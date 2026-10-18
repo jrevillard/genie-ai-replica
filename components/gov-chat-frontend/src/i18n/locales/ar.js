@@ -3138,6 +3138,8 @@ export default {
         rowError: 'خطأ',
         cancel: 'إلغاء التشغيل',
         phase: {
+          'building-knowledge-graph': 'بناء الرسم البياني المعرفي',
+          'synthesizing-questions': 'توليد الأسئلة',
           retrieval: 'جارٍ الاسترجاع',
           judge: 'جارٍ التقييم'
         }

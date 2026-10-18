@@ -3191,6 +3191,8 @@ export default {
         rowError: 'Fehler',
         cancel: 'Lauf abbrechen',
         phase: {
+          'building-knowledge-graph': 'Wissensgraph wird aufgebaut',
+          'synthesizing-questions': 'Fragen werden synthetisiert',
           retrieval: 'Abruf läuft',
           judge: 'Bewertung läuft'
         }

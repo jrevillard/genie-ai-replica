@@ -3161,6 +3161,8 @@ export default {
         rowError: 'ত্রুটি',
         cancel: 'রান বাতিল',
         phase: {
+          'building-knowledge-graph': 'জ্ঞান গ্রাফ তৈরি হচ্ছে',
+          'synthesizing-questions': 'প্রশ্ন তৈরি হচ্ছে',
           retrieval: 'পুনরুদ্ধার হচ্ছে',
           judge: 'মূল্যায়ন হচ্ছে'
         }

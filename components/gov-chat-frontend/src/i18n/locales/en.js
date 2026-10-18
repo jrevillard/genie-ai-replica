@@ -1816,6 +1816,8 @@ export default {
         rowError: 'error',
         cancel: 'Cancel run',
         phase: {
+          'building-knowledge-graph': 'Building the knowledge graph',
+          'synthesizing-questions': 'Synthesizing questions',
           retrieval: 'retrieving',
           judge: 'scoring'
         }

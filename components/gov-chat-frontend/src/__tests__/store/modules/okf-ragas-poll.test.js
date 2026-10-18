@@ -1,0 +1,194 @@
+'use strict';
+
+/**
+ * RAGAS poll-loop tolerance (2026-10-18 live incident): a kong restart made
+ * one poll of the generation GET fail with 502 and the UI gave up tracking a
+ * job that was still running server-side. The four ragas poll actions
+ * (ragasGenerate, ragasRun, ragasAdoptRun, ragasAdoptGeneration) must ride
+ * out transient gateway failures and only give up after a solid stretch of
+ * consecutive misses — the server never kills a healthy long job, so neither
+ * may the UI's tracking loop.
+ */
+
+const mockGenerateSuite = jest.fn();
+const mockGetSuite = jest.fn();
+const mockRunSuite = jest.fn();
+const mockGetRun = jest.fn();
+
+jest.mock('@/services/ragasService', () => ({
+  __esModule: true,
+  default: {
+    generateSuite: (...a) => mockGenerateSuite(...a),
+    getSuite: (...a) => mockGetSuite(...a),
+    runSuite: (...a) => mockRunSuite(...a),
+    getRun: (...a) => mockGetRun(...a),
+    cancelSuiteGeneration: jest.fn(),
+    cancelRun: jest.fn()
+  }
+}));
+
+jest.mock('@/services/studioService', () => ({
+  __esModule: true,
+  default: { saveDraft: jest.fn(), getDraft: jest.fn() }
+}));
+
+jest.mock('@/services/repoOkfService', () => ({
+  __esModule: true,
+  default: { get: jest.fn(), list: jest.fn() }
+}));
+
+jest.mock('@/services/conceptService', () => ({
+  __esModule: true,
+  default: { listForRepo: jest.fn() }
+}));
+
+jest.mock('@/services/crawlerToOkfService', () => ({
+  __esModule: true,
+  default: { convertCrawlToOkf: jest.fn() }
+}));
+
+jest.mock('@/services/okfRepoOps', () => ({ __esModule: true }));
+
+jest.mock('@/services/headTestService', () => ({
+  __esModule: true,
+  default: { listRuns: jest.fn() }
+}));
+
+const Vuex = require('vuex');
+const okfModule = require('@/store/modules/okf').default;
+
+function buildStore() {
+  return new Vuex.Store({
+    modules: {
+      okf: {
+        ...okfModule,
+        state: () => JSON.parse(JSON.stringify(okfModule.state))
+      }
+    }
+  });
+}
+
+const GATEWAY_502 = Object.assign(new Error('Request failed with status code 502'), {
+  code: 'ERR_BAD_RESPONSE'
+});
+
+describe('okf store — ragas poll loops survive transient gateway failures', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('ragasGenerate rides out a 502 blip and still lands the suite', async () => {
+    mockGenerateSuite.mockResolvedValue({ suite_key: 'rs-1' });
+    mockGetSuite
+      .mockRejectedValueOnce(GATEWAY_502)
+      .mockRejectedValueOnce(GATEWAY_502)
+      .mockResolvedValueOnce({
+        suite_key: 'rs-1',
+        status: 'generating',
+        progress: { phase: 'building-knowledge-graph' }
+      })
+      .mockResolvedValue({ suite_key: 'rs-1', status: 'ready', entries: [] });
+
+    const onProgress = jest.fn();
+    const p = buildStore().dispatch('okf/ragasGenerate', {
+      repoId: 'r-1',
+      options: {},
+      onStarted: jest.fn(),
+      onProgress
+    });
+    await jest.advanceTimersByTimeAsync(2500 * 4);
+    const res = await p;
+
+    expect(res.ok).toBe(true);
+    expect(mockGetSuite).toHaveBeenCalledTimes(4);
+    // The count-less KG phase still reaches the progress bar.
+    expect(onProgress).toHaveBeenCalledWith({ phase: 'building-knowledge-graph' });
+  });
+
+  it('ragasGenerate gives up only after a solid stretch of consecutive misses', async () => {
+    mockGenerateSuite.mockResolvedValue({ suite_key: 'rs-1' });
+    mockGetSuite.mockRejectedValue(GATEWAY_502);
+
+    const p = buildStore().dispatch('okf/ragasGenerate', { repoId: 'r-1', options: {} });
+    await jest.advanceTimersByTimeAsync(2500 * 65);
+    const res = await p;
+
+    expect(res.ok).toBe(false);
+    expect(mockGetSuite).toHaveBeenCalledTimes(60);
+  });
+
+  it('ragasRun rides out a 502 blip and still lands the run', async () => {
+    mockRunSuite.mockResolvedValue({ run_key: 'rr-1' });
+    mockGetRun.mockRejectedValueOnce(GATEWAY_502).mockResolvedValue({
+      run_key: 'rr-1',
+      status: 'completed',
+      summary: { faithfulness: 0.94 }
+    });
+
+    const p = buildStore().dispatch('okf/ragasRun', {
+      repoId: 'r-1',
+      suiteKey: 'rs-1',
+      onStarted: jest.fn(),
+      onProgress: jest.fn()
+    });
+    await jest.advanceTimersByTimeAsync(2000 * 2);
+    const res = await p;
+
+    expect(res.ok).toBe(true);
+    expect(mockGetRun).toHaveBeenCalledTimes(2);
+  });
+
+  it('ragasAdoptGeneration re-attaches through a 502 blip after a refresh', async () => {
+    mockGetSuite
+      .mockRejectedValueOnce(GATEWAY_502)
+      .mockResolvedValue({ suite_key: 'rs-1', status: 'ready', entries: [] });
+
+    const p = buildStore().dispatch('okf/ragasAdoptGeneration', {
+      repoId: 'r-1',
+      suiteKey: 'rs-1',
+      onProgress: jest.fn()
+    });
+    await jest.advanceTimersByTimeAsync(2500 * 2);
+    const res = await p;
+
+    expect(res.ok).toBe(true);
+    expect(mockGetSuite).toHaveBeenCalledTimes(2);
+  });
+
+  it('ragasAdoptRun re-attaches through a 502 blip after a refresh', async () => {
+    mockGetRun.mockRejectedValueOnce(GATEWAY_502).mockResolvedValue({ run_key: 'rr-1', status: 'completed' });
+
+    const p = buildStore().dispatch('okf/ragasAdoptRun', {
+      repoId: 'r-1',
+      suiteKey: 'rs-1',
+      runKey: 'rr-1',
+      onProgress: jest.fn()
+    });
+    await jest.advanceTimersByTimeAsync(2000 * 2);
+    const res = await p;
+
+    expect(res.ok).toBe(true);
+    expect(mockGetRun).toHaveBeenCalledTimes(2);
+  });
+
+  it('a server-side failure still surfaces (tolerance must not mask real failures)', async () => {
+    mockGenerateSuite.mockResolvedValue({ suite_key: 'rs-1' });
+    mockGetSuite.mockResolvedValue({
+      suite_key: 'rs-1',
+      status: 'failed',
+      error: { code: 'RAGAS_JOB_CANCELLED', message: 'cancelled by user' }
+    });
+
+    const p = buildStore().dispatch('okf/ragasGenerate', { repoId: 'r-1', options: {} });
+    await jest.advanceTimersByTimeAsync(2500);
+    const res = await p;
+
+    expect(res.ok).toBe(false);
+    expect(res.code).toBe('RAGAS_JOB_CANCELLED');
+  });
+});

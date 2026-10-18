@@ -3188,6 +3188,8 @@ export default {
         rowError: 'error',
         cancel: 'Cancelar ejecución',
         phase: {
+          'building-knowledge-graph': 'Construyendo el grafo de conocimiento',
+          'synthesizing-questions': 'Sintetizando preguntas',
           retrieval: 'recuperando',
           judge: 'calificando'
         }

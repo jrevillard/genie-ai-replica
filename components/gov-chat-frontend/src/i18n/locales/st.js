@@ -3178,6 +3178,8 @@ export default {
         rowError: 'phoso',
         cancel: 'Khansela tsamaiso',
         phase: {
+          'building-knowledge-graph': 'Ho haha sethalana sa tsebo',
+          'synthesizing-questions': 'Ho hlahisa dipotso',
           retrieval: 'e kgetha',
           judge: 'e lekanya'
         }

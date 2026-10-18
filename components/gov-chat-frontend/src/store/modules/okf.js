@@ -1382,6 +1382,10 @@ const actions = {
       // timeout message says so.
       const DEADLINE_MS = 24 * 60 * 60 * 1000;
       const deadline = Date.now() + DEADLINE_MS;
+      // A transient gateway failure (kong restart = 502) must not kill the
+      // tracking loop — the server-side job keeps running regardless (live
+      // incident 2026-10-18). Give up only after ~2.5 min of solid failure.
+      let misses = 0;
       for (;;) {
         if (Date.now() > deadline) {
           return {
@@ -1391,7 +1395,14 @@ const actions = {
           };
         }
         await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-        const doc = await ragasService.getSuite(repoId, started.suite_key);
+        let doc = null;
+        try {
+          doc = await ragasService.getSuite(repoId, started.suite_key);
+          misses = 0;
+        } catch (err) {
+          if (++misses >= 60) throw err;
+          continue;
+        }
         if (!doc || doc.status === 'generating') {
           if (typeof onProgress === 'function' && doc && doc.progress) onProgress(doc.progress);
           continue;
@@ -1530,6 +1541,8 @@ const actions = {
       // generateRagasSuite above); 24h bounds only this open dialog.
       const DEADLINE_MS = 24 * 60 * 60 * 1000;
       const deadline = Date.now() + DEADLINE_MS;
+      // Same gateway-blip tolerance as ragasGenerate (~2 min at this cadence).
+      let misses = 0;
       for (;;) {
         if (Date.now() > deadline) {
           return {
@@ -1539,7 +1552,14 @@ const actions = {
           };
         }
         await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-        const doc = await ragasService.getRun(repoId, suiteKey, started.run_key);
+        let doc = null;
+        try {
+          doc = await ragasService.getRun(repoId, suiteKey, started.run_key);
+          misses = 0;
+        } catch (err) {
+          if (++misses >= 60) throw err;
+          continue;
+        }
         if (!doc || doc.status === 'running') {
           if (typeof onProgress === 'function' && doc && doc.progress) onProgress(doc.progress);
           continue;
@@ -1572,12 +1592,21 @@ const actions = {
       const POLL_MS = 2000;
       const DEADLINE_MS = 24 * 60 * 60 * 1000;
       const deadline = Date.now() + DEADLINE_MS;
+      // Same gateway-blip tolerance as ragasGenerate (~2 min at this cadence).
+      let misses = 0;
       for (;;) {
         if (Date.now() > deadline) {
           return { ok: false, code: 'RUN_TIMEOUT', message: 'The run is still executing on the server.' };
         }
         await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-        const doc = await ragasService.getRun(repoId, suiteKey, runKey);
+        let doc = null;
+        try {
+          doc = await ragasService.getRun(repoId, suiteKey, runKey);
+          misses = 0;
+        } catch (err) {
+          if (++misses >= 60) throw err;
+          continue;
+        }
         if (!doc || doc.status === 'running') {
           if (typeof onProgress === 'function' && doc && doc.progress) onProgress(doc.progress);
           continue;
@@ -1608,12 +1637,21 @@ const actions = {
       const POLL_MS = 2500;
       const DEADLINE_MS = 24 * 60 * 60 * 1000;
       const deadline = Date.now() + DEADLINE_MS;
+      // Same gateway-blip tolerance as ragasGenerate (~2.5 min at this cadence).
+      let misses = 0;
       for (;;) {
         if (Date.now() > deadline) {
           return { ok: false, code: 'GENERATION_TIMEOUT', message: 'The generation is still running server-side.' };
         }
         await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-        const doc = await ragasService.getSuite(repoId, suiteKey);
+        let doc = null;
+        try {
+          doc = await ragasService.getSuite(repoId, suiteKey);
+          misses = 0;
+        } catch (err) {
+          if (++misses >= 60) throw err;
+          continue;
+        }
         if (!doc || doc.status === 'generating') {
           if (typeof onProgress === 'function' && doc && doc.progress) onProgress(doc.progress);
           continue;

@@ -3189,6 +3189,8 @@ export default {
         rowError: 'erreur',
         cancel: 'Annuler l’exécution',
         phase: {
+          'building-knowledge-graph': 'Construction du graphe de connaissances',
+          'synthesizing-questions': 'Synthèse des questions',
           retrieval: 'récupération',
           judge: 'évaluation'
         }

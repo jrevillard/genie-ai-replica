@@ -3169,6 +3169,8 @@ export default {
         rowError: 'galat',
         cancel: 'Batalkan proses',
         phase: {
+          'building-knowledge-graph': 'Membangun graf pengetahuan',
+          'synthesizing-questions': 'Menyusun pertanyaan',
           retrieval: 'mengambil',
           judge: 'menilai'
         }

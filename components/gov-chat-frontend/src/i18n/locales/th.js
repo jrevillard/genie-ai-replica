@@ -3144,6 +3144,8 @@ export default {
         rowError: 'ข้อผิดพลาด',
         cancel: 'ยกเลิกการรัน',
         phase: {
+          'building-knowledge-graph': 'กำลังสร้างกราฟความรู้',
+          'synthesizing-questions': 'กำลังสังเคราะห์คำถาม',
           retrieval: 'กำลังดึงข้อมูล',
           judge: 'กำลังให้คะแนน'
         }

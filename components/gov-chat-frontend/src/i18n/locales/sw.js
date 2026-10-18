@@ -3164,6 +3164,8 @@ export default {
         rowError: 'kosa',
         cancel: 'Ghairi uendeshaji',
         phase: {
+          'building-knowledge-graph': 'Kujenga grafu ya maarifa',
+          'synthesizing-questions': 'Kutunga maswali',
           retrieval: 'inarudisha',
           judge: 'inapima'
         }

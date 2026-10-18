@@ -3105,6 +3105,8 @@ export default {
         rowError: '错误',
         cancel: '取消运行',
         phase: {
+          'building-knowledge-graph': '正在构建知识图谱',
+          'synthesizing-questions': '正在生成问题',
           retrieval: '检索中',
           judge: '评分中'
         }

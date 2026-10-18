@@ -107,7 +107,11 @@ with suites interchangeable with that harness's xlsx formats:
   reference passages the answer should be grounded in. Generation is a
   background job: you can close the dialog and come back, and a **Cancel**
   button stops it at any time (the shared GPU drains within one in-flight
-  model call). Nothing is ever discarded on a timer — a healthy long run
+  model call). A per-phase progress bar tracks it — the knowledge-graph
+  build runs as an animated working bar (it has no intermediate counts;
+  on a fresh judge cache it is the longest phase), then question synthesis
+  reports i/n as scenarios complete. Nothing is ever discarded on a timer —
+  a healthy long run
   ends only when it completes or when you cancel it. A disk cache of judge
   responses makes **repeat** generations of the same repositories nearly
   instant (the knowledge-graph phase is skipped; disable with
@@ -125,8 +129,11 @@ with suites interchangeable with that harness's xlsx formats:
   context recall, and answer relevancy by default, with the full
   single-turn catalog selectable (factual and answer correctness, semantic
   similarity, entity recall, noise sensitivity, and more). A progress bar
-  reports each phase with counts (retrieving i/n, scoring i/n), and a
-  **Cancel run** control stops a benchmark that is taking too long.
+  reports each phase — with counts where the engine reports them
+  (retrieving i/n, scoring i/n) and an animated working bar where it cannot
+  — and a **Cancel run** control stops a benchmark that is taking too long.
+  Progress tracking survives transient gateway hiccups: a brief proxy
+  restart does not detach the panel from a job that is still running.
 - **Results** render per-question in a table with metric bars, as aggregate
   gauges, as a run-over-run trend, and as a status breakdown — and export
   as a **PDF report**, or as an xlsx workbook using the offline harness's

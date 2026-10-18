@@ -121,7 +121,9 @@
         <DsSpinner v-if="importBusy" size="sm">{{ translate('okf.ragas.import.working', 'Importing…') }}</DsSpinner>
       </div>
       <div v-if="generateBusy && genProgress" class="okf-ragas__progress">
-        <DsProgress :value="genProgressPct" />
+        <!-- count-less phases (the KG rebuild) animate instead of sitting
+             at a dead zero — honest "working, no counts yet" (2026-10-18) -->
+        <DsProgress :value="genProgressPct" :indeterminate="!genProgress.total" />
       </div>
     </div>
 

@@ -3177,6 +3177,8 @@ export default {
         rowError: 'ошибка',
         cancel: 'Отменить запуск',
         phase: {
+          'building-knowledge-graph': 'Построение графа знаний',
+          'synthesizing-questions': 'Синтез вопросов',
           retrieval: 'поиск',
           judge: 'оценка'
         }

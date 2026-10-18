@@ -2962,6 +2962,8 @@ export default {
         removeTag: 'Ondoa kwenye tag zilizozuiwa',
         tagsetTip: 'Tag zilizozuiwa za ukimbiaji huu',
         savedTitle: 'Vipima vilivyohifadhiwa',
+        savedTip:
+          'Kila suite iliyoundwa au kuingizwa hifadhiwa hapa, kwa kila hifadhidata. Aina mbili zinashiriki orodha hii: suites za kichwa (seti za maswali kutoka tagi na frontmatter, kwa hesabu za chanya/hasi) na suites za kipimo cha RAGAS (seti za maswali zenye majibu yanayotarajiwa, kwa beji ya RAGAS na idadi ya entries). Kupakia inafungua suite ya kichwa kwenye kichupo cha Head test na suite ya RAGAS kwenye kichupo cha RAGAS Benchmarks, ambapo inaweza kuendeshwa na kupimwa dhidi ya korupasi hai. Kufuta huondoa suite kabisa; kubadilisha jina hufanywa moja kwa moja kwenye jina.',
         load: 'Pakia',
         flipTip: 'Badilisha iwe-chaguliwe / isiwe-chaguliwe',
         deleteTip: 'Ondoa mstari huu kwenye kipima',

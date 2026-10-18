@@ -2980,6 +2980,8 @@ export default {
         removeTag: 'Remover das tags proibidas',
         tagsetTip: 'Tags proibidas desta execução',
         savedTitle: 'Suítes salvas',
+        savedTip:
+          'Cada suíte gerada ou importada é salva aqui, por repositório. Dois tipos compartilham esta lista: suítes de cabeçalho (conjuntos de consultas derivados de tags e frontmatter, com contagens de positivos/negativos) e suítes de benchmark RAGAS (conjuntos de perguntas com respostas esperadas, com selo RAGAS e contagem de entradas). Carregar abre uma suíte de cabeçalho na aba Teste de cabeçalho e uma suíte RAGAS na aba RAGAS Benchmarks, onde pode ser executada e pontuada contra o corpus ativo. Excluir remove a suíte permanentemente; renomear é feito diretamente no nome.',
         load: 'Carregar',
         flipTip: 'Alternar deve-selecionar / não-deve-selecionar',
         deleteTip: 'Remover esta linha da suíte',

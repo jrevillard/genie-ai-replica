@@ -2969,6 +2969,8 @@ export default {
         removeTag: 'Hapus dari tag terlarang',
         tagsetTip: 'Tag terlarang untuk eksekusi ini',
         savedTitle: 'Suite tersimpan',
+        savedTip:
+          'Setiap suite yang dibuat atau diimpor disimpan di sini, per repositori. Dua jenis berbagi daftar ini: suite head (kumpulan kueri dari tag dan frontmatter, dengan jumlah positif/negatif) dan suite tolok ukur RAGAS (kumpulan pertanyaan dengan jawaban yang diharapkan, dengan lencana RAGAS dan jumlah entri). Muat membuka suite head di tab Uji head dan suite RAGAS di tab RAGAS Benchmarks, tempat ia dapat dijalankan dan dinilai terhadap korpus langsung. Hapus menghapus suite secara permanen; ganti nama dilakukan langsung pada nama.',
         load: 'Muat',
         flipTip: 'Balikkan harus-dipilih / tidak-harus-dipilih',
         deleteTip: 'Hapus baris ini dari suite',

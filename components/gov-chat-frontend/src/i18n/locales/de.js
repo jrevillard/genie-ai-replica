@@ -2988,6 +2988,8 @@ export default {
         removeTag: 'Aus den Sperr-Tags entfernen',
         tagsetTip: 'Sperr-Tags dieses Laufs',
         savedTitle: 'Gespeicherte Suiten',
+        savedTip:
+          'Jede erstellte oder importierte Suite wird hier gespeichert, je Repository. Zwei Arten teilen sich diese Liste: Head-Suiten (aus Tags und Frontmatter abgeleitete Fragensätze, mit Positiv/Negativ-Zählern) und RAGAS-Benchmark-Suiten (Fragensätze mit erwarteten Antworten, mit RAGAS-Badge und Anzahl der Einträge). Laden öffnet eine Head-Suite im Tab Head-Test und eine RAGAS-Suite im Tab RAGAS-Benchmarks, wo sie gegen den Live-Korpus ausgeführt und bewertet werden kann. Löschen entfernt die Suite endgültig; Umbenennen erfolgt direkt im Namen.',
         load: 'Laden',
         flipTip: 'Wechseln zwischen soll-selektieren / nicht-selektieren',
         deleteTip: 'Diese Zeile aus der Suite entfernen',

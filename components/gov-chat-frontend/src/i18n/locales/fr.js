@@ -2987,6 +2987,8 @@ export default {
         removeTag: 'Retirer des tags interdits',
         tagsetTip: 'Tags interdits pour cette exécution',
         savedTitle: 'Suites enregistrées',
+        savedTip:
+          'Chaque suite générée ou importée est enregistrée ici, par dépôt. Deux types partagent cette liste : les suites de tête (jeux de requêtes issus des tags et du frontmatter, avec compteurs positifs/négatifs) et les suites de référence RAGAS (jeux de questions avec réponses attendues, avec badge RAGAS et nombre d entrées). Charger ouvre une suite de tête dans l onglet Test de tête et une suite RAGAS dans l onglet RAGAS Benchmarks, où elle peut être exécutée et notée contre le corpus en direct. Supprimer retire la suite définitivement ; le renommage se fait directement sur le nom.',
         load: 'Charger',
         flipTip: 'Basculer doit-sélectionner / ne-doit-pas-sélectionner',
         deleteTip: 'Retirer cette ligne de la suite',

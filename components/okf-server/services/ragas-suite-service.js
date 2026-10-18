@@ -1630,7 +1630,12 @@ async function probeEntry(repoId, suiteKey, payload = {}, opts = {}) {
     const repoIds = suite.repo_ids && suite.repo_ids.length ? suite.repo_ids : [repoId];
     const graphNames = await graphNamesFor(db, repoIds);
     const at = new Date().toISOString();
-    const probe = { at, id: entry.id, docs: 0, top_score: null, verdict: 'unknown', note: '' };
+    // verdict: answerable | weak | unanswerable | error. 'error' means the
+    // probe itself failed (embed/HTTP/Arango) — NEVER leave the factory
+    // default 'unknown' standing: a swallowed failure read as a scoring
+    // result cost a live debugging round (2026-10-18, seven probes showed
+    // "unknown" while the note said "HTTP 422").
+    const probe = { at, id: entry.id, docs: 0, top_score: null, verdict: 'error', note: '' };
     try {
       const embeddings = await frontmatterService.teiEmbed([entry.query]);
       const emb = Array.isArray(embeddings) && embeddings[0];

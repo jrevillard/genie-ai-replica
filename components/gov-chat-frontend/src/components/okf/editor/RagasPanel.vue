@@ -237,6 +237,9 @@
               </button>
               <span v-if="e.lastProbe" class="okf-ragas__muted" :title="(e.lastProbe && e.lastProbe.note) || ''">
                 {{ e.lastProbe.verdict }}
+                <em v-if="e.lastProbe.verdict === 'error' && e.lastProbe.note" class="okf-ragas__probe-note">{{
+                  e.lastProbe.note
+                }}</em>
               </span>
               <button
                 type="button"
@@ -1152,6 +1155,12 @@ export default {
 .okf-ragas__muted {
   color: var(--muted);
   font-size: 12px;
+}
+
+.okf-ragas__probe-note {
+  font-style: normal;
+  color: var(--danger, #b3261e);
+  font-size: 11px;
 }
 
 .okf-ragas__metrics {

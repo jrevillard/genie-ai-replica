@@ -169,6 +169,121 @@ def _make_fanout_class(ChatOpenAI):  # noqa: N802 — mirrors his validated subc
     return _FanoutChatOpenAI
 
 
+def _make_caching_wrapper(LangchainLLMWrapper):  # noqa: N802 — factory, like _make_fanout_class
+    """Disk-backed response cache around the judge client (2026-10-18).
+
+    Live cost anatomy of a 5-question generation over two SMALL repos (21
+    concepts in the KG): ~211 transform LLM calls + ~20 synthesis calls at
+    ~2s each ≈ 8 minutes — the question count is irrelevant, the corpus is
+    everything, and every repeat generation re-pays the whole KG phase. The
+    remote judge's slowest calls (20-30s long summaries) pace each wave, so
+    client concurrency (RunConfig max_workers=16) is already saturated —
+    the only lever that shortens a re-run is NOT MAKING THE CALLS.
+
+    Key = sha256(model | prompt | n | temperature | stop | max_tokens).
+    Hit → rebuild an LLMResult carrying ChatGeneration(text, AIMessage) —
+    consumers reading .text or .message both work. Cache lives under
+    RAGAS_LLM_CACHE_DIR (default /tmp/ragas-llm-cache — survives job
+    churn, cleared on container recreate); RAGAS_LLM_CACHE=0 disables.
+    """
+
+    class _CachingLlmWrapper(LangchainLLMWrapper):
+        def __init__(self, llm):
+            super().__init__(llm)
+            self._cache_dir = os.getenv("RAGAS_LLM_CACHE_DIR") or "/tmp/ragas-llm-cache"
+            self._enabled = (os.getenv("RAGAS_LLM_CACHE") or "1").strip().lower() not in ("0", "off", "false", "no")
+
+        def _cache_enabled(self) -> bool:
+            return self._enabled
+
+        def _key(self, prompt, n, temperature, stop) -> str:
+            import hashlib
+            import json
+
+            payload = json.dumps(
+                [
+                    os.getenv("RAGAS_JUDGE_MODEL"),
+                    os.getenv("RAGAS_JUDGE_MAX_TOKENS") or "0",
+                    prompt.to_string(),
+                    n,
+                    temperature,
+                    stop or None,
+                ],
+                default=str,
+            )
+            return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+        def _load(self, key):
+            import json
+
+            if not self._cache_enabled():
+                return None
+            try:
+                with open(os.path.join(self._cache_dir, f"{key}.json"), encoding="utf-8") as fh:
+                    entry = json.load(fh)
+                return entry.get("texts"), entry.get("llm_output")
+            except (OSError, ValueError):
+                return None
+
+        def _save(self, key, texts, llm_output):
+            import json
+
+            if not self._cache_enabled():
+                return
+            try:
+                os.makedirs(self._cache_dir, exist_ok=True)
+                tmp = os.path.join(self._cache_dir, f"{key}.json.tmp")
+                with open(tmp, "w", encoding="utf-8") as fh:
+                    json.dump({"texts": texts, "llm_output": llm_output}, fh, default=str)
+                os.replace(tmp, os.path.join(self._cache_dir, f"{key}.json"))
+            except OSError:
+                pass  # cache is best-effort — never fail a job over it
+
+        @staticmethod
+        def _rebuild(texts, llm_output):
+            from langchain_core.messages import AIMessage
+            from langchain_core.outputs import ChatGeneration, LLMResult
+
+            gens = [[ChatGeneration(text=t, message=AIMessage(content=t)) for t in texts]]
+            return LLMResult(generations=gens, llm_output=llm_output or {})
+
+        @staticmethod
+        def _extract(result):
+            try:
+                texts = [g.text for g in result.generations[0]]
+            except (IndexError, AttributeError):
+                return None
+            try:
+                llm_output = result.llm_output or None
+            except AttributeError:
+                llm_output = None
+            return texts, llm_output
+
+        def generate_text(self, prompt, n=1, temperature=0.01, stop=None, callbacks=None):
+            key = self._key(prompt, n, temperature, stop)
+            hit = self._load(key)
+            if hit is not None:
+                return self._rebuild(*hit)
+            result = super().generate_text(prompt, n=n, temperature=temperature, stop=stop, callbacks=callbacks)
+            extracted = self._extract(result)
+            if extracted is not None:
+                self._save(key, *extracted)
+            return result
+
+        async def agenerate_text(self, prompt, n=1, temperature=0.01, stop=None, callbacks=None):
+            key = self._key(prompt, n, temperature, stop)
+            hit = self._load(key)
+            if hit is not None:
+                return self._rebuild(*hit)
+            result = await super().agenerate_text(prompt, n=n, temperature=temperature, stop=stop, callbacks=callbacks)
+            extracted = self._extract(result)
+            if extracted is not None:
+                self._save(key, *extracted)
+            return result
+
+    return _CachingLlmWrapper
+
+
 def build_llm(temperature: float = 0.0):
     """Wrap the judge endpoint as a ragas LLM. Deferred-imported so /health
     never pays the langchain import cost and tests can stub this module."""
@@ -203,7 +318,7 @@ def build_llm(temperature: float = 0.0):
         timeout=300,
         **kwargs,
     )
-    return LangchainLLMWrapper(inner)
+    return _make_caching_wrapper(LangchainLLMWrapper)(inner)
 
 
 class _TeiEmbeddings:

@@ -309,6 +309,63 @@ def test_generate_testset_seeds_missing_headlines_before_splitter(monkeypatch, e
             asyncio.run(ragas_engine.generate_testset(documents, testset_size=2))
 
 
+def test_caching_wrapper_serves_hits_without_calling_the_judge(tmp_path, monkeypatch):
+    """The cache exists because repeat generations re-paid the whole KG
+    phase: 5 questions over 2 small repos = ~211 transform calls ≈ 8 min
+    (live 2026-10-18). A hit must NOT touch the judge, and must rebuild a
+    result whose .text consumers (ragas prompts) read identically."""
+    import asyncio
+
+    calls = {"sync": 0, "async": 0}
+
+    class _FakeResult:
+        def __init__(self, text):
+            self.generations = [[type("G", (), {"text": text})()]]
+            self.llm_output = {"model_name": "test"}
+
+    class _FakeBase:
+        def __init__(self, llm):
+            self.llm = llm
+
+        def generate_text(self, prompt, n=1, temperature=0.01, stop=None, callbacks=None):
+            calls["sync"] += 1
+            return _FakeResult(f"judge-sync-{calls['sync']}")
+
+        async def agenerate_text(self, prompt, n=1, temperature=0.01, stop=None, callbacks=None):
+            calls["async"] += 1
+            return _FakeResult(f"judge-async-{calls['async']}")
+
+    class _Prompt:
+        def to_string(self):
+            return "the same prompt text"
+
+    monkeypatch.setenv("RAGAS_LLM_CACHE_DIR", str(tmp_path / "cache"))
+    wrapper_cls = ragas_engine._make_caching_wrapper(_FakeBase)
+    w = wrapper_cls(object())
+
+    r1 = w.generate_text(_Prompt(), n=1, temperature=0.2)
+    assert r1.generations[0][0].text == "judge-sync-1"  # passthrough of the real result
+    r2 = w.generate_text(_Prompt(), n=1, temperature=0.2)
+    assert calls["sync"] == 1  # hit — the judge was NOT called again
+    assert r2.generations[0][0].text == "judge-sync-1"  # rebuilt from cache, same text
+
+    a1 = asyncio.run(w.agenerate_text(_Prompt(), n=1, temperature=0.2))
+    assert calls["async"] == 0  # the sync call's cache serves the async path too
+    assert a1.generations[0][0].text == "judge-sync-1"
+
+    # a different temperature is a different key — judge called again
+    r3 = w.generate_text(_Prompt(), n=1, temperature=0.9)
+    assert calls["sync"] == 2
+    assert r3.generations[0][0].text == "judge-sync-2"
+
+    # RAGAS_LLM_CACHE=0 bypasses entirely
+    monkeypatch.setenv("RAGAS_LLM_CACHE", "0")
+    w_off = wrapper_cls(object())
+    w_off.generate_text(_Prompt(), n=1, temperature=0.2)
+    w_off.generate_text(_Prompt(), n=1, temperature=0.2)
+    assert calls["sync"] == 4  # both went through
+
+
 def test_tolerant_synthesizer_never_raises_to_the_executor(engine_env):
     """Regression (live 2026-10-18, bug #9): with raise_exceptions=False,
     ragas's Executor turns a raised call into np.nan (executor.py:84) and

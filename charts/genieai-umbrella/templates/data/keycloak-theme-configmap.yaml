@@ -1,0 +1,21 @@
+{{- if .Values.data.keycloak.enabled -}}
+{{- /* Theme tarball carrier. ConfigMap keys cannot contain "/", so the
+       nested theme tree (themes/genie/login/resources/...) travels as a
+       single gzip key; the Keycloak pod's initContainer unpacks it into
+       an emptyDir mounted at /opt/keycloak/themes/<theme>. Rebuilt with
+       `make keycloak-theme` — CI compares it byte-for-byte against
+       configs/keycloak/themes. */ -}}
+{{- $tgz := "files/keycloak-themes.tgz" -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-theme
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "identity") | nindent 4 }}
+    genieai.io/data-tier: identity
+binaryData:
+  # `required` turns a missing tarball into a render-time failure instead
+  # of an empty ConfigMap and a theme-less Keycloak.
+  keycloak-themes.tgz: {{ .Files.Get $tgz | b64enc | required (printf "missing %s in the chart — run `make keycloak-theme` and commit the tarball" $tgz) }}
+{{- end -}}

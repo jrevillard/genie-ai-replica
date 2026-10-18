@@ -13,7 +13,14 @@
 # regen produces a lock CI's pinned uv accepts. Override with `make UV=uv ...`.
 UV ?= uvx --from uv==0.10.6 uv
 
-.PHONY: lock-retriever lock-reranker
+.PHONY: lock-retriever lock-reranker keycloak-theme
+
+# Repack charts/genieai-umbrella/files/keycloak-themes.tgz from
+# configs/keycloak/themes. Run after ANY theme edit; CI (chart:lint)
+# fails the pipeline when the committed tarball drifts from the source
+# tree.
+keycloak-theme:
+	./scripts/regen-keycloak-theme.sh
 
 lock-retriever:
 	cd genie-ai-overlay/retriever && $(UV) pip compile requirements.in \

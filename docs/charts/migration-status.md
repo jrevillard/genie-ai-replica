@@ -6,15 +6,36 @@ the design spec (`docs/superpowers/specs/2026-10-08-genie-ai-helm-charts-design.
 Plan checkboxes are not a status source — evidence is the chart, the deploy
 repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
-## Current state (2026-10-15)
+## Current state (2026-10-18)
 
-- Chart `genieai-umbrella` at **0.1.66** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.32** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
-- Full stack validated end-to-end live: OIDC login (PKCE, pinned issuer) →
-  chat stream → chatqna → retriever → LLM on the external GPU node
-  (10.0.0.110) → streamed FR translation → document upload → ClamAV scan →
-  dataprep ingestion (contextual retrieval + labeling + embeddings, 109
-  chunks) → RAG answers with citations.
+- Rebased onto main after issue #998 (runtime-theme model, 81 commits) —
+  tip `7a20c5913` at rebase time, theme delivery ported to the operator
+  world afterwards.
+- **Edge tier shipped (0.2.21–0.2.26)**: Envoy Gateway as a chart dependency
+  (`envoyGateway.enabled`, default on, disable-able), Gateway API Gateway/
+  GatewayClass/HTTPRoute/Certificate/SecurityPolicy templates, **nginx
+  REMOVED from the data path** (roundtable decision — Envoy routes
+  everything; the compose nginx remains the compose path's aggregator and is
+  out of scope for the chart). Port-bearing `ingress.host` (e.g.
+  `genieai.local:4443` for a sudo-less laptop browser origin); TLS via
+  cert-manager (selfsigned issuer on the laptop); issuer verified coherent
+  with the port. Live-validated in a browser.
+- **Keycloak theme at runtime (0.2.28)**: stock operator image +
+  `files/keycloak-themes.tgz` (reproducible tar of `configs/keycloak/themes`)
+  → ConfigMap → `spec.unsupported.podTemplate` initContainer untar →
+  `/opt/keycloak/themes/genie`; checksum annotation rolls pods on tarball
+  change; CI `chart:lint` guards source↔tarball drift by content hash.
+  Zero image builds — same runtime-injection model #998 chose for compose.
+- **Realm parity + required deployment data (0.2.29–0.2.32)**:
+  registration/verifyEmail/resetPassword default to the compose values;
+  `data.keycloak.adminEmail`, `ingress.host` (no more `genieai.local`
+  fallback) and `smtp.{from,host,user}` (once smtp is set) are required at
+  render time — deployment data no longer ships as chart defaults.
+- Full validation set green on 0.2.32 (2026-10-18): health via edge, FR
+  streamed chat, upload → ClamAV → dataprep ingestion, RAG answer with
+  citations from a freshly ingested doc, genie-themed login page.
 - GPU tier is a binary choice: `opea.gpu.mode=external` (remote OpenAI-compatible
   API) or `in-cluster` (model Deployments behind `gpu=true` nodeSelector).
   Laptop runs external; in-cluster is render-validated only (no GPU locally).
@@ -35,7 +56,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 | 7 — CI | `…-ci.md` | 🟡 partial (`chart:lint` + `chart:install` jobs exist; no `chart:contract` gate, no ct full suite, no kind+Calico install gate) |
 | 8 — docs | `…-docs.md` | 🟡 partial (`charts/README.md`; per-env overlay docs not written) |
 | 4 — observability | `2026-10-15-observability-tier.md` | ✅ shipped (charts 0.2.0–0.2.20: VLSingle baseline + collector gateway + filelog agent + Grafana CRs + VMServiceScrapes; live-validated on the laptop — admin logs 200, PII smoke green on the chart-rendered config; 0.2.20 scopes the filelog agent to the stack namespaces after foreign-ns zap-JSON rows broke the admin TYPE column; metrics/traces/grafana opt-in flags are render-validated only) |
-| 6 — per-env ingress | `…-per-env-ingress.md` | ⬜ Task 1 only → the "Phase 2" below |
+| 6 — per-env ingress | `…-per-env-ingress.md` | ✅ Phase 2 shipped as charts 0.2.21–0.2.26 (Envoy Gateway dependency, Gateway API templates, nginx removed from the data path, port-bearing host, TLS); per-env overlay knobs are the `ingress.*` values consumed by the laptop overlay |
 
 ## Supersessions (why two plans were replaced)
 
@@ -56,42 +77,35 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
    `feat-k8s-migration` image tag in the laptop overlay (source fixes ride the
    branch: `KEYCLOAK_EXPECTED_ISSUER`, ClamAV host forwarding, backend
    `OPEA_HOST` default, streaming translation default-on).
-2. **Global code review of the whole MR** (running 2026-10-15) — findings
-   triaged and fixed before any new tier lands on the branch.
-3. **Documentation pass** (pre-merge, after review fixes):
-   - `site/content/en/docs/deploy/` — new Kubernetes deployment page (chart,
-     Flux, overlays, GPU modes external/in-cluster) alongside the
-     compose/swarm pages.
+2. **Final whole-MR review** — the 2026-10-15 review predates the rebase +
+   edge tier + theme + realm-parity commits; re-run a fresh adversarial pass
+   over the full diff before merge.
+3. **Documentation pass** (in progress 2026-10-18):
+   - ✅ `site/content/en/docs/deploy/kubernetes.md` exists; refresh its
+     Access/Configuration sections (they still describe the pre-edge
+     port-forward-to-nginx loop) and add the exposure-scenario section.
+   - ✅ Root `CLAUDE.md` + `.claude/rules/K8s-WORKFLOW.md` exist; refresh
+     stale bits (nginx port-forward, image count, validation set).
    - `charts/README.md` + `charts/genieai-umbrella/README.md` — refresh
-     against 0.1.66 (values surface, `_lib` helpers, model skeleton).
-   - Root `CLAUDE.md` — helm/flux/kubectl essentials in Common Commands,
-     chart + deploy-repo layers in Architecture, Helm/Flux in the stack
-     table, `charts/` in Key Directories.
-   - `.claude/rules/K8s-WORKFLOW.md` (new) — cluster access patterns
-     (namespace, port-forwards), the `rtk proxy helm` output trap, the
-     byte-compare render gate, the chart-push → overlay-bump → flux
-     reconcile cycle.
+     against 0.2.32 (ingress/envoyGateway/theme values).
    - genie-ai-deploy README — overlay/SealedSecret model if missing.
-4. **Observability** — ✅ shipped 2026-10-15 (chart 0.2.17, commit range
-   `a32c922ae..` incl. hotfixes): admin logs UI 200 with live rows, service
-   filter functional, PII smoke green against the chart-rendered gateway
-   config. Residuals: whole-tier adversarial review pending; VT OTLP port
-   unverified until traces enabled somewhere; `${p}`/`${s}` OTTL
-   capture-group refs are eaten by confmap in collector 0.152 (replacement
-   drops boundary chars) — same latent behavior in the compose config, kept
-   verbatim; backlog.
-5. **Ingress (Phase 2)** — Gateway API (`Gateway` + `HTTPRoute`) + cert-manager,
-   nginx stays the in-cluster aggregator; tighten the placeholder
-   NetworkPolicy peers (`podSelector: {}`, broad `ipBlock`) once the gateway
-   data-plane labels exist; kind+Calico CI gate for the policy surface.
-6. **CI completion** — `chart:contract` render-gate job (MUST: render chart
-   with overlay-shaped values, extract the gateway collector config, run
-   `PII_SMOKE_CONFIG=<rendered> tests/otel-collector/run-pii-smoke.sh` — the
-   PII OTTL now lives in the chart helper, a second copy of the compose
-   regex that WILL drift without this gate — and assert operator Service
-   names `<kind>-<cr-name>` in every rendered URL), `ct lint`/`ct install`
-   on kind (kind prereqs now include cert-manager/vmoperator/otel-operator
-   via `scripts/install-prereqs.sh`), dashboards for chart test results.
+4. **CI gap (plan 7 residual)** — `chart:contract` render-gate job (MUST:
+   render the chart with overlay-shaped values, extract the gateway
+   collector config, run `PII_SMOKE_CONFIG=<rendered>
+   tests/otel-collector/run-pii-smoke.sh` — the PII OTTL lives in the chart
+   helper, a second copy of the compose regex that WILL drift without this
+   gate — and assert operator Service names `<kind>-<cr-name>` in every
+   rendered URL), `ct lint`/`ct install` on kind (kind prereqs now include
+   cert-manager/vmoperator/otel-operator via `scripts/install-prereqs.sh`),
+   kind+Calico NetworkPolicy install gate, dashboards for chart test
+   results. `chart:lint` + `chart:install` (incl. the theme-drift guard)
+   are green on every push.
+
+Observability residuals (tier ✅ shipped 2026-10-15): whole-tier adversarial
+review pending; VT OTLP port unverified until traces are enabled somewhere;
+`${p}`/`${s}` OTTL capture-group refs are eaten by confmap in collector
+0.152 (replacement drops boundary chars) — same latent behavior in the
+compose config, kept verbatim; backlog.
 
 ## Parked / backlog
 

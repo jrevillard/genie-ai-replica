@@ -3153,7 +3153,9 @@ export default {
         button: 'Générer',
         working: 'Génération — cela prend plusieurs minutes…',
         cancel: 'Annuler',
-        cancelling: 'Annulation…'
+        cancelling: 'Annulation…',
+
+        inFlight: 'Une génération de suite de benchmarks est déjà en cours pour ce dépôt — vous y êtes rattaché.'
       },
       import: {
         button: 'Importer une suite (.xlsx)',

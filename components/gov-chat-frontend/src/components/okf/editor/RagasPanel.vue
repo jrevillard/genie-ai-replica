@@ -785,17 +785,21 @@ export default {
         suiteKey
       });
       if (epoch !== this.suiteEpoch) return;
-      if (res.ok && res.result && res.result.kind === 'ragas_suite') {
+      // generating check FIRST: the live envelope carries no kind, but any
+      // doc shape that ever grows one must still adopt rather than render
+      // as an idle suite (live incident 2026-10-18: refresh orphaned a
+      // running generation because the branches matched the wrong way).
+      if (res.ok && res.result && res.result.status === 'generating') {
+        // refresh/reopen adoption (David 2026-10-18): a generating suite
+        // must never be orphaned from the UI — restore progress + Cancel
+        this.adoptGeneration(suiteKey, res.result);
+      } else if (res.ok && res.result && res.result.kind === 'ragas_suite') {
         this.suite = res.result;
         this.selectedMetrics = [
           ...new Set([...DEFAULT_METRICS, ...((this.suite.payload && this.suite.payload.metrics_config) || [])])
         ];
         this.$emit('changed');
         this.adoptInFlight(suiteKey);
-      } else if (res.ok && res.result && res.result.status === 'generating') {
-        // refresh/reopen adoption (David 2026-10-18): a generating suite
-        // must never be orphaned from the UI — restore progress + Cancel
-        this.adoptGeneration(suiteKey, res.result);
       }
     },
     /** Re-attach to server-side work that outlived this page load. */
@@ -834,7 +838,9 @@ export default {
         });
     },
     adoptGeneration(suiteKey, envelope) {
-      if (this.generateBusy) return;
+      // Guard on the KEY, not generateBusy: the 409-adoption path arrives
+      // from onGenerate with generateBusy already true (and must keep it).
+      if (this.generatingKey && this.generatingKey !== suiteKey) return;
       this.generateBusy = true;
       this.generatingKey = suiteKey;
       this.genProgress = (envelope && envelope.progress) || null;
@@ -864,6 +870,10 @@ export default {
       this.error = '';
       this.generateBusy = true;
       this.genProgress = null;
+      // When the server 409s because a generation is already running, we
+      // attach to it — the adoption then OWNS the busy state, so the finally
+      // must not stomp it back to idle (that race orphaned the UI once).
+      let adopted = false;
       try {
         const dist = [
           { synthesizer: 'single_hop_specific', weight: Number(this.distSingle) || 0 },
@@ -888,15 +898,42 @@ export default {
         if (res.ok) {
           this.suite = res.result;
           this.$emit('changed');
+        } else if (res.code === 'GENERATION_IN_FLIGHT') {
+          adopted = await this.adoptRunningGeneration();
         } else {
           this.error = res.message;
         }
       } finally {
-        this.generateBusy = false;
-        this.generatingKey = null;
+        if (!adopted) {
+          this.generateBusy = false;
+          this.generatingKey = null;
+          this.genProgress = null;
+        }
         this.cancelBusy = false;
-        this.genProgress = null;
       }
+    },
+    /** A generation is already running for this repo (409 GENERATION_IN_FLIGHT
+     * — usually this page lost it to a refresh, or another window started it):
+     * find it via the suite list (the server surfaces the live generation as
+     * a synthetic newest row) and adopt it — progress bar + Cancel. Returns
+     * true when attached. */
+    async adoptRunningGeneration() {
+      const res = await this.$store.dispatch('okf/ragasListRuns', {
+        repoId: this.repo && this.repo.repo_id,
+        kind: 'ragas_suite',
+        limit: 5
+      });
+      const gen = ((res && res.runs) || []).find((r) => r.status === 'generating');
+      if (!gen) {
+        // Stale server without the synthetic row: keep the honest error.
+        this.error = this.translate(
+          'okf.ragas.generate.inFlight',
+          'A benchmark-suite generation is already running for this repository — it will appear in the suite list when it completes.'
+        );
+        return false;
+      }
+      await this.loadSuite(gen.suite_key || gen._key);
+      return !!this.generatingKey;
     },
     async onCancelGenerate() {
       if (!this.generatingKey) return;

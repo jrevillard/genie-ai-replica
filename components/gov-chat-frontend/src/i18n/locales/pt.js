@@ -3145,7 +3145,9 @@ export default {
         button: 'Gerar',
         working: 'Gerando — isto leva alguns minutos…',
         cancel: 'Cancelar',
-        cancelling: 'A cancelar…'
+        cancelling: 'A cancelar…',
+
+        inFlight: 'Já está a decorrer uma geração de suite de benchmarks para este repositório — vai ser ligado a ela.'
       },
       import: {
         button: 'Importar suíte (.xlsx)',

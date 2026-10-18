@@ -3142,7 +3142,9 @@ export default {
         button: 'Hlahisa',
         working: 'E hlahisa — hona ho nka metsotso e mmalwa…',
         cancel: 'Khansela',
-        cancelling: 'E khanseletswa…'
+        cancelling: 'E khanseletswa…',
+
+        inFlight: 'Tlhahiso ya benchmark-suite e ntse e tsamaya bakeng sa repositori ena — re u kopantse le eona.'
       },
       import: {
         button: 'Kenya sete (.xlsx)',

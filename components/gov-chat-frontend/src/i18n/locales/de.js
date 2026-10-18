@@ -3155,7 +3155,9 @@ export default {
         button: 'Generieren',
         working: 'Wird generiert — das dauert einige Minuten…',
         cancel: 'Abbrechen',
-        cancelling: 'Wird abgebrochen…'
+        cancelling: 'Wird abgebrochen…',
+
+        inFlight: 'Für dieses Repository läuft bereits eine Benchmark-Suite-Generierung — Sie werden daran angehängt.'
       },
       import: {
         button: 'Suite importieren (.xlsx)',

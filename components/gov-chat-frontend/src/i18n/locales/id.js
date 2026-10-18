@@ -3133,7 +3133,9 @@ export default {
         button: 'Buat',
         working: 'Membuat — ini memakan waktu beberapa menit…',
         cancel: 'Batalkan',
-        cancelling: 'Membatalkan…'
+        cancelling: 'Membatalkan…',
+
+        inFlight: 'Pembuatan suite benchmark sudah berjalan untuk repositori ini — Anda sedang dikaitkan ke sana.'
       },
       import: {
         button: 'Impor suite (.xlsx)',

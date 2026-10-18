@@ -3101,7 +3101,9 @@ export default {
         button: 'Generate',
         working: 'Generating — this takes minutes…',
         cancel: 'Cancel',
-        cancelling: 'Cancelling…'
+        cancelling: 'Cancelling…',
+
+        inFlight: 'A benchmark-suite generation is already running for this repository — attaching you to it.'
       },
       import: {
         button: 'Import suite (.xlsx)',

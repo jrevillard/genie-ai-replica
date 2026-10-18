@@ -3069,7 +3069,9 @@ export default {
         button: '生成',
         working: '正在生成 — 需要几分钟…',
         cancel: '取消',
-        cancelling: '正在取消…'
+        cancelling: '正在取消…',
+
+        inFlight: '此仓库已有正在进行的基准套件生成——正在将您附加到该任务。'
       },
       import: {
         button: '导入测试集（.xlsx）',

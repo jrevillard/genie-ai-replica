@@ -3128,7 +3128,9 @@ export default {
         button: 'Tengeneza',
         working: 'Inatengeneza — hii inachukua dakika kadhaa…',
         cancel: 'Ghairi',
-        cancelling: 'Inaghairi…'
+        cancelling: 'Inaghairi…',
+
+        inFlight: 'Uundaji wa suite ya benchmark unaendelea tayari kwa hazina hii — tunakuunganisha nayo.'
       },
       import: {
         button: 'Ingiza seti (.xlsx)',

@@ -690,4 +690,57 @@ describe('xlsx passthrough + listing', () => {
     const all = await svc.listRuns('me', { kind: 'all' });
     expect(all).toHaveLength(2);
   });
+
+  // Live incident 2026-10-18: a generation in flight has NO collection doc
+  // (the suite persists only on completion), so after a page refresh the
+  // list could not contain it — the panel reloaded the previous suite and
+  // the running generation was orphaned from the UI until a second Generate
+  // attempt 409'd. The list must surface the live envelope as a row.
+  it('listRuns surfaces an in-flight generation as a synthetic newest row', async () => {
+    let polls = 0;
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/rerank')) return Promise.resolve(okJson([{ index: 0, score: 0.9 }]));
+      if (u.includes('/generate-testset'))
+        return Promise.resolve(okJson({ job_id: 'j-gen', status: 'queued', poll: '/jobs/j-gen' }));
+      if (u.includes('/jobs/j-gen')) {
+        polls += 1;
+        if (polls <= 25)
+          return Promise.resolve(
+            okJson({
+              job_id: 'j-gen',
+              kind: 'generate-testset',
+              status: 'running',
+              progress: { phase: 'synthesizing-questions', done: 1, total: 2 }
+            })
+          );
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-gen',
+            kind: 'generate-testset',
+            status: 'done',
+            result: { samples: GEN_SAMPLES, generator: { model: 'm', embed_model: 'e' } }
+          })
+        );
+      }
+      return Promise.reject(new Error('unexpected ' + u));
+    });
+    const begun = await svc.beginSuiteGeneration('me', { testset_size: 2 }, {});
+    // Let the sidecar's first poll land so the live progress (not the seed)
+    // is what the list row carries.
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    // In-flight window — no suite doc exists yet, but the list must show it.
+    const suites = await svc.listRuns('me', { kind: 'ragas_suite' });
+    const gen = suites.find((r) => r.status === 'generating');
+    expect(gen).toBeTruthy();
+    expect(gen.suite_key).toBe(begun.suite_key);
+    expect(gen.kind).toBe('ragas_suite');
+    expect(gen.progress).toEqual({ phase: 'synthesizing-questions', done: 1, total: 2 });
+    // Newest-first: the live generation leads the list.
+    expect(suites[0].status).toBe('generating');
+    // The synthetic suite row must NOT leak into ragas_run listings.
+    const runs = await svc.listRuns('me', { kind: 'ragas_run' });
+    expect(runs.some((r) => r.kind === 'ragas_suite')).toBe(false);
+    await begun.done; // let the poller finish so no work dangles past the test
+  });
 });

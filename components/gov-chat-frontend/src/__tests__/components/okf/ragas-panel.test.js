@@ -270,4 +270,67 @@ describe('RagasPanel', () => {
     expect(w.vm.barWidth(0.9)).toBe('90%');
     expect(w.vm.barWidth(null)).toBe('0%');
   });
+
+  // Live incident 2026-10-18: the page lost a running generation to a
+  // refresh, then a second Generate attempt dead-ended on the 409. The 409
+  // must ATTACH to the running generation (progress + Cancel), not error.
+  it('a GENERATION_IN_FLIGHT 409 attaches to the running generation instead of erroring', async () => {
+    const live = {
+      kind: 'ragas_suite',
+      _key: 'rs-live',
+      suite_key: 'rs-live',
+      status: 'generating',
+      created_at: '2026-10-18T16:23:00.000Z',
+      progress: { phase: 'synthesizing-questions', done: 1, total: 5 }
+    };
+    dispatch.mockImplementation(async (action, payload) => {
+      if (action === 'okf/fetchRepos') return { ok: true, repos: [] };
+      if (action === 'okf/ragasListRuns') {
+        // mount's history sweep (kind:all) sees only completed suites;
+        // the adoption lookup (kind:ragas_suite) surfaces the live row —
+        // exactly the server's synthetic in-flight listing.
+        if (payload && payload.kind === 'ragas_suite') return { ok: true, runs: [live] };
+        return {
+          ok: true,
+          runs: [
+            {
+              kind: 'ragas_suite',
+              _key: 'rs1-test',
+              suite_key: 'rs1-test',
+              name: 'Agri',
+              created_at: '2026-10-17T11:00:00.000Z',
+              entries: 2
+            }
+          ]
+        };
+      }
+      if (action === 'okf/ragasGenerate')
+        return {
+          ok: false,
+          code: 'GENERATION_IN_FLIGHT',
+          message: 'a benchmark-suite generation is already running for this repository'
+        };
+      if (action === 'okf/ragasGetSuite') {
+        if (payload && payload.suiteKey === 'rs-live')
+          return { ok: true, result: { suite_key: 'rs-live', status: 'generating', progress: live.progress } };
+        return { ok: true, result: suiteFixture() };
+      }
+      // In reality the adoption polls until the generation lands — a
+      // pending promise keeps it "in flight" so the busy state persists.
+      if (action === 'okf/ragasAdoptGeneration') return new Promise(() => {});
+      return { ok: true, result: null, runs: [] };
+    });
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(w.vm.generatingKey).toBeNull(); // mount did NOT adopt (no live row in history)
+
+    await w.vm.onGenerate();
+
+    expect(dispatch).toHaveBeenCalledWith('okf/ragasAdoptGeneration', expect.objectContaining({ suiteKey: 'rs-live' }));
+    // Attached: the adoption owns the busy state — progress + Cancel visible.
+    expect(w.vm.generateBusy).toBe(true);
+    expect(w.vm.generatingKey).toBe('rs-live');
+    expect(w.vm.genProgress).toEqual(live.progress);
+    expect(w.vm.error).toBe('');
+  });
 });

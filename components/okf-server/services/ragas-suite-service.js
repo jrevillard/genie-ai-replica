@@ -550,6 +550,9 @@ async function beginSuiteGeneration(repoId, payload = {}, opts = {}) {
   );
   const suiteKey = `rs${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
   genInFlight.set(repoId, suiteKey);
+  // Seed the phase immediately so the synthetic list row (and any adoption)
+  // has something to show before the sidecar's first poll lands.
+  genProgress.set(suiteKey, { phase: 'building-knowledge-graph' });
   genFailure.delete(repoId);
   const done = generateSuite(
     repoId,
@@ -1291,7 +1294,30 @@ async function listRuns(repoId, payload = {}) {
       'entries: HAS(d.payload, "entries") ? LENGTH(d.payload.entries) : null })',
     { rid: repoId, kinds, lim: limit }
   );
-  return cursor.all();
+  const rows = await cursor.all();
+  // A generation in flight has NO doc in the collection (the suite persists
+  // only on completion), so a collection-only list orphaned it from every UI
+  // surface after a page refresh — the panel reloaded the previous suite,
+  // showed no progress, and a second Generate attempt 409'd (live incident
+  // 2026-10-18). Surface the live generation as a synthetic newest row so
+  // the list — and any loadSuite on it — can adopt it (progress + Cancel).
+  const inflight = genInFlight.get(repoId);
+  if (inflight && (kind === 'all' || kind === 'ragas_suite')) {
+    rows.unshift({
+      _key: inflight,
+      repo_id: repoId,
+      kind: 'ragas_suite',
+      suite_key: inflight,
+      name: null,
+      created_at: new Date().toISOString(),
+      status: 'generating',
+      error: null,
+      progress: genProgress.get(inflight) || null,
+      summary: null,
+      entries: null
+    });
+  }
+  return rows;
 }
 
 // ---------- explain / advise ----------------------------------------------

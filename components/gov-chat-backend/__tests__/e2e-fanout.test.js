@@ -27,7 +27,14 @@ jest.mock(
     securityHeaders: (req, res, next) => next(),
     SecurityMiddleware: { applySecurityMiddleware: jest.fn() },
     reconfigureLogger: jest.fn(),
-    parsePositiveInt: require('./mocks/shared-lib').parsePositiveInt
+    parsePositiveInt: require('./mocks/shared-lib').parsePositiveInt,
+    // Main's #1090 tracing wave: query-routes reads spanAttrs.QUERY_ID_KEY
+    // and wraps the chatqna call in tracingBaggage.withBaggage — pass the
+    // REAL modules through (the shared mocks file does the same; a
+    // jest.fn() stub would never invoke the wrapped axios.post and the
+    // e2e assertions would see zero calls).
+    tracingBaggage: require('./mocks/shared-lib').tracingBaggage,
+    spanAttrs: require('./mocks/shared-lib').spanAttrs
   }),
   { virtual: true }
 );

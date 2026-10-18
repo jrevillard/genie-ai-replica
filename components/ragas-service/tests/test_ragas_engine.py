@@ -387,6 +387,18 @@ def test_tolerant_synthesizer_never_raises_to_the_executor(engine_env):
     assert scenarios == []  # a failed batch drops its questions, not the run
     assert wrapped.name == "stub_synth"
 
+    # n-cap enforcement (live 2026-10-18: 391 samples submitted for a
+    # 5-question suite — per-node scenario overshoot, ~30 min of GPU burn)
+    overshoot = _StubSynth()
+
+    async def many_scenarios(n, knowledge_graph, persona_list, callbacks=None):
+        return [object()] * (65 * n + 1)
+
+    overshoot.generate_scenarios = many_scenarios
+    capped = ragas_engine._TolerantSynthesizer(overshoot)
+    out = asyncio.run(capped.generate_scenarios(n=2, knowledge_graph=object(), persona_list=[]))
+    assert len(out) == 2
+
     # cancellation seam: once the event is set, remaining calls return
     # instantly WITHOUT touching the judge
     cancelled_inner = _StubSynth()

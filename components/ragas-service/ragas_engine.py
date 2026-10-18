@@ -667,12 +667,26 @@ class _TolerantSynthesizer:
         if self._cancelled():
             return []
         try:
-            return await self._inner.generate_scenarios(
+            scenarios = await self._inner.generate_scenarios(
                 n=n, knowledge_graph=knowledge_graph, persona_list=persona_list, callbacks=callbacks
             )
         except Exception as e:  # noqa: BLE001 — dropping this batch IS the recovery
             logger.warning("scenario generation failed for %s (dropping its questions): %s", self.name, e)
             return []
+        # Enforce the n cap HERE (live 2026-10-18: a 5-question suite over 65
+        # chunk nodes submitted 391 samples — 6×65+1, the per-node scenario
+        # builders ignoring the requested count — turning ~30s of synthesis
+        # into ~30 min at ~4.7s/call). generate() only ever consumes
+        # scenarios; the surplus was pure GPU burn.
+        if len(scenarios) > n:
+            logger.warning(
+                "ragas %s returned %d scenarios for n=%d — truncating (per-node overshoot bug)",
+                self.name,
+                len(scenarios),
+                n,
+            )
+            scenarios = scenarios[:n]
+        return scenarios
 
     async def generate_sample(self, scenario, callbacks=None):
         if self._cancelled():

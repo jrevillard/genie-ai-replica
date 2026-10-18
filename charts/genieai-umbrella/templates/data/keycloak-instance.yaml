@@ -64,17 +64,52 @@ spec:
   ingress:
     enabled: false
   {{- /*
-    Optional image override. Unset (default) the operator runs its own
-    pinned stock Keycloak image — no GENIE.AI theme in it, and the realm's
-    loginTheme falls back to the built-in theme. The theme-baked
-    genie-ai-keycloak image (configs/keycloak/Dockerfile: stock + COPY
-    themes) is the natural choice wherever the registry is reachable.
-    Same convention as the service factory: imageRegistry-prefixed when
-    the top-level imageRegistry is set.
-  */ -}}
-  {{- if .Values.data.keycloak.image.repository }}
-  image: {{ printf "%s/%s:%s" (.Values.imageRegistry | default "") .Values.data.keycloak.image.repository (.Values.data.keycloak.image.tag | default "main") }}
-  {{- end }}
+    Theme delivery: the CR has no volume/volumeMount surface (upstream
+    PR #53826 pending), so the pod template escape hatch is the only
+    injection point. The stock operator image stays untouched — the
+    theme tree travels in the keycloak-theme ConfigMap (single tgz key)
+    and an initContainer unpacks it into an emptyDir mounted at
+    /opt/keycloak/themes/<theme>, leaving the image's stock themes in
+    place. The checksum annotation makes a tarball change roll the pods:
+    Keycloak caches themes at startup, a mounted-file change alone would
+    never be picked up.
+  */}}
+  unsupported:
+    podTemplate:
+      metadata:
+        annotations:
+          genieai.io/keycloak-theme-checksum: {{ .Files.Get "files/keycloak-themes.tgz" | sha256sum | trunc 16 }}
+      spec:
+        volumes:
+          - name: keycloak-themes-src
+            configMap:
+              name: keycloak-theme
+          - name: keycloak-theme
+            emptyDir:
+              sizeLimit: 8Mi
+        initContainers:
+          - name: unpack-keycloak-theme
+            image: {{ .Values.data.keycloak.themeUnpackImage | default "busybox:1.36" }}
+            command:
+              - sh
+              - -c
+              # tarball root is themes/<theme>/: strip 2 so the tree lands
+              # directly at the emptyDir root (= /opt/keycloak/themes/<theme>)
+              - tar -xzf /src/keycloak-themes.tgz -C /theme --strip-components=2
+            volumeMounts:
+              - name: keycloak-themes-src
+                mountPath: /src
+                readOnly: true
+              - name: keycloak-theme
+                mountPath: /theme
+        # Merged into the operator-generated keycloak container by name —
+        # the only way to attach a mount to it through the pod template.
+        containers:
+          - name: keycloak
+            volumeMounts:
+              - name: keycloak-theme
+                mountPath: {{ printf "/opt/keycloak/themes/%s" .Values.data.keycloak.theme }}
+                readOnly: true
   # Trust X-Forwarded-* from Envoy. KC_PROXY=edge was removed in KC 24+;
   # spec.proxy.headers is the only path. Misconfiguration manifests as
   # `Invalid parameter: redirect_uri` loops on login.

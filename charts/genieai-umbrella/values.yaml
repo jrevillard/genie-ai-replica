@@ -182,19 +182,18 @@ data:
     adminUsername: genie-admin
     defaultLocale: en
     # Login/account/admin/email theme name, exported as KEYCLOAK_THEME.
-    # The `genie` theme source lives at configs/keycloak/themes (mounted
-    # at runtime on the compose path since #998). The Keycloak CR has no
-    # volume surface, so the theme reaches the pod only through
-    # image.repository pointing at a theme-baked image — with the
-    # operator's stock image Keycloak silently falls back to its
-    # default theme. See #998 for the runtime-mount branding model.
+    # The `genie` theme source lives at configs/keycloak/themes (the
+    # same source the compose path bind-mounts since #998). The chart
+    # ships it as files/keycloak-themes.tgz (regenerate with
+    # `make keycloak-theme` — CI fails on drift), unpacked into
+    # /opt/keycloak/themes/<theme> by an initContainer because the
+    # Keycloak CR has no volume surface.
     theme: genie
-    # Unset = the keycloak-operator's pinned stock image (no GENIE.AI
-    # theme). Set repository to the theme-baked genie-ai-keycloak image
-    # to enable the realm theme.
-    image:
-      repository: ""
-      tag: "main"
+    # Image that unpacks the theme tarball in the Keycloak pod's
+    # initContainer. Needs tar(1) with gzip + --strip-components
+    # (busybox qualifies). Override for air-gapped clusters with a
+    # mirrored image.
+    themeUnpackImage: busybox:1.36
     # Gates the new-user email-verification flow; requires smtp to be set
     # when true (Keycloak rejects verification emails without a server).
     verifyEmail: false

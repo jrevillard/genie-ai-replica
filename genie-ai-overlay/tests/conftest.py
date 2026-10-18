@@ -4,6 +4,7 @@ import os
 import sys
 
 os.makedirs("reports", exist_ok=True)
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -296,7 +297,6 @@ OWNED_SPAN_NAMES = frozenset(
         "reranker.tei_invoke",
         "dataprep.chunking",
         "dataprep.ensure_vector_index",
-        "dataprep.healthcheck",
         "dataprep.ingest",
         "dataprep.ingest.background",
         "dataprep.initialize_client",
@@ -353,6 +353,43 @@ def sweep_owned_spans():
 def owned_span_names():
     """Expose OWNED_SPAN_NAMES so a test can assert the mirror has not drifted."""
     return OWNED_SPAN_NAMES
+
+
+# ---------------------------------------------------------------------------
+# One answer to "what is overlay source?", shared by the two guards that need it.
+#
+# Both the span-coverage derivation (test_span_attrs) and the core-import pin
+# (test_image_ships_imported_core_modules) ask the same question and must not
+# answer it differently: a span opened in a directory the span derivation skips
+# but the import pin walks would be unguarded while the pin still reported
+# clean.
+#
+# Recursive, and pruned in place. ``Path.rglob`` cannot skip a directory it has
+# already descended into, and CI creates ``.venv`` at the overlay root and
+# caches it — so an unpruned walk visits every site-packages file before a
+# filter can throw it away.
+OVERLAY_ROOT = Path(__file__).resolve().parent.parent
+
+OVERLAY_SKIP_DIRS = frozenset(
+    {"tests", "contracts", ".venv", "reports", ".ruff_cache", "__pycache__", ".git", "build-patches", "site"}
+)
+
+
+def overlay_source_files() -> list[Path]:
+    """Every Python file under the overlay that is project source, recursively."""
+    found: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(OVERLAY_ROOT):
+        dirnames[:] = [d for d in dirnames if d not in OVERLAY_SKIP_DIRS]
+        for name in sorted(filenames):
+            if name.endswith(".py"):
+                found.append(Path(dirpath, name))
+    return sorted(found)
+
+
+@pytest.fixture
+def overlay_sources():
+    """Expose :func:`overlay_source_files` to both guards, so they cannot drift."""
+    return overlay_source_files()
 
 
 @pytest.fixture

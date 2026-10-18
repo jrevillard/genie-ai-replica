@@ -17,7 +17,6 @@ job.
 """
 
 import ast
-import os
 import re
 from pathlib import Path
 
@@ -50,8 +49,19 @@ def _core_imports(source_path: Path) -> set[str]:
     Parsed with ``ast`` rather than matched as text, so a ``core.x`` mentioned
     inside a comment or a docstring does not count as a dependency the image has
     to satisfy.
+
+    A file the running interpreter cannot parse yields an empty set rather than
+    raising. This walks the whole overlay now, so the blast radius is every
+    ``.py`` in the tree; an unparseable one — a helper using syntax newer than
+    the CI interpreter, say — would otherwise turn this into a traceback that
+    says nothing about which module is unpinned. Silent empty is the lesser
+    evil: the file has no imports this could see either way, and a genuine
+    ``core.*`` import is itself parseable by definition.
     """
-    tree = ast.parse(source_path.read_text(encoding="utf-8"))
+    try:
+        tree = ast.parse(source_path.read_text(encoding="utf-8"))
+    except SyntaxError:
+        return set()
     imported: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("core."):
@@ -66,26 +76,11 @@ def _copied_core_modules(dockerfile: Path) -> set[str]:
     return set(_COPY_CORE.findall(dockerfile.read_text(encoding="utf-8")))
 
 
-# Directories that never hold overlay source. ``.venv`` is here because CI
-# creates it at the overlay root (test:python) and caches it; walking into it
-# with ``rglob`` visits every file in site-packages before a filter can discard
-# them, which cost 3.2 s of a 4.4 s test and grew with the dependency count.
-SKIP_DIRS = frozenset({"tests", "contracts", ".venv", "reports", ".ruff_cache", "__pycache__", ".git"})
-
-
-def _overlay_modules() -> list[str]:
-    """Overlay-relative paths of every Python file that is project source.
-
-    Prunes in-place rather than filtering after the fact: ``rglob`` cannot skip a
-    directory it has already descended into.
-    """
-    found: list[str] = []
-    for dirpath, dirnames, filenames in os.walk(OVERLAY_ROOT):
-        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
-        for name in filenames:
-            if name.endswith(".py"):
-                found.append(str(Path(dirpath, name).relative_to(OVERLAY_ROOT)))
-    return found
+# The walk itself lives in conftest (``overlay_sources``) so this file and
+# test_span_attrs.py cannot answer "what is overlay source?" differently. They
+# did once: this side recursed, the span-coverage side listed five directories'
+# top level. A span opened in a directory only one of them saw would have been
+# unguarded while this file still reported the tree clean.
 
 
 @pytest.mark.parametrize("service", sorted(SERVICE_IMAGES), ids=sorted(SERVICE_IMAGES))
@@ -121,7 +116,7 @@ def test_the_pin_covers_every_service_directory_with_a_dockerfile() -> None:
     assert services_with_core_imports, "no pinned service imports from core — the pin is stale"
 
 
-def test_no_overlay_module_imports_core_without_being_pinned() -> None:
+def test_no_overlay_module_imports_core_without_being_pinned(overlay_sources) -> None:
     """The gap that let ``retriever/config.py`` import ``core.*`` unchecked.
 
     ``SERVICE_IMAGES`` is a hand-maintained list, and a hand-maintained list only
@@ -135,7 +130,9 @@ def test_no_overlay_module_imports_core_without_being_pinned() -> None:
     fails here by name rather than failing to fail at all.
     """
     unpinned = sorted(
-        rel for rel in _overlay_modules() if rel not in SERVICE_IMAGES and _core_imports(OVERLAY_ROOT / rel)
+        str(path.relative_to(OVERLAY_ROOT))
+        for path in overlay_sources
+        if str(path.relative_to(OVERLAY_ROOT)) not in SERVICE_IMAGES and _core_imports(path)
     )
     assert not unpinned, (
         f"modules importing core.* but not listed in SERVICE_IMAGES: {unpinned}. "

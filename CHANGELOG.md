@@ -9,10 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Document ingestion tracing:** ingestion spans are now checked for leaked
-  document content, the same way chat and retrieval spans already were. A file
-  id, file type or graph name that accidentally carried free text is now caught
-  during testing instead of reaching the trace store.
+- **Document ingestion tracing:** ingestion spans are now checked during
+  testing for accidentally recording free text, the same way chat and retrieval
+  spans already were. This catches a regression in the test suite; it does not
+  filter values in production. A file id written with spaces is rejected by the
+  check, but an id written with separators instead
+  (`Contrat_de_Jean_Dupont_Q3.pdf`) still reaches the trace store unchanged.
 - **RAG pipeline tracing:** LLM spans now record the model, the sampling
   parameters actually sent, token usage and the finish reason; retrieval spans
   record the search type, candidate fetch depth, whether a taxonomy label filter

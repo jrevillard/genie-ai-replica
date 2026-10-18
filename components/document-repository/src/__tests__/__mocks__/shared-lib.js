@@ -36,7 +36,12 @@ module.exports = {
     getConnection: jest.fn()
   },
   setScopeName: jest.fn(),
-  withBackgroundSpan: jest.fn(),
-  createGeniePropagator: jest.fn(),
-  withBaggage: jest.fn()
+  // Each of these INVOKES its callback rather than returning undefined. A bare
+  // `jest.fn()` turns a wrong assumption into a silent no-op: the shutdown
+  // handler would appear to run and do nothing, and `textMapPropagator` would
+  // hand the SDK `undefined` and fail deep inside it rather than at the mock
+  // boundary. Returning a real value keeps the stub honest about the contract.
+  withBackgroundSpan: jest.fn((_name, fn) => (typeof fn === 'function' ? fn() : undefined)),
+  withBaggage: jest.fn((_key, _value, fn) => (typeof fn === 'function' ? fn() : undefined)),
+  createGeniePropagator: jest.fn(() => ({}))
 };

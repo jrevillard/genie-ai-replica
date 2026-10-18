@@ -10,6 +10,7 @@ is a violation. Layer 2 alone is NOT sufficient — a one-word user query has no
 whitespace and passes — which is exactly why layer 1 exists.
 """
 
+import ast
 import json
 import pathlib
 import re
@@ -49,7 +50,6 @@ OWNED_SPAN_NAMES = {
     "reranker.tei_invoke",
     "dataprep.chunking",
     "dataprep.ensure_vector_index",
-    "dataprep.healthcheck",
     "dataprep.ingest",
     "dataprep.ingest.background",
     "dataprep.initialize_client",
@@ -62,13 +62,6 @@ OWNED_SPAN_NAMES = {
     "dataprep.log_environment_variables",
     "dataprep.retract",
 }
-
-# Spans the derivation regex matches that are not spans anything opens.
-#
-# ``service.operation`` is the usage example in ``tracing.with_span``'s docstring.
-# It is here rather than inline in the test so a reader who trips over it knows
-# it is a known false positive and not a second one waiting to happen.
-NOT_A_SPAN = {"service.operation"}
 
 
 class TestLabelDigest:
@@ -337,88 +330,80 @@ def _emit(name, attributes):
     return span
 
 
-# Matches a span name passed as the FIRST POSITIONAL argument to one of the four
-# span openers. The character class is deliberately wider than the current
-# vocabulary: it accepts digits, hyphens and uppercase so a rename like
-# ``llm.v2.invoke`` or ``dataprep.ingest-v2`` is still DERIVED rather than
-# silently escaping — an unswept span is the failure this whole guard exists to
-# prevent, so the pattern must not be narrower than names people actually write.
-_SPAN_OPENER = r"""(?:start_span|start_as_current_span|background_span|with_span)\("""
-_SPAN_LITERAL = re.compile(_SPAN_OPENER + r"""\s*["']([\w.:-]+)["']""")
+# The four ways this project opens a span with an explicit name.
+SPAN_OPENERS = frozenset({"start_span", "start_as_current_span", "background_span", "with_span"})
 
-# A span opened with anything OTHER than a plain string literal: a variable, an
-# f-string, a concatenation. The derivation above cannot see those, so a span
-# opened this way would be unguarded AND invisible to the guard — the worst of
-# both. ``_non_literal_span_openers`` reports them by file and line so the
-# remedy is obvious (pass the name as a literal).
-_SPAN_NON_LITERAL = re.compile(
-    _SPAN_OPENER + r"""(?!\s*["'])""",
-)
+# ``tracing.py`` is where those openers are DEFINED, so its own calls into
+# ``tracer.start_span(name)`` pass the parameter by design. Scanning it for
+# non-literal openers would report every definition as a violation.
+SPAN_OPENER_DEFINITIONS = frozenset({"tracing.py"})
 
 
-def _overlay_root():
+def overlay_root():
     return pathlib.Path(__file__).resolve().parent.parent
 
 
-def _overlay_sources():
-    """Every Python file under the overlay that may open a span."""
-    root = _overlay_root()
-    paths = [root / "tracing.py"]
-    for directory in ("chatqna", "retriever", "reranker", "dataprep", "core"):
-        paths.extend(sorted((root / directory).glob("*.py")))
-    return [p for p in paths if p.exists()]
+def _span_calls(path):
+    """Yield ``(lineno, first_arg_node_or_None)`` for each span opener call."""
+    import ast
+
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+    except SyntaxError:
+        # A file the running interpreter cannot parse is not evidence about
+        # span coverage; reporting it as an unpinned/unswept module would
+        # bury the real message under a traceback.
+        return
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+        if name in SPAN_OPENERS:
+            yield node.lineno, (node.args[0] if node.args else None)
 
 
-def _span_call_sites():
-    """Sources that CALL a span opener, as opposed to defining one.
-
-    ``tracing.py`` is excluded: it is where ``with_span`` /
-    ``background_span`` are implemented, so its first argument is the parameter
-    ``name`` by design. Scanning it would flag every one of them and tell you
-    nothing. Its docstring example is still covered for the literal case, via
-    ``NOT_A_SPAN``.
-    """
-    return [p for p in _overlay_sources() if p.name != "tracing.py"]
-
-
-def _emitted_span_names():
-    """Every span name the overlay opens with an explicit string literal.
+def _emitted_span_names(overlay_sources):
+    """Every span name the overlay opens with a plain string literal.
 
     Derived from the sources rather than hand-listed, because a hand-maintained
     list goes stale silently — that is the defect the previous dataprep pin
     existed to have caught, and re-introducing it in a new shape would be worse
     than the drift.
 
-    Two things that look like spans and are not:
+    Parsed with :mod:`ast`, not matched as text. A regex over the raw source
+    reads a ``with_span("llm.invoke")`` inside a DOCSTRING as a real span, and
+    the guard would then demand that a documentation example be registered as
+    production telemetry. (It did exactly that: ``service.operation``, the
+    usage example in ``tracing.with_span``, needed a hand-written exclusion
+    list to stay out.) ``ast`` sees only calls that are calls.
 
-    * an attribute-key prefix (``dataprep.file_id``) — never the first argument;
-    * ``service.operation``, the usage example in ``tracing.with_span``'s
-      docstring — see ``NOT_A_SPAN``.
-
-    Spans opened with a non-literal name are invisible here by construction;
-    ``test_no_span_is_opened_with_a_non_literal_name`` is what stops that from
-    being a silent gap.
-
-    FastAPI auto-instrumentation is invisible here too, by construction: those
-    spans are named by the framework, not by us.
+    FastAPI auto-instrumentation is absent by construction — those spans are
+    named by the framework, not by us.
     """
     emitted = set()
-    for path in _overlay_sources():
-        emitted.update(_SPAN_LITERAL.findall(path.read_text(encoding="utf-8", errors="replace")))
-    return emitted - NOT_A_SPAN
+    for path in overlay_sources:
+        for _lineno, first in _span_calls(path):
+            if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                emitted.add(first.value)
+    return emitted
 
 
-def _non_literal_span_openers():
-    """Span openers whose first argument is not a plain string literal."""
-    root = _overlay_root()
-    found = []
-    for path in _span_call_sites():
-        text = path.read_text(encoding="utf-8", errors="replace")
-        for match in _SPAN_NON_LITERAL.finditer(text):
-            line = text.count("\n", 0, match.start()) + 1
-            snippet = text[match.end() : match.end() + 40].split("\n")[0].strip()
-            found.append(f"{path.relative_to(root)}:{line} ({snippet})")
-    return found
+def _non_literal_span_openers(overlay_sources):
+    """Span openers whose first argument is not a plain string literal.
+
+    Reported as ``file:line`` so the remedy is obvious: pass the name as a
+    literal, or the span is invisible to ``_emitted_span_names`` and therefore
+    unguarded without anything failing.
+    """
+    offenders = []
+    for path in overlay_sources:
+        if path.name in SPAN_OPENER_DEFINITIONS:
+            continue
+        for lineno, first in _span_calls(path):
+            if first is None or not (isinstance(first, ast.Constant) and isinstance(first.value, str)):
+                offenders.append(f"{path.relative_to(overlay_root())}:{lineno}")
+    return offenders
 
 
 class TestOwnedSpanCoverage:
@@ -430,7 +415,7 @@ class TestOwnedSpanCoverage:
     this one safe?" — is exactly the one a swept span makes unnecessary.
     """
 
-    def test_every_emitted_span_is_swept(self, owned_span_names):
+    def test_every_emitted_span_is_swept(self, owned_span_names, overlay_sources):
         """The guard against the drift this whole mechanism exists to prevent.
 
         Written as a subset assertion, not equality: the failure mode is a span
@@ -438,7 +423,7 @@ class TestOwnedSpanCoverage:
         would also make the test fail for the wrong reason when a service is
         removed.
         """
-        unswept = sorted(_emitted_span_names() - set(owned_span_names))
+        unswept = sorted(_emitted_span_names(overlay_sources) - set(owned_span_names))
         assert not unswept, (
             f"spans opened but never swept: {unswept}. A span missing from "
             "tests/conftest.py OWNED_SPAN_NAMES starts unguarded — any attribute "
@@ -446,16 +431,16 @@ class TestOwnedSpanCoverage:
             "it writes in core/span_attrs.py ATTRIBUTE_NAMES."
         )
 
-    def test_the_swept_list_holds_no_span_the_code_does_not_emit(self, owned_span_names):
+    def test_the_swept_list_holds_no_span_the_code_does_not_emit(self, owned_span_names, overlay_sources):
         """The mirror failure: a name swept for a span that no longer exists.
 
         Harmless to the sweep itself, but it hides a rename — the span moved and
         the list kept the old name, and the new one is unguarded.
         """
-        stale = sorted(set(owned_span_names) - _emitted_span_names())
+        stale = sorted(set(owned_span_names) - _emitted_span_names(overlay_sources))
         assert not stale, f"OWNED_SPAN_NAMES lists spans no module opens: {stale}"
 
-    def test_no_span_is_opened_with_a_non_literal_name(self):
+    def test_no_span_is_opened_with_a_non_literal_name(self, overlay_sources):
         """A span whose name is computed is invisible to the guard that owns it.
 
         ``test_every_emitted_span_is_swept`` reads span names out of the source,
@@ -467,7 +452,7 @@ class TestOwnedSpanCoverage:
         So a non-literal opener is itself the finding: pass the name as a
         literal, or the span is unguarded by construction.
         """
-        offenders = _non_literal_span_openers()
+        offenders = _non_literal_span_openers(overlay_sources)
         assert not offenders, (
             f"span opened with a non-literal name: {offenders}. The coverage "
             "derivation reads names from the source, so such a span is neither "

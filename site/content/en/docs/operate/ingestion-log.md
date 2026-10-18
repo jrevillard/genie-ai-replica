@@ -31,8 +31,9 @@ correlate a log entry with the matching RAG-pipeline trace.
   Service-to-service callers authenticate as the `dataprep-service-client`
   OIDC client (mapped to the realm role `dataprep-service`).
 - For ArangoDB-level reads: shell access to a Swarm node and the deployed
-  `.env` file (`/opt/genieai/.env` for Ansible Swarm, project-root `.env` for
-  Docker Compose) so you can read `ARANGO_PASSWORD`, `ARANGO_USERNAME`, and
+  `.env` file (`<deploy_dir>/.env` for Ansible Swarm — default
+  `/opt/genieai/.env`, the path follows the `deploy_dir` group var; project-root
+  `.env` for Docker Compose) so you can read `ARANGO_PASSWORD`, `ARANGO_USERNAME`, and
   `ARANGO_DB`.
 - For trace correlation: the observability stack must be enabled —
   `ENABLE_OBSERVABILITY=1` in `.env`, otherwise VictoriaTraces carries no

@@ -3050,7 +3050,7 @@ chart:lint:
   stage: test
   interruptible: true
   before_script:
-    - apk add --no-cache curl bash
+    - apk add --no-cache curl bash tar
     - helm dependency update charts/genieai-umbrella
   script:
     # The realm file is duplicated: this copy is for the chart's
@@ -3058,6 +3058,10 @@ chart:lint:
     # the compose image. They must stay byte-identical or the two
     # delivery paths deploy different realms.
     - cmp -s charts/genieai-umbrella/files/genie-realm.yaml configs/keycloak/genie-realm.yaml || { echo "realm file drift between the chart copy and the compose copy - update both"; exit 1; }
+    # Same contract for the Keycloak theme tarball: reproducible tar
+    # (regen script pins mtime/owner/order) so a byte compare is sound.
+    - ./scripts/regen-keycloak-theme.sh >/dev/null
+    - git diff --exit-code --stat charts/genieai-umbrella/files/keycloak-themes.tgz || { echo "keycloak theme tarball drift - run 'make keycloak-theme' and commit the result"; exit 1; }
     - helm lint charts/genieai-umbrella --strict
     - >-
       helm template test charts/genieai-umbrella -n genieai

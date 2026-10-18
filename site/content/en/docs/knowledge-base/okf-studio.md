@@ -102,12 +102,23 @@ with suites interchangeable with that harness's xlsx formats:
   one alone, or with any number of related repositories — multi-hop
   questions cross repo boundaries when they are combined). You set the
   dimensions: question count (default 20), the query-type distribution, and
-  the number of personas. Each entry carries the question, its expected
-  answer, and the reference passages the answer should be grounded in.
+  the number of personas — the suite ships exactly the requested number of
+  questions. Each entry carries the question, its expected answer, and the
+  reference passages the answer should be grounded in. Generation is a
+  background job: you can close the dialog and come back, and a **Cancel**
+  button stops it at any time (the shared GPU drains within one in-flight
+  model call). Nothing is ever discarded on a timer — a healthy long run
+  ends only when it completes or when you cancel it. A disk cache of judge
+  responses makes **repeat** generations of the same repositories nearly
+  instant (the knowledge-graph phase is skipped; disable with
+  `RAGAS_LLM_CACHE=0`).
 - **Manage** entries with full parity to the other suites: edit the question
   or expected answer, flip an entry in-scope/out-of-scope, remove it, add
   your own, rename the suite, delete it, and probe a single entry against
-  the live corpus.
+  the live corpus. A probe reports *answerable* (the expected passage is in
+  the retrieved contexts), *weak* (contexts came back but not the expected
+  passage), *unanswerable* (nothing retrieved / no ingested graphs), or
+  *error* (the probe itself failed — the reason is shown inline).
 - **Run** the suite: each question is answered through the retrieval
   pipeline (the same corpora, embedding, and reranker the chat uses) and
   scored by the selected RAGAS metrics — faithfulness, context precision,

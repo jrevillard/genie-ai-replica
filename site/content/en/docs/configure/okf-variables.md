@@ -246,9 +246,13 @@ reasoning-token leak into judge completions) are part of the feature's spec.
 | `RAGAS_JUDGE_API_KEY` | = `VLLM_API_KEY` | Bearer token for the judge endpoint. |
 | `RAGAS_EMBED_BASE_URL` | TEI embedding service | Embedder endpoint (answer relevancy + testset generation). |
 | `RAGAS_EMBED_MODEL` | = `EMBED_MODEL_ID` | Embedding model — must be consistent within a run. |
-| `OKF_RAGAS_TESTSET_SIZE_DEFAULT` | `20` | The generate form's initial suite size; the user sets the actual dimensions per generation. |
+| `OKF_RAGAS_TESTSET_SIZE_DEFAULT` | `20` | The generate form's initial suite size; the user sets the actual dimensions per generation. The suite ships exactly the requested question count. |
 | `OKF_RAGAS_MAX_ENTRIES` | `200` | Hard cap per suite (generation + import). |
 | `OKF_RAGAS_RUN_CONCURRENCY` | `2` | Per-run question concurrency — bounds LLM load on the shared GPU so benchmarking does not starve chat answering. |
+| `OKF_RAGAS_LONG_TIMEOUT_MS` | `3600000` | **Liveness horizon, not a job deadline.** A reachable, running job is never timed out — this bounds only how long an *unreachable* sidecar is retried before the job record fails honestly. A healthy long generation ends only by completing or by the user's Cancel. |
+| `OKF_RAGAS_JOB_POLL_MS` | `3000` | How often okf-server polls the sidecar's job registry. |
+| `RAGAS_LLM_CACHE` | `1` | Disk judge cache — responses keyed by model+prompt+params persist under `RAGAS_LLM_CACHE_DIR`, so repeat generations of the same repositories skip the whole knowledge-graph phase (minutes to seconds) and suite re-runs re-judge only what changed. `0` disables. |
+| `RAGAS_LLM_CACHE_DIR` | `/tmp/ragas-llm-cache` | Where the judge cache lives (inside the container — cleared when the container is recreated; cache IO is best-effort and can never fail a job). |
 
 ## Related variables
 

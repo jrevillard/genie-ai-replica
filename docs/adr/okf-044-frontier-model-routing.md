@@ -18,16 +18,21 @@ very different kinds of work:
 - **Inference work** — ChatQnA answering, the RAG the framework exists to provide.
 
 David's directive (2026-10-18): add an option to configure a **remote frontier model**
-and delegate to it, per operation: the heavy admin operations *and* the basic inference
-service — "this way the framework user can access frontier models for RAG" (a
-deployment with a modest GPU keeps retrieval local but answers with a frontier model).
-The config carries a URL, a model list for selection, an access token, **both OpenAI
-and Anthropic APIs**, and a checkbox per operation choosing what delegates. The
-configuration screen must make it very clear what each option does. Embeddings,
-reranking, and (unchanged) translation stay on the local GPU services — embeddings and
-reranking are dimension-coupled to the indexed vectors; routing them breaks retrieval.
-If the frontier API is not configured (or a box is unchecked), everything defaults to
-the local model exactly as today — the feature is purely additive.
+and delegate to it, per operation: the heavy admin operations *and*, as a later
+expansion, the basic inference service. **Scope revision after ADR review (same day)**:
+v1 restricts to the **OKF admin operations**; inference is a **future expansion** (its
+streaming complexity is the reason — the config-UI row ships disabled and labeled); the
+**legacy ingestion pipeline is untouched** — the dataprep ingestion legs (labeling,
+contextual) are deferred with a stated crossover: those legs live in the shared
+dataprep service both pipelines execute, separable only by okf-originated request
+tagging, which ships as the future-extension design. The config carries a URL, a model
+list for selection, an access token, **both OpenAI and Anthropic APIs**, and a checkbox
+per operation choosing what delegates. The configuration screen must make it very
+clear what each option does. Embeddings, reranking, and (unchanged) translation stay on
+the local GPU services — embeddings and reranking are dimension-coupled to the indexed
+vectors; routing them breaks retrieval. If the frontier API is not configured (or a box
+is unchecked), everything defaults to the local model exactly as today — the feature is
+purely additive.
 
 A full call-site map (three research passes, 2026-10-18) found: nine
 `vllmChatCompletions` callers in okf-server, three more Node LLM helpers, three dataprep
@@ -60,16 +65,13 @@ configuration.
    Both normalize to `{ text, finishReason, usage }` and implement one schema-forced
    JSON operation with per-provider mechanics (OpenAI `json_schema` strict / Anthropic
    `output_config.format` / vLLM `json_object`), always with the existing parse+retry
-   fallback underneath. The inference adapter also carries **streaming** — chat
-   answering streams through the RAG pipeline today, and a non-streaming frontier leg
-   would visibly degrade the UX.
-4. **Unified propagation to OPEA consumers**: okf-server serves an internal
-   `GET /internal/llm-routing` (internal-secret authed, the
-   `RAGAS_INTERNAL_SECRET` convention) returning the resolved per-operation routing;
-   Python services (dataprep, chatqna) pull it with a short TTL cache and default to
-   their env/local config when unreachable or unconfigured. The RAGAS sidecar takes
-   per-request judge overrides through its existing job factory. Graph extraction
-   (vendored OPEA comps) stays local in v1.
+   fallback underneath. Streaming arrives with the future inference expansion.
+4. **Propagation (v1: RAGAS sidecar only)**: the sidecar takes per-request judge
+   overrides through its existing job factory. The broader internal
+   `GET /internal/llm-routing` pull for OPEA services (dataprep, chatqna) is designed
+   but future-extension plumbing — the dataprep legs are deferred to keep the legacy
+   ingestion pipeline untouched (the okf-originated tagging design ships with the
+   spec). Graph extraction (vendored OPEA comps) stays local.
 5. **Context-window adherence everywhere** (the RAGAS rule, generalized): every routed
    operation sizes its prompts from the selected model's configured window — the
    `RAGAS_JUDGE_CONTEXT_TOKENS`/`RAGAS_DOC_CHAR_CAP=auto` derivation is the worked
@@ -93,8 +95,11 @@ configuration.
   places a frontier round-trip in the user-facing chat path (mitigated by streaming +
   the always-available local default).
 - Non-goals: routing embeddings, reranking, translation, or PII; graph extraction
-  (v1); multi-profile simultaneity (one active frontier profile in v1); vendor Batch
-  APIs (phase 2); cost metering beyond logged usage events.
+  (v1); **inference/ChatQnA delegation in v1** (future expansion — streaming
+  complexity; UI row disabled + labeled); **the dataprep ingestion legs in v1**
+  (future expansion via okf-originated tagging — the legacy ingestion pipeline is
+  untouched); multi-profile simultaneity (one active frontier profile in v1); vendor
+  Batch APIs (phase 2); cost metering beyond logged usage events.
 
 ## References
 

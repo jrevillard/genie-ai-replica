@@ -14,7 +14,7 @@ OpenRouter — all `{base}/v1/chat/completions` + Bearer + `GET {base}/v1/models
 
 ```
 chat(request)      -> { text, finishReason, usage{in,out}, refused }
-chatStream(request)-> async chunks of {textDelta} | {finishReason}     # inference leg
+chatStream(request)-> async chunks of {textDelta} | {finishReason}     # FUTURE: inference leg (deferred w/ the expansion)
 listModels()       -> [{ id, name, contextTokens? }]
 testConnection()   -> { ok, detail }                                    # config screen
 ```

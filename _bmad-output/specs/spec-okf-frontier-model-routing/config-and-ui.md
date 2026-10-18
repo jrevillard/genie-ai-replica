@@ -69,7 +69,10 @@ Layout (DS components only):
   result `DsPill` ok/fail + the provider's own error text), master enabled toggle.
 - **Operations card**: one row per routing-table entry — checkbox (native input in
   label, the RagasPanel metrics house style; no DsCheckbox exists) + name + a one-line
-  "what this moves" description (CAP-8).
+  "what this moves" description (CAP-8). **Future-extension rows** (inference;
+  ingestion labeling; contextual generation) render DISABLED with their checkbox
+  greyed and a "future extension" `DsPill` — visible so administrators know they
+  exist, honest that they don't work yet.
 - **Every control carries its explanation inline** (David 2026-10-18: "make it very
   clear in the configuration screen what each option does"):
   - provider: "Which API family the endpoint speaks. OpenAI-compatible also covers

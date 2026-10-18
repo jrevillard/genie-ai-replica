@@ -16,7 +16,7 @@ deployment's choice must meet. "Local" floors describe the default vLLM path;
 | Test-suite generation (`suite_generation`) | ≥ 32k | REQUIRED (class-structured suites) | no | ≤ 6000/call | loop+dedup today; frontier handles in fewer calls |
 | RAGAS generation (`ragas_generation`) | ≥ 32k recommended (KG transforms + pair joins) | REQUIRED (RAGAS internals) | no | per-leg caps | window drives `_doc_char_cap`-style KG-input sizing |
 | RAGAS judging (`ragas_judging`) | ≥ 32k | REQUIRED (metric outputs) | no | per-metric | default-off toggle |
-| Inference (`inference`) | ≥ 32k recommended (prompt + contexts + history) | no (prose; abstention phrasing) | **REQUIRED** for chat UX | answer-sized, capped | local fallback must resume mid-conversation |
+| Inference (`inference`) — **FUTURE EXPANSION** | ≥ 32k recommended (prompt + contexts + history) | no (prose; abstention phrasing) | **REQUIRED** for chat UX | answer-sized, capped | local fallback must resume mid-conversation |
 
 ## Cross-cutting requirements (all classes)
 

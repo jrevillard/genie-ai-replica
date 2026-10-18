@@ -654,7 +654,11 @@ export default {
           labels: { style: { colors: t.textColor } }
         },
         yaxis: { min: 0, max: 1, labels: { style: { colors: t.textColor } } },
-        stroke: { curve: 'straight', width: 2 }
+        stroke: { curve: 'straight', width: 2 },
+        // a single-run history is ONE point — without markers the line
+        // chart renders empty (live 2026-10-18: first completed run showed
+        // an empty trend). Markers make 1..N points always visible.
+        markers: { size: 4, strokeWidth: 0, hover: { size: 5 } }
       };
     },
     statusOptions() {

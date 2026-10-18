@@ -443,7 +443,7 @@ MULTI_TURN_MODE = os.getenv("MULTI_TURN_MODE", "blend").strip().lower()
 # _extract_history_text) fed to the condense rewrite. Dedicated knob: the
 # blend's MULTI_TURN_HISTORY_TURNS stays blend-only so deleting the blend
 # later does not orphan condense semantics.
-MULTI_TURN_CONDENSE_HISTORY_TURNS = _env_int("MULTI_TURN_CONDENSE_HISTORY_TURNS", 4)
+MULTI_TURN_CONDENSE_HISTORY_TURNS = _env_int("MULTI_TURN_CONDENSE_HISTORY_TURNS", 8)
 RETRIEVER_SERVICE_HOST_IP = os.getenv("RETRIEVER_SERVICE_HOST_IP", "0.0.0.0")
 RETRIEVER_SERVICE_PORT = int(os.getenv("RETRIEVER_SERVICE_PORT", 7025))
 RERANK_SERVER_HOST_IP = os.getenv("RERANK_SERVER_HOST_IP", "0.0.0.0")

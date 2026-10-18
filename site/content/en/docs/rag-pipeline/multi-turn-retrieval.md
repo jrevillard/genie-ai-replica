@@ -158,7 +158,7 @@ rather than a confident-but-wrong answer.
 | Flag | Default | Purpose |
 |------|---------|---------|
 | `MULTI_TURN_MODE` | `blend` | Mode selector. Only the exact string `condense` (after `strip().lower()`) enters the condense branch — anything else skips it. Vector-space blending runs in the `elif` branch, gated on `MULTI_TURN_BLEND_ENABLED=true` AND `MULTI_TURN_HISTORY_TURNS > 0`. A typo'd mode with blend disabled (the default) falls through to stateless retrieval on the raw query — neither condense nor blend runs. |
-| `MULTI_TURN_CONDENSE_HISTORY_TURNS` | `4` | Number of prior conversation segments fed to the condense rewrite prompt. Only consulted when `MULTI_TURN_MODE=condense`; the blend path keeps its own `MULTI_TURN_HISTORY_TURNS` knob. |
+| `MULTI_TURN_CONDENSE_HISTORY_TURNS` | `8` | Number of prior conversation segments fed to the condense rewrite prompt. Only consulted when `MULTI_TURN_MODE=condense`; the blend path keeps its own `MULTI_TURN_HISTORY_TURNS` knob. |
 
 Setting `MULTI_TURN_MODE=condense` while `MULTI_TURN_BLEND_ENABLED=true`
 logs a warning and **ignores the blend flag** — the two paths cannot

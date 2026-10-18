@@ -118,13 +118,13 @@ class TestParseCondenseResponse:
         assert _env_int("UNSET_VAR_THAT_DOES_NOT_EXIST_XYZ", 4) == 4
         # Empty string (compose's default injection for semantic knobs).
         with patch.dict("os.environ", {"MULTI_TURN_CONDENSE_HISTORY_TURNS": ""}, clear=False):
-            assert _env_int("MULTI_TURN_CONDENSE_HISTORY_TURNS", 4) == 4
+            assert _env_int("MULTI_TURN_CONDENSE_HISTORY_TURNS", 8) == 8
         # Non-numeric value — must not raise, must fall back to default.
         with patch.dict("os.environ", {"MULTI_TURN_CONDENSE_HISTORY_TURNS": "abc"}, clear=False):
-            assert _env_int("MULTI_TURN_CONDENSE_HISTORY_TURNS", 4) == 4
+            assert _env_int("MULTI_TURN_CONDENSE_HISTORY_TURNS", 8) == 8
         # Valid value — passes through unchanged.
         with patch.dict("os.environ", {"MULTI_TURN_CONDENSE_HISTORY_TURNS": "7"}, clear=False):
-            assert _env_int("MULTI_TURN_CONDENSE_HISTORY_TURNS", 4) == 7
+            assert _env_int("MULTI_TURN_CONDENSE_HISTORY_TURNS", 8) == 7
 
 
 def _condense_response_payload(content='{"standalone_query": "maize planting density CENTA"}'):

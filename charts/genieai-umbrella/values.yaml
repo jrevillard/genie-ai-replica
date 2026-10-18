@@ -108,7 +108,10 @@ envoyGateway:
   enabled: true
 
 ingress:
-  host: genieai.local                 # public hostname for redirect URLs
+  # Public hostname (may carry :port, e.g. genieai.local:4443) — the OIDC
+  # issuer, redirect URLs and TLS dnsNames all derive from it. Deployment
+  # data, supplied per environment; no chart default.
+  host: ""
   # Scheme of the public origin. Feeds KC_PUBLIC_ORIGIN (realm
   # redirectUris/webOrigins): a port-forward demo serves plain HTTP, so
   # the overlay sets http:// there or every login redirect mismatches.

@@ -393,6 +393,15 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _env_float(name: str, default: float) -> float:
+    """Parse a float env var tolerantly — same contract as ``_env_int``:
+    unset, set-to-empty, or non-numeric values fall back to the default."""
+    try:
+        return float(os.getenv(name) or default)
+    except ValueError:
+        return default
+
+
 MEGA_SERVICE_PORT = _env_int("MEGA_SERVICE_PORT", 8888)
 GUARDRAIL_SERVICE_HOST_IP = os.getenv("GUARDRAIL_SERVICE_HOST_IP", "0.0.0.0")
 GUARDRAIL_SERVICE_PORT = int(os.getenv("GUARDRAIL_SERVICE_PORT", 80))
@@ -443,7 +452,7 @@ MULTI_TURN_MODE = os.getenv("MULTI_TURN_MODE", "blend").strip().lower()
 # _extract_history_text) fed to the condense rewrite. Dedicated knob: the
 # blend's MULTI_TURN_HISTORY_TURNS stays blend-only so deleting the blend
 # later does not orphan condense semantics.
-MULTI_TURN_CONDENSE_HISTORY_TURNS = _env_int("MULTI_TURN_CONDENSE_HISTORY_TURNS", 4)
+MULTI_TURN_CONDENSE_HISTORY_TURNS = _env_int("MULTI_TURN_CONDENSE_HISTORY_TURNS", 8)
 RETRIEVER_SERVICE_HOST_IP = os.getenv("RETRIEVER_SERVICE_HOST_IP", "0.0.0.0")
 RETRIEVER_SERVICE_PORT = int(os.getenv("RETRIEVER_SERVICE_PORT", 7025))
 RERANK_SERVER_HOST_IP = os.getenv("RERANK_SERVER_HOST_IP", "0.0.0.0")
@@ -687,14 +696,23 @@ def _blend_embeddings(query_emb, history_emb, alpha):
 # LLM's endpoint/model and is fail-closed: any failure classification below
 # fails the turn with LLM-failure semantics (503) — no blend or raw-query
 # fallback. Product stance: a wrong answer is worse than a failed turn.
+# Built-in default; MULTI_TURN_CONDENSE_SYSTEM_PROMPT overrides it per call
+# (two-tier priority, same contract as CHATQNA_SYSTEM_PROMPT). A custom prompt
+# must still demand JSON-only output — the response is parsed as
+# {"standalone_query": "..."} and anything else fails the turn (bad_body).
 _CONDENSE_SYSTEM_PROMPT = (
     "You rewrite a user's follow-up message into a standalone information-retrieval "
     "query. Resolve pronouns and implicit references using the chat history. "
     "EXCLUDE anything the user rejects. Output JSON only: "
     '{"standalone_query": "..."}'
 )
-_CONDENSE_MAX_TOKENS = 64
-_CONDENSE_TIMEOUT_SECONDS = 5.0
+# Env-tunable (MULTI_TURN_CONDENSE_MAX_TOKENS / MULTI_TURN_CONDENSE_TIMEOUT_SECONDS).
+# The token cap must clear the longest valid rewrite: a guided-JSON output cut
+# mid-string parses as bad_body and fails the turn (503). 256 = ~4x the worst
+# observed rewrite (a multi-clause follow-up, ~60 tokens); only consumed tokens
+# cost anything, and a runaway generation is still bounded by the timeout.
+_CONDENSE_MAX_TOKENS = _env_int("MULTI_TURN_CONDENSE_MAX_TOKENS", 256)
+_CONDENSE_TIMEOUT_SECONDS = _env_float("MULTI_TURN_CONDENSE_TIMEOUT_SECONDS", 5.0)
 
 
 class CondenseError(Exception):
@@ -3001,7 +3019,8 @@ class ChatQnAService:
         """Rewrite a follow-up into a standalone retrieval query (issue #1091).
 
         One short LLM call against the chat LLM's endpoint/model
-        (temperature 0, guided JSON, 5 s timeout, no retry). Fail-closed:
+        (temperature 0, guided JSON, fail-closed timeout via
+        MULTI_TURN_CONDENSE_TIMEOUT_SECONDS, no retry). Fail-closed:
         every failure classification raises HTTPException(503) — the turn
         fails with LLM-failure semantics; retrieval never sees the raw or
         blended query on this path.
@@ -3010,10 +3029,11 @@ class ChatQnAService:
             f"{LLM_SERVER_PROTOCOL}://{LLM_SERVER_HOST_IP}:{LLM_SERVER_PORT}"
             f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions"
         )
+        system_prompt = os.getenv("MULTI_TURN_CONDENSE_SYSTEM_PROMPT", "").strip() or _CONDENSE_SYSTEM_PROMPT
         payload = {
             "model": _get_llm_model(),
             "messages": [
-                {"role": "system", "content": _CONDENSE_SYSTEM_PROMPT},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": _build_condense_user_content(history_text, last_message)},
             ],
             "temperature": 0.0,

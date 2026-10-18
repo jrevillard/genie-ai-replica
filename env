@@ -376,7 +376,12 @@ HUGGING_FACE_HUB_TOKEN=
 # MULTI_TURN_MODE=blend              # condense = per-turn standalone-query rewrite
 #                                    # (fail-closed, issue #1091); blend = vector-space
 #                                    # blending above. condense overrides the blend flag.
-# MULTI_TURN_CONDENSE_HISTORY_TURNS=4  # conversation segments fed to the condense rewrite
+# MULTI_TURN_CONDENSE_HISTORY_TURNS=8  # conversation segments fed to the condense rewrite (8 = 4 exchanges)
+# MULTI_TURN_CONDENSE_MAX_TOKENS=256   # output cap for the rewrite LLM call; a longer guided-JSON
+#                                      # rewrite truncates and fails the turn (503)
+# MULTI_TURN_CONDENSE_TIMEOUT_SECONDS=5.0  # fail-closed budget (s) for the rewrite call
+# MULTI_TURN_CONDENSE_SYSTEM_PROMPT=       # override the rewrite prompt (must demand
+#                                          # JSON-only output; unset = built-in default)
 
 # Chat context-window: three tiers. A SET MAX_MODEL_LEN_TEXTGEN caps what
 # chatqna uses even when discovery answers — a deliberate consumer-side cap

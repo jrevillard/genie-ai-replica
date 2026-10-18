@@ -118,13 +118,30 @@ class TestParseCondenseResponse:
         assert _env_int("UNSET_VAR_THAT_DOES_NOT_EXIST_XYZ", 4) == 4
         # Empty string (compose's default injection for semantic knobs).
         with patch.dict("os.environ", {"MULTI_TURN_CONDENSE_HISTORY_TURNS": ""}, clear=False):
-            assert _env_int("MULTI_TURN_CONDENSE_HISTORY_TURNS", 4) == 4
+            assert _env_int("MULTI_TURN_CONDENSE_HISTORY_TURNS", 8) == 8
         # Non-numeric value — must not raise, must fall back to default.
         with patch.dict("os.environ", {"MULTI_TURN_CONDENSE_HISTORY_TURNS": "abc"}, clear=False):
-            assert _env_int("MULTI_TURN_CONDENSE_HISTORY_TURNS", 4) == 4
+            assert _env_int("MULTI_TURN_CONDENSE_HISTORY_TURNS", 8) == 8
         # Valid value — passes through unchanged.
         with patch.dict("os.environ", {"MULTI_TURN_CONDENSE_HISTORY_TURNS": "7"}, clear=False):
-            assert _env_int("MULTI_TURN_CONDENSE_HISTORY_TURNS", 4) == 7
+            assert _env_int("MULTI_TURN_CONDENSE_HISTORY_TURNS", 8) == 7
+
+    def test_tolerant_env_float_helper_falls_back_on_empty(self):
+        """``_env_float`` mirrors ``_env_int``'s tolerant contract for the
+        condense timeout knob (MULTI_TURN_CONDENSE_TIMEOUT_SECONDS)."""
+        from chatqna.genieai_chatqna import _env_float
+
+        # Default path (unset).
+        assert _env_float("UNSET_VAR_THAT_DOES_NOT_EXIST_XYZ", 5.0) == 5.0
+        # Empty string.
+        with patch.dict("os.environ", {"MULTI_TURN_CONDENSE_TIMEOUT_SECONDS": ""}, clear=False):
+            assert _env_float("MULTI_TURN_CONDENSE_TIMEOUT_SECONDS", 5.0) == 5.0
+        # Non-numeric value — must not raise, must fall back to default.
+        with patch.dict("os.environ", {"MULTI_TURN_CONDENSE_TIMEOUT_SECONDS": "abc"}, clear=False):
+            assert _env_float("MULTI_TURN_CONDENSE_TIMEOUT_SECONDS", 5.0) == 5.0
+        # Valid value — passes through unchanged.
+        with patch.dict("os.environ", {"MULTI_TURN_CONDENSE_TIMEOUT_SECONDS": "8.5"}, clear=False):
+            assert _env_float("MULTI_TURN_CONDENSE_TIMEOUT_SECONDS", 5.0) == 8.5
 
 
 def _condense_response_payload(content='{"standalone_query": "maize planting density CENTA"}'):
@@ -197,13 +214,44 @@ class TestCondenseQueryCall:
         assert captured["url"].endswith("/v1/chat/completions")
         assert captured["json"]["model"] == "granite-4.1-8b"
         assert captured["json"]["temperature"] == 0.0
-        assert captured["json"]["max_tokens"] == 64
+        assert captured["json"]["max_tokens"] == 256
         assert captured["json"]["response_format"] == {"type": "json_object"}
         assert captured["json"]["stream"] is False
         assert captured["json"]["messages"][0]["role"] == "system"
         assert captured["json"]["messages"][0]["content"] == _CONDENSE_SYSTEM_PROMPT
         assert captured["json"]["messages"][1]["content"].endswith("Standalone query:")
         assert captured["headers"]["Authorization"] == "Bearer test-key"
+
+    @pytest.mark.asyncio
+    async def test_system_prompt_env_override_reaches_payload(self):
+        """MULTI_TURN_CONDENSE_SYSTEM_PROMPT (two-tier priority, same contract
+        as CHATQNA_SYSTEM_PROMPT): a set value drives the rewrite call's
+        system message; empty/whitespace falls back to the built-in default."""
+        svc = create_chatqna_service()
+        captured = {}
+
+        def _post(url, json=None, headers=None):
+            captured.update(json=json)
+            return _make_httpx_response(json_data=_condense_response_payload())
+
+        override = "CUSTOM rewrite prompt. Output JSON only."
+        with (
+            patch.dict("os.environ", {"MULTI_TURN_CONDENSE_SYSTEM_PROMPT": override}, clear=False),
+            patch.object(chatqna_module, "_get_llm_model", return_value="granite-4.1-8b"),
+            patch.object(chatqna_module, "OPENAI_API_KEY", "test-key"),
+            patch.object(chatqna_module.httpx, "AsyncClient", _make_fake_client(_post)),
+        ):
+            await svc._condense_query("USER: bean?\nASSISTANT: EAC ...", "maize instead")
+        assert captured["json"]["messages"][0]["content"] == override
+
+        with (
+            patch.dict("os.environ", {"MULTI_TURN_CONDENSE_SYSTEM_PROMPT": "   "}, clear=False),
+            patch.object(chatqna_module, "_get_llm_model", return_value="granite-4.1-8b"),
+            patch.object(chatqna_module, "OPENAI_API_KEY", "test-key"),
+            patch.object(chatqna_module.httpx, "AsyncClient", _make_fake_client(_post)),
+        ):
+            await svc._condense_query("USER: bean?\nASSISTANT: EAC ...", "maize instead")
+        assert captured["json"]["messages"][0]["content"] == _CONDENSE_SYSTEM_PROMPT
 
     @pytest.mark.asyncio
     async def test_token_attrs_emitted_via_raw_set_attribute_bypass_pii_filter(self):

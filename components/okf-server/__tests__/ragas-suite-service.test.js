@@ -310,7 +310,8 @@ describe('beginSuiteGeneration / getSuite', () => {
       if (u.includes('/generate-testset')) return Promise.resolve(okJson({ job_id: 'j-long' }));
       if (u.includes('/jobs/j-long')) {
         polls += 1;
-        if (polls <= 5) return Promise.resolve(okJson({ job_id: 'j-long', status: 'running', phase: 'synthesizing-questions' }));
+        if (polls <= 5)
+          return Promise.resolve(okJson({ job_id: 'j-long', status: 'running', phase: 'synthesizing-questions' }));
         return Promise.resolve(
           okJson({ job_id: 'j-long', status: 'done', result: { samples: GEN_SAMPLES, generator: {} } })
         );

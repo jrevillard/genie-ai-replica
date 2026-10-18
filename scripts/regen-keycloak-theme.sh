@@ -9,12 +9,15 @@
 # contract as the genie-realm.yaml copy in chart:lint.
 #
 # Called by `make keycloak-theme` and by the CI chart:lint drift guard.
+# Optional $1 overrides the output path (CI regenerates to a temp file and
+# compares CONTENT hashes — gzip output legitimately differs a few bytes
+# between gzip versions, so a byte compare would be flaky).
 # Requires GNU tar (alpine: `apk add tar`; busybox tar lacks --sort/--mtime).
 set -eu
 
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 src="${repo_root}/configs/keycloak"
-out="${repo_root}/charts/genieai-umbrella/files/keycloak-themes.tgz"
+out="${1:-${repo_root}/charts/genieai-umbrella/files/keycloak-themes.tgz}"
 
 [ -d "${src}/themes/genie" ] || {
   echo "missing ${src}/themes/genie — run from a full checkout" >&2

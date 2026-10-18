@@ -33,7 +33,7 @@ runtime theme assets are another first-deploy download: Ansible pulls the
 branding archives from the GitLab repository-archive endpoint on every deploy
 node, so an air-gapped node must either reach that endpoint or have the two
 host config directories (`/opt/genieai/config/frontend/` and
-`/opt/genieai/config/keycloak/themes/genie/`) pre-seeded by hand with
+`/opt/genieai/config/keycloak/themes/`) pre-seeded by hand with
 `config_bootstrap_sync_enabled: false`.
 
 ### 3. Does it work with my SSO?

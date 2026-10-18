@@ -43,9 +43,9 @@
 #   deploy/ansible/roles/config_bootstrap/tasks/main.yml
 #                                               rsync --ignore-existing (preserve edits)
 #   deploy/ansible/deploy.yml:418-423            play tags [config, deploy]
-#   deploy/ansible/templates/env.j2:412-413      CONFIG_DIR_FRONTEND / CONFIG_DIR_KEYCLOAK
+#   deploy/ansible/templates/env.j2:415-416      CONFIG_DIR_FRONTEND / CONFIG_DIR_KEYCLOAK
 #   docker-compose.yaml:402                      /config  <- ${CONFIG_DIR_FRONTEND}:ro
-#   docker-compose.yaml:1620                     themes root <- ${CONFIG_DIR_KEYCLOAK}:ro
+#   docker-compose.yaml:1629                     themes root <- ${CONFIG_DIR_KEYCLOAK}:ro
 #   components/gov-chat-frontend/nginx.conf:20-46
 #                                               /config vs /runtime/config.js vs /theme-fallback.css
 #   components/gov-chat-frontend/docker-entrypoint.sh

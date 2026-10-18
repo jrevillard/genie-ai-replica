@@ -91,8 +91,14 @@ test.describe('Keycloak runtime theme mount', () => {
     expect(response.status(), 'login page should be served').toBe(200);
     const html = await response.text();
     // Theme assets are referenced as /auth/resources/<hash>/login/<theme>/...;
-    // `login/genie/` proves the mounted genie theme resolved — the built-in
-    // fallback would reference login/keycloak[.v2] instead.
-    expect(html, 'login page should load the mounted genie theme assets').toContain('login/genie/');
+    // referencing the selected theme proves the MOUNTED theme resolved — the
+    // built-in fallback would reference login/keycloak[.v2] instead. The
+    // expected theme follows the deployment's KEYCLOAK_THEME (default genie),
+    // so themed deployments (e.g. genie-el-salvador) validate their own theme.
+    const expectedTheme = process.env.KEYCLOAK_THEME || 'genie';
+    expect(
+      html,
+      `login page should load the mounted ${expectedTheme} theme assets`
+    ).toContain(`login/${expectedTheme}/`);
   });
 });

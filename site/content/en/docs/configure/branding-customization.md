@@ -207,6 +207,8 @@ Then restart the Keycloak container — it caches themes in memory.
 
 **Adding a new theme in three steps:** (1) create `configs/keycloak/themes/<your-theme>/` with `login/` (and optionally `account/`, `admin/`, `email/`) subdirectories, each with a `theme.properties` — `parent=genie` reuses the GENIE.AI layout and only overrides your files; (2) deploy — the `config_bootstrap` role seeds the whole `themes/` tree; (3) set `KEYCLOAK_THEME` (or the realm setting) to `<your-theme>`. On an already-deployed node, dropping the theme directory into `/opt/genieai/config/keycloak/themes/` and restarting Keycloak is enough — the bind mount serves it live.
 
+> **`KEYCLOAK_THEME` applies to all four surfaces at once** (login, account, admin, email — see `genie-realm.yaml`). A theme that only ships `login/` therefore leaves the account console, the admin console and emails on Keycloak's unbranded built-in look. If that is not what you want, either ship the other subdirectories too, or set the per-type realm settings (`accountTheme`, `adminTheme`, `emailTheme`) to `genie` via the admin API while pointing `loginTheme` at your theme.
+
 ### How to change the Keycloak login logo
 
 Replace four PNG files (one per surface) and (optionally) tweak the CSS:

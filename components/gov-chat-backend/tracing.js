@@ -51,8 +51,13 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   const { withBackgroundSpan } = require('./shared-lib/tracing-background');
   // Propagator factory — the shared test asserts on this factory, not on a
   // propagator it builds itself, so the wiring below cannot silently regress.
-  // Deep import matches the existing shared-lib/X pattern.
-  const { tracingBaggage } = require('./shared-lib/tracing-baggage');
+  // Deep import matches the existing shared-lib/X pattern. NOTE: the module
+  // exports { createGeniePropagator, withBaggage } directly — it does NOT
+  // nest a `tracingBaggage` namespace (main's destructure shipped a boot
+  // crash: "Cannot read properties of undefined (reading
+  // 'createGeniePropagator')", first exercised by this deployment — CI's
+  // test:backend mocks shared-lib and never boots the image).
+  const tracingBaggage = require('./shared-lib/tracing-baggage');
 
   // Custom SpanProcessor that redacts PII and drops noise spans before export
   class PIIRedactionProcessor {

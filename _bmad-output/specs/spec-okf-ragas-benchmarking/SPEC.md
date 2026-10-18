@@ -6,6 +6,7 @@ companions:
   - stack.md
   - model-requirements.md
   - failure-attribution.md
+  - scaling-design.md
   - ../../../tests/rag-benchmarks/eval/CLAUDE.md
   - ../../../tests/rag-benchmarks/eval/RUNBOOK.md
 sources: []
@@ -59,6 +60,7 @@ The OKF Routing Lab can prove *routing* (which repository should answer) but not
 - Branch discipline: `feat/okf-ragas` merges to `feat/okf-server` only; nothing lands on `main` or `release/el-salvador` from this work.
 - New env vars need four-site parity (code default, docker-compose, `env` template, `env.j2`) plus config-validator coverage.
 - Suite size is bounded (`OKF_RAGAS_MAX_ENTRIES`): generation and runs cost LLM time on the shared GPU and must not starve chat answering.
+- **Nothing ends a healthy long-running job on a timer** (David 2026-10-18): `OKF_RAGAS_LONG_TIMEOUT_MS` is a liveness horizon (bounds only the unreachable-sidecar case); a reachable running job completes or is cancelled by the user — progress visible, cancel always available (see `scaling-design.md`).
 - PDF report export is client-side from a dedicated report view — no server-side rendering service enters the deployment.
 
 ## Non-goals

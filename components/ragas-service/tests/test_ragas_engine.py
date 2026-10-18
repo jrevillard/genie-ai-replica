@@ -309,6 +309,20 @@ def test_generate_testset_seeds_missing_headlines_before_splitter(monkeypatch, e
             asyncio.run(ragas_engine.generate_testset(documents, testset_size=2))
 
 
+def test_build_llm_constructs_the_real_caching_wrapper(monkeypatch, engine_env):
+    """Regression (live 2026-10-18): subclassing ragas.llms.LangchainLLMWrapper
+    exploded at class-definition time — that name is a DeprecationHelper shim,
+    not a class ("DeprecationHelper.__init__() takes 3 positional arguments
+    but 4 were given") — and every /evaluate job died. Construction against
+    the REAL ragas classes must work end-to-end (no network — clients are
+    created but unused)."""
+    w = ragas_engine.build_llm(temperature=0.0)
+    assert hasattr(w, "generate_text") and hasattr(w, "agenerate_text")
+    from ragas.llms.base import BaseRagasLLM
+
+    assert isinstance(w, BaseRagasLLM)  # set_run_config etc. keep flowing
+
+
 def test_caching_wrapper_serves_hits_without_calling_the_judge(tmp_path, monkeypatch):
     """The cache exists because repeat generations re-paid the whole KG
     phase: 5 questions over 2 small repos = ~211 transform calls ≈ 8 min

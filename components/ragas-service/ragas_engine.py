@@ -289,7 +289,13 @@ def build_llm(temperature: float = 0.0):
     never pays the langchain import cost and tests can stub this module."""
     import httpx
     from langchain_openai import ChatOpenAI
-    from ragas.llms import LangchainLLMWrapper
+
+    # ragas.llms.LangchainLLMWrapper is a DeprecationHelper SHIM, not a
+    # class — subclassing it explodes at class-definition time (live
+    # 2026-10-18: "DeprecationHelper.__init__() takes 3 positional arguments
+    # but 4 were given", killing every /evaluate job). Import the REAL class
+    # from its module.
+    from ragas.llms.base import LangchainLLMWrapper
 
     base = _judge_base_url()
     if not base or not os.getenv("RAGAS_JUDGE_MODEL"):

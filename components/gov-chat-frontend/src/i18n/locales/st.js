@@ -3256,7 +3256,7 @@ export default {
           context_utilization:
             'Hore na moqoqo o fumanweng o lekane ho hlahisa karabo ea moelelo — teko ea ho phalla ha phumullo.',
           context_entities_recall:
-            'Kutolosa boemong ba ditaba: karolo ea litaba tse bitsoang lipasseng tsa boitšoaro ba mongolo (likhamphani, dateng, mabalenyana, libaka) tse bonahalang hape ho dikhouse tse khothalelitsoeng. Palo e tlase e bolela hore ho khothalelitsoe dikhouse tse sieang metso ea boitšoaro.',
+            'Kutolosa boemong ba ditaba: karolo ea litaba tse bitsoang lipasseng tsa boitšoaro ba mongolo (likhamphani, dateng, mabalenyana, libaka) tse bonahalang hape ho dikhouse tse khothalelitsoeng. Palo e tlase e bolela hore ho khothalelitsoe dikhouse tse sieang metso ea boitšoaro. Toka ho moahlodi — palo e tlase ha kutolosa context se fetoheletsoe hangata ho bolela hore ntsho ea litaba ke moahloli e ile ea siea, eseng hore teng e sieo.',
           factual_correctness:
             'Tumellano ea nnete maemong a litšoiso le karabo ea moelelo — moahlodi o arola ka bobeli ebe o lekanya tšusumetso. Teko e thata ka ho fetisisa ea nepo.',
           answer_correctness:

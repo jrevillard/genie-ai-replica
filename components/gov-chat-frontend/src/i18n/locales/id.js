@@ -3247,7 +3247,7 @@ export default {
           context_utilization:
             'Apakah konteks yang diambil cukup untuk menghasilkan jawaban referensi — pemeriksaan kelengkapan pengambilan.',
           context_entities_recall:
-            'Recall tingkat entitas: proporsi entitas bernama dalam bagian referensi entri (perusahaan, tanggal, jumlah, tempat) yang juga muncul di potongan yang diambil. Rendah berarti pengambilan membawa potongan yang melewatkan entitas yang disebut referensi.',
+            'Recall tingkat entitas: proporsi entitas bernama dalam bagian referensi entri (perusahaan, tanggal, jumlah, tempat) yang juga muncul di potongan yang diambil. Rendah berarti pengambilan membawa potongan yang melewatkan entitas yang disebut referensi. Sensitif terhadap juri — skor rendah saat recall konteks lulus biasanya berarti ekstraksi entitas juri melewatinya, bukan konten yang hilang.',
           factual_correctness:
             'Kesepakatan faktual tingkat klaim dengan jawaban referensi — juri memecah keduanya menjadi klaim dan menilai tumpang tindihnya. Metrik kebenaran paling ketat.',
           answer_correctness:

@@ -1492,6 +1492,16 @@ function attributeFailures(suite, runDoc) {
     ) {
       stage = 'reranker';
       recommendation = 'noise ranked above signal — rerank weights/strategy';
+    } else if (failed.includes('context_entities_recall') && !failed.includes('context_recall')) {
+      // Live 2026-10-19 (chunk-reference verification run): the reference
+      // chunk was retrieved VERBATIM (every reference token present, context
+      // recall 1.0) and entity recall still scored 0.4–0.5 — the judge's two
+      // entity-extraction calls disagree with each other. Attribute to the
+      // judge, not the corpus: telling a curator to "enrich entity mentions"
+      // for content that was retrieved character-for-character is wasted work.
+      stage = 'judge';
+      recommendation =
+        'context recall passed — the reference content WAS retrieved; the entity-recall miss comes from the judge’s entity extraction, not missing content. Treat as judge noise unless a stronger judge model reproduces it.';
     } else if (failed.includes('context_entities_recall')) {
       stage = 'corpus';
       recommendation = 'key entities of the reference are unretrievable — enrich entity mentions in the concept';

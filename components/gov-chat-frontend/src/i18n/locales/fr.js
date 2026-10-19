@@ -3267,7 +3267,7 @@ export default {
           context_utilization:
             'Si le contexte récupéré suffit à produire la réponse de référence — un contrôle de complétude de la récupération.',
           context_entities_recall:
-            'Rappel au niveau des entités : la part des entités nommées des passages de référence de l’entrée (sociétés, dates, montants, lieux) qui apparaissent aussi dans les morceaux récupérés. Un score bas signifie que la récupération a rapporté des morceaux qui manquent des entités de la référence.',
+            'Rappel au niveau des entités : la part des entités nommées des passages de référence de l’entrée (sociétés, dates, montants, lieux) qui apparaissent aussi dans les morceaux récupérés. Un score bas signifie que la récupération a rapporté des morceaux qui manquent des entités de la référence. Sensible au juge — un score bas alors que le rappel de contexte réussit signifie généralement que l’extraction d’entités du juge a manqué des éléments, non que le contenu manque.',
           factual_correctness:
             'Accord factuel au niveau des affirmations avec la référence — le juge décompose les deux et note le recouvrement. La métrique d’exactitude la plus stricte.',
           answer_correctness:

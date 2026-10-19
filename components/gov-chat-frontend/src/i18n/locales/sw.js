@@ -3242,7 +3242,7 @@ export default {
           context_utilization:
             'Muktadha uliopatikana unatosha kutoa jibu la rejea — ukaguzi wa ukamilifu wa upatikanaji.',
           context_entities_recall:
-            'Kukumbuka kwa kiwango cha vitu: uwiano wa vitu vilivyotajwa katika vifungu vya rejea ya ingizo (kampuni, tarehe, kiasi, maeneo) vinavyoonekana pia katika vipande vilivyoretwa. Kipimo cha chini kinaonyesha uteuzi ulileta vipande ambavyo vitu vya rejea havipo.',
+            'Kukumbuka kwa kiwango cha vitu: uwiano wa vitu vilivyotajwa katika vifungu vya rejea ya ingizo (kampuni, tarehe, kiasi, maeneo) vinavyoonekana pia katika vipande vilivyoretwa. Kipimo cha chini kinaonyesha uteuzi ulileta vipande ambavyo vitu vya rejea havipo. Inahisi kwa mhukumu — alama ya chini akiwa kukumbuka kwa muktadha umefanikiwa kwa kawaida maana uchimbaji wa vitu wa mhukumu umekosa, si maudhui kukosekana.',
           factual_correctness:
             'Ukubaliano wa kimantiki wa kiwango cha madai na jibu la rejea — mhakiki anagawanya vyote viwili kuwa madai na kupima mwingiliano. Kipimo cha usahihi kali zaidi.',
           answer_correctness:

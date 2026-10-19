@@ -1894,7 +1894,7 @@ export default {
           context_utilization:
             'Whether the retrieved context is sufficient to produce the reference answer — a retrieval-completeness check against what the ideal answer needs.',
           context_entities_recall:
-            'Entity-level recall: the share of named entities in the entry’s reference passages (companies, dates, amounts, places) that also appear in the retrieved chunks. Low means retrieval brought chunks that miss entities the reference names.',
+            'Entity-level recall: the share of named entities in the entry’s reference passages (companies, dates, amounts, places) that also appear in the retrieved chunks. Low means retrieval brought chunks that miss entities the reference names. Judge-sensitive — a low score while context recall passes usually means the judge’s entity extraction missed, not that content is missing.',
           factual_correctness:
             'Claim-level factual agreement with the reference answer — the judge decomposes both into claims and scores the overlap. The strictest correctness metric.',
           answer_correctness:

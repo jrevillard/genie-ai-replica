@@ -3259,7 +3259,7 @@ export default {
           context_utilization:
             'Se o contexto recuperado basta para produzir a resposta de referência — uma verificação de completude da recuperação.',
           context_entities_recall:
-            'Recall em nível de entidades: a proporção das entidades nomeadas nas passagens de referência da entrada (empresas, datas, valores, lugares) que também aparecem nos trechos recuperados. Baixo significa que a recuperação trouxe trechos que perdem entidades nomeadas pela referência.',
+            'Recall em nível de entidades: a proporção das entidades nomeadas nas passagens de referência da entrada (empresas, datas, valores, lugares) que também aparecem nos trechos recuperados. Baixo significa que a recuperação trouxe trechos que perdem entidades nomeadas pela referência. Sensível ao juiz — uma pontuação baixa com o recall de contexto aprovado normalmente significa que a extração de entidades do juiz falhou, não que o conteúdo está ausente.',
           factual_correctness:
             'Acordo factual no nível de afirmações com a referência — o juiz decompõe ambas e pontua a sobreposição. A métrica de correção mais estrita.',
           answer_correctness:

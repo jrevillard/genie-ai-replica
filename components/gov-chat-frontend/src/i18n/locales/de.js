@@ -3269,7 +3269,7 @@ export default {
           context_utilization:
             'Ob der abgerufene Kontext ausreicht, um die Referenzantwort zu erzeugen — eine Vollständigkeitsprüfung des Abrufs.',
           context_entities_recall:
-            'Recall auf Entitätenebene: der Anteil der benannten Entitäten in den Referenzpassagen des Eintrags (Firmen, Daten, Beträge, Orte), die auch in den abgerufenen Chunks vorkommen. Niedrig bedeutet, dass die abgerufenen Chunks Entitäten der Referenz verfehlen.',
+            'Recall auf Entitätenebene: der Anteil der benannten Entitäten in den Referenzpassagen des Eintrags (Firmen, Daten, Beträge, Orte), die auch in den abgerufenen Chunks vorkommen. Niedrig bedeutet, dass die abgerufenen Chunks Entitäten der Referenz verfehlen. Richter-sensitiv — ein niedriger Wert bei bestandenem Context-Recall bedeutet meist, dass die Entitätsextraktion des Judges versäumt hat, nicht dass Inhalt fehlt.',
           factual_correctness:
             'Faktische Übereinstimmung auf Aussagenebene mit der Referenzantwort — der Judge zerlegt beide in Aussagen und bewertet die Überschneidung. Die strengste Korrektheitsmetrik.',
           answer_correctness:

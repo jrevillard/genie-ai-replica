@@ -659,6 +659,84 @@ describe('explain', () => {
     expect(explained.payload.advice).toBeTruthy();
   });
 
+  // Live 2026-10-19 (verification run rr1792392548082): the reference chunk
+  // was retrieved VERBATIM — context recall 1.0, every reference token in the
+  // retrieved union — and entity recall still scored 0.4–0.5, because the
+  // judge's two entity-extraction calls disagree with each other. The advisor
+  // must attribute that to the judge, not send the curator to enrich entity
+  // mentions in content that was returned character-for-character.
+  it('entity-recall misses with context recall PASSING attribute to the judge, not the corpus', async () => {
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-cer', status: 'queued' }));
+      if (u.includes('/jobs/j-cer'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-cer',
+            status: 'done',
+            result: {
+              aggregate: {},
+              per_query: GEN_SAMPLES.map(() => ({ context_recall: 0.95, context_entities_recall: 0.3 })),
+              model: 'm',
+              n: 2
+            }
+          })
+        );
+      return baseFetch(url);
+    });
+    const begunSuite = await svc.beginSuiteGeneration('me', { testset_size: 2 }, {});
+    await begunSuite.done;
+    const run = await svc.beginRunSuite(
+      'me',
+      begunSuite.suite_key,
+      { metrics: ['context_recall', 'context_entities_recall'] },
+      {}
+    );
+    await run.done;
+    const explained = await svc.beginExplainFailures('me', begunSuite.suite_key, { run_key: run.run_key }, {});
+    await explained.done;
+    const doc = await svc.getExplainFailures('me', begunSuite.suite_key, run.run_key);
+    expect(doc.payload.attributions.length).toBeGreaterThan(0);
+    expect(doc.payload.attributions.every((a) => a.stage === 'judge')).toBe(true);
+    expect(doc.payload.attributions[0].recommendation).toMatch(/entity extraction/i);
+  });
+
+  it('entity-recall misses WITH context recall failing still attribute to the corpus', async () => {
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-cer2', status: 'queued' }));
+      if (u.includes('/jobs/j-cer2'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-cer2',
+            status: 'done',
+            result: {
+              aggregate: {},
+              per_query: GEN_SAMPLES.map(() => ({ context_recall: 0.2, context_entities_recall: 0.3 })),
+              model: 'm',
+              n: 2
+            }
+          })
+        );
+      return baseFetch(url);
+    });
+    const begunSuite = await svc.beginSuiteGeneration('me', { testset_size: 2 }, {});
+    await begunSuite.done;
+    const run = await svc.beginRunSuite(
+      'me',
+      begunSuite.suite_key,
+      { metrics: ['context_recall', 'context_entities_recall'] },
+      {}
+    );
+    await run.done;
+    const explained = await svc.beginExplainFailures('me', begunSuite.suite_key, { run_key: run.run_key }, {});
+    await explained.done;
+    const doc = await svc.getExplainFailures('me', begunSuite.suite_key, run.run_key);
+    expect(doc.payload.attributions.every((a) => a.stage === 'corpus')).toBe(true);
+  });
+
   it('routes tag suggestions through the existing guardrail', async () => {
     // Seed a failing metric so the advice path fires (all-passing runs get
     // attribution only — by design).

@@ -6,9 +6,9 @@ the design spec (`docs/superpowers/specs/2026-10-08-genie-ai-helm-charts-design.
 Plan checkboxes are not a status source — evidence is the chart, the deploy
 repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
-## Current state (2026-10-18)
+## Current state (2026-10-19)
 
-- Chart `genieai-umbrella` at **0.2.32** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.43** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto main after issue #998 (runtime-theme model, 81 commits) —
   tip `7a20c5913` at rebase time, theme delivery ported to the operator
@@ -33,9 +33,34 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
   `data.keycloak.adminEmail`, `ingress.host` (no more `genieai.local`
   fallback) and `smtp.{from,host,user}` (once smtp is set) are required at
   render time — deployment data no longer ships as chart defaults.
+- **Full-stack browser validation + edge fixes (0.2.33–0.2.38)**: login →
+  dashboard → FR streamed chat → ingestion → RAG-with-citations all green
+  through the edge. Bugs fixed live on the way: https listener port derived
+  from `ingress.host` (single source of truth, no duplicate knob, 0.2.35);
+  Keycloak backchannel discovery returned portless URLs (Envoy forwards Host
+  without the port and `backchannelDynamic` rebuilds token/jwks/userinfo from
+  it) — fixed by pinning `X-Forwarded-Host` via HTTPRoute
+  RequestHeaderModifier on `/auth/` (0.2.36); SSE chat killed by Envoy's 52 s
+  default route timeout — `timeouts.backendRequest: 1h10m` on `/api/`
+  (anchored to the backend `CHATQNA_STREAM_TIMEOUT` budget, 0.2.37–0.2.38).
+- **Traces tier live (0.2.39–0.2.41)**: VictoriaTraces single-port reality
+  (`-httpListenAddr=:10428`, OTLP ingest under `/insert/opentelemetry`) —
+  collector exporter endpoint fixed through three iterations. All six
+  services now emit spans with attributes into VT (chatqna/retriever/
+  reranker RAG chain with traceparent linkage, dataprep ingest taxonomy
+  `ingest/chunking/llm.context_batch/llm.context_chunk/llm.label_batch`,
+  backend + document-repository Express/auto-instr spans after
+  `ENABLE_OBSERVABILITY` reached the two Node services, 0.2.43).
+- **Metrics OTLP sink (0.2.42)**: with `observability.metrics.enabled=false`
+  the OTLP receiver had no `/v1/metrics` route and every instrumented pod
+  retried metric export forever on 404 — a `nop`-exporter pipeline now
+  accepts and discards. (Model-client timeout policy itself is overlay-side,
+  MR !568.)
 - Full validation set green on 0.2.32 (2026-10-18): health via edge, FR
   streamed chat, upload → ClamAV → dataprep ingestion, RAG answer with
-  citations from a freshly ingested doc, genie-themed login page.
+  citations from a freshly ingested doc, genie-themed login page. Re-run on
+  0.2.43 (2026-10-19) with the observability assertions added (VL enriched
+  rows, VT spans per service).
 - GPU tier is a binary choice: `opea.gpu.mode=external` (remote OpenAI-compatible
   API) or `in-cluster` (model Deployments behind `gpu=true` nodeSelector).
   Laptop runs external; in-cluster is render-validated only (no GPU locally).
@@ -53,7 +78,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 | 5 — AI/ML tier | `…-ai-ml.md` | ↩️ superseded by the OPEA-tier plan |
 | OPEA tier (Phase 3) | `2026-10-15-opea-tier.md` | ✅ shipped (six orchestrators, four in-cluster model templates, NetworkPolicies, endpoint helpers; final review pass integrated at 0.1.61) |
 | deploy repo | `…-deploy-repo.md` | ✅ shipped (`genie-ai-deploy`, Flux, per-laptop overlay) |
-| 7 — CI | `…-ci.md` | 🟡 partial (`chart:lint` + `chart:install` jobs exist; no `chart:contract` gate, no ct full suite, no kind+Calico install gate) |
+| 7 — CI | `…-ci.md` | 🟡 mostly (`chart:lint` + `chart:contract` green on every push — contract runs the PII smoke on the chart-rendered collector config; `chart:install` exists but is **manual-only** — a full install with prereqs takes ~30 min on the runner's kind, same posture as the compose E2E suite; residual: `ct` full suite, kind+Calico NetworkPolicy gate) |
 | 8 — docs | `…-docs.md` | 🟡 partial (`charts/README.md`; per-env overlay docs not written) |
 | 4 — observability | `2026-10-15-observability-tier.md` | ✅ shipped (charts 0.2.0–0.2.20: VLSingle baseline + collector gateway + filelog agent + Grafana CRs + VMServiceScrapes; live-validated on the laptop — admin logs 200, PII smoke green on the chart-rendered config; 0.2.20 scopes the filelog agent to the stack namespaces after foreign-ns zap-JSON rows broke the admin TYPE column; metrics/traces/grafana opt-in flags are render-validated only) |
 | 6 — per-env ingress | `…-per-env-ingress.md` | ✅ Phase 2 shipped as charts 0.2.21–0.2.26 (Envoy Gateway dependency, Gateway API templates, nginx removed from the data path, port-bearing host, TLS); per-env overlay knobs are the `ingress.*` values consumed by the laptop overlay |
@@ -89,23 +114,19 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
    - `charts/README.md` + `charts/genieai-umbrella/README.md` — refresh
      against 0.2.32 (ingress/envoyGateway/theme values).
    - genie-ai-deploy README — overlay/SealedSecret model if missing.
-4. **CI gap (plan 7 residual)** — `chart:contract` render-gate job (MUST:
-   render the chart with overlay-shaped values, extract the gateway
-   collector config, run `PII_SMOKE_CONFIG=<rendered>
-   tests/otel-collector/run-pii-smoke.sh` — the PII OTTL lives in the chart
-   helper, a second copy of the compose regex that WILL drift without this
-   gate — and assert operator Service names `<kind>-<cr-name>` in every
-   rendered URL), `ct lint`/`ct install` on kind (kind prereqs now include
-   cert-manager/vmoperator/otel-operator via `scripts/install-prereqs.sh`),
-   kind+Calico NetworkPolicy install gate, dashboards for chart test
-   results. `chart:lint` + `chart:install` (incl. the theme-drift guard)
-   are green on every push.
+4. **CI gap (plan 7 residual)** — ✅ `chart:contract` shipped (renders with
+   overlay-shaped values, runs `PII_SMOKE_CONFIG=<rendered>
+   tests/otel-collector/run-pii-smoke.sh`, asserts operator Service names);
+   `chart:install` settled as **manual-only** (full install ≈ 30 min on the
+   runner's kind — not tenable per push; same posture as the compose E2E
+   suite). Residual: `ct lint`/`ct install` full suite, kind+Calico
+   NetworkPolicy install gate, dashboards for chart test results.
 
 Observability residuals (tier ✅ shipped 2026-10-15): whole-tier adversarial
-review pending; VT OTLP port unverified until traces are enabled somewhere;
-`${p}`/`${s}` OTTL capture-group refs are eaten by confmap in collector
-0.152 (replacement drops boundary chars) — same latent behavior in the
-compose config, kept verbatim; backlog.
+review pending; ✅ VT OTLP ingest verified live (0.2.41, traces tier on on
+the laptop); `${p}`/`${s}` OTTL capture-group refs are eaten by confmap in
+collector 0.152 (replacement drops boundary chars) — same latent behavior in
+the compose config, kept verbatim; backlog.
 
 ## Parked / backlog
 

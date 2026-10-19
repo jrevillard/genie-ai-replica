@@ -17,10 +17,11 @@ going to delay the fallback that would have finished the ingest. So the budget
 is set to *bound the delay*, not to *wait longer for a good answer*.
 
 Precedence: ``MODEL_LLM_TIMEOUT_SECONDS`` > legacy ``VLLM_TIMEOUT`` > default.
-Retries have no legacy name. The second name reaches exactly one reader in a
-deployed stack — the vendored comps graph transformer, which reads it from the
-environment without going through this module — so the precedence above is the
-in-repo rule, and compose resolves the two consumers separately.
+Retries have no legacy name. ``VLLM_TIMEOUT`` is a second name for the same
+knob, kept so an existing ``.env`` carrying it keeps working; in a deployed
+service ``MODEL_LLM_TIMEOUT_SECONDS`` is always injected, so the second tier is
+never reached. It reaches no container at all now — the one vendored reader of
+that name cannot use an env string as a timeout, see ``OVERRIDES.yaml``.
 
 Scope — every in-repo call site (see the audit table below for what is NOT
 here, and why):
@@ -34,7 +35,7 @@ dataprep  Keycloak token, ingestion-log writes, doc status,
 reranker  TEI ``/rerank``     ``aiohttp``                 RERANK_*
 chatqna   backend user profile, document-repository metadata  ``aiohttp``  CONTROL_PLANE_*
 retriever OpenAI ``ChatOpenAI`` summarizer / probe   ``langchain_openai``  LLM_*
-retriever ``OpenAIEmbeddings``  ``langchain_openai``      TEI_*
+retriever ``OpenAIEmbeddings``  ``langchain_openai``      EMBEDDING_*
 ============================  ==========================  ==============
 
 NOT covered — vendored ``comps``, which owns the HTTP calls outright and cannot

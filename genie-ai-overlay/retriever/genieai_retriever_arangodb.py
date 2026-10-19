@@ -50,6 +50,7 @@ from .config import (
     ARANGO_URL,
     ARANGO_USE_APPROX_SEARCH,
     ARANGO_USERNAME,
+    EMBEDDING_TIMEOUT,
     HF_TOKEN,
     HYBRID_BM25_ANALYZER,
     HYBRID_BM25_CANDIDATES,
@@ -67,7 +68,6 @@ from .config import (
     SUMMARIZER_ENABLED,
     TEI_EMBED_MODEL,
     TEI_EMBEDDING_ENDPOINT,
-    TEI_TIMEOUT,
     VLLM_API_KEY,
     VLLM_ENDPOINT,
     VLLM_MAX_NEW_TOKENS,
@@ -1240,8 +1240,8 @@ class GenieaiArangoRetriever(OpeaComponent):
                 # OpenAI embeddings are not contrastive / instruction-tuned —
                 # get_query_instruction(OPENAI_EMBED_MODEL) returns None for
                 # any OpenAI model id, so the wrapper is never installed here.
-                # Shared TEI budget: this client is otherwise unbounded, and the
-                # retrieval request it serves has no deadline of its own.
+                # Shared embedding budget: this client is otherwise unbounded,
+                # and the retrieval request it serves has no deadline of its own.
                 #
                 # No max_retries here on purpose. MODEL_LLM_MAX_RETRIES exists to
                 # cap the retry ladder of a contended shared GPU, and this
@@ -1252,7 +1252,7 @@ class GenieaiArangoRetriever(OpeaComponent):
                 embeddings = OpenAIEmbeddings(
                     model=OPENAI_EMBED_MODEL,
                     dimensions=dimension,
-                    timeout=http_timeout(TEI_TIMEOUT),
+                    timeout=http_timeout(EMBEDDING_TIMEOUT),
                 )
             elif TEI_EMBEDDING_ENDPOINT and HF_TOKEN:
                 # Left unbudgeted on purpose. langchain_huggingface's

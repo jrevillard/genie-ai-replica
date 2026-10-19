@@ -1,7 +1,7 @@
 # Copyright (C) 2025 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
 #
-# OVERRIDE comps.dataprep.integrations.arangodb.llm_transformer | disposition: still-needed | reason: vendored LLM/embedding clients build their own HTTP clients; the graph-transformer's budget is reachable via VLLM_TIMEOUT but its telemetry is not, and the orchestrator/TEI wrappers have no budget at all | test: contracts/test_contract_http_budget.py  # noqa: E501
+# OVERRIDE comps.dataprep.integrations.arangodb.llm_transformer | disposition: still-needed | reason: vendored LLM/embedding clients build their own HTTP clients; the graph-transformer's budget reads VLLM_TIMEOUT but cannot be set from the environment (comps takes it verbatim from os.getenv and httpx 0.28 rejects a string timeout), and the orchestrator/TEI wrappers have no budget at all | test: contracts/test_contract_http_budget.py::test_the_vendored_graph_transformer_reads_vllm_timeout  # noqa: E501
 
 """Record of the vendored-``comps`` HTTP-budget debt, and what would close it.
 
@@ -26,16 +26,27 @@ that position:
 
 ``comps.dataprep.src.integrations.arangodb.OpeaArangoDataprep._initialize_llm``
     Builds ``self.llm_transformer``, invoked by ``convert_to_graph_documents``
-    once per ingested document inside ``asyncio.to_thread``. **Partly closed**:
-    this one reads a module-level ``VLLM_TIMEOUT`` (comps
+    once per ingested document inside ``asyncio.to_thread``. **Not closed, and
+    not closeable from here**: it reads a module-level ``VLLM_TIMEOUT`` (comps
     ``arangodb.py:55``, default 600) for its ``ChatOpenAI``, and the dataprep
-    service runs that code in-process, so setting the env var bounds it with no
-    override — ``docker-compose.yaml`` now does. What is still open is that the
-    transformer emits no span, no progress line, and no phase bound: the
-    per-request budget stops one call from hanging forever, but nothing tells an
-    operator how far through the documents it is, and the graph-insertion gather
-    that follows it remains unbounded (it cannot be bounded from outside either,
-    since abandoning a batch there drops its chunks outright).
+    service runs that code in-process, so an env var *looks* like it would bound
+    it with no override. It does not. comps takes the value verbatim from
+    ``os.getenv``, so it arrives as a string; httpx 0.28 does not coerce a
+    string timeout and ``socket.create_connection`` raises ``TypeError``
+    instead of timing out. ``_process_batch`` swallows that, so every batch
+    would fail extraction while the document still reported "Ingested" with an
+    empty knowledge graph — silently, on every deployment.
+
+    So ``docker-compose.yaml`` deliberately does not inject it, and the phase
+    keeps comps' own ``int`` 600 s default. That default is also the right
+    value: this phase has no degradation path, so a batch cancelled mid-flight
+    loses its chunks outright while the document still reports success.
+    Binding it differently — or bounding the graph-insertion gather that
+    follows, which cannot be bounded from outside for the same reason — needs a
+    patch to the vendored source.
+
+    The transformer also emits no span and no progress line, so nothing tells an
+    operator how far through the documents it is.
 
 ``OpeaArangoDataprep._initialize_embeddings``
     Builds the TEI embedding client used at ingest for label selection, chunk

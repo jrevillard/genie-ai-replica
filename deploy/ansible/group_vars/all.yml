@@ -153,17 +153,21 @@ keycloak_ssl_skip_verify: ""
 #   model_llm_timeout_seconds: 180        # vLLM chat completions. Raise if
 #                                         #   labelling exceeds it on a slow model.
 #   model_llm_max_retries: 2              # SDK retries on 5xx / connection errors
-#   model_tei_timeout_seconds: 120        # TEI embedding
+#   model_embedding_timeout_seconds: 120  # the retriever's embedding client
+#                                         #   (OpenAI-API branch). NOT the local
+#                                         #   TEI branch, which is deliberately
+#                                         #   unbudgeted.
 #   model_rerank_timeout_seconds: 300     # TEI rerank — no fallback path, so a
 #                                         #   tighter budget turns slow successes
 #                                         #   into 500s on the chat request
 #   model_control_plane_timeout_seconds: 30  # Keycloak token refresh, doc-repo calls
-#   vllm_timeout: 600                     # the vendored graph transformer's
-#                                         #   budget, and the ONLY one of these
-#                                         #   that must not track
-#                                         #   model_llm_timeout_seconds: that
-#                                         #   phase has no fallback, so a tighter
-#                                         #   value drops chunks silently
+#   vllm_timeout                          # DO NOT SET. Left undefined on
+#                                         #   purpose: the vendored comps graph
+#                                         #   transformer reads this verbatim
+#                                         #   from os.getenv, so a value reaches
+#                                         #   httpx as a string, httpx 0.28 does
+#                                         #   not coerce it, and the client raises
+#                                         #   TypeError instead of timing out.
 #   dataprep_llm_phase_timeout_seconds: 600   # wall clock for a whole LLM phase
 #   dataprep_llm_progress_interval_seconds: 60  # how often a phase reports to the
 #                                         #   document ingestion log the admin UI reads

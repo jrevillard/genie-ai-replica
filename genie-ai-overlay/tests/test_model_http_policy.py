@@ -255,7 +255,7 @@ def _kwarg(call: ast.Call, name: str) -> ast.AST | None:
 
 
 def _source_names(node: ast.AST | None) -> set[str]:
-    """Identifiers a value expression reads, e.g. ``L`` in ``TEI_TIMEOUT + L``."""
+    """Identifiers a value expression reads, e.g. ``L`` in ``EMBEDDING_TIMEOUT + L``."""
     return {n.id for n in ast.walk(node) if isinstance(n, ast.Name)} if node is not None else set()
 
 
@@ -491,7 +491,7 @@ class TestCallSitesConsumeThePolicy:
         calls = _constructors(source, "ChatOpenAI", "OpenAIEmbeddings")
         for call in calls:
             names = _source_names(_kwarg(call, "timeout"))
-            assert names & {"VLLM_TIMEOUT", "TEI_TIMEOUT"}, (
+            assert names & {"VLLM_TIMEOUT", "EMBEDDING_TIMEOUT"}, (
                 f"{ast.unparse(call.func)} timeout does not resolve to the shared policy: {names or 'not set'}"
             )
 
@@ -514,7 +514,7 @@ class TestCallSitesConsumeThePolicy:
                         bindings[target.id] = node.value.id
         for name, expected in (
             ("VLLM_TIMEOUT", "LLM_TIMEOUT_SECONDS"),
-            ("TEI_TIMEOUT", "EMBEDDING_TIMEOUT_SECONDS"),
+            ("EMBEDDING_TIMEOUT", "EMBEDDING_TIMEOUT_SECONDS"),
         ):
             assert name in bindings, f"{name} is no longer assigned at module level in retriever/config.py"
             assert bindings[name] == expected, (

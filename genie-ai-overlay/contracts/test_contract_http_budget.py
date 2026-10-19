@@ -1,31 +1,35 @@
 # Copyright (c) 2024-2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""Contract test — the vendored dataprep budget this repo configures really exists.
+"""Contract test — the vendored graph transformer's budget is NOT ours to set.
 
-``docker-compose.yaml`` injects ``VLLM_TIMEOUT`` into the dataprep service
-precisely because the vendored ``comps`` graph transformer reads it: that is what
-bounds the slowest phase of an ingest without an override patch. The claim is
-repeated in four places (compose, ``OVERRIDES.yaml``, the debt record, the
-CHANGELOG), and until now nothing could check it — ``tests/conftest.py`` stubs
-``comps`` in ``sys.modules``, so the mocked suite is blind to it by
-construction.
+The dataprep service runs the vendored comps graph transformer in-process, and
+that transformer reads ``VLLM_TIMEOUT``. Injecting it looked like a free win —
+bound the slowest phase of an ingest with no override patch — and it is not.
 
-This is that check, and it runs in CI via the ``contract:unit`` job — which is
-repo-side, so the two compose assertions execute for real there while the two
-``comps`` ones skip against the absent library rather than passing against the
-mock. Wiring matters as much as the code here: ``pytest.ini`` sets
-``testpaths = tests``, so a file in this directory that no job names is a test
-suite that never runs and a docstring that is simply wrong.
+comps takes the value verbatim from ``os.getenv``, so an injected value arrives
+as a string. httpx 0.28 does not coerce a string timeout:
 
-The three halves are asserted separately on purpose, because each one alone is
-worthless:
+    httpx.Timeout("5").connect                          -> "5"
+    httpx.Client(timeout=httpx.Timeout("5")).get(...)   -> TypeError
+    socket.create_connection(("host", 1), "600")        -> TypeError
 
-* the vendored module reads ``VLLM_TIMEOUT`` into a client timeout — without
-  this, the compose injection is a no-op;
-* the overlay runs that same module in-process — without this, setting the var
-  would reach a different process;
-* compose actually injects it into the dataprep service — without this, both of
-  the above are true and the budget still is not applied.
+``_process_batch`` swallows that. Every batch would fail graph extraction and
+the document would still report "Ingested" with an empty knowledge graph —
+silently, on every deployment including the default one. So ``docker-compose``
+deliberately does not inject the key, and the phase keeps comps' own ``int``
+600 s default, which is also the right value: it is the one phase here with no
+degradation path.
+
+This file pins that decision from both sides. In ``contract:unit`` (repo-side)
+the compose assertions run for real and re-adding the key fails. The ``comps``
+assertion skips there — no vendored library outside the image — and runs in the
+in-image contract jobs, where it checks that the reader still exists so the debt
+record's "closing this needs a patch" stays an accurate description rather than a
+guess.
+
+It runs in CI via ``contract:unit``; wiring matters as much as the code here,
+because ``pytest.ini`` sets ``testpaths = tests`` and a file in this directory
+that no job names is a suite that never runs.
 """
 
 from __future__ import annotations
@@ -85,24 +89,27 @@ def _vllm_timeout_is_a_client_timeout(module) -> bool:
 
 
 def test_the_vendored_graph_transformer_reads_vllm_timeout(comps):
-    """The load-bearing claim: comps binds ``VLLM_TIMEOUT`` to its LLM client.
+    """The reader still exists, so the debt record's "needs a patch" is accurate.
 
-    ``OpeaArangoDataprep``'s ``LLMGraphTransformer`` is the slowest stage of an
-    ingest and the only vendored call this repository can bound with an env var
-    instead of a patch. If an OPEA bump renames the variable or drops the
-    binding, this fails instead of the compose injection silently becoming a
-    no-op while four files still claim the phase is bounded.
+    Not a claim that the phase CAN be bounded by env var — it cannot, because
+    comps takes the value verbatim from ``os.getenv`` and httpx 0.28 rejects a
+    string timeout (the module docstring, and
+    ``test_compose_does_not_inject_vllm_timeout_into_the_dataprep_service``).
+    What this pins is the other half of that statement: that the variable and
+    its binding survive in the vendored source, so "closing this needs a patch
+    to comps" describes a real change rather than a variable an OPEA bump has
+    since renamed away — which would make OVERRIDES.yaml's prescription stale.
     """
     module = importlib.import_module("comps.dataprep.integrations.arangodb")
     assert hasattr(module, "VLLM_TIMEOUT"), (
-        "the vendored comps dataprep no longer defines VLLM_TIMEOUT — docker-compose.yaml "
-        "injects it for exactly this reader, so the graph-transformer phase is unbounded again "
-        "and every place documenting it as bounded is now wrong"
+        "the vendored comps dataprep no longer defines VLLM_TIMEOUT — OVERRIDES.yaml records "
+        "that closing this entry requires a patch to the vendored source, and such a patch "
+        "would have nothing to bind if the variable is gone"
     )
     assert _vllm_timeout_is_a_client_timeout(module), (
         "VLLM_TIMEOUT exists in the vendored dataprep but is no longer passed to any client's "
-        "timeout= — defining it is not the same as honouring it, and the CHANGELOG's "
-        "'the vendored graph-transformation phase is now bounded too' depends on the binding"
+        "timeout= — defining it is not the same as honouring it, and the binding is what makes "
+        "OVERRIDES.yaml's 'patch comps to coerce the env string' a route rather than a guess"
     )
 
 
@@ -148,23 +155,27 @@ def test_compose_does_not_inject_vllm_timeout_into_the_dataprep_service():
     )
 
 
-def test_the_graph_transformer_keeps_the_budget_it_had_before_this_policy():
-    """Nothing here tightens the one phase with no degradation path.
+def test_the_dataprep_block_still_exposes_its_own_budget_knob():
+    """The operator's knob must reach the container the overlay actually runs in.
 
-    A graph batch cancelled mid-flight loses its chunks and the document still
-    reports "Ingested", so the phase keeps the 600 s it ran at before this
-    policy. There were two ways to regress that, and this MR contained both at
-    some point: chaining the injection to MODEL_LLM_TIMEOUT_SECONDS (which
-    tightened it 3.3x on an upgrade that edited no .env), and injecting
-    VLLM_TIMEOUT at all (which is worse — it breaks the client outright). The
-    second is asserted by the test above; this one pins the remaining surface.
+    ``MODEL_LLM_TIMEOUT_SECONDS`` is what the dataprep service's own labelling
+    and context clients read (``core/model_http_policy.py``). Drop the compose
+    line and nothing raises — the policy falls back to its 180 s default — but
+    every ``.env`` an operator edits becomes inert for this one service, with
+    no error anywhere. That is the same class of silent no-op as injecting the
+    key in the first place, so it is worth its own assertion.
+
+    Deliberately NOT asserted here: that the graph transformer keeps comps' own
+    600 s. Nothing this MR writes can move it — there is no shared key left to
+    chain, which is the point of the withdrawal asserted above.
     """
     root = _require_repo_root()
     block = _service_block((root / "docker-compose.yaml").read_text(encoding="utf-8"), "dataprep-arango-service")
     assert block, "no dataprep-arango-service block found in docker-compose.yaml"
     assert re.search(r"^\s*MODEL_LLM_TIMEOUT_SECONDS:", block, re.M), (
-        "the dataprep service no longer injects MODEL_LLM_TIMEOUT_SECONDS — that is the knob "
-        "its own labelling and context clients read"
+        "the dataprep service no longer injects MODEL_LLM_TIMEOUT_SECONDS — the policy then "
+        "falls back to its built-in 180 s default and MODEL_LLM_TIMEOUT_SECONDS in the operator's "
+        ".env becomes inert for this service, silently"
     )
 
 

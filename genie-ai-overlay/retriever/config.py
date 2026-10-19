@@ -264,11 +264,14 @@ VLLM_MAX_NEW_TOKENS = os.getenv("VLLM_MAX_NEW_TOKENS", 512)
 VLLM_TOP_P = os.getenv("VLLM_TOP_P", 0.9)
 VLLM_TEMPERATURE = os.getenv("VLLM_TEMPERATURE", 0.8)
 # Deck-wide budgets, resolved once by core/model_http_policy.py (imported at the
-# top of this file). VLLM_TIMEOUT keeps its name because the retriever source,
-# its tests and deployed .env files all reference it; it now carries the shared
-# LLM budget rather than a retriever-local one.
+# top of this file). Both aliases keep their historical names because the
+# retriever source and its tests reference them; what they carry is now the
+# shared budget rather than a retriever-local constant. Neither container
+# receives VLLM_TIMEOUT any more - MODEL_LLM_TIMEOUT_SECONDS is injected instead,
+# and the policy reads that name first - so leaving the legacy name in the
+# environment made `docker exec ... env` report a value this service never uses.
 VLLM_TIMEOUT = LLM_TIMEOUT_SECONDS
-TEI_TIMEOUT = EMBEDDING_TIMEOUT_SECONDS
+EMBEDDING_TIMEOUT = EMBEDDING_TIMEOUT_SECONDS
 
 
 # OpenAI configuration (alternative to VLLM & TEI)

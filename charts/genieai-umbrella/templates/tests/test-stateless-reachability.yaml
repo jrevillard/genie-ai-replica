@@ -7,7 +7,7 @@ metadata:
   name: {{ include "genieai-common.fullname" . }}-test-stateless-reach
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "backend") | nindent 4 }}
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "test") | nindent 4 }}
   annotations:
     "helm.sh/hook": test
     "helm.sh/hook-delete-policy": before-hook-creation
@@ -82,9 +82,8 @@ spec:
           check document-repository 80 /health 200
           {{- end }}
           {{- if .Values.services.clamav.enabled }}
-          # The clamav NetworkPolicy only admits documentRepository pods —
-          # this backend-labeled pod cannot pass a policy-enforcing CNI.
-          # Probed via the documentRepository-labeled sibling pod below.
+          # Probed by the dedicated busybox/nc sibling pod below (this
+          # curlimages/curl image carries no nc).
           {{- end }}
           {{- if .Values.services.redisCache.enabled }}
           check_tcp redis-cache 6379
@@ -102,7 +101,7 @@ metadata:
   name: {{ include "genieai-common.fullname" . }}-test-clamav-reach
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "documentRepository") | nindent 4 }}
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "test") | nindent 4 }}
   annotations:
     "helm.sh/hook": test
     "helm.sh/hook-delete-policy": before-hook-creation

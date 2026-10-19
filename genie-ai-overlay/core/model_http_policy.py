@@ -34,8 +34,10 @@ dataprep  Keycloak token, ingestion-log writes, doc status,
           guardrail calls   ``aiohttp``                 CONTROL_PLANE_*
 reranker  TEI ``/rerank``     ``aiohttp``                 RERANK_*
 chatqna   backend user profile, document-repository metadata  ``aiohttp``  CONTROL_PLANE_*
-retriever OpenAI ``ChatOpenAI`` summarizer / probe   ``langchain_openai``  LLM_*
+retriever document summarizer ``ChatOpenAI``  ``langchain_openai``  SUMMARIZER_*
+retriever OpenAI API key probe  ``openai.OpenAI``          LLM_* (timeout only)
 retriever ``OpenAIEmbeddings``  ``langchain_openai``      EMBEDDING_*
+retriever ``HuggingFaceEndpointEmbeddings`` (TEI branch)  —  UNBUDGETED
 ============================  ==========================  ==============
 
 NOT covered — vendored ``comps``, which owns the HTTP calls outright and cannot
@@ -189,16 +191,17 @@ LLM_MAX_RETRIES = non_negative_int_env("MODEL_LLM_MAX_RETRIES", default=2)
 SUMMARIZER_TIMEOUT_SECONDS = positive_float_env("MODEL_SUMMARIZER_TIMEOUT_SECONDS", default=600.0)
 
 # Embedding, on the retriever's OpenAI-compatible embedding client. Named for
-# what it bounds rather than for TEI: the local-TEI branch is
+# what it bounds rather than for TEI: the TEI branch is
 # HuggingFaceEndpointEmbeddings, which is left unbudgeted on purpose (pydantic
 # field set), so a knob called MODEL_TEI_TIMEOUT_SECONDS would describe a path
 # it does not reach. 120 s leaves room for queueing behind a shared endpoint
 # without treating normal contention as failure.
 #
-# Read the exemption carefully: it is the REMOTE branch. `TEI_EMBEDDING_ENDPOINT
-# and HF_TOKEN` is the remote-GPU topology, so on exactly the deployment that
-# produced the original stall this knob does NOT apply and the embedding call is
-# unbounded. MODEL_EMBEDDING_TIMEOUT_SECONDS covers the OpenAI-API branch only.
+# Read the exemption carefully: the unbudgeted branch is the REMOTE one. Its
+# condition is `TEI_EMBEDDING_ENDPOINT and HF_TOKEN` — a remote endpoint plus a
+# Hub token — so on exactly the deployment that produced the original stall this
+# knob does NOT apply and the embedding call is unbounded.
+# MODEL_EMBEDDING_TIMEOUT_SECONDS covers the OpenAI-API branch only.
 #
 # No degradation route here, unlike the labelling budgets. A timeout on this
 # client is caught by the retriever and returns an EMPTY result set — not a

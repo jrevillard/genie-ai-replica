@@ -155,7 +155,11 @@ keycloak_ssl_skip_verify: ""
 #                                         #   — but see dataprep_llm_phase_timeout_seconds
 #                                         #   below: the phase ceiling must stay
 #                                         #   above (1 + retries) x this.
-#   model_llm_max_retries: 2              # SDK retries on 5xx / connection errors
+#   model_llm_max_retries: 2              # SDK retries on 5xx / connection
+#                                         #   errors. Raising it raises what
+#                                         #   the phase ceiling must outlast:
+#                                         #   3 retries x 180s needs 720s, over
+#                                         #   the 600s default below.
 #   model_summarizer_timeout_seconds: 600 # retriever summarizer. Deliberately NOT
 #                                         #   shortened from the openai default: no
 #                                         #   fallback path, so a tighter budget

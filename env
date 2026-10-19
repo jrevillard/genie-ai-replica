@@ -307,7 +307,12 @@ HUGGING_FACE_HUB_TOKEN=
 #                                 #   the ceiling must stay above
 #                                 #   (1+retries) x this.
 # MODEL_LLM_MAX_RETRIES=2         # SDK-level retries on 408/409/429/5xx and
-#                                 #   connection errors.
+#                                 #   connection errors. Raising this raises
+#                                 #   what the phase ceiling has to outlast:
+#                                 #   3 retries x 180s needs 720s, above the
+#                                 #   600s default. Raise
+#                                 #   DATAPREP_LLM_PHASE_TIMEOUT_SECONDS with
+#                                 #   it, or dataprep warns at startup.
 # MODEL_EMBEDDING_TIMEOUT_SECONDS=120   # The retriever's embedding client,
 #                                 #   OpenAI-API branch ONLY. The TEI branch
 #                                 #   (TEI_EMBEDDING_ENDPOINT and HF_TOKEN)

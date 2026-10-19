@@ -813,8 +813,23 @@ async def _run_uninterruptible(coro, *, timeout: float, label: str) -> bool:
     if not task.done():
         logger.error(
             f"{label} did not finish within {timeout:g}s and is still running; "
-            "it was left to complete rather than cancelled"
+            "it was left to complete rather than cancelled. Note the file lock is "
+            "released when the caller unwinds, so a re-ingest of the same document "
+            "can start while this rollback is still deleting"
         )
+    elif task.cancelled():
+        logger.error(f"{label} was cancelled before it could complete")
+    else:
+        # _settle_and_retrieve retrieves the exception to silence asyncio's
+        # "never retrieved" warning, which DISCARDS it. Left at that, a rollback
+        # that failed was completely silent: before the refactor the same
+        # exception propagated out of the handler and was at least visible, and
+        # nothing downstream reads it either. The AQL path self-reports through
+        # the ingestion log; a socket error, an unwrapped driver error, or a
+        # failure inside the status write itself does not, so it is logged here.
+        exc = task.exception()
+        if exc is not None:
+            logger.error(f"{label} FAILED and the document may be partially retracted: {exc!r}")
     return interrupted
 
 
@@ -840,7 +855,21 @@ async def _gather_with_phase_budget(
     # Literal span name: the attribute sweep derives span coverage by reading
     # names out of the source, so an f-string here is invisible to it and would
     # make this span untracked. The phase goes on as an attribute instead.
-    with background_span("dataprep.llm.phase") as span:
+    #
+    # The two CONSTANTS are attached at entry, not after the call. The inner
+    # helper raises on a failed batch and on an external cancel — and a kill is
+    # a routine path, not an edge case — so attributes set afterwards would be
+    # skipped on exactly the traces an operator opens to find out which phase
+    # was interrupted. `timed_out` is set in the finally so it is present on the
+    # success path too, as an explicit False rather than an absence.
+    with background_span(
+        "dataprep.llm.phase",
+        attributes={
+            ATTRIBUTE_NAMES["dataprep_llm_phase"]: phase_label,
+            ATTRIBUTE_NAMES["dataprep_llm_timeout_seconds"]: DATAPREP_LLM_PHASE_TIMEOUT_SECONDS,
+            ATTRIBUTE_NAMES["dataprep_llm_timed_out"]: False,
+        },
+    ) as span:
         results, timed_out = await _gather_with_phase_budget_inner(
             tasks,
             phase=phase,
@@ -849,9 +878,7 @@ async def _gather_with_phase_budget(
             file_id=file_id,
             write_ingestion_log=write_ingestion_log,
         )
-        span.set_attribute(ATTRIBUTE_NAMES["dataprep_llm_phase"], phase_label)
         span.set_attribute(ATTRIBUTE_NAMES["dataprep_llm_timed_out"], timed_out)
-        span.set_attribute(ATTRIBUTE_NAMES["dataprep_llm_timeout_seconds"], DATAPREP_LLM_PHASE_TIMEOUT_SECONDS)
     return results, timed_out
 
 
@@ -2694,8 +2721,15 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         coroutine, nothing lands inside it.
         """
         await self._write_ingestion_log(file_id, "WARN", "System", "Ingestion process killed. Starting cleanup...")
-        await self.retract_file(file_id=file_id, graph_name=graph_name)
-        await self._update_doc_status(file_id, "Killed")
+        try:
+            await self.retract_file(file_id=file_id, graph_name=graph_name)
+        finally:
+            # The status flip runs even when the retract fails. Inlined it was
+            # simply the statement after the call, so a failed retract left the
+            # document on whatever status it last had — partially deleted, with
+            # nothing on the record that an operator killed it.
+            with suppress(Exception):
+                await self._update_doc_status(file_id, "Killed")
         await self._write_ingestion_log(file_id, "INFO", "System", "Cleanup complete. Document state set to Killed.")
 
     async def retract_file(self, file_id: str, graph_name: str):

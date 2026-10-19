@@ -915,7 +915,10 @@ class TestThePhaseCeilingMustOutliveTheRetryLadder:
             and n.func.id == "_warn_if_phase_ceiling_too_low"
         ]
         assert len(calls) == 1, f"expected the phase-ceiling check to be applied once at import, found {len(calls)}"
+        # Positional AND keyword: `f(a, b, c)` and `f(a, b, retries=c)` are the
+        # same call, and a guard that rejects the second one fails correct code.
         passed = {ast.unparse(a) for a in calls[0].args}
+        passed |= {k.arg for k in calls[0].keywords if k.arg}
         assert passed == {
             "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS",
             "LLM_MAX_RETRIES",
@@ -923,9 +926,10 @@ class TestThePhaseCeilingMustOutliveTheRetryLadder:
         }, f"the import-time check reads {passed}, not this service's own budget knobs"
 
     def test_the_defaults_are_inside_the_constraint(self):
-        assert dataprep._one_batched_call_worst_case(
-            dataprep.LLM_MAX_RETRIES, dataprep.LLM_TIMEOUT_SECONDS
-        ) < dataprep.DATAPREP_LLM_PHASE_TIMEOUT_SECONDS, (
+        assert (
+            dataprep._one_batched_call_worst_case(dataprep.LLM_MAX_RETRIES, dataprep.LLM_TIMEOUT_SECONDS)
+            < dataprep.DATAPREP_LLM_PHASE_TIMEOUT_SECONDS
+        ), (
             "the shipped defaults already violate the phase-ceiling constraint — every batched "
             "labelling call would be cancelled before it could return"
         )
@@ -967,6 +971,81 @@ class TestTheKillRollbackCannotBeCancelled:
             "still in the graph, and the document status was never set to Killed"
         )
 
+    def test_a_failed_rollback_is_never_silent(self, monkeypatch):
+        """The settle retrieves the rollback's exception — and discards it.
+
+        ``_settle_and_retrieve`` calls ``task.exception()`` under ``suppress``
+        to silence asyncio's "never retrieved" warning. Left at that, a
+        ``retract_file`` that failed produced no output at all: before the
+        round-8 refactor the same exception escaped the handler and was at
+        least visible, and nothing downstream reads it either — the microservice
+        only pops the task from its registry. The ingest ended reporting a
+        clean kill over a half-retracted document.
+        """
+        # Observed on the module's own logger rather than through caplog: the
+        # suite stubs `comps`, so CustomLogger never reaches the root logger.
+        recorded = []
+
+        class _Recording:
+            def error(self, msg, *a, **k):
+                recorded.append(str(msg))
+
+            def warning(self, msg, *a, **k):
+                recorded.append(str(msg))
+
+        monkeypatch.setattr(dataprep, "logger", _Recording())
+
+        async def scenario():
+            async def failing_rollback():
+                raise RuntimeError("AQLQueryExecuteError: collection not found")
+
+            await dataprep._run_uninterruptible(failing_rollback(), timeout=2.0, label="rollback of f1")
+
+        _run(scenario())
+
+        joined = "\n".join(recorded)
+        assert "rollback of f1" in joined and "AQLQueryExecuteError" in joined, (
+            "a failed rollback logged nothing — the operator is told the document was killed "
+            f"cleanly while its chunks are still in the graph. Recorded: {recorded!r}"
+        )
+
+    def test_the_status_is_flipped_even_when_the_retract_fails(self):
+        """A half-deleted document must still be recorded as killed.
+
+        Inlined, the status write was simply the statement after the retract, so
+        a retract that raised skipped it: the document kept whatever status it
+        last had while being partially deleted, and nothing on the record said
+        an operator had killed it. Combined with the swallowed exception that
+        made the whole failure invisible.
+        """
+        calls = []
+
+        class _Stub:
+            async def _write_ingestion_log(self, file_id, level, component, message):
+                calls.append(("log", level))
+
+            async def retract_file(self, file_id, graph_name):
+                calls.append(("retract", graph_name))
+                raise RuntimeError("AQLQueryExecuteError: collection not found")
+
+            async def _update_doc_status(self, file_id, status, **kw):
+                calls.append(("status", status))
+
+        # Bound to the stub rather than redefined: the method under test is the
+        # real one, only its three collaborators are faked.
+        rollback = dataprep.GenieArangoDataprep._rollback_killed_ingest
+
+        async def scenario():
+            await rollback(_Stub(), "f1", "GRAPH")
+
+        with pytest.raises(RuntimeError, match="AQLQueryExecuteError"):
+            _run(scenario())
+
+        assert ("status", "Killed") in calls, (
+            f"the retract failed and the status was never set to Killed: {calls} — the document "
+            "is partially deleted with no record that it was killed"
+        )
+
     def test_the_kill_handler_routes_its_rollback_through_it(self):
         """The unit test above is worthless if the handler stops using it.
 
@@ -976,7 +1055,7 @@ class TestTheKillRollbackCannotBeCancelled:
         """
         source = (OVERLAY_ROOT / "dataprep" / "genieai_dataprep_arangodb.py").read_text(encoding="utf-8")
         tree = ast.parse(source)
-        guarded = False
+        kill_handlers = []
         for node in ast.walk(tree):
             if not isinstance(node, ast.ExceptHandler):
                 continue
@@ -987,12 +1066,35 @@ class TestTheKillRollbackCannotBeCancelled:
             )
             if not is_cancelled:
                 continue
-            calls = {n.func.id for n in ast.walk(node) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
-            if "_run_uninterruptible" in calls:
-                guarded = True
-        assert guarded, (
-            "no except-asyncio.CancelledError block routes its rollback through "
-            "_run_uninterruptible — a repeat cancel will abort it mid-cascade"
+            # Both spellings: a bare `f()` is an ast.Name, `self.f()` an
+            # ast.Attribute. The rollback is called as a method, so matching
+            # only the bare form would never find the handler at all.
+            calls = set()
+            for c in ast.walk(node):
+                if not isinstance(c, ast.Call):
+                    continue
+                if isinstance(c.func, ast.Name):
+                    calls.add(c.func.id)
+                elif isinstance(c.func, ast.Attribute):
+                    calls.add(c.func.attr)
+            # Identify the KILL handler by what it calls, not by its position:
+            # this file has several CancelledError handlers, and "some handler
+            # shields something" is satisfied by any of them. Inlining the kill
+            # rollback while an unrelated handler keeps a _run_uninterruptible
+            # call alive passes an any-handler guard and restores the
+            # half-retracted document — proven by mutation.
+            if "_rollback_killed_ingest" in calls:
+                kill_handlers.append(calls)
+
+        assert kill_handlers, (
+            "no except-CancelledError block runs _rollback_killed_ingest — the kill handler "
+            "has been restructured; re-check this guard rather than deleting it"
+        )
+        unguarded = [c for c in kill_handlers if "_run_uninterruptible" not in c]
+        assert not unguarded, (
+            "the kill handler awaits its rollback without _run_uninterruptible — a repeated "
+            "cancel aborts the retraction mid-cascade, leaving chunks in the graph and the "
+            "document status unset"
         )
 
 

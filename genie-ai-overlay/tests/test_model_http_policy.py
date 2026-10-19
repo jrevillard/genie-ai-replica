@@ -678,9 +678,24 @@ class TestCallSitesConsumeThePolicy:
                 "_write_ingestion_log / _update_doc_status caller behind it"
             )
             # Not just present: pointing it at a literal would satisfy the check
-            # above while the module quietly stopped following the shared knob.
-            assert "CONTROL_PLANE_TIMEOUT_SECONDS" in _source_names(value), (
-                f"the Keycloak session's timeout reads {ast.unparse(value)}, not the shared control-plane budget"
+            # above while the module quietly stopped following a shared knob.
+            #
+            # AUTH_TIMEOUT_SECONDS, and deliberately NOT CONTROL_PLANE_* — which
+            # is what this test asserted for several rounds, wrongly. Every
+            # control-plane write waits on this token; it is one attempt with no
+            # retry and the caller re-raises. Putting it on the 30 s
+            # control-plane budget gave a call with no degradation route a 10x
+            # cut below what aiohttp applied, which is the same mistake fixed on
+            # the reranker (round 6) and the summarizer (round 8). The two must
+            # not be collapsed back together.
+            names = _source_names(value)
+            assert "AUTH_TIMEOUT_SECONDS" in names, (
+                f"the Keycloak session's timeout reads {ast.unparse(value)}, not the auth budget. "
+                "Do not move it onto CONTROL_PLANE_*: this call has no degradation route"
+            )
+            assert "CONTROL_PLANE_TIMEOUT_SECONDS" not in names, (
+                "the Keycloak token fetch is back on the 30 s control-plane budget — every "
+                "_write_ingestion_log / _update_doc_status call waits on this token"
             )
 
     def test_dataprep_control_plane_calls_use_the_shared_budget(self):
@@ -739,7 +754,12 @@ class TestCallSitesConsumeThePolicy:
                 total = _kwarg(node, "total")
                 if total is None:
                     continue
-                if not _source_names(total) & {"CONTROL_PLANE_TIMEOUT_SECONDS"}:
+                # Either shared constant counts, whichever the module's calls
+                # are actually meant to read: a ClientTimeout must never be a
+                # literal beside a knob that governs it. AUTH_TIMEOUT_SECONDS
+                # is accepted because the Keycloak token fetch legitimately
+                # sits on that one rather than on the control-plane budget.
+                if not _source_names(total) & {"CONTROL_PLANE_TIMEOUT_SECONDS", "AUTH_TIMEOUT_SECONDS"}:
                     offenders.append(f"{rel}:{node.lineno} total={ast.unparse(total)}")
         assert not offenders, (
             f"a hardcoded control-plane timeout survived beside the knob at {offenders} — raising "

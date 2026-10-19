@@ -14,7 +14,7 @@ import time
 
 import aiohttp
 
-from core.model_http_policy import CONTROL_PLANE_TIMEOUT_SECONDS
+from core.model_http_policy import AUTH_TIMEOUT_SECONDS
 
 logger = logging.getLogger("GENIE_DATAPREP_SERVICE_ACCOUNT")
 
@@ -62,11 +62,15 @@ async def get_service_account_token() -> str:
             _skip_ssl = os.getenv("KEYCLOAK_SSL_SKIP_VERIFY", "") == "1"
             connector = aiohttp.TCPConnector(ssl=not _skip_ssl)
             async with (
-                # Bounded refresh (core/model_http_policy.py): an unbounded default
-                # (300 s) wedges every _write_ingestion_log / _update_doc_status
-                # caller behind a single slow Keycloak round-trip.
+                # AUTH_TIMEOUT_SECONDS, not the control-plane budget. Every
+                # _write_ingestion_log / _update_doc_status call waits on the
+                # token this fetches, so cutting it to 30 s would fail an ingest
+                # outright on a slow-to-start Keycloak. Single attempt, no retry,
+                # re-raises on failure: no degradation route, so the value stays
+                # at what aiohttp applied and becomes adjustable instead of
+                # accidental.
                 aiohttp.ClientSession(
-                    connector=connector, timeout=aiohttp.ClientTimeout(total=CONTROL_PLANE_TIMEOUT_SECONDS)
+                    connector=connector, timeout=aiohttp.ClientTimeout(total=AUTH_TIMEOUT_SECONDS)
                 ) as session,
                 session.post(token_url, data=payload) as response,
             ):

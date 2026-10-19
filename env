@@ -332,6 +332,15 @@ HUGGING_FACE_HUB_TOKEN=
 #                                 #   have used: the rerank path has no fallback, so
 #                                 #   its timeout becomes a 500 on the chat request.
 #                                 #   Lower it only once rerank can degrade.
+# MODEL_AUTH_TIMEOUT_SECONDS=300  # The dataprep service-account token fetch.
+#                                 #   Its own knob, NOT the control-plane 30 s:
+#                                 #   every _write_ingestion_log and
+#                                 #   _update_doc_status call waits on this
+#                                 #   token, it is a single attempt with no
+#                                 #   retry, and a failure re-raises. So there
+#                                 #   is no degradation route and the value
+#                                 #   stays at what aiohttp applied. Raise it
+#                                 #   for a Keycloak slow to start.
 # MODEL_CONTROL_PLANE_TIMEOUT_SECONDS=30  # Keycloak token refresh and the other
 #                                 #   in-cluster control-plane calls.
 # VLLM_TIMEOUT                     # NOT SETTABLE THROUGH THIS FILE. The only
@@ -350,7 +359,7 @@ HUGGING_FACE_HUB_TOKEN=
 # A phase that runs out is abandoned and degrades (labelling to file labels,
 # context generation to the raw chunk); it does not fail the ingest.
 #
-# DATAPREP_LLM_PHASE_TIMEOUT_SECONDS=600   # labelling / context generation.
+# DATAPREP_LLM_PHASE_TIMEOUT_SECONDS=900   # labelling / context generation.
 #                                 #   Wall clock for a whole LLM phase, not for
 #                                 #   one call. Above a single batched call
 #                                 #   ((1+MAX_RETRIES) x 180 = 540s) so a slow
@@ -360,6 +369,17 @@ HUGGING_FACE_HUB_TOKEN=
 #                                 #   while stragglers are still retrying. Raise
 #                                 #   it for large documents: it is a flat
 #                                 #   ceiling, not an allowance per wave.
+#                                 #   Sized for WAVES, not batches: 65 batches
+#                                 #   at concurrency 20 is 4 waves, so the
+#                                 #   reference document needs 4 x 180 = 720s
+#                                 #   even when every call finishes inside its
+#                                 #   own budget. 900s clears that, so at the
+#                                 #   defaults only a call that actually times
+#                                 #   out can trigger degradation.
+#                                 #   The ceiling does NOT scale with document
+#                                 #   size, so a document large enough that its
+#                                 #   labelling legitimately takes longer is
+#                                 #   degraded to file labels.
 #                                 #   KEEP IT ABOVE (1+MODEL_LLM_MAX_RETRIES)
 #                                 #   x MODEL_LLM_TIMEOUT_SECONDS. Below that,
 #                                 #   the phase cancels calls that were never

@@ -91,6 +91,11 @@ call that was abandoned at its budget from one still in flight — a closed span
 with no completion tokens and `dataprep.llm.timed_out=true` is a timeout, the
 same shape without the marker is a wedge.
 
+One attribute, two meanings: on the per-call spans it means "this call hit
+`MODEL_LLM_TIMEOUT_SECONDS`"; on `dataprep.llm.phase` it means "the phase
+ceiling expired". A cross-span query on the attribute alone mixes the two, so
+read `dataprep.llm.timeout_seconds` (180 vs 900) or group by span name.
+
 How to **add** a span (Python): `from tracing import with_span` then
 `with with_span("dataprep.<name>", attributes={...}) as span: span.set_attribute(...)`.
 

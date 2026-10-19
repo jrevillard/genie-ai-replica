@@ -155,17 +155,21 @@ def non_negative_int_env(*names: str, default: int) -> int:
 # 180 s, down from the openai-python default of 600 s, and deliberately so. The
 # default is not a safety property: openai pairs it with 2 automatic retries,
 # and three of this overlay's LLM call sites add their own 3-attempt loop on
-# top — a worst case of ~30 min per batch with no log line, no span attribute
-# and no fallback for the whole duration. Live-observed on a shared GPU: a
+# top, so the two compose: 3 x (1 + 2) x 600 = 5400 s, a worst case of ~90 min
+# per batch, with no log line, no span attribute and no fallback for the whole
+# duration. Live-observed on a shared GPU: a
 # 260-chunk ingest issued 65 batched labeling calls, and after 13 min none had
 # returned and none had failed, because 13 min sits inside the first 600 s
 # attempt. Every one of those calls had a fallback ready to go that the budget
 # was keeping from ever running.
 #
-# 180 s is ~3x the observed p95 for a batched labeling call on an uncontended
-# GPU, so healthy deployments keep their results and degraded ones fall back in
-# minutes instead of half an hour. Deployments on a slower model raise it via
-# MODEL_LLM_TIMEOUT_SECONDS.
+# 180 s is roughly 3x the p95 for a batched labelling call measured on an
+# uncontended GPU. That is an OBSERVATION from a validation run, not a figure
+# derived from anything in this repository — no benchmark artifact pins it, and
+# it is stated here so the margin can be re-checked rather than trusted. If it
+# holds, healthy deployments keep their results and degraded ones fall back in
+# minutes instead of the ~90 min computed above. A deployment on a slower model should raise
+# it via MODEL_LLM_TIMEOUT_SECONDS, and the phase ceiling with it.
 LLM_TIMEOUT_SECONDS = positive_float_env("MODEL_LLM_TIMEOUT_SECONDS", "VLLM_TIMEOUT", default=180.0)
 
 # openai-python retries twice by default: a 408/409/429/5xx response, a
@@ -176,6 +180,20 @@ LLM_TIMEOUT_SECONDS = positive_float_env("MODEL_LLM_TIMEOUT_SECONDS", "VLLM_TIME
 # saturated GPU answers 503 or drops the connection, and both clear on their
 # own. Set MODEL_LLM_MAX_RETRIES=0 to cap the worst case instead.
 LLM_MAX_RETRIES = non_negative_int_env("MODEL_LLM_MAX_RETRIES", default=2)
+
+# The dataprep service-account token fetch. Its own budget rather than
+# CONTROL_PLANE_*, and the distinction is load-bearing: the control-plane
+# clients write the ingestion log and the document status, and losing one of
+# those calls costs a log line. This one is a credential every one of those
+# writes depends on — a single attempt, no retry, and the caller re-raises on
+# failure, so there is no degradation route at all. Shortening it would be the
+# reranker mistake on a path with more blast radius, and a slow-to-start
+# Keycloak would fail the ingest rather than retry.
+#
+# 300 s is exactly what aiohttp's default total already was, so this knob
+# changes no behaviour: it makes an inherited default visible and adjustable
+# instead of accidental. Raise it for a Keycloak that is slow under load.
+AUTH_TIMEOUT_SECONDS = positive_float_env("MODEL_AUTH_TIMEOUT_SECONDS", default=300.0)
 
 # The retriever's document summarizer, a ChatOpenAI with no fallback: its
 # except clause degrades only vLLM input overflow and re-raises everything

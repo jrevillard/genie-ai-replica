@@ -980,23 +980,45 @@ class TestThePhaseCeilingMustOutliveTheRetryLadder:
     @pytest.mark.parametrize(
         ("retries", "per_call", "phase", "ceiling_ok"),
         [
-            (2, 180.0, 600.0, True),  # the shipped defaults: 540 worst case
-            (2, 180.0, 540.0, False),  # exactly equal is not "above"
-            (2, 300.0, 600.0, False),  # a slower model under the default ceiling
-            (3, 180.0, 600.0, False),  # one more retry than the defaults
-            (0, 180.0, 600.0, True),  # retries disabled, plenty of room
-            (5, 180.0, 1081.0, True),  # ceiling raised to match
+            (2, 180.0, 900.0, True),  # the shipped defaults: 4 waves x 180 = 720
+            (2, 180.0, 720.0, False),  # exactly the wave cost is not "above" it
+            (2, 180.0, 600.0, False),  # the pre-round-11 default degraded a 260-chunk doc
+            (2, 180.0, 541.0, False),  # above one ladder, still under four waves
+            (2, 300.0, 900.0, False),  # a slower model under the shipped ceiling
+            (2, 300.0, 1201.0, True),  # raised to match
+            (3, 180.0, 1800.0, True),  # the retry ladder is not what binds here
         ],
     )
     def test_the_warning_fires_exactly_when_the_ceiling_is_too_low(self, retries, per_call, phase, ceiling_ok):
         warned = dataprep._warn_if_phase_ceiling_too_low(phase, retries, per_call)
-        worst = dataprep._one_batched_call_worst_case(retries, per_call)
-        assert (phase > worst) is ceiling_ok, (
-            f"the case table disagrees with the code: ceiling {phase}s vs worst case {worst}s"
+        waves = dataprep._phase_waves_for_reference_document()
+        ladder = dataprep._one_batched_call_worst_case(retries, per_call)
+        needed = max(ladder, waves * per_call)
+        assert (phase > needed) is ceiling_ok, (
+            f"the case table disagrees with the code: ceiling {phase}s vs needed {needed}s "
+            f"(waves {waves} x {per_call}s = {waves * per_call}s, ladder {ladder}s)"
         )
         assert warned is not ceiling_ok, (
-            f"warned={warned} for ceiling {phase}s vs worst case {worst}s "
-            f"({retries} retries at {per_call}s), expected warned={not ceiling_ok}"
+            f"warned={warned} for ceiling {phase}s needing {needed}s, expected warned={not ceiling_ok}"
+        )
+
+    def test_the_wave_count_is_what_binds_at_the_defaults(self):
+        """The single-call constraint is necessary and NOT sufficient.
+
+        65 batches at concurrency 20 is four sequential waves sharing one
+        ceiling. Checking only the ladder would leave the shipped default
+        silently degrading any document whose calls finish inside their own
+        budget — exactly the shape of the incident this work exists for.
+        """
+        waves = dataprep._phase_waves_for_reference_document()
+        assert waves == 4, f"the reference document costs {waves} waves, not 4"
+        ladder = dataprep._one_batched_call_worst_case(dataprep.LLM_MAX_RETRIES, dataprep.LLM_TIMEOUT_SECONDS)
+        assert waves * dataprep.LLM_TIMEOUT_SECONDS > ladder, (
+            "the ladder is the binding constraint, so the wave case above is testing nothing"
+        )
+        assert waves * dataprep.LLM_TIMEOUT_SECONDS < dataprep.DATAPREP_LLM_PHASE_TIMEOUT_SECONDS, (
+            "the shipped phase ceiling cannot absorb four waves of fully-timed-out calls — a "
+            "healthy-but-slow GPU answering a batch in 180 s would degrade every such document"
         )
 
     def test_the_check_is_applied_to_this_deployment_at_import(self):

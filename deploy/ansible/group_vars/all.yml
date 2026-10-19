@@ -174,14 +174,30 @@ keycloak_ssl_skip_verify: ""
 #   model_rerank_timeout_seconds: 300     # TEI rerank — no fallback path, so a
 #                                         #   tighter budget turns slow successes
 #                                         #   into 500s on the chat request
-#   model_control_plane_timeout_seconds: 30  # Keycloak token refresh, doc-repo calls
-#   dataprep_llm_phase_timeout_seconds: 600   # wall clock for a whole LLM phase
+#   model_auth_timeout_seconds: 300     # dataprep's Keycloak service-account
+#                                         #   token fetch. NOT the control-plane
+#                                         #   30 s: every control-plane write waits
+#                                         #   on this token, one attempt, no retry,
+#                                         #   no fallback. Already 300 (aiohttp's
+#                                         #   default), so this changes nothing —
+#                                         #   it makes the value explicit.
+#   model_control_plane_timeout_seconds: 30  # doc-repo calls, ingestion-log writes
+#   dataprep_llm_phase_timeout_seconds: 900   # wall clock for a whole LLM phase;
+#                                         #   must cover the document's WAVES
 #                                         #   CONSTRAINT: must stay above
 #                                         #   (1 + model_llm_max_retries) x
 #                                         #   model_llm_timeout_seconds (540 s at
 #                                         #   the defaults above). Below it, the
 #                                         #   phase cancels calls that were never
-#                                         #   given a chance to be merely slow, and
+#                                         #   given a chance to be merely slow. A
+#                                         #   260-chunk document is 65 batches at
+#                                         #   concurrency 20 = 4 waves, so it
+#                                         #   needs 4 x MODEL_LLM_TIMEOUT_SECONDS
+#                                         #   even when every call succeeds, and
+#                                         #   that is what binds, not the ladder.
+#                                         #   dataprep warns at startup if the
+#                                         #   ceiling is under either.
+#                                         #   And
 #                                         #   labelling degrades to file labels —
 #                                         #   which reads as a labelling-quality
 #                                         #   regression, not a misconfiguration.

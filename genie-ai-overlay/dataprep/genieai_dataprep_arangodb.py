@@ -302,12 +302,25 @@ LLM_LABEL_TEMPERATURE = float(os.getenv("DATAPREP_LLM_TEMPERATURE", "0.0"))
 #   one batched HTTP call  (1 + LLM_MAX_RETRIES) x 180 =  540 s   no overlay loop
 #   one per-chunk call      3 x (1 + LLM_MAX_RETRIES) x 180 = 1620 s  3 attempts
 #   one batch task          540 + LABEL_LLM_BATCH_SIZE x 1620 = 7020 s at defaults
+#   one WAVE of the document 4 x 180 = 720 s  — the reference 260-chunk document
+#                                   runs 65 batches at concurrency 20
 #
-# 600 s therefore sits above a single batched call — a merely slow batch still
-# gets to finish instead of being cut mid-call — and roughly a twelfth of one
-# batch task. No per-request budget can stop a runaway batch task, which is why
-# the phase bound exists at all: it fires while a straggler is still inside its
-# own ladder, so the document degrades at 600 s instead of at an unbounded time.
+# The ceiling is spent over WAVES, not over one batch, and that is the
+# arithmetic that actually binds. A 260-chunk document is 65 batches at
+# concurrency 20 = 4 sequential waves, so even with every call inside its own
+# budget the phase needs 4 x 180 = 720 s. A 600 s ceiling put the break-even
+# per-call latency at 150 s — inside the 180 s budget — so a shared GPU
+# answering a batched call in 160 s would degrade EVERY such document to file
+# labels, permanently, while each individual call was well within its budget.
+# That is the topology this MR exists for, so 900 s is the default: it clears
+# four waves of fully-timed-out calls (720 s) with the fifth wave's headroom,
+# and degradation at the defaults can only be caused by a call actually timing
+# out — which is the signal the bound is for.
+#
+# It remains roughly a ninth of one batch task, so no per-request budget can
+# stop a runaway batch task, which is why the phase bound exists at all: it
+# fires while a straggler is still inside its own ladder, so the document
+# degrades at 900 s instead of at an unbounded time.
 #
 # It is also a whole-phase ceiling, not a per-wave allowance: a 260-chunk
 # document runs 65 batches in 4 waves of MAX_CONCURRENT_BATCHES, and all of them
@@ -328,12 +341,35 @@ LLM_LABEL_TEMPERATURE = float(os.getenv("DATAPREP_LLM_TEMPERATURE", "0.0"))
 # is 900, three retries is 720. Since the degradation is indistinguishable from
 # a labelling-quality regression, this is checked at import rather than left to
 # prose in four files an operator may not be reading.
-DATAPREP_LLM_PHASE_TIMEOUT_SECONDS = positive_float_env("DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", default=600.0)
+DATAPREP_LLM_PHASE_TIMEOUT_SECONDS = positive_float_env("DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", default=900.0)
+
+# Document size the wave arithmetic above is stated for: the one in the incident
+# report. Raising the ceiling is the fix for a larger document; this only makes
+# the startup check speak about a concrete case instead of an abstract one.
+_PHASE_REFERENCE_CHUNKS = 260
 
 
 # Worst case for one batched call: every attempt at the full per-request budget.
 def _one_batched_call_worst_case(retries: int, per_call_seconds: float) -> float:
     return (1 + retries) * per_call_seconds
+
+
+def _phase_waves_for_reference_document(chunks: int | None = None) -> int:
+    """Waves the reference document costs at the configured concurrency.
+
+    ``_PHASE_REFERENCE_CHUNKS`` is the size of the document in the incident
+    report. It is a reference, not a limit: the real count depends on the
+    document being ingested, so this only says whether the SHIPPED default
+    survives a document of that size with every call at its full budget.
+
+    The default is read from the global inside the body, not as a default
+    argument: a default is bound once at ``def`` time, which would both freeze
+    the value and fail to resolve, since the constant is declared below.
+    """
+    if chunks is None:
+        chunks = _PHASE_REFERENCE_CHUNKS
+    batches = -(-chunks // LABEL_LLM_BATCH_SIZE)
+    return -(-batches // max(1, MAX_CONCURRENT_BATCHES))
 
 
 def _warn_if_phase_ceiling_too_low(phase_seconds: float, retries: int, per_call_seconds: float) -> bool:
@@ -346,21 +382,34 @@ def _warn_if_phase_ceiling_too_low(phase_seconds: float, retries: int, per_call_
     Returns whether it warned.
     """
     worst = _one_batched_call_worst_case(retries, per_call_seconds)
-    if phase_seconds > worst:
+    waves = _phase_waves_for_reference_document()
+    # The wave check is the one that binds. The single-call constraint is
+    # necessary but not sufficient: a ceiling above one ladder still degrades a
+    # large document whose calls each finish inside their own budget, because the
+    # waves run back to back and share the one ceiling.
+    needed = max(worst, waves * per_call_seconds)
+    if phase_seconds > needed:
         return False
     logger.warning(
-        "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS (%.0f s) does not exceed one batched "
-        "LLM call's worst case (%.0f s = (1 + MODEL_LLM_MAX_RETRIES=%d) x "
-        "MODEL_LLM_TIMEOUT_SECONDS=%.0f). Every batched labelling call is "
-        "cancelled by the phase ceiling before it can return, so labelling "
-        "degrades to per-chunk and then to file labels — a symptom that reads "
-        "as a labelling-quality regression rather than as a misconfiguration. "
-        "Raise DATAPREP_LLM_PHASE_TIMEOUT_SECONDS above %.0f s.",
+        "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS (%.0f s) does not exceed what one "
+        "LLM phase needs: %d waves of the %d-chunk reference document x "
+        "MODEL_LLM_TIMEOUT_SECONDS (%.0f s) = %.0f s, against a single call's "
+        "worst case of %.0f s = (1 + MODEL_LLM_MAX_RETRIES=%d) x "
+        "MODEL_LLM_TIMEOUT_SECONDS. Calls that are cancelled before they can "
+        "return make labelling degrade to per-chunk and then to file labels — a "
+        "symptom that reads as a labelling-quality regression rather than as a "
+        "misconfiguration. Raise DATAPREP_LLM_PHASE_TIMEOUT_SECONDS above %.0f s, "
+        "or lower LABEL_BATCH_SIZE / raise DATAPREP_MAX_CONCURRENT_BATCHES to "
+        "shorten the wave count.",
         phase_seconds,
+        waves,
+        _PHASE_REFERENCE_CHUNKS,
+        per_call_seconds,
+        waves * per_call_seconds,
         worst,
         retries,
         per_call_seconds,
-        worst,
+        needed,
     )
     return True
 

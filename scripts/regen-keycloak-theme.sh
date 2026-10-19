@@ -25,7 +25,9 @@ out="${1:-${repo_root}/charts/genieai-umbrella/files/keycloak-themes.tgz}"
 }
 
 mkdir -p "$(dirname -- "${out}")"
-tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
+# LC_ALL=C pins the sort order regardless of runner locale (non-ASCII
+# filenames would otherwise sort differently per environment).
+LC_ALL=C tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
   -C "${src}" -cf - themes | gzip -n > "${out}"
 
 echo "written ${out} ($(wc -c < "${out}") bytes)"

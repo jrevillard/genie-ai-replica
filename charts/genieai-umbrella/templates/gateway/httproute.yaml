@@ -1,9 +1,11 @@
 {{- if .Values.ingress.enabled -}}
 {{- /*
   Edge routing: the Gateway owns the hostname and TLS, this route owns
-  the path matrix. PathPrefix precedence is longest-match-first per the
-  Gateway API spec, so /api/files and /api/labels beat /api/ itself. Envoy
-  sets Host and
+  the path matrix. Gateway API resolves rule matches by rule-list order
+  (first match wins — NOT longest-prefix), so the more-specific paths
+  (/api/files, /api/labels) are listed before /api/ itself; keep that
+  ordering when adding rules. Matches within a single rule are OR-ed.
+  Envoy sets Host and
   X-Forwarded-* on upstream calls natively — Keycloak needs both to derive
   its issuer from the public origin instead of the in-cluster service name.
 

@@ -6,6 +6,9 @@
 // - Traces + metrics exported via OTel HTTP; logs go through the single-channel
 //   pipeline (winston → stdout → fluentd → collector → VL). Mirrors backend.
 //
+// Everything else — the propagator, the PII span processor, the shutdown
+// handlers — is shared code from `shared-lib`, not a second copy of it.
+//
 // Test environment guard OR observability disabled — no-op (must be before any
 // OTel requires). ENABLE_OBSERVABILITY is the single gate: when disabled the
 // Collector is not deployed, so SDK init would produce DNS errors.
@@ -28,16 +31,16 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     ATTR_DEPLOYMENT_ENVIRONMENT
   } = require('@opentelemetry/semantic-conventions');
   const { BatchSpanProcessor } = require('@opentelemetry/sdk-trace-base');
-  const { W3CTraceContextPropagator } = require('@opentelemetry/core');
   const { resourceFromAttributes } = require('@opentelemetry/resources');
-  const { redactAttributes } = require('./tracing-pii');
   // Background-task tracing helpers — used by the SIGTERM/SIGINT handlers
   // below so the emitted shutdown logs inherit a real trace_id instead of
-  // being orphaned. Deep import matches the existing shared-lib/X pattern
-  // (Docker drops `/lib/` from the path; Jest moduleNameMapper in
-  // jest.config.js routes both `../shared-lib/X` and the source-tree
-  // `../shared/lib/X` to the real file).
+  // being orphaned. Deep import, not the barrel: the barrel pulls arangojs
+  // and express-rate-limit into module load, and this file has to install
+  // the OTel SDK before any of that. Jest maps these `shared-lib` paths back
+  // to the real files (the rest of `shared-lib` stays on the test mock).
   const { setScopeName, withBackgroundSpan } = require('../shared-lib/tracing-background');
+  const { createGeniePropagator } = require('../shared-lib/tracing-baggage');
+  const { PIIRedactionProcessor } = require('../shared-lib/pii-span-processor');
 
   // Resource attributes — stamped on every span + metric this SDK emits
   // (so spans carry service.name in VictoriaTraces, metrics carry it in
@@ -88,77 +91,6 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     exportIntervalMillis: 15000
   });
 
-  // Custom SpanProcessor that redacts PII attributes before export.
-  // Mirrors backend's PIIRedactionProcessor — same WeakSet-onStart
-  // drop pattern so /health /ready /alive /favicon.ico probes do NOT
-  // ship to VictoriaTraces. The previous doc-repo implementation only
-  // set a marker attribute and forwarded every span to the delegate;
-  // k8s probes hit /health every 5s × 6+ services × 30d retention
-  // produced millions of noise rows in VictoriaTraces. Backend's
-  // `_droppedSpans` WeakSet pattern (backend/tracing.js:69-77) tracks
-  // spans dropped in onStart so onEnd can skip the delegate — the OTel
-  // SDK calls onEnd on every registered SpanProcessor regardless of
-  // whether onStart returned early.
-  class PIIRedactionProcessor {
-    constructor(exporter) {
-      this._delegate = new BatchSpanProcessor(exporter);
-      // Paths that should not generate traces (health checks, readiness probes)
-      this._ignoredPaths = ['/health', '/ready', '/alive', '/favicon.ico'];
-      // Tracks spans dropped in onStart so onEnd can skip the delegate.
-      // WeakSet so dropped spans are GC'd along with their parent object.
-      this._droppedSpans = new WeakSet();
-    }
-
-    onStart(span, parentContext) {
-      // Drop health-check spans BEFORE the span is recorded — once a
-      // span ends, the OTel SDK marks attributes read-only and
-      // `span.setAttribute()` becomes a no-op. We must mutate attributes
-      // (PII redaction) and decide to drop at onStart while the span is
-      // still mutable.
-      const attrs = span.attributes || {};
-      const target = attrs['http.target'] || attrs['http.route'] || '';
-      if (target && this._ignoredPaths.some((p) => target.includes(p))) {
-        // Drop fully: do NOT register with the delegate's BatchSpanProcessor.
-        // If we called onStart on the delegate, OTel would track the span
-        // in its active set and rely on a matching onEnd to release it —
-        // but we want to skip export entirely. Mark the span in
-        // _droppedSpans so onEnd can skip the delegate too (the SDK
-        // calls onEnd on every processor regardless of onStart return).
-        span.setAttribute('genie.pii.dropped', true);
-        this._droppedSpans.add(span);
-        return;
-      }
-      try {
-        const redacted = redactAttributes(attrs);
-        for (const [key, value] of Object.entries(redacted)) {
-          if (attrs[key] !== value) {
-            span.setAttribute(key, value);
-          }
-        }
-      } catch {
-        // Redaction failure must not block span export
-      }
-      this._delegate.onStart(span, parentContext);
-    }
-
-    onEnd(span) {
-      // Skip delegate.onEnd for spans we dropped in onStart — otherwise
-      // the OTel SDK's unconditional onEnd dispatch would queue them on
-      // the BatchSpanProcessor export queue despite never having been
-      // registered with its active set.
-      if (this._droppedSpans.has(span)) return;
-      this._delegate.onEnd(span);
-    }
-
-    shutdown() {
-      return this._delegate.shutdown();
-    }
-
-    forceFlush() {
-      return this._delegate.forceFlush();
-    }
-  }
-
   // Create SDK with auto-instrumentations. Same single-exporter chain as
   // backend — spanProcessors owns export (no double-export from NodeSDK's
   // own BatchSpanProcessor).
@@ -195,8 +127,10 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
         }
       })
     ],
-    textMapPropagator: new W3CTraceContextPropagator(),
-    spanProcessors: [new PIIRedactionProcessor(traceExporter)]
+    // Trace context alone drops the baggage header. The composite keeps
+    // `genie.query_id` flowing on this service's outbound calls too.
+    textMapPropagator: createGeniePropagator(),
+    spanProcessors: [new PIIRedactionProcessor(new BatchSpanProcessor(traceExporter))]
   });
 
   try {

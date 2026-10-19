@@ -41,7 +41,7 @@ content manager, sovereign reviewer) start here.
   RAG pipeline (when `ENABLE_OBSERVABILITY=1`). See
   [Observability](/docs/observe/).
 - **Secure** — Keycloak OIDC identity, document antivirus scanning (ClamAV),
-  PII-filtered telemetry (`tracing-pii.js`, `tracing-pii-logs.js`).
+  PII-filtered telemetry (`shared/lib/tracing-pii.js`).
 
 ## Technology stack
 

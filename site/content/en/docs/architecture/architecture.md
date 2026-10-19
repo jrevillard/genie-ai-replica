@@ -336,7 +336,7 @@ Trace propagation chain:
 
 | Service | Instrumentation | Tracing Library | Key Spans |
 |---------|---------------|-----------------|-----------|
-| Backend | `tracing.js`, `tracing-db.js`, `tracing-pii.js`, `metrics.js` | `@opentelemetry/api` + `@opentelemetry/sdk-node` | HTTP requests, database queries, PII redaction |
+| Backend | `tracing.js`, `tracing-db.js`, `metrics.js`; PII redaction in `shared/lib/tracing-pii.js` | `@opentelemetry/api` + `@opentelemetry/sdk-node` | HTTP requests, database queries, PII redaction |
 | OPEA ChatQnA | `genie-ai-overlay/tracing.py` | OpenTelemetry Python + FastAPI | Request processing, LLM calls, retries |
 | OPEA Retriever | OpenTelemetry Python | Vector search, graph queries |
 | OPEA Dataprep | OpenTelemetry Python | Ingestion, chunking, labeling |

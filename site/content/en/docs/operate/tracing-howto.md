@@ -133,7 +133,7 @@ route, and status. The collector renames `kong` → `METHOD /path`.
 ## PII filtering
 
 Telemetry must never leak secrets. The backend applies a PII filter
-(`tracing-pii.js`) that strips sensitive attributes — tokens, passwords, user
+(`shared/lib/tracing-pii.js`) that strips sensitive attributes — tokens, passwords, user
 PII — from span attributes before export. The metrics middleware also rejects
 a fixed allow-list of PII keys (`user_id`, `email`, `query_text`,
 `document_text`, `password`, `token`) before they reach a `Counter.add` /
@@ -153,7 +153,7 @@ a fixed allow-list of PII keys (`user_id`, `email`, `query_text`,
    nothing labelled `token`, `password`, `email`, `query_text`, or
    `document_text` ever appears. If you see one, file an issue — the allow-list
    in `components/gov-chat-backend/middleware/metrics-middleware.js` or the
-   regex in `tracing-pii.js` needs updating.
+   regex in `shared/lib/tracing-pii.js` needs updating.
 
 ## Sampling
 

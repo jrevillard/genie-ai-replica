@@ -462,7 +462,7 @@ Both provide the same API shape (tracer, meter, shutdown) as no-op stubs.
 Sensitive attributes are filtered by `PIIRedactionProcessor` (Node.js) and a denylist check (Python). Denylist keys: `password`, `token`, `secret`, `authorization`, `cookie`, `api_key`, `credit_card`, `ssn`.
 
 When adding new span attributes, verify they don't contain PII. The denylist is in:
-- Node.js: `components/gov-chat-backend/tracing-pii.js`
+- Node.js: `components/shared/lib/tracing-pii.js` (used by the backend and document-repository)
 - Python: `genie-ai-overlay/tracing.py` (`PII_DENYLIST`)
 
 ### Metric Naming

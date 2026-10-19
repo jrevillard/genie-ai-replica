@@ -64,9 +64,13 @@ from .config import (
     VLLM_MAX_NEW_TOKENS,
     VLLM_MODEL_ID,
     VLLM_TEMPERATURE,
-    SUMMARIZER_TIMEOUT,
     VLLM_TOP_P,
 )
+
+# From core.model_http_policy, not .config: production's summarizer call sites
+# read it there too. An alias in .config that nothing in production uses is a
+# second name for one budget, guarded by nothing.
+from core.model_http_policy import SUMMARIZER_TIMEOUT_SECONDS
 
 logger = CustomLogger("genieai_retriever_arangodb")
 logflag = os.getenv("LOGFLAG", False)
@@ -122,7 +126,7 @@ class GenieaiArangoRetriever(OpeaComponent):
                 temperature=VLLM_TEMPERATURE,
                 max_tokens=VLLM_MAX_NEW_TOKENS,
                 top_p=VLLM_TOP_P,
-                timeout=SUMMARIZER_TIMEOUT,
+                timeout=SUMMARIZER_TIMEOUT_SECONDS,
             )
         else:
             raise HTTPException(

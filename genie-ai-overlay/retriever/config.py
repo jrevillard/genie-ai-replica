@@ -3,11 +3,7 @@
 
 import os
 
-from core.model_http_policy import (
-    EMBEDDING_TIMEOUT_SECONDS,
-    LLM_TIMEOUT_SECONDS,
-    SUMMARIZER_TIMEOUT_SECONDS,
-)
+from core.model_http_policy import EMBEDDING_TIMEOUT_SECONDS, LLM_TIMEOUT_SECONDS
 
 
 #######################################################
@@ -276,9 +272,11 @@ VLLM_TEMPERATURE = os.getenv("VLLM_TEMPERATURE", 0.8)
 # environment made `docker exec ... env` report a value this service never uses.
 VLLM_TIMEOUT = LLM_TIMEOUT_SECONDS
 EMBEDDING_TIMEOUT = EMBEDDING_TIMEOUT_SECONDS
-# The summarizer's own budget, deliberately not aliased onto VLLM_TIMEOUT: it has no
-# degradation route, so it keeps the openai default rather than the tightened LLM one.
-SUMMARIZER_TIMEOUT = SUMMARIZER_TIMEOUT_SECONDS
+# The summarizer's budget is deliberately NOT aliased here. It has no degradation
+# route, so it keeps the openai default rather than the tightened LLM one, and
+# its two call sites import SUMMARIZER_TIMEOUT_SECONDS straight from the policy
+# module — an alias nothing in production reads would be a second name for one
+# budget, guarded by nothing.
 
 
 # OpenAI configuration (alternative to VLLM & TEI)

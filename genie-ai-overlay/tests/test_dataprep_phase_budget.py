@@ -15,6 +15,7 @@ it reports while it runs, and it degrades rather than raising.
 
 import ast
 import asyncio
+import gc
 import sys
 import time
 from pathlib import Path
@@ -866,6 +867,106 @@ class TestFailureSeenDuringAHeartbeatEndsThePhase:
         )
 
 
+class TestThePhaseSpanSurvivesAnInterruptedPhase:
+    """The phase span must identify itself on the paths where the phase dies.
+
+    Both the constants and `timed_out` were originally set after the inner call,
+    which raises on a failed batch and on an external cancel. A kill is a
+    routine path, not an edge case — so on exactly the traces an operator opens
+    to find out which phase was interrupted, the span carried nothing but the
+    exception. That is the same "the instrumentation is not there" conclusion
+    this MR removed for `context_batch`.
+    """
+
+    def _recording_span(self, monkeypatch, opened):
+        class _Span:
+            def __init__(self):
+                self.attributes = {}
+
+            def set_attribute(self, key, value):
+                self.attributes[key] = value
+
+        class _CM:
+            def __init__(self, span):
+                self._span = span
+
+            def __enter__(self):
+                return self._span
+
+            def __exit__(self, *exc):
+                opened.append(self._span.attributes)
+                return False
+
+        def _fake(name, attributes=None):
+            span = _Span()
+            span.attributes.update(attributes or {})
+            return _CM(span)
+
+        monkeypatch.setattr(dataprep, "background_span", _fake)
+
+    def test_an_externally_cancelled_phase_still_names_itself(self, monkeypatch):
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 5.0)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+        opened = []
+        self._recording_span(monkeypatch, opened)
+
+        async def scenario():
+            async def wedged():
+                await asyncio.sleep(30)
+
+            phase = asyncio.ensure_future(
+                dataprep._gather_with_phase_budget(
+                    [asyncio.ensure_future(wedged())],
+                    phase="LLM labeling",
+                    phase_label=dataprep.PHASE_LABEL_LABELING,
+                    total=1,
+                    file_id="f1",
+                    write_ingestion_log=_noop_log,
+                )
+            )
+            await asyncio.sleep(0.05)
+            phase.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await phase
+
+        _run(scenario())
+
+        assert opened, "no phase span was recorded at all"
+        attrs = opened[-1]
+        assert attrs.get("dataprep.llm.phase") == dataprep.PHASE_LABEL_LABELING, attrs
+        assert attrs.get("dataprep.llm.timeout_seconds") == 5.0, attrs
+        # Explicit False, not an absence: "did not time out" and "we never found
+        # out" must not read the same in a trace query.
+        assert attrs.get("dataprep.llm.timed_out") is False, attrs
+
+    def test_a_failed_batch_still_names_the_phase(self, monkeypatch):
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 5.0)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+        opened = []
+        self._recording_span(monkeypatch, opened)
+
+        async def scenario():
+            async def boom():
+                raise RuntimeError("vLLM rejected the prompt")
+
+            with pytest.raises(RuntimeError, match="vLLM rejected the prompt"):
+                await dataprep._gather_with_phase_budget(
+                    [asyncio.ensure_future(boom())],
+                    phase="LLM labeling",
+                    phase_label=dataprep.PHASE_LABEL_LABELING,
+                    total=1,
+                    file_id="f1",
+                    write_ingestion_log=_noop_log,
+                )
+
+        _run(scenario())
+
+        assert opened, "no phase span was recorded at all"
+        attrs = opened[-1]
+        assert attrs.get("dataprep.llm.phase") == dataprep.PHASE_LABEL_LABELING, attrs
+        assert attrs.get("dataprep.llm.timeout_seconds") == 5.0, attrs
+
+
 class TestThePhaseCeilingMustOutliveTheRetryLadder:
     """The ceiling is only a bound if it sits above one call's worst case.
 
@@ -1271,6 +1372,80 @@ class TestUnboundedPhaseKeepsItsSiblings:
     therefore cancel what is pending and give it a bounded window to unwind.
     """
 
+    def test_a_batch_that_raises_inside_the_settle_is_retrieved(self):
+        """The settle drains outcomes; the drain is what stops the traceback.
+
+        ``task.exception()`` is called on every settled task so asyncio does not
+        later log "Task exception was never retrieved" with a full traceback —
+        noise landing in the dataprep log during exactly the contended-GPU
+        incidents this work exists to make diagnosable. Nothing else performs
+        that retrieval: the caller is about to raise something else, and the
+        microservice's done-callback only pops the task from its registry.
+
+        Asserted through the event loop's exception handler, which is where that
+        message is delivered. A sibling test's message PROMISES this property
+        but only checks ``task.done()`` — satisfied by a task whose exception
+        was never touched.
+        """
+        seen = []
+
+        async def scenario():
+            loop = asyncio.get_running_loop()
+            loop.set_exception_handler(lambda _loop, ctx: seen.append(ctx.get("message", "")))
+
+            async def boom():
+                await asyncio.sleep(0.05)
+                raise RuntimeError("retrievable failure")
+
+            task = asyncio.ensure_future(boom())
+            await dataprep._settle_and_retrieve([task])
+            del task  # drop the last reference so GC is what triggers the log
+            gc.collect()
+            await asyncio.sleep(0)
+
+        _run(scenario())
+        assert not seen, (
+            f"a settled task's exception was never retrieved: {seen} — asyncio logs the full "
+            "traceback into the dataprep log at collection time, during the incident this work "
+            "exists to make diagnosable"
+        )
+
+    def test_an_individually_cancelled_batch_does_not_mask_the_real_failure(self, monkeypatch):
+        """One cancelled batch must not turn a failure into a "Killed".
+
+        ``task.exception()`` raises ``CancelledError`` on a cancelled task, so a
+        batch cancelled on its own — its own timeout, say — would propagate out
+        of the drain and replace the failure the phase actually had. The kill
+        switch reads a CancelledError as "an administrator killed this", so the
+        document would report Killed instead of the real error.
+        """
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 5.0)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
+
+        async def scenario():
+            async def boom():
+                # Same wake-up tick as the cancelled sibling, so both land in
+                # one asyncio.wait and the drain sees them together.
+                await asyncio.sleep(0.05)
+                raise RuntimeError("the real failure")
+
+            async def self_cancelling():
+                await asyncio.sleep(0.05)
+                asyncio.current_task().cancel()
+
+            await dataprep._gather_with_phase_budget(
+                [asyncio.ensure_future(boom()), asyncio.ensure_future(self_cancelling())],
+                phase="LLM labeling",
+                phase_label=dataprep.PHASE_LABEL_LABELING,
+                total=2,
+                file_id="f1",
+                write_ingestion_log=_noop_log,
+            )
+
+        with pytest.raises(RuntimeError, match="the real failure"):
+            _run(scenario())
+
     def test_a_sibling_is_cancelled_rather_than_left_writing(self, monkeypatch):
         """The failure path takes its in-flight batches with it.
 
@@ -1313,9 +1488,14 @@ class TestUnboundedPhaseKeepsItsSiblings:
             # assertion after _run() returned would pass either way.
             await asyncio.sleep(0.3)
             assert wrote == [], f"a graph batch kept writing after the phase failed: {wrote}"
+            # This checks ownership only. Whether a settled task's exception is
+            # RETRIEVED is a separate property, and asserting it in the message
+            # without measuring it is what made this look guarded when it was
+            # not — see test_a_batch_that_raises_inside_the_settle_is_retrieved,
+            # which observes the loop's exception handler directly.
             assert all(t.cancelled() or t.done() for t in tasks), (
-                "batches left pending with no owner; each later raise logs an unretrieved-exception "
-                "traceback during exactly the incident this change exists to make diagnosable"
+                "batches left pending with no owner; a pending batch is not cancelled by the "
+                "phase, so it goes on to write after the caller retracts the document"
             )
 
         _run(scenario())

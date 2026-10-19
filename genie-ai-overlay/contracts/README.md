@@ -34,13 +34,27 @@ docker run --rm -v "$PWD/genie-ai-overlay/contracts":/contracts:ro \
   --entrypoint sh genie-ai-dataprep-arango:latest \
   -c "cd /contracts && python -m pytest test_contract_ingest.py test_contract_nfrp_budgets.py::test_ingest_wall_clock_within_budget -p no:cacheprovider"
 
+# Chatqna-shaped suite (real comps orchestrator, in the chatqna image):
+docker run --rm -v "$PWD/genie-ai-overlay/contracts":/contracts:ro \
+  --entrypoint sh genie-ai-chatqna-server:latest \
+  -c "cd /contracts && python -m pytest test_contract_orchestrator_wire.py -p no:cacheprovider"
+
 # Pure logic (dev venv — no image needed):
 cd genie-ai-overlay && python -m venv .venv && .venv/bin/pip install pytest pytest-asyncio
 .venv/bin/python -m pytest contracts/test_contract_harness.py contracts/test_contract_telemetry.py -p no:cacheprovider
 ```
 
 CI runs the per-module jobs in the `contract-in-image` stage (`contract:retriever-arango`,
-`contract:reranker`, `contract:dataprep-arango`) with `--junitxml` artifacts.
+`contract:reranker`, `contract:dataprep-arango`, `contract:chatqna-server`) with
+`--junitxml` artifacts.
+
+Each image job triggers on its own module's paths PLUS `genie-ai-overlay/core/**`
+and `genie-ai-overlay/contracts/**`. That last one is load-bearing, not
+decoration: every contract job declares `needs:` on its `build:` job, so if a
+contract-only MR instantiates the test job without its build job, GitLab
+rejects the whole pipeline ("job needs X, but it is not present in the
+pipeline"). Adding a fifth contract job means adding the same path to the
+matching `build:` job, or no contract-only MR will be buildable.
 
 ## Suite layout
 

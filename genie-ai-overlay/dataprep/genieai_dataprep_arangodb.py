@@ -1462,7 +1462,11 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 "dataprep.llm_batched": True,
                 "dataprep.llm_batch_size": len(batch),
                 "dataprep.llm_model": model or "",
-                "dataprep.chunk_indices": str(indices),
+                # A native OTel array, not str(indices): the vocabulary requires
+                # flat scalar sequences to be emitted as arrays, and the string
+                # form ("[0, 3, 7]") carries separators that read as prose to the
+                # span privacy sweep.
+                "dataprep.chunk_indices": indices,
             },
         ) as span:
             try:

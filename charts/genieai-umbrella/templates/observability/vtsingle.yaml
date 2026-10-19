@@ -29,4 +29,32 @@ spec:
       requests:
         storage: {{ .Values.observability.traces.storageSize | quote }}
   replicaCount: 1
+---
+{{- /*
+  The operator's default Service publishes only the 10428 query port —
+  VictoriaTraces also listens on 4318 (OTLP/HTTP) and 4317 (gRPC), which
+  the collector gateway exports to, but nothing exposes them (live-hit:
+  "no route to host" on svc:4318 with an endpoints list carrying 10428
+  only). The CRD's spec is fully x-kubernetes-preserve-unknown-fields, so
+  a serviceSpec guess would be silently swallowed instead of rejected —
+  this explicit Service is deterministic.
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: vtsingle-otlp
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+spec:
+  selector:
+    managed-by: vm-operator
+    app.kubernetes.io/instance: vtraces
+  ports:
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
 {{- end }}

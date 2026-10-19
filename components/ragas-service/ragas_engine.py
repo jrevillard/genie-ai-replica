@@ -289,7 +289,13 @@ def build_llm(temperature: float = 0.0):
     never pays the langchain import cost and tests can stub this module."""
     import httpx
     from langchain_openai import ChatOpenAI
-    from ragas.llms import LangchainLLMWrapper
+
+    # ragas.llms.LangchainLLMWrapper is a DeprecationHelper SHIM, not a
+    # class — subclassing it explodes at class-definition time (live
+    # 2026-10-18: "DeprecationHelper.__init__() takes 3 positional arguments
+    # but 4 were given", killing every /evaluate job). Import the REAL class
+    # from its module.
+    from ragas.llms.base import LangchainLLMWrapper
 
     base = _judge_base_url()
     if not base or not os.getenv("RAGAS_JUDGE_MODEL"):
@@ -652,9 +658,10 @@ class _TolerantSynthesizer:
     within one in-flight LLM batch instead of grinding the GPU to the end.
     """
 
-    def __init__(self, inner, cancel_event: threading.Event | None = None):
+    def __init__(self, inner, cancel_event: threading.Event | None = None, on_sample=None):
         self._inner = inner
         self._cancel = cancel_event
+        self._on_sample = on_sample  # callable(done_so_far) — synthesis progress
 
     @property
     def name(self):
@@ -689,13 +696,20 @@ class _TolerantSynthesizer:
         return scenarios
 
     async def generate_sample(self, scenario, callbacks=None):
-        if self._cancelled():
-            return _empty_sample()
         try:
-            return await self._inner.generate_sample(scenario=scenario, callbacks=callbacks)
-        except Exception as e:  # noqa: BLE001 — dropping this question IS the recovery
-            logger.warning("sample synthesis failed for %s (dropping question): %s", self.name, e)
-            return _empty_sample()
+            if self._cancelled():
+                return _empty_sample()
+            try:
+                return await self._inner.generate_sample(scenario=scenario, callbacks=callbacks)
+            except Exception as e:  # noqa: BLE001 — dropping this question IS the recovery
+                logger.warning("sample synthesis failed for %s (dropping question): %s", self.name, e)
+                return _empty_sample()
+        finally:
+            if self._on_sample is not None:
+                try:
+                    self._on_sample()
+                except Exception:  # noqa: BLE001 — progress reporting can never fail a job
+                    pass
 
 
 async def generate_testset(
@@ -793,7 +807,21 @@ async def generate_testset(
     # docs the HeadlinesExtractor filter skips (live 2026-10-18).
     if progress:
         progress("synthesizing-questions")
-    dist = _resolve_distribution(query_distribution, llm, kg=kg, cancel_event=cancel_event)
+    # Synthesis progress: count every resolved sample (wrapper finally-hook)
+    # against the split arithmetic's expected total — ceil(N × weight) per
+    # synthesizer, the same calculate_split_values ragas applies.
+    synth_done = [0]
+
+    def _bump():
+        synth_done[0] += 1
+        if progress is not None:
+            progress("synthesizing-questions", synth_done[0], None)
+
+    dist = _resolve_distribution(query_distribution, llm, kg=kg, cancel_event=cancel_event, on_sample=_bump)
+    if progress is not None and dist:
+        # ceil per entry (import-free): the bar's total is the expected count
+        expected = sum(-(-round(int(testset_size) * w) // 1) or 1 for _, w in dist)
+        progress("synthesizing-questions", synth_done[0], max(expected, int(testset_size)))
     testset = await asyncio.to_thread(
         generator.generate,
         testset_size=int(testset_size),
@@ -824,6 +852,13 @@ async def generate_testset(
             }
         )
     _check_cancel(cancel_event)  # a cancel beats partial results — the user asked to stop
+    # The split arithmetic can ceil ABOVE the request (3 synthesizers ×
+    # ceil(N/3) ≥ N) and the wrapper truncation bounds per-synthesizer, not
+    # the total — the user asked for N questions, ship N (2026-10-18: a
+    # 5-question request displayed 200 entries after the overshoot bug).
+    if len(samples) > int(testset_size):
+        dropped += len(samples) - int(testset_size)
+        samples = samples[: int(testset_size)]
     if not samples:
         raise RuntimeError(
             f"no questions could be synthesized ({dropped} candidate(s) dropped — every synthesis "
@@ -841,6 +876,7 @@ def _resolve_distribution(
     llm,
     kg=None,
     cancel_event: threading.Event | None = None,
+    on_sample=None,
 ):
     """Map [{synthesizer, weight}] specs to a ragas QueryDistribution.
 
@@ -864,7 +900,7 @@ def _resolve_distribution(
         from ragas.testset.synthesizers import default_query_distribution
 
         base = default_query_distribution(llm, kg)
-        return [(_TolerantSynthesizer(s, cancel_event), w) for s, w in base]
+        return [(_TolerantSynthesizer(s, cancel_event, on_sample), w) for s, w in base]
     from ragas.testset.synthesizers import (
         MultiHopAbstractQuerySynthesizer,
         MultiHopSpecificQuerySynthesizer,
@@ -885,7 +921,7 @@ def _resolve_distribution(
             raise ValueError(
                 f"bad query_distribution entry {spec}; synthesizer must be one of {sorted(factory)} with weight > 0"
             )
-        out.append((_TolerantSynthesizer(cls(llm=llm), cancel_event), weight))
+        out.append((_TolerantSynthesizer(cls(llm=llm), cancel_event, on_sample), weight))
     return out
 
 
@@ -900,9 +936,10 @@ async def evaluate_samples(
     """Score samples with the selected metrics. Sample keys are his exact
     mapping (user_input / retrieved_contexts / response / reference) plus
     reference_contexts for the context-metrics that consume them.
-    progress (optional): callback str -> None for the job registry.
-    cancel_event (optional): checked when evaluate() returns — a cancelled
-    run reports cancelled rather than shipping scores the user abandoned."""
+    progress (optional): callback(phase, done=None, total=None) for the job
+    registry — rows-done/rows-total is reported between evaluation batches.
+    cancel_event (optional): checked between batches — a cancelled run
+    reports cancelled rather than shipping scores the user abandoned."""
     from ragas import EvaluationDataset, evaluate
     from ragas.run_config import RunConfig
 
@@ -927,44 +964,64 @@ async def evaluate_samples(
             row["reference_contexts"] = [str(c) for c in s.get("reference_contexts")]
         rows.append(row)
 
-    dataset = EvaluationDataset.from_list(rows)
-    # Same thread confinement as generation (2026-10-18): evaluate() drives
-    # ragas's Executor, whose nest_asyncio reentrancy on the uvicorn loop
-    # corrupts it; in a worker thread it takes the plain asyncio.run path.
-    result = await asyncio.to_thread(
-        evaluate,
-        dataset=dataset,
-        metrics=metric_instances,
-        llm=llm,
-        embeddings=embeddings,
-        run_config=RunConfig(timeout=int(timeout_s), max_workers=8),
-        show_progress=False,
-        raise_exceptions=False,
-    )
-    _check_cancel(cancel_event)
-
-    per_query = []
-    frame = result.to_pandas()
+    # Row-batched evaluation (2026-10-18, David: "progress bars per phase so
+    # the user knows exactly what is happening"): one evaluate() per batch
+    # gives an honest rows-done/rows-total signal between batches — the
+    # judge calls dominate, so batch boundaries cost nothing measurable.
+    # Default 1 (2026-10-19, David: "the scoring progress bar jumps 10 at a
+    # time — it needs to jump 1 or 2 at a time"): per-row batches make the
+    # bar tick per question and sharpen cancel response, at no measurable
+    # cost for the same reason. Raise RAGAS_EVAL_BATCH_ROWS to coarsen.
+    batch_rows = max(1, int(os.getenv("RAGAS_EVAL_BATCH_ROWS") or "1"))
     metric_names = [m.name for m in metric_instances]
-    for _, row in frame.iterrows():
-        item = {
-            "user_input": row.get("user_input"),
-            "retrieved_contexts": list(row.get("retrieved_contexts") or []),
-            "response": row.get("response"),
-            "reference": row.get("reference"),
-        }
-        all_nan = True
-        for name in metric_names:
-            v = row.get(name)
-            try:
-                f = float(v) if v is not None else None
-            except (TypeError, ValueError):
-                f = None
-            item[name] = f
-            if f is not None and f == f:
-                all_nan = False
-        item["ragas_nan"] = "ALL_NAN" if all_nan else ""
-        per_query.append(item)
+    per_query: list[dict[str, Any]] = []
+    total = len(rows)
+    for offset in range(0, total, batch_rows):
+        _check_cancel(cancel_event)
+        chunk = rows[offset : offset + batch_rows]
+        dataset = EvaluationDataset.from_list(chunk)
+        # Same thread confinement as generation (2026-10-18): evaluate()
+        # drives ragas's Executor, whose nest_asyncio reentrancy on the
+        # uvicorn loop corrupts it; in a worker thread it takes the plain
+        # asyncio.run path.
+        result = await asyncio.to_thread(
+            evaluate,
+            dataset=dataset,
+            metrics=metric_instances,
+            llm=llm,
+            embeddings=embeddings,
+            run_config=RunConfig(timeout=int(timeout_s), max_workers=8),
+            show_progress=False,
+            raise_exceptions=False,
+        )
+        if progress is not None:
+            progress("scoring", min(offset + len(chunk), total), total)
+        frame = result.to_pandas()
+        for _, row in frame.iterrows():
+            item = {
+                "user_input": row.get("user_input"),
+                "retrieved_contexts": list(row.get("retrieved_contexts") or []),
+                "response": row.get("response"),
+                "reference": row.get("reference"),
+            }
+            all_nan = True
+            for name in metric_names:
+                v = row.get(name)
+                try:
+                    f = float(v) if v is not None else None
+                except (TypeError, ValueError):
+                    f = None
+                if f is not None and f != f:
+                    # NaN is not JSON-compliant — null it (live 2026-10-18:
+                    # a NaN metric 500'd every job poll and stranded the
+                    # finished run behind starlette's allow_nan=False)
+                    f = None
+                item[name] = f
+                if f is not None:
+                    all_nan = False
+            item["ragas_nan"] = "ALL_NAN" if all_nan else ""
+            per_query.append(item)
+    _check_cancel(cancel_event)
 
     aggregate = {}
     for name in metric_names:

@@ -2988,6 +2988,8 @@ export default {
         removeTag: 'Aus den Sperr-Tags entfernen',
         tagsetTip: 'Sperr-Tags dieses Laufs',
         savedTitle: 'Gespeicherte Suiten',
+        savedTip:
+          'Jede erstellte oder importierte Suite wird hier gespeichert, je Repository. Zwei Arten teilen sich diese Liste: Head-Suiten (aus Tags und Frontmatter abgeleitete Fragensätze, mit Positiv/Negativ-Zählern) und RAGAS-Benchmark-Suiten (Fragensätze mit erwarteten Antworten, mit RAGAS-Badge und Anzahl der Einträge). Laden öffnet eine Head-Suite im Tab Head-Test und eine RAGAS-Suite im Tab RAGAS-Benchmarks, wo sie gegen den Live-Korpus ausgeführt und bewertet werden kann. Löschen entfernt die Suite endgültig; Umbenennen erfolgt direkt im Namen.',
         load: 'Laden',
         flipTip: 'Wechseln zwischen soll-selektieren / nicht-selektieren',
         deleteTip: 'Diese Zeile aus der Suite entfernen',
@@ -3153,7 +3155,9 @@ export default {
         button: 'Generieren',
         working: 'Wird generiert — das dauert einige Minuten…',
         cancel: 'Abbrechen',
-        cancelling: 'Wird abgebrochen…'
+        cancelling: 'Wird abgebrochen…',
+
+        inFlight: 'Für dieses Repository läuft bereits eine Benchmark-Suite-Generierung — Sie werden daran angehängt.'
       },
       import: {
         button: 'Suite importieren (.xlsx)',
@@ -3182,7 +3186,15 @@ export default {
       run: {
         button: 'Vergleichstest ausführen',
         working: 'Wird ausgeführt…',
+        retrieved: 'abgerufen',
+        pass: 'bestanden',
+        fail: 'fehlgeschlagen',
+        abstained: 'abgelehnt',
+        rowError: 'Fehler',
+        cancel: 'Lauf abbrechen',
         phase: {
+          'building-knowledge-graph': 'Wissensgraph wird aufgebaut',
+          'synthesizing-questions': 'Fragen werden synthetisiert',
           retrieval: 'Abruf läuft',
           judge: 'Bewertung läuft'
         }
@@ -3194,6 +3206,16 @@ export default {
       results: {
         title: 'Ergebnisse des Vergleichstests',
         failing: '{n} fehlgeschlagen',
+        advisorHint:
+          '{n} Fragen liegen unter ihren Metrik-Schwellenwerten. Starten Sie den Advisor, um jeden Fehlschlag einer Pipeline-Stufe zuzuordnen und konkrete Maßnahmen zu erhalten.',
+        copy: 'Vollständige Antwort kopieren',
+        colResizeTip: 'Ziehen Sie den Griff zum Skalieren — Doppelklick auf die Kopfzeile setzt zurück',
+        trendTitle: 'Metrik-Trend über Läufe',
+        trendNote:
+          'Jede Linie ist der Suite-Mittelwert einer RAGAS-Metrik pro Lauf, ältester zuerst — das ␘ an jedem Tacho erklärt die Metrik. Bewertete Antworten werden gecacht; gleiche Wiederholungen unterscheiden sich nur, wo Antworten oder Abruf sich änderten.',
+        statusTitle: 'Ergebnisse pro Frage',
+        statusNote:
+          'Jede Suite-Frage dieses Laufs, gestapelt nach Ausgang: bestanden, durchgefallen (eine gewählte Metrik unter ihrer Schwelle), enthalten (Antwort verweigert) oder Fehler (Pipeline fehlgeschlagen).',
         allPass: 'alle bestanden',
         failingShort: 'fehlgeschlagen',
         answer: 'Antwort',
@@ -3234,14 +3256,41 @@ export default {
         factual_correctness: 'faktische Korrektheit',
         answer_correctness: 'Antwortkorrektheit',
         answer_similarity: 'Antwortähnlichkeit',
-        noise_sensitivity: 'Rauschempfindlichkeit'
+        noise_sensitivity: 'Rauschempfindlichkeit',
+        note: {
+          faithfulness:
+            'Wie faktenbasiert die Antwort gegenüber den abgerufenen Passagen ist — der Anteil der Aussagen, die von den Quellen gedeckt sind. Niedrig heißt: die Antwort behauptet Dinge, die die Belege nicht hergeben (Halluzination).',
+          context_precision:
+            'Ob die entscheidenden Passagen oben in der Trefferliste stehen. Niedrig heißt: die richtigen Belege wurden gefunden, aber von weniger relevanten Abschnitten verdeckt.',
+          context_recall:
+            'Ob die abgerufenen Passagen alles abdecken, was die Referenzantwort erfordert. Niedrig heißt: der Abruf hat Belege verpasst, die die Frage brauchte.',
+          answer_relevancy:
+            'Wie gut die Antwort die gestellte Frage adressiert: RAGAS erzeugt Fragen aus dem Antworttext und vergleicht sie per Embedding-Ähnlichkeit mit der Originalfrage. Faktische Richtigkeit wird NICHT geprüft — weitschweifige Antworten scoren niedrig, selbst wenn sie richtig sind.',
+          context_utilization:
+            'Ob der abgerufene Kontext ausreicht, um die Referenzantwort zu erzeugen — eine Vollständigkeitsprüfung des Abrufs.',
+          context_entities_recall:
+            'Recall auf Entitätenebene: der Anteil der benannten Entitäten in den Referenzpassagen des Eintrags (Firmen, Daten, Beträge, Orte), die auch in den abgerufenen Chunks vorkommen. Niedrig bedeutet, dass die abgerufenen Chunks Entitäten der Referenz verfehlen. Richter-sensitiv — ein niedriger Wert bei bestandenem Context-Recall bedeutet meist, dass die Entitätsextraktion des Judges versäumt hat, nicht dass Inhalt fehlt.',
+          factual_correctness:
+            'Faktische Übereinstimmung auf Aussagenebene mit der Referenzantwort — der Judge zerlegt beide in Aussagen und bewertet die Überschneidung. Die strengste Korrektheitsmetrik.',
+          answer_correctness:
+            'Gesamtqualität gegenüber der Referenzantwort — faktische Korrektheit kombiniert mit semantischer Ähnlichkeit. Die Metrik, die „ward die Antwort richtig“ am nächsten kommt.',
+          answer_similarity:
+            'Semantische (Embedding-)Ähnlichkeit zwischen erzeugter und Referenzantwort — hoch bedeutet: beide sagen dasselbe.',
+          noise_sensitivity:
+            'Wie sehr die Antwort leidet, wenn irrelevante Passagen in den Kontext gemischt werden — ein Robustheitsmaß. NIEDRIGER ist besser; die Schwelle ist invertiert.'
+        }
       },
       pdf: {
         title: 'RAGAS-Vergleichstestbericht',
         suite: 'Suite',
         run: 'Ausführung',
         summary: 'Zusammenfassung',
-        perQuery: 'Scores pro Frage'
+        perQuery: 'Scores pro Frage',
+        status: 'Ergebnisse',
+        n: 'Fragen',
+        evaluable: 'bewertbar',
+        abstained: 'enthalten',
+        compare: 'Vergleich über Läufe (Delta zum ersten)'
       }
     }
   },

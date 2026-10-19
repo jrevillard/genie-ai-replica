@@ -137,6 +137,31 @@ metrics judging ≈ 500–900 LLM calls, concurrent: frontier judge → target
 Non-goals: exact parity with retrieval-only suites (two LLM legs exist by
 definition); Batch APIs (phase 2, via the 8-7 adapter).
 
+## Kubernetes deployment constraints (David, 2026-10-18)
+
+The judge cache volume raised the question of what HPA means for this
+service. The honest answer has two layers:
+
+- **The volume is the smaller blocker.** `ragas_llm_cache` is a pure
+  performance layer (judge responses keyed by prompt hash); suites, runs and
+  results live in ArangoDB and never depend on it. On k8s: Deployment
+  `replicas: 1` + a ReadWriteOnce PVC (or `emptyDir` if cold caches after
+  rescheduling are acceptable — that is exactly the `/tmp` behaviour the
+  volume replaced). Losing the PV costs re-judging time, never data.
+- **The in-memory job registry is the real HPA blocker — with or without the
+  cache.** The sidecar's job dict, per-job progress and `cancel_event`s are
+  per-pod state; okf-server polls `GET /jobs/{id}` expecting to reach the pod
+  that owns the job. Behind a k8s Service with more than one replica,
+  round-robin routing orphans every poll. The same class of constraint sits
+  on okf-server (`genInFlight`/`runInFlight`/`genProgress` Maps).
+
+**Consequence:** horizontal scaling requires externalizing job state (Redis
+is already in the stack) and making job polling replica-addressable — that is
+a prerequisite for HPA on BOTH services, not a cache problem. Until then,
+k8s posture is `replicas: 1` + RWO PVC + a PodDisruptionBudget for
+ragas-service, and the scaling lever is D5's host-sized worker pool INSIDE
+the single pod — which is where "use the machine's resources" already lives.
+
 ## Story
 
 Tracked as **8-6b** (design done; implementation scheduled after 8-7). No

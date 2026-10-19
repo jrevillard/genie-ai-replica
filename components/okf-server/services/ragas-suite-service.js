@@ -65,7 +65,9 @@ const MAX_ENTRIES = Math.max(1, parseInt(process.env.OKF_RAGAS_MAX_ENTRIES || '2
 const RUN_CONCURRENCY = Math.max(1, parseInt(process.env.OKF_RAGAS_RUN_CONCURRENCY || '2', 10));
 const CANDIDATE_K = Math.max(1, parseInt(process.env.OKF_RAGAS_CANDIDATE_K || '24', 10));
 const TOP_N = Math.max(1, parseInt(process.env.OKF_RAGAS_TOP_N || process.env.RERANKER_TOP_N || '3', 10));
-const MAX_CORPUS_CONCEPTS = Math.max(1, parseInt(process.env.OKF_RAGAS_MAX_CORPUS_CONCEPTS || '400', 10));
+// Generation corpus cap in CHUNKS (the retrievable unit). Concepts average
+// 3-4 published chunks, so 1600 ≈ the 400-concept corpus this replaces.
+const MAX_CORPUS_CHUNKS = Math.max(1, parseInt(process.env.OKF_RAGAS_MAX_CORPUS_CHUNKS || '1600', 10));
 const CONTEXT_CHARS = 2000; // per-context cap stored on run rows (xlsx uses answer_first_200 anyway)
 const CONCEPT_BODY_CAP = parseInt(process.env.OKF_MAX_CONCEPT_DOC_CHARS || '200000', 10);
 
@@ -95,14 +97,31 @@ const FAIL_BELOW_DEFAULTS = {
 };
 
 // The answer leg's system prompt: the chatqna serving contract when the
-// deployment pins one, else the built-in default mirroring genieai_chatqna
-// (grounded answering + honest abstention). The sha is recorded on the run
-// so answer-leg drift is visible.
-const ANSWER_SYSTEM_PROMPT =
-  process.env.CHATQNA_SYSTEM_PROMPT ||
-  'You are a knowledgeable assistant. Answer ONLY from the provided context. ' +
-    'If the context does not contain the answer, say you cannot find the information ' +
-    'in the available knowledge base — never invent facts.';
+// deployment pins one (CHATQNA_SYSTEM_PROMPT is forwarded to okf-server in
+// compose for exactly this), else the VERBATIM genieai_chatqna built-in
+// default. The benchmark must answer the way the deployed chat answers —
+// a condensed paraphrase produced terse extractive answers ("101,746")
+// that RAGAS answer_relevancy structurally punishes (reverse question
+// generation from a bare number is generic), scoring factually-perfect
+// rows red while the real chat answered the same question well
+// (live-measured 2026-10-19: terse 0.415 vs chat-shaped 1.00 on the same
+// question + contexts + judge). The sha is recorded on the run so
+// answer-leg drift is visible.
+function ANSWER_SYSTEM_PROMPT() {
+  return (
+    process.env.CHATQNA_SYSTEM_PROMPT ||
+    'You are a friendly and polite information assistant.\n\n' +
+      'Your task is to answer the user’s latest question using only the content provided from the knowledge base.\n\n' +
+      '**Instructions:**\n' +
+      '- Do not invent or assume information\n' +
+      '- If the answer is not in the provided content, inform the user that the information is unavailable\n' +
+      '- Use the user’s name, gender, age, preferences, and chat history to tailor and personalise your responses\n' +
+      '- Keep answers informative but concise; provide detailed explanations\n' +
+      '  only when necessary or explicitly requested\n\n' +
+      'In line with the above instructions, generate a reply to the user’s latest\n' +
+      'message in the chat history based on the relevant content provided.'
+  );
+}
 
 const ABSTENT_PATTERNS = [
   'cannot find',
@@ -227,7 +246,7 @@ async function sidecar(path, { method = 'POST', json, body, contentType, timeout
  * job record fails honestly (the sidecar is down, the result is
  * uncollectable either way).
  */
-async function pollSidecarJob(jobId) {
+async function pollSidecarJob(jobId, { onProgress } = {}) {
   let horizon = Date.now() + RAGAS_LONG_TIMEOUT_MS;
   for (;;) {
     await sleepMs(RAGAS_JOB_POLL_MS);
@@ -244,6 +263,14 @@ async function pollSidecarJob(jobId) {
       }
       if (Date.now() > horizon) throw e; // sidecar unreachable + out of horizon
       continue; // transient poll failure — the job may still be fine
+    }
+    // live progress (phase + done/total) — surfaced to the UI on every poll
+    if (onProgress && job && job.progress) {
+      try {
+        onProgress(job.progress);
+      } catch (e) {
+        logger.warn('ragas-suite.progress_callback_failed', { job_id: jobId, error: e.message });
+      }
     }
     if (job.status === 'done') return job.result;
     if (job.status === 'failed') {
@@ -301,10 +328,10 @@ async function cancelSuiteJobs(suiteKey, why) {
  * Poll a sidecar job; on failure, cancel it (we are its only consumer — if
  * we are throwing, nobody is left to collect the result).
  */
-async function pollSidecarJobOwned(jobId, meta) {
+async function pollSidecarJobOwned(jobId, meta, { onProgress } = {}) {
   activeSidecarJobs.set(jobId, meta);
   try {
-    const result = await pollSidecarJob(jobId);
+    const result = await pollSidecarJob(jobId, { onProgress });
     activeSidecarJobs.delete(jobId);
     return result;
   } catch (e) {
@@ -318,9 +345,15 @@ async function pollSidecarJobOwned(jobId, meta) {
 const RERANK_RETRY_ATTEMPTS = 3;
 const RERANK_RETRY_STATUSES = new Set([429, 502, 503, 504]);
 const RERANK_TIMEOUT_MS = 15000;
+// TEI rerankers cap batches (live 2026-10-18: "batch size 48 > maximum
+// allowed batch size 32" — 24 candidates x 2 graphs 422'd EVERY probe and
+// run row, surfacing as "unknown" answers). Client-side batching like
+// teiEmbed's TEI_EMBED_CHUNK: every caller is bounded regardless of fanout.
+const RERANK_BATCH = 32;
 const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Same TEI rerank contract as head-suite's rerankTexts (env-shared). */
+/** Same TEI rerank contract as head-suite's rerankTexts (env-shared).
+ * Batches at RERANK_BATCH and remaps chunk-local indices to global ones. */
 async function rerankTexts(query, texts) {
   const rerankUrl = process.env.OKF_RERANK_ENDPOINT || '';
   if (!rerankUrl) {
@@ -331,38 +364,50 @@ async function rerankTexts(query, texts) {
   const headers = { 'Content-Type': 'application/json' };
   const token = process.env.OKF_RERANK_TOKEN || '';
   if (token) headers.Authorization = `Bearer ${token}`;
-  for (let attempt = 1; attempt <= RERANK_RETRY_ATTEMPTS; attempt += 1) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), RERANK_TIMEOUT_MS);
-    try {
-      const resp = await fetch(rerankUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ query, texts }),
-        signal: controller.signal
-      });
-      if (!resp.ok) {
-        const err = new Error(`HTTP ${resp.status}`);
-        err.status = resp.status;
-        err.retryable = RERANK_RETRY_STATUSES.has(resp.status);
-        const ra = Number(resp.headers && resp.headers.get && resp.headers.get('retry-after'));
-        if (Number.isFinite(ra) && ra > 0) err.retryAfterMs = ra * 1000;
-        throw err;
+  const merged = [];
+  for (let offset = 0; offset < texts.length; offset += RERANK_BATCH) {
+    const batch = texts.slice(offset, offset + RERANK_BATCH);
+    let decoded;
+    for (let attempt = 1; attempt <= RERANK_RETRY_ATTEMPTS; attempt += 1) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), RERANK_TIMEOUT_MS);
+      try {
+        const resp = await fetch(rerankUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ query, texts: batch }),
+          signal: controller.signal
+        });
+        if (!resp.ok) {
+          const err = new Error(`HTTP ${resp.status}`);
+          err.status = resp.status;
+          err.retryable = RERANK_RETRY_STATUSES.has(resp.status);
+          const ra = Number(resp.headers && resp.headers.get && resp.headers.get('retry-after'));
+          if (Number.isFinite(ra) && ra > 0) err.retryAfterMs = ra * 1000;
+          throw err;
+        }
+        decoded = await resp.json();
+        if (!Array.isArray(decoded)) throw new Error('unexpected rerank response shape');
+        break;
+      } catch (e) {
+        if (e.retryable === true && attempt < RERANK_RETRY_ATTEMPTS) {
+          await sleepMs(retryDelayMs(e, attempt));
+          continue;
+        }
+        throw e;
+      } finally {
+        clearTimeout(timer);
       }
-      const decoded = await resp.json();
-      if (!Array.isArray(decoded)) throw new Error('unexpected rerank response shape');
-      return decoded;
-    } catch (e) {
-      if (e.retryable === true && attempt < RERANK_RETRY_ATTEMPTS) {
-        await sleepMs(retryDelayMs(e, attempt));
-        continue;
+    }
+    // chunk-local indices -> global indices before merging
+    for (const r of decoded) {
+      const i = Number(r && r.index);
+      if (Number.isInteger(i) && i >= 0 && i < batch.length) {
+        merged.push({ index: i + offset, score: Number(r && r.score) || 0 });
       }
-      throw e;
-    } finally {
-      clearTimeout(timer);
     }
   }
-  throw new Error('rerank failed: retry loop exited unexpectedly'); // defensive
+  return merged;
 }
 
 function retryDelayMs(e, attempt) {
@@ -408,17 +453,22 @@ async function retrieveContexts(db, graphNames, query, emb) {
   };
 }
 
-/** The answer leg: chatqna-shaped prompt + guided-JSON {answer, abstained}. */
+/** The answer leg: the chatqna serving shape (relevant content + the user's
+ * question + the chat system contract) with a JSON envelope for the
+ * {answer, abstained} flags. The user message deliberately mirrors how
+ * genieai_chatqna presents context to the model — benchmark fidelity to the
+ * deployed chat IS the point (see ANSWER_SYSTEM_PROMPT above). */
 async function generateAnswer(query, contexts) {
   const contextBlock = contexts.map((c, i) => `[${i + 1}] ${c}`).join('\n\n');
   const user =
-    `Context:\n${contextBlock || '(no context retrieved)'}\n\nQuestion: ${query}\n\n` +
-    'Answer the question using ONLY the context above. If the context does not contain ' +
-    'the answer, set abstained=true and say you cannot find the information.\n' +
-    'Respond as JSON: {"answer": "<your answer>", "abstained": <true|false>}';
+    `Relevant content from the knowledge base:\n${contextBlock || '(no content retrieved)'}\n\n` +
+    `The user’s latest question: ${query}\n\n` +
+    'Generate your reply to the user per your instructions, then return it as JSON:\n' +
+    '{"answer": "<your reply to the user>", "abstained": <true|false>}\n' +
+    'Set abstained=true only when the relevant content does not contain the answer.';
   const resp = await frontmatterService.vllmChatCompletions(
     [
-      { role: 'system', content: ANSWER_SYSTEM_PROMPT },
+      { role: 'system', content: ANSWER_SYSTEM_PROMPT() },
       { role: 'user', content: user }
     ],
     { maxTokens: 800, temperature: 0.0 }
@@ -461,25 +511,36 @@ function loadDoc(db, key, code, what) {
     });
 }
 
-/** Concept bodies of the selected repos → sidecar documents (bounded). */
+/** Published corpus CHUNKS of the selected repos → sidecar documents.
+ *
+ * The generation corpus is the `<graph>_SOURCE` chunk texts — the same unit
+ * the run leg retrieves (live 2026-10-19: feeding concept bodies made the
+ * synthesizer's reference_contexts whole documents, which were then truncated
+ * to 500 chars at storage — often the WRONG section of the concept for the
+ * question it grounded — and could never be matched by top-N chunk retrieval
+ * anyway. Every entity-recall row of a 20-question suite failed at 0.10–0.50
+ * while context_recall sat at 1.0 and the answers were correct: the metrics
+ * were comparing unlike units. Questions are now synthesized from retrievable
+ * chunks and the stored references are those chunks — reference-based metrics
+ * and the advisor's passage-containment evidence compare chunk-to-chunk.
+ * Repos without a drained graph contribute nothing: their content is not
+ * retrievable, so benchmarking it measured fantasy. */
 async function buildCorpusDocuments(db, repoIds) {
   const docs = [];
   for (const rid of repoIds) {
-    const rows = await (
-      await db.query(
-        'FOR m IN okf_concepts_meta FILTER m.repo_id == @rid AND m.index_status != "rejected" ' +
-          'SORT m.concept_id LIMIT @lim ' +
-          'RETURN { concept_id: m.concept_id, title: m.title, body: m.body }',
-        { rid, lim: MAX_CORPUS_CONCEPTS }
-      )
-    ).all();
-    for (const r of rows) {
-      const body = String(r.body || '').slice(0, CONCEPT_BODY_CAP);
-      if (!body.trim()) continue;
-      docs.push({
-        page_content: body,
-        metadata: { repo_id: rid, concept_id: r.concept_id, title: r.title || r.concept_id }
-      });
+    for (const g of await graphNamesFor(db, [rid])) {
+      const rows = await (
+        await db.query(
+          `FOR c IN \`${g}_SOURCE\` FILTER c.text != null SORT c._key LIMIT @lim ` +
+            'RETURN { key: c._key, text: c.text }',
+          { lim: MAX_CORPUS_CHUNKS }
+        )
+      ).all();
+      for (const r of rows) {
+        const text = String(r.text || '').slice(0, CONCEPT_BODY_CAP);
+        if (!text.trim()) continue;
+        docs.push({ page_content: text, metadata: { repo_id: rid, graph: g, chunk_key: r.key } });
+      }
     }
   }
   return docs;
@@ -502,6 +563,7 @@ async function graphNamesFor(db, repoIds) {
 
 const genInFlight = new Map(); // repo_id -> suite_key
 const genFailure = new Map(); // repo_id -> {suite_key, code, message, at}
+const genProgress = new Map(); // suite_key -> live sidecar progress {phase, done, total}
 
 async function beginSuiteGeneration(repoId, payload = {}, opts = {}) {
   const inflight = genInFlight.get(repoId);
@@ -523,6 +585,9 @@ async function beginSuiteGeneration(repoId, payload = {}, opts = {}) {
   );
   const suiteKey = `rs${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
   genInFlight.set(repoId, suiteKey);
+  // Seed the phase immediately so the synthetic list row (and any adoption)
+  // has something to show before the sidecar's first poll lands.
+  genProgress.set(suiteKey, { phase: 'building-knowledge-graph' });
   genFailure.delete(repoId);
   const done = generateSuite(
     repoId,
@@ -530,7 +595,10 @@ async function beginSuiteGeneration(repoId, payload = {}, opts = {}) {
     { ...opts, suiteKey }
   )
     .then((suite) => suite)
-    .finally(() => genInFlight.delete(repoId));
+    .finally(() => {
+      genInFlight.delete(repoId);
+      genProgress.delete(suiteKey);
+    });
   done.catch((e) => {
     // A user cancel must surface AS a cancel: the sidecar drops the job on
     // DELETE, so the poller's next contact is a 404 that would otherwise
@@ -553,6 +621,28 @@ async function beginSuiteGeneration(repoId, payload = {}, opts = {}) {
 }
 
 const userCancelledGen = new Set(); // suite_keys the user asked to stop
+const userCancelledRun = new Set(); // run_keys the user asked to stop
+
+/**
+ * User-initiated RUN cancel (David 2026-10-18: kill controls for suite
+ * generation AND benchmarks). Cancels the evaluate sidecar job (the GPU
+ * drains within one in-flight batch) and records the honest reason; the
+ * detached worker observes the terminal status and persists
+ * status:'cancelled' with RAGAS_JOB_CANCELLED.
+ */
+async function cancelSuiteRun(repoId, suiteKey, runKey) {
+  const inflight = runInFlight.get(suiteKey);
+  if (!inflight || inflight !== runKey) {
+    const err = new Error('no such run is executing for this suite');
+    err.code = 'NO_RUN_IN_FLIGHT';
+    err.status = 409;
+    throw err;
+  }
+  userCancelledRun.add(runKey);
+  await cancelSuiteJobs(suiteKey, `run cancelled by user (${runKey})`);
+  logger.info('ragas-suite.run_cancelled_by_user', { repo_id: repoId, suite_key: suiteKey, run_key: runKey });
+  return { cancelled: true, run_key: runKey };
+}
 
 /**
  * User-initiated generation cancel (David 2026-10-18: the user must be able
@@ -593,7 +683,9 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
     const repoIds = payload.repo_ids || [repoId];
     const docs = await buildCorpusDocuments(db, repoIds);
     if (!docs.length) {
-      const err = new Error('no concept bodies found for the selected repositories — ingest first');
+      const err = new Error(
+        'no published corpus chunks for the selected repositories — publish and let ingestion drain first'
+      );
       err.code = 'NO_CORPUS';
       err.status = 409;
       throw err;
@@ -609,11 +701,19 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
       }
     });
     const genStarted = await genResp.json();
-    const gen = await pollSidecarJobOwned(genStarted.job_id, {
-      kind: 'generate-testset',
-      repo_id: repoId,
-      suite_key: opts.suiteKey
-    });
+    const gen = await pollSidecarJobOwned(
+      genStarted.job_id,
+      {
+        kind: 'generate-testset',
+        repo_id: repoId,
+        suite_key: opts.suiteKey
+      },
+      {
+        // live KG/synthesis counts land on the generating envelope (getSuite)
+        onProgress: (p) => genProgress.set(opts.suiteKey, p)
+      }
+    );
+    genProgress.delete(opts.suiteKey);
     const samples = Array.isArray(gen.samples) ? gen.samples : [];
     if (!samples.length) {
       const err = new Error('the generator produced no samples (judge/embedder logs have the cause)');
@@ -626,8 +726,15 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
       id: `new-${i + 1}`,
       query: String(s.user_input || '').trim(),
       reference_answer: String(s.reference || ''),
+      // Reference passages stored WHOLE (capped at CONTEXT_CHARS, the run
+      // leg's per-context cap — a published chunk fits intact). The old
+      // 500-char slice cut them mid-table and often kept the WRONG section
+      // of the concept for the question it grounded: entity-recall then
+      // compared the wrong section's entities against correctly-retrieved
+      // chunks (2026-10-19: every entity-recall row of a 20-question suite
+      // failed at 0.10–0.50 with context_recall at 1.0).
       reference_passages: (Array.isArray(s.reference_contexts) ? s.reference_contexts : []).map((c) =>
-        String(c).slice(0, 500)
+        String(c).slice(0, CONTEXT_CHARS)
       ),
       source_doc: '',
       language: '',
@@ -685,7 +792,10 @@ async function getSuite(repoId, suiteKey) {
   await ensureCollection(db);
   const inflight = genInFlight.get(repoId);
   if (inflight === suiteKey) {
-    return { suite_key: suiteKey, status: 'generating' };
+    const envelope = { suite_key: suiteKey, status: 'generating' };
+    const prog = genProgress.get(suiteKey);
+    if (prog) envelope.progress = prog;
+    return envelope;
   }
   const failed = genFailure.get(repoId);
   if (failed && failed.suite_key === suiteKey) {
@@ -720,7 +830,7 @@ async function updateSuiteRows(repoId, suiteKey, payload = {}, opts = {}) {
       if (typeof m.query === 'string' && m.query.trim()) e.query = m.query.trim();
       if (typeof m.reference_answer === 'string') e.reference_answer = m.reference_answer;
       if (Array.isArray(m.reference_passages))
-        e.reference_passages = m.reference_passages.map((p) => String(p).slice(0, 500));
+        e.reference_passages = m.reference_passages.map((p) => String(p).slice(0, CONTEXT_CHARS));
       if (typeof m.source_doc === 'string') e.source_doc = m.source_doc;
       if (typeof m.difficulty === 'string') e.difficulty = m.difficulty;
       if (m.flip_oos !== undefined) {
@@ -771,7 +881,7 @@ async function addQueries(repoId, suiteKey, payload = {}, _opts = {}) {
         query: q.query.trim(),
         reference_answer: typeof q.reference_answer === 'string' ? q.reference_answer : '',
         reference_passages: Array.isArray(q.reference_passages)
-          ? q.reference_passages.map((p) => String(p).slice(0, 500))
+          ? q.reference_passages.map((p) => String(p).slice(0, CONTEXT_CHARS))
           : [],
         source_doc: typeof q.source_doc === 'string' ? q.source_doc : '',
         language: '',
@@ -940,8 +1050,15 @@ async function beginRunSuite(repoId, suiteKey, payload = {}, opts = {}) {
   })
     .then((runDoc) => runDoc)
     .catch(async (e) => {
-      const code = typeof e.code === 'string' && e.code ? e.code : 'RUN_FAILED';
-      const failDoc = { ...placeholder, status: 'failed', error: { code, message: e.message } };
+      // a user cancel must surface AS a cancel, not as the post-cancel 404
+      const userCancelled = userCancelledRun.delete(runKey);
+      const code = userCancelled ? 'RAGAS_JOB_CANCELLED' : typeof e.code === 'string' && e.code ? e.code : 'RUN_FAILED';
+      const failDoc = {
+        ...placeholder,
+        status: 'cancelled',
+        error: { code, message: userCancelled ? 'run cancelled by user' : e.message }
+      };
+      if (!userCancelled) failDoc.status = 'failed';
       await db
         .collection(COLLECTION)
         .replace(runKey, failDoc)
@@ -1043,12 +1160,25 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     }));
     const evalStarted = await sidecar('/evaluate', { json: { samples, metrics: opts.metrics } });
     const evalStartedBody = await evalStarted.json();
-    const evaluation = await pollSidecarJobOwned(evalStartedBody.job_id, {
-      kind: 'evaluate',
-      repo_id: repoId,
-      suite_key: suiteKey,
-      run_key: opts.runKey
-    });
+    const evaluation = await pollSidecarJobOwned(
+      evalStartedBody.job_id,
+      {
+        kind: 'evaluate',
+        repo_id: repoId,
+        suite_key: suiteKey,
+        run_key: opts.runKey
+      },
+      {
+        // the sidecar's rows-done/rows-total becomes the run's judge-phase
+        // progress (David 2026-10-18: per-phase progress bars)
+        onProgress: (p) =>
+          report(opts, {
+            phase: 'judge',
+            done: Number(p && p.done) || 0,
+            total: Number(p && p.total) || total
+          })
+      }
+    );
     const perQuery = Array.isArray(evaluation.per_query) ? evaluation.per_query : [];
     // sidecar returns rows in sample order (EvaluationDataset preserves it)
     for (let i = 0; i < results.length; i += 1) {
@@ -1090,7 +1220,7 @@ async function runSuite(repoId, suiteKey, opts = {}) {
             graphs: graphNames
           },
           prompt: {
-            system_prompt_sha: sha256(ANSWER_SYSTEM_PROMPT),
+            system_prompt_sha: sha256(ANSWER_SYSTEM_PROMPT()),
             source: process.env.CHATQNA_SYSTEM_PROMPT ? 'CHATQNA_SYSTEM_PROMPT' : 'builtin-default'
           },
           judge: { model: evaluation.model || null, embed_model: null }
@@ -1208,7 +1338,30 @@ async function listRuns(repoId, payload = {}) {
       'entries: HAS(d.payload, "entries") ? LENGTH(d.payload.entries) : null })',
     { rid: repoId, kinds, lim: limit }
   );
-  return cursor.all();
+  const rows = await cursor.all();
+  // A generation in flight has NO doc in the collection (the suite persists
+  // only on completion), so a collection-only list orphaned it from every UI
+  // surface after a page refresh — the panel reloaded the previous suite,
+  // showed no progress, and a second Generate attempt 409'd (live incident
+  // 2026-10-18). Surface the live generation as a synthetic newest row so
+  // the list — and any loadSuite on it — can adopt it (progress + Cancel).
+  const inflight = genInFlight.get(repoId);
+  if (inflight && (kind === 'all' || kind === 'ragas_suite')) {
+    rows.unshift({
+      _key: inflight,
+      repo_id: repoId,
+      kind: 'ragas_suite',
+      suite_key: inflight,
+      name: null,
+      created_at: new Date().toISOString(),
+      status: 'generating',
+      error: null,
+      progress: genProgress.get(inflight) || null,
+      summary: null,
+      entries: null
+    });
+  }
+  return rows;
 }
 
 // ---------- explain / advise ----------------------------------------------
@@ -1339,6 +1492,16 @@ function attributeFailures(suite, runDoc) {
     ) {
       stage = 'reranker';
       recommendation = 'noise ranked above signal — rerank weights/strategy';
+    } else if (failed.includes('context_entities_recall') && !failed.includes('context_recall')) {
+      // Live 2026-10-19 (chunk-reference verification run): the reference
+      // chunk was retrieved VERBATIM (every reference token present, context
+      // recall 1.0) and entity recall still scored 0.4–0.5 — the judge's two
+      // entity-extraction calls disagree with each other. Attribute to the
+      // judge, not the corpus: telling a curator to "enrich entity mentions"
+      // for content that was retrieved character-for-character is wasted work.
+      stage = 'judge';
+      recommendation =
+        'context recall passed — the reference content WAS retrieved; the entity-recall miss comes from the judge’s entity extraction, not missing content. Treat as judge noise unless a stronger judge model reproduces it.';
     } else if (failed.includes('context_entities_recall')) {
       stage = 'corpus';
       recommendation = 'key entities of the reference are unretrievable — enrich entity mentions in the concept';
@@ -1630,7 +1793,12 @@ async function probeEntry(repoId, suiteKey, payload = {}, opts = {}) {
     const repoIds = suite.repo_ids && suite.repo_ids.length ? suite.repo_ids : [repoId];
     const graphNames = await graphNamesFor(db, repoIds);
     const at = new Date().toISOString();
-    const probe = { at, id: entry.id, docs: 0, top_score: null, verdict: 'unknown', note: '' };
+    // verdict: answerable | weak | unanswerable | error. 'error' means the
+    // probe itself failed (embed/HTTP/Arango) — NEVER leave the factory
+    // default 'unknown' standing: a swallowed failure read as a scoring
+    // result cost a live debugging round (2026-10-18, seven probes showed
+    // "unknown" while the note said "HTTP 422").
+    const probe = { at, id: entry.id, docs: 0, top_score: null, verdict: 'error', note: '' };
     try {
       const embeddings = await frontmatterService.teiEmbed([entry.query]);
       const emb = Array.isArray(embeddings) && embeddings[0];
@@ -1671,6 +1839,7 @@ async function probeEntry(repoId, suiteKey, payload = {}, opts = {}) {
 module.exports = {
   ALL_METRICS,
   DEFAULT_METRICS,
+  rerankTexts,
   beginSuiteGeneration,
   cancelSuiteGeneration,
   generateSuite,
@@ -1680,6 +1849,7 @@ module.exports = {
   renameSuite,
   deleteSuite,
   beginRunSuite,
+  cancelSuiteRun,
   runSuite,
   getRunSuite,
   listRuns,

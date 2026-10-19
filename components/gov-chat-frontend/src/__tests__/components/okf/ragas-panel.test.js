@@ -270,4 +270,179 @@ describe('RagasPanel', () => {
     expect(w.vm.barWidth(0.9)).toBe('90%');
     expect(w.vm.barWidth(null)).toBe('0%');
   });
+
+  // David 2026-10-19: every result chart carries an ⓘ with the metric's
+  // plain-language RAGAS meaning — honest about what each metric CANNOT see.
+  it('every metric gauge carries its RAGAS note via the info tip', async () => {
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    w.vm.runDoc = runFixture();
+    await w.vm.$nextTick();
+    expect(w.vm.aggregateRows.length).toBeGreaterThan(0);
+    const tips = w.findAllComponents({ name: 'DsInfoTip' });
+    expect(tips.length).toBeGreaterThanOrEqual(w.vm.aggregateRows.length);
+    expect(w.vm.metricNote('answer_relevancy')).toMatch(/does NOT check factual correctness/i);
+    expect(w.vm.metricNote('noise_sensitivity')).toMatch(/LOWER is better/i);
+  });
+
+  // Live incident 2026-10-18: the page lost a running generation to a
+  // refresh, then a second Generate attempt dead-ended on the 409. The 409
+  // must ATTACH to the running generation (progress + Cancel), not error.
+  it('a GENERATION_IN_FLIGHT 409 attaches to the running generation instead of erroring', async () => {
+    const live = {
+      kind: 'ragas_suite',
+      _key: 'rs-live',
+      suite_key: 'rs-live',
+      status: 'generating',
+      created_at: '2026-10-18T16:23:00.000Z',
+      progress: { phase: 'synthesizing-questions', done: 1, total: 5 }
+    };
+    dispatch.mockImplementation(async (action, payload) => {
+      if (action === 'okf/fetchRepos') return { ok: true, repos: [] };
+      if (action === 'okf/ragasListRuns') {
+        // mount's history sweep (kind:all) sees only completed suites;
+        // the adoption lookup (kind:ragas_suite) surfaces the live row —
+        // exactly the server's synthetic in-flight listing.
+        if (payload && payload.kind === 'ragas_suite') return { ok: true, runs: [live] };
+        return {
+          ok: true,
+          runs: [
+            {
+              kind: 'ragas_suite',
+              _key: 'rs1-test',
+              suite_key: 'rs1-test',
+              name: 'Agri',
+              created_at: '2026-10-17T11:00:00.000Z',
+              entries: 2
+            }
+          ]
+        };
+      }
+      if (action === 'okf/ragasGenerate')
+        return {
+          ok: false,
+          code: 'GENERATION_IN_FLIGHT',
+          message: 'a benchmark-suite generation is already running for this repository'
+        };
+      if (action === 'okf/ragasGetSuite') {
+        if (payload && payload.suiteKey === 'rs-live')
+          return { ok: true, result: { suite_key: 'rs-live', status: 'generating', progress: live.progress } };
+        return { ok: true, result: suiteFixture() };
+      }
+      // In reality the adoption polls until the generation lands — a
+      // pending promise keeps it "in flight" so the busy state persists.
+      if (action === 'okf/ragasAdoptGeneration') return new Promise(() => {});
+      return { ok: true, result: null, runs: [] };
+    });
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(w.vm.generatingKey).toBeNull(); // mount did NOT adopt (no live row in history)
+
+    await w.vm.onGenerate();
+
+    expect(dispatch).toHaveBeenCalledWith('okf/ragasAdoptGeneration', expect.objectContaining({ suiteKey: 'rs-live' }));
+    // Attached: the adoption owns the busy state — progress + Cancel visible.
+    expect(w.vm.generateBusy).toBe(true);
+    expect(w.vm.generatingKey).toBe('rs-live');
+    expect(w.vm.genProgress).toEqual(live.progress);
+    expect(w.vm.error).toBe('');
+  });
+
+  // David 2026-10-19: "how does the admin user know what possible actions
+  // they can take" — the advisor travels with the run. A persisted explain
+  // loads automatically; when rows fail with NO advisor output yet, the
+  // banner points at it instead of making the admin discover the button.
+  it('auto-loads the persisted explain with the run — advisor visible without a click', async () => {
+    dispatch.mockImplementation(async (action) => {
+      if (action === 'okf/fetchRepos') return { ok: true, repos: [] };
+      if (action === 'okf/ragasListRuns')
+        return {
+          ok: true,
+          runs: [
+            {
+              kind: 'ragas_run',
+              _key: 'rr1-run',
+              suite_key: 'rs1-test',
+              status: 'done',
+              created_at: '2026-10-17T12:00:00.000Z',
+              summary: runFixture().payload.summary
+            },
+            {
+              kind: 'ragas_suite',
+              _key: 'rs1-test',
+              suite_key: 'rs1-test',
+              created_at: '2026-10-17T11:00:00.000Z',
+              entries: 2
+            }
+          ]
+        };
+      if (action === 'okf/ragasGetSuite') return { ok: true, result: suiteFixture() };
+      if (action === 'okf/ragasGetRunQuiet') return { ok: true, result: runFixture() };
+      if (action === 'okf/ragasGetExplainQuiet')
+        return {
+          ok: true,
+          result: {
+            attributions: [
+              {
+                id: 'new-1',
+                query: 'q',
+                fails: ['context_recall'],
+                stage: 'corpus',
+                recommendation: 're-curate the concept'
+              }
+            ],
+            advice: { knob_changes: [], repo_tag_changes: [], content_curation: [], prompt_tweaks: [] }
+          }
+        };
+      return { ok: true, result: null, runs: [] };
+    });
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(dispatch).toHaveBeenCalledWith(
+      'okf/ragasGetExplainQuiet',
+      expect.objectContaining({ runKey: 'rr1-run', suiteKey: 'rs1-test' })
+    );
+    expect(w.vm.explainDoc).toBeTruthy();
+    // advisor output rendered without any click; hint suppressed (output on screen)
+    expect(w.text()).toContain('Failure attribution and advice');
+    expect(w.text()).toContain('re-curate the concept');
+    expect(w.find('.okf-ragas__advisor-hint').exists()).toBe(false);
+  });
+
+  it('shows the advisor hint when rows fail and no advisor output is loaded', async () => {
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    // default mock: run loads (failing_count 1), explain absent
+    expect(w.vm.runDoc._key).toBe('rr1-run');
+    expect(w.vm.explainDoc).toBeNull();
+    const hint = w.find('.okf-ragas__advisor-hint');
+    expect(hint.exists()).toBe(true);
+    expect(hint.text()).toContain('1');
+    expect(hint.text().toLowerCase()).toContain('advisor');
+  });
+
+  // David 2026-10-19: the results table must be resizable and the answers
+  // copyable (suite-table parity), and the full answer text is present —
+  // not a 60-char ellipsis.
+  it('results table: full answers in copyable cells, per-column resize grips', async () => {
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    w.vm.runDoc = runFixture();
+    await w.vm.$nextTick();
+    const ta = w.find('textarea.okf-ragas__answer-text');
+    expect(ta.exists()).toBe(true);
+    expect(ta.element.value).toBe('Plant after the last frost.'); // FULL answer
+    expect(w.vm.resultCols.length).toBe(2 + 4 + 1 + 1); // id, query, 4 metrics, answer, state
+    expect(w.findAll('.okf-ragas__col-grip').length).toBe(w.vm.resultCols.length);
+    // column resize lands on the colgroup
+    w.vm.colWidths = { 'm:context_recall': 140 };
+    await w.vm.$nextTick();
+    expect(w.vm.colStyle('m:context_recall')).toEqual({ width: '140px' });
+    // copy gesture flips the row button to ✓
+    const writeText = jest.fn().mockResolvedValue();
+    Object.assign(navigator, { clipboard: { writeText } });
+    await w.vm.copyAnswer(w.vm.runDoc.payload.results[0]);
+    expect(writeText).toHaveBeenCalledWith('Plant after the last frost.');
+    expect(w.vm.copiedId).toBe('new-1');
+  });
 });

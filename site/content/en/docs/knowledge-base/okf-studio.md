@@ -102,22 +102,66 @@ with suites interchangeable with that harness's xlsx formats:
   one alone, or with any number of related repositories — multi-hop
   questions cross repo boundaries when they are combined). You set the
   dimensions: question count (default 20), the query-type distribution, and
-  the number of personas. Each entry carries the question, its expected
-  answer, and the reference passages the answer should be grounded in.
+  the number of personas — the suite ships exactly the requested number of
+  questions. Each entry carries the question, its expected answer, and the
+  reference passages the answer should be grounded in — the reference is the
+  **published corpus chunk** the question was synthesized from (the same
+  unit retrieval returns), so reference-based metrics compare chunk to
+  chunk. Repositories that have not published (no drained graph) contribute
+  nothing: their content is not retrievable yet. Generation is a
+  background job: you can close the dialog and come back, and a **Cancel**
+  button stops it at any time (the shared GPU drains within one in-flight
+  model call). A per-phase progress bar tracks it — the knowledge-graph
+  build runs as an animated working bar (it has no intermediate counts;
+  on a fresh judge cache it is the longest phase), then question synthesis
+  reports i/n as scenarios complete. Refreshing or reopening the Lab
+  re-attaches to a running generation — it appears in the suite list while
+  it generates, and pressing Generate while one is already running attaches
+  to it rather than failing. Nothing is ever discarded on a timer —
+  a healthy long run
+  ends only when it completes or when you cancel it. A disk cache of judge
+  responses makes **repeat** generations of the same repositories nearly
+  instant (the knowledge-graph phase is skipped; disable with
+  `RAGAS_LLM_CACHE=0`).
 - **Manage** entries with full parity to the other suites: edit the question
   or expected answer, flip an entry in-scope/out-of-scope, remove it, add
   your own, rename the suite, delete it, and probe a single entry against
-  the live corpus.
+  the live corpus. A probe reports *answerable* (the expected passage is in
+  the retrieved contexts), *weak* (contexts came back but not the expected
+  passage), *unanswerable* (nothing retrieved / no ingested graphs), or
+  *error* (the probe itself failed — the reason is shown inline).
 - **Run** the suite: each question is answered through the retrieval
   pipeline (the same corpora, embedding, and reranker the chat uses) and
-  scored by the selected RAGAS metrics — faithfulness, context precision,
+  answered with the chat's own serving prompt — a pinned
+  `CHATQNA_SYSTEM_PROMPT` shapes the chat and the benchmark identically, so
+  the scores describe the answerer users actually get — then scored by the
+  selected RAGAS metrics — faithfulness, context precision,
   context recall, and answer relevancy by default, with the full
   single-turn catalog selectable (factual and answer correctness, semantic
-  similarity, entity recall, noise sensitivity, and more).
+  similarity, entity recall, noise sensitivity, and more). A progress bar
+  reports each phase — with counts where the engine reports them
+  (retrieving i/n, scoring i/n) and an animated working bar where it cannot
+  — and a **Cancel run** control stops a benchmark that is taking too long.
+  Progress tracking survives transient gateway hiccups: a brief proxy
+  restart does not detach the panel from a job that is still running.
 - **Results** render per-question in a table with metric bars, as aggregate
-  gauges, as a run-over-run trend, and as a status breakdown — and export
-  as a **PDF report**, or as an xlsx workbook using the offline harness's
-  column vocabulary.
+  gauges, as a run-over-run trend, and as a status breakdown — every chart
+  carries an **ⓘ** whose popup explains, in plain language, what that RAGAS
+  metric actually measures (and what it cannot see: answer relevancy never
+  checks correctness; noise sensitivity is inverted — lower is better). The
+  results table's columns are drag-resizable (double-click a header to
+  reset), each answer sits in its own selectable, copyable cell (one-click
+  copy button), and the Lab dialog sizes itself to the content — selecting
+  every metric widens the dialog instead of pushing the table off the side.
+  When questions fail their thresholds, the **advisor** appears with the
+  results: any previously saved failure attribution loads automatically, and
+  until one exists a banner points at *Explain failures*.
+  Export as a **PDF report** that includes the same per-metric notes and
+  parallels the offline harness export's information — outcome counts
+  (questions / evaluable / abstained / failing), all selected gauge charts,
+  the trend chart, a compare-across-runs table with delta-vs-first-run, and
+  per-question rows with abstention/error/failure flags — or as an xlsx
+  workbook using the offline harness's column vocabulary.
 - **Explain failures** attributes each failing row to the stage that broke
   (routing, corpus, reranker, LLM, abstention, or judge) and proposes
   guarded advice — including *repository-level* changes: frontmatter tag

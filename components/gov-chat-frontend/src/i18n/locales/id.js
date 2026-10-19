@@ -2969,6 +2969,8 @@ export default {
         removeTag: 'Hapus dari tag terlarang',
         tagsetTip: 'Tag terlarang untuk eksekusi ini',
         savedTitle: 'Suite tersimpan',
+        savedTip:
+          'Setiap suite yang dibuat atau diimpor disimpan di sini, per repositori. Dua jenis berbagi daftar ini: suite head (kumpulan kueri dari tag dan frontmatter, dengan jumlah positif/negatif) dan suite tolok ukur RAGAS (kumpulan pertanyaan dengan jawaban yang diharapkan, dengan lencana RAGAS dan jumlah entri). Muat membuka suite head di tab Uji head dan suite RAGAS di tab RAGAS Benchmarks, tempat ia dapat dijalankan dan dinilai terhadap korpus langsung. Hapus menghapus suite secara permanen; ganti nama dilakukan langsung pada nama.',
         load: 'Muat',
         flipTip: 'Balikkan harus-dipilih / tidak-harus-dipilih',
         deleteTip: 'Hapus baris ini dari suite',
@@ -3131,7 +3133,9 @@ export default {
         button: 'Buat',
         working: 'Membuat — ini memakan waktu beberapa menit…',
         cancel: 'Batalkan',
-        cancelling: 'Membatalkan…'
+        cancelling: 'Membatalkan…',
+
+        inFlight: 'Pembuatan suite benchmark sudah berjalan untuk repositori ini — Anda sedang dikaitkan ke sana.'
       },
       import: {
         button: 'Impor suite (.xlsx)',
@@ -3160,7 +3164,15 @@ export default {
       run: {
         button: 'Jalankan tolok ukur',
         working: 'Menjalankan…',
+        retrieved: 'diambil',
+        pass: 'lulus',
+        fail: 'gagal',
+        abstained: 'menolak',
+        rowError: 'galat',
+        cancel: 'Batalkan proses',
         phase: {
+          'building-knowledge-graph': 'Membangun graf pengetahuan',
+          'synthesizing-questions': 'Menyusun pertanyaan',
           retrieval: 'mengambil',
           judge: 'menilai'
         }
@@ -3172,6 +3184,16 @@ export default {
       results: {
         title: 'Hasil tolok ukur',
         failing: '{n} gagal',
+        advisorHint:
+          '{n} pertanyaan berada di bawah ambang batas metriknya. Jalankan penasihat untuk mengaitkan setiap kegagalan dengan tahap pipeline dan mendapatkan tindakan konkret.',
+        copy: 'Salin jawaban lengkap',
+        colResizeTip: 'Seret pegangan untuk mengubah ukuran — klik ganda header untuk mengatur ulang',
+        trendTitle: 'Tren metrik per run',
+        trendNote:
+          'Setiap garis adalah rata-rata satu metrik RAGAS per run, dari terlama — ␘ pada tiap meteran menjelaskan metriknya. Jawaban yang dinilai di-cache; run ulang identik hanya berbeda bila jawaban atau pengambilan berubah.',
+        statusTitle: 'Hasil per pertanyaan',
+        statusNote:
+          'Setiap pertanyaan suite pada run ini, ditumpuk per hasil: lulus, gagal (metrik terpilih di bawah ambangnya), menolak jawab, atau error pipeline.',
         allPass: 'semua lulus',
         failingShort: 'gagal',
         answer: 'Jawaban',
@@ -3212,14 +3234,41 @@ export default {
         factual_correctness: 'ketepatan faktual',
         answer_correctness: 'ketepatan jawaban',
         answer_similarity: 'kemiripan jawaban',
-        noise_sensitivity: 'sensitivitas derau'
+        noise_sensitivity: 'sensitivitas derau',
+        note: {
+          faithfulness:
+            'Seberapa kokoh jawaban secara faktual terhadap pasase yang diambil — proporsi klaim yang didukung sumber. Rendah berarti jawaban mengatakan hal yang tidak dikatakan bukti (halusinasi).',
+          context_precision:
+            'Apakah pasase yang penting berada di puncak himpunan hasil. Rendah berarti bukti yang tepat diambil tapi terkubur potongan yang kurang relevan.',
+          context_recall:
+            'Apakah pasase yang diambil mencakup semua yang dituntut jawaban referensi. Rendah berarti pengambilan melewatkan bukti yang dibutuhkan pertanyaan.',
+          answer_relevancy:
+            'Seberapa baik jawaban menjawab pertanyaan: RAGAS meregenerasi pertanyaan dari teks jawaban dan membandingkannya dengan aslinya lewat kemiripan embedding. TIDAK memeriksa kebenaran faktual — jawaban bertele-tele dapat rendah walau benar.',
+          context_utilization:
+            'Apakah konteks yang diambil cukup untuk menghasilkan jawaban referensi — pemeriksaan kelengkapan pengambilan.',
+          context_entities_recall:
+            'Recall tingkat entitas: proporsi entitas bernama dalam bagian referensi entri (perusahaan, tanggal, jumlah, tempat) yang juga muncul di potongan yang diambil. Rendah berarti pengambilan membawa potongan yang melewatkan entitas yang disebut referensi. Sensitif terhadap juri — skor rendah saat recall konteks lulus biasanya berarti ekstraksi entitas juri melewatinya, bukan konten yang hilang.',
+          factual_correctness:
+            'Kesepakatan faktual tingkat klaim dengan jawaban referensi — juri memecah keduanya menjadi klaim dan menilai tumpang tindihnya. Metrik kebenaran paling ketat.',
+          answer_correctness:
+            'Kualitas keseluruhan terhadap referensi — kebenaran faktual digabung kemiripan semantik. Metrik terdekat ke “apakah jawabannya benar”.',
+          answer_similarity:
+            'Kemiripan semantik (embedding) antara jawaban yang dihasilkan dan referensi — tinggi berarti keduanya menyampaikan hal yang sama.',
+          noise_sensitivity:
+            'Seberapa jauh jawaban menurun saat pasase tak relevan tercampur ke konteks — ukuran ketahanan. LEBIH RENDAH lebih baik; ambangnya terbalik.'
+        }
       },
       pdf: {
         title: 'Laporan tolok ukur RAGAS',
         suite: 'Suite',
         run: 'Eksekusi',
         summary: 'Ringkasan',
-        perQuery: 'Skor per pertanyaan'
+        perQuery: 'Skor per pertanyaan',
+        status: 'Hasil',
+        n: 'pertanyaan',
+        evaluable: 'dapat dinilai',
+        abstained: 'menolak jawab',
+        compare: 'Perbandingan antar run (delta vs run pertama)'
       }
     }
   },

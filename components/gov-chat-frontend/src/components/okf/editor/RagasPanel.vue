@@ -99,6 +99,7 @@
         <DsSpinner v-if="generateBusy" size="sm">
           {{ translate('okf.ragas.generate.working', 'Generating — this takes minutes…') }}
         </DsSpinner>
+        <span v-if="generateBusy && genProgressLabel" class="okf-ragas__muted">{{ genProgressLabel }}</span>
         <DsButton
           v-if="generateBusy && generatingKey"
           variant="secondary"
@@ -118,6 +119,11 @@
           </DsButton>
         </label>
         <DsSpinner v-if="importBusy" size="sm">{{ translate('okf.ragas.import.working', 'Importing…') }}</DsSpinner>
+      </div>
+      <div v-if="generateBusy && genProgress" class="okf-ragas__progress">
+        <!-- count-less phases (the KG rebuild) animate instead of sitting
+             at a dead zero — honest "working, no counts yet" (2026-10-18) -->
+        <DsProgress :value="genProgressPct" :indeterminate="!genProgress.total" />
       </div>
     </div>
 
@@ -169,6 +175,15 @@
         <DsSpinner v-if="runBusy" size="sm">
           {{ runProgressLabel }}
         </DsSpinner>
+        <DsButton
+          v-if="runBusy && runningRunKey"
+          variant="secondary"
+          small
+          :disabled="runCancelBusy"
+          @click="onCancelRun"
+        >
+          {{ translate('okf.ragas.run.cancel', 'Cancel run') }}
+        </DsButton>
       </div>
       <div v-if="runProgress" class="okf-ragas__progress">
         <DsProgress :value="progressPct" />
@@ -209,11 +224,22 @@
                 @change="onEditEntry(e, 'reference_answer', $event.target.value)"
               ></textarea>
             </td>
-            <td>{{ (e.reference_passages || []).length }}</td>
+            <td>
+              <span :title="passagesTitle(e)">{{ (e.reference_passages || []).length }}</span>
+              <span v-if="runOutcome(e)" class="okf-ragas__muted">
+                · {{ translate('okf.ragas.run.retrieved', 'retrieved') }} {{ runOutcome(e).retrieved }}</span
+              >
+            </td>
             <td>
               <DsPill
                 :variant="e.oos ? 'warning' : 'success'"
                 :label="e.oos ? translate('okf.ragas.oos', 'out-of-scope') : translate('okf.ragas.inscope', 'in scope')"
+              />
+              <DsPill
+                v-if="runOutcome(e)"
+                :variant="runOutcome(e).ok ? 'success' : 'danger'"
+                :label="runOutcomeLabel(e)"
+                class="okf-ragas__run-chip"
               />
             </td>
             <td v-if="!readOnly" class="okf-ragas__row-actions">
@@ -237,6 +263,9 @@
               </button>
               <span v-if="e.lastProbe" class="okf-ragas__muted" :title="(e.lastProbe && e.lastProbe.note) || ''">
                 {{ e.lastProbe.verdict }}
+                <em v-if="e.lastProbe.verdict === 'error' && e.lastProbe.note" class="okf-ragas__probe-note">{{
+                  e.lastProbe.note
+                }}</em>
               </span>
               <button
                 type="button"
@@ -282,7 +311,16 @@
         </DsButton>
       </div>
 
-      <!-- aggregate gauges -->
+      <!-- advisor hint — rows are failing and no advisor output is on screen;
+           the admin should not have to discover the Explain button exists -->
+      <div v-if="advisorHint" class="okf-ragas__advisor-hint">
+        <span>{{ advisorHint }}</span>
+        <DsButton v-if="!readOnly" small :disabled="explainBusy" @click="onExplain">
+          {{ translate('okf.ragas.explain.button', 'Explain failures') }}
+        </DsButton>
+      </div>
+
+      <!-- aggregate gauges — every metric chart carries its ⓘ RAGAS note -->
       <div v-if="aggregateRows.length" class="okf-ragas__gauges">
         <div v-for="g in aggregateRows" :key="g.key" class="okf-ragas__gauge">
           <apexchart
@@ -292,56 +330,121 @@
             :options="gaugeOptions(g)"
             :series="g.series"
           ></apexchart>
-          <span class="okf-ragas__gauge-label">{{ g.label }}</span>
+          <span class="okf-ragas__gauge-label">
+            {{ g.label }}
+            <DsInfoTip :label="g.label" :text="metricNote(g.key)" />
+          </span>
         </div>
       </div>
 
       <!-- trend across runs -->
       <div v-if="trendSeries.length" class="okf-ragas__trend">
+        <div class="okf-ragas__chart-head">
+          <span class="okf-ragas__chart-title">{{
+            translate('okf.ragas.results.trendTitle', 'Metric trend across runs')
+          }}</span>
+          <DsInfoTip
+            :label="translate('okf.ragas.results.trendTitle', 'Metric trend across runs')"
+            :text="
+              translate(
+                'okf.ragas.results.trendNote',
+                'Each line is one RAGAS metric’s suite mean per run, oldest to newest — hover any gauge’s ⓘ for what that metric measures. Judged answers are cached, so equal re-runs differ only where answers or retrieval changed.'
+              )
+            "
+          />
+        </div>
         <apexchart ref="trendChart" type="line" height="200" :options="trendOptions" :series="trendSeries"></apexchart>
       </div>
 
       <!-- status stacked bar -->
       <div v-if="statusSeries.length" class="okf-ragas__status">
+        <div class="okf-ragas__chart-head">
+          <span class="okf-ragas__chart-title">{{
+            translate('okf.ragas.results.statusTitle', 'Per-question outcomes')
+          }}</span>
+          <DsInfoTip
+            :label="translate('okf.ragas.results.statusTitle', 'Per-question outcomes')"
+            :text="
+              translate(
+                'okf.ragas.results.statusNote',
+                'Every suite question in this run, stacked by outcome: passing, failing (any selected metric below its threshold), abstained (the answerer declined), or errored (the pipeline failed that row).'
+              )
+            "
+          />
+        </div>
         <apexchart type="bar" height="120" :options="statusOptions" :series="statusSeries"></apexchart>
       </div>
 
-      <!-- per-query table -->
-      <table class="okf-headtest__scores">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>{{ translate('okf.ragas.col.query', 'Question') }}</th>
-            <th v-for="m in runMetricKeys" :key="m">{{ metricLabel(m) }}</th>
-            <th>{{ translate('okf.ragas.results.answer', 'Answer') }}</th>
-            <th>{{ translate('okf.ragas.results.state', 'State') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="r in runRows" :key="r.id" :class="{ 'okf-ragas__row--fail': rowFails(r) }">
-            <td>
-              <code>{{ r.id }}</code>
-            </td>
-            <td class="okf-ragas__cell-query" :title="r.query">{{ r.query }}</td>
-            <td v-for="m in runMetricKeys" :key="m">
-              <span class="okf-headtest__bar"
-                ><span :style="{ width: barWidth(r.metrics && r.metrics[m]) }"></span
-              ></span>
-              <span class="okf-ragas__score">{{ scoreText(r.metrics && r.metrics[m]) }}</span>
-            </td>
-            <td class="okf-ragas__cell-answer" :title="r.answer">{{ shortAnswer(r.answer) }}</td>
-            <td>
-              <DsPill v-if="r.error" variant="danger" :label="translate('okf.ragas.results.error', 'error')" />
-              <DsPill
-                v-else-if="r.abstained"
-                variant="warning"
-                :label="translate('okf.ragas.results.abstained', 'abstained')"
-              />
-              <DsPill v-else variant="neutral" :label="translate('okf.ragas.results.answered', 'answered')" />
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <!-- per-query table — columns are drag-resizable (grip on each header,
+           double-click a header to reset) and answers are selectable/copyable
+           like the suite table's cells. The dialog auto-sizes to the content
+           (DsModal size "auto"); past the viewport cap this wrapper scrolls
+           instead of pushing the table off the side of the dialog. -->
+      <div class="okf-ragas__table-scroll">
+        <table class="okf-headtest__scores okf-ragas__results">
+          <colgroup>
+            <col v-for="c in resultCols" :key="c.key" :style="colStyle(c.key)" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th
+                v-for="c in resultCols"
+                :key="c.key"
+                class="okf-ragas__th-col"
+                :title="colResizeTip"
+                @dblclick="resetCol(c.key)"
+              >
+                {{ c.label }}
+                <span
+                  class="okf-ragas__col-grip"
+                  :title="colResizeTip"
+                  @mousedown.prevent="startColResize($event, c.key)"
+                ></span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="r in runRows" :key="r.id" :class="{ 'okf-ragas__row--fail': rowFails(r) }">
+              <td>
+                <code>{{ r.id }}</code>
+              </td>
+              <td class="okf-ragas__cell-query" :title="r.query">{{ r.query }}</td>
+              <td v-for="m in runMetricKeys" :key="m" class="okf-ragas__cell-metric">
+                <span class="okf-headtest__bar"
+                  ><span :style="{ width: barWidth(r.metrics && r.metrics[m]) }"></span
+                ></span>
+                <span class="okf-ragas__score">{{ scoreText(r.metrics && r.metrics[m]) }}</span>
+              </td>
+              <td class="okf-ragas__cell-answer">
+                <textarea
+                  class="okf-ragas__answer-text"
+                  rows="2"
+                  readonly
+                  :value="r.answer"
+                  :title="translate('okf.ragas.results.copy', 'Copy the full answer')"
+                ></textarea>
+                <button
+                  type="button"
+                  class="okf-headtest__row-btn"
+                  :title="translate('okf.ragas.results.copy', 'Copy the full answer')"
+                  @click="copyAnswer(r)"
+                >
+                  {{ copiedId === r.id ? '✓' : '⧉' }}
+                </button>
+              </td>
+              <td>
+                <DsPill v-if="r.error" variant="danger" :label="translate('okf.ragas.results.error', 'error')" />
+                <DsPill
+                  v-else-if="r.abstained"
+                  variant="warning"
+                  :label="translate('okf.ragas.results.abstained', 'abstained')"
+                />
+                <DsPill v-else variant="neutral" :label="translate('okf.ragas.results.answered', 'answered')" />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <!-- EXPLAIN / ADVISE -->
@@ -442,10 +545,48 @@ const ALL_METRICS = [
   'noise_sensitivity'
 ];
 
+// Plain-language "what this RAGAS metric actually measures" notes (David
+// 2026-10-19: every result chart gets an ⓘ with one). English fallbacks —
+// the locales carry okf.ragas.metric.note.<key> overrides. Keep these
+// honest about what each metric CANNOT see (answer_relevancy never checks
+// correctness; noise_sensitivity is inverted — lower is better).
+const METRIC_NOTE_FALLBACKS = {
+  faithfulness:
+    'How factually grounded the answer is against the retrieved passages — the share of the answer’s claims the sources actually support. Low means the answer says things the retrieved evidence does not (hallucination).',
+  context_precision:
+    'Whether the passages that matter were ranked at the top of the retrieved set. Low means the right evidence was retrieved but buried under less relevant chunks.',
+  context_recall:
+    'Whether the retrieved passages cover everything the reference answer requires — each reference claim must be attributable to retrieved context. Low means retrieval missed evidence the question needed.',
+  answer_relevancy:
+    'How well the answer addresses the question asked: RAGAS regenerates questions from the answer text and compares them to the original by embedding similarity. It does NOT check factual correctness — verbose or off-topic answers score low even when right.',
+  context_utilization:
+    'Whether the retrieved context is sufficient to produce the reference answer — a retrieval-completeness check against what the ideal answer needs.',
+  context_entities_recall:
+    'Entity-level recall: the share of named entities in the entry’s reference passages (companies, dates, amounts, places) that also appear in the retrieved chunks. Low means retrieval brought chunks that miss entities the reference names. Judge-sensitive — a low score while context recall passes usually means the judge’s entity extraction missed, not that content is missing.',
+  factual_correctness:
+    'Claim-level factual agreement with the reference answer — the judge decomposes both into claims and scores the overlap. The strictest correctness metric.',
+  answer_correctness:
+    'Overall quality versus the reference answer — factual correctness combined with semantic similarity. The closest metric to “did it give the right answer”.',
+  answer_similarity:
+    'Semantic (embedding) similarity between the generated answer and the reference answer — high means the two convey the same meaning.',
+  noise_sensitivity:
+    'How much the answer degrades when irrelevant passages are mixed into the retrieved context — a robustness measure. LOWER is better; it is the one metric whose failure threshold is inverted.'
+};
+
 export default {
   name: 'OkfRagasPanel',
   components: { DsButton, DsPill, DsSpinner, DsProgress, DsInfoTip },
   mixins: [translateMixin],
+  setup() {
+    // Registered ONCE here (in setup context) so the composable's
+    // MutationObserver actually arms — calling useChartTheme() inside a
+    // computed creates throwaway refs whose observers never attach, so
+    // theme flips never re-rendered the charts (live 2026-10-18:
+    // light/dark breakage). chartTheme is read by the option computeds,
+    // making them reactive to mode changes.
+    const { theme, getCssVarStrings } = useChartTheme();
+    return { chartTheme: theme, chartThemeStrings: getCssVarStrings };
+  },
   props: {
     repo: { type: Object, default: null },
     readOnly: { type: Boolean, default: false },
@@ -472,6 +613,9 @@ export default {
       generateBusy: false,
       generatingKey: null, // suite_key of the in-flight generation (Cancel target)
       cancelBusy: false,
+      genProgress: null, // live {phase, done, total} from the generating envelope
+      runningRunKey: null, // run_key of the in-flight benchmark (Cancel target)
+      runCancelBusy: false,
       runBusy: false,
       explainBusy: false,
       importBusy: false,
@@ -479,6 +623,8 @@ export default {
       pdfBusy: false,
       probeBusy: '',
       runProgress: null,
+      colWidths: {}, // per-column px widths for the results table (drag-resize)
+      copiedId: '', // row whose answer was just copied (transient ✓)
       suiteEpoch: 0
     };
   },
@@ -569,6 +715,46 @@ export default {
       const counts = p ? ` ${p.done}/${p.total}` : '';
       return this.translate('okf.ragas.run.working', 'Running…') + (phase ? ` — ${phase}` : '') + counts;
     },
+    genProgressPct() {
+      const p = this.genProgress;
+      if (!p || !p.total) return 0;
+      return Math.min(100, Math.round((p.done / p.total) * 100));
+    },
+    genProgressLabel() {
+      const p = this.genProgress;
+      if (!p || !p.phase) return '';
+      const phase = this.translate(`okf.ragas.run.phase.${p.phase}`, p.phase);
+      return p.total ? `${phase} ${p.done}/${p.total}` : phase;
+    },
+    /** Column model for the per-query results table: id, question, one per
+     *  selected metric, the answer, the state — drives the colgroup and the
+     *  per-header drag grips. */
+    resultCols() {
+      return [
+        { key: 'id', label: '#' },
+        { key: 'query', label: this.translate('okf.ragas.col.query', 'Question') },
+        ...this.runMetricKeys.map((m) => ({ key: `m:${m}`, label: this.metricLabel(m) })),
+        { key: 'answer', label: this.translate('okf.ragas.results.answer', 'Answer') },
+        { key: 'state', label: this.translate('okf.ragas.results.state', 'State') }
+      ];
+    },
+    colResizeTip() {
+      return this.translate(
+        'okf.ragas.results.colResizeTip',
+        'Drag the grip to resize — double-click the header to reset'
+      );
+    },
+    /** Shown in Results while rows fail and no advisor output is on screen —
+     * the entry point to "what actions can I take" (2026-10-19). */
+    advisorHint() {
+      const summary = this.runDoc && this.runDoc.payload && this.runDoc.payload.summary;
+      const failing = (summary && summary.failing_count) || 0;
+      if (!failing || this.explainDoc) return '';
+      return this.translate(
+        'okf.ragas.results.advisorHint',
+        '{n} questions are below their metric thresholds. Run the advisor to attribute each failure to a pipeline stage and get concrete actions.'
+      ).replace('{n}', String(failing));
+    },
     adviceChips() {
       const advice = this.explainDoc && this.explainDoc.advice;
       if (!advice) return [];
@@ -588,29 +774,37 @@ export default {
       return chips;
     },
     trendOptions() {
-      const t = useChartTheme().getCssVarStrings();
+      // this.chartTheme read = reactive dependency on mode flips
+      const t = this.chartThemeStrings();
+      const mode = this.chartTheme === 'dark' ? 'dark' : 'light';
       return {
         chart: { toolbar: { show: false }, animations: { enabled: false } },
-        theme: { mode: 'dark' },
+        theme: { mode },
         colors: t.chartColors,
         xaxis: {
           categories: [...this.runHistory]
             .filter((h) => h.summary && h.summary.metrics)
             .reverse()
             .map((h) => String(h.created_at || '').slice(5, 16)),
-          labels: { style: { colors: t.fg } }
+          labels: { style: { colors: t.textColor } }
         },
-        yaxis: { min: 0, max: 1, labels: { style: { colors: t.fg } } },
-        stroke: { curve: 'straight', width: 2 }
+        yaxis: { min: 0, max: 1, labels: { style: { colors: t.textColor } } },
+        stroke: { curve: 'straight', width: 2 },
+        // a single-run history is ONE point — without markers the line
+        // chart renders empty (live 2026-10-18: first completed run showed
+        // an empty trend). Markers make 1..N points always visible.
+        markers: { size: 4, strokeWidth: 0, hover: { size: 5 } }
       };
     },
     statusOptions() {
-      const t = useChartTheme().getCssVarStrings();
+      const t = this.chartThemeStrings();
+      const mode = this.chartTheme === 'dark' ? 'dark' : 'light';
       return {
         chart: { type: 'bar', stacked: true, toolbar: { show: false } },
+        theme: { mode },
         colors: t.chartColors,
-        xaxis: { categories: [''], labels: { style: { colors: t.fg } } },
-        legend: { labels: { colors: t.fg } },
+        xaxis: { categories: [''], labels: { style: { colors: t.textColor } } },
+        legend: { labels: { colors: t.textColor } },
         plotOptions: { bar: { horizontal: true } }
       };
     }
@@ -625,15 +819,66 @@ export default {
     metricLabel(m) {
       return this.translate(`okf.ragas.metric.${m}`, m.replace(/_/g, ' '));
     },
+    /** The plain-language RAGAS meaning for a metric — chart ⓘ + PDF notes. */
+    metricNote(m) {
+      return this.translate(`okf.ragas.metric.note.${m}`, METRIC_NOTE_FALLBACKS[m] || m.replace(/_/g, ' '));
+    },
     barWidth(v) {
       return typeof v === 'number' && v === v ? `${Math.max(2, Math.min(100, Math.round(v * 100)))}%` : '0%';
     },
     scoreText(v) {
       return typeof v === 'number' && v === v ? v.toFixed(2) : '—';
     },
-    shortAnswer(a) {
-      const s = String(a || '');
-      return s.length > 60 ? `${s.slice(0, 60)}…` : s;
+    colStyle(key) {
+      const w = this.colWidths[key];
+      return w ? { width: `${w}px` } : {};
+    },
+    /** Drag a header grip to resize that column; widths land on the colgroup
+     *  col. Double-click resets (resetCol below). Document-level listeners
+     *  because the drag outlives the grip element under the cursor. */
+    startColResize(evt, key) {
+      const th = evt.target.closest('th');
+      if (!th) return;
+      const startX = evt.clientX;
+      const startW = th.getBoundingClientRect().width;
+      const move = (e) => {
+        const w = Math.max(48, Math.round(startW + e.clientX - startX));
+        this.colWidths = { ...this.colWidths, [key]: w };
+      };
+      const up = () => {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', up);
+        document.body.style.cursor = '';
+      };
+      document.body.style.cursor = 'col-resize';
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
+    },
+    resetCol(key) {
+      const next = { ...this.colWidths };
+      delete next[key];
+      this.colWidths = next;
+    },
+    /** Copy the FULL answer text — the cell shows it whole in a readonly
+     *  textarea (selectable like the suite table); the button is the one
+     *  gesture path. execCommand fallback for insecure contexts. */
+    async copyAnswer(r) {
+      const text = String(r.answer || '');
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      this.copiedId = r.id;
+      clearTimeout(this._copyTimer);
+      this._copyTimer = setTimeout(() => {
+        this.copiedId = '';
+      }, 2000);
     },
     shortDate(iso) {
       return String(iso || '')
@@ -645,17 +890,52 @@ export default {
       if (!s) return false;
       return (s.failing || []).some((f) => f.id === r.id);
     },
+    /** Latest-run outcome for a suite entry, by id (null before any run).
+     * Pass/fail comes from the SERVER's summary.failing (the same source
+     * the results table uses) — no client-side threshold invention. */
+    runOutcome(e) {
+      if (!this.runRows || !this.runRows.length) return null;
+      const r = this.runRows.find((x) => x.id === e.id);
+      if (!r) return null;
+      const s = this.runDoc && this.runDoc.payload && this.runDoc.payload.summary;
+      const fails = (((s || {}).failing || []).find((f) => f.id === e.id) || {}).fails || [];
+      const errored = !!(r.error && r.error.code);
+      return {
+        retrieved: (r.contexts || []).length,
+        abstained: !!r.abstained,
+        failed: errored,
+        fails,
+        ok: !errored && !r.abstained && fails.length === 0
+      };
+    },
+    runOutcomeLabel(e) {
+      const o = this.runOutcome(e);
+      if (!o) return '';
+      if (o.failed) return this.translate('okf.ragas.run.rowError', 'error');
+      if (o.abstained) return this.translate('okf.ragas.run.abstained', 'abstained');
+      return o.ok
+        ? this.translate('okf.ragas.run.pass', 'pass')
+        : `${this.translate('okf.ragas.run.fail', 'fail')}: ${o.fails.join(', ')}`;
+    },
+    passagesTitle(e) {
+      const ps = e.reference_passages || [];
+      const o = this.runOutcome(e);
+      const head = ps.length ? String(ps[0]).slice(0, 120) : '';
+      return o ? `retrieved ${o.retrieved} — ${head}` : head;
+    },
     gaugeOptions(g) {
-      const t = useChartTheme().getCssVarStrings();
+      const t = this.chartThemeStrings();
+      const mode = this.chartTheme === 'dark' ? 'dark' : 'light';
       return {
         chart: { type: 'radialBar', sparkline: { enabled: true } },
+        theme: { mode },
         colors: [t.chartColors[Math.abs(g.key.length) % t.chartColors.length]],
         plotOptions: {
           radialBar: {
             hollow: { size: '55%' },
             dataLabels: {
               name: { show: false },
-              value: { show: true, formatter: (v) => `${(Number(v) / 100).toFixed(2)}`, color: t.fg }
+              value: { show: true, formatter: (v) => `${(Number(v) / 100).toFixed(2)}`, color: t.textColor }
             }
           }
         }
@@ -689,17 +969,95 @@ export default {
         suiteKey
       });
       if (epoch !== this.suiteEpoch) return;
-      if (res.ok && res.result && res.result.kind === 'ragas_suite') {
+      // generating check FIRST: the live envelope carries no kind, but any
+      // doc shape that ever grows one must still adopt rather than render
+      // as an idle suite (live incident 2026-10-18: refresh orphaned a
+      // running generation because the branches matched the wrong way).
+      if (res.ok && res.result && res.result.status === 'generating') {
+        // refresh/reopen adoption (David 2026-10-18): a generating suite
+        // must never be orphaned from the UI — restore progress + Cancel
+        this.adoptGeneration(suiteKey, res.result);
+      } else if (res.ok && res.result && res.result.kind === 'ragas_suite') {
         this.suite = res.result;
         this.selectedMetrics = [
           ...new Set([...DEFAULT_METRICS, ...((this.suite.payload && this.suite.payload.metrics_config) || [])])
         ];
         this.$emit('changed');
+        this.adoptInFlight(suiteKey);
       }
+    },
+    /** Re-attach to server-side work that outlived this page load. */
+    async adoptInFlight(suiteKey) {
+      if (this.runBusy) return;
+      await this.refreshHistory(); // history may not be loaded yet on first mount
+      const running = (this.runHistory || []).find(
+        (r) => r.status === 'running' && (!r.suite_key || r.suite_key === suiteKey)
+      );
+      if (!running) return;
+      this.runBusy = true;
+      this.runningRunKey = running._key;
+      this.runProgress = (running && running.progress) || { phase: 'retrieval', done: 0, total: 0 };
+      this.$store
+        .dispatch('okf/ragasAdoptRun', {
+          repoId: this.repo && this.repo.repo_id,
+          suiteKey,
+          runKey: running._key,
+          onProgress: (p) => {
+            this.runProgress = p;
+          }
+        })
+        .then((res) => {
+          if (res.ok) {
+            this.runDoc = res.result;
+            this.refreshHistory();
+            this.$emit('changed');
+          } else {
+            this.error = res.message;
+          }
+        })
+        .finally(() => {
+          this.runBusy = false;
+          this.runningRunKey = null;
+          this.runProgress = null;
+        });
+    },
+    adoptGeneration(suiteKey, envelope) {
+      // Guard on the KEY, not generateBusy: the 409-adoption path arrives
+      // from onGenerate with generateBusy already true (and must keep it).
+      if (this.generatingKey && this.generatingKey !== suiteKey) return;
+      this.generateBusy = true;
+      this.generatingKey = suiteKey;
+      this.genProgress = (envelope && envelope.progress) || null;
+      this.$store
+        .dispatch('okf/ragasAdoptGeneration', {
+          repoId: this.repo && this.repo.repo_id,
+          suiteKey,
+          onProgress: (p) => {
+            this.genProgress = p;
+          }
+        })
+        .then((res) => {
+          if (res.ok) {
+            this.suite = res.result;
+            this.$emit('changed');
+          } else {
+            this.error = res.message;
+          }
+        })
+        .finally(() => {
+          this.generateBusy = false;
+          this.generatingKey = null;
+          this.genProgress = null;
+        });
     },
     async onGenerate() {
       this.error = '';
       this.generateBusy = true;
+      this.genProgress = null;
+      // When the server 409s because a generation is already running, we
+      // attach to it — the adoption then OWNS the busy state, so the finally
+      // must not stomp it back to idle (that race orphaned the UI once).
+      let adopted = false;
       try {
         const dist = [
           { synthesizer: 'single_hop_specific', weight: Number(this.distSingle) || 0 },
@@ -716,19 +1074,50 @@ export default {
           },
           onStarted: (suiteKey) => {
             this.generatingKey = suiteKey;
+          },
+          onProgress: (p) => {
+            this.genProgress = p;
           }
         });
         if (res.ok) {
           this.suite = res.result;
           this.$emit('changed');
+        } else if (res.code === 'GENERATION_IN_FLIGHT') {
+          adopted = await this.adoptRunningGeneration();
         } else {
           this.error = res.message;
         }
       } finally {
-        this.generateBusy = false;
-        this.generatingKey = null;
+        if (!adopted) {
+          this.generateBusy = false;
+          this.generatingKey = null;
+          this.genProgress = null;
+        }
         this.cancelBusy = false;
       }
+    },
+    /** A generation is already running for this repo (409 GENERATION_IN_FLIGHT
+     * — usually this page lost it to a refresh, or another window started it):
+     * find it via the suite list (the server surfaces the live generation as
+     * a synthetic newest row) and adopt it — progress bar + Cancel. Returns
+     * true when attached. */
+    async adoptRunningGeneration() {
+      const res = await this.$store.dispatch('okf/ragasListRuns', {
+        repoId: this.repo && this.repo.repo_id,
+        kind: 'ragas_suite',
+        limit: 5
+      });
+      const gen = ((res && res.runs) || []).find((r) => r.status === 'generating');
+      if (!gen) {
+        // Stale server without the synthetic row: keep the honest error.
+        this.error = this.translate(
+          'okf.ragas.generate.inFlight',
+          'A benchmark-suite generation is already running for this repository — it will appear in the suite list when it completes.'
+        );
+        return false;
+      }
+      await this.loadSuite(gen.suite_key || gen._key);
+      return !!this.generatingKey;
     },
     async onCancelGenerate() {
       if (!this.generatingKey) return;
@@ -740,6 +1129,18 @@ export default {
       if (!res.ok) this.error = res.message;
       // On ok: nothing to do here — the ragasGenerate poll exits on its next
       // tick with RAGAS_JOB_CANCELLED and clears the busy state.
+    },
+    async onCancelRun() {
+      if (!this.runningRunKey) return;
+      this.runCancelBusy = true;
+      const res = await this.$store.dispatch('okf/ragasCancelRun', {
+        repoId: this.repo && this.repo.repo_id,
+        suiteKey: this.suite && this.suite.suite_key,
+        runKey: this.runningRunKey
+      });
+      this.runCancelBusy = false;
+      if (!res.ok) this.error = res.message;
+      // On ok: the ragasRun poll observes the cancelled run record next tick.
     },
     async onRename(name) {
       if (!this.suite || !name || !name.trim() || name === this.suite.name) return;
@@ -813,12 +1214,16 @@ export default {
     async onRun() {
       this.error = '';
       this.runBusy = true;
+      this.runningRunKey = null;
       this.runProgress = { phase: 'retrieval', done: 0, total: this.entries.length };
       try {
         const res = await this.$store.dispatch('okf/ragasRun', {
           repoId: this.repo && this.repo.repo_id,
           suiteKey: this.suite.suite_key,
           metrics: this.selectedMetrics,
+          onStarted: (runKey) => {
+            this.runningRunKey = runKey;
+          },
           onProgress: (p) => {
             this.runProgress = p;
           }
@@ -833,6 +1238,8 @@ export default {
       } finally {
         this.runBusy = false;
         this.runProgress = null;
+        this.runningRunKey = null;
+        this.runCancelBusy = false;
       }
     },
     async refreshHistory() {
@@ -852,8 +1259,22 @@ export default {
           runKey
         })
         .catch(() => null);
-      if (res && res.ok) this.runDoc = res.result;
-      else if (!opts.silent && res) this.error = res.message;
+      if (res && res.ok) {
+        this.runDoc = res.result;
+        // The advisor travels with the run: a persisted explain for THIS run
+        // loads automatically, so the admin sees "what can I do" with the
+        // results instead of having to know the button exists (2026-10-19:
+        // "how does the admin user know what possible actions they can take").
+        this.explainDoc = null;
+        const ex = await this.$store
+          .dispatch('okf/ragasGetExplainQuiet', {
+            repoId: this.repo && this.repo.repo_id,
+            suiteKey: this.suite && this.suite.suite_key,
+            runKey
+          })
+          .catch(() => null);
+        if (ex && ex.ok) this.explainDoc = ex.result;
+      } else if (!opts.silent && res) this.error = res.message;
     },
     async onExplain() {
       this.error = '';
@@ -931,74 +1352,168 @@ export default {
     },
     /** The PDF report: tables + gauge images, built client-side (jsPDF is
      * an existing dependency — no server-side rendering, per the spec). */
+    /** PDF report (David 2026-10-19): the per-metric RAGAS notes are IN the
+     * report, and the format parallels the offline harness export
+     * (tests/rag-benchmarks enrich_xlsx_v2): per-metric aggregates with
+     * notes, status counts (n / evaluable / abstained / failing), the
+     * gauge + trend + status charts, a compare-across-runs table with
+     * delta-vs-first-run, and per-question rows with status flags. */
     async downloadPdf() {
       this.pdfBusy = true;
       try {
         const { jsPDF } = await import('jspdf');
         const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-        let y = 40;
+        const W = doc.internal.pageSize.getWidth();
+        const H = doc.internal.pageSize.getHeight();
+        const M = 40;
+        let y = M;
+        const need = (h) => {
+          if (y + h > H - M) {
+            doc.addPage();
+            y = M;
+          }
+        };
+        const summary = (this.runDoc && this.runDoc.payload && this.runDoc.payload.summary) || {};
+
         doc.setFontSize(16);
-        doc.text(this.translate('okf.ragas.pdf.title', 'RAGAS benchmark report'), 40, y);
+        doc.text(this.translate('okf.ragas.pdf.title', 'RAGAS benchmark report'), M, y);
         y += 18;
         doc.setFontSize(9);
         doc.text(
           `${this.translate('okf.ragas.pdf.suite', 'Suite')}: ${this.suite ? this.suite.name || this.suite.suite_key : '—'}`,
-          40,
+          M,
           y
         );
         y += 12;
         doc.text(
           `${this.translate('okf.ragas.pdf.run', 'Run')}: ${this.runDoc ? this.runDoc._key : '—'}   ${this.runDoc ? this.shortDate(this.runDoc.created_at) : ''}`,
-          40,
+          M,
           y
         );
         y += 20;
-        // summary
-        const summary = (this.runDoc && this.runDoc.payload && this.runDoc.payload.summary) || {};
+
+        // Summary: metric value + its plain-language RAGAS note (the same
+        // text the chart ⓘ popups show).
         doc.setFontSize(11);
-        doc.text(this.translate('okf.ragas.pdf.summary', 'Summary'), 40, y);
+        doc.text(this.translate('okf.ragas.pdf.summary', 'Summary'), M, y);
         y += 14;
         doc.setFontSize(9);
+        const noteLines = [];
         for (const [k, v] of Object.entries(summary.metrics || {})) {
-          doc.text(`${this.metricLabel(k)}: ${this.scoreText(v)}`, 40, y);
-          y += 12;
+          need(28);
+          doc.text(`${this.metricLabel(k)}: ${this.scoreText(v)}`, M, y);
+          y += 11;
+          doc.setFontSize(8);
+          doc.setTextColor(90);
+          const wrapped = doc.splitTextToSize(this.metricNote(k), W - 2 * M);
+          for (const line of wrapped.slice(0, 4)) {
+            need(11);
+            doc.text(line, M, y);
+            y += 10;
+          }
+          doc.setTextColor(0);
+          doc.setFontSize(9);
+          y += 4;
+          noteLines.push(k);
         }
         y += 6;
-        // gauges as images
-        for (const g of this.aggregateRows.slice(0, 4)) {
+
+        // Status counts — the harness export's n / n_abstained / n_evaluable
+        // accounting plus the failing count.
+        need(40);
+        doc.setFontSize(11);
+        doc.text(this.translate('okf.ragas.pdf.status', 'Outcomes'), M, y);
+        y += 14;
+        doc.setFontSize(9);
+        const st = [
+          `${this.translate('okf.ragas.pdf.n', 'questions')}: ${summary.n != null ? summary.n : this.runRows.length}`,
+          `${this.translate('okf.ragas.pdf.evaluable', 'evaluable')}: ${summary.n_evaluable != null ? summary.n_evaluable : '—'}`,
+          `${this.translate('okf.ragas.pdf.abstained', 'abstained')}: ${summary.n_abstained != null ? summary.n_abstained : 0}`,
+          `${this.translate('okf.ragas.results.failing', 'failing')}: ${summary.failing_count != null ? summary.failing_count : (summary.failing || []).length}`
+        ];
+        doc.text(st.join('   ·   '), M, y);
+        y += 20;
+
+        // Charts: gauges (two per row — all selected metrics, not just four),
+        // then trend + status when present.
+        const gauges = [];
+        for (const g of this.aggregateRows) {
           const chart = this.$refs[`gauge-${g.key}`];
           const inst = chart && chart[0] && chart[0].chart;
-          if (!inst) continue;
+          if (inst) {
+            try {
+              const img = await inst.dataURI();
+              gauges.push(img.imgURI);
+            } catch (e) {
+              void e;
+            }
+          }
+        }
+        for (let i = 0; i < gauges.length; i += 2) {
+          need(95);
+          doc.addImage(gauges[i], 'PNG', M, y, 160, 85);
+          if (gauges[i + 1]) doc.addImage(gauges[i + 1], 'PNG', M + 250, y, 160, 85);
+          y += 95;
+        }
+        const trendInst = this.$refs.trendChart && this.$refs.trendChart.chart;
+        if (trendInst && this.trendSeries.length) {
           try {
-            const img = await inst.dataURI();
-            doc.addImage(img.imgURI, 'PNG', 40, y, 110, 80);
-            y += 88;
+            const img = await trendInst.dataURI();
+            need(220);
+            doc.addImage(img.imgURI, 'PNG', M, y, W - 2 * M, ((W - 2 * M) * 200) / 715);
+            y += ((W - 2 * M) * 200) / 715 + 12;
           } catch (e) {
             void e;
           }
-          if (y > doc.internal.pageSize.getHeight() - 60) {
-            doc.addPage();
-            y = 40;
+        }
+
+        // Compare across runs with delta-vs-first — the harness Compare tab.
+        const history = [...this.runHistory].filter((h) => h.summary && h.summary.metrics).reverse();
+        if (history.length > 1) {
+          doc.addPage();
+          y = M;
+          doc.setFontSize(11);
+          doc.text(this.translate('okf.ragas.pdf.compare', 'Compare across runs (delta vs first)'), M, y);
+          y += 14;
+          doc.setFontSize(8);
+          const keys = this.historyMetricKeys;
+          const head = ('run  ' + keys.map((m) => this.metricLabel(m).slice(0, 12)).join('  ')).slice(0, 120);
+          doc.text(head, M, y);
+          y += 10;
+          const firstVals = keys.map((m) => history[0].summary.metrics[m]);
+          for (const h of history) {
+            need(10);
+            const cells = keys.map((m, i) => {
+              const v = h.summary.metrics[m];
+              const d = typeof v === 'number' && typeof firstVals[i] === 'number' ? v - firstVals[i] : null;
+              const ds = d === null || Math.abs(d) < 0.005 ? '' : d > 0 ? `+${d.toFixed(2)}` : d.toFixed(2);
+              return `${this.scoreText(v)}${ds ? '/' + ds : ''}`;
+            });
+            const label = (h.created_at || '').slice(0, 10) + ' ' + String(h._key || '').slice(-6);
+            doc.text(`${label}  ${cells.join('  ')}`.slice(0, 120), M, y);
+            y += 10;
           }
         }
-        // per-query table (text)
+
+        // Per-question rows with status flags (A=abstained, E=error,
+        // F=failing a threshold) — the harness per-run tab shape.
         doc.addPage();
-        y = 40;
+        y = M;
         doc.setFontSize(11);
-        doc.text(this.translate('okf.ragas.pdf.perQuery', 'Per-question scores'), 40, y);
+        doc.text(this.translate('okf.ragas.pdf.perQuery', 'Per-question scores'), M, y);
         y += 14;
         doc.setFontSize(8);
         const keys = this.runMetricKeys;
-        doc.text(('# ' + keys.map((m) => this.metricLabel(m).slice(0, 10)).join('  ')).slice(0, 110), 40, y);
+        const failingIds = new Set((summary.failing || []).map((f) => f.id));
+        doc.text(('# fl  ' + keys.map((m) => this.metricLabel(m).slice(0, 10)).join('  ')).slice(0, 120), M, y);
         y += 10;
         for (const r of this.runRows) {
-          const line = `${r.id}  ${keys.map((m) => this.scoreText(r.metrics && r.metrics[m])).join('   ')}`;
-          doc.text(line.slice(0, 110), 40, y);
+          need(10);
+          const flag = r.error ? 'E' : r.abstained ? 'A' : failingIds.has(r.id) ? 'F' : ' ';
+          const q = String(r.query || r.id).slice(0, 44);
+          const line = `${String(r.id).slice(0, 10)} ${flag} ${q}  ${keys.map((m) => this.scoreText(r.metrics && r.metrics[m])).join('   ')}`;
+          doc.text(line.slice(0, 120), M, y);
           y += 10;
-          if (y > doc.internal.pageSize.getHeight() - 40) {
-            doc.addPage();
-            y = 40;
-          }
         }
         doc.save(`ragas-report-${(this.runDoc && this.runDoc._key) || 'suite'}.pdf`);
       } finally {
@@ -1082,6 +1597,19 @@ export default {
   padding: 14px;
 }
 
+.okf-ragas__advisor-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 10px 12px;
+  margin: 8px 0;
+}
+
 .okf-ragas__hint {
   color: var(--muted);
   font-size: 12px;
@@ -1154,6 +1682,12 @@ export default {
   font-size: 12px;
 }
 
+.okf-ragas__probe-note {
+  font-style: normal;
+  color: var(--danger, #b3261e);
+  font-size: 11px;
+}
+
 .okf-ragas__metrics {
   display: flex;
   align-items: center;
@@ -1214,6 +1748,21 @@ export default {
 .okf-ragas__gauge-label {
   font-size: 11px;
   color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.okf-ragas__chart-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.okf-ragas__chart-title {
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .okf-ragas__trend,
@@ -1221,13 +1770,62 @@ export default {
   margin: 10px 0;
 }
 
-.okf-ragas__cell-query,
-.okf-ragas__cell-answer {
-  max-width: 260px;
+.okf-ragas__table-scroll {
+  overflow-x: auto; /* past the dialog's auto-size cap, scroll INSIDE — never off the side */
+}
+.okf-ragas__results th {
+  position: relative;
+  white-space: nowrap;
+}
+.okf-ragas__col-grip {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  user-select: none;
+  touch-action: none;
+}
+.okf-ragas__col-grip::after {
+  content: '';
+  position: absolute;
+  top: 25%;
+  bottom: 25%;
+  right: 2px;
+  width: 2px;
+  background: var(--border);
+}
+.okf-ragas__col-grip:hover::after,
+.okf-ragas__col-grip:active::after {
+  background: var(--fg);
+}
+.okf-ragas__cell-query {
+  min-width: 220px;
+  max-width: 340px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
+}
+.okf-ragas__cell-metric {
+  min-width: 92px;
+  white-space: nowrap;
+}
+.okf-ragas__cell-answer {
+  min-width: 260px;
+  max-width: 420px;
+}
+.okf-ragas__answer-text {
+  width: 100%;
+  min-width: 240px;
+  resize: vertical; /* suite-table parity: drag to grow the cell */
+  font: inherit;
+  font-size: 12px;
+  color: var(--fg);
+  background: transparent;
+  border: none;
+  padding: 2px 0;
 }
 
 .okf-ragas__score {

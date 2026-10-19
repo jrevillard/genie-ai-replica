@@ -141,15 +141,12 @@ beforeEach(() => {
     if (u.includes('/xlsx/')) return Promise.resolve(okJson({}));
     return Promise.reject(new Error(`unexpected fetch ${u}`));
   });
-  // Default AQL dispatcher: concepts, graphs, retrieval, and the
+  // Default AQL dispatcher: graphs, retrieval, and the
   // okf_head_test_runs queries (listing / explain lookup / delete cascade)
   // served faithfully from the mock store.
   __mockDb.query.mockImplementation(async (aql, bind) => {
     const runs = __mockDb._stores.okf_head_test_runs || {};
     const docs = Object.values(runs);
-    if (aql.includes('okf_concepts_meta') && aql.includes('m.body')) {
-      return { all: async () => [{ concept_id: 'c1', title: 'Tomato', body: 'Tomatoes need warm soil.' }] };
-    }
     if (aql.includes('okf_concepts_meta')) {
       return { all: async () => ['GRAPH_AGRI'] };
     }
@@ -224,7 +221,37 @@ describe('beginSuiteGeneration / getSuite', () => {
     expect(call).toBeTruthy();
     const sent = JSON.parse(call[1].body);
     expect(sent.documents[0].metadata.repo_id).toBe('me');
+    // The generation corpus is the PUBLISHED CHUNKS (the retrievable unit),
+    // not concept bodies — reference-based metrics compare chunk-to-chunk.
+    expect(sent.documents[0].page_content).toBe('Plant after the last frost date.');
+    expect(sent.documents[0].metadata.chunk_key).toBe('k1');
     expect(sent.testset_size).toBe(2);
+  });
+
+  it('stores reference passages WHOLE — a 1200-char chunk reference survives (no 500-char slice)', async () => {
+    // 2026-10-19: the 500-char storage slice cut references mid-table and
+    // often kept the WRONG section of the concept for the question it
+    // grounded — every entity-recall row of a live 20-question suite failed
+    // while context_recall sat at 1.0. The cap is now the run leg's
+    // per-context cap (CONTEXT_CHARS), so a published chunk fits intact.
+    const long = 'y'.repeat(1200);
+    global.fetch = jest.fn((u) => {
+      if (u.includes('/generate-testset')) return Promise.resolve(okJson({ job_id: 'j-long-ref' }));
+      if (u.includes('/jobs/j-long-ref'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-long-ref',
+            kind: 'generate-testset',
+            status: 'done',
+            result: { samples: [{ user_input: 'q?', reference: 'r', reference_contexts: [long] }] }
+          })
+        );
+      return Promise.reject(new Error(`unexpected fetch ${u}`));
+    });
+    const begun = await svc.beginSuiteGeneration('me', {}, {});
+    await begun.done;
+    const doc = await svc.getSuite('me', begun.suite_key);
+    expect(doc.payload.entries[0].reference_passages[0]).toHaveLength(1200);
   });
 
   it('deduplicates repo_ids — the primary is never listed twice', async () => {
@@ -340,6 +367,24 @@ describe('beginSuiteGeneration / getSuite', () => {
     expect(doc.error.code).toBe('RAGAS_JOB_CANCELLED');
     // and a second cancel is a clean 409 — nothing running anymore
     await expect(svc.cancelSuiteGeneration('me')).rejects.toMatchObject({ code: 'NO_GENERATION_IN_FLIGHT' });
+  });
+
+  it('rerank batches at 32 and remaps chunk-local indices to global (live: 48 texts 422d)', async () => {
+    const calls = [];
+    global.fetch = jest.fn(async (url, init) => {
+      const body = JSON.parse(init.body);
+      calls.push(body.texts.length);
+      // TEI contract: chunk-local indices into THIS batch, sorted by score
+      return okJson(body.texts.map((t, i) => ({ index: i, score: 0.9 - i * 0.01 })));
+    });
+    const texts = Array.from({ length: 48 }, (_, i) => `chunk ${i}`);
+    const out = await svc.rerankTexts('q', texts);
+    expect(calls).toEqual([32, 16]); // two batches, both under the cap
+    // second batch's chunk-local index 0 is GLOBAL index 32
+    const bumped = out.find((r) => r.index === 32);
+    expect(bumped).toBeTruthy();
+    expect(bumped.score).toBeCloseTo(0.9, 5);
+    expect(out.every((r) => r.index >= 0 && r.index < 48)).toBe(true);
   });
 
   it('a healthy long-running job is NEVER timed out — the liveness horizon rolls (David 2026-10-18)', async () => {
@@ -514,6 +559,42 @@ describe('run', () => {
     expect(doc.metrics).toEqual([...svc.DEFAULT_METRICS, 'factual_correctness']);
   });
 
+  // Live incident 2026-10-19: the answer leg's condensed prompt produced
+  // terse extractive answers ("101,746") that RAGAS answer_relevancy
+  // structurally fails (reverse question generation from a bare number is
+  // generic — measured 0.415 vs 1.00 for the chat-shaped answer on the
+  // same question, contexts and judge). The benchmark must answer the way
+  // the deployed chat answers.
+  it('the answer leg serves with the chatqna contract, not a terse extractive prompt', async () => {
+    const sk = await makeSuite();
+    const begun = await svc.beginRunSuite('me', sk, {}, {});
+    await begun.done;
+    const call = frontmatterService.vllmChatCompletions.mock.calls.find((c) => {
+      const sys = c[0] && c[0][0];
+      return sys && sys.role === 'system' && /information assistant/i.test(sys.content);
+    });
+    expect(call).toBeTruthy();
+    expect(call[0][0].content).toContain('friendly and polite information assistant');
+    const user = call[0][1].content;
+    expect(user).toContain('Relevant content from the knowledge base');
+    expect(user).not.toContain('Answer the question using ONLY');
+  });
+
+  it('a pinned CHATQNA_SYSTEM_PROMPT overrides the built-in chat default', async () => {
+    process.env.CHATQNA_SYSTEM_PROMPT = 'PINNED CHAT CONTRACT';
+    try {
+      const sk = await makeSuite();
+      const begun = await svc.beginRunSuite('me', sk, {}, {});
+      await begun.done;
+      const call = frontmatterService.vllmChatCompletions.mock.calls.find(
+        (c) => c[0] && c[0][0] && c[0][0].role === 'system' && c[0][0].content === 'PINNED CHAT CONTRACT'
+      );
+      expect(call).toBeTruthy();
+    } finally {
+      delete process.env.CHATQNA_SYSTEM_PROMPT;
+    }
+  });
+
   it('409 RUN_IN_FLIGHT with the adoptable run_key', async () => {
     const sk = await makeSuite();
     let releaseEval;
@@ -576,6 +657,84 @@ describe('explain', () => {
     expect(explained.payload.run_key).toBe(run_key);
     expect(Array.isArray(explained.payload.attributions)).toBe(true);
     expect(explained.payload.advice).toBeTruthy();
+  });
+
+  // Live 2026-10-19 (verification run rr1792392548082): the reference chunk
+  // was retrieved VERBATIM — context recall 1.0, every reference token in the
+  // retrieved union — and entity recall still scored 0.4–0.5, because the
+  // judge's two entity-extraction calls disagree with each other. The advisor
+  // must attribute that to the judge, not send the curator to enrich entity
+  // mentions in content that was returned character-for-character.
+  it('entity-recall misses with context recall PASSING attribute to the judge, not the corpus', async () => {
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-cer', status: 'queued' }));
+      if (u.includes('/jobs/j-cer'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-cer',
+            status: 'done',
+            result: {
+              aggregate: {},
+              per_query: GEN_SAMPLES.map(() => ({ context_recall: 0.95, context_entities_recall: 0.3 })),
+              model: 'm',
+              n: 2
+            }
+          })
+        );
+      return baseFetch(url);
+    });
+    const begunSuite = await svc.beginSuiteGeneration('me', { testset_size: 2 }, {});
+    await begunSuite.done;
+    const run = await svc.beginRunSuite(
+      'me',
+      begunSuite.suite_key,
+      { metrics: ['context_recall', 'context_entities_recall'] },
+      {}
+    );
+    await run.done;
+    const explained = await svc.beginExplainFailures('me', begunSuite.suite_key, { run_key: run.run_key }, {});
+    await explained.done;
+    const doc = await svc.getExplainFailures('me', begunSuite.suite_key, run.run_key);
+    expect(doc.payload.attributions.length).toBeGreaterThan(0);
+    expect(doc.payload.attributions.every((a) => a.stage === 'judge')).toBe(true);
+    expect(doc.payload.attributions[0].recommendation).toMatch(/entity extraction/i);
+  });
+
+  it('entity-recall misses WITH context recall failing still attribute to the corpus', async () => {
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-cer2', status: 'queued' }));
+      if (u.includes('/jobs/j-cer2'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-cer2',
+            status: 'done',
+            result: {
+              aggregate: {},
+              per_query: GEN_SAMPLES.map(() => ({ context_recall: 0.2, context_entities_recall: 0.3 })),
+              model: 'm',
+              n: 2
+            }
+          })
+        );
+      return baseFetch(url);
+    });
+    const begunSuite = await svc.beginSuiteGeneration('me', { testset_size: 2 }, {});
+    await begunSuite.done;
+    const run = await svc.beginRunSuite(
+      'me',
+      begunSuite.suite_key,
+      { metrics: ['context_recall', 'context_entities_recall'] },
+      {}
+    );
+    await run.done;
+    const explained = await svc.beginExplainFailures('me', begunSuite.suite_key, { run_key: run.run_key }, {});
+    await explained.done;
+    const doc = await svc.getExplainFailures('me', begunSuite.suite_key, run.run_key);
+    expect(doc.payload.attributions.every((a) => a.stage === 'corpus')).toBe(true);
   });
 
   it('routes tag suggestions through the existing guardrail', async () => {
@@ -671,5 +830,58 @@ describe('xlsx passthrough + listing', () => {
     expect(suites[0].kind).toBe('ragas_suite');
     const all = await svc.listRuns('me', { kind: 'all' });
     expect(all).toHaveLength(2);
+  });
+
+  // Live incident 2026-10-18: a generation in flight has NO collection doc
+  // (the suite persists only on completion), so after a page refresh the
+  // list could not contain it — the panel reloaded the previous suite and
+  // the running generation was orphaned from the UI until a second Generate
+  // attempt 409'd. The list must surface the live envelope as a row.
+  it('listRuns surfaces an in-flight generation as a synthetic newest row', async () => {
+    let polls = 0;
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/rerank')) return Promise.resolve(okJson([{ index: 0, score: 0.9 }]));
+      if (u.includes('/generate-testset'))
+        return Promise.resolve(okJson({ job_id: 'j-gen', status: 'queued', poll: '/jobs/j-gen' }));
+      if (u.includes('/jobs/j-gen')) {
+        polls += 1;
+        if (polls <= 25)
+          return Promise.resolve(
+            okJson({
+              job_id: 'j-gen',
+              kind: 'generate-testset',
+              status: 'running',
+              progress: { phase: 'synthesizing-questions', done: 1, total: 2 }
+            })
+          );
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-gen',
+            kind: 'generate-testset',
+            status: 'done',
+            result: { samples: GEN_SAMPLES, generator: { model: 'm', embed_model: 'e' } }
+          })
+        );
+      }
+      return Promise.reject(new Error('unexpected ' + u));
+    });
+    const begun = await svc.beginSuiteGeneration('me', { testset_size: 2 }, {});
+    // Let the sidecar's first poll land so the live progress (not the seed)
+    // is what the list row carries.
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    // In-flight window — no suite doc exists yet, but the list must show it.
+    const suites = await svc.listRuns('me', { kind: 'ragas_suite' });
+    const gen = suites.find((r) => r.status === 'generating');
+    expect(gen).toBeTruthy();
+    expect(gen.suite_key).toBe(begun.suite_key);
+    expect(gen.kind).toBe('ragas_suite');
+    expect(gen.progress).toEqual({ phase: 'synthesizing-questions', done: 1, total: 2 });
+    // Newest-first: the live generation leads the list.
+    expect(suites[0].status).toBe('generating');
+    // The synthetic suite row must NOT leak into ragas_run listings.
+    const runs = await svc.listRuns('me', { kind: 'ragas_run' });
+    expect(runs.some((r) => r.kind === 'ragas_suite')).toBe(false);
+    await begun.done; // let the poller finish so no work dangles past the test
   });
 });

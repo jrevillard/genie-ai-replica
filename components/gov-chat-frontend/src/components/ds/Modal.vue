@@ -26,7 +26,7 @@
 <script>
 import DsButton from './Button.vue';
 
-const SIZES = ['sm', 'md', 'lg', 'xl'];
+const SIZES = ['sm', 'md', 'lg', 'xl', 'auto'];
 
 export default {
   name: 'DsModal',
@@ -178,6 +178,14 @@ export default {
 }
 .ds-modal--xl {
   width: 1000px;
+}
+/* Content-sized: grows with the dialog's content (a wide table, a grid of
+ * charts) up to the shared 90% viewport cap, and never below the lg width
+ * so narrow content keeps today's layout. 2026-10-19: the Routing Lab's
+ * benchmark table with every metric selected pushed past the fixed 800px. */
+.ds-modal--auto {
+  width: fit-content;
+  min-width: 800px;
 }
 
 .ds-modal__header {

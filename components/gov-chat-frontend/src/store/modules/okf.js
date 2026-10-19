@@ -1368,7 +1368,7 @@ const actions = {
   /** Generate a benchmark suite (202 + store-side poll until the doc lands).
    * onStarted(suite_key) fires when the 202 returns so the UI can offer
    * Cancel mid-generation (David 2026-10-18 requirement). */
-  async ragasGenerate(_ctx, { repoId, options, onStarted } = {}) {
+  async ragasGenerate(_ctx, { repoId, options, onStarted, onProgress } = {}) {
     try {
       ensureServices();
       const started = await ragasService.generateSuite(repoId, options || {});
@@ -1382,6 +1382,10 @@ const actions = {
       // timeout message says so.
       const DEADLINE_MS = 24 * 60 * 60 * 1000;
       const deadline = Date.now() + DEADLINE_MS;
+      // A transient gateway failure (kong restart = 502) must not kill the
+      // tracking loop — the server-side job keeps running regardless (live
+      // incident 2026-10-18). Give up only after ~2.5 min of solid failure.
+      let misses = 0;
       for (;;) {
         if (Date.now() > deadline) {
           return {
@@ -1391,8 +1395,18 @@ const actions = {
           };
         }
         await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-        const doc = await ragasService.getSuite(repoId, started.suite_key);
-        if (!doc || doc.status === 'generating') continue;
+        let doc = null;
+        try {
+          doc = await ragasService.getSuite(repoId, started.suite_key);
+          misses = 0;
+        } catch (err) {
+          if (++misses >= 60) throw err;
+          continue;
+        }
+        if (!doc || doc.status === 'generating') {
+          if (typeof onProgress === 'function' && doc && doc.progress) onProgress(doc.progress);
+          continue;
+        }
         if (doc.status === 'failed') {
           return {
             ok: false,
@@ -1418,6 +1432,22 @@ const actions = {
     try {
       ensureServices();
       const result = await ragasService.cancelSuiteGeneration(repoId, suiteKey);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'CANCEL_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Cancel an in-flight benchmark RUN (user stop — the ragasRun poll then
+   * exits with the cancelled run record). */
+  async ragasCancelRun(_ctx, { repoId, suiteKey, runKey } = {}) {
+    try {
+      ensureServices();
+      const result = await ragasService.cancelRun(repoId, suiteKey, runKey);
       return { ok: true, result };
     } catch (err) {
       return {
@@ -1500,16 +1530,19 @@ const actions = {
 
   /** Run the suite (202 + store-side poll with live progress). opts.onProgress
    * (a plain function, not serialized) receives each poll's {phase, done, total}. */
-  async ragasRun(_ctx, { repoId, suiteKey, metrics, onProgress } = {}) {
+  async ragasRun(_ctx, { repoId, suiteKey, metrics, onProgress, onStarted } = {}) {
     try {
       ensureServices();
       const started = await ragasService.runSuite(repoId, suiteKey, metrics ? { metrics } : {});
       if (!started || !started.run_key) return { ok: true, result: started };
+      if (typeof onStarted === 'function') onStarted(started.run_key);
       const POLL_MS = 2000;
       // Judge-bound run — the server never times out a live job (see
       // generateRagasSuite above); 24h bounds only this open dialog.
       const DEADLINE_MS = 24 * 60 * 60 * 1000;
       const deadline = Date.now() + DEADLINE_MS;
+      // Same gateway-blip tolerance as ragasGenerate (~2 min at this cadence).
+      let misses = 0;
       for (;;) {
         if (Date.now() > deadline) {
           return {
@@ -1519,7 +1552,14 @@ const actions = {
           };
         }
         await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-        const doc = await ragasService.getRun(repoId, suiteKey, started.run_key);
+        let doc = null;
+        try {
+          doc = await ragasService.getRun(repoId, suiteKey, started.run_key);
+          misses = 0;
+        } catch (err) {
+          if (++misses >= 60) throw err;
+          continue;
+        }
         if (!doc || doc.status === 'running') {
           if (typeof onProgress === 'function' && doc && doc.progress) onProgress(doc.progress);
           continue;
@@ -1537,6 +1577,98 @@ const actions = {
       return {
         ok: false,
         code: (err && (err.code || (err.data && err.data.error))) || 'RUN_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Adopt an ALREADY-RUNNING benchmark run after a page refresh or dialog
+   * reopen (David 2026-10-18: refreshing must never orphan the UI from an
+   * in-flight run — the run doc is the source of truth). Same poll loop and
+   * envelope as ragasRun, minus the start call. */
+  async ragasAdoptRun(_ctx, { repoId, suiteKey, runKey, onProgress } = {}) {
+    try {
+      ensureServices();
+      const POLL_MS = 2000;
+      const DEADLINE_MS = 24 * 60 * 60 * 1000;
+      const deadline = Date.now() + DEADLINE_MS;
+      // Same gateway-blip tolerance as ragasGenerate (~2 min at this cadence).
+      let misses = 0;
+      for (;;) {
+        if (Date.now() > deadline) {
+          return { ok: false, code: 'RUN_TIMEOUT', message: 'The run is still executing on the server.' };
+        }
+        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+        let doc = null;
+        try {
+          doc = await ragasService.getRun(repoId, suiteKey, runKey);
+          misses = 0;
+        } catch (err) {
+          if (++misses >= 60) throw err;
+          continue;
+        }
+        if (!doc || doc.status === 'running') {
+          if (typeof onProgress === 'function' && doc && doc.progress) onProgress(doc.progress);
+          continue;
+        }
+        if (doc.status === 'failed' || doc.status === 'cancelled') {
+          return {
+            ok: false,
+            code: (doc.error && doc.error.code) || 'RUN_FAILED',
+            message: (doc.error && doc.error.message) || 'Run failed'
+          };
+        }
+        return { ok: true, result: doc };
+      }
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'RUN_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Adopt an ALREADY-GENERATING suite after a refresh/reopen — same poll
+   * as ragasGenerate's tail; the generating envelope carries live progress. */
+  async ragasAdoptGeneration(_ctx, { repoId, suiteKey, onProgress } = {}) {
+    try {
+      ensureServices();
+      const POLL_MS = 2500;
+      const DEADLINE_MS = 24 * 60 * 60 * 1000;
+      const deadline = Date.now() + DEADLINE_MS;
+      // Same gateway-blip tolerance as ragasGenerate (~2.5 min at this cadence).
+      let misses = 0;
+      for (;;) {
+        if (Date.now() > deadline) {
+          return { ok: false, code: 'GENERATION_TIMEOUT', message: 'The generation is still running server-side.' };
+        }
+        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+        let doc = null;
+        try {
+          doc = await ragasService.getSuite(repoId, suiteKey);
+          misses = 0;
+        } catch (err) {
+          if (++misses >= 60) throw err;
+          continue;
+        }
+        if (!doc || doc.status === 'generating') {
+          if (typeof onProgress === 'function' && doc && doc.progress) onProgress(doc.progress);
+          continue;
+        }
+        if (doc.status === 'failed') {
+          return {
+            ok: false,
+            code: (doc.error && doc.error.code) || 'GENERATION_FAILED',
+            message: (doc.error && doc.error.message) || 'Generation failed'
+          };
+        }
+        return { ok: true, result: doc };
+      }
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'GENERATION_FAILED',
         message: err.message
       };
     }
@@ -1582,6 +1714,19 @@ const actions = {
         code: (err && (err.code || (err.data && err.data.error))) || 'PROBE_FAILED',
         message: err.message
       };
+    }
+  },
+
+  /** Quiet fetch of the PERSISTED explain for a run — the advisor auto-load.
+   * A 404 (the run was never explained) is a normal state, not an error —
+   * silent: true keeps the shared httpService from logging [OKF-ERR] for it. */
+  async ragasGetExplainQuiet(_ctx, { repoId, suiteKey, runKey } = {}) {
+    try {
+      ensureServices();
+      const doc = await ragasService.getExplain(repoId, suiteKey, runKey, { silent: true });
+      return { ok: !!(doc && doc.payload), result: (doc && doc.payload) || null };
+    } catch {
+      return { ok: false, result: null };
     }
   },
 

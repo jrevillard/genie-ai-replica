@@ -2977,6 +2977,8 @@ export default {
         removeTag: 'Tlosa ho litag tse thibetsoeng',
         tagsetTip: 'Litag tse thibetsoeng tsa tsamaello ena',
         savedTitle: 'Liteko tse bolokiloeng',
+        savedTip:
+          'Sete e ngotsweng kapa e romoletsoeng e bolokwa mona, ka reporisari. Mefuta e mengata e arolelana lenaneong lena: di-suite tsa hlooho (di-query tse tsoang dithekeneng le frontmatter, ka palo ea positive/negative) le di-suite tsa benchmark tsa RAGAS (di-query ka likarabo tse lebellwang, ka letshao la RAGAS le palo ea li-entry). Ho bula ho bula suite ea hlooho letlapeng la Head test le suite ea RAGAS letlapeng la RAGAS Benchmarks, moo e ka phethisoang le haoloa khahlanong le corpus ea phelang. Ho hlakola ho ntsha suite ka ho sa feleng; hobitsoa ho ka fetoa ka ho toba lebitsoeng.',
         load: 'Jarisa',
         flipTip: 'Fetola lokisa ho khetha / se khethe',
         deleteTip: 'Tlosa mola ona seteng',
@@ -3140,7 +3142,9 @@ export default {
         button: 'Hlahisa',
         working: 'E hlahisa — hona ho nka metsotso e mmalwa…',
         cancel: 'Khansela',
-        cancelling: 'E khanseletswa…'
+        cancelling: 'E khanseletswa…',
+
+        inFlight: 'Tlhahiso ya benchmark-suite e ntse e tsamaya bakeng sa repositori ena — re u kopantse le eona.'
       },
       import: {
         button: 'Kenya sete (.xlsx)',
@@ -3169,7 +3173,15 @@ export default {
       run: {
         button: 'Phethahatsa tekanyo',
         working: 'E phethahatsa…',
+        retrieved: 'hlailwe',
+        pass: 'hantshwe',
+        fail: 'hlokile',
+        abstained: 'ikhethile',
+        rowError: 'phoso',
+        cancel: 'Khansela tsamaiso',
         phase: {
+          'building-knowledge-graph': 'Ho haha sethalana sa tsebo',
+          'synthesizing-questions': 'Ho hlahisa dipotso',
           retrieval: 'e kgetha',
           judge: 'e lekanya'
         }
@@ -3181,6 +3193,16 @@ export default {
       results: {
         title: 'Litseo tsa tekanyo',
         failing: '{n} li hlolehile',
+        advisorHint:
+          'Lipotso {n} li ka tlase ho meelo ea tsona ea metriki. Mathusa moeletsi ho beha ho hloleha ho mohala oa pipeline le ho fumana liketso tse sebetsang.',
+        copy: 'Kopola karabo e felletseng',
+        colResizeTip: 'Tsoasa seatla ho fetosa boholo — tlanya habeli hlooho ho qala hape',
+        trendTitle: 'Tsoelo-pele ea liteko hara ditsamaiso',
+        trendNote:
+          'Mola o mong le o mong ke karolo ea tekong e nngwe ea RAGAS ka sesebediso, ho tloha hodilo — ⓘ ea sekhomethadiso e nngwe le e nngwe e hlalosa teko eo. Dikarabo tse hlahlojitsoeng di bolokwa; dikopiso tse tšoanang di fapana hoo fela hoo karabo kapa phumullo e fetohe.',
+        statusTitle: 'Diphetho ka potso e nngwe le e nngwe',
+        statusNote:
+          'Potso e nngwe le e nngwe ea sehlooho sening samong, ka phetho: e phalletse, e hlotse (teko e kgethilweng e tlase ho moelo oa eona), e ile ka thoko, kapa phoso ea moralo.',
         allPass: 'tsohle li feta',
         failingShort: 'li hlolehile',
         answer: 'Karabo',
@@ -3221,14 +3243,41 @@ export default {
         factual_correctness: 'nepahalo ea lintlha',
         answer_correctness: 'nepahalo ea karabo',
         answer_similarity: 'ho tšoana ha dikarabo',
-        noise_sensitivity: 'kutloelo molumong o tiehang'
+        noise_sensitivity: 'kutloelo molumong o tiehang',
+        note: {
+          faithfulness:
+            'Karabo e thehilwe hakae ho ditšoanele tse fumanwego — karolo ea litšoiso tse thehilsoeng hodimo ke methopo. E tlase ho bolela karabo e bolela seo bopaki bo se bolele (bono).',
+          context_precision:
+            'Hore na ditšoanele tse ka sehloohong li ka holimo ea lintlha tse fumanwego. E tlase ho bolela bopaki bo nepahetseng bo fumanwe empa bo patiloe ke dikarolo tse sa amehang.',
+          context_recall:
+            'Hore na ditšoanele tse fumanwego di phalla ka tsohle karabo ea moelelo e hlokang. E tlase ho bolela phumullo e sieile bopaki potso e neng e se hloka.',
+          answer_relevancy:
+            'Karabo e arabatana potso ea hae: RAGAS e hlahisa dipotso hape ho mongolo oa karabo mme e li bapisa le ea pele ka ho tšoana ha embeddings. HA E hlahlobe nepo ea lintaba — dikarabo tse telele di fumana litho tse tlase le ho ba nepahetseng.',
+          context_utilization:
+            'Hore na moqoqo o fumanweng o lekane ho hlahisa karabo ea moelelo — teko ea ho phalla ha phumullo.',
+          context_entities_recall:
+            'Kutolosa boemong ba ditaba: karolo ea litaba tse bitsoang lipasseng tsa boitšoaro ba mongolo (likhamphani, dateng, mabalenyana, libaka) tse bonahalang hape ho dikhouse tse khothalelitsoeng. Palo e tlase e bolela hore ho khothalelitsoe dikhouse tse sieang metso ea boitšoaro. Toka ho moahlodi — palo e tlase ha kutolosa context se fetoheletsoe hangata ho bolela hore ntsho ea litaba ke moahloli e ile ea siea, eseng hore teng e sieo.',
+          factual_correctness:
+            'Tumellano ea nnete maemong a litšoiso le karabo ea moelelo — moahlodi o arola ka bobeli ebe o lekanya tšusumetso. Teko e thata ka ho fetisisa ea nepo.',
+          answer_correctness:
+            'Bohlebahle ho fapana le moelelo — nepo ea nnete e kopantsoe le ho tšoana ha moelelo. Teko e atamalanang le “na karabo e ne e nepahetse”.',
+          answer_similarity:
+            'Ho tšoana ha moelelo (embeddings) pakeng tsa karabo e hlahisitsoeng le ea moelelo — holimo ho bolela bobeli bo bolela se seng.',
+          noise_sensitivity:
+            'Karabo e fokotseha hakae ha dikarolo tse sa amehang di kenella moqoqong — teko ea mamello. TLASE ke e ntle; moelo oa eona o cholotsoe.'
+        }
       },
       pdf: {
         title: 'Tlaleho ea ditekanyo tsa RAGAS',
         suite: 'Sete',
         run: 'Tsamaello',
         summary: 'Kakaretso',
-        perQuery: 'Dipalo ka potso e nngwe le e nngwe'
+        perQuery: 'Dipalo ka potso e nngwe le e nngwe',
+        status: 'Diphetho',
+        n: 'dipotso',
+        evaluable: 'e ka hlahlojoa',
+        abstained: 'tse ikhethetseng',
+        compare: 'Papisano hara ditsamaiso (phapang le ea pele)'
       }
     }
   },

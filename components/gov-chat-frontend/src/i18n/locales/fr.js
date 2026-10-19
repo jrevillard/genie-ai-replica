@@ -2987,6 +2987,8 @@ export default {
         removeTag: 'Retirer des tags interdits',
         tagsetTip: 'Tags interdits pour cette exécution',
         savedTitle: 'Suites enregistrées',
+        savedTip:
+          'Chaque suite générée ou importée est enregistrée ici, par dépôt. Deux types partagent cette liste : les suites de tête (jeux de requêtes issus des tags et du frontmatter, avec compteurs positifs/négatifs) et les suites de référence RAGAS (jeux de questions avec réponses attendues, avec badge RAGAS et nombre d entrées). Charger ouvre une suite de tête dans l onglet Test de tête et une suite RAGAS dans l onglet RAGAS Benchmarks, où elle peut être exécutée et notée contre le corpus en direct. Supprimer retire la suite définitivement ; le renommage se fait directement sur le nom.',
         load: 'Charger',
         flipTip: 'Basculer doit-sélectionner / ne-doit-pas-sélectionner',
         deleteTip: 'Retirer cette ligne de la suite',
@@ -3151,7 +3153,9 @@ export default {
         button: 'Générer',
         working: 'Génération — cela prend plusieurs minutes…',
         cancel: 'Annuler',
-        cancelling: 'Annulation…'
+        cancelling: 'Annulation…',
+
+        inFlight: 'Une génération de suite de benchmarks est déjà en cours pour ce dépôt — vous y êtes rattaché.'
       },
       import: {
         button: 'Importer une suite (.xlsx)',
@@ -3180,7 +3184,15 @@ export default {
       run: {
         button: 'Lancer le banc d’essai',
         working: 'Exécution…',
+        retrieved: 'récupérés',
+        pass: 'réussi',
+        fail: 'échoué',
+        abstained: 'abstenu',
+        rowError: 'erreur',
+        cancel: 'Annuler l’exécution',
         phase: {
+          'building-knowledge-graph': 'Construction du graphe de connaissances',
+          'synthesizing-questions': 'Synthèse des questions',
           retrieval: 'récupération',
           judge: 'évaluation'
         }
@@ -3192,6 +3204,16 @@ export default {
       results: {
         title: 'Résultats du banc d’essai',
         failing: '{n} en échec',
+        advisorHint:
+          '{n} questions sont sous leurs seuils de métriques. Lancez le conseiller pour attribuer chaque échec à une étape du pipeline et obtenir des actions concrètes.',
+        copy: 'Copier la réponse complète',
+        colResizeTip: 'Faites glisser la poignée pour redimensionner — double-cliquez sur l’en-tête pour réinitialiser',
+        trendTitle: 'Tendance des métriques par exécution',
+        trendNote:
+          'Chaque ligne est la moyenne d’une métrique RAGAS par exécution, de la plus ancienne à la plus récente — le ␘ de chaque jauge explique la métrique. Les réponses jugées sont en cache ; des re-exécutions identiques ne diffèrent que si réponses ou récupération changent.',
+        statusTitle: 'Résultats par question',
+        statusNote:
+          'Chaque question de la suite dans cette exécution, empilée par issue : réussie, échouée (une métrique choisie sous son seuil), abstention ou erreur de pipeline.',
         allPass: 'toutes réussies',
         failingShort: 'en échec',
         answer: 'Réponse',
@@ -3232,14 +3254,41 @@ export default {
         factual_correctness: 'exactitude factuelle',
         answer_correctness: 'exactitude de la réponse',
         answer_similarity: 'similarité de la réponse',
-        noise_sensitivity: 'sensibilité au bruit'
+        noise_sensitivity: 'sensibilité au bruit',
+        note: {
+          faithfulness:
+            'À quel point la réponse est factuellement fondée sur les passages récupérés — la part des affirmations que les sources soutiennent. Faible : la réponse affirme ce que les preuves ne disent pas (hallucination).',
+          context_precision:
+            'Si les passages décisifs sont placés en tête de l’ensemble récupéré. Faible : la bonne preuve a été récupérée mais noyée sous des fragments moins pertinents.',
+          context_recall:
+            'Si les passages récupérés couvrent tout ce qu’exige la réponse de référence. Faible : la récupération a manqué des preuves nécessaires à la question.',
+          answer_relevancy:
+            'À quel point la réponse traite la question posée : RAGAS régénère des questions depuis le texte de la réponse et les compare à l’originale par similarité d’embeddings. Elle ne vérifie PAS l’exactitude — une réponse verbeuse score bas même juste.',
+          context_utilization:
+            'Si le contexte récupéré suffit à produire la réponse de référence — un contrôle de complétude de la récupération.',
+          context_entities_recall:
+            'Rappel au niveau des entités : la part des entités nommées des passages de référence de l’entrée (sociétés, dates, montants, lieux) qui apparaissent aussi dans les morceaux récupérés. Un score bas signifie que la récupération a rapporté des morceaux qui manquent des entités de la référence. Sensible au juge — un score bas alors que le rappel de contexte réussit signifie généralement que l’extraction d’entités du juge a manqué des éléments, non que le contenu manque.',
+          factual_correctness:
+            'Accord factuel au niveau des affirmations avec la référence — le juge décompose les deux et note le recouvrement. La métrique d’exactitude la plus stricte.',
+          answer_correctness:
+            'Qualité globale face à la référence — exactitude factuelle combinée à la similarité sémantique. La métrique la plus proche de « la réponse est-elle juste ».',
+          answer_similarity:
+            'Similarité sémantique (embeddings) entre la réponse générée et la référence — élevé : elles transmettent la même chose.',
+          noise_sensitivity:
+            'Combien la réponse se dégrade quand des passages non pertinents sont mélangés au contexte — une mesure de robustesse. PLUS BAS est mieux ; son seuil est inversé.'
+        }
       },
       pdf: {
         title: 'Rapport de banc d’essai RAGAS',
         suite: 'Suite',
         run: 'Exécution',
         summary: 'Résumé',
-        perQuery: 'Scores par question'
+        perQuery: 'Scores par question',
+        status: 'Issues',
+        n: 'questions',
+        evaluable: 'évaluables',
+        abstained: 'abstentions',
+        compare: 'Comparaison des exécutions (delta vs la première)'
       }
     }
   },

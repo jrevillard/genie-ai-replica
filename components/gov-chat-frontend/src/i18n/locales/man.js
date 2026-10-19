@@ -2936,6 +2936,8 @@ export default {
         removeTag: 'Remove from forbidden tags',
         tagsetTip: 'Forbidden tags for this run',
         savedTitle: 'Saved suites',
+        savedTip:
+          'Every generated or imported suite is saved here, per repository. Two kinds share this list: head suites (tag- and frontmatter-derived query sets, shown with Positives/Negatives counts) and RAGAS benchmark suites (question sets with expected answers, badged with a RAGAS pill and an entries count). Load opens a head suite into the Head test tab and a RAGAS suite into the RAGAS Benchmarks tab, where it can be run and scored against the live corpus. Delete removes the suite permanently; rename is inline on the name.',
         load: 'Load',
         flipTip: 'Flip should-select / should-NOT-select',
         deleteTip: 'Remove this row from the suite',
@@ -3099,7 +3101,9 @@ export default {
         button: 'Generate',
         working: 'Generating — this takes minutes…',
         cancel: 'Cancel',
-        cancelling: 'Cancelling…'
+        cancelling: 'Cancelling…',
+
+        inFlight: 'A benchmark-suite generation is already running for this repository — attaching you to it.'
       },
       import: {
         button: 'Import suite (.xlsx)',
@@ -3128,7 +3132,15 @@ export default {
       run: {
         button: 'Run benchmark',
         working: 'Running…',
+        retrieved: 'retrieved',
+        pass: 'pass',
+        fail: 'fail',
+        abstained: 'abstained',
+        rowError: 'error',
+        cancel: 'Cancel run',
         phase: {
+          'building-knowledge-graph': 'Building the knowledge graph',
+          'synthesizing-questions': 'Synthesizing questions',
           retrieval: 'retrieving',
           judge: 'scoring'
         }
@@ -3140,6 +3152,16 @@ export default {
       results: {
         title: 'Benchmark results',
         failing: '{n} failing',
+        advisorHint:
+          '{n} questions are below their metric thresholds. Run the advisor to attribute each failure to a pipeline stage and get concrete actions.',
+        copy: 'Copy the full answer',
+        colResizeTip: 'Drag the grip to resize — double-click the header to reset',
+        trendTitle: 'Metric trend across runs',
+        trendNote:
+          'Each line is one RAGAS metric’s suite mean per run, oldest to newest — hover any gauge’s ␘ for what that metric measures. Judged answers are cached, so equal re-runs differ only where answers or retrieval changed.',
+        statusTitle: 'Per-question outcomes',
+        statusNote:
+          'Every suite question in this run, stacked by outcome: passing, failing (any selected metric below its threshold), abstained (the answerer declined), or errored (the pipeline failed that row).',
         allPass: 'all passing',
         failingShort: 'failing',
         answer: 'Answer',
@@ -3180,14 +3202,41 @@ export default {
         factual_correctness: 'factual correctness',
         answer_correctness: 'answer correctness',
         answer_similarity: 'answer similarity',
-        noise_sensitivity: 'noise sensitivity'
+        noise_sensitivity: 'noise sensitivity',
+        note: {
+          faithfulness:
+            'How factually grounded the answer is against the retrieved passages — the share of the answer’s claims the sources support. Low means the answer says things the evidence does not (hallucination).',
+          context_precision:
+            'Whether the passages that matter were ranked at the top of the retrieved set. Low means the right evidence was retrieved but buried under less relevant chunks.',
+          context_recall:
+            'Whether the retrieved passages cover everything the reference answer requires — each reference claim must be attributable to retrieved context. Low means retrieval missed evidence the question needed.',
+          answer_relevancy:
+            'How well the answer addresses the question asked: RAGAS regenerates questions from the answer text and compares them to the original by embedding similarity. It does NOT check factual correctness — verbose or off-topic answers score low even when right.',
+          context_utilization:
+            'Whether the retrieved context is sufficient to produce the reference answer — a retrieval-completeness check against what the ideal answer needs.',
+          context_entities_recall:
+            'Entity-level recall: the share of named entities in the entry’s reference passages (companies, dates, amounts, places) that also appear in the retrieved chunks. Low means retrieval brought chunks that miss entities the reference names. Judge-sensitive — a low score while context recall passes usually means the judge’s entity extraction missed, not that content is missing.',
+          factual_correctness:
+            'Claim-level factual agreement with the reference answer — the judge decomposes both into claims and scores the overlap. The strictest correctness metric.',
+          answer_correctness:
+            'Overall quality versus the reference answer — factual correctness combined with semantic similarity. The closest metric to “did it give the right answer”.',
+          answer_similarity:
+            'Semantic (embedding) similarity between the generated answer and the reference answer — high means the two convey the same meaning.',
+          noise_sensitivity:
+            'How much the answer degrades when irrelevant passages are mixed into the retrieved context — a robustness measure. LOWER is better; its failure threshold is inverted.'
+        }
       },
       pdf: {
         title: 'RAGAS benchmark report',
         suite: 'Suite',
         run: 'Run',
         summary: 'Summary',
-        perQuery: 'Per-question scores'
+        perQuery: 'Per-question scores',
+        status: 'Outcomes',
+        n: 'questions',
+        evaluable: 'evaluable',
+        abstained: 'abstained',
+        compare: 'Compare across runs (delta vs first)'
       }
     }
   },

@@ -159,7 +159,10 @@ describe('Locale consistency', () => {
     'okf.editor.access.pickerAllSelected',
     'okf.editor.access.pickerGrant',
     'okf.editor.access.pickerGranting',
-    'okf.editor.access.grantedQueryNotice'
+    'okf.editor.access.grantedQueryNotice',
+    // RAGAS advisor hint (2026-10-19): failing-count banner, consumed via
+    // translate().replace('{n}') in RagasPanel.vue.
+    'okf.ragas.results.advisorHint'
   ];
   // #1042 batch delete: consumed via AdminDashboard.translate (compiled $t).
   const replaceConsumedEscaped = [

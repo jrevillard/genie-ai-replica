@@ -43,7 +43,7 @@
   <DsDialog
     :visible="visible"
     :title="translate('okf.headTest.title', 'Routing Lab — head test')"
-    size="lg"
+    size="auto"
     :actions="dialogActions"
     @close="$emit('close')"
     @action="onDialogAction"
@@ -1221,6 +1221,14 @@
         <div v-if="allSavedSuites.length" class="okf-headtest__saved-suites">
           <h4 class="okf-headtest__pane-title">
             {{ translate('okf.headTest.suites.savedTitle', 'Saved suites') }}
+            <DsInfoTip
+              :text="
+                translate(
+                  'okf.headTest.suites.savedTip',
+                  'Every generated or imported suite is saved here, per repository. Two kinds share this list: head suites (tag- and frontmatter-derived query sets, shown with Positives/Negatives counts) and RAGAS benchmark suites (question sets with expected answers, badged with a RAGAS pill and an entries count). Load opens a head suite into the Head test tab and a RAGAS suite into the RAGAS Benchmarks tab, where it can be run and scored against the live corpus. Delete removes the suite permanently; rename is inline on the name.'
+                )
+              "
+            />
           </h4>
           <!-- The load indicator sits HERE, outside the v-if="suite" pane on
                purpose: a first-ever load has no suite to render into, so a

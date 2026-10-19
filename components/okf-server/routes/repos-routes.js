@@ -207,6 +207,13 @@ router.post(
   ctrl.exportRagasResultsXlsx
 );
 router.post('/:repo_id/ragas-testsuite/:suite_key/run', requireRepoScope('repo_id', 'admin'), ctrl.runRagasSuite);
+// User-facing RUN cancel (David 2026-10-18): kill a benchmark that is
+// taking too long — cancels the evaluate sidecar job, records 'cancelled'.
+router.post(
+  '/:repo_id/ragas-testsuite/:suite_key/runs/:run_key/cancel',
+  requireRepoScope('repo_id', 'admin'),
+  ctrl.cancelRagasSuiteRun
+);
 router.get(
   '/:repo_id/ragas-testsuite/:suite_key/runs/:run_key',
   requireRepoScope('repo_id', 'read'),

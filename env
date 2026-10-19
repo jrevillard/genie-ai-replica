@@ -553,7 +553,9 @@ HUGGING_FACE_HUB_TOKEN=
 # Override here ONLY for deployment-specific customization.
 #
 # **Prompts** (text instructions for AI):
-#   - CHATQNA_SYSTEM_PROMPT: Main system prompt for chat behavior
+#   - CHATQNA_SYSTEM_PROMPT: Main system prompt for chat behavior. ALSO shapes
+#     the OKF RAGAS benchmark answer leg (forwarded to okf-server) — the
+#     benchmark scores the answerer the deployment's users actually get.
 #   - CHATQNA_ABSTENTION_INSTRUCTIONS: Instructions for when to refuse answering
 #   - LABEL_SELECTOR_SYSTEM_PROMPT: Prompt for automatic document labeling
 #
@@ -1583,6 +1585,22 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 # OKF_RAGAS_RUN_CONCURRENCY=2
 #   Default: 2. Per-run query concurrency — bounds LLM load on the shared
 #   GPU so benchmarking does not starve chat answering.
+# OKF_RAGAS_LONG_TIMEOUT_MS=3600000
+#   Default: 3600000 (1h). LIVENESS HORIZON, not a job deadline: a
+#   reachable, running job is NEVER timed out — the horizon bounds only how
+#   long an UNREACHABLE sidecar is retried before the job record fails
+#   honestly. The only things that end a healthy long job are its own
+#   completion or the user's Cancel (never a timer). Used by: okf-server.
+# RAGAS_LLM_CACHE=1
+#   Default: 1 (on). Disk judge cache — responses keyed by model+prompt+
+#   params persist under RAGAS_LLM_CACHE_DIR, so a repeat generation over
+#   the same repositories skips the whole knowledge-graph phase (minutes to
+#   seconds) and re-runs of a suite re-judge only what changed. 0 disables.
+#   Used by: ragas-service.
+# RAGAS_LLM_CACHE_DIR=/tmp/ragas-llm-cache
+#   Default: /tmp/ragas-llm-cache (inside the container — survives job
+#   churn, cleared when the container is recreated). Cache IO is
+#   best-effort: a cache failure can never fail a job.
 
 # --- okf-server: retrieval mode governance (Story 1.7, ADR-okf-039 D3) ---
 # OKF_RETRIEVAL_MODE=legacy

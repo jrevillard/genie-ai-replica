@@ -156,6 +156,68 @@ describe('model-config lifecycle', () => {
   });
 });
 
+describe('services checkboxes — which features use the config', () => {
+  test('create defaults to ragas_judge; explicit services are stored deduped; unknown keys 400', async () => {
+    const a = await svc.createConfig({ name: 'A', provider: 'openai', base_url: 'https://a/v1', api_key: 'k' }, {});
+    expect(a.services).toEqual(['ragas_judge']); // create-activate-judge just works
+    const b = await svc.createConfig(
+      {
+        name: 'B',
+        provider: 'openai',
+        base_url: 'https://b/v1',
+        api_key: 'k',
+        services: ['okf_tagging', 'okf_tagging']
+      },
+      {}
+    );
+    expect(b.services).toEqual(['okf_tagging']);
+    await expect(
+      svc.createConfig(
+        { name: 'C', provider: 'openai', base_url: 'https://c/v1', api_key: 'k', services: ['nope'] },
+        {}
+      )
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  });
+
+  test('an ACTIVE config only serves the features on its list; [] is dormant; picks bypass', async () => {
+    const c = await svc.createConfig(
+      { name: 'scoped', provider: 'openai', base_url: 'https://s/v1', api_key: 'k', services: ['okf_curation'] },
+      {}
+    );
+    await svc.activateConfig(c._key, {});
+    expect(await svc.resolveModelOverride({ service: 'okf_curation' })).toMatchObject({
+      source: 'active',
+      config_key: c._key
+    });
+    expect(await svc.resolveModelOverride({ service: 'ragas_judge' })).toBeNull(); // not checked → env default
+    expect(await svc.resolveModelOverride({ service: 'okf_tagging' })).toBeNull();
+    // an explicit pick ignores the list — the operator named the config
+    expect(await svc.resolveModelOverride({ config_key: c._key, service: 'ragas_judge' })).toMatchObject({
+      source: 'picked'
+    });
+    // dormant: empty list serves NOTHING
+    await svc.updateConfig(c._key, { services: [] }, {});
+    expect(await svc.resolveModelOverride({ service: 'okf_curation' })).toBeNull();
+  });
+
+  test('update without services KEEPS the stored list; copy carries it', async () => {
+    const c = await svc.createConfig(
+      {
+        name: 'K',
+        provider: 'openai',
+        base_url: 'https://k/v1',
+        api_key: 'k',
+        services: ['okf_curation', 'okf_tagging']
+      },
+      {}
+    );
+    await svc.updateConfig(c._key, { name: 'K2' }, {});
+    expect(store()[c._key].services).toEqual(['okf_curation', 'okf_tagging']);
+    const cp = await svc.copyConfig(c._key, {});
+    expect(cp.services).toEqual(['okf_curation', 'okf_tagging']);
+  });
+});
+
 describe('model listing (the config-form dropdown)', () => {
   test('openai-compatible: Bearer auth against {base}/models, sorted ids', async () => {
     const c = await svc.createConfig(

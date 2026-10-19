@@ -104,6 +104,39 @@ describe('ModelConfigPanel', () => {
     expect(dispatch).toHaveBeenCalledWith('okf/modelConfigDelete', { key: 'mc2' });
   });
 
+  test('services checkboxes: create defaults to benchmarks; edit loads and re-saves the doc list; anthropic disables the openai-only boxes', async () => {
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    // create form default — create-activate-judge just works
+    w.vm.openCreate();
+    await w.vm.$nextTick();
+    expect(w.vm.form.services).toEqual(['ragas_judge']);
+    expect(w.find('input[type="checkbox"][value="okf_curation"]').exists()).toBe(true);
+    w.vm.form.name = 'N';
+    w.vm.form.base_url = 'https://x/v1';
+    await w.vm.save();
+    expect(dispatch).toHaveBeenCalledWith(
+      'okf/modelConfigCreate',
+      expect.objectContaining({ services: ['ragas_judge'] })
+    );
+    // edit carries the DOC's list (not the default) and re-saves changes
+    w.vm.openEdit({ ...configs()[0], services: ['okf_curation', 'okf_tagging'] });
+    expect(w.vm.form.services).toEqual(['okf_curation', 'okf_tagging']);
+    w.vm.form.services = ['okf_tagging'];
+    await w.vm.save();
+    expect(dispatch).toHaveBeenCalledWith(
+      'okf/modelConfigUpdate',
+      expect.objectContaining({ key: 'mc1', payload: expect.objectContaining({ services: ['okf_tagging'] }) })
+    );
+    // an anthropic provider form disables the openai-wire-only boxes
+    w.vm.openEdit({ ...configs()[1], services: [] });
+    await w.vm.$nextTick();
+    const curation = w.find('input[type="checkbox"][value="okf_curation"]');
+    expect(curation.attributes('disabled')).toBeDefined();
+    const judge = w.find('input[type="checkbox"][value="ragas_judge"]');
+    expect(judge.attributes('disabled')).toBeUndefined();
+  });
+
   test('create posts the form; edit keeps an absent key (payload carries no api_key)', async () => {
     const w = mountPanel();
     await new Promise((r) => setTimeout(r, 0));

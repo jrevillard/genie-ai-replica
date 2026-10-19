@@ -204,6 +204,15 @@ generation to that model, reporting latency and exactly which layer
 failed if anything does. Testing is always available; activating is a
 separate, explicit act.
 
+Each configuration declares **which features use it** (checkboxes):
+**benchmarks** (the RAGAS judge and advisor), **concept curation**
+(labels, types, summaries) and **topics & tags** (frontmatter
+suggestions and routing explain). The active configuration only serves
+the features on its list — an unchecked configuration is dormant even
+while active. Concept curation and topics/tags speak the OpenAI wire
+format, so those two boxes require an OpenAI-compatible provider; an
+Anthropic-provider configuration can serve benchmarks only.
+
 Configurations can be **named, renamed, copied, modified, activated,
 deactivated and deleted**. Exactly **one** can be active at a time; the
 active configuration is the judge for benchmark generation and scoring

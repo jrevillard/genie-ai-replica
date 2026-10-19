@@ -702,7 +702,8 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
     // it); no pick silently uses the active config or the env default.
     const judgeOverride = await modelConfigService.resolveModelOverride({
       config_key: opts.judge_config_key,
-      model: opts.judge_model
+      model: opts.judge_model,
+      service: 'ragas_judge'
     });
     // 202 + poll: the sidecar starts a background job and we poll it — no
     // connection is held open for the (potentially hour-long) generation.
@@ -1179,7 +1180,8 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     await report(opts, { phase: 'judge', done: 0, total: 1 });
     const judgeOverride = await modelConfigService.resolveModelOverride({
       config_key: opts.judge_config_key,
-      model: opts.judge_model
+      model: opts.judge_model,
+      service: 'ragas_judge'
     });
     const samples = entries.map((e, i) => ({
       user_input: e.query,

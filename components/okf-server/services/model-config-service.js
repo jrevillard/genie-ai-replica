@@ -25,6 +25,12 @@ const auditService = require('./audit-service');
 
 const COLLECTION = 'okf_model_configs';
 const PROVIDERS = new Set(['openai', 'anthropic']);
+// The features a configuration can serve (David, 2026-10-19: "checkboxes for
+// the various services that will be configured to use the selected model").
+// The two Studio consumers speak the OpenAI wire format ONLY — the RAGAS
+// sidecar is the one consumer that can also drive an anthropic-provider
+// config (langchain-anthropic). The UI disables the incompatible boxes.
+const SERVICES = new Set(['ragas_judge', 'okf_curation', 'okf_tagging']);
 const NAME_MAX = 120;
 const LIST_TIMEOUT_MS = 15000;
 const TEST_TIMEOUT_MS = 20000;
@@ -66,6 +72,7 @@ function mask(doc) {
     provider: doc.provider,
     base_url: doc.base_url,
     default_model: doc.default_model || null,
+    services: Array.isArray(doc.services) ? doc.services : [],
     active: doc.active === true,
     has_api_key: !!key,
     api_key_hint: key ? `••••${key.slice(-4)}` : null,
@@ -76,7 +83,20 @@ function mask(doc) {
   };
 }
 
-function validate({ name, provider, base_url, api_key }, { partial = false } = {}) {
+function cleanServices(raw) {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw)) throw httpErr('VALIDATION_ERROR', 400, 'services must be an array of service keys');
+  const out = [];
+  for (const s of raw) {
+    if (!SERVICES.has(s)) {
+      throw httpErr('VALIDATION_ERROR', 400, `unknown service "${s}" — must be one of: ${[...SERVICES].join(', ')}`);
+    }
+    if (!out.includes(s)) out.push(s);
+  }
+  return out;
+}
+
+function validate({ name, provider, base_url, api_key, services }, { partial = false } = {}) {
   const out = {};
   if (!partial || name !== undefined) {
     const n = String(name || '').trim();
@@ -107,6 +127,7 @@ function validate({ name, provider, base_url, api_key }, { partial = false } = {
   // one (the UI never echoes it back) — only a non-empty string replaces it.
   if (api_key !== undefined && String(api_key).length > 0) out.api_key = String(api_key);
   else if (!partial) throw httpErr('VALIDATION_ERROR', 400, 'api_key is required');
+  out.services = cleanServices(services);
   return out;
 }
 
@@ -152,6 +173,11 @@ async function createConfig(payload = {}, opts = {}) {
       api_key: clean.api_key,
       default_model:
         typeof payload.default_model === 'string' && payload.default_model.trim() ? payload.default_model.trim() : null,
+      // Unchecked boxes = a dormant config nothing routes to ([] serves no
+      // service — what an empty checkbox row shows). New configs default to
+      // the flagship consumer so create-activate-judge "just works"; an
+      // explicit empty array on create means "I will pick later".
+      services: clean.services.length ? clean.services : ['ragas_judge'],
       active: false, // created INACTIVE — activation is an explicit act
       created_at: now,
       updated_at: now,
@@ -188,7 +214,8 @@ async function updateConfig(key, payload = {}, opts = {}) {
     const merged = {
       name: payload.name !== undefined ? payload.name : doc.name,
       provider: payload.provider !== undefined ? payload.provider : doc.provider,
-      base_url: payload.base_url !== undefined ? payload.base_url : doc.base_url
+      base_url: payload.base_url !== undefined ? payload.base_url : doc.base_url,
+      services: payload.services !== undefined ? payload.services : doc.services
     };
     if (payload.api_key !== undefined && String(payload.api_key).length > 0) merged.api_key = payload.api_key;
     const clean = validate(merged, { partial: true });
@@ -231,6 +258,7 @@ async function copyConfig(key, opts = {}) {
       base_url: src.base_url,
       api_key: src.api_key,
       default_model: src.default_model,
+      services: Array.isArray(src.services) ? src.services : [],
       active: false,
       created_at: now,
       updated_at: now,
@@ -482,6 +510,11 @@ async function testConnection(payload = {}) {
 /**
  * The resolution chain every model-consuming OKF leg shares:
  *   explicit pick (config key + optional model) > THE active config > env.
+ * `pick.service` scopes the ACTIVE branch to configs whose services list
+ * includes that feature ([] = dormant — serves nothing); an explicit pick
+ * is a deliberate operator override and applies regardless of the list.
+ * OpenAI-wire-only consumers (curation, tagging) must additionally check
+ * `provider === 'openai'` on the result — the RAGAS sidecar speaks both.
  * @returns {{provider:'openai'|'anthropic'|null, base_url, model, api_key,
  *            source:'picked'|'active'|'env', config_key, config_name}|null}
  *          null means "no override — use the env-configured default".
@@ -496,6 +529,10 @@ async function resolveModelOverride(pick = {}) {
   } else {
     const rows = await (await db.query(`FOR c IN ${COLLECTION} FILTER c.active == true LIMIT 1 RETURN c`)).all();
     doc = rows[0] || null;
+    // Service scoping (the checkboxes): an active config only serves the
+    // features on its list; [] is dormant. Explicit picks skip this — the
+    // operator named the config on purpose.
+    if (doc && pick.service && Array.isArray(doc.services) && !doc.services.includes(pick.service)) return null;
   }
   if (!doc) return null;
   return {
@@ -523,6 +560,7 @@ function judgeFidelity(override) {
 
 module.exports = {
   PROVIDERS,
+  SERVICES,
   listConfigs,
   createConfig,
   updateConfig,

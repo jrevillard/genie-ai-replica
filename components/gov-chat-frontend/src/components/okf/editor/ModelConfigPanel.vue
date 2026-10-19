@@ -112,6 +112,33 @@
           }}
         </p>
       </div>
+      <div class="okf-models__field okf-models__field--full">
+        <span>{{ translate('okf.models.services', 'Use this configuration for') }}</span>
+        <div class="okf-models__services">
+          <label
+            v-for="sv in SERVICE_DEFS"
+            :key="sv.key"
+            class="okf-models__svc"
+            :class="{ 'okf-models__svc--off': sv.openaiOnly && form.provider === 'anthropic' }"
+          >
+            <input
+              v-model="form.services"
+              type="checkbox"
+              :value="sv.key"
+              :disabled="busy || (sv.openaiOnly && form.provider === 'anthropic')"
+            />
+            <span>{{ translate(sv.i18n, sv.label) }}</span>
+          </label>
+        </div>
+        <p v-if="form.provider === 'anthropic'" class="okf-models__hint-inline">
+          {{
+            translate(
+              'okf.models.svcOpenaiOnly',
+              'Concept curation and topics/tags speak the OpenAI wire format — they need an OpenAI-compatible endpoint.'
+            )
+          }}
+        </p>
+      </div>
       <div class="okf-models__form-actions">
         <DsButton small :disabled="busy || !form.name || !form.base_url" @click="save">
           {{ editing ? translate('okf.models.save', 'Save changes') : translate('okf.models.create', 'Create') }}
@@ -148,6 +175,7 @@
           <th>{{ translate('okf.models.col.baseUrl', 'Endpoint') }}</th>
           <th>{{ translate('okf.models.col.key', 'Key') }}</th>
           <th>{{ translate('okf.models.col.model', 'Model') }}</th>
+          <th>{{ translate('okf.models.col.services', 'Used by') }}</th>
           <th>{{ translate('okf.models.col.state', 'State') }}</th>
           <th></th>
         </tr>
@@ -159,6 +187,13 @@
           <td class="okf-models__cell-url" :title="c.base_url">{{ c.base_url }}</td>
           <td class="okf-models__cell-key">{{ c.has_api_key ? c.api_key_hint : '—' }}</td>
           <td>{{ c.default_model || '—' }}</td>
+          <td class="okf-models__cell-svc">
+            {{
+              c.services && c.services.length
+                ? c.services.map((s) => serviceShort(s)).join(', ')
+                : translate('okf.models.svcNone', 'nothing (dormant)')
+            }}
+          </td>
           <td>
             <DsPill
               :variant="c.active ? 'success' : 'neutral'"
@@ -241,7 +276,49 @@ import DsPill from '../../ds/Pill.vue';
 
 let uidCounter = 0;
 
-const EMPTY_FORM = () => ({ name: '', provider: 'openai', base_url: '', api_key: '', default_model: '' });
+const EMPTY_FORM = () => ({
+  name: '',
+  provider: 'openai',
+  base_url: '',
+  api_key: '',
+  default_model: '',
+  // The checkboxes (David 2026-10-19: "the various services that will be
+  // configured to use the selected model"). Checked = the ACTIVE config
+  // serves that feature. Default: the flagship consumer, so
+  // create-activate-judge just works; the server defaults the same way.
+  services: ['ragas_judge']
+});
+
+// The feature vocabulary — must mirror SERVICES in model-config-service.js.
+// The two Studio consumers speak the OpenAI wire format ONLY; the RAGAS
+// sidecar can drive either provider. openaiOnly boxes disable for
+// anthropic configs.
+const SERVICE_DEFS = [
+  {
+    key: 'ragas_judge',
+    i18n: 'okf.models.svcJudge',
+    label: 'Benchmarks (RAGAS judge + advisor)',
+    shortI18n: 'okf.models.svcJudgeShort',
+    short: 'benchmarks',
+    openaiOnly: false
+  },
+  {
+    key: 'okf_curation',
+    i18n: 'okf.models.svcCuration',
+    label: 'Concept curation',
+    shortI18n: 'okf.models.svcCurationShort',
+    short: 'curation',
+    openaiOnly: true
+  },
+  {
+    key: 'okf_tagging',
+    i18n: 'okf.models.svcTagging',
+    label: 'Topics & tags',
+    shortI18n: 'okf.models.svcTaggingShort',
+    short: 'topics/tags',
+    openaiOnly: true
+  }
+];
 
 export default {
   name: 'OkfModelConfigPanel',
@@ -249,6 +326,7 @@ export default {
   mixins: [translateMixin],
   data() {
     return {
+      SERVICE_DEFS, // module const → template-visible via data
       configs: [],
       error: '',
       busy: false,
@@ -306,7 +384,8 @@ export default {
         provider: c.provider,
         base_url: c.base_url,
         api_key: '',
-        default_model: c.default_model || ''
+        default_model: c.default_model || '',
+        services: Array.isArray(c.services) ? [...c.services] : []
       };
       this.modelsError = '';
       this.testMsg = '';
@@ -409,6 +488,11 @@ export default {
       this.testOk = !!(r && r.ok);
       this.testMsg = res && !res.ok ? `✗ ${res.message}` : `${c.name}: ${this.testMessage(r)}`;
     },
+    /** Compact label for the Used-by table cell. */
+    serviceShort(s) {
+      const def = SERVICE_DEFS.find((d) => d.key === s);
+      return def ? this.translate(def.shortI18n, def.short) : s;
+    },
     async save() {
       this.busy = true;
       this.error = '';
@@ -417,7 +501,8 @@ export default {
           name: this.form.name,
           provider: this.form.provider,
           base_url: this.form.base_url,
-          default_model: this.form.default_model
+          default_model: this.form.default_model,
+          services: this.form.services || []
         };
         if (this.form.api_key) payload.api_key = this.form.api_key;
         const res = this.editing
@@ -555,5 +640,29 @@ export default {
 }
 .okf-models__test-result--ok {
   color: var(--success, #080);
+}
+.okf-models__field--full {
+  grid-column: 1 / -1;
+}
+.okf-models__services {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+.okf-models__svc {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.okf-models__svc--off {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.okf-models__cell-svc {
+  font-size: 11px;
+  color: var(--muted);
+  max-width: 150px;
 }
 </style>

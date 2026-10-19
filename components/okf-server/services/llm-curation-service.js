@@ -66,15 +66,29 @@ async function resolveAreaContext(domain) {
 }
 
 /** vLLM chat call — mirrors runLlmSummary's endpoint/bearer normalization
- * (concept-meta-service) with strict-JSON output and curation-sized limits. */
+ * (concept-meta-service) with strict-JSON output and curation-sized limits.
+ * 8-7 model configs: an ACTIVE configuration checked for 'okf_curation'
+ * (openai-wire provider only — this client speaks chat/completions) takes
+ * precedence over env. Resolution failure falls back to env silently: a
+ * model-config outage must never break curation. */
 async function callVllm(messages, { timeoutMs = CURATION_TIMEOUT_MS } = {}) {
   const t0 = Date.now();
-  const rawBase = config?.llm?.endpoint || process.env.VLLM_ENDPOINT;
-  const model = config?.llm?.model || process.env.VLLM_MODEL_ID;
+  let rawBase = config?.llm?.endpoint || process.env.VLLM_ENDPOINT;
+  let model = config?.llm?.model || process.env.VLLM_MODEL_ID;
+  let apiKey = process.env.VLLM_API_KEY || config?.llm?.apiKey;
+  try {
+    const ovr = await require('./model-config-service').resolveModelOverride({ service: 'okf_curation' });
+    if (ovr && ovr.provider === 'openai') {
+      rawBase = ovr.base_url;
+      model = ovr.model || model;
+      if (ovr.api_key) apiKey = ovr.api_key;
+    }
+  } catch {
+    /* env fallback — see docblock */
+  }
   if (!rawBase || !model) throw new Error('llm-not-configured');
   const base = rawBase.replace(/\/+$/, '').replace(/\/v1$/, '');
   const headers = {};
-  const apiKey = process.env.VLLM_API_KEY || config?.llm?.apiKey;
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   const r = await axios.post(
     `${base}/v1/chat/completions`,

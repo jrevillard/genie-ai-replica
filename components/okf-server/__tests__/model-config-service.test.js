@@ -27,7 +27,12 @@ const store = () => __mockDb._stores.okf_model_configs || {};
 function wireQueries() {
   __mockDb.query.mockImplementation(async (aql, bind) => {
     if (aql.includes('FILTER c.name == @n RETURN c._key')) {
-      return { all: async () => Object.values(store()).filter((c) => c.name === bind.n).map((c) => c._key) };
+      return {
+        all: async () =>
+          Object.values(store())
+            .filter((c) => c.name === bind.n)
+            .map((c) => c._key)
+      };
     }
     if (aql.includes('SORT c.active DESC, c.name ASC')) {
       const rows = Object.values(store()).sort(
@@ -56,7 +61,13 @@ beforeEach(() => {
 describe('model-config lifecycle', () => {
   test('create stores the key server-side and every read path MASKS it', async () => {
     const c = await svc.createConfig(
-      { name: 'Litellm gateway', provider: 'openai', base_url: 'http://gw:4000/v1/', api_key: 'sk-secret-1234', default_model: 'gpt-4o' },
+      {
+        name: 'Litellm gateway',
+        provider: 'openai',
+        base_url: 'http://gw:4000/v1/',
+        api_key: 'sk-secret-1234',
+        default_model: 'gpt-4o'
+      },
       { actor: { user_id: 'u1' } }
     );
     expect(c.has_api_key).toBe(true);
@@ -82,7 +93,9 @@ describe('model-config lifecycle', () => {
   });
 
   test('validation: provider vocabulary + http(s) base_url + key required on create', async () => {
-    await expect(svc.createConfig({ name: 'x', provider: 'google', base_url: 'https://x', api_key: 'k' }, {})).rejects.toMatchObject({
+    await expect(
+      svc.createConfig({ name: 'x', provider: 'google', base_url: 'https://x', api_key: 'k' }, {})
+    ).rejects.toMatchObject({
       code: 'VALIDATION_ERROR'
     });
     await expect(

@@ -30,7 +30,9 @@ async function create(req, res, next) {
 
 async function update(req, res, next) {
   try {
-    res.status(200).json(await svc.updateConfig(req.params.key, req.body || {}, { actor: actorFrom(req), source_ip: req.ip }));
+    res
+      .status(200)
+      .json(await svc.updateConfig(req.params.key, req.body || {}, { actor: actorFrom(req), source_ip: req.ip }));
   } catch (err) {
     next(err);
   }

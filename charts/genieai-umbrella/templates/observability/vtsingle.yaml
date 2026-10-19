@@ -8,11 +8,11 @@
   deferred to first reconcile — the operator is not installed locally.
 
   The operator creates the in-cluster Service <kind>-<metadata.name>
-  ("vtsingle-vtraces"). VictoriaTraces serves two distinct HTTP
-  surfaces on it: OTLP ingest on 4318 (HTTP) + 4317 (gRPC) — what the
-  collector gateway exports to — and the Jaeger/Tempo query API on
-  10428 — what Grafana's jaeger datasource and the trace UIs read.
-  No tempo-proxy needed: the query API is native.
+  ("vtsingle-vtraces"). VictoriaTraces runs single-port
+  (-httpListenAddr=:10428): the Jaeger query API AND OTLP ingest
+  (/insert/opentelemetry/v1/...) both live on 10428 — what the
+  collector gateway exports to and what Grafana's jaeger datasource
+  reads. No tempo-proxy needed: the query API is native.
 */}}
 apiVersion: operator.victoriametrics.com/v1
 kind: VTSingle

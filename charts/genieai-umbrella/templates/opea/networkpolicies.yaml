@@ -120,7 +120,7 @@ spec:
             cidr: 0.0.0.0/0
       ports:
         - protocol: TCP
-          port: 4318
+          port: {{ .Values.observability.collectorPort | default 4318 }}
     {{- if and (eq .Values.opea.gpu.mode "external") .Values.opea.gpu.nodeHost }}
     # External GPU node — TLS. The port family (443 + 444) is
     # intentionally broad because opea.gpu.nodeHost is concatenated
@@ -207,7 +207,7 @@ spec:
             cidr: 0.0.0.0/0
       ports:
         - protocol: TCP
-          port: 4318
+          port: {{ .Values.observability.collectorPort | default 4318 }}
     {{- if and (eq .Values.opea.gpu.mode "external") .Values.opea.gpu.nodeHost }}
     # External GPU node — TLS (TEI_EMBEDDING_ENDPOINT, VLLM_ENDPOINT).
     - to:
@@ -309,7 +309,7 @@ spec:
             cidr: 0.0.0.0/0
       ports:
         - protocol: TCP
-          port: 4318
+          port: {{ .Values.observability.collectorPort | default 4318 }}
     {{- if and (eq .Values.opea.gpu.mode "external") .Values.opea.gpu.nodeHost }}
     # External GPU node — TLS (VLLM_ENDPOINT, TEI_EMBEDDING_ENDPOINT,
     # DOCLING_ENDPOINT).
@@ -389,7 +389,7 @@ spec:
             cidr: 0.0.0.0/0
       ports:
         - protocol: TCP
-          port: 4318
+          port: {{ .Values.observability.collectorPort | default 4318 }}
     {{- if and (eq .Values.opea.gpu.mode "external") .Values.opea.gpu.nodeHost }}
     # External GPU node — TLS (TEI_EMBEDDING_ENDPOINT).
     - to:
@@ -453,7 +453,7 @@ spec:
             cidr: 0.0.0.0/0
       ports:
         - protocol: TCP
-          port: 4318
+          port: {{ .Values.observability.collectorPort | default 4318 }}
     {{- if and (eq .Values.opea.gpu.mode "external") .Values.opea.gpu.nodeHost }}
     # External GPU node — TLS (TEI_RERANKING_ENDPOINT).
     - to:
@@ -494,9 +494,16 @@ spec:
     - Egress
   ingress:
     - from:
+        # chatqna: history/answer translation.
         - podSelector:
             matchLabels:
               genieai.io/component: chatqna
+        # backend BFF: auto-probes the in-cluster translation Service when
+        # services.backend.translation.endpoint is empty — a dropped probe
+        # silently falls back to the in-process CPU translation model.
+        - podSelector:
+            matchLabels:
+              genieai.io/component: backend
       ports:
         # Post-DNAT pod port; the Service maps 9031 to 8888.
         - protocol: TCP
@@ -518,7 +525,7 @@ spec:
             cidr: 0.0.0.0/0
       ports:
         - protocol: TCP
-          port: 4318
+          port: {{ .Values.observability.collectorPort | default 4318 }}
     {{- if and (eq .Values.opea.gpu.mode "external") .Values.opea.gpu.nodeHost }}
     # External GPU node — TLS (LLM_ENDPOINT).
     - to:

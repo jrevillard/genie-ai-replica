@@ -78,4 +78,25 @@ async function models(req, res, next) {
   }
 }
 
-module.exports = { list, create, update, copy, activate, deactivate, remove, models };
+/** Unsaved-credential dropdown listing (create form) — key used once, never stored. */
+async function modelsPreview(req, res, next) {
+  try {
+    res.status(200).json(await svc.listModelsPreview(req.body || {}));
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Connection test. Probe failures are NOT errors — the diagnostic is the
+ * 200 payload; only shape errors (400) propagate to the error middleware.
+ */
+async function test(req, res, next) {
+  try {
+    res.status(200).json(await svc.testConnection(req.body || {}));
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { list, create, update, copy, activate, deactivate, remove, models, modelsPreview, test };

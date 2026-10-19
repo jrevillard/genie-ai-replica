@@ -189,10 +189,20 @@ The Lab's fifth tab — **Models** (platform admins) — manages **named
 remote-model configurations**: any OpenAI-compatible endpoint (OpenAI
 direct, a LiteLLM gateway, vLLM, Gemini's compat surface, Ollama) or
 Anthropic's native API. Each carries a name, provider, base URL, API key
-and a default model; once a configuration holds a URL and key, its model
-field becomes a **dropdown populated live from the endpoint** (the server
-performs the listing with the stored key — keys are stored server-side,
-shown only as a masked hint, and never reach the browser).
+and a default model; as soon as a URL and key are configured — **even
+before the configuration is saved** — the model field becomes a
+**dropdown combo populated live from the endpoint** (the server performs
+the listing; for a saved configuration it uses the stored key, for an
+unsaved form the typed key makes one server-side round trip and is never
+stored). Keys are held server-side, shown only as a masked hint, and
+never reach the browser.
+
+A **Test connection** action (in the form and on every table row) probes
+the configuration before you rely on it: it verifies the endpoint and
+credentials, and — when a model is selected — sends a one-token
+generation to that model, reporting latency and exactly which layer
+failed if anything does. Testing is always available; activating is a
+separate, explicit act.
 
 Configurations can be **named, renamed, copied, modified, activated,
 deactivated and deleted**. Exactly **one** can be active at a time; the

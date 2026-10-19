@@ -50,6 +50,10 @@ The OKF Routing Lab can prove *routing* (which repository should answer) but not
   - **intent:** RAGAS suites appear in the existing saved-suites list, visually differentiated as RAGAS benchmark tests, with full Lab job semantics.
   - **success:** The existing Suites table lists both suite kinds with a RAGAS differentiator pill; selecting a RAGAS suite opens the RAGAS pane with it loaded; no existing head-suite behavior changes.
 
+- **CAP-8 — Remote model configurations**
+  - **intent:** Platform admins manage named remote-model endpoints (any OpenAI-compatible surface or Anthropic's native API) that benchmark generation and scoring can use as their judge, with keys held server-side and never displayed; the model field becomes a dropdown combo populated live from the endpoint as soon as URL and key are configured — before first save as well as after; and any configuration can be connection-tested (endpoint + credentials + a one-token generation when a model is chosen) before it is relied on.
+  - **success:** Configurations support the full lifecycle (create, rename, copy, modify, activate exactly one, deactivate to env-default, delete) behind the admin role and audit log; the create form lists models from typed unsaved credentials via one server-side round trip that stores nothing; a test returns layered diagnostics (endpoint reachable / model listed / generation answered, with latency) as a result, not an error; benchmark judge resolution is explicit pick → active configuration → env default, and the run's fidelity block records which judge scored it.
+
 ## Constraints
 
 - ragas is Python-only and pinned at **0.4.3** (Jerome's pin): metric-number and report-shape parity with his chain is a hard requirement, so the sidecar dep set is frozen to his `requirements.txt` versions. The full metric catalog is selectable, but the compat surface stays anchored: his 22 `NEW_COLS` emit verbatim (the four `ragas_*` columns filled from the default metrics) and metrics beyond the four append extra `ragas_<metric>` columns his tooling ignores.

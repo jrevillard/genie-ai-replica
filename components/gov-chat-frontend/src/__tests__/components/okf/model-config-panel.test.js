@@ -18,7 +18,9 @@ jest.mock('@/services/modelConfigService', () => ({
     activate: jest.fn(),
     deactivate: jest.fn(),
     remove: jest.fn(),
-    models: jest.fn()
+    models: jest.fn(),
+    modelsPreview: jest.fn(),
+    test: jest.fn()
   }
 }));
 
@@ -72,7 +74,8 @@ beforeEach(() => {
   dispatch.mockReset();
   dispatch.mockImplementation(async (action) => {
     if (action === 'okf/modelConfigList') return { ok: true, configs: configs() };
-    if (action === 'okf/modelConfigModels') return { ok: true, models: ['claude-opus', 'claude-sonnet'] };
+    if (action === 'okf/modelConfigModels' || action === 'okf/modelConfigModelsPreview')
+      return { ok: true, models: ['claude-opus', 'claude-sonnet'] };
     return { ok: true, result: {} };
   });
 });
@@ -148,5 +151,107 @@ describe('ModelConfigPanel', () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(w.vm.modelChoices).toEqual([]);
     expect(w.vm.modelsError).toContain('401');
+  });
+
+  test('CREATE form lists models with the TYPED credentials (preview) once URL + key are set', async () => {
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    w.vm.openCreate();
+    expect(w.vm.canFetchModels).toBe(false); // nothing typed yet
+    w.vm.form = { name: 'N', provider: 'openai', base_url: 'https://gw/v1', api_key: 'sk-new', default_model: '' };
+    expect(w.vm.canFetchModels).toBe(true);
+    await w.vm.fetchModels();
+    expect(dispatch).toHaveBeenCalledWith('okf/modelConfigModelsPreview', {
+      provider: 'openai',
+      base_url: 'https://gw/v1',
+      api_key: 'sk-new'
+    });
+    expect(w.vm.modelChoices).toEqual(['claude-opus', 'claude-sonnet']);
+  });
+
+  test('an EDIT with a freshly typed key previews with the typed key, not the stored one', async () => {
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    w.vm.openEdit(configs()[0]);
+    await new Promise((r) => setTimeout(r, 0));
+    dispatch.mockClear();
+    w.vm.form.api_key = 'sk-retyped';
+    await w.vm.fetchModels();
+    expect(dispatch).toHaveBeenCalledWith('okf/modelConfigModelsPreview', {
+      provider: 'openai',
+      base_url: 'http://gw:4000/v1',
+      api_key: 'sk-retyped'
+    });
+  });
+
+  test('test from the form sends typed creds + model; the result line renders the diagnosis', async () => {
+    dispatch.mockImplementation(async (action) => {
+      if (action === 'okf/modelConfigList') return { ok: true, configs: configs() };
+      if (action === 'okf/modelConfigTest')
+        return {
+          ok: true,
+          result: {
+            ok: true,
+            endpoint_ok: true,
+            generation_ok: true,
+            model_listed: true,
+            latency_ms: 312,
+            models_n: 2,
+            model: 'gpt-4o'
+          }
+        };
+      return { ok: true, result: {} };
+    });
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    w.vm.openCreate();
+    w.vm.form = { name: 'N', provider: 'openai', base_url: 'https://gw/v1', api_key: 'sk-t', default_model: 'gpt-4o' };
+    await w.vm.testFromForm();
+    expect(dispatch).toHaveBeenCalledWith('okf/modelConfigTest', {
+      provider: 'openai',
+      base_url: 'https://gw/v1',
+      model: 'gpt-4o',
+      api_key: 'sk-t'
+    });
+    expect(w.vm.testOk).toBe(true);
+    expect(w.vm.testMsg).toContain('312');
+    expect(w.text()).toContain('312'); // rendered in the form
+  });
+
+  test('test with NO typed key falls back to the saved config key; a row test uses only the key', async () => {
+    dispatch.mockImplementation(async (action, payload) => {
+      if (action === 'okf/modelConfigList') return { ok: true, configs: configs() };
+      if (action === 'okf/modelConfigTest')
+        return {
+          ok: true,
+          result:
+            payload && payload.key === 'mc1'
+              ? {
+                  ok: false,
+                  endpoint_ok: false,
+                  error: 'could not reach https://gw:4000/v1/models: ECONNREFUSED',
+                  latency_ms: 41
+                }
+              : { ok: true, endpoint_ok: true, generation_ok: null, models_n: 5, model: null }
+        };
+      return { ok: true, result: {} };
+    });
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    w.vm.openEdit(configs()[0]);
+    await new Promise((r) => setTimeout(r, 0));
+    dispatch.mockClear();
+    await w.vm.testFromForm();
+    expect(dispatch).toHaveBeenCalledWith('okf/modelConfigTest', {
+      provider: 'openai',
+      base_url: 'http://gw:4000/v1',
+      model: 'gpt-4o',
+      key: 'mc1'
+    });
+    expect(w.vm.testOk).toBe(false);
+    expect(w.vm.testMsg).toContain('ECONNREFUSED');
+    await w.vm.onTestRow(configs()[1]);
+    expect(dispatch).toHaveBeenCalledWith('okf/modelConfigTest', { key: 'mc2' });
+    expect(w.vm.testOk).toBe(true);
   });
 });

@@ -162,7 +162,13 @@ describe('Locale consistency', () => {
     'okf.editor.access.grantedQueryNotice',
     // RAGAS advisor hint (2026-10-19): failing-count banner, consumed via
     // translate().replace('{n}') in RagasPanel.vue.
-    'okf.ragas.results.advisorHint'
+    'okf.ragas.results.advisorHint',
+    // Model-config connection test (2026-10-19): composed in
+    // ModelConfigPanel.testMessage() via .replace() for {n}/{ms}/{model}.
+    'okf.models.modelsLoaded',
+    'okf.models.testOkModel',
+    'okf.models.testOkEndpoint',
+    'okf.models.testNotListed'
   ];
   // #1042 batch delete: consumed via AdminDashboard.translate (compiled $t).
   const replaceConsumedEscaped = [

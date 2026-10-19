@@ -15,6 +15,10 @@ router.use(requireRole('tools-admin'));
 
 router.get('/', ctrl.list);
 router.post('/', ctrl.create);
+// Credential-carrying probes — declared BEFORE the /:key params so the
+// literal segments win. Both are tools-admin like everything else here.
+router.post('/models-preview', ctrl.modelsPreview);
+router.post('/test', ctrl.test);
 router.get('/:key/models', ctrl.models);
 router.patch('/:key', ctrl.update);
 router.post('/:key/copy', ctrl.copy);

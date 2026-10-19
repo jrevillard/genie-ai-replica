@@ -27,6 +27,7 @@ const COLLECTION = 'okf_model_configs';
 const PROVIDERS = new Set(['openai', 'anthropic']);
 const NAME_MAX = 120;
 const LIST_TIMEOUT_MS = 15000;
+const TEST_TIMEOUT_MS = 20000;
 
 let _collectionEnsured = false;
 async function ensureCollection(db) {
@@ -287,6 +288,80 @@ async function deleteConfig(key, opts = {}) {
 }
 
 /**
+ * Shared provider probe: list models at an endpoint with the given creds.
+ * OpenAI-compatible bases carry their own prefix (…/v1) — list at
+ * {base}/models. Anthropic's surface is always /v1/models; accept the base
+ * with or without the /v1 the user may have typed. One-shot with a hard
+ * timeout; throws MODEL_LIST_FAILED with the honest reason.
+ */
+async function fetchModelList({ provider, base_url, api_key }) {
+  const base = String(base_url || '').replace(/\/+$/, '');
+  const url = provider === 'anthropic' ? `${base.replace(/\/v1$/, '')}/v1/models` : `${base}/models`;
+  const headers =
+    provider === 'anthropic'
+      ? { 'x-api-key': api_key, 'anthropic-version': '2023-06-01' }
+      : { Authorization: `Bearer ${api_key}` };
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), LIST_TIMEOUT_MS);
+  let resp;
+  try {
+    resp = await fetch(url, { headers, signal: ctrl.signal });
+  } catch (e) {
+    throw httpErr('MODEL_LIST_FAILED', 502, `could not reach ${url}: ${e.message}`);
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => '');
+    let hint = '';
+    // The one mismatch users actually hit (live, 2026-10-19: MiniMax's
+    // /anthropic base saved under the openai provider): an OpenAI-style
+    // listing against an Anthropic-compatible base 404s because that base
+    // serves /v1/models, not /models.
+    if (resp.status === 404 && provider === 'openai' && /\/anthropic\/?$/.test(base)) {
+      hint = ' — this base URL looks like an Anthropic-compatible endpoint: switch the provider to Anthropic';
+    }
+    throw httpErr('MODEL_LIST_FAILED', 502, `model listing returned ${resp.status}: ${body.slice(0, 200)}${hint}`);
+  }
+  const j = await resp.json().catch(() => null);
+  const data = j && (Array.isArray(j.data) ? j.data : Array.isArray(j.models) ? j.models : null);
+  if (!data) throw httpErr('MODEL_LIST_FAILED', 502, 'endpoint did not return a model list');
+  return data
+    .map((m) => (typeof m === 'string' ? m : m && (m.id || m.model || m.name)))
+    .filter((s) => typeof s === 'string' && s.trim())
+    .sort((a, b) => a.localeCompare(b));
+}
+
+/** Minimal generation ping — the truest "can I actually use this model". */
+async function pingModel({ provider, base_url, api_key, model }) {
+  const base = String(base_url || '').replace(/\/+$/, '');
+  const url = provider === 'anthropic' ? `${base.replace(/\/v1$/, '')}/v1/messages` : `${base}/chat/completions`;
+  const headers =
+    provider === 'anthropic'
+      ? { 'x-api-key': api_key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }
+      : { Authorization: `Bearer ${api_key}`, 'content-type': 'application/json' };
+  const body =
+    provider === 'anthropic'
+      ? JSON.stringify({ model, max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] })
+      : JSON.stringify({ model, max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TEST_TIMEOUT_MS);
+  let resp;
+  try {
+    resp = await fetch(url, { method: 'POST', headers, body, signal: ctrl.signal });
+  } catch (e) {
+    return { ok: false, error: `could not reach ${url}: ${e.message}` };
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    return { ok: false, error: `generation returned ${resp.status}: ${text.slice(0, 200)}` };
+  }
+  return { ok: true };
+}
+
+/**
  * LIVE model listing for the config form's dropdown (David: "when a URL and
  * access token are configured, the model must be selectable via a dropdown
  * list"). Runs SERVER-SIDE with the stored key — the key never crosses to
@@ -298,38 +373,109 @@ async function listModels(key) {
     const db = await dbService.getConnection();
     await ensureCollection(db);
     const doc = await loadDoc(db, key);
-    const base = doc.base_url.replace(/\/+$/, '');
-    // OpenAI-compatible bases carry their own prefix (…/v1) — list at
-    // {base}/models. Anthropic's surface is always /v1/models; accept the
-    // base with or without the /v1 the user may have typed.
-    const url = doc.provider === 'anthropic' ? `${base.replace(/\/v1$/, '')}/v1/models` : `${base}/models`;
-    const headers =
-      doc.provider === 'anthropic'
-        ? { 'x-api-key': doc.api_key, 'anthropic-version': '2023-06-01' }
-        : { Authorization: `Bearer ${doc.api_key}` };
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), LIST_TIMEOUT_MS);
-    let resp;
-    try {
-      resp = await fetch(url, { headers, signal: ctrl.signal });
-    } catch (e) {
-      throw httpErr('MODEL_LIST_FAILED', 502, `could not reach ${url}: ${e.message}`);
-    } finally {
-      clearTimeout(timer);
-    }
-    if (!resp.ok) {
-      const body = await resp.text().catch(() => '');
-      throw httpErr('MODEL_LIST_FAILED', 502, `model listing returned ${resp.status}: ${body.slice(0, 200)}`);
-    }
-    const j = await resp.json().catch(() => null);
-    const data = j && (Array.isArray(j.data) ? j.data : Array.isArray(j.models) ? j.models : null);
-    if (!data) throw httpErr('MODEL_LIST_FAILED', 502, 'endpoint did not return a model list');
-    const models = data
-      .map((m) => (typeof m === 'string' ? m : m && (m.id || m.model || m.name)))
-      .filter((s) => typeof s === 'string' && s.trim())
-      .sort((a, b) => a.localeCompare(b));
+    const models = await fetchModelList(doc);
     span.setAttribute('okf.model_config.models_n', models.length);
     return { models };
+  });
+}
+
+/**
+ * Preview listing for credentials that are NOT saved yet (David, 2026-10-19:
+ * "once the endpoint and the URL are configured, the list of models provided
+ * by that service should be available in a dropdown combo"). The create form
+ * has no stored key to list against, so the typed credentials make ONE
+ * server-side round trip — over HTTPS, used for the listing, never stored or
+ * logged. Same honesty as listModels: failures throw, the UI falls back to
+ * free text.
+ */
+async function listModelsPreview(payload = {}) {
+  return withSpan('okf.model_config.list_models_preview', async (span) => {
+    const provider = payload.provider;
+    if (!PROVIDERS.has(provider)) {
+      throw httpErr('VALIDATION_ERROR', 400, `provider must be one of: ${[...PROVIDERS].join(', ')}`);
+    }
+    const u = String(payload.base_url || '').trim();
+    let parsed;
+    try {
+      parsed = new URL(u);
+    } catch {
+      /* caught below */
+    }
+    if (!parsed || !/^https?:$/.test(parsed.protocol)) {
+      throw httpErr('VALIDATION_ERROR', 400, 'base_url must be an http(s) URL');
+    }
+    const api_key = String(payload.api_key || '');
+    if (!api_key) throw httpErr('VALIDATION_ERROR', 400, 'api_key is required for a preview listing');
+    const models = await fetchModelList({ provider, base_url: u, api_key });
+    span.setAttribute('okf.model_config.models_n', models.length);
+    return { models };
+  });
+}
+
+/**
+ * Connection test (David, 2026-10-19: "the user must have the ability to
+ * test the connection to the model before enabling it"). Two layers, both
+ * reported honestly so the UI can say WHERE it broke:
+ *   1. endpoint + credentials — the model listing (auth-level proof);
+ *   2. the chosen model — a one-token generation ping.
+ * Credentials resolve as: typed fields win, a saved config key fills the
+ * gaps (so the form can test unsaved edits against the stored key, and a
+ * table row can test with just {key}). NEVER throws for a probe failure —
+ * the diagnostic IS the payload; only programmer errors (bad shape) throw.
+ */
+async function testConnection(payload = {}) {
+  return withSpan('okf.model_config.test', async (span) => {
+    let provider = payload.provider;
+    let base_url = payload.base_url;
+    let api_key = payload.api_key;
+    let model = typeof payload.model === 'string' && payload.model.trim() ? payload.model.trim() : null;
+    if (payload.key) {
+      const db = await dbService.getConnection();
+      await ensureCollection(db);
+      const doc = await loadDoc(db, payload.key);
+      if (provider === undefined) provider = doc.provider;
+      if (base_url === undefined) base_url = doc.base_url;
+      if (!api_key) api_key = doc.api_key;
+      if (!model) model = doc.default_model || null;
+    }
+    if (!PROVIDERS.has(provider) || !base_url || !api_key) {
+      throw httpErr('VALIDATION_ERROR', 400, 'provider, base_url and api_key (typed or via key) are required');
+    }
+    const t0 = Date.now();
+    let models;
+    try {
+      models = await fetchModelList({ provider, base_url, api_key });
+    } catch (e) {
+      span.setAttribute('okf.model_config.test_ok', false);
+      return {
+        ok: false,
+        endpoint_ok: false,
+        models_n: null,
+        model: model || null,
+        model_listed: null,
+        generation_ok: null,
+        latency_ms: Date.now() - t0,
+        error: e.message
+      };
+    }
+    const base = {
+      ok: true,
+      endpoint_ok: true,
+      models_n: models.length,
+      model: model || null,
+      model_listed: model ? models.includes(model) : null,
+      generation_ok: null,
+      latency_ms: Date.now() - t0
+    };
+    if (!model) return base; // endpoint + creds proven; nothing selected to ping
+    const ping = await pingModel({ provider, base_url, api_key, model });
+    base.generation_ok = ping.ok;
+    base.ok = ping.ok;
+    base.latency_ms = Date.now() - t0;
+    if (!ping.ok) base.error = ping.error;
+    span.setAttribute('okf.model_config.test_ok', base.ok);
+    span.setAttribute('okf.model_config.test_generation_ok', base.generation_ok === true);
+    return base;
   });
 }
 
@@ -385,6 +531,8 @@ module.exports = {
   deactivateConfig,
   deleteConfig,
   listModels,
+  listModelsPreview,
+  testConnection,
   resolveModelOverride,
   judgeFidelity,
   ensureCollection

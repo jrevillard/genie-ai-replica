@@ -72,15 +72,16 @@
       <div class="okf-models__field">
         <span>{{ translate('okf.models.model', 'Model') }}</span>
         <div class="okf-models__model-row">
-          <select v-if="modelChoices.length" v-model="form.default_model" :disabled="busy">
-            <option value="">{{ translate('okf.models.modelPick', 'Select a model…') }}</option>
-            <option v-for="m in modelChoices" :key="m" :value="m">{{ m }}</option>
-          </select>
           <input
             v-model="form.default_model"
             type="text"
+            class="okf-models__combo"
             :list="'okf-models-datalist-' + uid"
-            :placeholder="translate('okf.models.modelFreeText', 'model id (free text)')"
+            :placeholder="
+              modelChoices.length
+                ? translate('okf.models.modelPick', 'Select a model…')
+                : translate('okf.models.modelFreeText', 'model id (free text)')
+            "
             :disabled="busy"
           />
           <datalist :id="'okf-models-datalist-' + uid">
@@ -102,15 +103,37 @@
           </DsButton>
         </div>
         <p v-if="modelsError" class="okf-models__error">{{ modelsError }}</p>
+        <p v-if="modelChoices.length" class="okf-models__hint-inline">
+          {{
+            translate('okf.models.modelsLoaded', '{n} models loaded — pick from the dropdown or type freely').replace(
+              '{n}',
+              String(modelChoices.length)
+            )
+          }}
+        </p>
       </div>
       <div class="okf-models__form-actions">
         <DsButton small :disabled="busy || !form.name || !form.base_url" @click="save">
           {{ editing ? translate('okf.models.save', 'Save changes') : translate('okf.models.create', 'Create') }}
         </DsButton>
+        <DsButton
+          variant="secondary"
+          small
+          :disabled="busy || testBusy || !form.base_url"
+          :title="
+            translate('okf.models.testTitle', 'Probe the endpoint and (with a model chosen) a one-token generation')
+          "
+          @click="testFromForm"
+        >
+          {{ testBusy ? translate('okf.models.testing', 'Testing…') : translate('okf.models.test', 'Test connection') }}
+        </DsButton>
         <DsButton variant="secondary" small :disabled="busy" @click="closeForm">
           {{ translate('okf.models.cancel', 'Cancel') }}
         </DsButton>
       </div>
+      <p v-if="testMsg" class="okf-models__test-result" :class="{ 'okf-models__test-result--ok': testOk }">
+        {{ testMsg }}
+      </p>
     </div>
 
     <!-- the list -->
@@ -145,6 +168,15 @@
             />
           </td>
           <td class="okf-ragas__row-actions">
+            <button
+              type="button"
+              class="okf-headtest__row-btn"
+              :disabled="busy || rowTestKey === c._key"
+              :title="translate('okf.models.test', 'Test connection')"
+              @click="onTestRow(c)"
+            >
+              {{ rowTestKey === c._key ? '…' : '⇄' }}
+            </button>
             <button
               type="button"
               class="okf-headtest__row-btn"
@@ -196,6 +228,9 @@
         </tr>
       </tbody>
     </table>
+    <p v-if="testMsg && !formOpen" class="okf-models__test-result" :class="{ 'okf-models__test-result--ok': testOk }">
+      {{ testMsg }}
+    </p>
   </div>
 </template>
 
@@ -223,14 +258,22 @@ export default {
       modelChoices: [],
       modelsBusy: false,
       modelsError: '',
+      testMsg: '',
+      testOk: false,
+      testBusy: false,
+      rowTestKey: '',
       uid: `m${(uidCounter += 1)}`
     };
   },
   computed: {
-    /** Model fetch needs a SAVED config (the server holds the key) with both
-     * endpoint fields — or a created-but-unsaved form can't list yet. */
+    /** The combo can list as soon as the endpoint is configured — David:
+     * "once the endpoint and the URL are configured, the list of models
+     * should be available in a dropdown combo". A saved config can list
+     * through its stored key; an unsaved form lists with the typed key
+     * (one server-side round trip, never stored). */
     canFetchModels() {
-      return !!this.editing;
+      if (!this.form.base_url) return false;
+      return !!this.form.api_key || !!(this.editing && this.editing.has_api_key);
     }
   },
   mounted() {
@@ -253,6 +296,7 @@ export default {
       this.form = EMPTY_FORM();
       this.modelChoices = [];
       this.modelsError = '';
+      this.testMsg = '';
       this.formOpen = true;
     },
     openEdit(c) {
@@ -265,6 +309,7 @@ export default {
         default_model: c.default_model || ''
       };
       this.modelsError = '';
+      this.testMsg = '';
       this.modelChoices = [];
       this.formOpen = true;
       // auto-populate the dropdown for a key-bearing saved config
@@ -276,24 +321,93 @@ export default {
       this.editing = null;
     },
     async fetchModels() {
-      if (!this.editing) return;
+      if (!this.canFetchModels) return;
       this.modelsBusy = true;
       this.modelsError = '';
-      const res = await this.$store.dispatch('okf/modelConfigModels', { key: this.editing._key }).catch(() => null);
+      // Saved config with no freshly typed key → list through the stored key.
+      // Otherwise (create form, or an edit with a new key) → preview with the
+      // typed credentials: one server-side round trip, nothing persisted.
+      const res =
+        this.editing && !this.form.api_key
+          ? await this.$store.dispatch('okf/modelConfigModels', { key: this.editing._key }).catch(() => null)
+          : await this.$store
+              .dispatch('okf/modelConfigModelsPreview', {
+                provider: this.form.provider,
+                base_url: this.form.base_url,
+                api_key: this.form.api_key
+              })
+              .catch(() => null);
       this.modelsBusy = false;
       if (res && res.ok) {
         this.modelChoices = Array.isArray(res.models) ? res.models : [];
-        if (!res.models.length) {
+        if (!this.modelChoices.length) {
           this.modelsError = this.translate(
             'okf.models.modelsEmpty',
             'The endpoint returned no models — type the model id.'
           );
         }
       } else {
+        this.modelChoices = [];
         this.modelsError =
           (res && res.message) ||
           this.translate('okf.models.modelsFailed', 'Model listing failed — type the model id.');
       }
+    },
+    /** Compose the human line from the server's diagnostic flags. */
+    testMessage(r) {
+      const name = (r && r.model) || '';
+      if (!r) return this.translate('okf.models.testFail', '✗ test failed — no response');
+      if (r.ok && r.generation_ok === true) {
+        return (
+          this.translate('okf.models.testOkModel', '✓ Connected — the model answered ({ms} ms)').replace(
+            '{ms}',
+            String(r.latency_ms)
+          ) +
+          (r.model_listed === false
+            ? this.translate(
+                'okf.models.testNotListed',
+                ' — note: “{model}” is not in the endpoint’s model list'
+              ).replace('{model}', name)
+            : '')
+        );
+      }
+      if (r.ok && r.generation_ok === null) {
+        return this.translate(
+          'okf.models.testOkEndpoint',
+          '✓ Endpoint reachable — {n} models listed (pick a model to also test generation)'
+        ).replace('{n}', String(r.models_n));
+      }
+      if (r.ok && r.generation_ok === false) {
+        return this.translate('okf.models.testGenFail', '✗ Endpoint OK, but the model call failed') + `: ${r.error}`;
+      }
+      return `✗ ${r.error || 'connection failed'}`;
+    },
+    async testFromForm() {
+      this.testBusy = true;
+      this.testMsg = '';
+      // Typed fields win; the saved key fills the gaps — so an edited form
+      // tests what is ON SCREEN, and the saved config is the fallback.
+      const payload = {
+        provider: this.form.provider,
+        base_url: this.form.base_url,
+        model: this.form.default_model || undefined
+      };
+      if (this.form.api_key) payload.api_key = this.form.api_key;
+      else if (this.editing) payload.key = this.editing._key;
+      const res = await this.$store.dispatch('okf/modelConfigTest', payload).catch(() => null);
+      this.testBusy = false;
+      const r = res && res.ok ? res.result : null;
+      this.testOk = !!(r && r.ok);
+      this.testMsg = res && !res.ok ? `✗ ${res.message}` : this.testMessage(r);
+    },
+    async onTestRow(c) {
+      this.rowTestKey = c._key;
+      this.testMsg = '';
+      const res = await this.$store.dispatch('okf/modelConfigTest', { key: c._key }).catch(() => null);
+      this.rowTestKey = '';
+      const r = res && res.ok ? res.result : null;
+      this.testOk = !!(r && r.ok);
+      this.testMsg = res && !res.ok ? `✗ ${res.message}` : `${c.name}: ${this.testMessage(r)}`;
     },
     async save() {
       this.busy = true;
@@ -423,5 +537,23 @@ export default {
 }
 .okf-models__row--active {
   background: color-mix(in srgb, var(--success) 8%, transparent);
+}
+.okf-models__combo {
+  flex: 1;
+  min-width: 220px;
+}
+.okf-models__hint-inline {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+.okf-models__test-result {
+  margin: 0;
+  font-size: 12px;
+  color: var(--danger, #b00);
+  word-break: break-word;
+}
+.okf-models__test-result--ok {
+  color: var(--success, #080);
 }
 </style>

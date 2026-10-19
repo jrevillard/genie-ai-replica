@@ -1803,6 +1803,24 @@ const actions = {
       return { ok: false, code: (err && err.code) || 'MODEL_LIST_FAILED', message: err.message };
     }
   },
+  /** Dropdown listing with TYPED (unsaved) credentials — the create form. */
+  async modelConfigModelsPreview(_ctx, payload = {}) {
+    try {
+      ensureServices();
+      return { ok: true, models: await modelConfigService.modelsPreview(payload) };
+    } catch (err) {
+      return { ok: false, code: (err && err.code) || 'MODEL_LIST_FAILED', message: err.message };
+    }
+  },
+  /** Connection test before enabling. Diagnostics arrive as {ok:false,...}, not rejects. */
+  async modelConfigTest(_ctx, payload = {}) {
+    try {
+      ensureServices();
+      return { ok: true, result: await modelConfigService.test(payload) };
+    } catch (err) {
+      return { ok: false, code: (err && err.code) || 'MODEL_TEST_FAILED', message: err.message };
+    }
+  },
 
   /** Explain failures (202 + store-side poll). */
   async ragasExplain(_ctx, { repoId, suiteKey, runKey } = {}) {

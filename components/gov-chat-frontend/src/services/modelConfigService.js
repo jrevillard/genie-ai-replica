@@ -51,5 +51,22 @@ export default {
     const res = await httpService.get(`/okf/model-configs/${encodeURIComponent(key)}/models`, {}, { silent: true });
     const body = res && res.data;
     return body && Array.isArray(body.models) ? body.models : [];
+  },
+  /**
+   * Dropdown listing for credentials NOT saved yet (the create form): the
+   * typed key makes one server-side round trip — never stored, never echoed.
+   */
+  async modelsPreview(payload) {
+    const res = await httpService.post('/okf/model-configs/models-preview', payload, { silent: true });
+    const body = res && res.data;
+    return body && Array.isArray(body.models) ? body.models : [];
+  },
+  /**
+   * Connection test (before enabling). Probe failures come back as a 200
+   * DIAGNOSTIC ({ok:false, error, layer flags}); only shape errors reject.
+   */
+  async test(payload) {
+    const res = await httpService.post('/okf/model-configs/test', payload, { silent: true });
+    return res && res.data ? res.data : null;
   }
 };

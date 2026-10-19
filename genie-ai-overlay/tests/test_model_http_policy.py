@@ -252,9 +252,7 @@ class TestCallSitesConsumeThePolicy:
 
     def test_the_unbudgeted_huggingface_client_documents_why(self):
         """An unbounded client must say so where the next author will see it."""
-        source = (
-            OVERLAY_ROOT / "retriever" / "genieai_retriever_arangodb.py"
-        ).read_text(encoding="utf-8")
+        source = (OVERLAY_ROOT / "retriever" / "genieai_retriever_arangodb.py").read_text(encoding="utf-8")
         idx = source.find("HuggingFaceEndpointEmbeddings(")
         assert idx != -1, "the call site moved — re-check whether it can be budgeted now"
         preceding = source[max(0, idx - 1200) : idx]
@@ -296,8 +294,7 @@ class TestCallSitesConsumeThePolicy:
         assert sessions, "no aiohttp.ClientSession found in the dataprep module"
         for call in sessions:
             assert "CONTROL_PLANE_TIMEOUT_SECONDS" in _source_names(_kwarg(call, "timeout")), (
-                f"{ast.unparse(call.func)} at line {call.lineno} does not read the shared "
-                "control-plane budget"
+                f"{ast.unparse(call.func)} at line {call.lineno} does not read the shared control-plane budget"
             )
 
     def test_no_hardcoded_control_plane_timeout_is_left_behind(self):

@@ -205,6 +205,11 @@ install_sealed_secrets() {
   log "sealed-secrets ${SEALED_SECRETS_VERSION}: install via static manifest"
   curl -fsSL -o /tmp/sealed-secrets-controller.yaml \
     "https://github.com/bitnami/sealed-secrets/releases/download/v${SEALED_SECRETS_VERSION}/controller.yaml"
+  # The release manifest pins its namespaced objects to kube-system; this
+  # script's convention is the sealed-secrets namespace. Rewrite before
+  # applying — kubectl refuses an apply whose -n contradicts the objects
+  # ("namespace from the provided object does not match").
+  sed -i "s/namespace: kube-system/namespace: ${ns}/g" /tmp/sealed-secrets-controller.yaml
   kubectl apply -n "${ns}" -f /tmp/sealed-secrets-controller.yaml
   rm -f /tmp/sealed-secrets-controller.yaml
   wait_deploy_ready "${ns}" "sealed-secrets-controller"

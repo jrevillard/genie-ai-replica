@@ -185,7 +185,10 @@ install_kube_arangodb() {
     --version "${ARANGO_OPERATOR_VERSION}" \
     --namespace "${ns}" --create-namespace=false \
     --wait --timeout "${READY_TIMEOUT}"
-  wait_deploy_ready "${ns}" "kube-arangodb-operator"
+  # The chart's fullname helper mangles the release name: release
+  # "kube-arangodb" renders the operator Deployment as
+  # "arango-kube-arangodb-operator" (verified live on the laptop cluster).
+  wait_deploy_ready "${ns}" "arango-kube-arangodb-operator"
 }
 
 install_sealed_secrets() {

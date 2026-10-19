@@ -128,7 +128,10 @@ with suites interchangeable with that harness's xlsx formats:
   *error* (the probe itself failed — the reason is shown inline).
 - **Run** the suite: each question is answered through the retrieval
   pipeline (the same corpora, embedding, and reranker the chat uses) and
-  scored by the selected RAGAS metrics — faithfulness, context precision,
+  answered with the chat's own serving prompt — a pinned
+  `CHATQNA_SYSTEM_PROMPT` shapes the chat and the benchmark identically, so
+  the scores describe the answerer users actually get — then scored by the
+  selected RAGAS metrics — faithfulness, context precision,
   context recall, and answer relevancy by default, with the full
   single-turn catalog selectable (factual and answer correctness, semantic
   similarity, entity recall, noise sensitivity, and more). A progress bar

@@ -768,6 +768,10 @@ services:
       # Cancel is the user's call (David 2026-10-18).
       - OKF_RAGAS_LONG_TIMEOUT_MS=${OKF_RAGAS_LONG_TIMEOUT_MS:-3600000}
       - OKF_RAGAS_JOB_POLL_MS=${OKF_RAGAS_JOB_POLL_MS:-3000}
+      # The benchmark answer leg serves with the deployment's chat contract:
+      # a pinned CHATQNA_SYSTEM_PROMPT must reach okf-server too, or the
+      # run scores a different answerer than the one users get (2026-10-19).
+      - CHATQNA_SYSTEM_PROMPT=${CHATQNA_SYSTEM_PROMPT:-}
       - OKF_CURATION_TIMEOUT_MS=${OKF_CURATION_TIMEOUT_MS:-}
       - OKF_CURATION_LANES=${OKF_CURATION_LANES:-}
       # Story 1-8g-p: whole-corpus TOPIC-LINK AUTHORING. The import wizard runs

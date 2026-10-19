@@ -95,14 +95,31 @@ const FAIL_BELOW_DEFAULTS = {
 };
 
 // The answer leg's system prompt: the chatqna serving contract when the
-// deployment pins one, else the built-in default mirroring genieai_chatqna
-// (grounded answering + honest abstention). The sha is recorded on the run
-// so answer-leg drift is visible.
-const ANSWER_SYSTEM_PROMPT =
-  process.env.CHATQNA_SYSTEM_PROMPT ||
-  'You are a knowledgeable assistant. Answer ONLY from the provided context. ' +
-    'If the context does not contain the answer, say you cannot find the information ' +
-    'in the available knowledge base — never invent facts.';
+// deployment pins one (CHATQNA_SYSTEM_PROMPT is forwarded to okf-server in
+// compose for exactly this), else the VERBATIM genieai_chatqna built-in
+// default. The benchmark must answer the way the deployed chat answers —
+// a condensed paraphrase produced terse extractive answers ("101,746")
+// that RAGAS answer_relevancy structurally punishes (reverse question
+// generation from a bare number is generic), scoring factually-perfect
+// rows red while the real chat answered the same question well
+// (live-measured 2026-10-19: terse 0.415 vs chat-shaped 1.00 on the same
+// question + contexts + judge). The sha is recorded on the run so
+// answer-leg drift is visible.
+function ANSWER_SYSTEM_PROMPT() {
+  return (
+    process.env.CHATQNA_SYSTEM_PROMPT ||
+    'You are a friendly and polite information assistant.\n\n' +
+      'Your task is to answer the user’s latest question using only the content provided from the knowledge base.\n\n' +
+      '**Instructions:**\n' +
+      '- Do not invent or assume information\n' +
+      '- If the answer is not in the provided content, inform the user that the information is unavailable\n' +
+      '- Use the user’s name, gender, age, preferences, and chat history to tailor and personalise your responses\n' +
+      '- Keep answers informative but concise; provide detailed explanations\n' +
+      '  only when necessary or explicitly requested\n\n' +
+      'In line with the above instructions, generate a reply to the user’s latest\n' +
+      'message in the chat history based on the relevant content provided.'
+  );
+}
 
 const ABSTENT_PATTERNS = [
   'cannot find',
@@ -434,17 +451,22 @@ async function retrieveContexts(db, graphNames, query, emb) {
   };
 }
 
-/** The answer leg: chatqna-shaped prompt + guided-JSON {answer, abstained}. */
+/** The answer leg: the chatqna serving shape (relevant content + the user's
+ * question + the chat system contract) with a JSON envelope for the
+ * {answer, abstained} flags. The user message deliberately mirrors how
+ * genieai_chatqna presents context to the model — benchmark fidelity to the
+ * deployed chat IS the point (see ANSWER_SYSTEM_PROMPT above). */
 async function generateAnswer(query, contexts) {
   const contextBlock = contexts.map((c, i) => `[${i + 1}] ${c}`).join('\n\n');
   const user =
-    `Context:\n${contextBlock || '(no context retrieved)'}\n\nQuestion: ${query}\n\n` +
-    'Answer the question using ONLY the context above. If the context does not contain ' +
-    'the answer, set abstained=true and say you cannot find the information.\n' +
-    'Respond as JSON: {"answer": "<your answer>", "abstained": <true|false>}';
+    `Relevant content from the knowledge base:\n${contextBlock || '(no content retrieved)'}\n\n` +
+    `The user’s latest question: ${query}\n\n` +
+    'Generate your reply to the user per your instructions, then return it as JSON:\n' +
+    '{"answer": "<your reply to the user>", "abstained": <true|false>}\n' +
+    'Set abstained=true only when the relevant content does not contain the answer.';
   const resp = await frontmatterService.vllmChatCompletions(
     [
-      { role: 'system', content: ANSWER_SYSTEM_PROMPT },
+      { role: 'system', content: ANSWER_SYSTEM_PROMPT() },
       { role: 'user', content: user }
     ],
     { maxTokens: 800, temperature: 0.0 }
@@ -1176,7 +1198,7 @@ async function runSuite(repoId, suiteKey, opts = {}) {
             graphs: graphNames
           },
           prompt: {
-            system_prompt_sha: sha256(ANSWER_SYSTEM_PROMPT),
+            system_prompt_sha: sha256(ANSWER_SYSTEM_PROMPT()),
             source: process.env.CHATQNA_SYSTEM_PROMPT ? 'CHATQNA_SYSTEM_PROMPT' : 'builtin-default'
           },
           judge: { model: evaluation.model || null, embed_model: null }

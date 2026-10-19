@@ -553,7 +553,9 @@ HUGGING_FACE_HUB_TOKEN=
 # Override here ONLY for deployment-specific customization.
 #
 # **Prompts** (text instructions for AI):
-#   - CHATQNA_SYSTEM_PROMPT: Main system prompt for chat behavior
+#   - CHATQNA_SYSTEM_PROMPT: Main system prompt for chat behavior. ALSO shapes
+#     the OKF RAGAS benchmark answer leg (forwarded to okf-server) — the
+#     benchmark scores the answerer the deployment's users actually get.
 #   - CHATQNA_ABSTENTION_INSTRUCTIONS: Instructions for when to refuse answering
 #   - LABEL_SELECTOR_SYSTEM_PROMPT: Prompt for automatic document labeling
 #

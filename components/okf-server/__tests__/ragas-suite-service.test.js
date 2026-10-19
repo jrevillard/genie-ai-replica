@@ -532,6 +532,42 @@ describe('run', () => {
     expect(doc.metrics).toEqual([...svc.DEFAULT_METRICS, 'factual_correctness']);
   });
 
+  // Live incident 2026-10-19: the answer leg's condensed prompt produced
+  // terse extractive answers ("101,746") that RAGAS answer_relevancy
+  // structurally fails (reverse question generation from a bare number is
+  // generic — measured 0.415 vs 1.00 for the chat-shaped answer on the
+  // same question, contexts and judge). The benchmark must answer the way
+  // the deployed chat answers.
+  it('the answer leg serves with the chatqna contract, not a terse extractive prompt', async () => {
+    const sk = await makeSuite();
+    const begun = await svc.beginRunSuite('me', sk, {}, {});
+    await begun.done;
+    const call = frontmatterService.vllmChatCompletions.mock.calls.find((c) => {
+      const sys = c[0] && c[0][0];
+      return sys && sys.role === 'system' && /information assistant/i.test(sys.content);
+    });
+    expect(call).toBeTruthy();
+    expect(call[0][0].content).toContain('friendly and polite information assistant');
+    const user = call[0][1].content;
+    expect(user).toContain('Relevant content from the knowledge base');
+    expect(user).not.toContain('Answer the question using ONLY');
+  });
+
+  it('a pinned CHATQNA_SYSTEM_PROMPT overrides the built-in chat default', async () => {
+    process.env.CHATQNA_SYSTEM_PROMPT = 'PINNED CHAT CONTRACT';
+    try {
+      const sk = await makeSuite();
+      const begun = await svc.beginRunSuite('me', sk, {}, {});
+      await begun.done;
+      const call = frontmatterService.vllmChatCompletions.mock.calls.find(
+        (c) => c[0] && c[0][0] && c[0][0].role === 'system' && c[0][0].content === 'PINNED CHAT CONTRACT'
+      );
+      expect(call).toBeTruthy();
+    } finally {
+      delete process.env.CHATQNA_SYSTEM_PROMPT;
+    }
+  });
+
   it('409 RUN_IN_FLIGHT with the adoptable run_key', async () => {
     const sk = await makeSuite();
     let releaseEval;

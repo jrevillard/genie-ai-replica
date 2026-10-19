@@ -3110,16 +3110,12 @@ chart:contract:
   image: dtzar/helm-kubectl:3.16.0
   stage: test
   tags: [docker]
-  # Serialize dind slots with chart:install — two concurrent dind sidecars
-  # on one runner slot starve each other's wait-for-service probe.
+  # No dind sidecar: the [docker] runner exposes its daemon via the socket
+  # (the pattern the promote:* jobs use). Sidecar variants starved on the
+  # shared pool's wait-for-service window.
+  # Serialized with chart:install — both jobs run kind containers/smoke
+  # containers on the shared daemon.
   resource_group: chart-dind
-  services:
-    - name: docker:28-dind
-      alias: docker
-      command: ["--tls=false"]
-  variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
   retry:
     max: 1
     when: [runner_system_failure, stuck_or_timeout_failure, script_failure]
@@ -3184,17 +3180,10 @@ chart:install:
   tags: [docker]
   # Shares the chart-dind slot with chart:contract (see that job's note).
   resource_group: chart-dind
-  services:
-    - name: docker:28-dind
-      alias: docker
-      # Plain-HTTP sidecar: the shared-runner pool intermittently blows the
-      # wait-for-service window on dind TLS cert issuance ("wait-for-service
-      # timeout" → kind create fails on docker info).
-      command: ["--tls=false"]
+  # No dind sidecar — the [docker] runner exposes its daemon via the
+  # socket (promote:* pattern). The image is only used as the docker CLI.
   variables:
     KUBECONFIG: /tmp/kubeconfig
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
   retry:
     max: 1
     when: [runner_system_failure, stuck_or_timeout_failure, script_failure]

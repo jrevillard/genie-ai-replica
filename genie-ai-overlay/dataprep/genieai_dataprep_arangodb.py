@@ -119,7 +119,7 @@ def _overflow_message_from_exc(exc: BaseException) -> str:
 # TimeoutError. Matched on the class name rather than by importing the
 # libraries, so the classifier keeps working when one of them is absent — the
 # same reason _is_vllm_input_overflow inspects the message instead.
-_TIMEOUT_CLASS_MARKERS = ("Timeout", "TimeoutError")
+_TIMEOUT_CLASS_MARKERS = ("Timeout",)
 
 
 def _is_timeout(exc: BaseException) -> bool:
@@ -789,6 +789,15 @@ async def _gather_with_phase_budget(
                         continue
                     results.append(task.result())
 
+                if failure is not None:
+                    # A failure seen here must end the loop exactly as one seen
+                    # in the main drain does. Falling through would park the
+                    # remaining batches in asyncio.wait for a whole progress
+                    # interval before the finally cancels them — holding their
+                    # semaphore slots and connections while the fallback that
+                    # was about to run for the failed batch waits behind them.
+                    break
+
             if not pending or remaining_phase <= 0:
                 break
 
@@ -855,6 +864,7 @@ async def _await_with_heartbeat(tasks: list, *, phase: str, total: int, file_id:
     # ingest's outcome must not depend on it.
     order = {id(task): n for n, task in enumerate(tasks)}
     completed = 0
+    failure: BaseException | None = None
 
     while pending:
         settled = {t for t in pending if t.done()}
@@ -866,8 +876,20 @@ async def _await_with_heartbeat(tasks: list, *, phase: str, total: int, file_id:
             # Re-raise the first failure, as gather would. Done before any
             # further reporting so the phase fails on the real error rather than
             # on the heartbeat's log write.
-            task.result()
+            exc = task.exception()
             completed += 1
+            if exc is not None and failure is None:
+                failure = exc
+
+        if failure is not None:
+            # Let the in-flight batches finish rather than dropping them on the
+            # floor. asyncio.gather keeps every child alive on its done-callback
+            # and retrieves their outcomes; returning here would leave the rest
+            # running with no owner — each one that later raises logs an
+            # unretrieved-exception error, and they are still writing to ArangoDB
+            # while the caller's handler retracts the document.
+            await asyncio.wait(pending, timeout=_PHASE_CANCEL_GRACE_SECONDS)
+            raise failure
 
         now = time.monotonic()
         if pending and now >= next_report:

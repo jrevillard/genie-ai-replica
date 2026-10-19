@@ -1264,7 +1264,6 @@ services:
       # still overrides when explicitly set, since the nested default only
       # applies when VLLM_TIMEOUT is unset.
       MODEL_LLM_MAX_RETRIES: ${MODEL_LLM_MAX_RETRIES:-2}
-      MODEL_TEI_TIMEOUT_SECONDS: ${MODEL_TEI_TIMEOUT_SECONDS:-120}
       MODEL_CONTROL_PLANE_TIMEOUT_SECONDS: ${MODEL_CONTROL_PLANE_TIMEOUT_SECONDS:-30}
       DATAPREP_LLM_PHASE_TIMEOUT_SECONDS: ${DATAPREP_LLM_PHASE_TIMEOUT_SECONDS:-600}
       DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS: ${DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS:-60}
@@ -1369,7 +1368,6 @@ services:
       # always win and a deployment that already set VLLM_TIMEOUT (the
       # retriever's knob before this policy existed) would be silently reset.
       VLLM_TIMEOUT: ${VLLM_TIMEOUT:-${MODEL_LLM_TIMEOUT_SECONDS:-180}}
-      MODEL_LLM_MAX_RETRIES: ${MODEL_LLM_MAX_RETRIES:-2}
       MODEL_TEI_TIMEOUT_SECONDS: ${MODEL_TEI_TIMEOUT_SECONDS:-120}
     networks:
       - genieai_network

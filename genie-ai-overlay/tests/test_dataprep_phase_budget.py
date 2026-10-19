@@ -584,6 +584,86 @@ class TestPhaseBoundIsAHardWall:
         assert len(seen) == 1, f"the surfaced failure is not deterministic: {seen}"
 
 
+class TestFailureSeenDuringAHeartbeatEndsThePhase:
+    """A failure noticed during the log write must end the phase immediately.
+
+    The late drain that recovers work completed during the heartbeat sets
+    ``failure`` and, without a break, fell back into ``asyncio.wait`` — so the
+    siblings kept their semaphore slots for a whole progress interval before the
+    finally cancelled them, which is the delay the main drain's break exists to
+    prevent.
+    """
+
+    def test_a_failure_during_the_heartbeat_does_not_wait_out_the_interval(self, monkeypatch):
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 30.0)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 0.05)
+
+        async def scenario():
+            async def boom():
+                # Lands inside the heartbeat's ingestion-log await.
+                await asyncio.sleep(0.06)
+                raise RuntimeError("vLLM rejected the prompt")
+
+            async def sibling():
+                await asyncio.sleep(30)
+
+            loop = asyncio.get_running_loop()
+            started = loop.time()
+            with pytest.raises(RuntimeError, match="vLLM rejected the prompt"):
+                await dataprep._gather_with_phase_budget(
+                    [sibling(), boom(), sibling()],
+                    phase="Labeling",
+                    phase_label=dataprep.PHASE_LABEL_LABELING,
+                    total=3,
+                    file_id="f1",
+                    write_ingestion_log=_noop_log,
+                )
+            return loop.time() - started
+
+        elapsed = _run(scenario())
+        assert elapsed < 2.0, (
+            f"the phase sat {elapsed:.1f}s after a failure seen during the heartbeat — "
+            "the siblings kept their slots for a whole progress interval"
+        )
+
+
+class TestUnboundedPhaseKeepsItsSiblings:
+    """The graph phase cannot abandon work, and that includes on the error path.
+
+    ``asyncio.gather`` registers a done-callback on every child and keeps them
+    alive; returning early from this helper left the rest running with no owner —
+    each later failure logged an unretrieved-exception error, and they were still
+    writing to ArangoDB while the caller retracted the document.
+    """
+
+    def test_in_flight_batches_are_settled_before_the_error_propagates(self, monkeypatch):
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 1.0)
+
+        finished = []
+
+        async def scenario():
+            async def boom():
+                raise RuntimeError("ArangoDB insert failed")
+
+            async def slow_sibling():
+                await asyncio.sleep(0.2)
+                finished.append(1)
+
+            tasks = [asyncio.ensure_future(slow_sibling()), asyncio.ensure_future(boom())]
+            with pytest.raises(RuntimeError, match="ArangoDB insert failed"):
+                await dataprep._await_with_heartbeat(
+                    tasks,
+                    phase="Graph insertion",
+                    total=2,
+                    file_id="f1",
+                    write_ingestion_log=_noop_log,
+                )
+
+        _run(scenario())
+        assert finished, "the sibling was abandoned mid-write when the phase failed"
+
+
 class TestTimeoutClassifier:
     """A timeout is the failure the budget produces on purpose, so it is labelled.
 

@@ -3083,14 +3083,14 @@ chart:lint:
       | tar -xz -C /usr/local/bin kubeconform
     - kubeconform -summary -ignore-missing-schemas -kubernetes-version 1.33.0 /tmp/rendered.yaml
   rules:
+    # First-match semantics: a bare second merge_request_event rule would
+    # make this job run on every MR and render the changes filter dead.
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - charts/**/*
         - scripts/**/*
         - configs/keycloak/**/*
         - .gitlab-ci.yml
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      when: on_success
     - if: '$CI_COMMIT_BRANCH'
       changes:
         - charts/**/*
@@ -3210,18 +3210,31 @@ chart:install:
     # lifecycle — GitLab never cleans it. Purge on entry AND on every exit
     # path, or a failed job leaves node containers + pulled images
     # (multi-GB) on the shared host forever (observed: 'node(s) already
-    # exist' caused by the previous run's debris).
+    # exist' caused by the previous run's debris). The INT/TERM traps make
+    # a GitLab cancel/timeout (SIGTERM to the process group) exit through
+    # the EXIT trap — bash does NOT run EXIT traps on unhandled signals.
     - trap 'kind delete cluster --name kind 2>/dev/null || true' EXIT
+    - trap 'exit 130' INT
+    - trap 'exit 143' TERM
     - kind delete cluster --name kind 2>/dev/null || true
     # Bind the API server on the DAEMON's docker0 address (kind's default
     # 127.0.0.1 is unreachable from the job container when the daemon is
     # remote — the runner socket-proxy setup). Using the real address (not
     # 0.0.0.0) also puts it in the API cert's SANs, so kubectl needs no
     # rewrite. Fixed port is safe — the chart-dind resource group
-    # serializes this job.
+    # serializes this job. unix:// sockets are rejected outright: the
+    # derivation would yield apiServerAddress "unix" and kind create would
+    # fail far from the cause.
     - |
-      DAEMON_HOST="${DOCKER_HOST#tcp://}"; DAEMON_HOST="${DAEMON_HOST%%:*}"
-      [ -n "$DAEMON_HOST" ] || DAEMON_HOST="127.0.0.1"
+      case "${DOCKER_HOST:-}" in
+        tcp://*)
+          DAEMON_HOST="${DOCKER_HOST#tcp://}"; DAEMON_HOST="${DAEMON_HOST%%:*}" ;;
+        "")
+          DAEMON_HOST="127.0.0.1" ;;
+        *)
+          echo "ERROR: chart:install needs DOCKER_HOST=tcp://<host>:<port> (got '${DOCKER_HOST}')" >&2
+          exit 1 ;;
+      esac
       cat > /tmp/kind-config.yaml <<EOF
       kind: Cluster
       apiVersion: kind.x-k8s.io/v1alpha4
@@ -3243,7 +3256,11 @@ chart:install:
       --set "data.keycloak.clientSecrets.dataprep=${CI_JOB_ID}-dataprep"
       --set "data.keycloak.clientSecrets.grafana=${CI_JOB_ID}-grafana"
       --wait --timeout 30m
-    - kubectl wait --for=condition=Ready pods --all -n genieai --timeout=10m
+    # Wait on Deployments, NOT pods: pre-install hook pods (dependency
+    # check) are Succeeded-phase and never become Ready — `kubectl wait
+    # pods --all` times out on them even on a healthy install (empirically
+    # confirmed; review 2026-10-19).
+    - kubectl wait --for=condition=Available deploy --all -n genieai --timeout=10m
     - helm test test -n genieai --logs
     - mkdir -p chart-test-logs
     - >-

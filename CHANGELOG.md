@@ -7,7 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **ApexCharts hover tooltips were near-invisible in both light and dark mode.** The global chart-theme override nuked every tooltip background to transparent and painted the text with the page-background token — written for custom-renderer tooltips whose HTML provides its own inverted bubble, it left default-tooltip charts (the RAGAS gauges, trend and status charts, and every other default-tooltip chart in the app) rendering background-colored text on a transparent bubble over the page background. Default tooltips now draw a token-driven surface bubble (surface background, foreground text, themed border and title bar); custom-renderer charts keep their inverted style.
+
+- **RAGAS benchmark references were the wrong unit and mass-failed entity recall (8-6).** Suite generation synthesized questions from whole concept bodies but stored the reference passages truncated to 500 chars — often the wrong *section* of the concept for the question it grounded — while the run leg retrieves ~800-char published chunks. Every entity-recall row of a live 20-question suite failed (0.10–0.50) with context recall at 1.0 and correct answers: the metrics were comparing unlike units. Generation now draws its corpus from the published `<graph>_SOURCE` chunks (the exact unit retrieval can return; undrained repos contribute nothing — their content is unretrievable), and reference passages are stored whole (capped at the run leg's per-context cap). **Existing suites keep their damaged references — regenerate a suite to get chunk-level references; re-running alone will not fix entity recall.** The generation corpus cap is `OKF_RAGAS_MAX_CORPUS_CHUNKS` (default 1600; replaces `OKF_RAGAS_MAX_CORPUS_CONCEPTS`).
+
 ### Added
+
+- **The RAGAS advisor travels with the run (8-6).** A previously saved failure attribution now loads automatically with its run — the admin sees *what to do about it* with the results instead of having to discover the *Explain failures* button — and while questions fail with no advisor output on screen, a banner names the failing count and points at the advisor.
+- **RAGAS results table: resizable columns, copyable answers, self-sizing dialog (8-6).** Every results-table column has a drag grip (double-click the header to reset), each answer sits whole in a selectable cell with a one-click copy button (suite-table parity), and the Routing Lab dialog sizes itself to its content — selecting every metric widens the dialog (capped at the viewport) instead of pushing the table off the side.
 
 - **RAG pipeline tracing:** LLM spans now record the model, the sampling
   parameters actually sent, token usage and the finish reason; retrieval spans

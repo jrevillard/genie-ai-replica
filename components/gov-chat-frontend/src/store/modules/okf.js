@@ -1717,6 +1717,18 @@ const actions = {
     }
   },
 
+  /** Quiet fetch of the PERSISTED explain for a run — the advisor auto-load.
+   * A 404 (the run was never explained) is a normal state, not an error. */
+  async ragasGetExplainQuiet(_ctx, { repoId, suiteKey, runKey } = {}) {
+    try {
+      ensureServices();
+      const doc = await ragasService.getExplain(repoId, suiteKey, runKey);
+      return { ok: !!(doc && doc.payload), result: (doc && doc.payload) || null };
+    } catch {
+      return { ok: false, result: null };
+    }
+  },
+
   /** Explain failures (202 + store-side poll). */
   async ragasExplain(_ctx, { repoId, suiteKey, runKey } = {}) {
     try {

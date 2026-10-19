@@ -3179,6 +3179,10 @@ export default {
       results: {
         title: 'Matokeo ya kipimo',
         failing: '{n} zimeshindwa',
+        advisorHint:
+          'Maswali {n} yako chini ya vikwazo vyao vya kipimo. Endesha mshauri ili kuhusisha kila kushindwa na hatua ya pipeline na kupata vitendo maalum.',
+        copy: 'Nakili jibu kamili',
+        colResizeTip: 'Buruta handlesi kubadilisha ukubwa — bonyeza mara mbili kichwa kuanza upya',
         trendTitle: 'Mwelekeo wa vipimo kati ya uendeshaji',
         trendNote:
           'Kila mstari ni wastani wa kipimo kimoja cha RAGAS kwa kila uendeshaji, kutoka ya zamani — ⓘ ya kila kipimo inaelezea kipimo hicho. Majibu yaliyohakikiwa yanahifadhiwa; marudio sawa yanatofautiana tu ambapo jibu au upatikanaji ulibadilika.',
@@ -3238,7 +3242,7 @@ export default {
           context_utilization:
             'Muktadha uliopatikana unatosha kutoa jibu la rejea — ukaguzi wa ukamilifu wa upatikanaji.',
           context_entities_recall:
-            'Kukumbukwa kwa kiwango cha vitu: uwiano wa vitu vilivyotajwa katika jibu la rejea (kampuni, tarehe, kiasi, maeneo) vinavyopatikana katika muktadha uliopatikana.',
+            'Kukumbuka kwa kiwango cha vitu: uwiano wa vitu vilivyotajwa katika vifungu vya rejea ya ingizo (kampuni, tarehe, kiasi, maeneo) vinavyoonekana pia katika vipande vilivyoretwa. Kipimo cha chini kinaonyesha uteuzi ulileta vipande ambavyo vitu vya rejea havipo.',
           factual_correctness:
             'Ukubaliano wa kimantiki wa kiwango cha madai na jibu la rejea — mhakiki anagawanya vyote viwili kuwa madai na kupima mwingiliano. Kipimo cha usahihi kali zaidi.',
           answer_correctness:

@@ -3184,6 +3184,10 @@ export default {
       results: {
         title: 'Hasil tolok ukur',
         failing: '{n} gagal',
+        advisorHint:
+          '{n} pertanyaan berada di bawah ambang batas metriknya. Jalankan penasihat untuk mengaitkan setiap kegagalan dengan tahap pipeline dan mendapatkan tindakan konkret.',
+        copy: 'Salin jawaban lengkap',
+        colResizeTip: 'Seret pegangan untuk mengubah ukuran — klik ganda header untuk mengatur ulang',
         trendTitle: 'Tren metrik per run',
         trendNote:
           'Setiap garis adalah rata-rata satu metrik RAGAS per run, dari terlama — ␘ pada tiap meteran menjelaskan metriknya. Jawaban yang dinilai di-cache; run ulang identik hanya berbeda bila jawaban atau pengambilan berubah.',
@@ -3243,7 +3247,7 @@ export default {
           context_utilization:
             'Apakah konteks yang diambil cukup untuk menghasilkan jawaban referensi — pemeriksaan kelengkapan pengambilan.',
           context_entities_recall:
-            'Recall level entitas: proporsi entitas bernama dari jawaban referensi (perusahaan, tanggal, jumlah, tempat) yang muncul di konteks terambil.',
+            'Recall tingkat entitas: proporsi entitas bernama dalam bagian referensi entri (perusahaan, tanggal, jumlah, tempat) yang juga muncul di potongan yang diambil. Rendah berarti pengambilan membawa potongan yang melewatkan entitas yang disebut referensi.',
           factual_correctness:
             'Kesepakatan faktual tingkat klaim dengan jawaban referensi — juri memecah keduanya menjadi klaim dan menilai tumpang tindihnya. Metrik kebenaran paling ketat.',
           answer_correctness:

@@ -3152,6 +3152,10 @@ export default {
       results: {
         title: 'Benchmark results',
         failing: '{n} failing',
+        advisorHint:
+          '{n} questions are below their metric thresholds. Run the advisor to attribute each failure to a pipeline stage and get concrete actions.',
+        copy: 'Copy the full answer',
+        colResizeTip: 'Drag the grip to resize — double-click the header to reset',
         trendTitle: 'Metric trend across runs',
         trendNote:
           'Each line is one RAGAS metric’s suite mean per run, oldest to newest — hover any gauge’s ␘ for what that metric measures. Judged answers are cached, so equal re-runs differ only where answers or retrieval changed.',
@@ -3211,7 +3215,7 @@ export default {
           context_utilization:
             'Whether the retrieved context is sufficient to produce the reference answer — a retrieval-completeness check against what the ideal answer needs.',
           context_entities_recall:
-            'Entity-level recall: the share of named entities from the reference answer (companies, dates, amounts, places) that appear in the retrieved context.',
+            'Entity-level recall: the share of named entities in the entry’s reference passages (companies, dates, amounts, places) that also appear in the retrieved chunks. Low means retrieval brought chunks that miss entities the reference names.',
           factual_correctness:
             'Claim-level factual agreement with the reference answer — the judge decomposes both into claims and scores the overlap. The strictest correctness metric.',
           answer_correctness:

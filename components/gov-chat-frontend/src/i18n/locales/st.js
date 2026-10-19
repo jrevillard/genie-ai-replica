@@ -3193,6 +3193,10 @@ export default {
       results: {
         title: 'Litseo tsa tekanyo',
         failing: '{n} li hlolehile',
+        advisorHint:
+          'Lipotso {n} li ka tlase ho meelo ea tsona ea metriki. Mathusa moeletsi ho beha ho hloleha ho mohala oa pipeline le ho fumana liketso tse sebetsang.',
+        copy: 'Kopola karabo e felletseng',
+        colResizeTip: 'Tsoasa seatla ho fetosa boholo — tlanya habeli hlooho ho qala hape',
         trendTitle: 'Tsoelo-pele ea liteko hara ditsamaiso',
         trendNote:
           'Mola o mong le o mong ke karolo ea tekong e nngwe ea RAGAS ka sesebediso, ho tloha hodilo — ⓘ ea sekhomethadiso e nngwe le e nngwe e hlalosa teko eo. Dikarabo tse hlahlojitsoeng di bolokwa; dikopiso tse tšoanang di fapana hoo fela hoo karabo kapa phumullo e fetohe.',
@@ -3252,7 +3256,7 @@ export default {
           context_utilization:
             'Hore na moqoqo o fumanweng o lekane ho hlahisa karabo ea moelelo — teko ea ho phalla ha phumullo.',
           context_entities_recall:
-            'Kutloisiso ea maemong a lintho: karolo ea mabitso a hlalositsoeng karabong ea moelelo (dikhamphani, matsatsi, mabloto, libaka) a bonahalang moqoqong o fumanweng.',
+            'Kutolosa boemong ba ditaba: karolo ea litaba tse bitsoang lipasseng tsa boitšoaro ba mongolo (likhamphani, dateng, mabalenyana, libaka) tse bonahalang hape ho dikhouse tse khothalelitsoeng. Palo e tlase e bolela hore ho khothalelitsoe dikhouse tse sieang metso ea boitšoaro.',
           factual_correctness:
             'Tumellano ea nnete maemong a litšoiso le karabo ea moelelo — moahlodi o arola ka bobeli ebe o lekanya tšusumetso. Teko e thata ka ho fetisisa ea nepo.',
           answer_correctness:

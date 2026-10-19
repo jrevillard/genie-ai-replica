@@ -311,6 +311,15 @@
         </DsButton>
       </div>
 
+      <!-- advisor hint — rows are failing and no advisor output is on screen;
+           the admin should not have to discover the Explain button exists -->
+      <div v-if="advisorHint" class="okf-ragas__advisor-hint">
+        <span>{{ advisorHint }}</span>
+        <DsButton v-if="!readOnly" small :disabled="explainBusy" @click="onExplain">
+          {{ translate('okf.ragas.explain.button', 'Explain failures') }}
+        </DsButton>
+      </div>
+
       <!-- aggregate gauges — every metric chart carries its ⓘ RAGAS note -->
       <div v-if="aggregateRows.length" class="okf-ragas__gauges">
         <div v-for="g in aggregateRows" :key="g.key" class="okf-ragas__gauge">
@@ -366,42 +375,76 @@
         <apexchart type="bar" height="120" :options="statusOptions" :series="statusSeries"></apexchart>
       </div>
 
-      <!-- per-query table -->
-      <table class="okf-headtest__scores">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>{{ translate('okf.ragas.col.query', 'Question') }}</th>
-            <th v-for="m in runMetricKeys" :key="m">{{ metricLabel(m) }}</th>
-            <th>{{ translate('okf.ragas.results.answer', 'Answer') }}</th>
-            <th>{{ translate('okf.ragas.results.state', 'State') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="r in runRows" :key="r.id" :class="{ 'okf-ragas__row--fail': rowFails(r) }">
-            <td>
-              <code>{{ r.id }}</code>
-            </td>
-            <td class="okf-ragas__cell-query" :title="r.query">{{ r.query }}</td>
-            <td v-for="m in runMetricKeys" :key="m">
-              <span class="okf-headtest__bar"
-                ><span :style="{ width: barWidth(r.metrics && r.metrics[m]) }"></span
-              ></span>
-              <span class="okf-ragas__score">{{ scoreText(r.metrics && r.metrics[m]) }}</span>
-            </td>
-            <td class="okf-ragas__cell-answer" :title="r.answer">{{ shortAnswer(r.answer) }}</td>
-            <td>
-              <DsPill v-if="r.error" variant="danger" :label="translate('okf.ragas.results.error', 'error')" />
-              <DsPill
-                v-else-if="r.abstained"
-                variant="warning"
-                :label="translate('okf.ragas.results.abstained', 'abstained')"
-              />
-              <DsPill v-else variant="neutral" :label="translate('okf.ragas.results.answered', 'answered')" />
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <!-- per-query table — columns are drag-resizable (grip on each header,
+           double-click a header to reset) and answers are selectable/copyable
+           like the suite table's cells. The dialog auto-sizes to the content
+           (DsModal size "auto"); past the viewport cap this wrapper scrolls
+           instead of pushing the table off the side of the dialog. -->
+      <div class="okf-ragas__table-scroll">
+        <table class="okf-headtest__scores okf-ragas__results">
+          <colgroup>
+            <col v-for="c in resultCols" :key="c.key" :style="colStyle(c.key)" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th
+                v-for="c in resultCols"
+                :key="c.key"
+                class="okf-ragas__th-col"
+                :title="colResizeTip"
+                @dblclick="resetCol(c.key)"
+              >
+                {{ c.label }}
+                <span
+                  class="okf-ragas__col-grip"
+                  :title="colResizeTip"
+                  @mousedown.prevent="startColResize($event, c.key)"
+                ></span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="r in runRows" :key="r.id" :class="{ 'okf-ragas__row--fail': rowFails(r) }">
+              <td>
+                <code>{{ r.id }}</code>
+              </td>
+              <td class="okf-ragas__cell-query" :title="r.query">{{ r.query }}</td>
+              <td v-for="m in runMetricKeys" :key="m" class="okf-ragas__cell-metric">
+                <span class="okf-headtest__bar"
+                  ><span :style="{ width: barWidth(r.metrics && r.metrics[m]) }"></span
+                ></span>
+                <span class="okf-ragas__score">{{ scoreText(r.metrics && r.metrics[m]) }}</span>
+              </td>
+              <td class="okf-ragas__cell-answer">
+                <textarea
+                  class="okf-ragas__answer-text"
+                  rows="2"
+                  readonly
+                  :value="r.answer"
+                  :title="translate('okf.ragas.results.copy', 'Copy the full answer')"
+                ></textarea>
+                <button
+                  type="button"
+                  class="okf-headtest__row-btn"
+                  :title="translate('okf.ragas.results.copy', 'Copy the full answer')"
+                  @click="copyAnswer(r)"
+                >
+                  {{ copiedId === r.id ? '✓' : '⧉' }}
+                </button>
+              </td>
+              <td>
+                <DsPill v-if="r.error" variant="danger" :label="translate('okf.ragas.results.error', 'error')" />
+                <DsPill
+                  v-else-if="r.abstained"
+                  variant="warning"
+                  :label="translate('okf.ragas.results.abstained', 'abstained')"
+                />
+                <DsPill v-else variant="neutral" :label="translate('okf.ragas.results.answered', 'answered')" />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <!-- EXPLAIN / ADVISE -->
@@ -519,7 +562,7 @@ const METRIC_NOTE_FALLBACKS = {
   context_utilization:
     'Whether the retrieved context is sufficient to produce the reference answer — a retrieval-completeness check against what the ideal answer needs.',
   context_entities_recall:
-    'Entity-level recall: the share of named entities from the reference answer (companies, dates, amounts, places) that appear in the retrieved context.',
+    'Entity-level recall: the share of named entities in the entry’s reference passages (companies, dates, amounts, places) that also appear in the retrieved chunks. Low means retrieval brought chunks that miss entities the reference names.',
   factual_correctness:
     'Claim-level factual agreement with the reference answer — the judge decomposes both into claims and scores the overlap. The strictest correctness metric.',
   answer_correctness:
@@ -580,6 +623,8 @@ export default {
       pdfBusy: false,
       probeBusy: '',
       runProgress: null,
+      colWidths: {}, // per-column px widths for the results table (drag-resize)
+      copiedId: '', // row whose answer was just copied (transient ✓)
       suiteEpoch: 0
     };
   },
@@ -681,6 +726,35 @@ export default {
       const phase = this.translate(`okf.ragas.run.phase.${p.phase}`, p.phase);
       return p.total ? `${phase} ${p.done}/${p.total}` : phase;
     },
+    /** Column model for the per-query results table: id, question, one per
+     *  selected metric, the answer, the state — drives the colgroup and the
+     *  per-header drag grips. */
+    resultCols() {
+      return [
+        { key: 'id', label: '#' },
+        { key: 'query', label: this.translate('okf.ragas.col.query', 'Question') },
+        ...this.runMetricKeys.map((m) => ({ key: `m:${m}`, label: this.metricLabel(m) })),
+        { key: 'answer', label: this.translate('okf.ragas.results.answer', 'Answer') },
+        { key: 'state', label: this.translate('okf.ragas.results.state', 'State') }
+      ];
+    },
+    colResizeTip() {
+      return this.translate(
+        'okf.ragas.results.colResizeTip',
+        'Drag the grip to resize — double-click the header to reset'
+      );
+    },
+    /** Shown in Results while rows fail and no advisor output is on screen —
+     * the entry point to "what actions can I take" (2026-10-19). */
+    advisorHint() {
+      const summary = this.runDoc && this.runDoc.payload && this.runDoc.payload.summary;
+      const failing = (summary && summary.failing_count) || 0;
+      if (!failing || this.explainDoc) return '';
+      return this.translate(
+        'okf.ragas.results.advisorHint',
+        '{n} questions are below their metric thresholds. Run the advisor to attribute each failure to a pipeline stage and get concrete actions.'
+      ).replace('{n}', String(failing));
+    },
     adviceChips() {
       const advice = this.explainDoc && this.explainDoc.advice;
       if (!advice) return [];
@@ -755,9 +829,56 @@ export default {
     scoreText(v) {
       return typeof v === 'number' && v === v ? v.toFixed(2) : '—';
     },
-    shortAnswer(a) {
-      const s = String(a || '');
-      return s.length > 60 ? `${s.slice(0, 60)}…` : s;
+    colStyle(key) {
+      const w = this.colWidths[key];
+      return w ? { width: `${w}px` } : {};
+    },
+    /** Drag a header grip to resize that column; widths land on the colgroup
+     *  col. Double-click resets (resetCol below). Document-level listeners
+     *  because the drag outlives the grip element under the cursor. */
+    startColResize(evt, key) {
+      const th = evt.target.closest('th');
+      if (!th) return;
+      const startX = evt.clientX;
+      const startW = th.getBoundingClientRect().width;
+      const move = (e) => {
+        const w = Math.max(48, Math.round(startW + e.clientX - startX));
+        this.colWidths = { ...this.colWidths, [key]: w };
+      };
+      const up = () => {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', up);
+        document.body.style.cursor = '';
+      };
+      document.body.style.cursor = 'col-resize';
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
+    },
+    resetCol(key) {
+      const next = { ...this.colWidths };
+      delete next[key];
+      this.colWidths = next;
+    },
+    /** Copy the FULL answer text — the cell shows it whole in a readonly
+     *  textarea (selectable like the suite table); the button is the one
+     *  gesture path. execCommand fallback for insecure contexts. */
+    async copyAnswer(r) {
+      const text = String(r.answer || '');
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      this.copiedId = r.id;
+      clearTimeout(this._copyTimer);
+      this._copyTimer = setTimeout(() => {
+        this.copiedId = '';
+      }, 2000);
     },
     shortDate(iso) {
       return String(iso || '')
@@ -1138,8 +1259,22 @@ export default {
           runKey
         })
         .catch(() => null);
-      if (res && res.ok) this.runDoc = res.result;
-      else if (!opts.silent && res) this.error = res.message;
+      if (res && res.ok) {
+        this.runDoc = res.result;
+        // The advisor travels with the run: a persisted explain for THIS run
+        // loads automatically, so the admin sees "what can I do" with the
+        // results instead of having to know the button exists (2026-10-19:
+        // "how does the admin user know what possible actions they can take").
+        this.explainDoc = null;
+        const ex = await this.$store
+          .dispatch('okf/ragasGetExplainQuiet', {
+            repoId: this.repo && this.repo.repo_id,
+            suiteKey: this.suite && this.suite.suite_key,
+            runKey
+          })
+          .catch(() => null);
+        if (ex && ex.ok) this.explainDoc = ex.result;
+      } else if (!opts.silent && res) this.error = res.message;
     },
     async onExplain() {
       this.error = '';
@@ -1462,6 +1597,19 @@ export default {
   padding: 14px;
 }
 
+.okf-ragas__advisor-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 10px 12px;
+  margin: 8px 0;
+}
+
 .okf-ragas__hint {
   color: var(--muted);
   font-size: 12px;
@@ -1622,13 +1770,62 @@ export default {
   margin: 10px 0;
 }
 
-.okf-ragas__cell-query,
-.okf-ragas__cell-answer {
-  max-width: 260px;
+.okf-ragas__table-scroll {
+  overflow-x: auto; /* past the dialog's auto-size cap, scroll INSIDE — never off the side */
+}
+.okf-ragas__results th {
+  position: relative;
+  white-space: nowrap;
+}
+.okf-ragas__col-grip {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  user-select: none;
+  touch-action: none;
+}
+.okf-ragas__col-grip::after {
+  content: '';
+  position: absolute;
+  top: 25%;
+  bottom: 25%;
+  right: 2px;
+  width: 2px;
+  background: var(--border);
+}
+.okf-ragas__col-grip:hover::after,
+.okf-ragas__col-grip:active::after {
+  background: var(--fg);
+}
+.okf-ragas__cell-query {
+  min-width: 220px;
+  max-width: 340px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
+}
+.okf-ragas__cell-metric {
+  min-width: 92px;
+  white-space: nowrap;
+}
+.okf-ragas__cell-answer {
+  min-width: 260px;
+  max-width: 420px;
+}
+.okf-ragas__answer-text {
+  width: 100%;
+  min-width: 240px;
+  resize: vertical; /* suite-table parity: drag to grow the cell */
+  font: inherit;
+  font-size: 12px;
+  color: var(--fg);
+  background: transparent;
+  border: none;
+  padding: 2px 0;
 }
 
 .okf-ragas__score {

@@ -3196,6 +3196,10 @@ export default {
       results: {
         title: 'Resultados do teste comparativo',
         failing: '{n} com falha',
+        advisorHint:
+          '{n} perguntas estão abaixo dos seus limiares de métricas. Execute o assistente para atribuir cada falha a um estágio do pipeline e obter ações concretas.',
+        copy: 'Copiar a resposta completa',
+        colResizeTip: 'Arraste a alça para redimensionar — duplo clique no cabeçalho para redefinir',
         trendTitle: 'Tendência das métricas por execução',
         trendNote:
           'Cada linha é a média de uma métrica RAGAS por execução, da mais antiga à mais recente — o ␘ de cada medidor explica a métrica. Respostas julgadas ficam em cache; repetições idênticas só diferem onde resposta ou recuperação mudaram.',
@@ -3255,7 +3259,7 @@ export default {
           context_utilization:
             'Se o contexto recuperado basta para produzir a resposta de referência — uma verificação de completude da recuperação.',
           context_entities_recall:
-            'Recall no nível de entidades: a proporção das entidades nomeadas da referência (empresas, datas, valores, lugares) presentes no contexto recuperado.',
+            'Recall em nível de entidades: a proporção das entidades nomeadas nas passagens de referência da entrada (empresas, datas, valores, lugares) que também aparecem nos trechos recuperados. Baixo significa que a recuperação trouxe trechos que perdem entidades nomeadas pela referência.',
           factual_correctness:
             'Acordo factual no nível de afirmações com a referência — o juiz decompõe ambas e pontua a sobreposição. A métrica de correção mais estrita.',
           answer_correctness:

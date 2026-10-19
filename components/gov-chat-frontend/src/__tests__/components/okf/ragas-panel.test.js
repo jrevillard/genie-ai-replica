@@ -347,4 +347,102 @@ describe('RagasPanel', () => {
     expect(w.vm.genProgress).toEqual(live.progress);
     expect(w.vm.error).toBe('');
   });
+
+  // David 2026-10-19: "how does the admin user know what possible actions
+  // they can take" — the advisor travels with the run. A persisted explain
+  // loads automatically; when rows fail with NO advisor output yet, the
+  // banner points at it instead of making the admin discover the button.
+  it('auto-loads the persisted explain with the run — advisor visible without a click', async () => {
+    dispatch.mockImplementation(async (action) => {
+      if (action === 'okf/fetchRepos') return { ok: true, repos: [] };
+      if (action === 'okf/ragasListRuns')
+        return {
+          ok: true,
+          runs: [
+            {
+              kind: 'ragas_run',
+              _key: 'rr1-run',
+              suite_key: 'rs1-test',
+              status: 'done',
+              created_at: '2026-10-17T12:00:00.000Z',
+              summary: runFixture().payload.summary
+            },
+            {
+              kind: 'ragas_suite',
+              _key: 'rs1-test',
+              suite_key: 'rs1-test',
+              created_at: '2026-10-17T11:00:00.000Z',
+              entries: 2
+            }
+          ]
+        };
+      if (action === 'okf/ragasGetSuite') return { ok: true, result: suiteFixture() };
+      if (action === 'okf/ragasGetRunQuiet') return { ok: true, result: runFixture() };
+      if (action === 'okf/ragasGetExplainQuiet')
+        return {
+          ok: true,
+          result: {
+            attributions: [
+              {
+                id: 'new-1',
+                query: 'q',
+                fails: ['context_recall'],
+                stage: 'corpus',
+                recommendation: 're-curate the concept'
+              }
+            ],
+            advice: { knob_changes: [], repo_tag_changes: [], content_curation: [], prompt_tweaks: [] }
+          }
+        };
+      return { ok: true, result: null, runs: [] };
+    });
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(dispatch).toHaveBeenCalledWith(
+      'okf/ragasGetExplainQuiet',
+      expect.objectContaining({ runKey: 'rr1-run', suiteKey: 'rs1-test' })
+    );
+    expect(w.vm.explainDoc).toBeTruthy();
+    // advisor output rendered without any click; hint suppressed (output on screen)
+    expect(w.text()).toContain('Failure attribution and advice');
+    expect(w.text()).toContain('re-curate the concept');
+    expect(w.find('.okf-ragas__advisor-hint').exists()).toBe(false);
+  });
+
+  it('shows the advisor hint when rows fail and no advisor output is loaded', async () => {
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    // default mock: run loads (failing_count 1), explain absent
+    expect(w.vm.runDoc._key).toBe('rr1-run');
+    expect(w.vm.explainDoc).toBeNull();
+    const hint = w.find('.okf-ragas__advisor-hint');
+    expect(hint.exists()).toBe(true);
+    expect(hint.text()).toContain('1');
+    expect(hint.text().toLowerCase()).toContain('advisor');
+  });
+
+  // David 2026-10-19: the results table must be resizable and the answers
+  // copyable (suite-table parity), and the full answer text is present —
+  // not a 60-char ellipsis.
+  it('results table: full answers in copyable cells, per-column resize grips', async () => {
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    w.vm.runDoc = runFixture();
+    await w.vm.$nextTick();
+    const ta = w.find('textarea.okf-ragas__answer-text');
+    expect(ta.exists()).toBe(true);
+    expect(ta.element.value).toBe('Plant after the last frost.'); // FULL answer
+    expect(w.vm.resultCols.length).toBe(2 + 4 + 1 + 1); // id, query, 4 metrics, answer, state
+    expect(w.findAll('.okf-ragas__col-grip').length).toBe(w.vm.resultCols.length);
+    // column resize lands on the colgroup
+    w.vm.colWidths = { 'm:context_recall': 140 };
+    await w.vm.$nextTick();
+    expect(w.vm.colStyle('m:context_recall')).toEqual({ width: '140px' });
+    // copy gesture flips the row button to ✓
+    const writeText = jest.fn().mockResolvedValue();
+    Object.assign(navigator, { clipboard: { writeText } });
+    await w.vm.copyAnswer(w.vm.runDoc.payload.results[0]);
+    expect(writeText).toHaveBeenCalledWith('Plant after the last frost.');
+    expect(w.vm.copiedId).toBe('new-1');
+  });
 });

@@ -3206,6 +3206,10 @@ export default {
       results: {
         title: 'Ergebnisse des Vergleichstests',
         failing: '{n} fehlgeschlagen',
+        advisorHint:
+          '{n} Fragen liegen unter ihren Metrik-Schwellenwerten. Starten Sie den Advisor, um jeden Fehlschlag einer Pipeline-Stufe zuzuordnen und konkrete Maßnahmen zu erhalten.',
+        copy: 'Vollständige Antwort kopieren',
+        colResizeTip: 'Ziehen Sie den Griff zum Skalieren — Doppelklick auf die Kopfzeile setzt zurück',
         trendTitle: 'Metrik-Trend über Läufe',
         trendNote:
           'Jede Linie ist der Suite-Mittelwert einer RAGAS-Metrik pro Lauf, ältester zuerst — das ␘ an jedem Tacho erklärt die Metrik. Bewertete Antworten werden gecacht; gleiche Wiederholungen unterscheiden sich nur, wo Antworten oder Abruf sich änderten.',
@@ -3265,7 +3269,7 @@ export default {
           context_utilization:
             'Ob der abgerufene Kontext ausreicht, um die Referenzantwort zu erzeugen — eine Vollständigkeitsprüfung des Abrufs.',
           context_entities_recall:
-            'Recall auf Entitätenebene: der Anteil der benannten Entitäten der Referenzantwort (Firmen, Daten, Beträge, Orte), die im abgerufenen Kontext vorkommen.',
+            'Recall auf Entitätenebene: der Anteil der benannten Entitäten in den Referenzpassagen des Eintrags (Firmen, Daten, Beträge, Orte), die auch in den abgerufenen Chunks vorkommen. Niedrig bedeutet, dass die abgerufenen Chunks Entitäten der Referenz verfehlen.',
           factual_correctness:
             'Faktische Übereinstimmung auf Aussagenebene mit der Referenzantwort — der Judge zerlegt beide in Aussagen und bewertet die Überschneidung. Die strengste Korrektheitsmetrik.',
           answer_correctness:

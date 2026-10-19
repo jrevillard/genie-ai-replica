@@ -3204,6 +3204,10 @@ export default {
       results: {
         title: 'Résultats du banc d’essai',
         failing: '{n} en échec',
+        advisorHint:
+          '{n} questions sont sous leurs seuils de métriques. Lancez le conseiller pour attribuer chaque échec à une étape du pipeline et obtenir des actions concrètes.',
+        copy: 'Copier la réponse complète',
+        colResizeTip: 'Faites glisser la poignée pour redimensionner — double-cliquez sur l’en-tête pour réinitialiser',
         trendTitle: 'Tendance des métriques par exécution',
         trendNote:
           'Chaque ligne est la moyenne d’une métrique RAGAS par exécution, de la plus ancienne à la plus récente — le ␘ de chaque jauge explique la métrique. Les réponses jugées sont en cache ; des re-exécutions identiques ne diffèrent que si réponses ou récupération changent.',
@@ -3263,7 +3267,7 @@ export default {
           context_utilization:
             'Si le contexte récupéré suffit à produire la réponse de référence — un contrôle de complétude de la récupération.',
           context_entities_recall:
-            'Rappel au niveau des entités : la part des entités nommées de la référence (sociétés, dates, montants, lieux) présentes dans le contexte récupéré.',
+            'Rappel au niveau des entités : la part des entités nommées des passages de référence de l’entrée (sociétés, dates, montants, lieux) qui apparaissent aussi dans les morceaux récupérés. Un score bas signifie que la récupération a rapporté des morceaux qui manquent des entités de la référence.',
           factual_correctness:
             'Accord factuel au niveau des affirmations avec la référence — le juge décompose les deux et note le recouvrement. La métrique d’exactitude la plus stricte.',
           answer_correctness:

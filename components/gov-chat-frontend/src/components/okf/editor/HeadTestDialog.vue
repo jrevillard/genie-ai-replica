@@ -43,7 +43,7 @@
   <DsDialog
     :visible="visible"
     :title="translate('okf.headTest.title', 'Routing Lab — head test')"
-    size="lg"
+    size="auto"
     :actions="dialogActions"
     @close="$emit('close')"
     @action="onDialogAction"

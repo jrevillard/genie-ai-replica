@@ -104,7 +104,11 @@ with suites interchangeable with that harness's xlsx formats:
   dimensions: question count (default 20), the query-type distribution, and
   the number of personas — the suite ships exactly the requested number of
   questions. Each entry carries the question, its expected answer, and the
-  reference passages the answer should be grounded in. Generation is a
+  reference passages the answer should be grounded in — the reference is the
+  **published corpus chunk** the question was synthesized from (the same
+  unit retrieval returns), so reference-based metrics compare chunk to
+  chunk. Repositories that have not published (no drained graph) contribute
+  nothing: their content is not retrievable yet. Generation is a
   background job: you can close the dialog and come back, and a **Cancel**
   button stops it at any time (the shared GPU drains within one in-flight
   model call). A per-phase progress bar tracks it — the knowledge-graph
@@ -144,7 +148,14 @@ with suites interchangeable with that harness's xlsx formats:
   gauges, as a run-over-run trend, and as a status breakdown — every chart
   carries an **ⓘ** whose popup explains, in plain language, what that RAGAS
   metric actually measures (and what it cannot see: answer relevancy never
-  checks correctness; noise sensitivity is inverted — lower is better).
+  checks correctness; noise sensitivity is inverted — lower is better). The
+  results table's columns are drag-resizable (double-click a header to
+  reset), each answer sits in its own selectable, copyable cell (one-click
+  copy button), and the Lab dialog sizes itself to the content — selecting
+  every metric widens the dialog instead of pushing the table off the side.
+  When questions fail their thresholds, the **advisor** appears with the
+  results: any previously saved failure attribution loads automatically, and
+  until one exists a banner points at *Explain failures*.
   Export as a **PDF report** that includes the same per-metric notes and
   parallels the offline harness export's information — outcome counts
   (questions / evaluable / abstained / failing), all selected gauge charts,

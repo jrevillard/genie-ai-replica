@@ -254,7 +254,7 @@ class TestLegacyAttributeNames:
         ]
 
     def test_registering_the_backlog_did_not_inflate_the_vocabulary(self):
-        # See test_vocabulary_has_eighty_entries — raised 80 → 82 alongside the
+        # See test_vocabulary_entry_count_is_pinned — raised 80 → 82 alongside the
         # two timeout attributes, not by the legacy sweep.
         assert len(ATTRIBUTE_NAMES) == 82
         assert len(LEGACY_ATTRIBUTE_NAMES) == 21

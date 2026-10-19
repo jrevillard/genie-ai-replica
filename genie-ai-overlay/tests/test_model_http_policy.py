@@ -339,18 +339,48 @@ def _register_keys_set_on_spans(func: ast.AST) -> set[str]:
 
 
 def _stamped_under_a_positive_timeout_guard(func: ast.AST) -> bool:
-    """True when a span stamp sits inside ``if _is_timeout(...)``.
+    """True when EVERY span stamp sits inside ``if _is_timeout(...)``.
 
-    Requires the stamp to be a descendant of a guard whose test is a bare,
-    positive call to ``_is_timeout``. An ``if not _is_timeout(e)`` fails on the
-    polarity; a stamp hoisted above the ``if`` fails because no enclosing guard
-    matches. Presence of an ``if`` somewhere in the function accepted both.
+    Requires each stamp to be a descendant of a guard whose test is a bare,
+    positive call to ``_is_timeout``, and that guard's BODY — not the ``If``
+    node, which ``ast.walk`` also descends into the ``orelse`` of. So:
+
+    - ``if not _is_timeout(e)`` fails on the polarity;
+    - a stamp hoisted above the ``if`` fails, because it is not under any guard;
+    - a stamp moved into the ``else`` fails, because that is the NON-timeout
+      path — the exact misreading the attribute exists to prevent.
+
+    "Every", not "any": hoisting ``dataprep_llm_timed_out`` out of the guard
+    while leaving ``dataprep_llm_timeout_seconds`` inside satisfies an ``any``.
     """
-    stamps = [
-        n for n in ast.walk(func) if isinstance(n, ast.Call) and _called_name(n.func) == "set_attribute" and n.args
-    ]
+    # Scoped to the two timeout keys, not every span stamp: the same functions
+    # also stamp dataprep.input_too_long and friends outside any timeout guard,
+    # and requiring those to be guarded would be asserting the wrong invariant.
+    timeout_keys = {"dataprep_llm_timed_out", "dataprep_llm_timeout_seconds"}
+    stamps = {
+        id(n)
+        for n in ast.walk(func)
+        if isinstance(n, ast.Call)
+        and _called_name(n.func) == "set_attribute"
+        and n.args
+        and isinstance(n.args[0], ast.Subscript)
+        and isinstance(n.args[0].value, ast.Name)
+        and n.args[0].value.id == "ATTRIBUTE_NAMES"
+        and isinstance(n.args[0].slice, ast.Constant)
+        and n.args[0].slice.value in timeout_keys
+    }
     if not stamps:
         return False
+    guarded: set[int] = set()
+    for node in ast.walk(func):
+        if not isinstance(node, ast.If):
+            continue
+        if not (isinstance(node.test, ast.Call) and _called_name(node.test.func) == "_is_timeout"):
+            continue
+        for stmt in node.body:
+            guarded |= {id(n) for n in ast.walk(stmt) if id(n) in stamps}
+    return guarded == stamps
+
     for node in ast.walk(func):
         if not isinstance(node, ast.If):
             continue
@@ -687,8 +717,13 @@ class TestCallSitesConsumeThePolicy:
             "retriever/genieai_retriever_arangodb.py",
         ):
             text = (OVERLAY_ROOT / rel).read_text(encoding="utf-8")
-            if "CONTROL_PLANE_TIMEOUT_SECONDS" not in text:
-                continue
+            # No "does this module read the knob?" precondition. Skipping a
+            # module that does not import CONTROL_PLANE_TIMEOUT_SECONDS makes
+            # the guard blind to the one mutation it exists for: a module
+            # dropping the import and hardcoding a literal back — which is
+            # exactly the "raises the knob, sees it change in one service and
+            # not another" case its docstring describes. The retriever was
+            # permanently exempt for exactly that reason.
             for node in ast.walk(ast.parse(text)):
                 if not (isinstance(node, ast.Call) and _called_name(node.func) == "ClientTimeout"):
                     continue

@@ -683,6 +683,43 @@ async def _safe_log(write_ingestion_log, file_id, level, component, message):
         )
 
 
+async def _settle_and_retrieve(tasks) -> bool:
+    """Wait *tasks* out for the grace window, then drain their outcomes.
+
+    Returns True if an outer cancellation arrived while the wait was running.
+
+    The wait runs as its own task behind ``asyncio.shield`` because an await in
+    a cancellation path is itself cancellable: without the shield, a second
+    cancellation — the kill endpoint is idempotent-callable, so a double-clicked
+    Kill re-enters it, and any shutdown sweep cancels the same task again —
+    propagates straight out and skips the window entirely. The batches would
+    then be abandoned running, which is the exact outcome the window exists to
+    prevent, and worse than the ``asyncio.gather`` this replaced: gather had no
+    window to lose.
+
+    The caller re-raises whatever it was already raising; this only reports
+    whether the settle was interrupted.
+    """
+    tasks = [t for t in tasks if not t.done()]
+    if not tasks:
+        return False
+    wait = asyncio.ensure_future(asyncio.wait(tasks, timeout=_PHASE_CANCEL_GRACE_SECONDS))
+    interrupted = False
+    while not wait.done():
+        try:
+            await asyncio.shield(wait)
+        except asyncio.CancelledError:
+            # Deliberately swallowed: the settle is the thing we promised, and
+            # it has a timeout of its own, so it cannot hold the caller longer
+            # than the grace window regardless of how often we are cancelled.
+            interrupted = True
+    for task in tasks:
+        if task.done() and not task.cancelled():
+            with suppress(Exception):
+                task.exception()
+    return interrupted
+
+
 async def _gather_with_phase_budget(
     tasks: list, *, phase: str, phase_label: str, total: int, file_id: str, write_ingestion_log
 ) -> tuple[list, bool]:
@@ -768,6 +805,13 @@ async def _gather_with_phase_budget(
                 # asyncio.wait returns would pick an arbitrary member, so which
                 # of two differently-failing batches decides whether the ingest
                 # aborts or degrades would change run to run.
+                # cancelled() first: Task.exception() raises
+                # CancelledError on a cancelled task, so one individually-
+                # cancelled batch would otherwise turn the whole phase into a
+                # CancelledError and the document would report "Killed" instead
+                # of the failure it actually had.
+                if task.cancelled():
+                    continue
                 exc = task.exception()
                 if exc is not None:
                     if failure is None:
@@ -819,6 +863,11 @@ async def _gather_with_phase_budget(
                 late = {t for t in pending if t.done()}
                 pending -= late
                 for task in sorted(late, key=lambda t: order[id(t)]):
+                    # cancelled() first: Task.exception() raises CancelledError on
+                    # a cancelled task, so an individually-cancelled batch would
+                    # otherwise turn the whole phase into a CancelledError.
+                    if task.cancelled():
+                        continue
                     exc = task.exception()
                     if exc is not None:
                         if failure is None:
@@ -855,19 +904,15 @@ async def _gather_with_phase_budget(
             # to end. Waiting briefly lets well-behaved tasks release their slot
             # and their connection; anything still stuck is abandoned, and the
             # caller gets its fallback.
-            await asyncio.wait(pending, timeout=_PHASE_CANCEL_GRACE_SECONDS)
-            # Retrieve whatever finished during the settle. A task that turned
-            # its cancellation into a real exception — a client catching
+            # Settle and retrieve together, shielded: a task that turned its
+            # cancellation into a real exception — a client catching
             # CancelledError, or a typed failure raised between the last drain
             # and the cancel — would otherwise surface as "Task exception was
             # never retrieved" with a full traceback, noise landing in the
             # dataprep log during exactly the contended-GPU incidents this work
             # exists to make diagnosable. gather retrieved every child; this
             # restores that without giving up the bounded settle.
-            for task in pending:
-                if task.done() and not task.cancelled():
-                    with suppress(Exception):
-                        task.exception()
+            await _settle_and_retrieve(pending)
 
     if failure is not None:
         # A batch that raised is an error the phase's caller already knows how
@@ -940,49 +985,45 @@ async def _await_with_heartbeat(tasks: list, *, phase: str, total: int, file_id:
                 # Re-raise the first failure, as gather would. Done before any
                 # further reporting so the phase fails on the real error rather than
                 # on the heartbeat's log write.
+                # cancelled() first: Task.exception() raises
+                # CancelledError on a cancelled task, so one individually-
+                # cancelled batch would otherwise turn the whole phase into a
+                # CancelledError and the document would report "Killed" instead
+                # of the failure it actually had.
+                if task.cancelled():
+                    continue
                 exc = task.exception()
                 completed += 1
                 if exc is not None and failure is None:
                     failure = exc
 
             if failure is not None:
-                # Give the in-flight batches a bounded window to unwind rather than
-                # dropping them on the floor. asyncio.gather keeps every child alive
-                # and retrieves their outcomes; returning here would leave the rest
-                # running with no owner — each one that later raises logs an
-                # unretrieved-exception error, and they are still writing to ArangoDB
-                # while the caller's handler retracts the document. The wait is
-                # capped at _PHASE_CANCEL_GRACE_SECONDS: past that, the caller is
-                # already failing and a longer wait only delays the retract.
+                # Cancelled and settled, like every other non-success exit here.
+                # The caller retracts the document the moment this raises, so a
+                # sibling left running writes into ArangoDB after the retraction
+                # and resurrects its chunks for a document the admin UI shows as
+                # failed. Batches already inside asyncio.to_thread are unaffected
+                # either way — that thread runs to completion whatever we do — so
+                # what cancelling actually stops is every batch still queued on
+                # the semaphore, which for a large document is most of them.
                 #
-                # Cancelled, not just waited on. The caller retracts the document
-                # the moment this raises, so a sibling left running writes into
-                # ArangoDB after the retraction and resurrects its chunks — the
-                # same outcome the cancellation path guards against, one branch
-                # over. Batches already inside asyncio.to_thread are unaffected
-                # either way; the ones this stops are those still queued on the
-                # semaphore, which for a large document is most of them.
-                #
-                # Guarded because pending is empty whenever the failing task was the
-                # last one in flight, and asyncio.wait() on an empty set raises
-                # ValueError rather than returning. That is the single-batch case —
-                # a document with fewer chunks than BATCH_SIZE produces exactly one
-                # graph-insertion task — and unguarded it replaced the real
-                # "ArangoDB insert failed" with "Set of Tasks/Futures is empty" in
-                # the ingestion log and the document status, which is the last
-                # diagnostic channel the operator has.
+                # _settle_and_retrieve absorbs a cancellation that arrives during
+                # the window: the settle is what was promised, it has a timeout of
+                # its own, and losing it to a second cancel would hand the caller
+                # exactly the abandoned-batch outcome described above.
                 for task in pending:
                     task.cancel()
-                if pending:
-                    await asyncio.wait(pending, timeout=_PHASE_CANCEL_GRACE_SECONDS)
-                # Same retrieval as the budgeted variant's settle: a sibling that
-                # failed while we were waiting would otherwise log an unretrieved
-                # exception, during an incident whose diagnosis depends on these
-                # logs.
-                for task in pending:
-                    if task.done() and not task.cancelled():
-                        with suppress(Exception):
-                            task.exception()
+                interrupted = await _settle_and_retrieve(pending)
+                if interrupted:
+                    # An external cancellation during the settle does not replace
+                    # the failure. The document is retracted either way, but the
+                    # kill switch would report "Killed by an administrator" and
+                    # the ArangoDB error underneath — the one thing the operator
+                    # needs — would never reach the ingestion log.
+                    logger.warning(
+                        f"{phase}: cancelled externally while settling a failed batch; "
+                        "reporting the batch failure, which is the more specific cause"
+                    )
                 raise failure
 
             now = time.monotonic()
@@ -1008,12 +1049,7 @@ async def _await_with_heartbeat(tasks: list, *, phase: str, total: int, file_id:
         # document the admin UI shows as Killed, and served to the retriever.
         for task in pending:
             task.cancel()
-        if pending:
-            await asyncio.wait(pending, timeout=_PHASE_CANCEL_GRACE_SECONDS)
-            for task in pending:
-                if task.done() and not task.cancelled():
-                    with suppress(Exception):
-                        task.exception()
+        await _settle_and_retrieve(pending)
         raise
 
 

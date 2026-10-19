@@ -16,8 +16,11 @@ answered after minutes is not going to produce a better answer later; it is
 going to delay the fallback that would have finished the ingest. So the budget
 is set to *bound the delay*, not to *wait longer for a good answer*.
 
-Precedence: ``MODEL_LLM_TIMEOUT_SECONDS`` > legacy ``VLLM_TIMEOUT`` (retriever
-deployment knob) > default. Retries have no legacy name.
+Precedence: ``MODEL_LLM_TIMEOUT_SECONDS`` > legacy ``VLLM_TIMEOUT`` > default.
+Retries have no legacy name. The second name reaches exactly one reader in a
+deployed stack — the vendored comps graph transformer, which reads it from the
+environment without going through this module — so the precedence above is the
+in-repo rule, and compose resolves the two consumers separately.
 
 Scope — every in-repo call site (see the audit table below for what is NOT
 here, and why):

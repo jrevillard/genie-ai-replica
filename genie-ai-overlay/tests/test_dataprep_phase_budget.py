@@ -826,6 +826,74 @@ class TestUnboundedPhaseSurvivesExternalCancellation:
         _run(scenario())
 
 
+class TestASecondCancellationCannotSkipTheSettle:
+    """An await inside a cancellation path is itself cancellable.
+
+    The kill endpoint is idempotent-callable, so a double-clicked Kill re-enters
+    it and cancels the same task again while the first settle is still running.
+    Without a shield, that second cancellation propagates straight out of the
+    handler and the settle never happens — the batches are abandoned running,
+    which is the exact outcome the grace window exists to prevent, and worse
+    than the ``asyncio.gather`` this replaced: gather had no window to lose.
+    """
+
+    @pytest.mark.parametrize("helper", ["heartbeat", "gather"])
+    def test_a_second_cancel_during_the_settle_still_waits_the_window(self, helper, monkeypatch):
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 5.0)
+        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.3)
+
+        async def scenario():
+            unwound = []
+            started = asyncio.Event()
+
+            async def slow():
+                started.set()
+                try:
+                    await asyncio.sleep(5)
+                except asyncio.CancelledError:
+                    # Takes most of the grace window to unwind, so the second
+                    # cancellation lands squarely inside the settle.
+                    await asyncio.sleep(0.25)
+                    unwound.append(1)
+                    raise
+
+            tasks = [asyncio.ensure_future(slow()) for _ in range(3)]
+            await started.wait()
+
+            async def run():
+                if helper == "heartbeat":
+                    return await dataprep._await_with_heartbeat(
+                        tasks, phase="Graph insertion", total=3, file_id="f1", write_ingestion_log=_noop_log
+                    )
+                return await dataprep._gather_with_phase_budget(
+                    tasks,
+                    phase="Labeling",
+                    phase_label=dataprep.PHASE_LABEL_LABELING,
+                    total=3,
+                    file_id="f1",
+                    write_ingestion_log=_noop_log,
+                )
+
+            phase = asyncio.ensure_future(run())
+            await asyncio.sleep(0)
+            phase.cancel()
+            await asyncio.sleep(0.05)
+            phase.cancel()  # the second click, landing inside the settle
+
+            with pytest.raises(asyncio.CancelledError):
+                await phase
+            # Inside the loop: asyncio.run cancels stragglers on shutdown.
+            assert unwound, (
+                "the settle was skipped by the second cancellation — the batches were abandoned "
+                "running, so they go on to write after the caller retracts the document"
+            )
+            for task in tasks:
+                task.cancel()
+
+        _run(scenario())
+
+
 class TestUnboundedPhaseKeepsItsSiblings:
     """The graph phase cannot abandon work, and that includes on the error path.
 

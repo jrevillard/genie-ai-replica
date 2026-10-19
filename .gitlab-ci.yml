@@ -861,7 +861,7 @@ contract:unit:
         paths: ["genie-ai-overlay/contracts/**/*", "docker-compose.yaml", "genie-ai-overlay/dataprep/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+        paths: ["genie-ai-overlay/contracts/**/*", "docker-compose.yaml", "genie-ai-overlay/dataprep/**/*", ".gitlab-ci.yml"]
 
 # genie-ai-frontend
 build:frontend:

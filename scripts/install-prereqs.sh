@@ -273,7 +273,9 @@ install_otel_operator() {
     --version "${OTEL_OPERATOR_VERSION}" \
     --namespace "${ns}" --create-namespace=false \
     --wait --timeout "${READY_TIMEOUT}"
-  wait_deploy_ready "${ns}" "opentelemetry-operator-controller-manager"
+  # Chart renders the manager Deployment as plain "opentelemetry-operator"
+  # (no -controller-manager suffix; verified live on the laptop cluster).
+  wait_deploy_ready "${ns}" "opentelemetry-operator"
 }
 
 main() {

@@ -354,6 +354,12 @@ _REGISTERED_NAMES = (
 # carry no key of ours.
 _ATTRIBUTE_WRITERS = frozenset({"set_attribute", "set_attributes"})
 
+# How deep below a writer an attribute mapping may sit before this reader stops.
+# One level covers `set_attributes(sanitize_attributes({...}))`, which is how the
+# condense span writes. A deeper chain means the call transforms the dict, so the
+# keys that reach the span are no longer the dict's.
+_MAX_MAPPING_DEPTH = 1
+
 
 def _string_constant_names(module_path):
     """Names of module-level string constants, with their values.
@@ -365,7 +371,15 @@ def _string_constant_names(module_path):
     tree = ast.parse(module_path.read_text(encoding="utf-8"))
     found = {}
     for node in tree.body:
-        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+        # NAME = "..." and NAME: str = "..." are both module-level constants;
+        # reading only the first silently drops the second, and a dropped
+        # constant is a key the derivation stops resolving.
+        if isinstance(node, ast.AnnAssign) and node.value is not None and isinstance(node.value, ast.Constant):
+            if isinstance(node.target, ast.Name) and isinstance(node.value.value, str):
+                found[node.target.id] = node.value.value
+        elif (
+            isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)
+        ):
             for target in node.targets:
                 if isinstance(target, ast.Name):
                     found[target.id] = node.value.value
@@ -473,11 +487,7 @@ def _set_attribute_keys(overlay_sources):
         aliases = _register_aliases(tree)
         constants = _span_attrs_constants(tree)
         for node in ast.walk(tree):
-            if isinstance(node, ast.Name):
-                resolved = _constant_key(node, constants)
-                if resolved:
-                    keys.add(resolved)
-            elif isinstance(node, ast.Subscript):
+            if isinstance(node, ast.Subscript):
                 resolved = _registered_key(node, aliases)
                 if resolved:
                     keys.add(resolved)
@@ -494,8 +504,18 @@ def _set_attribute_keys(overlay_sources):
                     if node.args:
                         if name == "set_attributes":
                             keys.update(_mapping_keys(node.args[0])[0])
-                        elif isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
-                            keys.add(node.args[0].value)
+                            continue
+                        # set_attribute's first argument is the KEY. It is read
+                        # here, at the writer, and not by walking every Name in
+                        # the file: `_baggage.set_baggage(QUERY_ID_KEY, v)` puts
+                        # a key on a baggage entry, not on a span, and deriving
+                        # it would claim coverage no span write backs.
+                        key_arg = node.args[0]
+                        if isinstance(key_arg, ast.Constant) and isinstance(key_arg.value, str):
+                            keys.add(key_arg.value)
+                        resolved = _constant_key(key_arg, constants)
+                        if resolved:
+                            keys.add(resolved)
                 elif name in SPAN_OPENERS:
                     for keyword in node.keywords:
                         if keyword.arg in {"attributes", "attrs"}:
@@ -503,45 +523,50 @@ def _set_attribute_keys(overlay_sources):
     return keys
 
 
-def _mapping_keys(node):
-    """The string keys of the dict literals in *node*, one call deep at most.
+def _mapping_keys(node, depth=0):
+    """``(keys, readable)`` for an expression a span attribute mapping can be.
 
-    ``span.set_attributes(sanitize_attributes({...}))`` — the condense span
-    opens that way — puts its keys one call below the writer, so a reader that
-    only inspects the direct argument sees an empty key set for a site whose
-    keys are perfectly literal.
+    ``readable`` is the operative half: it is True only when every key this
+    expression can put on the span is a literal this function can name. A reader
+    that answers "yes, and here are the keys" for something whose keys it cannot
+    enumerate is worse than one that says "I cannot see this", because the first
+    silently removes a key from every downstream check.
 
-    Every argument of the wrapping call is read, positional and keyword: a merge
-    that takes a base mapping and an override puts the second dict's keys on the
-    span too, and returning at the first hit would drop them from BOTH readers —
-    which is the one outcome a vocabulary check cannot afford, since the key
-    would be neither registered-checked nor reported.
+    Four shapes, each with one reason:
 
-    One level is deliberate. Recursing an arbitrary call tree would let a wrong
-    guess silently ADD a key to the derived set that no writer produces, which
-    weakens the very check this exists to serve.
-
-    Returns ``(keys, saw_dict)``. The second element separates "no dict here"
-    from "a dict whose keys are none of ours": ``set_attributes({})`` is
-    readable and writes nothing, so reporting it as unreadable would be noise.
+    * a dict literal — every key literal, so readable. ``{}`` is readable and
+      writes nothing; reporting it would be noise.
+    * a dict with an unpacked entry, ``{**attrs}`` or ``{**attrs, "k": 1}`` — the
+      unpacked mapping's keys are unknown and unbounded, so NOT readable even
+      when the literal half is. Only the literal keys are returned, and the
+      caller must treat the site as reported.
+    * a call wrapping a dict, ``sanitize_attributes({...})`` — the condense span
+      writes that way. One level, so the depth is bounded and a chain
+      ``a(b(c({...})))`` stops being read: the further down the tree the dict
+      sits, the likelier the call transforms it into something whose keys are not
+      the dict's.
+    * a call with several dict arguments, ``merge(base, override)`` — every
+      positional argument is read, because a merge does put both mappings' keys
+      on the span. Keyword arguments are NOT: ``build(meta={...})`` passes an
+      unrelated dict alongside the mapping, and reading it would derive keys no
+      writer emits.
     """
-    keys = _literal_keys(node)
-    if keys:
-        return keys, True
     if isinstance(node, ast.Dict):
-        return keys, True
+        if any(key is None for key in node.keys):
+            # A `None` key is `**other` — the unpacked mapping is unknown.
+            return {key.value for key in node.keys if isinstance(key, ast.Constant)}, False
+        return {key.value for key in node.keys if isinstance(key, ast.Constant) and isinstance(key.value, str)}, True
     if isinstance(node, ast.Call):
-        saw_dict = False
-        arguments = list(node.args) + [keyword.value for keyword in node.keywords]
-        for arg in arguments:
-            found, is_dict = (
-                _mapping_keys(arg) if isinstance(arg, ast.Call) else (_literal_keys(arg), isinstance(arg, ast.Dict))
-            )
-            if is_dict:
-                saw_dict = True
+        if depth >= _MAX_MAPPING_DEPTH or not node.args:
+            return set(), False
+        keys: set[str] = set()
+        readable = True
+        for arg in node.args:
+            found, arg_readable = _mapping_keys(arg, depth + 1)
             keys |= found
-        return keys, saw_dict
-    return keys, False
+            readable = readable and arg_readable
+        return keys, readable
+    return set(), False
 
 
 def _register_aliases(tree):
@@ -692,6 +717,14 @@ def _non_literal_attribute_mappings(overlay_sources):
             elif name in _ATTRIBUTE_WRITERS:
                 # set_attribute("literal", …) is derivable; set_attribute(k, v)
                 # and set_attributes(mapping) are not.
+                #
+                # A writer with no positional argument at all — set_attributes(**attrs)
+                # — has no first argument to judge, so it is reported outright. The
+                # loop form below would skip it silently, leaving a site that
+                # stamps an unknown key set on a swept span reported by nobody.
+                if not node.args:
+                    offenders.append(f"{_display_path(path)}:{node.lineno}")
+                    continue
                 for arg in node.args[:1]:
                     if not _is_literal_key(arg, name, aliases, constants):
                         offenders.append(f"{_display_path(path)}:{node.lineno}")
@@ -792,24 +825,6 @@ class TestOwnedSpanCoverage:
             "the alias is what makes them derivable — hardcoding ATTRIBUTE_NAMES "
             "loses them, and the same hardcoding is what once made the report "
             "disagree with this walk"
-        )
-
-    def test_the_condense_keys_are_derived(self, overlay_sources):
-        """Gate the derivation-side gain of reading a dict through one call.
-
-        ``genie.condense.mode`` reaches its span as
-        ``set_attributes(sanitize_attributes({...}))``. If that one-level look
-        stops, the key drops out of the derived set — and nothing fails: the
-        coverage threshold still clears (0.89 against 0.85), and dropping a key
-        cannot trip the reverse gate, which only fires on a key that IS written
-        and IS unregistered. The reporting side is gated by the probe test; this
-        is the derivation side, which is where the claim lives.
-        """
-        derived = _set_attribute_keys(overlay_sources)
-        assert {"genie.condense.mode", "genie.condense.status"} <= derived, (
-            "the condense keys are written one call below the span opener and must "
-            "be derivable; they are the whole point of reading through a wrapping "
-            "call. Derived set lost them."
         )
 
     def test_every_attribute_key_written_in_the_overlay_is_registered(self, overlay_sources):
@@ -952,12 +967,21 @@ class TestOwnedSpanCoverage:
             # reported as unreadable before, by a reader that resolved neither.
             'span.set_attribute(A["traversal_max_depth"], 1)\n'
             "span.set_attribute(QUERY_ID_KEY, qid)\n"
+            # Unpacked keys are unknown, so the site is not readable even though
+            # a literal sits beside them. Bounded depth: three levels deep stops.
+            "span.set_attributes({**attrs})\n"
+            'span.set_attributes({**attrs, "packed.literal": 1})\n'
+            'span.set_attributes(a(b(c({"too.deep": 1}))))\n'
+            # A keyword beside the mapping is not the mapping.
+            'span.set_attributes(build(meta={"not.the.mapping": 1}))\n'
+            # No positional argument at all: nothing to judge, so report it.
+            "span.set_attributes(**attrs)\n"
             'with_span("c.d", attributes={"literal.key": 1})\n'
             'span.set_attribute("literal.key", 1)\n',
             encoding="utf-8",
         )
         offenders = _non_literal_attribute_mappings([probe])
-        assert len(offenders) == 3, f"expected the three runtime-built writes, got {offenders}"
+        assert len(offenders) == 8, f"expected eight runtime-built writes, got {offenders}"
 
     def test_mirror_matches_conftest(self, owned_span_names):
         """A conftest that drops a span must fail here, not just silently."""

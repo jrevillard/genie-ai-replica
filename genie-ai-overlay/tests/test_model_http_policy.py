@@ -469,22 +469,37 @@ class TestCallSitesConsumeThePolicy:
                 "the retriever call sites read this name, so this is the value they get"
             )
 
-    def test_the_retriever_clients_carry_the_retry_budget_too(self):
-        """``MODEL_LLM_MAX_RETRIES`` must not read as deck-wide and reach one service.
+    def test_the_retry_budget_reaches_the_gpu_clients_and_only_those(self):
+        """``MODEL_LLM_MAX_RETRIES`` is the shared GPU's knob, so it stops there.
 
-        The dataprep SDK client is the one with the long ladder, but the
-        retriever's summarizer and its embedding client are the same kind of
-        contended-GPU call. A knob documented as a shared budget that silently
-        applies to ingestion only is worse than no knob: an operator who sets
-        ``MODEL_LLM_MAX_RETRIES=0`` to cap a busy GPU gets that cap on half the
-        calls that make the GPU busy.
+        Two directions, both load-bearing. It must reach the retriever's vLLM
+        summarizer as well as the dataprep SDK client — a knob documented as
+        shared that silently applied to ingestion only would leave half the
+        calls that make the GPU busy uncapped. And it must NOT reach the two
+        clients built from an operator-supplied ``OPENAI_API_KEY``: those talk
+        to the OpenAI API, where the dominant transient failure is a 429 the
+        SDK's own retry handling exists to absorb, so an operator setting 0 for
+        a wedged vLLM node would silently disable it against a third party.
         """
         source = OVERLAY_ROOT / "retriever" / "genieai_retriever_arangodb.py"
         calls = _constructors(source, "ChatOpenAI", "OpenAIEmbeddings")
-        assert calls, "the retriever's OpenAI-branch clients moved — re-check the pin"
-        for call in calls:
-            assert "LLM_MAX_RETRIES" in _source_names(_kwarg(call, "max_retries")), (
-                f"{ast.unparse(call.func)} has no max_retries — MODEL_LLM_MAX_RETRIES silently does not reach it"
+        assert len(calls) >= 3, f"expected the retriever's three OpenAI-compatible clients, found {len(calls)}"
+
+        with_retries = [c for c in calls if "LLM_MAX_RETRIES" in _source_names(_kwarg(c, "max_retries"))]
+        without = [c for c in calls if c not in with_retries]
+        assert len(with_retries) == 1, (
+            f"expected exactly one GPU-facing client to carry max_retries, got "
+            f"{[ast.unparse(c.func) for c in with_retries]} — the vLLM summarizer "
+            "(_create_vllm_client) is the one that needs it"
+        )
+        assert len(without) == len(calls) - 1, (
+            "every retriever client ended up retry-capped: the OpenAI-API branch "
+            "(self.llm and the OpenAIEmbeddings instance) must keep the SDK default"
+        )
+        # Every client is still bounded on timeout, retry knob or not.
+        for call in without:
+            assert "http_timeout" in _source_names(_kwarg(call, "timeout")), (
+                f"{ast.unparse(call.func)} lost its timeout budget"
             )
 
     def test_no_openai_client_is_built_with_a_bare_number_timeout(self):

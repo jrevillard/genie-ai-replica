@@ -947,7 +947,17 @@ async def _await_with_heartbeat(tasks: list, *, phase: str, total: int, file_id:
             # while the caller's handler retracts the document. The wait is
             # capped at _PHASE_CANCEL_GRACE_SECONDS: past that, the caller is
             # already failing and a longer wait only delays the retract.
-            await asyncio.wait(pending, timeout=_PHASE_CANCEL_GRACE_SECONDS)
+            #
+            # Guarded because pending is empty whenever the failing task was the
+            # last one in flight, and asyncio.wait() on an empty set raises
+            # ValueError rather than returning. That is the single-batch case —
+            # a document with fewer chunks than BATCH_SIZE produces exactly one
+            # graph-insertion task — and unguarded it replaced the real
+            # "ArangoDB insert failed" with "Set of Tasks/Futures is empty" in
+            # the ingestion log and the document status, which is the last
+            # diagnostic channel the operator has.
+            if pending:
+                await asyncio.wait(pending, timeout=_PHASE_CANCEL_GRACE_SECONDS)
             # Same retrieval as the budgeted variant's settle: a sibling that
             # failed while we were waiting would otherwise log an unretrieved
             # exception, during an incident whose diagnosis depends on these

@@ -523,12 +523,15 @@ class GenieaiArangoRetriever(OpeaComponent):
                         probe.models.list()
                     if logflag:
                         logger.debug("OpenAI API Key is valid.")
+                    # Budgeted but not retry-capped: same reasoning as the
+                    # OpenAI embeddings branch above — this is a third-party
+                    # endpoint, and MODEL_LLM_MAX_RETRIES is the shared GPU's
+                    # knob, not this one's.
                     self.llm = ChatOpenAI(
                         temperature=OPENAI_CHAT_TEMPERATURE,
                         model=OPENAI_CHAT_MODEL,
                         max_tokens=OPENAI_CHAT_MAX_TOKENS,
                         timeout=http_timeout(VLLM_TIMEOUT),
-                        max_retries=LLM_MAX_RETRIES,
                     )
                     self._llm_model_id = OPENAI_CHAT_MODEL
                 except openai.error.AuthenticationError:
@@ -1239,11 +1242,17 @@ class GenieaiArangoRetriever(OpeaComponent):
                 # any OpenAI model id, so the wrapper is never installed here.
                 # Shared TEI budget: this client is otherwise unbounded, and the
                 # retrieval request it serves has no deadline of its own.
+                #
+                # No max_retries here on purpose. MODEL_LLM_MAX_RETRIES exists to
+                # cap the retry ladder of a contended shared GPU, and this
+                # branch talks to the OpenAI API instead, where the dominant
+                # transient failure is a 429 that the SDK's own retry handling
+                # exists to absorb. An operator setting the knob to 0 for a busy
+                # vLLM node would silently turn that off here as well.
                 embeddings = OpenAIEmbeddings(
                     model=OPENAI_EMBED_MODEL,
                     dimensions=dimension,
                     timeout=http_timeout(TEI_TIMEOUT),
-                    max_retries=LLM_MAX_RETRIES,
                 )
             elif TEI_EMBEDDING_ENDPOINT and HF_TOKEN:
                 # Left unbudgeted on purpose. langchain_huggingface's

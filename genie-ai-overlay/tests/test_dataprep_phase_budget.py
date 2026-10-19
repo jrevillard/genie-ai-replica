@@ -701,6 +701,36 @@ class TestFailureSeenDuringAHeartbeatEndsThePhase:
     them, which is the delay this whole mechanism exists to prevent.
     """
 
+    def test_a_lone_failing_batch_surfaces_its_own_error(self, monkeypatch):
+        """One failing task, no siblings: the real error must reach the caller.
+
+        A document with fewer chunks than BATCH_SIZE produces exactly one
+        graph-insertion task, so the failure path runs with ``pending`` empty —
+        and ``asyncio.wait`` on an empty set raises ``ValueError`` instead of
+        returning. Unguarded, the ingest log and the document status reported
+        "Set of Tasks/Futures is empty" and the ArangoDB error underneath it
+        was never surfaced anywhere.
+        """
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 5.0)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+
+        async def scenario():
+            async def only_batch():
+                raise RuntimeError("ArangoDB insert failed")
+
+            # create_task, matching the production call site: the helper reads
+            # .done()/.exception(), so it needs Tasks and not bare coroutines.
+            await dataprep._await_with_heartbeat(
+                [asyncio.ensure_future(only_batch())],
+                phase="Graph insertion",
+                total=1,
+                file_id="f1",
+                write_ingestion_log=_noop_log,
+            )
+
+        with pytest.raises(RuntimeError, match="ArangoDB insert failed"):
+            _run(scenario())
+
     def test_a_failure_during_the_heartbeat_does_not_wait_out_the_interval(self, monkeypatch):
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 30.0)
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 0.05)

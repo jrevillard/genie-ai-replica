@@ -3110,6 +3110,9 @@ chart:contract:
   image: dtzar/helm-kubectl:3.16.0
   stage: test
   tags: [docker]
+  # Serialize dind slots with chart:install — two concurrent dind sidecars
+  # on one runner slot starve each other's wait-for-service probe.
+  resource_group: chart-dind
   services:
     - name: docker:28-dind
       alias: docker
@@ -3179,6 +3182,8 @@ chart:install:
   image: docker:28-dind
   stage: test
   tags: [docker]
+  # Shares the chart-dind slot with chart:contract (see that job's note).
+  resource_group: chart-dind
   services:
     - name: docker:28-dind
       alias: docker

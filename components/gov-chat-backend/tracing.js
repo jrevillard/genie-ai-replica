@@ -51,8 +51,21 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   const { withBackgroundSpan } = require('./shared-lib/tracing-background');
   // Propagator factory — the shared test asserts on this factory, not on a
   // propagator it builds itself, so the wiring below cannot silently regress.
-  // Deep import matches the existing shared-lib/X pattern.
-  const { tracingBaggage } = require('./shared-lib/tracing-baggage');
+  // Deep import matches the existing shared-lib/X pattern. The BARREL is
+  // deliberately not used here: it pulls db-connection-service (arangojs) and
+  // security-middleware (express-rate-limit) into the module-load path, and
+  // this file has to install the OTel SDK before any of that loads.
+  //
+  // The module is required AS A WHOLE, not destructured. It exports
+  // { createGeniePropagator, withBaggage } flat and has never nested a
+  // `tracingBaggage` namespace — that shape belongs to the BARREL, which
+  // re-exports it under that name. Destructuring the deep path yields
+  // `undefined`, and every boot then dies at
+  // `tracingBaggage.createGeniePropagator()` with "Cannot read properties of
+  // undefined". The two import paths look interchangeable at a glance and are
+  // not; trace-propagation.test.js now pins both shapes against the real
+  // exports.
+  const tracingBaggage = require('./shared-lib/tracing-baggage');
 
   // Custom SpanProcessor that redacts PII and drops noise spans before export
   class PIIRedactionProcessor {

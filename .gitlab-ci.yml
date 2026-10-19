@@ -3200,6 +3200,7 @@ chart:install:
     - curl -fsSL -o /usr/local/bin/kind https://kind.sigs.k8s.io/dl/v0.27.0/kind-linux-amd64
     - install -m 0755 /usr/local/bin/kind /usr/local/bin/kind.real
     - mv /usr/local/bin/kind.real /usr/local/bin/kind
+    - helm dependency update charts/genieai-umbrella
     - helm version --short
     - kubectl version --client
     - kind version

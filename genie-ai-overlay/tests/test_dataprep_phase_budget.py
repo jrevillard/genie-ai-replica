@@ -180,6 +180,42 @@ class TestPhaseReportsProgress:
         assert progress, "a phase running longer than the interval wrote no progress line"
         assert any("in progress" in e[2] and "elapsed" in e[2] for e in progress)
 
+    def test_an_interval_at_or_above_the_budget_still_reports_on_the_final_tick(self, monkeypatch):
+        """Raising the interval to quiet a busy log must not silence the phase.
+
+        The wait runs for min(interval, remaining_phase), so an interval at or
+        above the budget means the phase ends on a single tick. A check placed
+        after the budget break would skip that tick's report — the operator who
+        raised the interval would get no progress line at all for the phase,
+        which is the undiagnosable silence this reporting exists to remove.
+        """
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 0.3)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+
+        async def scenario():
+            recorder = _Recorder()
+
+            async def wedged():
+                await asyncio.sleep(30)
+
+            results, timed_out = await dataprep._gather_with_phase_budget(
+                [wedged(), wedged()],
+                phase="Labeling",
+                phase_label=dataprep.PHASE_LABEL_LABELING,
+                total=2,
+                file_id="f1",
+                write_ingestion_log=recorder,
+            )
+            return results, timed_out, recorder.entries
+
+        results, timed_out, entries = _run(scenario())
+        assert timed_out is True
+        assert any(e[0] == "INFO" and "in progress" in e[2] for e in entries), (
+            "an interval above the budget silenced the whole phase — the operator "
+            "raised it to reduce noise, not to remove the heartbeat"
+        )
+        assert any(e[0] == "WARN" for e in entries), "the budget exhaustion itself must still be reported"
+
     def test_a_fast_phase_writes_no_progress_noise(self, monkeypatch):
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 10.0)
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)

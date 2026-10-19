@@ -1240,13 +1240,24 @@ class GenieaiArangoRetriever(OpeaComponent):
                     timeout=TEI_TIMEOUT,
                 )
             elif TEI_EMBEDDING_ENDPOINT and HF_TOKEN:
-                # huggingface_hub's client has no wall-clock default, so a
-                # contended TEI leaves this call open indefinitely.
+                # Left unbudgeted on purpose. langchain_huggingface's
+                # HuggingFaceEndpointEmbeddings is a pydantic model whose
+                # accepted field set depends on the pinned version; it is not
+                # documented as taking a timeout, and a rejected kwarg raises
+                # ValidationError at construction — which, on the remote-GPU
+                # path this branch selects, would 500 every retrieval request
+                # rather than merely leave one call unbounded.
+                #
+                # The bound belongs on the huggingface_hub client underneath
+                # (its InferenceClient does take a timeout; comps does not pass
+                # one either). Closing it means passing a pre-built client via
+                # model_kwargs, which needs the field set verified against the
+                # pinned langchain-huggingface first. Recorded with the rest of
+                # the vendored-client debt in genie-ai-overlay/OVERRIDES.yaml.
                 embeddings = HuggingFaceEndpointEmbeddings(
                     model=TEI_EMBEDDING_ENDPOINT,
                     task="feature-extraction",
                     huggingfacehub_api_token=HF_TOKEN,
-                    timeout=TEI_TIMEOUT,
                 )
                 # Issue #1035 (generalized): contrastive / instruction-tuned
                 # embedding models expect a query-side prefix at inference

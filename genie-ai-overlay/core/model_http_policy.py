@@ -49,19 +49,27 @@ rather than a knob here. Docling document parsing is in-process CPU work on the
 GPU node's own service, not a model call — no budget applies.
 """
 
+import math
 import os
 
 
 def positive_float_env(*names: str, default: float) -> float:
-    """Return the first env var among *names* parsing as a positive float.
+    """Return the first env var among *names* parsing as a positive finite float.
 
-    A garbage or non-positive value falls back to *default* instead of raising
-    or being honoured. Both matter for a tuning knob read at import time: a
-    typo must not take the service down at startup, and ``0`` / a negative value
-    must not be accepted — a zero timeout is not "no timeout", it is an
-    immediate failure on every call. Services whose own configuration reads
-    timings (dataprep's phase budgets) use this rather than a bare
-    ``float(os.getenv(...))`` so they cannot disagree about that rule.
+    A garbage, non-positive or non-finite value falls back to *default*
+    instead of raising or being honoured. All three matter for a tuning knob
+    read at import time:
+
+    - a typo must not take the service down at startup;
+    - ``0`` / a negative must not be accepted — a zero timeout is not "no
+      timeout", it is an immediate failure on every call;
+    - ``inf`` must not be accepted either. It passes a ``> 0`` check, and
+      ``int(inf)`` then raises ``OverflowError`` at import, which is the same
+      startup crash as a typo, reached by a different route.
+
+    Services whose own configuration reads timings (dataprep's phase budgets)
+    use this rather than a bare ``float(os.getenv(...))`` so they cannot
+    disagree about that rule.
     """
     for name in names:
         raw = os.getenv(name)
@@ -71,7 +79,9 @@ def positive_float_env(*names: str, default: float) -> float:
             value = float(raw)
         except ValueError:
             continue
-        if value > 0:
+        # isfinite before the comparison: NaN fails both, inf passes only the
+        # lower bound.
+        if math.isfinite(value) and value > 0:
             return value
     return default
 

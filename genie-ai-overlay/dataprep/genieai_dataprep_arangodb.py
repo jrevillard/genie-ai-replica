@@ -15,7 +15,7 @@ import aiohttp
 from opentelemetry import propagate
 
 from core.model_cache import get_model_id
-from core.model_http_policy import LLM_MAX_RETRIES, LLM_TIMEOUT_SECONDS
+from core.model_http_policy import CONTROL_PLANE_TIMEOUT_SECONDS, LLM_MAX_RETRIES, LLM_TIMEOUT_SECONDS
 from core.model_http_policy import positive_float_env as _positive_float_env
 from tracing import (
     background_span,
@@ -737,18 +737,31 @@ async def _gather_with_phase_budget(
             if failure is not None:
                 break
 
-            if not pending or remaining_phase <= 0:
-                break
-
-            if time.monotonic() >= next_report:
-                next_report = time.monotonic() + interval
+            # Report BEFORE the budget check. The wait ran for
+            # min(interval, remaining_phase), so if the operator set an interval
+            # at or above the budget the phase ends on this tick — and a check
+            # placed after the break would leave the final tick unreported,
+            # i.e. an operator who raised the interval to quiet a busy log
+            # would get silence for the whole phase instead.
+            now = time.monotonic()
+            # Report when the reporting interval has elapsed OR the phase is
+            # about to give up — the second clause is what keeps an interval
+            # set above the budget from silencing the phase, since in that case
+            # the single wait consumed the whole budget and the interval never
+            # elapsed on its own.
+            out_of_time = now >= next_report or remaining_phase <= 0
+            if pending and out_of_time:
+                next_report = now + interval
                 message = (
                     f"{phase} in progress: {len(results)}/{total} batches completed, "
-                    f"{len(pending)} in flight, {time.monotonic() - started:.0f}s elapsed "
+                    f"{len(pending)} in flight, {now - started:.0f}s elapsed "
                     f"(budget {DATAPREP_LLM_PHASE_TIMEOUT_SECONDS:g}s)"
                 )
                 logger.info(message)
                 await _safe_log(write_ingestion_log, file_id, "INFO", phase, message)
+
+            if not pending or remaining_phase <= 0:
+                break
 
         # Tasks still in flight at the deadline — not a raised batch, the phase
         # simply outran its budget.
@@ -784,6 +797,48 @@ async def _gather_with_phase_budget(
         return results, True
 
     return results, False
+
+
+async def _await_with_heartbeat(tasks: list, *, phase: str, total: int, file_id: str, write_ingestion_log) -> None:
+    """Wait for every task, reporting progress, and never abandoning one.
+
+    The counterpart to ``_gather_with_phase_budget`` for a phase that has no
+    fallback: it has the same reporting but no deadline, because the only way to
+    bound a phase is to give up on part of it and this phase cannot lose work
+    without losing documents. Errors propagate as ``asyncio.gather`` raises them
+    (first failure wins), so the caller's existing error handling still applies.
+    """
+    if not tasks:
+        return
+
+    started = time.monotonic()
+    interval = DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS
+    next_report = started + interval
+    pending = set(tasks)
+    completed = 0
+
+    while pending:
+        settled = {t for t in pending if t.done()}
+        pending -= settled
+        if not settled:
+            done, pending = await asyncio.wait(pending, timeout=interval, return_when=asyncio.FIRST_COMPLETED)
+            settled = done
+        for task in settled:
+            # Re-raise the first failure, as gather would. Done before any
+            # further reporting so the phase fails on the real error rather than
+            # on the heartbeat's log write.
+            task.result()
+            completed += 1
+
+        now = time.monotonic()
+        if pending and now >= next_report:
+            next_report = now + interval
+            message = (
+                f"{phase} in progress: {completed}/{total} batches completed, "
+                f"{len(pending)} in flight, {now - started:.0f}s elapsed"
+            )
+            logger.info(message)
+            await _safe_log(write_ingestion_log, file_id, "INFO", phase, message)
 
 
 @OpeaComponentRegistry.register("GENIE_DATAPREP_ARANGODB")
@@ -915,7 +970,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             # Also apply semaphore here to be safe
             async with (
                 self._log_semaphore,
-                aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session,
+                aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=CONTROL_PLANE_TIMEOUT_SECONDS)) as session,
                 session.patch(url, json=payload, headers=headers) as response,
             ):
                 if response.status != 200:
@@ -942,7 +997,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             # FIX: Limit concurrency of log writes to prevent 429 flooding
             async with (
                 self._log_semaphore,
-                aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session,
+                aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=CONTROL_PLANE_TIMEOUT_SECONDS)) as session,
                 session.post(url, json=payload, headers=headers) as response,
             ):
                 # Ignore 429s in logs specifically to prevent recursion or spam
@@ -969,7 +1024,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             propagate.inject(headers)
             async with (
                 self._log_semaphore,
-                aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session,
+                aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=CONTROL_PLANE_TIMEOUT_SECONDS)) as session,
                 session.get(url, headers=headers) as response,
             ):
                 if response.status == 200:
@@ -1099,7 +1154,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         if not GUARDRAIL_ENABLED:
             return {"success": True}
 
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=CONTROL_PLANE_TIMEOUT_SECONDS)) as session:
             for i, text in enumerate(plain_chunks):
                 try:
                     async with session.post(GUARDRAIL_URL, json={"text": text}) as resp:
@@ -1422,6 +1477,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         )
                         raise DataprepInputTooLongError(f"vLLM context overflow at context_batch: {err}") from e
                     logger.warning(f"Batch context failed {[i for i, _ in batch]}: {err}; falling back to per-chunk.")
+                    if _is_timeout(e):
+                        with suppress(Exception):
+                            span.set_attribute("dataprep.llm.timed_out", True)
+                            span.set_attribute("dataprep.llm.timeout_seconds", LLM_TIMEOUT_SECONDS)
                     _llm_fallback_total.add(1, {"phase": PHASE_LABEL_CONTEXTUAL, "reason": "batch_error"})
                     await self._write_ingestion_log(
                         file_id,
@@ -1813,6 +1872,15 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         f"Batch labeling vLLM context overflow ({err}). Aborting.",
                     )
                     raise DataprepInputTooLongError(f"vLLM context overflow at llm_call_batch: {err}") from e
+                # The batched call IS the path that stalls in practice (a
+                # 260-chunk document issues 65 of them), so the timeout marker
+                # belongs here as much as on the per-chunk call. Without it this
+                # span closes with no tokens and no status — indistinguishable
+                # from one still in flight.
+                if _is_timeout(e):
+                    with suppress(Exception):
+                        span.set_attribute("dataprep.llm.timed_out", True)
+                        span.set_attribute("dataprep.llm.timeout_seconds", LLM_TIMEOUT_SECONDS)
                 await self._write_ingestion_log(
                     file_id,
                     "WARN",
@@ -2107,30 +2175,26 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     # Wait for all batches to complete
                     #
                     # Not run through _gather_with_phase_budget, unlike the two
-                    # LLM phases above. That helper is safe here only because the
-                    # labeling and context phases have a fallback that turns an
-                    # abandoned batch into a degraded-but-present result. This
-                    # phase has none: a batch that is cancelled loses its chunks
-                    # outright, and the ingest still ends "Ingested" — silently
-                    # dropping documents from the knowledge graph is strictly
-                    # worse than a slow one. The heartbeat is kept (the phase is
-                    # the slowest part of a large ingest, and the silence is
-                    # what made the original stall undiagnosable); the bound does
-                    # not, because there is no safe way to abandon work here
-                    # without inventing a data-loss path.
-                    #
-                    # The bound that does apply is per-request, inside the
-                    # clients the vendored comps builds for the embedding calls —
-                    # which this repo cannot reach. Tracked in OVERRIDES.yaml
-                    # under comps.dataprep.integrations.arangodb.llm_transformer.
+                    # LLM phases above. That helper cancels stragglers on its
+                    # deadline, which is only safe because the labeling and
+                    # context phases have a fallback that turns an abandoned
+                    # batch into a degraded-but-present result. This phase has
+                    # none: a cancelled batch loses its chunks outright and the
+                    # ingest still ends "Ingested" — silently dropping documents
+                    # from the knowledge graph is strictly worse than a slow one.
+                    # So this phase is unbounded (the per-request bound inside
+                    # the clients it uses is the vendored comps', unreachable
+                    # from here — see OVERRIDES.yaml), but it still HEARTBEATS,
+                    # because a wedged graph phase was just as silent as the LLM
+                    # phases were and the whole point is that it is visible.
                     if tasks:
-                        _graph_started = time.monotonic()
-                        await asyncio.gather(*tasks)
-                        _graph_elapsed = time.monotonic() - _graph_started
-                        if _graph_elapsed > DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS:
-                            message = f"Graph insertion: {len(tasks)} batches completed in {_graph_elapsed:.0f}s"
-                            logger.info(message)
-                            await self._write_ingestion_log(input.file_id, "INFO", "Graph", message)
+                        await _await_with_heartbeat(
+                            tasks,
+                            phase="Graph insertion",
+                            total=len(tasks),
+                            file_id=input.file_id,
+                            write_ingestion_log=self._write_ingestion_log,
+                        )
 
                     # Ensure the vector index matches the embedder dim
                     # (recreate if dim drift). Failures are swallowed — see

@@ -20,6 +20,8 @@ import importlib
 import os
 from pathlib import Path
 
+import pytest
+
 import core.model_http_policy as policy
 
 _ENV_KEYS = (
@@ -106,6 +108,39 @@ class TestInvalidValues:
     def test_negative_rejected(self):
         assert _reload_with(MODEL_LLM_MAX_RETRIES="-3")["llm_retries"] == 2
 
+    @pytest.mark.parametrize("raw", ["inf", "1e400", "-inf", "nan", "NaN"])
+    def test_non_finite_rejected(self, raw):
+        """``inf`` passes a ``> 0`` check and then breaks ``int()``.
+
+        ``MODEL_LLM_MAX_RETRIES=1e400`` reached ``int(inf)`` and raised
+        OverflowError while the module was being imported — a startup crash in
+        every service that reads the policy, caused by a value no operator
+        would have meant to write. Rejected at parse like any other garbage.
+        """
+        m = _reload_with(MODEL_LLM_MAX_RETRIES=raw, MODEL_LLM_TIMEOUT_SECONDS=raw)
+        assert m["llm_retries"] == 2
+        assert m["llm_timeout"] == 180.0
+
+    def test_import_never_raises_on_any_garbage(self):
+        """Importing the policy must not be able to kill a service."""
+        for raw in ("", "inf", "-inf", "nan", "abc", "0", "-1", "1e999", "1,5", "  60  "):
+            saved = {k: os.environ.get(k) for k in _ENV_KEYS}
+            try:
+                for k, v in saved.items():
+                    if v is None:
+                        os.environ.pop(k, None)
+                    else:
+                        os.environ[k] = v
+                os.environ["MODEL_LLM_MAX_RETRIES"] = raw
+                importlib.reload(policy)  # would raise here
+            finally:
+                for k, v in saved.items():
+                    if v is None:
+                        os.environ.pop(k, None)
+                    else:
+                        os.environ[k] = v
+                importlib.reload(policy)
+
 
 def _constructors(source_path: Path, *class_names: str) -> list[ast.Call]:
     """Every call to any of *class_names* anywhere in *source_path*.
@@ -187,10 +222,19 @@ class TestCallSitesConsumeThePolicy:
             assert "TEI_TIMEOUT_SECONDS" in _source_names(_kwarg(call, "timeout"))
 
     def test_retriever_llm_and_embedding_clients_are_bounded(self):
-        """The retriever had three unbounded model clients; all three are bounded."""
+        """The retriever's OpenAI-branch clients are bounded.
+
+        ``HuggingFaceEndpointEmbeddings`` is deliberately excluded: it is a
+        pydantic model whose accepted fields depend on the pinned
+        langchain-huggingface, an unrecognised ``timeout`` raises at
+        construction, and on the remote-GPU path this branch selects that turns
+        an unbounded single call into a 500 on every retrieval. The gap is
+        tracked in OVERRIDES.yaml; asserting it here would only push the next
+        author to add the kwarg back.
+        """
         source = OVERLAY_ROOT / "retriever" / "genieai_retriever_arangodb.py"
-        calls = _constructors(source, "ChatOpenAI", "OpenAIEmbeddings", "HuggingFaceEndpointEmbeddings")
-        assert len(calls) >= 3, f"expected the retriever's 3 model clients, found {len(calls)}"
+        calls = _constructors(source, "ChatOpenAI", "OpenAIEmbeddings")
+        assert len(calls) >= 2, f"expected the retriever's OpenAI-branch clients, found {len(calls)}"
         for call in calls:
             assert _kwarg(call, "timeout") is not None, (
                 f"{ast.unparse(call.func)} built without an explicit timeout — "
@@ -199,12 +243,25 @@ class TestCallSitesConsumeThePolicy:
 
     def test_retriever_timeouts_come_from_the_policy(self):
         source = OVERLAY_ROOT / "retriever" / "genieai_retriever_arangodb.py"
-        calls = _constructors(source, "ChatOpenAI", "OpenAIEmbeddings", "HuggingFaceEndpointEmbeddings")
+        calls = _constructors(source, "ChatOpenAI", "OpenAIEmbeddings")
         for call in calls:
             names = _source_names(_kwarg(call, "timeout"))
             assert names & {"VLLM_TIMEOUT", "TEI_TIMEOUT"}, (
                 f"{ast.unparse(call.func)} timeout does not resolve to the shared policy: {names or 'not set'}"
             )
+
+    def test_the_unbudgeted_huggingface_client_documents_why(self):
+        """An unbounded client must say so where the next author will see it."""
+        source = (
+            OVERLAY_ROOT / "retriever" / "genieai_retriever_arangodb.py"
+        ).read_text(encoding="utf-8")
+        idx = source.find("HuggingFaceEndpointEmbeddings(")
+        assert idx != -1, "the call site moved — re-check whether it can be budgeted now"
+        preceding = source[max(0, idx - 1200) : idx]
+        assert "Left unbudgeted on purpose" in preceding, (
+            "HuggingFaceEndpointEmbeddings carries no timeout; without a comment "
+            "explaining why, the next reader adds the kwarg and 500s every retrieval"
+        )
 
     def test_dataprep_keycloak_refresh_is_bounded(self):
         """An unbounded refresh wedges every ingestion-log writer behind it."""
@@ -220,3 +277,33 @@ class TestCallSitesConsumeThePolicy:
                 "the Keycloak token session is unbounded — a slow IdP wedges every "
                 "_write_ingestion_log / _update_doc_status caller behind it"
             )
+
+    def test_dataprep_control_plane_calls_use_the_shared_budget(self):
+        """The docstring promises these read CONTROL_PLANE_TIMEOUT_SECONDS.
+
+        A deployer whose backend needs a longer budget must find every one of
+        these follow it, not just the Keycloak refresh — the ingestion-log
+        writer is the one that matters, since the phase heartbeats go through it
+        and a slow one stops the very reporting this change added.
+        """
+        source = OVERLAY_ROOT / "dataprep" / "genieai_dataprep_arangodb.py"
+        text = source.read_text(encoding="utf-8")
+        sessions = [
+            c
+            for c in ast.walk(ast.parse(text))
+            if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute) and c.func.attr == "ClientSession"
+        ]
+        assert sessions, "no aiohttp.ClientSession found in the dataprep module"
+        for call in sessions:
+            assert "CONTROL_PLANE_TIMEOUT_SECONDS" in _source_names(_kwarg(call, "timeout")), (
+                f"{ast.unparse(call.func)} at line {call.lineno} does not read the shared "
+                "control-plane budget"
+            )
+
+    def test_no_hardcoded_control_plane_timeout_is_left_behind(self):
+        assert "ClientTimeout(total=30)" not in (
+            (OVERLAY_ROOT / "dataprep" / "genieai_dataprep_arangodb.py").read_text(encoding="utf-8")
+        ), (
+            "a literal 30 s survived: the knob would change the Keycloak refresh and "
+            "leave these at 30, which is the configuration the docstring denies"
+        )

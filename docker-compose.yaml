@@ -1134,8 +1134,9 @@ services:
       - NOVELTY_SIGMOID_B=${NOVELTY_SIGMOID_B:-0.25}
       - CONTEXT_DECAY_FACTOR=${CONTEXT_DECAY_FACTOR:-0.0025}
       - MIN_VALUE_THRESHOLD=${MIN_VALUE_THRESHOLD:--1.0}
-
-      MODEL_TEI_TIMEOUT_SECONDS: ${MODEL_TEI_TIMEOUT_SECONDS:-120}
+      # Shared model-endpoint HTTP budgets (core/model_http_policy.py). This
+      # service's environment block is a sequence, so the form is KEY=VALUE.
+      - MODEL_TEI_TIMEOUT_SECONDS=${MODEL_TEI_TIMEOUT_SECONDS:-120}
     # Internal only
     # ports:
     #   - "6100:8000"
@@ -1188,10 +1189,14 @@ services:
       # entity/relationship extraction call per document, unbudgeted from here),
       # and it is the only model-endpoint call in the deck that comps reads a
       # budget for. Setting it here closes that gap with no override patch.
-      # 180 matches the in-repo default of MODEL_LLM_TIMEOUT_SECONDS, so both
-      # halves of the ingest degrade on the same clock; override VLLM_TIMEOUT
-      # directly if the graph transformer needs a different one.
-      VLLM_TIMEOUT: ${VLLM_TIMEOUT:-180}
+      #
+      # MODEL_LLM_TIMEOUT_SECONDS wins so that raising the one documented LLM
+      # knob moves both halves of the ingest together — the in-repo labelling
+      # client and the vendored graph transformer. VLLM_TIMEOUT stays readable
+      # as a fallback so a deployment that already set it (it was the retriever
+      # summarizer knob before this policy existed) keeps its value rather than
+      # being silently reset by the new default.
+      VLLM_TIMEOUT: ${VLLM_TIMEOUT:-${MODEL_LLM_TIMEOUT_SECONDS:-180}}
       GPU_NODE_HOST: ${GPU_NODE_HOST:-}
       TEI_EMBEDDING_ENDPOINT: ${EMBEDDING_SERVICE_URL:-http://tei:80}
       GUARDRAIL_URL: http://guardrail:9090/v1/guardrails
@@ -1349,7 +1354,12 @@ services:
 
       GPU_NODE_HOST: ${GPU_NODE_HOST:-}
       # Shared model-endpoint HTTP budgets (core/model_http_policy.py).
-      MODEL_LLM_TIMEOUT_SECONDS: ${MODEL_LLM_TIMEOUT_SECONDS:-180}
+      # The LLM budget is passed as VLLM_TIMEOUT, not
+      # MODEL_LLM_TIMEOUT_SECONDS: the policy gives VLLM_TIMEOUT second
+      # precedence, so injecting the shared name with a default here would
+      # always win and a deployment that already set VLLM_TIMEOUT (the
+      # retriever's knob before this policy existed) would be silently reset.
+      VLLM_TIMEOUT: ${VLLM_TIMEOUT:-${MODEL_LLM_TIMEOUT_SECONDS:-180}}
       MODEL_LLM_MAX_RETRIES: ${MODEL_LLM_MAX_RETRIES:-2}
       MODEL_TEI_TIMEOUT_SECONDS: ${MODEL_TEI_TIMEOUT_SECONDS:-120}
     networks:

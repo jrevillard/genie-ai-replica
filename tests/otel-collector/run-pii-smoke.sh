@@ -43,26 +43,21 @@ NETWORK="genie-ai-pii-smoke-$RUN_ID"
 # on this network would break DNS resolution to it.
 VL_CONTAINER="genie-pii-vl-$RUN_ID"
 COLLECTOR_CONTAINER="genie-pii-collector-$RUN_ID"
+QUEUE_VOLUME="genie-pii-vt-$RUN_ID"
 STATE_DIR="${TMPDIR:-/tmp}/genie-ai-pii-smoke-$RUN_ID"
 
 cleanup() {
   local rc=$?
   docker rm -f "$COLLECTOR_CONTAINER" >/dev/null 2>&1 || true
   docker rm -f "$VL_CONTAINER" >/dev/null 2>&1 || true
+  docker volume rm "$QUEUE_VOLUME" >/dev/null 2>&1 || true
   docker network rm "$NETWORK" >/dev/null 2>&1 || true
   if [ "$rc" -eq 0 ]; then rm -rf "$STATE_DIR"; else echo "artifacts kept: $STATE_DIR" >&2; fi
   echo "exit=$rc" >&2
   exit "$rc"
 }
 trap cleanup EXIT
-mkdir -p "$STATE_DIR/victoriatraces"
-# The collector image runs as uid 10001 and its persistent-queue storage
-# must be writable by that uid. Compose guarantees this with the one-shot
-# `otel-collector-init` service (`chown -R 10001:10001 /var/lib/otelcol`);
-# a bind-mounted host dir is root-owned, so without this the collector dies
-# with "permission denied" on the victoriatraces exporter's queue file.
-# 0777 rather than chown because a local test run may not be root.
-chmod 777 "$STATE_DIR" "$STATE_DIR/victoriatraces"
+mkdir -p "$STATE_DIR"
 
 # `docker version`, not `docker info`: the CI runners front the daemon with
 # a socket proxy (default-deny) where GET /info is filtered — `docker
@@ -98,14 +93,24 @@ if [ "${PII_SMOKE_CONFIG:-}" ] && grep -q "genie-pii-vl-HOSTPLACEHOLDER" "$CONFI
   sed "s/genie-pii-vl-HOSTPLACEHOLDER/${VL_CONTAINER}/g" "$CONFIG_FILE" > "${STATE_DIR}/config.yaml"
   CONFIG_FILE="${STATE_DIR}/config.yaml"
 fi
+# Remote-daemon (socket-proxy CI) compatibility: bind-mount source paths
+# resolve on the DAEMON's filesystem, not the client's — a client-local
+# config or queue path arrives as a nonexistent host path and the daemon
+# materializes a directory instead ("not a directory" mount error). So the
+# config travels through an env var (--config=env:) and the file_storage
+# queue lives in a named volume; the collector runs as root so the queue
+# volume is writable (the uid has no bearing on the transforms under test).
+export PII_SMOKE_COLLECTOR_CONFIG="$(cat "$CONFIG_FILE")"
+docker volume create "$QUEUE_VOLUME" >/dev/null
 docker run -d --name "$COLLECTOR_CONTAINER" --network "$NETWORK" \
+  -e PII_SMOKE_COLLECTOR_CONFIG \
   -e VICTORIALOGS_URL="http://${VL_CONTAINER}:9428" \
   -e VICTORIALOGS_URL_HOST="${VL_CONTAINER}" \
   -e VICTORIALOGS_TENANT_ID_ACCOUNT_ID=0 \
   -e VICTORIALOGS_TENANT_ID_PROJECT_ID=0 \
-  -v "${CONFIG_FILE}:/etc/otelcol-contrib/config.yaml:ro" \
-  -v "${STATE_DIR}/victoriatraces:/var/lib/otelcol/file_storage/victoriatraces" \
-  "$COLLECTOR_IMAGE" --config=/etc/otelcol-contrib/config.yaml >/dev/null
+  -v "${QUEUE_VOLUME}:/var/lib/otelcol/file_storage/victoriatraces" \
+  --user 0:0 \
+  "$COLLECTOR_IMAGE" --config=env:PII_SMOKE_COLLECTOR_CONFIG >/dev/null
 
 # --- Fast config gate --------------------------------------------------------
 # Catches an OTTL parse error (the failure mode that silently took the whole

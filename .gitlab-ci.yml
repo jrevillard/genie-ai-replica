@@ -3209,6 +3209,15 @@ chart:install:
     - kind delete cluster --name kind 2>/dev/null || true
     - kind create cluster --image kindest/node:v1.33.0 --wait 5m
     - kind get kubeconfig --name kind > "$KUBECONFIG"
+    # kind writes 127.0.0.1 as the API endpoint — unreachable from the job
+    # container when the daemon is remote (runner socket proxy). Rewrite to
+    # the daemon host taken from DOCKER_HOST.
+    - |
+      DAEMON_HOST="${DOCKER_HOST#tcp://}"; DAEMON_HOST="${DAEMON_HOST%%:*}"
+      if [ -n "$DAEMON_HOST" ] && [ "$DAEMON_HOST" != "127.0.0.1" ]; then
+        sed -i "s|https://127.0.0.1:|https://${DAEMON_HOST}:|" "$KUBECONFIG"
+        echo "kubeconfig endpoint rewritten to daemon host ${DAEMON_HOST}"
+      fi
     - export KUBECONFIG
     - ./scripts/install-prereqs.sh
     - >-

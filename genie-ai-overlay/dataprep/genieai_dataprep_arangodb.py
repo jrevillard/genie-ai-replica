@@ -752,6 +752,14 @@ async def _gather_with_phase_budget(
                     timeout=max(min(interval, remaining_phase), 0.01),
                     return_when=asyncio.FIRST_COMPLETED,
                 )
+                # Recomputed, not carried over: the wait, and the heartbeat
+                # write inside the branch below it, both consume wall clock, so
+                # the value from before the wait understates how much of the
+                # budget is gone. Using it to decide whether to report and
+                # whether to break lets the phase overshoot its own deadline by
+                # up to one tick, which is the difference between a bound and
+                # an approximation of one.
+                remaining_phase = DATAPREP_LLM_PHASE_TIMEOUT_SECONDS - (time.monotonic() - started)
 
             for task in sorted(done, key=lambda t: order[id(t)]):
                 # Propagate a raised task exactly as gather would — but record it
@@ -796,6 +804,12 @@ async def _gather_with_phase_budget(
                 )
                 logger.info(message)
                 await _safe_log(write_ingestion_log, file_id, "INFO", phase, message)
+                # Same reason as after the wait above: the write is a full
+                # ingestion-log round trip, and on a slow backend it can be the
+                # longest thing in the tick. Testing the deadline against the
+                # value from before it lets the phase run another whole tick
+                # past its budget.
+                remaining_phase = DATAPREP_LLM_PHASE_TIMEOUT_SECONDS - (time.monotonic() - started)
 
                 # The log write yields the event loop for a full ingestion-log
                 # round trip. A batch that answers during it holds a complete
@@ -1798,12 +1812,16 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 # _llm_call_batch already counted the failure (parse or call) —
                 # it swallows both and returns None, so nothing reaches the
                 # handlers below for a failed call.
+                # Wording is a published contract: this substring is listed in
+                # site/content/en/docs/operate/ingestion-log.md as one of the
+                # "canonical messages you will grep for", with the guided-JSON
+                # remedy attached. Renaming it here silently breaks the
+                # runbook, so the doc moves with the string, not the reverse.
                 await self._write_ingestion_log(
                     file_id,
                     "WARN",
                     "Labeling",
-                    f"Batch labeling did not return usable labels for chunks {[i for i, _ in batch]}; "
-                    "falling back to per-chunk.",
+                    f"Batch labeling parse failure for chunks {[i for i, _ in batch]}; falling back to per-chunk.",
                 )
             except DataprepInputTooLongError:
                 # Fail-loud: batch prompt is structurally too long; retrying with
@@ -1817,9 +1835,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             except Exception as e:
                 # Reached only for a failure _llm_call_batch did not handle —
                 # it is the last resort before per-chunk, not the common path.
+                # No counter here on purpose: _llm_call_batch swallows every
+                # failure it sees and returns None, so this handler only runs
+                # for an exception raised outside its own try, and a counter
+                # there would report a permanently-zero label that reads as
+                # "no batch errors ever happen".
                 err = f"{type(e).__name__}: {str(e)[:200]}"
                 batch_indices = [i for i, _ in batch]
-                _llm_fallback_total.add(1, {"phase": PHASE_LABEL_LABELING, "reason": "batch_error"})
                 await self._write_ingestion_log(
                     file_id,
                     "WARN",

@@ -1183,22 +1183,25 @@ services:
       DATAPREP_COMPONENT_NAME: GENIE_DATAPREP_ARANGODB
       VLLM_MODEL_ID: ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
       VLLM_ENDPOINT: ${VLLM_ENDPOINT:-http://vllm:8000}
-      # Read by the VENDORED comps, not by this repo: OpeaArangoDataprep builds
-      # its LLMGraphTransformer with ChatOpenAI(timeout=VLLM_TIMEOUT), defaulting
-      # to 600 s. That transformer is the dominant slow phase of an ingest (one
-      # entity/relationship extraction call per document, unbudgeted from here),
-      # and it is the only model-endpoint call in the deck that comps reads a
-      # budget for. Setting it here closes that gap with no override patch.
+      # Two names, two consumers, and they are NOT the same knob.
       #
-      # Only VLLM_TIMEOUT is injected, never MODEL_LLM_TIMEOUT_SECONDS. The policy
-      # gives MODEL_LLM_TIMEOUT_SECONDS precedence, so injecting it with a
-      # default here would always win and a deployment that already set
-      # VLLM_TIMEOUT (the retriever knob before this policy existed) would have
-      # it silently reset. With the nested default, raising the documented
-      # MODEL_LLM_TIMEOUT_SECONDS still moves both halves of the ingest — the
-      # in-repo labelling client and the vendored graph transformer — together,
-      # and an explicit VLLM_TIMEOUT still overrides it.
-      VLLM_TIMEOUT: ${VLLM_TIMEOUT:-${MODEL_LLM_TIMEOUT_SECONDS:-180}}
+      # MODEL_LLM_TIMEOUT_SECONDS reaches this repo's own clients (the labelling
+      # and context-generation SDK client). Every call behind it degrades on
+      # timeout - batch -> per-chunk -> file labels - so bounding it costs
+      # quality, not work, and 180 s is the deliberate default.
+      MODEL_LLM_TIMEOUT_SECONDS: ${MODEL_LLM_TIMEOUT_SECONDS:-180}
+      MODEL_LLM_MAX_RETRIES: ${MODEL_LLM_MAX_RETRIES:-2}
+      #
+      # VLLM_TIMEOUT is read by the VENDORED comps, not by this repo:
+      # OpeaArangoDataprep builds its LLMGraphTransformer with
+      # ChatOpenAI(timeout=VLLM_TIMEOUT), defaulting to 600 s. That phase has NO
+      # degradation path - a batch that is cancelled mid-flight loses its chunks
+      # and the document still reports "Ingested" - so it keeps the 600 s it ran
+      # at before this policy existed. Tightening it here would convert a slow
+      # graph extraction into silent data loss, the same trade MODEL_RERANK_
+      # TIMEOUT_SECONDS is kept at aiohttp's 300 s to avoid. Lower it
+      # deliberately once the graph phase has a fallback, not by upgrading.
+      VLLM_TIMEOUT: ${VLLM_TIMEOUT:-600}
       GPU_NODE_HOST: ${GPU_NODE_HOST:-}
       TEI_EMBEDDING_ENDPOINT: ${EMBEDDING_SERVICE_URL:-http://tei:80}
       GUARDRAIL_URL: http://guardrail:9090/v1/guardrails
@@ -1254,16 +1257,9 @@ services:
       # OpenTelemetry — SDK is no-op when ENABLE_OBSERVABILITY != 1
       ENABLE_OBSERVABILITY: ${ENABLE_OBSERVABILITY:-0}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
-      # Shared model-endpoint HTTP budgets (core/model_http_policy.py).
-      # The LLM budget goes in as VLLM_TIMEOUT only, for the same reason as the
-      # retriever block: injecting MODEL_LLM_TIMEOUT_SECONDS with a default here
-      # would always win the policy's precedence, so a deployment that already
-      # set VLLM_TIMEOUT would drive the vendored graph transformer with it while
-      # the in-repo labelling client silently used 180 — the two halves of one
-      # ingest disagreeing, which is what this is meant to prevent. MODEL_LLM_*
-      # still overrides when explicitly set, since the nested default only
-      # applies when VLLM_TIMEOUT is unset.
-      MODEL_LLM_MAX_RETRIES: ${MODEL_LLM_MAX_RETRIES:-2}
+      # Remaining shared model-endpoint budgets (core/model_http_policy.py).
+      # The LLM timeout and retry budget are set at the top of this block,
+      # where the two-name split is explained.
       MODEL_CONTROL_PLANE_TIMEOUT_SECONDS: ${MODEL_CONTROL_PLANE_TIMEOUT_SECONDS:-30}
       DATAPREP_LLM_PHASE_TIMEOUT_SECONDS: ${DATAPREP_LLM_PHASE_TIMEOUT_SECONDS:-600}
       DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS: ${DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS:-60}
@@ -1362,11 +1358,14 @@ services:
 
       GPU_NODE_HOST: ${GPU_NODE_HOST:-}
       # Shared model-endpoint HTTP budgets (core/model_http_policy.py).
-      # The LLM budget is passed as VLLM_TIMEOUT, not
-      # MODEL_LLM_TIMEOUT_SECONDS: the policy gives VLLM_TIMEOUT second
-      # precedence, so injecting the shared name with a default here would
-      # always win and a deployment that already set VLLM_TIMEOUT (the
-      # retriever's knob before this policy existed) would be silently reset.
+      # Both spellings are injected so the policy's own precedence is the one
+      # that decides: MODEL_LLM_TIMEOUT_SECONDS first, the legacy VLLM_TIMEOUT
+      # second. VLLM_TIMEOUT keeps the nested default because any vendored comps
+      # client in this container reads that name directly, not through the
+      # policy - without it, raising MODEL_LLM_TIMEOUT_SECONDS would move this
+      # repo's clients and leave those on the old value.
+      MODEL_LLM_TIMEOUT_SECONDS: ${MODEL_LLM_TIMEOUT_SECONDS:-180}
+      MODEL_LLM_MAX_RETRIES: ${MODEL_LLM_MAX_RETRIES:-2}
       VLLM_TIMEOUT: ${VLLM_TIMEOUT:-${MODEL_LLM_TIMEOUT_SECONDS:-180}}
       MODEL_TEI_TIMEOUT_SECONDS: ${MODEL_TEI_TIMEOUT_SECONDS:-120}
     networks:

@@ -124,6 +124,11 @@ vllm_api_key: ""
 # These are independent of gpu_node_host. For example:
 #   - Remote GPU node with Let's Encrypt: no need to set opea_ssl_skip_verify
 #   - Remote GPU node with self-signed cert: set opea_ssl_skip_verify = "1"
+# Cross-reference: gpu_self_signed_certs above describes the GPU node's own
+# certificate. When that node is remote (gpu_node_host set) AND its certificate
+# is self-signed, this must be "1" too — TLS verification on the OPEA side is
+# opt-in, so a deployment that relied on it being implied now fails at the first
+# LLM call with CERTIFICATE_VERIFY_FAILED instead of at deploy time.
 opea_ssl_skip_verify: ""
 
 # Keycloak SSL verification (independent of OPEA settings)

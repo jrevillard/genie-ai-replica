@@ -15,6 +15,7 @@ it reports while it runs, and it degrades rather than raising.
 
 import asyncio
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -34,13 +35,25 @@ async def _noop_log(*_args, **_kwargs):
 
 
 class _Recorder:
-    """Stand-in for the dataprep instance's ingestion-log writer."""
+    """Stand-in for the dataprep instance's ingestion-log writer.
 
-    def __init__(self):
+    ``yield_for`` makes the write take real wall-clock time, which is what the
+    late-drain path depends on: awaiting a coroutine that never awaits anything
+    gives the event loop no opportunity to run the batch the heartbeat is meant
+    to catch, so a recorder without it silently turns those tests into tests of
+    the main drain. Every entry is stamped so a test can assert the ordering
+    (batch finished *after* the write started), which is the only evidence that
+    the late path ran rather than the main one.
+    """
+
+    def __init__(self, yield_for: float = 0.0):
         self.entries: list[tuple] = []
+        self.yield_for = yield_for
 
     async def __call__(self, file_id, level, stage, message):
-        self.entries.append((level, stage, message))
+        self.entries.append((level, stage, message, time.monotonic()))
+        if self.yield_for:
+            await asyncio.sleep(self.yield_for)
 
 
 def _run(coro):
@@ -459,10 +472,17 @@ class TestPhaseBudgetIsSizedAgainstOneBatchTask:
     """
 
     @staticmethod
-    def _ladder(monkeypatch, *, batch_size):
-        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 600.0)
-        monkeypatch.setattr(dataprep, "LLM_MAX_RETRIES", 2)
-        monkeypatch.setattr(dataprep, "LLM_TIMEOUT_SECONDS", 180.0)
+    def _ladder(*, batch_size):
+        """The ladder arithmetic, read from the LIVE module constants.
+
+        Nothing here is monkeypatched. An earlier version pinned all three
+        inputs and then asserted relationships between the numbers the test
+        itself supplied, which passes whatever the production defaults are:
+        restoring LLM_TIMEOUT_SECONDS to the openai SDK's 600 leaves the whole
+        class green while a single batched call grows to 1800 s and starts
+        being cancelled mid-call. Only *batch_size* is injected, because that
+        is the one input no module constant carries.
+        """
         one_call = (1 + dataprep.LLM_MAX_RETRIES) * dataprep.LLM_TIMEOUT_SECONDS
         per_chunk = 3 * one_call
         return {
@@ -472,18 +492,18 @@ class TestPhaseBudgetIsSizedAgainstOneBatchTask:
             "batch_task": one_call + batch_size * per_chunk,
         }
 
-    def test_budget_is_above_a_single_batched_call(self, monkeypatch):
+    def test_budget_is_above_a_single_batched_call(self):
         """A slow-but-eventually-answering batch is not cut mid-call."""
-        ladder = self._ladder(monkeypatch, batch_size=dataprep.LABEL_LLM_BATCH_SIZE)
+        ladder = self._ladder(batch_size=dataprep.LABEL_LLM_BATCH_SIZE)
         assert ladder["budget"] > ladder["one_call"], (
             f"phase budget {ladder['budget']:.0f}s does not exceed the "
             f"{ladder['one_call']:.0f}s one batched call can occupy — a call that would have "
             "succeeded is abandoned mid-flight instead of completing"
         )
 
-    def test_budget_is_below_the_per_chunk_ladder(self, monkeypatch):
+    def test_budget_is_below_the_per_chunk_ladder(self):
         """The per-chunk ladder must not outlast the phase that stops it."""
-        ladder = self._ladder(monkeypatch, batch_size=dataprep.LABEL_LLM_BATCH_SIZE)
+        ladder = self._ladder(batch_size=dataprep.LABEL_LLM_BATCH_SIZE)
         assert ladder["budget"] < ladder["per_chunk"], (
             f"phase budget {ladder['budget']:.0f}s is not below the "
             f"{ladder['per_chunk']:.0f}s a per-chunk call can occupy — the phase would wait for "
@@ -491,7 +511,7 @@ class TestPhaseBudgetIsSizedAgainstOneBatchTask:
         )
 
     @pytest.mark.parametrize("batch_size", [1, 2, 4, 8])
-    def test_budget_fires_before_a_single_batch_task_could_finish(self, monkeypatch, batch_size):
+    def test_budget_fires_before_a_single_batch_task_could_finish(self, batch_size):
         """The invariant the phase bound actually rests on.
 
         Sizes the budget against the composed task, not against one call inside
@@ -501,7 +521,7 @@ class TestPhaseBudgetIsSizedAgainstOneBatchTask:
         chunk — and no per-request budget reaches that far, which is the reason
         the phase bound is not redundant with LLM_TIMEOUT_SECONDS.
         """
-        ladder = self._ladder(monkeypatch, batch_size=batch_size)
+        ladder = self._ladder(batch_size=batch_size)
         assert ladder["budget"] < ladder["batch_task"], (
             f"phase budget {ladder['budget']:.0f}s is not below the {ladder['batch_task']:.0f}s "
             f"one batch task (batch size {batch_size}) can occupy — nothing else bounds the "
@@ -577,15 +597,24 @@ class TestPhaseBoundIsAHardWall:
         it would report work as lost that the model actually did, and send the
         operator looking at GPU contention instead of at the budget.
         """
-        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 0.4)
+        # The budget expires INSIDE the heartbeat write, so the phase breaks out
+        # of the loop the moment the write returns and the main drain never gets
+        # another turn. Without that, deleting the late drain still passes: the
+        # batch is simply picked up by the main drain one iteration later.
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 0.08)
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 0.05)
 
         async def scenario():
-            recorder = _Recorder()
+            # The heartbeat's first tick lands at ~0.05 s; the write then holds
+            # the loop for 0.15 s, so the batch below completes strictly inside
+            # that window and strictly after the write started.
+            recorder = _Recorder(yield_for=0.15)
             late = []
+            finished_at = {}
 
             async def answers_during_the_log_write():
-                await asyncio.sleep(0.06)  # lands inside the heartbeat's await
+                await asyncio.sleep(0.06)
+                finished_at["batch"] = time.monotonic()
                 return {0: ["label"]}
 
             async def wedged():
@@ -600,9 +629,9 @@ class TestPhaseBoundIsAHardWall:
                 write_ingestion_log=recorder,
             )
             late.extend(recorder.entries)
-            return results, timed_out, late
+            return results, timed_out, late, finished_at
 
-        results, timed_out, entries = _run(scenario())
+        results, timed_out, entries, finished_at = _run(scenario())
         assert timed_out is True
         assert [r for partial in results for r in partial], (
             "a batch that completed during the heartbeat was discarded — its chunks "
@@ -611,7 +640,19 @@ class TestPhaseBoundIsAHardWall:
         warned = [e for e in entries if e[0] == "WARN"]
         assert warned, "the budget exhaustion must still be reported"
         assert "1/2 batches completed" in warned[0][2], (
-            "the WARN must count the batch that did finish, not report it abandoned"
+            "the WARN must count the batch that finished during the heartbeat write. Reporting "
+            "0/2 is the signature of the late drain being gone: the work was done, the phase "
+            "had no time left to notice, and the batch fell to the file-label fallback anyway"
+        )
+        # The evidence that this is the LATE path and not the main drain: the
+        # batch finished after a heartbeat write had already started, so the
+        # main drain could not have collected it. Without this assertion the
+        # test passes even if the late drain is deleted outright.
+        progress_writes = [e for e in entries if "in progress" in e[2]]
+        assert progress_writes, "no heartbeat was written — the scenario never reached the branch"
+        assert finished_at["batch"] > progress_writes[0][3], (
+            "the batch finished before the heartbeat write started, so the main drain collected "
+            "it and this test is not exercising the late path it is named for"
         )
 
     def test_the_reported_failure_is_deterministic_across_runs(self, monkeypatch):
@@ -663,6 +704,11 @@ class TestFailureSeenDuringAHeartbeatEndsThePhase:
     def test_a_failure_during_the_heartbeat_does_not_wait_out_the_interval(self, monkeypatch):
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 30.0)
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 0.05)
+        # Pinned so the ceiling below tracks the helper's own settle window
+        # instead of the production constant. Left at its real 5 s, the test
+        # asserts against a number the code could double without failing, and a
+        # future raise to 30 s would turn this into a 30-second test.
+        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
 
         async def scenario():
             async def boom():
@@ -689,7 +735,8 @@ class TestFailureSeenDuringAHeartbeatEndsThePhase:
         elapsed = _run(scenario())
         assert elapsed < 2.0, (
             f"the phase sat {elapsed:.1f}s after a failure seen during the heartbeat — "
-            "the siblings kept their slots for a whole progress interval"
+            "the siblings kept their slots for a whole progress interval instead of the "
+            "0.2s settle this test pins"
         )
 
 

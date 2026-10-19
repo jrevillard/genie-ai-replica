@@ -194,6 +194,22 @@ class TestInvalidValues:
                 importlib.reload(policy)
 
 
+def _called_name(node: ast.AST) -> str | None:
+    """The terminal name of a call target: ``OpenAI(...)`` and ``openai.OpenAI(...)``.
+
+    Both spellings matter. Matching only a bare ``ast.Name`` left the
+    retriever's readiness probe — built as ``openai.OpenAI(...)`` — invisible
+    to every guard in this file, so the suite reported full coverage of "every
+    httpx-backed client goes through http_timeout" while one of them was not
+    being looked at.
+    """
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    return None
+
+
 def _constructors(source_path: Path, *class_names: str) -> list[ast.Call]:
     """Every call to any of *class_names* anywhere in *source_path*.
 
@@ -203,11 +219,7 @@ def _constructors(source_path: Path, *class_names: str) -> list[ast.Call]:
     """
     tree = ast.parse(source_path.read_text(encoding="utf-8"))
     wanted = set(class_names)
-    return [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in wanted
-    ]
+    return [node for node in ast.walk(tree) if isinstance(node, ast.Call) and _called_name(node.func) in wanted]
 
 
 def _function_body(source: str, name: str) -> str:
@@ -301,6 +313,29 @@ class TestHttpTimeoutKeepsTheConnectCeiling:
 
         assert httpx.Timeout(180.0).connect == 180.0
         assert httpx.Timeout(180.0, connect=5.0).connect == 5.0
+
+
+def _register_keys_set_on_spans(func: ast.AST) -> set[str]:
+    """Vocabulary keys passed as the first argument of ``span.set_attribute``.
+
+    Read from the AST rather than the source text so the key has to actually
+    reach a call: a docstring naming the attribute, or a comment explaining why
+    it is stamped, satisfies a substring search over the same function.
+    """
+    found: set[str] = set()
+    for node in ast.walk(func):
+        if not (isinstance(node, ast.Call) and _called_name(node.func) == "set_attribute" and node.args):
+            continue
+        first = node.args[0]
+        if (
+            isinstance(first, ast.Subscript)
+            and isinstance(first.value, ast.Name)
+            and first.value.id == "ATTRIBUTE_NAMES"
+            and isinstance(first.slice, ast.Constant)
+            and isinstance(first.slice.value, str)
+        ):
+            found.add(first.slice.value)
+    return found
 
 
 class TestCallSitesConsumeThePolicy:
@@ -407,6 +442,33 @@ class TestCallSitesConsumeThePolicy:
                 f"{ast.unparse(call.func)} timeout does not resolve to the shared policy: {names or 'not set'}"
             )
 
+    def test_the_retriever_config_names_rebind_to_the_policy(self):
+        """``VLLM_TIMEOUT = LLM_TIMEOUT_SECONDS``, not a local re-read of the env.
+
+        The retriever call sites assert on the *name* ``VLLM_TIMEOUT``, so
+        nothing above notices what that name is bound to. Reverting this
+        assignment to ``os.getenv("VLLM_TIMEOUT", 600)`` would leave the
+        summarizer on a 10-minute budget — the exact live stall this policy
+        exists to bound — with the call-site tests still reporting the
+        retriever as budgeted.
+        """
+        source = (OVERLAY_ROOT / "retriever" / "config.py").read_text(encoding="utf-8")
+        bindings = {}
+        for node in ast.walk(ast.parse(source)):
+            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Name):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        bindings[target.id] = node.value.id
+        for name, expected in (
+            ("VLLM_TIMEOUT", "LLM_TIMEOUT_SECONDS"),
+            ("TEI_TIMEOUT", "TEI_TIMEOUT_SECONDS"),
+        ):
+            assert name in bindings, f"{name} is no longer assigned at module level in retriever/config.py"
+            assert bindings[name] == expected, (
+                f"retriever/config.py rebinds {name} to {bindings[name]!r}, not {expected!r} — "
+                "the retriever call sites read this name, so this is the value they get"
+            )
+
     def test_the_retriever_clients_carry_the_retry_budget_too(self):
         """``MODEL_LLM_MAX_RETRIES`` must not read as deck-wide and reach one service.
 
@@ -435,7 +497,10 @@ class TestCallSitesConsumeThePolicy:
         checked = 0
         for rel, names in (
             ("dataprep/genieai_dataprep_arangodb.py", ("AsyncOpenAI",)),
-            ("retriever/genieai_retriever_arangodb.py", ("ChatOpenAI", "OpenAIEmbeddings")),
+            # "OpenAI" covers openai.OpenAI(...) — the retriever's API-key probe,
+            # built through a dotted attribute rather than a bare name, which is
+            # why it needs the helper to match both spellings.
+            ("retriever/genieai_retriever_arangodb.py", ("OpenAI", "ChatOpenAI", "OpenAIEmbeddings")),
         ):
             for call in _constructors(OVERLAY_ROOT / rel, *names):
                 checked += 1
@@ -450,7 +515,11 @@ class TestCallSitesConsumeThePolicy:
                     f"{ast.unparse(value)}, which replaces the httpx.Timeout object instead of "
                     "shortening its total — the SDK's 5 s connect ceiling is discarded with it"
                 )
-        assert checked >= 4, f"expected the openai/langchain client sites, found {checked}"
+        assert checked >= 5, (
+            f"expected the openai/langchain client sites (dataprep SDK client, the retriever "
+            f"probe, its two summarizer clients and its embedding client), found {checked} — "
+            "a client that moved out of these constructors is no longer guarded"
+        )
 
     def test_every_dataprep_llm_call_site_marks_a_timeout(self):
         """All five LLM call sites stamp the timeout, not just the first three.
@@ -463,7 +532,11 @@ class TestCallSitesConsumeThePolicy:
         which is the state the attribute was added to eliminate.
         """
         source = OVERLAY_ROOT / "dataprep" / "genieai_dataprep_arangodb.py"
-        text = source.read_text(encoding="utf-8")
+        functions = {
+            node.name: node
+            for node in ast.walk(ast.parse(source.read_text(encoding="utf-8")))
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
         for fn in (
             "_context_batch_call",
             "_context_doc_call",
@@ -471,10 +544,23 @@ class TestCallSitesConsumeThePolicy:
             "_llm_call_batch",
             "_llm_call_single",
         ):
-            body = _function_body(text, fn)
-            assert body, f"{fn} not found — has it moved or been renamed?"
-            assert 'ATTRIBUTE_NAMES["dataprep_llm_timed_out"]' in body, (
-                f"{fn} records no timeout marker, so its span is indistinguishable from a call still in flight"
+            assert fn in functions, f"{fn} not found — has it moved or been renamed?"
+            stamped = _register_keys_set_on_spans(functions[fn])
+            for key in ("dataprep_llm_timed_out", "dataprep_llm_timeout_seconds"):
+                assert key in stamped, (
+                    f"{fn} never sets ATTRIBUTE_NAMES[{key!r}] on a span. Reading the function's "
+                    "source text instead of its AST would let the explanatory comment satisfy this "
+                    "check on its own, with the set_attribute calls deleted"
+                )
+            # The marker has to be behind the classifier: stamping every failed
+            # call as timed out is the misreading the attribute exists to
+            # prevent — "the GPU hung" would then read as "the GPU hung" for
+            # every parse failure too.
+            assert any(
+                isinstance(n, ast.If) and "_is_timeout" in ast.unparse(n.test) for n in ast.walk(functions[fn])
+            ), (
+                f"{fn} stamps the timeout marker without gating it on _is_timeout — every failed "
+                "label call would then be reported to the operator as a timed-out one"
             )
 
     def test_the_unbudgeted_huggingface_client_is_left_unbudgeted(self):
@@ -508,9 +594,15 @@ class TestCallSitesConsumeThePolicy:
         ]
         assert calls, "no aiohttp.ClientSession found in the Keycloak client"
         for call in calls:
-            assert _kwarg(call, "timeout") is not None, (
+            value = _kwarg(call, "timeout")
+            assert value is not None, (
                 "the Keycloak token session is unbounded — a slow IdP wedges every "
                 "_write_ingestion_log / _update_doc_status caller behind it"
+            )
+            # Not just present: pointing it at a literal would satisfy the check
+            # above while the module quietly stopped following the shared knob.
+            assert "CONTROL_PLANE_TIMEOUT_SECONDS" in _source_names(value), (
+                f"the Keycloak session's timeout reads {ast.unparse(value)}, not the shared control-plane budget"
             )
 
     def test_dataprep_control_plane_calls_use_the_shared_budget(self):
@@ -535,26 +627,39 @@ class TestCallSitesConsumeThePolicy:
             )
 
     def test_no_hardcoded_control_plane_timeout_is_left_behind(self):
-        """No module that reads the policy may keep a literal beside it.
+        """No module that reads the policy may build a timeout from a literal.
 
         Scoped to the modules that import it: a literal in one of them while the
         knob is presented as deck-wide means a deployer who raises it sees the
-        new budget in one service and 30 s in another, with nothing saying so.
+        new budget in one service and the old one in another, with nothing
+        saying so.
+
+        Matched on the AST, not on the text of the source. The previous version
+        searched for the literal string ``ClientTimeout(total=30)``, which any
+        edit of the number or the spacing steps around — ``total=60``,
+        ``total=30.0`` and ``total=30 )`` all slipped past, and for the chatqna
+        and Keycloak modules this was the only guard there was.
         """
         offenders = []
         for rel in (
             "dataprep/genieai_dataprep_arangodb.py",
             "dataprep/keycloak_service_account.py",
             "chatqna/genieai_chatqna.py",
+            "retriever/genieai_retriever_arangodb.py",
         ):
             text = (OVERLAY_ROOT / rel).read_text(encoding="utf-8")
             if "CONTROL_PLANE_TIMEOUT_SECONDS" not in text:
                 continue
-            for i, line in enumerate(text.split("\n"), 1):
-                if "ClientTimeout(total=30)" in line:
-                    offenders.append(f"{rel}:{i}")
+            for node in ast.walk(ast.parse(text)):
+                if not (isinstance(node, ast.Call) and _called_name(node.func) == "ClientTimeout"):
+                    continue
+                total = _kwarg(node, "total")
+                if total is None:
+                    continue
+                if not _source_names(total) & {"CONTROL_PLANE_TIMEOUT_SECONDS"}:
+                    offenders.append(f"{rel}:{node.lineno} total={ast.unparse(total)}")
         assert not offenders, (
-            f"a literal 30 s survived beside the knob in {offenders} — raising "
-            "MODEL_CONTROL_PLANE_TIMEOUT_SECONDS would change some call sites and "
-            "not others, which is the deck-wide claim the docstring denies"
+            f"a hardcoded control-plane timeout survived beside the knob at {offenders} — raising "
+            "MODEL_CONTROL_PLANE_TIMEOUT_SECONDS would change some call sites and not others, "
+            "which is the deck-wide claim the docstring denies"
         )

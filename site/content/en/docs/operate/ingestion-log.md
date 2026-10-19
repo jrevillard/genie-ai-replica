@@ -94,7 +94,7 @@ Stored in ArangoDB `ingestion_log` collection:
 | `message` | string | Human-readable event description — see canonical messages below. |
 | `timestamp` | ISO 8601 | When the event happened. |
 | `level` | string | `INFO`, `WARN`, `ERROR` (uppercase — set by the Joi schema in `components/document-repository/src/controllers/fileController.js:85-89`; dataprep emits these strings verbatim). |
-| `stage` | string | Pipeline stage emitting the event — one of `Labeling`, `Contextualization`, `Chunking`, `Graph`, `System`, `Guardrail`, `Retract` (PascalCase strings; not dot-separated). |
+| `stage` | string | Pipeline stage emitting the event. Free-form, not a validated enum — Joi only checks `level`. Common values: `Labeling`, `Contextualization`, `Chunking`, `Graph`, `System`, `Guardrail`, `Retract`, and the phase-level reports below (`LLM labeling`, `Contextual Retrieval`, `Graph insertion`), which carry spaces rather than the PascalCase of the older ones. Group by it with care: an exact-match filter written against the older values will not see the newer rows. |
 
 ## Canonical messages you will grep for
 
@@ -108,6 +108,7 @@ via `_write_ingestion_log(...)`. Learning them saves hours of debugging.
 | `using raw chunks` | `Doc-level context generation failed after 3 attempts — using raw chunks.` | Contextual Retrieval / doc-context generation failed; ingestion continued with raw chunks (no contextual prefix). | Investigate per-chunk cause. Common: vLLM client init failed, LLM timeout, JSON parse error. |
 | `using raw chunk` | `Chunk 14: context generation failed after 3 attempts — using raw chunk.` | A single chunk's context-generation retries were exhausted; that chunk ingested with the raw text. | Usually transient (vLLM load). Investigate per chunk if persistent. |
 | `Batch labeling parse failure` | `Batch labeling parse failure for chunks [3, 4, 5]; falling back to per-chunk.` | The labelling LLM returned non-JSON despite guided JSON (batched path). | Model compatibility issue — see [RAG &rarr; Choosing models]({{< relref "/docs/rag-pipeline/choosing-models" >}}). |
+| `in progress` | `LLM labeling in progress: 18/65 batches completed, 20 in flight, 124s elapsed (budget 600s)` | A phase is still running and reporting on its timer. The presence of these rows is what distinguishes a slow phase from a stalled one. | None while it keeps ticking. If the elapsed time stops advancing between rows, the phase is stuck — check the trace. |
 | `Batch labeling call failed` | `Batch labeling call failed for chunks [7, 8] (vLLM timeout); falling back to per-chunk.` | A labelling batch failed; per-chunk fallback engaged. | Usually transient (vLLM load). Retry; if persistent, lower `DATAPREP_LLM_LABEL_BATCH_SIZE`. |
 | `context generation failed` | `Chunk 14: context generation failed after 3 attempts — using raw chunk.` | Contextual Retrieval's per-chunk doc-context call failed; chunk ingested without the context prefix. | Non-fatal — the chunk is still retrievable but with weaker labels. |
 
@@ -178,6 +179,7 @@ gotcha), see [`.claude/rules/DEBUGGING-TRACING.md`](https://opensource.unicc.org
 | Symptom in the log | First action | Re-ingest? |
 |---|---|---|
 | `Batch labeling parse failure` on every chunk | Check the model supports `response_format=json_object` ([RAG &rarr; Choosing models]({{< relref "/docs/rag-pipeline/choosing-models" >}})). | No — fix the model config, then re-ingest. |
+| `in progress` rows whose elapsed time stops advancing | The phase is stuck rather than slow, or it has hit `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS` and is about to degrade. Check the trace, then `MODEL_LLM_TIMEOUT_SECONDS` and `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS` (raise both — the phase budget is the binding ceiling). | No — the document still ingests on its fallback (file labels / raw chunk). |
 | `failed` on the **context generation** step only | Lower `DATAPREP_CONTEXTUAL_DOC_BUDGET` or disable Contextual Retrieval (`CONTEXTUAL_RETRIEVAL_ENABLED=false`) temporarily. | Only if you want the context prefix on existing documents. |
 | `raw-chunk fallback` on isolated chunks (most chunks labelled) | Usually transient vLLM load. Re-ingest if labels are critical. | Optional. |
 | `failed` on **parsing** (docling) | Check the source file — scanned PDFs, password-protected files, etc. | After fixing the file (re-upload). |

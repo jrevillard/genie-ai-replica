@@ -88,9 +88,10 @@ spec:
 {{- end }}
 {{- if .Values.observability.traces.enabled }}
       otlphttp/victoriatraces:
-        # The chart-rendered vtsingle-otlp Service (the operator's default
-        # Service exposes only the 10428 query port).
-        endpoint: http://vtsingle-otlp.{{ .Values.namespace }}.svc.cluster.local:4318
+        # VictoriaTraces is single-port: -httpListenAddr=:10428 serves the
+        # Jaeger query API AND OTLP ingest (/opentelemetry/v1/traces — the
+        # otlphttp exporter appends /v1/traces to this base).
+        endpoint: http://vtsingle-vtraces.{{ .Values.namespace }}.svc.cluster.local:10428/opentelemetry
         tls:
           insecure: true
         sending_queue:

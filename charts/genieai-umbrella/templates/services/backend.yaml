@@ -50,6 +50,7 @@ against an operator's explicit off switch. */ -}}
     (dict "name" "ARANGO_DB" "value" "_system")
     (dict "name" "ARANGO_USER" "value" "root")
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
+    (dict "name" "ENABLE_OBSERVABILITY" "value" (ternary "1" "0" (or .Values.observability.logs.enabled .Values.observability.metrics.enabled .Values.observability.traces.enabled)))
     (dict "name" "TRANSLATION_CACHE" "value" "on")
     (dict "name" "TRANSLATION_CACHE_HOST" "value" (printf "redis-cache.%s.svc.cluster.local" $ns))
     (dict "name" "TRANSLATION_CACHE_PORT" "value" "6379")

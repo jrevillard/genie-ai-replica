@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 # Tear down the genie-ai chart from the current cluster context.
 #
-# Defaults: uninstall the chart release only (leaves the 4 cluster
+# Defaults: uninstall the chart release only (leaves the 7 cluster
 # operators intact so the next install-prereqs.sh run is a no-op).
 #
 # Flags:
-#   --with-operators   Also uninstall the 4 operators and delete their
+#   --with-operators   Also uninstall the 7 operators installed by
+#                      scripts/install-prereqs.sh and delete their
 #                      namespaces (keycloak-system, cnpg-system,
-#                      arango-system, sealed-secrets).
+#                      arango-system, sealed-secrets, cert-manager,
+#                      vmoperator-system,
+#                      opentelemetry-operator-system).
 #
 # Does NOT delete the cluster itself (minikube/kind lifetime is the
 # operator's decision — use `minikube delete` / `kind delete cluster`
@@ -71,11 +74,14 @@ uninstall_chart() {
 
 uninstall_operators() {
   local ns release
-  # helm-managed
-  for ns in cnpg-system arango-system; do
+  # helm-managed (release names as pinned in scripts/install-prereqs.sh)
+  for ns in cnpg-system arango-system cert-manager vmoperator-system opentelemetry-operator-system; do
     case "$ns" in
-      cnpg-system)        release="cnpg" ;;
-      arango-system)      release="kube-arangodb" ;;
+      cnpg-system)             release="cnpg" ;;
+      arango-system)           release="kube-arangodb" ;;
+      cert-manager)            release="cert-manager" ;;
+      vmoperator-system)       release="victoria-metrics-operator" ;;
+      opentelemetry-operator-system) release="opentelemetry-operator" ;;
     esac
     if helm list -n "${ns}" -q 2>/dev/null | grep -qx "${release}"; then
       log "helm uninstall ${release} -n ${ns}"

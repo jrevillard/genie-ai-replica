@@ -41,7 +41,12 @@ metadata:
   name: genieai-grafana
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+    # component "grafana" (not "observability"): every grafana-operator CR
+    # in this chart selects its instance via
+    # instanceSelector.matchLabels app.kubernetes.io/component: grafana —
+    # any other component label leaves datasources/folders/dashboards/
+    # alert rules silently unimported.
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "grafana") | nindent 4 }}
 spec:
   # Operator-managed admin credentials; values are not rendered —
   # the SealedSecret materializes a Secret named

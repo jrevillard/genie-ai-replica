@@ -43,7 +43,8 @@ spec:
   # TLS terminates at the edge (Envoy Gateway); the pod serves plain HTTP
   # internally. Letting the operator create an Ingress would shadow that.
   http:
-    httpEnabled: {{ .Values.data.keycloak.http.httpEnabled | default true }}
+    # kindIs guard: sprig `default true` would swallow an explicit `false`.
+    httpEnabled: {{ ternary .Values.data.keycloak.http.httpEnabled true (kindIs "bool" .Values.data.keycloak.http.httpEnabled) }}
   hostname:
     # Fixed frontend URL (issuer base): tokens carry this issuer on every
     # request path, so the browser OIDC flow and the backend validation

@@ -270,12 +270,18 @@ def pytest_unconfigure(config):
 # ``TestOwnedSpanCoverage::test_every_emitted_span_is_swept`` re-derives it from
 # the sources so a span added tomorrow fails CI instead of starting unswept.
 #
-# TWO SPANS ARE NOT OURS and are excluded:
+# ONE SOURCE OF SPANS IS NOT OURS and is excluded:
 #   * FastAPI auto-instrumentation (``http.method`` / ``url.full`` /
 #     ``http.status_code`` …). Legitimately outside our vocabulary; sweeping them
 #     would mean suppressing failures we do not understand.
-#   * ``service.operation``, the example in ``tracing.with_span``'s docstring.
-#     Matched by the derivation regex, opened by nothing.
+#
+# Nothing else is excluded by name. The derivation reads span openers out of the
+# AST, so a name that appears only in a docstring — ``service.operation``, the
+# usage example in ``tracing.with_span`` — is not a span and needs no exclusion;
+# an earlier text-matching derivation read it as one and needed a hand-written
+# exemption list to keep it out. Any further exclusion added here is a claim that
+# a real emitted span is safe to leave unguarded, and must be justified on those
+# terms.
 #
 # Dataprep was swept in a follow-up. It is the one service where document content
 # is closest to a span: ``dataprep.ingest`` records ``dataprep.file_type`` and
@@ -400,15 +406,20 @@ def span_sweep():
 
 @pytest.fixture
 def span_exporter():
-    """Expose the in-memory exporter, so a deliberate leak can be cleaned up.
+    """Expose the in-memory exporter to a test that emits a leak ON PURPOSE.
 
-    Only for tests that emit a leaking span ON PURPOSE to assert the sweep
-    catches it. The autouse sweep reads the same exporter at teardown, so
-    without a ``clear()`` at the end of such a test the leak is reported twice
-    -- once by the test's own assertion and once by the sweep -- and the test
-    fails for the wrong reason, which trains a reader to ignore the sweep.
+    Requesting this fixture is itself the signal that the test leaks
+    deliberately, so it clears the exporter on the way out — unconditionally,
+    including when the test failed. Clearing on the success path only, as a
+    trailing ``span_exporter.clear()`` in the body does, leaves the leak in place
+    exactly when the test broke, and the autouse sweep then reports it a second
+    time: two failures where there is one, the second one about a span the
+    reader has already been looking at.
+
+    The cleanup is therefore a teardown, not a line the caller has to remember.
     """
-    return _SPAN_EXPORTER
+    yield _SPAN_EXPORTER
+    _SPAN_EXPORTER.clear()
 
 
 @pytest.fixture

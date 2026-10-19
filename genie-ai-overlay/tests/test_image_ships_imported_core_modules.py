@@ -21,8 +21,7 @@ import re
 from pathlib import Path
 
 import pytest
-
-OVERLAY_ROOT = Path(__file__).resolve().parent.parent
+from tests.conftest import OVERLAY_ROOT
 
 # Overlay module -> the Dockerfile that builds its image.
 #
@@ -39,7 +38,6 @@ SERVICE_IMAGES: dict[str, Path] = {
     "dataprep/genieai_dataprep_arangodb.py": OVERLAY_ROOT / "dataprep" / "Dockerfile-dataprep_genie-ai",
 }
 
-_IMPORT_CORE = re.compile(r"^from\s+core\.(?P<module>\w+)\s+import\b", re.MULTILINE)
 _COPY_CORE = re.compile(r"^COPY\s+genie-ai-overlay/core/(?P<module>[\w.]+)\.py\s+\S+", re.MULTILINE)
 
 
@@ -50,22 +48,30 @@ def _core_imports(source_path: Path) -> set[str]:
     inside a comment or a docstring does not count as a dependency the image has
     to satisfy.
 
-    A file the running interpreter cannot parse yields an empty set rather than
-    raising. This walks the whole overlay now, so the blast radius is every
-    ``.py`` in the tree; an unparseable one — a helper using syntax newer than
-    the CI interpreter, say — would otherwise turn this into a traceback that
-    says nothing about which module is unpinned. Silent empty is the lesser
-    evil: the file has no imports this could see either way, and a genuine
-    ``core.*`` import is itself parseable by definition.
+    ``from core import span_attrs`` is recognised alongside the dotted forms.
+    ``core/`` is a namespace package (no ``__init__.py``), so that spelling
+    loads ``core/span_attrs.py`` — the same image dependency as
+    ``from core.span_attrs import X``, written differently. A check matching
+    only the dotted forms reports such a file clean.
+
+    ``import core`` alone yields nothing, correctly: a namespace package has no
+    ``__init__.py`` to copy, and every module it would give access to has to be
+    reached by its own name anyway.
+
+    A file the running interpreter cannot parse fails the walk rather than
+    yielding an empty set. The empty set reads as "imports nothing from core",
+    which is precisely the verdict that lets an unpinned module ship; a file the
+    CI interpreter cannot read is not evidence about imports at all, so the walk
+    must say so.
     """
-    try:
-        tree = ast.parse(source_path.read_text(encoding="utf-8"))
-    except SyntaxError:
-        return set()
+    tree = ast.parse(source_path.read_text(encoding="utf-8"))
     imported: set[str] = set()
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("core."):
-            imported.add(node.module.split(".", 1)[1])
+        if isinstance(node, ast.ImportFrom) and node.module:
+            if node.module == "core":
+                imported.update(alias.name for alias in node.names)
+            elif node.module.startswith("core."):
+                imported.add(node.module.split(".", 1)[1])
         elif isinstance(node, ast.Import):
             imported.update(alias.name.split(".", 1)[1] for alias in node.names if alias.name.startswith("core."))
     return imported
@@ -76,8 +82,8 @@ def _copied_core_modules(dockerfile: Path) -> set[str]:
     return set(_COPY_CORE.findall(dockerfile.read_text(encoding="utf-8")))
 
 
-# The walk itself lives in conftest (``overlay_sources``) so this file and
-# test_span_attrs.py cannot answer "what is overlay source?" differently. They
+# Both this file and test_span_attrs.py take OVERLAY_ROOT and the walk from
+# conftest, so they cannot answer "what is overlay source?" differently. They
 # did once: this side recursed, the span-coverage side listed five directories'
 # top level. A span opened in a directory only one of them saw would have been
 # unguarded while this file still reported the tree clean.
@@ -138,3 +144,48 @@ def test_no_overlay_module_imports_core_without_being_pinned(overlay_sources) ->
         f"modules importing core.* but not listed in SERVICE_IMAGES: {unpinned}. "
         "Add each one, mapped to the Dockerfile that builds its image."
     )
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("from core.span_attrs import QUERY_ID_KEY\n", {"span_attrs"}),
+        ("import core.span_attrs\n", {"span_attrs"}),
+        # The bare spelling of the same dependency. `core/` has no __init__.py,
+        # so this loads core/span_attrs.py — a check matching only dotted forms
+        # silently reports it clean.
+        ("from core import span_attrs\n", {"span_attrs"}),
+        ("from core import span_attrs, model_cache\n", {"span_attrs", "model_cache"}),
+        # A namespace package has no __init__.py to copy; nothing to pin.
+        ("import core\n", set()),
+        # Mentions that are not imports.
+        ('"""docs mention from core.span_attrs import X"""\n', set()),
+        ("# from core.span_attrs import X\n", set()),
+        ("from core_other import thing\n", set()),
+        ("from tracing import with_span\n", set()),
+    ],
+    ids=lambda p: p.strip().replace("\n", "; ") if isinstance(p, str) else None,
+)
+def test_every_core_import_spelling_is_recognised(tmp_path: Path, source: str, expected: set[str]) -> None:
+    """The extraction has to see every form the language allows.
+
+    A form it misses reads as "this module imports nothing from core", which is
+    the one verdict that lets a missing ``COPY`` line through — so each spelling
+    is pinned here rather than left to be noticed the next time one is written.
+    """
+    probe = tmp_path / "probe.py"
+    probe.write_text(source, encoding="utf-8")
+    assert _core_imports(probe) == expected
+
+
+def test_an_unparseable_module_is_not_reported_as_importing_nothing(tmp_path: Path) -> None:
+    """The walk cannot judge a file it cannot read.
+
+    Yielding an empty set here would report the module as free of ``core.*``
+    imports, which is a clean bill of health for the exact case the guard exists
+    to catch. Failing the walk keeps the answer visible instead.
+    """
+    probe = tmp_path / "broken.py"
+    probe.write_text("def f(:\n", encoding="utf-8")
+    with pytest.raises(SyntaxError):
+        _core_imports(probe)

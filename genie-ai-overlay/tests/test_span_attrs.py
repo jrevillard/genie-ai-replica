@@ -16,6 +16,7 @@ import pathlib
 import re
 
 import pytest
+from tests.conftest import OVERLAY_ROOT
 
 import core.span_attrs
 from core.span_attrs import (
@@ -333,27 +334,24 @@ def _emit(name, attributes):
 # The four ways this project opens a span with an explicit name.
 SPAN_OPENERS = frozenset({"start_span", "start_as_current_span", "background_span", "with_span"})
 
-# ``tracing.py`` is where those openers are DEFINED, so its own calls into
-# ``tracer.start_span(name)`` pass the parameter by design. Scanning it for
-# non-literal openers would report every definition as a violation.
-SPAN_OPENER_DEFINITIONS = frozenset({"tracing.py"})
+# The ways a key reaches a span. ``set_attribute`` / ``set_attributes`` are the
+# SDK's own API; ``record_exception`` and the exception attributes it implies
+# carry no key of ours.
+_ATTRIBUTE_WRITERS = frozenset({"set_attribute", "set_attributes"})
 
-
-def overlay_root():
-    return pathlib.Path(__file__).resolve().parent.parent
+# The overlay's shared ``tracing.py`` is where those openers are DEFINED, so its
+# own calls into ``tracer.start_span(name)`` pass the parameter by design;
+# scanning it for non-literal openers would report every definition as a
+# violation. Matched as a full path, not a file name — a service-local
+# ``retriever/tracing.py`` is a caller of these openers, not their definition,
+# and opting it out by name would exempt every span opened in it from both the
+# sweep and the non-literal check.
+SPAN_OPENER_DEFINITIONS = frozenset({OVERLAY_ROOT / "tracing.py"})
 
 
 def _span_calls(path):
     """Yield ``(lineno, first_arg_node_or_None)`` for each span opener call."""
-    import ast
-
-    try:
-        tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
-    except SyntaxError:
-        # A file the running interpreter cannot parse is not evidence about
-        # span coverage; reporting it as an unpinned/unswept module would
-        # bury the real message under a traceback.
-        return
+    tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
@@ -398,12 +396,80 @@ def _non_literal_span_openers(overlay_sources):
     """
     offenders = []
     for path in overlay_sources:
-        if path.name in SPAN_OPENER_DEFINITIONS:
+        if path.resolve() in SPAN_OPENER_DEFINITIONS:
             continue
         for lineno, first in _span_calls(path):
             if first is None or not (isinstance(first, ast.Constant) and isinstance(first.value, str)):
-                offenders.append(f"{path.relative_to(overlay_root())}:{lineno}")
+                offenders.append(f"{path.relative_to(OVERLAY_ROOT)}:{lineno}")
     return offenders
+
+
+def _set_attribute_keys(overlay_sources):
+    """Every span attribute key written as a literal in the overlay.
+
+    Two forms reach a span, and both are used: ``set_attribute("dataprep.
+    file_id", …)``, and an ``attributes={…}`` mapping passed to a span opener
+    (the batching and context spans open that way). A derivation that saw only
+    the first would miss every key the second carries.
+
+    Deriving the keys is what makes the register self-maintaining. Deriving only
+    the span NAMES cannot: ``dataprep.ingest`` stays in the list whether the code
+    on it writes three attributes or thirty, so a key added to a swept span is
+    invisible to every check until a test happens to drive that emission site
+    with a real exporter — which for most spans no test does.
+
+    A non-literal mapping is reported by
+    ``TestOwnedSpanCoverage::test_no_span_is_opened_with_a_non_literal_name``'s
+    sibling: an ``attributes=`` built from a variable is not derivable from the
+    source, so the keys inside it cannot be checked here. Passing one through
+    silently would understate the coverage this claims.
+    """
+    keys: set[str] = set()
+    for path in overlay_sources:
+        tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+            if name in _ATTRIBUTE_WRITERS:
+                if node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+                    keys.add(node.args[0].value)
+                keys.update(k for keyword in node.keywords for k in _literal_keys(keyword.value))
+            elif name in SPAN_OPENERS:
+                keys.update(k for keyword in node.keywords if keyword.arg in {"attributes", "attrs"}
+                            for k in _literal_keys(keyword.value))
+    return keys
+
+
+def _non_literal_attribute_mappings(overlay_sources):
+    """Span openers whose ``attributes=`` is not a dict literal.
+
+    The keys inside are invisible to a source-derived check, so a mapping built
+    at runtime would carry attributes that nothing polices.
+    """
+    offenders = []
+    for path in overlay_sources:
+        if path.resolve() in SPAN_OPENER_DEFINITIONS:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+            if name in SPAN_OPENERS:
+                for keyword in node.keywords:
+                    if keyword.arg in {"attributes", "attrs"} and not isinstance(keyword.value, ast.Dict):
+                        offenders.append(f"{path.relative_to(OVERLAY_ROOT)}:{node.lineno}")
+    return offenders
+
+
+def _literal_keys(node):
+    """The string-literal keys of a dict literal, if that is what *node* is."""
+    if not isinstance(node, ast.Dict):
+        return set()
+    return {key.value for key in node.keys if isinstance(key, ast.Constant) and isinstance(key.value, str)}
 
 
 class TestOwnedSpanCoverage:
@@ -414,6 +480,31 @@ class TestOwnedSpanCoverage:
     judgement call every time a span is added, and the call that matters — "is
     this one safe?" — is exactly the one a swept span makes unnecessary.
     """
+
+    def test_every_attribute_key_written_in_the_overlay_is_registered(self, overlay_sources):
+        """A key on a swept span is still unguarded until something else checks it.
+
+        ``test_every_emitted_span_is_swept`` reads span NAMES from the source, so
+        it cannot see what a span writes: adding ``set_attribute("dataprep.
+        file_name", payload.fileName)`` to ``dataprep.ingest`` leaves the name
+        unchanged and the sweep green. Whether the new key is policed then rests
+        on a test happening to drive that emission site with a real exporter —
+        which, for most spans, none does.
+
+        So the keys are derived too, and every one of them must be registered in
+        one of the three vocabularies. The union is deliberate: a key is policed
+        by whichever category it belongs to, and being absent from
+        ``ATTRIBUTE_NAMES`` alone is not evidence of that.
+        """
+        registered = set(ATTRIBUTE_NAMES.values()) | set(JSON_ENCODED_ATTRIBUTE_NAMES) | set(LEGACY_ATTRIBUTE_NAMES)
+        unregistered = sorted(_set_attribute_keys(overlay_sources) - registered)
+        assert not unregistered, (
+            f"span attributes written in the overlay but registered nowhere: {unregistered}. "
+            "Register each in core/span_attrs.py — ATTRIBUTE_NAMES for a plain "
+            "value, JSON_ENCODED_ATTRIBUTE_NAMES for a structure OTel cannot "
+            "represent natively, LEGACY_ATTRIBUTE_NAMES only for a key that "
+            "already ships and cannot change."
+        )
 
     def test_every_emitted_span_is_swept(self, owned_span_names, overlay_sources):
         """The guard against the drift this whole mechanism exists to prevent.
@@ -459,6 +550,22 @@ class TestOwnedSpanCoverage:
             "swept nor reported. Pass the name as a plain string literal."
         )
 
+    def test_no_span_is_opened_with_a_non_literal_attribute_mapping(self, overlay_sources):
+        """An ``attributes=`` built at runtime carries keys nothing can check.
+
+        The key derivation reads dict literals. A mapping assembled from a
+        variable is invisible to it, so its keys would reach a span with neither
+        the vocabulary sweep nor this coverage check ever naming them — the same
+        blind spot as a computed span name, one level down.
+        """
+        offenders = _non_literal_attribute_mappings(overlay_sources)
+        assert not offenders, (
+            f"span opened with a non-literal attributes= mapping: {offenders}. "
+            "The coverage derivation reads attribute keys from the source, so "
+            "such a span carries keys that are neither swept nor reported. Pass "
+            "the mapping as a dict literal."
+        )
+
     def test_mirror_matches_conftest(self, owned_span_names):
         """A conftest that drops a span must fail here, not just silently."""
         assert set(owned_span_names) == OWNED_SPAN_NAMES
@@ -468,7 +575,6 @@ class TestOwnedSpanCoverage:
         _emit("chatqna.orchestrate", {"rag.sniffed_query": "banana"})
         with pytest.raises(AssertionError):
             span_sweep(captured_spans())
-        span_exporter.clear()
 
     def test_orchestrate_accepts_its_vocabulary_keys(self, span_sweep, captured_spans):
         _emit("chatqna.orchestrate", {"rag.query_length": 42, "rag.model_id": "granite-4.1-8b"})
@@ -485,7 +591,6 @@ class TestOwnedSpanCoverage:
         with pytest.raises(AssertionError) as excinfo:
             span_sweep(captured_spans())
         assert "dataprep.ingest" in str(excinfo.value)
-        span_exporter.clear()
 
     def test_dataprep_accepts_its_vocabulary_keys(self, span_sweep, captured_spans):
         _emit("dataprep.llm.label_batch", {"dataprep.llm_batched": True, "dataprep.llm_batch_size": 4})
@@ -511,7 +616,6 @@ class TestOwnedSpanCoverage:
         with pytest.raises(AssertionError) as excinfo:
             span_sweep(captured_spans())
         assert "free-text value" in str(excinfo.value)
-        span_exporter.clear()
 
     def test_the_shape_rule_does_not_constrain_an_unvalidated_payload_value(self):
         """Pins the residual above so it cannot be quietly forgotten.
@@ -527,26 +631,18 @@ class TestOwnedSpanCoverage:
     def test_only_deliberate_leak_tests_may_clear_the_exporter(self):
         """``span_exporter`` is a hole in the sweep; keep it exactly as wide as it must be.
 
-        The autouse sweep reads the exporter at teardown. A test that emits a
-        leak on purpose to prove the sweep bites must therefore clear the
-        exporter itself, or it is reported twice and fails for the wrong reason
-        — which trains a reader to ignore the sweep. That is the whole reason the
-        fixture exists.
-
-        The cost is that any future test CAN request it and silence the sweep for
-        itself. Naming a closed set of tests here is the cheapest thing that
-        makes that a deliberate act: adding a fifth caller fails this test, and
-        the reviewer has to look at why. A "deliberate leak" marker attribute is
-        the wrong closure — the sweep's first layer rejects unregistered keys, so
-        the marker would have to enter the shipped trace vocabulary.
+        Requesting the fixture clears the exporter at teardown, which is what
+        lets a test emit a leak on purpose and assert the sweep bites. The cost
+        is that any future test can request it and silence the sweep for itself.
+        Naming a closed set of tests here is the cheapest thing that makes that a
+        deliberate act: adding a fifth caller fails this test, and the reviewer
+        has to look at why. A "deliberate leak" marker attribute is the wrong
+        closure — the sweep's first layer rejects unregistered keys, so the
+        marker would have to enter the shipped trace vocabulary.
         """
-        import pathlib
-        import re as _re
-
-        root = pathlib.Path(__file__).resolve().parent
-        requester = _re.compile(r"def (test_\w+)\([^)]*\bspan_exporter\b")
+        requester = re.compile(r"def (test_\w+)\([^)]*\bspan_exporter\b")
         callers = set()
-        for path in sorted(root.glob("test_*.py")):
+        for path in sorted(OVERLAY_ROOT.joinpath("tests").glob("test_*.py")):
             callers.update(requester.findall(path.read_text(encoding="utf-8", errors="replace")))
         expected = {
             "test_a_dataprep_span_bites",
@@ -575,14 +671,12 @@ class TestOwnedSpanSweep:
         with pytest.raises(AssertionError) as excinfo:
             span_sweep(captured_spans())
         assert "rag.sniffed_query: unregistered attribute key" in str(excinfo.value)
-        span_exporter.clear()
 
     def test_prose_on_a_registered_key_fails_the_sweep(self, span_sweep, captured_spans, span_exporter):
         _emit("llm.invoke", {"rag.search_type": "Soil Management"})
         with pytest.raises(AssertionError) as excinfo:
             span_sweep(captured_spans())
         assert "free-text value" in str(excinfo.value)
-        span_exporter.clear()
 
     def test_declared_attributes_on_an_owned_span_pass_the_sweep(self, span_sweep, captured_spans):
         _emit("llm.invoke", {"rag.fetch_k": 3, "rag.search_type": "mmr"})
@@ -600,4 +694,3 @@ class TestOwnedSpanSweep:
         message = str(excinfo.value)
         assert "retriever.hybrid_search" in message
         assert "rag.leaked_text" in message
-        span_exporter.clear()

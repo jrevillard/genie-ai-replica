@@ -124,9 +124,13 @@ const ragasService = {
     return res && res.data ? res.data : null;
   },
 
-  async getExplain(repoId, suiteKey, runKey) {
+  /** opts.silent: expected-miss lookups (the advisor auto-load — a run that
+   *  was never explained 404s by design) skip the shared httpService error
+   *  logging instead of printing [OKF-ERR] noise for a normal state. */
+  async getExplain(repoId, suiteKey, runKey, opts = {}) {
     const res = await httpService.get(
-      `/okf/repos/${rid(repoId)}/ragas-testsuite/${sk(suiteKey)}/explain/${encodeURIComponent(runKey)}`
+      `/okf/repos/${rid(repoId)}/ragas-testsuite/${sk(suiteKey)}/explain/${encodeURIComponent(runKey)}`,
+      opts.silent ? { silent: true } : undefined
     );
     return res && res.data ? res.data : null;
   },

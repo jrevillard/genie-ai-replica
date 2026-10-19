@@ -514,19 +514,20 @@ def _non_literal_attribute_mappings(overlay_sources):
     two in chatqna and the retriever. Checking only the opener would leave the
     larger half of the same defect unreported.
 
-    This is a REPORT, not a gate: there is no allowlist of known sites, because
-    a list keyed by file and line number breaks on any edit that shifts a line
-    and then reports a stale reason for a site that did not change. Fifteen such
-    writes exist today, all predating the derivation, and each assembles its
-    mapping in a helper that already has a test asserting the result is
-    free-text-free (``test_chatqna_budget_tracing.py`` covers the prompt-budget
-    and blend builders) — so those keys are policed, by that test rather than by
-    this one.
+    This is a REPORT, not a gate. Fifteen such writes exist today, all predating
+    the derivation, and each assembles its mapping in a helper that already has a
+    test asserting the result is free-text-free
+    (``test_chatqna_budget_tracing.py`` covers the prompt-budget and blend
+    builders) — so those keys are policed, by that test rather than by this one.
 
-    The threshold test beside it is what makes the number watchable:
-    ``test_the_derivation_covers_most_registered_keys`` names the register keys
-    this cannot read, so a new unreadable form shows up as a coverage drop
-    instead of passing unnoticed.
+    Nothing here pins that number. A count is not a contract: adding one more
+    runtime-built write is ordinary work, and a test that fails on it while its
+    message says the change is fine is the pin that teaches people to update pins
+    without reading. The coverage threshold
+    ``test_the_derivation_covers_most_registered_keys`` is what judges whether
+    unreadable writes matter, because it measures the register rather than the
+    sites: it names the register keys this cannot read, so a new unreadable FORM
+    shows up as a coverage drop instead of passing unnoticed.
     """
     offenders = []
     for path in overlay_sources:
@@ -706,22 +707,6 @@ class TestOwnedSpanCoverage:
         )
         offenders = _non_literal_attribute_mappings([probe])
         assert len(offenders) == 3, f"expected the three runtime-built writes, got {offenders}"
-
-    def test_the_reported_count_matches_what_the_helper_finds(self, overlay_sources):
-        """Pin the helper against the tree, so the report cannot go quiet.
-
-        A count that moves when a service adds or removes an attribute write is
-        the intended signal. It is not an allowlist — nothing is excused — it is
-        the statement of how many sites the derivation cannot read, which is the
-        number the coverage threshold exists to keep watch on.
-        """
-        assert len(_non_literal_attribute_mappings(overlay_sources)) == 15, (
-            "the number of attribute writes whose keys the source derivation "
-            "cannot read changed. That is fine — but the coverage threshold in "
-            "test_the_derivation_covers_most_registered_keys is what judges "
-            "whether it is a problem, so re-read that test's failure before "
-            "assuming it is."
-        )
 
     def test_mirror_matches_conftest(self, owned_span_names):
         """A conftest that drops a span must fail here, not just silently."""

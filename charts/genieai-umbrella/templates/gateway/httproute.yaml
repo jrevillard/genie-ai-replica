@@ -56,9 +56,10 @@ spec:
     {{- /* Backend BFF: /api + swagger. The chat SSE stream lives here:
            Envoy's default route timeout kills long streams mid-flight
            (live-observed: backend finished in 20s, browser got a 504 at
-           52s), so the rule carries an explicit long backendRequest
-           timeout — Gateway API expresses "no timeout" as a large
-           duration. */}}
+           52s). The BACKEND owns the real stream budget
+           (CHATQNA_STREAM_TIMEOUT, default 3600s) and aborts on its own;
+           the edge sits above it so the application timeout governs —
+           1h10m = the backend default + margin. */}}
     - matches:
         - path:
             type: PathPrefix
@@ -67,7 +68,7 @@ spec:
             type: PathPrefix
             value: /api-docs/
       timeouts:
-        backendRequest: 24h
+        backendRequest: 1h10m
       backendRefs:
         - name: backend
           port: 80

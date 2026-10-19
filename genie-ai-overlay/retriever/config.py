@@ -3,6 +3,8 @@
 
 import os
 
+from core.model_http_policy import LLM_TIMEOUT_SECONDS, TEI_TIMEOUT_SECONDS
+
 
 #######################################################
 #                Common Functions                     #
@@ -261,11 +263,12 @@ VLLM_MODEL_ID = os.getenv("VLLM_MODEL_ID", "ibm-granite/granite-3.3-2b-instruct"
 VLLM_MAX_NEW_TOKENS = os.getenv("VLLM_MAX_NEW_TOKENS", 512)
 VLLM_TOP_P = os.getenv("VLLM_TOP_P", 0.9)
 VLLM_TEMPERATURE = os.getenv("VLLM_TEMPERATURE", 0.8)
-# Shared deck-wide budget (core/model_http_policy.py): MODEL_LLM_TIMEOUT_SECONDS
-# > legacy VLLM_TIMEOUT > 600. Import after the policy to resolve precedence once.
-from core.model_http_policy import LLM_TIMEOUT_SECONDS  # noqa: E402
-
+# Deck-wide budgets, resolved once by core/model_http_policy.py (imported at the
+# top of this file). VLLM_TIMEOUT keeps its name because the retriever source,
+# its tests and deployed .env files all reference it; it now carries the shared
+# LLM budget rather than a retriever-local one.
 VLLM_TIMEOUT = LLM_TIMEOUT_SECONDS
+TEI_TIMEOUT = TEI_TIMEOUT_SECONDS
 
 # OpenAI configuration (alternative to VLLM & TEI)
 OPENAI_CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o")

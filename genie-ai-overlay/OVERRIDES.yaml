@@ -135,3 +135,10 @@ overrides:
     added_in: v1.5
     last_validated: v1.5
     test: tests/test_core.py::TestMCPFuncType
+  - override: comps.dataprep.integrations.arangodb.llm_transformer
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    justification: Vendored LLM and embedding clients build their own HTTP clients with library-default timeouts, so core/model_http_policy cannot reach them. Affects the chatqna RAG orchestrator graph, the dataprep graph-transformer and embedder, and the opea/embedding + opea/llm-textgen base images. Tracked so the gap has a named owner instead of an unnamed follow-up; see build-patches/comps_http_budget_debt.py for the two closing routes.
+    added_in: v1.5
+    last_validated: v1.5
+    test: contracts/README.md

@@ -66,6 +66,7 @@ from .config import (
     SUMMARIZER_ENABLED,
     TEI_EMBED_MODEL,
     TEI_EMBEDDING_ENDPOINT,
+    TEI_TIMEOUT,
     VLLM_API_KEY,
     VLLM_ENDPOINT,
     VLLM_MAX_NEW_TOKENS,
@@ -507,13 +508,22 @@ class GenieaiArangoRetriever(OpeaComponent):
                     logger.debug("OpenAI API Key is set. Verifying its validity...")
 
                 openai.api_key = OPENAI_API_KEY
+                # The module-level probe and client below read their defaults from
+                # the ``openai`` module namespace, so the budget has to be set
+                # there too — an explicit kwarg on ChatOpenAI does not reach the
+                # probe. Without it the key check inherits the SDK's 600 s and
+                # blocks service startup on an unreachable endpoint.
+                openai.timeout = VLLM_TIMEOUT
 
                 try:
                     openai.models.list()
                     if logflag:
                         logger.debug("OpenAI API Key is valid.")
                     self.llm = ChatOpenAI(
-                        temperature=OPENAI_CHAT_TEMPERATURE, model=OPENAI_CHAT_MODEL, max_tokens=OPENAI_CHAT_MAX_TOKENS
+                        temperature=OPENAI_CHAT_TEMPERATURE,
+                        model=OPENAI_CHAT_MODEL,
+                        max_tokens=OPENAI_CHAT_MAX_TOKENS,
+                        timeout=VLLM_TIMEOUT,
                     )
                     self._llm_model_id = OPENAI_CHAT_MODEL
                 except openai.error.AuthenticationError:
@@ -1221,12 +1231,21 @@ class GenieaiArangoRetriever(OpeaComponent):
                 # OpenAI embeddings are not contrastive / instruction-tuned —
                 # get_query_instruction(OPENAI_EMBED_MODEL) returns None for
                 # any OpenAI model id, so the wrapper is never installed here.
-                embeddings = OpenAIEmbeddings(model=OPENAI_EMBED_MODEL, dimensions=dimension)
+                # Shared TEI budget: this client is otherwise unbounded, and the
+                # retrieval request it serves has no deadline of its own.
+                embeddings = OpenAIEmbeddings(
+                    model=OPENAI_EMBED_MODEL,
+                    dimensions=dimension,
+                    timeout=TEI_TIMEOUT,
+                )
             elif TEI_EMBEDDING_ENDPOINT and HF_TOKEN:
+                # huggingface_hub's client has no wall-clock default, so a
+                # contended TEI leaves this call open indefinitely.
                 embeddings = HuggingFaceEndpointEmbeddings(
                     model=TEI_EMBEDDING_ENDPOINT,
                     task="feature-extraction",
                     huggingfacehub_api_token=HF_TOKEN,
+                    timeout=TEI_TIMEOUT,
                 )
                 # Issue #1035 (generalized): contrastive / instruction-tuned
                 # embedding models expect a query-side prefix at inference

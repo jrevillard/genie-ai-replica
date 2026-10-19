@@ -123,6 +123,12 @@ spec:
         seccompProfile:
           type: RuntimeDefault
         runAsUser: 65534
+      {{- with .Values.global.imagePullSecrets }}
+      # PodSpec level (NOT inside the container entry — a container-level
+      # imagePullSecrets is silently dropped under default field validation
+      # and the pull fails with no error).
+      imagePullSecrets: {{ toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: keycloak-config-cli
           # The -26 suffix encodes the Keycloak major version. A Keycloak
@@ -134,9 +140,6 @@ spec:
           # site must mirror docker.io/adorsys/keycloak-config-cli and
           # rewrite via insertAgent, not via the registry value.
           image: docker.io/adorsys/keycloak-config-cli:6.5.0-26
-          {{- with .Values.global.imagePullSecrets }}
-          imagePullSecrets: {{ toYaml . | nindent 12 }}
-          {{- end }}
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -231,17 +234,17 @@ spec:
             - name: KEYCLOAK_RESET_PASSWORD
               value: {{ eq ((.Values.data.keycloak.resetPasswordAllowed | default false) | toString) "true" | quote }}
             - name: KEYCLOAK_LOGIN_WITH_EMAIL
-              value: {{ eq ((.Values.data.keycloak.loginWithEmailAllowed | default true) | toString) "true" | quote }}
+              value: {{ eq (ternary (.Values.data.keycloak.loginWithEmailAllowed | toString) "true" (kindIs "bool" .Values.data.keycloak.loginWithEmailAllowed)) "true" | quote }}
             - name: KEYCLOAK_DUPLICATE_EMAILS
               value: {{ eq ((.Values.data.keycloak.duplicateEmailsAllowed | default false) | toString) "true" | quote }}
             - name: KEYCLOAK_BRUTE_FORCE
-              value: {{ eq ((.Values.data.keycloak.bruteForceProtected | default true) | toString) "true" | quote }}
+              value: {{ eq (ternary (.Values.data.keycloak.bruteForceProtected | toString) "true" (kindIs "bool" .Values.data.keycloak.bruteForceProtected)) "true" | quote }}
             - name: KEYCLOAK_PASSWORD_POLICY
               value: {{ .Values.data.keycloak.passwordPolicy | default "length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)" | quote }}
             - name: KEYCLOAK_THEME
               value: {{ .Values.data.keycloak.theme | default "keycloak" | quote }}
             - name: KEYCLOAK_I18N_ENABLED
-              value: {{ eq ((.Values.data.keycloak.internationalizationEnabled | default true) | toString) "true" | quote }}
+              value: {{ eq (ternary (.Values.data.keycloak.internationalizationEnabled | toString) "true" (kindIs "bool" .Values.data.keycloak.internationalizationEnabled)) "true" | quote }}
             - name: KEYCLOAK_LOCALE
               value: {{ .Values.data.keycloak.defaultLocale | quote }}
             # JSON array literal, not a comma-joined string: the realm

@@ -240,7 +240,10 @@ export default {
     async load() {
       this.error = '';
       const res = await this.$store.dispatch('okf/modelConfigList').catch(() => null);
-      if (res && res.ok) this.configs = res.configs;
+      // Guard the envelope field: a host dialog's test store (or a degraded
+      // backend response) can return {ok:true} without configs — an undefined
+      // list here kills the whole render tree, not just this tab.
+      if (res && res.ok) this.configs = Array.isArray(res.configs) ? res.configs : [];
       else if (res && /403|forbidden|scope/i.test(res.message || '')) {
         this.error = this.translate('okf.models.adminOnly', 'Model configurations require the platform admin role.');
       } else if (res) this.error = res.message;
@@ -279,7 +282,7 @@ export default {
       const res = await this.$store.dispatch('okf/modelConfigModels', { key: this.editing._key }).catch(() => null);
       this.modelsBusy = false;
       if (res && res.ok) {
-        this.modelChoices = res.models;
+        this.modelChoices = Array.isArray(res.models) ? res.models : [];
         if (!res.models.length) {
           this.modelsError = this.translate(
             'okf.models.modelsEmpty',

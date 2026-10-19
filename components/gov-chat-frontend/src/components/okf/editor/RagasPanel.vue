@@ -635,6 +635,12 @@ export default {
   name: 'OkfRagasPanel',
   components: { DsButton, DsPill, DsSpinner, DsProgress, DsInfoTip },
   mixins: [translateMixin],
+  props: {
+    repo: { type: Object, default: null },
+    readOnly: { type: Boolean, default: false },
+    initialSuiteKey: { type: String, default: '' }
+  },
+  emits: ['changed'],
   setup() {
     // Registered ONCE here (in setup context) so the composable's
     // MutationObserver actually arms — calling useChartTheme() inside a
@@ -645,12 +651,6 @@ export default {
     const { theme, getCssVarStrings } = useChartTheme();
     return { chartTheme: theme, chartThemeStrings: getCssVarStrings };
   },
-  props: {
-    repo: { type: Object, default: null },
-    readOnly: { type: Boolean, default: false },
-    initialSuiteKey: { type: String, default: '' }
-  },
-  emits: ['changed'],
   data() {
     return {
       showHelp: false,

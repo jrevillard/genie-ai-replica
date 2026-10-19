@@ -18,7 +18,6 @@
 // one) overrides the deployment's env-configured judge for the RAGAS legs;
 // with none active, RAGAS_JUDGE_* behaves exactly as before.
 
-const crypto = require('crypto');
 const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
@@ -131,9 +130,7 @@ async function listConfigs() {
   return withSpan('okf.model_config.list', async () => {
     const db = await dbService.getConnection();
     await ensureCollection(db);
-    const rows = await (
-      await db.query(`FOR c IN ${COLLECTION} SORT c.active DESC, c.name ASC RETURN c`)
-    ).all();
+    const rows = await (await db.query(`FOR c IN ${COLLECTION} SORT c.active DESC, c.name ASC RETURN c`)).all();
     return rows.map(mask);
   });
 }
@@ -143,7 +140,8 @@ async function createConfig(payload = {}, opts = {}) {
     const clean = validate(payload);
     const db = await dbService.getConnection();
     await ensureCollection(db);
-    if (await nameTaken(db, clean.name)) throw httpErr('NAME_TAKEN', 409, `a model configuration named "${clean.name}" already exists`);
+    if (await nameTaken(db, clean.name))
+      throw httpErr('NAME_TAKEN', 409, `a model configuration named "${clean.name}" already exists`);
     const now = new Date().toISOString();
     const doc = {
       _key: `mc${Date.now()}-${crypto.randomUUID().slice(0, 6)}`,
@@ -151,7 +149,8 @@ async function createConfig(payload = {}, opts = {}) {
       provider: clean.provider,
       base_url: clean.base_url,
       api_key: clean.api_key,
-      default_model: typeof payload.default_model === 'string' && payload.default_model.trim() ? payload.default_model.trim() : null,
+      default_model:
+        typeof payload.default_model === 'string' && payload.default_model.trim() ? payload.default_model.trim() : null,
       active: false, // created INACTIVE — activation is an explicit act
       created_at: now,
       updated_at: now,
@@ -166,10 +165,13 @@ async function createConfig(payload = {}, opts = {}) {
 }
 
 async function loadDoc(db, key) {
-  const doc = await db.collection(COLLECTION).document(key).catch((e) => {
-    if (e && (e.code === 404 || e.statusCode === 404 || /not found/i.test(e.message || ''))) return null;
-    throw e;
-  });
+  const doc = await db
+    .collection(COLLECTION)
+    .document(key)
+    .catch((e) => {
+      if (e && (e.code === 404 || e.statusCode === 404 || /not found/i.test(e.message || ''))) return null;
+      throw e;
+    });
   if (!doc) throw httpErr('MODEL_CONFIG_NOT_FOUND', 404, `model configuration ${key} not found`);
   return doc;
 }
@@ -189,10 +191,16 @@ async function updateConfig(key, payload = {}, opts = {}) {
     };
     if (payload.api_key !== undefined && String(payload.api_key).length > 0) merged.api_key = payload.api_key;
     const clean = validate(merged, { partial: true });
-    if (await nameTaken(db, clean.name, key)) throw httpErr('NAME_TAKEN', 409, `a model configuration named "${clean.name}" already exists`);
-    const patch = { ...clean, updated_at: new Date().toISOString(), updated_by: (opts.actor && opts.actor.user_id) || 'system' };
+    if (await nameTaken(db, clean.name, key))
+      throw httpErr('NAME_TAKEN', 409, `a model configuration named "${clean.name}" already exists`);
+    const patch = {
+      ...clean,
+      updated_at: new Date().toISOString(),
+      updated_by: (opts.actor && opts.actor.user_id) || 'system'
+    };
     if (payload.default_model !== undefined) {
-      patch.default_model = typeof payload.default_model === 'string' && payload.default_model.trim() ? payload.default_model.trim() : null;
+      patch.default_model =
+        typeof payload.default_model === 'string' && payload.default_model.trim() ? payload.default_model.trim() : null;
     }
     await db.collection(COLLECTION).update(key, patch);
     span.setAttribute('okf.model_config.name', clean.name);
@@ -268,7 +276,12 @@ async function deleteConfig(key, opts = {}) {
     const doc = await loadDoc(db, key);
     await db.collection(COLLECTION).remove(key);
     span.setAttribute('okf.model_config.name', doc.name);
-    await audit('delete', doc, opts, `model configuration "${doc.name}" deleted${doc.active ? ' (was active — env default now applies)' : ''}`);
+    await audit(
+      'delete',
+      doc,
+      opts,
+      `model configuration "${doc.name}" deleted${doc.active ? ' (was active — env default now applies)' : ''}`
+    );
     return { deleted: key };
   });
 }
@@ -330,7 +343,7 @@ async function listModels(key) {
 async function resolveModelOverride(pick = {}) {
   const db = await dbService.getConnection();
   await ensureCollection(db);
-  let doc = null;
+  let doc;
   if (pick.config_key) {
     doc = await loadDoc(db, pick.config_key).catch(() => null);
     if (!doc) throw httpErr('MODEL_CONFIG_NOT_FOUND', 404, `model configuration ${pick.config_key} not found`);

@@ -113,7 +113,13 @@ describe('ModelConfigPanel', () => {
     );
     // edit without typing a key → payload omits api_key entirely (keep-old)
     w.vm.openEdit(configs()[0]);
-    w.vm.form = { name: 'Renamed', provider: 'openai', base_url: 'http://gw:4000/v1', api_key: '', default_model: 'gpt-4o' };
+    w.vm.form = {
+      name: 'Renamed',
+      provider: 'openai',
+      base_url: 'http://gw:4000/v1',
+      api_key: '',
+      default_model: 'gpt-4o'
+    };
     await w.vm.save();
     expect(dispatch).toHaveBeenCalledWith(
       'okf/modelConfigUpdate',

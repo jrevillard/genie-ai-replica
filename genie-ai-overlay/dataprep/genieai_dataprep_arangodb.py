@@ -15,8 +15,9 @@ import aiohttp
 from opentelemetry import propagate
 
 from core.model_cache import get_model_id
+from core.span_attrs import ATTRIBUTE_NAMES
 from core.model_http_policy import CONTROL_PLANE_TIMEOUT_SECONDS, LLM_MAX_RETRIES, LLM_TIMEOUT_SECONDS
-from core.model_http_policy import positive_float_env as _positive_float_env
+from core.model_http_policy import positive_float_env
 from tracing import (
     background_span,
     get_meter,
@@ -296,12 +297,12 @@ LLM_LABEL_TEMPERATURE = float(os.getenv("DATAPREP_LLM_TEMPERATURE", "0.0"))
 # written for. 600 s sits above a healthy phase (a 260-chunk document completes
 # in minutes on an uncontended GPU) and well below one batch's worst case, so
 # the phase gives up while the stragglers are still retrying and cancels them.
-DATAPREP_LLM_PHASE_TIMEOUT_SECONDS = _positive_float_env("DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", default=600.0)
+DATAPREP_LLM_PHASE_TIMEOUT_SECONDS = positive_float_env("DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", default=600.0)
 # How often a still-running phase reports progress to the ingestion log. The log
 # is the only channel an operator watches during an ingest (the admin UI reads
 # it), so a phase that is alive but slow has to say so — silence is what made
 # the original stall undiagnosable.
-DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS = _positive_float_env("DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", default=60.0)
+DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS = positive_float_env("DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", default=60.0)
 # How long a cancelled batch is given to unwind before the phase gives up on it.
 # Long enough for a cooperative cancellation to close its HTTP connection and
 # free its semaphore slot; short enough that the phase bound stays the outer
@@ -1540,8 +1541,8 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     logger.warning(f"Batch context failed {[i for i, _ in batch]}: {err}; falling back to per-chunk.")
                     if _is_timeout(e):
                         with suppress(Exception):
-                            span.set_attribute("dataprep.llm.timed_out", True)
-                            span.set_attribute("dataprep.llm.timeout_seconds", LLM_TIMEOUT_SECONDS)
+                            span.set_attribute(ATTRIBUTE_NAMES["dataprep_llm_timed_out"], True)
+                            span.set_attribute(ATTRIBUTE_NAMES["dataprep_llm_timeout_seconds"], LLM_TIMEOUT_SECONDS)
                     _llm_fallback_total.add(1, {"phase": PHASE_LABEL_CONTEXTUAL, "reason": "batch_error"})
                     await self._write_ingestion_log(
                         file_id,
@@ -1734,13 +1735,16 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 suggestions = await self._llm_call_batch(client, model, system_prompt, batch, file_id)
                 if suggestions is not None:
                     return suggestions
+                # _llm_call_batch already counted the failure (parse or call) —
+                # it swallows both and returns None, so nothing reaches the
+                # handlers below for a failed call.
                 await self._write_ingestion_log(
                     file_id,
                     "WARN",
                     "Labeling",
-                    f"Batch labeling parse failure for chunks {[i for i, _ in batch]}; falling back to per-chunk.",
+                    f"Batch labeling did not return usable labels for chunks {[i for i, _ in batch]}; "
+                    "falling back to per-chunk.",
                 )
-                _llm_fallback_total.add(1, {"phase": PHASE_LABEL_LABELING, "reason": "batch_parse"})
             except DataprepInputTooLongError:
                 # Fail-loud: batch prompt is structurally too long; retrying with
                 # the same oversized prompt in the per-chunk fallback would either
@@ -1751,15 +1755,17 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 # raise the same typed exception cleanly when they hit the cap.
                 raise
             except Exception as e:
+                # Reached only for a failure _llm_call_batch did not handle —
+                # it is the last resort before per-chunk, not the common path.
                 err = f"{type(e).__name__}: {str(e)[:200]}"
                 batch_indices = [i for i, _ in batch]
+                _llm_fallback_total.add(1, {"phase": PHASE_LABEL_LABELING, "reason": "batch_error"})
                 await self._write_ingestion_log(
                     file_id,
                     "WARN",
                     "Labeling",
                     f"Batch labeling call failed for chunks {batch_indices} ({err}); falling back to per-chunk.",
                 )
-                _llm_fallback_total.add(1, {"phase": PHASE_LABEL_LABELING, "reason": "batch_error"})
         # Per-chunk path (default, and batch fallback for transient/non-overflow errors).
         out: dict[int, list[str]] = {}
         for i, text in batch:
@@ -1836,8 +1842,8 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     # call that is still in flight.
                     if _is_timeout(e):
                         with suppress(Exception):
-                            span.set_attribute("dataprep.llm.timed_out", True)
-                            span.set_attribute("dataprep.llm.timeout_seconds", LLM_TIMEOUT_SECONDS)
+                            span.set_attribute(ATTRIBUTE_NAMES["dataprep_llm_timed_out"], True)
+                            span.set_attribute(ATTRIBUTE_NAMES["dataprep_llm_timeout_seconds"], LLM_TIMEOUT_SECONDS)
                     await self._write_ingestion_log(
                         file_id,
                         "WARN",
@@ -1891,6 +1897,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 )
                 parsed = json.loads(response.choices[0].message.content)
                 if not isinstance(parsed, dict):
+                    _llm_fallback_total.add(1, {"phase": PHASE_LABEL_LABELING, "reason": "batch_parse"})
                     return None
                 index_set = set(indices)
                 suggestions: dict[int, list[str]] = {}
@@ -1940,14 +1947,21 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 # from one still in flight.
                 if _is_timeout(e):
                     with suppress(Exception):
-                        span.set_attribute("dataprep.llm.timed_out", True)
-                        span.set_attribute("dataprep.llm.timeout_seconds", LLM_TIMEOUT_SECONDS)
+                        span.set_attribute(ATTRIBUTE_NAMES["dataprep_llm_timed_out"], True)
+                        span.set_attribute(ATTRIBUTE_NAMES["dataprep_llm_timeout_seconds"], LLM_TIMEOUT_SECONDS)
                 await self._write_ingestion_log(
                     file_id,
                     "WARN",
                     "Labeling",
                     f"Batch labeling call failed for chunks {indices} ({err}); returning None for per-chunk fallback.",
                 )
+                # Counted here, not in the caller: this function swallows every
+                # failure and returns None, so the caller's own error handler
+                # never runs for a call that failed — only for one whose parse
+                # failed. Counting there left batch_error permanently zero and
+                # filed every timeout under batch_parse, which is the opposite of
+                # what an operator querying a contended GPU needs to see.
+                _llm_fallback_total.add(1, {"phase": PHASE_LABEL_LABELING, "reason": "batch_error"})
                 return None
 
     async def _finalize_chunk_labels(self, index, suggested, all_labels, file_id, file_labels=None) -> list[str]:

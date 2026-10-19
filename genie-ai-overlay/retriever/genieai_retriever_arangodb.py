@@ -517,7 +517,12 @@ class GenieaiArangoRetriever(OpeaComponent):
                     # client built later without an explicit timeout, and the
                     # effect would outlive this branch. One call gets its own
                     # client and nothing else is touched.
-                    openai.OpenAI(api_key=OPENAI_API_KEY, timeout=VLLM_TIMEOUT).models.list()
+                    #
+                    # Closed explicitly: the client owns an httpx connection pool
+                    # that would otherwise live until the GC finaliser runs, and
+                    # _initialize_llm runs again on every reconfigure.
+                    with openai.OpenAI(api_key=OPENAI_API_KEY, timeout=VLLM_TIMEOUT) as probe:
+                        probe.models.list()
                     if logflag:
                         logger.debug("OpenAI API Key is valid.")
                     self.llm = ChatOpenAI(

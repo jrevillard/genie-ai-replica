@@ -121,6 +121,28 @@ class TestInvalidValues:
         assert m["llm_retries"] == 2
         assert m["llm_timeout"] == 180.0
 
+    def test_zero_retries_is_honoured(self):
+        """Zero is the meaningful value for a retry count, unlike for a timeout.
+
+        An operator on a contended GPU sets 0 to cap a batch's worst-case
+        latency. Routing retries through the positive parser — which rejects
+        zero because a zero *timeout* means "fail every call immediately" —
+        gave them the default back with nothing to say so.
+        """
+        assert _reload_with(MODEL_LLM_MAX_RETRIES="0")["llm_retries"] == 0
+
+    def test_negative_retries_still_rejected(self):
+        assert _reload_with(MODEL_LLM_MAX_RETRIES="-3")["llm_retries"] == 2
+
+    def test_fractional_retries_round_up(self):
+        """A fractional count is nonsense; the safe reading is \"retry more\"."""
+        assert _reload_with(MODEL_LLM_MAX_RETRIES="2.2")["llm_retries"] == 3
+
+    def test_zero_timeout_is_still_rejected(self):
+        """The two knobs disagree on zero, and that has to stay true."""
+        assert _reload_with(MODEL_LLM_TIMEOUT_SECONDS="0")["llm_timeout"] == 180.0
+        assert _reload_with(MODEL_TEI_TIMEOUT_SECONDS="0")["tei_timeout"] == 120.0
+
     def test_import_never_raises_on_any_garbage(self):
         """Importing the policy must not be able to kill a service."""
         for raw in ("", "inf", "-inf", "nan", "abc", "0", "-1", "1e999", "1,5", "  60  "):
@@ -250,16 +272,26 @@ class TestCallSitesConsumeThePolicy:
                 f"{ast.unparse(call.func)} timeout does not resolve to the shared policy: {names or 'not set'}"
             )
 
-    def test_the_unbudgeted_huggingface_client_documents_why(self):
-        """An unbounded client must say so where the next author will see it."""
-        source = (OVERLAY_ROOT / "retriever" / "genieai_retriever_arangodb.py").read_text(encoding="utf-8")
-        idx = source.find("HuggingFaceEndpointEmbeddings(")
-        assert idx != -1, "the call site moved — re-check whether it can be budgeted now"
-        preceding = source[max(0, idx - 1200) : idx]
-        assert "Left unbudgeted on purpose" in preceding, (
-            "HuggingFaceEndpointEmbeddings carries no timeout; without a comment "
-            "explaining why, the next reader adds the kwarg and 500s every retrieval"
-        )
+    def test_the_unbudgeted_huggingface_client_is_left_unbudgeted(self):
+        """Guard the deliberate omission on the AST, not on prose.
+
+        The class is not given a timeout because langchain_huggingface's pydantic
+        field set is version-dependent and an unrecognised kwarg raises at
+        construction — which on the remote-GPU path would 500 every retrieval.
+        Asserting on a comment string would fail on any reworded comment and pass
+        on the kwarg being added back, so the assertion is on the shape of the
+        call: this class must not grow a timeout keyword.
+        """
+        source = OVERLAY_ROOT / "retriever" / "genieai_retriever_arangodb.py"
+        calls = _constructors(source, "HuggingFaceEndpointEmbeddings")
+        assert calls, "the call site moved — re-check whether it can be budgeted now"
+        for call in calls:
+            assert _kwarg(call, "timeout") is None, (
+                "HuggingFaceEndpointEmbeddings gained a timeout kwarg. That class is a "
+                "pydantic model whose field set depends on the pinned langchain-huggingface; "
+                "verify the field exists there before keeping it, or every retrieval on the "
+                "remote-GPU path fails at construction."
+            )
 
     def test_dataprep_keycloak_refresh_is_bounded(self):
         """An unbounded refresh wedges every ingestion-log writer behind it."""

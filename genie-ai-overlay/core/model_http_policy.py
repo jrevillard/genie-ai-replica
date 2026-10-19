@@ -5,7 +5,9 @@
 Every in-repo client that talks to a model endpoint derives its timeout and
 retry budget from this module, so a heavily contended shared GPU fails
 **bounded and uniformly** across services instead of per-site library defaults
-drifting apart.
+drifting apart. Two call sites are outside it and named below: the vendored
+``comps`` clients, and the retriever's ``HuggingFaceEndpointEmbeddings``, whose
+pydantic field set depends on the pinned ``langchain-huggingface``.
 
 Why a budget shorter than the library default is the safe choice: every LLM
 caller in this overlay has a degradation path that produces a usable document
@@ -90,12 +92,35 @@ def _positive_float(*names: str, default: float) -> float:
     return positive_float_env(*names, default=default)
 
 
+def non_negative_int_env(*names: str, default: int) -> int:
+    """Return the first env var among *names* parsing as a non-negative integer.
+
+    A separate rule from ``positive_float_env`` because the two settings have
+    different meanings for zero. A zero *timeout* is "fail immediately on every
+    call" and must be rejected; a zero *retry count* is the meaningful value —
+    an operator on a contended GPU setting ``MODEL_LLM_MAX_RETRIES=0`` to cap
+    the worst-case latency of a batch is asking for precisely that, and routing
+    it through the positive parser would silently give them the default back.
+
+    Fractional values round up, so ``0.5`` becomes 1 rather than truncating to a
+    retry count the operator did not ask for.
+    """
+    for name in names:
+        raw = os.getenv(name)
+        if raw is None or raw == "":
+            continue
+        try:
+            value = float(raw)
+        except ValueError:
+            continue
+        if math.isfinite(value) and value >= 0:
+            return math.ceil(value)
+    return default
+
+
 def _positive_int(*names: str, default: int) -> int:
-    # Round, not truncate. int() would turn a fractional value below 1 into 0,
-    # which passes the positive check and then disables the retry the knob
-    # exists to enable — the one outcome the parser promises is impossible.
-    # ceil keeps the floor at 1: a fractional retry count is nonsense, but the
-    # safe reading of nonsense here is "retry at least once".
+    # Kept for call sites where zero is genuinely meaningless; retry counts use
+    # non_negative_int_env above instead.
     return math.ceil(_positive_float(*names, default=default))
 
 
@@ -122,7 +147,7 @@ LLM_TIMEOUT_SECONDS = _positive_float("MODEL_LLM_TIMEOUT_SECONDS", "VLLM_TIMEOUT
 # 503 or drops the connection) are the ones that clear on their own; the timeout
 # is not retried by the SDK, and this overlay's own 3-attempt loops handle the
 # cases that deserve another try.
-LLM_MAX_RETRIES = _positive_int("MODEL_LLM_MAX_RETRIES", default=2)
+LLM_MAX_RETRIES = non_negative_int_env("MODEL_LLM_MAX_RETRIES", default=2)
 
 # TEI (rerank / embed): single-shot batch calls with short outputs, so a much
 # tighter budget than chat generation. 120 s leaves room for queueing behind a

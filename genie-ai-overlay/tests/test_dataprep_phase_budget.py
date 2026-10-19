@@ -432,7 +432,7 @@ class TestProgressIntervalCannotBeSilenced:
     def test_dataprep_uses_the_shared_parser(self):
         """The knobs must actually route through it, not a local ``float()``."""
         source = (OVERLAY_ROOT / "dataprep" / "genieai_dataprep_arangodb.py").read_text(encoding="utf-8")
-        assert "positive_float_env as _positive_float_env" in source, (
+        assert "positive_float_env" in source, (
             "dataprep must import the shared parser — a local float(os.getenv(...)) "
             "reintroduces the startup crash and the accepted-zero budget"
         )

@@ -867,6 +867,40 @@ class TestOwnedSpanCoverage:
             "and cannot change."
         )
 
+    def test_timeout_attributes_are_emitted_through_the_vocabulary(self, overlay_sources):
+        """The two timeout keys must be read from the register, not retyped.
+
+        ``test_every_attribute_key_written_in_the_overlay_is_registered`` checks
+        that a written key is *registered*, not that the emitter reads the
+        register. Writing ``span.set_attribute("dataprep.llm.timed_out", True)``
+        passes while ``ATTRIBUTE_NAMES["dataprep_llm_timed_out"]`` is renamed:
+        the vocabulary and the emitters then disagree, and the size pin above
+        still passes because the vocabulary did not shrink.
+
+        Scoped to the keys this work added rather than to dataprep's whole span
+        surface: the pre-existing attributes there are written as literals and
+        converting them is a separate change, not something this test should
+        make a prerequisite for.
+        """
+        keys = {ATTRIBUTE_NAMES["dataprep_llm_timed_out"], ATTRIBUTE_NAMES["dataprep_llm_timeout_seconds"]}
+        offenders: list[str] = []
+        for path in overlay_sources:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "set_attribute"
+                    and node.args
+                    and isinstance(node.args[0], ast.Constant)
+                    and node.args[0].value in keys
+                ):
+                    offenders.append(f"{path.name}:{node.lineno} {node.args[0].value}")
+        assert not offenders, (
+            f"timeout attributes written as literals instead of read from ATTRIBUTE_NAMES: "
+            f"{offenders}. Index the vocabulary so a rename propagates."
+        )
+
     def test_the_derivation_covers_most_registered_keys(self, overlay_sources):
         """The reverse direction, which is how a coverage claim gets measured.
 

@@ -265,9 +265,13 @@ HUGGING_FACE_HUB_TOKEN=
 #                                      #   while propagating the subject via vectors).
 
 # --- Model-endpoint HTTP budgets (optional) ---
-# Per-request timeouts for calls to the LLM and embedding endpoints. Every
-# in-repo client reads these (core/model_http_policy.py); the vendored comps
-# that dataprep's graph-transformer uses reads VLLM_TIMEOUT separately.
+# Per-request timeouts for calls to the LLM and embedding endpoints. Read by
+# every in-repo client (core/model_http_policy.py); the vendored comps that
+# dataprep's graph-transformer uses reads VLLM_TIMEOUT separately. One exception:
+# the retriever's HuggingFaceEndpointEmbeddings client is left unbounded — it is
+# a pydantic model whose accepted fields depend on the pinned
+# langchain-huggingface, and passing a timeout it may not declare fails at
+# construction rather than at call time.
 # Raise these only if your model is genuinely slower than the default allows —
 # on a shared GPU they are what stops a contended endpoint from stalling an
 # ingest for half an hour with no error. All four fall back to the default on a

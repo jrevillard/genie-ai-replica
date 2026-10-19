@@ -1192,16 +1192,20 @@ services:
       MODEL_LLM_TIMEOUT_SECONDS: ${MODEL_LLM_TIMEOUT_SECONDS:-180}
       MODEL_LLM_MAX_RETRIES: ${MODEL_LLM_MAX_RETRIES:-2}
       #
-      # VLLM_TIMEOUT is read by the VENDORED comps, not by this repo:
-      # OpeaArangoDataprep builds its LLMGraphTransformer with
-      # ChatOpenAI(timeout=VLLM_TIMEOUT), defaulting to 600 s. That phase has NO
-      # degradation path - a batch that is cancelled mid-flight loses its chunks
-      # and the document still reports "Ingested" - so it keeps the 600 s it ran
-      # at before this policy existed. Tightening it here would convert a slow
-      # graph extraction into silent data loss, the same trade MODEL_RERANK_
-      # TIMEOUT_SECONDS is kept at aiohttp's 300 s to avoid. Lower it
-      # deliberately once the graph phase has a fallback, not by upgrading.
-      VLLM_TIMEOUT: ${VLLM_TIMEOUT:-600}
+      # VLLM_TIMEOUT is deliberately NOT injected here, even though the vendored
+      # comps reads it: OpeaArangoDataprep builds its LLMGraphTransformer with
+      # ChatOpenAI(timeout=VLLM_TIMEOUT). Injecting it would break that client.
+      # comps takes the value straight from os.getenv, so it arrives as the
+      # STRING "600"; httpx 0.28 no longer coerces a string timeout, and the
+      # request dies with TypeError: 'str' object cannot be interpreted as an
+      # integer instead of timing out. _process_batch swallows that, so every
+      # batch would fail extraction and the document would still report
+      # "Ingested" with an empty knowledge graph.
+      #
+      # So the graph phase keeps comps' own int 600 s default - what it ran at
+      # before this policy, and the right value for a phase with no degradation
+      # path. Binding it differently needs a patch to the vendored source,
+      # tracked in genie-ai-overlay/OVERRIDES.yaml, not a compose line.
       GPU_NODE_HOST: ${GPU_NODE_HOST:-}
       TEI_EMBEDDING_ENDPOINT: ${EMBEDDING_SERVICE_URL:-http://tei:80}
       GUARDRAIL_URL: http://guardrail:9090/v1/guardrails
@@ -1366,7 +1370,7 @@ services:
       # which does not run in this image.
       MODEL_LLM_TIMEOUT_SECONDS: ${MODEL_LLM_TIMEOUT_SECONDS:-180}
       MODEL_LLM_MAX_RETRIES: ${MODEL_LLM_MAX_RETRIES:-2}
-      MODEL_TEI_TIMEOUT_SECONDS: ${MODEL_TEI_TIMEOUT_SECONDS:-120}
+      MODEL_EMBEDDING_TIMEOUT_SECONDS: ${MODEL_EMBEDDING_TIMEOUT_SECONDS:-120}
     networks:
       - genieai_network
     healthcheck:

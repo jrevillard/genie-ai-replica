@@ -894,6 +894,46 @@ class TestASecondCancellationCannotSkipTheSettle:
         _run(scenario())
 
 
+class TestTheSwallowedCancelDoesNotLeaveADanglingCounter:
+    """Catching CancelledError for cleanup means uncancel(), since 3.11.
+
+    ``asyncio.timeout`` and ``TaskGroup`` read ``task.cancelling()`` to decide
+    whether a cancellation is still live. A task that absorbs the error and
+    leaves the counter at 1 while returning normally is how a deadline stops
+    firing: the context manager cancels, the task absorbs, ``__aexit__`` sees a
+    clean return. Nothing in this overlay wraps an ingest in one today, so this
+    pins the pairing rather than a live outage.
+    """
+
+    def test_a_cancel_absorbed_by_the_settle_leaves_no_counter(self):
+        """The counter has to come back to where it started.
+
+        Without the uncancel() the task that absorbs the cancellation returns
+        normally with ``cancelling() == 1`` — precisely the state asyncio.timeout
+        and TaskGroup read to decide a cancellation is still live.
+        """
+
+        async def driver():
+            current = asyncio.current_task()
+            before = current.cancelling()
+
+            async def quick():
+                await asyncio.sleep(5)
+
+            inner = asyncio.ensure_future(quick())
+            current.cancel()
+            await dataprep._settle_and_retrieve([inner])
+            inner.cancel()
+            return before, current.cancelling()
+
+        before, after = _run(driver())
+        assert after == before, (
+            f"the settle left task.cancelling() at {after} (was {before}); a task that absorbs a "
+            "cancellation must decrement the counter, or asyncio.timeout and TaskGroup see a live "
+            "cancellation on a task that returned normally"
+        )
+
+
 class TestUnboundedPhaseKeepsItsSiblings:
     """The graph phase cannot abandon work, and that includes on the error path.
 

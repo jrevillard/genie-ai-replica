@@ -120,52 +120,51 @@ def test_the_overlay_runs_that_module_in_process():
     )
 
 
-def test_compose_injects_vllm_timeout_into_the_dataprep_service():
-    """The injection itself, so the two halves above have something to bind to.
+def test_compose_does_not_inject_vllm_timeout_into_the_dataprep_service():
+    """The regression this guards, stated as an absence.
 
-    Pure repo check — no comps needed, so ``contract:unit`` runs it for real.
-    Read as text because a compose parse would also succeed on the
-    mapping/sequence style mismatch this deck has hit once already.
+    The vendored comps reads VLLM_TIMEOUT with a bare ``os.getenv``, so an
+    injected value arrives as the STRING "600". httpx 0.28 stopped coercing a
+    string timeout and ``socket.create_connection`` rejects it outright, so the
+    request dies with ``TypeError: 'str' object cannot be interpreted as an
+    integer`` instead of timing out. ``_process_batch`` swallows that: every
+    batch would fail graph extraction and the document would still report
+    "Ingested" with an empty knowledge graph — silently, on every deployment
+    including the default one.
+
+    So the dataprep block must not carry the key. The graph phase keeps comps'
+    own int 600 s default, which is also the right value for the one phase here
+    with no degradation path. Changing it needs a patch to the vendored source
+    (OVERRIDES.yaml), not a compose line.
     """
-    compose = (_require_repo_root() / "docker-compose.yaml").read_text(encoding="utf-8")
-    dataprep_block = _service_block(compose, "dataprep-arango-service")
-    assert dataprep_block, "no dataprep-arango-service block found in docker-compose.yaml"
-    assert re.search(r"^\s*VLLM_TIMEOUT:", dataprep_block, re.M), (
-        "the dataprep service no longer receives VLLM_TIMEOUT — the vendored graph transformer "
-        "reads it from the environment, so dropping the injection unbounds the slowest ingest phase"
-    )
-    assert re.search(r"^\s*MODEL_LLM_TIMEOUT_SECONDS:", dataprep_block, re.M), (
-        "the dataprep service no longer receives MODEL_LLM_TIMEOUT_SECONDS — its own labelling "
-        "client would fall back to the VLLM_TIMEOUT meant for the vendored graph transformer"
+    root = _require_repo_root()
+    block = _service_block((root / "docker-compose.yaml").read_text(encoding="utf-8"), "dataprep-arango-service")
+    assert block, "no dataprep-arango-service block found in docker-compose.yaml"
+    assert not re.search(r"^\s*VLLM_TIMEOUT:", block, re.M), (
+        "the dataprep service injects VLLM_TIMEOUT. The vendored comps reads it with a bare "
+        "os.getenv, so it reaches httpx as a string; httpx 0.28 does not coerce it and the "
+        "client raises TypeError instead of timing out. _process_batch swallows that, so graph "
+        "extraction fails silently and the document still reports Ingested"
     )
 
 
 def test_the_graph_transformer_keeps_the_budget_it_had_before_this_policy():
-    """The one default here that must NOT tighten, and why.
+    """Nothing here tightens the one phase with no degradation path.
 
-    ``VLLM_TIMEOUT`` is read by a phase with no degradation path: a graph batch
-    cancelled mid-flight loses its chunks outright and the document still
-    reports "Ingested". Chaining it to MODEL_LLM_TIMEOUT_SECONDS — which is what
-    this service block used to do, 180 s — converts a slow-but-successful graph
-    extraction into silent data loss on an upgrade that edited no ``.env``.
-
-    So the two names are deliberately independent here: ours tightens because
-    every call behind it degrades, comps' does not because none of them do.
+    A graph batch cancelled mid-flight loses its chunks and the document still
+    reports "Ingested", so the phase keeps the 600 s it ran at before this
+    policy. There were two ways to regress that, and this MR contained both at
+    some point: chaining the injection to MODEL_LLM_TIMEOUT_SECONDS (which
+    tightened it 3.3x on an upgrade that edited no .env), and injecting
+    VLLM_TIMEOUT at all (which is worse — it breaks the client outright). The
+    second is asserted by the test above; this one pins the remaining surface.
     """
-    compose = (_require_repo_root() / "docker-compose.yaml").read_text(encoding="utf-8")
-    block = _service_block(compose, "dataprep-arango-service")
-    match = re.search(r"^\s*VLLM_TIMEOUT:\s*(\S+)", block, re.M)
-    assert match, "no VLLM_TIMEOUT assignment in the dataprep service block"
-    default = match.group(1)
-    assert default == "${VLLM_TIMEOUT:-600}", (
-        f"the dataprep service now injects VLLM_TIMEOUT={default}. The graph-insertion phase "
-        "has no fallback, so anything below the 600 s it ran at before this policy silently "
-        "drops chunks from the knowledge graph on upgrade"
-    )
-    assert "MODEL_LLM_TIMEOUT_SECONDS" not in default, (
-        "VLLM_TIMEOUT is chained to MODEL_LLM_TIMEOUT_SECONDS again — that couples the "
-        "no-fallback graph phase to the fallback-capable labelling phase, so raising the "
-        "labelling budget for a slow model would also multiply the graph phase's wait"
+    root = _require_repo_root()
+    block = _service_block((root / "docker-compose.yaml").read_text(encoding="utf-8"), "dataprep-arango-service")
+    assert block, "no dataprep-arango-service block found in docker-compose.yaml"
+    assert re.search(r"^\s*MODEL_LLM_TIMEOUT_SECONDS:", block, re.M), (
+        "the dataprep service no longer injects MODEL_LLM_TIMEOUT_SECONDS — that is the knob "
+        "its own labelling and context clients read"
     )
 
 

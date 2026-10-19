@@ -28,7 +28,7 @@ _ENV_KEYS = (
     "MODEL_LLM_TIMEOUT_SECONDS",
     "VLLM_TIMEOUT",
     "MODEL_LLM_MAX_RETRIES",
-    "MODEL_TEI_TIMEOUT_SECONDS",
+    "MODEL_EMBEDDING_TIMEOUT_SECONDS",
     "MODEL_RERANK_TIMEOUT_SECONDS",
     "MODEL_CONTROL_PLANE_TIMEOUT_SECONDS",
 )
@@ -53,7 +53,7 @@ def _reload_with(**env):
         return {
             "llm_timeout": m.LLM_TIMEOUT_SECONDS,
             "llm_retries": m.LLM_MAX_RETRIES,
-            "tei_timeout": m.TEI_TIMEOUT_SECONDS,
+            "tei_timeout": m.EMBEDDING_TIMEOUT_SECONDS,
             "rerank_timeout": m.RERANK_TIMEOUT_SECONDS,
             "control_plane_timeout": m.CONTROL_PLANE_TIMEOUT_SECONDS,
         }
@@ -119,7 +119,7 @@ class TestInvalidValues:
         assert m["llm_timeout"] == 180.0
 
     def test_zero_rejected(self):
-        assert _reload_with(MODEL_TEI_TIMEOUT_SECONDS="0")["tei_timeout"] == 120.0
+        assert _reload_with(MODEL_EMBEDDING_TIMEOUT_SECONDS="0")["tei_timeout"] == 120.0
 
     def test_negative_rejected(self):
         assert _reload_with(MODEL_LLM_MAX_RETRIES="-3")["llm_retries"] == 2
@@ -171,7 +171,7 @@ class TestInvalidValues:
     def test_zero_timeout_is_still_rejected(self):
         """The two knobs disagree on zero, and that has to stay true."""
         assert _reload_with(MODEL_LLM_TIMEOUT_SECONDS="0")["llm_timeout"] == 180.0
-        assert _reload_with(MODEL_TEI_TIMEOUT_SECONDS="0")["tei_timeout"] == 120.0
+        assert _reload_with(MODEL_EMBEDDING_TIMEOUT_SECONDS="0")["tei_timeout"] == 120.0
 
     def test_import_never_raises_on_any_garbage(self):
         """Importing the policy must not be able to kill a service."""
@@ -281,7 +281,7 @@ class TestHttpTimeoutKeepsTheConnectCeiling:
     def test_a_total_below_the_ceiling_is_not_inflated(self):
         """connect must never exceed the total, at any knob setting.
 
-        ``MODEL_TEI_TIMEOUT_SECONDS=2`` has to stay a 2 s budget everywhere; a
+        ``MODEL_EMBEDDING_TIMEOUT_SECONDS=2`` has to stay a 2 s budget everywhere; a
         fixed 5 s connect would silently outlive it.
         """
         t = policy.http_timeout(2.0)
@@ -514,7 +514,7 @@ class TestCallSitesConsumeThePolicy:
                         bindings[target.id] = node.value.id
         for name, expected in (
             ("VLLM_TIMEOUT", "LLM_TIMEOUT_SECONDS"),
-            ("TEI_TIMEOUT", "TEI_TIMEOUT_SECONDS"),
+            ("TEI_TIMEOUT", "EMBEDDING_TIMEOUT_SECONDS"),
         ):
             assert name in bindings, f"{name} is no longer assigned at module level in retriever/config.py"
             assert bindings[name] == expected, (

@@ -276,7 +276,7 @@ HUGGING_FACE_HUB_TOKEN=
 # Raise these only if your model is genuinely slower than the default allows —
 # on a shared GPU they are what stops a contended endpoint from stalling an
 # ingest for half an hour with no error.
-# The four *_TIMEOUT_SECONDS knobs fall back to their default on a non-numeric,
+# Every timeout knob falls back to its default on a non-numeric,
 # zero or negative value, so a typo cannot take a service down. MODEL_LLM_MAX_
 # RETRIES is the exception and 0 is a real value for it: it means "no SDK
 # retries" and is honoured as set. Setting both names does not blend them —
@@ -286,7 +286,7 @@ HUGGING_FACE_HUB_TOKEN=
 # MODEL_LLM_TIMEOUT_SECONDS=180   # vLLM completions made by THIS repo: dataprep
 #                                 #   labelling and context generation, and the
 #                                 #   retriever's summarizer client. Embedding
-#                                 #   is MODEL_TEI_TIMEOUT_SECONDS below, and
+#                                 #   is MODEL_EMBEDDING_TIMEOUT_SECONDS below, and
 #                                 #   not this knob. Not the chat path — that call
 #                                 #   lives inside the vendored comps
 #                                 #   orchestrator graph, which has no
@@ -304,7 +304,11 @@ HUGGING_FACE_HUB_TOKEN=
 #                                 #   rather than the full budget.
 # MODEL_LLM_MAX_RETRIES=2         # SDK-level retries on 408/409/429/5xx and
 #                                 #   connection errors.
-# MODEL_TEI_TIMEOUT_SECONDS=120   # TEI embedding calls.
+# MODEL_EMBEDDING_TIMEOUT_SECONDS=120   # The retriever's embedding client
+#                                 #   (OpenAI-API branch). NOT the local-TEI
+#                                 #   branch: HuggingFaceEndpointEmbeddings
+#                                 #   there is deliberately unbudgeted, and
+#                                 #   HuggingFaceBgeEmbeddings is in-process.
 # MODEL_RERANK_TIMEOUT_SECONDS=300 # TEI rerank. Deliberately NOT tighter than the
 #                                 #   300 s an unconfigured aiohttp session would
 #                                 #   have used: the rerank path has no fallback, so
@@ -312,27 +316,17 @@ HUGGING_FACE_HUB_TOKEN=
 #                                 #   Lower it only once rerank can degrade.
 # MODEL_CONTROL_PLANE_TIMEOUT_SECONDS=30  # Keycloak token refresh and the other
 #                                 #   in-cluster control-plane calls.
-# VLLM_TIMEOUT=600                # Read by the VENDORED comps for dataprep's
-#                                 #   graph transformer (the only model call in
-#                                 #   the deck that comps reads a budget for).
-#                                 #   retriever/config.py also names it, at
-#                                 #   second precedence — but only when this
-#                                 #   variable is NOT injected into that
-#                                 #   container, which it is not: the shared
-#                                 #   MODEL_LLM_TIMEOUT_SECONDS always wins
-#                                 #   there, so setting this value changes the
-#                                 #   dataprep graph phase and nothing else.
-#                                 #   NOT the same knob as
-#                                 #   MODEL_LLM_TIMEOUT_SECONDS, and deliberately
-#                                 #   decoupled from it: the graph phase has no
-#                                 #   fallback, so a batch cancelled mid-flight
-#                                 #   drops its chunks and the document still
-#                                 #   reports "Ingested". It therefore keeps the
-#                                 #   600 s it ran at before this policy existed.
-#                                 #   Raise MODEL_LLM_TIMEOUT_SECONDS for a slow
-#                                 #   model; lower this one only once graph
-#                                 #   insertion can degrade.
-#                                 #   Set in docker-compose.yaml.
+# VLLM_TIMEOUT                     # NOT SETTABLE THROUGH THIS FILE. The only
+#                                 #   reader is the vendored comps graph
+#                                 #   transformer, and it takes the value
+#                                 #   verbatim from os.getenv: an injected value
+#                                 #   arrives as a STRING, httpx 0.28 does not
+#                                 #   coerce it, and the client raises TypeError
+#                                 #   instead of timing out. It is therefore
+#                                 #   injected nowhere, and the graph phase keeps
+#                                 #   comps' own 600 s default — which is also
+#                                 #   correct, that being the one phase with no
+#                                 #   fallback. See genie-ai-overlay/OVERRIDES.yaml.
 #
 # Dataprep phase budgets — the wall clock for a whole LLM phase, not one call.
 # A phase that runs out is abandoned and degrades (labelling to file labels,

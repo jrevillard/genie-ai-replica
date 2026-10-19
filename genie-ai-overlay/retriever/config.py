@@ -3,7 +3,7 @@
 
 import os
 
-from core.model_http_policy import LLM_TIMEOUT_SECONDS, TEI_TIMEOUT_SECONDS
+from core.model_http_policy import EMBEDDING_TIMEOUT_SECONDS, LLM_TIMEOUT_SECONDS
 
 
 #######################################################
@@ -268,7 +268,7 @@ VLLM_TEMPERATURE = os.getenv("VLLM_TEMPERATURE", 0.8)
 # its tests and deployed .env files all reference it; it now carries the shared
 # LLM budget rather than a retriever-local one.
 VLLM_TIMEOUT = LLM_TIMEOUT_SECONDS
-TEI_TIMEOUT = TEI_TIMEOUT_SECONDS
+TEI_TIMEOUT = EMBEDDING_TIMEOUT_SECONDS
 
 
 # OpenAI configuration (alternative to VLLM & TEI)

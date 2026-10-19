@@ -712,7 +712,18 @@ async def _settle_and_retrieve(tasks) -> bool:
             # Deliberately swallowed: the settle is the thing we promised, and
             # it has a timeout of its own, so it cannot hold the caller longer
             # than the grace window regardless of how often we are cancelled.
+            #
+            # uncancel() with it. Since 3.11 a task that catches CancelledError
+            # to do cleanup is expected to decrement task.cancelling(), because
+            # asyncio.timeout and TaskGroup read that counter to decide whether
+            # a cancellation is still live. Leaving it at 1 on a task that then
+            # returns normally is how a swallowed deadline stops a timeout from
+            # ever firing. Nothing in this overlay wraps an ingest in one today —
+            # this is the documented pairing, not a reaction to a live outage.
             interrupted = True
+            current = asyncio.current_task()
+            if current is not None:
+                current.uncancel()
     for task in tasks:
         if task.done() and not task.cancelled():
             with suppress(Exception):
@@ -762,6 +773,7 @@ async def _gather_with_phase_budget(
     # finished — so one bad batch would stall the fallback that was about to
     # run for it.
     failure: BaseException | None = None
+    settle_interrupted = False
     abandoned = 0
 
     try:
@@ -912,7 +924,16 @@ async def _gather_with_phase_budget(
             # dataprep log during exactly the contended-GPU incidents this work
             # exists to make diagnosable. gather retrieved every child; this
             # restores that without giving up the bounded settle.
-            await _settle_and_retrieve(pending)
+            settle_interrupted = await _settle_and_retrieve(pending)
+
+    if settle_interrupted and failure is None:
+        # The settle absorbed a cancellation, and this path has no exception of
+        # its own to re-raise — it was reached by the budget expiring or by the
+        # drains finishing, not by anything propagating. Dropping the signal here
+        # returns a normal (results, timed_out) tuple for an ingest the kill
+        # endpoint has already reported as killed: the caller falls back, logs a
+        # budget warning, and carries on writing the document.
+        raise asyncio.CancelledError()
 
     if failure is not None:
         # A batch that raised is an error the phase's caller already knows how

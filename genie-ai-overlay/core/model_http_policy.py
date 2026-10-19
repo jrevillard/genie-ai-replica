@@ -82,8 +82,9 @@ def positive_float_env(*names: str, default: float) -> float:
 
     - ``0`` / a negative must not be accepted — a zero timeout is not "no
       timeout", it is an immediate failure on every call;
-    - ``inf`` must not be rejected either way: it passes a ``> 0`` check and
-      ``int(inf)`` then raises ``OverflowError`` at import.
+    - ``inf`` must be rejected explicitly, not merely by the ``> 0`` test: it
+      passes that one, and ``math.ceil(inf)`` on the sibling integer parser
+      raises ``OverflowError`` while the module is still being imported.
 
     Rejecting rather than skipping is what keeps precedence honest. Continuing
     past a malformed value would let a lower-precedence name answer for a knob
@@ -173,12 +174,18 @@ LLM_TIMEOUT_SECONDS = positive_float_env("MODEL_LLM_TIMEOUT_SECONDS", "VLLM_TIME
 # own. Set MODEL_LLM_MAX_RETRIES=0 to cap the worst case instead.
 LLM_MAX_RETRIES = non_negative_int_env("MODEL_LLM_MAX_RETRIES", default=2)
 
-# TEI embedding: single-shot batch calls with short outputs, so a much tighter
-# budget than chat generation. 120 s leaves room for queueing behind a shared
-# GPU without treating normal contention as failure. The embedding path has a
-# caller-side fallback (retrieval proceeds without the dense channel), so a
-# timeout costs quality rather than availability.
-TEI_TIMEOUT_SECONDS = positive_float_env("MODEL_TEI_TIMEOUT_SECONDS", default=120.0)
+# Embedding, on the retriever's OpenAI-compatible embedding client. Named for
+# what it bounds rather than for TEI: the local-TEI branch is
+# HuggingFaceEndpointEmbeddings, which is left unbudgeted on purpose (pydantic
+# field set), so a knob called MODEL_TEI_TIMEOUT_SECONDS would describe a path
+# it does not reach. 120 s leaves room for queueing behind a shared endpoint
+# without treating normal contention as failure.
+#
+# No degradation route here, unlike the labelling budgets: a timeout on this
+# client propagates out of the retrieval request. It is bounded because it was
+# previously unbounded, not because failing cheap is an option — raise it for a
+# slow endpoint rather than lowering it.
+EMBEDDING_TIMEOUT_SECONDS = positive_float_env("MODEL_EMBEDDING_TIMEOUT_SECONDS", default=120.0)
 
 # TEI RERANK is budgeted separately and, at its default, no tighter than the
 # 300 s aiohttp would have applied anyway — deliberately.

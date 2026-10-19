@@ -138,7 +138,7 @@ overrides:
   - override: comps.dataprep.integrations.arangodb.llm_transformer
     disposition: still-needed
     owner: genie-ai
-    justification: The vendored LLM graph-transformer and TEI embedder build their own HTTP clients, so core/model_http_policy cannot reach them. Its own ChatOpenAI budget is reachable via VLLM_TIMEOUT and is now set in compose, but it emits no span or progress line, and the chatqna orchestrator graph, the embedding client and the upstream opea/embedding + opea/llm-textgen images have no configurable budget at all (2000 s and 600 s hardcoded). Tracked so the gap has a named owner; see build-patches/comps_http_budget_debt.py for the closing routes.
+    justification: The vendored LLM graph-transformer and TEI embedder build their own HTTP clients, so core/model_http_policy cannot reach them. Its own ChatOpenAI budget reads VLLM_TIMEOUT, but that variable cannot be used from the environment: comps takes it verbatim from os.getenv, httpx 0.28 does not coerce a string timeout, and socket.create_connection raises TypeError instead of timing out - and _process_batch swallows that, so the phase would fail extraction silently on every document. It therefore keeps comps' own int default, and closing this entry needs a patch to the vendored source. It emits no span or progress line either, and the chatqna orchestrator graph, the embedding client and the upstream opea/embedding + opea/llm-textgen images have no configurable budget at all (2000 s and 600 s hardcoded). Tracked so the gap has a named owner; see build-patches/comps_http_budget_debt.py for the closing routes.
     added_in: v1.5
     last_validated: v1.5
     test: tests/test_model_http_policy.py::TestCallSitesConsumeThePolicy

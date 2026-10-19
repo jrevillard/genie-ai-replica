@@ -14,6 +14,8 @@ import time
 
 import aiohttp
 
+from core.model_http_policy import CONTROL_PLANE_TIMEOUT_SECONDS
+
 logger = logging.getLogger("GENIE_DATAPREP_SERVICE_ACCOUNT")
 
 # Configuration from environment
@@ -60,10 +62,12 @@ async def get_service_account_token() -> str:
             _skip_ssl = os.getenv("KEYCLOAK_SSL_SKIP_VERIFY", "") == "1"
             connector = aiohttp.TCPConnector(ssl=not _skip_ssl)
             async with (
-                # Bounded refresh: an unbounded default (300 s) wedges every
-                # _write_ingestion_log/_update_doc_status caller behind a
-                # single slow Keycloak round-trip.
-                aiohttp.ClientSession(connector=connector, timeout=aiohttp.ClientTimeout(total=30)) as session,
+                # Bounded refresh (core/model_http_policy.py): an unbounded default
+                # (300 s) wedges every _write_ingestion_log / _update_doc_status
+                # caller behind a single slow Keycloak round-trip.
+                aiohttp.ClientSession(
+                    connector=connector, timeout=aiohttp.ClientTimeout(total=CONTROL_PLANE_TIMEOUT_SECONDS)
+                ) as session,
                 session.post(token_url, data=payload) as response,
             ):
                 if response.status != 200:

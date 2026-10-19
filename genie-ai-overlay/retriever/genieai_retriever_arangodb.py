@@ -508,15 +508,16 @@ class GenieaiArangoRetriever(OpeaComponent):
                     logger.debug("OpenAI API Key is set. Verifying its validity...")
 
                 openai.api_key = OPENAI_API_KEY
-                # The module-level probe and client below read their defaults from
-                # the ``openai`` module namespace, so the budget has to be set
-                # there too — an explicit kwarg on ChatOpenAI does not reach the
-                # probe. Without it the key check inherits the SDK's 600 s and
-                # blocks service startup on an unreachable endpoint.
-                openai.timeout = VLLM_TIMEOUT
 
                 try:
-                    openai.models.list()
+                    # The probe is bounded with an explicit client rather than by
+                    # setting ``openai.timeout``: that attribute is the SDK-wide
+                    # default for every consumer of the module in this image, so
+                    # assigning it here would silently re-budget any langchain
+                    # client built later without an explicit timeout, and the
+                    # effect would outlive this branch. One call gets its own
+                    # client and nothing else is touched.
+                    openai.OpenAI(api_key=OPENAI_API_KEY, timeout=VLLM_TIMEOUT).models.list()
                     if logflag:
                         logger.debug("OpenAI API Key is valid.")
                     self.llm = ChatOpenAI(

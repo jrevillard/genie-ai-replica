@@ -1135,6 +1135,7 @@ services:
       - CONTEXT_DECAY_FACTOR=${CONTEXT_DECAY_FACTOR:-0.0025}
       - MIN_VALUE_THRESHOLD=${MIN_VALUE_THRESHOLD:--1.0}
 
+      MODEL_TEI_TIMEOUT_SECONDS: ${MODEL_TEI_TIMEOUT_SECONDS:-120}
     # Internal only
     # ports:
     #   - "6100:8000"
@@ -1181,6 +1182,16 @@ services:
       DATAPREP_COMPONENT_NAME: GENIE_DATAPREP_ARANGODB
       VLLM_MODEL_ID: ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
       VLLM_ENDPOINT: ${VLLM_ENDPOINT:-http://vllm:8000}
+      # Read by the VENDORED comps, not by this repo: OpeaArangoDataprep builds
+      # its LLMGraphTransformer with ChatOpenAI(timeout=VLLM_TIMEOUT), defaulting
+      # to 600 s. That transformer is the dominant slow phase of an ingest (one
+      # entity/relationship extraction call per document, unbudgeted from here),
+      # and it is the only model-endpoint call in the deck that comps reads a
+      # budget for. Setting it here closes that gap with no override patch.
+      # 180 matches the in-repo default of MODEL_LLM_TIMEOUT_SECONDS, so both
+      # halves of the ingest degrade on the same clock; override VLLM_TIMEOUT
+      # directly if the graph transformer needs a different one.
+      VLLM_TIMEOUT: ${VLLM_TIMEOUT:-180}
       GPU_NODE_HOST: ${GPU_NODE_HOST:-}
       TEI_EMBEDDING_ENDPOINT: ${EMBEDDING_SERVICE_URL:-http://tei:80}
       GUARDRAIL_URL: http://guardrail:9090/v1/guardrails
@@ -1236,6 +1247,13 @@ services:
       # OpenTelemetry — SDK is no-op when ENABLE_OBSERVABILITY != 1
       ENABLE_OBSERVABILITY: ${ENABLE_OBSERVABILITY:-0}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      # Shared model-endpoint HTTP budgets (core/model_http_policy.py).
+      MODEL_LLM_TIMEOUT_SECONDS: ${MODEL_LLM_TIMEOUT_SECONDS:-180}
+      MODEL_LLM_MAX_RETRIES: ${MODEL_LLM_MAX_RETRIES:-2}
+      MODEL_TEI_TIMEOUT_SECONDS: ${MODEL_TEI_TIMEOUT_SECONDS:-120}
+      MODEL_CONTROL_PLANE_TIMEOUT_SECONDS: ${MODEL_CONTROL_PLANE_TIMEOUT_SECONDS:-30}
+      DATAPREP_LLM_PHASE_TIMEOUT_SECONDS: ${DATAPREP_LLM_PHASE_TIMEOUT_SECONDS:-600}
+      DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS: ${DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS:-60}
     extra_hosts:
       - "localhost:host-gateway"
     networks:
@@ -1330,6 +1348,10 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
 
       GPU_NODE_HOST: ${GPU_NODE_HOST:-}
+      # Shared model-endpoint HTTP budgets (core/model_http_policy.py).
+      MODEL_LLM_TIMEOUT_SECONDS: ${MODEL_LLM_TIMEOUT_SECONDS:-180}
+      MODEL_LLM_MAX_RETRIES: ${MODEL_LLM_MAX_RETRIES:-2}
+      MODEL_TEI_TIMEOUT_SECONDS: ${MODEL_TEI_TIMEOUT_SECONDS:-120}
     networks:
       - genieai_network
     healthcheck:

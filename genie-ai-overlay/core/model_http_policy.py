@@ -52,8 +52,17 @@ GPU node's own service, not a model call — no budget applies.
 import os
 
 
-def _positive_float(*names: str, default: float) -> float:
-    """Return the first env var among *names* parsing as a positive float."""
+def positive_float_env(*names: str, default: float) -> float:
+    """Return the first env var among *names* parsing as a positive float.
+
+    A garbage or non-positive value falls back to *default* instead of raising
+    or being honoured. Both matter for a tuning knob read at import time: a
+    typo must not take the service down at startup, and ``0`` / a negative value
+    must not be accepted — a zero timeout is not "no timeout", it is an
+    immediate failure on every call. Services whose own configuration reads
+    timings (dataprep's phase budgets) use this rather than a bare
+    ``float(os.getenv(...))`` so they cannot disagree about that rule.
+    """
     for name in names:
         raw = os.getenv(name)
         if raw is None or raw == "":
@@ -65,6 +74,10 @@ def _positive_float(*names: str, default: float) -> float:
         if value > 0:
             return value
     return default
+
+
+def _positive_float(*names: str, default: float) -> float:
+    return positive_float_env(*names, default=default)
 
 
 def _positive_int(*names: str, default: int) -> int:

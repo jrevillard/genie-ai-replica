@@ -1,7 +1,7 @@
 # Copyright (C) 2025 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
 #
-# OVERRIDE comps.dataprep.integrations.arangodb.llm_transformer | disposition: re-graft-to-new-API | reason: vendored LLM/embedding clients build their own HTTP clients with library-default timeouts that this repo cannot configure | test: (none — cannot be asserted outside the built image; see contracts/README.md)
+# OVERRIDE comps.dataprep.integrations.arangodb.llm_transformer | disposition: still-needed | reason: vendored LLM/embedding clients build their own HTTP clients; the graph-transformer's budget is reachable via VLLM_TIMEOUT but its telemetry is not, and the orchestrator/TEI wrappers have no budget at all | test: contracts/test_contract_telemetry.py  # noqa: E501
 
 """Record of the vendored-``comps`` HTTP-budget debt, and what would close it.
 
@@ -16,19 +16,32 @@ construction happens inside its own module bodies. Four call families are in
 that position:
 
 ``comps.cores.mega.orchestrator`` (``ServiceOrchestrator.schedule``)
-    The chatqna RAG graph — embed → retrieve → rerank → LLM, one POST per hop
-    through ``MicroService.invoke``. This is the user-facing request path: a
+    The chatqna RAG graph — embed → retrieve → rerank → LLM. ``schedule`` opens
+    an ``aiohttp.ClientSession(timeout=ClientTimeout(total=2000))`` from a
+    *local variable*, so there is no module constant to reassign and no
+    constructor argument to pass: the 2000 s is not configurable from here. The
+    POST itself is issued by ``ServiceOrchestrator.execute`` (``MicroService``
+    has no ``invoke`` method in v1.5). This is the user-facing request path: a
     wedged GPU turns a chat request into an open socket, not an error.
 
 ``comps.dataprep.src.integrations.arangodb.OpeaArangoDataprep._initialize_llm``
     Builds ``self.llm_transformer``, invoked by ``convert_to_graph_documents``
-    once per ingested document inside ``asyncio.to_thread``. Uninstrumented:
-    no span, no timeout, no progress line, and a catch-all handler that retries
-    per document.
+    once per ingested document inside ``asyncio.to_thread``. **Partly closed**:
+    this one reads a module-level ``VLLM_TIMEOUT`` (comps
+    ``arangodb.py:55``, default 600) for its ``ChatOpenAI``, and the dataprep
+    service runs that code in-process, so setting the env var bounds it with no
+    override — ``docker-compose.yaml`` now does. What is still open is that the
+    transformer emits no span, no progress line, and no phase bound: the
+    per-request budget stops one call from hanging forever, but nothing tells an
+    operator how far through the documents it is, and the graph-insertion gather
+    that follows it remains unbounded (it cannot be bounded from outside either,
+    since abandoning a batch there drops its chunks outright).
 
 ``OpeaArangoDataprep._initialize_embeddings``
     Builds the TEI embedding client used at ingest for label selection, chunk
-    and node embedding, and relationship embedding.
+    and node embedding, and relationship embedding. It goes through
+    ``huggingface_hub.AsyncInferenceClient``, whose ``timeout`` comps never
+    passes.
 
 ``opea/embedding:1.5`` and ``opea/llm-textgen:1.5``
     No Python overlay at all — the TEI embedding microservice and the

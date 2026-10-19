@@ -60,6 +60,7 @@ class TestPhaseReturnsAllResults:
             return await dataprep._gather_with_phase_budget(
                 [quick(i) for i in range(5)],
                 phase="Labeling",
+                phase_label=dataprep.PHASE_LABEL_LABELING,
                 total=5,
                 file_id="f1",
                 write_ingestion_log=_noop_log,
@@ -74,7 +75,12 @@ class TestPhaseReturnsAllResults:
 
         async def scenario():
             return await dataprep._gather_with_phase_budget(
-                [], phase="Labeling", total=0, file_id="f1", write_ingestion_log=_noop_log
+                [],
+                phase="Labeling",
+                phase_label=dataprep.PHASE_LABEL_LABELING,
+                total=0,
+                file_id="f1",
+                write_ingestion_log=_noop_log,
             )
 
         assert _run(scenario()) == ([], False)
@@ -96,6 +102,7 @@ class TestPhaseIsBounded:
             results, timed_out = await dataprep._gather_with_phase_budget(
                 [wedged(), wedged(), wedged()],
                 phase="Labeling",
+                phase_label=dataprep.PHASE_LABEL_LABELING,
                 total=3,
                 file_id="f1",
                 write_ingestion_log=_noop_log,
@@ -129,6 +136,7 @@ class TestPhaseIsBounded:
             return await dataprep._gather_with_phase_budget(
                 [fast(0), fast(1), wedged()],
                 phase="Labeling",
+                phase_label=dataprep.PHASE_LABEL_LABELING,
                 total=3,
                 file_id="f1",
                 write_ingestion_log=_noop_log,
@@ -159,6 +167,7 @@ class TestPhaseReportsProgress:
             results, timed_out = await dataprep._gather_with_phase_budget(
                 [slow(0), slow(1)],
                 phase="Labeling",
+                phase_label=dataprep.PHASE_LABEL_LABELING,
                 total=2,
                 file_id="f1",
                 write_ingestion_log=recorder,
@@ -184,6 +193,7 @@ class TestPhaseReportsProgress:
             await dataprep._gather_with_phase_budget(
                 [quick(i) for i in range(3)],
                 phase="Labeling",
+                phase_label=dataprep.PHASE_LABEL_LABELING,
                 total=3,
                 file_id="f1",
                 write_ingestion_log=recorder,
@@ -208,6 +218,7 @@ class TestTimeoutIsVisible:
             await dataprep._gather_with_phase_budget(
                 [wedged(), wedged()],
                 phase="Contextual Retrieval",
+                phase_label=dataprep.PHASE_LABEL_CONTEXTUAL,
                 total=2,
                 file_id="f42",
                 write_ingestion_log=recorder,
@@ -243,6 +254,7 @@ class TestTimeoutIsVisible:
             return await dataprep._gather_with_phase_budget(
                 [wedged()],
                 phase="Labeling",
+                phase_label=dataprep.PHASE_LABEL_LABELING,
                 total=1,
                 file_id="f1",
                 write_ingestion_log=broken_log,
@@ -251,6 +263,217 @@ class TestTimeoutIsVisible:
         results, timed_out = _run(scenario())
         assert timed_out is True
         assert results == []
+
+
+class TestFailedTaskCleansUpAfterItself:
+    """A raising batch must not strand its siblings.
+
+    The failure this prevents: batch 3 raises while batches 4-20 are still
+    waiting on the semaphore or mid-HTTP. Re-raising at the point the exception
+    is noticed leaves those running — each holding a semaphore slot and an open
+    connection until its own retry ladder finishes — so the fallback that was
+    about to run for the failed batch cannot get a slot either. The phase would
+    then be exactly as stuck as before the bound was added, with the added
+    benefit that the operator was told the phase had a budget.
+    """
+
+    def test_siblings_are_cancelled_before_the_error_propagates(self, monkeypatch):
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 5.0)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+
+        cancelled = []
+
+        async def scenario():
+            async def boom():
+                await asyncio.sleep(0.01)
+                raise RuntimeError("vLLM rejected the prompt")
+
+            async def sibling():
+                try:
+                    await asyncio.sleep(30)
+                except asyncio.CancelledError:
+                    cancelled.append(1)
+                    raise
+
+            with pytest.raises(RuntimeError, match="vLLM rejected the prompt"):
+                await dataprep._gather_with_phase_budget(
+                    [boom(), sibling(), sibling()],
+                    phase="Labeling",
+                    phase_label=dataprep.PHASE_LABEL_LABELING,
+                    total=3,
+                    file_id="f1",
+                    write_ingestion_log=_noop_log,
+                )
+
+        _run(scenario())
+        assert len(cancelled) == 2, "the in-flight siblings were left running after the phase raised"
+
+    def test_the_phase_deadline_is_reached_despite_a_failed_batch(self, monkeypatch):
+        """The raise must not become a new way to hang.
+
+        With the cleanup in place the error still propagates — but only after
+        the stragglers are cancelled, so the phase cannot outlive its budget by
+        waiting on tasks nobody is going to collect.
+        """
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 5.0)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+
+        async def scenario():
+            async def boom():
+                await asyncio.sleep(0.01)
+                raise RuntimeError("boom")
+
+            async def wedged():
+                await asyncio.sleep(30)
+
+            loop = asyncio.get_running_loop()
+            started = loop.time()
+            with pytest.raises(RuntimeError):
+                await dataprep._gather_with_phase_budget(
+                    [boom(), wedged()],
+                    phase="Labeling",
+                    phase_label=dataprep.PHASE_LABEL_LABELING,
+                    total=2,
+                    file_id="f1",
+                    write_ingestion_log=_noop_log,
+                )
+            return loop.time() - started
+
+        elapsed = _run(scenario())
+        assert elapsed < 5.0, f"the error path waited {elapsed:.1f}s on a cancelled sibling"
+
+
+class TestProgressIntervalCannotBeSilenced:
+    """The phase tuning knobs are read through the shared positive-float parser.
+
+    They used to be read with a bare ``float(os.getenv(...))``, which has two
+    failure modes worth pinning:
+
+    - a typo (``30m``) raises ``ValueError`` at import, taking the service down
+      at startup over an optional knob;
+    - a ``0`` or a negative is *accepted*, and a zero phase budget cancels every
+      batch on the first tick — so every ingested document silently degrades to
+      file labels with a warning reading "exceeded its -1s budget".
+
+    The parser is exercised directly rather than through ``importlib.reload`` of
+    the dataprep module: reloading it rebinds every function object in it, which
+    breaks identity assertions in the neighbouring test modules.
+    """
+
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("0", 60.0),
+            ("-1", 60.0),
+            ("-0.5", 60.0),
+            ("30m", 60.0),
+            ("", 60.0),
+            ("60", 60.0),
+            ("15.5", 15.5),
+        ],
+    )
+    def test_parser_rejects_bad_interval_values(self, monkeypatch, raw, expected):
+        from core.model_http_policy import positive_float_env
+
+        monkeypatch.setenv("DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", raw)
+        assert positive_float_env("DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", default=60.0) == expected
+
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("-1", 600.0),
+            ("0", 600.0),
+            ("not-a-number", 600.0),
+            ("900", 900.0),
+        ],
+    )
+    def test_parser_rejects_bad_phase_budget_values(self, monkeypatch, raw, expected):
+        from core.model_http_policy import positive_float_env
+
+        monkeypatch.setenv("DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", raw)
+        assert positive_float_env("DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", default=600.0) == expected
+
+    def test_dataprep_uses_the_shared_parser(self):
+        """The knobs must actually route through it, not a local ``float()``."""
+        source = (OVERLAY_ROOT / "dataprep" / "genieai_dataprep_arangodb.py").read_text(encoding="utf-8")
+        assert "positive_float_env as _positive_float_env" in source, (
+            "dataprep must import the shared parser — a local float(os.getenv(...)) "
+            "reintroduces the startup crash and the accepted-zero budget"
+        )
+        assert 'float(os.getenv("DATAPREP_LLM_PHASE_TIMEOUT_SECONDS"' not in source
+        assert 'float(os.getenv("DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS"' not in source
+
+
+class TestPhaseBudgetDefaultIsBelowOneBatchWorstCase:
+    """The phase bound has to be able to fire on the case it was written for.
+
+    A single batch can occupy a semaphore slot for
+    ``LLM_MAX_RETRIES × 3 overlay attempts × LLM_TIMEOUT_SECONDS`` — about
+    1620 s at the defaults. A phase budget at or above that lets one wedged
+    batch consume the whole allowance, so the bound exists and never fires.
+    """
+
+    def test_default_phase_budget_is_below_one_batch_worst_case(self, monkeypatch):
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 600.0)
+        monkeypatch.setattr(dataprep, "LLM_MAX_RETRIES", 2)
+        monkeypatch.setattr(dataprep, "LLM_TIMEOUT_SECONDS", 180.0)
+
+        worst_case_one_batch = 2 * 3 * 180.0
+        assert dataprep.DATAPREP_LLM_PHASE_TIMEOUT_SECONDS < worst_case_one_batch, (
+            f"phase budget {dataprep.DATAPREP_LLM_PHASE_TIMEOUT_SECONDS:.0f}s is not below the "
+            f"{worst_case_one_batch:.0f}s a single wedged batch can occupy"
+        )
+
+
+class TestTimeoutClassifier:
+    """A timeout is the failure the budget produces on purpose, so it is labelled.
+
+    The deck is tuned by reading these off the traces: a timeout points at GPU
+    contention and at a budget that may need raising, while a 500 or a parse
+    failure means something else. Conflating them makes a contended GPU read as
+    a broken prompt, so the classifier is pinned per exception class rather
+    than left to be noticed when one of these arrives in production.
+    """
+
+    @pytest.mark.parametrize(
+        ("exc_name", "expected"),
+        [
+            # What the model-endpoint clients actually raise.
+            ("APITimeoutError", True),
+            ("ReadTimeout", True),
+            ("ConnectTimeout", True),
+            ("PoolTimeout", True),
+            ("ServerTimeoutError", True),
+            ("TimeoutError", True),
+            # The failures it must NOT claim.
+            ("InternalServerError", False),
+            ("APIConnectionError", False),
+            ("JSONDecodeError", False),
+            ("ValueError", False),
+            ("RateLimitError", False),
+        ],
+    )
+    def test_classification_by_exception_name(self, exc_name, expected):
+        exc = type(exc_name, (Exception,), {})()
+        assert dataprep._is_timeout(exc) is expected
+
+    def test_a_wrapped_timeout_is_still_recognised(self):
+        """Clients wrap the original error; the classifier must walk the chain.
+
+        openai and httpx both re-raise from the transport error, so the timeout
+        the budget set arrives wrapped. Matching only the outermost class would
+        miss exactly the case this exists to label.
+        """
+        inner = type("APITimeoutError", (Exception,), {})()
+        outer = RuntimeError("chat.completions.create failed")
+        outer.__cause__ = inner
+        assert dataprep._is_timeout(outer) is True
+
+    def test_a_self_referential_chain_terminates(self):
+        """A cyclic __cause__ chain must not hang the error path."""
+        exc = ValueError("boom")
+        exc.__cause__ = exc
+        assert dataprep._is_timeout(exc) is False
 
 
 class TestFailedTaskPropagates:
@@ -274,6 +497,7 @@ class TestFailedTaskPropagates:
             return await dataprep._gather_with_phase_budget(
                 [fine(), boom()],
                 phase="Labeling",
+                phase_label=dataprep.PHASE_LABEL_LABELING,
                 total=2,
                 file_id="f1",
                 write_ingestion_log=_noop_log,

@@ -155,7 +155,13 @@ class TestVocabularyShape:
         assert len(set(VOCABULARY)) == len(VOCABULARY)
 
     def test_vocabulary_has_eighty_entries(self):
-        assert len(ATTRIBUTE_NAMES) == 80
+        # Pin on the vocabulary size, raised 80 → 82 for the two timeout
+        # attributes (dataprep.llm.timed_out / .timeout_seconds). The pin exists
+        # so growth is a deliberate edit rather than a drifting default, not to
+        # forbid adding a key — a bounded-timeout trace needs a key that
+        # distinguishes "hit the budget" from "still running". Bump this with
+        # the addition it accounts for.
+        assert len(ATTRIBUTE_NAMES) == 82
 
 
 class TestLegacyAttributeNames:
@@ -248,7 +254,9 @@ class TestLegacyAttributeNames:
         ]
 
     def test_registering_the_backlog_did_not_inflate_the_vocabulary(self):
-        assert len(ATTRIBUTE_NAMES) == 80
+        # See test_vocabulary_has_eighty_entries — raised 80 → 82 alongside the
+        # two timeout attributes, not by the legacy sweep.
+        assert len(ATTRIBUTE_NAMES) == 82
         assert len(LEGACY_ATTRIBUTE_NAMES) == 21
 
 

@@ -233,6 +233,11 @@ ATTRIBUTE_NAMES = {
     "dataprep_llm_attempt": "dataprep.llm_attempt",
     "dataprep_llm_prompt_tokens": "dataprep.llm.prompt_tokens",
     "dataprep_llm_completion_tokens": "dataprep.llm.completion_tokens",
+    # Set when the call hit its HTTP budget. Without it a timed-out span closes
+    # with no tokens and no distinguishing attribute, so a wedged GPU and a
+    # call still in flight are indistinguishable in the trace.
+    "dataprep_llm_timed_out": "dataprep.llm.timed_out",
+    "dataprep_llm_timeout_seconds": "dataprep.llm.timeout_seconds",
     # Contextual Retrieval — the per-chunk doc-context generation
     "dataprep_contextual_retrieval": "dataprep.contextual_retrieval",
     "dataprep_contextual_strategy": "dataprep.contextual_strategy",

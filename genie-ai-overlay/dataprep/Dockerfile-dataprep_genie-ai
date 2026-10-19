@@ -143,8 +143,10 @@ COPY genie-ai-overlay/core/model_cache.py /app/core/model_cache.py
 COPY genie-ai-overlay/core/model_http_policy.py /app/core/model_http_policy.py
 
 # Copy the shared span-attribute vocabulary (importable as core.span_attrs).
-# Dataprep stamps span keys through it rather than by literal, so a renamed
-# attribute cannot silently diverge between the vocabulary and the emitters.
+# The LLM timeout attributes this overlay added are stamped through it rather
+# than by literal, so a renamed key cannot diverge between the vocabulary and
+# the emitters. The older dataprep attributes are still literals; converting
+# them is tracked separately.
 COPY genie-ai-overlay/core/span_attrs.py /app/core/span_attrs.py
 
 # Step H: Fix docarray circular import (proactive fix, shared with retriever/reranker)

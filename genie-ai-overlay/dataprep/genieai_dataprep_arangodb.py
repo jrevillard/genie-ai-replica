@@ -293,14 +293,20 @@ LLM_LABEL_TEMPERATURE = float(os.getenv("DATAPREP_LLM_TEMPERATURE", "0.0"))
 # exactly what a single batch failure already does — the phase bound only
 # decides how long the document waits before taking the same path.
 #
-# Sized against the worst case of a *single* batch, since a batch that runs to
-# completion keeps its semaphore slot for that whole time. The two paths differ:
-# the batched calls (_llm_call_batch, _context_batch_call) have no overlay-level
-# retry loop, so they pay (1 + LLM_MAX_RETRIES) × LLM_TIMEOUT_SECONDS = 540 s at
-# the defaults; the per-chunk paths wrap three of those in their own loop, for
-# 1620 s. 600 s therefore sits above the batched path — a wedged endpoint cannot
-# consume it alone — and well below the per-chunk one, so a per-chunk call that
-# runs away is cancelled by the phase rather than by its own ladder.
+# Sized against what one *batch task* can occupy, because the unit the phase
+# cancels is `_llm_suggest_labels` / the contextual equivalent, not an HTTP call.
+# That task holds its semaphore slot across the batched call AND the per-chunk
+# fallback it performs itself, so the ladder composes rather than picking one:
+#
+#   one batched HTTP call  (1 + LLM_MAX_RETRIES) x 180 =  540 s   no overlay loop
+#   one per-chunk call      3 x (1 + LLM_MAX_RETRIES) x 180 = 1620 s  3 attempts
+#   one batch task          540 + LABEL_LLM_BATCH_SIZE x 1620 = 7020 s at defaults
+#
+# 600 s therefore sits above a single batched call — a merely slow batch still
+# gets to finish instead of being cut mid-call — and roughly a twelfth of one
+# batch task. No per-request budget can stop a runaway batch task, which is why
+# the phase bound exists at all: it fires while a straggler is still inside its
+# own ladder, so the document degrades at 600 s instead of at an unbounded time.
 #
 # It is also a whole-phase ceiling, not a per-wave allowance: a 260-chunk
 # document runs 65 batches in 4 waves of MAX_CONCURRENT_BATCHES, and all of them
@@ -655,11 +661,12 @@ def _read_index_params():
 
 
 async def _safe_log(write_ingestion_log, file_id, level, component, message):
-    """Invoke `await _safe_log(write_ingestion_log, ...)` but swallow any exception.
+    """Write one ingestion-log row, swallowing any exception it raises.
 
-    Critical: the helper must never let a logging failure escape. Otherwise a
-    transient backend HTTP timeout on `_write_ingestion_log` would propagate
-    out of `ensure_vector_index`, into the outer except in
+    Critical: the helper must never let a logging failure escape. Every caller
+    is inside the ingest path — `ensure_vector_index`, and the phase heartbeat
+    and budget-exhaustion reports of both LLM phases — where a propagated
+    backend HTTP timeout would be caught by the outer except in
     `ingest_file_with_guardrail`, triggering `retract_file()` and DELETING
     already-committed chunks. Visibility loss on logs is acceptable; data
     loss is not.
@@ -670,7 +677,7 @@ async def _safe_log(write_ingestion_log, file_id, level, component, message):
         await write_ingestion_log(file_id, level, component, message)
     except Exception as e:
         logger.error(
-            f"_write_ingestion_log failed inside ensure_vector_index: "
+            f"_write_ingestion_log failed while reporting {component!r}: "
             f"{type(e).__name__}: {str(e)[:200]} (message was: {message[:100]})"
         )
 
@@ -909,12 +916,14 @@ async def _await_with_heartbeat(tasks: list, *, phase: str, total: int, file_id:
                 failure = exc
 
         if failure is not None:
-            # Let the in-flight batches finish rather than dropping them on the
-            # floor. asyncio.gather keeps every child alive on its done-callback
+            # Give the in-flight batches a bounded window to unwind rather than
+            # dropping them on the floor. asyncio.gather keeps every child alive
             # and retrieves their outcomes; returning here would leave the rest
             # running with no owner — each one that later raises logs an
             # unretrieved-exception error, and they are still writing to ArangoDB
-            # while the caller's handler retracts the document.
+            # while the caller's handler retracts the document. The wait is
+            # capped at _PHASE_CANCEL_GRACE_SECONDS: past that, the caller is
+            # already failing and a longer wait only delays the retract.
             await asyncio.wait(pending, timeout=_PHASE_CANCEL_GRACE_SECONDS)
             # Same retrieval as the budgeted variant's settle: a sibling that
             # failed while we were waiting would otherwise log an unretrieved
@@ -2000,9 +2009,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 # Counted here, not in the caller: this function swallows every
                 # failure and returns None, so the caller's own error handler
                 # never runs for a call that failed — only for one whose parse
-                # failed. Counting there left batch_error permanently zero and
-                # filed every timeout under batch_parse, which is the opposite of
-                # what an operator querying a contended GPU needs to see.
+                # failed. Counting there would leave batch_error permanently
+                # zero and file every timeout under batch_parse, which is the
+                # opposite of what an operator querying a contended GPU needs to
+                # see.
                 _llm_fallback_total.add(1, {"phase": PHASE_LABEL_LABELING, "reason": "batch_error"})
                 return None
 
@@ -2299,11 +2309,16 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     # none: a cancelled batch loses its chunks outright and the
                     # ingest still ends "Ingested" — silently dropping documents
                     # from the knowledge graph is strictly worse than a slow one.
-                    # So this phase is unbounded (the per-request bound inside
-                    # the clients it uses is the vendored comps', unreachable
-                    # from here — see OVERRIDES.yaml), but it still HEARTBEATS,
-                    # because a wedged graph phase was just as silent as the LLM
-                    # phases were and the whole point is that it is visible.
+                    # So this phase is unbounded, but it still HEARTBEATS, because a
+                    # wedged graph phase is just as silent as the LLM phases
+                    # were and the whole point is that it is visible.
+                    #
+                    # Its clients are not ours to bound: the embedding half runs
+                    # inside the vendored comps dataprep (bounded only through
+                    # VLLM_TIMEOUT, which reaches the LLM client but not the TEI
+                    # one — see OVERRIDES.yaml), and the ArangoDB writes go
+                    # through langchain-arangodb / py-arango, which carry their
+                    # own socket timeouts and take no HTTP budget.
                     if tasks:
                         await _await_with_heartbeat(
                             tasks,
@@ -2315,8 +2330,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
                     # Ensure the vector index matches the embedder dim
                     # (recreate if dim drift). Failures are swallowed — see
-                    # ensure_vector_index() docstring. Runs AFTER gather so
-                    # all batches are visible for index creation, and
+                    # ensure_vector_index() docstring. Runs once every graph
+                    # task has settled so all chunks are visible for index
+                    # creation, and
                     # BEFORE Ingested status flip so the retriever never
                     # queries a missing/stale index.
                     _metric, _n_lists = _read_index_params()

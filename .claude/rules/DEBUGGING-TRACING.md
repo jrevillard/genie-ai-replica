@@ -78,8 +78,17 @@ if phase:
 | `dataprep.ingest` | ingest entry | `dataprep.file_type`, `dataprep.file_size_bytes`, `dataprep.file_id` |
 | `dataprep.retract` | retract entry | `dataprep.file_id` |
 | `dataprep.chunking` | docling + chunk | `dataprep.chunk_count` |
-| `dataprep.llm.label_chunk` | single-chunk label call | `dataprep.chunk_index`, `dataprep.llm_attempt`, `dataprep.llm_batched=False`, `dataprep.llm_model`, `dataprep.labels_suggested`, `dataprep.llm.completion_tokens` |
-| `dataprep.llm.label_batch` | batched label call | `dataprep.llm_batched=True`, `dataprep.llm_batch_size`, `dataprep.chunk_indices`, `dataprep.llm_model`, `dataprep.labels_suggested`, `dataprep.llm.completion_tokens`, `dataprep.llm.prompt_tokens` |
+| `dataprep.llm.label_chunk` | single-chunk label call | `dataprep.chunk_index`, `dataprep.llm_attempt`, `dataprep.llm_batched=False`, `dataprep.llm_model`, `dataprep.labels_suggested`, `dataprep.llm.completion_tokens`, `dataprep.llm.timed_out`, `dataprep.llm.timeout_seconds` |
+| `dataprep.llm.label_batch` | batched label call | `dataprep.llm_batched=True`, `dataprep.llm_batch_size`, `dataprep.chunk_indices`, `dataprep.llm_model`, `dataprep.labels_suggested`, `dataprep.llm.completion_tokens`, `dataprep.llm.prompt_tokens`, `dataprep.llm.timed_out`, `dataprep.llm.timeout_seconds` |
+
+| `dataprep.llm.context_batch` | batched doc-context call | `dataprep.llm_batched=True`, `dataprep.llm_batch_size`, `dataprep.chunk_indices`, `dataprep.llm_model`, `dataprep.llm.timed_out`, `dataprep.llm.timeout_seconds` |
+| `dataprep.llm.context_doc` | one doc-context call per document | `dataprep.llm_batched=False`, `dataprep.llm_model`, `dataprep.context_chars`, `dataprep.llm.timed_out`, `dataprep.llm.timeout_seconds` |
+| `dataprep.llm.context_chunk` | per-chunk doc-context call | `dataprep.llm_batched=False`, `dataprep.chunk_index`, `dataprep.llm_attempt`, `dataprep.llm_model`, `dataprep.llm.timed_out`, `dataprep.llm.timeout_seconds` |
+
+`dataprep.llm.timed_out` / `dataprep.llm.timeout_seconds` are what separate a
+call that was abandoned at its budget from one still in flight — a closed span
+with no completion tokens and `dataprep.llm.timed_out=true` is a timeout, the
+same shape without the marker is a wedge.
 
 How to **add** a span (Python): `from tracing import with_span` then
 `with with_span("dataprep.<name>", attributes={...}) as span: span.set_attribute(...)`.

@@ -203,9 +203,9 @@ class TestRequestsAuthInjection:
 
         This is every remote-GPU deployment: the key is set to authenticate to
         the GPU node, and OPEA_SSL_SKIP_VERIFY is left off because the node's
-        certificate is properly issued. The auth patch used to force verify off
-        unconditionally, so setting a key to *gain* authentication silently
-        turned off TLS verification for every other requests call in the
+        certificate is properly issued. Authentication and certificate
+        validation are independent decisions, so setting a key to *gain* the
+        first must not cost the second on every other requests call in the
         process — document repository, backend, ArangoDB.
         """
         import requests

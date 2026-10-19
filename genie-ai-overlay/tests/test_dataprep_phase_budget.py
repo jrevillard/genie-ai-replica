@@ -382,8 +382,8 @@ class TestFailedTaskCleansUpAfterItself:
 class TestProgressIntervalCannotBeSilenced:
     """The phase tuning knobs are read through the shared positive-float parser.
 
-    They used to be read with a bare ``float(os.getenv(...))``, which has two
-    failure modes worth pinning:
+    A bare ``float(os.getenv(...))`` here would have two failure modes, both
+    of which are what the parser is being pinned against:
 
     - a typo (``30m``) raises ``ValueError`` at import, taking the service down
       at startup over an optional knob;
@@ -440,49 +440,89 @@ class TestProgressIntervalCannotBeSilenced:
         assert 'float(os.getenv("DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS"' not in source
 
 
-class TestPhaseBudgetIsSizedAgainstBothBatchPaths:
-    """The phase bound must be able to fire on each kind of wedged batch.
+class TestPhaseBudgetIsSizedAgainstOneBatchTask:
+    """The phase bound must fire long before one batch task can finish.
 
-    The two paths are not symmetric. The batched calls have no overlay-level
-    retry loop, so they pay (1 + LLM_MAX_RETRIES) attempts; the per-chunk calls
-    wrap three of those in their own loop. The budget has to be above the first
-    — a wedged batch cannot then consume it alone, which is the stall this
-    exists for — and below the second, so a per-chunk call that runs away is
-    stopped by the phase instead of by its own ladder.
+    The unit the phase cancels is the batch coroutine, not an HTTP call, and that
+    coroutine holds its semaphore slot across the batched call *and* the
+    per-chunk fallback it performs itself. The two ladders compose, so sizing
+    the budget against either one alone leaves the other unbounded:
 
-    The first version of this test pinned ``2 * 3 * 180``, a product of neither
-    path, and the accompanying comment claimed a figure that matched nothing:
-    the invariant being protected was not the one that actually held.
+        one batched call   (1 + LLM_MAX_RETRIES) x LLM_TIMEOUT_SECONDS
+        one per-chunk call 3 x the above
+        one batch task     one batched call + LABEL_LLM_BATCH_SIZE x per-chunk
+
+    Both ends matter. Above the batched call, a merely slow batch finishes
+    instead of being cut mid-call. Below the composed batch task, the phase
+    fires while a straggler is still inside its own ladder — which is the only
+    thing that can stop it, since no per-request budget reaches that far.
     """
 
-    def test_budget_is_above_the_batched_path_worst_case(self, monkeypatch):
-        """A single wedged batch must not be able to eat the whole phase budget."""
+    @staticmethod
+    def _ladder(monkeypatch, *, batch_size):
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 600.0)
         monkeypatch.setattr(dataprep, "LLM_MAX_RETRIES", 2)
         monkeypatch.setattr(dataprep, "LLM_TIMEOUT_SECONDS", 180.0)
+        one_call = (1 + dataprep.LLM_MAX_RETRIES) * dataprep.LLM_TIMEOUT_SECONDS
+        per_chunk = 3 * one_call
+        return {
+            "budget": dataprep.DATAPREP_LLM_PHASE_TIMEOUT_SECONDS,
+            "one_call": one_call,
+            "per_chunk": per_chunk,
+            "batch_task": one_call + batch_size * per_chunk,
+        }
 
-        # SDK attempts (1 + max_retries); the batched calls have no overlay loop.
-        batched_worst_case = (1 + dataprep.LLM_MAX_RETRIES) * dataprep.LLM_TIMEOUT_SECONDS
-        budget = dataprep.DATAPREP_LLM_PHASE_TIMEOUT_SECONDS
-        assert budget > batched_worst_case, (
-            f"phase budget {budget:.0f}s does not exceed the "
-            f"{batched_worst_case:.0f}s one batched call can occupy — a wedged endpoint could "
-            "consume the whole allowance and the bound would never fire"
+    def test_budget_is_above_a_single_batched_call(self, monkeypatch):
+        """A slow-but-eventually-answering batch is not cut mid-call."""
+        ladder = self._ladder(monkeypatch, batch_size=dataprep.LABEL_LLM_BATCH_SIZE)
+        assert ladder["budget"] > ladder["one_call"], (
+            f"phase budget {ladder['budget']:.0f}s does not exceed the "
+            f"{ladder['one_call']:.0f}s one batched call can occupy — a call that would have "
+            "succeeded is abandoned mid-flight instead of completing"
         )
 
-    def test_budget_is_below_the_per_chunk_path_worst_case(self, monkeypatch):
-        """The per-chunk ladder must not outlast the phase that is meant to stop it."""
-        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 600.0)
-        monkeypatch.setattr(dataprep, "LLM_MAX_RETRIES", 2)
-        monkeypatch.setattr(dataprep, "LLM_TIMEOUT_SECONDS", 180.0)
-
-        # Overlay's 3-attempt loop around the SDK attempts.
-        per_chunk_worst_case = 3 * (1 + dataprep.LLM_MAX_RETRIES) * dataprep.LLM_TIMEOUT_SECONDS
-        budget = dataprep.DATAPREP_LLM_PHASE_TIMEOUT_SECONDS
-        assert budget < per_chunk_worst_case, (
-            f"phase budget {budget:.0f}s is not below the "
-            f"{per_chunk_worst_case:.0f}s a per-chunk call can occupy — the phase would wait for "
+    def test_budget_is_below_the_per_chunk_ladder(self, monkeypatch):
+        """The per-chunk ladder must not outlast the phase that stops it."""
+        ladder = self._ladder(monkeypatch, batch_size=dataprep.LABEL_LLM_BATCH_SIZE)
+        assert ladder["budget"] < ladder["per_chunk"], (
+            f"phase budget {ladder['budget']:.0f}s is not below the "
+            f"{ladder['per_chunk']:.0f}s a per-chunk call can occupy — the phase would wait for "
             "the call's own retry ladder instead of stopping it"
+        )
+
+    @pytest.mark.parametrize("batch_size", [1, 2, 4, 8])
+    def test_budget_fires_before_a_single_batch_task_could_finish(self, monkeypatch, batch_size):
+        """The invariant the phase bound actually rests on.
+
+        Sizes the budget against the composed task, not against one call inside
+        it. The per-chunk fallback runs in the same coroutine that holds the
+        semaphore, so a batch whose batched call fails and then runs every chunk
+        individually occupies the batched call plus one per-chunk ladder per
+        chunk — and no per-request budget reaches that far, which is the reason
+        the phase bound is not redundant with LLM_TIMEOUT_SECONDS.
+        """
+        ladder = self._ladder(monkeypatch, batch_size=batch_size)
+        assert ladder["budget"] < ladder["batch_task"], (
+            f"phase budget {ladder['budget']:.0f}s is not below the {ladder['batch_task']:.0f}s "
+            f"one batch task (batch size {batch_size}) can occupy — nothing else bounds the "
+            "fallback the batch coroutine performs internally"
+        )
+
+    def test_the_default_budget_is_a_small_fraction_of_one_batch_task(self):
+        """The margin has to be large, not merely positive.
+
+        A budget one second under the worst case still leaves the document
+        waiting on a straggler for the whole ladder; the point of the bound is
+        that it lands while the fallback is still cheap, so the composed task
+        must be several times the budget.
+        """
+        budget = dataprep.DATAPREP_LLM_PHASE_TIMEOUT_SECONDS
+        one_call = (1 + dataprep.LLM_MAX_RETRIES) * dataprep.LLM_TIMEOUT_SECONDS
+        per_chunk = 3 * one_call
+        batch_task = one_call + dataprep.LABEL_LLM_BATCH_SIZE * per_chunk
+        assert batch_task >= 5 * budget, (
+            f"one batch task ({batch_task:.0f}s) is under 5x the {budget:.0f}s budget — the bound "
+            "would land at the very end of the ladder rather than well before it"
         )
 
 
@@ -577,9 +617,11 @@ class TestPhaseBoundIsAHardWall:
     def test_the_reported_failure_is_deterministic_across_runs(self, monkeypatch):
         """Which failing batch aborts the ingest must not change run to run.
 
-        asyncio.wait returns a set. Iterating one to pick the exception made the
-        choice depend on hash ordering, so two batches failing differently could
-        abort the document on one run and degrade it on the next.
+        asyncio.wait returns a set, so the implementation indexes every task at
+        submission and sorts by that index: iterating the returned set would
+        make the choice depend on hash ordering, and two batches failing
+        differently could abort the document on one run and degrade it on the
+        next.
         """
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 5.0)
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
@@ -611,11 +653,11 @@ class TestPhaseBoundIsAHardWall:
 class TestFailureSeenDuringAHeartbeatEndsThePhase:
     """A failure noticed during the log write must end the phase immediately.
 
-    The late drain that recovers work completed during the heartbeat sets
-    ``failure`` and, without a break, fell back into ``asyncio.wait`` — so the
-    siblings kept their semaphore slots for a whole progress interval before the
-    finally cancelled them, which is the delay the main drain's break exists to
-    prevent.
+    The late drain that recovers work completed during the heartbeat can set
+    ``failure``, and it has to break the loop at that point for the same reason
+    the main drain does: without the break the siblings would keep their
+    semaphore slots for a whole progress interval before the finally cancelled
+    them, which is the delay this whole mechanism exists to prevent.
     """
 
     def test_a_failure_during_the_heartbeat_does_not_wait_out_the_interval(self, monkeypatch):

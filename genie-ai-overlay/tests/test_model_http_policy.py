@@ -124,26 +124,40 @@ class TestInvalidValues:
     def test_negative_rejected(self):
         assert _reload_with(MODEL_LLM_MAX_RETRIES="-3")["llm_retries"] == 2
 
-    @pytest.mark.parametrize("raw", ["inf", "1e400", "-inf", "nan", "NaN"])
-    def test_non_finite_rejected(self, raw):
-        """``inf`` passes a ``> 0`` check and then breaks ``int()``.
+    @pytest.mark.parametrize(
+        "raw",
+        ["30m", "0", "-5", "inf", "1e400", "-inf", "nan", "NaN", "  60  x"],
+        ids=lambda v: repr(v),
+    )
+    def test_a_rejected_primary_knob_is_never_answered_by_the_legacy_one(self, raw):
+        """Every rejection reason ends the search, not just the unparsable one.
 
-        ``MODEL_LLM_MAX_RETRIES=1e400`` reached ``int(inf)`` and raised
-        OverflowError while the module was being imported — a startup crash in
-        every service that reads the policy, caused by a value no operator
-        would have meant to write. Rejected at parse like any other garbage.
+        The legacy name is set on every case, so this pins the branch as well as
+        the value: a parser that rejected unparsable input but let an
+        out-of-range value fall through would return 600.0 here for every case
+        except ``30m`` and the suite would still look green, because a rejection
+        with no lower-precedence name behind it resolves to the same default
+        either way.
+
+        Both rejection classes matter to an operator: ``30m`` is a typo, and
+        ``0`` is someone deliberately capping a budget. Answering either with
+        the legacy name reports a budget they never set.
         """
-        m = _reload_with(MODEL_LLM_MAX_RETRIES=raw, MODEL_LLM_TIMEOUT_SECONDS=raw)
-        assert m["llm_retries"] == 2
-        assert m["llm_timeout"] == 180.0
+        assert _reload_with(MODEL_LLM_TIMEOUT_SECONDS=raw, VLLM_TIMEOUT="600")["llm_timeout"] == 180.0
+
+    @pytest.mark.parametrize("raw", ["0.5x", "-1", "nan", "inf"], ids=lambda v: repr(v))
+    def test_a_rejected_retry_count_is_never_answered_by_a_later_name(self, raw):
+        """Same rule on the retry parser, which takes two names too."""
+        assert _reload_with(MODEL_LLM_MAX_RETRIES=raw, MODEL_LLM_TIMEOUT_SECONDS="600")["llm_retries"] == 2
 
     def test_zero_retries_is_honoured(self):
         """Zero is the meaningful value for a retry count, unlike for a timeout.
 
         An operator on a contended GPU sets 0 to cap a batch's worst-case
-        latency. Routing retries through the positive parser — which rejects
-        zero because a zero *timeout* means "fail every call immediately" —
-        gave them the default back with nothing to say so.
+        latency. The positive parser must therefore not be reused here: it
+        rejects zero because a zero *timeout* means "fail every call
+        immediately", and reusing it would hand back the default with nothing to
+        say so.
         """
         assert _reload_with(MODEL_LLM_MAX_RETRIES="0")["llm_retries"] == 0
 
@@ -294,8 +308,8 @@ class TestCallSitesConsumeThePolicy:
         to file labels, context to the raw chunk, embedding to the sparse
         channel. The reranker's timeout propagates to a 500 and fails the user's
         chat request, so shortening it converts a slow-but-successful rerank into
-        a visible error. An earlier revision of this MR set it to 120 s against
-        aiohttp's 300 s default: 2.5x more failures on a contended GPU, with no
+        a visible error. 120 s would be 2.5x more failures than a bare
+        aiohttp.ClientSession already produced on a contended GPU, with no
         degraded path to catch them.
         """
         assert _reload_with()["rerank_timeout"] >= 300.0, (

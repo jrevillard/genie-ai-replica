@@ -100,13 +100,15 @@ if _VLLM_API_KEY:
 
         def _patched_req_request(self, method, url, **kwargs):
             # Certificate verification follows OPEA_SSL_SKIP_VERIFY, matching the
-            # TLS block above. It used to be forced off unconditionally, which
-            # disabled verification for every requests call in the process —
-            # including the ones to the document repository, the backend and
-            # ArangoDB — whenever a VLLM_API_KEY happened to be set, i.e. on
-            # every remote-GPU deployment. A remote endpoint with a self-signed
-            # certificate is the only case that needs this; an attacker who can
-            # MITM an in-cluster call should not gain that by default.
+            # TLS block above, and is NOT implied by the presence of a
+            # VLLM_API_KEY. Setting that key authenticates the call to the GPU
+            # node; it says nothing about whether the certificate that node
+            # presents can be trusted. Verifying here covers every requests call
+            # in the process — document repository, backend, ArangoDB — so a
+            # remote-GPU deployment with a properly issued certificate keeps
+            # verification on, and only an endpoint with a self-signed one has
+            # to opt out. An attacker who can MITM an in-cluster call gains
+            # nothing by default.
             if _SSL_SKIP:
                 kwargs["verify"] = False
             headers = kwargs.setdefault("headers", {})

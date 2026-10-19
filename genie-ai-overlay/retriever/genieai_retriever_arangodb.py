@@ -510,17 +510,14 @@ class GenieaiArangoRetriever(OpeaComponent):
                 openai.api_key = OPENAI_API_KEY
 
                 try:
-                    # The probe is bounded with an explicit client rather than by
-                    # setting ``openai.timeout``: that attribute is the SDK-wide
-                    # default for every consumer of the module in this image, so
-                    # assigning it here would silently re-budget any langchain
-                    # client built later without an explicit timeout, and the
-                    # effect would outlive this branch. One call gets its own
-                    # client and nothing else is touched.
+                    # The probe is bounded by a client scoped to this one call,
+                    # so the budget cannot reach anything built later off the
+                    # same module state — the module-level ``openai.api_key``
+                    # assigned just above is process-wide, and this way only the
+                    # timeout stays local.
                     #
                     # Closed explicitly: the client owns an httpx connection pool
-                    # that would otherwise live until the GC finaliser runs, and
-                    # _initialize_llm runs again on every reconfigure.
+                    # that would otherwise live until the GC finaliser runs.
                     with openai.OpenAI(api_key=OPENAI_API_KEY, timeout=VLLM_TIMEOUT) as probe:
                         probe.models.list()
                     if logflag:

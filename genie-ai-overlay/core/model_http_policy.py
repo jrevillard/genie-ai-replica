@@ -5,9 +5,8 @@
 Every in-repo client that talks to a model endpoint derives its timeout and
 retry budget from this module, so a heavily contended shared GPU fails
 **bounded and uniformly** across services instead of per-site library defaults
-drifting apart. Two call sites are outside it and named below: the vendored
-``comps`` clients, and the retriever's ``HuggingFaceEndpointEmbeddings``, whose
-pydantic field set depends on the pinned ``langchain-huggingface``.
+drifting apart. What is outside it, and why, is named at the bottom of this
+docstring.
 
 Why a budget shorter than the library default is the safe choice: every LLM
 caller in this overlay has a degradation path that produces a usable document
@@ -26,12 +25,13 @@ here, and why):
 ============================  ==========================  ==============
 service / site               client                      budget
 ============================  ==========================  ==============
-dataprep  ``_build_vllm_client``  ``AsyncOpenAI``          LLM_*
-dataprep  Keycloak token      ``aiohttp``                 CONTROL_PLANE_*
-reranker  TEI ``/rerank``     ``aiohttp``                 TEI_*
-retriever ``VLLM_TIMEOUT``    ``ChatOpenAI`` summarizer   LLM_*
+dataprep  ``_build_vllm_client``  ``AsyncOpenAI``          LLM_* (timeout + retries)
+dataprep  Keycloak token, ingestion-log writes, doc status,
+          guardrail calls   ``aiohttp``                 CONTROL_PLANE_*
+reranker  TEI ``/rerank``     ``aiohttp``                 RERANK_*
+chatqna   OPEA readiness probe, dataprep/health checks  ``aiohttp``  CONTROL_PLANE_*
+retriever OpenAI ``ChatOpenAI`` summarizer / probe   ``langchain_openai``  LLM_*
 retriever ``OpenAIEmbeddings``  ``langchain_openai``      TEI_*
-retriever OpenAI ChatOpenAI   ``langchain_openai``       LLM_*
 ============================  ==========================  ==============
 
 NOT covered — vendored ``comps``, which owns the HTTP calls outright and cannot
@@ -47,8 +47,20 @@ microservice and the streaming textgen path live entirely inside the upstream
 
 Closing that gap needs a change to the vendored source, tracked in
 ``OVERRIDES.yaml`` under ``comps.dataprep.…`` / ``comps.cores.mega.orchestrator…``
-rather than a knob here. Docling document parsing is in-process CPU work on the
-GPU node's own service, not a model call — no budget applies.
+rather than a knob here.
+
+Two in-repo clients reach a model endpoint without a budget from this module,
+both for a library reason rather than an oversight:
+
+* ``HuggingFaceEndpointEmbeddings`` (retriever, remote-GPU branch) — a pydantic
+  model whose accepted fields follow the pinned langchain-huggingface, so an
+  unrecognised ``timeout`` raises at construction;
+* ``HuggingFaceBgeEmbeddings`` (retriever, local branch) — runs the embedding
+  model in-process, so there is no HTTP hop to bound.
+
+Docling parsing is also out of scope here: it is a remote ``docling-serve`` call,
+but it is a document-conversion service rather than a model endpoint, and it
+already carries its own ``DOCLING_ENDPOINT_TIMEOUT`` budget.
 """
 
 import math
@@ -92,6 +104,11 @@ def positive_float_env(*names: str, default: float) -> float:
         # lower bound.
         if math.isfinite(value) and value > 0:
             return value
+        # Parsed but out of range. This ends the search like an unparsable value
+        # does, rather than falling through to the next name: `MODEL_LLM_TIMEOUT_
+        # SECONDS=0` is an operator who said something, and answering them with
+        # `VLLM_TIMEOUT` would report a budget they never asked for.
+        return default
     return default
 
 
@@ -122,6 +139,7 @@ def non_negative_int_env(*names: str, default: int) -> int:
             return default
         if math.isfinite(value) and value >= 0:
             return math.ceil(value)
+        return default
     return default
 
 

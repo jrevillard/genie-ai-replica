@@ -304,10 +304,15 @@ HUGGING_FACE_HUB_TOKEN=
 # context generation to the raw chunk); it does not fail the ingest.
 #
 # DATAPREP_LLM_PHASE_TIMEOUT_SECONDS=600   # labelling / context generation.
-#                                 #   Sized below one wedged batch's worst case
-#                                 #   (MAX_RETRIES x 3 attempts x 180 s), so the
-#                                 #   phase gives up while stragglers are still
-#                                 #   retrying rather than after they finish.
+#                                 #   Wall clock for a whole LLM phase, not for
+#                                 #   one call. Above a single batched call
+#                                 #   ((1+MAX_RETRIES) x 180 = 540s) so a slow
+#                                 #   batch still completes, and far below one
+#                                 #   batch task (540s + batch_size x 1620s =
+#                                 #   ~7020s at defaults) so the phase gives up
+#                                 #   while stragglers are still retrying. Raise
+#                                 #   it for large documents: it is a flat
+#                                 #   ceiling, not an allowance per wave.
 # DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS=60  # how often a running phase reports
 #                                 #   "N/M batches done" to the ingestion log
 #                                 #   (the admin UI reads that log). Raise it to

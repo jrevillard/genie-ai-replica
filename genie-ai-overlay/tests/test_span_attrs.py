@@ -154,7 +154,7 @@ class TestVocabularyShape:
     def test_values_are_unique(self):
         assert len(set(VOCABULARY)) == len(VOCABULARY)
 
-    def test_vocabulary_has_eighty_entries(self):
+    def test_vocabulary_entry_count_is_pinned(self):
         # Pin on the vocabulary size, raised 80 → 82 for the two timeout
         # attributes (dataprep.llm.timed_out / .timeout_seconds). The pin exists
         # so growth is a deliberate edit rather than a drifting default, not to

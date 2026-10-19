@@ -52,14 +52,18 @@ spec:
   # MUST also update `data.keycloak.cnpgServiceName` in values.yaml to match.
   bootstrap:
     initdb:
-      database: keycloak
+      # Same values the Keycloak CR reads (data.keycloak.db.*) — the CNPG
+      # cluster creates the bootstrap Secret/database and Keycloak consumes
+      # them; two independent sources of truth here would let a
+      # db.secretName override split that contract silently.
+      database: {{ .Values.data.keycloak.db.database | default "keycloak" }}
       owner: keycloak
       # CNPG expects this Secret to carry BOTH `username` and `password`
-      # keys (username-only fails validation). The `keycloak-db-credentials`
-      # Secret is operator-provided via their secret backend; the chart
-      # does not materialize it.
+      # keys (username-only fails validation). The Secret is
+      # operator-provided via their secret backend; the chart does not
+      # materialize it.
       secret:
-        name: keycloak-db-credentials
+        name: {{ .Values.data.keycloak.db.secretName }}
   serviceAccountTemplate:
     metadata:
       labels:

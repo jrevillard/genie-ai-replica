@@ -357,7 +357,6 @@ dependencyGraph:
 #   volumeMounts: optional container volumeMounts (subPath supported)
 #   probes: readiness/liveness/startup probe definitions
 #   podDisruptionBudget: optional PDB; null disables
-#   serviceMonitor: opt-in Prometheus scrape; gated by observability.enabled
 services:
   backend:
     enabled: true
@@ -420,7 +419,6 @@ services:
       liveness:  { httpGet: { path: /api/health, port: 3000 }, initialDelaySeconds: 30, periodSeconds: 30 }
       startup:   { httpGet: { path: /api/health, port: 3000 }, initialDelaySeconds: 5, failureThreshold: 12 }
     podDisruptionBudget: { minAvailable: 1 }
-    serviceMonitor: false
 
   frontend:
     enabled: true
@@ -470,7 +468,6 @@ services:
       readiness: { httpGet: { path: /health, port: 8090 }, initialDelaySeconds: 5, periodSeconds: 10 }
       liveness:  { httpGet: { path: /health, port: 8090 }, initialDelaySeconds: 30, periodSeconds: 30 }
     podDisruptionBudget: null
-    serviceMonitor: false
 
   documentRepository:
     enabled: true
@@ -537,7 +534,6 @@ services:
       readiness: { httpGet: { path: /health, port: 3001 }, initialDelaySeconds: 10, periodSeconds: 10 }
       liveness:  { tcpSocket: { port: 3001 }, initialDelaySeconds: 30, periodSeconds: 30 }
     podDisruptionBudget: null
-    serviceMonitor: false
 
   clamav:
     cache:
@@ -552,57 +548,16 @@ services:
     # — re-pin to a digest before any production rollout.
     image: { repository: clamav/clamav, tag: "stable-debian" }
     port: 3310
-    # The clamav image's entrypoint runs `install -o clamav -g clamav
-    # /run/clamav` then chowns it. /run/clamav is NOT in the image —
-    # it's a tmpfs the entrypoint expects to find (or, in Docker,
-    # a path the parent process has mounted). Without an emptyDir at
-    # /run/clamav in the PodSpec, the entrypoint fails with
-    # 'cannot change owner and permissions of /run/clamav: No such
-    # file or directory' and the pod crash-loops.
-    volumes:
-      - name: run-clamav
-        emptyDir: {}
-    volumeMounts:
-      - name: run-clamav
-        mountPath: /run/clamav
-    # The shared per-service template applies a default non-root
-    # securityContext; this service requires a fully-restated block
-    # because runAsUser must match the upstream image's clamav account
-    # (uid 100).
-    securityContext:
-      runAsNonRoot: true
-      # The image's clamav user is uid/gid 1000 (verified via
-      # `docker run --rm --entrypoint sh clamav/clamav:stable-debian
-      # -c "grep clamav /etc/passwd"`). Earlier revisions used 100
-      # and the entrypoint's `freshclam` failed with "Failed to
-      # open log file /var/log/clamav/freshclam.log: Permission
-      # denied" — /var/log/clamav is owned 1000:1000 in the image
-      # and uid 100 cannot write there. Container-level runAsUser
-      # overrides the pod-level; redeclared here so the values.yaml
-      # block stays the source of truth.
-      runAsUser: 1000
-      allowPrivilegeEscalation: false
-      # ClamAV's writable paths in the runtime image are tmpfs-mounted
-      # (/tmp, /run) or backed by an explicit volume mounted at
-      # /var/lib/clamav by the service factory when one is set. A
-      # read-only root filesystem keeps the on-disk attack surface
-      # limited to those mount points.
-      readOnlyRootFilesystem: true
-      # Drop only NET_RAW: the upstream default drops ALL, which
-      # also drops CHOWN. /init-unprivileged no longer runs the
-      # chown that broke earlier revisions, but keeping CHOWN out
-      # of the drop list is the belt-and-braces move for any
-      # future entrypoint that needs it.
-      capabilities: { drop: ["NET_RAW"] }
+    # securityContext / volumes / volumeMounts / PVC are NOT values
+    # here: templates/services/clamav.yaml is a hand-written Deployment
+    # that owns them (uid 1000 rationale, /run/clamav tmpfs, signature
+    # cache). Edit the template, not this block.
     resources: { requests: { cpu: 100m, memory: 512Mi }, limits: { cpu: 1, memory: 1Gi } }
     env: []
-    secrets: []
-    pvc: null
     probes:
       readiness: { tcpSocket: { port: 3310 }, initialDelaySeconds: 60, periodSeconds: 30 }
       liveness:  { tcpSocket: { port: 3310 }, initialDelaySeconds: 120, periodSeconds: 60, failureThreshold: 5 }
     podDisruptionBudget: null
-    serviceMonitor: false
     # Egress to the ClamAV signature-distribution network on 80/443.
     # `database.clamav.net` is a CNAME-to-A round-robin and the IP set
     # shifts; pin resolved IPs in this list (run `dig +short
@@ -623,7 +578,6 @@ services:
       enabled: true                          # appendonly persistence
       storageSize: 5Gi
     podDisruptionBudget: null
-    serviceMonitor: false
 
 # OPEA AI/ML tier. Disabled by default; enabling renders the six
 # OPEA services (chatqna, retriever, dataprep, reranker, embedding,

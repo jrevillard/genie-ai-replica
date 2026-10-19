@@ -38,7 +38,7 @@ spec:
               kubernetes.io/metadata.name: {{ .Values.namespace }}-obs
       ports:
         - protocol: TCP
-          port: 4318
+          port: {{ .Values.observability.collectorPort | default 4318 }}
         - protocol: TCP
           port: 4317
   egress:
@@ -75,7 +75,9 @@ spec:
           port: 8428
     {{- end }}
     {{- if .Values.observability.traces.enabled }}
-    # VTSingle OTLP/HTTP ingest (VT default 4318).
+    # VTSingle is single-port (-httpListenAddr=:10428): the Jaeger query
+    # API AND the OTLP ingest (/insert/opentelemetry) both live there —
+    # the collector's exporter dials 10428 (see otel-collector.yaml).
     - to:
         - podSelector:
             matchLabels:
@@ -83,15 +85,18 @@ spec:
               app.kubernetes.io/instance: vtraces
       ports:
         - protocol: TCP
-          port: 4318
-        - protocol: TCP
-          port: 4317
+          port: 10428
     {{- end }}
+{{- end }}
+{{- if .Values.observability.logs.enabled }}
 ---
 # Filelog agent (DaemonSet): tails containerd's pod-log path on each
 # node and forwards to the gateway over OTLP. Ingress is closed
 # (the agent never accepts inbound traffic — filelog is a one-way
-# pull from the host filesystem).
+# pull from the host filesystem). Gated on logs alone: the agent
+# lives in <ns>-obs, a namespace that only exists when the log tier
+# is on — rendering this policy under metrics/traces-only would
+# target a nonexistent namespace and fail the install.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -128,5 +133,5 @@ spec:
               app.kubernetes.io/managed-by: opentelemetry-operator
       ports:
         - protocol: TCP
-          port: 4318
+          port: {{ .Values.observability.collectorPort | default 4318 }}
 {{- end }}

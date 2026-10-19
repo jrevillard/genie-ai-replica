@@ -135,20 +135,27 @@ describe('PIIRedactionProcessor', () => {
 
   describe('when redaction throws', () => {
     it('still hands the span to the delegate', () => {
-      jest.isolateModules(() => {
-        jest.doMock('../tracing-pii', () => ({
-          redactAttributes: () => {
+      // Make `redactAttributes` throw for real rather than mocking it out:
+      // `jest.doMock` inside `jest.isolateModules` registers on the outer
+      // registry, so the isolated require reuses the real module and the test
+      // passes whether or not the redactor throws. A Proxy whose own keys
+      // throw makes the production call genuinely blow up.
+      const span = createSpan({});
+      span.attributes = new Proxy(
+        {},
+        {
+          ownKeys() {
             throw new Error('redactor exploded');
+          },
+          getOwnPropertyDescriptor() {
+            return undefined;
           }
-        }));
-        const { PIIRedactionProcessor: Isolated } = require('../pii-span-processor');
-        const span = createSpan({ password: 'secret' });
+        }
+      );
 
-        new Isolated(delegate).onStart(span, 'ctx');
+      processor.onStart(span, 'ctx');
 
-        expect(delegate.onStart).toHaveBeenCalledWith(span, 'ctx');
-      });
-      jest.dontMock('../tracing-pii');
+      expect(delegate.onStart).toHaveBeenCalledWith(span, 'ctx');
     });
   });
 

@@ -44,7 +44,7 @@ module.exports = {
     // SDK with them, and the mock barrel below exports only `logger` and
     // `dbService`, so a mocked `createGeniePropagator` would be `undefined`
     // and this component would fail to boot exactly the way the backend did.
-    '^\\.\\./shared-lib/(tracing-[a-z-]+|pii-span-processor)$': '<rootDir>/../shared/lib/$1.js',
+    '^\\.\\./shared-lib/(tracing-background|tracing-baggage|pii-span-processor)$': '<rootDir>/../shared/lib/$1.js',
     // Everything else in shared-lib still goes to the mock barrel, so require
     // chains inside src/ never touch the real filesystem path (which Docker
     // drops /lib/ from) and the existing suites keep their stubs.

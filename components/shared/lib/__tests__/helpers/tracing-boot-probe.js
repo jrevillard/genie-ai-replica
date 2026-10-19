@@ -37,7 +37,7 @@ const path = require('path');
 
 const originalResolve = Module._resolveFilename;
 Module._resolveFilename = function (request, ...rest) {
-  if (/shared-lib(\/|$)/.test(request)) {
+  if (/^(\.{1,2}\/)*shared-lib(\/|$)/.test(request)) {
     const sub = request.replace(/^(\.{1,2}\/)*shared-lib\/?/, '');
     return originalResolve.call(this, path.join(process.env.SHARED_LIB, sub), ...rest);
   }

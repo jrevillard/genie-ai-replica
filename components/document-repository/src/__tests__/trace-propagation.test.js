@@ -22,6 +22,11 @@ describe('document-repository tracing.js', () => {
     expect(result.error).toBeUndefined();
     expect(result.booted).toBe(true);
     expect(result.sdkPresent).toBe(true);
+    // Names what the SDK actually registered. Without this the only symptom of
+    // a start() that never registered anything would be an empty carrier after
+    // the probe's 5 s wait, which reads as a propagation failure rather than
+    // as the SDK not coming up.
+    expect(result.propagatorFields).toEqual(expect.arrayContaining(['traceparent', 'baggage']));
     expect(result.carrierKeys).toEqual(expect.arrayContaining(['traceparent', 'baggage']));
     expect(result.baggage).toBe('genie.query_id=q-probe');
   });

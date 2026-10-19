@@ -757,7 +757,7 @@ async function fetchSomething(userId) {
 }
 ```
 
-`tracing-pii.js` automatically filters sensitive attributes (passwords,
+`shared/lib/tracing-pii.js` automatically filters sensitive attributes (passwords,
 tokens, emails) — do not log raw user PII in span attributes.
 
 ### OPEA (Python)

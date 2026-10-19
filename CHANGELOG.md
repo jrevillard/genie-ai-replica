@@ -56,9 +56,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   setup read the shared propagator factory under a name that module does not
   export, so the process exited at startup with `Cannot read properties of
   undefined`. It affected `ENABLE_OBSERVABILITY=1` only (the default is `0`) and
-  was never part of a release tag — deployments built from a tagged release are
-  unaffected; only builds from an unreleased `main` were. A boot-level
-  regression test now covers it.
+  was never part of a release tag, so deployments built from a tagged release —
+  including `release/el-salvador` — are unaffected. Builds of an unreleased
+  `main` carried it, as did builds of the `feat/k8s-migration`, `feat/okf-*`
+  and `fix/issue-1093-tracing-debt` branches. A boot-level regression test now
+  covers it.
 - **document-repository dropped the `baggage` header on its outbound calls
   (!565):** it installed a trace-context-only propagator, where the backend
   installed the composite one, so any correlation id arriving on an inbound call

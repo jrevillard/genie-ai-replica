@@ -1246,7 +1246,8 @@ logging keeps `docker logs` working too.
 **Metrics**
 
 - Kong: Prometheus metrics at `kong:8001/metrics` (internal only).
-- Backend: OTel SDK (`tracing.js`, `tracing-db.js`, `tracing-pii.js`) +
+- Backend: OTel SDK (`tracing.js`, `tracing-db.js`; PII redaction in
+  `shared/lib/tracing-pii.js`) +
   Prometheus metrics (`metrics.js`).
 - OPEA services: OTel SDK (`genie-ai-overlay/tracing.py`) emitting per-RAG
   stage spans.

@@ -3185,6 +3185,12 @@ chart:install:
   tags: [docker]
   # Shares the chart-dind slot with chart:contract (see that job's note).
   resource_group: chart-dind
+  # Manual + allow_failure: a `when: manual` job WITHOUT allow_failure
+  # leaves the pipeline blocked on a pending manual action — the MR
+  # pipeline never goes green and merge gating never passes. With it,
+  # the pipeline succeeds without this job and it stays runnable by hand
+  # (same posture as the compose E2E suite below).
+  allow_failure: true
   # No dind sidecar — the [docker] runner exposes its daemon via the
   # socket (promote:* pattern). The image is only used as the docker CLI.
   variables:

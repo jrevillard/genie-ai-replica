@@ -36,6 +36,7 @@ both rows must be set explicitly. */ -}}
     (dict "name" "CLAMSCAN_PORT" "value" (.Values.services.documentRepository.clamavPort | toString))
     (dict "name" "VIRUS_SCANNING" "value" (.Values.services.documentRepository.virusScanning | default "true" | toString))
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
+    (dict "name" "ENABLE_OBSERVABILITY" "value" (ternary "1" "0" (or .Values.observability.logs.enabled .Values.observability.metrics.enabled .Values.observability.traces.enabled)))
 -}}
 {{- $secretEnv := list (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "ARANGO_PASSWORD" "secret" "arango-root-secret" "key" "password" "optional" true) | fromJson) -}}
 {{- $existingEnv := index $vals.services.documentRepository "env" | default list -}}

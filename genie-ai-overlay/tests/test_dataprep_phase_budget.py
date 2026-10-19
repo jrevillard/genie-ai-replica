@@ -440,25 +440,45 @@ class TestProgressIntervalCannotBeSilenced:
         assert 'float(os.getenv("DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS"' not in source
 
 
-class TestPhaseBudgetDefaultIsBelowOneBatchWorstCase:
-    """The phase bound has to be able to fire on the case it was written for.
+class TestPhaseBudgetIsSizedAgainstBothBatchPaths:
+    """The phase bound must be able to fire on each kind of wedged batch.
 
-    A single batch can occupy a semaphore slot for
-    ``LLM_MAX_RETRIES × 3 overlay attempts × LLM_TIMEOUT_SECONDS`` — about
-    1620 s at the defaults. A phase budget at or above that lets one wedged
-    batch consume the whole allowance, so the bound exists and never fires.
+    The two paths are not symmetric. The batched calls have no overlay-level
+    retry loop, so they pay (1 + LLM_MAX_RETRIES) attempts; the per-chunk calls
+    wrap three of those in their own loop. The budget has to be above the first
+    — a wedged batch cannot then consume it alone, which is the stall this
+    exists for — and below the second, so a per-chunk call that runs away is
+    stopped by the phase instead of by its own ladder.
+
+    The first version of this test pinned ``2 * 3 * 180``, a product of neither
+    path, and the accompanying comment claimed a figure that matched nothing:
+    the invariant being protected was not the one that actually held.
     """
 
-    def test_default_phase_budget_is_below_one_batch_worst_case(self, monkeypatch):
+    def test_budget_is_above_the_batched_path_worst_case(self, monkeypatch):
+        """A single wedged batch must not be able to eat the whole phase budget."""
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 600.0)
         monkeypatch.setattr(dataprep, "LLM_MAX_RETRIES", 2)
         monkeypatch.setattr(dataprep, "LLM_TIMEOUT_SECONDS", 180.0)
 
-        worst_case_one_batch = 2 * 3 * 180.0
-        phase_budget = dataprep.DATAPREP_LLM_PHASE_TIMEOUT_SECONDS
-        assert phase_budget < worst_case_one_batch, (
-            f"phase budget {phase_budget:.0f}s is not below the "
-            f"{worst_case_one_batch:.0f}s a single wedged batch can occupy"
+        batched_worst_case = (1 + 2) * 180.0  # SDK attempts, no overlay loop
+        assert dataprep.DATAPREP_LLM_PHASE_TIMEOUT_SECONDS > batched_worst_case, (
+            f"phase budget {dataprep.DATAPREP_LLM_PHASE_TIMEOUT_SECONDS:.0f}s does not exceed the "
+            f"{batched_worst_case:.0f}s one batched call can occupy — a wedged endpoint could "
+            "consume the whole allowance and the bound would never fire"
+        )
+
+    def test_budget_is_below_the_per_chunk_path_worst_case(self, monkeypatch):
+        """The per-chunk ladder must not outlast the phase that is meant to stop it."""
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 600.0)
+        monkeypatch.setattr(dataprep, "LLM_MAX_RETRIES", 2)
+        monkeypatch.setattr(dataprep, "LLM_TIMEOUT_SECONDS", 180.0)
+
+        per_chunk_worst_case = 3 * (1 + 2) * 180.0  # overlay loop x SDK attempts
+        assert dataprep.DATAPREP_LLM_PHASE_TIMEOUT_SECONDS < per_chunk_worst_case, (
+            f"phase budget {dataprep.DATAPREP_LLM_PHASE_TIMEOUT_SECONDS:.0f}s is not below the "
+            f"{per_chunk_worst_case:.0f}s a per-chunk call can occupy — the phase would wait for "
+            "the call's own retry ladder instead of stopping it"
         )
 
 

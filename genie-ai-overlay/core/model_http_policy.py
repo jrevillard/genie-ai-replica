@@ -56,18 +56,25 @@ import os
 
 
 def positive_float_env(*names: str, default: float) -> float:
-    """Return the first env var among *names* parsing as a positive finite float.
+    """Return the first env var among *names* that is *set* and parses validly.
+
+    Precedence is by position in *names*: the first one SET wins, and a value
+    that does not parse is rejected rather than skipped. Both halves matter.
 
     A garbage, non-positive or non-finite value falls back to *default*
-    instead of raising or being honoured. All three matter for a tuning knob
-    read at import time:
+    instead of raising or being honoured, because these knobs are read at
+    import time and a typo must not take a service down:
 
-    - a typo must not take the service down at startup;
     - ``0`` / a negative must not be accepted — a zero timeout is not "no
       timeout", it is an immediate failure on every call;
-    - ``inf`` must not be accepted either. It passes a ``> 0`` check, and
-      ``int(inf)`` then raises ``OverflowError`` at import, which is the same
-      startup crash as a typo, reached by a different route.
+    - ``inf`` must not be rejected either way: it passes a ``> 0`` check and
+      ``int(inf)`` then raises ``OverflowError`` at import.
+
+    Rejecting rather than skipping is what keeps precedence honest. Continuing
+    past a malformed value would let a lower-precedence name answer for a knob
+    the operator set explicitly — ``MODEL_LLM_TIMEOUT_SECONDS=30m`` next to
+    ``VLLM_TIMEOUT=600`` would quietly resolve to 600, and the container log
+    would report a budget the .env never asked for.
 
     Services whose own configuration reads timings (dataprep's phase budgets)
     use this rather than a bare ``float(os.getenv(...))`` so they cannot
@@ -80,16 +87,12 @@ def positive_float_env(*names: str, default: float) -> float:
         try:
             value = float(raw)
         except ValueError:
-            continue
+            return default
         # isfinite before the comparison: NaN fails both, inf passes only the
         # lower bound.
         if math.isfinite(value) and value > 0:
             return value
     return default
-
-
-def _positive_float(*names: str, default: float) -> float:
-    return positive_float_env(*names, default=default)
 
 
 def non_negative_int_env(*names: str, default: int) -> int:
@@ -104,6 +107,10 @@ def non_negative_int_env(*names: str, default: int) -> int:
 
     Fractional values round up, so ``0.5`` becomes 1 rather than truncating to a
     retry count the operator did not ask for.
+
+    Like ``positive_float_env``, a name that is set but malformed ends the
+    search rather than yielding to the next name — otherwise a typo in the
+    preferred knob is answered for by a lower-precedence one.
     """
     for name in names:
         raw = os.getenv(name)
@@ -112,16 +119,10 @@ def non_negative_int_env(*names: str, default: int) -> int:
         try:
             value = float(raw)
         except ValueError:
-            continue
+            return default
         if math.isfinite(value) and value >= 0:
             return math.ceil(value)
     return default
-
-
-def _positive_int(*names: str, default: int) -> int:
-    # Kept for call sites where zero is genuinely meaningless; retry counts use
-    # non_negative_int_env above instead.
-    return math.ceil(_positive_float(*names, default=default))
 
 
 # LLM (vLLM chat completions).
@@ -140,23 +141,25 @@ def _positive_int(*names: str, default: int) -> int:
 # GPU, so healthy deployments keep their results and degraded ones fall back in
 # minutes instead of half an hour. Deployments on a slower model raise it via
 # MODEL_LLM_TIMEOUT_SECONDS.
-LLM_TIMEOUT_SECONDS = _positive_float("MODEL_LLM_TIMEOUT_SECONDS", "VLLM_TIMEOUT", default=180.0)
+LLM_TIMEOUT_SECONDS = positive_float_env("MODEL_LLM_TIMEOUT_SECONDS", "VLLM_TIMEOUT", default=180.0)
 
-# openai-python retries a 408/409/429/5xx and a connection error twice by
-# default. Left at 2 because the errors worth retrying (a saturated GPU returns
-# 503 or drops the connection) are the ones that clear on their own; the timeout
-# is not retried by the SDK, and this overlay's own 3-attempt loops handle the
-# cases that deserve another try.
+# openai-python retries twice by default: a 408/409/429/5xx response, a
+# connection error, AND a request timeout (verified in _base_client.py — the
+# httpx.TimeoutException handler consumes a retry when one remains, so the
+# budget below is paid up to 3 times on a wedged endpoint). Left at 2 because
+# the errors worth retrying are exactly the contention this deck sees: a
+# saturated GPU answers 503 or drops the connection, and both clear on their
+# own. Set MODEL_LLM_MAX_RETRIES=0 to cap the worst case instead.
 LLM_MAX_RETRIES = non_negative_int_env("MODEL_LLM_MAX_RETRIES", default=2)
 
 # TEI (rerank / embed): single-shot batch calls with short outputs, so a much
 # tighter budget than chat generation. 120 s leaves room for queueing behind a
 # shared GPU without treating normal contention as failure.
-TEI_TIMEOUT_SECONDS = _positive_float("MODEL_TEI_TIMEOUT_SECONDS", default=120.0)
+TEI_TIMEOUT_SECONDS = positive_float_env("MODEL_TEI_TIMEOUT_SECONDS", default=120.0)
 
 # Control-plane calls (Keycloak token refresh, ingestion-log writes, doc status
 # updates, taxonomy fetch). These are in-cluster HTTP services with no model
 # work behind them — a slow one means something is wrong with the service, not
 # that the answer is worth waiting for. 30 s covers a slow TLS handshake plus a
 # slow handler; beyond that the caller is better off surfacing the failure.
-CONTROL_PLANE_TIMEOUT_SECONDS = _positive_float("MODEL_CONTROL_PLANE_TIMEOUT_SECONDS", default=30.0)
+CONTROL_PLANE_TIMEOUT_SECONDS = positive_float_env("MODEL_CONTROL_PLANE_TIMEOUT_SECONDS", default=30.0)

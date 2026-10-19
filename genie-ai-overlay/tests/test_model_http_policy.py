@@ -96,6 +96,20 @@ class TestPrecedence:
     def test_legacy_vllm_timeout_still_honored(self):
         assert _reload_with(VLLM_TIMEOUT="77")["llm_timeout"] == 77.0
 
+    def test_a_malformed_primary_knob_is_not_answered_by_the_legacy_one(self):
+        """A typo must not resolve to a value the operator never asked for.
+
+        Skipping a malformed value to reach the next name made
+        ``MODEL_LLM_TIMEOUT_SECONDS=30m`` silently resolve to whatever
+        ``VLLM_TIMEOUT`` said, and the container log would report that budget.
+        The preferred knob is set, so its rejection is the answer.
+        """
+        assert _reload_with(MODEL_LLM_TIMEOUT_SECONDS="30m", VLLM_TIMEOUT="600")["llm_timeout"] == 180.0
+
+    def test_an_empty_primary_knob_still_yields_to_the_legacy_one(self):
+        """Unset and empty are different: an empty var is not a decision."""
+        assert _reload_with(MODEL_LLM_TIMEOUT_SECONDS="", VLLM_TIMEOUT="600")["llm_timeout"] == 600.0
+
 
 class TestInvalidValues:
     def test_non_numeric_falls_back_to_default(self):
@@ -330,9 +344,26 @@ class TestCallSitesConsumeThePolicy:
             )
 
     def test_no_hardcoded_control_plane_timeout_is_left_behind(self):
-        assert "ClientTimeout(total=30)" not in (
-            (OVERLAY_ROOT / "dataprep" / "genieai_dataprep_arangodb.py").read_text(encoding="utf-8")
-        ), (
-            "a literal 30 s survived: the knob would change the Keycloak refresh and "
-            "leave these at 30, which is the configuration the docstring denies"
+        """No module that reads the policy may keep a literal beside it.
+
+        Scoped to the modules that import it: a literal in one of them while the
+        knob is presented as deck-wide means a deployer who raises it sees the
+        new budget in one service and 30 s in another, with nothing saying so.
+        """
+        offenders = []
+        for rel in (
+            "dataprep/genieai_dataprep_arangodb.py",
+            "dataprep/keycloak_service_account.py",
+            "chatqna/genieai_chatqna.py",
+        ):
+            text = (OVERLAY_ROOT / rel).read_text(encoding="utf-8")
+            if "CONTROL_PLANE_TIMEOUT_SECONDS" not in text:
+                continue
+            for i, line in enumerate(text.split("\n"), 1):
+                if "ClientTimeout(total=30)" in line:
+                    offenders.append(f"{rel}:{i}")
+        assert not offenders, (
+            f"a literal 30 s survived beside the knob in {offenders} — raising "
+            "MODEL_CONTROL_PLANE_TIMEOUT_SECONDS would change some call sites and "
+            "not others, which is the deck-wide claim the docstring denies"
         )

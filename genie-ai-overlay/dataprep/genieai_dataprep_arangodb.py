@@ -289,14 +289,20 @@ LLM_LABEL_TEMPERATURE = float(os.getenv("DATAPREP_LLM_TEMPERATURE", "0.0"))
 # exactly what a single batch failure already does — the phase bound only
 # decides how long the document waits before taking the same path.
 #
-# Sized against the worst case of a *single* batch, not against a whole
-# document. One batch can occupy a slot for LLM_MAX_RETRIES × 3 overlay attempts
-# × LLM_TIMEOUT_SECONDS ≈ 1620 s at the defaults, so a phase budget above that
-# would let a single wedged batch consume the whole allowance before the phase
-# gave up on it — the bound would exist and never fire on the case it was
-# written for. 600 s sits above a healthy phase (a 260-chunk document completes
-# in minutes on an uncontended GPU) and well below one batch's worst case, so
-# the phase gives up while the stragglers are still retrying and cancels them.
+# Sized against the worst case of a *single* batch, since a batch that runs to
+# completion keeps its semaphore slot for that whole time. The two paths differ:
+# the batched calls (_llm_call_batch, _context_batch_call) have no overlay-level
+# retry loop, so they pay (1 + LLM_MAX_RETRIES) × LLM_TIMEOUT_SECONDS = 540 s at
+# the defaults; the per-chunk paths wrap three of those in their own loop, for
+# 1620 s. 600 s therefore sits above the batched path — a wedged endpoint cannot
+# consume it alone — and well below the per-chunk one, so a per-chunk call that
+# runs away is cancelled by the phase rather than by its own ladder.
+#
+# It is also the worst case for several batches at once, which is the point: on
+# a contended GPU the batches do not run in sequence, so a budget below the
+# per-batch worst case would fire on healthy slow batches rather than only on
+# wedged ones. Raise it for a slower model; the phase falls back rather than
+# failing, so a budget set too low degrades labels instead of stalling.
 DATAPREP_LLM_PHASE_TIMEOUT_SECONDS = positive_float_env("DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", default=600.0)
 # How often a still-running phase reports progress to the ingestion log. The log
 # is the only channel an operator watches during an ingest (the admin UI reads

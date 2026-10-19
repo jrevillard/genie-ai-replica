@@ -1412,6 +1412,9 @@ services:
     environment:
       CHATQNA_TYPE: ${CHATQNA_TYPE:-ChatQnA}
       VLLM_API_KEY: ${VLLM_API_KEY:-}
+      # Control-plane budget for the backend / document-repository calls on the
+      # chat path (core/model_http_policy.py).
+      MODEL_CONTROL_PLANE_TIMEOUT_SECONDS: ${MODEL_CONTROL_PLANE_TIMEOUT_SECONDS:-30}
       MEGA_SERVICE_HOST_IP: chatqna-xeon-backend-server
       LOG_LEVEL: ${LOG_LEVEL:-info}
       EMBEDDING_SERVER_HOST_IP: embedding

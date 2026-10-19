@@ -66,13 +66,23 @@ spec:
           port: 80
     {{- /* Keycloak OIDC endpoints, same-origin with the SPA. The /auth
            prefix reaches Keycloak as-is (its http-relative-path is
-           /auth); Envoy preserves the incoming Host header and stamps
-           X-Forwarded-Proto/Port, which Keycloak needs to derive the
-           issuer from the public origin. */}}
+           /auth). Envoy's upstream request carries the Host without the
+           port, and Keycloak (backchannelDynamic) rebuilds the discovery
+           document's token/jwks/userinfo URLs from the forwarded host —
+           portless backchannel URLs the SPA then fails to reach. The
+           RequestHeaderModifier re-pins X-Forwarded-Host to the full
+           public origin (ingress.host, port included) so every URL in
+           the discovery document matches the issuer's origin. */}}
     - matches:
         - path:
             type: PathPrefix
             value: /auth/
+      filters:
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            set:
+              - name: X-Forwarded-Host
+                value: {{ .Values.ingress.host | quote }}
       backendRefs:
         - name: keycloak-service
           port: 8080

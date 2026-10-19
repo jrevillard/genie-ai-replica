@@ -336,9 +336,13 @@ SPAN_OPENERS = frozenset({"start_span", "start_as_current_span", "background_spa
 
 # Every key the sweep polices, in one place. A key is policed by whichever
 # vocabulary it belongs to, so a reader that resolves a name to a key must accept
-# all three — checking only ATTRIBUTE_NAMES would miss the JSON-encoded and
+# all of them — checking only ATTRIBUTE_NAMES would miss the JSON-encoded and
 # legacy registers. The two tests below assert against this instead of rebuilding
-# the union, so a fourth vocabulary is added in one place.
+# the union, so a new vocabulary is added in one place.
+#
+# EVAL_HARNESS_KEYS is deliberately absent: it is a subset of LEGACY_ATTRIBUTE_NAMES
+# today (test_only_the_two_keys_the_harness_reads_claim_the_harness_contract
+# pins that), so including it would be redundant until the two diverge.
 _REGISTERED_NAMES = (
     frozenset(ATTRIBUTE_NAMES.values()) | set(JSON_ENCODED_ATTRIBUTE_NAMES) | set(LEGACY_ATTRIBUTE_NAMES)
 )
@@ -480,11 +484,16 @@ def _set_attribute_keys(overlay_sources):
                 func = node.func
                 name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
                 if name in _ATTRIBUTE_WRITERS:
-                    # set_attribute("key", v) is a literal first argument;
-                    # set_attributes({"key": v}) is a dict first argument.
+                    # set_attribute("key", v) has a KEY first; set_attributes(
+                    # mapping) has a MAPPING first. The two-position writer is
+                    # not read through _mapping_keys: its first argument is a key,
+                    # and looking for a dict inside a call that produces a key
+                    # would let the walk derive a dict's contents that no writer
+                    # puts on the span.
                     if node.args:
-                        keys.update(_mapping_keys(node.args[0]))
-                        if isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+                        if name == "set_attributes":
+                            keys.update(_mapping_keys(node.args[0]))
+                        elif isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
                             keys.add(node.args[0].value)
                 elif name in SPAN_OPENERS:
                     for keyword in node.keywords:
@@ -566,9 +575,9 @@ def _constant_key(node, constants):
     """The attribute key a ``<name>`` bound to a span_attrs constant names.
 
     ``QUERY_ID_KEY`` is a ``genie.query_id``, written through the constant so
-    the string has one definition. Treating that write as unreadable hid six of
-    them — one per service plus the condense span — behind a name the reader
-    happened not to special-case.
+    the string has one definition. Reading it back needs no key registry: the
+    constant's value IS the key, and it lives in the module the services import
+    from.
     """
     if isinstance(node, ast.Name):
         return constants.get(node.id)
@@ -613,11 +622,16 @@ def _non_literal_attribute_mappings(overlay_sources):
     two in chatqna and the retriever. Checking only the opener would leave the
     larger half of the same defect unreported.
 
-    This is a REPORT, not a gate. Six such writes exist today, all predating the
-    derivation, and each assembles its mapping in a helper that already has a
-    test asserting the result is free-text-free
-    (``test_chatqna_budget_tracing.py`` covers the prompt-budget and blend
-    builders) — so those keys are policed, by that test rather than by this one.
+    This is a REPORT, not a gate. Six such writes exist today — three in chatqna,
+    three in the retriever — all predating the derivation. Four of the six build
+    their mapping in a helper a test already asserts is free-text-free:
+    ``test_no_free_text_in_prompt_budget_attributes`` and
+    ``test_no_free_text_in_blend_attributes`` on the chatqna side,
+    ``test_no_free_text_in_retrieval_attributes`` and
+    ``test_score_attributes_pass_the_guard`` on the retriever's. The other two
+    (chatqna's llm.invoke request and usage stamps) are safe structurally rather
+    than by test: their keys come from a literal tuple, so the value is a number
+    or a flag whatever the request carries.
 
     Nothing here pins that number. A count is not a contract: adding one more
     runtime-built write is ordinary work, and a test that fails on it while its
@@ -642,7 +656,7 @@ def _non_literal_attribute_mappings(overlay_sources):
             name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
             if name in SPAN_OPENERS:
                 for keyword in node.keywords:
-                    if keyword.arg in {"attributes", "attrs"} and not isinstance(keyword.value, ast.Dict):
+                    if keyword.arg in {"attributes", "attrs"} and not _mapping_keys(keyword.value):
                         offenders.append(f"{_display_path(path)}:{node.lineno}")
             elif name in _ATTRIBUTE_WRITERS:
                 # set_attribute("literal", …) is derivable; set_attribute(k, v)
@@ -662,12 +676,12 @@ def _is_literal_key(arg, writer, aliases, constants):
     argument, when it is a register subscript, which ``_set_attribute_keys``
     resolves through the same ``aliases`` this receives.
 
-    That shared resolution is the point. An earlier version passed a hardcoded
-    ``{"ATTRIBUTE_NAMES"}`` here while the derivation resolved the import alias
-    properly, so ``span.set_attribute(A["traversal.injected_docs"], …)`` was
-    reported as unreadable by one reader and read as ``traversal.injected_docs``
-    by the other. Two readers disagreeing about what is readable is how a
-    report starts teaching the reader to distrust it.
+    The shared resolution is the point: ``aliases`` carries what
+    ``_register_aliases`` read from the module's imports, so
+    ``span.set_attribute(A["traversal.injected_docs"], …)`` is readable HERE and
+    in the derivation alike. Two readers disagreeing about what is readable is
+    how a report starts teaching its reader to distrust it — the alias has to be
+    resolved here or not at all.
     """
     if writer == "set_attributes":
         return bool(_mapping_keys(arg))
@@ -691,6 +705,44 @@ class TestOwnedSpanCoverage:
     judgement call every time a span is added, and the call that matters — "is
     this one safe?" — is exactly the one a swept span makes unnecessary.
     """
+
+    def test_the_filter_that_hides_unregistered_constants_is_pinned(self):
+        """``_span_attrs_constants`` only resolves a name the register knows.
+
+        A constant is read as a KEY only when its value is already a registered
+        attribute name. That filter is what keeps ``UNRESOLVED`` out — it is a
+        value written INTO ``rag.adaptive_chunk_keys``, not a key — and it is
+        also what makes a NEW unregistered constant invisible to this derivation.
+
+        So the invisible side is named here rather than assumed. A second
+        non-key constant means the resolver has a second special case nobody
+        wrote down, and a reader cannot tell which shape it will refuse next.
+        """
+        declared = _string_constant_names(pathlib.Path(core.span_attrs.__file__))
+        not_keys = {value for value in declared.values() if value not in _REGISTERED_NAMES}
+        assert not_keys == {UNRESOLVED}, (
+            f"span_attrs string constants that are not registered attribute names: "
+            f"{sorted(not_keys)}. Each is invisible to the key derivation, so a "
+            "constant written as a key carries nothing the sweep can check."
+        )
+
+    def test_the_condense_keys_are_derived(self, overlay_sources):
+        """Gate the derivation-side gain of reading a dict through one call.
+
+        ``genie.condense.mode`` reaches its span as
+        ``set_attributes(sanitize_attributes({...}))``. If that one-level look
+        stops, the key drops out of the derived set — and nothing fails: the
+        coverage threshold still clears (0.89 against 0.85), and dropping a key
+        cannot trip the reverse gate, which only fires on a key that IS written
+        and IS unregistered. The reporting side is gated by the probe test; this
+        is the derivation side, which is where the claim lives.
+        """
+        derived = _set_attribute_keys(overlay_sources)
+        assert {"genie.condense.mode", "genie.condense.status"} <= derived, (
+            "the condense keys are written one call below the span opener and must "
+            "be derivable; they are the whole point of reading through a wrapping "
+            "call. Derived set lost them."
+        )
 
     def test_every_attribute_key_written_in_the_overlay_is_registered(self, overlay_sources):
         """A key on a swept span is still unguarded until something else checks it.
@@ -735,9 +787,13 @@ class TestOwnedSpanCoverage:
         Coverage is not expected to reach 1.00, for two reasons that are not
         defects. ``llm.request.repetition_penalty`` is registered with no writer
         by design — chatqna never sends the parameter, and two tests pin its
-        absence. Seven ``llm.request.*`` / ``llm.usage.*`` keys are stamped from
-        a module-level table of ``(param, register_key)`` tuples resolved through
-        a loop variable, which a source walk would have to interpret to follow.
+        absence. Seven keys reach a span through a tuple of
+        ``(field, register_key)`` pairs walked by a loop variable, which a source
+        walk would have to interpret rather than read: four in the module-level
+        ``_LLM_REQUEST_PARAM_ATTRS`` (``llm.request.max_tokens``, ``top_p``,
+        ``temperature``, ``frequency_penalty``) and three in a tuple literal
+        inside ``_emit_llm_invoke_usage`` (``llm.usage.prompt_tokens``,
+        ``completion_tokens``, ``total_tokens``).
 
         Both are named in the failure, so the unreadable set stays visible
         instead of becoming an assumption. Were a ninth and tenth key to join

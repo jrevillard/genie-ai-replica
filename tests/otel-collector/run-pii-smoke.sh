@@ -64,7 +64,11 @@ mkdir -p "$STATE_DIR/victoriatraces"
 # 0777 rather than chown because a local test run may not be root.
 chmod 777 "$STATE_DIR" "$STATE_DIR/victoriatraces"
 
-if ! docker info >/dev/null 2>&1; then
+# `docker version`, not `docker info`: the CI runners front the daemon with
+# a socket proxy (default-deny) where GET /info is filtered — `docker
+# version` (/version + /_ping) is always allowed and proves reachability
+# just as well.
+if ! docker version >/dev/null 2>&1; then
   echo "FAIL: docker is not reachable." >&2
   exit 1
 fi

@@ -132,6 +132,8 @@ ingress:
     # deployments that manage keys outside cert-manager.
     enabled: false
     issuerName: ""
+    # ClusterIssuer (cluster-scoped) or Issuer (namespace-scoped).
+    issuerKind: ClusterIssuer
     secretName: ""
   # Cross-origin API access. Empty list = no CORS SecurityPolicy rendered
   # (same-origin deployments — the default topology — need none).
@@ -193,7 +195,10 @@ data:
     # ships it as files/keycloak-themes.tgz (regenerate with
     # `make keycloak-theme` — CI fails on drift), unpacked into
     # /opt/keycloak/themes/<theme> by an initContainer because the
-    # Keycloak CR has no volume surface.
+    # Keycloak CR has no volume surface. MUST match the theme directory
+    # at the tarball root (themes/<theme>/) — a rename here without
+    # regenerating the tarball from a matching tree leaves Keycloak
+    # theme-less.
     theme: genie
     # Image that unpacks the theme tarball in the Keycloak pod's
     # initContainer. Needs tar(1) with gzip + --strip-components

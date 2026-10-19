@@ -381,15 +381,6 @@ def _stamped_under_a_positive_timeout_guard(func: ast.AST) -> bool:
             guarded |= {id(n) for n in ast.walk(stmt) if id(n) in stamps}
     return guarded == stamps
 
-    for node in ast.walk(func):
-        if not isinstance(node, ast.If):
-            continue
-        if not (isinstance(node.test, ast.Call) and _called_name(node.test.func) == "_is_timeout"):
-            continue
-        if any(stamp in ast.walk(node) for stamp in stamps):
-            return True
-    return False
-
 
 class TestCallSitesConsumeThePolicy:
     """Every model-endpoint client in the overlay is built with a budget.
@@ -487,12 +478,30 @@ class TestCallSitesConsumeThePolicy:
             )
 
     def test_retriever_timeouts_come_from_the_policy(self):
+        """Each retriever client resolves to the constant that fits its fallback.
+
+        Deliberately per-constructor rather than "some policy name": the
+        summarizer and the embedding client must NOT share a constant. They have
+        opposite failure shapes — a summarizer timeout re-raises out of
+        retrieve() and becomes a 500, an embedding timeout returns an empty
+        result set — and only one of them can afford the 180 s the LLM budget
+        carries. A guard that accepted either name at either site would have
+        passed while the summarizer sat on the tighter, wrong budget.
+        """
         source = OVERLAY_ROOT / "retriever" / "genieai_retriever_arangodb.py"
+        expected = {
+            "ChatOpenAI": "SUMMARIZER_TIMEOUT_SECONDS",
+            "OpenAIEmbeddings": "EMBEDDING_TIMEOUT",
+        }
         calls = _constructors(source, "ChatOpenAI", "OpenAIEmbeddings")
         for call in calls:
+            ctor = ast.unparse(call.func)
             names = _source_names(_kwarg(call, "timeout"))
-            assert names & {"VLLM_TIMEOUT", "EMBEDDING_TIMEOUT"}, (
-                f"{ast.unparse(call.func)} timeout does not resolve to the shared policy: {names or 'not set'}"
+            want = expected[ctor]
+            assert want in names, (
+                f"{ctor} timeout does not resolve to {want}: {names or 'not set'}. "
+                f"It must not fall back to {sorted(set(expected.values()) - {want})} — "
+                "that constant is sized for a call with a degradation route, and this one has none"
             )
 
     def test_the_retriever_config_names_rebind_to_the_policy(self):

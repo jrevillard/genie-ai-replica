@@ -238,6 +238,10 @@ ATTRIBUTE_NAMES = {
     # call still in flight are indistinguishable in the trace.
     "dataprep_llm_timed_out": "dataprep.llm.timed_out",
     "dataprep_llm_timeout_seconds": "dataprep.llm.timeout_seconds",
+    # Set on the phase-level span (dataprep.llm.phase) so one trace says which
+    # phase exhausted its budget when a document runs both labelling and
+    # Contextual Retrieval under the same ceiling.
+    "dataprep_llm_phase": "dataprep.llm.phase",
     # Contextual Retrieval — the per-chunk doc-context generation
     "dataprep_contextual_retrieval": "dataprep.contextual_retrieval",
     "dataprep_contextual_strategy": "dataprep.contextual_strategy",

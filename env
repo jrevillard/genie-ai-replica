@@ -266,12 +266,12 @@ HUGGING_FACE_HUB_TOKEN=
 
 # --- Model-endpoint HTTP budgets (optional) ---
 # Per-request timeouts for calls to the LLM and embedding endpoints. Read by
-# every in-repo client (core/model_http_policy.py); the vendored comps that
-# dataprep's graph-transformer uses reads VLLM_TIMEOUT separately, and is the one
-# exception to "every" below. Two clients are deliberately left unbounded: the
+# every in-repo client (core/model_http_policy.py), except the two named below
+# and the vendored comps graph transformer, which has no budget of ours to set. Two clients are deliberately left unbounded: the
 # retriever's HuggingFaceEndpointEmbeddings (a pydantic model whose accepted
 # fields depend on the pinned langchain-huggingface, so passing a timeout it may
-# not declare fails at construction rather than at call time) and its
+# not declare fails at construction rather than at call time — and it is the
+# REMOTE-TEI branch, so a remote-GPU deployment is the one that has it) and its
 # HuggingFaceBgeEmbeddings (in-process, no HTTP hop to bound).
 # Raise these only if your model is genuinely slower than the default allows —
 # on a shared GPU they are what stops a contended endpoint from stalling an
@@ -301,14 +301,27 @@ HUGGING_FACE_HUB_TOKEN=
 #                                 #   Total only. The 5 s connect ceiling the
 #                                 #   openai SDK ships is kept regardless — a GPU
 #                                 #   node that stops answering gives up in 5 s
-#                                 #   rather than the full budget.
+#                                 #   rather than the full budget. Raising it
+#                                 #   for a slower model? Then raise
+#                                 #   DATAPREP_LLM_PHASE_TIMEOUT_SECONDS too —
+#                                 #   the ceiling must stay above
+#                                 #   (1+retries) x this.
 # MODEL_LLM_MAX_RETRIES=2         # SDK-level retries on 408/409/429/5xx and
 #                                 #   connection errors.
-# MODEL_EMBEDDING_TIMEOUT_SECONDS=120   # The retriever's embedding client
-#                                 #   (OpenAI-API branch). NOT the local-TEI
-#                                 #   branch: HuggingFaceEndpointEmbeddings
-#                                 #   there is deliberately unbudgeted, and
+# MODEL_EMBEDDING_TIMEOUT_SECONDS=120   # The retriever's embedding client,
+#                                 #   OpenAI-API branch ONLY. The TEI branch
+#                                 #   (TEI_EMBEDDING_ENDPOINT and HF_TOKEN)
+#                                 #   uses HuggingFaceEndpointEmbeddings and is
+#                                 #   deliberately unbudgeted — and that branch
+#                                 #   is the REMOTE-GPU topology, so on a remote
+#                                 #   deployment this knob does not reach it.
 #                                 #   HuggingFaceBgeEmbeddings is in-process.
+# MODEL_SUMMARIZER_TIMEOUT_SECONDS=600 # The retriever's document summarizer.
+#                                 #   Deliberately NOT tightened to the LLM
+#                                 #   budget: its except clause re-raises
+#                                 #   anything but vLLM input overflow, so a
+#                                 #   timeout becomes a 500 on the chat request.
+#                                 #   600 s is the openai SDK default, kept.
 # MODEL_RERANK_TIMEOUT_SECONDS=300 # TEI rerank. Deliberately NOT tighter than the
 #                                 #   300 s an unconfigured aiohttp session would
 #                                 #   have used: the rerank path has no fallback, so
@@ -342,6 +355,15 @@ HUGGING_FACE_HUB_TOKEN=
 #                                 #   while stragglers are still retrying. Raise
 #                                 #   it for large documents: it is a flat
 #                                 #   ceiling, not an allowance per wave.
+#                                 #   KEEP IT ABOVE (1+MODEL_LLM_MAX_RETRIES)
+#                                 #   x MODEL_LLM_TIMEOUT_SECONDS. Below that,
+#                                 #   the phase cancels calls that were never
+#                                 #   given the chance to be merely slow, and
+#                                 #   labelling degrades to file labels — which
+#                                 #   looks like a labelling-quality regression,
+#                                 #   not a misconfiguration. The defaults leave
+#                                 #   a 60s margin. dataprep warns at startup
+#                                 #   if the ceiling is too low.
 # DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS=60  # how often a running phase reports
 #                                 #   "N/M batches done" to the ingestion log
 #                                 #   (the admin UI reads that log). Raise it to

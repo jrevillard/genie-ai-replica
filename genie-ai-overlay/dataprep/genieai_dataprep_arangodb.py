@@ -318,7 +318,56 @@ LLM_LABEL_TEMPERATURE = float(os.getenv("DATAPREP_LLM_TEMPERATURE", "0.0"))
 # replaces, and the degradation is visible (a WARN naming the phase, a
 # phase_budget_exhausted counter) rather than silent. Raise the budget for
 # deployments with large documents or slower models.
+#
+# THE CONSTRAINT: the ceiling must stay above one batched call's worst case,
+# (1 + LLM_MAX_RETRIES) x LLM_TIMEOUT_SECONDS, or the phase cancels calls that
+# were never given the chance to be slow. At defaults that is 540 s against a
+# 600 s ceiling — a 60 s margin, and the margin is the whole safety band. Both
+# knobs the policy docstring tells operators to turn (raise the per-call budget
+# for a slower model, or raise retries) walk straight through it: 300 s per call
+# is 900, three retries is 720. Since the degradation is indistinguishable from
+# a labelling-quality regression, this is checked at import rather than left to
+# prose in four files an operator may not be reading.
 DATAPREP_LLM_PHASE_TIMEOUT_SECONDS = positive_float_env("DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", default=600.0)
+
+
+# Worst case for one batched call: every attempt at the full per-request budget.
+def _one_batched_call_worst_case(retries: int, per_call_seconds: float) -> float:
+    return (1 + retries) * per_call_seconds
+
+
+def _warn_if_phase_ceiling_too_low(phase_seconds: float, retries: int, per_call_seconds: float) -> bool:
+    """Warn when the phase ceiling cannot outlast one call's retry ladder.
+
+    Takes its arguments rather than reading the module globals so the condition
+    is testable: at import time the values are already fixed, and the case worth
+    testing is the one the shipped defaults never take.
+
+    Returns whether it warned.
+    """
+    worst = _one_batched_call_worst_case(retries, per_call_seconds)
+    if phase_seconds > worst:
+        return False
+    logger.warning(
+        "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS (%.0f s) does not exceed one batched "
+        "LLM call's worst case (%.0f s = (1 + MODEL_LLM_MAX_RETRIES=%d) x "
+        "MODEL_LLM_TIMEOUT_SECONDS=%.0f). Every batched labelling call is "
+        "cancelled by the phase ceiling before it can return, so labelling "
+        "degrades to per-chunk and then to file labels — a symptom that reads "
+        "as a labelling-quality regression rather than as a misconfiguration. "
+        "Raise DATAPREP_LLM_PHASE_TIMEOUT_SECONDS above %.0f s.",
+        phase_seconds,
+        worst,
+        retries,
+        per_call_seconds,
+        worst,
+    )
+    return True
+
+
+_ONE_BATCHED_CALL_WORST_CASE_SECONDS = _one_batched_call_worst_case(LLM_MAX_RETRIES, LLM_TIMEOUT_SECONDS)
+
+_warn_if_phase_ceiling_too_low(DATAPREP_LLM_PHASE_TIMEOUT_SECONDS, LLM_MAX_RETRIES, LLM_TIMEOUT_SECONDS)
 # How often a still-running phase reports progress to the ingestion log. The log
 # is the only channel an operator watches during an ingest (the admin UI reads
 # it), so a phase that is alive but slow has to say so — silence is what made
@@ -683,10 +732,22 @@ async def _safe_log(write_ingestion_log, file_id, level, component, message):
         )
 
 
-async def _settle_and_retrieve(tasks) -> bool:
-    """Wait *tasks* out for the grace window, then drain their outcomes.
+async def _settle_and_retrieve(tasks, *, timeout=None) -> tuple[bool, BaseException | None]:
+    """Wait *tasks* out for *timeout* seconds, then drain their outcomes.
 
-    Returns True if an outer cancellation arrived while the wait was running.
+    Returns ``(interrupted, absorbed)`` — whether an outer cancellation arrived
+    while the wait was running, and the ``CancelledError`` it delivered.
+
+    *timeout* defaults to ``_PHASE_CANCEL_GRACE_SECONDS``, read from the module
+    global at call time rather than as a default argument: a default is bound
+    once when the ``def`` runs, which would freeze the window and quietly
+    ignore a test (or a future operator hook) that retunes it.
+
+    The absorbed exception is returned rather than discarded because a caller
+    that has to raise *something* must raise THAT object. A freshly constructed
+    ``CancelledError`` carries none of the original's identity, so an enclosing
+    ``asyncio.timeout`` cannot recognise its own expiry and reports a generic
+    cancellation instead of ``TimeoutError``.
 
     The wait runs as its own task behind ``asyncio.shield`` because an await in
     a cancellation path is itself cancellable: without the shield, a second
@@ -696,22 +757,21 @@ async def _settle_and_retrieve(tasks) -> bool:
     then be abandoned running, which is the exact outcome the window exists to
     prevent, and worse than the ``asyncio.gather`` this replaced: gather had no
     window to lose.
-
-    The caller re-raises whatever it was already raising; this only reports
-    whether the settle was interrupted.
     """
     tasks = [t for t in tasks if not t.done()]
     if not tasks:
-        return False
-    wait = asyncio.ensure_future(asyncio.wait(tasks, timeout=_PHASE_CANCEL_GRACE_SECONDS))
-    interrupted = False
+        return False, None
+    if timeout is None:
+        timeout = _PHASE_CANCEL_GRACE_SECONDS
+    wait = asyncio.ensure_future(asyncio.wait(tasks, timeout=timeout))
+    absorbed: BaseException | None = None
     while not wait.done():
         try:
             await asyncio.shield(wait)
-        except asyncio.CancelledError:
+        except asyncio.CancelledError as exc:
             # Deliberately swallowed: the settle is the thing we promised, and
             # it has a timeout of its own, so it cannot hold the caller longer
-            # than the grace window regardless of how often we are cancelled.
+            # than the timeout regardless of how often we are cancelled.
             #
             # uncancel() with it. Since 3.11 a task that catches CancelledError
             # to do cleanup is expected to decrement task.cancelling(), because
@@ -720,7 +780,11 @@ async def _settle_and_retrieve(tasks) -> bool:
             # returns normally is how a swallowed deadline stops a timeout from
             # ever firing. Nothing in this overlay wraps an ingest in one today —
             # this is the documented pairing, not a reaction to a live outage.
-            interrupted = True
+            #
+            # Kept rather than dropped: the caller re-raises this exact object so
+            # the signal survives, and an enclosing deadline can still tell it
+            # apart from a kill.
+            absorbed = exc
             current = asyncio.current_task()
             if current is not None:
                 current.uncancel()
@@ -728,10 +792,70 @@ async def _settle_and_retrieve(tasks) -> bool:
         if task.done() and not task.cancelled():
             with suppress(Exception):
                 task.exception()
+    return absorbed is not None, absorbed
+
+
+async def _run_uninterruptible(coro, *, timeout: float, label: str) -> bool:
+    """Run *coro* to completion even if the caller is cancelled meanwhile.
+
+    Returns True if a cancellation was absorbed while it ran.
+
+    For work that destroys data: the kill handler's rollback is a chain of
+    awaits, and a second cancel — which a double-clicked Kill produces, the same
+    re-entrancy ``_settle_and_retrieve`` exists to absorb — used to land on its
+    first await and skip the rest, leaving the document half-retracted with a
+    status that never reached "Killed". The window bounds how long that can
+    hold the caller; past it the coroutine is left running rather than killed,
+    because an overrunning rollback is recoverable and an interrupted one is not.
+    """
+    task = asyncio.ensure_future(coro)
+    interrupted, _ = await _settle_and_retrieve([task], timeout=timeout)
+    if not task.done():
+        logger.error(
+            f"{label} did not finish within {timeout:g}s and is still running; "
+            "it was left to complete rather than cancelled"
+        )
     return interrupted
 
 
+# How long the kill switch's rollback may hold a cancelled ingest. Long enough
+# for the full cascade — chunks, edges, orphans — plus the status flip, on a
+# loaded database. Only reached when an operator cancels the same ingest twice.
+_ROLLBACK_CANCEL_GRACE_SECONDS = 60.0
+
+
 async def _gather_with_phase_budget(
+    tasks: list, *, phase: str, phase_label: str, total: int, file_id: str, write_ingestion_log
+) -> tuple[list, bool]:
+    """Run *tasks* concurrently under a wall-clock bound, reporting progress.
+
+    Wraps ``_gather_with_phase_budget_inner`` in a span, because the phase-bound
+    path is the one that had no span to write to. ``dataprep.llm.timed_out`` is
+    emitted from the per-call timeout handler inside a batch; a batch cancelled
+    by the phase ceiling never raises, so that handler never runs and the
+    attribute stayed dark on exactly the scenario the MR exists for — 65
+    batched calls, none returned, none failed. The ceiling needs its own span
+    to be observable at all.
+    """
+    # Literal span name: the attribute sweep derives span coverage by reading
+    # names out of the source, so an f-string here is invisible to it and would
+    # make this span untracked. The phase goes on as an attribute instead.
+    with background_span("dataprep.llm.phase") as span:
+        results, timed_out = await _gather_with_phase_budget_inner(
+            tasks,
+            phase=phase,
+            phase_label=phase_label,
+            total=total,
+            file_id=file_id,
+            write_ingestion_log=write_ingestion_log,
+        )
+        span.set_attribute(ATTRIBUTE_NAMES["dataprep_llm_phase"], phase_label)
+        span.set_attribute(ATTRIBUTE_NAMES["dataprep_llm_timed_out"], timed_out)
+        span.set_attribute(ATTRIBUTE_NAMES["dataprep_llm_timeout_seconds"], DATAPREP_LLM_PHASE_TIMEOUT_SECONDS)
+    return results, timed_out
+
+
+async def _gather_with_phase_budget_inner(
     tasks: list, *, phase: str, phase_label: str, total: int, file_id: str, write_ingestion_log
 ) -> tuple[list, bool]:
     """Run *tasks* concurrently under a wall-clock bound, reporting progress.
@@ -924,7 +1048,7 @@ async def _gather_with_phase_budget(
             # dataprep log during exactly the contended-GPU incidents this work
             # exists to make diagnosable. gather retrieved every child; this
             # restores that without giving up the bounded settle.
-            settle_interrupted = await _settle_and_retrieve(pending)
+            settle_interrupted, absorbed_cancel = await _settle_and_retrieve(pending)
 
     if settle_interrupted and failure is None:
         # The settle absorbed a cancellation, and this path has no exception of
@@ -933,12 +1057,28 @@ async def _gather_with_phase_budget(
         # returns a normal (results, timed_out) tuple for an ingest the kill
         # endpoint has already reported as killed: the caller falls back, logs a
         # budget warning, and carries on writing the document.
-        raise asyncio.CancelledError()
+        # Re-raise the object the cancellation actually delivered. A fresh
+        # CancelledError would carry none of its identity, and an enclosing
+        # asyncio.timeout that expires inside this window could not tell its own
+        # expiry from a kill.
+        raise absorbed_cancel
 
     if failure is not None:
         # A batch that raised is an error the phase's caller already knows how
         # to fall back from; swallowing it here would turn a visible failure
         # into a silently degraded document.
+        #
+        # An absorbed cancellation does not displace it, but it is not silent
+        # either: without this the same situation logged a warning in
+        # _await_with_heartbeat and vanished here, so an operator who cancelled
+        # a failing phase saw "Ingestion Error" with no record that a kill had
+        # been requested. The failure wins because it is the more specific
+        # cause; the cancellation is recorded so the other is not lost.
+        if settle_interrupted:
+            logger.warning(
+                f"{phase}: cancelled externally while settling a failed batch; "
+                "reporting the batch failure, which is the more specific cause"
+            )
         raise failure
 
     if abandoned:
@@ -1034,7 +1174,7 @@ async def _await_with_heartbeat(tasks: list, *, phase: str, total: int, file_id:
                 # exactly the abandoned-batch outcome described above.
                 for task in pending:
                     task.cancel()
-                interrupted = await _settle_and_retrieve(pending)
+                interrupted, _absorbed = await _settle_and_retrieve(pending)
                 if interrupted:
                     # An external cancellation during the settle does not replace
                     # the failure. The document is retracted either way, but the
@@ -1070,7 +1210,7 @@ async def _await_with_heartbeat(tasks: list, *, phase: str, total: int, file_id:
         # document the admin UI shows as Killed, and served to the retriever.
         for task in pending:
             task.cancel()
-        await _settle_and_retrieve(pending)
+        _, _absorbed = await _settle_and_retrieve(pending)
         raise
 
 
@@ -2449,12 +2589,14 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     # wedged graph phase is just as silent as the LLM phases
                     # were and the whole point is that it is visible.
                     #
-                    # Its clients are not ours to bound: the embedding half runs
-                    # inside the vendored comps dataprep (bounded only through
-                    # VLLM_TIMEOUT, which reaches the LLM client but not the TEI
-                    # one — see OVERRIDES.yaml), and the ArangoDB writes go
-                    # through langchain-arangodb / py-arango, which carry their
-                    # own socket timeouts and take no HTTP budget.
+                    # Its clients are not ours to bound. The embedding half runs
+                    # inside the vendored comps dataprep, which reads VLLM_TIMEOUT
+                    # from a bare os.getenv — so a value would reach httpx as a
+                    # string, which 0.28 does not coerce, and the client raises
+                    # TypeError instead of timing out. That is why no compose
+                    # line injects it (see OVERRIDES.yaml). The ArangoDB writes
+                    # go through langchain-arangodb / py-arango, which carry
+                    # their own socket timeouts and take no HTTP budget.
                     if tasks:
                         await _await_with_heartbeat(
                             tasks,
@@ -2500,20 +2642,24 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     kill_msg = f"Ingestion for {input.file_id} was KILLED by an administrator. Rolling back..."
                     logger.warning(kill_msg)
 
-                    # Log the termination event
-                    await self._write_ingestion_log(
-                        input.file_id, "WARN", "System", "Ingestion process killed. Starting cleanup..."
+                    # The rollback runs uninterruptible. This handler is a chain of
+                    # awaits, and an await inside a cancellation path is itself
+                    # cancellable: a second task.cancel() — a double-clicked Kill,
+                    # which this endpoint allows, or a shutdown sweep — used to land
+                    # on the first await and skip the rest. The result was a
+                    # document with its chunks half-deleted, still served to the
+                    # retriever, and a status that never reached "Killed" because
+                    # the flip was after the retracted cascade.
+                    interrupted = await _run_uninterruptible(
+                        self._rollback_killed_ingest(input.file_id, getattr(input, "graph_name", "GRAPH")),
+                        timeout=_ROLLBACK_CANCEL_GRACE_SECONDS,
+                        label=f"rollback of {input.file_id}",
                     )
-
-                    # Perform graceful rollback (retraction)
-                    await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH"))
-
-                    # Set final status to "Killed" as per state machine specification
-                    await self._update_doc_status(input.file_id, "Killed")
-
-                    await self._write_ingestion_log(
-                        input.file_id, "INFO", "System", "Cleanup complete. Document state set to Killed."
-                    )
+                    if interrupted:
+                        logger.warning(
+                            f"{input.file_id}: cancelled again during the kill rollback; "
+                            "the rollback was allowed to finish anyway"
+                        )
                     raise  # Re-raise to ensure the task terminates properly
 
                 except Exception as e:
@@ -2538,6 +2684,19 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             if lock_file:
                 fcntl.flock(lock_file, fcntl.LOCK_UN)
                 lock_file.close()
+
+    async def _rollback_killed_ingest(self, file_id: str, graph_name: str) -> None:
+        """Undo a killed ingest: retract what was written, then mark it Killed.
+
+        Split out of the ``except asyncio.CancelledError`` block so the whole
+        sequence can be handed to ``_run_uninterruptible`` as one unit. Inline,
+        a second cancellation could abort it between any two steps; as a single
+        coroutine, nothing lands inside it.
+        """
+        await self._write_ingestion_log(file_id, "WARN", "System", "Ingestion process killed. Starting cleanup...")
+        await self.retract_file(file_id=file_id, graph_name=graph_name)
+        await self._update_doc_status(file_id, "Killed")
+        await self._write_ingestion_log(file_id, "INFO", "System", "Cleanup complete. Document state set to Killed.")
 
     async def retract_file(self, file_id: str, graph_name: str):
         """

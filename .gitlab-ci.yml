@@ -771,7 +771,7 @@ contract:dataprep-arango:
   variables:
     IMAGE_NAME: "genie-ai-dataprep-arango"
     # Dataprep-capable suite: ingest smoke + ingest budget (chunker-dependent).
-    CONTRACT_TEST_PATTERN: "test_contract_ingest.py test_contract_nfrp_budgets.py::test_ingest_wall_clock_within_budget"
+    CONTRACT_TEST_PATTERN: "test_contract_ingest.py test_contract_nfrp_budgets.py::test_ingest_wall_clock_within_budget test_contract_http_budget.py"
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never

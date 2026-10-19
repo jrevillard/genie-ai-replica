@@ -60,6 +60,7 @@ OWNED_SPAN_NAMES = {
     "dataprep.llm.context_chunk",
     "dataprep.llm.context_doc",
     "dataprep.llm.label_batch",
+    "dataprep.llm.phase",
     "dataprep.llm.label_chunk",
     "dataprep.log_environment_variables",
     "dataprep.retract",
@@ -161,7 +162,7 @@ class TestVocabularyShape:
         # forbid adding a key — a bounded-timeout trace needs a key that
         # distinguishes "hit the budget" from "still running". Bump this with
         # the addition it accounts for.
-        assert len(ATTRIBUTE_NAMES) == 82
+        assert len(ATTRIBUTE_NAMES) == 83
 
 
 class TestLegacyAttributeNames:
@@ -256,7 +257,7 @@ class TestLegacyAttributeNames:
     def test_registering_the_backlog_did_not_inflate_the_vocabulary(self):
         # See test_vocabulary_entry_count_is_pinned — raised 80 → 82 alongside the
         # two timeout attributes, not by the legacy sweep.
-        assert len(ATTRIBUTE_NAMES) == 82
+        assert len(ATTRIBUTE_NAMES) == 83
         assert len(LEGACY_ATTRIBUTE_NAMES) == 21
 
 

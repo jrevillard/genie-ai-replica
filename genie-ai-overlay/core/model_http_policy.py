@@ -45,7 +45,7 @@ be configured from this repository:
 * the dataprep graph-transformer (``LLMGraphTransformer`` inside
   ``OpeaArangoDataprep``, invoked once per ingested document).
 
-The embedding and textgen images carry no Python at all — the TEI embedding
+The embedding and textgen images carry no overlay code at all — the TEI embedding
 microservice and the streaming textgen path live entirely inside the upstream
 ``opea/*:1.5`` base images.
 
@@ -175,6 +175,19 @@ LLM_TIMEOUT_SECONDS = positive_float_env("MODEL_LLM_TIMEOUT_SECONDS", "VLLM_TIME
 # own. Set MODEL_LLM_MAX_RETRIES=0 to cap the worst case instead.
 LLM_MAX_RETRIES = non_negative_int_env("MODEL_LLM_MAX_RETRIES", default=2)
 
+# The retriever's document summarizer, a ChatOpenAI with no fallback: its
+# except clause degrades only vLLM input overflow and re-raises everything
+# else, so a timeout propagates out of retrieve() and the microservice maps it
+# to a 500 on the user's chat request.
+#
+# Its budget is therefore the openai default, 600 s, and is NOT lowered to
+# LLM_TIMEOUT_SECONDS — the exact defect round six found and fixed on the
+# reranker, which would have been repeated here. Shortening a no-fallback call
+# below the value the library already applies does not bound a stall, it
+# converts a slow-but-successful summarization into a visible error. The knob
+# exists so a deployment that wants a hard ceiling can set one deliberately.
+SUMMARIZER_TIMEOUT_SECONDS = positive_float_env("MODEL_SUMMARIZER_TIMEOUT_SECONDS", default=600.0)
+
 # Embedding, on the retriever's OpenAI-compatible embedding client. Named for
 # what it bounds rather than for TEI: the local-TEI branch is
 # HuggingFaceEndpointEmbeddings, which is left unbudgeted on purpose (pydantic
@@ -182,27 +195,47 @@ LLM_MAX_RETRIES = non_negative_int_env("MODEL_LLM_MAX_RETRIES", default=2)
 # it does not reach. 120 s leaves room for queueing behind a shared endpoint
 # without treating normal contention as failure.
 #
-# No degradation route here, unlike the labelling budgets: a timeout on this
-# client propagates out of the retrieval request. It is bounded because it was
-# previously unbounded, not because failing cheap is an option — raise it for a
-# slow endpoint rather than lowering it.
+# Read the exemption carefully: it is the REMOTE branch. `TEI_EMBEDDING_ENDPOINT
+# and HF_TOKEN` is the remote-GPU topology, so on exactly the deployment that
+# produced the original stall this knob does NOT apply and the embedding call is
+# unbounded. MODEL_EMBEDDING_TIMEOUT_SECONDS covers the OpenAI-API branch only.
+#
+# No degradation route here, unlike the labelling budgets. A timeout on this
+# client is caught by the retriever and returns an EMPTY result set — not a
+# sparse/BM25 fallback, because the `return []` short-circuits before the hybrid
+# leg is ever reached. So hitting this budget costs the retrieval entirely, and
+# surfaces as one logger.error line and a silently empty answer.
+#
+# That makes it the same shape as the reranker, and it is bounded for the same
+# reason: it was previously unbounded, not because failing cheap is available.
+# Raise it for a slow endpoint rather than lowering it.
 EMBEDDING_TIMEOUT_SECONDS = positive_float_env("MODEL_EMBEDDING_TIMEOUT_SECONDS", default=120.0)
 
 # TEI RERANK is budgeted separately and, at its default, no tighter than the
 # 300 s aiohttp would have applied anyway — deliberately.
 #
-# Every other budget in this module sits on a call that degrades: dataprep's
-# labelling falls back to file labels, Contextual Retrieval to the raw chunk,
-# embedding to the sparse channel. The reranker has no such path. Its timeout
-# propagates out of `invoke`, the microservice maps it to a 500, and the user's
-# chat request fails outright. For that one call a short budget does not bound a
-# stall gracefully, it converts a slow-but-successful rerank into a visible
-# error — so tightening it below the default is a regression, not a fix.
+# Three budgets in this module sit on calls with no degradation route, and they
+# are treated the same way: bounded, configurable, and NOT tightened below what
+# the library already applied.
 #
-# The budget still exists, and is still configurable: it turns an unbounded wait
+#   reranker    timeout propagates out of `invoke`; microservice maps it to a
+#               500 and the chat request fails.
+#   embedding   timeout is caught and returns an EMPTY result set; the
+#               `return []` short-circuits before the BM25 leg, so there is no
+#               sparse fallback — one logger.error and a silently empty answer.
+#   summarizer  timeout propagates out of retrieve(); microservice maps it to a
+#               500.
+#
+# For each, a short budget does not bound a stall gracefully — it converts a
+# slow-but-successful call into a visible error or a silent empty result. That
+# is a regression, not a fix. The budget still exists: it turns an unbounded wait
 # into a bounded failure, which is better than neither. What it must not do is
-# fail faster than the library already would. Lower it deliberately, not by
-# default, once the rerank path has a degradation route.
+# fail faster than the library already would. Lower any of the three
+# deliberately, not by default, once its path has a degradation route.
+#
+# Everything else in this module does sit on a call that degrades: dataprep's
+# labelling falls back to file labels, Contextual Retrieval to the raw chunk,
+# the control-plane calls to a logged failure.
 RERANK_TIMEOUT_SECONDS = positive_float_env("MODEL_RERANK_TIMEOUT_SECONDS", default=300.0)
 
 # Control-plane calls (Keycloak token refresh, ingestion-log writes, doc status

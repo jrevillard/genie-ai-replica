@@ -1371,6 +1371,9 @@ services:
       MODEL_LLM_TIMEOUT_SECONDS: ${MODEL_LLM_TIMEOUT_SECONDS:-180}
       MODEL_LLM_MAX_RETRIES: ${MODEL_LLM_MAX_RETRIES:-2}
       MODEL_EMBEDDING_TIMEOUT_SECONDS: ${MODEL_EMBEDDING_TIMEOUT_SECONDS:-120}
+      # Deliberately 600, the openai default: the summarizer has no fallback
+      # path, so its ceiling is not tightened the way the LLM budgets are.
+      MODEL_SUMMARIZER_TIMEOUT_SECONDS: ${MODEL_SUMMARIZER_TIMEOUT_SECONDS:-600}
     networks:
       - genieai_network
     healthcheck:

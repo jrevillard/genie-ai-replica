@@ -944,9 +944,15 @@ class TestLabelWithLlm:
         ):
             await dp._label_with_llm(["chunk"], ["Healthcare"], [], "file1")
 
-        ws.assert_called_once()
-        assert ws.call_args.args[0] == "dataprep.llm.label_chunk"
-        assert ws.call_args.kwargs["attributes"]["dataprep.chunk_index"] == 0
+        # Two spans now open around a labelling phase: the phase-level one that
+        # carries the budget outcome, and one label_chunk per call. This test is
+        # about the second, so it selects it rather than asserting a total.
+        label_chunk_calls = [c for c in ws.call_args_list if c.args[0] == "dataprep.llm.label_chunk"]
+        assert len(label_chunk_calls) == 1, [c.args[0] for c in ws.call_args_list]
+        assert label_chunk_calls[0].kwargs["attributes"]["dataprep.chunk_index"] == 0
+        # The phase span is what makes a budget exhaustion visible; without it
+        # the whole incident this policy exists for leaves no span trace.
+        assert [c.args[0] for c in ws.call_args_list].count("dataprep.llm.phase") == 1
 
     @pytest.mark.asyncio
     async def test_failed_attempt_logs_exception_reason(self, monkeypatch):

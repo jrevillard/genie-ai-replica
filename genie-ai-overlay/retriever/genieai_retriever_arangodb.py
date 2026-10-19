@@ -22,7 +22,7 @@ from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from core.model_cache import get_model_id
-from core.model_http_policy import LLM_MAX_RETRIES, http_timeout
+from core.model_http_policy import LLM_MAX_RETRIES, SUMMARIZER_TIMEOUT_SECONDS, http_timeout
 from core.span_attrs import ATTRIBUTE_NAMES as A
 from core.span_attrs import QUERY_ID_KEY, label_digest, query_id_from_baggage
 from tracing import (
@@ -526,12 +526,16 @@ class GenieaiArangoRetriever(OpeaComponent):
                     # Budgeted but not retry-capped: same reasoning as the
                     # OpenAI embeddings branch above — this is a third-party
                     # endpoint, and MODEL_LLM_MAX_RETRIES is the shared GPU's
-                    # knob, not this one's.
+                    # knob, not this one's. Summarizer budget, not LLM_*: this
+                    # call has no fallback (its except clause re-raises
+                    # anything but vLLM input overflow, so a timeout becomes a
+                    # 500 on the chat request), which is why the default stays
+                    # at the openai default rather than at LLM_TIMEOUT.
                     self.llm = ChatOpenAI(
                         temperature=OPENAI_CHAT_TEMPERATURE,
                         model=OPENAI_CHAT_MODEL,
                         max_tokens=OPENAI_CHAT_MAX_TOKENS,
-                        timeout=http_timeout(VLLM_TIMEOUT),
+                        timeout=http_timeout(SUMMARIZER_TIMEOUT_SECONDS),
                     )
                     self._llm_model_id = OPENAI_CHAT_MODEL
                 except openai.error.AuthenticationError:
@@ -571,7 +575,14 @@ class GenieaiArangoRetriever(OpeaComponent):
             temperature=VLLM_TEMPERATURE,
             max_tokens=VLLM_MAX_NEW_TOKENS,
             top_p=VLLM_TOP_P,
-            timeout=http_timeout(VLLM_TIMEOUT),
+            # Not LLM_TIMEOUT_SECONDS: no degradation route on this call, so
+            # the ceiling stays at the openai default. See
+            # core/model_http_policy.py SUMMARIZER_TIMEOUT_SECONDS.
+            #
+            # Imported unaliased on purpose: the AST call-site guard resolves a
+            # client's timeout back to the policy constant by name, and an
+            # `as` clause hides the constant from it.
+            timeout=http_timeout(SUMMARIZER_TIMEOUT_SECONDS),
             max_retries=LLM_MAX_RETRIES,
         )
 

@@ -113,17 +113,41 @@ def test_the_vendored_graph_transformer_reads_vllm_timeout(comps):
     )
 
 
+def _overlay_dataprep_source() -> str:
+    """The dataprep entry point, whether or not a repo tree is mounted.
+
+    In-image the suite is copied to ``/contracts`` and the service lands at
+    ``/app/comps/dataprep/src/integrations/``; repo-side it is the source tree.
+    Returns "" when neither is there, and the caller skips — the compose
+    assertions above already establish that no `environment:` entry carries
+    VLLM_TIMEOUT, so this cannot rescue a regression on its own, but the file
+    must not raise FileNotFoundError in a venue it was not written for.
+    """
+    candidates = [
+        _overlay_root() / "dataprep" / "genieai_dataprep_arangodb.py",
+        Path("/app/comps/dataprep/src/integrations/genieai_dataprep_arangodb.py"),
+    ]
+    for path in candidates:
+        if path.is_file():
+            return path.read_text(encoding="utf-8")
+    return ""
+
+
 def test_the_overlay_runs_that_module_in_process():
     """The var has to reach the process that builds the transformer.
 
-    Without this, both halves below could hold and the budget would still not
-    apply: a service that shells out, or points at a remote dataprep, would read
-    its own environment rather than the one compose configured.
+    Without this, the reader could exist in comps and the dataprep image could
+    still get its graph phase from a remote service — in which case nothing
+    injected into this container would bound it.
     """
-    source = (_overlay_root() / "dataprep" / "genieai_dataprep_arangodb.py").read_text(encoding="utf-8")
+    source = _overlay_dataprep_source()
+    if not source:
+        import pytest
+
+        pytest.skip("dataprep entry point not mounted here")
     assert re.search(r"from\s+comps\.dataprep[.\w]*\s+import|import\s+comps\.dataprep", source), (
         "the overlay no longer imports comps.dataprep directly — if the graph transformer moved "
-        "to a remote service, VLLM_TIMEOUT injected into this container no longer bounds it"
+        "to a remote service, the vendored VLLM_TIMEOUT reader in this container is inert"
     )
 
 

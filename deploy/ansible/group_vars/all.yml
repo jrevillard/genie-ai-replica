@@ -151,26 +151,47 @@ keycloak_ssl_skip_verify: ""
 # that misses its budget falls back (file labels, raw chunk) rather than
 # blocking, so a budget set too low degrades quality instead of stalling.
 #   model_llm_timeout_seconds: 180        # vLLM chat completions. Raise if
-#                                         #   labelling exceeds it on a slow model.
+#                                         #   labelling exceeds it on a slow model
+#                                         #   — but see dataprep_llm_phase_timeout_seconds
+#                                         #   below: the phase ceiling must stay
+#                                         #   above (1 + retries) x this.
 #   model_llm_max_retries: 2              # SDK retries on 5xx / connection errors
-#   model_embedding_timeout_seconds: 120  # the retriever's embedding client
-#                                         #   (OpenAI-API branch). NOT the local
-#                                         #   TEI branch, which is deliberately
-#                                         #   unbudgeted.
+#   model_summarizer_timeout_seconds: 600 # retriever summarizer. Deliberately NOT
+#                                         #   shortened from the openai default: no
+#                                         #   fallback path, so a tighter budget
+#                                         #   turns a slow success into a 500 on the
+#                                         #   chat request.
+#   model_embedding_timeout_seconds: 120  # the retriever's embedding client,
+#                                         #   OpenAI-API branch ONLY. The TEI
+#                                         #   branch (TEI_EMBEDDING_ENDPOINT and
+#                                         #   HF_TOKEN) is deliberately unbudgeted
+#                                         #   — and that is the REMOTE-GPU branch,
+#                                         #   so this knob does not reach it.
 #   model_rerank_timeout_seconds: 300     # TEI rerank — no fallback path, so a
 #                                         #   tighter budget turns slow successes
 #                                         #   into 500s on the chat request
 #   model_control_plane_timeout_seconds: 30  # Keycloak token refresh, doc-repo calls
-#   vllm_timeout                          # DO NOT SET. Left undefined on
-#                                         #   purpose: the vendored comps graph
-#                                         #   transformer reads this verbatim
-#                                         #   from os.getenv, so a value reaches
-#                                         #   httpx as a string, httpx 0.28 does
-#                                         #   not coerce it, and the client raises
-#                                         #   TypeError instead of timing out.
 #   dataprep_llm_phase_timeout_seconds: 600   # wall clock for a whole LLM phase
+#                                         #   CONSTRAINT: must stay above
+#                                         #   (1 + model_llm_max_retries) x
+#                                         #   model_llm_timeout_seconds (540 s at
+#                                         #   the defaults above). Below it, the
+#                                         #   phase cancels calls that were never
+#                                         #   given a chance to be merely slow, and
+#                                         #   labelling degrades to file labels —
+#                                         #   which reads as a labelling-quality
+#                                         #   regression, not a misconfiguration.
+#                                         #   dataprep warns at startup if violated.
 #   dataprep_llm_progress_interval_seconds: 60  # how often a phase reports to the
 #                                         #   document ingestion log the admin UI reads
+#
+# There is deliberately no `vllm_timeout` knob, and there must not be one added
+# back. The vendored comps graph transformer reads VLLM_TIMEOUT verbatim from
+# os.getenv, so a value reaches httpx as a string; httpx 0.28 does not coerce it
+# and the client raises TypeError instead of timing out. The graph phase keeps
+# comps' own int 600 s default. No template line can reach it in any case —
+# compose forwards only keys a service declares in `environment:` — so a knob
+# here would be rendered and silently dropped.
 # Contextual Retrieval (default ON since v1.5) — per-chunk LLM doc-context prefix
 # prepended before embedding + labeling (Anthropic-style). Adds one vLLM
 # call/chunk at ingest; never blocks ingestion (raw-chunk fallback). Override in

@@ -13,6 +13,7 @@ cover the three properties the ingest depends on: the phase finishes on time,
 it reports while it runs, and it degrades rather than raising.
 """
 
+import ast
 import asyncio
 import sys
 import time
@@ -331,6 +332,7 @@ class TestFailedTaskCleansUpAfterItself:
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
 
         cancelled = []
+        observed = []
 
         async def scenario():
             async def boom():
@@ -353,9 +355,18 @@ class TestFailedTaskCleansUpAfterItself:
                     file_id="f1",
                     write_ingestion_log=_noop_log,
                 )
+            # Sampled INSIDE the loop, immediately after the phase raised.
+            # asyncio.run's shutdown cancels whatever is still pending, so an
+            # observation taken after it returns would see the stragglers
+            # cancelled by the loop and pass with the phase's own cancel loop
+            # deleted — which is the mutation this test exists to catch.
+            observed.append(len(cancelled))
 
         _run(scenario())
-        assert len(cancelled) == 2, "the in-flight siblings were left running after the phase raised"
+        assert observed == [2], (
+            "the in-flight siblings were left running after the phase raised: "
+            f"saw {observed} cancelled inside the loop, expected 2"
+        )
 
     def test_the_phase_deadline_is_reached_despite_a_failed_batch(self, monkeypatch):
         """The raise must not become a new way to hang.
@@ -366,6 +377,9 @@ class TestFailedTaskCleansUpAfterItself:
         """
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 5.0)
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+        # Pinned so the ceiling below tracks the helper's settle window instead
+        # of the production constant, which is the same 5 s the assertion uses.
+        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
 
         async def scenario():
             async def boom():
@@ -373,7 +387,17 @@ class TestFailedTaskCleansUpAfterItself:
                 raise RuntimeError("boom")
 
             async def wedged():
-                await asyncio.sleep(30)
+                # Swallows the cancellation. With a cancellable sleep the settle
+                # window is invisible — asyncio.wait returns the instant the task
+                # takes its cancel — so this test could not tell a bounded
+                # settle from an unbounded one, which is the only thing it
+                # asserts. This shape makes the window load-bearing: unbounded,
+                # the phase sits here for 6 s and blows the 5 s ceiling.
+                try:
+                    await asyncio.sleep(30)
+                except asyncio.CancelledError:
+                    await asyncio.sleep(6.0)
+                    raise
 
             loop = asyncio.get_running_loop()
             started = loop.time()
@@ -443,14 +467,38 @@ class TestProgressIntervalCannotBeSilenced:
         assert positive_float_env("DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", default=600.0) == expected
 
     def test_dataprep_uses_the_shared_parser(self):
-        """The knobs must actually route through it, not a local ``float()``."""
+        """Each knob routes through it, by call shape rather than by substring.
+
+        ``"positive_float_env" in source`` is satisfied by the import line alone:
+        swap every call site for a local helper and the assertion still reads
+        green while the validation the parser exists to provide is gone. Parsed
+        instead, so a call is only credited to the real parser.
+        """
         source = (OVERLAY_ROOT / "dataprep" / "genieai_dataprep_arangodb.py").read_text(encoding="utf-8")
-        assert "positive_float_env" in source, (
-            "dataprep must import the shared parser — a local float(os.getenv(...)) "
-            "reintroduces the startup crash and the accepted-zero budget"
+        tree = ast.parse(source)
+        from_shared = set()
+        from_getenv = set()
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            first = node.args[0] if node.args and isinstance(node.args[0], ast.Constant) else None
+            env_name = first.value if first is not None and isinstance(first.value, str) else None
+            if not env_name or not env_name.startswith("DATAPREP_LLM_"):
+                continue
+            func = node.func
+            called = func.id if isinstance(func, ast.Name) else getattr(func, "attr", "")
+            if called == "positive_float_env":
+                from_shared.add(env_name)
+            elif called in {"float", "int"}:
+                from_getenv.add(env_name)
+
+        knobs = {"DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS"}
+        assert knobs <= from_shared, (
+            "these knobs no longer route through positive_float_env — a local "
+            f"float(os.getenv(...)) reintroduces the startup crash and the accepted-zero budget: "
+            f"{sorted(knobs - from_shared)}"
         )
-        assert 'float(os.getenv("DATAPREP_LLM_PHASE_TIMEOUT_SECONDS"' not in source
-        assert 'float(os.getenv("DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS"' not in source
+        assert not (knobs & from_getenv), f"a knob is parsed straight from the env again: {sorted(knobs & from_getenv)}"
 
 
 class TestPhaseBudgetIsSizedAgainstOneBatchTask:
@@ -701,15 +749,48 @@ class TestFailureSeenDuringAHeartbeatEndsThePhase:
     them, which is the delay this whole mechanism exists to prevent.
     """
 
+    def test_every_batch_settling_at_once_exits_the_heartbeat_cleanly(self, monkeypatch):
+        """The success path must return, not loop into an empty ``asyncio.wait``.
+
+        ``asyncio.wait`` raises ``ValueError: Set of Tasks/Futures is empty``
+        rather than returning, so any loop that re-enters its wait with nothing
+        pending dies with that instead of a result. The four other tests on this
+        helper all end on an exception — a failure or a cancellation — which
+        raises out of the loop before the next iteration, so they cannot see it.
+
+        This one drives the phase to a normal completion, where the last
+        ``asyncio.wait`` drains every task and the loop condition is all that
+        stands between the helper and one more empty wait.
+        """
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 5.0)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+
+        async def scenario():
+            async def batch(i):
+                # Same wake-up tick for every task, so the first wait drains all
+                # of them in one go rather than one per iteration.
+                await asyncio.sleep(0.01)
+                return i
+
+            await dataprep._await_with_heartbeat(
+                [asyncio.ensure_future(batch(i)) for i in range(3)],
+                phase="Graph insertion",
+                total=3,
+                file_id="f1",
+                write_ingestion_log=_noop_log,
+            )
+
+        _run(scenario())
+
     def test_a_lone_failing_batch_surfaces_its_own_error(self, monkeypatch):
         """One failing task, no siblings: the real error must reach the caller.
 
         A document with fewer chunks than BATCH_SIZE produces exactly one
-        graph-insertion task, so the failure path runs with ``pending`` empty —
-        and ``asyncio.wait`` on an empty set raises ``ValueError`` instead of
-        returning. Unguarded, the ingest log and the document status reported
-        "Set of Tasks/Futures is empty" and the ArangoDB error underneath it
-        was never surfaced anywhere.
+        graph-insertion task, so the failure path runs with ``pending`` empty.
+        The protection is the loop's own ``while pending:`` condition, which
+        exits before the empty-set wait; without it the ingest log and the
+        document status reported "Set of Tasks/Futures is empty" and the
+        ArangoDB error underneath it was never surfaced anywhere.
         """
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 5.0)
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
@@ -747,7 +828,22 @@ class TestFailureSeenDuringAHeartbeatEndsThePhase:
                 raise RuntimeError("vLLM rejected the prompt")
 
             async def sibling():
-                await asyncio.sleep(30)
+                # Swallows the cancellation instead of returning on it. With a
+                # plain cancellable sleep the settle window is invisible here —
+                # asyncio.wait returns the moment the task takes its cancel —
+                # so this test could not tell a bounded settle from an unbounded
+                # one, while its assertion and the comment below both claim
+                # otherwise. This shape makes the window load-bearing: remove
+                # the timeout from _settle_and_retrieve and the phase sits here
+                # for 30 s.
+                try:
+                    await asyncio.sleep(30)
+                except asyncio.CancelledError:
+                    # Unwinds for LONGER than this test's 2 s ceiling, and
+                    # longer than the 0.2 s settle window: bounded, the phase
+                    # gives up and returns; unbounded, it sits here and fails.
+                    await asyncio.sleep(3.0)
+                    raise
 
             loop = asyncio.get_running_loop()
             started = loop.time()
@@ -767,6 +863,136 @@ class TestFailureSeenDuringAHeartbeatEndsThePhase:
             f"the phase sat {elapsed:.1f}s after a failure seen during the heartbeat — "
             "the siblings kept their slots for a whole progress interval instead of the "
             "0.2s settle this test pins"
+        )
+
+
+class TestThePhaseCeilingMustOutliveTheRetryLadder:
+    """The ceiling is only a bound if it sits above one call's worst case.
+
+    Both knobs the policy docstring tells an operator to turn walk through that:
+    ``MODEL_LLM_TIMEOUT_SECONDS=300`` on a slower model needs 900 s, and a third
+    retry needs 720 s. Neither is a crash — labelling just degrades to per-chunk
+    and then to file labels, which reads as a labelling-quality regression and
+    sends the investigation to the prompt rather than to the configuration.
+    """
+
+    @pytest.mark.parametrize(
+        ("retries", "per_call", "phase", "ceiling_ok"),
+        [
+            (2, 180.0, 600.0, True),  # the shipped defaults: 540 worst case
+            (2, 180.0, 540.0, False),  # exactly equal is not "above"
+            (2, 300.0, 600.0, False),  # a slower model under the default ceiling
+            (3, 180.0, 600.0, False),  # one more retry than the defaults
+            (0, 180.0, 600.0, True),  # retries disabled, plenty of room
+            (5, 180.0, 1081.0, True),  # ceiling raised to match
+        ],
+    )
+    def test_the_warning_fires_exactly_when_the_ceiling_is_too_low(self, retries, per_call, phase, ceiling_ok):
+        warned = dataprep._warn_if_phase_ceiling_too_low(phase, retries, per_call)
+        worst = dataprep._one_batched_call_worst_case(retries, per_call)
+        assert (phase > worst) is ceiling_ok, (
+            f"the case table disagrees with the code: ceiling {phase}s vs worst case {worst}s"
+        )
+        assert warned is not ceiling_ok, (
+            f"warned={warned} for ceiling {phase}s vs worst case {worst}s "
+            f"({retries} retries at {per_call}s), expected warned={not ceiling_ok}"
+        )
+
+    def test_the_check_is_applied_to_this_deployment_at_import(self):
+        """The function can exist and still never be called.
+
+        The values are fixed at import, so the only case the suite above reaches
+        is one the shipped defaults never take — the check has to actually run
+        against the module's own constants for it to protect a real deployment.
+        """
+        source = (OVERLAY_ROOT / "dataprep" / "genieai_dataprep_arangodb.py").read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        calls = [
+            n
+            for n in ast.walk(tree)
+            if isinstance(n, ast.Call)
+            and isinstance(n.func, ast.Name)
+            and n.func.id == "_warn_if_phase_ceiling_too_low"
+        ]
+        assert len(calls) == 1, f"expected the phase-ceiling check to be applied once at import, found {len(calls)}"
+        passed = {ast.unparse(a) for a in calls[0].args}
+        assert passed == {
+            "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS",
+            "LLM_MAX_RETRIES",
+            "LLM_TIMEOUT_SECONDS",
+        }, f"the import-time check reads {passed}, not this service's own budget knobs"
+
+    def test_the_defaults_are_inside_the_constraint(self):
+        assert dataprep._one_batched_call_worst_case(
+            dataprep.LLM_MAX_RETRIES, dataprep.LLM_TIMEOUT_SECONDS
+        ) < dataprep.DATAPREP_LLM_PHASE_TIMEOUT_SECONDS, (
+            "the shipped defaults already violate the phase-ceiling constraint — every batched "
+            "labelling call would be cancelled before it could return"
+        )
+
+
+class TestTheKillRollbackCannotBeCancelled:
+    """A second cancel must not abort the only path that destroys data.
+
+    The kill switch's rollback is a chain of awaits — log, retract, set the
+    status, log — living inside an ``except asyncio.CancelledError`` block, and
+    an await in a cancellation path is itself cancellable. The endpoint accepts
+    a repeated call, so a double-clicked Kill delivers a second
+    ``task.cancel()`` straight into the middle of it. Inline, that skipped
+    whatever came after the interruption: the document kept the chunks the
+    cascade had not reached yet, still served to the retriever, with a status
+    that never read "Killed" and therefore no recorded cause.
+    """
+
+    def test_a_repeated_cancel_lets_the_rollback_finish(self):
+        steps = []
+
+        async def scenario():
+            async def rollback():
+                await asyncio.sleep(0.05)
+                steps.append("retracted")
+                await asyncio.sleep(0.05)
+                steps.append("status_set")
+
+            task = asyncio.ensure_future(dataprep._run_uninterruptible(rollback(), timeout=2.0, label="rollback"))
+            await asyncio.sleep(0.02)
+            task.cancel()  # the admin double-clicks Kill
+            await asyncio.sleep(0)
+            task.cancel()  # the second one lands mid-rollback
+            await asyncio.sleep(0.3)
+
+        _run(scenario())
+        assert steps == ["retracted", "status_set"], (
+            f"the rollback stopped partway: {steps} — chunks the cascade had not reached are "
+            "still in the graph, and the document status was never set to Killed"
+        )
+
+    def test_the_kill_handler_routes_its_rollback_through_it(self):
+        """The unit test above is worthless if the handler stops using it.
+
+        Nothing about the handler's shape is forced by the type system: a future
+        edit that inlines the rollback again compiles, passes every other test
+        here, and restores the half-deleted document. So the call is pinned.
+        """
+        source = (OVERLAY_ROOT / "dataprep" / "genieai_dataprep_arangodb.py").read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        guarded = False
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ExceptHandler):
+                continue
+            # `except asyncio.CancelledError` parses as an Attribute; the bare
+            # `except CancelledError` spelling as a Name. Either is the handler.
+            is_cancelled = (isinstance(node.type, ast.Attribute) and node.type.attr == "CancelledError") or (
+                isinstance(node.type, ast.Name) and node.type.id == "CancelledError"
+            )
+            if not is_cancelled:
+                continue
+            calls = {n.func.id for n in ast.walk(node) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
+            if "_run_uninterruptible" in calls:
+                guarded = True
+        assert guarded, (
+            "no except-asyncio.CancelledError block routes its rollback through "
+            "_run_uninterruptible — a repeat cancel will abort it mid-cascade"
         )
 
 
@@ -993,33 +1219,43 @@ class TestUnboundedPhaseKeepsItsSiblings:
         _run(scenario())
 
     def test_a_batch_that_already_finished_keeps_its_outcome(self, monkeypatch):
-        """Cancelling pending must not disturb a sibling that already settled."""
+        """A batch's result survives the phase that abandoned its siblings.
+
+        Asserted on the value the phase RETURNS, which is the only place an
+        outcome can survive: ``_await_with_heartbeat`` returns ``None`` by
+        design, so pinning anything there proves nothing about keeping work. The
+        budget helper is the one that hands completed batches back to the caller
+        for a degraded document, and a completed batch it silently drops becomes
+        a chunk that was labelled in time and then thrown away.
+        """
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 0.4)
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
         monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
 
-        finished = []
-
         async def scenario():
-            async def boom():
-                await asyncio.sleep(0.05)
-                raise RuntimeError("ArangoDB insert failed")
-
-            async def quick_sibling():
+            async def quick():
                 await asyncio.sleep(0.01)
-                finished.append(1)
+                return {"labels": ["Healthcare"]}
 
-            tasks = [asyncio.ensure_future(quick_sibling()), asyncio.ensure_future(boom())]
-            with pytest.raises(RuntimeError, match="ArangoDB insert failed"):
-                await dataprep._await_with_heartbeat(
-                    tasks,
-                    phase="Graph insertion",
-                    total=2,
-                    file_id="f1",
-                    write_ingestion_log=_noop_log,
-                )
+            async def wedged():
+                await asyncio.sleep(30)
 
-        _run(scenario())
-        assert finished == [1], "a batch that had already completed lost its result"
+            results, timed_out = await dataprep._gather_with_phase_budget(
+                [asyncio.ensure_future(quick()), asyncio.ensure_future(wedged())],
+                phase="LLM labeling",
+                phase_label=dataprep.PHASE_LABEL_LABELING,
+                total=2,
+                file_id="f1",
+                write_ingestion_log=_noop_log,
+            )
+            return results, timed_out
+
+        results, timed_out = _run(scenario())
+        assert timed_out is True, "the wedged batch should have exhausted the phase budget"
+        assert results == [{"labels": ["Healthcare"]}], (
+            "the batch that completed before the budget expired was dropped from the phase's "
+            f"results, so its labels are lost for no reason: {results!r}"
+        )
 
 
 class TestTimeoutClassifier:

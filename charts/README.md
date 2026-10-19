@@ -7,15 +7,15 @@ Kubernetes-deployment Helm charts for GENIE.AI.
 | Chart | Purpose |
 |---|---|
 | `genieai-common` | Library chart. Templates + helpers shared by the umbrella. Not installed directly. |
-| `genieai-umbrella` | Single-install chart. Renders the full GENIE.AI service topology (stateless tier, data layer, OPEA AI/ML tier, keycloak-config-cli convergence) in one `helm install`. |
+| `genieai-umbrella` | Single-install chart. Renders the full GENIE.AI service topology (stateless tier, data layer, OPEA AI/ML tier, Gateway API edge, keycloak-config-cli convergence) in one `helm install`. |
 
 ## Status
 
-`genieai-umbrella` 0.1.69 covers foundation, service tier, data layer, and the OPEA tier (render-validated). Observability rendering and the per-environment Gateway API / cert-manager ingress tier are in progress; both will land as additional templates in the same chart.
+`genieai-umbrella` 0.2.33: foundation, service tier, data layer, OPEA tier, observability, and the Gateway API edge (Envoy Gateway as an optional chart dependency, nginx removed from the data path) — all live-validated on a minikube laptop cluster via Flux. Keycloak custom theme ships at runtime (ConfigMap tarball + initContainer — `make keycloak-theme` to regenerate; CI guards drift).
 
 ## Cluster prerequisites
 
-Operator controllers (CNPG ≥1.30, kube-arangodb 1.4.x, sealed-secrets ≥0.40, keycloak-operator 26.x, OpenTelemetry Operator, GPU operator, cert-manager, Envoy Gateway) are cluster bootstrap prerequisites — installed once per cluster, before any release. Per-release operator installs would create competing cluster-scoped controllers. See `genieai-umbrella/README.md` for install hints.
+Operator controllers (CNPG ≥1.30, kube-arangodb 1.4.x, sealed-secrets ≥0.40, keycloak-operator 26.x, OpenTelemetry Operator) are cluster bootstrap prerequisites — installed once per cluster, before any release. Per-release operator installs would create competing cluster-scoped controllers. `scripts/install-prereqs.sh` automates the set. Conditional prerequisites: cert-manager (only when `ingress.tls.enabled` with an issuer), GPU operator (only when `opea.gpu.mode=in-cluster`). The Envoy Gateway is NOT a prerequisite — it ships as a chart dependency (`envoyGateway.enabled`, default on).
 
 ## Render gates
 

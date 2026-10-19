@@ -189,9 +189,7 @@ class TestCallSitesConsumeThePolicy:
     def test_retriever_llm_and_embedding_clients_are_bounded(self):
         """The retriever had three unbounded model clients; all three are bounded."""
         source = OVERLAY_ROOT / "retriever" / "genieai_retriever_arangodb.py"
-        calls = _constructors(source, "ChatOpenAI") + _constructors(source, "OpenAIEmbeddings") + _constructors(
-            source, "HuggingFaceEndpointEmbeddings"
-        )
+        calls = _constructors(source, "ChatOpenAI", "OpenAIEmbeddings", "HuggingFaceEndpointEmbeddings")
         assert len(calls) >= 3, f"expected the retriever's 3 model clients, found {len(calls)}"
         for call in calls:
             assert _kwarg(call, "timeout") is not None, (
@@ -201,9 +199,7 @@ class TestCallSitesConsumeThePolicy:
 
     def test_retriever_timeouts_come_from_the_policy(self):
         source = OVERLAY_ROOT / "retriever" / "genieai_retriever_arangodb.py"
-        calls = _constructors(source, "ChatOpenAI") + _constructors(source, "OpenAIEmbeddings") + _constructors(
-            source, "HuggingFaceEndpointEmbeddings"
-        )
+        calls = _constructors(source, "ChatOpenAI", "OpenAIEmbeddings", "HuggingFaceEndpointEmbeddings")
         for call in calls:
             names = _source_names(_kwarg(call, "timeout"))
             assert names & {"VLLM_TIMEOUT", "TEI_TIMEOUT"}, (

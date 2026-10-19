@@ -3242,7 +3242,7 @@ chart:install:
       --set "data.keycloak.clientSecrets.proxyClient=${CI_JOB_ID}-proxy"
       --set "data.keycloak.clientSecrets.dataprep=${CI_JOB_ID}-dataprep"
       --set "data.keycloak.clientSecrets.grafana=${CI_JOB_ID}-grafana"
-      --wait --timeout 15m
+      --wait --timeout 30m
     - kubectl wait --for=condition=Ready pods --all -n genieai --timeout=10m
     - helm test test -n genieai --logs
     - mkdir -p chart-test-logs

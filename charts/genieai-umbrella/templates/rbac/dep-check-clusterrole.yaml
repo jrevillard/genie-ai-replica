@@ -20,6 +20,14 @@ metadata:
   name: {{ include "genieai-common.fullname" . }}-dep-check
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "rbac") | nindent 4 }}
+  annotations:
+    # Hook, not a regular resource: the clusterprofile-detect hook job
+    # runs at weight -10 and reads the namespace label with this SA. A
+    # regular ClusterRole lands only AFTER every pre-install hook, so the
+    # job's `kubectl get ns` 403s and the drift event is never created.
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-30"
+    "helm.sh/hook-delete-policy": before-hook-creation
 rules:
   # Cluster-scoped lookups only — NO Secrets, NO ConfigMaps here.
   # The clusterprofile-detect hook reads the namespace label (get);
@@ -34,6 +42,14 @@ metadata:
   name: {{ include "genieai-common.fullname" . }}-dep-check
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "rbac") | nindent 4 }}
+  annotations:
+    # Hook, not a regular resource: the clusterprofile-detect hook job
+    # runs at weight -10 and reads the namespace label with this SA. A
+    # regular ClusterRole lands only AFTER every pre-install hook, so the
+    # job's `kubectl get ns` 403s and the drift event is never created.
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-30"
+    "helm.sh/hook-delete-policy": before-hook-creation
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole

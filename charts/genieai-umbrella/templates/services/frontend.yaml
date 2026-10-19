@@ -53,6 +53,14 @@ spec:
         - protocol: TCP
           port: 8090
     {{- end }}
+    # helm-test reachability probe (component "test").
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: test
+      ports:
+        - protocol: TCP
+          port: 8090
   egress:
     # DNS resolution to kube-system.
     - to:
@@ -79,5 +87,5 @@ spec:
             cidr: 0.0.0.0/0
       ports:
         - protocol: TCP
-          port: 4318
+          port: {{ .Values.observability.collectorPort | default 4318 }}
 {{- end -}}

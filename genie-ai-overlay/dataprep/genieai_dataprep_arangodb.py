@@ -901,13 +901,19 @@ async def _await_with_heartbeat(tasks: list, *, phase: str, total: int, file_id:
     without losing documents. Errors propagate as ``asyncio.gather`` raises them
     (first failure wins), so the caller's existing error handling still applies.
 
-    On the first failure it does NOT wait out the siblings the way the success
-    path does — the phase has already failed, the caller is about to retract the
-    document, and extending an already-failing path only delays that. The
-    siblings get ``_PHASE_CANCEL_GRACE_SECONDS`` to settle, and one still running
-    after that is left running: this is the one place in the overlay where a
-    task can outlive its owner, which is the trade for not holding a document
-    open behind a stuck ArangoDB write.
+    Every exit other than the success path takes the still-pending batches with
+    it, by cancelling them and giving ``_PHASE_CANCEL_GRACE_SECONDS`` to settle.
+    That matters because the caller retracts the document on every one of those
+    exits: a batch still running writes into ArangoDB after ``retract_file`` has
+    deleted it, resurrecting chunks for a document the admin UI shows as failed.
+
+    Cancelling does not stop a batch already inside ``asyncio.to_thread`` — the
+    thread runs to completion either way, and that race is pre-existing and
+    documented at the call site. What it does stop is every batch still queued
+    on ``MAX_CONCURRENT_BATCHES``, which for a large document is most of them:
+    they have not reached the thread and would otherwise write the whole
+    document after the retraction. So the grace window is a courtesy for batches
+    that unwind promptly, not a licence to abandon the rest.
     """
     if not tasks:
         return
@@ -949,6 +955,14 @@ async def _await_with_heartbeat(tasks: list, *, phase: str, total: int, file_id:
                 # capped at _PHASE_CANCEL_GRACE_SECONDS: past that, the caller is
                 # already failing and a longer wait only delays the retract.
                 #
+                # Cancelled, not just waited on. The caller retracts the document
+                # the moment this raises, so a sibling left running writes into
+                # ArangoDB after the retraction and resurrects its chunks — the
+                # same outcome the cancellation path guards against, one branch
+                # over. Batches already inside asyncio.to_thread are unaffected
+                # either way; the ones this stops are those still queued on the
+                # semaphore, which for a large document is most of them.
+                #
                 # Guarded because pending is empty whenever the failing task was the
                 # last one in flight, and asyncio.wait() on an empty set raises
                 # ValueError rather than returning. That is the single-batch case —
@@ -957,6 +971,8 @@ async def _await_with_heartbeat(tasks: list, *, phase: str, total: int, file_id:
                 # "ArangoDB insert failed" with "Set of Tasks/Futures is empty" in
                 # the ingestion log and the document status, which is the last
                 # diagnostic channel the operator has.
+                for task in pending:
+                    task.cancel()
                 if pending:
                     await asyncio.wait(pending, timeout=_PHASE_CANCEL_GRACE_SECONDS)
                 # Same retrieval as the budgeted variant's settle: a sibling that

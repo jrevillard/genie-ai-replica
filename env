@@ -314,9 +314,14 @@ HUGGING_FACE_HUB_TOKEN=
 #                                 #   in-cluster control-plane calls.
 # VLLM_TIMEOUT=600                # Read by the VENDORED comps for dataprep's
 #                                 #   graph transformer (the only model call in
-#                                 #   the deck that comps reads a budget for), and
-#                                 #   by retriever/config.py at second precedence
-#                                 #   behind MODEL_LLM_TIMEOUT_SECONDS.
+#                                 #   the deck that comps reads a budget for).
+#                                 #   retriever/config.py also names it, at
+#                                 #   second precedence — but only when this
+#                                 #   variable is NOT injected into that
+#                                 #   container, which it is not: the shared
+#                                 #   MODEL_LLM_TIMEOUT_SECONDS always wins
+#                                 #   there, so setting this value changes the
+#                                 #   dataprep graph phase and nothing else.
 #                                 #   NOT the same knob as
 #                                 #   MODEL_LLM_TIMEOUT_SECONDS, and deliberately
 #                                 #   decoupled from it: the graph phase has no

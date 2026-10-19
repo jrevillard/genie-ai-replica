@@ -829,25 +829,40 @@ class TestUnboundedPhaseSurvivesExternalCancellation:
 class TestUnboundedPhaseKeepsItsSiblings:
     """The graph phase cannot abandon work, and that includes on the error path.
 
-    ``asyncio.gather`` registers a done-callback on every child and keeps them
-    alive; returning early from this helper left the rest running with no owner —
-    each later failure logged an unretrieved-exception error, and they were still
-    writing to ArangoDB while the caller retracted the document.
+    The caller retracts the document the moment this helper raises, so a batch
+    still running writes into ArangoDB *after* the retraction and resurrects its
+    chunks for a document the admin UI shows as failed. Both error exits
+    therefore cancel what is pending and give it a bounded window to unwind.
     """
 
-    def test_in_flight_batches_are_settled_before_the_error_propagates(self, monkeypatch):
-        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
-        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 1.0)
+    def test_a_sibling_is_cancelled_rather_than_left_writing(self, monkeypatch):
+        """The failure path takes its in-flight batches with it.
 
-        finished = []
+        An earlier version asserted the opposite — that a slow sibling was left
+        to finish — on the reasoning that the grace window was there to let it.
+        That is the behaviour that lets it write after the retraction, and a
+        batch already inside ``asyncio.to_thread`` runs to completion either way,
+        so "not cancelling" bought nothing while "cancelling" stops every batch
+        still queued on the semaphore.
+        """
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
 
         async def scenario():
+            wrote = []
+            started = asyncio.Event()
+
             async def boom():
+                await started.wait()
                 raise RuntimeError("ArangoDB insert failed")
 
             async def slow_sibling():
-                await asyncio.sleep(0.2)
-                finished.append(1)
+                started.set()
+                # Lands inside the observation window below, so an uncancelled
+                # sibling actually performs the write rather than merely
+                # failing a flag check.
+                await asyncio.sleep(0.15)
+                wrote.append("chunk")
 
             tasks = [asyncio.ensure_future(slow_sibling()), asyncio.ensure_future(boom())]
             with pytest.raises(RuntimeError, match="ArangoDB insert failed"):
@@ -858,9 +873,45 @@ class TestUnboundedPhaseKeepsItsSiblings:
                     file_id="f1",
                     write_ingestion_log=_noop_log,
                 )
+            # Inside the loop: asyncio.run cancels stragglers on shutdown, so an
+            # assertion after _run() returned would pass either way.
+            await asyncio.sleep(0.3)
+            assert wrote == [], f"a graph batch kept writing after the phase failed: {wrote}"
+            assert all(t.cancelled() or t.done() for t in tasks), (
+                "batches left pending with no owner; each later raise logs an unretrieved-exception "
+                "traceback during exactly the incident this change exists to make diagnosable"
+            )
 
         _run(scenario())
-        assert finished, "the sibling was abandoned mid-write when the phase failed"
+
+    def test_a_batch_that_already_finished_keeps_its_outcome(self, monkeypatch):
+        """Cancelling pending must not disturb a sibling that already settled."""
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
+
+        finished = []
+
+        async def scenario():
+            async def boom():
+                await asyncio.sleep(0.05)
+                raise RuntimeError("ArangoDB insert failed")
+
+            async def quick_sibling():
+                await asyncio.sleep(0.01)
+                finished.append(1)
+
+            tasks = [asyncio.ensure_future(quick_sibling()), asyncio.ensure_future(boom())]
+            with pytest.raises(RuntimeError, match="ArangoDB insert failed"):
+                await dataprep._await_with_heartbeat(
+                    tasks,
+                    phase="Graph insertion",
+                    total=2,
+                    file_id="f1",
+                    write_ingestion_log=_noop_log,
+                )
+
+        _run(scenario())
+        assert finished == [1], "a batch that had already completed lost its result"
 
 
 class TestTimeoutClassifier:

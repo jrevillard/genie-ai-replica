@@ -1358,15 +1358,14 @@ services:
 
       GPU_NODE_HOST: ${GPU_NODE_HOST:-}
       # Shared model-endpoint HTTP budgets (core/model_http_policy.py).
-      # Both spellings are injected so the policy's own precedence is the one
-      # that decides: MODEL_LLM_TIMEOUT_SECONDS first, the legacy VLLM_TIMEOUT
-      # second. VLLM_TIMEOUT keeps the nested default because any vendored comps
-      # client in this container reads that name directly, not through the
-      # policy - without it, raising MODEL_LLM_TIMEOUT_SECONDS would move this
-      # repo's clients and leave those on the old value.
+      # Only the shared name is injected here. The policy reads
+      # MODEL_LLM_TIMEOUT_SECONDS first, so a VLLM_TIMEOUT in this container
+      # could never win, and leaving it in made `docker exec ... env` report a
+      # value the retriever does not actually use. The vendored comps client
+      # that reads VLLM_TIMEOUT directly is the dataprep graph transformer,
+      # which does not run in this image.
       MODEL_LLM_TIMEOUT_SECONDS: ${MODEL_LLM_TIMEOUT_SECONDS:-180}
       MODEL_LLM_MAX_RETRIES: ${MODEL_LLM_MAX_RETRIES:-2}
-      VLLM_TIMEOUT: ${VLLM_TIMEOUT:-${MODEL_LLM_TIMEOUT_SECONDS:-180}}
       MODEL_TEI_TIMEOUT_SECONDS: ${MODEL_TEI_TIMEOUT_SECONDS:-120}
     networks:
       - genieai_network

@@ -858,7 +858,7 @@ contract:unit:
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+        paths: ["genie-ai-overlay/contracts/**/*", "docker-compose.yaml", "genie-ai-overlay/dataprep/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
         paths: ["genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]

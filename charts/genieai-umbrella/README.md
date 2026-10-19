@@ -1,13 +1,15 @@
 # genieai-umbrella
 
 Single-install Helm chart for GENIE.AI. Renders the full GENIE.AI service
-topology — stateless tier (backend, frontend, document-repository, nginx,
-clamav, redis-cache), data layer (CNPG, kube-arangodb, Keycloak CR), OPEA
+topology — stateless tier (backend, frontend, document-repository, clamav,
+redis-cache), data layer (CNPG, kube-arangodb, Keycloak CR), OPEA
 AI/ML tier (six orchestrators + four in-cluster model Deployments + shared
-model-weights PVC), and the Keycloak realm-convergence + ArangoDB
-migrations hook Jobs — with one `helm install`.
+model-weights PVC), the Gateway API edge (Envoy Gateway dependency +
+Gateway/HTTPRoute/Certificate; nginx is NOT part of the k8s data path), and
+the Keycloak realm-convergence + ArangoDB migrations hook Jobs — with one
+`helm install`.
 
-Chart version: **0.1.69**. `appVersion` mirrors `version` deliberately
+Chart version: **0.2.33**. `appVersion` mirrors `version` deliberately
 (chart layout, not product release; deployed image tags are governed by
 `values.yaml`, never `latest`).
 
@@ -76,7 +78,8 @@ only the custom resources they manage.
 | keycloak-operator | 26.8.0 | From the repo root: `./scripts/install-prereqs.sh` (Kustomize overlay that overrides the upstream `keycloak` namespace to `keycloak-system`; Quarkus-based modern operator, 4 CRDs in `k8s.keycloak.org`). Alternatives: OLM (`installPlanApproval: Manual` recommended — auto-upgrade causes unintended Keycloak version bumps), or `oci://quay.io/keycloak/keycloak-operator-helm` (experimental, cluster-wide). |
 | OpenTelemetry Operator | latest | (required by `observability.*`; the collector Service it creates is what `otlpEndpoint` points at) |
 | GPU operator (NVIDIA) | latest | (required by `opea.gpu.mode=in-cluster`; the in-cluster model Deployments target `gpu=true` nodes) |
-| cert-manager + Envoy Gateway | latest | (required by the per-environment ingress tier — Phase 2) |
+| cert-manager | latest | (only when `ingress.tls.enabled` with an issuer) |
+| Envoy Gateway | — | NOT a prerequisite — chart dependency (`envoyGateway.enabled`, default on) |
 
 ## Status
 
@@ -84,11 +87,12 @@ only the custom resources they manage.
 |---|---|
 | Foundation (namespace, ArgoCD example, chart-testing baseline) | ✅ Shipped |
 | Data layer (CNPG, kube-arangodb, Keycloak CR + convergence Job) | ✅ Shipped |
-| Service tier (backend + frontend + document-repository + nginx + clamav + redis-cache) | ✅ Shipped |
+| Service tier (backend + frontend + document-repository + clamav + redis-cache) | ✅ Shipped |
 | OPEA AI/ML (six orchestrators + four in-cluster models + NetworkPolicies + endpoint helpers) | ✅ Shipped |
-| Observability (vmoperator + collector + Grafana + serviceMonitors) | ⏳ In progress |
-| Per-env config + ingress (Envoy Gateway + cert-manager) | ⏳ In progress |
-| CI completion (`chart:contract` render-gate, ct full suite on kind) | ⏳ In progress |
+| Observability (vmoperator + collector gateway + filelog agent + Grafana CRs) | ✅ Shipped |
+| Edge (Envoy Gateway dependency, Gateway API templates, TLS, nginx removed) | ✅ Shipped |
+| Keycloak theme at runtime (ConfigMap tarball + initContainer) | ✅ Shipped |
+| CI completion (`chart:contract` render-gate, ct full suite on kind) | ⏳ Residual |
 
 ## Required Secrets
 
@@ -185,7 +189,7 @@ the current source of truth.
 | Ingress | `ingress.host`, `ingress.scheme` | Public origin; feeds `KC_PUBLIC_ORIGIN` (issuer pin) |
 | Observability | `observability.collectorCRName`, `observability.collectorPort` | OTLP exporter endpoint overrides |
 | Data | `data.postgres`, `data.arangodb`, `data.keycloak` | Data-layer CRs + Keycloak convergence |
-| Services | `services.<backend\|frontend\|documentRepository\|nginx\|clamav\|redisCache>` | Stateless-tier per-service config |
+| Services | `services.<backend\|frontend\|documentRepository\|clamav\|redisCache>` | Stateless-tier per-service config |
 | OPEA | `opea.enabled`, `opea.gpu`, `opea.<orchestrator>`, `opea.models.<llm\|reranker>.modelId`, `opea.models.cache` | AI/ML tier |
 | Dependency graph | `dependencyGraph.services`, `dependencyGraph.data` | Read by the dep-check hook |
 
@@ -261,7 +265,6 @@ all live on `values.yaml`.
 | Backend | `backend` | 3000 | 80 | 1 → 3 |
 | Frontend | `frontend` | 8090 | 80 | 1 → 2 |
 | Document repository | `documentRepository` | 3001 | 80 | 1 → 2 |
-| Nginx | `nginx` | 8080 | 80 | 1 |
 | ClamAV | `clamav` | 3310 | 3310 | 1 |
 | Redis cache | `redisCache` | 6379 | 6379 | 1 |
 
@@ -277,8 +280,8 @@ to avoid duplicating the var.
 
 A PDB is rendered **only when `replicas >= 2`** for that service. With
 baseline `replicas: 1`, no PDB lands until `clusterProfileReplicas.prod`
-activates (backend, frontend, document-repository qualify; nginx,
-clamav, redis-cache stay singletons). Avoids voluntary-disruption blocks
+activates (backend, frontend, document-repository qualify; clamav,
+redis-cache stay singletons). Avoids voluntary-disruption blocks
 on services that cannot survive a drain.
 
 ### CORS

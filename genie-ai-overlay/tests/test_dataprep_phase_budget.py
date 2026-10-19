@@ -419,8 +419,9 @@ class TestPhaseBudgetDefaultIsBelowOneBatchWorstCase:
         monkeypatch.setattr(dataprep, "LLM_TIMEOUT_SECONDS", 180.0)
 
         worst_case_one_batch = 2 * 3 * 180.0
-        assert dataprep.DATAPREP_LLM_PHASE_TIMEOUT_SECONDS < worst_case_one_batch, (
-            f"phase budget {dataprep.DATAPREP_LLM_PHASE_TIMEOUT_SECONDS:.0f}s is not below the "
+        phase_budget = dataprep.DATAPREP_LLM_PHASE_TIMEOUT_SECONDS
+        assert phase_budget < worst_case_one_batch, (
+            f"phase budget {phase_budget:.0f}s is not below the "
             f"{worst_case_one_batch:.0f}s a single wedged batch can occupy"
         )
 

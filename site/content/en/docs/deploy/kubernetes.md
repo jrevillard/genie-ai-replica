@@ -207,16 +207,20 @@ in the Kubernetes data path** — Envoy routes every public path (`/` SPA,
 `/api/`, `/api-docs/`, `/auth/` Keycloak, `/api/files/` + `/uploads/`
 document repository). Pick one of three scenarios:
 
-### Scenario 1 — No ingress (port-forward, laptop/dev)
+### Scenario 1 — Edge deployed, port-forward as the local front (laptop/dev)
 
-`ingress.enabled: false`. Nothing is exposed; you reach the stack through
-`kubectl port-forward` against the Envoy data-plane Service.
+The full edge tier is deployed exactly as in Scenario 2 (Gateway API
+resources rendered, Envoy routes everything), but there is no LoadBalancer
+or DNS — a `kubectl port-forward` fronts the Envoy data-plane Service as
+the stand-in. Use a **non-privileged local port** carried in
+`ingress.host` (e.g. `genieai.local:4443`) so the browser origin matches
+the OIDC issuer without root.
 
 ```mermaid
 flowchart LR
     dev["Developer browser<br/>https://genieai.local:4443"]
     pf["kubectl port-forward<br/>4443 → envoy svc 443"]
-    edge["Envoy data-plane<br/>(still deployed, no Gateway API resources)"]
+    edge["Envoy data-plane<br/>(Gateway + HTTPRoute active)"]
     subgraph cluster ["namespace: genieai"]
         edge --> spa["frontend (SPA)"]
         edge --> api["backend"]
@@ -227,8 +231,15 @@ flowchart LR
 
 | Knob | Value |
 |---|---|
-| `ingress.enabled` | `false` |
-| `ingress.host` | still required — the port-forward origin must match the OIDC issuer (e.g. `genieai.local:4443`, `https://` scheme) |
+| `ingress.enabled` | `true` |
+| `envoyGateway.enabled` | `true` |
+| `ingress.host` | `genieai.local:4443` (port-bearing, `https://` scheme) |
+
+> `ingress.enabled: false` renders no Gateway/HTTPRoute at all — Envoy has
+> nothing to route and any port-forward to it 404s. With the edge off, the
+> NetworkPolicies also become ingress default-deny for the SPA: that mode
+> assumes a CNI that does not enforce NetworkPolicy (minikube kubenet).
+> Real clusters should run one of the scenarios above.
 
 ### Scenario 2 — Envoy Gateway in-chart (default)
 
@@ -266,8 +277,17 @@ flowchart LR
 |---|---|
 | `ingress.enabled` | `true` |
 | `envoyGateway.enabled` | `true` (default) |
-| `ingress.tls.enabled` / `issuerName` / `secretName` | cert-manager flow or pre-baked certificate |
+| `ingress.tls.enabled` / `issuerName` / `secretName` | cert-manager flow (`issuerKind`: `ClusterIssuer` by default, set `Issuer` for a namespace-scoped one) or pre-baked certificate |
 | `ingress.cors.allowOrigins` | optional CORS `SecurityPolicy` (empty = same-origin, no policy rendered) |
+
+Two operational notes on this scenario:
+
+- The certificate SAN is always the **port-stripped** hostname; an external
+  issuer workflow must align its identifiers with that form.
+- `GatewayClass.spec.controllerName` is immutable — upgrading a cluster
+  that still carries a GatewayClass created with an older chart's
+  controller name requires a one-time `kubectl delete gatewayclass envoy`
+  (the chart recreates it).
 
 ### Scenario 3 — External controller / off-cluster edge
 

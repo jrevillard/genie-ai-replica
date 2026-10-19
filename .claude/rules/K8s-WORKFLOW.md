@@ -153,8 +153,8 @@ The end-to-end test that proves the stack works. Per cycle, run all six
 (last full pass: 0.2.32, 2026-10-18):
 
 1. `/api/health` returns 200 through the edge: `kubectl -n genieai
-   port-forward svc/envoy-genieai-genieai-<hash> 8443:443` →
-   `curl -sk -H "Host: genieai.local" https://localhost:8443/api/health`.
+   port-forward svc/envoy-genieai-genieai-<hash> 4443:443` →
+   `curl -sk -H "Host: genieai.local" https://localhost:4443/api/health`.
 2. Login page carries the genie theme — fetch the realm login form (PKCE
    challenge needed) and grep for `login/genie/css/genie.css`; theme
    delivery = ConfigMap tgz + initContainer (regen: `make keycloak-theme`).

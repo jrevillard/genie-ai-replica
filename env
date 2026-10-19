@@ -285,7 +285,12 @@ HUGGING_FACE_HUB_TOKEN=
 #                                 #   delaying an otherwise usable document.
 # MODEL_LLM_MAX_RETRIES=2         # SDK-level retries on 408/409/429/5xx and
 #                                 #   connection errors.
-# MODEL_TEI_TIMEOUT_SECONDS=120   # TEI rerank / embedding calls.
+# MODEL_TEI_TIMEOUT_SECONDS=120   # TEI embedding calls.
+# MODEL_RERANK_TIMEOUT_SECONDS=300 # TEI rerank. Deliberately NOT tighter than the
+#                                 #   300 s an unconfigured aiohttp session would
+#                                 #   have used: the rerank path has no fallback, so
+#                                 #   its timeout becomes a 500 on the chat request.
+#                                 #   Lower it only once rerank can degrade.
 # MODEL_CONTROL_PLANE_TIMEOUT_SECONDS=30  # Keycloak token refresh and the other
 #                                 #   in-cluster control-plane calls.
 # VLLM_TIMEOUT=180                # Read by the VENDORED comps for dataprep's

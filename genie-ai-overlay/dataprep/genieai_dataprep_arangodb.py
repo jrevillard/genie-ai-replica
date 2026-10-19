@@ -302,11 +302,15 @@ LLM_LABEL_TEMPERATURE = float(os.getenv("DATAPREP_LLM_TEMPERATURE", "0.0"))
 # consume it alone — and well below the per-chunk one, so a per-chunk call that
 # runs away is cancelled by the phase rather than by its own ladder.
 #
-# It is also the worst case for several batches at once, which is the point: on
-# a contended GPU the batches do not run in sequence, so a budget below the
-# per-batch worst case would fire on healthy slow batches rather than only on
-# wedged ones. Raise it for a slower model; the phase falls back rather than
-# failing, so a budget set too low degrades labels instead of stalling.
+# It is also a whole-phase ceiling, not a per-wave allowance: a 260-chunk
+# document runs 65 batches in 4 waves of MAX_CONCURRENT_BATCHES, and all of them
+# plus the queueing share the 600 s. A document large enough that its labelling
+# would legitimately take longer than that is degraded to file labels — the
+# phase does not scale its budget with the batch count. That is a deliberate
+# ceiling, not an oversight: an unbounded budget is what produced the stall this
+# replaces, and the degradation is visible (a WARN naming the phase, a
+# phase_budget_exhausted counter) rather than silent. Raise the budget for
+# deployments with large documents or slower models.
 DATAPREP_LLM_PHASE_TIMEOUT_SECONDS = positive_float_env("DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", default=600.0)
 # How often a still-running phase reports progress to the ingestion log. The log
 # is the only channel an operator watches during an ingest (the admin UI reads
@@ -830,6 +834,18 @@ async def _gather_with_phase_budget(
             # and their connection; anything still stuck is abandoned, and the
             # caller gets its fallback.
             await asyncio.wait(pending, timeout=_PHASE_CANCEL_GRACE_SECONDS)
+            # Retrieve whatever finished during the settle. A task that turned
+            # its cancellation into a real exception — a client catching
+            # CancelledError, or a typed failure raised between the last drain
+            # and the cancel — would otherwise surface as "Task exception was
+            # never retrieved" with a full traceback, noise landing in the
+            # dataprep log during exactly the contended-GPU incidents this work
+            # exists to make diagnosable. gather retrieved every child; this
+            # restores that without giving up the bounded settle.
+            for task in pending:
+                if task.done() and not task.cancelled():
+                    with suppress(Exception):
+                        task.exception()
 
     if failure is not None:
         # A batch that raised is an error the phase's caller already knows how
@@ -900,6 +916,14 @@ async def _await_with_heartbeat(tasks: list, *, phase: str, total: int, file_id:
             # unretrieved-exception error, and they are still writing to ArangoDB
             # while the caller's handler retracts the document.
             await asyncio.wait(pending, timeout=_PHASE_CANCEL_GRACE_SECONDS)
+            # Same retrieval as the budgeted variant's settle: a sibling that
+            # failed while we were waiting would otherwise log an unretrieved
+            # exception, during an incident whose diagnosis depends on these
+            # logs.
+            for task in pending:
+                if task.done() and not task.cancelled():
+                    with suppress(Exception):
+                        task.exception()
             raise failure
 
         now = time.monotonic()
@@ -1644,6 +1668,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         )
                         raise DataprepInputTooLongError(f"vLLM context overflow at context_doc: {err}") from e
                     logger.warning(f"Doc-level context attempt {attempt}/3 failed: {err}")
+                    if _is_timeout(e):
+                        with suppress(Exception):
+                            span.set_attribute(ATTRIBUTE_NAMES["dataprep_llm_timed_out"], True)
+                            span.set_attribute(ATTRIBUTE_NAMES["dataprep_llm_timeout_seconds"], LLM_TIMEOUT_SECONDS)
                     await self._write_ingestion_log(
                         file_id,
                         "WARN",
@@ -1717,6 +1745,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         )
                         raise DataprepInputTooLongError(f"vLLM context overflow at context_single: {err}") from e
                     logger.warning(f"Chunk {index}: context attempt {attempt}/3 failed: {err}")
+                    if _is_timeout(e):
+                        with suppress(Exception):
+                            span.set_attribute(ATTRIBUTE_NAMES["dataprep_llm_timed_out"], True)
+                            span.set_attribute(ATTRIBUTE_NAMES["dataprep_llm_timeout_seconds"], LLM_TIMEOUT_SECONDS)
                     await self._write_ingestion_log(
                         file_id,
                         "WARN",

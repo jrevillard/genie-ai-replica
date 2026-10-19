@@ -145,7 +145,10 @@ keycloak_ssl_skip_verify: ""
 #   model_llm_timeout_seconds: 180        # vLLM chat completions. Raise if
 #                                         #   labelling exceeds it on a slow model.
 #   model_llm_max_retries: 2              # SDK retries on 5xx / connection errors
-#   model_tei_timeout_seconds: 120        # TEI rerank / embedding
+#   model_tei_timeout_seconds: 120        # TEI embedding
+#   model_rerank_timeout_seconds: 300     # TEI rerank — no fallback path, so a
+#                                         #   tighter budget turns slow successes
+#                                         #   into 500s on the chat request
 #   model_control_plane_timeout_seconds: 30  # Keycloak token refresh, doc-repo calls
 #   vllm_timeout: 180                     # also bounds the vendored graph transformer
 #   dataprep_llm_phase_timeout_seconds: 600   # wall clock for a whole LLM phase

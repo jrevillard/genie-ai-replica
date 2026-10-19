@@ -29,6 +29,7 @@ _ENV_KEYS = (
     "VLLM_TIMEOUT",
     "MODEL_LLM_MAX_RETRIES",
     "MODEL_TEI_TIMEOUT_SECONDS",
+    "MODEL_RERANK_TIMEOUT_SECONDS",
     "MODEL_CONTROL_PLANE_TIMEOUT_SECONDS",
 )
 
@@ -53,6 +54,7 @@ def _reload_with(**env):
             "llm_timeout": m.LLM_TIMEOUT_SECONDS,
             "llm_retries": m.LLM_MAX_RETRIES,
             "tei_timeout": m.TEI_TIMEOUT_SECONDS,
+            "rerank_timeout": m.RERANK_TIMEOUT_SECONDS,
             "control_plane_timeout": m.CONTROL_PLANE_TIMEOUT_SECONDS,
         }
     finally:
@@ -194,6 +196,34 @@ def _constructors(source_path: Path, *class_names: str) -> list[ast.Call]:
     ]
 
 
+def _function_body(source: str, name: str) -> str:
+    """The source text of the method/function *name*, by indentation.
+
+    Matches both ``def name(`` and ``async def name(`` — every one of these
+    call sites is async, and a matcher that only saw the sync form would report
+    them as absent rather than as unmarked.
+    """
+    lines = source.split("\n")
+    start = next(
+        (i for i, ln in enumerate(lines) if ln.lstrip().startswith(f"def {name}(")),
+        None,
+    )
+    if start is None:
+        start = next(
+            (i for i, ln in enumerate(lines) if ln.lstrip().startswith(f"async def {name}(")),
+            None,
+        )
+    if start is None:
+        return ""
+    indent = len(lines[start]) - len(lines[start].lstrip())
+    out = [lines[start]]
+    for line in lines[start + 1 :]:
+        if line.strip() and (len(line) - len(line.lstrip())) <= indent:
+            break
+        out.append(line)
+    return "\n".join(out)
+
+
 def _kwarg(call: ast.Call, name: str) -> ast.AST | None:
     return next((kw.value for kw in call.keywords if kw.arg == name), None)
 
@@ -255,7 +285,28 @@ class TestCallSitesConsumeThePolicy:
             if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute) and c.func.attr == "ClientSession"
         ]
         for call in calls:
-            assert "TEI_TIMEOUT_SECONDS" in _source_names(_kwarg(call, "timeout"))
+            assert "RERANK_TIMEOUT_SECONDS" in _source_names(_kwarg(call, "timeout"))
+
+    def test_the_rerank_budget_is_never_tighter_than_the_library_default(self):
+        """The one client with no fallback must not fail faster than it already did.
+
+        Every other budget in the policy sits on a call that degrades — labelling
+        to file labels, context to the raw chunk, embedding to the sparse
+        channel. The reranker's timeout propagates to a 500 and fails the user's
+        chat request, so shortening it converts a slow-but-successful rerank into
+        a visible error. An earlier revision of this MR set it to 120 s against
+        aiohttp's 300 s default: 2.5x more failures on a contended GPU, with no
+        degraded path to catch them.
+        """
+        assert _reload_with()["rerank_timeout"] >= 300.0, (
+            "the rerank budget defaults below the 300 s a bare aiohttp.ClientSession "
+            "would have applied — that path has no fallback, so a tighter budget "
+            "turns slow successes into 500s rather than bounding a stall"
+        )
+
+    def test_the_rerank_budget_is_still_configurable_and_tunable(self):
+        assert _reload_with(MODEL_RERANK_TIMEOUT_SECONDS="45")["rerank_timeout"] == 45.0
+        assert _reload_with(MODEL_RERANK_TIMEOUT_SECONDS="nonsense")["rerank_timeout"] == 300.0
 
     def test_retriever_llm_and_embedding_clients_are_bounded(self):
         """The retriever's OpenAI-branch clients are bounded.
@@ -285,6 +336,33 @@ class TestCallSitesConsumeThePolicy:
             assert names & {"VLLM_TIMEOUT", "TEI_TIMEOUT"}, (
                 f"{ast.unparse(call.func)} timeout does not resolve to the shared policy: {names or 'not set'}"
             )
+
+    def test_every_dataprep_llm_call_site_marks_a_timeout(self):
+        """All five LLM call sites stamp the timeout, not just the first three.
+
+        The attribute exists so a wedged GPU is distinguishable from a call
+        still in flight. Three of the five sites carried it; the two
+        Contextual Retrieval per-chunk paths did not, and those are exactly the
+        ones the phase budget singles out as having the longest ladder — so
+        their spans closed with no tokens, no status and no timeout marker,
+        which is the state the attribute was added to eliminate.
+        """
+        source = OVERLAY_ROOT / "dataprep" / "genieai_dataprep_arangodb.py"
+        text = source.read_text(encoding="utf-8")
+        for fn in (
+            "_context_batch_call",
+            "_context_doc_call",
+            "_context_single_call",
+            "_llm_call_batch",
+            "_llm_call_single",
+        ):
+            body = _function_body(text, fn)
+            assert body, f"{fn} not found — has it moved or been renamed?"
+            assert 'ATTRIBUTE_NAMES["dataprep_llm_timed_out"]' in body, (
+                f"{fn} records no timeout marker, so its span is indistinguishable "
+                "from a call still in flight"
+            )
+
 
     def test_the_unbudgeted_huggingface_client_is_left_unbudgeted(self):
         """Guard the deliberate omission on the AST, not on prose.

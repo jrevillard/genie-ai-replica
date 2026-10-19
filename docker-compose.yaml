@@ -1136,7 +1136,7 @@ services:
       - MIN_VALUE_THRESHOLD=${MIN_VALUE_THRESHOLD:--1.0}
       # Shared model-endpoint HTTP budgets (core/model_http_policy.py). This
       # service's environment block is a sequence, so the form is KEY=VALUE.
-      - MODEL_TEI_TIMEOUT_SECONDS=${MODEL_TEI_TIMEOUT_SECONDS:-120}
+      - MODEL_RERANK_TIMEOUT_SECONDS=${MODEL_RERANK_TIMEOUT_SECONDS:-300}
     # Internal only
     # ports:
     #   - "6100:8000"

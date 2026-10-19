@@ -152,10 +152,29 @@ LLM_TIMEOUT_SECONDS = positive_float_env("MODEL_LLM_TIMEOUT_SECONDS", "VLLM_TIME
 # own. Set MODEL_LLM_MAX_RETRIES=0 to cap the worst case instead.
 LLM_MAX_RETRIES = non_negative_int_env("MODEL_LLM_MAX_RETRIES", default=2)
 
-# TEI (rerank / embed): single-shot batch calls with short outputs, so a much
-# tighter budget than chat generation. 120 s leaves room for queueing behind a
-# shared GPU without treating normal contention as failure.
+# TEI embedding: single-shot batch calls with short outputs, so a much tighter
+# budget than chat generation. 120 s leaves room for queueing behind a shared
+# GPU without treating normal contention as failure. The embedding path has a
+# caller-side fallback (retrieval proceeds without the dense channel), so a
+# timeout costs quality rather than availability.
 TEI_TIMEOUT_SECONDS = positive_float_env("MODEL_TEI_TIMEOUT_SECONDS", default=120.0)
+
+# TEI RERANK is budgeted separately and, at its default, no tighter than the
+# 300 s aiohttp would have applied anyway — deliberately.
+#
+# Every other budget in this module sits on a call that degrades: dataprep's
+# labelling falls back to file labels, Contextual Retrieval to the raw chunk,
+# embedding to the sparse channel. The reranker has no such path. Its timeout
+# propagates out of `invoke`, the microservice maps it to a 500, and the user's
+# chat request fails outright. For that one call a short budget does not bound a
+# stall gracefully, it converts a slow-but-successful rerank into a visible
+# error — so tightening it below the default is a regression, not a fix.
+#
+# The budget still exists, and is still configurable: it turns an unbounded wait
+# into a bounded failure, which is better than neither. What it must not do is
+# fail faster than the library already would. Lower it deliberately, not by
+# default, once the rerank path has a degradation route.
+RERANK_TIMEOUT_SECONDS = positive_float_env("MODEL_RERANK_TIMEOUT_SECONDS", default=300.0)
 
 # Control-plane calls (Keycloak token refresh, ingestion-log writes, doc status
 # updates, taxonomy fetch). These are in-cluster HTTP services with no model

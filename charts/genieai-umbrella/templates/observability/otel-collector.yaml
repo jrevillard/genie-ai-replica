@@ -88,10 +88,12 @@ spec:
 {{- end }}
 {{- if .Values.observability.traces.enabled }}
       otlphttp/victoriatraces:
-        # VictoriaTraces is single-port: -httpListenAddr=:10428 serves the
-        # Jaeger query API AND OTLP ingest (/opentelemetry/v1/traces — the
-        # otlphttp exporter appends /v1/traces to this base).
-        endpoint: http://vtsingle-vtraces.{{ .Values.namespace }}.svc.cluster.local:10428/opentelemetry
+        # VictoriaTraces is single-port (-httpListenAddr=:10428) and its
+        # ingest paths live under /insert like the rest of the Victoria
+        # family — /insert/opentelemetry/v1/traces (the otlphttp exporter
+        # appends /v1/traces to this base; /opentelemetry without /insert
+        # answers 400 InvalidArgument).
+        endpoint: http://vtsingle-vtraces.{{ .Values.namespace }}.svc.cluster.local:10428/insert/opentelemetry
         tls:
           insecure: true
         sending_queue:

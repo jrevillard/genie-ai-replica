@@ -141,15 +141,12 @@ beforeEach(() => {
     if (u.includes('/xlsx/')) return Promise.resolve(okJson({}));
     return Promise.reject(new Error(`unexpected fetch ${u}`));
   });
-  // Default AQL dispatcher: concepts, graphs, retrieval, and the
+  // Default AQL dispatcher: graphs, retrieval, and the
   // okf_head_test_runs queries (listing / explain lookup / delete cascade)
   // served faithfully from the mock store.
   __mockDb.query.mockImplementation(async (aql, bind) => {
     const runs = __mockDb._stores.okf_head_test_runs || {};
     const docs = Object.values(runs);
-    if (aql.includes('okf_concepts_meta') && aql.includes('m.body')) {
-      return { all: async () => [{ concept_id: 'c1', title: 'Tomato', body: 'Tomatoes need warm soil.' }] };
-    }
     if (aql.includes('okf_concepts_meta')) {
       return { all: async () => ['GRAPH_AGRI'] };
     }
@@ -224,7 +221,37 @@ describe('beginSuiteGeneration / getSuite', () => {
     expect(call).toBeTruthy();
     const sent = JSON.parse(call[1].body);
     expect(sent.documents[0].metadata.repo_id).toBe('me');
+    // The generation corpus is the PUBLISHED CHUNKS (the retrievable unit),
+    // not concept bodies — reference-based metrics compare chunk-to-chunk.
+    expect(sent.documents[0].page_content).toBe('Plant after the last frost date.');
+    expect(sent.documents[0].metadata.chunk_key).toBe('k1');
     expect(sent.testset_size).toBe(2);
+  });
+
+  it('stores reference passages WHOLE — a 1200-char chunk reference survives (no 500-char slice)', async () => {
+    // 2026-10-19: the 500-char storage slice cut references mid-table and
+    // often kept the WRONG section of the concept for the question it
+    // grounded — every entity-recall row of a live 20-question suite failed
+    // while context_recall sat at 1.0. The cap is now the run leg's
+    // per-context cap (CONTEXT_CHARS), so a published chunk fits intact.
+    const long = 'y'.repeat(1200);
+    global.fetch = jest.fn((u) => {
+      if (u.includes('/generate-testset')) return Promise.resolve(okJson({ job_id: 'j-long-ref' }));
+      if (u.includes('/jobs/j-long-ref'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-long-ref',
+            kind: 'generate-testset',
+            status: 'done',
+            result: { samples: [{ user_input: 'q?', reference: 'r', reference_contexts: [long] }] }
+          })
+        );
+      return Promise.reject(new Error(`unexpected fetch ${u}`));
+    });
+    const begun = await svc.beginSuiteGeneration('me', {}, {});
+    await begun.done;
+    const doc = await svc.getSuite('me', begun.suite_key);
+    expect(doc.payload.entries[0].reference_passages[0]).toHaveLength(1200);
   });
 
   it('deduplicates repo_ids — the primary is never listed twice', async () => {

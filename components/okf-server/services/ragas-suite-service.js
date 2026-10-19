@@ -65,7 +65,9 @@ const MAX_ENTRIES = Math.max(1, parseInt(process.env.OKF_RAGAS_MAX_ENTRIES || '2
 const RUN_CONCURRENCY = Math.max(1, parseInt(process.env.OKF_RAGAS_RUN_CONCURRENCY || '2', 10));
 const CANDIDATE_K = Math.max(1, parseInt(process.env.OKF_RAGAS_CANDIDATE_K || '24', 10));
 const TOP_N = Math.max(1, parseInt(process.env.OKF_RAGAS_TOP_N || process.env.RERANKER_TOP_N || '3', 10));
-const MAX_CORPUS_CONCEPTS = Math.max(1, parseInt(process.env.OKF_RAGAS_MAX_CORPUS_CONCEPTS || '400', 10));
+// Generation corpus cap in CHUNKS (the retrievable unit). Concepts average
+// 3-4 published chunks, so 1600 ≈ the 400-concept corpus this replaces.
+const MAX_CORPUS_CHUNKS = Math.max(1, parseInt(process.env.OKF_RAGAS_MAX_CORPUS_CHUNKS || '1600', 10));
 const CONTEXT_CHARS = 2000; // per-context cap stored on run rows (xlsx uses answer_first_200 anyway)
 const CONCEPT_BODY_CAP = parseInt(process.env.OKF_MAX_CONCEPT_DOC_CHARS || '200000', 10);
 
@@ -509,25 +511,36 @@ function loadDoc(db, key, code, what) {
     });
 }
 
-/** Concept bodies of the selected repos → sidecar documents (bounded). */
+/** Published corpus CHUNKS of the selected repos → sidecar documents.
+ *
+ * The generation corpus is the `<graph>_SOURCE` chunk texts — the same unit
+ * the run leg retrieves (live 2026-10-19: feeding concept bodies made the
+ * synthesizer's reference_contexts whole documents, which were then truncated
+ * to 500 chars at storage — often the WRONG section of the concept for the
+ * question it grounded — and could never be matched by top-N chunk retrieval
+ * anyway. Every entity-recall row of a 20-question suite failed at 0.10–0.50
+ * while context_recall sat at 1.0 and the answers were correct: the metrics
+ * were comparing unlike units. Questions are now synthesized from retrievable
+ * chunks and the stored references are those chunks — reference-based metrics
+ * and the advisor's passage-containment evidence compare chunk-to-chunk.
+ * Repos without a drained graph contribute nothing: their content is not
+ * retrievable, so benchmarking it measured fantasy. */
 async function buildCorpusDocuments(db, repoIds) {
   const docs = [];
   for (const rid of repoIds) {
-    const rows = await (
-      await db.query(
-        'FOR m IN okf_concepts_meta FILTER m.repo_id == @rid AND m.index_status != "rejected" ' +
-          'SORT m.concept_id LIMIT @lim ' +
-          'RETURN { concept_id: m.concept_id, title: m.title, body: m.body }',
-        { rid, lim: MAX_CORPUS_CONCEPTS }
-      )
-    ).all();
-    for (const r of rows) {
-      const body = String(r.body || '').slice(0, CONCEPT_BODY_CAP);
-      if (!body.trim()) continue;
-      docs.push({
-        page_content: body,
-        metadata: { repo_id: rid, concept_id: r.concept_id, title: r.title || r.concept_id }
-      });
+    for (const g of await graphNamesFor(db, [rid])) {
+      const rows = await (
+        await db.query(
+          `FOR c IN \`${g}_SOURCE\` FILTER c.text != null SORT c._key LIMIT @lim ` +
+            'RETURN { key: c._key, text: c.text }',
+          { lim: MAX_CORPUS_CHUNKS }
+        )
+      ).all();
+      for (const r of rows) {
+        const text = String(r.text || '').slice(0, CONCEPT_BODY_CAP);
+        if (!text.trim()) continue;
+        docs.push({ page_content: text, metadata: { repo_id: rid, graph: g, chunk_key: r.key } });
+      }
     }
   }
   return docs;
@@ -670,7 +683,9 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
     const repoIds = payload.repo_ids || [repoId];
     const docs = await buildCorpusDocuments(db, repoIds);
     if (!docs.length) {
-      const err = new Error('no concept bodies found for the selected repositories — ingest first');
+      const err = new Error(
+        'no published corpus chunks for the selected repositories — publish and let ingestion drain first'
+      );
       err.code = 'NO_CORPUS';
       err.status = 409;
       throw err;
@@ -711,8 +726,15 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
       id: `new-${i + 1}`,
       query: String(s.user_input || '').trim(),
       reference_answer: String(s.reference || ''),
+      // Reference passages stored WHOLE (capped at CONTEXT_CHARS, the run
+      // leg's per-context cap — a published chunk fits intact). The old
+      // 500-char slice cut them mid-table and often kept the WRONG section
+      // of the concept for the question it grounded: entity-recall then
+      // compared the wrong section's entities against correctly-retrieved
+      // chunks (2026-10-19: every entity-recall row of a 20-question suite
+      // failed at 0.10–0.50 with context_recall at 1.0).
       reference_passages: (Array.isArray(s.reference_contexts) ? s.reference_contexts : []).map((c) =>
-        String(c).slice(0, 500)
+        String(c).slice(0, CONTEXT_CHARS)
       ),
       source_doc: '',
       language: '',
@@ -808,7 +830,7 @@ async function updateSuiteRows(repoId, suiteKey, payload = {}, opts = {}) {
       if (typeof m.query === 'string' && m.query.trim()) e.query = m.query.trim();
       if (typeof m.reference_answer === 'string') e.reference_answer = m.reference_answer;
       if (Array.isArray(m.reference_passages))
-        e.reference_passages = m.reference_passages.map((p) => String(p).slice(0, 500));
+        e.reference_passages = m.reference_passages.map((p) => String(p).slice(0, CONTEXT_CHARS));
       if (typeof m.source_doc === 'string') e.source_doc = m.source_doc;
       if (typeof m.difficulty === 'string') e.difficulty = m.difficulty;
       if (m.flip_oos !== undefined) {
@@ -859,7 +881,7 @@ async function addQueries(repoId, suiteKey, payload = {}, _opts = {}) {
         query: q.query.trim(),
         reference_answer: typeof q.reference_answer === 'string' ? q.reference_answer : '',
         reference_passages: Array.isArray(q.reference_passages)
-          ? q.reference_passages.map((p) => String(p).slice(0, 500))
+          ? q.reference_passages.map((p) => String(p).slice(0, CONTEXT_CHARS))
           : [],
         source_doc: typeof q.source_doc === 'string' ? q.source_doc : '',
         language: '',

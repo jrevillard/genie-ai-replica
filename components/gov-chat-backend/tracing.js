@@ -44,100 +44,23 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   const { BatchSpanProcessor } = require('@opentelemetry/sdk-trace-base');
   const { trace } = require('@opentelemetry/api');
   const { resourceFromAttributes } = require('@opentelemetry/resources');
-  const { redactAttributes } = require('./tracing-pii');
   // Background-task tracing helpers — used by the SIGTERM/SIGINT handlers
   // below so the emitted shutdown logs inherit a real trace_id instead of
   // being orphaned. Deep import matches the existing shared-lib/X pattern.
   const { withBackgroundSpan } = require('./shared-lib/tracing-background');
-  // Propagator factory — the shared test asserts on this factory, not on a
-  // propagator it builds itself, so the wiring below cannot silently regress.
-  // Deep import matches the existing shared-lib/X pattern. The BARREL is
-  // deliberately not used here: it pulls db-connection-service (arangojs) and
-  // security-middleware (express-rate-limit) into the module-load path, and
-  // this file has to install the OTel SDK before any of that loads.
+  // Propagator factory — deep import matches the shared-lib/X pattern above.
+  // The BARREL is deliberately not used here: it pulls db-connection-service
+  // (arangojs) and security-middleware (express-rate-limit) into the
+  // module-load path, and this file has to install the OTel SDK before any of
+  // that loads.
   //
-  // The module is required AS A WHOLE, not destructured. It exports
-  // { createGeniePropagator, withBaggage } flat and has never nested a
-  // `tracingBaggage` namespace — that shape belongs to the BARREL, which
-  // re-exports it under that name. Destructuring the deep path yields
-  // `undefined`, and every boot then dies at
-  // `tracingBaggage.createGeniePropagator()` with "Cannot read properties of
-  // undefined". The two import paths look interchangeable at a glance and are
-  // not; trace-propagation.test.js now pins both shapes against the real
-  // exports.
-  const tracingBaggage = require('./shared-lib/tracing-baggage');
-
-  // Custom SpanProcessor that redacts PII and drops noise spans before export
-  class PIIRedactionProcessor {
-    constructor(exporter) {
-      this._delegate = new BatchSpanProcessor(exporter);
-      // Paths that should not generate traces (health checks, readiness probes)
-      this._ignoredPaths = ['/health', '/ready', '/alive', '/favicon.ico'];
-      // Tracks spans dropped in onStart so onEnd can skip the delegate.
-      // The OTel SDK calls onEnd on every registered SpanProcessor when
-      // a span ends — regardless of whether onStart returned early — so
-      // forwarding unconditionally to BatchSpanProcessor would queue
-      // dropped spans for export (BatchSpanProcessor.onEnd checks the
-      // sampled flag, not whether onStart was called). WeakSet so
-      // dropped spans are GC'd along with their parent object.
-      this._droppedSpans = new WeakSet();
-    }
-
-    onStart(span, parentContext) {
-      // Drop health-check spans BEFORE the span is recorded — once a
-      // span ends, the OTel SDK marks attributes read-only and
-      // `span.setAttribute()` becomes a no-op (`Span.js:77-78`). We must
-      // mutate attributes (PII redaction) and decide to drop at
-      // onStart while the span is still mutable.
-      const attrs = span.attributes || {};
-      const target = attrs['http.target'] || attrs['http.route'] || '';
-      if (target && this._ignoredPaths.some((p) => target.includes(p))) {
-        // Drop fully: do NOT register with the delegate's BatchSpanProcessor.
-        // If we called onStart on the delegate, OTel would track the span
-        // in its active set and rely on a matching onEnd to release it —
-        // but we want to skip export entirely. Mark the span in
-        // _droppedSpans so onEnd can skip the delegate too (the SDK
-        // calls onEnd on every processor regardless of onStart return).
-        span.setAttribute('genie.pii.dropped', true);
-        this._droppedSpans.add(span);
-        return;
-      }
-      try {
-        const redacted = redactAttributes(attrs);
-        for (const [key, value] of Object.entries(redacted)) {
-          // Only set the attribute if the value changed — avoids
-          // triggering span updates when no PII was redacted.
-          if (attrs[key] !== value) {
-            span.setAttribute(key, value);
-          }
-        }
-      } catch {
-        // Redaction failure must not block span export
-      }
-      this._delegate.onStart(span, parentContext);
-    }
-
-    onEnd(span) {
-      // Skip delegate.onEnd for spans we dropped in onStart — otherwise
-      // the OTel SDK's unconditional onEnd dispatch would queue them on
-      // the BatchSpanProcessor export queue despite never having been
-      // registered with its active set. K8s probes hit /health every 5s,
-      // so without this guard the SDK's internal maps grow unbounded.
-      if (this._droppedSpans.has(span)) {
-        this._droppedSpans.delete(span);
-        return;
-      }
-      this._delegate.onEnd(span);
-    }
-
-    async shutdown() {
-      return this._delegate.shutdown();
-    }
-
-    async forceFlush() {
-      return this._delegate.forceFlush();
-    }
-  }
+  // Deep-import destructures flat member names, while the barrel nests them
+  // (`{ tracingBaggage: { createGeniePropagator } }`). Reaching for a barrel key
+  // on the deep path binds `undefined`, and the call below then throws at every
+  // boot. `trace-propagation.test.js` boots this branch out-of-process so the
+  // wiring is checked by running it, not by reading it.
+  const { createGeniePropagator } = require('./shared-lib/tracing-baggage');
+  const { PIIRedactionProcessor } = require('./shared-lib/pii-span-processor');
 
   // Resource attributes — service.version reads package.json (npm does NOT
   // propagate npm_package_version into Docker runtime; the previous
@@ -192,7 +115,7 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
 
   // Create SDK with auto-instrumentations.
   // The explicit `spanProcessors: [PIIRedactionProcessor]` chains the
-  // processor (which itself wraps `exporter` in a BatchSpanProcessor).
+  // processor (which wraps the BatchSpanProcessor we hand it).
   // Setting `traceExporter: exporter` here in addition would make NodeSDK
   // build its own BatchSpanProcessor on top of the same exporter → every
   // span is exported twice (2x storage, 2x VictoriaTraces egress). We pass
@@ -239,8 +162,8 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     // Trace context ALONE drops the baggage header, so `genie.query_id` would
     // never reach chatqna. Built by the shared factory so the test asserts on
     // the propagator production actually installs.
-    textMapPropagator: tracingBaggage.createGeniePropagator(),
-    spanProcessors: [new PIIRedactionProcessor(exporter)]
+    textMapPropagator: createGeniePropagator(),
+    spanProcessors: [new PIIRedactionProcessor(new BatchSpanProcessor(exporter))]
   });
 
   // Start the SDK. OTLP exporters are lazy — they open the HTTP connection

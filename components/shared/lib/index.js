@@ -7,6 +7,8 @@ const validationUtils = require('./validation-utils'); // parsePositiveInt helpe
 const meltModule = require('./melt'); // MELT hexagonal seam (port + adapters + client); unconditional so a missing submodule fails loudly with MODULE_NOT_FOUND
 const spanAttrs = require('./span-attrs'); // OTel span-attribute vocabulary, mirroring the OPEA overlay
 const tracingBaggage = require('./tracing-baggage'); // Propagator factory + baggage scope helper
+const tracingPii = require('./tracing-pii'); // Span-attribute PII redaction
+const piiSpanProcessor = require('./pii-span-processor'); // SpanProcessor that redacts and drops noise spans
 
 module.exports = {
   logger: loggerModule.logger, // Export the Winston logger instance
@@ -17,5 +19,7 @@ module.exports = {
   SecurityMiddleware,
   melt: meltModule,
   spanAttrs,
-  tracingBaggage
+  tracingBaggage,
+  tracingPii,
+  piiSpanProcessor
 };

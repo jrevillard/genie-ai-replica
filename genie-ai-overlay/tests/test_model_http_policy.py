@@ -359,10 +359,8 @@ class TestCallSitesConsumeThePolicy:
             body = _function_body(text, fn)
             assert body, f"{fn} not found — has it moved or been renamed?"
             assert 'ATTRIBUTE_NAMES["dataprep_llm_timed_out"]' in body, (
-                f"{fn} records no timeout marker, so its span is indistinguishable "
-                "from a call still in flight"
+                f"{fn} records no timeout marker, so its span is indistinguishable from a call still in flight"
             )
-
 
     def test_the_unbudgeted_huggingface_client_is_left_unbudgeted(self):
         """Guard the deliberate omission on the AST, not on prose.

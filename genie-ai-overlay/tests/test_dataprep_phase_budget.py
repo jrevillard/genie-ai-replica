@@ -461,9 +461,11 @@ class TestPhaseBudgetIsSizedAgainstBothBatchPaths:
         monkeypatch.setattr(dataprep, "LLM_MAX_RETRIES", 2)
         monkeypatch.setattr(dataprep, "LLM_TIMEOUT_SECONDS", 180.0)
 
-        batched_worst_case = (1 + 2) * 180.0  # SDK attempts, no overlay loop
-        assert dataprep.DATAPREP_LLM_PHASE_TIMEOUT_SECONDS > batched_worst_case, (
-            f"phase budget {dataprep.DATAPREP_LLM_PHASE_TIMEOUT_SECONDS:.0f}s does not exceed the "
+        # SDK attempts (1 + max_retries); the batched calls have no overlay loop.
+        batched_worst_case = (1 + dataprep.LLM_MAX_RETRIES) * dataprep.LLM_TIMEOUT_SECONDS
+        budget = dataprep.DATAPREP_LLM_PHASE_TIMEOUT_SECONDS
+        assert budget > batched_worst_case, (
+            f"phase budget {budget:.0f}s does not exceed the "
             f"{batched_worst_case:.0f}s one batched call can occupy — a wedged endpoint could "
             "consume the whole allowance and the bound would never fire"
         )
@@ -474,9 +476,11 @@ class TestPhaseBudgetIsSizedAgainstBothBatchPaths:
         monkeypatch.setattr(dataprep, "LLM_MAX_RETRIES", 2)
         monkeypatch.setattr(dataprep, "LLM_TIMEOUT_SECONDS", 180.0)
 
-        per_chunk_worst_case = 3 * (1 + 2) * 180.0  # overlay loop x SDK attempts
-        assert dataprep.DATAPREP_LLM_PHASE_TIMEOUT_SECONDS < per_chunk_worst_case, (
-            f"phase budget {dataprep.DATAPREP_LLM_PHASE_TIMEOUT_SECONDS:.0f}s is not below the "
+        # Overlay's 3-attempt loop around the SDK attempts.
+        per_chunk_worst_case = 3 * (1 + dataprep.LLM_MAX_RETRIES) * dataprep.LLM_TIMEOUT_SECONDS
+        budget = dataprep.DATAPREP_LLM_PHASE_TIMEOUT_SECONDS
+        assert budget < per_chunk_worst_case, (
+            f"phase budget {budget:.0f}s is not below the "
             f"{per_chunk_worst_case:.0f}s a per-chunk call can occupy — the phase would wait for "
             "the call's own retry ladder instead of stopping it"
         )

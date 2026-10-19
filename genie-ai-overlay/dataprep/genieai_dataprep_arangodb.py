@@ -14,6 +14,7 @@ import aiohttp
 from opentelemetry import propagate
 
 from core.model_cache import get_model_id
+from core.model_http_policy import LLM_MAX_RETRIES, LLM_TIMEOUT_SECONDS
 from tracing import (
     background_span,
     get_meter,
@@ -334,16 +335,16 @@ def _build_vllm_client() -> tuple[AsyncOpenAI, str]:
     """
     _api_key = os.getenv("VLLM_API_KEY", "EMPTY")
     _vllm_endpoint = os.getenv("VLLM_ENDPOINT")
-    # Explicit request budget: the openai-python defaults (600 s, 2 retries)
-    # let a heavily contended shared GPU stall labeling/context batches for
-    # 10+ minutes with no feedback (live-observed). Env-tunable so shared-GPU
-    # deployments can tighten it; the fallback chain (batch -> per-chunk ->
-    # file labels) keeps ingestion alive either way.
+    # Shared request budget (core/model_http_policy.py): the openai-python
+    # defaults (600 s, 2 retries) let a heavily contended shared GPU stall
+    # labeling/context batches for 10+ minutes with no feedback
+    # (live-observed). Env-tunable deck-wide; the fallback chain (batch ->
+    # per-chunk -> file labels) keeps ingestion alive either way.
     client = AsyncOpenAI(
         api_key=_api_key,
         base_url=f"{_vllm_endpoint}/v1",
-        timeout=float(os.getenv("DATAPREP_LLM_TIMEOUT_SECONDS", "600")),
-        max_retries=int(os.getenv("DATAPREP_LLM_MAX_RETRIES", "2")),
+        timeout=LLM_TIMEOUT_SECONDS,
+        max_retries=LLM_MAX_RETRIES,
     )
     model = os.getenv("VLLM_MODEL_ID")
     if os.getenv("GPU_NODE_HOST"):

@@ -652,6 +652,13 @@ spec:
         - podSelector:
             matchLabels:
               genieai.io/component: chatqna
+        # backend BFF: its in-cluster translation endpoint defaults to
+        # this Service when services.backend.translation.endpoint is
+        # unset; a dropped probe silently falls back to the in-process
+        # CPU translation model.
+        - podSelector:
+            matchLabels:
+              genieai.io/component: backend
       ports:
         - protocol: TCP
           port: 9031

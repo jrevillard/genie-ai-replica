@@ -67,8 +67,19 @@ uninstall_chart() {
     warn "no helm release ${RELEASE} in namespace ${NS}; skip"
   fi
   if kubectl get namespace "${NS}" >/dev/null 2>&1; then
-    log "kubectl delete namespace ${NS} (waits up to 2m)"
-    kubectl delete namespace "${NS}" --wait=true --timeout=2m >/dev/null 2>&1 || true
+    # Namespace deletion cascades to EVERYTHING inside it: the PVCs
+    # (clamav signature cache, document-repository uploads) and the
+    # SealedSecret-materialized Secrets. --keep-resources keeps the PVs;
+    # set PURGE_NAMESPACE=true to actually reclaim them.
+    local purge="${PURGE_NAMESPACE:-false}"
+    if [ "${purge}" = "true" ]; then
+      warn "PURGE_NAMESPACE=true — PVs and namespace ${NS} will be destroyed"
+      log "kubectl delete namespace ${NS} (waits up to 2m)"
+      kubectl delete namespace "${NS}" --wait=true --timeout=2m >/dev/null 2>&1 || true
+    else
+      log "kubectl delete namespace ${NS} --keep-resources (PURGE_NAMESPACE=true to purge PVs)"
+      kubectl delete namespace "${NS}" --keep-resources=true --wait=true --timeout=2m >/dev/null 2>&1 || true
+    fi
   fi
 }
 

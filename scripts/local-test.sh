@@ -59,7 +59,9 @@ echo "-- SealedSecrets --"
 kubectl get sealedsecret -n "$NS"
 echo "-- Pods Ready? --"
 kubectl get pods -n "$NS" -o wide
-kubectl wait --for=condition=Ready pods --all -n "$NS" --timeout=10m
+# Deployments, not pods: Succeeded hook pods never become Ready and would
+# time the wait out even on a healthy install.
+kubectl wait --for=condition=Available deploy --all -n "$NS" --timeout=10m
 
 echo
 echo "=== STEP 5: helm test ==="
@@ -67,10 +69,10 @@ helm test "$RELEASE" -n "$NS" --logs
 
 echo
 echo "=== STEP 6: smoke URLs (if ingress enabled) ==="
-echo "-- Keycloak OIDC discovery --"
-KC_URL="http://keycloak-service.${NS}.svc.cluster.local:8080"
-curl -sk -o /dev/null -w "  HTTP %{http_code}  (expect 200 or 401, NOT 000/503)\n" \
-  "${KC_URL}/auth/realms/genie/.well-known/openid-configuration" || true
+echo "-- Keycloak OIDC discovery (in-cluster — host cannot resolve .svc DNS) --"
+kubectl run kc-probe --rm -i --restart=Never --image=curlimages/curl:8.10.1 --command -- \
+  curl -s -o /dev/null -w "  HTTP %{http_code}  (expect 200 or 401, NOT 000/503)\n" \
+  "http://keycloak-service.${NS}.svc.cluster.local:8080/auth/realms/genie/.well-known/openid-configuration" || true
 
 echo
 echo "=== DONE ==="

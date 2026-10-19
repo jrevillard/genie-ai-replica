@@ -165,6 +165,14 @@ spec:
       ports:
         - protocol: TCP
           port: 3310
+    # helm-test reachability probe (component "test").
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: test
+      ports:
+        - protocol: TCP
+          port: 3310
   egress:
     # DNS resolution to kube-system.
     - to:

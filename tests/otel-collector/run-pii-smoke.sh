@@ -60,9 +60,9 @@ trap cleanup EXIT
 mkdir -p "$STATE_DIR"
 
 # `docker version`, not `docker info`: the CI runners front the daemon with
-# a socket proxy (default-deny) where GET /info is filtered — `docker
-# version` (/version + /_ping) is always allowed and proves reachability
-# just as well.
+# a socket proxy (default-deny) whose /info policy is deployment-dependent
+# (INFO=1 is a playbook opt-in) — `docker version` (/version + /_ping) is
+# always allowed and proves reachability just as well.
 if ! docker version >/dev/null 2>&1; then
   echo "FAIL: docker is not reachable." >&2
   exit 1

@@ -968,7 +968,11 @@ async def evaluate_samples(
     # the user knows exactly what is happening"): one evaluate() per batch
     # gives an honest rows-done/rows-total signal between batches — the
     # judge calls dominate, so batch boundaries cost nothing measurable.
-    batch_rows = max(1, int(os.getenv("RAGAS_EVAL_BATCH_ROWS") or "10"))
+    # Default 1 (2026-10-19, David: "the scoring progress bar jumps 10 at a
+    # time — it needs to jump 1 or 2 at a time"): per-row batches make the
+    # bar tick per question and sharpen cancel response, at no measurable
+    # cost for the same reason. Raise RAGAS_EVAL_BATCH_ROWS to coarsen.
+    batch_rows = max(1, int(os.getenv("RAGAS_EVAL_BATCH_ROWS") or "1"))
     metric_names = [m.name for m in metric_instances]
     per_query: list[dict[str, Any]] = []
     total = len(rows)

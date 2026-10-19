@@ -152,21 +152,18 @@ echo "${PAYLOAD}" > "$TMP/payload.json"
 # localhost:4318 IS the collector's OTLP HTTP receiver. The collector
 # then runs its production pipeline → exports to VL via otlp_http.
 #
-# The payload is mounted as a file (not piped via stdin) because piping
-# JSON via stdin + curl --data-binary @- races with the parent shell's
-# pipe-close and surfaces as curl exit 23 ("client returned ERROR on
-# write of N bytes"). The collector still receives the request, but
-# curl aborts before emitting the HTTP status code. A file mount makes
-# the request body fully owned by curl and the exit code reliable.
-echo "${PAYLOAD}" > "$TMP/payload.json"
+# The payload is passed as a single argv element (not piped via stdin,
+# which races the parent shell's pipe-close and surfaces as curl exit 23;
+# and not as a mounted file, whose source path resolves on the DAEMON's
+# filesystem when the daemon is remote — the runner socket-proxy setup).
+# Argv expansion happens in this shell; the body is fully owned by curl.
 HTTP_CODE=$(docker run --rm \
   --network "container:${COLLECTOR_CONTAINER}" \
-  -v "$TMP/payload.json:/tmp/payload.json:ro" \
   --entrypoint "" \
   curlimages/curl:8.10.1 \
   curl -sS -w '%{http_code}' \
   -X POST -H "Content-Type: application/json" \
-  --data-binary @/tmp/payload.json \
+  --data-binary "${PAYLOAD}" \
   -o /dev/null \
   http://127.0.0.1:4318/v1/logs) || {
   echo "FAIL: OTLP HTTP POST to collector failed (curl exit)"

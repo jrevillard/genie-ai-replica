@@ -3207,15 +3207,26 @@ chart:install:
     # The daemon is SHARED across jobs on this runner — previous runs (ours
     # or others') may have left a kind cluster behind; adopt a clean slate.
     - kind delete cluster --name kind 2>/dev/null || true
-    - kind create cluster --image kindest/node:v1.33.0 --wait 5m
+    # Bind the API server on all interfaces with a fixed port: kind's
+    # default 127.0.0.1 binding is unreachable from the job container when
+    # the daemon is remote (runner socket proxy). Fixed port is safe — the
+    # chart-dind resource group serializes this job.
+    - |
+      cat > /tmp/kind-config.yaml <<'EOF'
+      kind: Cluster
+      apiVersion: kind.x-k8s.io/v1alpha4
+      networking:
+        apiServerAddress: "0.0.0.0"
+        apiServerPort: 36443
+      EOF
+    - kind create cluster --config /tmp/kind-config.yaml --image kindest/node:v1.33.0 --wait 5m
     - kind get kubeconfig --name kind > "$KUBECONFIG"
-    # kind writes 127.0.0.1 as the API endpoint — unreachable from the job
-    # container when the daemon is remote (runner socket proxy). Rewrite to
-    # the daemon host taken from DOCKER_HOST.
+    # kubeconfig still names 0.0.0.1/127.0.0.1 as the endpoint — rewrite to
+    # the daemon host taken from DOCKER_HOST so kubectl in the job reaches it.
     - |
       DAEMON_HOST="${DOCKER_HOST#tcp://}"; DAEMON_HOST="${DAEMON_HOST%%:*}"
-      if [ -n "$DAEMON_HOST" ] && [ "$DAEMON_HOST" != "127.0.0.1" ]; then
-        sed -i "s|https://127.0.0.1:|https://${DAEMON_HOST}:|" "$KUBECONFIG"
+      if [ -n "$DAEMON_HOST" ] && [ "$DAEMON_HOST" != "127.0.0.1" ] && [ "$DAEMON_HOST" != "localhost" ]; then
+        sed -i "s|https://0.0.0.0:|https://${DAEMON_HOST}:|; s|https://127.0.0.1:|https://${DAEMON_HOST}:|" "$KUBECONFIG"
         echo "kubeconfig endpoint rewritten to daemon host ${DAEMON_HOST}"
       fi
     - export KUBECONFIG

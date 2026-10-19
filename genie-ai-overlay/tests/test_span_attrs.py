@@ -400,7 +400,7 @@ def _non_literal_span_openers(overlay_sources):
             continue
         for lineno, first in _span_calls(path):
             if first is None or not (isinstance(first, ast.Constant) and isinstance(first.value, str)):
-                offenders.append(f"{path.relative_to(OVERLAY_ROOT)}:{lineno}")
+                offenders.append(f"{_display_path(path)}:{lineno}")
     return offenders
 
 
@@ -489,33 +489,17 @@ def _registered_key(node, aliases):
     return None
 
 
-# Write sites whose attribute keys the source walk cannot read, named so the
-# exemption is a decision with a reason rather than a silent pass. Each builds
-# its mapping in a helper that already has a test asserting the result carries
-# no free text, so the keys ARE policed — by that test, not by the derivation.
-# Adding a sixteenth site fails the test below and forces the same question.
-#
-# Line numbers move when these files are edited; a site that disappears from the
-# derivation must be removed from this list, and one that moves must be updated.
-KNOWN_RUNTIME_ATTRIBUTE_WRITES = frozenset(
-    {
-        "chatqna/genieai_chatqna.py:1186",  # set_attributes(sanitize_attributes({…})) — ok path only
-        "chatqna/genieai_chatqna.py:166",  # llm.invoke request-stamping helper
-        "chatqna/genieai_chatqna.py:207",  # llm.invoke usage-stamping helper
-        "chatqna/genieai_chatqna.py:277",  # llm.invoke model/service attributes
-        "chatqna/genieai_chatqna.py:301",  # llm.invoke self-confidence
-        "chatqna/genieai_chatqna.py:346",  # llm.invoke stream flags
-        "chatqna/genieai_chatqna.py:864",  # _set_attributes(key, value) helper
-        "chatqna/genieai_chatqna.py:3574",  # condense-question span
-        "reranker/genieai_tei_reranker.py:342",  # adaptive breakdown (JSON-encoded)
-        "retriever/genieai_retriever_arangodb.py:1060",  # hybrid-search attribute batch
-        "retriever/genieai_retriever_arangodb.py:1086",  # hybrid-search attribute batch
-        "retriever/genieai_retriever_arangodb.py:1402",  # traversal attributes
-        "retriever/genieai_retriever_arangodb.py:1421",  # traversal attributes
-        "retriever/genieai_retriever_arangodb.py:1531",  # score attributes
-        "retriever/genieai_retriever_arangodb.py:1532",  # score attributes
-    }
-)
+def _display_path(path):
+    """A path relative to the overlay when it is inside one, absolute otherwise.
+
+    The offenders are reported for a human to act on, and a probe file outside
+    the overlay must not make the reporting helper raise — the caller is asking
+    "what does this find?", not "is this under the overlay?".
+    """
+    try:
+        return str(path.relative_to(OVERLAY_ROOT))
+    except ValueError:
+        return str(path)
 
 
 def _non_literal_attribute_mappings(overlay_sources):
@@ -530,13 +514,19 @@ def _non_literal_attribute_mappings(overlay_sources):
     two in chatqna and the retriever. Checking only the opener would leave the
     larger half of the same defect unreported.
 
-    Every site found today is listed in ``KNOWN_RUNTIME_ATTRIBUTE_WRITES``. They
-    predate the derivation: each assembles its mapping in a helper that already
-    has a test asserting the result is free-text-free
-    (``test_chatqna_budget_tracing.py`` covers the prompt-budget and blend
-    builders), so the keys are policed — just by that test rather than by this
-    one. The list is the honest statement of that, and it turns the next such
-    site into a failing name rather than another unremarkable one.
+    This is a REPORT, not a gate: there is no allowlist of known sites, because
+    a list keyed by file and line number breaks on any edit that shifts a line
+    and then reports a stale reason for a site that did not change. Fifteen such
+    writes exist today, all predating the derivation, and each assembles its
+    mapping in a helper that already has a test asserting the result is
+    free-text-free (``test_chatqna_budget_tracing.py`` covers the prompt-budget
+    and blend builders) — so those keys are policed, by that test rather than by
+    this one.
+
+    The threshold test beside it is what makes the number watchable:
+    ``test_the_derivation_covers_most_registered_keys`` names the register keys
+    this cannot read, so a new unreadable form shows up as a coverage drop
+    instead of passing unnoticed.
     """
     offenders = []
     for path in overlay_sources:
@@ -551,13 +541,13 @@ def _non_literal_attribute_mappings(overlay_sources):
             if name in SPAN_OPENERS:
                 for keyword in node.keywords:
                     if keyword.arg in {"attributes", "attrs"} and not isinstance(keyword.value, ast.Dict):
-                        offenders.append(f"{path.relative_to(OVERLAY_ROOT)}:{node.lineno}")
+                        offenders.append(f"{_display_path(path)}:{node.lineno}")
             elif name in _ATTRIBUTE_WRITERS:
                 # set_attribute("literal", …) is derivable; set_attribute(k, v)
                 # and set_attributes(mapping) are not.
                 for arg in node.args[:1]:
                     if not _is_literal_key(arg, name):
-                        offenders.append(f"{path.relative_to(OVERLAY_ROOT)}:{node.lineno}")
+                        offenders.append(f"{_display_path(path)}:{node.lineno}")
                         break
     return offenders
 
@@ -692,28 +682,45 @@ class TestOwnedSpanCoverage:
             "swept nor reported. Pass the name as a plain string literal."
         )
 
-    def test_no_span_is_opened_with_a_non_literal_attribute_mapping(self, overlay_sources):
-        """An ``attributes=`` built at runtime carries keys nothing can check.
+    def test_a_non_literal_attribute_mapping_is_reported(self, tmp_path):
+        """The check that names a write form the derivation cannot read must work.
 
-        The key derivation reads dict literals. A mapping assembled from a
-        variable is invisible to it, so its keys would reach a span with neither
-        the vocabulary sweep nor this coverage check ever naming them — the same
-        blind spot as a computed span name, one level down.
+        It reports rather than gates: the fifteen write sites that exist today
+        all predate the derivation and each has a test asserting its built
+        mapping is free-text-free, so making them CI failures would be noise
+        dressed as rigor. Coverage is gated instead, by threshold, in
+        ``test_the_derivation_covers_most_registered_keys``.
+
+        So the assertion here is about the DETECTION, on a synthetic file: a
+        mapping built at runtime is reported, a dict literal is not. Without it
+        the report could quietly stop reporting and nothing would fail.
         """
-        offenders = set(_non_literal_attribute_mappings(overlay_sources))
-        unexpected = sorted(offenders - KNOWN_RUNTIME_ATTRIBUTE_WRITES)
-        assert not unexpected, (
-            f"attribute writes whose keys this derivation cannot read, and which "
-            f"are not declared in KNOWN_RUNTIME_ATTRIBUTE_WRITES: {unexpected}. "
-            "Either pass the mapping as a dict literal so the keys are derivable, "
-            "or add the site to that list with the reason its keys are policed "
-            "somewhere else — a blanket exemption is the same as no check."
+        probe = tmp_path / "probe.py"
+        probe.write_text(
+            'with_span("a.b", attributes=build())\n'
+            "span.set_attribute(variable_key, 1)\n"
+            "span.set_attributes(prepared)\n"
+            'with_span("c.d", attributes={"literal.key": 1})\n'
+            'span.set_attribute("literal.key", 1)\n',
+            encoding="utf-8",
         )
-        stale = sorted(KNOWN_RUNTIME_ATTRIBUTE_WRITES - offenders)
-        assert not stale, (
-            f"KNOWN_RUNTIME_ATTRIBUTE_WRITES lists sites the derivation can now "
-            f"read: {stale}. Remove them — the list is a record of what the "
-            "derivation cannot see, and a stale entry hides a real one."
+        offenders = _non_literal_attribute_mappings([probe])
+        assert len(offenders) == 3, f"expected the three runtime-built writes, got {offenders}"
+
+    def test_the_reported_count_matches_what_the_helper_finds(self, overlay_sources):
+        """Pin the helper against the tree, so the report cannot go quiet.
+
+        A count that moves when a service adds or removes an attribute write is
+        the intended signal. It is not an allowlist — nothing is excused — it is
+        the statement of how many sites the derivation cannot read, which is the
+        number the coverage threshold exists to keep watch on.
+        """
+        assert len(_non_literal_attribute_mappings(overlay_sources)) == 15, (
+            "the number of attribute writes whose keys the source derivation "
+            "cannot read changed. That is fine — but the coverage threshold in "
+            "test_the_derivation_covers_most_registered_keys is what judges "
+            "whether it is a problem, so re-read that test's failure before "
+            "assuming it is."
         )
 
     def test_mirror_matches_conftest(self, owned_span_names):

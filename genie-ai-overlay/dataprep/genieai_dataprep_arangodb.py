@@ -334,7 +334,17 @@ def _build_vllm_client() -> tuple[AsyncOpenAI, str]:
     """
     _api_key = os.getenv("VLLM_API_KEY", "EMPTY")
     _vllm_endpoint = os.getenv("VLLM_ENDPOINT")
-    client = AsyncOpenAI(api_key=_api_key, base_url=f"{_vllm_endpoint}/v1")
+    # Explicit request budget: the openai-python defaults (600 s, 2 retries)
+    # let a heavily contended shared GPU stall labeling/context batches for
+    # 10+ minutes with no feedback (live-observed). Env-tunable so shared-GPU
+    # deployments can tighten it; the fallback chain (batch -> per-chunk ->
+    # file labels) keeps ingestion alive either way.
+    client = AsyncOpenAI(
+        api_key=_api_key,
+        base_url=f"{_vllm_endpoint}/v1",
+        timeout=float(os.getenv("DATAPREP_LLM_TIMEOUT_SECONDS", "600")),
+        max_retries=int(os.getenv("DATAPREP_LLM_MAX_RETRIES", "2")),
+    )
     model = os.getenv("VLLM_MODEL_ID")
     if os.getenv("GPU_NODE_HOST"):
         detected = get_model_id(_vllm_endpoint)

@@ -126,10 +126,14 @@ const ragasService = {
 
   /** opts.silent: expected-miss lookups (the advisor auto-load — a run that
    *  was never explained 404s by design) skip the shared httpService error
-   *  logging instead of printing [OKF-ERR] noise for a normal state. */
+   *  logging instead of printing [OKF-ERR] noise for a normal state. The
+   *  flag is an axios OPTION (third arg) — in the params slot it leaks onto
+   *  the wire as ?silent=true and never reaches error.config (field report
+   *  2026-10-19). */
   async getExplain(repoId, suiteKey, runKey, opts = {}) {
     const res = await httpService.get(
       `/okf/repos/${rid(repoId)}/ragas-testsuite/${sk(suiteKey)}/explain/${encodeURIComponent(runKey)}`,
+      {},
       opts.silent ? { silent: true } : undefined
     );
     return res && res.data ? res.data : null;

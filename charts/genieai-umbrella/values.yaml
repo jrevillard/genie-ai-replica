@@ -116,13 +116,6 @@ ingress:
   # redirectUris/webOrigins): a port-forward demo serves plain HTTP, so
   # the overlay sets http:// there or every login redirect mismatches.
   scheme: https
-  # Port the https Gateway LISTENER binds. Envoy derives X-Forwarded-Port
-  # from it and Keycloak (backchannelDynamic) builds the discovery
-  # document's token/jwks/userinfo URLs from those headers — a listener on
-  # 443 behind a public origin with a different port serves portless
-  # backchannel URLs and the SPA's token exchange fails. 443 by default;
-  # set to the port carried by ingress.host when it has one.
-  httpsPort: 443
   # Gateway API tier (Plan 6 Phase 2). Off by default: the laptop overlay
   # reach the stack through `kubectl port-forward` of the Envoy data-plane
   # an Envoy Gateway (or any controller implementing the `envoy` class)

@@ -1530,10 +1530,16 @@ const actions = {
 
   /** Run the suite (202 + store-side poll with live progress). opts.onProgress
    * (a plain function, not serialized) receives each poll's {phase, done, total}. */
-  async ragasRun(_ctx, { repoId, suiteKey, metrics, onProgress, onStarted } = {}) {
+  async ragasRun(_ctx, { repoId, suiteKey, metrics, judge_config_key, judge_model, onProgress, onStarted } = {}) {
     try {
       ensureServices();
-      const started = await ragasService.runSuite(repoId, suiteKey, metrics ? { metrics } : {});
+      const body = { ...(metrics ? { metrics } : {}) };
+      // 8-7: an explicit judge pick rides the run body (picked > active > env)
+      if (judge_config_key) {
+        body.judge_config_key = judge_config_key;
+        if (judge_model) body.judge_model = judge_model;
+      }
+      const started = await ragasService.runSuite(repoId, suiteKey, body);
       if (!started || !started.run_key) return { ok: true, result: started };
       if (typeof onStarted === 'function') onStarted(started.run_key);
       const POLL_MS = 2000;
@@ -1730,6 +1736,74 @@ const actions = {
     }
   },
 
+  /** Story 8-7 — named remote-model configurations. All pass-through with
+   * honest {ok, result|message} envelopes; the service masks keys. */
+  async modelConfigList() {
+    try {
+      ensureServices();
+      return { ok: true, configs: await modelConfigService.list() };
+    } catch (err) {
+      return { ok: false, code: (err && err.code) || 'MODEL_CONFIG_LIST_FAILED', message: err.message };
+    }
+  },
+  async modelConfigCreate(_ctx, payload) {
+    try {
+      ensureServices();
+      return { ok: true, result: await modelConfigService.create(payload) };
+    } catch (err) {
+      return { ok: false, code: (err && err.code) || 'MODEL_CONFIG_CREATE_FAILED', message: err.message };
+    }
+  },
+  async modelConfigUpdate(_ctx, { key, payload } = {}) {
+    try {
+      ensureServices();
+      return { ok: true, result: await modelConfigService.update(key, payload) };
+    } catch (err) {
+      return { ok: false, code: (err && err.code) || 'MODEL_CONFIG_UPDATE_FAILED', message: err.message };
+    }
+  },
+  async modelConfigCopy(_ctx, { key } = {}) {
+    try {
+      ensureServices();
+      return { ok: true, result: await modelConfigService.copy(key) };
+    } catch (err) {
+      return { ok: false, code: (err && err.code) || 'MODEL_CONFIG_COPY_FAILED', message: err.message };
+    }
+  },
+  async modelConfigActivate(_ctx, { key } = {}) {
+    try {
+      ensureServices();
+      return { ok: true, result: await modelConfigService.activate(key) };
+    } catch (err) {
+      return { ok: false, code: (err && err.code) || 'MODEL_CONFIG_ACTIVATE_FAILED', message: err.message };
+    }
+  },
+  async modelConfigDeactivate(_ctx, { key } = {}) {
+    try {
+      ensureServices();
+      return { ok: true, result: await modelConfigService.deactivate(key) };
+    } catch (err) {
+      return { ok: false, code: (err && err.code) || 'MODEL_CONFIG_DEACTIVATE_FAILED', message: err.message };
+    }
+  },
+  async modelConfigDelete(_ctx, { key } = {}) {
+    try {
+      ensureServices();
+      return { ok: true, result: await modelConfigService.remove(key) };
+    } catch (err) {
+      return { ok: false, code: (err && err.code) || 'MODEL_CONFIG_DELETE_FAILED', message: err.message };
+    }
+  },
+  /** Live model listing for a config's dropdown (server-side, key-safe). */
+  async modelConfigModels(_ctx, { key } = {}) {
+    try {
+      ensureServices();
+      return { ok: true, models: await modelConfigService.models(key) };
+    } catch (err) {
+      return { ok: false, code: (err && err.code) || 'MODEL_LIST_FAILED', message: err.message };
+    }
+  },
+
   /** Explain failures (202 + store-side poll). */
   async ragasExplain(_ctx, { repoId, suiteKey, runKey } = {}) {
     try {
@@ -1824,6 +1898,7 @@ let conceptService;
 let okfRepoOps;
 let headTestService;
 let ragasService;
+let modelConfigService;
 function ensureServices() {
   if (!studioService) studioService = require('@/services/studioService').default;
   if (!repoOkfService) repoOkfService = require('@/services/repoOkfService').default;
@@ -1832,6 +1907,7 @@ function ensureServices() {
   if (!okfRepoOps) okfRepoOps = require('@/services/okfRepoOps');
   if (!headTestService) headTestService = require('@/services/headTestService').default;
   if (!ragasService) ragasService = require('@/services/ragasService').default;
+  if (!modelConfigService) modelConfigService = require('@/services/modelConfigService').default;
 }
 
 const actionsWithServices = {};

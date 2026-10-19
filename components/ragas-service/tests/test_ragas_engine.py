@@ -91,8 +91,8 @@ def _stub_default_distribution(monkeypatch, stub=None):
 def test_generate_testset_passes_num_personas_to_generate(monkeypatch, engine_env):
     from ragas.testset import TestsetGenerator
 
-    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0: object())
-    monkeypatch.setattr(ragas_engine, "build_embeddings", lambda: object())
+    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None: object())
+    monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: object())
 
     seen = {}
 
@@ -143,8 +143,8 @@ def test_generate_testset_caps_concept_text_for_the_kg(monkeypatch, engine_env):
     window and killed the job (live bug #7). The KG input must be capped."""
     from ragas.testset import TestsetGenerator
 
-    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0: object())
-    monkeypatch.setattr(ragas_engine, "build_embeddings", lambda: object())
+    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None: object())
+    monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: object())
 
     seen = {}
 
@@ -228,8 +228,8 @@ def test_generate_testset_seeds_missing_headlines_before_splitter(monkeypatch, e
         async def embed_text(self, _text):
             return [0.1, 0.2]
 
-    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0: object())
-    monkeypatch.setattr(ragas_engine, "build_embeddings", lambda: _FakeEmbedder())
+    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None: object())
+    monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: _FakeEmbedder())
 
     # Stub every LLM touchpoint in the chain (prompts are patched at the
     # CLASS level — each extractor instance builds its own prompt object).
@@ -434,8 +434,8 @@ def test_generate_testset_filters_dropped_samples(monkeypatch, engine_env):
 
     from ragas.testset import TestsetGenerator
 
-    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0: object())
-    monkeypatch.setattr(ragas_engine, "build_embeddings", lambda: object())
+    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None: object())
+    monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: object())
     monkeypatch.setattr(ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model: [])
     import ragas.testset.transforms as transforms_module
 
@@ -449,9 +449,7 @@ def test_generate_testset_filters_dropped_samples(monkeypatch, engine_env):
         return _testset_with(_StubTS(), _StubTS(empty), _StubTS(blank))
 
     monkeypatch.setattr(TestsetGenerator, "generate", fake_generate)
-    out = asyncio.run(
-        ragas_engine.generate_testset([{"page_content": "b", "metadata": {}}], testset_size=3)
-    )
+    out = asyncio.run(ragas_engine.generate_testset([{"page_content": "b", "metadata": {}}], testset_size=3))
     assert len(out["samples"]) == 1
     assert out["dropped"] == 2
 
@@ -461,9 +459,7 @@ def test_generate_testset_filters_dropped_samples(monkeypatch, engine_env):
         return _testset_with(_StubTS(), _StubTS(), _StubTS())
 
     monkeypatch.setattr(TestsetGenerator, "generate", fake_generate_many)
-    out2 = asyncio.run(
-        ragas_engine.generate_testset([{"page_content": "b", "metadata": {}}], testset_size=2)
-    )
+    out2 = asyncio.run(ragas_engine.generate_testset([{"page_content": "b", "metadata": {}}], testset_size=2))
     assert len(out2["samples"]) == 2
     assert out2["dropped"] == 1  # the third valid sample was capped away
 
@@ -473,8 +469,8 @@ def test_generate_testset_all_dropped_raises_an_honest_error(monkeypatch, engine
 
     from ragas.testset import TestsetGenerator
 
-    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0: object())
-    monkeypatch.setattr(ragas_engine, "build_embeddings", lambda: object())
+    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None: object())
+    monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: object())
     monkeypatch.setattr(ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model: [])
     import ragas.testset.transforms as transforms_module
 
@@ -499,8 +495,8 @@ def test_generate_testset_cancel_beats_partial_results(monkeypatch, engine_env):
 
     from ragas.testset import TestsetGenerator
 
-    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0: object())
-    monkeypatch.setattr(ragas_engine, "build_embeddings", lambda: object())
+    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None: object())
+    monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: object())
     monkeypatch.setattr(ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model: [])
     import ragas.testset.transforms as transforms_module
 
@@ -545,9 +541,7 @@ def test_resolve_distribution_wraps_both_paths(monkeypatch, engine_env):
         "MultiHopSpecificQuerySynthesizer",
     ):
         monkeypatch.setattr(synth_mod, cls_name, _UserSynth)
-    dist2 = ragas_engine._resolve_distribution(
-        [{"synthesizer": "multi_hop_abstract", "weight": 0.7}], llm=object()
-    )
+    dist2 = ragas_engine._resolve_distribution([{"synthesizer": "multi_hop_abstract", "weight": 0.7}], llm=object())
     assert isinstance(dist2[0][0], ragas_engine._TolerantSynthesizer)
     assert dist2[0][0].name == "user_synth"
     assert dist2[0][1] == 0.7
@@ -711,8 +705,8 @@ def test_evaluate_batches_rows_and_reports_progress(monkeypatch, engine_env):
 
     import ragas as ragas_mod
 
-    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0: object())
-    monkeypatch.setattr(ragas_engine, "build_embeddings", lambda: object())
+    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None: object())
+    monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: object())
     monkeypatch.setenv("RAGAS_EVAL_BATCH_ROWS", "2")
 
     class _M:

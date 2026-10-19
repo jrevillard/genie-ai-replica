@@ -15,3 +15,7 @@ uvicorn==0.37.0
 # string-distance (rapidfuzz) — the eval-only runner never needs it, the
 # Lab's TestsetGenerator does (live-caught 2026-10-17).
 rapidfuzz==3.14.6
+# 8-7 model configs (2026-10-19): native Anthropic judging (provider
+# 'anthropic'). Lazy-imported — an image without it still serves every
+# openai-compatible config and fails Anthropic configs with an honest error.
+langchain-anthropic==1.4.1

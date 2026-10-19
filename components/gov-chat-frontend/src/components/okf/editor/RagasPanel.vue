@@ -86,6 +86,44 @@
           <input v-model.number="genPersonas" type="number" min="1" max="10" :disabled="generateBusy" />
         </label>
       </div>
+      <!-- 8-7 model configs: the judge this generation runs with — an explicit
+           pick beats the deployment's active configuration; default = env. -->
+      <div v-if="modelConfigs.length" class="okf-ragas__judge-row">
+        <label class="okf-ragas__dim">
+          <span>{{ translate('okf.ragas.judge.config', 'Judge model configuration') }}</span>
+          <select v-model="judgeConfigKey" :disabled="generateBusy" @change="onJudgeConfigChange">
+            <option value="">
+              {{ translate('okf.ragas.judge.default', 'Deployment default (active configuration / env)') }}
+            </option>
+            <option v-for="c in modelConfigs" :key="c._key" :value="c._key">
+              {{ c.name }}{{ c.active ? ' ★' : '' }}
+            </option>
+          </select>
+        </label>
+        <label v-if="judgeConfigKey" class="okf-ragas__dim">
+          <span>{{ translate('okf.ragas.judge.model', 'Model') }}</span>
+          <select v-if="judgeModels.length" v-model="judgeModel" :disabled="generateBusy">
+            <option value="">{{ translate('okf.ragas.judge.modelPick', 'Configuration default') }}</option>
+            <option v-for="m in judgeModels" :key="m" :value="m">{{ m }}</option>
+          </select>
+          <input
+            v-else
+            v-model="judgeModel"
+            type="text"
+            :placeholder="translate('okf.ragas.judge.modelDefault', 'configuration default')"
+            :disabled="generateBusy"
+          />
+        </label>
+        <DsInfoTip
+          :label="translate('okf.ragas.judge.config', 'Judge model configuration')"
+          :text="
+            translate(
+              'okf.ragas.judge.note',
+              'The model that synthesizes questions and scores answers. An active configuration (★, Models tab) applies automatically; picking one here overrides it for this operation only. Stronger judges make entity-recall and advice quality markedly better on small local models.'
+            )
+          "
+        />
+      </div>
       <div class="okf-ragas__actions">
         <DsButton
           v-if="!readOnly"
@@ -159,6 +197,26 @@
             :disabled="m.default || readOnly || runBusy"
           />
           <span>{{ m.label }}</span>
+        </label>
+        <!-- 8-7: the run's scoring judge — same shared pick as generation -->
+        <label v-if="modelConfigs.length" class="okf-ragas__metric okf-ragas__judge-inline">
+          <select v-model="judgeConfigKey" :disabled="runBusy" @change="onJudgeConfigChange">
+            <option value="">
+              {{ translate('okf.ragas.judge.default', 'Deployment default (active configuration / env)') }}
+            </option>
+            <option v-for="c in modelConfigs" :key="c._key" :value="c._key">
+              {{ c.name }}{{ c.active ? ' ★' : '' }}
+            </option>
+          </select>
+          <select
+            v-if="judgeConfigKey && judgeModels.length"
+            v-model="judgeModel"
+            :disabled="runBusy"
+            class="okf-ragas__judge-model"
+          >
+            <option value="">{{ translate('okf.ragas.judge.modelPick', 'Configuration default') }}</option>
+            <option v-for="m in judgeModels" :key="m" :value="m">{{ m }}</option>
+          </select>
         </label>
       </div>
 
@@ -625,6 +683,10 @@ export default {
       runProgress: null,
       colWidths: {}, // per-column px widths for the results table (drag-resize)
       copiedId: '', // row whose answer was just copied (transient ✓)
+      modelConfigs: [], // 8-7: named judge configurations (admin-managed)
+      judgeConfigKey: '', // '' = deployment default (active config / env)
+      judgeModel: '', // '' = the configuration's default model
+      judgeModels: [],
       suiteEpoch: 0
     };
   },
@@ -812,10 +874,28 @@ export default {
   mounted() {
     this.selectedRepoIds = this.repo && this.repo.repo_id ? [this.repo.repo_id] : [];
     this.loadRepoChoices();
+    this.loadJudgeConfigs();
     if (this.initialSuiteKey) this.loadSuite(this.initialSuiteKey);
     else this.loadLatest();
   },
   methods: {
+    /** 8-7: the judge-config dropdown — a 403 (non-admin) or an empty list
+     *  simply hides the selector; the deployment default keeps applying. */
+    async loadJudgeConfigs() {
+      const res = await this.$store.dispatch('okf/modelConfigList').catch(() => null);
+      if (res && res.ok) this.modelConfigs = res.configs || [];
+      // pre-select the ACTIVE configuration's model choices? No — the active
+      // config applies server-side automatically; the pick here is an
+      // explicit OVERRIDE, which starts empty (deployment default).
+    },
+    async onJudgeConfigChange() {
+      this.judgeModel = '';
+      this.judgeModels = [];
+      if (!this.judgeConfigKey) return;
+      const res = await this.$store.dispatch('okf/modelConfigModels', { key: this.judgeConfigKey }).catch(() => null);
+      if (res && res.ok) this.judgeModels = res.models || [];
+      // listing failure leaves the free-text input — honest fallback
+    },
     metricLabel(m) {
       return this.translate(`okf.ragas.metric.${m}`, m.replace(/_/g, ' '));
     },
@@ -1070,7 +1150,10 @@ export default {
             repo_ids: this.selectedRepoIds,
             testset_size: this.genSize,
             query_distribution: dist,
-            num_personas: this.genPersonas
+            num_personas: this.genPersonas,
+            // 8-7: explicit judge pick ('' fields simply omit the override)
+            judge_config_key: this.judgeConfigKey || undefined,
+            judge_model: this.judgeConfigKey ? this.judgeModel || undefined : undefined
           },
           onStarted: (suiteKey) => {
             this.generatingKey = suiteKey;
@@ -1221,6 +1304,9 @@ export default {
           repoId: this.repo && this.repo.repo_id,
           suiteKey: this.suite.suite_key,
           metrics: this.selectedMetrics,
+          // 8-7: explicit judge pick ('' fields simply omit the override)
+          judge_config_key: this.judgeConfigKey || undefined,
+          judge_model: this.judgeConfigKey ? this.judgeModel || undefined : undefined,
           onStarted: (runKey) => {
             this.runningRunKey = runKey;
           },
@@ -1608,6 +1694,29 @@ export default {
   background: var(--surface);
   padding: 10px 12px;
   margin: 8px 0;
+}
+
+.okf-ragas__judge-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 6px 0;
+}
+.okf-ragas__judge-inline select,
+.okf-ragas__judge-row select,
+.okf-ragas__judge-row input {
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--fg);
+  max-width: 300px;
+}
+.okf-ragas__judge-model {
+  max-width: 220px;
 }
 
 .okf-ragas__hint {

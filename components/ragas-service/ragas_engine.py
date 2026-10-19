@@ -138,7 +138,7 @@ def _make_fanout_class(ChatOpenAI):  # noqa: N802 — mirrors his validated subc
             return out
 
         def _generate(self, messages, stop=None, run_manager=None, **kwargs):
-            n = self._effective_n(kwargs.pop("n", None), self.n)
+            n = self._effective_n(kwargs.pop("n", None), getattr(self, "n", 1))
             if n <= 1:
                 return super()._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
             per_call = {**kwargs, "n": 1}
@@ -153,7 +153,7 @@ def _make_fanout_class(ChatOpenAI):  # noqa: N802 — mirrors his validated subc
             return self._merge_results(results)
 
         async def _agenerate(self, messages, stop=None, run_manager=None, **kwargs):
-            n = self._effective_n(kwargs.pop("n", None), self.n)
+            n = self._effective_n(kwargs.pop("n", None), getattr(self, "n", 1))
             if n <= 1:
                 return await super()._agenerate(messages, stop=stop, run_manager=run_manager, **kwargs)
             per_call = {**kwargs, "n": 1}
@@ -169,7 +169,7 @@ def _make_fanout_class(ChatOpenAI):  # noqa: N802 — mirrors his validated subc
     return _FanoutChatOpenAI
 
 
-def _make_caching_wrapper(LangchainLLMWrapper):  # noqa: N802 — factory, like _make_fanout_class
+def _make_caching_wrapper(LangchainLLMWrapper, model_tag=None):  # noqa: N802 — factory, like _make_fanout_class
     """Disk-backed response cache around the judge client (2026-10-18).
 
     Live cost anatomy of a 5-question generation over two SMALL repos (21
@@ -181,6 +181,10 @@ def _make_caching_wrapper(LangchainLLMWrapper):  # noqa: N802 — factory, like 
     the only lever that shortens a re-run is NOT MAKING THE CALLS.
 
     Key = sha256(model | prompt | n | temperature | stop | max_tokens).
+    model_tag (8-7 model configs, 2026-10-19): the EFFECTIVE judge identity
+    — with judge overrides the env var would collide runs from different
+    models onto each other's cached answers; the env case keeps the exact
+    historical tag so existing caches stay valid.
     Hit → rebuild an LLMResult carrying ChatGeneration(text, AIMessage) —
     consumers reading .text or .message both work. Cache lives under
     RAGAS_LLM_CACHE_DIR (default /tmp/ragas-llm-cache — survives job
@@ -190,6 +194,7 @@ def _make_caching_wrapper(LangchainLLMWrapper):  # noqa: N802 — factory, like 
     class _CachingLlmWrapper(LangchainLLMWrapper):
         def __init__(self, llm):
             super().__init__(llm)
+            self._model_tag = model_tag if model_tag is not None else os.getenv("RAGAS_JUDGE_MODEL")
             self._cache_dir = os.getenv("RAGAS_LLM_CACHE_DIR") or "/tmp/ragas-llm-cache"
             self._enabled = (os.getenv("RAGAS_LLM_CACHE") or "1").strip().lower() not in ("0", "off", "false", "no")
 
@@ -202,7 +207,7 @@ def _make_caching_wrapper(LangchainLLMWrapper):  # noqa: N802 — factory, like 
 
             payload = json.dumps(
                 [
-                    os.getenv("RAGAS_JUDGE_MODEL"),
+                    self._model_tag,
                     os.getenv("RAGAS_JUDGE_MAX_TOKENS") or "0",
                     prompt.to_string(),
                     n,
@@ -284,9 +289,18 @@ def _make_caching_wrapper(LangchainLLMWrapper):  # noqa: N802 — factory, like 
     return _CachingLlmWrapper
 
 
-def build_llm(temperature: float = 0.0):
+def build_llm(temperature: float = 0.0, judge: dict | None = None):
     """Wrap the judge endpoint as a ragas LLM. Deferred-imported so /health
-    never pays the langchain import cost and tests can stub this module."""
+    never pays the langchain import cost and tests can stub this module.
+
+    judge (8-7 model configs, 2026-10-19): optional per-request override
+    {provider, base_url, model, api_key} resolved by okf-server — an
+    explicit run pick or the deployment's active model configuration.
+    provider 'openai' covers every OpenAI-compatible surface (OpenAI
+    direct, a LiteLLM gateway, vLLM, Gemini-compat, Ollama); 'anthropic'
+    is the native Messages API via langchain-anthropic (lazy import —
+    optional dependency, honest error when absent). Without an override
+    the env contract (RAGAS_JUDGE_*) applies unchanged."""
     import httpx
     from langchain_openai import ChatOpenAI
 
@@ -297,9 +311,37 @@ def build_llm(temperature: float = 0.0):
     # from its module.
     from ragas.llms.base import LangchainLLMWrapper
 
-    base = _judge_base_url()
-    if not base or not os.getenv("RAGAS_JUDGE_MODEL"):
-        raise RuntimeError("judge endpoint not configured (RAGAS_JUDGE_BASE_URL / RAGAS_JUDGE_MODEL)")
+    provider = "openai"
+    if judge:
+        provider = str(judge.get("provider") or "openai").lower()
+        base = str(judge.get("base_url") or "").rstrip("/")
+        model = judge.get("model")
+        api_key = judge.get("api_key") or "sk-no-key"
+        if not base or not model:
+            raise RuntimeError("judge override incomplete — base_url and model are required")
+        model_tag = f"{provider}:{base}:{model}"
+    else:
+        base = _judge_base_url()
+        model = os.getenv("RAGAS_JUDGE_MODEL")
+        api_key = os.getenv("RAGAS_JUDGE_API_KEY") or "sk-no-key"
+        if not base or not model:
+            raise RuntimeError("judge endpoint not configured (RAGAS_JUDGE_BASE_URL / RAGAS_JUDGE_MODEL)")
+        model_tag = None  # env tag — keeps the existing disk cache valid
+
+    if provider == "anthropic":
+        try:
+            from langchain_anthropic import ChatAnthropic
+        except ImportError as e:
+            raise RuntimeError(
+                "anthropic judging needs langchain-anthropic in the ragas-service image "
+                "(pip install langchain-anthropic) — or point the config at a LiteLLM gateway"
+            ) from e
+        cls = ChatAnthropic
+        # The SDK appends its own /v1 paths; accept the base with or without
+        # the /v1 the config UI may have stored.
+        base = base.removesuffix("/v1")
+    else:
+        cls = ChatOpenAI
 
     # Sovereign vLLM fronts nginx with a self-signed cert — bypass SSL
     # verify on BOTH sync and async clients (ragas uses the async path
@@ -311,20 +353,22 @@ def build_llm(temperature: float = 0.0):
     async_client = httpx.AsyncClient(verify=False, timeout=300)
     kwargs: dict[str, Any] = {}
     max_tokens = int(os.getenv("RAGAS_JUDGE_MAX_TOKENS") or "0")
+    if max_tokens <= 0 and provider == "anthropic":
+        max_tokens = 4096  # the Anthropic API REQUIRES max_tokens — no default
     if max_tokens > 0:
         kwargs["max_tokens"] = max_tokens
-    fanout_cls = _make_fanout_class(ChatOpenAI)
+    fanout_cls = _make_fanout_class(cls)
     inner = fanout_cls(
         base_url=base,
-        api_key=os.getenv("RAGAS_JUDGE_API_KEY") or "sk-no-key",
-        model=os.getenv("RAGAS_JUDGE_MODEL"),
+        api_key=api_key,
+        model=model,
         temperature=temperature,
         http_client=sync_client,
         http_async_client=async_client,
         timeout=300,
         **kwargs,
     )
-    return _make_caching_wrapper(LangchainLLMWrapper)(inner)
+    return _make_caching_wrapper(LangchainLLMWrapper, model_tag)(inner)
 
 
 class _TeiEmbeddings:
@@ -374,7 +418,7 @@ class _TeiEmbeddings:
         return (await asyncio.to_thread(self._post, [text]))[0]
 
 
-def build_embeddings():
+def build_embeddings(embed: dict | None = None):
     """Wrap the embedder endpoint. Returns None when unconfigured —
     answer_relevancy is then dropped from the wanted metrics with a loud
     warning (his documented pitfall: silent drop).
@@ -382,8 +426,25 @@ def build_embeddings():
     RAGAS_EMBED_API selects the dialect: 'tei' (default — POSTs
     {RAGAS_EMBED_BASE_URL}/embed with {inputs, truncate}, the project's
     TEI-behind-nginx contract) or 'openai' (any OpenAI-compatible
-    embeddings endpoint, e.g. LiteLLM — uses /embeddings)."""
+    embeddings endpoint, e.g. LiteLLM — uses /embeddings).
+
+    embed (8-7 model configs, 2026-10-19): optional per-request override
+    {base_url, model, api_key} against an OpenAI-compatible embeddings
+    surface (Anthropic serves none — a config with that provider cannot
+    embed; keep the env TEI embedder, which is what the sovereign stack
+    uses anyway)."""
     from ragas.embeddings import LangchainEmbeddingsWrapper
+
+    if embed:
+        base = str(embed.get("base_url") or "").rstrip("/")
+        model = embed.get("model")
+        if not base or not model:
+            raise RuntimeError("embed override incomplete — base_url and model are required")
+        from langchain_openai import OpenAIEmbeddings
+
+        return LangchainEmbeddingsWrapper(
+            OpenAIEmbeddings(model=model, api_key=embed.get("api_key") or "sk-no-key", base_url=base)
+        )
 
     model = os.getenv("RAGAS_EMBED_MODEL")
     if not model:
@@ -719,6 +780,8 @@ async def generate_testset(
     num_personas: int = 3,
     progress=None,
     cancel_event: threading.Event | None = None,
+    judge: dict | None = None,
+    embed: dict | None = None,
 ) -> dict:
     """Generate benchmark-suite samples from concept documents.
 
@@ -731,6 +794,8 @@ async def generate_testset(
     cancel_event (optional): set by the app layer on DELETE; checked at
     phase boundaries and inside the synthesizer wrappers (see
     _TolerantSynthesizer).
+    judge / embed (8-7 model configs): optional per-request model overrides
+    resolved by okf-server (build_llm / build_embeddings carry the shapes).
     """
     from langchain_core.documents import Document as LCDocument
     from ragas.run_config import RunConfig
@@ -738,8 +803,8 @@ async def generate_testset(
     from ragas.testset.graph import KnowledgeGraph, Node, NodeType
     from ragas.testset.transforms import apply_transforms
 
-    llm = build_llm(temperature=0.3)  # generation benefits from mild creativity
-    embeddings = build_embeddings()
+    llm = build_llm(temperature=0.3, judge=judge)  # generation benefits from mild creativity
+    embeddings = build_embeddings(embed=embed)
     if embeddings is None:
         raise RuntimeError("RAGAS_EMBED_MODEL is required for testset generation (KG transforms embed)")
 
@@ -931,7 +996,13 @@ def _resolve_distribution(
 
 
 async def evaluate_samples(
-    samples: list[dict], metrics: list[str] | None, timeout_s: int = 600, progress=None, cancel_event=None
+    samples: list[dict],
+    metrics: list[str] | None,
+    timeout_s: int = 600,
+    progress=None,
+    cancel_event=None,
+    judge: dict | None = None,
+    embed: dict | None = None,
 ) -> dict:
     """Score samples with the selected metrics. Sample keys are his exact
     mapping (user_input / retrieved_contexts / response / reference) plus
@@ -939,7 +1010,9 @@ async def evaluate_samples(
     progress (optional): callback(phase, done=None, total=None) for the job
     registry — rows-done/rows-total is reported between evaluation batches.
     cancel_event (optional): checked between batches — a cancelled run
-    reports cancelled rather than shipping scores the user abandoned."""
+    reports cancelled rather than shipping scores the user abandoned.
+    judge / embed (8-7 model configs): optional per-request model overrides
+    resolved by okf-server (build_llm / build_embeddings carry the shapes)."""
     from ragas import EvaluationDataset, evaluate
     from ragas.run_config import RunConfig
 
@@ -949,8 +1022,8 @@ async def evaluate_samples(
     if not metric_instances:
         raise RuntimeError("no metrics available (embedder unconfigured and only embedding metrics requested?)")
 
-    llm = build_llm(temperature=0.0)
-    embeddings = build_embeddings()
+    llm = build_llm(temperature=0.0, judge=judge)
+    embeddings = build_embeddings(embed=embed)
 
     rows = []
     for s in samples:

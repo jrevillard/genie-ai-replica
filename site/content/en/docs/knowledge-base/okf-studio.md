@@ -96,7 +96,12 @@ or wizard step 10) tests that routing against the live corpus:
 The Lab's fourth tab — **Benchmarks** — measures what routing tests cannot:
 *answer quality*. It runs [RAGAS](https://ragas.io) evaluation (the same
 framework as the offline `tests/rag-benchmarks` harness) inside the Studio,
-with suites interchangeable with that harness's xlsx formats:
+with suites interchangeable with that harness's xlsx formats. A **judge
+model** selector rides the Generate and Run controls: the deployment's
+**active model configuration** applies automatically, and picking a
+configuration (and optionally a specific model from its live dropdown)
+overrides it for that operation only — the run's fidelity block records
+which judge scored it.
 
 - **Generate** a benchmark suite from one or more repositories (the current
   one alone, or with any number of related repositories — multi-hop
@@ -177,6 +182,25 @@ suites, marked with a RAGAS badge. No feature is tied to a specific model:
 the judge and embedder point at the deployment's own OpenAI-compatible
 endpoints (defaults inherit the LLM configuration); the per-task model
 minimums are documented in the deployment guide.
+
+## Model configurations
+
+The Lab's fifth tab — **Models** (platform admins) — manages **named
+remote-model configurations**: any OpenAI-compatible endpoint (OpenAI
+direct, a LiteLLM gateway, vLLM, Gemini's compat surface, Ollama) or
+Anthropic's native API. Each carries a name, provider, base URL, API key
+and a default model; once a configuration holds a URL and key, its model
+field becomes a **dropdown populated live from the endpoint** (the server
+performs the listing with the stored key — keys are stored server-side,
+shown only as a masked hint, and never reach the browser).
+
+Configurations can be **named, renamed, copied, modified, activated,
+deactivated and deleted**. Exactly **one** can be active at a time; the
+active configuration is the judge for benchmark generation and scoring
+unless an operation picks another explicitly. With **none** active, the
+deployment's env-configured default model (`RAGAS_JUDGE_*`) applies — the
+behavior before any configuration exists. Every lifecycle action is
+written to the audit log.
 
 ## Where things are recorded
 

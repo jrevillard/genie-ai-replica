@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Named remote-model configurations (8-7).** Platform admins manage named model endpoints in the Routing Lab's new **Models** tab — any OpenAI-compatible surface (OpenAI direct, a LiteLLM gateway, vLLM, Gemini-compat, Ollama) or Anthropic's native Messages API. Configurations are named, renamed, copied, modified, activated (exactly one), deactivated and deleted; with none active the deployment's env-configured default model applies unchanged. API keys are stored server-side only — every read returns a masked hint, and the **model dropdown is populated by a server-side live listing** against the configured endpoint (free-text fallback when a gateway doesn't expose one). Benchmark generation and scoring resolve their judge as *explicit pick → active configuration → env default*, the run's fidelity block records which judge scored it, and the judge-response disk cache keys on the effective model so switching judges never replays another model's cached answers. The sidecar accepts per-request judge overrides (`langchain-anthropic` added for native Anthropic judging); every lifecycle action is audited.
+
 ### Fixed
 
 - **ApexCharts hover tooltips were near-invisible in both light and dark mode.** The global chart-theme override nuked every tooltip background to transparent and painted the text with the page-background token — written for custom-renderer tooltips whose HTML provides its own inverted bubble, it left default-tooltip charts (the RAGAS gauges, trend and status charts, and every other default-tooltip chart in the app) rendering background-colored text on a transparent bubble over the page background. Default tooltips now draw a token-driven surface bubble (surface background, foreground text, themed border and title bar); custom-renderer charts keep their inverted style.

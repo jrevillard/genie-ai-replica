@@ -20,7 +20,7 @@ metadata:
 spec:
   issuerRef:
     name: {{ .Values.ingress.tls.issuerName | required "ingress.tls.issuerName is required when ingress.tls.enabled=true and ingress.tls.secretName is empty" }}
-    kind: ClusterIssuer
+    kind: {{ .Values.ingress.tls.issuerKind | default "ClusterIssuer" }}
     group: cert-manager.io
   # Same helper the Gateway listener's certificateRefs uses — a divergence
   # leaves the listener NotReady (ResolvedRefs=False) while cert-manager

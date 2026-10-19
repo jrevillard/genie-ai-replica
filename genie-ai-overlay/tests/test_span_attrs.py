@@ -334,10 +334,38 @@ def _emit(name, attributes):
 # The four ways this project opens a span with an explicit name.
 SPAN_OPENERS = frozenset({"start_span", "start_as_current_span", "background_span", "with_span"})
 
+# Every key the sweep polices, in one place. A key is policed by whichever
+# vocabulary it belongs to, so a reader that resolves a name to a key must accept
+# all three — checking only ATTRIBUTE_NAMES would miss the JSON-encoded and
+# legacy registers. The two tests below assert against this instead of rebuilding
+# the union, so a fourth vocabulary is added in one place.
+_REGISTERED_NAMES = (
+    frozenset(ATTRIBUTE_NAMES.values()) | set(JSON_ENCODED_ATTRIBUTE_NAMES) | set(LEGACY_ATTRIBUTE_NAMES)
+)
+
+
 # The ways a key reaches a span. ``set_attribute`` / ``set_attributes`` are the
 # SDK's own API; ``record_exception`` and the exception attributes it implies
 # carry no key of ours.
 _ATTRIBUTE_WRITERS = frozenset({"set_attribute", "set_attributes"})
+
+
+def _string_constant_names(module_path):
+    """Names of module-level string constants, with their values.
+
+    Used to resolve ``span.set_attribute(QUERY_ID_KEY, …)`` to the key it names,
+    without a hand-kept list of which constants happen to be attributes today —
+    that list would go stale exactly like the vocabulary it mirrors.
+    """
+    tree = ast.parse(module_path.read_text(encoding="utf-8"))
+    found = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    found[target.id] = node.value.value
+    return found
+
 
 # The overlay's shared ``tracing.py`` is where those openers are DEFINED, so its
 # own calls into ``tracer.start_span(name)`` pass the parameter by design;
@@ -438,8 +466,13 @@ def _set_attribute_keys(overlay_sources):
     for path in overlay_sources:
         tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
         aliases = _register_aliases(tree)
+        constants = _span_attrs_constants(tree)
         for node in ast.walk(tree):
-            if isinstance(node, ast.Subscript):
+            if isinstance(node, ast.Name):
+                resolved = _constant_key(node, constants)
+                if resolved:
+                    keys.add(resolved)
+            elif isinstance(node, ast.Subscript):
                 resolved = _registered_key(node, aliases)
                 if resolved:
                     keys.add(resolved)
@@ -450,13 +483,35 @@ def _set_attribute_keys(overlay_sources):
                     # set_attribute("key", v) is a literal first argument;
                     # set_attributes({"key": v}) is a dict first argument.
                     if node.args:
-                        keys.update(_literal_keys(node.args[0]))
+                        keys.update(_mapping_keys(node.args[0]))
                         if isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
                             keys.add(node.args[0].value)
                 elif name in SPAN_OPENERS:
                     for keyword in node.keywords:
                         if keyword.arg in {"attributes", "attrs"}:
-                            keys.update(_literal_keys(keyword.value))
+                            keys.update(_mapping_keys(keyword.value))
+    return keys
+
+
+def _mapping_keys(node):
+    """The string keys of a dict literal, looking through one wrapping call.
+
+    ``span.set_attributes(sanitize_attributes({...}))`` — the condense span
+    opens that way — puts its keys one call below the writer, so a reader that
+    only inspects the direct argument reports an empty key set for a site whose
+    keys are perfectly literal. One level is deliberate: recursing through an
+    arbitrary call tree would let a wrong guess silently ADD a key to the
+    derived set that no writer produces, which weakens the very check this
+    exists to serve.
+    """
+    keys = _literal_keys(node)
+    if keys:
+        return keys
+    if isinstance(node, ast.Call):
+        for arg in node.args:
+            found = _literal_keys(arg)
+            if found:
+                return found
     return keys
 
 
@@ -474,6 +529,50 @@ def _register_aliases(tree):
                 if alias.name in {"ATTRIBUTE_NAMES", "ATTRIBUTE_NAME"} and alias.asname:
                     names.add(alias.asname)
     return names
+
+
+def _span_attrs_constants(tree):
+    """Names bound to a string constant exported by ``core.span_attrs``.
+
+    ``span.set_attribute(QUERY_ID_KEY, …)`` is the same dependency as
+    ``span.set_attribute("genie.query_id", …)``, written with the constant so
+    the value has one definition. The value IS a literal in the register, so a
+    reader that resolves the binding gets the key without importing anything.
+
+    Like :func:`_register_aliases`, this is read from the import rather than
+    matched by name — a service is free to rename what it binds, and a reader
+    keyed on the spelling ``QUERY_ID_KEY`` would silently stop resolving the day
+    one does.
+    """
+    bound = {}
+    constants = _string_constant_names(pathlib.Path(core.span_attrs.__file__))
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.ImportFrom) and node.module and node.module.endswith("span_attrs")):
+            continue
+        for alias in node.names:
+            value = constants.get(alias.name)
+            # Only a constant whose VALUE is a registered attribute name can be a
+            # key. `UNRESOLVED = "__unresolved__"` is the counter-example: it is
+            # a value written INTO `rag.adaptive_chunk_keys`, so treating it as a
+            # key would put a destination no writer produces into the derived
+            # set — which is the failure mode that makes this derivation's own
+            # reverse assertion fire on correct code.
+            if value is not None and value in _REGISTERED_NAMES:
+                bound[alias.asname or alias.name] = value
+    return bound
+
+
+def _constant_key(node, constants):
+    """The attribute key a ``<name>`` bound to a span_attrs constant names.
+
+    ``QUERY_ID_KEY`` is a ``genie.query_id``, written through the constant so
+    the string has one definition. Treating that write as unreadable hid six of
+    them — one per service plus the condense span — behind a name the reader
+    happened not to special-case.
+    """
+    if isinstance(node, ast.Name):
+        return constants.get(node.id)
+    return None
 
 
 def _registered_key(node, aliases):
@@ -514,8 +613,8 @@ def _non_literal_attribute_mappings(overlay_sources):
     two in chatqna and the retriever. Checking only the opener would leave the
     larger half of the same defect unreported.
 
-    This is a REPORT, not a gate. Fifteen such writes exist today, all predating
-    the derivation, and each assembles its mapping in a helper that already has a
+    This is a REPORT, not a gate. Six such writes exist today, all predating the
+    derivation, and each assembles its mapping in a helper that already has a
     test asserting the result is free-text-free
     (``test_chatqna_budget_tracing.py`` covers the prompt-budget and blend
     builders) — so those keys are policed, by that test rather than by this one.
@@ -534,6 +633,8 @@ def _non_literal_attribute_mappings(overlay_sources):
         if path.resolve() in SPAN_OPENER_DEFINITIONS:
             continue
         tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+        aliases = _register_aliases(tree)
+        constants = _span_attrs_constants(tree)
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
@@ -547,25 +648,32 @@ def _non_literal_attribute_mappings(overlay_sources):
                 # set_attribute("literal", …) is derivable; set_attribute(k, v)
                 # and set_attributes(mapping) are not.
                 for arg in node.args[:1]:
-                    if not _is_literal_key(arg, name):
+                    if not _is_literal_key(arg, name, aliases, constants):
                         offenders.append(f"{_display_path(path)}:{node.lineno}")
                         break
     return offenders
 
 
-def _is_literal_key(arg, writer):
+def _is_literal_key(arg, writer, aliases, constants):
     """Whether an attribute-writer argument is a key the derivation can read.
 
     ``set_attribute(key, value)`` takes its key first; ``set_attributes(mapping)``
-    takes a dict. Both are readable only when they are literals — or, for the key
+    takes a dict. Both are readable when they are literals — or, for the key
     argument, when it is a register subscript, which ``_set_attribute_keys``
-    resolves through ``ATTRIBUTE_NAMES``.
+    resolves through the same ``aliases`` this receives.
+
+    That shared resolution is the point. An earlier version passed a hardcoded
+    ``{"ATTRIBUTE_NAMES"}`` here while the derivation resolved the import alias
+    properly, so ``span.set_attribute(A["traversal.injected_docs"], …)`` was
+    reported as unreadable by one reader and read as ``traversal.injected_docs``
+    by the other. Two readers disagreeing about what is readable is how a
+    report starts teaching the reader to distrust it.
     """
     if writer == "set_attributes":
-        return _literal_keys(arg) or isinstance(arg, ast.Dict)
+        return bool(_mapping_keys(arg))
     if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
         return True
-    return _registered_key(arg, {"ATTRIBUTE_NAMES"}) is not None
+    return _constant_key(arg, constants) is not None or _registered_key(arg, aliases) is not None
 
 
 def _literal_keys(node):
@@ -605,7 +713,7 @@ class TestOwnedSpanCoverage:
         with no writer is either dead vocabulary or a write form the derivation
         cannot read, and both need a decision.
         """
-        registered = set(ATTRIBUTE_NAMES.values()) | set(JSON_ENCODED_ATTRIBUTE_NAMES) | set(LEGACY_ATTRIBUTE_NAMES)
+        registered = set(_REGISTERED_NAMES)
         unregistered = sorted(_set_attribute_keys(overlay_sources) - registered)
         assert not unregistered, (
             f"span attributes written in the overlay but registered nowhere: {unregistered}. "
@@ -624,12 +732,20 @@ class TestOwnedSpanCoverage:
         that IS written and IS unregistered, so shrinking what the walk reads
         makes it stricter-looking, not weaker, and nothing notices.
 
-        The threshold is not 100%. A handful of chatqna keys are stamped from a
-        table of ``(param, register_key)`` tuples resolved at call time, which no
-        source walk can read; they are named in the failure so the set of
-        unreadable keys stays visible rather than becoming an assumption.
+        Coverage is not expected to reach 1.00, for two reasons that are not
+        defects. ``llm.request.repetition_penalty`` is registered with no writer
+        by design — chatqna never sends the parameter, and two tests pin its
+        absence. Seven ``llm.request.*`` / ``llm.usage.*`` keys are stamped from
+        a module-level table of ``(param, register_key)`` tuples resolved through
+        a loop variable, which a source walk would have to interpret to follow.
+
+        Both are named in the failure, so the unreadable set stays visible
+        instead of becoming an assumption. Were a ninth and tenth key to join
+        them the threshold would still pass, which is the trade: it is set low
+        enough not to bite on ordinary vocabulary growth, and the reverse
+        assertion above is what catches a genuine regression.
         """
-        registered = set(ATTRIBUTE_NAMES.values()) | set(JSON_ENCODED_ATTRIBUTE_NAMES) | set(LEGACY_ATTRIBUTE_NAMES)
+        registered = set(_REGISTERED_NAMES)
         unreadable = sorted(registered - _set_attribute_keys(overlay_sources))
         covered = (len(registered) - len(unreadable)) / len(registered)
         assert covered >= 0.85, (
@@ -686,21 +802,30 @@ class TestOwnedSpanCoverage:
     def test_a_non_literal_attribute_mapping_is_reported(self, tmp_path):
         """The check that names a write form the derivation cannot read must work.
 
-        It reports rather than gates: the fifteen write sites that exist today
-        all predate the derivation and each has a test asserting its built
-        mapping is free-text-free, so making them CI failures would be noise
-        dressed as rigor. Coverage is gated instead, by threshold, in
+        It reports rather than gates: the six write sites that exist today all
+        predate the derivation and each has a test asserting its built mapping is
+        free-text-free, so making them CI failures would be noise dressed as
+        rigor. Coverage is gated instead, by threshold, in
         ``test_the_derivation_covers_most_registered_keys``.
 
         So the assertion here is about the DETECTION, on a synthetic file: a
-        mapping built at runtime is reported, a dict literal is not. Without it
-        the report could quietly stop reporting and nothing would fail.
+        mapping built at runtime is reported, a dict literal is not — including
+        the literal one call deep, which is the shape that hid the condense keys.
+        Without this the report could quietly stop reporting and nothing would
+        fail.
         """
         probe = tmp_path / "probe.py"
         probe.write_text(
+            "from core.span_attrs import ATTRIBUTE_NAMES as A, QUERY_ID_KEY\n"
             'with_span("a.b", attributes=build())\n'
             "span.set_attribute(variable_key, 1)\n"
             "span.set_attributes(prepared)\n"
+            # Readable one call deep — the shape that hid the condense keys.
+            'span.set_attributes(sanitize({"genie.condense.mode": "x"}))\n'
+            # Readable through the import alias and the constant. Both were
+            # reported as unreadable before, by a reader that resolved neither.
+            'span.set_attribute(A["traversal_max_depth"], 1)\n'
+            "span.set_attribute(QUERY_ID_KEY, qid)\n"
             'with_span("c.d", attributes={"literal.key": 1})\n'
             'span.set_attribute("literal.key", 1)\n',
             encoding="utf-8",

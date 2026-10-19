@@ -239,18 +239,32 @@ async def cancel_job(job_id: str):
 # --- generation -----------------------------------------------------------
 
 
+class ModelOverride(BaseModel):
+    """8-7 model configs (2026-10-19): per-request judge/embedder routing
+    resolved by okf-server from its named model configurations. The api_key
+    rides the INTERNAL network only (okf-server → sidecar), exactly like the
+    env-resident VLLM_API_KEY always has."""
+
+    provider: str = "openai"
+    base_url: str
+    model: str
+    api_key: str = ""
+
+
 class GenerateRequest(BaseModel):
     documents: list[dict] = Field(default_factory=list)
     testset_size: int = Field(default=20, ge=1, le=500)
     query_distribution: list[dict] | None = None
     num_personas: int = Field(default=3, ge=1, le=10)
+    judge: ModelOverride | None = None
+    embed: ModelOverride | None = None
 
 
 @app.post("/generate-testset", status_code=202)
 async def generate_testset(req: GenerateRequest):
     if not req.documents:
         raise HTTPException(status_code=400, detail="documents must not be empty")
-    if not ragas_engine.judge_configured():
+    if not req.judge and not ragas_engine.judge_configured():
         raise HTTPException(
             status_code=503, detail="judge endpoint not configured (RAGAS_JUDGE_BASE_URL / RAGAS_JUDGE_MODEL)"
         )
@@ -264,6 +278,8 @@ async def generate_testset(req: GenerateRequest):
             req.num_personas,
             progress=_phase_tracker(job_id),
             cancel_event=JOBS[job_id]["cancel_event"],
+            judge=req.judge.model_dump() if req.judge else None,
+            embed=req.embed.model_dump() if req.embed else None,
         ),
     )
     return {"job_id": job_id, "status": "queued", "poll": f"/jobs/{job_id}"}
@@ -276,13 +292,15 @@ class EvaluateRequest(BaseModel):
     samples: list[dict]
     metrics: list[str] | None = None
     timeout_s: int = Field(default=600, ge=30, le=3600)
+    judge: ModelOverride | None = None
+    embed: ModelOverride | None = None
 
 
 @app.post("/evaluate", status_code=202)
 async def evaluate(req: EvaluateRequest):
     if not req.samples:
         raise HTTPException(status_code=400, detail="samples must not be empty")
-    if not ragas_engine.judge_configured():
+    if not req.judge and not ragas_engine.judge_configured():
         raise HTTPException(
             status_code=503, detail="judge endpoint not configured (RAGAS_JUDGE_BASE_URL / RAGAS_JUDGE_MODEL)"
         )
@@ -295,6 +313,8 @@ async def evaluate(req: EvaluateRequest):
             req.timeout_s,
             progress=_phase_tracker(job_id),
             cancel_event=JOBS[job_id]["cancel_event"],
+            judge=req.judge.model_dump() if req.judge else None,
+            embed=req.embed.model_dump() if req.embed else None,
         ),
     )
     return {"job_id": job_id, "status": "queued", "poll": f"/jobs/{job_id}"}

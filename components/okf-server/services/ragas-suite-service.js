@@ -45,6 +45,7 @@ const dbService = require('../shared-lib/db-connection-service');
 const frontmatterService = require('./frontmatter-service');
 const repositoryService = require('./repository-service');
 const headTestService = require('./head-test-service');
+const modelConfigService = require('./model-config-service');
 
 const COLLECTION = 'okf_head_test_runs'; // kinds: ragas_suite | ragas_run | ragas_explain
 
@@ -592,7 +593,13 @@ async function beginSuiteGeneration(repoId, payload = {}, opts = {}) {
   const done = generateSuite(
     repoId,
     { ...payload, repo_ids: repoIds, testset_size: testsetSize },
-    { ...opts, suiteKey }
+    {
+      ...opts,
+      suiteKey,
+      // 8-7: an explicit judge pick from the Generate dialog rides the opts
+      judge_config_key: payload.judge_config_key || null,
+      judge_model: payload.judge_model || null
+    }
   )
     .then((suite) => suite)
     .finally(() => {
@@ -690,6 +697,14 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
       err.status = 409;
       throw err;
     }
+    // 8-7 model configs: the generation judge resolves picked > active >
+    // env. An explicit pick that no longer resolves THROWS (the user chose
+    // it); no pick silently uses the active config or the env default.
+    const judgeOverride = await modelConfigService.resolveModelOverride({
+      config_key: opts.judge_config_key,
+      model: opts.judge_model,
+      service: 'ragas_judge'
+    });
     // 202 + poll: the sidecar starts a background job and we poll it — no
     // connection is held open for the (potentially hour-long) generation.
     const genResp = await sidecar('/generate-testset', {
@@ -697,7 +712,15 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
         documents: docs,
         testset_size: clampCount(payload.testset_size, 1, MAX_ENTRIES),
         query_distribution: Array.isArray(payload.query_distribution) ? payload.query_distribution : null,
-        num_personas: clampCount(payload.num_personas, 1, 10)
+        num_personas: clampCount(payload.num_personas, 1, 10),
+        judge: judgeOverride
+          ? {
+              provider: judgeOverride.provider,
+              base_url: judgeOverride.base_url,
+              model: judgeOverride.model,
+              api_key: judgeOverride.api_key
+            }
+          : null
       }
     });
     const genStarted = await genResp.json();
@@ -1046,7 +1069,10 @@ async function beginRunSuite(repoId, suiteKey, payload = {}, opts = {}) {
     runKey,
     metrics,
     startedAt: placeholder.created_at,
-    reportProgress
+    reportProgress,
+    // 8-7: an explicit judge pick from the Run dialog rides the opts
+    judge_config_key: payload.judge_config_key || null,
+    judge_model: payload.judge_model || null
   })
     .then((runDoc) => runDoc)
     .catch(async (e) => {
@@ -1149,8 +1175,14 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     }
     await Promise.all(Array.from({ length: Math.min(RUN_CONCURRENCY, entries.length) }, worker));
 
-    // score with the sidecar
+    // score with the sidecar — 8-7 model configs: the scoring judge resolves
+    // picked > active > env (same chain as generation).
     await report(opts, { phase: 'judge', done: 0, total: 1 });
+    const judgeOverride = await modelConfigService.resolveModelOverride({
+      config_key: opts.judge_config_key,
+      model: opts.judge_model,
+      service: 'ragas_judge'
+    });
     const samples = entries.map((e, i) => ({
       user_input: e.query,
       retrieved_contexts: results[i].contexts,
@@ -1158,7 +1190,20 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       reference: e.reference_answer || '',
       reference_contexts: e.reference_passages || []
     }));
-    const evalStarted = await sidecar('/evaluate', { json: { samples, metrics: opts.metrics } });
+    const evalStarted = await sidecar('/evaluate', {
+      json: {
+        samples,
+        metrics: opts.metrics,
+        judge: judgeOverride
+          ? {
+              provider: judgeOverride.provider,
+              base_url: judgeOverride.base_url,
+              model: judgeOverride.model,
+              api_key: judgeOverride.api_key
+            }
+          : null
+      }
+    });
     const evalStartedBody = await evalStarted.json();
     const evaluation = await pollSidecarJobOwned(
       evalStartedBody.job_id,
@@ -1223,7 +1268,11 @@ async function runSuite(repoId, suiteKey, opts = {}) {
             system_prompt_sha: sha256(ANSWER_SYSTEM_PROMPT()),
             source: process.env.CHATQNA_SYSTEM_PROMPT ? 'CHATQNA_SYSTEM_PROMPT' : 'builtin-default'
           },
-          judge: { model: evaluation.model || null, embed_model: null }
+          judge: {
+            ...modelConfigService.judgeFidelity(judgeOverride),
+            sidecar_reported_model: evaluation.model || null,
+            embed_model: null
+          }
         }
       }
     };

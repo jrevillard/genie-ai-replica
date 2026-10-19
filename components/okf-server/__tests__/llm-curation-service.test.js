@@ -8,6 +8,10 @@ jest.mock('axios');
 jest.mock('../services/ingest-service', () => ({
   composeIngestLabels: jest.fn(() => ['t:demo', 'r:repo-1', 'd:demo', 'CURATED'])
 }));
+// 8-7 model configs — default: no override (env path, exactly pre-8-7).
+jest.mock('../services/model-config-service', () => ({
+  resolveModelOverride: jest.fn(async () => null)
+}));
 
 const axios = require('axios');
 const service = require('../services/llm-curation-service');
@@ -153,6 +157,49 @@ describe('curateRepoConcepts (#980)', () => {
     expect(stats.labeled).toBe(0);
     expect(updates[0].patch.labels).toBeUndefined();
     expect(updates[0].patch.curation.label_source).toBe('none');
+  });
+
+  test('8-7 routing: an ACTIVE okf_curation model config takes the LLM call; env otherwise', async () => {
+    const modelConfig = require('../services/model-config-service');
+    const updates = [];
+    mockDb = makeDb([metaRow()], updates);
+    llmReply({ type: 'entity', label: 'Culture', summary: 's' });
+    // an openai-wire active config checked for curation → the call follows it
+    modelConfig.resolveModelOverride.mockResolvedValueOnce({
+      provider: 'openai',
+      base_url: 'https://frontier.example/v1',
+      model: 'frontier-curator',
+      api_key: 'fk-1',
+      source: 'active',
+      config_key: 'mc1',
+      config_name: 'Frontier'
+    });
+    await service.curateRepoConcepts(REPO, { classification: 'llm' });
+    expect(axios.post).toHaveBeenCalledWith(
+      'https://frontier.example/v1/chat/completions',
+      expect.objectContaining({ model: 'frontier-curator' }),
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer fk-1' }) })
+    );
+    // an anthropic-provider active config is NOT usable by this openai-wire
+    // client — the call stays on env
+    axios.post.mockClear();
+    modelConfig.resolveModelOverride.mockResolvedValueOnce({
+      provider: 'anthropic',
+      base_url: 'https://api.anthropic.com',
+      model: 'claude-x',
+      api_key: 'ak',
+      source: 'active',
+      config_key: 'mc2',
+      config_name: 'Ant'
+    });
+    await service.curateRepoConcepts(REPO, { classification: 'llm' });
+    expect(axios.post).toHaveBeenCalledWith(
+      'http://vllm:8000/v1/chat/completions',
+      expect.objectContaining({ model: 'test-model' }),
+      expect.anything()
+    );
+    // and the service tag it resolved with
+    expect(modelConfig.resolveModelOverride).toHaveBeenCalledWith({ service: 'okf_curation' });
   });
 
   test('authorial types are REPLACED by the taxonomy verdict in llm mode (David 2026-09-08)', async () => {

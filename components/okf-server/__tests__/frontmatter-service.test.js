@@ -20,6 +20,10 @@ jest.mock('../shared-lib/db-connection-service', () => {
   return { getConnection: jest.fn(() => Promise.resolve(mockDb)), __mockDb: mockDb };
 });
 jest.mock('axios');
+// 8-7 model configs — default: no override (env path, exactly pre-8-7).
+jest.mock('../services/model-config-service', () => ({
+  resolveModelOverride: jest.fn(async () => null)
+}));
 
 const svc = require('../services/frontmatter-service');
 const axios = require('axios');
@@ -484,5 +488,27 @@ describe('1-8g-m — suggestTags integration', () => {
     expect(out.coverage.concepts_total).toBe(2);
     expect(out.coverage.label_count).toBe(2); // Health + (unlabeled)
     expect(Array.isArray(out.forbidden_rejected)).toBe(true);
+  });
+
+  test('8-7 routing: an ACTIVE okf_tagging model config (openai wire) takes the LLM call', async () => {
+    const modelConfig = require('../services/model-config-service');
+    seedDb();
+    axios.post.mockResolvedValue(vllmResponse(JSON.stringify({ topic: ['x'], forbidden: [], summary: '' })));
+    modelConfig.resolveModelOverride.mockResolvedValueOnce({
+      provider: 'openai',
+      base_url: 'https://frontier.example',
+      model: 'frontier-tagger',
+      api_key: 'fk-2',
+      source: 'active',
+      config_key: 'mc1',
+      config_name: 'Frontier'
+    });
+    await svc.suggestTags(REPO_ID);
+    expect(axios.post).toHaveBeenCalledWith(
+      'https://frontier.example/v1/chat/completions',
+      expect.objectContaining({ model: 'frontier-tagger' }),
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer fk-2' }) })
+    );
+    expect(modelConfig.resolveModelOverride).toHaveBeenCalledWith({ service: 'okf_tagging' });
   });
 });

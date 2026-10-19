@@ -145,7 +145,14 @@ def test_generate_is_202_plus_poll_with_result(client, monkeypatch):
     seen_kwargs = {}
 
     async def fake_generate(
-        documents, testset_size, query_distribution=None, num_personas=3, progress=None, cancel_event=None
+        documents,
+        testset_size,
+        query_distribution=None,
+        num_personas=3,
+        progress=None,
+        cancel_event=None,
+        judge=None,
+        embed=None,
     ):
         seen_kwargs.update({"testset_size": testset_size, "num_personas": num_personas})
         if progress:
@@ -188,7 +195,7 @@ def test_generate_job_failure_surfaces_the_error(client, monkeypatch):
 
 
 def test_evaluate_is_202_plus_poll_with_result(client, monkeypatch):
-    async def fake_evaluate(samples, metrics, timeout_s=600, progress=None, cancel_event=None):
+    async def fake_evaluate(samples, metrics, timeout_s=600, progress=None, cancel_event=None, judge=None, embed=None):
         if progress:
             progress("scoring")
         return {"aggregate": {"faithfulness": 1.0}, "per_query": [], "n": 0, "dropped": []}

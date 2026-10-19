@@ -37,6 +37,10 @@ router.use(requireScope('read'));
 // Repository CRUD (Story 2.2) — inherits authenticate above.
 router.use('/repos', require('./repos-routes'));
 
+// Story 8-7 — named remote-model configurations (LiteLLM gateway or direct
+// provider APIs). Platform-level: tools-admin inside the sub-router.
+router.use('/model-configs', require('./model-config-routes'));
+
 // Retrieval mode governance (Story 1.7, ADR-okf-039 D3): the governance
 // write is tools-admin only and audited before→after in the service.
 router.put('/retrieval-config', requireRole('tools-admin'), retrievalConfigController.putRetrievalConfig);

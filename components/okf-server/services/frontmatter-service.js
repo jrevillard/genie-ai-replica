@@ -336,17 +336,34 @@ ${sampleText}
 
 Output ONLY a JSON object: {"results": [{"index": <int>, "match": "yes"|"no", "reason": "<one sentence>"}, ...]}`;
 
+/** 8-7 model configs: an ACTIVE configuration checked for 'okf_tagging'
+ * (openai-wire provider only) takes precedence over the env consts — this
+ * one client fronts every frontmatter/topic/head-test-explain LLM call.
+ * Resolution failure falls back to env silently. */
 async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
+  let host = VLLM_LLM_HOST;
+  let model = VLLM_LLM_MODEL_ID;
+  let apiKey = VLLM_LLM_API_KEY;
+  try {
+    const ovr = await require('./model-config-service').resolveModelOverride({ service: 'okf_tagging' });
+    if (ovr && ovr.provider === 'openai') {
+      host = ovr.base_url.replace(/\/+$/, '').replace(/\/v1$/, '');
+      if (ovr.model) model = ovr.model;
+      if (ovr.api_key) apiKey = ovr.api_key;
+    }
+  } catch {
+    /* env fallback — see docblock */
+  }
   const headers = { 'Content-Type': 'application/json' };
-  if (VLLM_LLM_API_KEY) headers['Authorization'] = 'Bearer ' + VLLM_LLM_API_KEY;
+  if (apiKey) headers['Authorization'] = 'Bearer ' + apiKey;
   const body = {
-    model: VLLM_LLM_MODEL_ID,
+    model,
     messages: systemAndUserMessages,
     max_tokens: opts.maxTokens || 800,
     temperature: opts.temperature || 0.0,
     response_format: { type: 'json_object' }
   };
-  const fn = () => axios.post(`${VLLM_LLM_HOST}/v1/chat/completions`, body, { headers, timeout: 60000 });
+  const fn = () => axios.post(`${host}/v1/chat/completions`, body, { headers, timeout: 60000 });
   return withVllmRetry(fn, { endpoint: '/v1/chat/completions' });
 }
 

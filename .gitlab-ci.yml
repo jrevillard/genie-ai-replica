@@ -3256,6 +3256,12 @@ chart:install:
     expire_in: 7 days
     paths:
       - chart-test-logs/
+  # Manual-only (2026-10-19): a cold full-stack install on the shared
+  # runner pool needs >30m (multi-GB pulls inside the kind node + shared
+  # CPU) — not tenable as a per-push gate. Same posture as the compose E2E
+  # jobs: the fast gates (chart:lint, chart:contract) run per push;
+  # installability is proven continuously on the live laptop cluster; this
+  # job stays available on demand (click to run, e.g. before a release).
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
       when: never
@@ -3266,13 +3272,13 @@ chart:install:
         - charts/**/*
         - scripts/**/*
         - .gitlab-ci.yml
-      when: on_success
+      when: manual
     - if: '$CI_COMMIT_BRANCH == "feat/k8s-migration"'
       changes:
         - charts/**/*
         - scripts/**/*
         - .gitlab-ci.yml
-      when: on_success
+      when: manual
 
 # Patrol E2E tests — DinD emulator (shared with scheduled:e2e-mobile)
 e2e:integration:

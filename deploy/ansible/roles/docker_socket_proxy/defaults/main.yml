@@ -20,3 +20,7 @@ docker_socket_proxy_auth: "1"
 docker_socket_proxy_distribution: "1"
 docker_socket_proxy_plugins: "0"
 docker_socket_proxy_build: "1"
+# GET /info — needed by tooling preflights (kind checks daemon info before
+# creating a cluster; plain `docker info` probes). Denying it makes
+# otherwise-allowed workloads fail with a confusing "docker not reachable".
+docker_socket_proxy_info: "1"

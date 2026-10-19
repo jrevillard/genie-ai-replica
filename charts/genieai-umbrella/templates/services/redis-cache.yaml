@@ -151,6 +151,14 @@ spec:
       ports:
         - protocol: TCP
           port: 6379
+    # helm-test reachability probe (component "test").
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: test
+      ports:
+        - protocol: TCP
+          port: 6379
   egress:
     - to:
         - namespaceSelector:

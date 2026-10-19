@@ -66,6 +66,7 @@ spec:
   allowCrossNamespaceImport: true
 ---
 {{- range $dashboardsGeneral }}
+---
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDashboard
 metadata:
@@ -75,8 +76,7 @@ metadata:
   name: {{ trimSuffix ".json" . | replace "/" "-" }}
   namespace: {{ $.Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" $.Chart "Release" $.Release "Values" $.Values "component" "observability") | nindent 4 }}
-    app.kubernetes.io/component: dashboards
+    {{- include "genieai-common.labels" (dict "Chart" $.Chart "Release" $.Release "Values" $.Values "component" "dashboards") | nindent 4 }}
 spec:
   instanceSelector:
     matchLabels:
@@ -88,14 +88,14 @@ spec:
 {{ $.Files.Get (printf "files/observability/dashboards/%s" . ) | indent 4 }}
 {{- end }}
 {{- range $dashboardsObservability }}
+---
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDashboard
 metadata:
   name: {{ trimSuffix ".json" . | replace "/" "-" }}
   namespace: {{ $.Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" $.Chart "Release" $.Release "Values" $.Values "component" "observability") | nindent 4 }}
-    app.kubernetes.io/component: dashboards
+    {{- include "genieai-common.labels" (dict "Chart" $.Chart "Release" $.Release "Values" $.Values "component" "dashboards") | nindent 4 }}
 spec:
   instanceSelector:
     matchLabels:
@@ -115,8 +115,7 @@ metadata:
   name: {{ $group.name | replace "." "-" }}
   namespace: {{ $.Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" $.Chart "Release" $.Release "Values" $.Values "component" "observability") | nindent 4 }}
-    app.kubernetes.io/component: alerts
+    {{- include "genieai-common.labels" (dict "Chart" $.Chart "Release" $.Release "Values" $.Values "component" "alerts") | nindent 4 }}
 spec:
   instanceSelector:
     matchLabels:

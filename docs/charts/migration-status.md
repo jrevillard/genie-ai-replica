@@ -130,6 +130,18 @@ the compose config, kept verbatim; backlog.
 
 ## Parked / backlog
 
+- **arango-operator ClusterRole over-grant (2026-10-19 review)**: the
+  chart's ClusterRole grants the operator cluster-wide core-resource
+  access (secrets, configmaps, SAs, services, statefulsets) while the
+  bootstrap already ships 6 cluster-wide operator roles; only the
+  `database.arangodb.com` rules need cluster scope. Trimming requires a
+  validation cycle with ArangoDB reinstalled — deferred, not done blind.
+- **RWO PVC + replicas>1**: `clusterProfileReplicas.prod` runs
+  documentRepository ×2 against one ReadWriteOnce PVC with no node
+  pinning — multi-attach risk on multi-node prod (single-node minikube
+  masks it). Same shape: redis-cache + clamav cache PVCs. Needs either
+  ReadWriteMany storage, a Read-only replica pattern, or anti-affinity
+  + single-writer documentation.
 - OPEA images hardcode tag `main` in templates → lift to values when
   branch-tagged images are needed (laptop uses registry `main` today).
 - Translation orchestrator image `docker.io/opea/translation:1.3` hardcoded;

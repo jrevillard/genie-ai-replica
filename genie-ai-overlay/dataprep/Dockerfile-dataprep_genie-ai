@@ -146,7 +146,7 @@ COPY genie-ai-overlay/core/model_http_policy.py /app/core/model_http_policy.py
 # The LLM timeout attributes this overlay added are stamped through it rather
 # than by literal, so a renamed key cannot diverge between the vocabulary and
 # the emitters. The older dataprep attributes are still literals; converting
-# them is tracked separately.
+# them is a separate change.
 COPY genie-ai-overlay/core/span_attrs.py /app/core/span_attrs.py
 
 # Step H: Fix docarray circular import (proactive fix, shared with retriever/reranker)

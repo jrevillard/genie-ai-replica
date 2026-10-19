@@ -29,7 +29,7 @@ dataprep  ``_build_vllm_client``  ``AsyncOpenAI``          LLM_* (timeout + retr
 dataprep  Keycloak token, ingestion-log writes, doc status,
           guardrail calls   ``aiohttp``                 CONTROL_PLANE_*
 reranker  TEI ``/rerank``     ``aiohttp``                 RERANK_*
-chatqna   OPEA readiness probe, dataprep/health checks  ``aiohttp``  CONTROL_PLANE_*
+chatqna   backend user profile, document-repository metadata  ``aiohttp``  CONTROL_PLANE_*
 retriever OpenAI ``ChatOpenAI`` summarizer / probe   ``langchain_openai``  LLM_*
 retriever ``OpenAIEmbeddings``  ``langchain_openai``      TEI_*
 ============================  ==========================  ==============

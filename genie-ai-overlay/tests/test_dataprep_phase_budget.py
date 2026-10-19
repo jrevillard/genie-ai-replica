@@ -770,6 +770,62 @@ class TestFailureSeenDuringAHeartbeatEndsThePhase:
         )
 
 
+class TestUnboundedPhaseSurvivesExternalCancellation:
+    """Cancelling the ingest must not leave graph batches running.
+
+    ``asyncio.gather``, which this helper replaced, cancelled its children when
+    the awaiting task was cancelled. A bare drain loop does not, and the queued
+    batches are parked on ``MAX_CONCURRENT_BATCHES`` — so they acquired the
+    semaphore afterwards and wrote the whole document to ArangoDB *after*
+    ``retract_file`` had already deleted it. The admin UI showed Killed while
+    the retriever served the resurrected chunks.
+    """
+
+    def test_cancelling_the_ingest_cancels_every_queued_batch(self, monkeypatch):
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
+
+        async def scenario():
+            queued = []
+            started = asyncio.Event()
+
+            async def batch():
+                started.set()
+                # Short enough that an uncancelled sibling actually reaches the
+                # write inside the observation window below, rather than merely
+                # being caught by the assertion on its cancelled flag.
+                await asyncio.sleep(0.05)
+                queued.append("wrote")
+
+            tasks = [asyncio.ensure_future(batch()) for _ in range(3)]
+            await started.wait()
+            phase = asyncio.ensure_future(
+                dataprep._await_with_heartbeat(
+                    tasks, phase="Graph insertion", total=3, file_id="f1", write_ingestion_log=_noop_log
+                )
+            )
+            await asyncio.sleep(0)
+            phase.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await phase
+
+            # Everything below runs INSIDE the loop. asyncio.run cancels every
+            # remaining task as it shuts down, so an assertion made after
+            # _run() returned would see all three cancelled either way and pass
+            # against a helper that cancels nothing.
+            await asyncio.sleep(0.15)
+            assert queued == [], f"a graph batch kept writing after the ingest was cancelled: {queued}"
+            assert all(t.cancelled() or t.done() for t in tasks), (
+                "batches left pending with no owner; each later raise logs an unretrieved-exception "
+                "traceback into the dataprep log, during exactly the incident this change exists to "
+                "make diagnosable"
+            )
+            for task in tasks:
+                task.cancel()
+
+        _run(scenario())
+
+
 class TestUnboundedPhaseKeepsItsSiblings:
     """The graph phase cannot abandon work, and that includes on the error path.
 

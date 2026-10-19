@@ -1,7 +1,7 @@
 # Copyright (C) 2025 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
 #
-# OVERRIDE comps.dataprep.integrations.arangodb.llm_transformer | disposition: still-needed | reason: vendored LLM/embedding clients build their own HTTP clients; the graph-transformer's budget is reachable via VLLM_TIMEOUT but its telemetry is not, and the orchestrator/TEI wrappers have no budget at all | test: contracts/test_contract_telemetry.py  # noqa: E501
+# OVERRIDE comps.dataprep.integrations.arangodb.llm_transformer | disposition: still-needed | reason: vendored LLM/embedding clients build their own HTTP clients; the graph-transformer's budget is reachable via VLLM_TIMEOUT but its telemetry is not, and the orchestrator/TEI wrappers have no budget at all | test: contracts/test_contract_http_budget.py  # noqa: E501
 
 """Record of the vendored-``comps`` HTTP-budget debt, and what would close it.
 
@@ -78,8 +78,8 @@ its own review.
 The fix shape is the URL-scoped variant already proposed below for the timeout
 shim: match the endpoint (the GPU host / the TEI and vLLM URLs) and inject only
 for that host, rather than for every call the process makes. Worth pairing
-with the ``verify=False`` gating this MR did land, since both live in the same
-wrapper.
+with the ``verify=False`` gating in ``configs/ssl/genie_ssl_patch.py``, since
+both live in the same wrapper.
 
 What would close it
 -------------------

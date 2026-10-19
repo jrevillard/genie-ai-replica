@@ -285,8 +285,9 @@ HUGGING_FACE_HUB_TOKEN=
 #
 # MODEL_LLM_TIMEOUT_SECONDS=180   # vLLM completions made by THIS repo: dataprep
 #                                 #   labelling and context generation, and the
-#                                 #   retriever's summarizer and embedding
-#                                 #   clients. Not the chat path — that call
+#                                 #   retriever's summarizer client. Embedding
+#                                 #   is MODEL_TEI_TIMEOUT_SECONDS below, and
+#                                 #   not this knob. Not the chat path — that call
 #                                 #   lives inside the vendored comps
 #                                 #   orchestrator graph, which has no
 #                                 #   configurable budget at all (see

@@ -338,6 +338,29 @@ def _register_keys_set_on_spans(func: ast.AST) -> set[str]:
     return found
 
 
+def _stamped_under_a_positive_timeout_guard(func: ast.AST) -> bool:
+    """True when a span stamp sits inside ``if _is_timeout(...)``.
+
+    Requires the stamp to be a descendant of a guard whose test is a bare,
+    positive call to ``_is_timeout``. An ``if not _is_timeout(e)`` fails on the
+    polarity; a stamp hoisted above the ``if`` fails because no enclosing guard
+    matches. Presence of an ``if`` somewhere in the function accepted both.
+    """
+    stamps = [
+        n for n in ast.walk(func) if isinstance(n, ast.Call) and _called_name(n.func) == "set_attribute" and n.args
+    ]
+    if not stamps:
+        return False
+    for node in ast.walk(func):
+        if not isinstance(node, ast.If):
+            continue
+        if not (isinstance(node.test, ast.Call) and _called_name(node.test.func) == "_is_timeout"):
+            continue
+        if any(stamp in ast.walk(node) for stamp in stamps):
+            return True
+    return False
+
+
 class TestCallSitesConsumeThePolicy:
     """Every model-endpoint client in the overlay is built with a budget.
 
@@ -567,15 +590,16 @@ class TestCallSitesConsumeThePolicy:
                     "source text instead of its AST would let the explanatory comment satisfy this "
                     "check on its own, with the set_attribute calls deleted"
                 )
-            # The marker has to be behind the classifier: stamping every failed
-            # call as timed out is the misreading the attribute exists to
-            # prevent — "the GPU hung" would then read as "the GPU hung" for
-            # every parse failure too.
-            assert any(
-                isinstance(n, ast.If) and "_is_timeout" in ast.unparse(n.test) for n in ast.walk(functions[fn])
-            ), (
-                f"{fn} stamps the timeout marker without gating it on _is_timeout — every failed "
-                "label call would then be reported to the operator as a timed-out one"
+            # The marker has to be INSIDE a positive _is_timeout guard, not
+            # merely somewhere in the same function. Presence alone accepted
+            # both hoisting the stamping out of the if (every failed call then
+            # reported as a timeout) and inverting the test to `if not
+            # _is_timeout(e)` — the same misreading with the sign flipped — so
+            # this checks the enclosing guard of each stamp directly.
+            assert _stamped_under_a_positive_timeout_guard(functions[fn]), (
+                f"{fn} does not stamp the timeout marker inside `if _is_timeout(e):` — stamping "
+                "every failed call, or stamping the non-timeout ones, is the misreading the "
+                "attribute exists to prevent"
             )
 
     def test_the_unbudgeted_huggingface_client_is_left_unbudgeted(self):

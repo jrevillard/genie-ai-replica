@@ -10,9 +10,12 @@ CHANGELOG), and until now nothing could check it — ``tests/conftest.py`` stubs
 ``comps`` in ``sys.modules``, so the mocked suite is blind to it by
 construction.
 
-This is that check. It only runs in-image, where the real ``comps`` is importable
-(see ``conftest.py``); in the dev venv it skips rather than passing against the
-mock, which would prove nothing.
+This is that check, and it runs in CI via the ``contract:unit`` job — which is
+repo-side, so the two compose assertions execute for real there while the two
+``comps`` ones skip against the absent library rather than passing against the
+mock. Wiring matters as much as the code here: ``pytest.ini`` sets
+``testpaths = tests``, so a file in this directory that no job names is a test
+suite that never runs and a docstring that is simply wrong.
 
 The three halves are asserted separately on purpose, because each one alone is
 worthless:
@@ -39,7 +42,24 @@ def _overlay_root() -> Path:
 
 
 def _repo_root() -> Path:
-    return _overlay_root().parent
+    """The repo root, or None when this suite is mounted without one.
+
+    The in-image contract jobs copy ``contracts/`` to ``/contracts``, so
+    ``parents[1]`` is ``/`` there and the compose file does not exist. The
+    assertions that need it skip rather than failing, so the same file is safe
+    in either venue instead of only in the one it was written for.
+    """
+    root = _overlay_root().parent
+    return root if (root / "docker-compose.yaml").is_file() else None
+
+
+def _require_repo_root():
+    root = _repo_root()
+    if root is None:
+        import pytest
+
+        pytest.skip("repo tree not mounted — the compose assertions run repo-side in contract:unit")
+    return root
 
 
 def _vllm_timeout_is_a_client_timeout(module) -> bool:
@@ -103,11 +123,11 @@ def test_the_overlay_runs_that_module_in_process():
 def test_compose_injects_vllm_timeout_into_the_dataprep_service():
     """The injection itself, so the two halves above have something to bind to.
 
-    Pure repo check — no comps needed, so it runs everywhere. Read as text
-    because a compose parse would also succeed on the mapping/sequence style
-    mismatch this deck has hit once already.
+    Pure repo check — no comps needed, so ``contract:unit`` runs it for real.
+    Read as text because a compose parse would also succeed on the
+    mapping/sequence style mismatch this deck has hit once already.
     """
-    compose = (_repo_root() / "docker-compose.yaml").read_text(encoding="utf-8")
+    compose = (_require_repo_root() / "docker-compose.yaml").read_text(encoding="utf-8")
     dataprep_block = _service_block(compose, "dataprep-arango-service")
     assert dataprep_block, "no dataprep-arango-service block found in docker-compose.yaml"
     assert re.search(r"^\s*VLLM_TIMEOUT:", dataprep_block, re.M), (
@@ -132,7 +152,7 @@ def test_the_graph_transformer_keeps_the_budget_it_had_before_this_policy():
     So the two names are deliberately independent here: ours tightens because
     every call behind it degrades, comps' does not because none of them do.
     """
-    compose = (_repo_root() / "docker-compose.yaml").read_text(encoding="utf-8")
+    compose = (_require_repo_root() / "docker-compose.yaml").read_text(encoding="utf-8")
     block = _service_block(compose, "dataprep-arango-service")
     match = re.search(r"^\s*VLLM_TIMEOUT:\s*(\S+)", block, re.M)
     assert match, "no VLLM_TIMEOUT assignment in the dataprep service block"

@@ -729,11 +729,11 @@ async def _gather_with_phase_budget(
 
     try:
         while pending:
-            # Wait on whichever deadline comes first, so a progress tick is never
-            # held behind the phase deadline (and vice versa). The tick is never
-            # the phase deadline itself: falling back to it here would make the
-            # heartbeat silent for the whole budget, which is the failure this
-            # reporting exists to prevent.
+            # Wait on whichever deadline comes first, so a progress tick is
+            # never held behind the phase deadline. When the remaining budget is
+            # the shorter of the two, this single wait IS the phase deadline —
+            # which is why the reporting below forces a tick whenever
+            # remaining_phase <= 0 rather than relying on the interval alone.
             remaining_phase = DATAPREP_LLM_PHASE_TIMEOUT_SECONDS - (time.monotonic() - started)
 
             settled = {t for t in pending if t.done()}
@@ -923,60 +923,82 @@ async def _await_with_heartbeat(tasks: list, *, phase: str, total: int, file_id:
     completed = 0
     failure: BaseException | None = None
 
-    while pending:
-        settled = {t for t in pending if t.done()}
-        pending -= settled
-        if not settled:
-            done, pending = await asyncio.wait(pending, timeout=interval, return_when=asyncio.FIRST_COMPLETED)
-            settled = done
-        for task in sorted(settled, key=lambda t: order[id(t)]):
-            # Re-raise the first failure, as gather would. Done before any
-            # further reporting so the phase fails on the real error rather than
-            # on the heartbeat's log write.
-            exc = task.exception()
-            completed += 1
-            if exc is not None and failure is None:
-                failure = exc
+    try:
+        while pending:
+            settled = {t for t in pending if t.done()}
+            pending -= settled
+            if not settled:
+                done, pending = await asyncio.wait(pending, timeout=interval, return_when=asyncio.FIRST_COMPLETED)
+                settled = done
+            for task in sorted(settled, key=lambda t: order[id(t)]):
+                # Re-raise the first failure, as gather would. Done before any
+                # further reporting so the phase fails on the real error rather than
+                # on the heartbeat's log write.
+                exc = task.exception()
+                completed += 1
+                if exc is not None and failure is None:
+                    failure = exc
 
-        if failure is not None:
-            # Give the in-flight batches a bounded window to unwind rather than
-            # dropping them on the floor. asyncio.gather keeps every child alive
-            # and retrieves their outcomes; returning here would leave the rest
-            # running with no owner — each one that later raises logs an
-            # unretrieved-exception error, and they are still writing to ArangoDB
-            # while the caller's handler retracts the document. The wait is
-            # capped at _PHASE_CANCEL_GRACE_SECONDS: past that, the caller is
-            # already failing and a longer wait only delays the retract.
-            #
-            # Guarded because pending is empty whenever the failing task was the
-            # last one in flight, and asyncio.wait() on an empty set raises
-            # ValueError rather than returning. That is the single-batch case —
-            # a document with fewer chunks than BATCH_SIZE produces exactly one
-            # graph-insertion task — and unguarded it replaced the real
-            # "ArangoDB insert failed" with "Set of Tasks/Futures is empty" in
-            # the ingestion log and the document status, which is the last
-            # diagnostic channel the operator has.
-            if pending:
-                await asyncio.wait(pending, timeout=_PHASE_CANCEL_GRACE_SECONDS)
-            # Same retrieval as the budgeted variant's settle: a sibling that
-            # failed while we were waiting would otherwise log an unretrieved
-            # exception, during an incident whose diagnosis depends on these
-            # logs.
+            if failure is not None:
+                # Give the in-flight batches a bounded window to unwind rather than
+                # dropping them on the floor. asyncio.gather keeps every child alive
+                # and retrieves their outcomes; returning here would leave the rest
+                # running with no owner — each one that later raises logs an
+                # unretrieved-exception error, and they are still writing to ArangoDB
+                # while the caller's handler retracts the document. The wait is
+                # capped at _PHASE_CANCEL_GRACE_SECONDS: past that, the caller is
+                # already failing and a longer wait only delays the retract.
+                #
+                # Guarded because pending is empty whenever the failing task was the
+                # last one in flight, and asyncio.wait() on an empty set raises
+                # ValueError rather than returning. That is the single-batch case —
+                # a document with fewer chunks than BATCH_SIZE produces exactly one
+                # graph-insertion task — and unguarded it replaced the real
+                # "ArangoDB insert failed" with "Set of Tasks/Futures is empty" in
+                # the ingestion log and the document status, which is the last
+                # diagnostic channel the operator has.
+                if pending:
+                    await asyncio.wait(pending, timeout=_PHASE_CANCEL_GRACE_SECONDS)
+                # Same retrieval as the budgeted variant's settle: a sibling that
+                # failed while we were waiting would otherwise log an unretrieved
+                # exception, during an incident whose diagnosis depends on these
+                # logs.
+                for task in pending:
+                    if task.done() and not task.cancelled():
+                        with suppress(Exception):
+                            task.exception()
+                raise failure
+
+            now = time.monotonic()
+            if pending and now >= next_report:
+                next_report = now + interval
+                message = (
+                    f"{phase} in progress: {completed}/{total} batches completed, "
+                    f"{len(pending)} in flight, {now - started:.0f}s elapsed"
+                )
+                logger.info(message)
+                await _safe_log(write_ingestion_log, file_id, "INFO", phase, message)
+
+    except asyncio.CancelledError:
+        # Every exit other than the success path has to take the still-pending
+        # batches with it, because the caller is retracted either way.
+        # asyncio.gather, which this helper replaced, did that implicitly by
+        # cancelling its children; a bare `while pending` loop does not, so an
+        # external cancellation — ingest_file_with_guardrail's kill switch, or
+        # a service shutdown — propagated straight out and left every queued
+        # graph batch running. They were parked on the semaphore at that point,
+        # so they would acquire it and write the whole document to ArangoDB
+        # AFTER retract_file() had already deleted it: chunks resurrected for a
+        # document the admin UI shows as Killed, and served to the retriever.
+        for task in pending:
+            task.cancel()
+        if pending:
+            await asyncio.wait(pending, timeout=_PHASE_CANCEL_GRACE_SECONDS)
             for task in pending:
                 if task.done() and not task.cancelled():
                     with suppress(Exception):
                         task.exception()
-            raise failure
-
-        now = time.monotonic()
-        if pending and now >= next_report:
-            next_report = now + interval
-            message = (
-                f"{phase} in progress: {completed}/{total} batches completed, "
-                f"{len(pending)} in flight, {now - started:.0f}s elapsed"
-            )
-            logger.info(message)
-            await _safe_log(write_ingestion_log, file_id, "INFO", phase, message)
+        raise
 
 
 @OpeaComponentRegistry.register("GENIE_DATAPREP_ARANGODB")

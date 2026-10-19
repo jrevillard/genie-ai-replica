@@ -11,6 +11,7 @@ whitespace and passes — which is exactly why layer 1 exists.
 """
 
 import ast
+import functools
 import json
 import pathlib
 import re
@@ -492,36 +493,55 @@ def _set_attribute_keys(overlay_sources):
                     # puts on the span.
                     if node.args:
                         if name == "set_attributes":
-                            keys.update(_mapping_keys(node.args[0]))
+                            keys.update(_mapping_keys(node.args[0])[0])
                         elif isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
                             keys.add(node.args[0].value)
                 elif name in SPAN_OPENERS:
                     for keyword in node.keywords:
                         if keyword.arg in {"attributes", "attrs"}:
-                            keys.update(_mapping_keys(keyword.value))
+                            keys.update(_mapping_keys(keyword.value)[0])
     return keys
 
 
 def _mapping_keys(node):
-    """The string keys of a dict literal, looking through one wrapping call.
+    """The string keys of the dict literals in *node*, one call deep at most.
 
     ``span.set_attributes(sanitize_attributes({...}))`` — the condense span
     opens that way — puts its keys one call below the writer, so a reader that
-    only inspects the direct argument reports an empty key set for a site whose
-    keys are perfectly literal. One level is deliberate: recursing through an
-    arbitrary call tree would let a wrong guess silently ADD a key to the
-    derived set that no writer produces, which weakens the very check this
-    exists to serve.
+    only inspects the direct argument sees an empty key set for a site whose
+    keys are perfectly literal.
+
+    Every argument of the wrapping call is read, positional and keyword: a merge
+    that takes a base mapping and an override puts the second dict's keys on the
+    span too, and returning at the first hit would drop them from BOTH readers —
+    which is the one outcome a vocabulary check cannot afford, since the key
+    would be neither registered-checked nor reported.
+
+    One level is deliberate. Recursing an arbitrary call tree would let a wrong
+    guess silently ADD a key to the derived set that no writer produces, which
+    weakens the very check this exists to serve.
+
+    Returns ``(keys, saw_dict)``. The second element separates "no dict here"
+    from "a dict whose keys are none of ours": ``set_attributes({})`` is
+    readable and writes nothing, so reporting it as unreadable would be noise.
     """
     keys = _literal_keys(node)
     if keys:
-        return keys
+        return keys, True
+    if isinstance(node, ast.Dict):
+        return keys, True
     if isinstance(node, ast.Call):
-        for arg in node.args:
-            found = _literal_keys(arg)
-            if found:
-                return found
-    return keys
+        saw_dict = False
+        arguments = list(node.args) + [keyword.value for keyword in node.keywords]
+        for arg in arguments:
+            found, is_dict = (
+                _mapping_keys(arg) if isinstance(arg, ast.Call) else (_literal_keys(arg), isinstance(arg, ast.Dict))
+            )
+            if is_dict:
+                saw_dict = True
+            keys |= found
+        return keys, saw_dict
+    return keys, False
 
 
 def _register_aliases(tree):
@@ -540,6 +560,17 @@ def _register_aliases(tree):
     return names
 
 
+@functools.lru_cache(maxsize=1)
+def _span_attrs_string_constants():
+    """The string constants ``core.span_attrs`` exports, read once per run.
+
+    The module cannot change while the suite runs, and both walkers ask for this
+    once per source file — parsing it twenty times per call was most of the
+    walk's cost.
+    """
+    return _string_constant_names(pathlib.Path(core.span_attrs.__file__))
+
+
 def _span_attrs_constants(tree):
     """Names bound to a string constant exported by ``core.span_attrs``.
 
@@ -554,7 +585,7 @@ def _span_attrs_constants(tree):
     one does.
     """
     bound = {}
-    constants = _string_constant_names(pathlib.Path(core.span_attrs.__file__))
+    constants = _span_attrs_string_constants()
     for node in ast.walk(tree):
         if not (isinstance(node, ast.ImportFrom) and node.module and node.module.endswith("span_attrs")):
             continue
@@ -656,7 +687,7 @@ def _non_literal_attribute_mappings(overlay_sources):
             name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
             if name in SPAN_OPENERS:
                 for keyword in node.keywords:
-                    if keyword.arg in {"attributes", "attrs"} and not _mapping_keys(keyword.value):
+                    if keyword.arg in {"attributes", "attrs"} and not _mapping_keys(keyword.value)[1]:
                         offenders.append(f"{_display_path(path)}:{node.lineno}")
             elif name in _ATTRIBUTE_WRITERS:
                 # set_attribute("literal", …) is derivable; set_attribute(k, v)
@@ -684,7 +715,7 @@ def _is_literal_key(arg, writer, aliases, constants):
     resolved here or not at all.
     """
     if writer == "set_attributes":
-        return bool(_mapping_keys(arg))
+        return _mapping_keys(arg)[1]
     if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
         return True
     return _constant_key(arg, constants) is not None or _registered_key(arg, aliases) is not None
@@ -718,12 +749,49 @@ class TestOwnedSpanCoverage:
         non-key constant means the resolver has a second special case nobody
         wrote down, and a reader cannot tell which shape it will refuse next.
         """
-        declared = _string_constant_names(pathlib.Path(core.span_attrs.__file__))
+        declared = _span_attrs_string_constants()
         not_keys = {value for value in declared.values() if value not in _REGISTERED_NAMES}
         assert not_keys == {UNRESOLVED}, (
             f"span_attrs string constants that are not registered attribute names: "
             f"{sorted(not_keys)}. Each is invisible to the key derivation, so a "
             "constant written as a key carries nothing the sweep can check."
+        )
+
+    def test_the_three_resolutions_are_needed_for_the_real_sources(self, overlay_sources):
+        """Each of the three indirections earns its place on the overlay itself.
+
+        Every one of them is ungated by construction if the probe alone is
+        trusted. Dropping a resolution removes keys from the derived set, and
+        nothing downstream complains: coverage stays above the threshold, and
+        the reverse gate only fires on a key that IS written and IS unregistered
+        — a key that stopped being derived cannot trip it. That is how a
+        resolution can be reverted with the suite green.
+
+        So the keys each resolution is responsible for are named here, against
+        the real walk rather than a synthetic file. All three condense keys are
+        asserted, not two: a partial fix must fail too.
+        """
+        derived = _set_attribute_keys(overlay_sources)
+
+        assert {
+            "genie.condense.mode",
+            "genie.condense.status",
+            "genie.condense.latency_ms",
+        } <= derived, (
+            "the condense keys are written one call below set_attributes; they are "
+            "what reading through a wrapping call buys, and they left the derived "
+            "set when that lookup stopped"
+        )
+        assert "genie.query_id" in derived, (
+            "genie.query_id is stamped through the QUERY_ID_KEY constant on six "
+            "sites. Resolving span_attrs string constants is what makes them "
+            "derivable; without it all six leave the derived set at once"
+        )
+        assert {"traversal.injected_docs", "traversal.injected_neighbor_items"} <= derived, (
+            "the retriever writes these through the import alias A[...]. Resolving "
+            "the alias is what makes them derivable — hardcoding ATTRIBUTE_NAMES "
+            "loses them, and the same hardcoding is what once made the report "
+            "disagree with this walk"
         )
 
     def test_the_condense_keys_are_derived(self, overlay_sources):
@@ -859,9 +927,11 @@ class TestOwnedSpanCoverage:
         """The check that names a write form the derivation cannot read must work.
 
         It reports rather than gates: the six write sites that exist today all
-        predate the derivation and each has a test asserting its built mapping is
-        free-text-free, so making them CI failures would be noise dressed as
-        rigor. Coverage is gated instead, by threshold, in
+        predate the derivation, and four of the six build their mapping in a
+        helper a test already asserts is free-text-free — so making them CI
+        failures would be noise dressed as rigor. The remaining two are safe by
+        construction rather than by test; ``_non_literal_attribute_mappings``
+        says which is which. Coverage is gated instead, by threshold, in
         ``test_the_derivation_covers_most_registered_keys``.
 
         So the assertion here is about the DETECTION, on a synthetic file: a

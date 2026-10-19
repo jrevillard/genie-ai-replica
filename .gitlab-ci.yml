@@ -3155,6 +3155,9 @@ chart:contract:
       || { echo "OTLP endpoint drifted from the operator Service name"; exit 1; }
     - PII_SMOKE_CONFIG=/tmp/contract-collector-config.yaml ./tests/otel-collector/run-pii-smoke.sh
   rules:
+    # Generic (not branch-pinned): the job validates the chart at its own
+    # commit SHA, so contract coverage follows chart/otel changes wherever
+    # they land — release/* cherry-picks, other feature branches, main.
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - charts/**/*
@@ -3163,7 +3166,7 @@ chart:contract:
         - tests/otel-collector/**/*
         - .gitlab-ci.yml
       when: on_success
-    - if: '$CI_COMMIT_BRANCH == "feat/k8s-migration"'
+    - if: '$CI_COMMIT_BRANCH'
       changes:
         - charts/**/*
         - scripts/**/*
@@ -3259,7 +3262,7 @@ chart:install:
     # Wait on Deployments, NOT pods: pre-install hook pods (dependency
     # check) are Succeeded-phase and never become Ready — `kubectl wait
     # pods --all` times out on them even on a healthy install (empirically
-    # confirmed; review 2026-10-19).
+    # confirmed).
     - kubectl wait --for=condition=Available deploy --all -n genieai --timeout=10m
     - helm test test -n genieai --logs
     - mkdir -p chart-test-logs

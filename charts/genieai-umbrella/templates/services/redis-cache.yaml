@@ -39,23 +39,23 @@ spec:
             - $(TRANSLATION_CACHE_PASSWORD)
           env:
             # redis-cli consumes REDISCLI_AUTH automatically for the
-            # health probes below. Both `secretKeyRef` entries are
-            # `optional: true` so the pod starts even when the Secret
-            # has not been materialized (e.g. dev installs where the
-            # SealedSecret bundle is not yet rendered). redis then
-            # runs without AUTH (dev installs).
+            # health probes below. The Secret is REQUIRED, not optional:
+            # --requirepass is unconditionally set above, and an optional
+            # secretKeyRef leaves the literal "$(TRANSLATION_CACHE_PASSWORD)"
+            # in the args — redis then runs with an unknown literal password
+            # and every probe gets NOAUTH. translation-cache-password is on
+            # the chart's required-secrets list; a missing Secret must fail
+            # the pod loudly at scheduling, not corrupt auth silently.
             - name: REDISCLI_AUTH
               valueFrom:
                 secretKeyRef:
                   name: translation-cache-password
                   key: TRANSLATION_CACHE_PASSWORD
-                  optional: true
             - name: TRANSLATION_CACHE_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: translation-cache-password
                   key: TRANSLATION_CACHE_PASSWORD
-                  optional: true
           ports:
             - name: redis
               containerPort: {{ $svc.port | default 6379 }}

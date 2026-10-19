@@ -44,8 +44,8 @@ against an operator's explicit off switch. */ -}}
 {{- end -}}
 {{- $urls := list
     (dict "name" "KEYCLOAK_URL" "value" (include "genieai-umbrella.keycloakInternalURL" .))
-    (dict "name" "KEYCLOAK_REALM" "value" "genie")
-    (dict "name" "KEYCLOAK_CLIENT_ID" "value" "genie-app")
+    (dict "name" "KEYCLOAK_REALM" "value" (.Values.data.keycloak.realm | default "genie"))
+    (dict "name" "KEYCLOAK_CLIENT_ID" "value" (.Values.data.keycloak.webClientId | default "genie-app"))
     (dict "name" "ARANGO_URL" "value" (include "genieai-umbrella.arangoURL" .))
     (dict "name" "ARANGO_DB" "value" "_system")
     (dict "name" "ARANGO_USER" "value" "root")

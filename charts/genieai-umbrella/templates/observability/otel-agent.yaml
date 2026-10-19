@@ -165,7 +165,7 @@ spec:
       # (The `otlp` exporter is gRPC-only on 4317; both work, this
       # matches the gateway's own downstream exporter type.)
       otlphttp/gateway:
-        endpoint: http://{{ .Values.observability.collectorCRName }}-collector.{{ .Values.namespace }}.svc.cluster.local:4318
+        endpoint: {{ include "genieai-umbrella.otlpEndpoint" . }}
         tls:
           insecure: true
         sending_queue:

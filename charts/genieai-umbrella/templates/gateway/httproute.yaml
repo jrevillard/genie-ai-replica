@@ -53,7 +53,12 @@ spec:
       backendRefs:
         - name: document-repository
           port: 80
-    {{- /* Backend BFF: /api + swagger. */}}
+    {{- /* Backend BFF: /api + swagger. The chat SSE stream lives here:
+           Envoy's default route timeout kills long streams mid-flight
+           (live-observed: backend finished in 20s, browser got a 504 at
+           52s), so the rule carries an explicit long backendRequest
+           timeout — Gateway API expresses "no timeout" as a large
+           duration. */}}
     - matches:
         - path:
             type: PathPrefix
@@ -61,6 +66,8 @@ spec:
         - path:
             type: PathPrefix
             value: /api-docs/
+      timeouts:
+        backendRequest: 24h
       backendRefs:
         - name: backend
           port: 80

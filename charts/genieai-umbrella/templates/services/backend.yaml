@@ -156,7 +156,7 @@ spec:
         # OTLP exporter: required for the observability pipeline. Without
         # this port the default-deny policy drops all traces at the source.
         - protocol: TCP
-          port: 4318
+          port: {{ .Values.observability.collectorPort | default 4318 }}
     {{- if .Values.observability.logs.enabled }}
     # VictoriaLogs read path for the admin logs UI (VICTORIALOGS_URL).
     # Own rule, not a port in the shared any-destination list: the

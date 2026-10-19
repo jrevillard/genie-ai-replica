@@ -302,6 +302,12 @@ DATAPREP_LLM_PHASE_TIMEOUT_SECONDS = _positive_float_env("DATAPREP_LLM_PHASE_TIM
 # it), so a phase that is alive but slow has to say so — silence is what made
 # the original stall undiagnosable.
 DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS = _positive_float_env("DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", default=60.0)
+# How long a cancelled batch is given to unwind before the phase gives up on it.
+# Long enough for a cooperative cancellation to close its HTTP connection and
+# free its semaphore slot; short enough that the phase bound stays the outer
+# limit. A task that has not finished by then is abandoned, which is what the
+# caller's fallback is for.
+_PHASE_CANCEL_GRACE_SECONDS = 5.0
 
 # Contextual Retrieval (Anthropic-style): per-chunk LLM-generated document
 # context prepended to each chunk before embedding + labeling, so chunks carry
@@ -680,7 +686,12 @@ async def _gather_with_phase_budget(
         return [], False
 
     started = time.monotonic()
-    pending = {asyncio.ensure_future(t) for t in tasks}
+    # Wrapped in submission order so a failed batch can be picked
+    # deterministically: asyncio.wait hands back a set, and iterating one would
+    # make "which exception aborts the ingest" depend on set ordering.
+    ordered = [asyncio.ensure_future(t) for t in tasks]
+    order = {id(task): n for n, task in enumerate(ordered)}
+    pending = set(ordered)
     results: list = []
     interval = DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS
     next_report = started + interval
@@ -719,10 +730,13 @@ async def _gather_with_phase_budget(
                     return_when=asyncio.FIRST_COMPLETED,
                 )
 
-            for task in done:
+            for task in sorted(done, key=lambda t: order[id(t)]):
                 # Propagate a raised task exactly as gather would — but record it
                 # and keep draining the loop first, so the settle-and-cancel in
-                # the finally block runs before it escapes.
+                # the finally block runs before it escapes. Iterating the set
+                # asyncio.wait returns would pick an arbitrary member, so which
+                # of two differently-failing batches decides whether the ingest
+                # aborts or degrades would change run to run.
                 exc = task.exception()
                 if exc is not None:
                     if failure is None:
@@ -760,6 +774,21 @@ async def _gather_with_phase_budget(
                 logger.info(message)
                 await _safe_log(write_ingestion_log, file_id, "INFO", phase, message)
 
+                # The log write yields the event loop for a full ingestion-log
+                # round trip. A batch that answers during it holds a complete
+                # result, and discarding it would report the phase as having
+                # lost work the LLM actually did — pointing the operator at GPU
+                # contention instead of at the budget. Drain what settled.
+                late = {t for t in pending if t.done()}
+                pending -= late
+                for task in sorted(late, key=lambda t: order[id(t)]):
+                    exc = task.exception()
+                    if exc is not None:
+                        if failure is None:
+                            failure = exc
+                        continue
+                    results.append(task.result())
+
             if not pending or remaining_phase <= 0:
                 break
 
@@ -772,9 +801,15 @@ async def _gather_with_phase_budget(
         if pending:
             for task in pending:
                 task.cancel()
-            # Let the cancellations settle so the tasks release their slots and
-            # their HTTP connections before the caller starts the fallback work.
-            await asyncio.gather(*pending, return_exceptions=True)
+            # Bounded settle. An unbounded gather here would make the phase
+            # bound advisory: a task sitting in a non-cancellable await (a
+            # thread offload, a client swallowing CancelledError) never
+            # completes, so the gather never returns and the caller waits past
+            # its budget anyway — the exact unbounded stall this helper exists
+            # to end. Waiting briefly lets well-behaved tasks release their slot
+            # and their connection; anything still stuck is abandoned, and the
+            # caller gets its fallback.
+            await asyncio.wait(pending, timeout=_PHASE_CANCEL_GRACE_SECONDS)
 
     if failure is not None:
         # A batch that raised is an error the phase's caller already knows how
@@ -815,6 +850,10 @@ async def _await_with_heartbeat(tasks: list, *, phase: str, total: int, file_id:
     interval = DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS
     next_report = started + interval
     pending = set(tasks)
+    # Submission order, for the same reason as the budgeted variant: the set
+    # asyncio.wait returns has no order, and which failing batch decides the
+    # ingest's outcome must not depend on it.
+    order = {id(task): n for n, task in enumerate(tasks)}
     completed = 0
 
     while pending:
@@ -823,7 +862,7 @@ async def _await_with_heartbeat(tasks: list, *, phase: str, total: int, file_id:
         if not settled:
             done, pending = await asyncio.wait(pending, timeout=interval, return_when=asyncio.FIRST_COMPLETED)
             settled = done
-        for task in settled:
+        for task in sorted(settled, key=lambda t: order[id(t)]):
             # Re-raise the first failure, as gather would. Done before any
             # further reporting so the phase fails on the real error rather than
             # on the heartbeat's log write.

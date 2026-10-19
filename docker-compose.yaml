@@ -1190,12 +1190,14 @@ services:
       # and it is the only model-endpoint call in the deck that comps reads a
       # budget for. Setting it here closes that gap with no override patch.
       #
-      # MODEL_LLM_TIMEOUT_SECONDS wins so that raising the one documented LLM
-      # knob moves both halves of the ingest together — the in-repo labelling
-      # client and the vendored graph transformer. VLLM_TIMEOUT stays readable
-      # as a fallback so a deployment that already set it (it was the retriever
-      # summarizer knob before this policy existed) keeps its value rather than
-      # being silently reset by the new default.
+      # Only VLLM_TIMEOUT is injected, never MODEL_LLM_TIMEOUT_SECONDS. The policy
+      # gives MODEL_LLM_TIMEOUT_SECONDS precedence, so injecting it with a
+      # default here would always win and a deployment that already set
+      # VLLM_TIMEOUT (the retriever knob before this policy existed) would have
+      # it silently reset. With the nested default, raising the documented
+      # MODEL_LLM_TIMEOUT_SECONDS still moves both halves of the ingest — the
+      # in-repo labelling client and the vendored graph transformer — together,
+      # and an explicit VLLM_TIMEOUT still overrides it.
       VLLM_TIMEOUT: ${VLLM_TIMEOUT:-${MODEL_LLM_TIMEOUT_SECONDS:-180}}
       GPU_NODE_HOST: ${GPU_NODE_HOST:-}
       TEI_EMBEDDING_ENDPOINT: ${EMBEDDING_SERVICE_URL:-http://tei:80}
@@ -1253,7 +1255,14 @@ services:
       ENABLE_OBSERVABILITY: ${ENABLE_OBSERVABILITY:-0}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
       # Shared model-endpoint HTTP budgets (core/model_http_policy.py).
-      MODEL_LLM_TIMEOUT_SECONDS: ${MODEL_LLM_TIMEOUT_SECONDS:-180}
+      # The LLM budget goes in as VLLM_TIMEOUT only, for the same reason as the
+      # retriever block: injecting MODEL_LLM_TIMEOUT_SECONDS with a default here
+      # would always win the policy's precedence, so a deployment that already
+      # set VLLM_TIMEOUT would drive the vendored graph transformer with it while
+      # the in-repo labelling client silently used 180 — the two halves of one
+      # ingest disagreeing, which is what this is meant to prevent. MODEL_LLM_*
+      # still overrides when explicitly set, since the nested default only
+      # applies when VLLM_TIMEOUT is unset.
       MODEL_LLM_MAX_RETRIES: ${MODEL_LLM_MAX_RETRIES:-2}
       MODEL_TEI_TIMEOUT_SECONDS: ${MODEL_TEI_TIMEOUT_SECONDS:-120}
       MODEL_CONTROL_PLANE_TIMEOUT_SECONDS: ${MODEL_CONTROL_PLANE_TIMEOUT_SECONDS:-30}

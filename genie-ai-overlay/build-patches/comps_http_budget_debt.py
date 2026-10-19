@@ -65,6 +65,22 @@ and only inside the built image (see ``contracts/README.md``). Shipping a
 process-wide patch with no CI able to observe its blast radius is the kind of
 change that should be measured, not assumed.
 
+Adjacent finding — the same hook, a different leak
+---------------------------------------------------
+``configs/ssl/genie_ssl_patch.py`` injects ``Authorization: Bearer
+$VLLM_API_KEY`` into **every** ``aiohttp`` and ``requests`` call in the
+process, regardless of destination: the document repository, the backend and
+ArangoDB all receive the GPU node's credential. This predates the HTTP-budget
+work (both wrappers predate it) and was left unchanged here rather than fixed
+inside a timeout MR — it is an auth-scope change on a critical path and wants
+its own review.
+
+The fix shape is the URL-scoped variant already proposed below for the timeout
+shim: match the endpoint (the GPU host / the TEI and vLLM URLs) and inject only
+for that host, rather than for every call the process makes. Worth pairing
+with the ``verify=False`` gating this MR did land, since both live in the same
+wrapper.
+
 What would close it
 -------------------
 Two routes, in order of how well they are understood:

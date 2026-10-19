@@ -91,7 +91,12 @@ def _positive_float(*names: str, default: float) -> float:
 
 
 def _positive_int(*names: str, default: int) -> int:
-    return int(_positive_float(*names, default=default))
+    # Round, not truncate. int() would turn a fractional value below 1 into 0,
+    # which passes the positive check and then disables the retry the knob
+    # exists to enable — the one outcome the parser promises is impossible.
+    # ceil keeps the floor at 1: a fractional retry count is nonsense, but the
+    # safe reading of nonsense here is "retry at least once".
+    return math.ceil(_positive_float(*names, default=default))
 
 
 # LLM (vLLM chat completions).

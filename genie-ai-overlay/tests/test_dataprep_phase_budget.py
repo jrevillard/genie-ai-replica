@@ -462,6 +462,128 @@ class TestPhaseBudgetDefaultIsBelowOneBatchWorstCase:
         )
 
 
+class TestPhaseBoundIsAHardWall:
+    """The phase bound must bound the phase, including its own cleanup.
+
+    The bound is only real if the caller gets its fallback back on time. Two
+    ways it did not: an unbounded gather while settling cancellations (a task in
+    a non-cancellable await never finishes, so the settle never returns), and
+    result-collection that depended on which set iteration order it got.
+    """
+
+    def test_a_task_that_ignores_cancellation_does_not_hold_the_phase(self, monkeypatch):
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 0.3)
+        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+
+        async def scenario():
+            async def stuck():
+                # Swallows the cancellation the way a client offloading to a
+                # thread or catching broadly around its HTTP call does.
+                try:
+                    await asyncio.sleep(30)
+                except asyncio.CancelledError:
+                    await asyncio.sleep(30)
+                    return None
+
+            loop = asyncio.get_running_loop()
+            started = loop.time()
+            results, timed_out = await dataprep._gather_with_phase_budget(
+                [stuck(), stuck()],
+                phase="Labeling",
+                phase_label=dataprep.PHASE_LABEL_LABELING,
+                total=2,
+                file_id="f1",
+                write_ingestion_log=_noop_log,
+            )
+            return results, timed_out, loop.time() - started
+
+        results, timed_out, elapsed = _run(scenario())
+        assert timed_out is True
+        assert elapsed < 3.0, (
+            f"the phase spent {elapsed:.1f}s waiting on tasks that ignore "
+            "cancellation — the bound is only as real as its own cleanup"
+        )
+
+    def test_work_that_finishes_during_a_heartbeat_is_kept(self, monkeypatch):
+        """A completed batch is a completed batch, whoever noticed it.
+
+        The heartbeat awaits an ingestion-log round trip, which yields the event
+        loop. A batch answering during that window holds a full result; dropping
+        it would report work as lost that the model actually did, and send the
+        operator looking at GPU contention instead of at the budget.
+        """
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 0.4)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 0.05)
+
+        async def scenario():
+            recorder = _Recorder()
+            late = []
+
+            async def answers_during_the_log_write():
+                await asyncio.sleep(0.06)  # lands inside the heartbeat's await
+                return {0: ["label"]}
+
+            async def wedged():
+                await asyncio.sleep(30)
+
+            results, timed_out = await dataprep._gather_with_phase_budget(
+                [answers_during_the_log_write(), wedged()],
+                phase="Labeling",
+                phase_label=dataprep.PHASE_LABEL_LABELING,
+                total=2,
+                file_id="f1",
+                write_ingestion_log=recorder,
+            )
+            late.extend(recorder.entries)
+            return results, timed_out, late
+
+        results, timed_out, entries = _run(scenario())
+        assert timed_out is True
+        assert [r for partial in results for r in partial], (
+            "a batch that completed during the heartbeat was discarded — its chunks "
+            "fell to the file-label fallback even though the LLM answered"
+        )
+        warned = [e for e in entries if e[0] == "WARN"]
+        assert warned, "the budget exhaustion must still be reported"
+        assert "1/2 batches completed" in warned[0][2], (
+            "the WARN must count the batch that did finish, not report it abandoned"
+        )
+
+    def test_the_reported_failure_is_deterministic_across_runs(self, monkeypatch):
+        """Which failing batch aborts the ingest must not change run to run.
+
+        asyncio.wait returns a set. Iterating one to pick the exception made the
+        choice depend on hash ordering, so two batches failing differently could
+        abort the document on one run and degrade it on the next.
+        """
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 5.0)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+
+        async def scenario():
+            async def aborting():
+                raise ValueError("first batch aborts")
+
+            async def transient():
+                raise RuntimeError("second batch fails transiently")
+
+            return await dataprep._gather_with_phase_budget(
+                [aborting(), transient(), aborting(), transient(), aborting(), transient()],
+                phase="Labeling",
+                phase_label=dataprep.PHASE_LABEL_LABELING,
+                total=6,
+                file_id="f1",
+                write_ingestion_log=_noop_log,
+            )
+
+        seen = set()
+        for _ in range(12):
+            with pytest.raises(Exception) as exc:
+                _run(scenario())
+            seen.add(type(exc.value).__name__ + ":" + str(exc.value))
+        assert len(seen) == 1, f"the surfaced failure is not deterministic: {seen}"
+
+
 class TestTimeoutClassifier:
     """A timeout is the failure the budget produces on purpose, so it is labelled.
 

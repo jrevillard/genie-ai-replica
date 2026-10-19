@@ -3206,6 +3206,12 @@ export default {
       results: {
         title: 'Ergebnisse des Vergleichstests',
         failing: '{n} fehlgeschlagen',
+        trendTitle: 'Metrik-Trend über Läufe',
+        trendNote:
+          'Jede Linie ist der Suite-Mittelwert einer RAGAS-Metrik pro Lauf, ältester zuerst — das ␘ an jedem Tacho erklärt die Metrik. Bewertete Antworten werden gecacht; gleiche Wiederholungen unterscheiden sich nur, wo Antworten oder Abruf sich änderten.',
+        statusTitle: 'Ergebnisse pro Frage',
+        statusNote:
+          'Jede Suite-Frage dieses Laufs, gestapelt nach Ausgang: bestanden, durchgefallen (eine gewählte Metrik unter ihrer Schwelle), enthalten (Antwort verweigert) oder Fehler (Pipeline fehlgeschlagen).',
         allPass: 'alle bestanden',
         failingShort: 'fehlgeschlagen',
         answer: 'Antwort',
@@ -3246,14 +3252,41 @@ export default {
         factual_correctness: 'faktische Korrektheit',
         answer_correctness: 'Antwortkorrektheit',
         answer_similarity: 'Antwortähnlichkeit',
-        noise_sensitivity: 'Rauschempfindlichkeit'
+        noise_sensitivity: 'Rauschempfindlichkeit',
+        note: {
+          faithfulness:
+            'Wie faktenbasiert die Antwort gegenüber den abgerufenen Passagen ist — der Anteil der Aussagen, die von den Quellen gedeckt sind. Niedrig heißt: die Antwort behauptet Dinge, die die Belege nicht hergeben (Halluzination).',
+          context_precision:
+            'Ob die entscheidenden Passagen oben in der Trefferliste stehen. Niedrig heißt: die richtigen Belege wurden gefunden, aber von weniger relevanten Abschnitten verdeckt.',
+          context_recall:
+            'Ob die abgerufenen Passagen alles abdecken, was die Referenzantwort erfordert. Niedrig heißt: der Abruf hat Belege verpasst, die die Frage brauchte.',
+          answer_relevancy:
+            'Wie gut die Antwort die gestellte Frage adressiert: RAGAS erzeugt Fragen aus dem Antworttext und vergleicht sie per Embedding-Ähnlichkeit mit der Originalfrage. Faktische Richtigkeit wird NICHT geprüft — weitschweifige Antworten scoren niedrig, selbst wenn sie richtig sind.',
+          context_utilization:
+            'Ob der abgerufene Kontext ausreicht, um die Referenzantwort zu erzeugen — eine Vollständigkeitsprüfung des Abrufs.',
+          context_entities_recall:
+            'Recall auf Entitätenebene: der Anteil der benannten Entitäten der Referenzantwort (Firmen, Daten, Beträge, Orte), die im abgerufenen Kontext vorkommen.',
+          factual_correctness:
+            'Faktische Übereinstimmung auf Aussagenebene mit der Referenzantwort — der Judge zerlegt beide in Aussagen und bewertet die Überschneidung. Die strengste Korrektheitsmetrik.',
+          answer_correctness:
+            'Gesamtqualität gegenüber der Referenzantwort — faktische Korrektheit kombiniert mit semantischer Ähnlichkeit. Die Metrik, die „ward die Antwort richtig“ am nächsten kommt.',
+          answer_similarity:
+            'Semantische (Embedding-)Ähnlichkeit zwischen erzeugter und Referenzantwort — hoch bedeutet: beide sagen dasselbe.',
+          noise_sensitivity:
+            'Wie sehr die Antwort leidet, wenn irrelevante Passagen in den Kontext gemischt werden — ein Robustheitsmaß. NIEDRIGER ist besser; die Schwelle ist invertiert.'
+        }
       },
       pdf: {
         title: 'RAGAS-Vergleichstestbericht',
         suite: 'Suite',
         run: 'Ausführung',
         summary: 'Zusammenfassung',
-        perQuery: 'Scores pro Frage'
+        perQuery: 'Scores pro Frage',
+        status: 'Ergebnisse',
+        n: 'Fragen',
+        evaluable: 'bewertbar',
+        abstained: 'enthalten',
+        compare: 'Vergleich über Läufe (Delta zum ersten)'
       }
     }
   },

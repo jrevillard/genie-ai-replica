@@ -311,7 +311,7 @@
         </DsButton>
       </div>
 
-      <!-- aggregate gauges -->
+      <!-- aggregate gauges — every metric chart carries its ⓘ RAGAS note -->
       <div v-if="aggregateRows.length" class="okf-ragas__gauges">
         <div v-for="g in aggregateRows" :key="g.key" class="okf-ragas__gauge">
           <apexchart
@@ -321,17 +321,48 @@
             :options="gaugeOptions(g)"
             :series="g.series"
           ></apexchart>
-          <span class="okf-ragas__gauge-label">{{ g.label }}</span>
+          <span class="okf-ragas__gauge-label">
+            {{ g.label }}
+            <DsInfoTip :label="g.label" :text="metricNote(g.key)" />
+          </span>
         </div>
       </div>
 
       <!-- trend across runs -->
       <div v-if="trendSeries.length" class="okf-ragas__trend">
+        <div class="okf-ragas__chart-head">
+          <span class="okf-ragas__chart-title">{{
+            translate('okf.ragas.results.trendTitle', 'Metric trend across runs')
+          }}</span>
+          <DsInfoTip
+            :label="translate('okf.ragas.results.trendTitle', 'Metric trend across runs')"
+            :text="
+              translate(
+                'okf.ragas.results.trendNote',
+                'Each line is one RAGAS metric’s suite mean per run, oldest to newest — hover any gauge’s ⓘ for what that metric measures. Judged answers are cached, so equal re-runs differ only where answers or retrieval changed.'
+              )
+            "
+          />
+        </div>
         <apexchart ref="trendChart" type="line" height="200" :options="trendOptions" :series="trendSeries"></apexchart>
       </div>
 
       <!-- status stacked bar -->
       <div v-if="statusSeries.length" class="okf-ragas__status">
+        <div class="okf-ragas__chart-head">
+          <span class="okf-ragas__chart-title">{{
+            translate('okf.ragas.results.statusTitle', 'Per-question outcomes')
+          }}</span>
+          <DsInfoTip
+            :label="translate('okf.ragas.results.statusTitle', 'Per-question outcomes')"
+            :text="
+              translate(
+                'okf.ragas.results.statusNote',
+                'Every suite question in this run, stacked by outcome: passing, failing (any selected metric below its threshold), abstained (the answerer declined), or errored (the pipeline failed that row).'
+              )
+            "
+          />
+        </div>
         <apexchart type="bar" height="120" :options="statusOptions" :series="statusSeries"></apexchart>
       </div>
 
@@ -470,6 +501,34 @@ const ALL_METRICS = [
   'answer_similarity',
   'noise_sensitivity'
 ];
+
+// Plain-language "what this RAGAS metric actually measures" notes (David
+// 2026-10-19: every result chart gets an ⓘ with one). English fallbacks —
+// the locales carry okf.ragas.metric.note.<key> overrides. Keep these
+// honest about what each metric CANNOT see (answer_relevancy never checks
+// correctness; noise_sensitivity is inverted — lower is better).
+const METRIC_NOTE_FALLBACKS = {
+  faithfulness:
+    'How factually grounded the answer is against the retrieved passages — the share of the answer’s claims the sources actually support. Low means the answer says things the retrieved evidence does not (hallucination).',
+  context_precision:
+    'Whether the passages that matter were ranked at the top of the retrieved set. Low means the right evidence was retrieved but buried under less relevant chunks.',
+  context_recall:
+    'Whether the retrieved passages cover everything the reference answer requires — each reference claim must be attributable to retrieved context. Low means retrieval missed evidence the question needed.',
+  answer_relevancy:
+    'How well the answer addresses the question asked: RAGAS regenerates questions from the answer text and compares them to the original by embedding similarity. It does NOT check factual correctness — verbose or off-topic answers score low even when right.',
+  context_utilization:
+    'Whether the retrieved context is sufficient to produce the reference answer — a retrieval-completeness check against what the ideal answer needs.',
+  context_entities_recall:
+    'Entity-level recall: the share of named entities from the reference answer (companies, dates, amounts, places) that appear in the retrieved context.',
+  factual_correctness:
+    'Claim-level factual agreement with the reference answer — the judge decomposes both into claims and scores the overlap. The strictest correctness metric.',
+  answer_correctness:
+    'Overall quality versus the reference answer — factual correctness combined with semantic similarity. The closest metric to “did it give the right answer”.',
+  answer_similarity:
+    'Semantic (embedding) similarity between the generated answer and the reference answer — high means the two convey the same meaning.',
+  noise_sensitivity:
+    'How much the answer degrades when irrelevant passages are mixed into the retrieved context — a robustness measure. LOWER is better; it is the one metric whose failure threshold is inverted.'
+};
 
 export default {
   name: 'OkfRagasPanel',
@@ -685,6 +744,10 @@ export default {
   methods: {
     metricLabel(m) {
       return this.translate(`okf.ragas.metric.${m}`, m.replace(/_/g, ' '));
+    },
+    /** The plain-language RAGAS meaning for a metric — chart ⓘ + PDF notes. */
+    metricNote(m) {
+      return this.translate(`okf.ragas.metric.note.${m}`, METRIC_NOTE_FALLBACKS[m] || m.replace(/_/g, ' '));
     },
     barWidth(v) {
       return typeof v === 'number' && v === v ? `${Math.max(2, Math.min(100, Math.round(v * 100)))}%` : '0%';
@@ -1154,74 +1217,168 @@ export default {
     },
     /** The PDF report: tables + gauge images, built client-side (jsPDF is
      * an existing dependency — no server-side rendering, per the spec). */
+    /** PDF report (David 2026-10-19): the per-metric RAGAS notes are IN the
+     * report, and the format parallels the offline harness export
+     * (tests/rag-benchmarks enrich_xlsx_v2): per-metric aggregates with
+     * notes, status counts (n / evaluable / abstained / failing), the
+     * gauge + trend + status charts, a compare-across-runs table with
+     * delta-vs-first-run, and per-question rows with status flags. */
     async downloadPdf() {
       this.pdfBusy = true;
       try {
         const { jsPDF } = await import('jspdf');
         const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-        let y = 40;
+        const W = doc.internal.pageSize.getWidth();
+        const H = doc.internal.pageSize.getHeight();
+        const M = 40;
+        let y = M;
+        const need = (h) => {
+          if (y + h > H - M) {
+            doc.addPage();
+            y = M;
+          }
+        };
+        const summary = (this.runDoc && this.runDoc.payload && this.runDoc.payload.summary) || {};
+
         doc.setFontSize(16);
-        doc.text(this.translate('okf.ragas.pdf.title', 'RAGAS benchmark report'), 40, y);
+        doc.text(this.translate('okf.ragas.pdf.title', 'RAGAS benchmark report'), M, y);
         y += 18;
         doc.setFontSize(9);
         doc.text(
           `${this.translate('okf.ragas.pdf.suite', 'Suite')}: ${this.suite ? this.suite.name || this.suite.suite_key : '—'}`,
-          40,
+          M,
           y
         );
         y += 12;
         doc.text(
           `${this.translate('okf.ragas.pdf.run', 'Run')}: ${this.runDoc ? this.runDoc._key : '—'}   ${this.runDoc ? this.shortDate(this.runDoc.created_at) : ''}`,
-          40,
+          M,
           y
         );
         y += 20;
-        // summary
-        const summary = (this.runDoc && this.runDoc.payload && this.runDoc.payload.summary) || {};
+
+        // Summary: metric value + its plain-language RAGAS note (the same
+        // text the chart ⓘ popups show).
         doc.setFontSize(11);
-        doc.text(this.translate('okf.ragas.pdf.summary', 'Summary'), 40, y);
+        doc.text(this.translate('okf.ragas.pdf.summary', 'Summary'), M, y);
         y += 14;
         doc.setFontSize(9);
+        const noteLines = [];
         for (const [k, v] of Object.entries(summary.metrics || {})) {
-          doc.text(`${this.metricLabel(k)}: ${this.scoreText(v)}`, 40, y);
-          y += 12;
+          need(28);
+          doc.text(`${this.metricLabel(k)}: ${this.scoreText(v)}`, M, y);
+          y += 11;
+          doc.setFontSize(8);
+          doc.setTextColor(90);
+          const wrapped = doc.splitTextToSize(this.metricNote(k), W - 2 * M);
+          for (const line of wrapped.slice(0, 4)) {
+            need(11);
+            doc.text(line, M, y);
+            y += 10;
+          }
+          doc.setTextColor(0);
+          doc.setFontSize(9);
+          y += 4;
+          noteLines.push(k);
         }
         y += 6;
-        // gauges as images
-        for (const g of this.aggregateRows.slice(0, 4)) {
+
+        // Status counts — the harness export's n / n_abstained / n_evaluable
+        // accounting plus the failing count.
+        need(40);
+        doc.setFontSize(11);
+        doc.text(this.translate('okf.ragas.pdf.status', 'Outcomes'), M, y);
+        y += 14;
+        doc.setFontSize(9);
+        const st = [
+          `${this.translate('okf.ragas.pdf.n', 'questions')}: ${summary.n != null ? summary.n : this.runRows.length}`,
+          `${this.translate('okf.ragas.pdf.evaluable', 'evaluable')}: ${summary.n_evaluable != null ? summary.n_evaluable : '—'}`,
+          `${this.translate('okf.ragas.pdf.abstained', 'abstained')}: ${summary.n_abstained != null ? summary.n_abstained : 0}`,
+          `${this.translate('okf.ragas.results.failing', 'failing')}: ${summary.failing_count != null ? summary.failing_count : (summary.failing || []).length}`
+        ];
+        doc.text(st.join('   ·   '), M, y);
+        y += 20;
+
+        // Charts: gauges (two per row — all selected metrics, not just four),
+        // then trend + status when present.
+        const gauges = [];
+        for (const g of this.aggregateRows) {
           const chart = this.$refs[`gauge-${g.key}`];
           const inst = chart && chart[0] && chart[0].chart;
-          if (!inst) continue;
+          if (inst) {
+            try {
+              const img = await inst.dataURI();
+              gauges.push(img.imgURI);
+            } catch (e) {
+              void e;
+            }
+          }
+        }
+        for (let i = 0; i < gauges.length; i += 2) {
+          need(95);
+          doc.addImage(gauges[i], 'PNG', M, y, 160, 85);
+          if (gauges[i + 1]) doc.addImage(gauges[i + 1], 'PNG', M + 250, y, 160, 85);
+          y += 95;
+        }
+        const trendInst = this.$refs.trendChart && this.$refs.trendChart.chart;
+        if (trendInst && this.trendSeries.length) {
           try {
-            const img = await inst.dataURI();
-            doc.addImage(img.imgURI, 'PNG', 40, y, 110, 80);
-            y += 88;
+            const img = await trendInst.dataURI();
+            need(220);
+            doc.addImage(img.imgURI, 'PNG', M, y, W - 2 * M, ((W - 2 * M) * 200) / 715);
+            y += ((W - 2 * M) * 200) / 715 + 12;
           } catch (e) {
             void e;
           }
-          if (y > doc.internal.pageSize.getHeight() - 60) {
-            doc.addPage();
-            y = 40;
+        }
+
+        // Compare across runs with delta-vs-first — the harness Compare tab.
+        const history = [...this.runHistory].filter((h) => h.summary && h.summary.metrics).reverse();
+        if (history.length > 1) {
+          doc.addPage();
+          y = M;
+          doc.setFontSize(11);
+          doc.text(this.translate('okf.ragas.pdf.compare', 'Compare across runs (delta vs first)'), M, y);
+          y += 14;
+          doc.setFontSize(8);
+          const keys = this.historyMetricKeys;
+          const head = ('run  ' + keys.map((m) => this.metricLabel(m).slice(0, 12)).join('  ')).slice(0, 120);
+          doc.text(head, M, y);
+          y += 10;
+          const firstVals = keys.map((m) => history[0].summary.metrics[m]);
+          for (const h of history) {
+            need(10);
+            const cells = keys.map((m, i) => {
+              const v = h.summary.metrics[m];
+              const d = typeof v === 'number' && typeof firstVals[i] === 'number' ? v - firstVals[i] : null;
+              const ds = d === null || Math.abs(d) < 0.005 ? '' : d > 0 ? `+${d.toFixed(2)}` : d.toFixed(2);
+              return `${this.scoreText(v)}${ds ? '/' + ds : ''}`;
+            });
+            const label = (h.created_at || '').slice(0, 10) + ' ' + String(h._key || '').slice(-6);
+            doc.text(`${label}  ${cells.join('  ')}`.slice(0, 120), M, y);
+            y += 10;
           }
         }
-        // per-query table (text)
+
+        // Per-question rows with status flags (A=abstained, E=error,
+        // F=failing a threshold) — the harness per-run tab shape.
         doc.addPage();
-        y = 40;
+        y = M;
         doc.setFontSize(11);
-        doc.text(this.translate('okf.ragas.pdf.perQuery', 'Per-question scores'), 40, y);
+        doc.text(this.translate('okf.ragas.pdf.perQuery', 'Per-question scores'), M, y);
         y += 14;
         doc.setFontSize(8);
         const keys = this.runMetricKeys;
-        doc.text(('# ' + keys.map((m) => this.metricLabel(m).slice(0, 10)).join('  ')).slice(0, 110), 40, y);
+        const failingIds = new Set((summary.failing || []).map((f) => f.id));
+        doc.text(('# fl  ' + keys.map((m) => this.metricLabel(m).slice(0, 10)).join('  ')).slice(0, 120), M, y);
         y += 10;
         for (const r of this.runRows) {
-          const line = `${r.id}  ${keys.map((m) => this.scoreText(r.metrics && r.metrics[m])).join('   ')}`;
-          doc.text(line.slice(0, 110), 40, y);
+          need(10);
+          const flag = r.error ? 'E' : r.abstained ? 'A' : failingIds.has(r.id) ? 'F' : ' ';
+          const q = String(r.query || r.id).slice(0, 44);
+          const line = `${String(r.id).slice(0, 10)} ${flag} ${q}  ${keys.map((m) => this.scoreText(r.metrics && r.metrics[m])).join('   ')}`;
+          doc.text(line.slice(0, 120), M, y);
           y += 10;
-          if (y > doc.internal.pageSize.getHeight() - 40) {
-            doc.addPage();
-            y = 40;
-          }
         }
         doc.save(`ragas-report-${(this.runDoc && this.runDoc._key) || 'suite'}.pdf`);
       } finally {
@@ -1442,6 +1599,21 @@ export default {
 
 .okf-ragas__gauge-label {
   font-size: 11px;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.okf-ragas__chart-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.okf-ragas__chart-title {
+  font-size: 12px;
   color: var(--muted);
 }
 

@@ -3152,6 +3152,12 @@ export default {
       results: {
         title: 'Benchmark results',
         failing: '{n} failing',
+        trendTitle: 'Metric trend across runs',
+        trendNote:
+          'Each line is one RAGAS metric’s suite mean per run, oldest to newest — hover any gauge’s ␘ for what that metric measures. Judged answers are cached, so equal re-runs differ only where answers or retrieval changed.',
+        statusTitle: 'Per-question outcomes',
+        statusNote:
+          'Every suite question in this run, stacked by outcome: passing, failing (any selected metric below its threshold), abstained (the answerer declined), or errored (the pipeline failed that row).',
         allPass: 'all passing',
         failingShort: 'failing',
         answer: 'Answer',
@@ -3192,14 +3198,41 @@ export default {
         factual_correctness: 'factual correctness',
         answer_correctness: 'answer correctness',
         answer_similarity: 'answer similarity',
-        noise_sensitivity: 'noise sensitivity'
+        noise_sensitivity: 'noise sensitivity',
+        note: {
+          faithfulness:
+            'How factually grounded the answer is against the retrieved passages — the share of the answer’s claims the sources support. Low means the answer says things the evidence does not (hallucination).',
+          context_precision:
+            'Whether the passages that matter were ranked at the top of the retrieved set. Low means the right evidence was retrieved but buried under less relevant chunks.',
+          context_recall:
+            'Whether the retrieved passages cover everything the reference answer requires — each reference claim must be attributable to retrieved context. Low means retrieval missed evidence the question needed.',
+          answer_relevancy:
+            'How well the answer addresses the question asked: RAGAS regenerates questions from the answer text and compares them to the original by embedding similarity. It does NOT check factual correctness — verbose or off-topic answers score low even when right.',
+          context_utilization:
+            'Whether the retrieved context is sufficient to produce the reference answer — a retrieval-completeness check against what the ideal answer needs.',
+          context_entities_recall:
+            'Entity-level recall: the share of named entities from the reference answer (companies, dates, amounts, places) that appear in the retrieved context.',
+          factual_correctness:
+            'Claim-level factual agreement with the reference answer — the judge decomposes both into claims and scores the overlap. The strictest correctness metric.',
+          answer_correctness:
+            'Overall quality versus the reference answer — factual correctness combined with semantic similarity. The closest metric to “did it give the right answer”.',
+          answer_similarity:
+            'Semantic (embedding) similarity between the generated answer and the reference answer — high means the two convey the same meaning.',
+          noise_sensitivity:
+            'How much the answer degrades when irrelevant passages are mixed into the retrieved context — a robustness measure. LOWER is better; its failure threshold is inverted.'
+        }
       },
       pdf: {
         title: 'RAGAS benchmark report',
         suite: 'Suite',
         run: 'Run',
         summary: 'Summary',
-        perQuery: 'Per-question scores'
+        perQuery: 'Per-question scores',
+        status: 'Outcomes',
+        n: 'questions',
+        evaluable: 'evaluable',
+        abstained: 'abstained',
+        compare: 'Compare across runs (delta vs first)'
       }
     }
   },

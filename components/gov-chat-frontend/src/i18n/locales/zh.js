@@ -3120,6 +3120,11 @@ export default {
       results: {
         title: '基准测试结果',
         failing: '{n} 项失败',
+        trendTitle: '各次运行的指标趋势',
+        trendNote:
+          '每条线是一个 RAGAS 指标在每次运行中的均值，从旧到新——每个仪表的 ⓘ 解释该指标。已评判的答案会缓存；相同重跑只在答案或检索变化处不同。',
+        statusTitle: '逐题结果',
+        statusNote: '本次运行中的每个套件问题，按结果堆叠：通过、失败（任选指标低于阈值）、拒答或流水线错误。',
         allPass: '全部通过',
         failingShort: '失败',
         answer: '答案',
@@ -3160,14 +3165,35 @@ export default {
         factual_correctness: '事实正确性',
         answer_correctness: '答案正确性',
         answer_similarity: '答案相似度',
-        noise_sensitivity: '噪声敏感度'
+        noise_sensitivity: '噪声敏感度',
+        note: {
+          faithfulness:
+            '答案相对检索段落的事实依据程度——答案中的论断被来源支持的比例。低分表示答案说出了证据中没有的内容（幻觉）。',
+          context_precision: '关键段落是否排在检索结果前列。低分表示正确的证据被检索到，但被较不相关的片段淹没。',
+          context_recall: '检索段落是否覆盖参考答案所需的全部内容。低分表示检索遗漏了问题所需的证据。',
+          answer_relevancy:
+            '答案对所提问题的针对程度：RAGAS 从答案文本反向生成问题并与原问题做嵌入相似度比较。它不检查事实正确性——冗长或偏题的答案即使正确也得分偏低。',
+          context_utilization: '检索到的上下文是否足以生成参考答案——对检索完整性的检查。',
+          context_entities_recall:
+            '实体级召回：参考答案中的命名实体（公司、日期、金额、地点）出现在检索上下文中的比例。',
+          factual_correctness:
+            '与参考答案在论断层面的事实一致性——评判模型将两者分解为论断并评估重合度。最严格的正确性指标。',
+          answer_correctness: '相对参考答案的综合质量——事实正确性与语义相似度结合。最接近“答案是否正确”的指标。',
+          answer_similarity: '生成答案与参考答案之间的语义（嵌入）相似度——高表示两者表达同一含义。',
+          noise_sensitivity: '无关片段混入检索上下文时答案的退化程度——鲁棒性度量。越低越好；其阈值方向相反。'
+        }
       },
       pdf: {
         title: 'RAGAS 基准测试报告',
         suite: '测试集',
         run: '运行',
         summary: '摘要',
-        perQuery: '各问题得分'
+        perQuery: '各问题得分',
+        status: '结果',
+        n: '问题',
+        evaluable: '可评估',
+        abstained: '拒答',
+        compare: '跨运行比较（相对首次的差值）'
       }
     }
   },

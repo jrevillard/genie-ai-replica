@@ -3184,6 +3184,12 @@ export default {
       results: {
         title: 'Hasil tolok ukur',
         failing: '{n} gagal',
+        trendTitle: 'Tren metrik per run',
+        trendNote:
+          'Setiap garis adalah rata-rata satu metrik RAGAS per run, dari terlama — ␘ pada tiap meteran menjelaskan metriknya. Jawaban yang dinilai di-cache; run ulang identik hanya berbeda bila jawaban atau pengambilan berubah.',
+        statusTitle: 'Hasil per pertanyaan',
+        statusNote:
+          'Setiap pertanyaan suite pada run ini, ditumpuk per hasil: lulus, gagal (metrik terpilih di bawah ambangnya), menolak jawab, atau error pipeline.',
         allPass: 'semua lulus',
         failingShort: 'gagal',
         answer: 'Jawaban',
@@ -3224,14 +3230,41 @@ export default {
         factual_correctness: 'ketepatan faktual',
         answer_correctness: 'ketepatan jawaban',
         answer_similarity: 'kemiripan jawaban',
-        noise_sensitivity: 'sensitivitas derau'
+        noise_sensitivity: 'sensitivitas derau',
+        note: {
+          faithfulness:
+            'Seberapa kokoh jawaban secara faktual terhadap pasase yang diambil — proporsi klaim yang didukung sumber. Rendah berarti jawaban mengatakan hal yang tidak dikatakan bukti (halusinasi).',
+          context_precision:
+            'Apakah pasase yang penting berada di puncak himpunan hasil. Rendah berarti bukti yang tepat diambil tapi terkubur potongan yang kurang relevan.',
+          context_recall:
+            'Apakah pasase yang diambil mencakup semua yang dituntut jawaban referensi. Rendah berarti pengambilan melewatkan bukti yang dibutuhkan pertanyaan.',
+          answer_relevancy:
+            'Seberapa baik jawaban menjawab pertanyaan: RAGAS meregenerasi pertanyaan dari teks jawaban dan membandingkannya dengan aslinya lewat kemiripan embedding. TIDAK memeriksa kebenaran faktual — jawaban bertele-tele dapat rendah walau benar.',
+          context_utilization:
+            'Apakah konteks yang diambil cukup untuk menghasilkan jawaban referensi — pemeriksaan kelengkapan pengambilan.',
+          context_entities_recall:
+            'Recall level entitas: proporsi entitas bernama dari jawaban referensi (perusahaan, tanggal, jumlah, tempat) yang muncul di konteks terambil.',
+          factual_correctness:
+            'Kesepakatan faktual tingkat klaim dengan jawaban referensi — juri memecah keduanya menjadi klaim dan menilai tumpang tindihnya. Metrik kebenaran paling ketat.',
+          answer_correctness:
+            'Kualitas keseluruhan terhadap referensi — kebenaran faktual digabung kemiripan semantik. Metrik terdekat ke “apakah jawabannya benar”.',
+          answer_similarity:
+            'Kemiripan semantik (embedding) antara jawaban yang dihasilkan dan referensi — tinggi berarti keduanya menyampaikan hal yang sama.',
+          noise_sensitivity:
+            'Seberapa jauh jawaban menurun saat pasase tak relevan tercampur ke konteks — ukuran ketahanan. LEBIH RENDAH lebih baik; ambangnya terbalik.'
+        }
       },
       pdf: {
         title: 'Laporan tolok ukur RAGAS',
         suite: 'Suite',
         run: 'Eksekusi',
         summary: 'Ringkasan',
-        perQuery: 'Skor per pertanyaan'
+        perQuery: 'Skor per pertanyaan',
+        status: 'Hasil',
+        n: 'pertanyaan',
+        evaluable: 'dapat dinilai',
+        abstained: 'menolak jawab',
+        compare: 'Perbandingan antar run (delta vs run pertama)'
       }
     }
   },

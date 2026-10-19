@@ -3179,6 +3179,12 @@ export default {
       results: {
         title: 'Matokeo ya kipimo',
         failing: '{n} zimeshindwa',
+        trendTitle: 'Mwelekeo wa vipimo kati ya uendeshaji',
+        trendNote:
+          'Kila mstari ni wastani wa kipimo kimoja cha RAGAS kwa kila uendeshaji, kutoka ya zamani — ⓘ ya kila kipimo inaelezea kipimo hicho. Majibu yaliyohakikiwa yanahifadhiwa; marudio sawa yanatofautiana tu ambapo jibu au upatikanaji ulibadilika.',
+        statusTitle: 'Matokeo kwa kila swali',
+        statusNote:
+          'Kila swali la suite katika uendeshaji huu, kwa matokeo: limoefaulu, kushindwa (kipimo kuchaguliwa chini ya kikomo chake), kukataa kujibu, au hitilafu ya mnyororo.',
         allPass: 'zote zimefaulu',
         failingShort: 'zimeshindwa',
         answer: 'Jibu',
@@ -3219,14 +3225,41 @@ export default {
         factual_correctness: 'usahihi wa ukweli',
         answer_correctness: 'usahihi wa jibu',
         answer_similarity: 'kufanana kwa jibu',
-        noise_sensitivity: 'unyeti wa kelele'
+        noise_sensitivity: 'unyeti wa kelele',
+        note: {
+          faithfulness:
+            'Jibu lina msingi wa kimantiki kiasi gani kuhusiana na vifungu vilivyopatikana — uwiano wa madai yanayoungwa mkono na vyanzo. Chini maana yake jibu linasema ambacho ushahidi haujasema (udanganyifu).',
+          context_precision:
+            'Vifungu muhimu viko juu ya matokeo yaliyopatikana? Chini maana yake ushahidi sahihi ulipatikana lakini ulizikwa chini ya vipande visivyohusika.',
+          context_recall:
+            'Vifungu vilivyopatikana vinashughulikia kila kitu jibu la rejea linahitaji? Chini maana yake upatikanaji umekosa ushahidi swali lilikuwa linahitaji.',
+          answer_relevancy:
+            'Jibu linajibu swali lililoulizwa kiasi gani: RAGAS inazalisha maswali upya kutoka kwa maandishi ya jibu na kuyalinganisha na la asili kwa ufanano wa embedding. HAUKAGUI usahihi wa kimantiki — majibu marefu hupata alama ya chini hata yakawa sahihi.',
+          context_utilization:
+            'Muktadha uliopatikana unatosha kutoa jibu la rejea — ukaguzi wa ukamilifu wa upatikanaji.',
+          context_entities_recall:
+            'Kukumbukwa kwa kiwango cha vitu: uwiano wa vitu vilivyotajwa katika jibu la rejea (kampuni, tarehe, kiasi, maeneo) vinavyopatikana katika muktadha uliopatikana.',
+          factual_correctness:
+            'Ukubaliano wa kimantiki wa kiwango cha madai na jibu la rejea — mhakiki anagawanya vyote viwili kuwa madai na kupima mwingiliano. Kipimo cha usahihi kali zaidi.',
+          answer_correctness:
+            'Ubora wa jumla kulinganisha na rejea — usahihi wa kimantiki pamoja na ufanano wa maana. Kipimo karibu zaidi na “jibu lilikuwa sahihi”.',
+          answer_similarity:
+            'Ufanano wa maana (embedding) kati ya jibu lililozalishwa na la rejea — juu maana yake vyote vinasema kitu kimoja.',
+          noise_sensitivity:
+            'Jibu linashuka kiasi gani vipande visivyohusika vikipangwa muktadhani — kipimo cha uvumilivu. CHINI ni bora; kikomo chake kimegeuzwa.'
+        }
       },
       pdf: {
         title: 'Ripoti ya vipimo vya RAGAS',
         suite: 'Seti',
         run: 'Utekelezaji',
         summary: 'Muhtasari',
-        perQuery: 'Alama kwa kila swali'
+        perQuery: 'Alama kwa kila swali',
+        status: 'Matokeo',
+        n: 'maswali',
+        evaluable: 'yanayoweza kupimwa',
+        abstained: 'yaliyojitoa',
+        compare: 'Linganisha uendeshaji (tofauti na wa kwanza)'
       }
     }
   },

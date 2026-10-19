@@ -271,6 +271,20 @@ describe('RagasPanel', () => {
     expect(w.vm.barWidth(null)).toBe('0%');
   });
 
+  // David 2026-10-19: every result chart carries an ⓘ with the metric's
+  // plain-language RAGAS meaning — honest about what each metric CANNOT see.
+  it('every metric gauge carries its RAGAS note via the info tip', async () => {
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    w.vm.runDoc = runFixture();
+    await w.vm.$nextTick();
+    expect(w.vm.aggregateRows.length).toBeGreaterThan(0);
+    const tips = w.findAllComponents({ name: 'DsInfoTip' });
+    expect(tips.length).toBeGreaterThanOrEqual(w.vm.aggregateRows.length);
+    expect(w.vm.metricNote('answer_relevancy')).toMatch(/does NOT check factual correctness/i);
+    expect(w.vm.metricNote('noise_sensitivity')).toMatch(/LOWER is better/i);
+  });
+
   // Live incident 2026-10-18: the page lost a running generation to a
   // refresh, then a second Generate attempt dead-ended on the 409. The 409
   // must ATTACH to the running generation (progress + Cancel), not error.

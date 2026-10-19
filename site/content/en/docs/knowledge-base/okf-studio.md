@@ -141,9 +141,16 @@ with suites interchangeable with that harness's xlsx formats:
   Progress tracking survives transient gateway hiccups: a brief proxy
   restart does not detach the panel from a job that is still running.
 - **Results** render per-question in a table with metric bars, as aggregate
-  gauges, as a run-over-run trend, and as a status breakdown — and export
-  as a **PDF report**, or as an xlsx workbook using the offline harness's
-  column vocabulary.
+  gauges, as a run-over-run trend, and as a status breakdown — every chart
+  carries an **ⓘ** whose popup explains, in plain language, what that RAGAS
+  metric actually measures (and what it cannot see: answer relevancy never
+  checks correctness; noise sensitivity is inverted — lower is better).
+  Export as a **PDF report** that includes the same per-metric notes and
+  parallels the offline harness export's information — outcome counts
+  (questions / evaluable / abstained / failing), all selected gauge charts,
+  the trend chart, a compare-across-runs table with delta-vs-first-run, and
+  per-question rows with abstention/error/failure flags — or as an xlsx
+  workbook using the offline harness's column vocabulary.
 - **Explain failures** attributes each failing row to the stage that broke
   (routing, corpus, reranker, LLM, abstention, or judge) and proposes
   guarded advice — including *repository-level* changes: frontmatter tag

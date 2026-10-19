@@ -3203,6 +3203,12 @@ export default {
       results: {
         title: 'Resultados de la prueba comparativa',
         failing: '{n} con fallos',
+        trendTitle: 'Tendencia de métricas por ejecución',
+        trendNote:
+          'Cada línea es la media de una métrica RAGAS por ejecución, de la más antigua a la más reciente — el ␘ de cada medidor explica la métrica. Las respuestas juzgadas se cachean; repeticiones idénticas solo difieren donde cambió la respuesta o la recuperación.',
+        statusTitle: 'Resultados por pregunta',
+        statusNote:
+          'Cada pregunta de la suite en esta ejecución, apilada por resultado: aprobada, reprobada (alguna métrica elegida bajo su umbral), abstención o error de pipeline.',
         allPass: 'todas superadas',
         failingShort: 'con fallos',
         answer: 'Respuesta',
@@ -3243,14 +3249,41 @@ export default {
         factual_correctness: 'corrección factual',
         answer_correctness: 'corrección de la respuesta',
         answer_similarity: 'similitud de la respuesta',
-        noise_sensitivity: 'sensibilidad al ruido'
+        noise_sensitivity: 'sensibilidad al ruido',
+        note: {
+          faithfulness:
+            'Qué tan fundamentada está la respuesta en los pasajes recuperados: la proporción de afirmaciones que las fuentes respaldan. Bajo significa que la respuesta afirma cosas que la evidencia no dice (alucinación).',
+          context_precision:
+            'Si los pasajes que importan quedaron arriba del conjunto recuperado. Bajo significa que la evidencia correcta se recuperó pero quedó enterrada bajo fragmentos menos relevantes.',
+          context_recall:
+            'Si los pasajes recuperados cubren todo lo que la respuesta de referencia exige. Bajo significa que la recuperación omitió evidencia que la pregunta necesitaba.',
+          answer_relevancy:
+            'Qué tan bien la respuesta aborda la pregunta: RAGAS regenera preguntas a partir del texto de la respuesta y las compara con la original por similitud de embeddings. NO verifica corrección factual — las respuestas verbosas puntúan bajo aun siendo correctas.',
+          context_utilization:
+            'Si el contexto recuperado basta para producir la respuesta de referencia — una verificación de completitud de la recuperación.',
+          context_entities_recall:
+            'Recall a nivel de entidades: la proporción de entidades nombradas de la referencia (empresas, fechas, montos, lugares) presentes en el contexto recuperado.',
+          factual_correctness:
+            'Coincidencia factual a nivel de afirmaciones con la referencia — el juez descompone ambas y puntúa el solape. La métrica de corrección más estricta.',
+          answer_correctness:
+            'Calidad global frente a la referencia — corrección factual combinada con similitud semántica. La métrica más cercana a «¿dio la respuesta correcta?».',
+          answer_similarity:
+            'Similitud semántica (embeddings) entre la respuesta generada y la de referencia — alto significa que transmiten lo mismo.',
+          noise_sensitivity:
+            'Cuánto se degrada la respuesta cuando se mezclan pasajes irrelevantes en el contexto — una medida de robustez. MÁS BAJO es mejor; su umbral está invertido.'
+        }
       },
       pdf: {
         title: 'Informe de pruebas comparativas RAGAS',
         suite: 'Suite',
         run: 'Ejecución',
         summary: 'Resumen',
-        perQuery: 'Puntuaciones por pregunta'
+        perQuery: 'Puntuaciones por pregunta',
+        status: 'Resultados',
+        n: 'preguntas',
+        evaluable: 'evaluables',
+        abstained: 'abstenciones',
+        compare: 'Comparación entre ejecuciones (delta vs la primera)'
       }
     }
   },

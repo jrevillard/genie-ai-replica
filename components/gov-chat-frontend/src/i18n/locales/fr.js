@@ -3204,6 +3204,12 @@ export default {
       results: {
         title: 'Résultats du banc d’essai',
         failing: '{n} en échec',
+        trendTitle: 'Tendance des métriques par exécution',
+        trendNote:
+          'Chaque ligne est la moyenne d’une métrique RAGAS par exécution, de la plus ancienne à la plus récente — le ␘ de chaque jauge explique la métrique. Les réponses jugées sont en cache ; des re-exécutions identiques ne diffèrent que si réponses ou récupération changent.',
+        statusTitle: 'Résultats par question',
+        statusNote:
+          'Chaque question de la suite dans cette exécution, empilée par issue : réussie, échouée (une métrique choisie sous son seuil), abstention ou erreur de pipeline.',
         allPass: 'toutes réussies',
         failingShort: 'en échec',
         answer: 'Réponse',
@@ -3244,14 +3250,41 @@ export default {
         factual_correctness: 'exactitude factuelle',
         answer_correctness: 'exactitude de la réponse',
         answer_similarity: 'similarité de la réponse',
-        noise_sensitivity: 'sensibilité au bruit'
+        noise_sensitivity: 'sensibilité au bruit',
+        note: {
+          faithfulness:
+            'À quel point la réponse est factuellement fondée sur les passages récupérés — la part des affirmations que les sources soutiennent. Faible : la réponse affirme ce que les preuves ne disent pas (hallucination).',
+          context_precision:
+            'Si les passages décisifs sont placés en tête de l’ensemble récupéré. Faible : la bonne preuve a été récupérée mais noyée sous des fragments moins pertinents.',
+          context_recall:
+            'Si les passages récupérés couvrent tout ce qu’exige la réponse de référence. Faible : la récupération a manqué des preuves nécessaires à la question.',
+          answer_relevancy:
+            'À quel point la réponse traite la question posée : RAGAS régénère des questions depuis le texte de la réponse et les compare à l’originale par similarité d’embeddings. Elle ne vérifie PAS l’exactitude — une réponse verbeuse score bas même juste.',
+          context_utilization:
+            'Si le contexte récupéré suffit à produire la réponse de référence — un contrôle de complétude de la récupération.',
+          context_entities_recall:
+            'Rappel au niveau des entités : la part des entités nommées de la référence (sociétés, dates, montants, lieux) présentes dans le contexte récupéré.',
+          factual_correctness:
+            'Accord factuel au niveau des affirmations avec la référence — le juge décompose les deux et note le recouvrement. La métrique d’exactitude la plus stricte.',
+          answer_correctness:
+            'Qualité globale face à la référence — exactitude factuelle combinée à la similarité sémantique. La métrique la plus proche de « la réponse est-elle juste ».',
+          answer_similarity:
+            'Similarité sémantique (embeddings) entre la réponse générée et la référence — élevé : elles transmettent la même chose.',
+          noise_sensitivity:
+            'Combien la réponse se dégrade quand des passages non pertinents sont mélangés au contexte — une mesure de robustesse. PLUS BAS est mieux ; son seuil est inversé.'
+        }
       },
       pdf: {
         title: 'Rapport de banc d’essai RAGAS',
         suite: 'Suite',
         run: 'Exécution',
         summary: 'Résumé',
-        perQuery: 'Scores par question'
+        perQuery: 'Scores par question',
+        status: 'Issues',
+        n: 'questions',
+        evaluable: 'évaluables',
+        abstained: 'abstentions',
+        compare: 'Comparaison des exécutions (delta vs la première)'
       }
     }
   },

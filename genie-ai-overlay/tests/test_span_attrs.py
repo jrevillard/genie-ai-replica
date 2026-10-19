@@ -16,7 +16,6 @@ import pathlib
 import re
 
 import pytest
-from tests.conftest import OVERLAY_ROOT
 
 import core.span_attrs
 from core.span_attrs import (
@@ -32,6 +31,7 @@ from core.span_attrs import (
     free_text_violations,
     label_digest,
 )
+from tests.conftest import OVERLAY_ROOT
 
 VOCABULARY = sorted(ATTRIBUTE_NAMES.values())
 
@@ -405,12 +405,24 @@ def _non_literal_span_openers(overlay_sources):
 
 
 def _set_attribute_keys(overlay_sources):
-    """Every span attribute key written as a literal in the overlay.
+    """Every span attribute key derivable from the overlay source.
 
-    Two forms reach a span, and both are used: ``set_attribute("dataprep.
-    file_id", …)``, and an ``attributes={…}`` mapping passed to a span opener
-    (the batching and context spans open that way). A derivation that saw only
-    the first would miss every key the second carries.
+    Two families of write reach a span and both are used:
+
+    * A **literal** key — ``span.set_attribute("rag.query_length", …)``, a string
+      in ``set_attributes({…})``, or a string key in an ``attributes={…}`` mapping
+      on a span opener.
+    * A **registered** key — ``{ATTRIBUTE_NAMES["rag_blend_alpha"]: …}``, where
+      the chatqna vocabulary builders index the register rather than repeat the
+      destination string, and ``A["rag_search_type"]`` in the retriever, which
+      imports it under an alias (``from core.span_attrs import ATTRIBUTE_NAMES as
+      A``). Both are resolved through the register here, the alias included, so
+      the derived set is in destination vocabulary and compares against
+      ``ATTRIBUTE_NAMES.values()`` directly. Every ``rag.prompt.*``,
+      ``rag.blend.*``, ``rag.scores.*``, ``rag.hybrid.*``, ``traversal.*`` and
+      ``genie.condense.*`` key reaches a span this way; a derivation that saw
+      only literals would miss most of the vocabulary and claim coverage it does
+      not have.
 
     Deriving the keys is what makes the register self-maintaining. Deriving only
     the span NAMES cannot: ``dataprep.ingest`` stays in the list whether the code
@@ -418,35 +430,113 @@ def _set_attribute_keys(overlay_sources):
     invisible to every check until a test happens to drive that emission site
     with a real exporter — which for most spans no test does.
 
-    A non-literal mapping is reported by
-    ``TestOwnedSpanCoverage::test_no_span_is_opened_with_a_non_literal_name``'s
-    sibling: an ``attributes=`` built from a variable is not derivable from the
-    source, so the keys inside it cannot be checked here. Passing one through
-    silently would understate the coverage this claims.
+    A mapping assembled at runtime carries keys no source walk can recover; those
+    are reported separately as
+    ``TestOwnedSpanCoverage::test_no_span_is_opened_with_a_non_literal_attribute_mapping``.
     """
     keys: set[str] = set()
     for path in overlay_sources:
         tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+        aliases = _register_aliases(tree)
         for node in ast.walk(tree):
-            if not isinstance(node, ast.Call):
-                continue
-            func = node.func
-            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
-            if name in _ATTRIBUTE_WRITERS:
-                if node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
-                    keys.add(node.args[0].value)
-                keys.update(k for keyword in node.keywords for k in _literal_keys(keyword.value))
-            elif name in SPAN_OPENERS:
-                keys.update(k for keyword in node.keywords if keyword.arg in {"attributes", "attrs"}
-                            for k in _literal_keys(keyword.value))
+            if isinstance(node, ast.Subscript):
+                resolved = _registered_key(node, aliases)
+                if resolved:
+                    keys.add(resolved)
+            elif isinstance(node, ast.Call):
+                func = node.func
+                name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+                if name in _ATTRIBUTE_WRITERS:
+                    # set_attribute("key", v) is a literal first argument;
+                    # set_attributes({"key": v}) is a dict first argument.
+                    if node.args:
+                        keys.update(_literal_keys(node.args[0]))
+                        if isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+                            keys.add(node.args[0].value)
+                elif name in SPAN_OPENERS:
+                    for keyword in node.keywords:
+                        if keyword.arg in {"attributes", "attrs"}:
+                            keys.update(_literal_keys(keyword.value))
     return keys
 
 
+def _register_aliases(tree):
+    """Local names bound to the register in this module.
+
+    ``from core.span_attrs import ATTRIBUTE_NAMES as A`` is how the retriever
+    spells it, and the alias is a real import binding, not a local guess — so it
+    is read from the import rather than guessed at each subscript.
+    """
+    names = {"ATTRIBUTE_NAMES"}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module and node.module.endswith("span_attrs"):
+            for alias in node.names:
+                if alias.name in {"ATTRIBUTE_NAMES", "ATTRIBUTE_NAME"} and alias.asname:
+                    names.add(alias.asname)
+    return names
+
+
+def _registered_key(node, aliases):
+    """The destination vocabulary a ``<register>["<key>"]`` subscript names."""
+    if not isinstance(node, ast.Subscript):
+        return None
+    base = node.value
+    if not (isinstance(base, ast.Name) and base.id in aliases):
+        return None
+    index = node.slice
+    if isinstance(index, ast.Constant) and isinstance(index.value, str):
+        return ATTRIBUTE_NAMES.get(index.value)
+    return None
+
+
+# Write sites whose attribute keys the source walk cannot read, named so the
+# exemption is a decision with a reason rather than a silent pass. Each builds
+# its mapping in a helper that already has a test asserting the result carries
+# no free text, so the keys ARE policed — by that test, not by the derivation.
+# Adding a sixteenth site fails the test below and forces the same question.
+#
+# Line numbers move when these files are edited; a site that disappears from the
+# derivation must be removed from this list, and one that moves must be updated.
+KNOWN_RUNTIME_ATTRIBUTE_WRITES = frozenset(
+    {
+        "chatqna/genieai_chatqna.py:1186",  # set_attributes(sanitize_attributes({…})) — ok path only
+        "chatqna/genieai_chatqna.py:166",  # llm.invoke request-stamping helper
+        "chatqna/genieai_chatqna.py:207",  # llm.invoke usage-stamping helper
+        "chatqna/genieai_chatqna.py:277",  # llm.invoke model/service attributes
+        "chatqna/genieai_chatqna.py:301",  # llm.invoke self-confidence
+        "chatqna/genieai_chatqna.py:346",  # llm.invoke stream flags
+        "chatqna/genieai_chatqna.py:864",  # _set_attributes(key, value) helper
+        "chatqna/genieai_chatqna.py:3574",  # condense-question span
+        "reranker/genieai_tei_reranker.py:342",  # adaptive breakdown (JSON-encoded)
+        "retriever/genieai_retriever_arangodb.py:1060",  # hybrid-search attribute batch
+        "retriever/genieai_retriever_arangodb.py:1086",  # hybrid-search attribute batch
+        "retriever/genieai_retriever_arangodb.py:1402",  # traversal attributes
+        "retriever/genieai_retriever_arangodb.py:1421",  # traversal attributes
+        "retriever/genieai_retriever_arangodb.py:1531",  # score attributes
+        "retriever/genieai_retriever_arangodb.py:1532",  # score attributes
+    }
+)
+
+
 def _non_literal_attribute_mappings(overlay_sources):
-    """Span openers whose ``attributes=`` is not a dict literal.
+    """Write sites whose attribute keys the derivation cannot read.
 
     The keys inside are invisible to a source-derived check, so a mapping built
     at runtime would carry attributes that nothing polices.
+
+    Both write forms are covered, not just the opener: ``span.set_attributes(v)``
+    and ``span.set_attribute(k, v)`` hide their keys from the derivation exactly
+    the way a computed ``attributes=`` does, and they are the more common of the
+    two in chatqna and the retriever. Checking only the opener would leave the
+    larger half of the same defect unreported.
+
+    Every site found today is listed in ``KNOWN_RUNTIME_ATTRIBUTE_WRITES``. They
+    predate the derivation: each assembles its mapping in a helper that already
+    has a test asserting the result is free-text-free
+    (``test_chatqna_budget_tracing.py`` covers the prompt-budget and blend
+    builders), so the keys are policed — just by that test rather than by this
+    one. The list is the honest statement of that, and it turns the next such
+    site into a failing name rather than another unremarkable one.
     """
     offenders = []
     for path in overlay_sources:
@@ -462,7 +552,29 @@ def _non_literal_attribute_mappings(overlay_sources):
                 for keyword in node.keywords:
                     if keyword.arg in {"attributes", "attrs"} and not isinstance(keyword.value, ast.Dict):
                         offenders.append(f"{path.relative_to(OVERLAY_ROOT)}:{node.lineno}")
+            elif name in _ATTRIBUTE_WRITERS:
+                # set_attribute("literal", …) is derivable; set_attribute(k, v)
+                # and set_attributes(mapping) are not.
+                for arg in node.args[:1]:
+                    if not _is_literal_key(arg, name):
+                        offenders.append(f"{path.relative_to(OVERLAY_ROOT)}:{node.lineno}")
+                        break
     return offenders
+
+
+def _is_literal_key(arg, writer):
+    """Whether an attribute-writer argument is a key the derivation can read.
+
+    ``set_attribute(key, value)`` takes its key first; ``set_attributes(mapping)``
+    takes a dict. Both are readable only when they are literals — or, for the key
+    argument, when it is a register subscript, which ``_set_attribute_keys``
+    resolves through ``ATTRIBUTE_NAMES``.
+    """
+    if writer == "set_attributes":
+        return _literal_keys(arg) or isinstance(arg, ast.Dict)
+    if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+        return True
+    return _registered_key(arg, {"ATTRIBUTE_NAMES"}) is not None
 
 
 def _literal_keys(node):
@@ -492,9 +604,15 @@ class TestOwnedSpanCoverage:
         which, for most spans, none does.
 
         So the keys are derived too, and every one of them must be registered in
-        one of the three vocabularies. The union is deliberate: a key is policed
+        one of the four vocabularies. The union is deliberate: a key is policed
         by whichever category it belongs to, and being absent from
         ``ATTRIBUTE_NAMES`` alone is not evidence of that.
+
+        This asserts in one direction only — a key WRITTEN must be REGISTERED.
+        The reverse (every registered key has a writer) is
+        ``test_the_derivation_covers_most_registered_keys``: a register entry
+        with no writer is either dead vocabulary or a write form the derivation
+        cannot read, and both need a decision.
         """
         registered = set(ATTRIBUTE_NAMES.values()) | set(JSON_ENCODED_ATTRIBUTE_NAMES) | set(LEGACY_ATTRIBUTE_NAMES)
         unregistered = sorted(_set_attribute_keys(overlay_sources) - registered)
@@ -502,8 +620,32 @@ class TestOwnedSpanCoverage:
             f"span attributes written in the overlay but registered nowhere: {unregistered}. "
             "Register each in core/span_attrs.py — ATTRIBUTE_NAMES for a plain "
             "value, JSON_ENCODED_ATTRIBUTE_NAMES for a structure OTel cannot "
-            "represent natively, LEGACY_ATTRIBUTE_NAMES only for a key that "
-            "already ships and cannot change."
+            "represent natively, EVAL_HARNESS_KEYS for a key the RAG harness "
+            "reads, LEGACY_ATTRIBUTE_NAMES only for a key that already ships "
+            "and cannot change."
+        )
+
+    def test_the_derivation_covers_most_registered_keys(self, overlay_sources):
+        """The reverse direction, which is how a coverage claim gets measured.
+
+        Without this, a derivation can quietly see half the vocabulary and still
+        pass every other assertion — the assertion above only fails on a key
+        that IS written and IS unregistered, so shrinking what the walk reads
+        makes it stricter-looking, not weaker, and nothing notices.
+
+        The threshold is not 100%. A handful of chatqna keys are stamped from a
+        table of ``(param, register_key)`` tuples resolved at call time, which no
+        source walk can read; they are named in the failure so the set of
+        unreadable keys stays visible rather than becoming an assumption.
+        """
+        registered = set(ATTRIBUTE_NAMES.values()) | set(JSON_ENCODED_ATTRIBUTE_NAMES) | set(LEGACY_ATTRIBUTE_NAMES)
+        unreadable = sorted(registered - _set_attribute_keys(overlay_sources))
+        covered = (len(registered) - len(unreadable)) / len(registered)
+        assert covered >= 0.85, (
+            f"the key derivation reads only {covered:.0%} of the {len(registered)} "
+            f"registered keys. Either a write form it used to handle changed, or "
+            f"vocabulary was added for keys nothing writes. Keys it cannot read: "
+            f"{unreadable}."
         )
 
     def test_every_emitted_span_is_swept(self, owned_span_names, overlay_sources):
@@ -558,12 +700,20 @@ class TestOwnedSpanCoverage:
         the vocabulary sweep nor this coverage check ever naming them — the same
         blind spot as a computed span name, one level down.
         """
-        offenders = _non_literal_attribute_mappings(overlay_sources)
-        assert not offenders, (
-            f"span opened with a non-literal attributes= mapping: {offenders}. "
-            "The coverage derivation reads attribute keys from the source, so "
-            "such a span carries keys that are neither swept nor reported. Pass "
-            "the mapping as a dict literal."
+        offenders = set(_non_literal_attribute_mappings(overlay_sources))
+        unexpected = sorted(offenders - KNOWN_RUNTIME_ATTRIBUTE_WRITES)
+        assert not unexpected, (
+            f"attribute writes whose keys this derivation cannot read, and which "
+            f"are not declared in KNOWN_RUNTIME_ATTRIBUTE_WRITES: {unexpected}. "
+            "Either pass the mapping as a dict literal so the keys are derivable, "
+            "or add the site to that list with the reason its keys are policed "
+            "somewhere else — a blanket exemption is the same as no check."
+        )
+        stale = sorted(KNOWN_RUNTIME_ATTRIBUTE_WRITES - offenders)
+        assert not stale, (
+            f"KNOWN_RUNTIME_ATTRIBUTE_WRITES lists sites the derivation can now "
+            f"read: {stale}. Remove them — the list is a record of what the "
+            "derivation cannot see, and a stale entry hides a real one."
         )
 
     def test_mirror_matches_conftest(self, owned_span_names):
@@ -628,7 +778,7 @@ class TestOwnedSpanCoverage:
         """
         assert free_text_violations({"dataprep.file_id": "Contrat_de_Jean_Dupont_Q3.pdf"}) == []
 
-    def test_only_deliberate_leak_tests_may_clear_the_exporter(self):
+    def test_only_deliberate_leak_tests_may_request_the_exporter(self):
         """``span_exporter`` is a hole in the sweep; keep it exactly as wide as it must be.
 
         Requesting the fixture clears the exporter at teardown, which is what

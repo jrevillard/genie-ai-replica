@@ -198,7 +198,7 @@ ATTRIBUTE_NAMES = {
     #
     # Registering these keys does NOT filter that value at runtime. Nothing in
     # the services calls ``free_text_violations`` / ``assert_no_free_text`` — the
-    # shape rule is exercised by the test suite and by the RAG harness, so what
+    # shape rule is exercised by the test suite, so what
     # this register buys is that a free-text value on these keys FAILS A TEST.
     # Stopping it at the write site is a separate change, to the ingest API's
     # contract (validate ``fileId`` or record a digest).
@@ -250,8 +250,9 @@ ATTRIBUTE_NAMES = {
     # ``genie.condense.mode`` is read from ``MULTI_TURN_MODE``, an operator-set
     # env var, not user input — but it is still free-form text from the
     # environment's point of view, and the shape rule is what makes a typo'd
-    # value like ``MULTI_TURN_MODE="condense v2"`` FAIL A TEST rather than be
-    # emitted unremarked. Status and counters are emitted as declared.
+    # value like ``MULTI_TURN_MODE="condense v2"`` fail a test that drives this
+    # emission through the exporter, rather than being emitted unremarked.
+    # Status and counters are emitted as declared.
     # ------------------------------------------------------------------------
     "condense_mode": "genie.condense.mode",
     "condense_status": "genie.condense.status",

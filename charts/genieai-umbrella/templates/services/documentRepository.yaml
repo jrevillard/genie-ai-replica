@@ -24,8 +24,8 @@ the Kubernetes-injected connection env for the dataprep Service
 both rows must be set explicitly. */ -}}
 {{- $urls := list
     (dict "name" "KEYCLOAK_URL" "value" (include "genieai-umbrella.keycloakInternalURL" .))
-    (dict "name" "KC_REALM" "value" "genie")
-    (dict "name" "KEYCLOAK_EXPECTED_ISSUER" "value" (printf "%s/realms/genie" (include "genieai-umbrella.keycloakPublicIssuer" .)))
+    (dict "name" "KC_REALM" "value" (.Values.data.keycloak.realm | default "genie"))
+    (dict "name" "KEYCLOAK_EXPECTED_ISSUER" "value" (printf "%s/realms/%s" (include "genieai-umbrella.keycloakPublicIssuer" .) (.Values.data.keycloak.realm | default "genie")))
     (dict "name" "KC_CLIENT_ID" "value" "dataprep-service-client")
     (dict "name" "ARANGO_URL" "value" (include "genieai-umbrella.arangoURL" .))
     (dict "name" "ARANGO_DB" "value" "_system")
@@ -34,7 +34,7 @@ both rows must be set explicitly. */ -}}
     (dict "name" "DATAPREP_PORT" "value" "5000")
     (dict "name" "CLAMSCAN_HOST" "value" .Values.services.documentRepository.clamavHost)
     (dict "name" "CLAMSCAN_PORT" "value" (.Values.services.documentRepository.clamavPort | toString))
-    (dict "name" "VIRUS_SCANNING" "value" (.Values.services.documentRepository.virusScanning | default "true" | toString))
+    (dict "name" "VIRUS_SCANNING" "value" (ternary (.Values.services.documentRepository.virusScanning | toString) "true" (kindIs "bool" .Values.services.documentRepository.virusScanning)))
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
     (dict "name" "ENABLE_OBSERVABILITY" "value" (ternary "1" "0" (or .Values.observability.logs.enabled .Values.observability.metrics.enabled .Values.observability.traces.enabled)))
 -}}

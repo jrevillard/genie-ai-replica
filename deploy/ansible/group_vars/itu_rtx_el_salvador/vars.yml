@@ -61,12 +61,19 @@ nginx_permissions_policy: "camera=(), microphone=()"
 # during generation instead of English-then-flip. Set "0" to revert.
 streaming_translation_enabled: "1"
 
-# Multi-turn vector-space blending (issue #833 / MR !232). Blends the query
-# embedding with the previous N turns (V = α·EQ + (1-α)·EH) so pronoun-heavy
-# follow-ups retrieve the prior turn's subject. Only the dense leg is blended.
-multi_turn_blend_enabled: "true"
-multi_turn_blend_alpha: "0.7"
-multi_turn_history_turns: "2"
+# Multi-turn retrieval (issue #1091). Condense-question rewrite: one short
+# LLM call rewrites each follow-up into a standalone retrieval query; retrieval
+# and rerank use the rewritten query. Fail-closed: a failed rewrite fails the
+# turn (503) rather than answering on a wrong retrieval. The vector-space
+# blend (issue #833 / MR !232) is retired for el-salvador — measured-broken on
+# corrections and topic switches (the rejected entity stays in the query at
+# any alpha). The history window (8 segments), the rewrite call's output cap
+# and its timeout inherit the code defaults; override via the
+# multi_turn_condense_* knobs in env.j2 if ever needed. Rollback: set
+# multi_turn_mode back to "blend" and re-add the retired keys with their
+# prior values: multi_turn_blend_enabled: "true",
+# multi_turn_blend_alpha: "0.7", multi_turn_history_turns: "2".
+multi_turn_mode: "condense"
 
 # =============================================================================
 # EMAIL (non-secret)

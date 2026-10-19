@@ -3205,8 +3205,13 @@ chart:install:
     - kubectl version --client
     - kind version
   script:
-    # The daemon is SHARED across jobs on this runner — previous runs (ours
-    # or others') may have left a kind cluster behind; adopt a clean slate.
+    # Shared daemon hygiene: the kind cluster lives on the runner HOST
+    # (via the socket proxy), NOT under the runner's job-container
+    # lifecycle — GitLab never cleans it. Purge on entry AND on every exit
+    # path, or a failed job leaves node containers + pulled images
+    # (multi-GB) on the shared host forever (observed: 'node(s) already
+    # exist' caused by the previous run's debris).
+    - trap 'kind delete cluster --name kind 2>/dev/null || true' EXIT
     - kind delete cluster --name kind 2>/dev/null || true
     # Bind the API server on the DAEMON's docker0 address (kind's default
     # 127.0.0.1 is unreachable from the job container when the daemon is

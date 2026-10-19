@@ -24,6 +24,7 @@ services:
       DISTRIBUTION: "{{ docker_socket_proxy_distribution }}"
       PLUGINS: "{{ docker_socket_proxy_plugins }}"
       BUILD: "{{ docker_socket_proxy_build }}"
+      INFO: "{{ docker_socket_proxy_info | default('1') }}"
     labels:
       managed_by: "ansible-gitlab-runner"
       purpose: "docker-socket-proxy"

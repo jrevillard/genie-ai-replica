@@ -3107,21 +3107,23 @@ chart:lint:
 # SAME smoke suite runs against it. A regex fix landing in compose but not
 # in the chart fails this job instead of leaking PII on k8s deployments.
 chart:contract:
-  image: dtzar/helm-kubectl:3.16.0
+  image: docker:28
   stage: test
   tags: [docker]
   # No dind sidecar: the [docker] runner exposes its daemon via the socket
-  # (the pattern the promote:* jobs use). Sidecar variants starved on the
-  # shared pool's wait-for-service window.
-  # Serialized with chart:install — both jobs run kind containers/smoke
-  # containers on the shared daemon.
+  # (the pattern the promote:* jobs use — and the docker:28 client is the
+  # one proven to reach it; an alpine docker-cli in another image did not).
+  # Serialized with chart:install — both jobs run containers on the shared
+  # daemon.
   resource_group: chart-dind
   retry:
     max: 1
     when: [runner_system_failure, stuck_or_timeout_failure, script_failure]
   interruptible: true
   before_script:
-    - apk add --no-cache bash tar docker-cli py3-yaml
+    - apk add --no-cache bash tar curl py3-yaml
+    - curl -fsSL https://get.helm.sh/helm-v3.16.3-linux-amd64.tar.gz | tar -xz -C /tmp
+    - install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm
     - helm dependency update charts/genieai-umbrella
   script:
     - >-
@@ -3202,6 +3204,9 @@ chart:install:
     - kubectl version --client
     - kind version
   script:
+    # The daemon is SHARED across jobs on this runner — previous runs (ours
+    # or others') may have left a kind cluster behind; adopt a clean slate.
+    - kind delete cluster --name kind 2>/dev/null || true
     - kind create cluster --image kindest/node:v1.33.0 --wait 5m
     - kind get kubeconfig --name kind > "$KUBECONFIG"
     - export KUBECONFIG

@@ -89,7 +89,8 @@ if _VLLM_API_KEY:
     except ImportError:
         pass
 
-    # Patch for requests: inject Authorization header + force verify=False.
+    # Patch for requests: inject Authorization header (+ disable verification
+    # only when SSL bypass is on).
     # The OPEA orchestrator uses sync requests.post(stream=True) for LLM streaming.
     # ChatOpenAI/httpx send Authorization natively, but requests does not.
     try:
@@ -98,7 +99,16 @@ if _VLLM_API_KEY:
         _orig_req_request = req_lib.Session.request
 
         def _patched_req_request(self, method, url, **kwargs):
-            kwargs["verify"] = False
+            # Certificate verification follows OPEA_SSL_SKIP_VERIFY, matching the
+            # TLS block above. It used to be forced off unconditionally, which
+            # disabled verification for every requests call in the process —
+            # including the ones to the document repository, the backend and
+            # ArangoDB — whenever a VLLM_API_KEY happened to be set, i.e. on
+            # every remote-GPU deployment. A remote endpoint with a self-signed
+            # certificate is the only case that needs this; an attacker who can
+            # MITM an in-cluster call should not gain that by default.
+            if _SSL_SKIP:
+                kwargs["verify"] = False
             headers = kwargs.setdefault("headers", {})
             headers.setdefault("Authorization", f"Bearer {_VLLM_API_KEY}")
             return _orig_req_request(self, method, url, **kwargs)

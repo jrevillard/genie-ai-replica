@@ -198,6 +198,36 @@ class TestRequestsAuthInjection:
         assert call_kwargs["headers"]["Authorization"] == "Bearer test-secret-key"
         assert call_kwargs["verify"] is False
 
+    def test_requests_verification_survives_when_ssl_bypass_is_off(self):
+        """A VLLM_API_KEY alone must not disable certificate verification.
+
+        This is every remote-GPU deployment: the key is set to authenticate to
+        the GPU node, and OPEA_SSL_SKIP_VERIFY is left off because the node's
+        certificate is properly issued. The auth patch used to force verify off
+        unconditionally, so setting a key to *gain* authentication silently
+        turned off TLS verification for every other requests call in the
+        process — document repository, backend, ArangoDB.
+        """
+        import requests
+
+        mock_request = MagicMock(return_value=MagicMock(status_code=200))
+        requests.Session.request = mock_request
+        reload_with_env(ssl_skip="0", vllm_api_key="test-secret-key")
+
+        session = requests.Session()
+        session.request(
+            "POST",
+            "https://gpu.example.com/v1/chat/completions",
+            json={"model": "test"},
+        )
+
+        call_kwargs = mock_request.call_args[1]
+        assert call_kwargs["headers"]["Authorization"] == "Bearer test-secret-key", "auth is still injected"
+        assert call_kwargs.get("verify") is not False, (
+            "verify=False must not be injected when OPEA_SSL_SKIP_VERIFY is off — "
+            "the patch would be disabling TLS verification for unrelated in-cluster calls"
+        )
+
 
 # =============================================================================
 # Auth header injection tests (aiohttp)

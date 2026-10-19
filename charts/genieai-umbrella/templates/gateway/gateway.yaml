@@ -51,15 +51,14 @@ spec:
     {{- if .Values.ingress.tls.enabled }}
     - name: https
       protocol: HTTPS
-      # The listener sits on the PUBLIC port: Envoy derives
-      # X-Forwarded-Port from it, and Keycloak (backchannelDynamic) builds
-      # token/jwks/userinfo URLs from those headers. With the listener on
-      # 443 while the public origin carries a different port, the
-      # discovery document hands the SPA portless backchannel URLs and the
-      # token exchange dies. Default 443; a port-bearing ingress.host
-      # (e.g. genieai.local:4443 behind a local forward) must set this to
-      # the same port.
-      port: {{ .Values.ingress.httpsPort | default 443 }}
+      # The listener binds the PUBLIC port — the one ingress.host carries
+      # (443 when bare). Envoy derives X-Forwarded-Port from the listener
+      # and Keycloak (backchannelDynamic) builds the discovery document's
+      # token/jwks/userinfo URLs from those headers; a listener on 443
+      # behind a port-bearing origin serves portless backchannel URLs and
+      # the SPA's token exchange fails. Single source of truth: the port
+      # in ingress.host.
+      port: {{ .Values.ingress.host | default "" | splitList ":" | rest | first | default 443 | int }}
       tls:
         mode: Terminate
         certificateRefs:

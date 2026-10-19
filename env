@@ -283,6 +283,10 @@ HUGGING_FACE_HUB_TOKEN=
 #                                 #   every LLM phase has a fallback, so a
 #                                 #   request that has not answered in 3 min is
 #                                 #   delaying an otherwise usable document.
+#                                 #   Total only. The 5 s connect ceiling the
+#                                 #   openai SDK ships is kept regardless — a GPU
+#                                 #   node that stops answering gives up in 5 s
+#                                 #   rather than the full budget.
 # MODEL_LLM_MAX_RETRIES=2         # SDK-level retries on 408/409/429/5xx and
 #                                 #   connection errors.
 # MODEL_TEI_TIMEOUT_SECONDS=120   # TEI embedding calls.

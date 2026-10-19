@@ -141,4 +141,4 @@ overrides:
     justification: The vendored LLM graph-transformer and TEI embedder build their own HTTP clients, so core/model_http_policy cannot reach them. Its own ChatOpenAI budget is reachable via VLLM_TIMEOUT and is now set in compose, but it emits no span or progress line, and the chatqna orchestrator graph, the embedding client and the upstream opea/embedding + opea/llm-textgen images have no configurable budget at all (2000 s and 600 s hardcoded). Tracked so the gap has a named owner; see build-patches/comps_http_budget_debt.py for the closing routes.
     added_in: v1.5
     last_validated: v1.5
-    test: contracts/test_contract_telemetry.py
+    test: tests/test_model_http_policy.py::TestCallSitesConsumeThePolicy

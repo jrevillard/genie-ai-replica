@@ -200,3 +200,31 @@ RERANK_TIMEOUT_SECONDS = positive_float_env("MODEL_RERANK_TIMEOUT_SECONDS", defa
 # that the answer is worth waiting for. 30 s covers a slow TLS handshake plus a
 # slow handler; beyond that the caller is better off surfacing the failure.
 CONTROL_PLANE_TIMEOUT_SECONDS = positive_float_env("MODEL_CONTROL_PLANE_TIMEOUT_SECONDS", default=30.0)
+
+
+# The connect ceiling the OpenAI SDK ships: openai 1.81.0 sets
+# DEFAULT_TIMEOUT = httpx.Timeout(timeout=600, connect=5.0), so a peer that
+# blackholes SYNs — a powered-off host, a DROP rule, a network partition — is
+# given up on in 5 s rather than sitting on Linux's ~127 s tcp_syn_retries
+# budget. It matters here because the endpoint is a separate GPU node: the most
+# common failure is the node going away mid-ingest.
+CONNECT_TIMEOUT_SECONDS = 5.0
+
+
+def http_timeout(total_seconds: float):
+    """An ``httpx.Timeout`` carrying *total_seconds* but a 5 s connect ceiling.
+
+    Handing an OpenAI-compatible client a bare float does NOT shorten one
+    timeout — it replaces the whole ``httpx.Timeout`` object, so a float of
+    ``total_seconds`` sets connect to *total_seconds* too and the SDK's 5 s
+    ceiling is discarded along with it. On a blackholed GPU node that turns a
+    ~15 s give-up into ~9 minutes of connect waiting per batch task, which is
+    the exact stall a total budget exists to bound.
+
+    Imported lazily: this module is read by every service in the overlay and
+    importing it must not be able to kill one, so a service that never builds an
+    httpx client never needs httpx installed.
+    """
+    import httpx
+
+    return httpx.Timeout(total_seconds, connect=min(CONNECT_TIMEOUT_SECONDS, total_seconds))

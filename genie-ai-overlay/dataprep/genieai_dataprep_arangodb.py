@@ -19,6 +19,7 @@ from core.model_http_policy import (
     CONTROL_PLANE_TIMEOUT_SECONDS,
     LLM_MAX_RETRIES,
     LLM_TIMEOUT_SECONDS,
+    http_timeout,
     positive_float_env,
 )
 from core.span_attrs import ATTRIBUTE_NAMES
@@ -469,7 +470,7 @@ def _build_vllm_client() -> tuple[AsyncOpenAI, str]:
     client = AsyncOpenAI(
         api_key=_api_key,
         base_url=f"{_vllm_endpoint}/v1",
-        timeout=LLM_TIMEOUT_SECONDS,
+        timeout=http_timeout(LLM_TIMEOUT_SECONDS),
         max_retries=LLM_MAX_RETRIES,
     )
     model = os.getenv("VLLM_MODEL_ID")
@@ -878,13 +879,21 @@ async def _gather_with_phase_budget(
 
 
 async def _await_with_heartbeat(tasks: list, *, phase: str, total: int, file_id: str, write_ingestion_log) -> None:
-    """Wait for every task, reporting progress, and never abandoning one.
+    """Wait for every task, reporting progress as they settle.
 
     The counterpart to ``_gather_with_phase_budget`` for a phase that has no
     fallback: it has the same reporting but no deadline, because the only way to
     bound a phase is to give up on part of it and this phase cannot lose work
     without losing documents. Errors propagate as ``asyncio.gather`` raises them
     (first failure wins), so the caller's existing error handling still applies.
+
+    On the first failure it does NOT wait out the siblings the way the success
+    path does — the phase has already failed, the caller is about to retract the
+    document, and extending an already-failing path only delays that. The
+    siblings get ``_PHASE_CANCEL_GRACE_SECONDS`` to settle, and one still running
+    after that is left running: this is the one place in the overlay where a
+    task can outlive its owner, which is the trade for not holding a document
+    open behind a stuck ArangoDB write.
     """
     if not tasks:
         return

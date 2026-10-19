@@ -22,6 +22,7 @@ from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from core.model_cache import get_model_id
+from core.model_http_policy import LLM_MAX_RETRIES, http_timeout
 from core.span_attrs import ATTRIBUTE_NAMES as A
 from core.span_attrs import QUERY_ID_KEY, label_digest, query_id_from_baggage
 from tracing import (
@@ -518,7 +519,7 @@ class GenieaiArangoRetriever(OpeaComponent):
                     #
                     # Closed explicitly: the client owns an httpx connection pool
                     # that would otherwise live until the GC finaliser runs.
-                    with openai.OpenAI(api_key=OPENAI_API_KEY, timeout=VLLM_TIMEOUT) as probe:
+                    with openai.OpenAI(api_key=OPENAI_API_KEY, timeout=http_timeout(VLLM_TIMEOUT)) as probe:
                         probe.models.list()
                     if logflag:
                         logger.debug("OpenAI API Key is valid.")
@@ -526,7 +527,8 @@ class GenieaiArangoRetriever(OpeaComponent):
                         temperature=OPENAI_CHAT_TEMPERATURE,
                         model=OPENAI_CHAT_MODEL,
                         max_tokens=OPENAI_CHAT_MAX_TOKENS,
-                        timeout=VLLM_TIMEOUT,
+                        timeout=http_timeout(VLLM_TIMEOUT),
+                        max_retries=LLM_MAX_RETRIES,
                     )
                     self._llm_model_id = OPENAI_CHAT_MODEL
                 except openai.error.AuthenticationError:
@@ -566,7 +568,8 @@ class GenieaiArangoRetriever(OpeaComponent):
             temperature=VLLM_TEMPERATURE,
             max_tokens=VLLM_MAX_NEW_TOKENS,
             top_p=VLLM_TOP_P,
-            timeout=VLLM_TIMEOUT,
+            timeout=http_timeout(VLLM_TIMEOUT),
+            max_retries=LLM_MAX_RETRIES,
         )
 
     def _get_llm(self) -> ChatOpenAI:
@@ -1239,7 +1242,8 @@ class GenieaiArangoRetriever(OpeaComponent):
                 embeddings = OpenAIEmbeddings(
                     model=OPENAI_EMBED_MODEL,
                     dimensions=dimension,
-                    timeout=TEI_TIMEOUT,
+                    timeout=http_timeout(TEI_TIMEOUT),
+                    max_retries=LLM_MAX_RETRIES,
                 )
             elif TEI_EMBEDDING_ENDPOINT and HF_TOKEN:
                 # Left unbudgeted on purpose. langchain_huggingface's

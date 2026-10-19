@@ -247,6 +247,62 @@ def _source_names(node: ast.AST | None) -> set[str]:
     return {n.id for n in ast.walk(node) if isinstance(n, ast.Name)} if node is not None else set()
 
 
+class TestHttpTimeoutKeepsTheConnectCeiling:
+    """A total budget must not widen the connect ceiling it is layered on.
+
+    The OpenAI SDK ships ``httpx.Timeout(timeout=600, connect=5.0)``. Handing a
+    client a bare float REPLACES that object rather than shortening it, so
+    ``timeout=180`` sets connect to 180 s too. On the failure this deck is most
+    exposed to — a GPU node that stops answering and blackholes SYNs instead of
+    refusing them — each attempt then waits out the full total before giving up,
+    which is the stall the budget exists to bound.
+    """
+
+    def test_connect_stays_at_the_sdk_ceiling(self):
+        t = policy.http_timeout(180.0)
+        assert t.connect == policy.CONNECT_TIMEOUT_SECONDS
+
+    def test_read_write_and_pool_carry_the_total(self):
+        t = policy.http_timeout(180.0)
+        assert (t.read, t.write, t.pool) == (180.0, 180.0, 180.0)
+
+    def test_a_total_below_the_ceiling_is_not_inflated(self):
+        """connect must never exceed the total, at any knob setting.
+
+        ``MODEL_TEI_TIMEOUT_SECONDS=2`` has to stay a 2 s budget everywhere; a
+        fixed 5 s connect would silently outlive it.
+        """
+        t = policy.http_timeout(2.0)
+        assert t.connect == 2.0
+        assert t.read == 2.0
+
+    def test_it_is_an_httpx_timeout_and_not_a_bare_number(self):
+        """The distinction the whole helper exists for.
+
+        Asserted on the type rather than on the numbers above so a future edit
+        that returns a plain float fails here instead of passing the checks that
+        a float would also satisfy.
+        """
+        import httpx
+
+        assert isinstance(policy.http_timeout(180.0), httpx.Timeout)
+
+    def test_passing_a_float_to_httpx_is_what_widens_connect(self):
+        """The httpx semantic that makes the helper necessary, asserted directly.
+
+        openai 1.81.0 ships ``DEFAULT_TIMEOUT = httpx.Timeout(timeout=600,
+        connect=5.0)``, but the SDK is mocked out of this suite, so the constant
+        itself cannot be observed here. What can be is the httpx behaviour the
+        constant exists to work around: ``httpx.Timeout(180.0)`` sets *every*
+        dimension, connect included. Pinned here so the reason the helper exists
+        stays true even if the SDK's own default is later re-pinned.
+        """
+        import httpx
+
+        assert httpx.Timeout(180.0).connect == 180.0
+        assert httpx.Timeout(180.0, connect=5.0).connect == 5.0
+
+
 class TestCallSitesConsumeThePolicy:
     """Every model-endpoint client in the overlay is built with a budget.
 
@@ -350,6 +406,51 @@ class TestCallSitesConsumeThePolicy:
             assert names & {"VLLM_TIMEOUT", "TEI_TIMEOUT"}, (
                 f"{ast.unparse(call.func)} timeout does not resolve to the shared policy: {names or 'not set'}"
             )
+
+    def test_the_retriever_clients_carry_the_retry_budget_too(self):
+        """``MODEL_LLM_MAX_RETRIES`` must not read as deck-wide and reach one service.
+
+        The dataprep SDK client is the one with the long ladder, but the
+        retriever's summarizer and its embedding client are the same kind of
+        contended-GPU call. A knob documented as a shared budget that silently
+        applies to ingestion only is worse than no knob: an operator who sets
+        ``MODEL_LLM_MAX_RETRIES=0`` to cap a busy GPU gets that cap on half the
+        calls that make the GPU busy.
+        """
+        source = OVERLAY_ROOT / "retriever" / "genieai_retriever_arangodb.py"
+        calls = _constructors(source, "ChatOpenAI", "OpenAIEmbeddings")
+        assert calls, "the retriever's OpenAI-branch clients moved — re-check the pin"
+        for call in calls:
+            assert "LLM_MAX_RETRIES" in _source_names(_kwarg(call, "max_retries")), (
+                f"{ast.unparse(call.func)} has no max_retries — MODEL_LLM_MAX_RETRIES silently does not reach it"
+            )
+
+    def test_no_openai_client_is_built_with_a_bare_number_timeout(self):
+        """Every httpx-backed client goes through ``http_timeout``.
+
+        A bare float is accepted by all four client classes and silently drops
+        the SDK's 5 s connect ceiling, so this asserts on the call shape at every
+        site rather than on the value any one of them happens to carry.
+        """
+        checked = 0
+        for rel, names in (
+            ("dataprep/genieai_dataprep_arangodb.py", ("AsyncOpenAI",)),
+            ("retriever/genieai_retriever_arangodb.py", ("ChatOpenAI", "OpenAIEmbeddings")),
+        ):
+            for call in _constructors(OVERLAY_ROOT / rel, *names):
+                checked += 1
+                value = _kwarg(call, "timeout")
+                assert value is not None, f"{rel}: {ast.unparse(call.func)} has no timeout"
+                # No escape hatch for a bare Name here: VLLM_TIMEOUT and friends
+                # are plain floats, so accepting one would accept exactly the
+                # shape this test exists to reject. Verified by mutation --
+                # rewriting a site to `timeout=VLLM_TIMEOUT` has to fail here.
+                assert "http_timeout" in _source_names(value), (
+                    f"{rel}: {ast.unparse(call.func)} builds its timeout as "
+                    f"{ast.unparse(value)}, which replaces the httpx.Timeout object instead of "
+                    "shortening its total — the SDK's 5 s connect ceiling is discarded with it"
+                )
+        assert checked >= 4, f"expected the openai/langchain client sites, found {checked}"
 
     def test_every_dataprep_llm_call_site_marks_a_timeout(self):
         """All five LLM call sites stamp the timeout, not just the first three.

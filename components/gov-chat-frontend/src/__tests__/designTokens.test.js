@@ -23,7 +23,11 @@ const fs = require('fs');
 const path = require('path');
 
 const SRC = path.resolve(__dirname, '..');
-const THEME_VARS = path.resolve(SRC, 'theme-variables.css');
+// The global token definitions moved to the runtime-config location (main's
+// theme rework, 2026-10): public/config/theme-variables.css is the file the
+// config-loader serves at runtime — and the authoritative definition source
+// this guard reads. The old src/theme-variables.css no longer exists.
+const THEME_VARS = path.resolve(SRC, '..', 'public', 'config', 'theme-variables.css');
 
 /** Token names actually DEFINED by the design system. */
 function definedTokens() {

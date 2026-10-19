@@ -15,9 +15,13 @@ import aiohttp
 from opentelemetry import propagate
 
 from core.model_cache import get_model_id
+from core.model_http_policy import (
+    CONTROL_PLANE_TIMEOUT_SECONDS,
+    LLM_MAX_RETRIES,
+    LLM_TIMEOUT_SECONDS,
+    positive_float_env,
+)
 from core.span_attrs import ATTRIBUTE_NAMES
-from core.model_http_policy import CONTROL_PLANE_TIMEOUT_SECONDS, LLM_MAX_RETRIES, LLM_TIMEOUT_SECONDS
-from core.model_http_policy import positive_float_env
 from tracing import (
     background_span,
     get_meter,

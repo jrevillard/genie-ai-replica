@@ -85,6 +85,14 @@ spec:
           max_interval: 30s
           max_elapsed_time: 300s
         timeout: 15s
+{{- else }}
+      # Metrics sink when the metrics tier is off. App SDKs initialise a
+      # MeterProvider whenever ENABLE_OBSERVABILITY=1, and the OTLP receiver
+      # only registers /v1/metrics when a metrics pipeline consumes it —
+      # without this pipeline every instrumented pod retries its metric
+      # export forever on 404 ("Failed to export batch code: 404", live
+      # observed on 0.2.41). nop accepts and discards.
+      nop: {}
 {{- end }}
 {{- if .Values.observability.traces.enabled }}
       otlphttp/victoriatraces:
@@ -136,6 +144,11 @@ spec:
           receivers: [otlp]
           processors: [memory_limiter, batch]
           exporters: [prometheusremotewrite/victoriametrics]
+{{- else }}
+        metrics:
+          receivers: [otlp]
+          processors: [memory_limiter]
+          exporters: [nop]
 {{- end }}
 {{- if .Values.observability.traces.enabled }}
         traces:

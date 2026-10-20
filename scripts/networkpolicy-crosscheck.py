@@ -31,6 +31,29 @@ selects) and reports the ones the destination never allows back. Declaring a
 flow and admitting it are different decisions; the first is the intent, the
 second is what the datapath honours.
 
+Ports on both sides are compared in POD space, i.e. after DNAT — the space
+the datapath actually evaluates. A policy may be written against either
+space, so every declared port is translated through the peer's own Service
+(`index_services`); without that, the common case of a source naming the
+Service port and the destination naming the container port reports a broken
+flow that does not exist, and a policy naming the Service port where the pod
+port is required goes unnoticed.
+
+What it does NOT cover, by construction:
+
+  * Flows to operator-managed peers. The check needs a policy on BOTH
+    ends, and vm-operator / kube-arangodb / keycloak-operator pods have
+    none — the chart only restricts the pods it owns. A peer labelled
+    `app.kubernetes.io/instance: vmetrics` or
+    `app.kubernetes.io/managed-by: keycloak-operator` is therefore out of
+    scope, and that is exactly where the collector's egress to
+    VictoriaMetrics (Service 8428, pod 8429) hid: correct-looking, wrong
+    post-DNAT, and silently dropping every remote-write batch.
+  * A rule that mixes a CIDR or namespace peer with a component peer. The
+    CIDR says nothing about which component is meant, so those rules are
+    reported as SKIPPED rather than checked — visible, not silently green.
+  * Anything a Service-less peer implies (a pod dialled directly by IP).
+
 Usage:
   networkpolicy-crosscheck.py RENDERED.yaml [RENDERED.yaml ...]
 
@@ -90,12 +113,77 @@ def component_of(selector):
     return labels.get("genieai.io/component")
 
 
+def index_services(docs):
+    """component -> {service port: container port}, from the rendered Services.
+
+    Both policy sides are evaluated AFTER DNAT, so both describe the
+    DESTINATION's container port. The two sides are routinely written in
+    different spaces — the backend declares egress to `translation` on
+    9031 (the Service port) while the translation policy admits 8888 (the
+    container port the Service maps it to) — and comparing them raw
+    reports a broken flow where the datapath is fine. Translating every
+    declared port through the peer's own Service puts both sides in the
+    same space.
+
+    It also sharpens the check: a policy that names the Service port
+    where the pod port is required (the collector's egress to
+    VictoriaMetrics, 8428 for a pod that listens on 8429) stops matching
+    once normalised, which is exactly the defect that rule carried.
+    """
+    mapping: dict[str, dict] = {}
+    for doc in docs:
+        if not isinstance(doc, dict) or doc.get("kind") != "Service":
+            continue
+        # A Service's spec.selector is a FLAT label map, not a
+        # LabelSelector — reading it with component_of() (which expects
+        # {"matchLabels": ...}) yields nothing and the index stays empty.
+        component = (doc.get("spec", {}).get("selector") or {}).get("genieai.io/component")
+        if not component:
+            continue
+        ports = {}
+        for entry in doc.get("spec", {}).get("ports") or []:
+            if "port" not in entry:
+                continue
+            service_port = as_port(entry["port"])
+            target = entry.get("targetPort", service_port)
+            # A NAMED targetPort (the chart's `targetPort: http` style) has
+            # no numeric mapping; leave the Service port as-is.
+            if isinstance(as_port(target), int):
+                ports[service_port] = as_port(target)
+        mapping.setdefault(component, {}).update(ports)
+    return mapping
+
+
+def to_pod_ports(covered, services, component):
+    """Translate a rule's ports from the peer's Service space to pod space."""
+    if covered is None:
+        return None
+    mapping = services.get(component) or {}
+    return {mapping.get(port, port) for port in covered}
+
+
+def is_unscoped_rule(rule, key):
+    """Whether a rule carries a peer that is not component-scoped.
+
+    `ipBlock` (a CIDR) and `namespaceSelector` (a whole namespace) say
+    nothing about which component a rule is about, so this script cannot
+    reason about them. A rule made ONLY of such peers is simply not
+    checkable and that is fine. A rule that mixes one of them with a
+    component peer is different: the component peer carries the intent,
+    and silently treating the rule as "admits anything" turns the whole
+    rule into an unchecked hole — a chart edit that adds an ipBlock next
+    to a podSelector would disable the gate for that rule with the
+    pipeline still green. Those get reported as skipped instead.
+    """
+    return any("ipBlock" in peer or "namespaceSelector" in peer for peer in rule.get(key) or [])
+
+
 def peer_allows_any(rule, key, peer_component):
     """Whether a rule admits `peer_component` at all, ignoring ports."""
     for peer in rule.get(key) or []:
         if "ipBlock" in peer or "namespaceSelector" in peer:
-            # Not a component-scoped peer: treated as admissible, because the
-            # port matrix (not the selector) is what this script asserts.
+            # Not a component-scoped peer: admissible, because the port
+            # matrix (not the selector) is what this script asserts.
             return True
         selector = peer.get("podSelector")
         if selector is not None:
@@ -123,18 +211,31 @@ def index_policies(docs):
     return policies
 
 
-def policy_allows(policies, component, direction, peer_component, port):
+def policy_allows(policies, component, direction, peer_component, port, services, skipped=None):
     key = "to" if direction == "egress" else "from"
     for policy in policies.get(component, []):
+        name = policy.get("metadata", {}).get("name", "?")
         for rule in (policy.get("spec") or {}).get(direction) or []:
-            if not covers(rule_ports(rule), port):
+            # Both sides are written against the destination's container
+            # port once DNAT has run, so translate this rule's ports out of
+            # whatever Service space the author used.
+            covered = to_pod_ports(rule_ports(rule), services, peer_component)
+            if not covers(covered, port):
                 continue
+            if is_unscoped_rule(rule, key) and skipped is not None:
+                # Report the hole rather than pass over it: this rule
+                # mixes a CIDR/namespace peer with a component peer, so
+                # its component-scoped half is not asserted here. The
+                # rule is still treated as admissible below — a CIDR peer
+                # may well cover the peer in question, and failing closed
+                # on it would report a broken flow where none is known.
+                skipped.add(f"{name}/{direction}")
             if peer_allows_any(rule, key, peer_component):
                 return True
     return False
 
 
-def declared_flows(policies):
+def declared_flows(policies, services):
     flows = set()
     for source, source_policies in policies.items():
         for policy in source_policies:
@@ -147,7 +248,7 @@ def declared_flows(policies):
                     if covered is None:
                         flows.add((source, target, None))
                         continue
-                    for port in covered:
+                    for port in to_pod_ports(covered, services, target):
                         flows.add((source, target, port))
     return flows
 
@@ -156,14 +257,16 @@ def crosscheck(path):
     with open(path) as handle:
         docs = [d for d in yaml.safe_load_all(handle) if d]
     policies = index_policies(docs)
-    flows = declared_flows(policies)
+    services = index_services(docs)
+    flows = declared_flows(policies, services)
 
     blocked = []
+    skipped: set[str] = set()
     for source, target, port in sorted(flows, key=lambda f: (f[0], f[1], str(f[2]))):
         missing = []
-        if not policy_allows(policies, source, "egress", target, port):
+        if not policy_allows(policies, source, "egress", target, port, services, skipped):
             missing.append("egress")
-        if not policy_allows(policies, target, "ingress", source, port):
+        if not policy_allows(policies, target, "ingress", source, port, services, skipped):
             missing.append("ingress")
         if missing:
             blocked.append((source, target, port, "+".join(missing)))
@@ -172,6 +275,8 @@ def crosscheck(path):
         f"{path}: {len(policies)} component policies, "
         f"{len(flows)} declared pod-to-pod flows"
     )
+    for entry in sorted(skipped):
+        print(f"  SKIPPED {entry}: mixes a CIDR/namespace peer with a component peer — not asserted here")
     for source, target, port, missing in blocked:
         print(
             f"  BLOCKED {source} -> {target} :{port} ({missing} not permitted by the destination/source policy)"

@@ -363,8 +363,9 @@ feeds backend `ARANGO_URL`.
 
 | Helper | Signature | Purpose |
 |---|---|---|
-| `genieai-umbrella.keycloakInternalURL` | `include "..." .` | `http://keycloak-service.<ns>.svc.cluster.local:8080/auth` (backchannel base — token endpoints, JWKS) |
-| `genieai-umbrella.keycloakPublicIssuer` | `include "..." .` | `<scheme>://<ingress.host>/auth` (pinned `iss` claim; must match token `iss`) |
+| `genieai-umbrella.keycloakContextPath` | `include "..." .` | `data.keycloak.httpRelativePath` (default `/auth`) — the single source: the Keycloak CR's `additionalOptions`, both URL helpers and the HTTPRoute `/auth` rules all read it |
+| `genieai-umbrella.keycloakInternalURL` | `include "..." .` | `http://keycloak-service.<ns>.svc.cluster.local:8080<context-path>` (backchannel base — token endpoints, JWKS) |
+| `genieai-umbrella.keycloakPublicIssuer` | `include "..." .` | `<scheme>://<ingress.host><context-path>` (pinned `iss` claim; must match token `iss`) |
 | `genieai-umbrella.arangoURL` | `include "..." .` | `http://<arango-host>.<ns>.svc.cluster.local:8529` |
 | `genieai-umbrella.arangoHost` | `include "..." .` | Mode-aware Arango Service name |
 | `genieai-umbrella.serviceURL` | `include "..." (dict "root" . "name" "X" "port" "N")` | `http://<name>.<ns>.svc.cluster.local:<port>` |

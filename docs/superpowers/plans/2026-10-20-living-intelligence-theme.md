@@ -1707,9 +1707,12 @@ it has to override outranks it, and it is the only one in the file."
 
 - [ ] **Step 1: Extend the migration script with the visual block**
 
-In `components/gov-chat-frontend/scripts/migrate-config-schema.js`, add to the `main()` function, after `seedBaseStyles(doc)`:
+In `components/gov-chat-frontend/scripts/migrate-config-schema.js`, add to the `main()` function. Place the assignment **after** the `if (name === BASE_FILE) { … }` block, not inside it — it must run for every file, and the per-file value comes from the `enabled` expression:
 
 ```js
+    if (name === BASE_FILE) {
+      seedBaseStyles(doc);
+    }
     doc.theme.visual = {
       enabled: name === BASE_FILE,
       assets: {

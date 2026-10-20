@@ -17,7 +17,14 @@ RELEASE=test
 NS=genieai
 MINIKUBE_PROFILE=${MINIKUBE_PROFILE:-minikube}
 
-# Real-looking dummy secrets (chart fails on placeholders since wave 15).
+# Required values — the render fails without them (deployment data, not
+# chart defaults): the public hostname (may carry :port) and the realm
+# admin email. Override via env for a laptop whose origin differs.
+# The client secrets below are real-looking dummies: the chart rejects
+# `change-me-*` placeholders.
+INGRESS_HOST="${INGRESS_HOST:-local.genieai.test}"
+ADMIN_EMAIL="${ADMIN_EMAIL:-admin@local.genieai.test}"
+
 CLIENT_PROXY="dummy-proxy-$(date +%s)"
 CLIENT_DATAPREP="dummy-dataprep-$(date +%s)"
 CLIENT_GRAFANA="dummy-grafana-$(date +%s)"
@@ -37,6 +44,8 @@ helm template "$RELEASE" "$CHART" -n "$NS" \
   --set "data.keycloak.clientSecrets.proxyClient=$CLIENT_PROXY" \
   --set "data.keycloak.clientSecrets.dataprep=$CLIENT_DATAPREP" \
   --set "data.keycloak.clientSecrets.grafana=$CLIENT_GRAFANA" \
+  --set "ingress.host=$INGRESS_HOST" \
+  --set "data.keycloak.adminEmail=$ADMIN_EMAIL" \
   > /tmp/genieai-rendered.yaml
 echo "  rendered to /tmp/genieai-rendered.yaml ($(wc -l < /tmp/genieai-rendered.yaml) lines)"
 
@@ -47,6 +56,8 @@ helm install "$RELEASE" "$CHART" -n "$NS" --create-namespace \
   --set "data.keycloak.clientSecrets.proxyClient=$CLIENT_PROXY" \
   --set "data.keycloak.clientSecrets.dataprep=$CLIENT_DATAPREP" \
   --set "data.keycloak.clientSecrets.grafana=$CLIENT_GRAFANA" \
+  --set "ingress.host=$INGRESS_HOST" \
+  --set "data.keycloak.adminEmail=$ADMIN_EMAIL" \
   --wait --timeout 10m
 
 echo

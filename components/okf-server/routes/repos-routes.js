@@ -164,7 +164,10 @@ router.get(
 // Story 1-8d — the COMPREHENSIVE advisor: aggregates recent runs (all
 // classes), simulates tag-set changes against the gate, recommends the
 // globally-optimal add/remove set under a zero-positive-harm constraint.
+// 2026-10-20 — async (202 + poll): a thinking model takes minutes and the
+// sync POST died at the gateway; poll the job endpoint for the result.
 router.post('/:repo_id/routing-advisor', requireRepoScope('repo_id', 'admin'), ctrl.recommendTagSet);
+router.get('/:repo_id/routing-advisor/jobs/:job_key', requireRepoScope('repo_id', 'read'), ctrl.recommendJob);
 router.post(
   '/:repo_id/routing-testsuite/:suite_key/queries',
   requireRepoScope('repo_id', 'admin'),

@@ -196,9 +196,45 @@ const headTestService = {
    * gate, recommends the globally-optimal add/remove set under a
    * zero-positive-harm constraint. Admin action (one LLM call). Returns
    * {current_scorecard, recommended_scorecard, changes:{add,remove},
-   * add_eval, remove_eval, note, ...}. */
+   * add_eval, remove_eval, note, ...}.
+   *
+   * 2026-10-20 — async (202 + poll): with a thinking model configured the
+   * advisor takes minutes and the synchronous POST died at the gateway
+   * ("The upstream server is timing out") while the server kept working.
+   * Poll here (not in the component) so the dialog's existing spinner and
+   * error handling stay untouched. Tolerates a synchronous server that
+   * answers 200 inline (no job_key) — not coupled to deploy order. */
   async recommendTags(repoId, payload = {}) {
     const res = await httpService.post(`/okf/repos/${rid(repoId)}/routing-advisor`, payload);
+    const started = res && res.data;
+    if (!started || !started.job_key) return started;
+    const POLL_MS = 2000;
+    // A ceiling, so a wedged job surfaces as a readable error instead of an
+    // endless spinner. The job doc keeps its state server-side regardless.
+    const DEADLINE_MS = 15 * 60 * 1000;
+    const deadline = Date.now() + DEADLINE_MS;
+    for (;;) {
+      if (Date.now() > deadline) {
+        throw new Error(
+          'The advisor is still running on the model host. Reopen the Lab later to see its result — nothing was lost.'
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+      const doc = await this.getRecommendJob(repoId, started.job_key);
+      if (!doc || doc.status === 'running') continue;
+      if (doc.status === 'failed') {
+        const e = new Error((doc.error && doc.error.message) || 'Advisor failed');
+        e.code = (doc.error && doc.error.code) || 'RECOMMEND_FAILED';
+        throw e;
+      }
+      return doc.payload;
+    }
+  },
+
+  /** The async advisor's poll: {status:'running'} | {status:'failed',
+   * error} | the finished advice in `payload`. */
+  async getRecommendJob(repoId, jobKey) {
+    const res = await httpService.get(`/okf/repos/${rid(repoId)}/routing-advisor/jobs/${encodeURIComponent(jobKey)}`);
     return res && res.data ? res.data : null;
   }
 };

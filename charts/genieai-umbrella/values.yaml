@@ -178,11 +178,11 @@ data:
   # controllers that reconcile them (CNPG, kube-arangodb, keycloak-operator)
   # are cluster bootstrap prerequisites — see the README's Cluster
   # prerequisites section.
-  # `services` tier enabled toggles are declared in this values
-  # surface, so the dep-check loop currently asserts only the data tier
-  # (it iterates both `services` and `data` maps but reads `false` for
-  # every services.* key until those entries are added — the
-  # service→data validation half is therefore decorative today).
+  # `dependencyGraph` drives the pre-install dep-check for both tiers:
+  # the hook exports one toggle per graph key into enabled.json and
+  # refuses an install whose enabled component depends on a disabled
+  # one. A component absent from the graph exports nothing, so its
+  # dependencies go unchecked — add the entry alongside the component.
   postgres:
     enabled: true
     # CNPG Cluster resources for the keycloak-db (the only Postgres; the edge

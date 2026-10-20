@@ -133,7 +133,10 @@ spec:
       app.kubernetes.io/component: grafana
   folderRef: genieai-general
   allowCrossNamespaceImport: true
-  resyncInterval: 30s
+  # resyncPeriod, not resyncInterval: the GrafanaDashboard CRD has
+  # no `resyncInterval`, and grafana-operator decodes strictly —
+  # one unknown field rejects every dashboard.
+  resyncPeriod: 30s
 {{- include "genieai-umbrella.dashboardDatasources" (dict "root" $ "entry" . "tier" $tierOn) }}
   json: |-
 {{ $.Files.Get (printf "files/observability/dashboards/%s" .file) | indent 4 }}
@@ -155,7 +158,10 @@ spec:
       app.kubernetes.io/component: grafana
   folderRef: genieai-observability
   allowCrossNamespaceImport: true
-  resyncInterval: 30s
+  # resyncPeriod, not resyncInterval: the GrafanaDashboard CRD has
+  # no `resyncInterval`, and grafana-operator decodes strictly —
+  # one unknown field rejects every dashboard.
+  resyncPeriod: 30s
 {{- include "genieai-umbrella.dashboardDatasources" (dict "root" $ "entry" . "tier" $tierOn) }}
   json: |-
 {{ $.Files.Get (printf "files/observability/dashboards/observability/%s" .file) | indent 4 }}

@@ -141,5 +141,8 @@ spec:
   # this option Keycloak serves at / and every authenticated request 404s.
   additionalOptions:
     - name: http-relative-path
-      value: /auth
+      # Single source: the URL helpers and the HTTPRoute /auth rules read
+      # the same value (see genieai-umbrella.keycloakContextPath), so the
+      # served context path and every caller cannot drift apart.
+      value: {{ include "genieai-umbrella.keycloakContextPath" . }}
 {{- end -}}

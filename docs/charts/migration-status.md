@@ -17,7 +17,28 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
   `resyncPeriod`, so all nine dashboards were rejected) and
   `Cluster.spec.storage.accessModes` (pruned silently; access modes
   belong under `storage.pvcTemplate`).
-- Chart `genieai-umbrella` at **0.2.56** on `feat/k8s-migration`; deployed on
+- **Review rounds 6-7 closed (0.2.56-0.2.60)**. Findings that mattered,
+  each verified against the live cluster rather than taken on report:
+  the backend's translation endpoint only defaulted in in-cluster GPU
+  mode, so an external-GPU site that omitted it fell back to the 6 Gi
+  in-process CPU model (the OOM path); `local-teardown.sh` passed
+  `helm uninstall --keep-resources` to `kubectl delete namespace`,
+  which is not a kubectl flag, so the default teardown never deleted
+  anything while reporting success; the same script deleted the
+  sealed-secrets namespace under `--with-operators`, destroying the key
+  every committed SealedSecret is encrypted against; the bootstrap
+  script's key restore parsed JSON while documenting a YAML file, after
+  having already deleted the generated keys; `chart:contract`'s OTLP
+  assertion was a whole-file grep the agent CR satisfied on its own;
+  the NetworkPolicy cross-check compared ports in Service space where
+  the datapath uses pod space; `clusterProfile=prod` was rendered by
+  nothing in CI, though it is the only configuration that emits a
+  PodDisruptionBudget and multiplies the backend to 3.
+  Refuted with reproduction: the `ternary … kindIs "bool"` inversion
+  (the sites use `not (kindIs "invalid")`, and `httpEnabled` is typed
+  in the schema), and the Keycloak theme `strip-components` mismatch
+  (it counts path components, so any theme name works).
+- Chart `genieai-umbrella` at **0.2.60** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto main after issue #998 (runtime-theme model, 81 commits) —
   tip `7a20c5913` at rebase time, theme delivery ported to the operator

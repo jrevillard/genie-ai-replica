@@ -127,11 +127,13 @@ describe('GpuTranslateBackend streaming', () => {
       spy.mockRestore();
     });
 
-    it('keeps generous max_tokens for short input without context', async () => {
+    it('keeps a budget proportional to the input for short text without context', async () => {
       const spy = jest.spyOn(backend, 'callVllmStream').mockResolvedValue('OK');
       await backend.translateStream('Short text.', 'en', 'es', null, () => {});
       const requestBody = spy.mock.calls[0][0];
-      expect(requestBody.max_tokens).toBeGreaterThan(1000);
+      // Room is plentiful here — the budget tracks what the translation needs
+      // rather than the whole window, and still clears the prompt.
+      expect(requestBody.max_tokens).toBeGreaterThan(256);
       spy.mockRestore();
     });
   });
@@ -144,6 +146,11 @@ describe('GpuTranslateBackend streaming', () => {
       capped.maxModelLen = 8192;
     });
 
+    // Input size is estimated at 4 chars/token. Assertions are written
+    // against that estimate so the suite pins the production contract rather
+    // than re-deriving the formula.
+    const estimate = (body) => Math.ceil(JSON.stringify(body.messages).length / 4);
+
     it('leaves room in max_tokens for the prompt it builds', () => {
       // vLLM rejects a request whose prompt plus max_tokens exceeds the
       // model's context window, so the output budget has to be derived from
@@ -151,13 +158,34 @@ describe('GpuTranslateBackend streaming', () => {
       // alone.
       const unit = 'the recovery code for the migrated tenant is recorded '.repeat(12);
       const body = capped.formatRequest('google/gemma-3-4b-it', 'en', 'fr', unit);
-      const inputTokens = Math.ceil(JSON.stringify(body.messages).length / 4);
-      expect(body.max_tokens + inputTokens).toBeLessThanOrEqual(capped.maxModelLen);
+      expect(body.max_tokens + estimate(body)).toBeLessThanOrEqual(capped.maxModelLen);
     });
 
-    it('keeps a generous output budget for a short input', () => {
+    it('leaves room even when the estimate undercounts the prompt fourfold', () => {
+      // `chars / 4` assumes ~4 chars per token. CJK runs nearer one token per
+      // character, so the real prompt can be four times the estimate — and an
+      // over-generous budget is what turns that miscount into a rejection.
+      const cjk = '今天天气很好我们一起去公园散步吧。'.repeat(60);
+      const body = capped.formatRequest('google/gemma-3-4b-it', 'zh', 'en', cjk);
+      expect(body.max_tokens + estimate(body) * 4).toBeLessThanOrEqual(capped.maxModelLen);
+    });
+
+    it('leaves enough room to translate what it was given', () => {
+      // The ceiling must not eat into the answer: a translation runs about as
+      // long as its source, so the budget has to clear the prompt size.
+      const unit = 'the recovery code for the migrated tenant is recorded '.repeat(12);
+      const body = capped.formatRequest('google/gemma-3-4b-it', 'en', 'fr', unit);
+      expect(body.max_tokens).toBeGreaterThanOrEqual(estimate(body));
+    });
+
+    it('does not hand a short prompt the whole window', () => {
       const body = capped.formatRequest('google/gemma-3-4b-it', 'en', 'fr', 'Bonjour.');
-      expect(body.max_tokens).toBeGreaterThan(4000);
+      expect(body.max_tokens).toBeLessThan(capped.maxModelLen / 2);
+    });
+
+    it('degrades to a minimal budget rather than a negative one on an oversized prompt', () => {
+      const body = capped.formatRequest('google/gemma-3-4b-it', 'en', 'fr', 'x'.repeat(40000));
+      expect(body.max_tokens).toBeGreaterThanOrEqual(1);
     });
   });
 

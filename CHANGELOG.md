@@ -65,7 +65,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   English. Affects every deployment that translates through a GPU
   (`TRANSLATION_BACKEND=gpu`, or `auto` when the GPU probe succeeds), in Docker
   Compose as well as Kubernetes; a short answer was never long enough to trip
-  it, which is why it went unnoticed.
+  it, which is why it went unnoticed. The budget is now sized by what the
+  translation can actually produce, so a prompt whose token count is
+  underestimated — CJK runs near one token per character — is no longer
+  rejected either. (!576)
 
 - **The backend could not start with observability enabled (!565):** the OpenTelemetry
   setup read the shared propagator factory under a name that module does not

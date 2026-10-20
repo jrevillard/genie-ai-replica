@@ -262,25 +262,32 @@ class GpuTranslateBackend {
   }
 
   /**
-   * Format request for specific model
-   * @param {string} modelId - Model identifier
-   * @param {string} sourceCode - Source language code (model-specific)
-   * @param {string} targetCode - Target language code (model-specific)
-   * @param {string} text - Text to translate
-   * @returns {Object} Formatted request body
-   */
-  /**
    * Lower `max_tokens` so the request's INPUT plus its OUTPUT budget fits
-   * `maxModelLen`.
+   * `maxModelLen`, without asking for output the translation cannot use.
    *
    * `max_tokens` is the OUTPUT budget, and vLLM rejects a request whose prompt
    * plus `max_tokens` exceeds the model's context window. Deriving it from the
    * context length alone (`maxModelLen - 128`) therefore caps the PROMPT at
-   * ~128 tokens: on an 8192-token model every request asks for 8064 output
-   * tokens, so anything longer than a short sentence is refused outright
+   * ~128 tokens: on an 8192-token model every request asked for 8064 output
+   * tokens, so anything longer than a short sentence was refused outright
    * ("maximum context length is 8192 tokens. However, you requested 8064
    * output tokens and your prompt contains at least 129"). The prompt has to
    * come out of the same window.
+   *
+   * The budget is therefore the smaller of two bounds: what the window can
+   * carry (`room`), and what a translation of this prompt can plausibly
+   * produce (`needed` — a translation runs about as long as its source, so a
+   * prompt of N tokens needs on the order of N, not the ~8000 the window would
+   * otherwise hand over). The second bound is what keeps the input-size
+   * estimate from being load-bearing: `chars / 4` underestimates badly for CJK
+   * (zh is in the gemma-3 and translategemma language maps, and streaming CJK
+   * units reach ~1500 characters), and an over-generous budget is precisely
+   * what turns a miscount into a rejected request.
+   *
+   * Trade-off: `needed` is a ceiling, so a prompt whose translation genuinely
+   * runs longer than `needed` is truncated rather than rejected. Measured from
+   * the streaming unit cap (~1500 characters) the ceiling stays well clear of
+   * what the model actually emits.
    *
    * Idempotent — it only ever lowers the budget — so it is safe to apply again
    * after a caller has grown the messages (see translateStream's context
@@ -291,11 +298,20 @@ class GpuTranslateBackend {
    */
   _capMaxTokens(requestBody) {
     const inputTokens = Math.ceil(JSON.stringify(requestBody.messages).length / 4);
-    const safeMaxTokens = Math.max(256, this.maxModelLen - inputTokens - 128);
-    requestBody.max_tokens = Math.min(requestBody.max_tokens || safeMaxTokens, safeMaxTokens);
+    const room = this.maxModelLen - inputTokens - 128;
+    const needed = 4 * inputTokens + 256;
+    requestBody.max_tokens = Math.max(1, Math.min(requestBody.max_tokens || room, room, needed));
     return requestBody;
   }
 
+  /**
+   * Format request for specific model
+   * @param {string} modelId - Model identifier
+   * @param {string} sourceCode - Source language code (model-specific)
+   * @param {string} targetCode - Target language code (model-specific)
+   * @param {string} text - Text to translate
+   * @returns {Object} Formatted request body
+   */
   formatRequest(modelId, sourceCode, targetCode, text) {
     // TranslateGemma format (structured chat with language codes)
     if (modelId.includes('translategemma')) {

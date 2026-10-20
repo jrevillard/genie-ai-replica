@@ -3588,10 +3588,16 @@ chart:install:
     # (arango-root-secret, arango-jwt-secret, translation-cache-password,
     # keycloak-admin-credentials, keycloak-db-credentials,
     # keycloak-proxy-client-secret) are NOT created here, so the
-    # convergence Job and the data tier fail on this install. Seeding them
-    # needs a generated-values step (scripts/genieai-dev-secrets.sh — not
-    # yet written) before this job can prove a full install. Until then it
-    # exercises render + install ordering, not a working stack.
+    # convergence Job and the data tier fail on this install. Seeding
+    # them means materialising throwaway values in the job (a
+    # generated-values step, which does not exist yet) before this job
+    # can prove a full install. Until then it exercises render + install
+    # ordering, not a working stack.
+    #
+    # The CRD surface IS covered per push by chart:crd-validate, which
+    # validates every rendered object against the installed CRDs without
+    # scheduling anything — that is the half of installability a cold
+    # kind cluster is not needed for.
     - >-
       helm install test charts/genieai-umbrella -n genieai --create-namespace
       --set data.keycloak.failOnPlaceholderSecrets=false

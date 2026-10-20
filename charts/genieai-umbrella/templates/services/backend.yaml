@@ -9,26 +9,62 @@ genieai-umbrella.opeaGpuEndpoint: the in-cluster model Service in
 in-cluster GPU mode, `opea.gpu.nodeHost + opea.gpu.paths.translation` in
 external mode.
 
-Deriving it matters: unset, the backend's auto mode probes its own
-compose-era default, finds nothing, and silently falls back to an
-in-process CPU model — Xenova/nllb-200-distilled-600M, ~6 Gi at ONNX
-load and a core of steady inference. On a node near its memory limit
-that is not a degradation, it is an OOM kill of the backend (observed on
-the laptop: exit 137, and the node dying with it). In external mode the
-helper also fails the render when `opea.gpu.nodeHost` is empty, so the
-misconfiguration is named at install time instead of surfacing as a
-missing translation endpoint at the first user request. */ -}}
+Deriving it matters: the endpoint is what tells the application that a
+GPU translation API was NAMED, and a named API is mandatory — the
+backend waits for it at startup and refuses to come up without it.
+Unset, the application has no GPU API to reach, and the answer is
+translated by an in-process CPU model — Xenova/nllb-200-distilled-600M,
+~6 Gi at ONNX load and a core of steady inference. On a node near its
+memory limit that is not a degradation, it is an OOM kill of the backend
+(observed on the laptop: exit 137, and the node dying with it). In
+external mode the helper also fails the render when
+`opea.gpu.nodeHost` is empty, so the misconfiguration is named at
+install time instead of surfacing as a missing translation endpoint at
+the first user request. */ -}}
 {{- $translationEndpoint := .Values.services.backend.translation.endpoint -}}
 {{- if and (not $translationEndpoint) .Values.opea.enabled -}}
 {{- $translationEndpoint = include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "translation") -}}
 {{- end -}}
 {{- $translationEnv := list -}}
 {{- $translationSecrets := list -}}
-{{- if $translationEndpoint }}
+{{- /* Which backend translates the answer. The application decides this
+       on the endpoint, not on the knob: a deployment that NAMED a
+       translation API always uses it — TRANSLATION_BACKEND is not an
+       input to that decision, and the backend refuses to start when the
+       named API does not answer rather than translate with a model the
+       deployment did not ask for.
+
+       So the chart states the outcome it can actually produce. With an
+       endpoint: the GPU, and `cpu` is refused at render time, because
+       the application would ignore it and use the GPU anyway — a chart
+       advertising the CPU model while the deployment uses the GPU is
+       the silent mismatch this file exists to prevent. Without one:
+       the in-process CPU model, since a `gpu` would probe a
+       compose-era endpoint that does not resolve here. */ -}}
+{{- $translationBackend := .Values.services.backend.translation.backend | default "gpu" -}}
+{{- if not (has $translationBackend (list "gpu" "cpu" "auto")) -}}
+{{- fail (printf "services.backend.translation.backend must be one of gpu|cpu|auto, got %q" $translationBackend) -}}
+{{- end -}}
+{{- if $translationEndpoint -}}
+{{- if eq $translationBackend "cpu" -}}
+{{- fail "services.backend.translation.backend=cpu cannot be honoured while a translation endpoint is configured: a named translation API is mandatory and the application uses it whatever this knob says. Unset services.backend.translation.endpoint to translate with the in-process CPU model instead." -}}
+{{- end -}}
+{{- $translationBackend = "gpu" -}}
+{{- else -}}
+{{- $translationBackend = "cpu" -}}
+{{- end -}}
 {{- $translationEnv = list
+    (dict "name" "TRANSLATION_BACKEND" "value" $translationBackend) -}}
+{{- $probeTimeout := .Values.services.backend.translation.probeTimeoutSeconds -}}
+{{- if $probeTimeout -}}
+{{- $translationEnv = concat $translationEnv (list
+    (dict "name" "TRANSLATION_PROBE_TIMEOUT_SECONDS" "value" (printf "%v" $probeTimeout))) -}}
+{{- end -}}
+{{- if $translationEndpoint }}
+{{- $translationEnv = concat $translationEnv (list
     (dict "name" "VLLM_TRANSLATION_ENDPOINT" "value" $translationEndpoint)
     (dict "name" "VLLM_TRANSLATION_MODEL_ID" "value" (.Values.services.backend.translation.modelId | default "google/gemma-3-4b-it"))
--}}
+) }}
 {{- $translationSecrets = list
     (dict "name" "VLLM_API_KEY" "valueFrom" (dict "secretKeyRef" (dict "name" "vllm-api-key" "key" "VLLM_API_KEY")))
 -}}

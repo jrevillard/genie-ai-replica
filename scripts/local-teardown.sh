@@ -83,6 +83,15 @@ uninstall_chart() {
   fi
 }
 
+# Helm never garbage-collects hook resources on uninstall, so the
+# dep-check ClusterRole/ClusterRoleBinding (hooks, cluster-scoped) would
+# survive every teardown on a shared cluster.
+delete_leaked_hook_rbac() {
+  for kind in clusterrole clusterrolebinding; do
+    kubectl delete "${kind}" "${RELEASE}-genieai-umbrella-dep-check" --ignore-not-found >/dev/null 2>&1 || true
+  done
+}
+
 uninstall_operators() {
   local ns release
   # helm-managed (release names as pinned in scripts/install-prereqs.sh)
@@ -118,6 +127,7 @@ uninstall_operators() {
 main() {
   log "teardown (release=${RELEASE}, namespace=${NS}, with-operators=${WITH_OPERATORS})"
   uninstall_chart
+  delete_leaked_hook_rbac
   if [ "${WITH_OPERATORS}" = "true" ]; then
     uninstall_operators
   fi

@@ -11,7 +11,7 @@ Kubernetes-deployment Helm charts for GENIE.AI.
 
 ## Status
 
-`genieai-umbrella` 0.2.33: foundation, service tier, data layer, OPEA tier, observability, and the Gateway API edge (Envoy Gateway as an optional chart dependency, nginx removed from the data path) — all live-validated on a minikube laptop cluster via Flux. Keycloak custom theme ships at runtime (ConfigMap tarball + initContainer — `make keycloak-theme` to regenerate; CI guards drift).
+`genieai-umbrella` 0.2.59: foundation, service tier, data layer, OPEA tier, observability, and the Gateway API edge (Envoy Gateway as an optional chart dependency, nginx removed from the data path) — all live-validated on a minikube laptop cluster via Flux. Keycloak custom theme ships at runtime (ConfigMap tarball + initContainer — `make keycloak-theme` to regenerate; CI guards drift).
 
 ## Cluster prerequisites
 
@@ -32,7 +32,10 @@ make -C charts lint
 
 # 2. helm template byte-diff — operator-facing surface stays stable
 make -C charts template              # writes /tmp/genieai-rendered.yaml
-diff -u <(git show HEAD:path/to/baseline.yaml) /tmp/genieai-rendered.yaml
+# capture the baseline on purpose, not every day:
+make -C charts template && cp /tmp/genieai-rendered.yaml /tmp/baseline.yaml
+# then, after an intentional change, compare against it:
+make -C charts template && diff -u /tmp/baseline.yaml /tmp/genieai-rendered.yaml
 ```
 
 `ct install` against a kind cluster + `helm test` runs the smoke jobs (namespace existence, data-tier dependency reachability). Trigger via `make -C charts test`.
@@ -51,5 +54,7 @@ diff -u <(git show HEAD:path/to/baseline.yaml) /tmp/genieai-rendered.yaml
 
 ## Other directories
 
-- `deploy/environments/` — per-environment Kustomize overlays + values-override files.
+- `deploy/environments/` — empty; per-environment overlays live in the
+  `genie-ai-deploy` repo under `overlays/<pays>/<env>/` and are applied by
+  Flux, not from this tree (see `deploy/environments/README.md`).
 - `docs/charts/` — dev-internal reference docs (operator selection, migration playbooks).

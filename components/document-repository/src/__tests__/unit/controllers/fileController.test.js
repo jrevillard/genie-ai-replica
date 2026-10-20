@@ -277,6 +277,31 @@ describe('fileController', () => {
         expect(retractCall[1]).toEqual({ fileId: 'f1' });
       });
 
+      it('leaves a non-degraded re-ingest chunk count alone', async () => {
+        // clearedPreviously only guards the degraded path. Initialising it true,
+        // or hoisting the assignment out of the branch, would zero the count of a
+        // document that was never cleared — Retracted, Ingestion Error, or never
+        // ingested — where file.chunk_count is still meaningful. The guard's
+        // positive direction is well pinned; this is its negative.
+        const metadataService = require('../../../services/metadataService');
+        for (const status of ['Retracted', 'Ingestion Error', 'Pending']) {
+          jest.clearAllMocks();
+          metadataService.updateMetadata = jest.fn().mockResolvedValue({});
+          axios.post.mockResolvedValue({
+            data: { success: true, status: 200, message: 'Ingestion started in background.' }
+          });
+          jest.spyOn(fileController, '_getFileBase64').mockResolvedValue({
+            file: { file_id: 'f1', chunk_count: 42, dataprep: { status } },
+            base64String: 'b64'
+          });
+
+          await fileController._ingestFileById('f1');
+
+          const counts = metadataService.updateMetadata.mock.calls.map((c) => c[1].chunk_count);
+          expect(counts[counts.length - 1]).toBe(42);
+        }
+      });
+
       it('does not reinstate the pre-clear count when the ingest succeeds', async () => {
         // dataprep's ingest response carries no chunk_count ("Ingestion started
         // in background"), so the write-back falls through to `file.chunk_count`

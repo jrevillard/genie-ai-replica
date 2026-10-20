@@ -2193,7 +2193,24 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         response_format={"type": "json_object"},
                     )
                     parsed = json.loads(response.choices[0].message.content)
-                    ctx = parsed.get("context", "")
+                    # A body with no "context" key is not an answer saying the
+                    # chunk needs no context — it is a body in a shape we never
+                    # asked for, which is what a model ignoring
+                    # response_format=json_object produces. `parsed.get("context",
+                    # "")` made the two indistinguishable and then logged "empty
+                    # context", a statement about the model that is simply false.
+                    if not isinstance(parsed, dict) or "context" not in parsed:
+                        shape = type(parsed).__name__ if not isinstance(parsed, dict) else "object without 'context'"
+                        await self._write_ingestion_log(
+                            file_id,
+                            "WARN",
+                            "Contextualization",
+                            f"{'Doc-level'}: LLM returned a {shape}, not "
+                            '{"context": "..."}. Retrying '
+                            f"({attempt}/3)...",
+                        )
+                        continue
+                    ctx = parsed["context"]
                     if isinstance(ctx, str) and ctx.strip():
                         _usage = getattr(response, "usage", None)
                         if getattr(_usage, "completion_tokens", None) is not None:
@@ -2270,7 +2287,24 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         response_format={"type": "json_object"},
                     )
                     parsed = json.loads(response.choices[0].message.content)
-                    ctx = parsed.get("context", "")
+                    # A body with no "context" key is not an answer saying the
+                    # chunk needs no context — it is a body in a shape we never
+                    # asked for, which is what a model ignoring
+                    # response_format=json_object produces. `parsed.get("context",
+                    # "")` made the two indistinguishable and then logged "empty
+                    # context", a statement about the model that is simply false.
+                    if not isinstance(parsed, dict) or "context" not in parsed:
+                        shape = type(parsed).__name__ if not isinstance(parsed, dict) else "object without 'context'"
+                        await self._write_ingestion_log(
+                            file_id,
+                            "WARN",
+                            "Contextualization",
+                            f"{f'Chunk {index}'}: LLM returned a {shape}, not "
+                            '{"context": "..."}. Retrying '
+                            f"({attempt}/3)...",
+                        )
+                        continue
+                    ctx = parsed["context"]
                     if isinstance(ctx, str) and ctx.strip():
                         _usage = getattr(response, "usage", None)
                         if getattr(_usage, "completion_tokens", None) is not None:
@@ -2505,7 +2539,15 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         return (list(file_labels) if file_labels else []), True
 
     async def _llm_call_batch(self, client, model, system_prompt, batch, file_id) -> dict[int, list[str]] | None:
-        """One LLM call labeling a whole batch of chunks. Returns None on parse failure."""
+        """One LLM call labeling a whole batch of chunks.
+
+        Returns None when the response cannot be used as a batch answer at all —
+        malformed JSON, not an object, or not every requested index present. The
+        caller treats None as a batch failure and re-asks per chunk; a reader who
+        assumes None means "the model emitted garbage" will misread why the
+        per-chunk path ran. An index present with an unusable VALUE is not a None
+        case — it becomes [] in place, without re-asking.
+        """
         indices = [i for i, _ in batch]
         user_content = (
             "For each numbered chunk below, assign labels. Respond with ONLY a JSON object "
@@ -2546,6 +2588,12 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     return None
                 index_set = set(indices)
                 suggestions: dict[int, list[str]] = {}
+                # Which indices the response MENTIONED, tracked apart from which
+                # it managed to give a usable value for. The two used to be the
+                # same set, so an index the model never mentioned and one it
+                # mentioned with an unusable value both ended up as [] filed
+                # under "the model chose not to label them".
+                mentioned: set[int] = set()
                 for key, labels in parsed.items():
                     try:
                         idx = int(key)
@@ -2553,6 +2601,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         continue
                     if idx not in index_set:
                         continue
+                    mentioned.add(idx)
                     # Lenient: accept the model's varied shapes (null / string / list);
                     # an unusable value skips the chunk (-> empty) instead of failing the batch.
                     if labels is None:
@@ -2563,23 +2612,28 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         continue
                     labels = [x for x in labels if isinstance(x, str)]
                     suggestions[idx] = labels
-                if not suggestions:
-                    # Zero of the requested indices came back. The model answered,
-                    # but not in the shape asked for — an envelope keyed by
-                    # "labels", a bare array, anything without the index keys. That
-                    # is what a model ignoring response_format=json_object looks
-                    # like, and filling every index with [] below would store the
-                    # whole document unlabelled while reporting a clean ingest.
-                    #
-                    # Distinguished from "the model matched nothing", which arrives
-                    # as the index keys PRESENT and empty — the loop above records
-                    # those, so `suggestions` is populated and this does not fire.
-                    # Returned as a parse failure rather than a result so the
-                    # per-chunk path runs, which either recovers or counts the
-                    # fallbacks and names the cause.
+                # An index the response never mentioned is a contract violation,
+                # not an answer: the prompt this same call sends says "Every index
+                # MUST be present" and "use [] for chunks with no matching label",
+                # so [] is how the model says no-match and absence says something
+                # else. Filling those with [] and filing them under "the model
+                # chose not to label them" stored the document's chunks unlabelled
+                # and reported a clean Ingested.
+                #
+                # Returns None so the per-chunk path runs, which keeps the labels
+                # the model DID give where it can and names the cause where it
+                # cannot. This is what _context_batch_call already does for the
+                # same violation on the contextual side.
+                #
+                # A value that is present but unusable stays lenient and becomes
+                # [], as before — the batch parser has always recovered from a bad
+                # VALUE without re-asking. Only an absent KEY is a failure.
+                missing = [i for i in indices if i not in mentioned]
+                if missing:
                     _llm_fallback_total.add(1, {"phase": PHASE_LABEL_LABELING, "reason": "batch_parse"})
                     return None
-                # Missing indices = the model chose not to label them (valid → empty).
+                # Every index was mentioned: absent from `suggestions` means the
+                # value was unusable, which is a [] the model did ask for.
                 for i in indices:
                     suggestions.setdefault(i, [])
                 span.set_attribute("dataprep.labels_suggested", sum(len(v) for v in suggestions.values()))

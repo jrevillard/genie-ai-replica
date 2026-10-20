@@ -155,16 +155,19 @@ keycloak_ssl_skip_verify: ""
 #   model_llm_max_retries: 2              # SDK retries on 5xx / connection
 #                                         #   errors. 0 is a real value and means
 #                                         #   no SDK retries.
-#   model_summarizer_timeout_seconds: 600 # retriever summarizer. Deliberately NOT
-#                                         #   shortened from the openai default: no
-#                                         #   fallback path, so a tighter budget
-#                                         #   turns a slow success into a 500 on the
-#                                         #   chat request.
+#   model_summarizer_timeout_seconds: 600 # retriever summarizer. No fallback
+#                                         #   path, so a tighter budget turns a
+#                                         #   slow success into a 500 on the chat
+#                                         #   request. The client was unbounded;
+#                                         #   600 matches the openai SDK default so
+#                                         #   this is the least likely ceiling to
+#                                         #   break a working deployment.
 #   model_embedding_timeout_seconds: 600 # the retriever's embedding client,
-#                                         #   OpenAI-API branch ONLY, and NOT a
-#                                         #   cut: an unconfigured client already
-#                                         #   inherited httpx.Timeout(600,
-#                                         #   connect=5.0) from the openai SDK.
+#                                         #   OpenAI-API branch ONLY. A NEW
+#                                         #   ceiling: langchain-openai forwards
+#                                         #   request_timeout (default None),
+#                                         #   which overrides the openai SDK
+#                                         #   default, so the call was unbounded.
 #                                         #   Lowering it yields a silently empty
 #                                         #   retrieval — the retriever's except
 #                                         #   clause returns [] ahead of the
@@ -183,7 +186,7 @@ keycloak_ssl_skip_verify: ""
 #   model_rerank_timeout_seconds: 300     # TEI rerank — no fallback path, so a
 #                                         #   tighter budget turns slow successes
 #                                         #   into 500s on the chat request
-#   model_auth_timeout_seconds: 300     # dataprep's Keycloak service-account
+#   model_auth_timeout_seconds: 300    # dataprep's Keycloak service-account
 #                                         #   token fetch. NOT the control-plane
 #                                         #   30 s: every control-plane write waits
 #                                         #   on this token, one attempt, no retry,

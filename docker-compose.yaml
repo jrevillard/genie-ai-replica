@@ -1190,6 +1190,7 @@ services:
       # file labels), so bounding it costs quality, not work, and 180 s is the
       # deliberate default. No client in THIS image reads it yet -- dataprep's
       # SDK client is still unbounded and is the one gap left open.
+      # MODEL_LLM_MAX_RETRIES below is unread here for the same reason.
       MODEL_LLM_TIMEOUT_SECONDS: ${MODEL_LLM_TIMEOUT_SECONDS:-180}
       MODEL_LLM_MAX_RETRIES: ${MODEL_LLM_MAX_RETRIES:-2}
       # The service-account token fetch every control-plane write depends on.
@@ -1380,8 +1381,13 @@ services:
       MODEL_PROBE_TIMEOUT_SECONDS: ${MODEL_PROBE_TIMEOUT_SECONDS:-10}
       MODEL_LLM_MAX_RETRIES: ${MODEL_LLM_MAX_RETRIES:-2}
       MODEL_EMBEDDING_TIMEOUT_SECONDS: ${MODEL_EMBEDDING_TIMEOUT_SECONDS:-600}
-      # Deliberately 600, the openai default: the summarizer has no fallback
-      # path, so its ceiling is not tightened the way the LLM budgets are.
+      # 600 is a NEW ceiling, not the openai default kept — langchain-openai
+      # forwards request_timeout (default None), so this client was unbounded.
+      # Not tightened the way the LLM budgets are: the summarizer has no
+      # fallback path, so its timeout becomes a 500 on the chat request.
+      # MODEL_LLM_TIMEOUT_SECONDS above reaches only the API-key probe, which
+      # needs OPENAI_API_KEY — a variable this service is not given, so on
+      # every shipped topology that line is parsed and then unused here.
       MODEL_SUMMARIZER_TIMEOUT_SECONDS: ${MODEL_SUMMARIZER_TIMEOUT_SECONDS:-600}
     networks:
       - genieai_network

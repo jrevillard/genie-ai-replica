@@ -313,22 +313,30 @@ HUGGING_FACE_HUB_TOKEN=
 #                                 #   is the REMOTE-GPU topology, so on a remote
 #                                 #   deployment this knob does not reach it.
 #                                 #   HuggingFaceBgeEmbeddings is in-process.
-#                                 #   600 is NOT a cut: an unconfigured
-#                                 #   OpenAIEmbeddings already inherited
-#                                 #   httpx.Timeout(600, connect=5.0) from the
-#                                 #   openai SDK, so this records the value that
-#                                 #   was really in force. Lower it only knowing
-#                                 #   how this call fails: the retriever's except
-#                                 #   clause returns [] and that short-circuits
-#                                 #   ahead of the hybrid/BM25 leg, so too low a
-#                                 #   value yields a silently EMPTY retrieval,
-#                                 #   not a visible error.
+#                                 #   This call was UNBOUNDED before the knob
+#                                 #   existed: langchain-openai forwards
+#                                 #   request_timeout (default None) into the
+#                                 #   openai client, and an explicit None
+#                                 #   overrides the SDK default. So 600 is a
+#                                 #   new ceiling, not a restatement — there is
+#                                 #   no pre-existing floor to reason from.
+#                                 #   Lower it only knowing how this call fails:
+#                                 #   the retriever's except clause returns []
+#                                 #   and that short-circuits ahead of the
+#                                 #   hybrid/BM25 leg, so too low a value yields
+#                                 #   a silently EMPTY retrieval, not a visible
+#                                 #   error.
 # MODEL_SUMMARIZER_TIMEOUT_SECONDS=600 # The retriever's document summarizer.
 #                                 #   Deliberately NOT tightened to the LLM
 #                                 #   budget: its except clause re-raises
 #                                 #   anything but vLLM input overflow, so a
 #                                 #   timeout becomes a 500 on the chat request.
-#                                 #   600 s is the openai SDK default, kept.
+#                                 #   Also a new ceiling, not the SDK default
+#                                 #   kept — the client carried no timeout. 600
+#                                 #   matches the openai SDK's own default so a
+#                                 #   no-fallback call is as unlikely as
+#                                 #   possible to turn a working deployment
+#                                 #   into a failing one.
 # MODEL_PROBE_TIMEOUT_SECONDS=10     # The /v1/models probe behind the TTL-
 #                                 #   cached model-id lookup (retriever
 #                                 #   summarizer init, dataprep graph). It

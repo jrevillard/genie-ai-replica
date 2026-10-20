@@ -187,6 +187,13 @@ def non_negative_int_env(*names: str, default: int) -> int:
 # holds, healthy deployments keep their results and degraded ones fall back in
 # minutes instead of the ~90 min computed above. A deployment on a slower model
 # should raise it via MODEL_LLM_TIMEOUT_SECONDS, and the phase ceiling with it.
+#
+# Read this beside where the constant is CONSUMED, which is one place: the
+# retriever's OpenAI API-key probe, reachable only when OPENAI_API_KEY is set.
+# No service is given that variable in compose, so on every shipped topology
+# this knob is parsed, resolved and then unused. It is kept because dataprep's
+# own labelling client reads it (in the follow-on MR) and because that probe is
+# the one site that would consume it, once someone does inject the key.
 LLM_TIMEOUT_SECONDS = positive_float_env("MODEL_LLM_TIMEOUT_SECONDS", "VLLM_TIMEOUT", default=180.0)
 
 # openai-python retries twice by default: a 408/409/429/5xx response, a
@@ -232,12 +239,19 @@ PROBE_TIMEOUT_SECONDS = positive_float_env("MODEL_PROBE_TIMEOUT_SECONDS", defaul
 # else, so a timeout propagates out of retrieve() and the microservice maps it
 # to a 500 on the user's chat request.
 #
-# Its budget is therefore the openai default, 600 s, and is NOT lowered to
-# LLM_TIMEOUT_SECONDS — the exact defect round six found and fixed on the
-# reranker, which would have been repeated here. Shortening a no-fallback call
-# below the value the library already applies does not bound a stall, it
-# converts a slow-but-successful summarization into a visible error. The knob
-# exists so a deployment that wants a hard ceiling can set one deliberately.
+# Its budget is therefore 600 s, and is NOT lowered to LLM_TIMEOUT_SECONDS —
+# the exact defect round six found and fixed on the reranker, which would have
+# been repeated here. Shortening a no-fallback call converts a
+# slow-but-successful summarization into a visible error.
+#
+# 600 is a NEW bound, not the openai default kept: like the embedding client,
+# this ChatOpenAI was constructed without a timeout, so langchain-openai
+# forwarded request_timeout=None and the call was unbounded. The number is
+# chosen to match what a reader would assume the openai default to be
+# (DEFAULT_TIMEOUT is httpx.Timeout(600, connect=5.0)), because for a
+# no-fallback call that is the value least likely to convert a working
+# deployment into a failing one. The knob exists so a deployment that wants a
+# different ceiling sets one deliberately.
 SUMMARIZER_TIMEOUT_SECONDS = positive_float_env("MODEL_SUMMARIZER_TIMEOUT_SECONDS", default=600.0)
 
 # Embedding, on the retriever's OpenAI-compatible embedding client. Named for
@@ -260,16 +274,25 @@ SUMMARIZER_TIMEOUT_SECONDS = positive_float_env("MODEL_SUMMARIZER_TIMEOUT_SECOND
 # surfaces as one logger.error line and a silently empty answer.
 #
 # That makes it the same shape as the reranker, and it is budgeted on the same
-# terms: the openai default, which is what an unconfigured client already
-# applied. 600, not 120.
+# terms: 600, chosen because it clears a legitimately slow embedding call, and
+# not lowered by default because the failure mode above is the worst of the
+# three.
 #
-# An earlier revision of this comment said the client "was previously
-# unbounded". It was not: openai-python's DEFAULT_TIMEOUT is
-# httpx.Timeout(timeout=600, connect=5.0), so 120 was a 5x cut of an existing
-# budget whose failure mode is the silent empty answer described above — worse
-# than the summarizer's visible 500 that SUMMARIZER_TIMEOUT_SECONDS declines to
-# cut. The knob exists so a deployment that wants a hard ceiling sets one
-# deliberately; lowering the default converts slow successes into nothing.
+# This client WAS unbounded, and 600 is therefore a new bound rather than a
+# restatement of an existing one. An earlier revision of this comment claimed
+# otherwise — that openai-python's DEFAULT_TIMEOUT of httpx.Timeout(600,
+# connect=5.0) was already in force and 120 was a cut of it. It was not:
+# langchain-openai forwards `timeout=self.request_timeout` into openai.OpenAI,
+# `request_timeout` defaults to None, and an explicit None overrides the SDK
+# default. Verified on the pinned set (openai 1.109.1, langchain-openai 0.3.35):
+#
+#   >>> OpenAIEmbeddings(model="...", dimensions=1536, api_key="...").client
+#       ._client._client.timeout.as_dict()
+#   {'connect': None, 'read': None, 'write': None, 'pool': None}
+#
+# The practical consequence for an operator is that there is no pre-existing
+# floor to reason from: any value set here, above or below 600, is a new
+# ceiling on a call that previously had none.
 EMBEDDING_TIMEOUT_SECONDS = positive_float_env("MODEL_EMBEDDING_TIMEOUT_SECONDS", default=600.0)
 
 # TEI RERANK is budgeted separately and, at its default, no tighter than the
@@ -298,6 +321,22 @@ EMBEDDING_TIMEOUT_SECONDS = positive_float_env("MODEL_EMBEDDING_TIMEOUT_SECONDS"
 # labelling falls back to file labels, Contextual Retrieval to the raw chunk,
 # the control-plane calls to a logged failure.
 RERANK_TIMEOUT_SECONDS = positive_float_env("MODEL_RERANK_TIMEOUT_SECONDS", default=300.0)
+
+# aiohttp's connect ceiling, which an explicit ClientTimeout silently drops.
+#
+# aiohttp's DEFAULT_TIMEOUT is ClientTimeout(total=300, ..., sock_connect=30),
+# so a BARE ClientSession() gives up on an unreachable endpoint after 30 s.
+# Constructing `ClientTimeout(total=X)` instead leaves sock_connect=None, and
+# None is not "inherit" — it is no limit. So the two aiohttp sites this policy
+# moved off a bare session (the TEI rerank call and the Keycloak token fetch)
+# would have traded a 30 s connect give-up for an unbounded one: precisely the
+# failure this module exists to bound, introduced by the act of bounding it.
+#
+# `total` alone is not enough at those two sites, so they pass sock_connect
+# explicitly. The control-plane sessions are exempt: they already constructed an
+# explicit ClientTimeout(total=30) before this policy existed, so they never had
+# a ceiling to lose.
+AIOHTTP_CONNECT_TIMEOUT_SECONDS = 30.0
 
 # Control-plane calls (Keycloak token refresh, ingestion-log writes, doc status
 # updates, taxonomy fetch). These are in-cluster HTTP services with no model

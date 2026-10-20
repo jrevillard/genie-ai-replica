@@ -543,7 +543,7 @@ class GenieaiArangoRetriever(OpeaComponent):
                         timeout=http_timeout(SUMMARIZER_TIMEOUT_SECONDS),
                     )
                     self._llm_model_id = OPENAI_CHAT_MODEL
-                except openai.error.AuthenticationError:
+                except openai.AuthenticationError:
                     logger.error("OpenAI API Key is invalid.")
                 except Exception as e:
                     logger.error(f"An error occurred while verifying the API Key: {e}")

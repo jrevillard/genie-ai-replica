@@ -14,7 +14,7 @@ import time
 
 import aiohttp
 
-from core.model_http_policy import AUTH_TIMEOUT_SECONDS
+from core.model_http_policy import AIOHTTP_CONNECT_TIMEOUT_SECONDS, AUTH_TIMEOUT_SECONDS
 
 logger = logging.getLogger("GENIE_DATAPREP_SERVICE_ACCOUNT")
 
@@ -70,7 +70,10 @@ async def get_service_account_token() -> str:
                 # at what aiohttp applied and becomes adjustable instead of
                 # accidental.
                 aiohttp.ClientSession(
-                    connector=connector, timeout=aiohttp.ClientTimeout(total=AUTH_TIMEOUT_SECONDS)
+                    connector=connector,
+                    timeout=aiohttp.ClientTimeout(
+                        total=AUTH_TIMEOUT_SECONDS, sock_connect=AIOHTTP_CONNECT_TIMEOUT_SECONDS
+                    ),
                 ) as session,
                 session.post(token_url, data=payload) as response,
             ):

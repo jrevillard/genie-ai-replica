@@ -902,3 +902,113 @@ class TestCallSitesConsumeThePolicy:
             "MODEL_CONTROL_PLANE_TIMEOUT_SECONDS would change some call sites and not others, "
             "which is the deck-wide claim the docstring denies"
         )
+
+    @pytest.mark.parametrize(
+        ("rel", "expected"),
+        [
+            ("dataprep/genieai_dataprep_arangodb.py", "CONTROL_PLANE_TIMEOUT_SECONDS"),
+            ("chatqna/genieai_chatqna.py", "CONTROL_PLANE_TIMEOUT_SECONDS"),
+            ("dataprep/keycloak_service_account.py", "AUTH_TIMEOUT_SECONDS"),
+        ],
+    )
+    def test_a_module_cannot_borrow_the_other_module_budget(self, rel, expected):
+        """Each module's sessions sit on ONE knob, and the wrong one is a defect.
+
+        The literal check above accepts either constant in any of the four
+        modules, because a literal beside a knob that governs it is the failure
+        it hunts. That leniency is also a hole: aliasing
+        ``AUTH_TIMEOUT_SECONDS as CONTROL_PLANE_TIMEOUT_SECONDS`` in chatqna
+        passes it, and the operator then raises the control-plane knob and the
+        backend profile and doc-repo metadata calls on the chat path do not
+        move. Verified by mutation.
+
+        The retriever is absent on purpose — it builds no aiohttp session, and
+        its httpx clients are covered by the constructor-shape guards above.
+        """
+        text = (OVERLAY_ROOT / rel).read_text(encoding="utf-8")
+        other = (
+            "AUTH_TIMEOUT_SECONDS" if expected == "CONTROL_PLANE_TIMEOUT_SECONDS" else "CONTROL_PLANE_TIMEOUT_SECONDS"
+        )
+        tree = ast.parse(text)
+        # Resolve what each local name is actually bound to. Reading the call
+        # site alone is not enough — importing AUTH under the control-plane name
+        # leaves every `total=` expression spelling CONTROL_PLANE_..., so the
+        # alias is invisible until the import is followed. Verified by mutation:
+        # without this the aliased module passes.
+        bound = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module == "core.model_http_policy":
+                for alias in node.names:
+                    bound[alias.asname or alias.name] = alias.name
+        offenders = []
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call) and _called_name(node.func) == "ClientTimeout"):
+                continue
+            total = _kwarg(node, "total")
+            if total is None:
+                continue
+            names = {bound.get(n, n) for n in _source_names(total)}
+            if expected not in names or other in names:
+                offenders.append(f"{rel}:{node.lineno} total={ast.unparse(total)} binds {sorted(names)}")
+        assert not offenders, (
+            f"{rel} must build its aiohttp timeout from {expected} and never {other}; found {offenders}. "
+            f"Raising MODEL_{'AUTH' if expected == 'CONTROL_PLANE_TIMEOUT_SECONDS' else 'CONTROL_PLANE'}"
+            "_TIMEOUT_SECONDS has to move these calls and only these calls."
+        )
+
+    def test_chatqna_control_plane_sessions_are_bounded(self):
+        """Chatqna needs its own "is it bounded" test, which the other three have.
+
+        ``test_no_hardcoded_control_plane_timeout_is_left_behind`` fires when a
+        ``ClientTimeout`` is present with the WRONG value, so deleting the
+        timeout outright leaves it nothing to match — and chatqna was the only
+        one of the four modules without a companion test that catches that.
+        Verified by mutation: dropping both of chatqna's control-plane
+        timeouts leaves this suite green.
+        """
+        text = (OVERLAY_ROOT / "chatqna/genieai_chatqna.py").read_text(encoding="utf-8")
+        sessions = [
+            node
+            for node in ast.walk(ast.parse(text))
+            if isinstance(node, ast.Call) and _called_name(node.func) == "ClientSession"
+        ]
+        assert len(sessions) == 2, (
+            f"expected chatqna's two control-plane sessions, found {len(sessions)} — this guard "
+            "is pinned to a count and must be revisited rather than left silently covering nothing"
+        )
+        for call in sessions:
+            timeout = _kwarg(call, "timeout")
+            assert timeout is not None, (
+                f"{ast.unparse(call.func)} at line {call.lineno} has no timeout, so it inherits "
+                "aiohttp's 300 s — on the chat path, for the backend profile and doc-repo metadata"
+            )
+            assert _source_names(timeout) & {"CONTROL_PLANE_TIMEOUT_SECONDS", "_timeout"}, (
+                f"{ast.unparse(call.func)} at line {call.lineno} builds its timeout as {ast.unparse(timeout)}"
+            )
+
+    @pytest.mark.parametrize("rel", ["reranker/genieai_tei_reranker.py", "dataprep/keycloak_service_account.py"])
+    def test_an_aiohttp_budget_keeps_the_connect_ceiling(self, rel):
+        """``ClientTimeout(total=X)`` DROPS aiohttp's 30 s connect ceiling.
+
+        aiohttp's default is ``ClientTimeout(total=300, sock_connect=30)``, so a
+        bare session gives up on an unreachable endpoint after 30 s. Building an
+        explicit ``ClientTimeout`` instead leaves ``sock_connect=None``, and None
+        is no limit rather than "inherit" — so bounding these two calls the way
+        the policy does would have replaced a 30 s connect give-up with an
+        unbounded one. Verified on aiohttp 3.14.3.
+        """
+        text = (OVERLAY_ROOT / rel).read_text(encoding="utf-8")
+        checked = 0
+        for node in ast.walk(ast.parse(text)):
+            if not (isinstance(node, ast.Call) and _called_name(node.func) == "ClientTimeout"):
+                continue
+            checked += 1
+            sock = _kwarg(node, "sock_connect")
+            assert sock is not None, (
+                f"{rel}:{node.lineno} sets no sock_connect, so the connect phase is unbounded. "
+                "aiohttp treats an explicit ClientTimeout's None as no limit, not as its default"
+            )
+            assert "AIOHTTP_CONNECT_TIMEOUT_SECONDS" in _source_names(sock), (
+                f"{rel}:{node.lineno} hardcodes its connect ceiling as {ast.unparse(sock)}"
+            )
+        assert checked, f"{rel} builds no ClientTimeout — the guard is covering nothing"

@@ -260,18 +260,66 @@ const audit = () => {
         // sizing has to survive. Capture the open state as the default
         // and the collapsed states only at the desktop sizes — narrow
         // widths already pin the sidebar.
+        let openOverlayWidth = null;
+        let collapsedOverlayWidth = null;
         if (sidebar.collapsed) {
-          const buttons = await page.$$('.hamburger-btn, [aria-label*="sidebar" i][aria-label*="collapse" i]');
-          // Click the left-sidebar hamburger once, then the right sidebar's
-          // chevron if asked to collapse both.
-          if (buttons.length >= 1 && sidebar.collapsed !== 'both') {
-            await buttons[0].click();
+          // Snapshot the open width before any clicks so we can compare
+          // against it afterwards; a "collapsed" capture that did not
+          // collapse the sidebar would otherwise be misnamed and write
+          // the open state's geometry as evidence.
+          openOverlayWidth = await page.evaluate(
+            () => document.querySelector('.quick-help-overlay').getBoundingClientRect().width
+          );
+
+          // The actual toggle buttons: the navbar's hamburger
+          // (.hamburger-btn) and the right sidebar's chevron
+          // (.sidebar-toggle). The aria-label of the latter is just
+          // "Collapse" / "Réduire" in the user's locale — no "sidebar"
+          // word — so any aria-label pattern that demands the word
+          // "sidebar" alongside never matches it and the right panel
+          // never collapses. Use the class names directly.
+          const left = await page.$('.hamburger-btn');
+          const right = await page.$('.sidebar-toggle');
+          const wantBoth = sidebar.collapsed === 'both';
+          if (wantBoth && (!left || !right)) {
+            throw new Error(
+              `Capture wants ${sidebar.label} but the toggles are absent ` +
+                `(hamburger=${!!left}, sidebar-toggle=${!!right}). ` +
+                `Either the desktop layout has pinned the sidebar or the ` +
+                `selectors are stale; refusing to write a misnamed capture.`
+            );
+          }
+          if (!wantBoth && !left) {
+            throw new Error(
+              `Capture wants ${sidebar.label} but the left hamburger is absent; ` +
+                `refusing to write a misnamed capture.`
+            );
+          }
+          await left.click();
+          await page.waitForTimeout(400);
+          if (wantBoth) {
+            await right.click();
             await page.waitForTimeout(400);
-          } else if (buttons.length >= 2) {
-            await buttons[0].click();
-            await page.waitForTimeout(400);
-            await buttons[1].click();
-            await page.waitForTimeout(400);
+          }
+
+          // Verify the panel actually widened. The art's box tracks the
+          // overlay's width (the user explicitly rejected a centred box
+          // with gutters), so a state labelled "collapsed" that did not
+          // collapse the sidebar would still read the open width.
+          collapsedOverlayWidth = await page.evaluate(
+            () => document.querySelector('.quick-help-overlay').getBoundingClientRect().width
+          );
+          if (collapsedOverlayWidth <= openOverlayWidth + 1) {
+            const leftState = await page.evaluate(
+              () => document.querySelector('.sidebar:not(.collapsed)')?.classList.contains('sidebar') ?? null
+            );
+            throw new Error(
+              `Capture ${theme}-${viewport.label}-${sidebar.label}: ` +
+                `overlay did not widen (open=${openOverlayWidth}px, ` +
+                `collapsed=${collapsedOverlayWidth}px). A "collapsed" ` +
+                `capture whose geometry is the open state is evidence of ` +
+                `nothing — aborting the run.`
+            );
           }
         }
 

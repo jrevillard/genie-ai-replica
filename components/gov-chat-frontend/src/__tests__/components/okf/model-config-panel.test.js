@@ -63,7 +63,8 @@ function mountPanel() {
       },
       stubs: {
         DsButton: { template: '<button @click="$emit(\'click\')"><slot /></button>' },
-        DsPill: { props: ['label', 'variant'], template: '<span class="pill">{{ label }}</span>' }
+        DsPill: { props: ['label', 'variant'], template: '<span class="pill">{{ label }}</span>' },
+        DsInfoTip: { props: ['text', 'label'], template: '<span class="infotip" :title="text">ⓘ</span>' }
       }
     }
   });
@@ -155,6 +156,11 @@ describe('ModelConfigPanel', () => {
     expect(w.text()).toContain('Test Lab Pipelines');
     expect(w.text()).toContain('Data Prep Pipeline');
     expect(w.text()).toContain('Inference Pipeline');
+    // the verified-endpoint info tips ride the provider + base-URL fields
+    const titles = w.findAll('.infotip').map((t) => t.attributes('title') || '');
+    expect(titles.length).toBeGreaterThanOrEqual(2);
+    expect(titles.some((s) => s.includes('https://api.openai.com/v1'))).toBe(true);
+    expect(titles.some((s) => s.includes('+ /v1/models'))).toBe(true);
     // saving carries only live keys — a mock can never leak into the payload
     w.vm.form.services = ['ragas_answers'];
     w.vm.form.name = 'N2';

@@ -1504,6 +1504,12 @@ export default {
       mockChatServing: 'চ্যাট উত্তর',
       mockTranslation: 'চ্যাট অনুবাদ',
       svcOpenaiOnlyShort: 'শুধু OpenAI-সামঞ্জস্যপূর্ণ এন্ডপয়েন্ট',
+      providerTipOpenai:
+        'যাচাই করা OpenAI-সামঞ্জস্যপূর্ণ এন্ডপয়েন্ট: OpenAI https://api.openai.com/v1 · MiniMax https://api.minimax.io/v1 · z.ai https://api.z.ai/api/paas/v4 · LiteLLM গেটওয়ে http://your-gateway:4000/v1',
+      providerTipAnthropic:
+        'যাচাই করা Anthropic-নেটিভ এন্ডপয়েন্ট: Anthropic https://api.anthropic.com · MiniMax https://api.minimax.io/anthropic · z.ai https://api.z.ai/api/anthropic',
+      baseUrlTip:
+        'সার্ভার এই বেসে + /models (OpenAI-সামঞ্জস্যপূর্ণ) বা + /v1/models (Anthropic — শেষের /v1 স্বাভাবিক করা হয়) থেকে মডেল তালিকাভুক্ত করে, এবং Test connection + /chat/completions বা + /v1/messages-এ জেনারেট করে। চারটি স্ট্যান্ডার্ড পাথ 2026-10-20 তারিখে সরাসরি যাচাই করা হয়েছে।',
       save: 'পরিবর্তন সংরক্ষণ',
       create: 'তৈরি',
       cancel: 'বাতিল',

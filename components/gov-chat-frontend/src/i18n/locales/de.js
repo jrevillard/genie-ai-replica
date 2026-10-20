@@ -1516,6 +1516,12 @@ export default {
       mockChatServing: 'Chat-Beantwortung',
       mockTranslation: 'Chat-Übersetzung',
       svcOpenaiOnlyShort: 'Nur OpenAI-kompatible Endpunkte',
+      providerTipOpenai:
+        'Geprüfte OpenAI-kompatible Endpunkte: OpenAI https://api.openai.com/v1 · MiniMax https://api.minimax.io/v1 · z.ai https://api.z.ai/api/paas/v4 · ein LiteLLM-Gateway http://your-gateway:4000/v1',
+      providerTipAnthropic:
+        'Geprüfte Anthropic-native Endpunkte: Anthropic https://api.anthropic.com · MiniMax https://api.minimax.io/anthropic · z.ai https://api.z.ai/api/anthropic',
+      baseUrlTip:
+        'Der Server listet Modelle unter dieser Basis + /models (OpenAI-kompatibel) oder + /v1/models (Anthropic — ein abschließendes /v1 wird normalisiert); Test connection generiert unter + /chat/completions bzw. + /v1/messages. Alle vier Standardpfade am 2026-10-20 live geprüft.',
       save: 'Änderungen speichern',
       create: 'Anlegen',
       cancel: 'Abbrechen',

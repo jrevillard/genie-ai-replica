@@ -1516,6 +1516,12 @@ export default {
       mockChatServing: 'Karabo ya poledisano',
       mockTranslation: 'Phetolelo ya poledisano',
       svcOpenaiOnlyShort: 'E bang ba tsamaellanang le OpenAI feela',
+      providerTipOpenai:
+        'Methati e netefaditsweng e tsamaellanang le OpenAI: OpenAI https://api.openai.com/v1 · MiniMax https://api.minimax.io/v1 · z.ai https://api.z.ai/api/paas/v4 · gate ya LiteLLM http://your-gateway:4000/v1',
+      providerTipAnthropic:
+        'Methati ya kamehla ya Anthropic e netefaditsweng: Anthropic https://api.anthropic.com · MiniMax https://api.minimax.io/anthropic · z.ai https://api.z.ai/api/anthropic',
+      baseUrlTip:
+        'Seva e hlalosa mesebetsi ho motheo ona + /models (e tsamaellanang le OpenAI) kapa + /v1/models (Anthropic — /v1 ya qetela e lokiswa), mme Test connection e hlahisa ho + /chat/completions kapa + /v1/messages. Metso e mengata e ne e netefaditswe ka 2026-10-20.',
       save: 'Boloka diphetoho',
       create: 'Theha',
       cancel: 'Khansela',

@@ -1496,6 +1496,12 @@ export default {
       mockChatServing: 'การตอบแชท',
       mockTranslation: 'การแปลแชท',
       svcOpenaiOnlyShort: 'รองรับเฉพาะ endpoint ที่เข้ากันได้กับ OpenAI',
+      providerTipOpenai:
+        'endpoint ที่เข้ากันได้กับ OpenAI ซึ่งตรวจสอบแล้ว: OpenAI https://api.openai.com/v1 · MiniMax https://api.minimax.io/v1 · z.ai https://api.z.ai/api/paas/v4 · เกตเวย์ LiteLLM http://your-gateway:4000/v1',
+      providerTipAnthropic:
+        'endpoint แบบ Anthropic ดั้งเดิมที่ตรวจสอบแล้ว: Anthropic https://api.anthropic.com · MiniMax https://api.minimax.io/anthropic · z.ai https://api.z.ai/api/anthropic',
+      baseUrlTip:
+        'เซิร์ฟเวอร์แสดงรายการโมเดลที่เบสนี้ + /models (เข้ากันได้ OpenAI) หรือ + /v1/models (Anthropic — /v1 ท้ายถูกทำให้เป็นมาตรฐาน) และ Test connection สร้างที่ + /chat/completions หรือ + /v1/messages ตรวจสอบเส้นทางมาตรฐานทั้งสี่แบบสดวันที่ 2026-10-20',
       save: 'บันทึกการเปลี่ยนแปลง',
       create: 'สร้าง',
       cancel: 'ยกเลิก',

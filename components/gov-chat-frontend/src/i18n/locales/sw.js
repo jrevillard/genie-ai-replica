@@ -1503,6 +1503,12 @@ export default {
       mockChatServing: 'Kujibu kwa soga',
       mockTranslation: 'Tafsiri ya soga',
       svcOpenaiOnlyShort: 'Endpoints zinazolingana na OpenAI pekee',
+      providerTipOpenai:
+        'Endpoints zilizothibitishwa zinazolingana na OpenAI: OpenAI https://api.openai.com/v1 · MiniMax https://api.minimax.io/v1 · z.ai https://api.z.ai/api/paas/v4 · lango la LiteLLM http://your-gateway:4000/v1',
+      providerTipAnthropic:
+        'Endpoints asili za Anthropic zilizothibitishwa: Anthropic https://api.anthropic.com · MiniMax https://api.minimax.io/anthropic · z.ai https://api.z.ai/api/anthropic',
+      baseUrlTip:
+        'Server hoorodhesha modeli kwenye msingi huu + /models (inayolingana na OpenAI) au + /v1/models (Anthropic — /v1 ya mwisho inarekebishwa), na Test connection huzalisha kwa + /chat/completions au + /v1/messages. Njia zote nne za kawaida zilithibitishwa moja kwa moja tarehe 2026-10-20.',
       save: 'Hifadhi mabadiliko',
       create: 'Unda',
       cancel: 'Ghairi',

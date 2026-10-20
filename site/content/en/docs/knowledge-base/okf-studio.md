@@ -202,7 +202,10 @@ the configuration before you rely on it: it verifies the endpoint and
 credentials, and — when a model is selected — sends a one-token
 generation to that model, reporting latency and exactly which layer
 failed if anything does. Testing is always available; activating is a
-separate, explicit act.
+separate, explicit act. The Provider and Base URL fields carry **ⓘ
+info tips** with live-verified example endpoints (OpenAI, Anthropic,
+MiniMax, z.ai, LiteLLM) and the exact paths the server appends for
+listing and generation.
 
 Each configuration declares **which features use it**, grouped by
 pipeline. The **Test Lab Pipelines** group is live: **benchmarks** (the

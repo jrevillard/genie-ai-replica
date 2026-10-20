@@ -1510,6 +1510,12 @@ export default {
       mockChatServing: 'Penjawab chat',
       mockTranslation: 'Terjemahan chat',
       svcOpenaiOnlyShort: 'Hanya endpoint yang kompatibel dengan OpenAI',
+      providerTipOpenai:
+        'Endpoint terverifikasi yang kompatibel dengan OpenAI: OpenAI https://api.openai.com/v1 · MiniMax https://api.minimax.io/v1 · z.ai https://api.z.ai/api/paas/v4 · gateway LiteLLM http://your-gateway:4000/v1',
+      providerTipAnthropic:
+        'Endpoint native Anthropic terverifikasi: Anthropic https://api.anthropic.com · MiniMax https://api.minimax.io/anthropic · z.ai https://api.z.ai/api/anthropic',
+      baseUrlTip:
+        'Server mendaftarkan model pada basis ini + /models (kompatibel OpenAI) atau + /v1/models (Anthropic — trailing /v1 dinormalisasi), dan Test connection menghasilkan di + /chat/completions atau + /v1/messages. Keempat jalur standar diverifikasi langsung pada 2026-10-20.',
       save: 'Simpan perubahan',
       create: 'Buat',
       cancel: 'Batal',

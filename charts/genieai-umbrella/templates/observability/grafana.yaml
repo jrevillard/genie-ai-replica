@@ -11,10 +11,13 @@ enabled alongside it. */ -}}
   prerequisite — see charts/README.md.
 
   Reached through the edge at /grafana: gateway/httproute.yaml renders a
-  PathPrefix rule for it (before the SPA catch-all) pointing at the
-  grafana-operator-managed Service, which it names after the CR
-  ("grafana-genieai-grafana"). Same path the compose deployment serves
-  through Kong. CRD group: grafana.integreatly.org/v1beta1
+  PathPrefix rule for it (before the SPA catch-all) pointing at
+  "genieai-grafana" — the Service grafana-operator creates after the CR.
+  That name is the operator's convention, not a settable field
+  (spec.service.metadata only carries annotations/labels, so a name there
+  would be pruned); what the chart DOES pin is the Service port (80 →
+  targetPort 3000), which the route's backendRef depends on. Same path
+  the compose deployment serves through Kong. CRD group: grafana.integreatly.org/v1beta1
   (the bitnami v4.9.x chart ships this group; the upstream
   grafana-operator project also uses it).
 
@@ -54,14 +57,27 @@ metadata:
     # alert rules silently unimported.
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "grafana") | nindent 4 }}
 spec:
-  # Explicit Service name so gateway/httproute.yaml's /grafana backendRef
-  # is anchored to the CR rather than to the operator's naming default
-  # (which is the CR name today, but is a convention, not a contract).
+  # Service spec the operator MUST materialise for the edge route to
+  # resolve. Two contracts live here:
+  #   - the port: grafana-operator defaults the Service to Grafana's own
+  #     3000 (config.GrafanaHTTPPort), so a backendRef on 80 has no
+  #     matching ServicePort and every request 503s.
+  #   - the selector: pinning it makes the route's Service independent of
+  #     the operator's pod labels.
+  # spec.service.metadata.name is NOT in the CRD schema (annotations and
+  # labels only) — the apiserver prunes it silently, so the Service keeps
+  # the operator's default name (the CR name, "genieai-grafana").
   service:
-    metadata:
-      name: genieai-grafana
     spec:
       type: ClusterIP
+      selector:
+        app.kubernetes.io/name: grafana
+        app.kubernetes.io/instance: genieai-grafana
+      ports:
+        - name: http
+          port: 80
+          targetPort: 3000
+          protocol: TCP
   # Operator-managed admin credentials; values are not rendered —
   # the SealedSecret materializes a Secret named
   # "grafana-admin-credentials" with `user` and `password` keys.
@@ -78,10 +94,19 @@ spec:
   resources:
     {{- toYaml (.Values.observability.grafana.resources | default (dict "requests" (dict "cpu" "100m" "memory" "128Mi") "limits" (dict "cpu" "500m" "memory" "1Gi"))) | nindent 4 }}
   config:
-    # server: root_url is left empty; the operator injects the
-    # in-cluster Service URL and the ingress fronting it carries
-    # the public origin. The "GF_" prefixes follow the operator's
-    # env-var convention; config-as-yaml is a passthrough.
+    # The edge mounts this tier at /grafana (see gateway/httproute.yaml).
+    # root_url + serve_from_sub_path are what make that work: without
+    # them Grafana emits absolute asset URLs at the domain root
+    # (/public/*), which the SPA catch-all answers with index.html and
+    # the UI renders blank. Same shape the compose path gets from Kong's
+    # strip-prefix location.
+    server:
+      {{- if .Values.ingress.host }}
+      root_url: {{ printf "%s://%s/grafana" (.Values.ingress.scheme | default "https") .Values.ingress.host }}
+      {{- else }}
+      root_url: "%(protocol)s://%(domain)s:%(http_port)s/grafana"
+      {{- end }}
+      serve_from_sub_path: true
     log:
       mode: console
     security:
@@ -173,7 +198,12 @@ spec:
     name: VictoriaTraces
     type: jaeger
     access: proxy
-    url: http://vtsingle-vtraces.{{ .Values.namespace }}.svc.cluster.local:10428
+    # /select/jaeger is REQUIRED: Grafana's Jaeger datasource appends
+    # /api/* to this base, and VictoriaTraces serves the HTTP Jaeger API
+    # under the Victoria prefix (live: /api/services answers 400 without
+    # it, /select/jaeger/api/services answers 200). Same role tempo-proxy
+    # played in Swarm, which is why removing the proxy obliges this path.
+    url: http://vtsingle-vtraces.{{ .Values.namespace }}.svc.cluster.local:10428/select/jaeger
     uid: victoriatraces
     editable: false
 {{- end }}

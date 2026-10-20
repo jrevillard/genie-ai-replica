@@ -55,7 +55,10 @@ spec:
     # through different hostnames.
     strict: {{ .Values.data.keycloak.hostname.strict | default false }}
     {{- if .Values.ingress.host }}
-    hostname: {{ printf "%s://%s/auth" (.Values.ingress.scheme | default "https") .Values.ingress.host }}
+    # The issuer base, same string the backend's KEYCLOAK_EXPECTED_ISSUER
+    # and the realm's redirect URLs use: scheme + host + the context path
+    # (data.keycloak.httpRelativePath).
+    hostname: {{ include "genieai-umbrella.keycloakPublicIssuer" . }}
     {{- end }}
     # Backchannel URLs (JWKS, token, userinfo inside the discovery
     # document) keep deriving from the request host, so in-cluster

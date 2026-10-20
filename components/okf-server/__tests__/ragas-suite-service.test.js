@@ -151,12 +151,23 @@ beforeEach(() => {
       return { all: async () => ['GRAPH_AGRI'] };
     }
     if (aql.includes('_SOURCE')) {
-      return {
-        all: async () => [
-          { key: 'k1', text: 'Plant after the last frost date.', score: 0.9 },
-          { key: 'k2', text: 'Other chunk.', score: 0.4 }
-        ]
-      };
+      // The corpus builder's three query shapes: COUNT (budget check),
+      // keys-only (stride selection), and rows (the documents).
+      const corpus = __mockDb.__corpusRows || [
+        { key: 'k1', text: 'Plant after the last frost date.', score: 0.9 },
+        { key: 'k2', text: 'Other chunk.', score: 0.4 }
+      ];
+      if (aql.includes('COLLECT WITH COUNT')) {
+        return { all: async () => [corpus.length] };
+      }
+      if (/RETURN c\._key\s*$/.test(aql.trim())) {
+        return { all: async () => corpus.map((c) => c.key) };
+      }
+      if (aql.includes('c._key IN @keys')) {
+        const keys = (bind && bind.keys) || [];
+        return { all: async () => corpus.filter((c) => keys.includes(c.key)) };
+      }
+      return { all: async () => corpus };
     }
     if (aql.includes('REMOVE d IN')) {
       const removed = docs.filter((d) => d.repo_id === bind.rid && d.suite_key === bind.sk);
@@ -259,6 +270,35 @@ describe('beginSuiteGeneration / getSuite', () => {
     await begun.done;
     const doc = await svc.getSuite('me', begun.suite_key);
     expect(doc.repo_ids).toEqual(['me']);
+  });
+
+  it('caps the corpus with an EVEN SPREAD and records coverage (2026-10-21: never a silent slice)', async () => {
+    // David: "we have much larger corpuses to process than this". Over the
+    // chunk budget the builder strides the KEY SPACE (not first-N — the
+    // prefix benchmarked the oldest-ingested slice and called it a suite)
+    // and the suite doc records {total, used} per graph.
+    const prevCap = process.env.OKF_RAGAS_MAX_CORPUS_CHUNKS;
+    process.env.OKF_RAGAS_MAX_CORPUS_CHUNKS = '5';
+    __mockDb.__corpusRows = Array.from({ length: 20 }, (_, i) => ({
+      key: `k${String(i).padStart(2, '0')}`,
+      text: `chunk ${i} of the corpus`
+    }));
+    try {
+      const begun = await svc.beginSuiteGeneration('me', { testset_size: 1 }, {});
+      await begun.done;
+      const call = global.fetch.mock.calls.find((c) => String(c[0]).includes('/generate-testset'));
+      const sent = JSON.parse(call[1].body);
+      expect(sent.documents).toHaveLength(5); // the budget, not 20
+      // EVEN SPREAD: stride 4 over k00..k19 → k00, k04, k08, k12, k16 — the
+      // first-N prefix would have sent k00..k04.
+      expect(sent.documents.map((d) => d.metadata.chunk_key)).toEqual(['k00', 'k04', 'k08', 'k12', 'k16']);
+      const doc = await svc.getSuite('me', begun.suite_key);
+      expect(doc.payload.corpus_coverage).toEqual([{ repo_id: 'me', graph: 'GRAPH_AGRI', total: 20, used: 5 }]);
+    } finally {
+      if (prevCap === undefined) delete process.env.OKF_RAGAS_MAX_CORPUS_CHUNKS;
+      else process.env.OKF_RAGAS_MAX_CORPUS_CHUNKS = prevCap;
+      delete __mockDb.__corpusRows;
+    }
   });
 
   it('409 GENERATION_IN_FLIGHT with the adoptable key while one runs', async () => {

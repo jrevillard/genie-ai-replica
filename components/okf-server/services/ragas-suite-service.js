@@ -66,9 +66,12 @@ const MAX_ENTRIES = Math.max(1, parseInt(process.env.OKF_RAGAS_MAX_ENTRIES || '2
 const RUN_CONCURRENCY = Math.max(1, parseInt(process.env.OKF_RAGAS_RUN_CONCURRENCY || '2', 10));
 const CANDIDATE_K = Math.max(1, parseInt(process.env.OKF_RAGAS_CANDIDATE_K || '24', 10));
 const TOP_N = Math.max(1, parseInt(process.env.OKF_RAGAS_TOP_N || process.env.RERANKER_TOP_N || '3', 10));
-// Generation corpus cap in CHUNKS (the retrievable unit). Concepts average
-// 3-4 published chunks, so 1600 ≈ the 400-concept corpus this replaces.
-const MAX_CORPUS_CHUNKS = Math.max(1, parseInt(process.env.OKF_RAGAS_MAX_CORPUS_CHUNKS || '1600', 10));
+// Generation corpus budget in CHUNKS (the retrievable unit). Concepts
+// average 3-4 published chunks, so 1600 ≈ the 400-concept corpus this
+// replaces. Read per call — an operator can raise it for a big-corpus
+// deployment without a rebuild (David 2026-10-21: "we have much larger
+// corpuses to process than this").
+const maxCorpusChunks = () => Math.max(1, parseInt(process.env.OKF_RAGAS_MAX_CORPUS_CHUNKS || '1600', 10));
 const CONTEXT_CHARS = 2000; // per-context cap stored on run rows (xlsx uses answer_first_200 anyway)
 const CONCEPT_BODY_CAP = parseInt(process.env.OKF_MAX_CONCEPT_DOC_CHARS || '200000', 10);
 
@@ -545,26 +548,64 @@ function loadDoc(db, key, code, what) {
  * chunks and the stored references are those chunks — reference-based metrics
  * and the advisor's passage-containment evidence compare chunk-to-chunk.
  * Repos without a drained graph contribute nothing: their content is not
- * retrievable, so benchmarking it measured fantasy. */
+ * retrievable, so benchmarking it measured fantasy.
+ *
+ * 2026-10-21 (David: "we have much larger corpuses to process than this"):
+ * over the OKF_RAGAS_MAX_CORPUS_CHUNKS budget the selection is an EVEN SPREAD across
+ * the chunk-key space, not the first-N prefix — first-N benchmarks the
+ * oldest-ingested slice and calls it a suite (live: a capped run's node
+ * filter silently totalled exactly 1600 with no trace on the suite). The
+ * stride sample carries the whole corpus's character at the same cost, is
+ * deterministic and reproducible, and the truncation is RETURNED as
+ * coverage accounting ({total, used} per graph) for the suite doc to
+ * record — a capped corpus is a decision the suite must show, never a
+ * silent one. */
 async function buildCorpusDocuments(db, repoIds) {
   const docs = [];
+  const coverage = [];
   for (const rid of repoIds) {
     for (const g of await graphNamesFor(db, [rid])) {
-      const rows = await (
-        await db.query(
-          `FOR c IN \`${g}_SOURCE\` FILTER c.text != null SORT c._key LIMIT @lim ` +
-            'RETURN { key: c._key, text: c.text }',
-          { lim: MAX_CORPUS_CHUNKS }
-        )
+      const countRows = await (
+        await db.query(`FOR c IN \`${g}_SOURCE\` FILTER c.text != null COLLECT WITH COUNT INTO n RETURN n`)
       ).all();
+      const total = Number(countRows[0] || 0);
+      if (!total) continue;
+      let rows;
+      if (total <= maxCorpusChunks()) {
+        rows = await (
+          await db.query(
+            `FOR c IN \`${g}_SOURCE\` FILTER c.text != null SORT c._key LIMIT @lim ` +
+              'RETURN { key: c._key, text: c.text }',
+            { lim: maxCorpusChunks() }
+          )
+        ).all();
+      } else {
+        const keys = (
+          await (await db.query(`FOR c IN \`${g}_SOURCE\` FILTER c.text != null SORT c._key RETURN c._key`)).all()
+        ).map(String);
+        const stride = total / maxCorpusChunks();
+        const picked = [...new Set(Array.from({ length: maxCorpusChunks() }, (_, i) => keys[Math.floor(i * stride)]))];
+        rows = await (
+          await db.query(
+            `FOR c IN \`${g}_SOURCE\` FILTER c._key IN @keys SORT c._key RETURN { key: c._key, text: c.text }`,
+            { keys: picked }
+          )
+        ).all();
+      }
+      let used = 0;
       for (const r of rows) {
         const text = String(r.text || '').slice(0, CONCEPT_BODY_CAP);
         if (!text.trim()) continue;
         docs.push({ page_content: text, metadata: { repo_id: rid, graph: g, chunk_key: r.key } });
+        used += 1;
+      }
+      coverage.push({ repo_id: rid, graph: g, total, used });
+      if (used < total) {
+        logger.info('ragas-suite.corpus_capped', { repo_id: rid, graph: g, used, total });
       }
     }
   }
-  return docs;
+  return { docs, coverage };
 }
 
 async function graphNamesFor(db, repoIds) {
@@ -708,7 +749,7 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
     const db = await dbService.getConnection();
     await ensureCollection(db);
     const repoIds = payload.repo_ids || [repoId];
-    const docs = await buildCorpusDocuments(db, repoIds);
+    const { docs, coverage } = await buildCorpusDocuments(db, repoIds);
     if (!docs.length) {
       const err = new Error(
         'no published corpus chunks for the selected repositories — publish and let ingestion drain first'
@@ -806,6 +847,10 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
           query_distribution: payload.query_distribution || null,
           num_personas: payload.num_personas || 3
         },
+        // Coverage accounting: what slice of each repo's published corpus
+        // the suite is actually grounded in. Equal when under the budget;
+        // used < total means the corpus was capped — show it, never hide it.
+        corpus_coverage: coverage,
         metrics_config: [...DEFAULT_METRICS],
         entries
       }

@@ -132,7 +132,14 @@ which judge scored it.
   and question synthesis reports i/n as scenarios complete. A disk cache of
   judge responses makes **repeat** generations of the same repositories
   nearly instant (the knowledge-graph phase is skipped; disable with
-  `RAGAS_LLM_CACHE=0`).
+  `RAGAS_LLM_CACHE=0`). The generation corpus is bounded by a chunk budget
+  (`OKF_RAGAS_MAX_CORPUS_CHUNKS`, default 1600 — the knowledge-graph build
+  is per-node model work, so an unbounded corpus means an unbounded bill).
+  Over the budget the selection is an **even spread across the whole
+  corpus**, not a first-come prefix, and the suite records what it is
+  grounded in: a capped suite shows *"grounded in 1600 of 5590 chunks"* on
+  its header — the benchmark's coverage is a visible property of the suite,
+  never a silent slice.
 - **Manage** entries with full parity to the other suites: edit the question
   or expected answer, flip an entry in-scope/out-of-scope, remove it, add
   your own, rename the suite, delete it, and probe a single entry against

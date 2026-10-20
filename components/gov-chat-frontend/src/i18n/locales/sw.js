@@ -3128,6 +3128,10 @@ export default {
       }
     },
     ragas: {
+      corpus: {
+        capped: 'Imeingizwa kwenye {parts} (bajeti ya makusanyo)',
+        part: '{used} kati ya {total} vipande'
+      },
       gen: {
         eta: '~{t} zimebaki',
         elapsed: 'inaendelea {t}',

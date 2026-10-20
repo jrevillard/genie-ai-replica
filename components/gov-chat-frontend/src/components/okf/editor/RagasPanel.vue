@@ -190,6 +190,10 @@
         <span v-if="suite.payload && suite.payload.generator" class="okf-ragas__muted">{{
           suite.payload.generator
         }}</span>
+        <!-- Coverage honesty (2026-10-21): a corpus capped by the chunk
+             budget is a property of the SUITE, shown where the suite lives —
+             "grounded in 1600 of 5590 chunks" — never a silent slice. -->
+        <span v-if="corpusCoverageNote" class="okf-ragas__muted">{{ corpusCoverageNote }}</span>
       </div>
 
       <!-- metrics selection -->
@@ -793,6 +797,23 @@ export default {
       if (!p || !p.phase) return '';
       const phase = this.translate(`okf.ragas.run.phase.${p.phase}`, p.phase);
       return p.total ? `${phase} ${p.done}/${p.total}` : phase;
+    },
+    /** Coverage note for a corpus-capped suite: "grounded in 1600 of 5590
+     * chunks" per capped repo (2026-10-21 — a capped corpus is shown, never
+     * silently sliced). Empty when every repo fit the budget. */
+    corpusCoverageNote() {
+      const cov = this.suite && this.suite.payload && this.suite.payload.corpus_coverage;
+      if (!Array.isArray(cov)) return '';
+      const capped = cov.filter((c) => c && Number(c.total) > Number(c.used));
+      if (!capped.length) return '';
+      const parts = capped
+        .map((c) =>
+          this.translate('okf.ragas.corpus.part', '{used} of {total} chunks')
+            .replace('{used}', String(c.used))
+            .replace('{total}', String(c.total))
+        )
+        .join(', ');
+      return this.translate('okf.ragas.corpus.capped', 'Grounded in {parts} (corpus budget)').replace('{parts}', parts);
     },
     /** The sub-step line: active transform + counts + ETA + elapsed
      * (David 2026-10-20: "the user needs more feedback than this" — a

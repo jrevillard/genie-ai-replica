@@ -3145,6 +3145,10 @@ export default {
       }
     },
     ragas: {
+      corpus: {
+        capped: 'Fundado em {parts} (orçamento de corpus)',
+        part: '{used} de {total} fragmentos'
+      },
       gen: {
         eta: 'faltam ~{t}',
         elapsed: 'a decorrer há {t}',

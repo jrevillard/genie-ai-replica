@@ -3154,6 +3154,10 @@ export default {
       }
     },
     ragas: {
+      corpus: {
+        capped: 'Fondé sur {parts} (budget de corpus)',
+        part: '{used} sur {total} segments'
+      },
       gen: {
         eta: '~{t} restantes',
         elapsed: 'en cours depuis {t}',

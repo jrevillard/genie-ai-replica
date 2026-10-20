@@ -3126,6 +3126,10 @@ export default {
       }
     },
     ragas: {
+      corpus: {
+        capped: '{parts} থেকে গঠিত (কর্পাস বাজেট)',
+        part: '{total}-এর মধ্যে {used} খণ্ড'
+      },
       gen: {
         eta: '~{t} বাকি',
         elapsed: '{t} ধরে চলছে',

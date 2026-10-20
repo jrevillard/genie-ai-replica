@@ -227,6 +227,25 @@ describe('RagasPanel', () => {
     );
   });
 
+  it('shows the corpus coverage note when the suite is capped, nothing when the corpus fit', async () => {
+    // 2026-10-21: a corpus capped by the chunk budget is a property of the
+    // SUITE — shown in the header, never a silent slice.
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    const base = suiteFixture();
+    w.vm.suite = {
+      ...base,
+      payload: { ...base.payload, corpus_coverage: [{ repo_id: 'me', graph: 'G', total: 5590, used: 1600 }] }
+    };
+    expect(w.vm.corpusCoverageNote).toContain('1600');
+    expect(w.vm.corpusCoverageNote).toContain('5590');
+    w.vm.suite = {
+      ...base,
+      payload: { ...base.payload, corpus_coverage: [{ repo_id: 'me', graph: 'G', total: 100, used: 100 }] }
+    };
+    expect(w.vm.corpusCoverageNote).toBe('');
+  });
+
   it('renders the generation sub-step line: active transform, ETA, elapsed (2026-10-20)', async () => {
     // David: "the progress bar keeps flashing by without any sense of what
     // is happening or how long it is going to take" — the KG phase now

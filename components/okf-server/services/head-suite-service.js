@@ -920,9 +920,16 @@ async function updateSuiteRows(repoId, suiteKey, payload = {}, opts = {}) {
     const removes = Array.isArray(payload.removes) ? payload.removes : [];
     const validRow = (q) =>
       q && typeof q.query === 'string' && q.query.trim() && (q.kind === 'positive' || q.kind === 'negative');
+    // A REMOVE may target a BLANK row. Every writer today rejects blank
+    // queries, but legacy suites predate that guard and hold one — a
+    // delete gated by validRow write-locks the junk into the suite
+    // forever (live 2026-10-20: removing a blank query 400'd). Only the
+    // kind must be valid; a blank can never be added or flipped, but it
+    // MUST be deletable.
+    const validRemove = (r) => r && typeof r.query === 'string' && (r.kind === 'positive' || r.kind === 'negative');
     const validUpdate = (u) =>
       u && validRow(u.match) && u.set && (u.set.kind === 'positive' || u.set.kind === 'negative');
-    if (!updates.filter(validUpdate).length && !removes.filter(validRow).length) {
+    if (!updates.filter(validUpdate).length && !removes.filter(validRemove).length) {
       const err = new Error('updates[] ({match:{query,kind}, set:{kind}}) and/or removes[] ({query, kind}) required');
       err.code = 'VALIDATION_ERROR';
       err.status = 400;
@@ -960,10 +967,16 @@ async function updateSuiteRows(repoId, suiteKey, payload = {}, opts = {}) {
     //    represents the TEXT (a pre-1-8g-h suite can hold it 3×; deleting
     //    one and leaving the twins re-triggered the duplicate guard on the
     //    next save and write-locked the suite).
-    for (const r of removes.filter(validRow)) {
+    for (const r of removes.filter(validRemove)) {
       let matches = [];
+      // Trim BOTH sides of the match: a legacy blank row may be stored as
+      // '' or as whitespace — exact-match against the trimmed request
+      // misses the whitespace form and leaves it undeletable too. Writers
+      // always trim, so this loosens nothing for real rows.
       for (const arr of [pos, neg]) {
-        matches = matches.concat(arr.filter((row) => row.query === r.query.trim() && row.kind === r.kind));
+        matches = matches.concat(
+          arr.filter((row) => String(row.query || '').trim() === r.query.trim() && row.kind === r.kind)
+        );
       }
       for (const arr of [pos, neg]) {
         for (const m of matches) {

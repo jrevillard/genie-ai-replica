@@ -1301,6 +1301,27 @@ describe('getSuite + updateSuiteRows (1-8f)', () => {
     expect(flipped).toMatchObject({ kind: 'negative', cls: null, source: 'manual' });
   });
 
+  it('updateSuiteRows can DELETE a blank row — legacy junk is not write-locked', async () => {
+    // Live 2026-10-20: removing a blank query 400'd. validRow (blank =
+    // invalid) gated removes[] too, so a blank row in a legacy suite
+    // could never pass the validation guarding its own deletion. Blank
+    // junk may be stored as '' OR whitespace — both must be deletable.
+    const suite = await seedRows();
+    suite.payload.positive.push({ query: '', kind: 'positive', cls: null, source: 'llm' });
+    suite.payload.negative.push({ query: '   ', kind: 'negative', cls: null, source: 'llm' });
+    __mockDb.collection('okf_head_test_runs').replace(suite._key, suite);
+    const out = await svc.updateSuiteRows('me', suite._key, {
+      removes: [
+        { query: '', kind: 'positive' },
+        { query: '   ', kind: 'negative' }
+      ]
+    });
+    expect(out.payload.positive.every((r) => r.query.trim())).toBe(true);
+    expect(out.payload.negative.every((r) => r.query.trim())).toBe(true);
+    expect(out.payload.positive).toHaveLength(2);
+    expect(out.payload.negative).toHaveLength(2);
+  });
+
   it('updateSuiteRows removes rows cleanly and RESOLVES the ambiguous shared-text flip (1-8g-p)', async () => {
     const suite = await seedRows();
     // Removing the insurance near-miss is fine.

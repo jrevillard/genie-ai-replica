@@ -2,15 +2,25 @@
 {{- $ns := .Values.namespace -}}
 {{- $arangoHost := include "genieai-umbrella.arangoHost" . -}}
 {{- $backendVals := deepCopy .Values -}}
-{{- /* Remote translation API (OpenAI-compatible vLLM). The endpoint
-defaults to the in-cluster vllm-translation model Service when the OPEA
-tier runs in-cluster GPU mode; an explicit value (external GPU node URL)
-wins. Unset everywhere, the backend's auto mode probes its own
-compose-era default, finds nothing, and falls back to an in-process CPU
-model (~6 Gi and a core of steady inference). */ -}}
+{{- /* Remote translation API (OpenAI-compatible vLLM). An explicit
+value wins. Otherwise the endpoint derives from the OPEA tier the same
+way the other five orchestrators derive theirs, through
+genieai-umbrella.opeaGpuEndpoint: the in-cluster model Service in
+in-cluster GPU mode, `opea.gpu.nodeHost + opea.gpu.paths.translation` in
+external mode.
+
+Deriving it matters: unset, the backend's auto mode probes its own
+compose-era default, finds nothing, and silently falls back to an
+in-process CPU model — Xenova/nllb-200-distilled-600M, ~6 Gi at ONNX
+load and a core of steady inference. On a node near its memory limit
+that is not a degradation, it is an OOM kill of the backend (observed on
+the laptop: exit 137, and the node dying with it). In external mode the
+helper also fails the render when `opea.gpu.nodeHost` is empty, so the
+misconfiguration is named at install time instead of surfacing as a
+missing translation endpoint at the first user request. */ -}}
 {{- $translationEndpoint := .Values.services.backend.translation.endpoint -}}
-{{- if and (not $translationEndpoint) .Values.opea.enabled (eq .Values.opea.gpu.mode "in-cluster") -}}
-{{- $translationEndpoint = printf "http://vllm-translation.%s.svc.cluster.local:9031" .Values.namespace -}}
+{{- if and (not $translationEndpoint) .Values.opea.enabled -}}
+{{- $translationEndpoint = include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "translation") -}}
 {{- end -}}
 {{- $translationEnv := list -}}
 {{- $translationSecrets := list -}}

@@ -32,6 +32,16 @@ spec:
     # SDKs dial the gateway at 4318 (HTTP) and 4317 (gRPC); the
     # filelog agent dials 4318 from the same namespace too.
     #
+    # `podSelector: {}` is DELIBERATE and is the one place in this chart
+    # where a policy is not default-deny: it is the OTLP intake, and the
+    # set of instrumented workloads is whatever the release happens to
+    # run — the collector cannot enumerate its own clients, and a
+    # component list here would silently drop telemetry the moment a
+    # service is added. The trade-off is explicit: any pod in this
+    # namespace can push arbitrary metrics, logs or traces into the
+    # collector. That is the same trust boundary as the metrics
+    # ingress, and it is why the gateway's own egress stays restrictive.
+    #
     # The kubelet probe on the health extension (13133) is NOT listed:
     # it originates from the node, which no peer selector can name, so
     # it rides the CNI's host-to-pod default. A CNI that denies that

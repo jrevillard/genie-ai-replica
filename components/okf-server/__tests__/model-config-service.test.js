@@ -289,13 +289,14 @@ describe('preview listing (unsaved credentials — the create-form dropdown)', (
 });
 
 describe('connection test (before enabling)', () => {
-  test('happy path: endpoint proven, model listed, one-token generation ping OK', async () => {
+  // 2026-10-20 (David: "just ping the model not list") — the test is ONE
+  // one-token generation over the provider's native wire. The old layer-1
+  // model listing hard-failed providers that generate perfectly but serve
+  // no list (live: DeepSeek's Anthropic surface — messages 200, models 404).
+  test('happy path: a single generation ping — no listing call at all', async () => {
     const calls = [];
     global.fetch = jest.fn(async (url, opts) => {
       calls.push({ url, opts });
-      if (url.endsWith('/models')) {
-        return { ok: true, json: async () => ({ data: [{ id: 'gpt-x' }] }) };
-      }
       expect(url).toBe('https://gw:4000/v1/chat/completions');
       expect(opts.method).toBe('POST');
       expect(opts.headers.Authorization).toBe('Bearer kt');
@@ -308,9 +309,27 @@ describe('connection test (before enabling)', () => {
       api_key: 'kt',
       model: 'gpt-x'
     });
-    expect(r).toMatchObject({ ok: true, endpoint_ok: true, model_listed: true, generation_ok: true, models_n: 1 });
+    expect(r).toMatchObject({ ok: true, endpoint_ok: true, model_listed: null, generation_ok: true, models_n: null });
     expect(typeof r.latency_ms).toBe('number');
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(1);
+  });
+
+  test('the DeepSeek live shape: messages 200 while a listing would 404 — the test never lists, so it passes', async () => {
+    global.fetch = jest.fn(async (url) => {
+      // Any listing attempt would answer 404 on this provider's anthropic
+      // surface; if the test still listed, this mock makes it fail loudly.
+      if (url.endsWith('/models')) return { ok: false, status: 404, text: async () => 'not found' };
+      expect(url).toBe('https://api.deepseek.com/anthropic/v1/messages');
+      return { ok: true, json: async () => ({ content: [{ type: 'text', text: 'p' }] }) };
+    });
+    const r = await svc.testConnection({
+      provider: 'anthropic',
+      base_url: 'https://api.deepseek.com/anthropic',
+      api_key: 'k',
+      model: 'deepseek-v4-pro'
+    });
+    expect(r).toMatchObject({ ok: true, endpoint_ok: true, generation_ok: true });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
   test('anthropic ping goes to /v1/messages with x-api-key; typed creds can override a saved key', async () => {
@@ -327,37 +346,37 @@ describe('connection test (before enabling)', () => {
     const calls = [];
     global.fetch = jest.fn(async (url, opts) => {
       calls.push(url);
-      if (url.endsWith('/models')) return { ok: true, json: async () => ({ data: [{ id: 'claude-x' }] }) };
       expect(url).toBe('https://api.anthropic.com/v1/messages');
       expect(opts.headers['x-api-key']).toBe('sk-ant-new'); // typed key wins over stored
       return { ok: true, json: async () => ({ content: [] }) };
     });
     const r = await svc.testConnection({ key: c._key, api_key: 'sk-ant-new' });
     expect(r).toMatchObject({ ok: true, generation_ok: true, model: 'claude-x' }); // model fell back to default_model
-    expect(calls).toEqual(['https://api.anthropic.com/v1/models', 'https://api.anthropic.com/v1/messages']);
+    expect(calls).toEqual(['https://api.anthropic.com/v1/messages']);
   });
 
-  test('endpoint unreachable: diagnostic payload, NOT a throw — ok false, error set, downstream layers null', async () => {
+  test('transport failure: diagnostic payload, NOT a throw — ok false, endpoint NOT reached', async () => {
+    global.fetch = jest.fn(async () => {
+      throw new Error('ECONNREFUSED nope');
+    });
+    const r = await svc.testConnection({ provider: 'openai', base_url: 'https://x/v1', api_key: 'k', model: 'm' });
+    expect(r).toMatchObject({ ok: false, endpoint_ok: false, generation_ok: false });
+    expect(r.error).toContain('could not reach');
+  });
+
+  test('an HTTP answer (401) proves the endpoint was REACHED — the error says creds, not transport', async () => {
     global.fetch = jest.fn(async () => ({ ok: false, status: 401, text: async () => 'bad key' }));
     const r = await svc.testConnection({ provider: 'openai', base_url: 'https://x/v1', api_key: 'k', model: 'm' });
-    expect(r).toMatchObject({ ok: false, endpoint_ok: false, generation_ok: null, model_listed: null });
+    expect(r).toMatchObject({ ok: false, endpoint_ok: true, generation_ok: false });
     expect(r.error).toContain('401');
   });
 
-  test('model missing from the list still attempts the generation (gateways alias names) and reports both', async () => {
-    global.fetch = jest.fn(async (url) => {
-      if (url.endsWith('/models')) return { ok: true, json: async () => ({ data: [{ id: 'other' }] }) };
-      return { ok: false, status: 404, text: async () => 'model not found' };
-    });
-    const r = await svc.testConnection({ provider: 'openai', base_url: 'https://x/v1', api_key: 'k', model: 'ghost' });
-    expect(r).toMatchObject({ ok: false, endpoint_ok: true, model_listed: false, generation_ok: false });
-    expect(r.error).toContain('404');
-  });
-
-  test('no model selected: endpoint + credentials proven, generation skipped (null)', async () => {
-    global.fetch = jest.fn(async () => ({ ok: true, json: async () => ({ data: [{ id: 'm' }] }) }));
+  test('no model selected: nothing to test — honest error, no network call', async () => {
+    global.fetch = jest.fn();
     const r = await svc.testConnection({ provider: 'openai', base_url: 'https://x/v1', api_key: 'k' });
-    expect(r).toMatchObject({ ok: true, endpoint_ok: true, generation_ok: null, model: null });
+    expect(r).toMatchObject({ ok: false, endpoint_ok: null, generation_ok: null, model: null });
+    expect(r.error).toMatch(/no model to test/);
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   test('shape errors still throw 400', async () => {

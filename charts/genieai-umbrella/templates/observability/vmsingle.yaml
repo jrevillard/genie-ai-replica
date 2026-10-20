@@ -19,6 +19,15 @@ metadata:
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
 spec:
+  # ingestOnlyMode is a *bool with no kubebuilder default, so the operator
+  # dereferences nil to TRUE and skips the entire scrape-config builder
+  # (createOrUpdateScrapeConfig returns before it reads any selector).
+  # The symptom is invisible: VMServiceScrape CRs still report
+  # `status.updateStatus: operational` — that only proves the CR is
+  # valid — while VMSingle reports zero targets and zero series. Setting
+  # it false is what lets the operator generate its self-scrape, so the
+  # stack's own VictoriaMetrics dashboard has data.
+  ingestOnlyMode: false
   retentionPeriod: {{ .Values.observability.metrics.retentionPeriod | quote }}
   removePvcAfterDelete: false
   storage:

@@ -57,13 +57,20 @@ spec:
         # PathPrefix "/api/" does not match the bare "/api" (the prefix
         # includes the slash) — real flows always carry subpaths, but the
         # bare form gets the same backend instead of falling through to
-        # the SPA catch-all.
+        # the SPA catch-all. Exact (not PathPrefix) on the bare forms: a
+        # PathPrefix "/api" would also swallow "/apifoo".
         - path:
             type: PathPrefix
             value: /api/
         - path:
-            type: PathPrefix
+            type: Exact
             value: /api
+        # swagger-ui is served at the bare "/api-docs"; "/api-docs/" (the
+        # redirect target) must land on the backend too, not on the SPA
+        # catch-all.
+        - path:
+            type: Exact
+            value: /api-docs
         - path:
             type: PathPrefix
             value: /api-docs/
@@ -88,7 +95,7 @@ spec:
             type: PathPrefix
             value: {{ include "genieai-umbrella.keycloakContextPath" . }}/
         - path:
-            type: PathPrefix
+            type: Exact
             value: {{ include "genieai-umbrella.keycloakContextPath" . }}
       filters:
         - type: RequestHeaderModifier

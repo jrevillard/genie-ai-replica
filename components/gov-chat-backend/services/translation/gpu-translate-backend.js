@@ -5,6 +5,12 @@ const https = require('https');
 // API key for remote GPU node authentication (standard OpenAI Bearer token)
 const VLLM_API_KEY = process.env.VLLM_API_KEY || '';
 
+// Smallest output budget worth asking for. Below this a reply cannot hold a
+// sentence, and a caller that gets one has no way to tell it apart from a real
+// translation — so a prompt that cannot leave this much room is refused rather
+// than sent with a token or two.
+const MIN_OUTPUT_BUDGET = 256;
+
 /**
  * GPU Translation Backend
  *
@@ -303,7 +309,7 @@ class GpuTranslateBackend {
    *
    * @param {Object} requestBody - OpenAI-compatible request body; mutated
    * @returns {Object} the same body, with `max_tokens` capped
-   * @throws {Error} if the prompt alone does not fit the context window
+   * @throws {Error} if the prompt leaves too little of the window to translate
    */
   _capMaxTokens(requestBody) {
     if (!Array.isArray(requestBody.messages)) {
@@ -311,10 +317,12 @@ class GpuTranslateBackend {
     }
     const inputTokens = Math.ceil(JSON.stringify(requestBody.messages).length / 4);
     const room = this.maxModelLen - inputTokens - 128;
-    if (room <= 0) {
-      throw new Error(
-        `Prompt alone (~${inputTokens} tokens) does not fit the ${this.maxModelLen}-token context window`
-      );
+    if (room < MIN_OUTPUT_BUDGET) {
+      // A budget this small would earn a reply of a few tokens, which the
+      // markdown path would substitute for the whole paragraph. Refuse instead:
+      // an oversized prompt is the caller's to split, and in `auto` mode the
+      // refusal routes to the CPU backend.
+      throw new Error(`Prompt leaves ${room} of ${this.maxModelLen} tokens, too little for a translation`);
     }
     const needed = 4 * inputTokens + 256;
     requestBody.max_tokens = Math.min(requestBody.max_tokens ?? room, room, needed);
@@ -436,7 +444,15 @@ class GpuTranslateBackend {
                 return;
               }
 
-              resolve(choice && choice.message.content ? choice.message.content.trim() : '');
+              const content = choice && choice.message ? choice.message.content : undefined;
+              if (typeof content !== 'string') {
+                // A choice with no content (null, or a tool-call shape) is not a
+                // translation. Resolving it as an empty string would blank the
+                // paragraph; rejecting routes it to the CPU backend instead.
+                reject(new Error('vLLM returned a choice with no message content'));
+                return;
+              }
+              resolve(content.trim());
             } else {
               logger.error(`[GPU-BACKEND] vLLM service returned status ${res.statusCode}: ${data}`);
               reject(new Error(`vLLM service error: ${res.statusCode}`));

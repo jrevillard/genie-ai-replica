@@ -183,11 +183,25 @@ describe('GpuTranslateBackend streaming', () => {
       expect(body.max_tokens).toBeLessThan(capped.maxModelLen / 2);
     });
 
-    it('refuses a prompt that does not fit the window at all', () => {
+    it('refuses a prompt that cannot leave room for a translation', () => {
       // Sending this with a minimal budget would earn a 200 with a near-empty
       // translation, which the markdown path would substitute for the paragraph.
       // Refusing it here routes the request to the CPU backend instead.
-      expect(() => capped.formatRequest('google/gemma-3-4b-it', 'en', 'fr', 'x'.repeat(40000))).toThrow(/does not fit/);
+      expect(() => capped.formatRequest('google/gemma-3-4b-it', 'en', 'fr', 'x'.repeat(40000))).toThrow(
+        /too little for a translation/
+      );
+    });
+
+    it('refuses when the discovered window was too small to leave room', () => {
+      // The 4096 default stays in place when /v1/models cannot be read. A prompt
+      // that nearly fills it leaves a handful of tokens — enough to pass a
+      // "does it fit at all" check, not enough to translate with.
+      const stale = new GpuTranslateBackend();
+      stale.initialized = true;
+      stale.maxModelLen = 4096;
+      expect(() => stale.formatRequest('google/gemma-3-4b-it', 'en', 'fr', 'x'.repeat(15900))).toThrow(
+        /too little for a translation/
+      );
     });
 
     it('refuses to size a budget for a body with no messages', () => {
@@ -229,6 +243,15 @@ describe('GpuTranslateBackend streaming', () => {
       await expect(
         backend.callVllmService({ model: 'm', messages: [{ role: 'user', content: 'hi' }] })
       ).rejects.toThrow(/truncated/);
+    });
+
+    it('rejects a choice carrying no content', async () => {
+      // Resolving this as an empty string would blank the paragraph: the
+      // markdown path substitutes whatever came back for the node's core.
+      serveBody({ choices: [{ finish_reason: 'content_filter', message: { content: null } }] });
+      await expect(
+        backend.callVllmService({ model: 'm', messages: [{ role: 'user', content: 'hi' }] })
+      ).rejects.toThrow(/no message content/);
     });
 
     it('resolves a completed non-streaming translation', async () => {

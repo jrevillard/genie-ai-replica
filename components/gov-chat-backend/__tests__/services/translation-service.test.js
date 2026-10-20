@@ -231,6 +231,28 @@ describe('TranslationService', () => {
       expect(result).toEqual(['translated text']);
     });
 
+    it('builds the CPU fallback once and reuses it across failures', async () => {
+      // Every CPU backend instance spawns a worker thread and loads the NLLB
+      // model, and nothing terminates it — one per failed request leaks one.
+      setEnv('TRANSLATION_BACKEND', 'auto');
+      jest.isolateModules(() => {
+        translationService = require('../../services/translation-service');
+      });
+      translationService.initialized = true;
+      translationService.backendType = 'gpu';
+
+      const badGpu = new GpuTranslateBackend();
+      badGpu.translate.mockRejectedValue(new Error('GPU OOM'));
+      translationService.backend = badGpu;
+
+      const before = CpuTranslateBackend.mock.calls.length;
+      await translationService.translate(['hello'], 'en', 'fr');
+      await translationService.translate(['bonjour'], 'en', 'fr');
+      await translationService.translate(['hola'], 'en', 'fr');
+
+      expect(CpuTranslateBackend.mock.calls.length - before).toBe(1);
+    });
+
     it('should throw when both backends fail', async () => {
       setEnv('TRANSLATION_BACKEND', 'auto');
       jest.isolateModules(() => {

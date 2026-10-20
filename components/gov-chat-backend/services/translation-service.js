@@ -38,6 +38,7 @@ class TranslationService {
     this.visit = null;
     this.initialized = false;
     this.cacheClient = null; // For Redis client
+    this.cpuFallbackBackend = null; // Built on first GPU failure, reused afterwards
     this.inFlightTranslations = new Map(); // Track in-progress translations: key = docHash:lang, value = Promise
 
     logger.info('[TRANSLATION-SERVICE] Constructor called');
@@ -173,6 +174,22 @@ class TranslationService {
   }
 
   /**
+   * @method _cpuFallback
+   * @description The CPU backend used when the GPU one fails in `auto` mode.
+   * Built once and reused: each instance spawns a worker thread and loads the
+   * NLLB model, and nothing terminates it, so building one per failed request
+   * turns a GPU outage into a pile of live model loads.
+   * @returns {Promise<CpuTranslateBackend>} An initialized CPU backend.
+   */
+  async _cpuFallback() {
+    if (!this.cpuFallbackBackend) {
+      this.cpuFallbackBackend = new CpuTranslateBackend();
+      await this.cpuFallbackBackend.init();
+    }
+    return this.cpuFallbackBackend;
+  }
+
+  /**
    * @method translate
    * @description Translates a batch of texts from a source language to a target language.
    * @param {string[]} texts - An array of text strings to translate.
@@ -226,9 +243,7 @@ class TranslationService {
       if (this.backendType === 'gpu' && translationBackend === 'auto') {
         logger.warn(`[TRANSLATION-SERVICE] GPU backend failed for this request, falling back to CPU: ${error.message}`);
         try {
-          const cpuBackend = new CpuTranslateBackend();
-          await cpuBackend.init();
-          logger.info('[TRANSLATION-SERVICE] CPU backend initialized as fallback');
+          const cpuBackend = await this._cpuFallback();
 
           const sourceCode = cpuBackend.getLanguageCode(sourceLang);
           const targetCode = cpuBackend.getLanguageCode(targetLang);
@@ -301,8 +316,7 @@ class TranslationService {
       if (this.backendType === 'gpu' && translationBackend === 'auto') {
         logger.warn(`[TRANSLATION-SERVICE] GPU stream failed, CPU fallback (non-streaming): ${error.message}`);
         try {
-          const cpuBackend = new CpuTranslateBackend();
-          await cpuBackend.init();
+          const cpuBackend = await this._cpuFallback();
           const sCode = cpuBackend.getLanguageCode(sourceLang);
           const tCode = cpuBackend.getLanguageCode(targetLang);
           const [translated] = await cpuBackend.translate([unit], sCode, tCode);

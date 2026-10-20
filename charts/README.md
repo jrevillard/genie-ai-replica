@@ -17,6 +17,8 @@ Kubernetes-deployment Helm charts for GENIE.AI.
 
 Operator controllers (CNPG ≥1.30, kube-arangodb 1.4.x, sealed-secrets ≥0.40, keycloak-operator 26.x, OpenTelemetry Operator) are cluster bootstrap prerequisites — installed once per cluster, before any release. Per-release operator installs would create competing cluster-scoped controllers. `scripts/install-prereqs.sh` automates the set. Conditional prerequisites: cert-manager (only when `ingress.tls.enabled` with an issuer), GPU operator (only when `opea.gpu.mode=in-cluster`). The Envoy Gateway is NOT a prerequisite — it ships as a chart dependency (`envoyGateway.enabled`, default on).
 
+A laptop cluster additionally needs a **policy-enforcing CNI**: minikube's default (kubenet) stores the chart's NetworkPolicies and never applies them, so a broken egress graph stays invisible. `scripts/laptop-cluster-bootstrap.sh` builds the whole cluster (`--cni=calico`) and restores the state that lives only inside a cluster — the sealed-secrets key, the Flux PAT, the selfsigned issuer. The procedure, the installation order and the SealedSecret/SOPS split are documented in [`docs/charts/laptop-cluster-bootstrap.md`](../docs/charts/laptop-cluster-bootstrap.md).
+
 ## Render gates
 
 The umbrella is validated by two stages. Both must pass before a release lands on `main`.

@@ -291,11 +291,12 @@ describe('AdminDashboard', () => {
       expect(mockGetSystemHealth).toHaveBeenCalledTimes(1);
     });
 
-    it('initializes all nine admin tabs (incl. OKF Studio, sitting next to Document Management)', () => {
+    it('initializes all ten admin tabs (OKF Studio next to Document Management; Models LAST)', () => {
       const wrapper = createAdminDashboardWrapper();
       const tabIds = wrapper.vm.tabs.map((t) => t.id);
       // Story 3-7 fix (#977): OKF Studio tab moved to sit immediately after
       // Document Management so the crawler→OKF workflow is a one-step click.
+      // Story 8-7 (David 2026-10-20): model configurations — the LAST tab.
       expect(tabIds).toEqual([
         'overview',
         'hierarchy',
@@ -305,7 +306,8 @@ describe('AdminDashboard', () => {
         'logs',
         'queryInspector',
         'security',
-        'users'
+        'users',
+        'models'
       ]);
     });
   });
@@ -394,7 +396,7 @@ describe('AdminDashboard', () => {
     it('adminTabs computed maps each tab to { label, value }', () => {
       const wrapper = createAdminDashboardWrapper();
       const tabs = wrapper.vm.adminTabs;
-      expect(tabs.length).toBe(9);
+      expect(tabs.length).toBe(10);
       expect(tabs[0].value).toBe('overview');
       expect(tabs[0].label).toBe('System Health'); // translate() returns the fallback label from tabs data
       expect(tabs.every((t) => typeof t.label === 'string' && typeof t.value === 'string')).toBe(true);

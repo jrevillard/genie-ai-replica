@@ -57,6 +57,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Bounding an `aiohttp` call can remove a ceiling it already had.** aiohttp's default session carries `sock_connect=30`, but constructing `ClientTimeout(total=X)` explicitly leaves `sock_connect=None`, which is no limit rather than "inherit". Two calls that were bounded by giving them a budget would therefore have traded a 30 s give-up on an unreachable endpoint for an unbounded wait — the exact failure this change exists to stop, introduced by the act of stopping it. Those two sites now set the connect ceiling explicitly.
   - **A `timeout=` given as a bare number silently discards the SDK's 5 s connect ceiling.** All four client classes accept it, and it replaces the whole `httpx.Timeout` object rather than shortening it — so a GPU node that stops answering waits the full budget instead of 5 s. Every timeout is now built by the policy's `http_timeout()` helper, which keeps that ceiling regardless of the total.
   - **The model-id probe behind the TTL cache had a hardcoded `timeout=10`.** It degrades to the configured model id on failure, which sounds harmless until the vLLM is still loading weights — that takes minutes — and the fallback then quietly picks the configured id instead of the served one, i.e. the wrong model rather than no model.
+- **Non-English answers came back half-translated when a GPU translation model
+  was in use:** the output budget sent to vLLM was derived from the model's
+  context length alone, leaving no room for the prompt. On a model with an
+  8192-token context, any prompt longer than roughly 128 tokens was rejected and
+  the affected part of the answer — and everything after it — fell back to
+  English. Affects every deployment that translates through a GPU
+  (`TRANSLATION_BACKEND=gpu`, or `auto` when the GPU probe succeeds), in Docker
+  Compose as well as Kubernetes; a short answer was never long enough to trip
+  it, which is why it went unnoticed.
 
 - **The backend could not start with observability enabled (!565):** the OpenTelemetry
   setup read the shared propagator factory under a name that module does not

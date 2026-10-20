@@ -1,21 +1,277 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
-  "$comment": "The schema pins ONLY the enum-valued keys a typo would silently mis-render: a wrong clusterProfile renders the dev topology and the drift hook cannot catch it. Everything else stays permissive (no additionalProperties:false anywhere) — Helm injects `global`, and future tiers add keys.",
+  "$comment": "Pins the values a wrong TYPE or a wrong ENUM would silently mis-render. Enums: a wrong clusterProfile renders the dev topology and the drift hook cannot catch it. Booleans: Helm's `not`/`and`/`or`/`ternary` are strict — a knob set to 0 or \"true\" aborts the render with 'wrong type for value; expected bool; got int64', so the type is checked up front instead. Everything else stays permissive (no additionalProperties:false anywhere) — Helm injects `global`, and future tiers add keys. Every boolean leaf of values.yaml is typed here; scripts/values-schema-bools-check.py fails the build when a new one is added without a matching constraint.",
   "type": "object",
   "properties": {
     "clusterProfile": {
       "type": "string",
-      "enum": ["dev", "staging", "prod"]
+      "enum": [
+        "dev",
+        "staging",
+        "prod"
+      ]
     },
     "data": {
       "type": "object",
       "properties": {
+        "postgres": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          }
+        },
         "arangodb": {
           "type": "object",
           "properties": {
-            "mode": {
-              "type": "string",
-              "enum": ["single", "cluster"]
+            "enabled": {
+              "type": "boolean"
+            }
+          }
+        },
+        "keycloak": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "registrationAllowed": {
+              "type": "boolean"
+            },
+            "resetPasswordAllowed": {
+              "type": "boolean"
+            },
+            "verifyEmail": {
+              "type": "boolean"
+            },
+            "failOnPlaceholderSecrets": {
+              "type": "boolean"
+            },
+            "http": {
+              "type": "object",
+              "properties": {
+                "httpEnabled": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "hostname": {
+              "type": "object",
+              "properties": {
+                "strict": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "startOptimized": {
+              "type": "boolean"
+            },
+            "convergence": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "observability": {
+      "type": "object",
+      "properties": {
+        "logs": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          }
+        },
+        "metrics": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          }
+        },
+        "traces": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          }
+        },
+        "grafana": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "envoyGateway": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "properties": {
+        "createGatewayClass": {
+          "type": "boolean"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "tls": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "services": {
+      "type": "object",
+      "properties": {
+        "backend": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "translation": {
+              "type": "object",
+              "properties": {
+                "streamingEnabled": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "securityContext": {
+              "type": "object",
+              "properties": {
+                "runAsNonRoot": {
+                  "type": "boolean"
+                },
+                "allowPrivilegeEscalation": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        },
+        "frontend": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "securityContext": {
+              "type": "object",
+              "properties": {
+                "runAsNonRoot": {
+                  "type": "boolean"
+                },
+                "allowPrivilegeEscalation": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        },
+        "documentRepository": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "securityContext": {
+              "type": "object",
+              "properties": {
+                "runAsNonRoot": {
+                  "type": "boolean"
+                },
+                "allowPrivilegeEscalation": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "virusScanning": {
+              "type": "boolean"
+            },
+            "pvc": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        },
+        "clamav": {
+          "type": "object",
+          "properties": {
+            "cache": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "enabled": {
+              "type": "boolean"
+            }
+          }
+        },
+        "redisCache": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "pvc": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "opea": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "models": {
+          "type": "object",
+          "properties": {
+            "cache": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                }
+              }
             }
           }
         }

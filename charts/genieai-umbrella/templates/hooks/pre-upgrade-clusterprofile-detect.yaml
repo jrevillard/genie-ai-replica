@@ -124,7 +124,7 @@ spec:
                 # branch's semantics. The label-absent branch used to
                 # fall through silently: operators had no signal that
                 # genieai.io/cluster-profile was unset.
-                echo "WARN: namespace $ns lacks genieai.io/cluster-profile label (set it to dev|staging|prod|sovereign or accept defaults via clusterProfile)" >&2
+                echo "WARN: namespace $ns lacks genieai.io/cluster-profile label (set it to dev|staging|prod or accept defaults via clusterProfile)" >&2
               fi
               if [ -n "$detected" ] && [ "$detected" != "$rendered" ]; then
                 # Echo a one-line summary that includes the detected value

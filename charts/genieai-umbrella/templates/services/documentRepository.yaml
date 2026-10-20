@@ -13,6 +13,38 @@
 {{- $ns := .Values.namespace -}}
 {{- $arangoHost := include "genieai-umbrella.arangoHost" . -}}
 {{- $vals := deepCopy .Values -}}
+{{- /* VIRUS_SCANNING is the app-side switch, not the operator's: a scan
+step with no scanner behind it fails every upload, so the ClamAV tier
+being off forces it off. `services.documentRepository.virusScanning`
+still turns it off on its own. */ -}}
+{{- $virusScanning := .Values.services.clamav.enabled -}}
+{{- if kindIs "bool" .Values.services.documentRepository.virusScanning -}}
+{{- $virusScanning = and $virusScanning .Values.services.documentRepository.virusScanning -}}
+{{- end -}}
+{{- /* The chart owns `document-repository-uploads` only while
+`services.documentRepository.pvc.enabled` is true. With it off, a volume
+row still naming that claim leaves the pod in ContainerCreating forever
+(kubelet waits on a claim nobody creates), so the chart-owned rows are
+dropped here. Operator-supplied volumes and mounts are left untouched:
+turning the PVC off means "ephemeral /app/uploads, or bring your own
+volume". */ -}}
+{{- if not .Values.services.documentRepository.pvc.enabled -}}
+{{- $ownedClaim := "document-repository-uploads" -}}
+{{- $keptVolumes := list -}}
+{{- range $v := ($vals.services.documentRepository.volumes | default list) -}}
+{{- if ne (dig "persistentVolumeClaim" "claimName" "" $v) $ownedClaim -}}
+{{- $keptVolumes = append $keptVolumes $v -}}
+{{- end -}}
+{{- end -}}
+{{- $keptMounts := list -}}
+{{- range $m := ($vals.services.documentRepository.volumeMounts | default list) -}}
+{{- if ne $m.name "uploads" -}}
+{{- $keptMounts = append $keptMounts $m -}}
+{{- end -}}
+{{- end -}}
+{{- $_ := set $vals.services.documentRepository "volumes" $keptVolumes -}}
+{{- $_ := set $vals.services.documentRepository "volumeMounts" $keptMounts -}}
+{{- end -}}
 {{- /* KEYCLOAK_EXPECTED_ISSUER: tokens carry the public issuer pinned on the
 Keycloak CR (hostname v2); JWKS keeps resolving in-cluster through
 KEYCLOAK_URL. Without the override the service derives the expected
@@ -32,7 +64,7 @@ both rows must be set explicitly. */ -}}
     (dict "name" "DATAPREP_PORT" "value" "5000")
     (dict "name" "CLAMSCAN_HOST" "value" .Values.services.documentRepository.clamavHost)
     (dict "name" "CLAMSCAN_PORT" "value" (.Values.services.documentRepository.clamavPort | toString))
-    (dict "name" "VIRUS_SCANNING" "value" (ternary (.Values.services.documentRepository.virusScanning | toString) "true" (kindIs "bool" .Values.services.documentRepository.virusScanning)))
+    (dict "name" "VIRUS_SCANNING" "value" ($virusScanning | toString))
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
     (dict "name" "ENABLE_OBSERVABILITY" "value" (ternary "1" "0" (or .Values.observability.logs.enabled .Values.observability.metrics.enabled .Values.observability.traces.enabled)))
 -}}
@@ -88,6 +120,24 @@ spec:
         - podSelector:
             matchLabels:
               genieai.io/component: backend
+      ports:
+        - protocol: TCP
+          port: 3001
+    # dataprep: PATCH /api/files/<id>/status is how an ingest reports
+    # completion (genieai_dataprep_arangodb.py _update_doc_status).
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: dataprep
+      ports:
+        - protocol: TCP
+          port: 3001
+    # chatqna: reads file metadata for citation provenance
+    # (genieai_chatqna.py, the sources shown next to an answer).
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: chatqna
       ports:
         - protocol: TCP
           port: 3001

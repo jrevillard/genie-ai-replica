@@ -1,0 +1,38 @@
+{{- if .Values.services.backend.enabled }}
+{{- /*
+  Egress for the post-install/post-upgrade migrations Job. It carries
+  component "migrate-db" so it never joins the backend Service's
+  EndpointSlice (see the pod-template comment in db-migrations-job.yaml),
+  which means it no longer inherits the backend's default-deny egress
+  either — ArangoDB on 8529 is the only thing the migration image dials.
+*/ -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-db-migrations
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "migrate-db") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: migrate-db
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 8529
+{{- end -}}

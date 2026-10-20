@@ -202,6 +202,20 @@ spec:
               # placeholder fallback.
               value: {{ .Values.data.keycloak.adminEmail | required "data.keycloak.adminEmail is required — supply the operator contact email in the environment overlay" | quote }}
             {{- $smtp := .Values.data.keycloak.smtp | default dict }}
+            # A flow that SENDS a mail needs a mail server. The realm's
+            # smtpServer block is unconditional (kcc substitutes every
+            # EMAIL_* placeholder), so without an smtp the realm would be
+            # imported with sentinel values — host "localhost", from
+            # "no-reply@genieai.local" — and the send would fail at
+            # runtime with nothing in the operator's face: the user sees
+            # "check your email" and no mail ever leaves. Failing the
+            # render points at the knob instead.
+            {{- if and (.Values.data.keycloak.verifyEmail | default false) (not $smtp) -}}
+            {{- fail "data.keycloak.verifyEmail=true requires data.keycloak.smtp — without a mail server the verification mail never leaves" -}}
+            {{- end -}}
+            {{- if and (.Values.data.keycloak.resetPasswordAllowed | default false) (not $smtp) -}}
+            {{- fail "data.keycloak.resetPasswordAllowed=true requires data.keycloak.smtp — without a mail server the reset mail never leaves" -}}
+            {{- end -}}
             # The realm file's smtpServer block is unconditional, so the
             # EMAIL_* vars must resolve on every install — including
             # smtp:null. Kubernetes drops an EnvVar whose value is the

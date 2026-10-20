@@ -38,7 +38,6 @@ class TranslationService {
     this.visit = null;
     this.initialized = false;
     this.cacheClient = null; // For Redis client
-    this.cpuFallbackBackend = null; // Built on first GPU failure, reused afterwards
     this.inFlightTranslations = new Map(); // Track in-progress translations: key = docHash:lang, value = Promise
 
     logger.info('[TRANSLATION-SERVICE] Constructor called');
@@ -106,20 +105,24 @@ class TranslationService {
       }
 
       if (translationBackend === 'auto') {
-        // Try GPU first, fallback to CPU
+        // `auto` is a selection policy, not a resilience one: probe the GPU
+        // once, at startup, and commit to whichever answers. The same pattern
+        // as the dataprep device resolution (`_resolve_docling_device`). A
+        // backend that dies later is a failure to report, not a reason to
+        // switch models for the rest of the process's life.
         try {
-          logger.info('[TRANSLATION-SERVICE] Auto mode: Trying GPU backend first');
+          logger.info('[TRANSLATION-SERVICE] Auto mode: Probing GPU backend');
           this.backend = new GpuTranslateBackend();
           await this.backend.init();
           this.backendType = 'gpu';
-          logger.info('[TRANSLATION-SERVICE] Auto mode: GPU backend successful');
+          logger.info('[TRANSLATION-SERVICE] Auto mode: GPU backend selected');
           return this.backend;
         } catch (gpuError) {
-          logger.warn(`[TRANSLATION-SERVICE] Auto mode: GPU backend failed (${gpuError.message}), falling back to CPU`);
+          logger.warn(`[TRANSLATION-SERVICE] Auto mode: GPU unavailable (${gpuError.message}), selecting CPU`);
           this.backend = new CpuTranslateBackend();
           await this.backend.init();
           this.backendType = 'cpu';
-          logger.info('[TRANSLATION-SERVICE] Auto mode: CPU backend initialized as fallback');
+          logger.info('[TRANSLATION-SERVICE] Auto mode: CPU backend selected');
           return this.backend;
         }
       }
@@ -174,26 +177,6 @@ class TranslationService {
   }
 
   /**
-   * @method _cpuFallback
-   * @description The CPU backend used when the GPU one fails in `auto` mode.
-   * Built once and reused: each instance spawns a worker thread and loads the
-   * NLLB model, and nothing terminates it, so building one per failed request
-   * turns a GPU outage into a pile of live model loads.
-   * @returns {Promise<CpuTranslateBackend>} An initialized CPU backend.
-   */
-  async _cpuFallback() {
-    if (!this.cpuFallbackBackend) {
-      // Assign only after init resolves: an instance whose worker failed to
-      // start is not a fallback, and caching it would hand the same broken
-      // backend to every later failure for the life of the process.
-      const backend = new CpuTranslateBackend();
-      await backend.init();
-      this.cpuFallbackBackend = backend;
-    }
-    return this.cpuFallbackBackend;
-  }
-
-  /**
    * @method translate
    * @description Translates a batch of texts from a source language to a target language.
    * @param {string[]} texts - An array of text strings to translate.
@@ -243,21 +226,11 @@ class TranslationService {
       const translatedTexts = await this.backend.translate(texts, sourceLangCode, targetLangCode);
       return translatedTexts;
     } catch (error) {
-      // If backend is GPU and in auto mode, try falling back to CPU for this request only
-      if (this.backendType === 'gpu' && translationBackend === 'auto') {
-        logger.warn(`[TRANSLATION-SERVICE] GPU backend failed for this request, falling back to CPU: ${error.message}`);
-        try {
-          const cpuBackend = await this._cpuFallback();
-
-          const sourceCode = cpuBackend.getLanguageCode(sourceLang);
-          const targetCode = cpuBackend.getLanguageCode(targetLang);
-          return await cpuBackend.translate(texts, sourceCode, targetCode);
-        } catch (cpuError) {
-          logger.error(`[TRANSLATION-SERVICE] CPU fallback also failed: ${cpuError.message}`);
-          throw new Error(`Translation failed on both GPU and CPU backends`, { cause: cpuError });
-        }
-      }
-
+      // The backend chosen at startup is the backend we use. `auto` decides
+      // between GPU and CPU once, in selectBackend; a request that fails later
+      // is a failure, not a reason to switch models mid-answer — that would
+      // serve a different, lower-quality translation of the same content with
+      // nothing in the output to say so.
       logger.error(`[TRANSLATION-SERVICE] Translation failed: ${error.message}`, {
         stack: error.stack,
         sourceLang: sourceLang,
@@ -316,20 +289,10 @@ class TranslationService {
       if (translated && onToken) onToken(translated);
       return translated || '';
     } catch (error) {
-      // GPU failure in auto mode -> CPU fallback (non-streaming) for this unit.
-      if (this.backendType === 'gpu' && translationBackend === 'auto') {
-        logger.warn(`[TRANSLATION-SERVICE] GPU stream failed, CPU fallback (non-streaming): ${error.message}`);
-        try {
-          const cpuBackend = await this._cpuFallback();
-          const sCode = cpuBackend.getLanguageCode(sourceLang);
-          const tCode = cpuBackend.getLanguageCode(targetLang);
-          const [translated] = await cpuBackend.translate([unit], sCode, tCode);
-          if (translated && onToken) onToken(translated);
-          return translated || '';
-        } catch (cpuError) {
-          throw new Error('Stream translation failed on both GPU and CPU', { cause: cpuError });
-        }
-      }
+      // Same contract as translate(): the startup-selected backend is the one
+      // used. Switching models mid-stream would emit a second translation into
+      // a caller that has already rendered the first.
+      logger.warn(`[TRANSLATION-SERVICE] Stream translation failed: ${error.message}`);
       throw error;
     }
   }

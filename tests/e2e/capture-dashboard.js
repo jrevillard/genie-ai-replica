@@ -25,14 +25,17 @@ const BASE_URL = process.env.BASE_URL || 'https://localhost';
 const OUT_DIR = path.join(__dirname, '..', '..', 'artifacts', 'living-intelligence');
 // Four viewports: 1775×886 is the reference and 1920×960 is what the user
 // sees in production, so the welcome banner's full-bleed is proven at both;
-// 1280×720 is the laptop the deployment is also looked at on, and
-// 768×1024 is the narrow layout where the layer's two media queries take
-// over and the card grid drops to fewer columns.
+// 1280×720 is the laptop the deployment is also looked at on, 768×1024 is
+// the narrow layout where the layer's two media queries take over and the
+// card grid drops to fewer columns, and 414×896 is the phone: below 480px
+// the welcome grid is one column and the heading changes weight, which is
+// what decides whether the brand ramp inside it counts as large text.
 const VIEWPORTS = [
   { label: '1775', width: 1775, height: 886 },
   { label: '1920', width: 1920, height: 960 },
   { label: '1280', width: 1280, height: 720 },
-  { label: '768', width: 768, height: 1024 }
+  { label: '768', width: 768, height: 1024 },
+  { label: '414', width: 414, height: 896 }
 ];
 const THEMES = process.argv.includes('--theme')
   ? [process.argv[process.argv.indexOf('--theme') + 1]]
@@ -138,6 +141,12 @@ const audit = () => {
         textFillColor: style.getPropertyValue('-webkit-text-fill-color'),
         color: style.color,
         fontSize: style.fontSize,
+        // Weight is recorded with the size because the two together decide
+        // whether the mark is WCAG large text: 24px at any weight, or
+        // 18.66px at weight 700+. Below 480px the heading drops to 20px,
+        // so this is the field that says whether the ramp still gets the
+        // 3:1 allowance or has to clear 4.5:1.
+        fontWeight: style.fontWeight,
         fontFamily: style.fontFamily
       };
     });

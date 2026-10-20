@@ -2365,8 +2365,14 @@ export default {
     grid-template-columns: 1fr;
   }
 
+  /* Weight, not size: at --text-lg the heading is 20px, which is under
+     WCAG's 24px limb for large text, so the brand ramp inside it has to
+     clear 4.5:1 rather than the 3:1 large-text allowance. 20px at weight
+     700 is large text, and the ramp's worst stop is 3.99:1 against the
+     white panel this viewport renders. */
   .quick-help-heading {
     font-size: var(--text-lg);
+    font-weight: 700;
   }
 }
 

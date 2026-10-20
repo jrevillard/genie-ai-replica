@@ -250,7 +250,7 @@ describe('fileController', () => {
         fileService.deleteIngestionLogs = jest.fn().mockResolvedValue({});
 
         jest.spyOn(fileController, '_getFileBase64').mockResolvedValue({
-          file: { file_id: 'f1', dataprep: { status: 'Ingested with Warnings' } },
+          file: { file_id: 'f1', chunk_count: 260, dataprep: { status: 'Ingested with Warnings' } },
           base64String: 'b64'
         });
         axios.post.mockResolvedValue({ data: { success: true, chunk_count: 3 } });
@@ -275,6 +275,33 @@ describe('fileController', () => {
 
         const retractCall = axios.post.mock.calls.find((c) => String(c[0]).includes(config.dataprep.retractPath));
         expect(retractCall[1]).toEqual({ fileId: 'f1' });
+      });
+
+      it('does not reinstate the pre-clear count when the ingest succeeds', async () => {
+        // dataprep's ingest response carries no chunk_count ("Ingestion started
+        // in background"), so the write-back falls through to `file.chunk_count`
+        // — read at the top of the function, i.e. the PREVIOUS run's count of
+        // chunks the clear just deleted. That is the same stale number the
+        // reset exists to remove, restored 20 lines later.
+        const metadataService = require('../../../services/metadataService');
+
+        // dataprep's real ingest response — it starts the ingest in the
+        // background and reports no chunk_count, so the write-back has to come
+        // from somewhere else. The shared fixture above supplies one, which is
+        // not what any deployment returns and would mask this entirely.
+        axios.post.mockResolvedValue({
+          data: { success: true, status: 200, message: 'Ingestion started in background.' }
+        });
+
+        const result = await fileController._ingestFileById('f1');
+
+        expect(result.success).toBe(true);
+        const counts = metadataService.updateMetadata.mock.calls.map((c) => c[1].chunk_count);
+        // Assert the pre-clear value never comes back, not merely that 0 appears
+        // somewhere: the reset already puts a 0 in the list, so `toContain(0)`
+        // passed with the stale-number guard removed.
+        expect(counts).not.toContain(260);
+        expect(counts[counts.length - 1]).toBe(0);
       });
 
       it('zeroes the chunk count, so a failed ingest does not leave a stale one', async () => {

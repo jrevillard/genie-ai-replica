@@ -419,9 +419,9 @@ DEGRADED_REMEDIES = {
         "(response_format=json_object)."
     ),
     DEGRADED_NO_LABELS: (
-        "{phase}: every chunk was labelled from the document's own labels because the model returned "
-        "nothing usable. Raising a budget will not help — the endpoint must be reachable and the model "
-        "must support guided JSON (response_format=json_object)."
+        "{phase}: every chunk fell back to the document's own labels — none, if the document has none — "
+        "because the model returned nothing usable. Raising a budget will not help — the endpoint must "
+        "be reachable and the model must support guided JSON (response_format=json_object)."
     ),
 }
 
@@ -1803,7 +1803,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             # All-or-nothing only. Some chunks falling back is what the per-batch
             # fallback is for, and flagging the document for it would make the
             # status fire on healthy documents.
-            if fell_back == len(chunks):
+            if chunks and fell_back == len(chunks):
                 degraded.append(f"{DEGRADED_NO_LABELS} (0/{len(chunks)})")
 
         suggested_map: dict[int, list[str]] = {}
@@ -2423,7 +2423,25 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         response_format={"type": "json_object"},
                     )
                     parsed = json.loads(response.choices[0].message.content)
-                    suggested = parsed.get("labels", [])
+                    # A body with no "labels" key is not an answer saying "no match" —
+                    # it is a body in a shape we did not ask for, which is what a model
+                    # ignoring response_format=json_object produces. `parsed.get("labels", [])`
+                    # made the two indistinguishable: the key missing became an empty list,
+                    # so the call counted as ANSWERED, fell_back stayed False, and a document
+                    # with every chunk unlabelled reported a clean Ingested. An explicit
+                    # {"labels": []} is a real answer and still takes the path below.
+                    if not isinstance(parsed, dict) or "labels" not in parsed:
+                        shape = type(parsed).__name__ if not isinstance(parsed, dict) else "object without 'labels'"
+                        await self._write_ingestion_log(
+                            file_id,
+                            "WARN",
+                            "Labeling",
+                            f"Chunk {index}: LLM returned a {shape}, not "
+                            '{"labels": [...]}. Retrying '
+                            f"({attempt}/3)...",
+                        )
+                        continue
+                    suggested = parsed["labels"]
                     # Lenient: null -> []; a bare string -> [string]; drop non-strings.
                     if suggested is None:
                         suggested = []
@@ -2545,6 +2563,22 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         continue
                     labels = [x for x in labels if isinstance(x, str)]
                     suggestions[idx] = labels
+                if not suggestions:
+                    # Zero of the requested indices came back. The model answered,
+                    # but not in the shape asked for — an envelope keyed by
+                    # "labels", a bare array, anything without the index keys. That
+                    # is what a model ignoring response_format=json_object looks
+                    # like, and filling every index with [] below would store the
+                    # whole document unlabelled while reporting a clean ingest.
+                    #
+                    # Distinguished from "the model matched nothing", which arrives
+                    # as the index keys PRESENT and empty — the loop above records
+                    # those, so `suggestions` is populated and this does not fire.
+                    # Returned as a parse failure rather than a result so the
+                    # per-chunk path runs, which either recovers or counts the
+                    # fallbacks and names the cause.
+                    _llm_fallback_total.add(1, {"phase": PHASE_LABEL_LABELING, "reason": "batch_parse"})
+                    return None
                 # Missing indices = the model chose not to label them (valid → empty).
                 for i in indices:
                     suggestions.setdefault(i, [])
@@ -2986,8 +3020,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                                 # a diagnosis.
                                 remedy_sentences.append(f"{name}: {reason}.")
                             else:
+                                # The reason comes first and verbatim, so the line
+                                # is greppable on the phrase the runbook quotes and
+                                # keeps the (0/N) counts the remedy drops. Then the
+                                # advice for this cause specifically.
                                 remedy_sentences.append(
-                                    remedy.format(phase=name, seconds=DATAPREP_LLM_PHASE_TIMEOUT_SECONDS)
+                                    f"{name}: {reason} — "
+                                    + remedy.format(phase=name, seconds=DATAPREP_LLM_PHASE_TIMEOUT_SECONDS)
                                 )
                         await self._write_ingestion_log(
                             input.file_id,

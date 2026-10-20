@@ -1032,10 +1032,13 @@ class FileController {
     // It has one side effect worth naming: dataprep's retract_file ends by
     // setting the document's status to 'Retracted'. That is accurate — the graph
     // genuinely is empty — and the ingest sets 'Ingesting' on success below. But
-    // if the ingest POST then fails, the document is left showing 'Retracted'
-    // next to the PREVIOUS run's chunk_count, which is no longer true of
-    // anything. Resetting it here keeps the two consistent in that window; the
-    // alternative is a status that reads as an admin retraction nobody performed.
+    // between the two the document is left showing 'Retracted' next to the
+    // PREVIOUS run's chunk_count, which describes chunks that no longer exist.
+    // Zeroing it here keeps the two consistent in that window, and `clearedPreviously`
+    // stops the success path from reinstating the same stale number from
+    // `file.chunk_count`.
+    // True only when this call cleared the document's existing chunks below.
+    let clearedPreviously = false;
     if (status === 'ingested with warnings') {
       const retractUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.retractPath}`;
       logger.debug(
@@ -1060,6 +1063,7 @@ class FileController {
           details: retractResponse.data
         };
       }
+      clearedPreviously = true;
       await metadataService.updateMetadata(fileId, { chunk_count: 0 });
     }
     const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.ingestPath}`;
@@ -1076,7 +1080,13 @@ class FileController {
     });
     if (response.data.success) {
       await metadataService.updateMetadata(fileId, {
-        chunk_count: response.data.chunk_count || file.chunk_count || 0, // Update chunk count if provided
+        // After a degraded clear, `file.chunk_count` is the PREVIOUS run's count of
+        // chunks that no longer exist — dataprep's ingest response carries no
+        // chunk_count of its own ("Ingestion started in background"), so the
+        // `|| file.chunk_count` fallback below would reinstate exactly the stale
+        // number the clear removed. Report 0 and let dataprep's background task
+        // write the real count when the ingest finishes.
+        chunk_count: response.data.chunk_count || (clearedPreviously ? 0 : file.chunk_count) || 0,
         dataprep: {
           status: 'Ingesting',
           ingest_date: new Date().toISOString(),

@@ -1365,38 +1365,6 @@ class TestADegradedPhaseNeverReportsIngested:
     (`variant="warning"`) all already carry it. Nothing produced it.
     """
 
-    def _run_ingest(self, monkeypatch, *, degraded, contextual_reasons=None):
-        from unittest.mock import AsyncMock, MagicMock, patch
-
-        monkeypatch.setenv("VLLM_API_KEY", "test-key")
-        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
-        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
-        dp = _stub_dataprep()
-        dp.db = MagicMock()
-        dp._fetch_all_labels = AsyncMock(return_value=["Tax:IVA"])
-        dp._load_and_chunk = AsyncMock(return_value=["chunk one", "chunk two"])
-        dp._run_guardrail = AsyncMock(return_value={"success": True})
-        dp._update_doc_status = AsyncMock()
-        dp._apply_contextualization = AsyncMock(side_effect=lambda c, i, f: (list(c), list(contextual_reasons or [])))
-        dp._apply_labels = AsyncMock(
-            return_value=([{"text": "a", "labels": ["Tax:IVA"]}, {"text": "b", "labels": ["Tax:IVA"]}], degraded)
-        )
-        dp._process_batch = AsyncMock()
-        dp.ensure_vector_index = AsyncMock(return_value=(None, None))
-
-        from unittest.mock import MagicMock as MM
-
-        inp = MM(file_id="f1", file_path="/tmp/f1.pdf", graph_name="GRAPH", file_labels=[])
-
-        async def scenario():
-            with (
-                patch.object(dataprep, "ArangoGraph"),
-                patch.object(dataprep, "Document", side_effect=lambda **kw: MM(metadata=dict(kw))),
-            ):
-                return await dp.ingest_file_with_guardrail(inp, lock_file=None)
-
-        return _run(scenario()), dp
-
     def test_a_degraded_phase_reports_ingested_with_warnings(self, monkeypatch):
         _result, dp = _run_degraded_ingest(monkeypatch, degraded=[dataprep.DEGRADED_PHASE_BUDGET])
         statuses = [c.args[1] for c in dp._update_doc_status.call_args_list]
@@ -2163,7 +2131,11 @@ class TestEveryDegradationIsNamed:
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
 
         client = MagicMock()
-        client.chat.completions.create = _AsyncJson({"labels": []})
+        # Indexed keys PRESENT and empty — that is what "nothing matched the
+        # taxonomy" looks like on the wire. An envelope keyed by "labels" is a
+        # different thing: a model that did not honour response_format, which
+        # the parser now treats as a batch failure rather than an answer.
+        client.chat.completions.create = _AsyncJson({"0": [], "1": []})
 
         async def scenario():
             dp = _stub_dataprep()
@@ -2176,8 +2148,16 @@ class TestEveryDegradationIsNamed:
             "that is a correct answer, not a failure"
         )
 
-    def test_partly_labelled_chunks_are_not_a_total_failure(self, monkeypatch):
-        """Some chunks falling back is what the per-batch fallback is for."""
+    def test_a_misshaped_batch_falls_back_to_per_chunk_and_recovers(self, monkeypatch):
+        """The batch parser's recovery path, which nothing else exercised.
+
+        The parser fills every requested index with [] for indices the response
+        does not mention, so a response it cannot map — an envelope keyed by
+        "labels", a bare array — produced the whole batch as unlabelled and
+        called it answered. It is now a batch failure, so the per-chunk path
+        runs. Here the model copes with the simpler per-chunk prompt, so the
+        document is fully labelled and there is nothing to report.
+        """
         from unittest.mock import MagicMock, patch
 
         monkeypatch.setenv("VLLM_API_KEY", "test-key")
@@ -2186,25 +2166,140 @@ class TestEveryDegradationIsNamed:
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 30.0)
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
 
-        calls = {"n": 0}
-
-        async def half_fails(**_kwargs):
-            calls["n"] += 1
-            if calls["n"] == 1:
-                raise RuntimeError("transient")
-            raise AssertionError("the batch path should not have retried past the first chunk")
-
+        # No index keys, so the batch parser recognises nothing — but it IS the
+        # shape the per-chunk prompt asks for, so the recovery succeeds.
         client = MagicMock()
-        client.chat.completions.create = half_fails
+        client.chat.completions.create = _AsyncJson({"labels": ["Tax:IVA"]})
 
         async def scenario():
             dp = _stub_dataprep()
-            dp._llm_suggest_labels = _AsyncTuple({"0": ["Tax:IVA"]}, 0)
             with patch.object(dataprep, "_build_vllm_client", return_value=(client, "test-model")):
                 return await dp._label_with_llm(["chunk one", "chunk two"], ["Tax:IVA"], ["Tax:IVA"], "f1")
 
-        _results, reasons = _run(scenario())
-        assert reasons == [], f"a batch that succeeded was reported as degraded: {reasons!r}"
+        results, reasons = _run(scenario())
+        assert reasons == [], f"a recovered batch was reported as degraded: {reasons!r}"
+        assert all(r["labels"] == ["Tax:IVA"] for r in results), results
+
+    def test_a_shape_no_level_can_map_is_named(self, monkeypatch):
+        """The failure the new cause exists for, at both levels.
+
+        A model that ignores response_format=json_object answers in a shape
+        neither the batch nor the per-chunk parser can read. Every chunk then
+        falls back to the document's own labels and the phase accomplished
+        nothing — which must be named, not stored as a clean ingest.
+        """
+        from unittest.mock import MagicMock, patch
+
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 30.0)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+
+        for payload in (
+            {"results": [{"index": 0, "labels": ["Tax:IVA"]}]},
+            {"nope": "Tax:IVA"},
+            ["Tax:IVA"],
+        ):
+            client = MagicMock()
+            client.chat.completions.create = _AsyncJson(payload)
+
+            async def scenario(c=client):
+                dp = _stub_dataprep()
+                with patch.object(dataprep, "_build_vllm_client", return_value=(c, "test-model")):
+                    return await dp._label_with_llm(["chunk one", "chunk two"], ["Tax:IVA"], ["Tax:IVA"], "f1")
+
+            results, reasons = _run(scenario())
+            assert reasons, (
+                f"the model answered {payload!r} — a shape no level can map — and the document was "
+                "stored with no labels from the model and reported as a clean ingest"
+            )
+            assert reasons[0].startswith(dataprep.DEGRADED_NO_LABELS), (
+                f"{payload!r} reported {reasons!r}, not the cause it is"
+            )
+            # And the chunks still carry the document's labels, so they stay
+            # reachable by a taxonomy search rather than stored unlabelled.
+            assert all(r["labels"] == ["Tax:IVA"] for r in results), results
+
+    def test_a_body_without_a_labels_key_says_so(self, monkeypatch):
+        """The shape check names the problem instead of letting it raise.
+
+        The end state is reachable either way — `parsed["labels"]` raises KeyError
+        on a missing key and the existing handler retries — so mutating the guard
+        away left the whole suite green. What it changes is what the operator
+        reads: an explicit "returned a body without 'labels'" against a generic
+        "call attempt failed: 'labels'", the second of which points at the call
+        rather than at the model's answer.
+        """
+        from unittest.mock import MagicMock, patch
+
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 30.0)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+
+        recorded = []
+
+        async def _record(*args, **_kwargs):
+            # str() on a plain str is the message itself; repr of the args tuple
+            # would backslash-escape the apostrophes the assertion looks for.
+            recorded.append(" ".join(str(a) for a in args))
+
+        client = MagicMock()
+        client.chat.completions.create = _AsyncJson({"results": []})
+
+        async def scenario():
+            dp = _stub_dataprep()
+            dp._write_ingestion_log = _record
+            with patch.object(dataprep, "_build_vllm_client", return_value=(client, "test-model")):
+                return await dp._label_with_llm(["chunk one"], ["Tax:IVA"], ["Tax:IVA"], "f1")
+
+        _results, _reasons = _run(scenario())
+        joined = " ".join(recorded)
+        assert "without 'labels'" in joined, (
+            f"a body with no labels key was not named as such; the operator gets: {joined}"
+        )
+
+    def test_partly_labelled_chunks_are_not_a_total_failure(self, monkeypatch):
+        """Some chunks falling back is what the per-batch fallback is for.
+
+        The all-or-nothing invariant is stated in the code's comment at the
+        check; this is what pins it. An earlier version of this test stubbed
+        fell_back=0, which means "NO chunk fell back" and so said nothing about
+        the partial case — mutating `== len(chunks)` to `> 0`, which flags every
+        partially-fallen-back document, left the whole suite green.
+        """
+        from unittest.mock import MagicMock, patch
+
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 30.0)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+
+        # THREE chunks, so a partial count and "all but one" are two distinct
+        # cases. With two chunks len-1 == 1 and there is only one partial value,
+        # which is why the first version of this test could not pin anything.
+        # fell_back == 3 is the total case, and it IS named — see
+        # test_a_labelling_phase_that_produced_nothing_names_that.
+        for fell_back in (1, 2):
+            client = MagicMock()
+            client.chat.completions.create = _AsyncJson({"0": ["Tax:IVA"]})
+
+            async def scenario(fb=fell_back, c=client):
+                dp = _stub_dataprep()
+                dp._llm_suggest_labels = _AsyncTuple({"0": ["Tax:IVA"]}, fb)
+                with patch.object(dataprep, "_build_vllm_client", return_value=(c, "test-model")):
+                    return await dp._label_with_llm(
+                        ["chunk one", "chunk two", "chunk three"], ["Tax:IVA"], ["Tax:IVA"], "f1"
+                    )
+
+            _results, reasons = _run(scenario())
+            assert reasons == [], (
+                f"{fell_back} of 3 chunks fell back and that was reported as a total failure: "
+                f"{reasons!r} — the status must mean something or operators will ignore it"
+            )
 
     def test_doc_level_that_produced_nothing_names_that(self, monkeypatch):
         """doc_level is a supported strategy with the same hole.
@@ -2308,9 +2403,42 @@ class TestCauseClassification:
             f"matched but not declared: {sorted(rostered - declared)} (dead entries)."
         )
 
+    def test_the_reported_line_carries_the_reason_verbatim(self, monkeypatch):
+        """The reason is greppable, and keeps the counts the remedy drops.
+
+        The runbook tells operators to look for the cause phrase in this line.
+        Emitting only the remedy meant the quoted phrase appeared nowhere in the
+        log, and the (0/N) counts the phase computed were discarded.
+        """
+        _result, dp = _run_degraded_ingest(
+            monkeypatch, degraded=["the labelling model returned no labels for any chunk (0/260)"]
+        )
+        joined = " ".join(str(c.args[3]) for c in dp._write_ingestion_log.call_args_list if len(c.args) > 3)
+        assert "the labelling model returned no labels for any chunk (0/260)" in joined, joined
+        # And the remedy for that cause is still attached, not replaced by it.
+        assert "Raising a budget will not help" in joined, joined
+
     def test_only_the_budget_remedy_tells_the_operator_to_raise_a_budget(self):
         for sentinel, remedy in dataprep.DEGRADED_REMEDIES.items():
             mentions_raising = "Raise DATAPREP_LLM_PHASE_TIMEOUT_SECONDS" in remedy
             assert mentions_raising == (sentinel == dataprep.DEGRADED_PHASE_BUDGET), (
                 f"{sentinel!r} prescribes the wrong fix: {remedy}"
+            )
+
+    def test_every_non_budget_remedy_says_a_budget_will_not_help(self):
+        """The half of the distinction the previous guard could not see.
+
+        That guard checked the budget remedy is not offered for a non-budget
+        cause — by looking for the string "Raise DATAPREP_LLM_PHASE_TIMEOUT_SECONDS",
+        which is absent from every other remedy by construction, so it passed
+        whatever those remedies said. The operator-facing risk is the opposite
+        direction: a non-budget cause whose remedy does NOT rule out raising the
+        ceiling sends them to a knob that cannot help. Deleting that clause from
+        any one remedy left the suite green.
+        """
+        for sentinel, remedy in dataprep.DEGRADED_REMEDIES.items():
+            if sentinel == dataprep.DEGRADED_PHASE_BUDGET:
+                continue
+            assert "Raising a budget will not help" in remedy, (
+                f"{sentinel!r} does not tell the operator that raising a budget cannot fix it: {remedy}"
             )

@@ -304,7 +304,16 @@
     }
   },
   "theme": {
-    "brandColor": "#4071cb"
+    "brandColor": "#4071cb",
+    "visual": {
+      "enabled": true,
+      "assets": {
+        "hero": "/config/genie-visual/assets/genie-hero-transparent.png",
+        "waves": "/config/genie-visual/assets/genie-bottom-waves.svg",
+        "mesh": "/config/genie-visual/assets/genie-dot-mesh.svg",
+        "corner": "/config/genie-visual/assets/genie-corner-network.svg"
+      }
+    }
   },
   "features": {
     "chat": {

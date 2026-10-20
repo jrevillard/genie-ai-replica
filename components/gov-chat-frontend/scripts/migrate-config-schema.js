@@ -188,6 +188,15 @@ const main = () => {
     if (name === BASE_FILE) {
       seedBaseStyles(doc);
     }
+    doc.theme.visual = {
+      enabled: name === BASE_FILE,
+      assets: {
+        hero: '/config/genie-visual/assets/genie-hero-transparent.png',
+        waves: '/config/genie-visual/assets/genie-bottom-waves.svg',
+        mesh: '/config/genie-visual/assets/genie-dot-mesh.svg',
+        corner: '/config/genie-visual/assets/genie-corner-network.svg'
+      }
+    };
     fs.writeFileSync(path.join(CONFIG_DIR, name), serialize(doc), 'utf8');
     console.log(`${name}: migrated`);
   }

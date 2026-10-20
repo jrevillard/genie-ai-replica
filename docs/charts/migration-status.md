@@ -172,11 +172,27 @@ the compose config, kept verbatim; backlog.
   duplicates possible; scoping `include` in 0.2.20 did not change this).
   Add `file_storage` + wire it into the receiver if that gap ever matters
   operationally.
-- **The Grafana tier has never run live.** `observability.grafana.enabled`
-  is false by default and the laptop overlay leaves it off, so the CRs were
-  only ever validated by the schema gate above. The instance CR → operator
-  Deployment → Service selector → `/grafana` route chain is unproven at
-  runtime; enabling it on the laptop is the next validation step.
+- **The Grafana and metrics tiers had never been turned on** — both are
+  chart-default off, so their CRs were only ever validated against the
+  schema gate. Turning them on exposed four defects that no static gate
+  could see, all now fixed: `GrafanaDashboard.spec.resyncInterval` (the
+  field is `resyncPeriod`); the `/grafana` backendRef naming the CR
+  instead of the `<cr-name>-service` the operator creates; the collector
+  image carrying no prometheus exporter at all (the `k8s` distribution),
+  which crash-looped the collector and took logs and traces down with it;
+  and the collector's egress to VMSingle written against the Service
+  port 8428 while the pod listens on 8429, so every remote-write batch
+  timed out. The laptop overlay now runs all three tiers.
+- **No application service exposes a Prometheus `/metrics` endpoint** —
+  measured on all eleven (backend, doc-repo, frontend, redis, the six
+  OPEA orchestrators, and the storage CRs). They export over OTLP, so
+  the chart's VMServiceScrape CRs are inert; they are kept with that
+  written down. Two silent vm-operator gates apply if they are ever
+  revived: `VMSingle.spec.ingestOnlyMode` defaults to true (nil
+  deref) and skips the whole scrape-config builder, and pairing a
+  VMServiceScrape with a VMSingle needs
+  `VMSingle.spec.serviceScrapeSelector` — a selector on the scrape
+  object's OWN labels, not on its target Service.
 - Dataprep vendored `llm_transformer` (sync langchain in `to_thread`) has no
   effective request timeout; long ingestions can pin threads on a stalled
   upstream (observed once against the shared GPU node; pod restart recovered).

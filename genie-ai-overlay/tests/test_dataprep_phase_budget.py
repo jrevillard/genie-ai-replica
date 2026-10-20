@@ -16,9 +16,11 @@ it reports while it runs, and it degrades rather than raising.
 import ast
 import asyncio
 import gc
+import json
 import sys
 import time
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -2610,8 +2612,6 @@ class TestTheDegradedPathIsActuallyGuarded:
         chunk indexed with no labels, indistinguishable downstream from a chunk
         the model genuinely labelled with nothing.
         """
-        import ast
-
         tree, _ = self._module_tree()
         offenders = []
         seen = 0
@@ -2643,8 +2643,6 @@ class TestTheDegradedPathIsActuallyGuarded:
         `if tasks:` → `if False:` skips the write entirely and every test stays
         green, so the gate's condition is pinned as well as its presence.
         """
-        import ast
-
         tree, _ = self._module_tree()
         found = False
         for node in ast.walk(tree):
@@ -2671,8 +2669,6 @@ class TestTheDegradedPathIsActuallyGuarded:
         shows a warning badge over it. So every `retract_file` call must sit in
         an exception handler or a `finally`, never in the success path.
         """
-        import ast
-
         tree, _ = self._module_tree()
         function = next(
             n
@@ -2716,8 +2712,6 @@ class TestTheDegradedPathIsActuallyGuarded:
         arguments and passed — while the operator never saw the misconfiguration
         warning in any deployment.
         """
-        import ast
-
         tree, _ = self._module_tree()
         guarded = []
         for node in ast.walk(tree):
@@ -2745,8 +2739,6 @@ class TestTheDegradedPathIsActuallyGuarded:
         Deleting either `.add(...)` leaves the suite green, which would leave a
         degraded document visible only to whoever opens its ingestion log.
         """
-        import ast
-
         tree, _ = self._module_tree()
         counts = {}
         for node in ast.walk(tree):
@@ -2784,3 +2776,158 @@ class TestTheDegradedPathIsActuallyGuarded:
             f"no _llm_fallback_total.add call tags reason=phase_budget (found {sorted(tags)}), so a "
             "budget-exhausted phase is indistinguishable from a parse failure or a dead endpoint"
         )
+
+
+class TestAnIncompleteBatchKeepsWhatItAnswered:
+    """A batch response that labelled N-1 of N is not a failed batch call.
+
+    This MR made an omitted index a contract violation rather than a silent
+    `[]` — correctly, since the prompt the same call sends says every index must
+    be present. But it then returned None, which discarded the N-1 answers the
+    model had already produced and made the caller re-ask all N chunks.
+
+    On the contended GPU this exists for, that is the worst possible trade: a
+    dropped index makes the batch call slow, which makes it likelier to drop
+    another, and each of the N per-chunk re-asks carries its own three-attempt
+    ladder while holding the same semaphore slot. A 4-chunk batch went from
+    1 call to 5 — and the phase ceiling is sized on BATCH count, so it cannot
+    see the expansion and the document degrades for a reason no knob covers.
+
+    So: keep the partial answer, re-ask only the missing indices.
+    """
+
+    @staticmethod
+    def _batch_response(labels_by_index, omit=()):
+        """A batch answer naming `labels_by_index`, silently skipping `omit`."""
+        payload = {str(k): v for k, v in labels_by_index.items() if k not in omit}
+        message = MagicMock()
+        message.content = json.dumps(payload)
+        message.tool_calls = None
+        choice = MagicMock()
+        choice.message = message
+        choice.finish_reason = "stop"
+        response = MagicMock()
+        response.choices = [choice]
+        response.usage = None
+        return response
+
+    @staticmethod
+    def _async_client(responses):
+        """A client returning each response in turn, recording every call."""
+        calls = []
+        pending = list(responses)
+
+        async def create(**kwargs):
+            calls.append(kwargs)
+            item = pending.pop(0)
+            if isinstance(item, Exception):
+                raise item
+            return item
+
+        client = MagicMock()
+        client.chat.completions.create = create
+        return client, calls
+
+    def _run_batch(self, client, batch):
+        async def scenario():
+            dp = _stub_dataprep()
+            return await dp._llm_call_batch(client, "test-model", "sys", batch, "f1")
+
+        return _run(scenario())
+
+    def test_a_missing_index_is_reported_not_discarded(self):
+        client, calls = self._async_client([self._batch_response({0: ["A"], 2: ["C"]}, omit=(1,))])
+        suggestions, missing = self._run_batch(client, [(0, "a"), (1, "b"), (2, "c")])
+        assert len(calls) == 1, "the batch call must not be retried to recover one index"
+        assert missing == [1], f"expected only index 1 to be reported missing, got {missing}"
+        assert set(suggestions) == {0, 2}, f"the two answered indices were discarded: {suggestions}"
+        assert suggestions[0] == ["A"] and suggestions[2] == ["C"]
+
+    def test_a_complete_batch_reports_nothing_missing(self):
+        client, _ = self._async_client([self._batch_response({0: ["A"], 1: ["B"]})])
+        suggestions, missing = self._run_batch(client, [(0, "a"), (1, "b")])
+        assert missing == []
+        assert set(suggestions) == {0, 1}
+
+    def test_an_unusable_value_is_still_lenient(self):
+        """A present-but-unusable value is `[]`, not a re-ask.
+
+        The asymmetry is deliberate: the prompt forbids both `null` and a bare
+        string, but an index that is PRESENT means the model answered, and
+        re-asking costs a call to get the same `[]` it already gave.
+        """
+        message = MagicMock()
+        message.content = json.dumps({"0": ["A"], "1": None})
+        message.tool_calls = None
+        choice = MagicMock()
+        choice.message = message
+        choice.finish_reason = "stop"
+        response = MagicMock()
+        response.choices = [choice]
+        response.usage = None
+        client, calls = self._async_client([response])
+
+        suggestions, missing = self._run_batch(client, [(0, "a"), (1, "b")])
+        assert len(calls) == 1
+        assert missing == [], "a null VALUE is an answer, not an omission"
+        assert suggestions[1] == [], f"a null value must become [], got {suggestions[1]!r}"
+
+    def test_only_the_missing_indices_are_re_asked(self):
+        """The cost this exists to bound: N-1 re-asks, not N.
+
+        Four chunks, one omitted. The old contract spent five calls; this spends
+        two. Asserted by COUNT, because asserting on the answer alone would pass
+        under either contract — the labels come out the same either way, which is
+        exactly why the regression went unnoticed.
+        """
+        client, calls = self._async_client(
+            [
+                self._batch_response({0: ["A"], 1: ["B"], 3: ["D"]}, omit=(2,)),
+                # The per-chunk shape, so the re-ask goes through the real
+                # _llm_call_single and lands on this client. Stubbing it would
+                # hide the very call this test counts.
+                self._single_response(["C"]),
+            ]
+        )
+
+        async def scenario():
+            dp = _stub_dataprep()
+            return await dp._llm_suggest_labels(
+                client, "test-model", "sys", [(0, "a"), (1, "b"), (2, "c"), (3, "d")], "f1", []
+            )
+
+        out, fell_back = _run(scenario())
+
+        assert len(calls) == 2, (
+            f"expected 1 batch call + 1 re-ask, made {len(calls)}. Re-asking every chunk turns a "
+            "4-chunk batch into 5 calls, each with its own retry ladder, holding one semaphore "
+            "slot — and the phase ceiling is sized on batch count, so it cannot see that."
+        )
+        assert set(out) == {0, 1, 2, 3}, f"every chunk must end up answered, got {sorted(out)}"
+        assert out[0] == ["A"] and out[2] == ["C"], f"partial answers were lost: {out}"
+
+    @staticmethod
+    def _single_response(labels):
+        message = MagicMock()
+        message.content = json.dumps({"labels": labels})
+        message.tool_calls = None
+        choice = MagicMock()
+        choice.message = message
+        choice.finish_reason = "stop"
+        response = MagicMock()
+        response.choices = [choice]
+        response.usage = None
+        return response
+
+    @staticmethod
+    def _batch_response_text(text):
+        message = MagicMock()
+        message.content = text
+        message.tool_calls = None
+        choice = MagicMock()
+        choice.message = message
+        choice.finish_reason = "stop"
+        response = MagicMock()
+        response.choices = [choice]
+        response.usage = None
+        return response

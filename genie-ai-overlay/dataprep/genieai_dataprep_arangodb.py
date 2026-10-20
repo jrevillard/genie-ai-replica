@@ -2398,9 +2398,25 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         """
         if len(batch) > 1:
             try:
-                suggestions = await self._llm_call_batch(client, model, system_prompt, batch, file_id)
-                if suggestions is not None:
-                    return suggestions, 0
+                result = await self._llm_call_batch(client, model, system_prompt, batch, file_id)
+                if result is not None:
+                    suggestions, missing = result
+                    if not missing:
+                        return suggestions, 0
+                    # Keep what the model DID answer and re-ask only the rest.
+                    # Falling through to the per-chunk path below would re-ask
+                    # every chunk in the batch, spending a second call on each
+                    # one already labelled by the call we just made.
+                    out = dict(suggestions)
+                    fell_back = 0
+                    by_index = dict(batch)
+                    for i in missing:
+                        labels, used_file_labels = await self._llm_call_single(
+                            client, model, system_prompt, i, by_index[i], file_id, file_labels
+                        )
+                        out[i] = labels
+                        fell_back += used_file_labels
+                    return out, fell_back
                 # _llm_call_batch already counted the failure (parse or call) —
                 # it swallows both and returns None, so nothing reaches the
                 # handlers below for a failed call.
@@ -2564,15 +2580,26 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         _llm_fallback_total.add(1, {"phase": PHASE_LABEL_LABELING, "reason": "file_labels"})
         return (list(file_labels) if file_labels else []), True
 
-    async def _llm_call_batch(self, client, model, system_prompt, batch, file_id) -> dict[int, list[str]] | None:
+    async def _llm_call_batch(self, client, model, system_prompt, batch, file_id):
         """One LLM call labeling a whole batch of chunks.
 
-        Returns None when the response cannot be used as a batch answer at all —
-        malformed JSON, not an object, or not every requested index present. The
-        caller treats None as a batch failure and re-asks per chunk; a reader who
-        assumes None means "the model emitted garbage" will misread why the
-        per-chunk path ran. An index present with an unusable VALUE is not a None
-        case — it becomes [] in place, without re-asking.
+        Returns ``(suggestions, missing)`` where ``missing`` lists the requested
+        indices the response never mentioned, or ``None`` when the response
+        cannot be used as a batch answer AT ALL — malformed JSON, not an object,
+        or a failed call.
+
+        The two are different failures with different costs. ``None`` throws the
+        whole call away, so the caller re-asks every chunk. An incomplete answer
+        is mostly good: the model labelled N-1 of N chunks, and re-asking all N
+        discards N-1 answers it already paid for. On a contended GPU — exactly
+        where the batch call is slowest and a drop most likely — that turns a
+        2-call batch into 5 calls each carrying its own retry ladder, holding the
+        same semaphore slot for the lot, which is more than the phase ceiling is
+        sized for. So an incomplete answer is returned, not discarded, and only
+        the missing indices are re-asked.
+
+        An index present with an unusable VALUE is neither case — it becomes []
+        in place, without re-asking, which is what the model means by it.
         """
         indices = [i for i, _ in batch]
         user_content = (
@@ -2656,18 +2683,26 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 # VALUE without re-asking. Only an absent KEY is a failure.
                 missing = [i for i in indices if i not in mentioned]
                 if missing:
-                    _llm_fallback_total.add(1, {"phase": PHASE_LABEL_LABELING, "reason": "batch_parse"})
-                    return None
-                # Every index was mentioned: absent from `suggestions` means the
-                # value was unusable, which is a [] the model did ask for.
+                    _llm_fallback_total.add(len(missing), {"phase": PHASE_LABEL_LABELING, "reason": "batch_parse"})
+                    await self._write_ingestion_log(
+                        file_id,
+                        "WARN",
+                        "Labeling",
+                        f"Batch labeling response omitted chunk indices {missing}; "
+                        f"re-asking those {len(missing)} of {len(indices)} only.",
+                    )
+                # Every index that was mentioned is answered: absent from
+                # `suggestions` means its value was unusable, which is a [] the
+                # model did ask for.
                 for i in indices:
-                    suggestions.setdefault(i, [])
+                    if i not in missing:
+                        suggestions.setdefault(i, [])
                 span.set_attribute("dataprep.labels_suggested", sum(len(v) for v in suggestions.values()))
                 _usage = getattr(response, "usage", None)
                 if getattr(_usage, "completion_tokens", None) is not None:
                     span.set_attribute("dataprep.llm.completion_tokens", _usage.completion_tokens)
                     span.set_attribute("dataprep.llm.prompt_tokens", getattr(_usage, "prompt_tokens", 0))
-                return suggestions
+                return suggestions, missing
             except Exception as e:
                 err = f"{type(e).__name__}: {str(e)[:200]}"
                 if _is_vllm_input_overflow(e):

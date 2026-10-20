@@ -45,6 +45,19 @@ spec:
       ports:
         - protocol: TCP
           port: 8888
+  {{- if .Values.observability.metrics.enabled }}
+  # Prometheus scrape peer (VMServiceScrape targets this Service).
+  # VictoriaMetrics runs as a vm-operator-managed pod in this namespace;
+  # without this peer its scrapes are dropped by the default-deny.
+    - from:
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: vmetrics
+      ports:
+        - protocol: TCP
+          port: 8888
+  {{- end }}
   egress:
     # DNS resolution to kube-system.
     - to:
@@ -180,6 +193,19 @@ spec:
       ports:
         - protocol: TCP
           port: 7000
+  {{- if .Values.observability.metrics.enabled }}
+  # Prometheus scrape peer (VMServiceScrape targets this Service).
+  # VictoriaMetrics runs as a vm-operator-managed pod in this namespace;
+  # without this peer its scrapes are dropped by the default-deny.
+    - from:
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: vmetrics
+      ports:
+        - protocol: TCP
+          port: 7000
+  {{- end }}
   egress:
     # DNS resolution to kube-system.
     - to:
@@ -262,6 +288,19 @@ spec:
       ports:
         - protocol: TCP
           port: 5000
+  {{- if .Values.observability.metrics.enabled }}
+  # Prometheus scrape peer (VMServiceScrape targets this Service).
+  # VictoriaMetrics runs as a vm-operator-managed pod in this namespace;
+  # without this peer its scrapes are dropped by the default-deny.
+    - from:
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: vmetrics
+      ports:
+        - protocol: TCP
+          port: 5000
+  {{- end }}
   egress:
     # DNS resolution to kube-system.
     - to:
@@ -372,6 +411,19 @@ spec:
       ports:
         - protocol: TCP
           port: 6000
+  {{- if .Values.observability.metrics.enabled }}
+  # Prometheus scrape peer (VMServiceScrape targets this Service).
+  # VictoriaMetrics runs as a vm-operator-managed pod in this namespace;
+  # without this peer its scrapes are dropped by the default-deny.
+    - from:
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: vmetrics
+      ports:
+        - protocol: TCP
+          port: 6000
+  {{- end }}
   egress:
     # DNS resolution to kube-system.
     - to:
@@ -436,6 +488,19 @@ spec:
       ports:
         - protocol: TCP
           port: 8000
+  {{- if .Values.observability.metrics.enabled }}
+  # Prometheus scrape peer (VMServiceScrape targets this Service).
+  # VictoriaMetrics runs as a vm-operator-managed pod in this namespace;
+  # without this peer its scrapes are dropped by the default-deny.
+    - from:
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: vmetrics
+      ports:
+        - protocol: TCP
+          port: 8000
+  {{- end }}
   egress:
     # DNS resolution to kube-system.
     - to:
@@ -508,6 +573,19 @@ spec:
         # Post-DNAT pod port; the Service maps 9031 to 8888.
         - protocol: TCP
           port: 8888
+  {{- if .Values.observability.metrics.enabled }}
+  # Prometheus scrape peer (VMServiceScrape targets this Service).
+  # VictoriaMetrics runs as a vm-operator-managed pod in this namespace;
+  # without this peer its scrapes are dropped by the default-deny.
+    - from:
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: vmetrics
+      ports:
+        - protocol: TCP
+          port: 8888
+  {{- end }}
   egress:
     # DNS resolution to kube-system.
     - to:

@@ -100,7 +100,7 @@ def test_the_vendored_graph_transformer_reads_vllm_timeout(comps):
     to comps" describes a real change rather than a variable an OPEA bump has
     since renamed away — which would make OVERRIDES.yaml's prescription stale.
     """
-    module = importlib.import_module("comps.dataprep.integrations.arangodb")
+    module = importlib.import_module("comps.dataprep.src.integrations.arangodb")
     assert hasattr(module, "VLLM_TIMEOUT"), (
         "the vendored comps dataprep no longer defines VLLM_TIMEOUT — OVERRIDES.yaml records "
         "that closing this entry requires a patch to the vendored source, and such a patch "

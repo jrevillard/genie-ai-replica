@@ -1,3 +1,15 @@
+{{- /*
+  The Cluster below is Keycloak's database, not a generic PostgreSQL
+  tier: its name, its bootstrap database and its owner all come from
+  data.keycloak.*, and the Keycloak CR's spec.db.host points at it.
+  Turning the postgres tier off while Keycloak is on therefore deletes
+  the only database the CR can reach, and nothing reports it — the
+  Keycloak pods stay Pending on a connection error. Fail the render
+  instead of shipping that combination.
+*/ -}}
+{{- if and .Values.data.keycloak.enabled (not .Values.data.postgres.enabled) -}}
+{{- fail "data.keycloak.enabled=true requires data.postgres.enabled=true — this chart renders exactly one CNPG Cluster (the Keycloak database, named data.keycloak.cnpgServiceName); without it the Keycloak CR has no database to connect to" -}}
+{{- end -}}
 {{- if .Values.data.postgres.enabled -}}
 {{- $instances := .Values.data.postgres.instances | default 1 -}}
 {{- if eq .Values.clusterProfile "prod" -}}

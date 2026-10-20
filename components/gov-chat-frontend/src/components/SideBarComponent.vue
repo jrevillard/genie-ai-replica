@@ -470,20 +470,19 @@ export default {
   width: 100%;
 }
 
-/* Off-canvas below 1024 px. The right sidebar stays in flow at
-   every width ≥ 768 px so the chat column at 769 - 1023 px has
-   one fixed sidebar (the right, 320 px) to subtract rather than
-   two — the centre then has ~ 441 px at 769 px (with the right in
-   flow and the left off-canvas) which auto-fit sees as a
-   single-column panel. Above 1024 px both sidebars are in flow
-   at their normal widths (450 + 320 = 770 px) so the centre is the
-   reference 486 px at 1280 px (the brief's 2-col layout).
+/* Off-canvas below 1400 px. Both sidebars step aside together
+   (right at the same 1400 px breakpoint, in the right sidebar's
+   own CSS), so the chat column never gets squeezed by the 450 px
+   left reservation at narrow laptop widths — at 1280 px the
+   centre is the full 1280 px (minus a 320 px right sidebar that
+   stays in flow under the same policy), and at 1024 px it is the
+   full 1024 px. The responsive ladder is monotonic in the
+   viewport width; the centre never narrows as the user widens
+   the window.
 
-   The boundary at 1024 px is unambiguous: (max-width: 1023px)
-   pairs with (min-width: 1024px), only one matches at any width,
-   and the boundary sits at a natural "small tablet turns desktop"
-   seam. */
-@media screen and (max-width: 1023px) {
+   The boundary at 1400 px is unambiguous: (max-width: 1399px)
+   pairs with (min-width: 1400px), only one matches at any width. */
+@media screen and (max-width: 1399px) {
   .side-bar {
     position: fixed;
     top: 60px;
@@ -515,9 +514,9 @@ export default {
   }
 }
 
-/* In flow at 1024 px and above. Pairs with the (max-width: 1023px)
-   rule above so the boundary at 1024 px is unambiguous. */
-@media screen and (min-width: 1024px) {
+/* In flow at 1400 px and above. Pairs with the (max-width: 1399px)
+   rule above so the boundary at 1400 px is unambiguous. */
+@media screen and (min-width: 1400px) {
   .side-bar {
     position: relative;
     transform: translateX(0);

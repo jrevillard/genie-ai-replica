@@ -551,15 +551,19 @@ export default {
   padding-left: var(--space-lg);
 }
 
-@media (max-width: 767px) {
-  /* Off-canvas until made visible. The boundary is (max-width: 767px)
-     so the in-flow rule below does NOT also match at exactly 768 px.
-     The Living Intelligence layer's corner-network rule (in
-     genie-visual-effects.css) is now bounded to @media screen and
-     (min-width: 1024px) and so does not compete for `position`
-     below 768 px — the sidebar is off-canvas there anyway, and the
-     position defaults above 768 px are static without any layer
-     override. */
+@media (max-width: 1399px) {
+  /* Off-canvas until made visible. The boundary is (max-width: 1399px)
+     — both sidebars step aside together at this width: the left
+     sidebar's CSS in SideBarComponent sets the same breakpoint so
+     the layout has a single, monotonic threshold. The right stays
+     in flow at every width ≥ 1400 px (where the layout reserves
+     450 + 320 = 770 px for two sidebars); below 1400 px the chat
+     column never has to reserve space for both, so the centre
+     never narrows as the user widens the window. The Living
+     Intelligence layer's corner-network rule in
+     genie-visual-effects.css is bounded to @media screen and
+     (min-width: 1400px), so it does not compete for position
+     below 1400 px. */
   .sidebar {
     position: fixed;
     right: 0;

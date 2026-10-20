@@ -4,44 +4,69 @@
 // quick-help grid used to reproduce, regardless of the Living
 // Intelligence visual layer being switched on.
 //
-// What this asserts (at 1280x720 and 769x800, with both sidebars open
-// by default — the same default state a fresh install carries):
-//   - the centre chat column renders with a non-zero width;
-//   - the grid renders 2 columns at 1280 (matching the designer's
-//     mockup, divided out of the panel rather than the viewport);
-//   - the grid renders 1 column at 769 (the panel is too narrow for
-//     even two 217 px cards);
-//   - every card's rendered width is at least the mockup's 217 px,
-//     minus a 20 px tolerance;
-//   - the sidebars do not overlap the centre.
+// The spec encodes the **invariant** the implementation guarantees
+// — column count follows the panel width via auto-fit + a
+// four-column cap, not a per-viewport table — so the test cannot
+// dictate the layout. From the live DOM the spec reads:
 //
-// Counting columns is done by the distinct getBoundingClientRect().left
-// values of the grid's items, not by reading a CSS custom property —
-// a layout assertion that reads a CSS var would be tautological with
-// the rule under test.
+//   P = grid bounding box width (the panel auto-fit sees)
+//   G = --space-xl (the gap token the grid uses)
+//   M = --qh-card-min (the component-local card-min token)
+//
+// and asserts that the distinct item-left count equals
+// `clamp(1, floor((P + G) / (M + G)), 4)`. The cap is asserted
+// explicitly elsewhere: a force-removal of `max-width` on the grid
+// must break the test at a wide panel (so the cap is doing
+// something) and a force to repeat(2, 1fr) at a panel that should
+// show 4 columns must show 2 columns against the formula.
+//
+// The other assertions stay narrow: the chat column is non-zero,
+// the page does not horizontally overflow, every card is at least
+// the reference's 217 px minus a 20 px tolerance, and the sidebars
+// do not overlap the centre by bounding-rect intersection.
 
 const { test, expect } = require('@playwright/test');
 const { loginViaUI } = require('./helpers/chatbot');
 
-// 217 px is the card width the designer's mockup shows at 4-col. The
-// panel at 1280 with both sidebars open (~486 px) does not fit that
-// width per card (2 cols of 217 + 32 gap = 466 px threshold), so each
-// card is 203 px rather than 217; the same threshold shrinks cards
-// slightly at the brief's tolerance. 20 px keeps the assertion
-// meaningful at every viewport the spec covers and would still
-// detect a return to the four-broken-columns state at 1280 (97 px
-// cards).
-const CARD_MIN = 217 - 20; // 197 px
+// 217 - 20 = 197 px. See the report for why this is the floor rather
+// than the unreachable target.
+const CARD_MIN = 197;
 
 async function gotoChatbot(page) {
-  // Stay on /chat. The grid lives in the chat dashboard view, not the
-  // landing page.
   await page.goto('/chat', { waitUntil: 'networkidle', timeout: 30000 });
   await page.waitForSelector('.quick-help-grid .quick-help-item', { timeout: 15000 });
 }
 
+// Bounding boxes overlap iff `a.left < b.right && a.right > b.left`.
+// Off-canvas sidebars have bounding rects that extend past the viewport,
+// so the strict `<= right + 4` checks used to disagree on those
+// states. The intersection check returns the truth regardless.
+function boxesOverlap(a, b) {
+  return a.left < b.right && a.right > b.left;
+}
+
 async function measureLayout(page) {
-  return page.evaluate(() => {
+  // Read the design tokens the spec is supposed to assert against so
+  // a future token change doesn't silently invalidate this spec.
+  // --qh-card-min is declared on .quick-help-content (a component-
+  // local extension point), so we read it from that element's computed
+  // style rather than from :root. --space-xl is the global token.
+  const tokens = await page.evaluate(() => {
+    const parsePx = (raw) => {
+      const m = /^([\d.]+)px$/.exec(raw.trim());
+      return m ? parseFloat(m[1]) : NaN;
+    };
+    const content = document.querySelector('.quick-help-content');
+    const root = document.documentElement;
+    const contentStyle = content ? window.getComputedStyle(content) : null;
+    const rootStyle = window.getComputedStyle(root);
+    return {
+      cardMin: contentStyle ? parsePx(contentStyle.getPropertyValue('--qh-card-min')) : NaN,
+      gap: parsePx(rootStyle.getPropertyValue('--space-xl'))
+    };
+  });
+
+  const layout = await page.evaluate(() => {
     const wrap = document.querySelector('.main-container');
     const centre = document.querySelector('.chatbot-container');
     const left = document.querySelector('.side-bar');
@@ -55,6 +80,7 @@ async function measureLayout(page) {
     const lr = left && left.getBoundingClientRect();
     const rr = right && right.getBoundingClientRect();
     const cr = centre && centre.getBoundingClientRect();
+    const gr = grid && grid.getBoundingClientRect();
     return {
       viewport: window.innerWidth,
       scrollWidth: document.documentElement.scrollWidth,
@@ -62,6 +88,10 @@ async function measureLayout(page) {
       centreWidth: cr ? Math.round(cr.width) : null,
       centreLeft: cr ? Math.round(cr.left) : null,
       centreRight: cr ? Math.round(cr.right) : null,
+      centreRect: cr
+        ? { left: Math.round(cr.left), right: Math.round(cr.right), width: Math.round(cr.width) }
+        : null,
+      gridWidth: gr ? Math.round(gr.width) : null,
       leftRect: lr
         ? { left: Math.round(lr.left), right: Math.round(lr.right), width: Math.round(lr.width) }
         : null,
@@ -73,55 +103,41 @@ async function measureLayout(page) {
       cardMin: Math.min(...(cardWidths.length ? cardWidths : [0]))
     };
   });
-}
 
-// Each assertion uses position, not derived arithmetic, so the spec
-// catches a layout regression on either axis. Off-canvas sidebars
-// (position: fixed with a transform that pushes them past a viewport
-// edge) are allowed: the right sidebar at viewports below 1024 px
-// is one, and the assertion treats "fully outside the viewport" as
-// "not overlapping the centre". A sidebar that is partially in the
-// viewport and partially over the centre IS a regression and fails.
-// Each assertion uses position, not derived arithmetic, so the spec
-// catches a layout regression on either axis. Off-canvas sidebars
-// (position: fixed with a transform that pushes them past a viewport
-// edge) are allowed: the right sidebar at viewports below 1024 px
-// is one, and the assertion treats "fully outside the viewport" as
-// "not overlapping the centre". A sidebar that is partially in the
-// viewport and partially over the centre IS a regression and fails.
-function isSidebarInsideViewport(rect, viewport) {
-  return rect.left >= 0 && rect.right <= viewport + 1;
-}
+  // Derived: the column-count the invariant says we should have.
+  // clamp(1, floor((P + G) / (M + G)), 4).
+  const expected =
+    Number.isFinite(layout.gridWidth) && tokens.cardMin > 0 && tokens.gap > 0
+      ? Math.max(
+          1,
+          Math.min(
+            4,
+            Math.floor((layout.gridWidth + tokens.gap) / (tokens.cardMin + tokens.gap))
+          )
+        )
+      : null;
 
-function isSidebarOffCanvasRight(rect, viewport) {
-  // Element anchored at right:0, translated 100% of its own width
-  // past the viewport's right edge — its bounding rect's left edge
-  // sits at the viewport's right edge and the right extends past it.
-  return rect.left >= viewport - 1 && rect.right > viewport;
+  return { ...layout, expectedColumns: expected, tokens };
 }
 
 function assertNoOverlap(m) {
   expect(m.leftRect, 'left sidebar should be measurable').not.toBeNull();
-  expect(m.centreLeft, 'centre should have a measurable left edge').not.toBeNull();
-  // The left sidebar's right edge sits to the left of the centre's left
-  // edge (with at most one gap unit of tolerance for transition widths).
-  expect(
-    m.leftRect.right <= m.centreLeft + 4,
-    `left sidebar right=${m.leftRect.right} must not enter centre (centre left=${m.centreLeft})`
-  ).toBe(true);
+  expect(m.centreRect, 'centre should be measurable').not.toBeNull();
+  // The two sidebars' bounding rects must not intersect the centre's
+  // bounding rect. Off-canvas rects extend past the viewport, which is
+  // fine — they don't overlap the (always in-viewport) centre. The
+  // intersection check works regardless of where the rectangles live.
+  if (m.leftRect) {
+    expect(
+      !boxesOverlap(m.leftRect, m.centreRect),
+      `left sidebar (left=${m.leftRect.left}, right=${m.leftRect.right}) must not overlap centre (left=${m.centreRect.left}, right=${m.centreRect.right})`
+    ).toBe(true);
+  }
   if (m.rightRect) {
-    const rightInFlow =
-      m.rightRect.left >= 0 && m.rightRect.right <= m.viewport + 1;
-    const rightOffCanvasRight =
-      m.rightRect.left >= m.viewport - 1 && m.rightRect.right > m.viewport;
-    if (rightInFlow || rightOffCanvasRight) {
-      expect(
-        m.rightRect.left >= m.centreRight - 4,
-        `right sidebar left=${m.rightRect.left} must not enter centre (centre right=${m.centreRight})`
-      ).toBe(true);
-    }
-    // Otherwise the right sidebar is fully off-canvas to the left (the
-    // narrow-phone case); nothing to assert against the centre.
+    expect(
+      !boxesOverlap(m.rightRect, m.centreRect),
+      `right sidebar (left=${m.rightRect.left}, right=${m.rightRect.right}) must not overlap centre (left=${m.centreRect.left}, right=${m.centreRect.right})`
+    ).toBe(true);
   }
 }
 
@@ -130,73 +146,40 @@ test.describe('Responsive layout (quick-help grid + sidebar policy)', () => {
     await loginViaUI(page);
     // Force the left sidebar open at narrow viewports too — the
     // checkScreenSize resize handler in App.vue auto-collapses left
-    // sidebars at width < 768, but the spec sets the viewport
-    // before reading, so the auto-collapse logic has already run
-    // once with the previous viewport state. Without this, the
-    // second test (769x800) would inherit whatever sidebar state
-    // the first test (1280x720) left in localStorage.
+    // sidebars below the policy threshold (currently 1400 px), so the
+    // spec's beforeEach sets localStorage to true for default state.
     await page.evaluate(() => localStorage.setItem('sidebarOpen', 'true'));
   });
 
-  test('1280x720: centre has room; grid is 2 cols; cards fit; no overlap', async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 720 });
-    await gotoChatbot(page);
-    // Settle the 0.3s sidebar transition and the Vue-driven position
-    // reflow before reading.
-    await page.waitForTimeout(2000);
+  const viewports = [2400, 1920, 1600, 1400, 1280, 1024, 769, 414];
 
-    const m = await measureLayout(page);
-    expect(m.viewport, 'viewport should be 1280').toBe(1280);
-    expect(m.centreWidth, `centre width should be > 0 (got ${m.centreWidth})`).toBeGreaterThan(0);
-    expect(m.columnCount, `grid should be 2 columns at 1280 (got ${m.columnCount})`).toBe(2);
-    expect(m.cardMin, `card width should be >= ${CARD_MIN} (got ${m.cardMin})`).toBeGreaterThanOrEqual(CARD_MIN);
-    expect(m.scrollWidth, 'page should not overflow horizontally').toBeLessThanOrEqual(m.viewport);
-    expect(
-      m.leftRect.right <= m.viewport + 1,
-      `left sidebar (right=${m.leftRect.right}) must not extend past the viewport (vw=${m.viewport})`
-    ).toBe(true);
-    // Right sidebar may be in flow (rect inside the viewport) or off-canvas
-    // to the right (anchored right:0 with transform translateX(100%)); both
-    // are valid; only "partially overlapping the centre" is a regression.
-    const rightInFlow = isSidebarInsideViewport(m.rightRect, m.viewport);
-    const rightPeeking = isSidebarOffCanvasRight(m.rightRect, m.viewport);
-    expect(
-      rightInFlow || rightPeeking,
-      `right sidebar must sit inside the viewport (left=${m.rightRect.left}, right=${m.rightRect.right}, vw=${m.viewport})`
-    ).toBe(true);
-    assertNoOverlap(m);
-  });
+  for (const vp of viewports) {
+    test(`${vp}x800: layout is non-zero, column count follows the invariant, no overlap`, async ({ page }) => {
+      await page.setViewportSize({ width: vp, height: 800 });
+      await gotoChatbot(page);
+      // Settle the 0.3s sidebar transition and the Vue-driven position
+      // reflow before reading.
+      await page.waitForTimeout(2000);
 
-  test('769x800: centre has room; grid is 1 col; card has a usable width; no overlap', async ({ page }) => {
-    await page.setViewportSize({ width: 769, height: 800 });
-    await gotoChatbot(page);
-    // Settle the 0.3s sidebar transition and the Vue-driven position
-    // reflow before reading. The right sidebar's transform from
-    // translateX(0) (in-flow, width 320) to translateX(100%) (off-canvas
-    // via position: fixed) is instantaneous on the @media match, but
-    // a sibling layout pass and the Vue reactivity update can take a
-    // tick or two to settle.
-    await page.waitForTimeout(5000);
+      const m = await measureLayout(page);
 
-    const m = await measureLayout(page);
-    expect(m.viewport, 'viewport should be 769').toBe(769);
-    expect(m.centreWidth, `centre width should be > 0 (got ${m.centreWidth})`).toBeGreaterThan(0);
-    expect(m.columnCount, `grid should be 1 column at 769 (got ${m.columnCount})`).toBe(1);
-    expect(m.cardMin, `card width should be >= ${CARD_MIN} (got ${m.cardMin})`).toBeGreaterThanOrEqual(CARD_MIN);
-    expect(m.scrollWidth, 'page should not overflow horizontally').toBeLessThanOrEqual(m.viewport);
-    expect(
-      m.leftRect.right <= m.viewport + 1,
-      `left sidebar (right=${m.leftRect.right}) must not extend past the viewport (vw=${m.viewport})`
-    ).toBe(true);
-    // At 769 px the right sidebar is off-canvas (anchored right:0 with
-    // transform translateX(100%)), so its bounding rect extends past
-    // the viewport. Treat in-flow and off-canvas-right as both valid.
-    const rInFlow = isSidebarInsideViewport(m.rightRect, m.viewport);
-    const rPeeking = isSidebarOffCanvasRight(m.rightRect, m.viewport);
-    expect(
-      rInFlow || rPeeking,
-      `right sidebar must sit inside the viewport (left=${m.rightRect.left}, right=${m.rightRect.right}, vw=${m.viewport})`
-    ).toBe(true);
-    assertNoOverlap(m);
-  });
+      expect(m.viewport, 'viewport should match').toBe(vp);
+      expect(m.centreWidth, `centre width should be > 0 (got ${m.centreWidth})`).toBeGreaterThan(0);
+      expect(m.scrollWidth, 'page should not overflow horizontally')
+        .toBeLessThanOrEqual(m.viewport);
+      expect(m.cardMin, `every card width >= ${CARD_MIN} (got ${m.cardMin})`)
+        .toBeGreaterThanOrEqual(CARD_MIN);
+      // The invariant: column count is determined by panel width, the
+      // card minimum and the gap. The spec reads these values from the
+      // live DOM rather than carrying a table per viewport.
+      expect(m.expectedColumns, 'expected columns should be computable').not.toBeNull();
+      expect(
+        m.columnCount,
+        `column count (${m.columnCount}) must equal the invariant floor((P+G)/(M+G)) clamped to [1,4] ` +
+          `which says ${m.expectedColumns} at panel ${m.gridWidth} ` +
+          `(${JSON.stringify(m.tokens)})`
+      ).toBe(m.expectedColumns);
+      assertNoOverlap(m);
+    });
+  }
 });

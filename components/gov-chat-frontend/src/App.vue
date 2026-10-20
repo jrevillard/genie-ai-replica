@@ -294,19 +294,23 @@ export default {
     },
 
     checkScreenSize() {
-      // The sidebar reserves 450 px in flow above 1024 px; below 1024 px
-      // the chat column cannot fit both sidebars at their natural widths
-      // (1280 - 770 = 510 px → 486 px after padding → 2 cards; 1024 - 770
-      // = 254 px → 230 after padding, only 1 card). The sidebar's own
-      // CSS off-canvas rule (transform: translateX(-100%)) applies at
-      // < 1024 px and would leave the chat with the room it needs, but
-      // the default isOpen=true renders the sidebar as an overlay on top
-      // of the chat at translateX(0). Auto-close it here so the user's
-      // first view at narrow viewports shows the chat, not the overlay.
-      // The hamburger button still toggles isOpen and the SidebarComponent
-      // slides the sidebar in/out via the existing transform rules; only
-      // the initial state at < 1024 px changes.
-      if (window.innerWidth < 1024 && this.isSidebarOpen) {
+      // The default app state is both sidebars open (the left's
+      // `isOpen` prop is bound to this flag). Below 1400 px the
+      // sidebar component's own CSS off-canvases the sidebar via
+      // transform: translateX(-100%), but the default isOpen=true
+      // would render the sidebar as an overlay on top of the chat
+      // (the .side-bar.side-bar-open rule overrides the transform
+      // to translateX(0)). Auto-close it here so the user's first
+      // view at narrow viewports shows the chat, not the overlay.
+      // The 1400 px threshold must match the CSS breakpoint in
+      // SideBarComponent; if the two diverge, a resize can leave
+      // the app in a state its CSS does not describe. The hamburger
+      // button still toggles isOpen and the SidebarComponent
+      // slides the sidebar in/out; only the initial state at
+      // < 1400 px changes. The check is one-directional (does not
+      // reset isOpen on resize upward), matching the existing
+      // < 768 px behaviour.
+      if (window.innerWidth < 1400 && this.isSidebarOpen) {
         this.isSidebarOpen = false;
       }
     }

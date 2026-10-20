@@ -268,15 +268,27 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-item:focus-visible
 /*
  * Scoped right resources sidebar; position the network out of text's way.
  *
- * Gated on the sidebar's own breakpoint. SideBarComponent declares
- * `max-width: 768px` -> `position: fixed` and `min-width: 768px` ->
- * `position: relative`; both match at exactly 768 and the fixed one wins,
- * so the in-flow branch the layer can safely rely on starts at 769. The
- * layer's selector is specific enough to outrank those rules, so leaving
- * the gate out gives the panel an in-flow column at narrow widths and
- * squeezes .chatbot-container to zero.
+ * Gated to the range where the sidebar is in flow: ≥1024 px. The 769 px
+ * breakpoint that was here before asked the layer to share a position
+ * declaration with the component's off-canvas policy at 768 - 1023 px;
+ * the component's rule lost the cascade at every higher specificity
+ * (the layer's @media, the .genie-living-intelligence class, the
+ * :not(.collapsed) pseudo-class, and the html attribute together add
+ * up). The component had to mirror the layer's selector shape to win
+ * — an app-layout CSS file learning the layer's class names is a
+ * silent coupling that breaks the next time the layer changes shape.
+ *
+ * The fix is in this file: bound the rule to the range where the
+ * sidebar is in flow (≥1024 px). The component's off-canvas rule
+ * below 1024 px is unscoped (`.sidebar { position: fixed; ... }`)
+ * and owns the position by itself at every narrower width — no
+ * mirroring, no shared class names, no coupling. The corner
+ * network's `::before` was previously painted at widths where the
+ * sidebar was off-canvas (768 - 1023 px) and so reached nothing; it
+ * stays painted at ≥1024 px where the sidebar is in flow and the
+ * artwork can anchor to the panel.
  */
-@media screen and (min-width: 769px) {
+@media screen and (min-width: 1024px) {
   html[data-visual='on'] .genie-living-intelligence .sidebar:not(.collapsed) {
     position: relative;
     isolation: isolate;
@@ -322,7 +334,14 @@ html[data-visual='on'] .genie-living-intelligence .document-item {
   }
 }
 
-@media screen and (min-width: 769px) and (max-width: 900px) {
+/* A narrower corner network when the in-flow chat column is small —
+   1024 - 1280 px is the range where the panel starts narrow and the
+   78 % / 420 px corner would crowd the text. Above 1280 px the full
+   300 x 420 px network anchors as written above. The lower edge of
+   1024 px matches the sidebar's own in-flow breakpoint; below that
+   the sidebar is off-canvas and so is the corner art that anchored
+   to it. */
+@media screen and (min-width: 1024px) and (max-width: 1280px) {
   html[data-visual='on'] .genie-living-intelligence .sidebar:not(.collapsed)::before {
     width: calc(var(--visual-corner-set, 0) * 150px);
     height: calc(var(--visual-corner-set, 0) * 230px);

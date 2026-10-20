@@ -470,12 +470,20 @@ export default {
   width: 100%;
 }
 
-/* Mobile: offscreen unless side-bar-open is set.
-   The boundary is (max-width: 767px) so it does NOT overlap with the
-   (min-width: 768px) in-flow rule below at exactly 768 px. The two
-   earlier both-matched-768 queries fought over position, transform
-   and width on .side-bar; this single-pixel gap is the fix. */
-@media screen and (max-width: 767px) {
+/* Off-canvas below 1024 px. The right sidebar stays in flow at
+   every width ≥ 768 px so the chat column at 769 - 1023 px has
+   one fixed sidebar (the right, 320 px) to subtract rather than
+   two — the centre then has ~ 441 px at 769 px (with the right in
+   flow and the left off-canvas) which auto-fit sees as a
+   single-column panel. Above 1024 px both sidebars are in flow
+   at their normal widths (450 + 320 = 770 px) so the centre is the
+   reference 486 px at 1280 px (the brief's 2-col layout).
+
+   The boundary at 1024 px is unambiguous: (max-width: 1023px)
+   pairs with (min-width: 1024px), only one matches at any width,
+   and the boundary sits at a natural "small tablet turns desktop"
+   seam. */
+@media screen and (max-width: 1023px) {
   .side-bar {
     position: fixed;
     top: 60px;
@@ -507,10 +515,9 @@ export default {
   }
 }
 
-/* Desktop: if not open, set width=0 or transform. Matches at 768 px
-   exactly and above; pairs with the (max-width: 767px) rule above
-   so the boundary at 768 px is unambiguous. */
-@media screen and (min-width: 768px) {
+/* In flow at 1024 px and above. Pairs with the (max-width: 1023px)
+   rule above so the boundary at 1024 px is unambiguous. */
+@media screen and (min-width: 1024px) {
   .side-bar {
     position: relative;
     transform: translateX(0);

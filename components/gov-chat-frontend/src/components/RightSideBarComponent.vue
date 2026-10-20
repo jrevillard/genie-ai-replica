@@ -551,30 +551,16 @@ export default {
   padding-left: var(--space-lg);
 }
 
-@media (max-width: 1023px) {
-  /* Off-canvas until made visible. The boundary is (max-width: 1023px)
-     so the off-canvas behaviour spans 769 - 1023 px as well as
-     <768 px — at 1280 px and wider the right sidebar stays in flow at
-     320 px so the chat column receives the reference 486 px width.
-     The boundary is unambiguous (max-width: 1023px pairs with no
-     other sidebar-position rule at exactly 1024 px), and the seam
-     with the left sidebar's 768 px boundary is closed:
-     SideBarComponent declares its off-canvas at (max-width: 767px)
-     so 768 - 1023 has the left in flow (450 px) and the right
-     off-canvas, and the chat column receives the remainder of the
-     viewport.
-
-     The selector shape mirrors the Living Intelligence layer's
-     corner-network rule at @media screen and (min-width: 769px)
-     (which sets position: relative on .sidebar), so Vue scoped CSS
-     adds the same data-v-XXX on this rule too — the two rules end
-     up at the same specificity, and source order lets our position:
-     fixed win. The corner network still anchors on the expanded
-     sidebar above 1024 px; below 1024 the right sidebar is off-canvas
-     and the corner art is hidden by transform: translateX(100%). */
-  html[data-visual='on'] .genie-living-intelligence .sidebar:not(.collapsed),
-  html[data-visual='off'] .genie-living-intelligence .sidebar:not(.collapsed),
-  html:not([data-visual]) .genie-living-intelligence .sidebar:not(.collapsed) {
+@media (max-width: 767px) {
+  /* Off-canvas until made visible. The boundary is (max-width: 767px)
+     so the in-flow rule below does NOT also match at exactly 768 px.
+     The Living Intelligence layer's corner-network rule (in
+     genie-visual-effects.css) is now bounded to @media screen and
+     (min-width: 1024px) and so does not compete for `position`
+     below 768 px — the sidebar is off-canvas there anyway, and the
+     position defaults above 768 px are static without any layer
+     override. */
+  .sidebar {
     position: fixed;
     right: 0;
     top: 0;
@@ -583,20 +569,12 @@ export default {
     transform: translateX(100%);
   }
 
-  html[data-visual='on'] .genie-living-intelligence .sidebar:not(.collapsed).visible,
-  html[data-visual='off'] .genie-living-intelligence .sidebar:not(.collapsed).visible,
-  html:not([data-visual]) .genie-living-intelligence .sidebar:not(.collapsed).visible {
+  .sidebar.visible {
     transform: translateX(0);
   }
 
-  html[data-visual='on'] .genie-living-intelligence .sidebar:not(.collapsed).collapsed,
-  html[data-visual='off'] .genie-living-intelligence .sidebar:not(.collapsed).collapsed,
-  html:not([data-visual]) .genie-living-intelligence .sidebar:not(.collapsed).collapsed {
-    transform: translateX(calc(100% - 50px));
-  }
-
   .sidebar.collapsed {
-    width: 50px;
+    transform: translateX(calc(100% - 50px));
   }
 }
 </style>

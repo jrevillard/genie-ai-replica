@@ -289,8 +289,19 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-content {
   z-index: 1;
   min-width: 0;
   background: var(--surface);
+  /*
+   * mask-mode: alpha is load-bearing. Without it, Blink resolves the
+   * linear-gradient's `transparent` stop as luminance=0, which the
+   * `match-source` default keys to the luminance mask mode; the 0-30%
+   * fade then collapses to a uniform 0 (mask OFF everywhere) and the
+   * banner's artwork bleeds through the scrim. Forcing alpha locks
+   * the gradient to its declared alpha stops, so the scrim past 30%
+   * is opaque `var(--surface)` and the heading paints on the panel.
+   */
   -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgb(0 0 0 / 1) 30%);
   mask-image: linear-gradient(to bottom, transparent 0%, rgb(0 0 0 / 1) 30%);
+  -webkit-mask-mode: alpha;
+  mask-mode: alpha;
   /* The padding-top is large enough that the heading's first pixel
      sits past the 30 % mask transition. At a content height of ~120 px
      (banner.content ≈ heading 38 + subtitle 26 + margins 8 + padding 16),

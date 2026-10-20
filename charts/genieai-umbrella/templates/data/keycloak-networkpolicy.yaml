@@ -35,8 +35,30 @@ spec:
         - protocol: TCP
           port: 8080
     {{- end }}
+    # The same-namespace consumers, named. `podSelector: {}` matches
+    # EVERY pod in the namespace and voids the default-deny this policy
+    # exists for — and port 8080 serves the Keycloak ADMIN REST API and
+    # the admin console, not just the OIDC endpoints. The list is the
+    # chart's own consumers: the backend (realm token validation), the
+    # document-repository (JWKS fetch), chatqna and dataprep (their
+    # service-account token), and the post-install convergence Job
+    # (component "identity") that drives the Admin API.
     - from:
-        - podSelector: {}
+        - podSelector:
+            matchLabels:
+              genieai.io/component: backend
+        - podSelector:
+            matchLabels:
+              genieai.io/component: documentRepository
+        - podSelector:
+            matchLabels:
+              genieai.io/component: chatqna
+        - podSelector:
+            matchLabels:
+              genieai.io/component: dataprep
+        - podSelector:
+            matchLabels:
+              genieai.io/component: identity
       ports:
         - protocol: TCP
           port: 8080

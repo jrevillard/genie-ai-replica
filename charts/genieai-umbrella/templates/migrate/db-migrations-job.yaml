@@ -36,6 +36,15 @@ spec:
         {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "migrate-db") | nindent 8 }}
     spec:
       restartPolicy: Never
+      # Same contract as the service factory and the convergence Job: a
+      # registry that needs a pull secret (an air-gapped mirror, a private
+      # GitLab registry) would leave THIS hook in ImagePullBackOff, and
+      # the hook blocks the whole install — with a message naming a
+      # component the operator is not looking at.
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       securityContext:
         runAsNonRoot: true
         seccompProfile:

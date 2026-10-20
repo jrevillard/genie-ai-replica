@@ -85,7 +85,7 @@ spec:
   ports:
     - name: http
       port: 80
-      targetPort: 3001
+      targetPort: http
   selector:
     {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "documentRepository") | nindent 4 }}
 ---

@@ -342,11 +342,14 @@ html[data-visual='on'] .genie-living-intelligence.gli-no-waves .quick-help-overl
  * switched off. Both call sites pass the brand through as a slot, so
  * the name is rendered as text and stays selectable and translatable.
  *
- * Two grounds, two ramps. The heading's mark sits on the panel surface
- * and the navbar's on --navbar-bg; both are themed, so the pair follows
- * the theme rather than the decoration switch. They differ only in dark,
- * where the mockup paints the navbar name plain white and the heading's
- * brand in a lifted ramp.
+ * Two surfaces, two ramps. The mockup paints the navbar name and the
+ * heading brand with the same gradient — the same family in both
+ * themes — but the surfaces they sit on are not the same: the navbar
+ * band is brand-tinted and lifts the contrast, the panel surface is
+ * deep and cannot. So the navbar's tokens stay the light ramp across
+ * both themes (the ramp is the same family regardless of theme), and
+ * the heading's tokens get a lifted dark ramp for the panel surface
+ * that the light ramp's violet end would not clear at 3:1.
  *
  * background-clip: text is what keeps the mark resolution-independent -
  * it is live type, not an image, so it re-rasterises at any zoom. The
@@ -358,19 +361,20 @@ html[data-visual='on'] .genie-living-intelligence.gli-no-waves .quick-help-overl
   --brand-mark-mid: #755cf8;
   --brand-mark-to: #a036f7;
 
-  /* On the light navbar's pale wash the mockup's dark ramp is legible
-     again, so the navbar takes the same one the heading does. */
-  --brand-mark-navbar-from: var(--brand-mark-from);
-  --brand-mark-navbar-mid: var(--brand-mark-mid);
-  --brand-mark-navbar-to: var(--brand-mark-to);
+  /* The navbar's ramp is the same in both themes: a literal triplet so
+     that the dark block's heading override below cannot reach it. */
+  --brand-mark-navbar-from: #2e79fc;
+  --brand-mark-navbar-mid: #755cf8;
+  --brand-mark-navbar-to: #a036f7;
 }
 
 /*
- * In dark the ramp is lifted rather than replaced: the mockup's dark
- * heading samples #4ea3f8 and #9489f7 at the two positions visible in the
- * crop, which these three stops match to within a few percent per channel,
- * and they reach 8.6:1 on the deep panel where the light ramp would not
- * clear 3:1 at all.
+ * The heading's lifted ramp sits on the panel surface (deeper than
+ * the navbar band), where the light ramp's violet end would not clear
+ * the 3:1 large-text floor. The navbar must NOT pick this ramp up —
+ * its tokens above are literals, not references to --brand-mark-*, so
+ * these overrides name a different family entirely and the navbar's
+ * triplet above is unchanged.
  */
 html[data-theme='dark'],
 html.dark-mode,
@@ -378,13 +382,6 @@ body.dark-mode {
   --brand-mark-from: #58bcff;
   --brand-mark-mid: #a48bff;
   --brand-mark-to: #ec82ff;
-
-  /* The dark navbar is the brand itself, and the mockup paints its name
-     plain white there rather than in the heading's ramp — the heading's
-     ramp reaches only 2.2-2.4:1 against that band. */
-  --brand-mark-navbar-from: #ffffff;
-  --brand-mark-navbar-mid: #ffffff;
-  --brand-mark-navbar-to: #ffffff;
 }
 
 .brand-wordmark {

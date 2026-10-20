@@ -3425,10 +3425,9 @@ chart:crd-validate:
     - install -m 0755 /tmp/kind /usr/local/bin/kind
     - helm dependency update charts/genieai-umbrella
   script:
-    - trap 'kind delete cluster --name kind 2>/dev/null || true' EXIT
+    - trap 'kind delete cluster --name genieai 2>/dev/null || true' EXIT
     - trap 'exit 130' INT
     - trap 'exit 143' TERM
-    - kind delete cluster --name kind 2>/dev/null || true
     # Same daemon-address derivation as chart:install: the kind API must
     # bind the DOCKER DAEMON's docker0 address, not the job container's
     # 127.0.0.1 (the runner socket-proxy setup), and it must land in the
@@ -3450,8 +3449,15 @@ chart:crd-validate:
         apiServerAddress: "${DAEMON_HOST}"
         apiServerPort: 36444
       EOF
-    - kind create cluster --config /tmp/kind-config.yaml --image kindest/node:v1.33.0 --wait 5m
-    - kind get kubeconfig --name kind > "$KUBECONFIG"
+    # Purged only once the daemon address is known to be usable: the
+    # runner's docker socket is shared with every other job on the host,
+    # and a job that cannot even address its daemon has no business
+    # deleting a cluster on it first. The cluster is named `genieai`, not
+    # `kind`, so a leftover from another project is never in the blast
+    # radius either.
+    - kind delete cluster --name genieai 2>/dev/null || true
+    - kind create cluster --name genieai --config /tmp/kind-config.yaml --image kindest/node:v1.33.0 --wait 5m
+    - kind get kubeconfig --name genieai > "$KUBECONFIG"
     - export KUBECONFIG
     # The CRDs only — the operators never need to be Ready, and waiting on
     # them would only add minutes. --with-grafana covers the grafana CRs,
@@ -3533,10 +3539,10 @@ chart:install:
     # exist' caused by the previous run's debris). The INT/TERM traps make
     # a GitLab cancel/timeout (SIGTERM to the process group) exit through
     # the EXIT trap — bash does NOT run EXIT traps on unhandled signals.
-    - trap 'kind delete cluster --name kind 2>/dev/null || true' EXIT
+    - trap 'kind delete cluster --name genieai 2>/dev/null || true' EXIT
     - trap 'exit 130' INT
     - trap 'exit 143' TERM
-    - kind delete cluster --name kind 2>/dev/null || true
+    - kind delete cluster --name genieai 2>/dev/null || true
     # Bind the API server on the DAEMON's docker0 address (kind's default
     # 127.0.0.1 is unreachable from the job container when the daemon is
     # remote — the runner socket-proxy setup). Using the real address (not
@@ -3563,7 +3569,10 @@ chart:install:
         apiServerPort: 36443
       EOF
       echo "kind API on ${DAEMON_HOST}:36443"
-    - kind create cluster --config /tmp/kind-config.yaml --image kindest/node:v1.33.0 --wait 5m
+    # Purged only once the daemon address is known to be usable (see the
+    # note in chart:crd-validate).
+    - kind delete cluster --name genieai 2>/dev/null || true
+    - kind create cluster --name genieai --config /tmp/kind-config.yaml --image kindest/node:v1.33.0 --wait 5m
     # kind ships no default StorageClass: every PVC stays Pending and
     # `helm install --wait` blocks on it until the job timeout — a
     # storage gap indistinguishable from a chart defect. local-path gives
@@ -3572,7 +3581,7 @@ chart:install:
       https://raw.githubusercontent.com/rancher/local-path-provisioner/v0.0.26/deploy/local-path-storage.yaml
     - kubectl wait --for=condition=Ready pod -l app=local-path-provisioner
       -n local-path-storage --timeout=120s
-    - kind get kubeconfig --name kind > "$KUBECONFIG"
+    - kind get kubeconfig --name genieai > "$KUBECONFIG"
     - export KUBECONFIG
     - ./scripts/install-prereqs.sh
     # KNOWN INCOMPLETE (manual job): the operator-provided Secrets

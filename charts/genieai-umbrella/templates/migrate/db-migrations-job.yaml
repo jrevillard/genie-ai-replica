@@ -28,7 +28,12 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "backend") | nindent 8 }}
+        # component "migrate-db", NOT "backend": a pod labeled like the
+        # backend Service's own selector joins its EndpointSlice, so during
+        # the post-install hook window real /api traffic load-balances to a
+        # migrations process that exits when it finishes. The egress this
+        # loses is granted back by migrate/db-migrations-networkpolicy.yaml.
+        {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "migrate-db") | nindent 8 }}
     spec:
       restartPolicy: Never
       securityContext:

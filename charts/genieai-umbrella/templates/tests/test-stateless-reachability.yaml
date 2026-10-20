@@ -93,6 +93,7 @@ spec:
             exit 1
           fi
           echo "PASS: all stateless-tier services reachable"
+{{- if .Values.services.clamav.enabled }}
 ---
 # clamav reachability from the only peer its NetworkPolicy admits.
 apiVersion: v1
@@ -116,3 +117,4 @@ spec:
     - name: clamav-reach
       image: {{ .Values.global.toolingImageRegistry | default "docker.io" }}/busybox:1.36
       command: ["sh", "-c", "nc -z -w 5 clamav 3310 && echo 'PASS: clamav reachable' || (echo 'FAIL: clamav unreachable'; exit 1)"]
+{{- end }}

@@ -17,15 +17,7 @@ Usage:
 {{- define "genieai-umbrella.pdbForService" -}}
 {{- $ctx := . -}}
 {{- $svc := index $ctx.Values.services $ctx.name -}}
-{{- $replicas := int ($svc.replicas | default 1) -}}
-{{- with $ctx.Values.clusterProfileReplicas -}}
-{{- if hasKey . $ctx.Values.clusterProfile -}}
-{{- $profileReplicas := index . $ctx.Values.clusterProfile -}}
-{{- if hasKey $profileReplicas $ctx.name -}}
-{{- $replicas = int (index $profileReplicas $ctx.name) -}}
-{{- end -}}
-{{- end -}}
-{{- end -}}
+{{- $replicas := include "genieai-umbrella.resolveReplicas" (dict "Values" $ctx.Values "service" $ctx.name) | int -}}
 {{- if and (ge $replicas 2) $svc.podDisruptionBudget (hasKey $svc.podDisruptionBudget "minAvailable") $svc.podDisruptionBudget.minAvailable -}}
 ---
 apiVersion: policy/v1

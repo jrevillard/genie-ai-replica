@@ -86,24 +86,38 @@ const BASE_BUTTON_STYLES = {
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
 /**
- * Rewrites a config file with 2-space indent and a trailing newline,
- * preserving the file's existing non-ASCII encoding. The base config writes
- * raw UTF-8 (`ensure_ascii: false`); the flavour configs escape non-ASCII
- * (`ensure_ascii: true`).
+ * Serializes a config file in the project's single canonical format: 2-space
+ * indent, trailing newline, raw UTF-8.
  *
- * The encoding is detected by round-tripping the document BEFORE it is
- * mutated — a mutated document no longer matches its own original bytes, so
- * detecting afterwards would always fail and, worse, would silently
- * reformat every file.
+ * Every config file in this repo (the base + six flavours) shares this one
+ * serialization — Node's `JSON.stringify` with 2-space indent already emits
+ * the document with no trailing newline, so we add one; it never escapes
+ * non-ASCII characters, and the project does not use ASCII-only escapes
+ * anywhere. There is therefore no encoding choice to make, and no flavour to
+ * detect: the same function serializes every file identically.
  */
-const detectEnsureAscii = (doc, original) => {
-  for (const ensureAscii of [false, true]) {
-    if (JSON.stringify(doc, null, 2) + '\n' === original) return ensureAscii;
-  }
-  throw new Error('Could not detect the JSON formatting of the file; refusing to rewrite it.');
-};
+const serialize = (doc) => `${JSON.stringify(doc, null, 2)}\n`;
 
-const serialize = (doc, _ensureAscii) => `${JSON.stringify(doc, null, 2)}\n`;
+/**
+ * Asserts the untouched document already round-trips through `serialize`. If
+ * it does not, the file is not in the project's canonical format — somewhere
+ * along the line it was authored or saved with different indentation, line
+ * endings, or character handling. The migration refuses to silently reformat
+ * a file it does not understand.
+ *
+ * The check MUST run against the untouched document; once the migration
+ * mutates the document (cloning the theme, seeding styles, rewriting the
+ * localized-text descriptions) the round-trip is no longer a check against
+ * the original file's format.
+ */
+const assertRoundTrip = (doc, original) => {
+  if (serialize(doc) === original) return;
+  throw new Error(
+    "Refusing to rewrite: the file is not in the project's canonical " +
+      'format (2-space indent, trailing newline, raw UTF-8). ' +
+      'Round-tripping it through the migration would reformat it silently.'
+  );
+};
 
 const localizedRef = (description) => ({
   description,
@@ -166,14 +180,15 @@ const main = () => {
 
   for (const name of FILES) {
     const doc = docs.get(name);
-    // Detect the encoding before mutating — the round-trip only matches an
-    // untouched document.
-    const ensureAscii = detectEnsureAscii(doc, raw.get(name));
+    // Confirm the untouched document is already in the project's canonical
+    // format before mutating — the round-trip only matches an untouched
+    // document.
+    assertRoundTrip(doc, raw.get(name));
     migrateSchema(doc, canonicalTheme);
     if (name === BASE_FILE) {
       seedBaseStyles(doc);
     }
-    fs.writeFileSync(path.join(CONFIG_DIR, name), serialize(doc, ensureAscii), 'utf8');
+    fs.writeFileSync(path.join(CONFIG_DIR, name), serialize(doc), 'utf8');
     console.log(`${name}: migrated`);
   }
 };

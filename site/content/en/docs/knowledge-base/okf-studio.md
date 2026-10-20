@@ -212,8 +212,17 @@ config-routed internal tasks ask reasoning-capable models not to think
 (the wire convention for it, dropped automatically if the endpoint
 doesn't know the parameter), and a call whose answer was starved by
 reasoning — the model spent its whole budget thinking and wrote nothing
-— is retried once with a larger budget, so strict-JSON tasks (tags,
-curation, advice, benchmark answers) survive frontier reasoning models.
+— is retried on a climbing ladder: each retry gets four times the token
+budget (to a ceiling) **and** twice the wall clock, so strict-JSON
+tasks (tags, curation, advice, benchmark answers) survive frontier
+reasoning models.
+
+**Frontmatter tag suggestion runs as a background job.** The request
+returns immediately and the panel polls until the suggestion lands —
+there is no gateway timeout in the path, and the model is given a
+five-minute clock per attempt (plus the ladder above) to think. With a
+reasoning model configured, a suggestion taking a couple of minutes is
+normal, not a failure.
 
 Each configuration declares **which features use it**, grouped by
 pipeline. The **Test Lab Pipelines** group is live: **benchmarks** (the

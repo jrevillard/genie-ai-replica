@@ -274,6 +274,10 @@ data:
       port: 5432
       database: keycloak
     # HTTP listener (TLS terminates at Envoy Gateway, not here).
+    # Context path Keycloak serves under (the operator CR's
+    # http-relative-path). Single source: the internal/public URL helpers
+    # and the HTTPRoute /auth rules all derive from it.
+    httpRelativePath: /auth
     http:
       httpEnabled: true
     # Hostname strict mode: false for lab/staging (Envoy rewrites the public

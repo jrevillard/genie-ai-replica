@@ -86,10 +86,10 @@ spec:
         # "/auth" some OIDC clients request.
         - path:
             type: PathPrefix
-            value: /auth/
+            value: {{ include "genieai-umbrella.keycloakContextPath" . }}/
         - path:
             type: PathPrefix
-            value: /auth
+            value: {{ include "genieai-umbrella.keycloakContextPath" . }}
       filters:
         - type: RequestHeaderModifier
           requestHeaderModifier:

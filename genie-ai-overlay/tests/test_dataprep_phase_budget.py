@@ -112,7 +112,7 @@ class TestPhaseReturnsAllResults:
                 write_ingestion_log=_noop_log,
             )
 
-        assert _run(scenario()) == ([], False)
+        assert _run(scenario()) == ([], [])
 
 
 class TestPhaseIsBounded:
@@ -660,7 +660,9 @@ class TestPhaseBoundIsAHardWall:
                 )
 
         results, degraded = _run(scenario())
-        assert degraded is True, "the phase was abandoned, so it must report degraded"
+        assert degraded == [dataprep.DEGRADED_PHASE_BUDGET], (
+            f"the phase was abandoned, so it must report the budget as its cause: {degraded!r}"
+        )
         assert len(results) == 4, results
         unlabelled = [r["text"] for r in results if not r["labels"]]
         assert not unlabelled, (
@@ -1300,7 +1302,7 @@ class TestADegradedPhaseNeverReportsIngested:
     (`variant="warning"`) all already carry it. Nothing produced it.
     """
 
-    def _run_ingest(self, monkeypatch, *, degraded):
+    def _run_ingest(self, monkeypatch, *, degraded, contextual_reasons=None):
         from unittest.mock import AsyncMock, MagicMock, patch
 
         monkeypatch.setenv("VLLM_API_KEY", "test-key")
@@ -1312,7 +1314,7 @@ class TestADegradedPhaseNeverReportsIngested:
         dp._load_and_chunk = AsyncMock(return_value=["chunk one", "chunk two"])
         dp._run_guardrail = AsyncMock(return_value={"success": True})
         dp._update_doc_status = AsyncMock()
-        dp._apply_contextualization = AsyncMock(side_effect=lambda c, i, f: (list(c), False))
+        dp._apply_contextualization = AsyncMock(side_effect=lambda c, i, f: (list(c), list(contextual_reasons or [])))
         dp._apply_labels = AsyncMock(
             return_value=([{"text": "a", "labels": ["Tax:IVA"]}, {"text": "b", "labels": ["Tax:IVA"]}], degraded)
         )
@@ -1333,16 +1335,121 @@ class TestADegradedPhaseNeverReportsIngested:
         return _run(scenario()), dp
 
     def test_a_degraded_phase_reports_ingested_with_warnings(self, monkeypatch):
-        _result, dp = self._run_ingest(monkeypatch, degraded=True)
+        _result, dp = self._run_ingest(monkeypatch, degraded=[dataprep.DEGRADED_PHASE_BUDGET])
         statuses = [c.args[1] for c in dp._update_doc_status.call_args_list]
         assert "Ingested" not in statuses, (
             f"a document with an abandoned phase was reported as plainly Ingested: {statuses}"
         )
         assert statuses[-1] == "Ingested with Warnings", statuses
 
+    def test_the_contextual_phase_reports_its_own_timeout(self, monkeypatch):
+        """The phase must produce the reason, not just pass one through.
+
+        The other test here stubs _apply_contextualization, so it covers the
+        ingest's handling of the signal and nothing else. Mutating the real
+        _contextualize_per_chunk to report no timeout leaves this file green
+        without it — so the signal's origin needs its own test, driven by a
+        client that never answers and a phase budget that expires.
+        """
+        from unittest.mock import MagicMock, patch
+
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 0.4)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
+
+        async def never_answers(**_kwargs):
+            await asyncio.sleep(30)
+
+        client = MagicMock()
+        client.chat.completions.create = never_answers
+
+        async def scenario():
+            dp = _stub_dataprep()
+            inp = MagicMock(file_name="f1.pdf", file_type="pdf", storage_path="/tmp/f1.pdf")
+            with patch.object(dataprep, "_build_vllm_client", return_value=(client, "test-model")):
+                return await dp._apply_contextualization(["chunk one", "chunk two"], inp, "f1")
+
+        texts, reasons = _run(scenario())
+        assert reasons == [dataprep.DEGRADED_PHASE_BUDGET], (
+            f"the contextual phase timed out but reported {reasons!r} — the document would be "
+            "reported as plainly Ingested"
+        )
+        # And the chunks survive, raw, rather than the ingest failing.
+        assert len(texts) == 2, texts
+
+    def test_a_client_that_will_not_build_names_itself_as_the_cause(self, monkeypatch):
+        """The other way this phase degrades, with its own remedy.
+
+        `_build_vllm_client` raises on a bad endpoint or an undetectable model.
+        That is an endpoint problem, not a slow one: raising the phase budget
+        cannot fix it, and the message used to say to do exactly that. The reason
+        string is what separates them, so the origin needs coverage too.
+        """
+        from unittest.mock import MagicMock, patch
+
+        dp = _stub_dataprep()
+        inp = MagicMock(file_name="f1.pdf", file_type="pdf", storage_path="/tmp/f1.pdf")
+
+        async def scenario():
+            with patch.object(dataprep, "_build_vllm_client", side_effect=RuntimeError("model id unset")):
+                return await dp._apply_contextualization(["chunk one"], inp, "f1")
+
+        texts, reasons = _run(scenario())
+        assert reasons and "could not be built" in reasons[0], (
+            f"a client that would not build reported {reasons!r} — the operator is told to raise "
+            "a budget, re-ingests, and gets the identical failure"
+        )
+        assert reasons != [dataprep.DEGRADED_PHASE_BUDGET], (
+            "a broken client was reported as a budget exhaustion, which prescribes the wrong fix"
+        )
+        # The chunks still land, raw.
+        assert texts == ["chunk one"], texts
+
+    def test_a_contextual_timeout_alone_still_degrades_the_document(self, monkeypatch):
+        """The Contextual Retrieval half needs its own coverage.
+
+        The two tests above drive the LABELLING flag only — the harness stubs
+        _apply_contextualization to report no degradation. So the whole contextual
+        path could regress to always reporting "Ingested" and the suite would stay
+        green: mutating `return result, [DEGRADED_PHASE_BUDGET] if timed_out
+        else []` to `return result, []` passes every test in this file. That is
+        the incident this rule came from — a count that is not a contract.
+        """
+        _result, dp = self._run_ingest(
+            monkeypatch,
+            degraded=[],
+            contextual_reasons=[dataprep.DEGRADED_PHASE_BUDGET],
+        )
+        statuses = [c.args[1] for c in dp._update_doc_status.call_args_list]
+        assert statuses[-1] == "Ingested with Warnings", (
+            f"the contextual phase ran out of budget and the document still reported {statuses[-1]!r}"
+        )
+
+    def test_a_broken_vllm_client_is_named_as_a_degradation_not_a_slow_one(self, monkeypatch):
+        """A client that will not build is a different problem from a slow one.
+
+        Both degrade the document, and both were previously reported as "ran out
+        of its 900s budget" — sending an operator to raise a budget that could
+        not fix a misconfigured endpoint. The ingestion log names which it was.
+        """
+        _result, dp = self._run_ingest(
+            monkeypatch,
+            degraded=[],
+            contextual_reasons=["the vLLM client could not be built (ConnectionError)"],
+        )
+        messages = [c.args[3] for c in dp._write_ingestion_log.call_args_list if len(c.args) > 3]
+        joined = " ".join(str(m) for m in messages)
+        assert "could not be built" in joined, joined
+        # The budget remedy must NOT be offered for a cause it cannot fix.
+        budget_lines = [m for m in messages if "Phase budget exhausted" in str(m)]
+        assert not budget_lines, f"a broken client was reported as a budget exhaustion: {budget_lines}"
+
     def test_a_clean_ingest_still_reports_ingested(self, monkeypatch):
         """The new state must not become the default — it means something."""
-        _result, dp = self._run_ingest(monkeypatch, degraded=False)
+        _result, dp = self._run_ingest(monkeypatch, degraded=[])
         statuses = [c.args[1] for c in dp._update_doc_status.call_args_list]
         assert statuses[-1] == "Ingested", statuses
 

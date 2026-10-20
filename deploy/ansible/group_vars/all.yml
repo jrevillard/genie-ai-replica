@@ -158,8 +158,11 @@ keycloak_ssl_skip_verify: ""
 #   model_llm_max_retries: 2              # SDK retries on 5xx / connection
 #                                         #   errors. Raising it raises what
 #                                         #   the phase ceiling must outlast:
-#                                         #   3 retries x 180s needs 720s, over
-#                                         #   the 600s default below.
+#                                         #   3 retries x 180s needs 720s, which
+#                                         #   still fits under the 900s default
+#                                         #   below; it is raising the PER-CALL
+#                                         #   budget that crosses it (300s/call
+#                                         #   needs 1200s of waves).
 #   model_summarizer_timeout_seconds: 600 # retriever summarizer. Deliberately NOT
 #                                         #   shortened from the openai default: no
 #                                         #   fallback path, so a tighter budget
@@ -184,24 +187,21 @@ keycloak_ssl_skip_verify: ""
 #   model_control_plane_timeout_seconds: 30  # doc-repo calls, ingestion-log writes
 #   dataprep_llm_phase_timeout_seconds: 900   # wall clock for a whole LLM phase;
 #                                         #   must cover the document's WAVES
-#                                         #   CONSTRAINT: must stay above
+#                                         #   CONSTRAINT: must stay above BOTH
+#                                         #   waves x model_llm_timeout_seconds
+#                                         #   (4 x 180 = 720 s at the defaults
+#                                         #   above — a 260-chunk document is 65
+#                                         #   batches at concurrency 20 = 4 waves
+#                                         #   sharing one ceiling, which is what
+#                                         #   usually binds) AND
 #                                         #   (1 + model_llm_max_retries) x
-#                                         #   model_llm_timeout_seconds (540 s at
-#                                         #   the defaults above). Below it, the
-#                                         #   phase cancels calls that were never
-#                                         #   given a chance to be merely slow. A
-#                                         #   260-chunk document is 65 batches at
-#                                         #   concurrency 20 = 4 waves, so it
-#                                         #   needs 4 x MODEL_LLM_TIMEOUT_SECONDS
-#                                         #   even when every call succeeds, and
-#                                         #   that is what binds, not the ladder.
-#                                         #   dataprep warns at startup if the
-#                                         #   ceiling is under either.
-#                                         #   And
-#                                         #   labelling degrades to file labels —
-#                                         #   which reads as a labelling-quality
-#                                         #   regression, not a misconfiguration.
-#                                         #   dataprep warns at startup if violated.
+#                                         #   model_llm_timeout_seconds (540 s).
+#                                         #   Below either, chunks fall back per
+#                                         #   chunk and the document lands as
+#                                         #   'Ingested with Warnings'. That reads
+#                                         #   as a labelling-quality regression
+#                                         #   rather than a misconfiguration, so
+#                                         #   dataprep warns at startup naming both.
 #   dataprep_llm_progress_interval_seconds: 60  # how often a phase reports to the
 #                                         #   document ingestion log the admin UI reads
 #

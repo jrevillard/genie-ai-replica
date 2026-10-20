@@ -312,36 +312,48 @@ LLM_LABEL_TEMPERATURE = float(os.getenv("DATAPREP_LLM_TEMPERATURE", "0.0"))
 # per-call latency at 150 s — inside the 180 s budget — so a shared GPU
 # answering a batched call in 160 s would degrade EVERY such document to file
 # labels, permanently, while each individual call was well within its budget.
-# That is the topology this MR exists for, so 900 s is the default: it clears
-# four waves of fully-timed-out calls (720 s) with the fifth wave's headroom,
-# and degradation at the defaults can only be caused by a call actually timing
-# out — which is the signal the bound is for.
+# That is the topology this MR exists for, so 900 s is the default. It is not
+# four waves of EXHAUSTED ladders — those cost (1 + 2) x 180 = 540 s each, so
+# 900 s absorbs about one and two thirds. What it clears is four waves of calls
+# that each sit at their full per-request budget, which is the case that
+# degrades a document whose calls all technically succeeded. A call that
+# genuinely exhausts its ladder still gets cut, and that is the signal the bound
+# is for.
 #
-# It remains roughly a ninth of one batch task, so no per-request budget can
-# stop a runaway batch task, which is why the phase bound exists at all: it
-# fires while a straggler is still inside its own ladder, so the document
-# degrades at 900 s instead of at an unbounded time.
+# It remains roughly an eighth of one batch task (7020 s at the defaults), so
+# no per-request budget can stop a runaway batch task — which is why the phase
+# bound exists at all: it fires while a straggler is still inside its own
+# ladder, so the document degrades at 900 s instead of at an unbounded time.
 #
-# It is also a whole-phase ceiling, not a per-wave allowance: a 260-chunk
-# document runs 65 batches in 4 waves of MAX_CONCURRENT_BATCHES, and all of them
-# plus the queueing share the 600 s. A document large enough that its labelling
-# would legitimately take longer than that is degraded to file labels — the
-# phase does not scale its budget with the batch count. That is a deliberate
-# ceiling, not an oversight: an unbounded budget is what produced the stall this
-# replaces, and the degradation is visible (a WARN naming the phase, a
-# phase_budget_exhausted counter) rather than silent. Raise the budget for
-# deployments with large documents or slower models.
+# It is a whole-phase ceiling, not a per-wave allowance: a 260-chunk document
+# runs 65 batches in 4 waves of MAX_CONCURRENT_BATCHES, and all of them plus the
+# queueing share the 900 s. A document large enough that its labelling would
+# legitimately take longer is degraded — the phase does not scale its budget
+# with the batch count. That is a deliberate ceiling, not an oversight: an
+# unbounded budget is what produced the stall this replaces, and the
+# degradation is visible (a WARN naming the phase, an `Ingested with Warnings`
+# status, a phase_budget_exhausted counter) rather than silent.
 #
-# THE CONSTRAINT: the ceiling must stay above one batched call's worst case,
-# (1 + LLM_MAX_RETRIES) x LLM_TIMEOUT_SECONDS, or the phase cancels calls that
-# were never given the chance to be slow. At defaults that is 540 s against a
-# 600 s ceiling — a 60 s margin, and the margin is the whole safety band. Both
-# knobs the policy docstring tells operators to turn (raise the per-call budget
-# for a slower model, or raise retries) walk straight through it: 300 s per call
-# is 900, three retries is 720. Since the degradation is indistinguishable from
-# a labelling-quality regression, this is checked at import rather than left to
-# prose in four files an operator may not be reading.
+# THE CONSTRAINT — two of them, and the second is the one that usually binds:
+#   waves  x LLM_TIMEOUT_SECONDS  — 4 x 180 = 720 s at the defaults, against a
+#                                    900 s ceiling, a 180 s margin;
+#   ladder  (1 + LLM_MAX_RETRIES) x LLM_TIMEOUT_SECONDS  — 540 s, comfortably
+#                                    under, and NOT what needs raising: three
+#                                    retries (720 s) still fits under 900 s.
+# Both are checked at import against the reference document rather than left to
+# prose in four files an operator may not be reading, because the degradation is
+# indistinguishable from a labelling-quality regression. Raising the per-call
+# budget for a slower model DOES cross one: 300 s per call is 4 x 300 = 1200 s
+# of waves, over the ceiling.
 DATAPREP_LLM_PHASE_TIMEOUT_SECONDS = positive_float_env("DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", default=900.0)
+
+# Why a phase degraded. A phase can stop early for reasons that have DIFFERENT
+# fixes — an expired budget is fixed by raising the budget, a vLLM client that
+# will not build is fixed by fixing the endpoint — so the phases report a reason
+# string and the operator is told which knob applies. A bare boolean produced a
+# message that named the budget for both, sending the operator to raise a knob
+# that could not help. See _apply_contextualization.
+DEGRADED_PHASE_BUDGET = "the phase ran out of its wall-clock budget with work unfinished"
 
 # Document size the wave arithmetic above is stated for: the one in the incident
 # report. Raising the ceiling is the fix for a larger document; this only makes
@@ -954,7 +966,7 @@ async def _gather_with_phase_budget_inner(
     costs one line per interval whatever the throughput.
     """
     if not tasks:
-        return [], False
+        return [], []
 
     started = time.monotonic()
     # Wrapped in submission order so a failed batch can be picked
@@ -1690,7 +1702,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             results.append({"text": text, "labels": labels})
             if n % 200 == 0 or n == total:
                 logger.info(f"Labeling progress: {n}/{total} chunks finalized")
-        return results, timed_out
+        return results, [DEGRADED_PHASE_BUDGET] if timed_out else []
 
     def _build_doc_context(self, chunks: list[str], input, budget: int = DATAPREP_CONTEXTUAL_DOC_BUDGET) -> str:
         """Build the document-context string fed to the context-generation LLM.
@@ -1721,20 +1733,25 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             )
         return "\n".join(parts)
 
-    async def _apply_contextualization(self, chunks: list[str], input, file_id: str) -> tuple[list[str], bool]:
+    async def _apply_contextualization(self, chunks: list[str], input, file_id: str) -> tuple[list[str], list[str]]:
         """Prepend an LLM-generated document context to each chunk.
 
         No-op when CONTEXTUAL_RETRIEVAL_ENABLED is false (returns chunks
-        unchanged). When enabled, returns ``(contextualized_texts, degraded)``
+        unchanged). When enabled, returns ``(contextualized_texts, reasons)``
         — the texts in the same order and length, of the form
         ``<context>\\n\\n<chunk>``. Chunks whose context generation fails fall
         back to the raw chunk so ingestion never blocks.
 
-        ``degraded`` means the phase ran out of budget with work unfinished, and
-        is what stops the document from being reported as plainly Ingested.
+        ``reasons`` lists human-readable causes, empty when the phase completed,
+        and it is what stops the document being reported as plainly Ingested. A
+        list rather than a flag because the causes have DIFFERENT REMEDIES: an
+        expired phase budget is fixed by raising the budget, a vLLM client that
+        will not build is fixed by fixing the endpoint. Telling an operator to
+        raise a budget for the second sends them to the wrong knob, with no
+        error anywhere to tell them otherwise.
         """
         if not CONTEXTUAL_RETRIEVAL_ENABLED or not chunks:
-            return list(chunks), False
+            return list(chunks), []
 
         # Build the client outside the per-chunk retry loop. If construction fails
         # (e.g. model auto-detection failure on the GPU node), skip contextualization
@@ -1752,7 +1769,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 "Contextualization",
                 f"vLLM client init failed ({err}); using raw chunks.",
             )
-            return list(chunks), True
+            return list(chunks), [f"the vLLM client could not be built ({err})"]
 
         model = DATAPREP_CONTEXTUAL_MODEL.strip() or default_model
         total = len(chunks)
@@ -1762,7 +1779,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         if CONTEXTUAL_STRATEGY == "doc_level":
             doc_context = self._build_doc_context(chunks, input, DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL)
             texts = await self._contextualize_doc_level(client, model, doc_context, chunks, file_id, total)
-            return texts, False  # one call for the document; no phase to run out of
+            return texts, []  # one call for the document; no phase to run out of
 
         # per_chunk (default): batched calls so the document context lives once
         # per batch (system prompt), not per chunk; per-chunk fallback on any
@@ -1844,7 +1861,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 f"Contextual Retrieval: {with_context}/{total} chunks contextualized "
                 f"({raw_count} using raw text after batch + per-chunk recovery failed)."
             )
-        return result, timed_out
+        return result, [DEGRADED_PHASE_BUDGET] if timed_out else []
 
     async def _context_batch_call(self, client, model, system_prompt, batch, file_id) -> dict[int, str]:
         """One LLM call generating contexts for a batch of chunks.
@@ -2476,18 +2493,18 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             await self._write_ingestion_log(
                 file_id, "WARN", "Labeling", "No labels found in Taxonomy. Using only file labels."
             )
-            return [{"text": c, "labels": file_labels if file_labels else []} for c in plain_chunks], False
+            return [{"text": c, "labels": file_labels if file_labels else []} for c in plain_chunks], []
 
         logger.info(f"Labeling using strategy: {LABELING_STRATEGY}")
 
         if LABELING_STRATEGY == "embedding":
             # Offload CPU-bound embedding calculations to a thread
             docs = await asyncio.to_thread(self._label_with_embedding, plain_chunks, all_labels)
-            return docs, False
+            return docs, []
         elif LABELING_STRATEGY == "bm25":
             # Offload CPU-bound BM25 calculations to a thread
             docs = await asyncio.to_thread(self._label_with_bm25, plain_chunks, all_labels)
-            return docs, False
+            return docs, []
         else:
             # Default to LLM (with retry fix and advisory logic)
             return await self._label_with_llm(plain_chunks, all_labels, file_labels, file_id)
@@ -2619,7 +2636,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     # chunk so the embedding carries the document's subject (see
                     # spec-contextual-retrieval.md). No-op (returns chunks unchanged)
                     # when CONTEXTUAL_RETRIEVAL_ENABLED=false.
-                    contextualized, contextual_degraded = await self._apply_contextualization(
+                    contextualized, contextual_reasons = await self._apply_contextualization(
                         original_chunks, input, input.file_id
                     )
                     # Decoupled mode (CONTEXTUAL_LABEL_RAW, default true): label the
@@ -2627,16 +2644,19 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     # label) and use the contextualized text ONLY for the embedding.
                     # When false, the context is fed to both (label contextualized).
                     label_input = original_chunks if CONTEXTUAL_LABEL_RAW else contextualized
-                    labelled_docs, labelling_degraded = await self._apply_labels(
+                    labelled_docs, labelling_reasons = await self._apply_labels(
                         label_input, all_labels, file_labels, input.file_id
                     )
+                    # (phase, why) pairs rather than names: the two causes have
+                    # different fixes, and telling an operator to raise a budget
+                    # for a client that will not build wastes their afternoon.
                     degraded_phases = [
-                        name
-                        for name, hit in (
-                            ("Contextual Retrieval", contextual_degraded),
-                            ("LLM labeling", labelling_degraded),
+                        (name, reason)
+                        for name, reasons in (
+                            ("Contextual Retrieval", contextual_reasons),
+                            ("LLM labeling", labelling_reasons),
                         )
-                        if hit
+                        for reason in reasons
                     ]
 
                     # 5. Graph Insertion (BATCHED & CONCURRENT)
@@ -2747,18 +2767,46 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     ingest_status = "Ingested with Warnings" if degraded_phases else "Ingested"
                     await self._update_doc_status(input.file_id, ingest_status, chunk_count=len(chunks))
                     if degraded_phases:
+                        # One line per cause, each naming the knob that fixes
+                        # THAT cause. A single combined sentence either lies
+                        # about what happened or gives a remedy that does not
+                        # apply — an operator who raises a budget because the
+                        # message says to, re-ingests, and gets the identical
+                        # failure because the endpoint was the problem.
+                        budget_causes = [name for name, reason in degraded_phases if reason == DEGRADED_PHASE_BUDGET]
+                        other_causes = [
+                            f"{name}: {reason}" for name, reason in degraded_phases if reason != DEGRADED_PHASE_BUDGET
+                        ]
                         await self._write_ingestion_log(
                             input.file_id,
                             "WARN",
                             "System",
-                            f"Ingestion completed DEGRADED — {', '.join(degraded_phases)} ran out of its "
-                            f"{DATAPREP_LLM_PHASE_TIMEOUT_SECONDS:g}s budget and fell back per chunk. "
-                            "Status set to 'Ingested with Warnings'. Raise "
-                            "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS, or the per-call "
-                            "MODEL_LLM_TIMEOUT_SECONDS together with it.",
+                            "Ingestion completed DEGRADED — status set to 'Ingested with Warnings'. "
+                            + (
+                                f"Phase budget exhausted ({', '.join(budget_causes)}) after "
+                                f"{DATAPREP_LLM_PHASE_TIMEOUT_SECONDS:g}s, so the unfinished batches fell back "
+                                "per chunk. Raise DATAPREP_LLM_PHASE_TIMEOUT_SECONDS, or the per-call "
+                                "MODEL_LLM_TIMEOUT_SECONDS together with it. "
+                                if budget_causes
+                                else ""
+                            )
+                            + (
+                                " ".join(
+                                    f"Also degraded — {c}. That is an endpoint or model-configuration "
+                                    "problem, not a budget one: raising a budget will not fix it. "
+                                    for c in other_causes
+                                )
+                                if other_causes
+                                else ""
+                            ),
                         )
                     await self._write_ingestion_log(
-                        input.file_id, "INFO", "System", "Ingestion completed successfully."
+                        input.file_id,
+                        "WARN" if degraded_phases else "INFO",
+                        "System",
+                        "Ingestion completed with warnings."
+                        if degraded_phases
+                        else "Ingestion completed successfully.",
                     )
 
                     return {

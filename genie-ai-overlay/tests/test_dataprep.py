@@ -540,7 +540,7 @@ class TestApplyLabels:
                 dp,
                 "_label_with_llm",
                 new_callable=AsyncMock,
-                return_value=([{"text": "chunk", "labels": ["A"]}], False),
+                return_value=([{"text": "chunk", "labels": ["A"]}], []),
             ),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
@@ -1384,7 +1384,7 @@ class TestIngestFileWithGuardrail:
                 dp,
                 "_apply_contextualization",
                 new_callable=AsyncMock,
-                side_effect=lambda chunks, inp, fid: (list(chunks), False),
+                side_effect=lambda chunks, inp, fid: (list(chunks), []),
             ),
             patch.object(
                 dp,
@@ -1395,7 +1395,7 @@ class TestIngestFileWithGuardrail:
                         {"text": "chunk1", "labels": ["A"]},
                         {"text": "chunk2", "labels": ["B"]},
                     ],
-                    False,
+                    [],
                 ),
             ),
             patch.object(dp, "_process_batch", new_callable=AsyncMock),
@@ -1510,7 +1510,7 @@ class TestIngestFileWithGuardrail:
                     [
                         {"text": "chunk1", "labels": ["Healthcare"]},
                     ],
-                    False,
+                    [],
                 ),
             ),
             patch.object(dp, "_process_batch", new_callable=AsyncMock, side_effect=capture_batch),
@@ -1552,7 +1552,7 @@ class TestIngestFileWithGuardrail:
                         {"text": "c2", "labels": ["B"]},
                         {"text": "c3", "labels": ["A"]},
                     ],
-                    False,
+                    [],
                 ),
             ),
             patch.object(dp, "_process_batch", new_callable=AsyncMock, side_effect=capture_batch),
@@ -2240,11 +2240,11 @@ class TestContextualRetrieval:
 
         async def fake_context(chunks, _inp, file_id):
             captured["ctx_in"] = list(chunks)
-            return contextualized, False
+            return contextualized, []
 
         async def fake_labels(chunks, all_labels, file_labels, file_id):
             captured["labels_in"] = list(chunks)
-            return [{"text": c, "labels": ["L"]} for c in chunks], False
+            return [{"text": c, "labels": ["L"]} for c in chunks], []
 
         async def fake_process_batch(batch_docs, *a, **k):
             built.extend(batch_docs)
@@ -2281,7 +2281,7 @@ class TestContextualRetrieval:
 
         async def fake_labels(chunks, all_labels, file_labels, file_id):
             captured["labels_in"] = list(chunks)
-            return [{"text": c, "labels": ["L"]} for c in chunks], False
+            return [{"text": c, "labels": ["L"]} for c in chunks], []
 
         async def fake_process_batch(batch_docs, *a, **k):
             built.extend(batch_docs)
@@ -2446,11 +2446,11 @@ class TestContextualRetrieval:
 
         async def fake_context(chunks, _inp, file_id):
             captured["ctx_in"] = list(chunks)
-            return contextualized, False
+            return contextualized, []
 
         async def fake_labels(chunks, all_labels, file_labels, file_id):
             captured["labels_in"] = list(chunks)
-            return [{"text": c, "labels": ["L"]} for c in chunks], False
+            return [{"text": c, "labels": ["L"]} for c in chunks], []
 
         async def fake_process_batch(batch_docs, *a, **k):
             built.extend(batch_docs)

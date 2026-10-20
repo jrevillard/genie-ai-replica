@@ -380,15 +380,20 @@ HUGGING_FACE_HUB_TOKEN=
 #                                 #   size, so a document large enough that its
 #                                 #   labelling legitimately takes longer is
 #                                 #   degraded to file labels.
-#                                 #   KEEP IT ABOVE (1+MODEL_LLM_MAX_RETRIES)
-#                                 #   x MODEL_LLM_TIMEOUT_SECONDS. Below that,
-#                                 #   the phase cancels calls that were never
-#                                 #   given the chance to be merely slow, and
-#                                 #   labelling degrades to file labels — which
-#                                 #   looks like a labelling-quality regression,
-#                                 #   not a misconfiguration. The defaults leave
-#                                 #   a 60s margin. dataprep warns at startup
-#                                 #   if the ceiling is too low.
+#                                 #   KEEP IT ABOVE BOTH: waves x
+#                                 #   MODEL_LLM_TIMEOUT_SECONDS (4 x 180 = 720s
+#                                 #   at the defaults) AND
+#                                 #   (1+MODEL_LLM_MAX_RETRIES) x
+#                                 #   MODEL_LLM_TIMEOUT_SECONDS (540s). The
+#                                 #   wave term is the one that usually binds —
+#                                 #   65 batches at concurrency 20 is 4 waves
+#                                 #   sharing one ceiling. Below either, chunks
+#                                 #   fall back per chunk, which looks like a
+#                                 #   labelling-quality regression rather than a
+#                                 #   misconfiguration, and the document lands
+#                                 #   as 'Ingested with Warnings'. The defaults
+#                                 #   leave a 180s margin. dataprep warns at
+#                                 #   startup naming both if it is too low.
 # DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS=60  # how often a running phase reports
 #                                 #   "N/M batches done" to the ingestion log
 #                                 #   (the admin UI reads that log). Raise it to

@@ -156,11 +156,13 @@ def non_negative_int_env(*names: str, default: int) -> int:
 # default is not a safety property: openai pairs it with 2 automatic retries,
 # and three of this overlay's LLM call sites add their own 3-attempt loop on
 # top, so the two compose: 3 x (1 + 2) x 600 = 5400 s, a worst case of ~90 min
-# per batch, with no log line, no span attribute and no fallback for the whole
-# duration. Live-observed on a shared GPU: a
-# 260-chunk ingest issued 65 batched labeling calls, and after 13 min none had
-# returned and none had failed, because 13 min sits inside the first 600 s
-# attempt. Every one of those calls had a fallback ready to go that the budget
+# for a single call's ladder, with no log line, no span attribute and no
+# fallback for the whole duration. (Per BATCH the figure is larger still — the
+# batch task also carries its own per-chunk fallback — and dataprep's sizing
+# comment works that out: 540 + LABEL_LLM_BATCH_SIZE x 1620 = 7020 s.)
+# Live-observed on a shared GPU: a 260-chunk ingest issued 65 batched labeling
+# calls, and after 13 min none had returned and none had failed, because 13 min
+# sits inside the first 600 s attempt. Every one of those calls had a fallback ready to go that the budget
 # was keeping from ever running.
 #
 # 180 s is roughly 3x the p95 for a batched labelling call measured on an
@@ -168,8 +170,8 @@ def non_negative_int_env(*names: str, default: int) -> int:
 # derived from anything in this repository — no benchmark artifact pins it, and
 # it is stated here so the margin can be re-checked rather than trusted. If it
 # holds, healthy deployments keep their results and degraded ones fall back in
-# minutes instead of the ~90 min computed above. A deployment on a slower model should raise
-# it via MODEL_LLM_TIMEOUT_SECONDS, and the phase ceiling with it.
+# minutes instead of the ~90 min computed above. A deployment on a slower model
+# should raise it via MODEL_LLM_TIMEOUT_SECONDS, and the phase ceiling with it.
 LLM_TIMEOUT_SECONDS = positive_float_env("MODEL_LLM_TIMEOUT_SECONDS", "VLLM_TIMEOUT", default=180.0)
 
 # openai-python retries twice by default: a 408/409/429/5xx response, a

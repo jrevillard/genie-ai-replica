@@ -345,10 +345,10 @@ class TestEnsureVectorIndexHook:
         # Both phases return (value, degraded); this test is about the vector
         # index hook, and neither phase is degraded here.
         async def fake_apply_contextualization(self, chunks, *a, **kw):
-            return chunks, False
+            return chunks, []
 
         async def fake_apply_labels(self, chunks, *a, **kw):
-            return [{"text": c.get("text", ""), "labels": []} for c in chunks], False
+            return [{"text": c.get("text", ""), "labels": []} for c in chunks], []
 
         async def fake_fetch_all_labels(self):
             return []

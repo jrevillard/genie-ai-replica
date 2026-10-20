@@ -31,6 +31,12 @@ spec:
     # OTLP/HTTP + OTLP/gRPC from any pod in the namespace. App
     # SDKs dial the gateway at 4318 (HTTP) and 4317 (gRPC); the
     # filelog agent dials 4318 from the same namespace too.
+    #
+    # The kubelet probe on the health extension (13133) is NOT listed:
+    # it originates from the node, which no peer selector can name, so
+    # it rides the CNI's host-to-pod default. A CNI that denies that
+    # by default leaves this collector un-Ready — see the CNI note in
+    # charts/README.md ("Cluster prerequisites").
     - from:
         - podSelector: {}
         - namespaceSelector:

@@ -3331,6 +3331,116 @@ chart:contract:
 # operators via scripts/install-prereqs.sh, then install + helm-test the
 # genie-ai umbrella chart. allow_failure because the operator + chart
 # fan-out is resource-sensitive on the shared docker runner pool.
+# CRD strict-decoding gate.
+#
+# kubeconform runs with `-ignore-missing-schemas`, so every Custom
+# Resource in this chart is UNVALIDATED by chart:lint — it has no schema
+# to check against. That blind spot is not theoretical: the
+# grafana-operator decodes its CRs strictly, and `spec.credentialsEx` /
+# `spec.resources` (neither is a CRD field) rejected the whole Grafana
+# object with `helm lint` and kubeconform both green. The only thing
+# that catches this class is a real API server asked to validate the
+# object against the installed CRD's OpenAPI schema.
+#
+# So: kind + the operator CRDs + `kubectl apply --dry-run=server`. No
+# images are pulled and no workload is scheduled — this is a schema
+# check, not an install, which is why it can afford to run on every
+# chart push where chart:install cannot (that one needs >30m).
+chart:crd-validate:
+  image: docker:28-dind
+  stage: test
+  tags: [docker]
+  resource_group: chart-dind
+  allow_failure: false
+  variables:
+    KUBECONFIG: /tmp/kubeconfig
+  retry:
+    max: 1
+    when: [runner_system_failure, stuck_or_timeout_failure, script_failure]
+  interruptible: true
+  before_script:
+    - apk add --no-cache bash curl
+    - curl -fsSL https://get.helm.sh/helm-v3.16.3-linux-amd64.tar.gz | tar -xz -C /tmp
+    - install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm
+    - curl -fsSL -o /tmp/kubectl https://dl.k8s.io/release/v1.33.0/bin/linux/amd64/kubectl
+    - install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
+    - curl -fsSL -o /tmp/kind https://kind.sigs.k8s.io/dl/v0.27.0/kind-linux-amd64
+    - install -m 0755 /tmp/kind /usr/local/bin/kind
+    - helm dependency update charts/genieai-umbrella
+  script:
+    - trap 'kind delete cluster --name kind 2>/dev/null || true' EXIT
+    - trap 'exit 130' INT
+    - trap 'exit 143' TERM
+    - kind delete cluster --name kind 2>/dev/null || true
+    # Same daemon-address derivation as chart:install: the kind API must
+    # bind the DOCKER DAEMON's docker0 address, not the job container's
+    # 127.0.0.1 (the runner socket-proxy setup), and it must land in the
+    # API cert's SANs so kubectl needs no rewrite.
+    - |
+      case "${DOCKER_HOST:-}" in
+        tcp://*)
+          DAEMON_HOST="${DOCKER_HOST#tcp://}"; DAEMON_HOST="${DAEMON_HOST%%:*}" ;;
+        "")
+          DAEMON_HOST="127.0.0.1" ;;
+        *)
+          echo "ERROR: chart:crd-validate needs DOCKER_HOST=tcp://<host>:<port> (got '${DOCKER_HOST}')" >&2
+          exit 1 ;;
+      esac
+      cat > /tmp/kind-config.yaml <<EOF
+      kind: Cluster
+      apiVersion: kind.x-k8s.io/v1alpha4
+      networking:
+        apiServerAddress: "${DAEMON_HOST}"
+        apiServerPort: 36444
+      EOF
+    - kind create cluster --config /tmp/kind-config.yaml --image kindest/node:v1.33.0 --wait 5m
+    - kind get kubeconfig --name kind > "$KUBECONFIG"
+    - export KUBECONFIG
+    # The CRDs only — the operators never need to be Ready, and waiting on
+    # them would only add minutes. --with-grafana covers the grafana CRs,
+    # which the default render leaves out.
+    - ./scripts/install-prereqs.sh --with-grafana
+    - |
+      set -e
+      NS=genieai
+      helm template test charts/genieai-umbrella -n "${NS}" \
+        --set data.keycloak.failOnPlaceholderSecrets=false \
+        --set data.keycloak.adminEmail=ci-render@example.org \
+        --set ingress.host=ci-render.local \
+        --set ingress.enabled=true \
+        --set ingress.createGatewayClass=true \
+        --set 'data.keycloak.clientSecrets.proxyClient=lint-dummy' \
+        --set 'data.keycloak.clientSecrets.dataprep=lint-dummy' \
+        --set 'data.keycloak.clientSecrets.grafana=lint-dummy' \
+        --set opea.enabled=true \
+        --set opea.gpu.mode=in-cluster \
+        --set observability.metrics.enabled=true \
+        --set observability.traces.enabled=true \
+        --set observability.grafana.enabled=true \
+        --set data.arangodb.mode=cluster \
+        > /tmp/crd-validate.yaml
+      # Namespaced objects fail a server dry-run when their namespace is
+      # absent, and the render's own Namespace objects are validated in
+      # the same pass — so create them first rather than filtering.
+      for extra in "${NS}" "${NS}-obs"; do
+        kubectl create namespace "${extra}" --dry-run=client -o yaml | kubectl apply -f -
+      done
+      kubectl apply --dry-run=server -f /tmp/crd-validate.yaml
+      echo "every rendered object validated against the installed CRDs"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - charts/**/*
+        - scripts/install-prereqs.sh
+        - .gitlab-ci.yml
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH'
+      changes:
+        - charts/**/*
+        - scripts/install-prereqs.sh
+        - .gitlab-ci.yml
+      when: on_success
+
 chart:install:
   image: docker:28-dind
   stage: test

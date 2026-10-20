@@ -161,9 +161,22 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-overlay {
   background-repeat: no-repeat, no-repeat, no-repeat;
 }
 
-html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::before {
-  content: '';
-  display: block;
+/*
+ * The banner is a real element rather than a ::before pseudo-element
+ * so it can contain the heading and subtitle in its box. A pseudo
+ * cannot host text in flow, and a heading that overflows the box
+ * must either be clipped, overlap, or push the box — and only the
+ * third satisfies the brief's "make the box content-aware" goal.
+ *
+ * The aspect-ratio is the artwork's band (a function of --f, declared
+ * on the overlay), so it provides a floor: content that fits inside
+ * the band leaves the height at its reference; content taller than
+ * the band grows the box past it. The mask dissolves the lower 28 %
+ * toward --surface so the heading reads as sitting inside the
+ * artwork rather than below a hard cut, and so the wordmark and
+ * subtitle paint against the panel surface, not against the ink band.
+ */
+html[data-visual='on'] .genie-living-intelligence .quick-help-banner {
   position: relative;
   z-index: 0;
   flex: 0 0 auto;
@@ -197,7 +210,13 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::before {
      starts where the globe's own falloff already thins out. */
   -webkit-mask-image: linear-gradient(to bottom, rgb(0 0 0 / 1) 0 72%, transparent 100%);
   mask-image: linear-gradient(to bottom, rgb(0 0 0 / 1) 0 72%, transparent 100%);
-  pointer-events: none;
+  /* Lay the heading + subtitle at the bottom of the box, inside the
+     fade band. The visible pixels behind them are masked-out — the
+     panel surface shows through — so contrast over the gradient is
+     not the contrast we have to clear. */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
   filter: drop-shadow(0 12px 30px color-mix(in srgb, var(--accent) 16%, transparent));
   animation: gli-enter 650ms ease-out both;
 }
@@ -211,10 +230,12 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::before {
    even when the viewport is narrow.
 
    The container query must target a descendant of the container; the
-   simplest path is the ::before pseudo-element, whose --f drives
-   both aspect-ratio and bg-position-y. */
+   banner element is itself a flex child of the overlay, so targeting
+   the banner here keeps the descendant rule and the container
+   relationship intact now that the banner is a real element rather
+   than a ::before pseudo. */
 @container (min-width: 1700px) {
-  html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::before {
+  html[data-visual='on'] .genie-living-intelligence .quick-help-banner {
     --f: var(--f-min);
   }
 }
@@ -247,10 +268,33 @@ html[data-visual='on'] .dark-mode .genie-living-intelligence .quick-help-overlay
   mix-blend-mode: screen;
 }
 
+/* The content sits inside the banner. z-index 1 places it above the
+   artwork inside the banner's stacking context, and the banner's own
+   z-index 0 keeps the artwork below the grid (which uses z-index 1 to
+   sit above the waves ::after).
+
+   A solid surface scrim is laid behind the text so the brand ramp
+   inside the heading and the subtitle have a known backdrop
+   regardless of where the artwork's ink band ends. The scrim is
+   fully opaque; the visual dissolve between the artwork above and
+   the scrim is carried by the banner's own mask (which already fades
+   the artwork's lower 28 % toward transparent) — the scrim simply
+   occupies the bottom of the banner with surface, so the text sits
+   on surface, never on the artwork's ink band. */
 html[data-visual='on'] .genie-living-intelligence .quick-help-content {
   position: relative;
   z-index: 1;
   min-width: 0;
+  background: var(--surface);
+  padding-bottom: var(--space-md);
+}
+
+/* The grid is a sibling of the banner, not a descendant of content
+   anymore. The waves ::after has z-index 0, so the grid needs an
+   explicit z-index 1 to keep painting on top of them. */
+html[data-visual='on'] .genie-living-intelligence .quick-help-grid {
+  position: relative;
+  z-index: 1;
 }
 
 html[data-visual='on'] .genie-living-intelligence .quick-help-heading {
@@ -346,10 +390,11 @@ html[data-visual='on'] .genie-living-intelligence .document-item {
  * Reduced motion.
  *
  * The !important is load-bearing and is the only one in this file:
- * .quick-help-overlay::before weighs 0,2,1 and would otherwise outrank
- * the .genie-living-intelligence *::before rule below it, so the
- * animation would keep running. Every other rule in this layer relies
- * on the design system's own extension points instead.
+ * .quick-help-banner carries the entrance animation; the universal
+ * `*` rule below (0,0,0) cannot outrank it without !important, so
+ * the animation would keep running under prefers-reduced-motion.
+ * Every other rule in this layer relies on the design system's own
+ * extension points instead.
  */
 @media (prefers-reduced-motion: reduce) {
   html[data-visual='on'] .genie-living-intelligence *,
@@ -361,7 +406,7 @@ html[data-visual='on'] .genie-living-intelligence .document-item {
 }
 
 /* Scoped opt-outs, for a deployment that wants the layer without a motif. */
-html[data-visual='on'] .genie-living-intelligence.gli-no-hero .quick-help-overlay::before {
+html[data-visual='on'] .genie-living-intelligence.gli-no-hero .quick-help-banner {
   display: none;
 }
 

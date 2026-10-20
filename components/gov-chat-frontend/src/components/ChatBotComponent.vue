@@ -140,30 +140,39 @@
       </div>
       <!-- Quick Help Overlay -->
       <div v-if="showQuickHelp && selectedContextItems.length === 0" class="quick-help-overlay">
-        <div class="quick-help-content">
-          <i18n-t keypath="chatbot.whatCanIHelp" tag="h2" class="quick-help-heading">
-            <template #brandwordmark>
-              <span :class="brandWordmarkClass">{{ brandName }}</span>
-            </template>
-          </i18n-t>
-          <p class="quick-help-subtitle">{{ translate('chatbot.quickHelpSubtitle') }}</p>
-
-          <div class="quick-help-grid">
-            <DsCard
-              v-for="button in quickHelpButtons"
-              :key="button.id"
-              variant="flat"
-              padding="md"
-              :hoverable="true"
-              class="quick-help-item"
-              :class="{ 'just-chat': !button.category }"
-              :style="buttonTintStyle(button)"
-              @click="selectQuickHelpOption(button)"
-            >
-              <img class="quick-help-icon" :src="button.icon" alt="Quick Help Icon" />
-              <div class="quick-help-text">{{ button.service }}</div>
-            </DsCard>
+        <!-- The banner is a real element so its height can grow with the
+             heading + subtitle inside it (a content-aware box), and the
+             heading reads as sitting inside the artwork instead of below
+             a hard cut. With the Living Intelligence layer switched
+             off, the banner has no special styling and the layout is
+             identical to the legacy version: heading + subtitle stack
+             above the grid as ordinary block-flow children. -->
+        <div class="quick-help-banner">
+          <div class="quick-help-content">
+            <i18n-t keypath="chatbot.whatCanIHelp" tag="h2" class="quick-help-heading">
+              <template #brandwordmark>
+                <span :class="brandWordmarkClass">{{ brandName }}</span>
+              </template>
+            </i18n-t>
+            <p class="quick-help-subtitle">{{ translate('chatbot.quickHelpSubtitle') }}</p>
           </div>
+        </div>
+
+        <div class="quick-help-grid">
+          <DsCard
+            v-for="button in quickHelpButtons"
+            :key="button.id"
+            variant="flat"
+            padding="md"
+            :hoverable="true"
+            class="quick-help-item"
+            :class="{ 'just-chat': !button.category }"
+            :style="buttonTintStyle(button)"
+            @click="selectQuickHelpOption(button)"
+          >
+            <img class="quick-help-icon" :src="button.icon" alt="Quick Help Icon" />
+            <div class="quick-help-text">{{ button.service }}</div>
+          </DsCard>
         </div>
       </div>
       <!-- Input Area -->
@@ -2257,15 +2266,6 @@ export default {
 
 .quick-help-content {
   width: 100%;
-  /* The minimum card width the quick-help grid lays out at. The
-     reference mocks a 217 px card; this is a component-local extension
-     point (the same shape as the Living Intelligence layer's per-button
-     --qh-bg / --qh-hover tokens), derived from the mockup, not a new
-     token in theme-variables.css. The grid's auto-fit lower bound and
-     the four-column cap below both reference it, so a deployment that
-     wants wider or narrower cards only has to change this one
-     declaration. */
-  --qh-card-min: 217px;
 }
 
 /* The heading and the subtitle under it share one gap: the heading
@@ -2389,7 +2389,17 @@ export default {
    recomputes its column count and the cap in step. Changing
    --space-xl does NOT require updating these rules. */
 .quick-help-grid {
+  /* The minimum card width the quick-help grid lays out at. The
+     reference mocks a 217 px card; this is a component-local extension
+     point (the same shape as the Living Intelligence layer's per-button
+     --qh-bg / --qh-hover tokens), derived from the mockup, not a new
+     token in theme-variables.css. The auto-fit lower bound and the
+     four-column cap below both reference it, so a deployment that
+     wants wider or narrower cards only has to change this one
+     declaration. */
+  --qh-card-min: 217px;
   display: grid;
+  width: 100%;
   gap: var(--space-xl);
   grid-template-columns: repeat(auto-fit, minmax(var(--qh-card-min), 1fr));
   /* The four-column cap. The formula is 4 cards + 3 gaps. */

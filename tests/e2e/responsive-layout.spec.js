@@ -48,20 +48,22 @@ function boxesOverlap(a, b) {
 async function measureLayout(page) {
   // Read the design tokens the spec is supposed to assert against so
   // a future token change doesn't silently invalidate this spec.
-  // --qh-card-min is declared on .quick-help-content (a component-
-  // local extension point), so we read it from that element's computed
-  // style rather than from :root. --space-xl is the global token.
+  // --qh-card-min is a component-local extension point declared on
+  // .quick-help-grid (the only element that reads it directly). The
+  // brief keeps it out of theme-variables.css on purpose, so this spec
+  // reads it from that element rather than from :root.
+  // --space-xl is the global token.
   const tokens = await page.evaluate(() => {
     const parsePx = (raw) => {
       const m = /^([\d.]+)px$/.exec(raw.trim());
       return m ? parseFloat(m[1]) : NaN;
     };
-    const content = document.querySelector('.quick-help-content');
+    const grid = document.querySelector('.quick-help-grid');
     const root = document.documentElement;
-    const contentStyle = content ? window.getComputedStyle(content) : null;
+    const gridStyle = grid ? window.getComputedStyle(grid) : null;
     const rootStyle = window.getComputedStyle(root);
     return {
-      cardMin: contentStyle ? parsePx(contentStyle.getPropertyValue('--qh-card-min')) : NaN,
+      cardMin: gridStyle ? parsePx(gridStyle.getPropertyValue('--qh-card-min')) : NaN,
       gap: parsePx(rootStyle.getPropertyValue('--space-xl'))
     };
   });

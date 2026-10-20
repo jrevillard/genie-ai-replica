@@ -18,9 +18,28 @@
   self-metrics are rarely scraped. Operators that want GPU self-
   metrics add a custom VMServiceScrape out of band.
 
-  OPEA orchestrators ship a `/metrics` endpoint on their container
-  port (the same listener that serves `/health`); the Prometheus
-  exporter path is the Service's `http` port name.
+  MEASURED 2026-10-20 on the laptop: every one of these endpoints
+  answers 404. /metrics was probed on each Service's own port —
+  backend:80, document-repository:80, frontend:80, redis-cache:80,
+  chatqna:8888, dataprep:5000, retriever:7000, reranker:8000,
+  translation:9031, embedding:6000 — and none serves a Prometheus
+  surface. The application services export metrics over OTLP instead
+  (their SDKs push to the collector, which forwards to VictoriaMetrics
+  with prometheusremotewrite), so the charts that matter get their
+  data that way.
+
+  These CRs are therefore inert today, and they are kept because the
+  shape is right the moment an image does expose /metrics. Two traps
+  to know about before trusting one:
+
+  1. They do nothing unless VMSingle has ingestOnlyMode: false AND a
+     serviceScrapeSelector (see vmsingle.yaml). Both gates are silent —
+     the CRs still report `operational`, which only proves the CR is
+     valid.
+  2. `selector.matchLabels` here selects the TARGET Service, not the
+     VMSingle. Pairing the CR with the VMSingle is
+     VMSingle.spec.serviceScrapeSelector, a label selector on the
+     VMServiceScrape object's OWN labels.
 */}}
 {{- if .Values.services.backend.enabled }}
 ---

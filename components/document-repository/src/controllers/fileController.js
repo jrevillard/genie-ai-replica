@@ -1028,6 +1028,14 @@ class FileController {
     // The dataprep retract endpoint is called directly rather than through
     // _retractFileById: that one also wipes the ingestion log, and for this case
     // the log is the diagnosis the operator is in the middle of reading.
+    //
+    // It has one side effect worth naming: dataprep's retract_file ends by
+    // setting the document's status to 'Retracted'. That is accurate — the graph
+    // genuinely is empty — and the ingest sets 'Ingesting' on success below. But
+    // if the ingest POST then fails, the document is left showing 'Retracted'
+    // next to the PREVIOUS run's chunk_count, which is no longer true of
+    // anything. Resetting it here keeps the two consistent in that window; the
+    // alternative is a status that reads as an admin retraction nobody performed.
     if (status === 'ingested with warnings') {
       const retractUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.retractPath}`;
       logger.debug(
@@ -1052,6 +1060,7 @@ class FileController {
           details: retractResponse.data
         };
       }
+      await metadataService.updateMetadata(fileId, { chunk_count: 0 });
     }
     const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.ingestPath}`;
     logger.debug(`[FILE-CONTROLLER] Sending file to dataprep service at ${dataprepUrl}`);

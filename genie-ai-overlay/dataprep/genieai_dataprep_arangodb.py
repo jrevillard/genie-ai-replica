@@ -361,19 +361,34 @@ DATAPREP_LLM_PHASE_TIMEOUT_SECONDS = positive_float_env("DATAPREP_LLM_PHASE_TIME
 DEGRADED_PHASE_BUDGET = "the phase ran out of its wall-clock budget with work unfinished"
 DEGRADED_CLIENT_UNAVAILABLE = "the vLLM client could not be built"
 DEGRADED_NO_CONTEXTS = "context generation returned nothing usable for any chunk"
+DEGRADED_NO_LABELS = "the labelling model returned no labels for any chunk"
+
+# The complete set, in one place, rather than a tuple written into the matcher.
+# A sentinel missing from THIS list is invisible to _degraded_cause, which then
+# falls through to reporting the reason verbatim — no remedy, silently. Keeping
+# the roster here makes that a difference a test can assert on equality, instead
+# of two lists that can drift apart with nothing to notice.
+DEGRADED_CAUSES = (
+    DEGRADED_PHASE_BUDGET,
+    DEGRADED_CLIENT_UNAVAILABLE,
+    DEGRADED_NO_CONTEXTS,
+    DEGRADED_NO_LABELS,
+)
 
 
 def _degraded_cause(reason: str) -> str:
     """The sentinel *reason* belongs to, or *reason* itself when unknown.
 
-    Prefix-matched because a phase appends its own detail to the sentinel — the
-    client-init error text, the per-chunk fallback counts. Equality would only
-    ever match the bare-budget case and quietly classify the others as
-    unrecognised, which is the state that produced a remedy naming the wrong
-    knob. An unrecognised reason falls through to itself so an unmapped cause is
+    Prefix-matched because a phase appends its own detail to the sentinel: the
+    client-init error text, and the ``0/N`` counts on the two that can produce
+    nothing. Equality would only ever match a bare reason and quietly classify
+    the decorated ones as unrecognised, which is the state that produced a
+    remedy naming the wrong knob.
+
+    An unrecognised reason falls through to itself so an unmapped cause is
     reported verbatim rather than filed under a cause that does not describe it.
     """
-    for sentinel in (DEGRADED_PHASE_BUDGET, DEGRADED_CLIENT_UNAVAILABLE, DEGRADED_NO_CONTEXTS):
+    for sentinel in DEGRADED_CAUSES:
         if reason.startswith(sentinel):
             return sentinel
     return reason
@@ -402,6 +417,11 @@ DEGRADED_REMEDIES = {
         "{phase}: every chunk came back without a generated context. Raising a budget will not help — "
         "the endpoint must be reachable and the model must support guided JSON "
         "(response_format=json_object)."
+    ),
+    DEGRADED_NO_LABELS: (
+        "{phase}: every chunk was labelled from the document's own labels because the model returned "
+        "nothing usable. Raising a budget will not help — the endpoint must be reachable and the model "
+        "must support guided JSON (response_format=json_object)."
     ),
 }
 
@@ -1684,7 +1704,14 @@ class GenieArangoDataprep(OpeaArangoDataprep):
     # --- Labeling Strategies (Spec 5.3, 5.4) ---
 
     async def _label_with_llm(self, chunks: list[str], all_labels: list[str], file_labels: list[str], file_id: str):
-        """Labels chunks using VLLM with Retry Logic and Advisory Warnings (Spec 5.3)."""
+        """Label chunks with the LLM, falling back to the document's own labels.
+
+        Returns ``(results, reasons)``. ``results`` is one
+        ``{"text", "labels"}`` per input chunk, in order. ``reasons`` lists
+        human-readable causes, empty when labelling completed, and it is what
+        stops the document being reported as plainly Ingested — see
+        DEGRADED_REMEDIES for why a list rather than a flag.
+        """
         # Guarded exactly as _apply_contextualization guards it, and for the same
         # reason. Contextualization runs first, so an unbuildable client is caught
         # there, recorded as a degradation, and the ingest carries on to labelling —
@@ -1711,8 +1738,17 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 f"vLLM client init failed ({err}); using file labels.",
             )
             degraded.append(f"{DEGRADED_CLIENT_UNAVAILABLE} ({err})")
+            # The metric covers the per-batch AND the whole-phase paths; a whole
+            # phase that never reached the model is the larger of the two and
+            # was counted nowhere.
+            _llm_fallback_total.add(len(chunks), {"phase": PHASE_LABEL_LABELING, "reason": "client_unavailable"})
 
-        partial_maps: list = []
+        # Enumerated once, above the client check: the batch split below and the
+        # fallback tail below both read it, and the tail runs whether or not a
+        # client was ever built. Computing it inside the branch left the second
+        # read rebinding the same value, which is a rename waiting to diverge.
+        indexed = list(enumerate(chunks))
+        partials: list = []
         timed_out = False
         if client is not None:
             # Precompute the system prompt once (the taxonomy is identical for every chunk).
@@ -1733,14 +1769,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
             # Group indexed chunks into batches; each batch yields one LLM call (or,
             # on parse failure, per-chunk calls). All gated by the semaphore.
-            indexed = list(enumerate(chunks))
             batches = [indexed[i : i + LABEL_LLM_BATCH_SIZE] for i in range(0, len(indexed), LABEL_LLM_BATCH_SIZE)]
 
             async def _process_batch(batch):
                 async with semaphore:
                     return await self._llm_suggest_labels(client, model, system_prompt, batch, file_id, file_labels)
 
-            partial_maps, timed_out = await _gather_with_phase_budget(
+            partials, timed_out = await _gather_with_phase_budget(
                 [_process_batch(b) for b in batches],
                 phase="LLM labeling",
                 phase_label=PHASE_LABEL_LABELING,
@@ -1750,16 +1785,29 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             )
 
             if timed_out:
-                abandoned = len(batches) - len(partial_maps)
+                abandoned = len(batches) - len(partials)
                 _llm_fallback_total.add(abandoned, {"phase": PHASE_LABEL_LABELING, "reason": "phase_budget"})
                 # Recorded here, where the cause is known, so the file-label
                 # fallback below can see that the phase degraded as a whole.
                 degraded.append(DEGRADED_PHASE_BUDGET)
 
-        indexed = list(enumerate(chunks))
+            fell_back = sum(f for _, f in partials)
+            # Every chunk answered by the document's own labels rather than the
+            # model: the endpoint is unreachable, or it is a model that rejects
+            # response_format=json_object, or a model id that resolves to nothing
+            # usable. Every chunk landed, so nothing looks broken, and without
+            # this the document reports a clean Ingested on a labelling phase
+            # that never ran. The contextual phase reports its equivalent
+            # (DEGRADED_NO_CONTEXTS); this is the labelling twin.
+            #
+            # All-or-nothing only. Some chunks falling back is what the per-batch
+            # fallback is for, and flagging the document for it would make the
+            # status fire on healthy documents.
+            if fell_back == len(chunks):
+                degraded.append(f"{DEGRADED_NO_LABELS} (0/{len(chunks)})")
 
         suggested_map: dict[int, list[str]] = {}
-        for partial in partial_maps:
+        for partial, _fell_back in partials:
             suggested_map.update(partial)
 
         # An abandoned batch contributes NOTHING — it was cancelled before
@@ -2272,17 +2320,27 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     async def _llm_suggest_labels(
         self, client, model, system_prompt, batch, file_id, file_labels
-    ) -> dict[int, list[str]]:
-        """Return raw suggested labels per chunk index for one batch.
+    ) -> tuple[dict[int, list[str]], int]:
+        """Return ``(suggestions, fell_back)`` for one batch.
 
-        Uses a single batched LLM call when ``len(batch) > 1``; any parse failure
-        falls back to one call per chunk so labeling always completes.
+        ``suggestions`` maps chunk index to raw suggested labels. Uses a single
+        batched LLM call when ``len(batch) > 1``; any parse failure falls back to
+        one call per chunk so labeling always completes.
+
+        ``fell_back`` counts the chunks whose labels came from the document's own
+        scope because the model did not answer, NOT the ones the model answered
+        with an empty list. The two are indistinguishable in ``suggestions`` —
+        a chunk the model genuinely found no matching label for and a chunk
+        whose call failed three times both arrive as ``[]`` or as the file's
+        labels — and only the second one is a degradation. The caller needs the
+        distinction to tell a total labelling failure from a document that
+        legitimately matched nothing.
         """
         if len(batch) > 1:
             try:
                 suggestions = await self._llm_call_batch(client, model, system_prompt, batch, file_id)
                 if suggestions is not None:
-                    return suggestions
+                    return suggestions, 0
                 # _llm_call_batch already counted the failure (parse or call) —
                 # it swallows both and returns None, so nothing reaches the
                 # handlers below for a failed call.
@@ -2324,12 +2382,25 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 )
         # Per-chunk path (default, and batch fallback for transient/non-overflow errors).
         out: dict[int, list[str]] = {}
+        fell_back = 0
         for i, text in batch:
-            out[i] = await self._llm_call_single(client, model, system_prompt, i, text, file_id, file_labels)
-        return out
+            labels, used_file_labels = await self._llm_call_single(
+                client, model, system_prompt, i, text, file_id, file_labels
+            )
+            out[i] = labels
+            fell_back += used_file_labels
+        return out, fell_back
 
-    async def _llm_call_single(self, client, model, system_prompt, index, text, file_id, file_labels) -> list[str]:
-        """One LLM call for a single chunk with up to 3 retries. Emits an OTel span."""
+    async def _llm_call_single(
+        self, client, model, system_prompt, index, text, file_id, file_labels
+    ) -> tuple[list[str], bool]:
+        """One LLM call for a single chunk with up to 3 retries. Emits an OTel span.
+
+        Returns ``(labels, fell_back)``. ``fell_back`` is True only when the
+        model did not answer and the document's own labels were substituted —
+        not when the model answered that the chunk matches nothing, which is a
+        correct answer and not a degradation.
+        """
         for attempt in range(1, 4):
             with background_span(
                 "dataprep.llm.label_chunk",
@@ -2364,7 +2435,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         _usage = getattr(response, "usage", None)
                         if getattr(_usage, "completion_tokens", None) is not None:
                             span.set_attribute("dataprep.llm.completion_tokens", _usage.completion_tokens)
-                        return suggested
+                        return suggested, False
                     await self._write_ingestion_log(
                         file_id,
                         "WARN",
@@ -2413,7 +2484,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             f"Chunk {index}: LLM failed to return valid labels after 3 attempts. Falling back to file labels.",
         )
         _llm_fallback_total.add(1, {"phase": PHASE_LABEL_LABELING, "reason": "file_labels"})
-        return list(file_labels) if file_labels else []
+        return (list(file_labels) if file_labels else []), True
 
     async def _llm_call_batch(self, client, model, system_prompt, batch, file_id) -> dict[int, list[str]] | None:
         """One LLM call labeling a whole batch of chunks. Returns None on parse failure."""

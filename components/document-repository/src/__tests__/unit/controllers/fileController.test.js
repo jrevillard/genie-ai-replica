@@ -277,6 +277,20 @@ describe('fileController', () => {
         expect(retractCall[1]).toEqual({ fileId: 'f1' });
       });
 
+      it('zeroes the chunk count, so a failed ingest does not leave a stale one', async () => {
+        // dataprep's retract_file sets the status to 'Retracted'. If the ingest
+        // POST then fails, the document would show 'Retracted' beside the
+        // previous run's chunk count — a number describing chunks that are gone.
+        const metadataService = require('../../../services/metadataService');
+        axios.post.mockResolvedValueOnce({ data: { success: true } }).mockRejectedValueOnce(new Error('ingest down'));
+
+        // The ingest POST's rejection propagates to the route's handler, which is
+        // where the document is left in exactly the state under test.
+        await expect(fileController._ingestFileById('f1')).rejects.toThrow('ingest down');
+
+        expect(metadataService.updateMetadata).toHaveBeenCalledWith('f1', { chunk_count: 0 });
+      });
+
       it('keeps the ingestion log: it is the diagnosis the operator is reading', async () => {
         const fileService = require('../../../services/fileService');
         await fileController._ingestFileById('f1');

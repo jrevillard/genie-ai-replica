@@ -76,6 +76,30 @@ def _run(coro):
     return asyncio.run(coro)
 
 
+def _AsyncJson(payload):
+    """An async ``create()`` that answers with *payload* as its JSON body."""
+
+    import json
+    from unittest.mock import MagicMock
+
+    async def create(**_kwargs):
+        return MagicMock(
+            choices=[MagicMock(message=MagicMock(content=json.dumps(payload)))],
+            usage=None,
+        )
+
+    return create
+
+
+def _AsyncTuple(value, fell_back):
+    """A stand-in for ``_llm_suggest_labels``: one batch's result."""
+
+    async def call(*_args, **_kwargs):
+        return value, fell_back
+
+    return call
+
+
 class TestPhaseReturnsAllResults:
     def test_all_tasks_that_finish_are_returned(self, monkeypatch):
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 5.0)
@@ -1294,6 +1318,39 @@ class TestTheKillRollbackCannotBeCancelled:
         )
 
 
+def _run_degraded_ingest(monkeypatch, *, degraded, contextual_reasons=None):
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    monkeypatch.setenv("VLLM_API_KEY", "test-key")
+    monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+    monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+    dp = _stub_dataprep()
+    dp.db = MagicMock()
+    dp._fetch_all_labels = AsyncMock(return_value=["Tax:IVA"])
+    dp._load_and_chunk = AsyncMock(return_value=["chunk one", "chunk two"])
+    dp._run_guardrail = AsyncMock(return_value={"success": True})
+    dp._update_doc_status = AsyncMock()
+    dp._apply_contextualization = AsyncMock(side_effect=lambda c, i, f: (list(c), list(contextual_reasons or [])))
+    dp._apply_labels = AsyncMock(
+        return_value=([{"text": "a", "labels": ["Tax:IVA"]}, {"text": "b", "labels": ["Tax:IVA"]}], degraded)
+    )
+    dp._process_batch = AsyncMock()
+    dp.ensure_vector_index = AsyncMock(return_value=(None, None))
+
+    from unittest.mock import MagicMock as MM
+
+    inp = MM(file_id="f1", file_path="/tmp/f1.pdf", graph_name="GRAPH", file_labels=[])
+
+    async def scenario():
+        with (
+            patch.object(dataprep, "ArangoGraph"),
+            patch.object(dataprep, "Document", side_effect=lambda **kw: MM(metadata=dict(kw))),
+        ):
+            return await dp.ingest_file_with_guardrail(inp, lock_file=None)
+
+    return _run(scenario()), dp
+
+
 class TestADegradedPhaseNeverReportsIngested:
     """ "Ingested" claims the whole document landed. A degraded one must not say so.
 
@@ -1341,7 +1398,7 @@ class TestADegradedPhaseNeverReportsIngested:
         return _run(scenario()), dp
 
     def test_a_degraded_phase_reports_ingested_with_warnings(self, monkeypatch):
-        _result, dp = self._run_ingest(monkeypatch, degraded=[dataprep.DEGRADED_PHASE_BUDGET])
+        _result, dp = _run_degraded_ingest(monkeypatch, degraded=[dataprep.DEGRADED_PHASE_BUDGET])
         statuses = [c.args[1] for c in dp._update_doc_status.call_args_list]
         assert "Ingested" not in statuses, (
             f"a document with an abandoned phase was reported as plainly Ingested: {statuses}"
@@ -1424,7 +1481,7 @@ class TestADegradedPhaseNeverReportsIngested:
         else []` to `return result, []` passes every test in this file. That is
         the incident this rule came from — a count that is not a contract.
         """
-        _result, dp = self._run_ingest(
+        _result, dp = _run_degraded_ingest(
             monkeypatch,
             degraded=[],
             contextual_reasons=[dataprep.DEGRADED_PHASE_BUDGET],
@@ -1441,7 +1498,7 @@ class TestADegradedPhaseNeverReportsIngested:
         of its 900s budget" — sending an operator to raise a budget that could
         not fix a misconfigured endpoint. The ingestion log names which it was.
         """
-        _result, dp = self._run_ingest(
+        _result, dp = _run_degraded_ingest(
             monkeypatch,
             degraded=[],
             contextual_reasons=["the vLLM client could not be built (ConnectionError)"],
@@ -1450,12 +1507,18 @@ class TestADegradedPhaseNeverReportsIngested:
         joined = " ".join(str(m) for m in messages)
         assert "could not be built" in joined, joined
         # The budget remedy must NOT be offered for a cause it cannot fix.
-        budget_lines = [m for m in messages if "Phase budget exhausted" in str(m)]
-        assert not budget_lines, f"a broken client was reported as a budget exhaustion: {budget_lines}"
+        # This used to be asserted by grepping the log for "Phase budget exhausted"
+        # — a string this MR replaced with the DEGRADED_REMEDIES budget sentence,
+        # so the filter was always empty and the assertion could never fail. It
+        # now checks the rendered text for the budget knob, which is what the
+        # remedy actually emits.
+        assert "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS" not in joined, (
+            f"a broken client was handed the budget remedy: {joined}"
+        )
 
     def test_a_clean_ingest_still_reports_ingested(self, monkeypatch):
         """The new state must not become the default — it means something."""
-        _result, dp = self._run_ingest(monkeypatch, degraded=[])
+        _result, dp = _run_degraded_ingest(monkeypatch, degraded=[])
         statuses = [c.args[1] for c in dp._update_doc_status.call_args_list]
         assert statuses[-1] == "Ingested", statuses
 
@@ -1903,11 +1966,7 @@ class TestEveryDegradationIsNamed:
         entire budget sentence — the operator-facing instruction that is the
         point of the degraded status — left the suite green.
         """
-        from unittest.mock import MagicMock
-
-        from tests.test_dataprep_phase_budget import TestADegradedPhaseNeverReportsIngested as T
-
-        _result, dp = T()._run_ingest(monkeypatch, degraded=[dataprep.DEGRADED_PHASE_BUDGET])
+        _result, dp = _run_degraded_ingest(monkeypatch, degraded=[dataprep.DEGRADED_PHASE_BUDGET])
         joined = self._ingestion_messages(dp)
         assert "budget" in joined.lower(), joined
         assert "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS" in joined, (
@@ -1916,7 +1975,6 @@ class TestEveryDegradationIsNamed:
         assert "MODEL_LLM_TIMEOUT_SECONDS" in joined, (
             f"the budget cause never named the per-call knob that fixes it: {joined}"
         )
-        assert MagicMock is not None  # keeps the import honest for linters
 
     def test_a_client_that_will_not_build_survives_the_labelling_phase(self, monkeypatch):
         """The labelling half of the client-init cause.
@@ -2048,6 +2106,106 @@ class TestEveryDegradationIsNamed:
         assert texts[0].startswith("about the subject"), texts
         assert texts[3] == "chunk 3", texts
 
+    def test_a_labelling_phase_that_produced_nothing_names_that(self, monkeypatch):
+        """The labelling twin of the contextual no-contexts cause.
+
+        Every chunk falling back to the document's own labels means the labelling
+        phase accomplished nothing — an endpoint that answers but returns nothing
+        usable, a model that rejects response_format=json_object, a model id that
+        resolves to nothing. Every chunk still lands, so nothing looks broken and
+        the document reported a clean Ingested on a phase that never ran.
+        """
+        from unittest.mock import MagicMock, patch
+
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 30.0)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+
+        async def rejects_prompt(**_kwargs):
+            raise RuntimeError("this model does not support guided JSON")
+
+        client = MagicMock()
+        client.chat.completions.create = rejects_prompt
+
+        async def scenario():
+            dp = _stub_dataprep()
+            with patch.object(dataprep, "_build_vllm_client", return_value=(client, "test-model")):
+                return await dp._label_with_llm(["chunk one", "chunk two"], ["Tax:IVA"], ["Tax:IVA"], "f1")
+
+        results, reasons = _run(scenario())
+        assert reasons and reasons[0].startswith(dataprep.DEGRADED_NO_LABELS), (
+            f"a labelling phase that produced nothing reported {reasons!r} — the document would be "
+            "reported as plainly Ingested"
+        )
+        assert reasons != [dataprep.DEGRADED_PHASE_BUDGET], (
+            "an endpoint that returns nothing was reported as a budget exhaustion"
+        )
+        # And the chunks still carry the document's labels rather than nothing,
+        # so they stay reachable through a taxonomy search.
+        assert all(r["labels"] == ["Tax:IVA"] for r in results), results
+
+    def test_a_labelling_phase_that_answered_nothing_is_not_a_degradation(self, monkeypatch):
+        """A model that says "no label matches" has answered, and that is fine.
+
+        It arrives in the suggestion map as an empty list, indistinguishable from
+        a failure unless the failure is counted separately. Flagging the document
+        would make the status fire on documents whose taxonomy simply does not
+        cover them.
+        """
+        from unittest.mock import MagicMock, patch
+
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 30.0)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+
+        client = MagicMock()
+        client.chat.completions.create = _AsyncJson({"labels": []})
+
+        async def scenario():
+            dp = _stub_dataprep()
+            with patch.object(dataprep, "_build_vllm_client", return_value=(client, "test-model")):
+                return await dp._label_with_llm(["chunk one", "chunk two"], ["Tax:IVA"], ["Tax:IVA"], "f1")
+
+        _results, reasons = _run(scenario())
+        assert reasons == [], (
+            f"a model that answered with no matching labels was reported as degraded: {reasons!r} — "
+            "that is a correct answer, not a failure"
+        )
+
+    def test_partly_labelled_chunks_are_not_a_total_failure(self, monkeypatch):
+        """Some chunks falling back is what the per-batch fallback is for."""
+        from unittest.mock import MagicMock, patch
+
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 30.0)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+
+        calls = {"n": 0}
+
+        async def half_fails(**_kwargs):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("transient")
+            raise AssertionError("the batch path should not have retried past the first chunk")
+
+        client = MagicMock()
+        client.chat.completions.create = half_fails
+
+        async def scenario():
+            dp = _stub_dataprep()
+            dp._llm_suggest_labels = _AsyncTuple({"0": ["Tax:IVA"]}, 0)
+            with patch.object(dataprep, "_build_vllm_client", return_value=(client, "test-model")):
+                return await dp._label_with_llm(["chunk one", "chunk two"], ["Tax:IVA"], ["Tax:IVA"], "f1")
+
+        _results, reasons = _run(scenario())
+        assert reasons == [], f"a batch that succeeded was reported as degraded: {reasons!r}"
+
     def test_doc_level_that_produced_nothing_names_that(self, monkeypatch):
         """doc_level is a supported strategy with the same hole.
 
@@ -2110,14 +2268,44 @@ class TestCauseClassification:
         assert dataprep._degraded_cause("something nobody has seen before") == ("something nobody has seen before")
 
     def test_every_cause_the_code_emits_has_a_remedy(self):
-        """Adding a cause without a remedy must be a visible gap, not a silent one."""
-        emitted = {
-            dataprep.DEGRADED_PHASE_BUDGET,
-            dataprep.DEGRADED_CLIENT_UNAVAILABLE,
-            dataprep.DEGRADED_NO_CONTEXTS,
+        """Adding a cause without a remedy must be a visible gap, not a silent one.
+
+        Derived from the module, NOT written out as a literal: a literal here is
+        checked against itself, so adding a fourth sentinel and emitting it with no
+        remedy entry left the suite green — verified by mutation. Reading the
+        sentinels back off the module is what makes the gap visible.
+        """
+        sentinels = {
+            value
+            for name, value in vars(dataprep).items()
+            if name.startswith("DEGRADED_") and name != "DEGRADED_REMEDIES" and isinstance(value, str)
         }
-        assert emitted <= set(dataprep.DEGRADED_REMEDIES), (
-            f"causes with no remedy: {sorted(emitted - set(dataprep.DEGRADED_REMEDIES))}"
+        assert sentinels, "no sentinels found — the derivation is broken, not the code"
+        missing = sentinels - set(dataprep.DEGRADED_REMEDIES)
+        assert not missing, f"causes with no remedy, so an operator would get none: {sorted(missing)}"
+
+    def test_every_sentinel_is_in_the_classifier_roster(self):
+        """A sentinel _degraded_cause does not know about gets NO remedy.
+
+        It falls through to reporting the reason verbatim, so an operator is told
+        what happened and not what to do. Checked as set EQUALITY against the
+        module's roster: asserting that the classifier returns something with a
+        remedy cannot catch this, because the fall-through value IS the sentinel,
+        and the sentinel has a remedy entry — so the miss reads as a pass. That
+        was verified by mutation: dropping a sentinel from the matcher left the
+        suite green until this test existed.
+        """
+        declared = {
+            value
+            for name, value in vars(dataprep).items()
+            if name.startswith("DEGRADED_") and name != "DEGRADED_REMEDIES" and isinstance(value, str)
+        }
+        rostered = set(dataprep.DEGRADED_CAUSES)
+        assert declared == rostered, (
+            f"DEGRADED_CAUSES is out of step with the declared sentinels. "
+            f"declared but not matched: {sorted(declared - rostered)} "
+            f"(these would be reported with no remedy). "
+            f"matched but not declared: {sorted(rostered - declared)} (dead entries)."
         )
 
     def test_only_the_budget_remedy_tells_the_operator_to_raise_a_budget(self):

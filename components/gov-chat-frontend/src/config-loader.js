@@ -7,10 +7,16 @@
 
 import Ajv from 'ajv';
 
-// The asset keys the decorative layer knows how to use. An explicit list
-// rather than Object.entries(), so a typo in a config becomes an ignored
-// key instead of an inert --visual-<typo> property nobody can trace.
-const VISUAL_ASSET_KEYS = ['hero', 'waves', 'mesh', 'corner'];
+// The asset keys the decorative layer knows how to use come from the
+// schema itself: a config's own `properties.theme.properties.visual.
+// properties.assets.properties` is the canonical list of accepted keys,
+// so the loader cannot silently ignore a key the schema accepts, and
+// cannot accept a key the schema rejects. The set is asserted in test.
+const visualAssetKeysFromSchema = (data) => {
+  const properties = data?.properties?.theme?.properties?.visual?.properties?.assets?.properties;
+  if (!properties || typeof properties !== 'object') return [];
+  return Object.keys(properties);
+};
 
 const defaults = {
   app: {
@@ -114,9 +120,17 @@ async function loadConfig() {
 
   if (theme.visual) {
     root.dataset.visual = theme.visual.enabled === false ? 'off' : 'on';
-    for (const key of VISUAL_ASSET_KEYS) {
+    const assetKeys = visualAssetKeysFromSchema(data) || [];
+    for (const key of assetKeys) {
       const value = theme.visual.assets?.[key];
-      if (value) root.style.setProperty(`--visual-${key}`, `url("${value}")`);
+      // Per-asset presence flag: a partial config (e.g. only hero) leaves
+      // the unset assets unset, and the CSS gates each band on its own
+      // --visual-<key>-set so the welcome overlay collapses the missing
+      // band rather than reserving 282 px of empty space.
+      root.style.setProperty(`--visual-${key}-set`, value ? '1' : '0');
+      if (value) {
+        root.style.setProperty(`--visual-${key}`, `url("${value}")`);
+      }
     }
   }
 

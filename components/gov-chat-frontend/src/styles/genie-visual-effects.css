@@ -57,7 +57,7 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-item {
 }
 
 html[data-visual='on'] .genie-living-intelligence .quick-help-item:hover {
-  --ds-card-bg: var(--qh-hover, var(--ds-card-bg));
+  --ds-card-bg: var(--qh-hover, var(--qh-bg, var(--surface)));
   --ds-card-border-color: color-mix(in srgb, var(--qh-outline, var(--accent)) 47%, var(--border));
 }
 
@@ -70,12 +70,14 @@ html[data-visual='on'] .dark-mode .genie-living-intelligence .quick-help-item {
 html[data-theme='dark'][data-visual='on'] .genie-living-intelligence .quick-help-item:hover,
 html[data-visual='on'] .dark-mode .genie-living-intelligence .quick-help-item:hover {
   --ds-card-bg: color-mix(in srgb, var(--qh-hover, var(--qh-bg, var(--surface))) 20%, var(--surface));
+  /* Parity with the light hover rule: the border also shifts, otherwise
+     dark hover feedback would be background-only. */
+  --ds-card-border-color: color-mix(in srgb, var(--qh-outline, var(--gli-frost-border)) 45%, var(--border));
 }
 
 /* Keep the existing chat, data and scroll behavior intact. */
 html[data-visual='on'] .genie-living-intelligence .chatbot-container {
   min-width: 0;
-  position: relative;
 }
 
 /*
@@ -94,14 +96,16 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-overlay {
   justify-content: flex-start;
   background-image:
     linear-gradient(180deg, transparent 0 25%, var(--surface) 40%, var(--surface) 55%, transparent 70% 100%),
-    var(--visual-mesh);
+    var(--visual-mesh), var(--visual-ambient, none);
   background-position:
     center top,
-    center top;
+    center top,
+    center 22%;
   background-size:
     100% 100%,
-    min(900px, 100%) auto;
-  background-repeat: no-repeat;
+    min(900px, 100%) auto,
+    min(100%, 1600px) clamp(120px, 22%, 220px);
+  background-repeat: no-repeat, no-repeat, no-repeat;
 }
 
 html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::before {
@@ -115,7 +119,12 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::before {
   margin-left: calc(-1 * var(--space-lg));
   margin-right: calc(-1 * var(--space-lg));
   margin-top: calc(-1 * var(--space-lg));
-  height: clamp(180px, 28vw, 282px);
+  /* A partial config that omits hero must collapse the band's layout
+     reservation rather than reserve 282 px of blank. The per-asset
+     --visual-hero-set flag is 1 when configured and 0 otherwise, so
+     multiplying the clamp by it sizes the box to 0 when the operator
+     left the asset out. */
+  height: calc(var(--visual-hero-set, 0) * clamp(180px, 28vw, 282px));
   /* 115% scales the asset so its 1592 px visible-art band fills the box
      width — both the 114 px left and the 69 px right transparent margins
      fall outside the box (measured L=0, R≈0 at 1775×886 and 1920×960). */
@@ -141,7 +150,7 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::after {
      keeps the whole painted band inside the box at every measured
      viewport (194 px of ink on the 981 px overlay at 1775x886, 224 px
      on the wider one at 1920x960). */
-  height: min(28%, 300px);
+  height: calc(var(--visual-waves-set, 0) * min(28%, 300px));
   background: var(--visual-waves) bottom / 100% auto no-repeat;
   opacity: var(--gli-deco-strength);
   /* Multiply sinks the light-blue strokes into the white surface (light
@@ -201,8 +210,8 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-item:focus-visible
        right 49 % and top 88 %. A 190x205 box therefore showed 64 px of
        artwork; 300x420 shows 131 px, close to the ~160 px the approved
        mockup gives it, and keeps the painted band inside the box. */
-    width: min(78%, 300px);
-    height: 420px;
+    width: calc(var(--visual-corner-set, 0) * min(78%, 300px));
+    height: calc(var(--visual-corner-set, 0) * 420px);
     background: var(--visual-corner) right top / contain no-repeat;
     opacity: var(--gli-corner-strength);
     pointer-events: none;
@@ -234,21 +243,21 @@ html[data-visual='on'] .genie-living-intelligence .document-item {
 
 @media (max-width: 900px) {
   html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::before {
-    height: clamp(140px, 30vw, 230px);
+    height: calc(var(--visual-hero-set, 0) * clamp(140px, 30vw, 230px));
   }
 }
 
 @media screen and (min-width: 769px) and (max-width: 900px) {
   html[data-visual='on'] .genie-living-intelligence .sidebar:not(.collapsed)::before {
-    width: 150px;
-    height: 230px;
+    width: calc(var(--visual-corner-set, 0) * 150px);
+    height: calc(var(--visual-corner-set, 0) * 230px);
     opacity: 0.36;
   }
 }
 
 @media (max-width: 600px) {
   html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::before {
-    height: clamp(110px, 28vw, 160px);
+    height: calc(var(--visual-hero-set, 0) * clamp(110px, 28vw, 160px));
   }
 
   html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::after {

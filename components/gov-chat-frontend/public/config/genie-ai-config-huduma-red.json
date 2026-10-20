@@ -158,8 +158,13 @@
                 "corner": {
                   "type": "string",
                   "description": "Corner network motif in the resources sidebar."
+                },
+                "ambient": {
+                  "type": "string",
+                  "description": "Low-opacity line overlay on the welcome panel (designer ships inactive)."
                 }
-              }
+              },
+              "additionalProperties": false
             }
           }
         }

@@ -273,26 +273,30 @@ html[data-visual='on'] .dark-mode .genie-living-intelligence .quick-help-overlay
    z-index 0 keeps the artwork below the grid (which uses z-index 1 to
    sit above the waves ::after).
 
-   A surface scrim is drawn behind the text. The scrim's bg and mask
-   share the same linear gradient (transparent at the top of the
-   content, opaque surface at the bottom). Because bg and mask match,
-   the scrim's *visibility* tracks its *colour* — at the top the scrim
-   is invisible (so the banner's mask-faded artwork shows through
-   unmodified), and at the bottom the scrim is fully opaque surface
-   (so the heading + subtitle paint on white). The single gradient
-   across bg and mask means there is no abrupt transition in either
-   component — the artwork never meets a hard edge, only a smoothly
-   deepening white that ends at the panel's own --surface. The text
-   sits in the lower part of the content where the scrim is opaque;
-   above the text the artwork's own fade (carried by the banner's
-   mask) is already where it belongs. */
+   A surface scrim sits behind the text. The scrim is fully opaque
+   `var(--surface)`; a mask fades only its top edge to transparent
+   over the top ~30 % of the content. The mask is the only place the
+   gradient lives — it never appears as a *colour* transition under
+   the text, so the brand ramp inside the heading and the subtitle
+   paint on opaque surface everywhere they actually render. The
+   padding-top pushes the heading + subtitle below the mask's
+   transparent band, into the part of the content where mask alpha
+   is already 1; nothing of the gradient transition reaches the text.
+   The artwork above still dissolves through the banner's own mask
+   — the scrim's job is to be a surface, not a second ramp. */
 html[data-visual='on'] .genie-living-intelligence .quick-help-content {
   position: relative;
   z-index: 1;
   min-width: 0;
-  background: linear-gradient(to bottom, transparent 0%, var(--surface) 30%);
+  background: var(--surface);
   -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgb(0 0 0 / 1) 30%);
   mask-image: linear-gradient(to bottom, transparent 0%, rgb(0 0 0 / 1) 30%);
+  /* The padding-top is large enough that the heading's first pixel
+     sits past the 30 % mask transition. At a content height of ~120 px
+     (banner.content ≈ heading 38 + subtitle 26 + margins 8 + padding 16),
+     30 % is ~36 px; the heading's font line begins at 50 px down, so
+     every glyph paints on fully opaque surface. */
+  padding-top: 50px;
   padding-bottom: var(--space-sm);
 }
 

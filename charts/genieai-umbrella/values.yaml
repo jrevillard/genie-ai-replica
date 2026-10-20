@@ -116,6 +116,18 @@ ingress:
   # where this release owns it (single-stack dev cluster), or pre-create
   # the class yourself.
   createGatewayClass: false
+  #
+  # Multiple GENIE releases on one cluster: supported, with three
+  # requirements — distinct release names, distinct namespaces, distinct
+  # ingress hosts. Every cluster-scoped resource the chart owns carries
+  # the release name or the namespace, EXCEPT the GatewayClass, which is
+  # a deliberate per-cluster singleton both releases share (that is why
+  # createGatewayClass defaults to false: pre-create it once, or let each
+  # environment opt in). CI asserts this per render — a cluster-scoped
+  # name carrying neither is a second-release collision waiting to happen.
+  # The operator dependencies (kube-arangodb, CNPG, keycloak-operator,
+  # cert-manager, vmoperator, otel-operator) are cluster-wide by nature:
+  # install them ONCE and share them.
   # Public hostname (may carry :port, e.g. genieai.local:4443) — the OIDC
   # issuer, redirect URLs and TLS dnsNames all derive from it. Deployment
   # data, supplied per environment; no chart default.

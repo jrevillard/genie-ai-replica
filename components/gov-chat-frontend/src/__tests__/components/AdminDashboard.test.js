@@ -214,7 +214,7 @@ function createUnauthenticatedStore() {
 // Mount helper
 // ---------------------------------------------------------------------------
 
-function createAdminDashboardWrapper(storeOverrides = {}) {
+function createAdminDashboardWrapper(storeOverrides = {}, extraMocks = {}) {
   const store = createAdminStore(storeOverrides);
   return mount(AdminDashboard, {
     global: {
@@ -222,7 +222,8 @@ function createAdminDashboardWrapper(storeOverrides = {}) {
       mocks: {
         $t: (key) => key,
         $te: () => true,
-        $i18n: { locale: 'en' }
+        $i18n: { locale: 'en' },
+        ...extraMocks
       },
       stubs: {
         DsButton: {
@@ -1464,6 +1465,52 @@ describe('AdminDashboard', () => {
       expect(wrapper.vm.getDisplayStatus({ dataprep: { status: 'ingested with warnings' } })).toBe(
         'Ingested with Warnings'
       );
+    });
+
+    it('resolves each dataprep status through the real en catalogue', () => {
+      // The test above proves the badge is TRANSLATED, and this one proves the
+      // translation it asks for is the right one. Those are different claims,
+      // and only the first was covered: the suite-wide `$t: (key) => key` mock
+      // makes `translate()` treat every key as missing and return its fallback,
+      // so pointing a status at ANOTHER status's key left all of them green —
+      // while a real build resolved that key to the other label and badged a
+      // degraded document as a clean one. That is the visibility this MR added,
+      // disappearing silently.
+      //
+      // So: resolve against the catalogue the app ships, the way vue-i18n does,
+      // and assert the badge the user would actually see.
+      const en = require('../../i18n/locales/en.js').default;
+      const lookup = (key) => key.split('.').reduce((node, part) => (node == null ? undefined : node[part]), en);
+      const wrapper = createAdminDashboardWrapper(
+        {},
+        {
+          $i18n: {
+            locale: 'en',
+            t: (key) => {
+              const found = lookup(key);
+              return found === undefined ? key : found;
+            }
+          }
+        }
+      );
+
+      // Every dataprep status getDisplayStatus maps, and the badge a user sees
+      // for it once the catalogue — not the fallback — has answered.
+      const expected = {
+        pending: 'Pending',
+        ingesting: 'Ingesting',
+        ingested: 'Ingested',
+        'ingested with warnings': 'Ingested with Warnings',
+        retracted: 'Retracted',
+        'ingestion error': 'Ingestion Error'
+      };
+
+      for (const [status, label] of Object.entries(expected)) {
+        expect(wrapper.vm.getDisplayStatus({ dataprep: { status } })).toBe(label);
+        // Case-insensitively too: the stored status is title-cased by dataprep
+        // while the filter option is lower-case, and both reach this function.
+        expect(wrapper.vm.getDisplayStatus({ dataprep: { status: status.toUpperCase() } })).toBe(label);
+      }
     });
 
     it('passes an unrecognised dataprep status through unchanged', () => {

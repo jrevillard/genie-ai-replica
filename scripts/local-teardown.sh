@@ -8,9 +8,17 @@
 #   --with-operators   Also uninstall the 7 operators installed by
 #                      scripts/install-prereqs.sh and delete their
 #                      namespaces (keycloak-system, cnpg-system,
-#                      arango-system, sealed-secrets, cert-manager,
-#                      vmoperator-system,
+#                      arango-system, cert-manager, vmoperator-system,
 #                      opentelemetry-operator-system).
+#
+#                      The sealed-secrets namespace is NOT in that list
+#                      and never will be: the controller key it holds is
+#                      the state every committed SealedSecret in
+#                      genie-ai-deploy is encrypted against, and
+#                      deleting it invalidates all of them. Pass
+#                      --purge-sealed-secrets to remove it anyway (the
+#                      key cannot be recovered; you will have to
+#                      re-seal and re-commit every SealedSecret).
 #
 # Does NOT delete the cluster itself (minikube/kind lifetime is the
 # operator's decision — use `minikube delete` / `kind delete cluster`
@@ -23,10 +31,12 @@ set -euo pipefail
 RELEASE="${RELEASE:-test}"
 NS="${NS:-genieai}"
 WITH_OPERATORS="false"
+PURGE_SEALED_SECRETS="false"
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --with-operators) WITH_OPERATORS="true" ;;
+    --purge-sealed-secrets) PURGE_SEALED_SECRETS="true" ;;
     -h|--help)
       grep '^#' "$0" | sed 's/^# \?//'
       exit 0
@@ -61,34 +71,67 @@ fi
 
 uninstall_chart() {
   if helm list -n "${NS}" -q 2>/dev/null | grep -qx "${RELEASE}"; then
-    log "helm uninstall ${RELEASE} -n ${NS}"
-    helm uninstall "${RELEASE}" -n "${NS}" --wait
+    # KEEP_RESOURCES=true is the only way to keep the PVs: it maps to
+    # helm's own --keep-resources. kubectl has no equivalent, and
+    # deleting the namespace afterwards discards them either way.
+    local keep=""
+    if [ "${KEEP_RESOURCES:-false}" = "true" ]; then
+      keep="--keep-resources"
+      log "helm uninstall ${RELEASE} -n ${NS} (KEEP_RESOURCES=true: PVs are kept)"
+    else
+      log "helm uninstall ${RELEASE} -n ${NS}"
+    fi
+    helm uninstall "${RELEASE}" -n "${NS}" --wait ${keep}
   else
     warn "no helm release ${RELEASE} in namespace ${NS}; skip"
   fi
+  # Namespace deletion cascades to EVERYTHING inside it: the PVCs
+  # (clamav signature cache, document-repository uploads) and the
+  # SealedSecret-materialized Secrets.
+  #
+  # `--keep-resources` is a `helm uninstall` flag, NOT a kubectl one.
+  # Passing it to `kubectl delete namespace` fails with
+  # `error: unknown flag: --keep-resources`, and with the error
+  # swallowed by `|| true` the teardown reported success while leaving
+  # the whole namespaced graph behind — so the next local-test.sh
+  # install collided with the resources that were supposedly gone.
+  # Keeping the PVs is `helm uninstall --keep-resources`, i.e. a flag on
+  # the uninstall above, not on the namespace delete.
   if kubectl get namespace "${NS}" >/dev/null 2>&1; then
-    # Namespace deletion cascades to EVERYTHING inside it: the PVCs
-    # (clamav signature cache, document-repository uploads) and the
-    # SealedSecret-materialized Secrets. --keep-resources keeps the PVs;
-    # set PURGE_NAMESPACE=true to actually reclaim them.
-    local purge="${PURGE_NAMESPACE:-false}"
-    if [ "${purge}" = "true" ]; then
-      warn "PURGE_NAMESPACE=true — PVs and namespace ${NS} will be destroyed"
-      log "kubectl delete namespace ${NS} (waits up to 2m)"
-      kubectl delete namespace "${NS}" --wait=true --timeout=2m >/dev/null 2>&1 || true
-    else
-      log "kubectl delete namespace ${NS} --keep-resources (PURGE_NAMESPACE=true to purge PVs)"
-      kubectl delete namespace "${NS}" --keep-resources=true --wait=true --timeout=2m >/dev/null 2>&1 || true
+    log "kubectl delete namespace ${NS} (cascades to its PVs and Secrets)"
+    if ! kubectl delete namespace "${NS}" --wait=true --timeout=2m; then
+      warn "namespace ${NS} did not delete within 2m — inspect with: kubectl get ns ${NS}"
     fi
   fi
 }
 
-# Helm never garbage-collects hook resources on uninstall, so the
-# dep-check ClusterRole/ClusterRoleBinding (hooks, cluster-scoped) would
-# survive every teardown on a shared cluster.
+# Helm never garbage-collects cluster-scoped resources on uninstall: a
+# hook resource is created and then forgotten, and a subchart's
+# cluster-scoped object belongs to the parent release. Both survive every
+# teardown, and the Envoy Gateway webhook is the expensive one:
+# MutatingWebhookConfiguration/envoy-gateway-topology-injector.<release>
+# is cluster-scoped admission wired to a Service INSIDE the namespace
+# being torn down, so once it is left behind every pod CREATE on the
+# whole cluster fails with "no endpoints available for service".
+#
+# Selected by Helm's own ownership labels rather than a hardcoded list,
+# so it covers the dep-check ClusterRole/Binding, the gateway subchart's
+# certgen ClusterRole/Binding, the topology-injector webhook, and
+# whatever a future subchart adds. All of them carry
+# `app.kubernetes.io/instance: <release>` + `managed-by: Helm` — the
+# `meta.helm.sh/release-name` ANNOTATION is not usable here, label
+# selectors cannot read annotations.
 delete_leaked_hook_rbac() {
-  for kind in clusterrole clusterrolebinding; do
-    kubectl delete "${kind}" "${RELEASE}-genieai-umbrella-dep-check" --ignore-not-found >/dev/null 2>&1 || true
+  local sel="app.kubernetes.io/managed-by=Helm,app.kubernetes.io/instance=${RELEASE}"
+  log "removing cluster-scoped resources owned by release ${RELEASE}"
+  for kind in clusterrole clusterrolebinding mutatingwebhookconfiguration validatingwebhookconfiguration; do
+    local names
+    names="$(kubectl get "${kind}" -l "${sel}" -o name 2>/dev/null || true)"
+    if [ -n "${names}" ]; then
+      # shellcheck disable=SC2086
+      kubectl delete ${names} --ignore-not-found >/dev/null 2>&1 || true
+      printf '    %s: %s\n' "${kind}" "$(printf '%s' "${names}" | tr '\n' ' ')"
+    fi
   done
 }
 
@@ -114,7 +157,7 @@ uninstall_operators() {
   # static-manifest operators: delete namespace only (manifests are owned
   # by their respective projects; the simplest teardown is namespace-delete
   # which cascades to every resource inside).
-  for ns in keycloak-system sealed-secrets; do
+  for ns in keycloak-system; do
     if kubectl get namespace "${ns}" >/dev/null 2>&1; then
       log "kubectl delete namespace ${ns} (waits up to 2m)"
       kubectl delete namespace "${ns}" --wait=true --timeout=2m >/dev/null 2>&1 || true
@@ -122,6 +165,24 @@ uninstall_operators() {
       warn "namespace ${ns} not present; skip"
     fi
   done
+
+  # sealed-secrets is NOT part of the default teardown. Its controller
+  # key is the state every committed SealedSecret in genie-ai-deploy is
+  # encrypted against: deleting the namespace destroys it irrecoverably
+  # and every one of those manifests then fails with "no key could
+  # decrypt secret", which means re-sealing and re-committing all of
+  # them. An operator asking for a full teardown does not mean that.
+  if [ "${PURGE_SEALED_SECRETS}" = "true" ]; then
+    warn "--purge-sealed-secrets: destroying the controller key. Every committed SealedSecret in genie-ai-deploy becomes undecryptable and must be re-sealed and re-committed."
+    if kubectl get namespace sealed-secrets >/dev/null 2>&1; then
+      log "kubectl delete namespace sealed-secrets (waits up to 2m)"
+      kubectl delete namespace sealed-secrets --wait=true --timeout=2m >/dev/null 2>&1 || true
+    else
+      warn "namespace sealed-secrets not present; skip"
+    fi
+  else
+    log "keeping the sealed-secrets namespace (its key decrypts the committed SealedSecrets; --purge-sealed-secrets to remove it anyway)"
+  fi
 }
 
 main() {

@@ -3302,9 +3302,42 @@ chart:contract:
       PY
     # The app SDKs must point at the operator-derived collector Service
     # (<cr-name>-collector), not a hand-written name.
-    - >-
-      grep -q 'http://genieai-collector-collector.genieai.svc.cluster.local:4318' /tmp/rendered.yaml
-      || { echo "OTLP endpoint drifted from the operator Service name"; exit 1; }
+    #
+    # Scoped to the app Deployments on purpose. A whole-file grep is
+    # vacuous here: the filelog agent's OpenTelemetryCollector CR carries
+    # the same URL, so every app Deployment could be pointed at a
+    # Service that does not exist and this assertion would still pass —
+    # a green pipeline over a total loss of trace export. Parsed, not
+    # grepped, and every app workload must carry it.
+    - |
+      python3 - <<'PY'
+      import sys, yaml
+
+      EXPECTED = 'http://genieai-collector-collector.genieai.svc.cluster.local:4318'
+      # Deployments the chart owns and whose SDK exports over OTLP.
+      APPS = ('backend', 'documentrepository', 'frontend')
+
+      found = {}
+      for doc in yaml.safe_load_all(open('/tmp/rendered.yaml')):
+          if not doc or doc.get('kind') != 'Deployment':
+              continue
+          name = doc['metadata']['name']
+          slug = name.rsplit('-', 1)[-1]
+          if slug not in APPS:
+              continue
+          for c in doc['spec']['template']['spec']['containers']:
+              for e in c.get('env', []):
+                  if e.get('name') == 'OTEL_EXPORTER_OTLP_ENDPOINT':
+                      found.setdefault(slug, e.get('value'))
+
+      missing = [a for a in APPS if a not in found]
+      wrong = {a: v for a, v in found.items() if v != EXPECTED}
+      if missing:
+          sys.exit(f'app Deployments with no OTEL_EXPORTER_OTLP_ENDPOINT: {missing}')
+      if wrong:
+          sys.exit(f'OTEL_EXPORTER_OTLP_ENDPOINT drifted from the operator Service name: {wrong}')
+      print('OTLP endpoint on every app Deployment:', ', '.join(sorted(found)))
+      PY
     - PII_SMOKE_CONFIG=/tmp/contract-collector-config.yaml ./tests/otel-collector/run-pii-smoke.sh
   rules:
     # Generic (not branch-pinned): the job validates the chart at its own

@@ -2198,7 +2198,6 @@ export default {
 }
 
 .quick-help-content {
-  max-width: 600px;
   width: 100%;
 }
 
@@ -2212,8 +2211,8 @@ export default {
 
 .quick-help-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: var(--space-md);
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-xl);
 }
 
 .quick-help-item {
@@ -2286,16 +2285,6 @@ export default {
     margin-right: var(--space-sm);
     flex: 1;
   }
-
-  .quick-help-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-@media (min-width: 1024px) {
-  .quick-help-grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
 }
 
 @media (max-width: 768px) {
@@ -2308,6 +2297,18 @@ export default {
   .status-metrics {
     width: 100%;
     justify-content: space-between;
+  }
+}
+
+@media (max-width: 1024px) {
+  .quick-help-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .quick-help-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 

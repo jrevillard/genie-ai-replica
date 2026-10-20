@@ -77,8 +77,10 @@ spec:
   #   - the selector: pinning it makes the route's Service independent of
   #     the operator's pod labels.
   # spec.service.metadata.name is NOT in the CRD schema (annotations and
-  # labels only) — the apiserver prunes it silently, so the Service keeps
-  # the operator's default name (the CR name, "genieai-grafana").
+  # labels only) — the apiserver prunes it silently, so the Service name
+  # is the operator's own convention: "<cr-name>-service", i.e.
+  # genieai-grafana-service. That is the name gateway/httproute.yaml
+  # routes /grafana to; the two must not drift.
   service:
     spec:
       type: ClusterIP

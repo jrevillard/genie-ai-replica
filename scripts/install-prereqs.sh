@@ -30,6 +30,9 @@ CNPG_VERSION="${CNPG_VERSION:-0.22.0}"
 ARANGO_OPERATOR_VERSION="${ARANGO_OPERATOR_VERSION:-1.4.5}"
 SEALED_SECRETS_VERSION="${SEALED_SECRETS_VERSION:-0.40.0}"
 CERT_MANAGER_VERSION="${CERT_MANAGER_VERSION:-v1.18.2}"
+# Helm CHART version of vm/victoria-metrics-operator (this chart ships
+# app v0.75.0 — the version that serves VLSingle/VTSingle under
+# operator.victoriametrics.com/v1, which this chart's CRs require).
 VM_OPERATOR_VERSION="${VM_OPERATOR_VERSION:-0.68.1}"
 OTEL_OPERATOR_VERSION="${OTEL_OPERATOR_VERSION:-0.126.0}"
 

@@ -418,10 +418,10 @@ services:
     # as the service images.
     migrationsImage: { repository: genie-ai-db-migrations, tag: "main" }
     # Remote translation API (OpenAI-compatible vLLM). endpoint empty:
-    # auto mode probes the in-cluster translation service (gpu-models
-    # tier) and falls back to an in-process CPU model when that tier is
-    # absent — set the endpoint to target a GPU node's translation API
-    # directly (requires a vllm-api-key Secret alongside).
+    # the in-process CPU model translates the answer. Set it to target a
+    # GPU node's translation API directly (requires a vllm-api-key Secret
+    # alongside); a named API is then mandatory and the backend waits for
+    # it to answer at startup.
     translation:
       endpoint: ""
       modelId: ""
@@ -432,6 +432,29 @@ services:
       # with it off the streamed answer stays English for non-English
       # UI languages. Defaults ON.
       streamingEnabled: true
+      # Which backend translates the answer.
+      #
+      # The application decides this on the endpoint, not on this knob: a
+      # deployment that NAMED a translation API always uses it, whatever
+      # this is set to, and the backend refuses to start when that API
+      # does not answer — it will not translate with a model the
+      # deployment did not ask for. So this value is only consulted when
+      # no endpoint is configured, where the in-process CPU model
+      # (Xenova/nllb-200-distilled-600M, ~6 Gi at ONNX load) is the
+      # only outcome.
+      #
+      # `cpu` is therefore refused at render time when an endpoint IS
+      # configured: the application would ignore it and use the GPU
+      # anyway, and a chart that advertised the CPU model while the
+      # deployment used the GPU is exactly the silent mismatch this
+      # knob must not create.
+      backend: gpu
+      # Budget for the startup probe of the configured translation API.
+      # Failing it stops the backend — the API is mandatory once named —
+      # so it has to cover a cold TLS handshake to a remote GPU node
+      # that is busy serving another workload. Empty = the application's
+      # own default (30 s).
+      probeTimeoutSeconds: ""
     # OPEA chat pipeline host (chatqna service). Empty = the code's
     # image default — set it to the chatqna Service when the OPEA
     # chart (in-cluster Service name).

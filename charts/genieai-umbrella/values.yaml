@@ -229,15 +229,17 @@ data:
     # compose default (KEYCLOAK_REGISTRATION_ENABLED:-true). Works without
     # SMTP while verifyEmail is false — accounts activate immediately.
     registrationAllowed: true
-    # "Forgot password?" link on the login page. Mirrors the compose
-    # default (KEYCLOAK_RESET_PASSWORD:-true); the reset flow needs a
-    # working smtp to actually deliver.
-    resetPasswordAllowed: true
-    # Email verification on new accounts. Mirrors the compose default
-    # (KEYCLOAK_VERIFY_EMAIL:-true). Registration and password reset
-    # send mails — set data.keycloak.smtp or those flows error at send
-    # time (realm import itself is unaffected).
-    verifyEmail: true
+    # "Forgot password?" link on the login page. The reset flow sends a
+    # mail, so it needs data.keycloak.smtp — the render FAILS if this is
+    # true without one (a sentinelled smtpServer would swallow the mail
+    # and leave the user staring at a reset form that never answers).
+    resetPasswordAllowed: false
+    # Email verification on new accounts. Same SMTP dependency as
+    # resetPasswordAllowed: the render fails if this is true without
+    # data.keycloak.smtp. Off by default because `smtp` is null by
+    # default — a verification that can never be delivered is worse than
+    # none.
+    verifyEmail: false
     # Realm password policy — defaults to the Swarm export value
     # (public-sector baseline). Non-empty on purpose: an empty value
     # would be dropped from the convergence Job's env (K8s omitempty),
@@ -274,8 +276,10 @@ data:
     mobileClientId: genie-mobile          # Flutter OIDC client (public, PKCE)
     mobileRedirectScheme: genieai         # <scheme>://callback redirect
     # ── Keycloak 26 v2beta1 connection + behavior knobs ──
-    # CNPG Read-Write Service name (default for Cluster `keycloak-db`).
-    # The Keycloak CR's spec.db.host is set to "<cnpgServiceName>.<namespace>.svc.cluster.local".
+    # CNPG Cluster name (its Read-Write Service is "<cnpgServiceName>-rw").
+    # The chart names the CNPG Cluster after it and points the Keycloak CR
+    # at "<cnpgServiceName>-rw.<namespace>.svc.cluster.local" — one knob,
+    # one name, so the two cannot drift.
     cnpgServiceName: keycloak-db
     # Database connection secret (the chart does NOT materialize it — operator
     # wires it from their secret backend; the secret MUST carry both
@@ -668,7 +672,8 @@ opea:
 
 # clusterProfile-driven replica overrides. prod runs multiple replicas per
 # stateless service for zero-downtime rolling updates; staging runs a
-# reduced subset; sovereign matches dev (single replica).
+# reduced subset. dev has no entry — every service falls back to its own
+# `services.<name>.replicas` (default 1).
 clusterProfileReplicas:
   prod:
     backend: 3
@@ -677,8 +682,4 @@ clusterProfileReplicas:
   staging:
     backend: 2
     frontend: 2
-    documentRepository: 1
-  sovereign:
-    backend: 1
-    frontend: 1
     documentRepository: 1

@@ -203,12 +203,17 @@ spec:
         - protocol: TCP
           port: 9031
     {{- end }}
-    {{- if and .Values.opea.enabled (eq .Values.opea.gpu.mode "external") }}
-    # External GPU node — VLLM_TRANSLATION_ENDPOINT when the operator
-    # routes the BFF's translation path at the same GPU node the OPEA
-    # orchestrators reach. Port family (443 + 444) is intentionally
-    # broad because services.backend.translation.endpoint is a free
-    # string; a future tightening can derive the port from the URL.
+    {{- /* Gated on the endpoint being EXTERNAL, not on the OPEA tier:
+           services.backend.translation.endpoint is an independent knob —
+           it can point at a GPU node with opea.enabled=false (translation
+           only), or alongside the in-cluster GPU mode. Gating on the OPEA
+           tier left the env var set with no matching egress rule, and the
+           BFF silently fell back to the in-process CPU model. */ -}}
+    {{- if and .Values.services.backend.translation.endpoint (not (and .Values.opea.enabled (eq .Values.opea.gpu.mode "in-cluster"))) }}
+    # External translation endpoint. Port family (443 + 444) is
+    # intentionally broad because
+    # services.backend.translation.endpoint is a free string; a future
+    # tightening can derive the port from the URL.
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0

@@ -3217,6 +3217,18 @@ chart:lint:
     - kubeconform -summary -ignore-missing-schemas -kubernetes-version 1.33.0 /tmp/rendered-full.yaml
     - kubeconform -summary -ignore-missing-schemas -kubernetes-version 1.33.0 /tmp/rendered-incluster.yaml
     - python3 /tmp/strict-yaml.py /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-incluster.yaml
+    # NetworkPolicy cross-check: the chart renders an ingress and an egress
+    # side for every component, in different templates, edited
+    # independently. A flow declared on one side and absent from the other
+    # renders fine, passes kubeconform, and only times out at runtime — and
+    # only on a CNI that enforces NetworkPolicy (the default minikube and
+    # kind CNIs store the objects and drop them, so a laptop cluster looks
+    # healthy while carrying a broken egress graph).
+    - python3 scripts/networkpolicy-crosscheck.py /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-incluster.yaml
+    # The schema types every boolean leaf of values.yaml so a wrongly-typed
+    # knob fails with the operator's path instead of "wrong type for value;
+    # expected bool". This check keeps the two lists from drifting.
+    - python3 scripts/values-schema-bools-check.py charts/genieai-umbrella/values.yaml charts/genieai-umbrella/values.schema.json
     - >-
       python3 /tmp/cluster-scope-check.py test genieai 1 envoy
       /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-incluster.yaml

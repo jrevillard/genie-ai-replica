@@ -6,7 +6,7 @@
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
-  name: keycloak-db
+  name: {{ .Values.data.keycloak.cnpgServiceName | default "keycloak-db" }}
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "data-postgres") | nindent 4 }}
@@ -44,12 +44,12 @@ spec:
       max_connections: "200"
       shared_buffers: "256MB"
   # CNPG publishes 3 Services for this Cluster:
-  #   keycloak-db       (RW, points at the current primary; default JDBC target)
-  #   keycloak-db-rw    (RW, explicit; the Keycloak CR's spec.db.host uses this name)
-  #   keycloak-db-ro    (RO, replicas; for read-heavy reporting)
-  # The Keycloak v2beta1 CR's spec.db.host is `<cluster-name>-rw.<ns>.svc.cluster.local`
-  # (see keycloak-instance.yaml). Operators changing this Cluster's `metadata.name`
-  # MUST also update `data.keycloak.cnpgServiceName` in values.yaml to match.
+  #   <cluster>       (RW, points at the current primary; default JDBC target)
+  #   <cluster>-rw    (RW, explicit; the Keycloak CR's spec.db.host uses this name)
+  #   <cluster>-ro    (RO, replicas; for read-heavy reporting)
+  # The Cluster's name IS `data.keycloak.cnpgServiceName` — one knob, one
+  # name — and the Keycloak v2beta1 CR's spec.db.host is
+  # `<cluster>-rw.<ns>.svc.cluster.local` (see keycloak-instance.yaml).
   bootstrap:
     initdb:
       # Same values the Keycloak CR reads (data.keycloak.db.*) — the CNPG

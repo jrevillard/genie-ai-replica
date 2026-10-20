@@ -8,7 +8,7 @@ metadata:
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "redis-cache") | nindent 4 }}
 spec:
-  replicas: {{ $svc.replicas | default 1 }}
+  replicas: {{ include "genieai-umbrella.resolveReplicas" (dict "Values" .Values "service" "redisCache") | int }}
   selector:
     matchLabels:
       genieai.io/component: redis-cache

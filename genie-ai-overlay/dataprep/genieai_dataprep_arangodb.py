@@ -338,9 +338,10 @@ LLM_LABEL_TEMPERATURE = float(os.getenv("DATAPREP_LLM_TEMPERATURE", "0.0"))
 # THE CONSTRAINT — two of them, and the second is the one that usually binds:
 #   waves  x LLM_TIMEOUT_SECONDS  — 4 x 180 = 720 s at the defaults, against a
 #                                    900 s ceiling, a 180 s margin;
-#   ladder  (1 + LLM_MAX_RETRIES) x LLM_TIMEOUT_SECONDS  — 540 s, comfortably
-#                                    under, and NOT what needs raising: three
-#                                    retries (720 s) still fits under 900 s.
+#   ladder  (1 + LLM_MAX_RETRIES) x LLM_TIMEOUT_SECONDS  — 3 x 180 = 540 s,
+#                                    comfortably under, and NOT what binds.
+#                                    (720 s is the WAVE term above; the two are
+#                                    different numbers that look alike.)
 # Both are checked at import against the reference document rather than left to
 # prose in four files an operator may not be reading, because the degradation is
 # indistinguishable from a labelling-quality regression. Raising the per-call
@@ -2673,10 +2674,14 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 # chose not to label them" stored the document's chunks unlabelled
                 # and reported a clean Ingested.
                 #
-                # Returns None so the per-chunk path runs, which keeps the labels
-                # the model DID give where it can and names the cause where it
-                # cannot. This is what _context_batch_call already does for the
-                # same violation on the contextual side.
+                # Returns the partial map plus the missing indices, NOT None.
+                # The caller keeps what the model DID answer and re-asks only
+                # the absent ones: returning None told it the whole batch was
+                # unusable, so it re-asked every chunk in it — five calls with
+                # their own retry ladders, one semaphore slot, against a phase
+                # ceiling sized on batch count and blind to the expansion. This
+                # is what _context_batch_call already does for the same
+                # violation on the contextual side.
                 #
                 # A value that is present but unusable stays lenient and becomes
                 # [], as before — the batch parser has always recovered from a bad
@@ -2684,7 +2689,12 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 missing = [i for i in indices if i not in mentioned]
                 if missing:
                     _llm_fallback_total.add(len(missing), {"phase": PHASE_LABEL_LABELING, "reason": "batch_parse"})
-                    await self._write_ingestion_log(
+                    # _safe_log, not _write_ingestion_log: a logging failure
+                    # escaping into the ingest path is caught by the outer
+                    # except in ingest_file_with_guardrail, which then retracts
+                    # every chunk the finished batches committed. See _safe_log.
+                    await _safe_log(
+                        self._write_ingestion_log,
                         file_id,
                         "WARN",
                         "Labeling",

@@ -308,11 +308,14 @@ HUGGING_FACE_HUB_TOKEN=
 #                                 #   (1+retries) x this.
 # MODEL_LLM_MAX_RETRIES=2         # SDK-level retries on 408/409/429/5xx and
 #                                 #   connection errors. The phase ceiling has
-#                                 #   to outlast the whole ladder: 3 attempts
-#                                 #   x 180s = 720s, which still fits under the
-#                                 #   900s default. Raising the PER-CALL budget
-#                                 #   is what crosses it (300s/call needs 1200s
-#                                 #   of waves). If you raise either one, raise
+#                                 #   to outlast two terms:
+#                                 #     ladder (1+retries) x 180s = 540s
+#                                 #     waves  x 180s = 4 x 180 = 720s
+#                                 #   Both fit under the 900s default, and it is
+#                                 #   the WAVES term that binds. Raising
+#                                 #   either the per-call budget or the batch
+#                                 #   size is what crosses it (300s/call needs
+#                                 #   1200s of waves). If you raise one, raise
 #                                 #   DATAPREP_LLM_PHASE_TIMEOUT_SECONDS too, or
 #                                 #   dataprep warns at startup.
 # MODEL_EMBEDDING_TIMEOUT_SECONDS=600 # The retriever's embedding client,

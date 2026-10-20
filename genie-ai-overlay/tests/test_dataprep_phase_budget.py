@@ -2693,12 +2693,65 @@ class TestTheDegradedPathIsActuallyGuarded:
                     return True
             return False
 
+        # The retract need not be WRITTEN on the success path to be a bug: a
+        # helper (`async def _purge_partial(...): await self.retract_file(...)`)
+        # called from there does the same damage and defeats a scan of this
+        # function alone. Proven by mutation — that exact indirection left the
+        # guard green. And it is not exotic: this module already extracts
+        # `_rollback_killed_ingest` out of its CancelledError handler, so
+        # wrapping is the house style here.
+        #
+        # So: every retract_file call in the MODULE must be reachable only from
+        # a rollback position — in its own body, or through callers that are
+        # themselves rollback-only.
+        module_parents = {}
+        for outer in ast.walk(tree):
+            for child in ast.iter_child_nodes(outer):
+                module_parents[child] = outer
+
+        def rollback_from(n) -> bool:
+            while n in module_parents:
+                n = module_parents[n]
+                if isinstance(n, ast.ExceptHandler):
+                    return True
+                owner = module_parents.get(n)
+                if isinstance(owner, ast.Try) and n is owner.finalbody:
+                    return True
+            return False
+
+        def enclosing_function(n):
+            while n in module_parents:
+                n = module_parents[n]
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    return n
+            return None
+
+        functions = [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
         offenders = []
-        for node in ast.walk(function):
+        for node in ast.walk(tree):
             if not (isinstance(node, ast.Call) and ast.unparse(node.func).endswith("retract_file")):
                 continue
-            if not in_rollback(node):
-                offenders.append(f"line {node.lineno}: {ast.unparse(node)[:60]}")
+            if rollback_from(node):
+                continue
+            owner = enclosing_function(node)
+            # Callers reach the retract by CALLING THE FUNCTION THAT HOLDS IT,
+            # so match on that function's NAME. `func is node` only ever hits a
+            # bare `self.retract_file(...)` written in the same body, and it
+            # flagged the legitimate `_rollback_killed_ingest` helper as an
+            # offender until this was corrected.
+            name = owner.name if owner is not None else None
+            callers = [
+                call
+                for fn in functions
+                if fn is not owner
+                for stmt in fn.body
+                for call in ast.walk(stmt)
+                if isinstance(call, ast.Call) and ast.unparse(call.func).endswith(f".{name}")
+            ]
+            if callers and all(rollback_from(c) for c in callers):
+                continue
+            where = f" in {owner.name}" if owner is not None else ""
+            offenders.append(f"line {node.lineno}{where}: {ast.unparse(node)[:50]}")
         assert not offenders, (
             f"the degraded success path calls retract_file at {offenders}. The batches that finished "
             "are real work; a degraded document is reported as such, not deleted"

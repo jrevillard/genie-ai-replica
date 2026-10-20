@@ -8,7 +8,16 @@ enabled alongside it. */ -}}
 {{- /*
   Grafana instance + datasources, rendered as grafana-operator CRs.
   Operator (grafana-operator / bitnami) is a cluster bootstrap
-  prerequisite — see charts/README.md. CRD group: grafana.integreatly.org/v1beta1
+  prerequisite — see charts/README.md.
+
+  NOT exposed through the edge: the grafana-operator creates the
+  Grafana Service in the release namespace, but the chart renders no
+  HTTPRoute rule for it, so /grafana reaches the SPA catch-all. Reaching
+  the tier is out-of-band by design (kubectl port-forward to the
+  operator-managed Service, or an Ingress owned by the environment's
+  gateway). The compose path serves it through Kong at /grafana/ — this
+  is the one place the two deployment paths differ, and the port-forward
+  is the Kubernetes equivalent. CRD group: grafana.integreatly.org/v1beta1
   (the bitnami v4.9.x chart ships this group; the upstream
   grafana-operator project also uses it).
 

@@ -3050,7 +3050,34 @@ chart:lint:
   stage: test
   interruptible: true
   before_script:
-    - apk add --no-cache curl bash tar
+    - apk add --no-cache curl bash tar python3 py3-yaml
+    - |
+      cat > /tmp/strict-yaml.py <<'PY'
+      # Helm's rendered output can concatenate documents (a stray `{{- if }}`
+      # trims the newline before a `---`) or emit duplicate mapping keys;
+      # both are invalid Kubernetes YAML and both pass Helm's own parser and
+      # a default YAML load. This checks both, for every render the job made.
+      import sys
+      import yaml
+
+      class Strict(yaml.SafeLoader):
+          pass
+
+      def no_dup(loader, node, deep=False):
+          keys = set()
+          for key_node, _ in node.value:
+              key = loader.construct_object(key_node, deep=deep)
+              if key in keys:
+                  raise ValueError("duplicate key %r at line %s" % (key, key_node.start_mark.line + 1))
+              keys.add(key)
+          return yaml.SafeLoader.construct_mapping(loader, node, deep)
+
+      Strict.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, no_dup)
+
+      for path in sys.argv[1:]:
+          docs = [d for d in yaml.load_all(open(path), Loader=Strict) if d]
+          print("%s: %d documents, strict parse OK" % (path, len(docs)))
+      PY
     - helm dependency update charts/genieai-umbrella
   script:
     # The realm file is duplicated: this copy is for the chart's
@@ -3165,34 +3192,7 @@ chart:contract:
     when: [runner_system_failure, stuck_or_timeout_failure, script_failure]
   interruptible: true
   before_script:
-    - apk add --no-cache bash tar curl python3 py3-yaml
-    - |
-      cat > /tmp/strict-yaml.py <<'PY'
-      # Helm's rendered output can concatenate documents (a stray `{{- if }}`
-      # trims the newline before a `---`) or emit duplicate mapping keys;
-      # both are invalid Kubernetes YAML and both pass Helm's own parser and
-      # a default YAML load. This checks both, for every render the job made.
-      import sys
-      import yaml
-
-      class Strict(yaml.SafeLoader):
-          pass
-
-      def no_dup(loader, node, deep=False):
-          keys = set()
-          for key_node, _ in node.value:
-              key = loader.construct_object(key_node, deep=deep)
-              if key in keys:
-                  raise ValueError("duplicate key %r at line %s" % (key, key_node.start_mark.line + 1))
-              keys.add(key)
-          return yaml.SafeLoader.construct_mapping(loader, node, deep)
-
-      Strict.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, no_dup)
-
-      for path in sys.argv[1:]:
-          docs = [d for d in yaml.load_all(open(path), Loader=Strict) if d]
-          print("%s: %d documents, strict parse OK" % (path, len(docs)))
-      PY
+    - apk add --no-cache bash tar curl
     - curl -fsSL https://get.helm.sh/helm-v3.16.3-linux-amd64.tar.gz | tar -xz -C /tmp
     - install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm
     - helm dependency update charts/genieai-umbrella
@@ -3335,6 +3335,14 @@ chart:install:
     - kind get kubeconfig --name kind > "$KUBECONFIG"
     - export KUBECONFIG
     - ./scripts/install-prereqs.sh
+    # KNOWN INCOMPLETE (manual job): the operator-provided Secrets
+    # (arango-root-secret, arango-jwt-secret, translation-cache-password,
+    # keycloak-admin-credentials, keycloak-db-credentials,
+    # keycloak-proxy-client-secret) are NOT created here, so the
+    # convergence Job and the data tier fail on this install. Seeding them
+    # needs a generated-values step (scripts/genieai-dev-secrets.sh — not
+    # yet written) before this job can prove a full install. Until then it
+    # exercises render + install ordering, not a working stack.
     - >-
       helm install test charts/genieai-umbrella -n genieai --create-namespace
       --set data.keycloak.failOnPlaceholderSecrets=false

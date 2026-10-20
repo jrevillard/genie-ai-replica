@@ -40,6 +40,15 @@ const VIEWPORTS = [
 const THEMES = process.argv.includes('--theme')
   ? [process.argv[process.argv.indexOf('--theme') + 1]]
   : ['light', 'dark'];
+// The welcome overlay widens when a sidebar collapses, and the hero and
+// waves used to slice their art at the wider panel width. The capture
+// matrix now records that state at the desktop size, so a regression
+// surfaces as a captured difference rather than an unread screenshot.
+const SIDEBAR_STATES = [
+  { label: 'open', collapsed: false },
+  { label: 'collapsed-left', collapsed: 'left' },
+  { label: 'collapsed-both', collapsed: 'both' }
+];
 
 const audit = () => {
   const rootStyle = getComputedStyle(document.documentElement);
@@ -232,31 +241,57 @@ const audit = () => {
 
   for (const viewport of VIEWPORTS) {
     for (const theme of THEMES) {
-      const context = await browser.newContext({
-        viewport: { width: viewport.width, height: viewport.height },
-        colorScheme: theme,
-        ignoreHTTPSErrors: true
-      });
-      const page = await context.newPage();
+      for (const sidebar of SIDEBAR_STATES) {
+        const context = await browser.newContext({
+          viewport: { width: viewport.width, height: viewport.height },
+          colorScheme: theme,
+          ignoreHTTPSErrors: true
+        });
+        const page = await context.newPage();
 
-      await loginViaUI(page);
-      await page.waitForSelector('.quick-help-overlay', { timeout: 30000 });
-      // Wait for the splash overlay to fade out (5s display + 1s fade)
-      await page.waitForSelector('.splash-screen', { state: 'detached', timeout: 15000 }).catch(() => {});
-      await page.waitForTimeout(1500);
+        await loginViaUI(page);
+        await page.waitForSelector('.quick-help-overlay', { timeout: 30000 });
+        // Wait for the splash overlay to fade out (5s display + 1s fade)
+        await page.waitForSelector('.splash-screen', { state: 'detached', timeout: 15000 }).catch(() => {});
+        await page.waitForTimeout(1500);
 
-      const data = await page.evaluate(audit);
-      data.viewport = { width: viewport.width, height: viewport.height };
-      const file = path.join(OUT_DIR, `${theme}-${viewport.label}.png`);
-      await page.screenshot({ path: file, fullPage: false });
-      fs.writeFileSync(path.join(OUT_DIR, `${theme}-${viewport.label}.audit.json`), JSON.stringify(data, null, 2));
+        // The collapsed-sidebars state widens the centre overlay; the
+        // panel's response to a wider stage is what the layer's band
+        // sizing has to survive. Capture the open state as the default
+        // and the collapsed states only at the desktop sizes — narrow
+        // widths already pin the sidebar.
+        if (sidebar.collapsed) {
+          const buttons = await page.$$('.hamburger-btn, [aria-label*="sidebar" i][aria-label*="collapse" i]');
+          // Click the left-sidebar hamburger once, then the right sidebar's
+          // chevron if asked to collapse both.
+          if (buttons.length >= 1 && sidebar.collapsed !== 'both') {
+            await buttons[0].click();
+            await page.waitForTimeout(400);
+          } else if (buttons.length >= 2) {
+            await buttons[0].click();
+            await page.waitForTimeout(400);
+            await buttons[1].click();
+            await page.waitForTimeout(400);
+          }
+        }
 
-      results[`${theme}-${viewport.label}`] = {
-        file,
-        audit: path.join(OUT_DIR, `${theme}-${viewport.label}.audit.json`)
-      };
-      console.log(`${theme}-${viewport.label}: ${file}`);
-      await context.close();
+        const data = await page.evaluate(audit);
+        data.viewport = { width: viewport.width, height: viewport.height };
+        data.sidebar = sidebar.label;
+        const file = path.join(OUT_DIR, `${theme}-${viewport.label}-${sidebar.label}.png`);
+        await page.screenshot({ path: file, fullPage: false });
+        fs.writeFileSync(
+          path.join(OUT_DIR, `${theme}-${viewport.label}-${sidebar.label}.audit.json`),
+          JSON.stringify(data, null, 2)
+        );
+
+        results[`${theme}-${viewport.label}-${sidebar.label}`] = {
+          file,
+          audit: path.join(OUT_DIR, `${theme}-${viewport.label}-${sidebar.label}.audit.json`)
+        };
+        console.log(`${theme}-${viewport.label}-${sidebar.label}: ${file}`);
+        await context.close();
+      }
     }
   }
 

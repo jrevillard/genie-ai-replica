@@ -133,6 +133,20 @@ html[data-visual='on'] .genie-living-intelligence .chatbot-container {
 html[data-visual='on'] .genie-living-intelligence .quick-help-overlay {
   isolation: isolate;
   justify-content: flex-start;
+  /* The overlay is the panel: a container query keying on it lets the
+     art's box respond to its width, not the viewport's — important
+     when a sidebar is collapsed and the centre widens. */
+  container-type: inline-size;
+  /* f is the box-to-image-display fraction. f_max (0.553) shows the
+     full ink band; f_min (0.515) is the widest legal crop before
+     the icon tiles or wave crest get sliced. The container query
+     below eases --f to f_min once the overlay is wide enough that
+     the reference's own crop would otherwise grow the box past the
+     mockup's full-bleed. The flag multiplier zeros both for the
+     partial-config collapse. */
+  --f-max: calc(var(--visual-hero-set, 0) * 0.553);
+  --f-min: calc(var(--visual-hero-set, 0) * 0.515);
+  --f: var(--f-max);
   background-image:
     linear-gradient(180deg, transparent 0 25%, var(--surface) 40%, var(--surface) 55%, transparent 70% 100%),
     var(--visual-mesh), var(--visual-ambient, none);
@@ -154,20 +168,30 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::before {
   z-index: 0;
   flex: 0 0 auto;
   align-self: stretch;
+  /* Full bleed: the box breaks out past the overlay's padding so the
+     artwork reaches the panel's edges at every width (the user
+     explicitly rejected a centred-with-gutters banner). */
   width: calc(100% + 2 * var(--space-lg));
   margin-left: calc(-1 * var(--space-lg));
   margin-right: calc(-1 * var(--space-lg));
   margin-top: calc(-1 * var(--space-lg));
-  /* A partial config that omits hero must collapse the band's layout
-     reservation rather than reserve 282 px of blank. The per-asset
-     --visual-hero-set flag is 1 when configured and 0 otherwise, so
-     multiplying the clamp by it sizes the box to 0 when the operator
-     left the asset out. */
-  height: calc(var(--visual-hero-set, 0) * clamp(180px, 28vw, 282px));
-  /* 115% scales the asset so its 1592 px visible-art band fills the box
-     width — both the 114 px left and the 69 px right transparent margins
-     fall outside the box (measured L=0, R≈0 at 1775×886 and 1920×960). */
-  background: var(--visual-hero) center 45.7% / 115% auto no-repeat;
+  /* The artwork's legible bands, measured on the alpha channel (the
+     box tracks the art, not the viewport):
+       alpha > 128  y 178..667  490 px  aspect 3.62:1  f = 0.553  (full ink band)
+       alpha > 192  y 200..655  456 px  aspect 3.89:1  f = 0.515  (tiles + wave crest)
+     f is the fraction of the image's display height that the box
+     occupies; f_max gives the reference's own crop, f_min is the
+     widest legal crop before the icon tiles or wave crest get sliced.
+     Anything below f_min would expose bright ink to a hard edge.
+     f, f_max, f_min are declared on the overlay (the container query
+     target), and inherited here. */
+  aspect-ratio: calc(2 / var(--f));
+  /* bg-position-y at center P%, with P = (c - f/2) / (1 - f) chosen so
+     the artwork band's centre stays at the box's centre at every f
+     (overflow = I - H, image's top at P * (I - H)). With c = 0.477
+     (the alpha > 128 band centre as a fraction of the frame), P is
+     45.0 % at f_max and 45.1 % at f_min — width-independent. */
+  background: var(--visual-hero) center calc(((0.477 - var(--f) / 2) / (1 - var(--f))) * 100%) / 100% auto no-repeat;
   /* Dissolve the lower edge into the panel so the heading reads as
      sitting inside the artwork rather than below a hard cut. The ramp
      starts where the globe's own falloff already thins out. */
@@ -178,18 +202,36 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::before {
   animation: gli-enter 650ms ease-out both;
 }
 
+/* At full-bleed panel widths the reference's own crop would otherwise
+   grow the box linearly with width (a 3.62:1 band is 525 px at 1900 px).
+   Easing the ratio down to f_min keeps the height bounded; the crop
+   then enters only the soft falloff above the icons or below the
+   waves, never the dense band. The container query keys on the panel,
+   not the viewport, so a collapsed sidebar triggers the response
+   even when the viewport is narrow.
+
+   The container query must target a descendant of the container; the
+   simplest path is the ::before pseudo-element, whose --f drives
+   both aspect-ratio and bg-position-y. */
+@container (min-width: 1700px) {
+  html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::before {
+    --f: var(--f-min);
+  }
+}
+
 html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::after {
   content: '';
   position: absolute;
   inset: auto 0 0;
-  /* The asset's painted band is only 5.05:1 — it fills the 3.46:1
-     viewBox's full width but paints only y 162-518 of its 520 rows, so
-     the top third of the viewBox is transparent. Sizing the box from the
-     viewBox would spend its height on that empty strip; this height
-     keeps the whole painted band inside the box at every measured
-     viewport (194 px of ink on the 981 px overlay at 1775x886, 224 px
-     on the wider one at 1920x960). */
-  height: calc(var(--visual-waves-set, 0) * min(28%, 300px));
+  /* The waves fill the panel's width, the same as the banner. Their
+     asset's top 31 % is transparent (y 0-162 of 520), so cropping into
+     it is invisible — bg-position bottom keeps the ink in the box
+     regardless of how the box is sized. */
+  width: calc(100% + 2 * var(--space-lg));
+  margin-left: calc(-1 * var(--space-lg));
+  margin-right: calc(-1 * var(--space-lg));
+  aspect-ratio: 1800 / 356;
+  max-height: calc(var(--visual-waves-set, 0) * 320px);
   background: var(--visual-waves) bottom / 100% auto no-repeat;
   opacity: var(--gli-deco-strength);
   /* Multiply sinks the light-blue strokes into the white surface (light
@@ -280,12 +322,6 @@ html[data-visual='on'] .genie-living-intelligence .document-item {
   }
 }
 
-@media (max-width: 900px) {
-  html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::before {
-    height: calc(var(--visual-hero-set, 0) * clamp(140px, 30vw, 230px));
-  }
-}
-
 @media screen and (min-width: 769px) and (max-width: 900px) {
   html[data-visual='on'] .genie-living-intelligence .sidebar:not(.collapsed)::before {
     width: calc(var(--visual-corner-set, 0) * 150px);
@@ -295,10 +331,9 @@ html[data-visual='on'] .genie-living-intelligence .document-item {
 }
 
 @media (max-width: 600px) {
-  html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::before {
-    height: calc(var(--visual-hero-set, 0) * clamp(110px, 28vw, 160px));
-  }
-
+  /* The waves are dimmer at this width because their band fills the
+     column fully and the strokes would compete with the cards; the
+     hero's f and bg-position continue to track the artwork's band. */
   html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::after {
     opacity: 0.3;
   }

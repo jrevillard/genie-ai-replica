@@ -34,7 +34,7 @@ const { logger } = require('../shared-lib/logger');
 
 const MAX_TOKENS_CEILING = 8192;
 const BUDGET_SCALE = 4;
-const TIMEOUT_CEILING_MS = 180000;
+const TIMEOUT_CEILING_MS = 300000; // 5 min — async callers hand thinking models minutes
 const TIMEOUT_SCALE = 2;
 /** The standard no-think request params, both wire conventions. */
 const NO_THINK_PARAMS = { thinking: { type: 'disabled' }, enable_thinking: false };
@@ -110,8 +110,10 @@ async function adaptiveChatCompletion({ url, headers, body, timeoutMs = 60000, d
   }
 
   // Layer 2 — budget + wall-clock adaptation for answers starved by
-  // reasoning that could not be turned off.
-  if (starvedAnswer(resp) && body.max_tokens && body.max_tokens < MAX_TOKENS_CEILING) {
+  // reasoning that could not be turned off. The ladder scales until the
+  // ceiling (live 2026-10-20: M3.1-Flash starved at 1500 AND at 6000 — a
+  // single retry was not enough); each rung doubles the wall clock.
+  while (starvedAnswer(resp) && body.max_tokens && body.max_tokens < MAX_TOKENS_CEILING) {
     const raised = Math.min(MAX_TOKENS_CEILING, body.max_tokens * BUDGET_SCALE);
     timeout = Math.min(TIMEOUT_CEILING_MS, timeout * TIMEOUT_SCALE);
     logger.warn('adaptive_llm.budget_starved_retry', {

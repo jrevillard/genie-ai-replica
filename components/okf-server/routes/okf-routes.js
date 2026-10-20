@@ -67,19 +67,34 @@ router.put('/retrieval-config', requireRole('tools-admin'), retrievalConfigContr
 // index.md YAML (via the existing concept-meta PATCH); this route
 // is the operator-script + migration-window backstop.
 const frontmatterService = require('../services/frontmatter-service');
+// Async job (David 2026-10-20: "let the fucking thing think… do the
+// processing async if needed"): a reasoning-required model can take
+// minutes and can never fit a synchronous request — the gateway cuts the
+// browser long before any server-side timeout. 202 + poll, like every
+// other long-running Lab operation.
 router.post('/repos/:id/frontmatter/suggest', requireScope('admin'), async (req, res, next) => {
   try {
-    const suggested = await frontmatterService.suggestTags(req.params.id, {});
-    let validation = { validated: true, inconsistencies: [] };
-    try {
-      validation = await frontmatterService.validateFrontmatter(req.params.id, suggested);
-    } catch (e) {
-      // The /suggest route returns the proposed set regardless; the
-      // Publish gate catches validation failures server-side. We
-      // surface the validation error so the caller can decide.
-      validation = { validated: false, inconsistencies: [{ reason: 'validation_error', message: e.message }] };
+    const job = frontmatterService.startSuggestTags(req.params.id, {});
+    res.status(202).json({ repo_id: req.params.id, job_id: job.job_id, status: job.status });
+  } catch (err) {
+    next(err);
+  }
+});
+router.get('/repos/:id/frontmatter/suggest/jobs/:jobId', requireScope('admin'), async (req, res, next) => {
+  try {
+    const job = frontmatterService.getSuggestJob(req.params.jobId);
+    if (!job || job.repo_id !== req.params.id) {
+      return res.status(404).json({ error: 'SUGGEST_JOB_NOT_FOUND', message: `no suggest job ${req.params.jobId}` });
     }
-    res.status(200).json({ repo_id: req.params.id, suggested, validation });
+    // The done payload matches the old synchronous response shape
+    // ({repo_id, suggested, validation}) so callers read one contract.
+    res.status(200).json({
+      repo_id: job.repo_id,
+      job_id: job.job_id,
+      status: job.status,
+      ...(job.status === 'done' ? { suggested: job.suggested, validation: job.validation } : {}),
+      ...(job.status === 'failed' ? { error: job.error } : {})
+    });
   } catch (err) {
     next(err);
   }

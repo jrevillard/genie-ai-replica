@@ -380,7 +380,7 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
       url: `${host}/v1/chat/completions`,
       headers,
       body,
-      timeoutMs: 60000,
+      timeoutMs: opts.timeoutMs || 60000,
       disableThinking: viaOverride
     });
   return withVllmRetry(fn, { endpoint: '/v1/chat/completions' });
@@ -772,6 +772,61 @@ function screenForbiddenAgainstCorpus(forbidden, histogram) {
 
 // ---------- Public methods ----------
 
+// ---------- suggest jobs (async; David 2026-10-20: "let the fucking thing ---
+// think, if it is a thinking model and do the processing async if needed")
+//
+// A reasoning-required model (live: MiniMax M3.1-Flash burned 5,999 of
+// 6,000 tokens thinking over 104 seconds and wrote zero answer chars —
+// and the gateway cut the browser off before our own clock expired) can
+// never fit inside a synchronous browser request, whatever the axios
+// timeout: gateway, proxy and browser each impose their own shorter
+// clock. Suggest therefore runs as the Lab's standard 202+poll job: the
+// route starts the job, the UI polls, and the model gets minutes, not
+// seconds. Jobs are in-memory (single-replica service, same class of
+// registry as genInFlight/runInFlight).
+const suggestJobs = new Map();
+const SUGGEST_JOB_CAP = 100;
+const SUGGEST_LLM_TIMEOUT_MS = 300000; // 5 min — thinking models get room
+
+function startSuggestTags(repoId, opts = {}) {
+  const id = `sg${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
+  const job = { job_id: id, repo_id: repoId, status: 'running', started_at: new Date().toISOString() };
+  suggestJobs.set(id, job);
+  // prune oldest finished jobs when the registry grows past the cap
+  if (suggestJobs.size > SUGGEST_JOB_CAP) {
+    for (const [k, v] of suggestJobs) {
+      if (suggestJobs.size <= SUGGEST_JOB_CAP) break;
+      if (v.status !== 'running') suggestJobs.delete(k);
+    }
+  }
+  // fire-and-forget worker; every outcome lands ON the job
+  (async () => {
+    try {
+      const suggested = await suggestTags(repoId, { ...opts, llmTimeoutMs: SUGGEST_LLM_TIMEOUT_MS });
+      let validation = { validated: true, inconsistencies: [] };
+      try {
+        validation = await validateFrontmatter(repoId, suggested);
+      } catch (e) {
+        validation = { validated: false, inconsistencies: [{ reason: 'validation_error', message: e.message }] };
+      }
+      job.suggested = suggested;
+      job.validation = validation;
+      job.status = 'done';
+    } catch (e) {
+      job.status = 'failed';
+      job.error = e.message || String(e);
+    } finally {
+      job.finished_at = new Date().toISOString();
+    }
+  })();
+  return job;
+}
+
+function getSuggestJob(id) {
+  const job = suggestJobs.get(id);
+  return job ? { ...job } : null;
+}
+
 async function suggestTags(repoId, _opts = {}) {
   return withSpan('okf.frontmatter.suggest', async (span) => {
     span.setAttribute('okf.repo_id', repoId);
@@ -816,7 +871,12 @@ async function suggestTags(repoId, _opts = {}) {
     // closing brace (finish_reason "length"). The prompt now caps each array
     // and forbids repeats; this is the second line of defence for corpora
     // legitimately wider than the ranges above.
-    const resp = await vllmChatCompletions([{ role: 'user', content: prompt }], { maxTokens: 1500 });
+    const resp = await vllmChatCompletions([{ role: 'user', content: prompt }], {
+      maxTokens: 1500,
+      // The async suggest job gives thinking models minutes; every other
+      // caller of this shared primitive keeps the default 60s.
+      timeoutMs: _opts.llmTimeoutMs
+    });
     const content =
       resp.data &&
       resp.data.choices &&
@@ -1439,6 +1499,8 @@ function expandFrontmatterToRows(fm) {
 module.exports = {
   // writer
   suggestTags,
+  startSuggestTags,
+  getSuggestJob,
   validateFrontmatter,
   embedAllTags,
   writeFrontmatterToRepoDoc,

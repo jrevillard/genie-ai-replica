@@ -511,4 +511,57 @@ describe('1-8g-m — suggestTags integration', () => {
     );
     expect(modelConfig.resolveModelOverride).toHaveBeenCalledWith({ service: 'okf_tagging' });
   });
+
+  test('async suggest job (David 2026-10-20: let thinking models think): 202-style lifecycle with the old response shape', async () => {
+    seedDb();
+    axios.post.mockResolvedValue(
+      vllmResponse(
+        JSON.stringify({ topic: ['t1'], entity: [], scope: 's', forbidden: ['f1'], summary: 'sum', keyword: [] })
+      )
+    );
+    const job = svc.startSuggestTags(REPO_ID);
+    expect(job.status).toBe('running');
+    expect(job.job_id).toMatch(/^sg/);
+    // poll until the fire-and-forget worker lands
+    let final = null;
+    for (let i = 0; i < 100; i += 1) {
+      final = svc.getSuggestJob(job.job_id);
+      if (final.status !== 'running') break;
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    expect(final.status).toBe('done');
+    expect(final.suggested.topic).toEqual(['t1']);
+    expect(final.validation).toBeDefined(); // the route payload shape, on the job
+    expect(svc.getSuggestJob('sg-nope')).toBeNull();
+  });
+
+  test('a failed suggest LLM call fails the JOB (honest message), never the process', async () => {
+    seedDb();
+    axios.post.mockRejectedValue(new Error('boom'));
+    const job = svc.startSuggestTags(REPO_ID);
+    let final = null;
+    for (let i = 0; i < 100; i += 1) {
+      final = svc.getSuggestJob(job.job_id);
+      if (final.status !== 'running') break;
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    expect(final.status).toBe('failed');
+    expect(final.error).toBeTruthy();
+  });
+
+  test('the async job gives the suggest LLM call the long thinking clock (5 min, not 60s)', async () => {
+    seedDb();
+    axios.post.mockResolvedValue(vllmResponse(JSON.stringify({ topic: ['x'], forbidden: [], summary: '' })));
+    const job = svc.startSuggestTags(REPO_ID);
+    for (let i = 0; i < 100; i += 1) {
+      if (svc.getSuggestJob(job.job_id).status !== 'running') break;
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    // the job path's LLM call carries the raised clock — thinking models
+    // get minutes because the browser is no longer holding the connection
+    const call = axios.post.mock.calls.find(
+      (c) => String(c[0]).includes('/chat/completions') && c[2] && c[2].timeout === 300000
+    );
+    expect(call).toBeTruthy();
+  });
 });

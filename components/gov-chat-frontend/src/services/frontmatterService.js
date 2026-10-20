@@ -118,13 +118,28 @@ export async function getFrontmatterSummary(repoId) {
  * doc, or via the lifecycle publish hook which passes the suggested set
  * through to the server).
  *
- * The backend's suggestTags runs the AsyncOpenAI-equivalent via vLLM with
- * retry+backoff per reference_remote-llm-endpoint.md — a slow call (5-15s);
- * callers should show a "Curating…" indicator with no expected quick resolution.
+ * Async job (David 2026-10-20): a reasoning model may think for minutes —
+ * the backend answers 202 + job id and this helper polls until done
+ * (thinking models are given room, not a gateway timeout). Callers keep
+ * the "Curating…" indicator up for as long as this promise is pending.
  */
+const SUGGEST_POLL_MS = 2000;
+const SUGGEST_POLL_MAX_MS = 15 * 60 * 1000;
+
 export async function suggestFrontmatter(repoId) {
-  const res = await httpService.post(`/okf/repos/${encodeURIComponent(repoId)}/frontmatter/suggest`);
-  return res.data;
+  const base = `/okf/repos/${encodeURIComponent(repoId)}/frontmatter/suggest`;
+  const start = await httpService.post(base);
+  const jobId = start && start.data && start.data.job_id;
+  if (!jobId) return start && start.data; // older sync servers
+  const deadline = Date.now() + SUGGEST_POLL_MAX_MS;
+  for (;;) {
+    const res = await httpService.get(`${base}/jobs/${encodeURIComponent(jobId)}`);
+    const job = res && res.data;
+    if (job && job.status === 'done') return job;
+    if (job && job.status === 'failed') throw new Error(job.error || 'suggest job failed');
+    if (Date.now() > deadline) throw new Error('suggest job did not finish in time');
+    await new Promise((r) => setTimeout(r, SUGGEST_POLL_MS));
+  }
 }
 
 /**

@@ -169,13 +169,12 @@ def crosscheck(path):
             blocked.append((source, target, port, "+".join(missing)))
 
     print(
-        "%s: %d component policies, %d declared pod-to-pod flows"
-        % (path, len(policies), len(flows))
+        f"{path}: {len(policies)} component policies, "
+        f"{len(flows)} declared pod-to-pod flows"
     )
     for source, target, port, missing in blocked:
         print(
-            "  BLOCKED %s -> %s :%s (%s not permitted by the destination/source policy)"
-            % (source, target, port, missing)
+            f"  BLOCKED {source} -> {target} :{port} ({missing} not permitted by the destination/source policy)"
         )
     return policies, blocked
 
@@ -193,19 +192,18 @@ def main(argv):
             empty.append(path)
     if empty:
         print(
-            "\nNo component-scoped NetworkPolicy found in: %s\n"
+            f"\nNo component-scoped NetworkPolicy found in: {', '.join(empty)}\n"
             "A render that carries no policy proves nothing. This happens when\n"
             "the render dropped the tier that owns them (or when the policy\n"
             "templates stopped matching) — treat it as a failure, not a pass."
-            % ", ".join(empty)
         )
         return 1
     if blocked:
         print(
-            "\n%d NetworkPolicy flow(s) are declared on one side and denied on "
-            "the other. Kubernetes applies ingress and egress as separate "
-            "policies and admits only what BOTH allow, so each of these is a "
-            "connection that silently times out at runtime." % len(blocked)
+            f"\n{len(blocked)} NetworkPolicy flow(s) are declared on one side and "
+            "denied on the other. Kubernetes applies ingress and egress as "
+            "separate policies and admits only what BOTH allow, so each of "
+            "these is a connection that silently times out at runtime."
         )
         return 1
     print("all declared pod-to-pod flows are permitted by both sides")

@@ -87,10 +87,17 @@ observability:
   collectorImage: "ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.161.0"
   # The filelog agent's k8sattributes processor needs the Kubernetes API.
   # A NetworkPolicy cannot name the API server (it is not a pod), so the
-  # peer is a CIDR: list the control plane's address range here. Empty
-  # (the default) means the CNI's own default applies — Calico's
-  # failsafe ports include the API server's 6443, and the laptop
-  # cluster's agent reaches it with no rule at all.
+  # peer is a CIDR: list the control plane's address range here.
+  #
+  # Empty (the default) means the CNI's own default applies. That works
+  # on Calico and kube-router, whose failsafe ports include the API
+  # server's; it is NOT guaranteed. A CNI that denies host-to-pod by
+  # default (Cilium with --allow-localhost=policy, a hardened Calico
+  # with a global default-deny) drops the agent's watch, and the
+  # symptom is silent and narrow: logs still arrive, every row just
+  # loses its k8s.pod.name / service.name. Check it after installing on
+  # a new cluster:
+  #   kubectl -n genieai-obs logs deploy/genieai-agent --tail=50 | grep -i error
   collectorAgent:
     apiServerCIDRs: []
 

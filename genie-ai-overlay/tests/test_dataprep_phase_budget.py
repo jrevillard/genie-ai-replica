@@ -112,7 +112,13 @@ class TestPhaseReturnsAllResults:
                 write_ingestion_log=_noop_log,
             )
 
-        assert _run(scenario()) == ([], [])
+        # The second element is the timed_out flag. It was asserted as `[]` while
+        # the function returned `[]` — an empty list where the contract says bool.
+        # Every `if timed_out` then read as working by coincidence of falsiness.
+        # False is the shape the callers are annotated for and branch on.
+        partials, timed_out = _run(scenario())
+        assert partials == []
+        assert timed_out is False
 
 
 class TestPhaseIsBounded:
@@ -1875,3 +1881,248 @@ class TestFailedTaskPropagates:
 
         with pytest.raises(RuntimeError, match="vLLM rejected the prompt"):
             _run(scenario())
+
+
+class TestEveryDegradationIsNamed:
+    """A phase that degrades must say WHY, with the remedy that matches.
+
+    Each test here is a mutant that was green before: a degradation the code
+    performs, names in a log line, and reports nowhere. The document reads
+    "Ingested" while part of it never landed — the exact silent shortfall this
+    whole mechanism exists to remove.
+    """
+
+    def _ingestion_messages(self, dp):
+        return " ".join(str(c.args[3]) for c in dp._write_ingestion_log.call_args_list if len(c.args) > 3)
+
+    def test_a_budget_exhaustion_names_the_budget_and_both_knobs(self, monkeypatch):
+        """The POSITIVE half of what was already pinned.
+
+        The existing guard asserts the budget remedy is absent for a non-budget
+        cause. Nothing asserted it is present for a budget one, so deleting the
+        entire budget sentence — the operator-facing instruction that is the
+        point of the degraded status — left the suite green.
+        """
+        from unittest.mock import MagicMock
+
+        from tests.test_dataprep_phase_budget import TestADegradedPhaseNeverReportsIngested as T
+
+        _result, dp = T()._run_ingest(monkeypatch, degraded=[dataprep.DEGRADED_PHASE_BUDGET])
+        joined = self._ingestion_messages(dp)
+        assert "budget" in joined.lower(), joined
+        assert "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS" in joined, (
+            f"the budget cause never named the knob that fixes it: {joined}"
+        )
+        assert "MODEL_LLM_TIMEOUT_SECONDS" in joined, (
+            f"the budget cause never named the per-call knob that fixes it: {joined}"
+        )
+        assert MagicMock is not None  # keeps the import honest for linters
+
+    def test_a_client_that_will_not_build_survives_the_labelling_phase(self, monkeypatch):
+        """The labelling half of the client-init cause.
+
+        Contextualization runs first and guards `_build_vllm_client`, so an
+        unbuildable client was caught, recorded, and the ingest carried on to
+        labelling — where the same unguarded call raised, landed in the ingest's
+        except handler, and RETRACTED a document that has a working file-label
+        fallback. Which phase runs first decided whether the ingest survived a
+        misconfigured endpoint.
+        """
+        from unittest.mock import patch
+
+        dp = _stub_dataprep()
+
+        async def scenario():
+            with patch.object(dataprep, "_build_vllm_client", side_effect=RuntimeError("model id unset")):
+                return await dp._label_with_llm(["chunk one", "chunk two"], ["Tax:IVA"], ["Tax:IVA"], "f1")
+
+        results, reasons = _run(scenario())
+        assert reasons and reasons[0].startswith(dataprep.DEGRADED_CLIENT_UNAVAILABLE), (
+            f"labelling did not name the unbuildable client: {reasons!r}"
+        )
+        assert reasons != [dataprep.DEGRADED_PHASE_BUDGET], (
+            "a broken client was reported as a budget exhaustion, which prescribes the wrong fix"
+        )
+        # The document still gets labels — from the file's own scope.
+        assert len(results) == 2, results
+        assert all(r["labels"] == ["Tax:IVA"] for r in results), results
+
+    def test_a_phase_that_produced_nothing_names_that(self, monkeypatch):
+        """An endpoint that answers but returns nothing usable is a degradation.
+
+        Every chunk falling back to raw text logged a loud ERROR and then
+        returned no reason, so the document reported "Ingested". The two are
+        different problems with different fixes — this one is not a slow phase.
+        """
+        from unittest.mock import MagicMock, patch
+
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 30.0)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+
+        async def answers_empty(**_kwargs):
+            return MagicMock(choices=[], usage=None)
+
+        client = MagicMock()
+        client.chat.completions.create = answers_empty
+
+        async def scenario():
+            dp = _stub_dataprep()
+            inp = MagicMock(file_name="f1.pdf", file_type="pdf", storage_path="/tmp/f1.pdf")
+            with patch.object(dataprep, "_build_vllm_client", return_value=(client, "test-model")):
+                return await dp._apply_contextualization(["chunk one", "chunk two"], inp, "f1")
+
+        texts, reasons = _run(scenario())
+        assert reasons and reasons[0].startswith(dataprep.DEGRADED_NO_CONTEXTS), (
+            f"a phase that produced no context reported {reasons!r} — the document would be "
+            "reported as plainly Ingested"
+        )
+        assert reasons != [dataprep.DEGRADED_PHASE_BUDGET], (
+            "an endpoint that returns nothing was reported as a budget exhaustion"
+        )
+        assert texts == ["chunk one", "chunk two"], texts
+
+    def test_an_exhausted_budget_does_not_also_blame_the_model(self, monkeypatch):
+        """The two contextual causes are mutually exclusive, budget first.
+
+        An exhausted phase produced no contexts BECAUSE its batches were
+        abandoned. Naming both told the operator to check their model supports
+        guided JSON when the ceiling is what stopped it — the wrong knob, on top
+        of the right one.
+        """
+        from unittest.mock import MagicMock, patch
+
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 0.4)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
+
+        async def never_answers(**_kwargs):
+            await asyncio.sleep(30)
+
+        client = MagicMock()
+        client.chat.completions.create = never_answers
+
+        async def scenario():
+            dp = _stub_dataprep()
+            inp = MagicMock(file_name="f1.pdf", file_type="pdf", storage_path="/tmp/f1.pdf")
+            with patch.object(dataprep, "_build_vllm_client", return_value=(client, "test-model")):
+                return await dp._apply_contextualization(["chunk one", "chunk two"], inp, "f1")
+
+        _texts, reasons = _run(scenario())
+        assert reasons == [dataprep.DEGRADED_PHASE_BUDGET], (
+            f"an exhausted phase blamed something besides the ceiling: {reasons!r}"
+        )
+
+    def test_partly_contextualized_chunks_are_not_a_degradation(self, monkeypatch):
+        """The all-or-nothing case is a cause; the ordinary one is not.
+
+        Some chunks falling back is what the per-batch fallback is for. Flagging
+        the document for it would make "Ingested with Warnings" fire on healthy
+        documents and teach operators to ignore it.
+
+        Drives _contextualize_per_chunk with the batch call stubbed, so this is
+        about the classification and not about how a response body parses.
+        """
+        from unittest.mock import AsyncMock, MagicMock
+
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 30.0)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+
+        async def scenario():
+            dp = _stub_dataprep()
+            # Two of four chunks get a context; the other two come back empty.
+            dp._context_batch_call = AsyncMock(return_value={0: "about the subject", 1: "also about it"})
+            chunks = [f"chunk {i}" for i in range(4)]
+            return await dp._contextualize_per_chunk(MagicMock(), "m", "sys", chunks, "f1", 4)
+
+        texts, reasons = _run(scenario())
+        assert reasons == [], (
+            f"a phase that mostly succeeded was reported as degraded: {reasons!r} — the status must "
+            "mean something or operators will ignore it"
+        )
+        assert texts[0].startswith("about the subject"), texts
+        assert texts[3] == "chunk 3", texts
+
+    def test_doc_level_that_produced_nothing_names_that(self, monkeypatch):
+        """doc_level is a supported strategy with the same hole.
+
+        One call for the whole document means no batch wave to exceed a budget
+        over — which is not the same as "cannot degrade". A single call returning
+        nothing usable left every chunk raw and the document "Ingested".
+        """
+        from unittest.mock import MagicMock, patch
+
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        monkeypatch.setattr(dataprep, "CONTEXTUAL_STRATEGY", "doc_level")
+
+        async def answers_empty(**_kwargs):
+            return MagicMock(choices=[], usage=None)
+
+        client = MagicMock()
+        client.chat.completions.create = answers_empty
+
+        async def scenario():
+            dp = _stub_dataprep()
+            inp = MagicMock(file_name="f1.pdf", file_type="pdf", storage_path="/tmp/f1.pdf")
+            with patch.object(dataprep, "_build_vllm_client", return_value=(client, "test-model")):
+                return await dp._apply_contextualization(["chunk one", "chunk two"], inp, "f1")
+
+        texts, reasons = _run(scenario())
+        assert reasons and reasons[0].startswith(dataprep.DEGRADED_NO_CONTEXTS), (
+            f"doc_level produced no context and reported {reasons!r} — a doc_level deployment "
+            "would report every fully-uncontextualized document as a clean ingest"
+        )
+        assert texts == ["chunk one", "chunk two"], texts
+
+
+class TestCauseClassification:
+    """_degraded_cause decides which remedy an operator is handed.
+
+    It matches by prefix because a phase appends its own detail to the sentinel.
+    Equality would match only the bare budget case and quietly file the rest as
+    unrecognised — the state that produced a remedy naming the wrong knob.
+    """
+
+    def test_each_sentinel_classifies_to_itself(self):
+        for sentinel in (
+            dataprep.DEGRADED_PHASE_BUDGET,
+            dataprep.DEGRADED_CLIENT_UNAVAILABLE,
+            dataprep.DEGRADED_NO_CONTEXTS,
+        ):
+            assert dataprep._degraded_cause(sentinel) is sentinel
+
+    def test_appended_detail_still_classifies(self):
+        assert (
+            dataprep._degraded_cause(f"{dataprep.DEGRADED_CLIENT_UNAVAILABLE} (ConnectionError: refused)")
+            is dataprep.DEGRADED_CLIENT_UNAVAILABLE
+        )
+        assert dataprep._degraded_cause(f"{dataprep.DEGRADED_NO_CONTEXTS} (0/260)") is dataprep.DEGRADED_NO_CONTEXTS
+
+    def test_an_unmapped_cause_falls_through_to_itself(self):
+        """Unknown causes are reported verbatim, never filed under another one."""
+        assert dataprep._degraded_cause("something nobody has seen before") == ("something nobody has seen before")
+
+    def test_every_cause_the_code_emits_has_a_remedy(self):
+        """Adding a cause without a remedy must be a visible gap, not a silent one."""
+        emitted = {
+            dataprep.DEGRADED_PHASE_BUDGET,
+            dataprep.DEGRADED_CLIENT_UNAVAILABLE,
+            dataprep.DEGRADED_NO_CONTEXTS,
+        }
+        assert emitted <= set(dataprep.DEGRADED_REMEDIES), (
+            f"causes with no remedy: {sorted(emitted - set(dataprep.DEGRADED_REMEDIES))}"
+        )
+
+    def test_only_the_budget_remedy_tells_the_operator_to_raise_a_budget(self):
+        for sentinel, remedy in dataprep.DEGRADED_REMEDIES.items():
+            mentions_raising = "Raise DATAPREP_LLM_PHASE_TIMEOUT_SECONDS" in remedy
+            assert mentions_raising == (sentinel == dataprep.DEGRADED_PHASE_BUDGET), (
+                f"{sentinel!r} prescribes the wrong fix: {remedy}"
+            )

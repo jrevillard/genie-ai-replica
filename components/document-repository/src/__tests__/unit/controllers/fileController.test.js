@@ -232,6 +232,84 @@ describe('fileController', () => {
       expect(result.error).toMatch(/already been ingested/i);
       expect(axios.post).not.toHaveBeenCalled();
     });
+
+    // 'Ingested with Warnings' is indexed but incomplete, and re-ingesting it after
+    // raising the phase budget is its documented remedy — so it must NOT be
+    // blocked. The hazard is the opposite one: dataprep appends to the graph, so
+    // re-ingesting without clearing first leaves two copies of every chunk under
+    // one file_id, and the chunk_count written back describes only the new copy.
+    describe('a degraded document is re-ingestable, and is cleared first', () => {
+      const config = require('../../../config/appConfig');
+
+      beforeEach(() => {
+        // The module-level mocks are empty objects; each describe supplies the
+        // methods its path actually calls.
+        const metadataService = require('../../../services/metadataService');
+        const fileService = require('../../../services/fileService');
+        metadataService.updateMetadata = jest.fn().mockResolvedValue({});
+        fileService.deleteIngestionLogs = jest.fn().mockResolvedValue({});
+
+        jest.spyOn(fileController, '_getFileBase64').mockResolvedValue({
+          file: { file_id: 'f1', dataprep: { status: 'Ingested with Warnings' } },
+          base64String: 'b64'
+        });
+        axios.post.mockResolvedValue({ data: { success: true, chunk_count: 3 } });
+      });
+
+      it('clears the previous chunks before ingesting', async () => {
+        const result = await fileController._ingestFileById('f1');
+
+        expect(result.success).toBe(true);
+        const urls = axios.post.mock.calls.map((c) => c[0]);
+        const retractIdx = urls.findIndex((u) => String(u).includes(config.dataprep.retractPath));
+        const ingestIdx = urls.findIndex((u) => String(u).includes(config.dataprep.ingestPath));
+
+        expect(retractIdx).toBeGreaterThanOrEqual(0);
+        expect(ingestIdx).toBeGreaterThanOrEqual(0);
+        // Order is the whole point: clearing after the ingest would still duplicate.
+        expect(retractIdx).toBeLessThan(ingestIdx);
+      });
+
+      it('clears by file_id, not by display name', async () => {
+        await fileController._ingestFileById('f1');
+
+        const retractCall = axios.post.mock.calls.find((c) => String(c[0]).includes(config.dataprep.retractPath));
+        expect(retractCall[1]).toEqual({ fileId: 'f1' });
+      });
+
+      it('keeps the ingestion log: it is the diagnosis the operator is reading', async () => {
+        const fileService = require('../../../services/fileService');
+        await fileController._ingestFileById('f1');
+
+        // _retractFileById would have called this. The degraded re-ingest path
+        // must not: the log is what names the cause that made the document
+        // degraded in the first place.
+        expect(fileService.deleteIngestionLogs).not.toHaveBeenCalled();
+      });
+
+      it('aborts rather than double-indexing when the clear fails', async () => {
+        axios.post.mockRejectedValueOnce(new Error('dataprep down'));
+
+        const result = await fileController._ingestFileById('f1');
+
+        expect(result.success).toBe(false);
+        expect(result.error).toMatch(/previous chunks/i);
+        // The ingest must not have been attempted — that is the corrupting call.
+        const urls = axios.post.mock.calls.map((c) => String(c[0]));
+        expect(urls.some((u) => u.includes(config.dataprep.ingestPath))).toBe(false);
+      });
+
+      it('aborts when dataprep reports the clear as unsuccessful', async () => {
+        axios.post.mockResolvedValueOnce({ data: { success: false, error: 'no such graph' } });
+
+        const result = await fileController._ingestFileById('f1');
+
+        expect(result.success).toBe(false);
+        expect(result.error).toMatch(/previous chunks/i);
+        const urls = axios.post.mock.calls.map((c) => String(c[0]));
+        expect(urls.some((u) => u.includes(config.dataprep.ingestPath))).toBe(false);
+      });
+    });
   });
 
   describe('_retractFileById (retraction guard)', () => {

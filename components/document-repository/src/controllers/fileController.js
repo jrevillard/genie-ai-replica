@@ -1014,8 +1014,44 @@ class FileController {
   async _ingestFileById(fileId, chunkOverlap) {
     const { file, base64String } = await this._getFileBase64(fileId);
     // Case-insensitive: dataprep persists the status capitalized ('Ingested'), not lowercase
-    if (file.dataprep && (file.dataprep.status || '').toLowerCase() === 'ingested') {
+    const status = file.dataprep ? (file.dataprep.status || '').toLowerCase() : '';
+    if (status === 'ingested') {
       return { success: false, error: 'File has already been ingested' };
+    }
+    // 'Ingested with Warnings' is indexed but incomplete, and re-ingesting it after
+    // raising the phase budget is its documented remedy — so it must pass the
+    // guard above. But its chunks are still in the graph, and dataprep appends
+    // rather than replaces, so a plain re-ingest leaves a second copy of every
+    // chunk under the same file_id. The chunk_count written back afterwards
+    // describes only the new copy, so nothing visible reports the duplicate.
+    //
+    // The dataprep retract endpoint is called directly rather than through
+    // _retractFileById: that one also wipes the ingestion log, and for this case
+    // the log is the diagnosis the operator is in the middle of reading.
+    if (status === 'ingested with warnings') {
+      const retractUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.retractPath}`;
+      logger.debug(
+        `[FILE-CONTROLLER] Clearing previously ingested chunks for degraded file ${fileId} before re-ingest`
+      );
+      let retractResponse;
+      try {
+        retractResponse = await axios.post(retractUrl, { fileId: file.file_id });
+      } catch (retractErr) {
+        // Continuing would double-index the document, and a duplicated knowledge
+        // base entry is far harder to notice than a failed re-ingest.
+        logger.error(`[FILE-CONTROLLER] Failed to clear degraded chunks for ${fileId}: ${retractErr.message}`);
+        return {
+          success: false,
+          error: 'Could not clear the previous chunks of the degraded document; re-ingest aborted'
+        };
+      }
+      if (!retractResponse.data || !retractResponse.data.success) {
+        return {
+          success: false,
+          error: 'Could not clear the previous chunks of the degraded document; re-ingest aborted',
+          details: retractResponse.data
+        };
+      }
     }
     const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.ingestPath}`;
     logger.debug(`[FILE-CONTROLLER] Sending file to dataprep service at ${dataprepUrl}`);

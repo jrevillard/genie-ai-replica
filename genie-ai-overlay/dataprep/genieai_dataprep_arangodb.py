@@ -353,7 +353,57 @@ DATAPREP_LLM_PHASE_TIMEOUT_SECONDS = positive_float_env("DATAPREP_LLM_PHASE_TIME
 # string and the operator is told which knob applies. A bare boolean produced a
 # message that named the budget for both, sending the operator to raise a knob
 # that could not help. See _apply_contextualization.
+#
+# Sentinels, not free text: each one is the prefix of the reason the phase
+# reports and keys its remedy in DEGRADED_REMEDIES. A reason carries detail its
+# sentinel does not (the client-init error, how many chunks fell back), which is
+# why causes are matched by prefix — see _degraded_cause.
 DEGRADED_PHASE_BUDGET = "the phase ran out of its wall-clock budget with work unfinished"
+DEGRADED_CLIENT_UNAVAILABLE = "the vLLM client could not be built"
+DEGRADED_NO_CONTEXTS = "context generation returned nothing usable for any chunk"
+
+
+def _degraded_cause(reason: str) -> str:
+    """The sentinel *reason* belongs to, or *reason* itself when unknown.
+
+    Prefix-matched because a phase appends its own detail to the sentinel — the
+    client-init error text, the per-chunk fallback counts. Equality would only
+    ever match the bare-budget case and quietly classify the others as
+    unrecognised, which is the state that produced a remedy naming the wrong
+    knob. An unrecognised reason falls through to itself so an unmapped cause is
+    reported verbatim rather than filed under a cause that does not describe it.
+    """
+    for sentinel in (DEGRADED_PHASE_BUDGET, DEGRADED_CLIENT_UNAVAILABLE, DEGRADED_NO_CONTEXTS):
+        if reason.startswith(sentinel):
+            return sentinel
+    return reason
+
+
+# What to tell the operator for each cause, keyed by its sentinel. Kept beside
+# the sentinels rather than inlined at the call site so that adding a cause
+# forces a decision about its remedy: a cause with no entry is reported verbatim
+# with no remedy, which is visible, instead of inheriting a diagnosis about
+# budgets or endpoints that may not apply to it.
+#
+# Every non-budget remedy says raising a budget will not help. That is the whole
+# reason the causes are distinguished — an operator told to raise a ceiling for
+# an endpoint that is down re-ingests into the identical failure.
+DEGRADED_REMEDIES = {
+    DEGRADED_PHASE_BUDGET: (
+        "{phase}: the phase budget ran out after {seconds:g}s, so the batches still running were "
+        "abandoned and fell back per chunk. Raise DATAPREP_LLM_PHASE_TIMEOUT_SECONDS, or the per-call "
+        "MODEL_LLM_TIMEOUT_SECONDS together with it."
+    ),
+    DEGRADED_CLIENT_UNAVAILABLE: (
+        "{phase}: the vLLM client could not be built. Raising a budget will not help — check "
+        "VLLM_ENDPOINT and the configured model id."
+    ),
+    DEGRADED_NO_CONTEXTS: (
+        "{phase}: every chunk came back without a generated context. Raising a budget will not help — "
+        "the endpoint must be reachable and the model must support guided JSON "
+        "(response_format=json_object)."
+    ),
+}
 
 # Document size the wave arithmetic above is stated for: the one in the incident
 # report. Raising the ceiling is the fix for a larger document; this only makes
@@ -425,8 +475,6 @@ def _warn_if_phase_ceiling_too_low(phase_seconds: float, retries: int, per_call_
     )
     return True
 
-
-_ONE_BATCHED_CALL_WORST_CASE_SECONDS = _one_batched_call_worst_case(LLM_MAX_RETRIES, LLM_TIMEOUT_SECONDS)
 
 _warn_if_phase_ceiling_too_low(DATAPREP_LLM_PHASE_TIMEOUT_SECONDS, LLM_MAX_RETRIES, LLM_TIMEOUT_SECONDS)
 # How often a still-running phase reports progress to the ingestion log. The log
@@ -966,7 +1014,10 @@ async def _gather_with_phase_budget_inner(
     costs one line per interval whatever the throughput.
     """
     if not tasks:
-        return [], []
+        # False, not []: an empty list happens to be falsy so the callers behave,
+        # but a list where the contract says bool makes every `if timed_out` read
+        # as working by coincidence.
+        return [], False
 
     started = time.monotonic()
     # Wrapped in submission order so a failed batch can be picked
@@ -1634,45 +1685,78 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     async def _label_with_llm(self, chunks: list[str], all_labels: list[str], file_labels: list[str], file_id: str):
         """Labels chunks using VLLM with Retry Logic and Advisory Warnings (Spec 5.3)."""
-        client, model = _build_vllm_client()
+        # Guarded exactly as _apply_contextualization guards it, and for the same
+        # reason. Contextualization runs first, so an unbuildable client is caught
+        # there, recorded as a degradation, and the ingest carries on to labelling —
+        # where the same call would raise, land in the ingest's except handler, and
+        # retract a document that has a perfectly good file-label fallback. Which
+        # of the two phases is reached first must not decide whether the ingest
+        # survives a misconfigured endpoint.
+        #
+        # Falls through to the same tail the per-batch fallback uses rather than
+        # returning early: that tail resolves each chunk's labels against the
+        # taxonomy, so a client-less run produces the same result as a batch that
+        # failed, instead of a second, subtly different labelling path.
+        degraded: list[str] = []
+        client = model = None
+        try:
+            client, model = _build_vllm_client()
+        except Exception as e:
+            err = f"{type(e).__name__}: {str(e)[:200]}"
+            logger.error(f"LLM labeling disabled for {file_id}: vLLM client init failed ({err}); using file labels.")
+            await self._write_ingestion_log(
+                file_id,
+                "ERROR",
+                "Labeling",
+                f"vLLM client init failed ({err}); using file labels.",
+            )
+            degraded.append(f"{DEGRADED_CLIENT_UNAVAILABLE} ({err})")
 
-        # Precompute the system prompt once (the taxonomy is identical for every chunk).
-        system_prompt = LABEL_SELECTOR_SYSTEM_PROMPT.replace("{labels_list}", str(all_labels))
-        logger.debug(
-            f"LLM LABELING INPUTS: taxonomy ({len(all_labels)} labels), "
-            f"file_labels: {file_labels}, system_prompt ({len(system_prompt)} chars), "
-            f"chunks: {len(chunks)}, batch_size: {LABEL_LLM_BATCH_SIZE}, "
-            f"concurrency: {MAX_CONCURRENT_BATCHES}"
-        )
+        partial_maps: list = []
+        timed_out = False
+        if client is not None:
+            # Precompute the system prompt once (the taxonomy is identical for every chunk).
+            system_prompt = LABEL_SELECTOR_SYSTEM_PROMPT.replace("{labels_list}", str(all_labels))
+            logger.debug(
+                f"LLM LABELING INPUTS: taxonomy ({len(all_labels)} labels), "
+                f"file_labels: {file_labels}, system_prompt ({len(system_prompt)} chars), "
+                f"chunks: {len(chunks)}, batch_size: {LABEL_LLM_BATCH_SIZE}, "
+                f"concurrency: {MAX_CONCURRENT_BATCHES}"
+            )
 
-        semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)
-        logger.info(
-            f"LLM labeling: {len(chunks)} chunks "
-            f"(concurrency={MAX_CONCURRENT_BATCHES}, batch_size={LABEL_LLM_BATCH_SIZE}, "
-            f"model={model}, temperature={LLM_LABEL_TEMPERATURE})"
-        )
+            semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)
+            logger.info(
+                f"LLM labeling: {len(chunks)} chunks "
+                f"(concurrency={MAX_CONCURRENT_BATCHES}, batch_size={LABEL_LLM_BATCH_SIZE}, "
+                f"model={model}, temperature={LLM_LABEL_TEMPERATURE})"
+            )
 
-        # Group indexed chunks into batches; each batch yields one LLM call (or,
-        # on parse failure, per-chunk calls). All gated by the semaphore.
+            # Group indexed chunks into batches; each batch yields one LLM call (or,
+            # on parse failure, per-chunk calls). All gated by the semaphore.
+            indexed = list(enumerate(chunks))
+            batches = [indexed[i : i + LABEL_LLM_BATCH_SIZE] for i in range(0, len(indexed), LABEL_LLM_BATCH_SIZE)]
+
+            async def _process_batch(batch):
+                async with semaphore:
+                    return await self._llm_suggest_labels(client, model, system_prompt, batch, file_id, file_labels)
+
+            partial_maps, timed_out = await _gather_with_phase_budget(
+                [_process_batch(b) for b in batches],
+                phase="LLM labeling",
+                phase_label=PHASE_LABEL_LABELING,
+                total=len(batches),
+                file_id=file_id,
+                write_ingestion_log=self._write_ingestion_log,
+            )
+
+            if timed_out:
+                abandoned = len(batches) - len(partial_maps)
+                _llm_fallback_total.add(abandoned, {"phase": PHASE_LABEL_LABELING, "reason": "phase_budget"})
+                # Recorded here, where the cause is known, so the file-label
+                # fallback below can see that the phase degraded as a whole.
+                degraded.append(DEGRADED_PHASE_BUDGET)
+
         indexed = list(enumerate(chunks))
-        batches = [indexed[i : i + LABEL_LLM_BATCH_SIZE] for i in range(0, len(indexed), LABEL_LLM_BATCH_SIZE)]
-
-        async def _process_batch(batch):
-            async with semaphore:
-                return await self._llm_suggest_labels(client, model, system_prompt, batch, file_id, file_labels)
-
-        partial_maps, timed_out = await _gather_with_phase_budget(
-            [_process_batch(b) for b in batches],
-            phase="LLM labeling",
-            phase_label=PHASE_LABEL_LABELING,
-            total=len(batches),
-            file_id=file_id,
-            write_ingestion_log=self._write_ingestion_log,
-        )
-
-        if timed_out:
-            abandoned = len(batches) - len(partial_maps)
-            _llm_fallback_total.add(abandoned, {"phase": PHASE_LABEL_LABELING, "reason": "phase_budget"})
 
         suggested_map: dict[int, list[str]] = {}
         for partial in partial_maps:
@@ -1685,11 +1769,14 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         # ingestion log reads "Final labels (0): []" for them, which looks like
         # a labelling regression rather than the budget exhaustion it is.
         #
-        # Filled with the document's own labels, which is what a batch that
-        # failed rather than timed out ends up with, so a degraded document is
-        # uniform. Scoped to the budget path on purpose: a chunk the LLM
+        # A client that never built is the same shape one step earlier: no chunk
+        # reaches the LLM at all, so every one of them would land unlabelled.
+        # Both are wholesale failures of the phase rather than a per-batch miss,
+        # so both fall back to the document's own labels — which is what a batch
+        # that failed rather than timed out ends up with, so a degraded document
+        # is uniform. Scoped to those two on purpose: a chunk the LLM
         # legitimately returned nothing for is not force-labelled.
-        if timed_out and file_labels:
+        if degraded and file_labels:
             for i, _ in indexed:
                 suggested_map.setdefault(i, list(file_labels))
 
@@ -1702,7 +1789,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             results.append({"text": text, "labels": labels})
             if n % 200 == 0 or n == total:
                 logger.info(f"Labeling progress: {n}/{total} chunks finalized")
-        return results, [DEGRADED_PHASE_BUDGET] if timed_out else []
+        return results, degraded
 
     def _build_doc_context(self, chunks: list[str], input, budget: int = DATAPREP_CONTEXTUAL_DOC_BUDGET) -> str:
         """Build the document-context string fed to the context-generation LLM.
@@ -1769,7 +1856,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 "Contextualization",
                 f"vLLM client init failed ({err}); using raw chunks.",
             )
-            return list(chunks), [f"the vLLM client could not be built ({err})"]
+            return list(chunks), [f"{DEGRADED_CLIENT_UNAVAILABLE} ({err})"]
 
         model = DATAPREP_CONTEXTUAL_MODEL.strip() or default_model
         total = len(chunks)
@@ -1778,8 +1865,14 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         # chunk (uses a larger doc budget — it is a single call; N× cheaper).
         if CONTEXTUAL_STRATEGY == "doc_level":
             doc_context = self._build_doc_context(chunks, input, DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL)
-            texts = await self._contextualize_doc_level(client, model, doc_context, chunks, file_id, total)
-            return texts, []  # one call for the document; no phase to run out of
+            texts, generated = await self._contextualize_doc_level(client, model, doc_context, chunks, file_id, total)
+            # One call for the document, so there is no batch wave to exhaust a
+            # budget over — but that is not the same as "cannot degrade". A single
+            # call that returns nothing usable is the all-or-nothing case, exactly
+            # as a per_chunk phase where no chunk got a context, and it must name
+            # itself or doc_level deployments report every fully-uncontextualized
+            # document as a clean ingest.
+            return texts, [] if generated else [f"{DEGRADED_NO_CONTEXTS} (0/{total})"]
 
         # per_chunk (default): batched calls so the document context lives once
         # per batch (system prompt), not per chunk; per-chunk fallback on any
@@ -1788,7 +1881,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         system_prompt = CONTEXTUAL_RETRIEVAL_PROMPT.replace("{document_context}", doc_context)
         return await self._contextualize_per_chunk(client, model, system_prompt, chunks, file_id, total)
 
-    async def _contextualize_per_chunk(self, client, model, system_prompt, chunks, file_id, total) -> list[str]:
+    async def _contextualize_per_chunk(
+        self, client, model, system_prompt, chunks, file_id, total
+    ) -> tuple[list[str], list[str]]:
         """per_chunk strategy: batched LLM calls → one section-tailored context per chunk.
 
         Chunks are batched (``LABEL_LLM_BATCH_SIZE``) so the document context is
@@ -1861,7 +1956,27 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 f"Contextual Retrieval: {with_context}/{total} chunks contextualized "
                 f"({raw_count} using raw text after batch + per-chunk recovery failed)."
             )
-        return result, [DEGRADED_PHASE_BUDGET] if timed_out else []
+        # Both a stalled phase and a phase that produced nothing are degradations,
+        # and they have different fixes — so both are named. Reporting only the
+        # budget case meant an endpoint that answers but returns nothing usable
+        # (a model without guided JSON, say) logged a loud ERROR and then left
+        # the document reading "Ingested", which is precisely the silent shortfall
+        # this status exists to make visible.
+        #
+        # Mutually exclusive, budget first: an exhausted phase produced no contexts
+        # *because* its batches were abandoned, so naming both would tell the
+        # operator to check their model supports guided JSON when the ceiling is
+        # what stopped it — the wrong knob, on top of the right one.
+        #
+        # Only the all-or-nothing case is a cause. A handful of chunks out of
+        # hundreds falling back is normal operation — it is what the per-batch
+        # fallback is for — and flagging the document for it would make the
+        # status fire on healthy documents and train operators to ignore it.
+        if timed_out:
+            return result, [DEGRADED_PHASE_BUDGET]
+        if with_context == 0:
+            return result, [f"{DEGRADED_NO_CONTEXTS} (0/{total})"]
+        return result, []
 
     async def _context_batch_call(self, client, model, system_prompt, batch, file_id) -> dict[int, str]:
         """One LLM call generating contexts for a batch of chunks.
@@ -1973,8 +2088,16 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             fallback[i] = await self._context_single_call(client, model, system_prompt, i, text, file_id)
         return fallback
 
-    async def _contextualize_doc_level(self, client, model, doc_context, chunks, file_id, total) -> list[str]:
-        """doc_level strategy: one LLM call → one document context prepended to every chunk."""
+    async def _contextualize_doc_level(
+        self, client, model, doc_context, chunks, file_id, total
+    ) -> tuple[list[str], bool]:
+        """doc_level strategy: one LLM call → one document context prepended to every chunk.
+
+        Returns ``(texts, generated)``. ``generated`` is False when the single
+        call produced nothing usable, which is the doc_level equivalent of a
+        per_chunk phase where no chunk got a context — the caller needs it to
+        report the degradation rather than infer it from the text.
+        """
         system_prompt = _CONTEXTUAL_DOC_PROMPT_DEFAULT.replace("{document_context}", doc_context)
         logger.info(f"Contextual Retrieval (doc_level): 1 call for {total} chunks (model={model}).")
         summary = (await self._context_doc_call(client, model, system_prompt, file_id) or "").strip()
@@ -1989,9 +2112,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 "Contextualization",
                 "0 doc-level contexts generated — verify the model supports guided JSON and is reachable.",
             )
-            return list(chunks)
+            return list(chunks), False
         logger.info(f"Contextual Retrieval (doc_level): context generated, prepending to {total} chunks.")
-        return [f"{summary}\n\n{chunk}" for chunk in chunks]
+        return [f"{summary}\n\n{chunk}" for chunk in chunks], True
 
     async def _context_doc_call(self, client, model, system_prompt, file_id: str) -> str:
         """One LLM call generating a single document-level context (3 retries).
@@ -2483,11 +2606,14 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         return results
 
     async def _apply_labels(self, plain_chunks: list[str], all_labels: list[str], file_labels: list[str], file_id: str):
-        """Returns ``(labelled_docs, degraded)``.
+        """Returns ``(labelled_docs, reasons)``.
 
-        ``degraded`` is True only when the LLM phase ran out of budget. The
-        non-LLM strategies have no budget and no failure mode of their own, and
-        an empty taxonomy is a configured state rather than a degraded one.
+        ``reasons`` lists human-readable causes, empty when labelling completed,
+        and it is what stops the document being reported as plainly Ingested. A
+        list rather than a flag because the causes have DIFFERENT REMEDIES — see
+        DEGRADED_REMEDIES. The non-LLM strategies have no budget and no failure
+        mode of their own, and an empty taxonomy is a configured state rather
+        than a degraded one.
         """
         if not all_labels:
             await self._write_ingestion_log(
@@ -2767,38 +2893,37 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     ingest_status = "Ingested with Warnings" if degraded_phases else "Ingested"
                     await self._update_doc_status(input.file_id, ingest_status, chunk_count=len(chunks))
                     if degraded_phases:
-                        # One line per cause, each naming the knob that fixes
+                        # One sentence per cause, each naming the knob that fixes
                         # THAT cause. A single combined sentence either lies
                         # about what happened or gives a remedy that does not
                         # apply — an operator who raises a budget because the
                         # message says to, re-ingests, and gets the identical
                         # failure because the endpoint was the problem.
-                        budget_causes = [name for name, reason in degraded_phases if reason == DEGRADED_PHASE_BUDGET]
-                        other_causes = [
-                            f"{name}: {reason}" for name, reason in degraded_phases if reason != DEGRADED_PHASE_BUDGET
-                        ]
+                        #
+                        # Every cause is reported, not just the first: two phases
+                        # degrading for two different reasons is the normal case
+                        # when a GPU node is unhealthy, and naming one of them
+                        # sends the operator to fix it and find the other still
+                        # broken.
+                        remedy_sentences = []
+                        for name, reason in degraded_phases:
+                            remedy = DEGRADED_REMEDIES.get(_degraded_cause(reason))
+                            if remedy is None:
+                                # No remedy mapped for this cause: report it
+                                # verbatim rather than borrowing another cause's
+                                # advice, which would be a guess presented as
+                                # a diagnosis.
+                                remedy_sentences.append(f"{name}: {reason}.")
+                            else:
+                                remedy_sentences.append(
+                                    remedy.format(phase=name, seconds=DATAPREP_LLM_PHASE_TIMEOUT_SECONDS)
+                                )
                         await self._write_ingestion_log(
                             input.file_id,
                             "WARN",
                             "System",
                             "Ingestion completed DEGRADED — status set to 'Ingested with Warnings'. "
-                            + (
-                                f"Phase budget exhausted ({', '.join(budget_causes)}) after "
-                                f"{DATAPREP_LLM_PHASE_TIMEOUT_SECONDS:g}s, so the unfinished batches fell back "
-                                "per chunk. Raise DATAPREP_LLM_PHASE_TIMEOUT_SECONDS, or the per-call "
-                                "MODEL_LLM_TIMEOUT_SECONDS together with it. "
-                                if budget_causes
-                                else ""
-                            )
-                            + (
-                                " ".join(
-                                    f"Also degraded — {c}. That is an endpoint or model-configuration "
-                                    "problem, not a budget one: raising a budget will not fix it. "
-                                    for c in other_causes
-                                )
-                                if other_causes
-                                else ""
-                            ),
+                            + " ".join(remedy_sentences),
                         )
                     await self._write_ingestion_log(
                         input.file_id,

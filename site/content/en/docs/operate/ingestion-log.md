@@ -179,7 +179,7 @@ gotcha), see [`.claude/rules/DEBUGGING-TRACING.md`](https://opensource.unicc.org
 | Symptom in the log | First action | Re-ingest? |
 |---|---|---|
 | `Batch labeling parse failure` on every chunk | Check the model supports `response_format=json_object` ([RAG &rarr; Choosing models]({{< relref "/docs/rag-pipeline/choosing-models" >}})). | No — fix the model config, then re-ingest. |
-A document lands as `Ingested with Warnings` instead of `Ingested` | An LLM phase exhausted `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS`; the affected chunks carry the document's file labels (labelling) or raw text (Contextual Retrieval) instead of the model's output. Raise `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS`, or `MODEL_LLM_TIMEOUT_SECONDS` together with it. | No — the document is fully indexed and searchable; only the enrichment is incomplete. Re-ingest after raising the budget for a clean result. |
+| A document lands as `Ingested with Warnings` instead of `Ingested` | One LLM phase degraded. The `System` log line names which cause and the knob that fixes it: **budget exhausted** → raise `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS` (or `MODEL_LLM_TIMEOUT_SECONDS` with it); **client could not be built** → check `VLLM_ENDPOINT` and the model id; **no context generated** → the endpoint is unreachable or the model does not support `response_format=json_object`. The affected chunks carry the document's file labels (labelling) or raw text (Contextual Retrieval) instead of the model's output. | Yes, after fixing the cause — the document is indexed and searchable, only the enrichment is incomplete. Re-ingesting a degraded document clears its existing chunks first, so it replaces rather than duplicates. |
 | `in progress` rows whose elapsed time stops advancing | The phase is stuck rather than slow, or it has hit `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS` and is about to degrade. Check the trace, then `MODEL_LLM_TIMEOUT_SECONDS` and `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS` (raise both — the phase budget is the binding ceiling). | No — the document still ingests on its fallback (file labels / raw chunk). |
 | `failed` on the **context generation** step only | Lower `DATAPREP_CONTEXTUAL_DOC_BUDGET` or disable Contextual Retrieval (`CONTEXTUAL_RETRIEVAL_ENABLED=false`) temporarily. | Only if you want the context prefix on existing documents. |
 | `raw-chunk fallback` on isolated chunks (most chunks labelled) | Usually transient vLLM load. Re-ingest if labels are critical. | Optional. |
@@ -296,25 +296,34 @@ Two parse-failure modes exist: batch-failures cite the chunk indices and trigger
 
 ### Symptom: file in `Ingested with Warnings`
 
-Ingestion succeeded but at least one chunk used a fallback. The document IS
-retrievable, but quality may be reduced. Open the ingestion log, count
-warnings per chunk, and decide whether to retract + re-upload.
+Ingestion succeeded but at least one LLM phase could not complete. The document
+IS retrievable, but part of it was indexed from a fallback rather than from the
+model. Open the ingestion log: the `System` line written at the end of the
+ingest names each cause and the knob that fixes it.
 
-**Set when dataprep's LLM phases exhaust their budget.** The status is
-`Ingested with Warnings` rather than `Ingested` because some of the document
-really did not land: chunks from an abandoned labelling batch carry the
-document's own file labels instead of model labels, and chunks from an
-abandoned Contextual Retrieval batch carry raw text instead of a generated
-context prefix. The document is not retracted — the batches that did finish are
-real work and the chunks are indexed and searchable — but the operator is not
-told "Ingested" for a document that was only partially processed. Look for
-`exceeded its ...s budget` in the ingestion log, which names how many batches
-completed and how many were abandoned. Raising `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS`
-(or `MODEL_LLM_TIMEOUT_SECONDS` together with it) and re-ingesting gives a
-clean result.
+The status is `Ingested with Warnings` rather than `Ingested` because some of
+the document really did not land. The document is not retracted — the batches
+that did finish are real work and the chunks are indexed and searchable — but
+the operator is not told "Ingested" for a document that was only partially
+processed.
 
-Also set when the Contextual Retrieval client cannot be initialised at all, in
-which case no chunk received a generated context.
+Three causes, with different fixes:
+
+| Cause in the `System` line | What happened | Fix |
+|---|---|---|
+| the phase budget ran out | The labelling or Contextual Retrieval batches still running when `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS` expired were abandoned. Their chunks carry the document's own file labels (labelling) or raw text (context) instead of the model's output. Look for `exceeded its ...s budget`, which names how many batches completed and how many were abandoned. | Raise `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS`, or `MODEL_LLM_TIMEOUT_SECONDS` together with it. |
+| the vLLM client could not be built | The client could not be constructed at all — a bad `VLLM_ENDPOINT`, or no model id and auto-detection failed. No chunk reached the model, in either phase. | Fix the endpoint or the model id. Raising a budget will not help. |
+| context generation returned nothing | The endpoint answered but no usable context came back — typically a model that does not support `response_format=json_object`. Every chunk was stored raw. | Use a model that supports guided JSON, or set `CONTEXTUAL_RETRIEVAL_ENABLED=false` deliberately. Raising a budget will not help. |
+
+A handful of chunks falling back while the rest succeeded is normal operation
+and does **not** set this status — that is what the per-batch fallback is for.
+The status is reserved for a phase that accomplished nothing, so it keeps
+meaning something.
+
+After fixing the cause, re-ingest from the admin dashboard for a clean result.
+Re-ingesting a degraded document clears its existing chunks first, so it
+replaces the previous copy rather than adding a second one to the knowledge
+base.
 
 ## Related
 

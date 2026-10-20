@@ -1833,3 +1833,101 @@ describe('ChatBotComponent', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Brand-spaced heading
+//
+// The welcome heading uses <i18n-t> with a named slot for the brand name.
+// createChatBotWrapper installs only the store, not the i18n plugin, so
+// vue-i18n is absent and <i18n-t> resolves to nothing in every test above —
+// a regression that dropped the brand span or emitted the raw key would be
+// invisible. This block mounts a real i18n instance (minimal messages,
+// legacy mode) and asserts the heading renders the localized sentence and
+// the brand name in its own element.
+// ---------------------------------------------------------------------------
+
+const { createI18n } = require('vue-i18n');
+
+function createChatBotWrapperWithI18n() {
+  const store = createChatBotStore();
+  const i18n = createI18n({
+    legacy: true,
+    locale: 'en',
+    fallbackLocale: 'en',
+    messages: {
+      en: {
+        chatbot: {
+          whatCanIHelp: 'How can {brandwordmark} help you today?'
+        }
+      }
+    }
+  });
+  return mount(ChatBotComponent, {
+    global: {
+      plugins: [store, i18n],
+      stubs: {
+        ChatResponseFeedbackDialog: true,
+        ModalDialog: true,
+        RightSideBarComponent: true,
+        ConfirmDialog: true,
+        DsPill: true,
+        DsButton: {
+          template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
+          props: ['disabled', 'variant', 'small', 'tag']
+        },
+        DsCard: true,
+        DsInput: true,
+        DsSelect: true,
+        Brain: true,
+        Loader2: true,
+        Plus: true,
+        Save: true,
+        FileText: true
+      }
+    }
+  });
+}
+
+describe('ChatBotComponent welcome heading', () => {
+  beforeEach(() => {
+    // Brand name is read from cachedConfig.app.title, which the
+    // config-loader mock at the top of this file returns through the
+    // loadConfig mock. The default mock returns no `app` block, so
+    // brandName is empty and brandWordmarkClass returns ''. To
+    // exercise the wordmark class branch (the path the layer paints
+    // the brand gradient on), install a config-loader mock that
+    // returns the GENIE.AI title.
+    const configLoader = require('../../config-loader');
+    configLoader.default.mockResolvedValue({
+      app: { title: 'GENIE.AI' },
+      features: { chat: { quickHelp: { buttons: [] } } }
+    });
+  });
+
+  it('renders the localized sentence with the brand name in its own element', async () => {
+    const wrapper = createChatBotWrapperWithI18n();
+    // The component mounts and then resolves the runtime config; until
+    // that promise settles, cachedConfig is null and brandName resolves
+    // to ''. Wait one tick before asserting the rendered brand element.
+    await flushPromises();
+    const heading = wrapper.find('h2.quick-help-heading');
+    expect(heading.exists()).toBe(true);
+    // The localized sentence and the brand name are both rendered as
+    // text inside the h2; a regression that emits the raw key or the
+    // raw placeholder would fail this match.
+    expect(heading.text()).toContain('How can');
+    expect(heading.text()).toContain('GENIE.AI');
+    // The brand must live in its own element so the layer can paint
+    // the gradient. <i18n-t> renders the slot template's root tag,
+    // so a regression that flattened the slot to a bare text node
+    // would fail this assertion.
+    const brand = heading.find('.brand-wordmark');
+    expect(brand.exists()).toBe(true);
+    expect(brand.text()).toBe('GENIE.AI');
+    // No placeholder leakage (the "{brandwordmark}" form would mean
+    // the slot never bound). No HTML-tag leakage (would mean the
+    // fallback path rendered).
+    expect(heading.text()).not.toMatch(/[{}]/);
+    expect(heading.text()).not.toMatch(/[<>]/);
+  });
+});

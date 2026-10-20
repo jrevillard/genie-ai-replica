@@ -8,7 +8,7 @@ module.exports = {
     '^.+\\.vue$': '@vue/vue3-jest'
   },
   transformIgnorePatterns: [
-    '/node_modules/(?!oidc-client-ts)'
+    '/node_modules/(?!oidc-client-ts|vue-i18n|@intlify/)'
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',

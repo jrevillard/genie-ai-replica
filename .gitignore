@@ -76,8 +76,9 @@ reports/
 **/reports/
 
 # Local visual-fidelity evidence (per-capture screenshots + audit JSON + NOTES).
-# Lives next to the change that produced it, never in the tree.
-artifacts/
+# Lives at the repository root, never in the tree. Anchored so it cannot
+# shadow a future `artifacts/` source directory anywhere in the tree.
+/artifacts/
 
 # bmad-loop story-track control-plane (per-machine state)
 ci-status.json

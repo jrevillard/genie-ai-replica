@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { expectRevalidated } = require('./helpers/cache-headers');
 
 // Cache-header contract for the runtime theme configuration.
 //
@@ -12,15 +13,6 @@ const { test, expect } = require('@playwright/test');
 // operators edit at runtime, which is exactly what these tests exist to catch.
 
 const IMMUTABLE_ASSET_CACHE = 'public, max-age=31536000, immutable';
-
-function expectRevalidated(response, label) {
-  expect(response.status(), `${label} should be served (HTTP 200)`).toBe(200);
-  const cacheControl = response.headers()['cache-control'] || '';
-  expect(cacheControl, `${label} must be no-cache`).toContain('no-cache');
-  expect(cacheControl, `${label} must be must-revalidate`).toContain('must-revalidate');
-  expect(cacheControl, `${label} must not be immutable`).not.toContain('immutable');
-  expect(cacheControl, `${label} must not carry a one-year max-age`).not.toContain('max-age=31536000');
-}
 
 test.describe('Runtime theme config cache headers', () => {
   test('operator-editable theme stylesheet is revalidated', async ({ request }) => {

@@ -421,6 +421,11 @@ export default {
  * competing.
  */
 .brand-name.brand-wordmark {
+  /* Sizes assume --font-scale: 1; the operator's typography.fontScale
+     scales --text-lg / --text-xl with the rest of the tokens, so the
+     wordmark scales with the rest of the navbar rather than holding a
+     fixed size. The clamp floor is the small-screen view (~16px at 1.0
+     scale = var(--text-lg); 1.6vw reaches 16px at a 1024px viewport). */
   font-family: var(--font-display);
   font-size: clamp(var(--text-lg), 1.6vw, var(--text-xl));
   font-weight: 800;

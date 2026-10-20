@@ -2369,7 +2369,13 @@ export default {
      WCAG's 24px limb for large text, so the brand ramp inside it has to
      clear 4.5:1 rather than the 3:1 large-text allowance. 20px at weight
      700 is large text, and the ramp's worst stop is 3.99:1 against the
-     white panel this viewport renders. */
+     white panel this viewport renders. Sizes assume --font-scale: 1;
+     the operator's typography.fontScale scales --text-lg with the rest
+     of the tokens, so a deployment that drops it below ~0.93 (18.66px
+     at weight 700 — the WCAG threshold above which the mark qualifies
+     as large text and gets the 3:1 allowance, below which it has to
+     clear 4.5:1 and the worst 3.99:1 stop fails) takes the
+     responsibility itself rather than getting a non-scaling floor. */
   .quick-help-heading {
     font-size: var(--text-lg);
     font-weight: 700;

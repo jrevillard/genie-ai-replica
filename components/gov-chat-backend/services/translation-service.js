@@ -16,7 +16,7 @@ const DEFAULT_BATCHES = 5;
 const intraOpNumThreads = parseInt(process.env.TRANSLATION_THREADS, 10) || DEFAULT_THREADS;
 const numParallelBatches = parseInt(process.env.TRANSLATION_BATCHES, 10) || DEFAULT_BATCHES;
 const cacheEnabled = process.env.TRANSLATION_CACHE === 'on';
-const translationBackend = process.env.TRANSLATION_BACKEND || 'auto'; // Default to auto (tries GPU, falls back to CPU)
+const translationBackend = process.env.TRANSLATION_BACKEND || 'auto'; // Default to auto (probes the GPU endpoint once, then CPU if that probe fails)
 
 // --- Get Redis cache settings from env ---
 const redisHost = process.env.TRANSLATION_CACHE_HOST || 'localhost';
@@ -88,8 +88,9 @@ class TranslationService {
     try {
       if (translationBackend === 'gpu') {
         // Force GPU backend
-        this.backend = new GpuTranslateBackend();
-        await this.backend.init();
+        const backend = new GpuTranslateBackend();
+        await backend.init();
+        this.backend = backend;
         this.backendType = 'gpu';
         logger.info('[TRANSLATION-SERVICE] GPU backend selected and initialized');
         return this.backend;
@@ -97,8 +98,9 @@ class TranslationService {
 
       if (translationBackend === 'cpu') {
         // Force CPU backend
-        this.backend = new CpuTranslateBackend();
-        await this.backend.init();
+        const backend = new CpuTranslateBackend();
+        await backend.init();
+        this.backend = backend;
         this.backendType = 'cpu';
         logger.info('[TRANSLATION-SERVICE] CPU backend selected and initialized');
         return this.backend;
@@ -106,21 +108,29 @@ class TranslationService {
 
       if (translationBackend === 'auto') {
         // `auto` is a selection policy, not a resilience one: probe the GPU
-        // once, at startup, and commit to whichever answers. The same pattern
-        // as the dataprep device resolution (`_resolve_docling_device`). A
-        // backend that dies later is a failure to report, not a reason to
-        // switch models for the rest of the process's life.
+        // once and commit to whichever answers. The same pattern as the
+        // dataprep device resolution (`_resolve_docling_device`). A backend
+        // that dies later is a failure to report, not a reason to switch
+        // models for the rest of the process's life.
+        //
+        // Each backend is assigned only after its init resolves. An instance
+        // whose worker never started is not a backend, and `selectBackend`
+        // short-circuits on `this.backend` — caching one that failed to
+        // initialise would hand it to every later request for the life of the
+        // process, with the service reporting itself ready.
         try {
           logger.info('[TRANSLATION-SERVICE] Auto mode: Probing GPU backend');
-          this.backend = new GpuTranslateBackend();
-          await this.backend.init();
+          const gpuBackend = new GpuTranslateBackend();
+          await gpuBackend.init();
+          this.backend = gpuBackend;
           this.backendType = 'gpu';
           logger.info('[TRANSLATION-SERVICE] Auto mode: GPU backend selected');
           return this.backend;
         } catch (gpuError) {
           logger.warn(`[TRANSLATION-SERVICE] Auto mode: GPU unavailable (${gpuError.message}), selecting CPU`);
-          this.backend = new CpuTranslateBackend();
-          await this.backend.init();
+          const cpuBackend = new CpuTranslateBackend();
+          await cpuBackend.init();
+          this.backend = cpuBackend;
           this.backendType = 'cpu';
           logger.info('[TRANSLATION-SERVICE] Auto mode: CPU backend selected');
           return this.backend;

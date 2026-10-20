@@ -92,7 +92,9 @@ class GpuTranslateBackend {
       logger.info('[GPU-BACKEND] Initialized successfully. vLLM service is ready.');
     } catch (error) {
       logger.error(`[GPU-BACKEND] Initialization failed: ${error.message}`);
-      // Don't throw - allow fallback to CPU backend
+      // Rethrow: this is the startup probe `auto` runs to choose a backend,
+      // and its failure is what selects the CPU model. Swallowing it would
+      // leave `auto` with a GPU backend that never answered.
       this.healthCheckPassed = false;
       throw error;
     }
@@ -298,10 +300,9 @@ class GpuTranslateBackend {
    * A budget is a ceiling, so a translation that genuinely needs more stops at
    * `max_tokens`. That is not left as a quiet shortfall: `callVllmService` and
    * `callVllmStream` reject on `finish_reason === 'length'`, so a truncated
-   * translation surfaces as a failed request — which in `auto` mode falls
-   * through to the CPU backend — rather than being accepted and cached as a
-   * shortened answer. A prompt that cannot fit at all is refused here rather
-   * than sent with an unusable budget.
+   * translation surfaces as a failed request rather than being accepted and
+   * cached as a shortened answer. A prompt that cannot fit at all is refused
+   * here rather than sent with an unusable budget.
    *
    * Re-applying after a caller has grown the messages only lowers the budget
    * further (see `translateStream`'s context window), which is what that
@@ -320,8 +321,8 @@ class GpuTranslateBackend {
     if (room < MIN_OUTPUT_BUDGET) {
       // A budget this small would earn a reply of a few tokens, which the
       // markdown path would substitute for the whole paragraph. Refuse instead:
-      // an oversized prompt is the caller's to split, and in `auto` mode the
-      // refusal routes to the CPU backend.
+      // an oversized prompt is the caller's to split, and a refusal has to
+      // stay visible rather than becoming a silently shorter answer.
       throw new Error(`Prompt leaves ${room} of ${this.maxModelLen} tokens, too little for a translation`);
     }
     const needed = 4 * inputTokens + 256;
@@ -435,8 +436,8 @@ class GpuTranslateBackend {
               if (choice && choice.finish_reason === 'length') {
                 // The model ran into the output budget instead of finishing. The
                 // caller cannot tell a short text from a truncated one, so treat
-                // it as a failed request: it falls back to the CPU backend in
-                // `auto` mode, and never reaches the translation cache.
+                // it as a failed request: it surfaces to the caller and never
+                // reaches the translation cache.
                 logger.error(
                   `[GPU-BACKEND] vLLM stopped at max_tokens=${requestBody.max_tokens} without finishing the translation`
                 );
@@ -448,7 +449,7 @@ class GpuTranslateBackend {
               if (typeof content !== 'string') {
                 // A choice with no content (null, or a tool-call shape) is not a
                 // translation. Resolving it as an empty string would blank the
-                // paragraph; rejecting routes it to the CPU backend instead.
+                // paragraph, so the request fails visibly instead.
                 reject(new Error('vLLM returned a choice with no message content'));
                 return;
               }

@@ -234,6 +234,9 @@ describe('TranslationService', () => {
     it('propagates a GPU failure instead of translating on CPU', async () => {
       withGpuBackend();
       await expect(translationService.translate(['hello'], 'en', 'fr')).rejects.toThrow('GPU OOM');
+      // The harm was the construction, not just the call: a CpuTranslateBackend
+      // spawns a worker thread and loads the NLLB model at construction time.
+      expect(CpuTranslateBackend).not.toHaveBeenCalled();
       expect(mockCpuTranslate).not.toHaveBeenCalled();
     });
 
@@ -241,7 +244,32 @@ describe('TranslationService', () => {
       withGpuBackend();
       translationService.backend.translateStream = jest.fn().mockRejectedValue(new Error('GPU OOM'));
       await expect(translationService.translateStream('hello', 'en', 'fr')).rejects.toThrow('GPU OOM');
+      expect(CpuTranslateBackend).not.toHaveBeenCalled();
       expect(mockCpuTranslate).not.toHaveBeenCalled();
+    });
+
+    it('does not leave a CPU backend behind when selectBackend fails to start one', async () => {
+      // `selectBackend` short-circuits on `this.backend`, so an instance
+      // assigned before its init rejects would be reused for the life of the
+      // process while the service reported itself ready on a dead backend.
+      setEnv('TRANSLATION_BACKEND', 'auto');
+      jest.isolateModules(() => {
+        translationService = require('../../services/translation-service');
+      });
+      // selectBackend constructs its own instances, so the failures have to be
+      // queued on the constructors rather than on an instance held here.
+      GpuTranslateBackend.mockImplementationOnce(() => ({
+        init: jest.fn().mockRejectedValue(new Error('GPU OOM')),
+        getLanguageCode: (l) => l,
+        translate: mockGpuTranslate
+      }));
+      CpuTranslateBackend.mockImplementationOnce(() => ({
+        init: jest.fn().mockRejectedValue(new Error('NLLB worker failed to start')),
+        getLanguageCode: (l) => l
+      }));
+
+      await expect(translationService.selectBackend()).rejects.toThrow('NLLB worker failed to start');
+      expect(translationService.backend).toBeNull();
     });
   });
 

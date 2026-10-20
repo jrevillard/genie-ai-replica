@@ -171,13 +171,15 @@ Shortening any of these converts a slow-but-successful call into a visible failu
   `TRANSLATION_BACKEND=auto` the backend was chosen once at startup and then
   set aside — a request that failed was silently re-translated by NLLB on CPU,
   producing a different, lower-quality translation of the same answer with
-  nothing in the output to show it. `auto` now probes once (remote translation
-  API, then local GPU, then local CPU) and stays with whichever answered, the
-  way the dataprep device is resolved at load time. **A deployment that relied
-  on the fallback will now see the affected text served in English:** the unit
-  that failed is left untranslated and the rest of the answer follows. To keep
-  the old behaviour, set `TRANSLATION_BACKEND` explicitly to the backend you
-  want and treat its failure as a real failure.
+  nothing in the output to show it. `auto` now probes the GPU translation
+  endpoint once — a remote API or the in-network service, whichever
+  `VLLM_TRANSLATION_ENDPOINT` points at — and stays with whatever answered,
+  the way the dataprep device is resolved at load time. The CPU model is
+  selected only when that startup probe itself fails. **A deployment that
+  relied on the fallback will now see the affected text served in English:**
+  the unit that failed is left untranslated and the rest of the answer
+  follows. To keep the old behaviour, set `TRANSLATION_BACKEND` explicitly to
+  the backend you want and treat its failure as a real failure.
 - **Legacy benchmark suite removed** (`tests/rag-benchmarks/{benchmark_*.py, run_benchmarks.sh}`, 2549 lines): the scripts were run-once-and-never-rerun, had no live test, and produced numbers that drifted from the rest of the eval surface. Latency and load-testing now live on the OTel trace waterfall (Grafana RAG Pipeline Trace Waterfall dashboard) — the OTel collector already captures every request with `latency` and `http.status_code` attributes, so the dashboards cover the same question without a separate harness. The site docs (`source-tree-analysis.md`) no longer mention the deleted files.
 - **Wrapper ROPC `EVAL_DEPLOY_ENV` is no longer defaulted:** the wrapper used to silently fall back to `/opt/genieai-el-salvador/.env` when the env var was unset — a stack-specific hardcode inside a script that should be generic. The wrapper now fails LOUD with `:?` and a message naming the expected `/opt/<stack>/.env` pattern (per `deploy/ansible/templates/env.j2` layout) when neither the env var nor `GENIE_ADMIN_PASSWORD` is set. The MR replaces the runbook / docs and the wrapper's "wrapper / argparse defaults" table to make the override path explicit.
 - **Per-context manual slicing heredocs removed from the root `CLAUDE.md` golden-dataset recipe:** the manual `for i in range(N): chunk = dict(gold); chunk['entries'] = gold['entries'][i::N]; open(f'/tmp/batches/gold_{i:02d}.json', 'w').write(json.dumps(chunk))` loop is gone — `run_eval.py` now slices the gold internally when `EVAL_CHUNK_SIZE` is set, and the sidecar already records per-chunk progress so a manual round-robin shell loop is no longer needed.

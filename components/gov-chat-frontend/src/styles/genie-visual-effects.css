@@ -1,0 +1,221 @@
+/*
+ * GENIE.AI — Living Intelligence visual layer.
+ *
+ * An additive decorative layer over the existing design system. The
+ * design-system tokens stay canonical; every colour here is derived from
+ * one with color-mix(), and the only literal colours are the two
+ * secondary hues the layer mixes its own tints from.
+ *
+ * Two gates, both required:
+ *   - .genie-living-intelligence scopes the layer to the dashboard route
+ *   - html[data-visual='on'] carries the deployment's own choice
+ *
+ * The asset paths are configuration, not CSS: --visual-hero and its
+ * siblings are written onto the document element by config-loader from
+ * the theme.visual block of the runtime config.
+ */
+html[data-visual='on'] .genie-living-intelligence {
+  --gli-blue: var(--accent);
+  --gli-cyan: color-mix(in oklch, var(--accent) 52%, #5de9f4);
+  --gli-violet: color-mix(in oklch, var(--accent) 50%, #b875f8);
+  --gli-frost-border: color-mix(in srgb, var(--accent) 17%, var(--border));
+  --gli-deco-strength: 0.65;
+  min-width: 0;
+  isolation: isolate;
+}
+
+html[data-theme='dark'][data-visual='on'] .genie-living-intelligence,
+html[data-visual='on'] .dark-mode .genie-living-intelligence {
+  --gli-deco-strength: 0.82;
+  --gli-frost-border: color-mix(in srgb, var(--accent) 27%, var(--border));
+}
+
+/*
+ * The card tint. --qh-bg, --qh-hover and --qh-outline come from the
+ * button's own config `styles` block; a button that declares none falls
+ * back to the accent, so a deployment without per-button tints still
+ * renders.
+ *
+ * In light mode the configured tint is a pale 50-step used almost
+ * directly; in dark mode it is mixed into the dark surface, because a
+ * literal pale background would glare against it.
+ */
+html[data-visual='on'] .genie-living-intelligence .quick-help-item {
+  --ds-card-bg: var(--qh-bg, var(--surface));
+  --ds-card-border-color: var(--qh-outline, var(--gli-frost-border));
+}
+
+html[data-visual='on'] .genie-living-intelligence .quick-help-item:hover {
+  --ds-card-bg: var(--qh-hover, var(--ds-card-bg));
+  --ds-card-border-color: color-mix(in srgb, var(--qh-outline, var(--accent)) 47%, var(--border));
+}
+
+html[data-theme='dark'][data-visual='on'] .genie-living-intelligence .quick-help-item,
+html[data-visual='on'] .dark-mode .genie-living-intelligence .quick-help-item {
+  --ds-card-bg: color-mix(in srgb, var(--qh-bg, var(--surface)) 14%, var(--surface));
+}
+
+html[data-theme='dark'][data-visual='on'] .genie-living-intelligence .quick-help-item:hover,
+html[data-visual='on'] .dark-mode .genie-living-intelligence .quick-help-item:hover {
+  --ds-card-bg: color-mix(in srgb, var(--qh-hover, var(--qh-bg, var(--surface))) 20%, var(--surface));
+}
+
+/* Keep the existing chat, data and scroll behavior intact. */
+html[data-visual='on'] .genie-living-intelligence .chatbot-container {
+  min-width: 0;
+  position: relative;
+}
+
+/*
+ * The welcome overlay. The mesh is painted on the overlay rather than
+ * on the chat window: the overlay is opaque, so anything painted on the
+ * window behind it would never be seen.
+ */
+html[data-visual='on'] .genie-living-intelligence .quick-help-overlay {
+  isolation: isolate;
+  background-image:
+    linear-gradient(180deg, transparent, color-mix(in srgb, var(--surface) 30%, transparent)), var(--visual-mesh);
+  background-position: center, center;
+  background-size:
+    cover,
+    min(900px, 100%) auto;
+  background-repeat: no-repeat;
+}
+
+html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::before {
+  content: '';
+  display: block;
+  position: relative;
+  z-index: 0;
+  flex: 0 0 auto;
+  align-self: center;
+  width: min(100%, 860px);
+  height: clamp(96px, 19vw, 218px);
+  background: var(--visual-hero) center / contain no-repeat;
+  pointer-events: none;
+  filter: drop-shadow(0 12px 25px color-mix(in srgb, var(--accent) 14%, transparent));
+  animation: gli-enter 650ms ease-out both;
+}
+
+html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: min(32%, 220px);
+  background: var(--visual-waves) bottom / 100% auto no-repeat;
+  opacity: var(--gli-deco-strength);
+  pointer-events: none;
+  z-index: -1;
+}
+
+html[data-visual='on'] .genie-living-intelligence .quick-help-content {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+html[data-visual='on'] .genie-living-intelligence .quick-help-heading {
+  font-family: var(--font-display);
+  color: var(--fg);
+  text-wrap: balance;
+  letter-spacing: -0.025em;
+}
+
+html[data-visual='on'] .genie-living-intelligence .quick-help-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* Scoped right resources sidebar; position the network out of text's way. */
+html[data-visual='on'] .genie-living-intelligence .sidebar:not(.collapsed) {
+  position: relative;
+  isolation: isolate;
+}
+
+html[data-visual='on'] .genie-living-intelligence .sidebar:not(.collapsed)::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: min(48%, 190px);
+  height: 205px;
+  background: var(--visual-corner) right top / contain no-repeat;
+  opacity: var(--gli-deco-strength);
+  pointer-events: none;
+  z-index: 0;
+}
+
+html[data-visual='on'] .genie-living-intelligence .sidebar .sidebar-header,
+html[data-visual='on'] .genie-living-intelligence .sidebar .sidebar-section {
+  position: relative;
+  z-index: 1;
+}
+
+html[data-visual='on'] .genie-living-intelligence .document-item {
+  border: 1px solid var(--gli-frost-border);
+  border-radius: var(--radius-lg);
+}
+
+@keyframes gli-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 900px) {
+  html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::before {
+    height: clamp(76px, 22vw, 160px);
+  }
+
+  html[data-visual='on'] .genie-living-intelligence .sidebar:not(.collapsed)::before {
+    width: 125px;
+    height: 140px;
+    opacity: 0.36;
+  }
+}
+
+@media (max-width: 600px) {
+  html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::before {
+    height: 90px;
+  }
+
+  html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::after {
+    opacity: 0.3;
+  }
+}
+
+/*
+ * Reduced motion.
+ *
+ * The !important is load-bearing and is the only one in this file:
+ * .quick-help-overlay::before weighs 0,2,1 and would otherwise outrank
+ * the .genie-living-intelligence *::before rule below it, so the
+ * animation would keep running. Every other rule in this layer relies
+ * on the design system's own extension points instead.
+ */
+@media (prefers-reduced-motion: reduce) {
+  html[data-visual='on'] .genie-living-intelligence *,
+  html[data-visual='on'] .genie-living-intelligence *::before,
+  html[data-visual='on'] .genie-living-intelligence *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Scoped opt-outs, for a deployment that wants the layer without a motif. */
+html[data-visual='on'] .genie-living-intelligence.gli-no-hero .quick-help-overlay::before {
+  display: none;
+}
+
+html[data-visual='on'] .genie-living-intelligence.gli-no-corner .sidebar::before {
+  display: none;
+}
+
+html[data-visual='on'] .genie-living-intelligence.gli-no-waves .quick-help-overlay::after {
+  display: none;
+}

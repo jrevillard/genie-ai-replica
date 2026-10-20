@@ -196,4 +196,82 @@ describe('loadConfig', () => {
 
     expect(result.theme.brandColor).toBe('#123456');
   });
+
+  it('marks the decorative layer off and writes no asset properties when theme.visual is absent', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ theme: { brandColor: '#ff0000' } })
+    });
+
+    await loadConfig();
+
+    expect(document.documentElement.getAttribute('data-visual')).toBeNull();
+    expect(cssPropsSet()).not.toContain('--visual-hero');
+  });
+
+  it('marks the decorative layer off when it is disabled', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ theme: { brandColor: '#ff0000', visual: { enabled: false } } })
+    });
+
+    await loadConfig();
+
+    expect(document.documentElement.getAttribute('data-visual')).toBe('off');
+  });
+
+  it('marks the decorative layer on and writes one property per known asset', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          theme: {
+            brandColor: '#ff0000',
+            visual: {
+              enabled: true,
+              assets: {
+                hero: '/config/genie-visual/assets/genie-hero-transparent.png',
+                waves: '/config/genie-visual/assets/genie-bottom-waves.svg',
+                mesh: '/config/genie-visual/assets/genie-dot-mesh.svg',
+                corner: '/config/genie-visual/assets/genie-corner-network.svg'
+              }
+            }
+          }
+        })
+    });
+
+    await loadConfig();
+
+    expect(document.documentElement.getAttribute('data-visual')).toBe('on');
+    expect(setProperty).toHaveBeenCalledWith(
+      '--visual-hero',
+      'url("/config/genie-visual/assets/genie-hero-transparent.png")'
+    );
+    expect(setProperty).toHaveBeenCalledWith(
+      '--visual-waves',
+      'url("/config/genie-visual/assets/genie-bottom-waves.svg")'
+    );
+    expect(setProperty).toHaveBeenCalledWith('--visual-mesh', 'url("/config/genie-visual/assets/genie-dot-mesh.svg")');
+    expect(setProperty).toHaveBeenCalledWith(
+      '--visual-corner',
+      'url("/config/genie-visual/assets/genie-corner-network.svg")'
+    );
+  });
+
+  it('ignores an unknown asset key instead of writing an inert property', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          theme: {
+            brandColor: '#ff0000',
+            visual: { enabled: true, assets: { heor: '/config/typo.png' } }
+          }
+        })
+    });
+
+    await loadConfig();
+
+    expect(cssPropsSet()).not.toContain('--visual-heor');
+  });
 });

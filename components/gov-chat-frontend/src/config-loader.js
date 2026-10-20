@@ -7,6 +7,11 @@
 
 import Ajv from 'ajv';
 
+// The asset keys the decorative layer knows how to use. An explicit list
+// rather than Object.entries(), so a typo in a config becomes an ignored
+// key instead of an inert --visual-<typo> property nobody can trace.
+const VISUAL_ASSET_KEYS = ['hero', 'waves', 'mesh', 'corner'];
+
 const defaults = {
   app: {
     title: 'GENIE.AI',
@@ -105,6 +110,14 @@ async function loadConfig() {
   }
   if (theme.typography?.fontScale) {
     root.style.setProperty('--font-scale', String(theme.typography.fontScale));
+  }
+
+  if (theme.visual) {
+    root.dataset.visual = theme.visual.enabled === false ? 'off' : 'on';
+    for (const key of VISUAL_ASSET_KEYS) {
+      const value = theme.visual.assets?.[key];
+      if (value) root.style.setProperty(`--visual-${key}`, `url("${value}")`);
+    }
   }
 
   // Set favicon from config if available

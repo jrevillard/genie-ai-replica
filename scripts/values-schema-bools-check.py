@@ -35,7 +35,7 @@ def boolean_leaves(values, prefix=""):
     found = set()
     if isinstance(values, dict):
         for key, value in values.items():
-            path = "%s.%s" % (prefix, key) if prefix else str(key)
+            path = f"{prefix}.{key}" if prefix else str(key)
             if isinstance(value, bool):
                 found.add(path)
             else:
@@ -49,7 +49,7 @@ def schema_boolean_leaves(schema, prefix=""):
     if not isinstance(schema, dict):
         return found
     for key, value in (schema.get("properties") or {}).items():
-        path = "%s.%s" % (prefix, key) if prefix else str(key)
+        path = f"{prefix}.{key}" if prefix else str(key)
         if not isinstance(value, dict):
             continue
         if value.get("type") == "boolean":
@@ -78,24 +78,23 @@ def main(argv):
     if missing:
         print("values.yaml booleans with no schema type constraint:")
         for path in missing:
-            print("  - %s" % path)
+            print(f"  - {path}")
     if extra:
         print("schema boolean constraints with no matching values.yaml leaf:")
         for path in extra:
-            print("  - %s" % path)
+            print(f"  - {path}")
 
     if missing or extra:
         print(
-            "\n%d missing, %d stale — Helm aborts the render on a wrongly-typed\n"
-            "boolean with a message naming a template instead of the value. Add\n"
-            "the constraint (or drop it) so the error points at the operator's\n"
-            "actual mistake." % (len(missing), len(extra))
+            f"\n{len(missing)} missing, {len(extra)} stale — Helm aborts the render "
+            "on a wrongly-typed\nboolean with a message naming a template instead "
+            "of the value. Add\nthe constraint (or drop it) so the error points at "
+            "the operator's\nactual mistake."
         )
         return 1
 
     print(
-        "values.schema.json types all %d boolean leaves of values.yaml"
-        % len(in_values)
+        f"values.schema.json types all {len(in_values)} boolean leaves of values.yaml"
     )
     return 0
 

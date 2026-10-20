@@ -117,16 +117,25 @@ spec:
           port: 8080
     {{- end }}
     {{- /* Grafana (opt-in tier). Before the SPA catch-all: /grafana
-           would otherwise be served by the frontend. The Service name is
-           pinned by spec.service.metadata.name in the Grafana CR, so this
-           backendRef and the operator agree by construction. */ -}}
+           would otherwise be served by the frontend.
+
+           The backendRef names the Service the OPERATOR creates, which
+           is `<cr-name>-service` (the Grafana CR's own status.adminUrl
+           points at it) — the same convention as Keycloak's
+           `<cr-name>-service` above. It is not configurable: the CR has
+           no field for the Service name, since spec.service.metadata
+           carries annotations and labels only and a `name` there is
+           pruned. Naming the CR instead leaves the HTTPRoute
+           unresolvable — Envoy then answers with a direct 500 and the
+           Grafana logs never see a single request, which is exactly how
+           this shipped unnoticed. */ -}}
     {{- if .Values.observability.grafana.enabled }}
     - matches:
         - path:
             type: PathPrefix
             value: /grafana
       backendRefs:
-        - name: genieai-grafana
+        - name: genieai-grafana-service
           port: 80
     {{- end }}
     {{- /* Frontend SPA catch-all. */}}

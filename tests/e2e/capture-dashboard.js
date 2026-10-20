@@ -40,13 +40,13 @@ const audit = () => {
     if (!url) return { url: null, ok: false, reason: 'not set' };
     try {
       const response = await fetch(url, { cache: 'no-store' });
-      const body = await response.text();
+      const buffer = await response.arrayBuffer();
       return {
         url,
         ok: response.ok,
         status: response.status,
         contentType: response.headers.get('content-type'),
-        bytes: body.length
+        bytes: buffer.byteLength
       };
     } catch (error) {
       return { url, ok: false, reason: error.message };

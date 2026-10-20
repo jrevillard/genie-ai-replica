@@ -53,6 +53,7 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-item:hover {
 html[data-theme='dark'][data-visual='on'] .genie-living-intelligence .quick-help-item,
 html[data-visual='on'] .dark-mode .genie-living-intelligence .quick-help-item {
   --ds-card-bg: color-mix(in srgb, var(--qh-bg, var(--surface)) 14%, var(--surface));
+  --ds-card-border-color: color-mix(in srgb, var(--qh-outline, var(--gli-frost-border)) 30%, var(--border));
 }
 
 html[data-theme='dark'][data-visual='on'] .genie-living-intelligence .quick-help-item:hover,
@@ -78,6 +79,7 @@ html[data-visual='on'] .genie-living-intelligence .chatbot-container {
  */
 html[data-visual='on'] .genie-living-intelligence .quick-help-overlay {
   isolation: isolate;
+  justify-content: flex-start;
   background-image: linear-gradient(180deg, transparent 0 28%, var(--surface) 58% 100%), var(--visual-mesh);
   background-position:
     center top,
@@ -94,10 +96,16 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::before {
   position: relative;
   z-index: 0;
   flex: 0 0 auto;
-  align-self: center;
-  width: min(100%, 920px);
+  align-self: stretch;
+  width: calc(100% + 2 * var(--space-lg));
+  margin-left: calc(-1 * var(--space-lg));
+  margin-right: calc(-1 * var(--space-lg));
+  margin-top: calc(-1 * var(--space-lg));
   height: clamp(180px, 28vw, 282px);
-  background: var(--visual-hero) center 45.7% / cover no-repeat;
+  /* The 112% scales the asset so its 1592 px visible-art band fills the box
+     width; the asset's 114 px left and 69 px right transparent margins fall
+     outside the box. */
+  background: var(--visual-hero) center 45.7% / 112% auto no-repeat;
   pointer-events: none;
   filter: drop-shadow(0 12px 30px color-mix(in srgb, var(--accent) 16%, transparent));
   animation: gli-enter 650ms ease-out both;

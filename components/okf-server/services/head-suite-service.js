@@ -920,13 +920,15 @@ async function updateSuiteRows(repoId, suiteKey, payload = {}, opts = {}) {
     const removes = Array.isArray(payload.removes) ? payload.removes : [];
     const validRow = (q) =>
       q && typeof q.query === 'string' && q.query.trim() && (q.kind === 'positive' || q.kind === 'negative');
-    // A REMOVE may target a BLANK row. Every writer today rejects blank
-    // queries, but legacy suites predate that guard and hold one — a
-    // delete gated by validRow write-locks the junk into the suite
-    // forever (live 2026-10-20: removing a blank query 400'd). Only the
-    // kind must be valid; a blank can never be added or flipped, but it
-    // MUST be deletable.
-    const validRemove = (r) => r && typeof r.query === 'string' && (r.kind === 'positive' || r.kind === 'negative');
+    // A REMOVE may target a MALFORMED row. Every writer today rejects
+    // blank queries, but legacy suites predate that guard and hold one —
+    // and the live case (2026-10-20, suite s1791908298011) held a row
+    // with NO query key at all, so the UI's delete click sent only
+    // {kind}. A delete gated by validRow write-locks the junk into the
+    // suite forever. Only the kind must be valid; a remove whose query is
+    // missing/blank matches exactly the missing/blank rows of that kind —
+    // the junk being deleted and nothing else.
+    const validRemove = (r) => r && (r.kind === 'positive' || r.kind === 'negative');
     const validUpdate = (u) =>
       u && validRow(u.match) && u.set && (u.set.kind === 'positive' || u.set.kind === 'negative');
     if (!updates.filter(validUpdate).length && !removes.filter(validRemove).length) {
@@ -969,14 +971,14 @@ async function updateSuiteRows(repoId, suiteKey, payload = {}, opts = {}) {
     //    next save and write-locked the suite).
     for (const r of removes.filter(validRemove)) {
       let matches = [];
-      // Trim BOTH sides of the match: a legacy blank row may be stored as
-      // '' or as whitespace — exact-match against the trimmed request
-      // misses the whitespace form and leaves it undeletable too. Writers
-      // always trim, so this loosens nothing for real rows.
+      // Null-safe BOTH sides of the match: a legacy junk row may lack the
+      // query key entirely, hold '', or hold whitespace — the request
+      // mirror of that (missing/blank query) matches exactly those rows of
+      // this kind, nothing else. Writers always trim real queries, so the
+      // trimmed comparison loosens nothing for legitimate rows.
+      const rq = typeof r.query === 'string' ? r.query.trim() : '';
       for (const arr of [pos, neg]) {
-        matches = matches.concat(
-          arr.filter((row) => String(row.query || '').trim() === r.query.trim() && row.kind === r.kind)
-        );
+        matches = matches.concat(arr.filter((row) => String(row.query || '').trim() === rq && row.kind === r.kind));
       }
       for (const arr of [pos, neg]) {
         for (const m of matches) {

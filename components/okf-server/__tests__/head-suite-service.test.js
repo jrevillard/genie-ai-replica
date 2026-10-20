@@ -1358,24 +1358,29 @@ describe('getSuite + updateSuiteRows (1-8f)', () => {
     expect(flipped).toMatchObject({ kind: 'negative', cls: null, source: 'manual' });
   });
 
-  it('updateSuiteRows can DELETE a blank row — legacy junk is not write-locked', async () => {
+  it('updateSuiteRows can DELETE a blank or queryless row — legacy junk is not write-locked', async () => {
     // Live 2026-10-20: removing a blank query 400'd. validRow (blank =
     // invalid) gated removes[] too, so a blank row in a legacy suite
     // could never pass the validation guarding its own deletion. Blank
-    // junk may be stored as '' OR whitespace — both must be deletable.
+    // junk may be stored as '' OR whitespace — and the actual live row
+    // (suite s1791908298011, positive[204]) had NO query key at all, so
+    // the UI's delete click sent only {kind}. All three shapes must be
+    // deletable, and a no-query remove must spare every real query.
     const suite = await seedRows();
     suite.payload.positive.push({ query: '', kind: 'positive', cls: null, source: 'llm' });
+    suite.payload.positive.push({ kind: 'positive', cls: null, lastProbe: { verdict: 'unknown' } }); // queryless — the live shape
     suite.payload.negative.push({ query: '   ', kind: 'negative', cls: null, source: 'llm' });
     __mockDb.collection('okf_head_test_runs').replace(suite._key, suite);
     const out = await svc.updateSuiteRows('me', suite._key, {
       removes: [
         { query: '', kind: 'positive' },
+        { kind: 'positive' }, // what the UI sends for a row with no query
         { query: '   ', kind: 'negative' }
       ]
     });
-    expect(out.payload.positive.every((r) => r.query.trim())).toBe(true);
-    expect(out.payload.negative.every((r) => r.query.trim())).toBe(true);
-    expect(out.payload.positive).toHaveLength(2);
+    expect(out.payload.positive.every((r) => r.query && r.query.trim())).toBe(true);
+    expect(out.payload.negative.every((r) => r.query && r.query.trim())).toBe(true);
+    expect(out.payload.positive).toHaveLength(2); // the real queries survived
     expect(out.payload.negative).toHaveLength(2);
   });
 

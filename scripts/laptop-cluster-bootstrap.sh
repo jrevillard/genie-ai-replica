@@ -32,7 +32,7 @@
 # Usage
 # -----
 #   ./scripts/laptop-cluster-bootstrap.sh \
-#     --sealed-secrets-key ~/.genieai-sealed-secrets/sealed-secrets-key.yaml \
+#     --sealed-secrets-key ~/.genieai-sealed-secrets/sealed-secrets-key.json \
 #     --flux-git-auth   ~/.genieai-sealed-secrets/flux-git-auth.json \
 #     --issuer          ~/.genieai-sealed-secrets/selfsigned-issuer.yaml
 #
@@ -160,9 +160,20 @@ if [ -n "$SEALED_KEYS_FILE" ]; then
   # it: the controller logs "Searching for existing private keys", finds
   # nothing, generates a fresh one, and every committed SealedSecret
   # fails with "no key could decrypt secret".
-  apply_clean "$SEALED_KEYS_FILE" \
-    | python3 -c 'import json,sys; d=json.load(sys.stdin); d["metadata"].setdefault("labels",{})["sealedsecrets.bitnami.com/sealed-secrets-key"]="active"; print(json.dumps(d))' \
-    | kubectl apply -f -
+  # Labelled with kubectl rather than by editing the manifest: the file
+  # may be JSON or YAML, and a json.load() stage turned a YAML key file
+  # into a JSONDecodeError — AFTER the generated keys had already been
+  # deleted a few lines up, so the cluster was left with no key at all
+  # and every committed SealedSecret undecryptable. kubectl reads both
+  # formats, so the restore does too.
+  apply_clean "$SEALED_KEYS_FILE" | kubectl apply -f -
+  # NB: a positional 'sealed-secrets-key*' argument is an exact-name
+  # selector in kubectl, not a glob — it silently matches nothing. List
+  # and filter instead, the same way the generated-key cleanup below does.
+  for key in $(kubectl -n sealed-secrets get secret -o name 2>/dev/null | grep 'sealed-secrets-key' || true); do
+    kubectl -n sealed-secrets label "${key}" \
+      sealedsecrets.bitnami.com/sealed-secrets-key=active --overwrite >/dev/null
+  done
   # The controller caches its key set at startup; a restart makes it
   # pick the restored one up deterministically.
   kubectl -n sealed-secrets rollout restart deploy/sealed-secrets-controller 2>/dev/null || true

@@ -231,6 +231,59 @@ describe('TranslationService', () => {
       expect(result).toEqual(['translated text']);
     });
 
+    it('builds the CPU fallback once and reuses it across failures', async () => {
+      // Every CPU backend instance spawns a worker thread and loads the NLLB
+      // model, and nothing terminates it — one per failed request leaks one.
+      setEnv('TRANSLATION_BACKEND', 'auto');
+      jest.isolateModules(() => {
+        translationService = require('../../services/translation-service');
+      });
+      translationService.initialized = true;
+      translationService.backendType = 'gpu';
+
+      const badGpu = new GpuTranslateBackend();
+      badGpu.translate.mockRejectedValue(new Error('GPU OOM'));
+      translationService.backend = badGpu;
+
+      const before = CpuTranslateBackend.mock.calls.length;
+      await translationService.translate(['hello'], 'en', 'fr');
+      await translationService.translate(['bonjour'], 'en', 'fr');
+      await translationService.translate(['hola'], 'en', 'fr');
+
+      expect(CpuTranslateBackend.mock.calls.length - before).toBe(1);
+    });
+
+    it('does not cache a CPU fallback whose init failed', async () => {
+      // An instance whose worker failed to start is not a fallback. Caching it
+      // would hand the same broken backend to every later failure until the
+      // process restarts.
+      setEnv('TRANSLATION_BACKEND', 'auto');
+      jest.isolateModules(() => {
+        translationService = require('../../services/translation-service');
+      });
+      translationService.initialized = true;
+      translationService.backendType = 'gpu';
+
+      const badGpu = new GpuTranslateBackend();
+      badGpu.translate.mockRejectedValue(new Error('GPU OOM'));
+      translationService.backend = badGpu;
+
+      CpuTranslateBackend.mockImplementationOnce(() => ({
+        init: jest.fn().mockRejectedValue(new Error('NLLB worker OOM')),
+        getLanguageCode: (l) => l,
+        translate: mockCpuTranslate
+      }));
+
+      const before = CpuTranslateBackend.mock.calls.length;
+      await expect(translationService.translate(['hello'], 'en', 'fr')).rejects.toThrow(
+        'Translation failed on both GPU and CPU'
+      );
+      // The retry must build a fresh backend, not reuse the broken one.
+      await translationService.translate(['hello'], 'en', 'fr');
+
+      expect(CpuTranslateBackend.mock.calls.length - before).toBe(2);
+    });
+
     it('should throw when both backends fail', async () => {
       setEnv('TRANSLATION_BACKEND', 'auto');
       jest.isolateModules(() => {

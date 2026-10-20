@@ -127,12 +127,186 @@ describe('GpuTranslateBackend streaming', () => {
       spy.mockRestore();
     });
 
-    it('keeps generous max_tokens for short input without context', async () => {
+    it('keeps a budget proportional to the input for short text without context', async () => {
       const spy = jest.spyOn(backend, 'callVllmStream').mockResolvedValue('OK');
       await backend.translateStream('Short text.', 'en', 'es', null, () => {});
       const requestBody = spy.mock.calls[0][0];
-      expect(requestBody.max_tokens).toBeGreaterThan(1000);
+      // Room is plentiful here — the budget tracks what the translation needs
+      // rather than the whole window, and still clears the prompt.
+      expect(requestBody.max_tokens).toBeGreaterThan(256);
       spy.mockRestore();
+    });
+  });
+
+  describe('formatRequest context budget', () => {
+    let capped;
+    beforeAll(() => {
+      capped = new GpuTranslateBackend();
+      capped.initialized = true;
+      capped.maxModelLen = 8192;
+    });
+
+    // Input size is estimated at 4 chars/token. Assertions are written
+    // against that estimate so the suite pins the production contract rather
+    // than re-deriving the formula.
+    const estimate = (body) => Math.ceil(JSON.stringify(body.messages).length / 4);
+
+    it('leaves room in max_tokens for the prompt it builds', () => {
+      // vLLM rejects a request whose prompt plus max_tokens exceeds the
+      // model's context window, so the output budget has to be derived from
+      // the prompt the request actually carries — not from the context length
+      // alone.
+      const unit = 'the recovery code for the migrated tenant is recorded '.repeat(12);
+      const body = capped.formatRequest('google/gemma-3-4b-it', 'en', 'fr', unit);
+      expect(body.max_tokens + estimate(body)).toBeLessThanOrEqual(capped.maxModelLen);
+    });
+
+    it('leaves room even when the estimate undercounts the prompt fourfold', () => {
+      // `chars / 4` assumes ~4 chars per token. CJK runs nearer one token per
+      // character, so the real prompt can be four times the estimate — and an
+      // over-generous budget is what turns that miscount into a rejection.
+      const cjk = '今天天气很好我们一起去公园散步吧。'.repeat(60);
+      const body = capped.formatRequest('google/gemma-3-4b-it', 'zh', 'en', cjk);
+      expect(body.max_tokens + estimate(body) * 4).toBeLessThanOrEqual(capped.maxModelLen);
+    });
+
+    it('leaves enough room to translate what it was given', () => {
+      // The ceiling must not eat into the answer: a translation runs about as
+      // long as its source, so the budget has to clear the prompt size.
+      const unit = 'the recovery code for the migrated tenant is recorded '.repeat(12);
+      const body = capped.formatRequest('google/gemma-3-4b-it', 'en', 'fr', unit);
+      expect(body.max_tokens).toBeGreaterThanOrEqual(estimate(body));
+    });
+
+    it('does not hand a short prompt the whole window', () => {
+      const body = capped.formatRequest('google/gemma-3-4b-it', 'en', 'fr', 'Bonjour.');
+      expect(body.max_tokens).toBeLessThan(capped.maxModelLen / 2);
+    });
+
+    it('refuses a prompt that cannot leave room for a translation', () => {
+      // Sending this with a minimal budget would earn a 200 with a near-empty
+      // translation, which the markdown path would substitute for the paragraph.
+      // Refusing it here routes the request to the CPU backend instead.
+      expect(() => capped.formatRequest('google/gemma-3-4b-it', 'en', 'fr', 'x'.repeat(40000))).toThrow(
+        /too little for a translation/
+      );
+    });
+
+    it('refuses when the discovered window was too small to leave room', () => {
+      // The 4096 default stays in place when /v1/models cannot be read. A prompt
+      // that nearly fills it leaves a handful of tokens — enough to pass a
+      // "does it fit at all" check, not enough to translate with.
+      const stale = new GpuTranslateBackend();
+      stale.initialized = true;
+      stale.maxModelLen = 4096;
+      expect(() => stale.formatRequest('google/gemma-3-4b-it', 'en', 'fr', 'x'.repeat(15900))).toThrow(
+        /too little for a translation/
+      );
+    });
+
+    it('refuses to size a budget for a body with no messages', () => {
+      expect(() => capped._capMaxTokens({ model: 'google/gemma-3-4b-it' })).toThrow(/no messages array/);
+    });
+  });
+
+  describe('truncation detection', () => {
+    let backend;
+    beforeAll(() => {
+      backend = new GpuTranslateBackend();
+      backend.initialized = true;
+    });
+    afterEach(() => jest.clearAllMocks());
+
+    const serveBody = (body) => {
+      const res = new EventEmitter();
+      res.statusCode = 200;
+      res.setEncoding = () => {};
+      http.request.mockImplementation((opts, cb) => {
+        const req = new EventEmitter();
+        req.write = () => {};
+        req.end = () => {};
+        process.nextTick(() => {
+          cb(res);
+          res.emit('data', JSON.stringify(body));
+          res.emit('end');
+        });
+        return req;
+      });
+    };
+
+    it('rejects a non-streaming translation that stopped at max_tokens', async () => {
+      // A budget is a ceiling: without this the caller cannot tell a short text
+      // from a cut-off one, and the shortened answer reaches the cache.
+      serveBody({
+        choices: [{ finish_reason: 'length', message: { content: 'Une traduc' } }]
+      });
+      await expect(
+        backend.callVllmService({ model: 'm', messages: [{ role: 'user', content: 'hi' }] })
+      ).rejects.toThrow(/truncated/);
+    });
+
+    it('rejects a choice carrying no content', async () => {
+      // Resolving this as an empty string would blank the paragraph: the
+      // markdown path substitutes whatever came back for the node's core.
+      serveBody({ choices: [{ finish_reason: 'content_filter', message: { content: null } }] });
+      await expect(
+        backend.callVllmService({ model: 'm', messages: [{ role: 'user', content: 'hi' }] })
+      ).rejects.toThrow(/no message content/);
+    });
+
+    it('resolves a completed non-streaming translation', async () => {
+      serveBody({
+        choices: [{ finish_reason: 'stop', message: { content: ' Hola ' } }]
+      });
+      await expect(backend.callVllmService({ model: 'm', messages: [{ role: 'user', content: 'hi' }] })).resolves.toBe(
+        'Hola'
+      );
+    });
+
+    it('rejects a stream that stopped at max_tokens', async () => {
+      const res = new EventEmitter();
+      res.statusCode = 200;
+      res.setEncoding = () => {};
+      http.request.mockImplementation((opts, cb) => {
+        const req = new EventEmitter();
+        req.write = () => {};
+        req.end = () => {};
+        process.nextTick(() => {
+          cb(res);
+          res.emit('data', 'data: {"choices":[{"delta":{"content":"Hola"}}]}\n\n');
+          res.emit('data', 'data: {"choices":[{"finish_reason":"length","delta":{}}]}\n\n');
+          res.emit('data', 'data: [DONE]\n\n');
+          res.emit('end');
+        });
+        return req;
+      });
+      await expect(backend.callVllmStream({ model: 'm', messages: [{ role: 'user', content: 'hi' }] })).rejects.toThrow(
+        /truncated/
+      );
+    });
+
+    it('rejects a stream that produced no content', async () => {
+      // A refusal or a moderation block answers 200 with no deltas. Resolving
+      // the empty string would let the markdown path substitute it for the
+      // paragraph, so the stream rejects like the non-streaming path does.
+      const res = new EventEmitter();
+      res.statusCode = 200;
+      res.setEncoding = () => {};
+      http.request.mockImplementation((opts, cb) => {
+        const req = new EventEmitter();
+        req.write = () => {};
+        req.end = () => {};
+        process.nextTick(() => {
+          cb(res);
+          res.emit('data', 'data: {"choices":[{"finish_reason":"content_filter","delta":{}}]}\n\n');
+          res.emit('data', 'data: [DONE]\n\n');
+          res.emit('end');
+        });
+        return req;
+      });
+      await expect(backend.callVllmStream({ model: 'm', messages: [{ role: 'user', content: 'hi' }] })).rejects.toThrow(
+        /no content/
+      );
     });
   });
 

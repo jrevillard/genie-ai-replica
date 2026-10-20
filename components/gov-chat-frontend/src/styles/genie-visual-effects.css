@@ -3,11 +3,11 @@
  *
  * An additive decorative layer over the existing design system. The
  * design-system tokens stay canonical; every colour here is derived from
- * one with color-mix(). The literal colours are eight brand hues, all
- * declared below: the two secondary hues the layer mixes its own tints
- * from, and the two three-stop brand-wordmark ramps. The navbar's ramp
- * is the themed one tinted towards white with color-mix(), so it adds no
- * literal of its own.
+ * one with color-mix(). The literal colours are eight chromatic brand
+ * hues, all declared below: the two secondary hues the layer mixes its
+ * own tints from, and the two three-stop brand-wordmark ramps. The only
+ * other literal is white, which is a neutral rather than a hue and is
+ * used once, for the dark navbar's wordmark.
  *
  * Two gates, both required:
  *   - .genie-living-intelligence scopes the layer to the dashboard route
@@ -179,33 +179,45 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-item:focus-visible
   outline-offset: 3px;
 }
 
-/* Scoped right resources sidebar; position the network out of text's way. */
-html[data-visual='on'] .genie-living-intelligence .sidebar:not(.collapsed) {
-  position: relative;
-  isolation: isolate;
-}
+/*
+ * Scoped right resources sidebar; position the network out of text's way.
+ *
+ * Gated on the sidebar's own breakpoint. SideBarComponent declares
+ * `max-width: 768px` -> `position: fixed` and `min-width: 768px` ->
+ * `position: relative`; both match at exactly 768 and the fixed one wins,
+ * so the in-flow branch the layer can safely rely on starts at 769. The
+ * layer's selector is specific enough to outrank those rules, so leaving
+ * the gate out gives the panel an in-flow column at narrow widths and
+ * squeezes .chatbot-container to zero.
+ */
+@media screen and (min-width: 769px) {
+  html[data-visual='on'] .genie-living-intelligence .sidebar:not(.collapsed) {
+    position: relative;
+    isolation: isolate;
+  }
 
-html[data-visual='on'] .genie-living-intelligence .sidebar:not(.collapsed)::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: 0;
-  /* `contain` fits the whole viewBox, and this asset paints only its
-     right 49 % and top 88 %. A 190x205 box therefore showed 64 px of
-     artwork; 300x420 shows 131 px, close to the ~160 px the approved
-     mockup gives it, and keeps the painted band inside the box. */
-  width: min(78%, 300px);
-  height: 420px;
-  background: var(--visual-corner) right top / contain no-repeat;
-  opacity: var(--gli-corner-strength);
-  pointer-events: none;
-  z-index: 0;
-}
+  html[data-visual='on'] .genie-living-intelligence .sidebar:not(.collapsed)::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    /* `contain` fits the whole viewBox, and this asset paints only its
+       right 49 % and top 88 %. A 190x205 box therefore showed 64 px of
+       artwork; 300x420 shows 131 px, close to the ~160 px the approved
+       mockup gives it, and keeps the painted band inside the box. */
+    width: min(78%, 300px);
+    height: 420px;
+    background: var(--visual-corner) right top / contain no-repeat;
+    opacity: var(--gli-corner-strength);
+    pointer-events: none;
+    z-index: 0;
+  }
 
-html[data-visual='on'] .genie-living-intelligence .sidebar .sidebar-header,
-html[data-visual='on'] .genie-living-intelligence .sidebar .sidebar-section {
-  position: relative;
-  z-index: 1;
+  html[data-visual='on'] .genie-living-intelligence .sidebar .sidebar-header,
+  html[data-visual='on'] .genie-living-intelligence .sidebar .sidebar-section {
+    position: relative;
+    z-index: 1;
+  }
 }
 
 html[data-visual='on'] .genie-living-intelligence .document-item {
@@ -228,7 +240,9 @@ html[data-visual='on'] .genie-living-intelligence .document-item {
   html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::before {
     height: clamp(140px, 30vw, 230px);
   }
+}
 
+@media screen and (min-width: 769px) and (max-width: 900px) {
   html[data-visual='on'] .genie-living-intelligence .sidebar:not(.collapsed)::before {
     width: 150px;
     height: 230px;
@@ -284,16 +298,11 @@ html[data-visual='on'] .genie-living-intelligence.gli-no-waves .quick-help-overl
  * switched off. Both call sites pass the brand through as a slot, so
  * the name is rendered as text and stays selectable and translatable.
  *
- * Two grounds, two ramps. The heading's mark sits on the panel surface,
- * which is pale in light and deep navy in dark, so its ramp is themed.
- * The navbar's mark sits on --navbar-bg, which config-loader writes once
- * from theme.navbar.background and never re-derives per theme: that band
- * is a saturated gradient in both themes, so the mark on it has to be
- * light in both, and the navbar ramp tints the themed one towards white
- * until it clears 3.3:1 against the band's violet end. The approved
- * mockup sidesteps this by giving its light navbar a pale band; the
- * navbar's own controls are pinned to --accent-fg, the brand colour
- * lightened, so a pale band is not available here.
+ * Two grounds, two ramps. The heading's mark sits on the panel surface
+ * and the navbar's on --navbar-bg; both are themed, so the pair follows
+ * the theme rather than the decoration switch. They differ only in dark,
+ * where the mockup paints the navbar name plain white and the heading's
+ * brand in a lifted ramp.
  *
  * background-clip: text is what keeps the mark resolution-independent -
  * it is live type, not an image, so it re-rasterises at any zoom. The
@@ -305,9 +314,11 @@ html[data-visual='on'] .genie-living-intelligence.gli-no-waves .quick-help-overl
   --brand-mark-mid: #755cf8;
   --brand-mark-to: #a036f7;
 
-  --brand-mark-navbar-from: color-mix(in oklch, var(--brand-mark-from) 40%, white);
-  --brand-mark-navbar-mid: color-mix(in oklch, var(--brand-mark-mid) 40%, white);
-  --brand-mark-navbar-to: color-mix(in oklch, var(--brand-mark-to) 40%, white);
+  /* On the light navbar's pale wash the mockup's dark ramp is legible
+     again, so the navbar takes the same one the heading does. */
+  --brand-mark-navbar-from: var(--brand-mark-from);
+  --brand-mark-navbar-mid: var(--brand-mark-mid);
+  --brand-mark-navbar-to: var(--brand-mark-to);
 }
 
 /*
@@ -323,6 +334,13 @@ body.dark-mode {
   --brand-mark-from: #58bcff;
   --brand-mark-mid: #a48bff;
   --brand-mark-to: #ec82ff;
+
+  /* The dark navbar is the brand itself, and the mockup paints its name
+     plain white there rather than in the heading's ramp — the heading's
+     ramp reaches only 2.2-2.4:1 against that band. */
+  --brand-mark-navbar-from: #ffffff;
+  --brand-mark-navbar-mid: #ffffff;
+  --brand-mark-navbar-to: #ffffff;
 }
 
 .brand-wordmark {
@@ -346,8 +364,7 @@ body.dark-mode {
     var(--brand-mark-navbar-mid) 62%,
     var(--brand-mark-navbar-to) 100%
   );
-  /* The band is saturated, so the no-background-clip fallback is the
-     navbar's own foreground rather than the accent, which is what the
-     heading on the panel surface wants. */
+  /* The navbar's own ink, which is the brand darkened in light and the
+     brand lightened in dark — the accent is wrong on both bands. */
   color: var(--navbar-fg, var(--accent-fg));
 }

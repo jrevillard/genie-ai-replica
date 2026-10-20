@@ -305,9 +305,6 @@
   },
   "theme": {
     "brandColor": "#4071cb",
-    "navbar": {
-      "background": "linear-gradient(90deg, #2b6bd5 0%, #a036f7 100%)"
-    },
     "visual": {
       "enabled": true,
       "assets": {

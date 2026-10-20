@@ -361,8 +361,14 @@ export default {
   position: relative;
 }
 
-/* Navbar styling — flat solid accent background (tech-utility direction) */
+/* Navbar styling — a brand-tinted band, pale in light and saturated in dark */
 .nav-bar {
+  /* Several controls in here — the ghost buttons and the language select
+     among them — read --accent-fg, which is the app-wide ink for the page
+     surface, not for this band. Rebinding it once to the navbar's own token
+     is what keeps them readable when the band changes value; without it the
+     bar inherits one theme's ink and paints the other's. */
+  --accent-fg: var(--navbar-fg);
   display: flex;
   align-items: center;
   background: var(--navbar-bg, var(--accent));

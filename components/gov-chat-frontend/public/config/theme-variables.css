@@ -31,9 +31,14 @@
   --accent-fg: oklch(from var(--brand) min(calc(l + 0.56), 0.98) calc(c * 0.1) h);
   --accent-secondary: oklch(from var(--brand) max(calc(l - 0.07), 0.05) c calc(h + 0));
 
-  /* --- Navbar (defaults to brand, overridable via config) --- */
-  --navbar-bg: var(--brand);
-  --navbar-fg: oklch(from var(--brand) min(calc(l + 0.56), 0.98) calc(c * 0.1) h);
+  /* --- Navbar (light: a pale wash of the brand, overridable via config) ---
+     The bar is a tinted plane, not a brand-coloured slab: its lightness
+     and chroma are the light surface's, its hue is the deployment's, so a
+     flavour keeps its own colour. The ink is the brand darkened, the same
+     expression the dark block uses, which is what keeps the bar's controls
+     readable at both ends of the theme. */
+  --navbar-bg: oklch(from var(--brand) 0.94 0.04 h);
+  --navbar-fg: oklch(from var(--brand) max(calc(l - 0.32), 0.1) c h);
 
   /* --- Semantic status --- */
   --success: #10b981;
@@ -136,8 +141,14 @@ body[data-theme='dark'],
   --accent-fg: oklch(from var(--brand) max(calc(l - 0.32), 0.1) c h);
   --accent-secondary: oklch(from var(--brand) max(calc(l + 0.1), 0.05) c calc(h + 0));
 
-  /* --- Navbar (dark mode) --- */
-  --navbar-fg: oklch(from var(--brand) max(calc(l - 0.32), 0.1) c h);
+  /* --- Navbar (dark mode) ---
+     Re-asserted rather than inherited: the light default is a pale wash, so
+     dark has to name the brand outright to get the saturated bar. The ink
+     is the brand lightened, the mirror of the light block's darkened one —
+     the bar is saturated here, so its ink has to be pale, and pairing a
+     saturated bar with a darkened ink leaves every control at ~2:1. */
+  --navbar-bg: var(--brand);
+  --navbar-fg: oklch(from var(--brand) min(calc(l + 0.56), 0.98) calc(c * 0.1) h);
 
   /* --- Semantic surfaces (brand-tinted) --- */
   --bg-tertiary: oklch(from var(--brand) 0.19 calc(c * 0.2) h);
@@ -195,7 +206,8 @@ body[data-theme='dark'],
     --accent-fg: oklch(from var(--brand) max(calc(l - 0.32), 0.1) c h);
     --accent-secondary: oklch(from var(--brand) max(calc(l + 0.1), 0.05) c calc(h + 0));
 
-    --navbar-fg: oklch(from var(--brand) max(calc(l - 0.32), 0.1) c h);
+    --navbar-bg: var(--brand);
+    --navbar-fg: oklch(from var(--brand) min(calc(l + 0.56), 0.98) calc(c * 0.1) h);
 
     --bg-tertiary: oklch(from var(--brand) 0.19 calc(c * 0.2) h);
     --bg-sidebar: oklch(from var(--brand) 0.16 calc(c * 0.22) h);

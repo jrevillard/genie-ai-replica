@@ -23,11 +23,16 @@ const { loginViaUI } = require('./helpers/chatbot');
 
 const BASE_URL = process.env.BASE_URL || 'https://localhost';
 const OUT_DIR = path.join(__dirname, '..', '..', 'artifacts', 'living-intelligence');
-// Two viewports: 1775×886 is the reference, 1920×960 is what the user sees
-// in production (the welcome banner's full-bleed needs to hold at both).
+// Four viewports: 1775×886 is the reference and 1920×960 is what the user
+// sees in production, so the welcome banner's full-bleed is proven at both;
+// 1280×720 is the laptop the deployment is also looked at on, and
+// 768×1024 is the narrow layout where the layer's two media queries take
+// over and the card grid drops to fewer columns.
 const VIEWPORTS = [
   { label: '1775', width: 1775, height: 886 },
-  { label: '1920', width: 1920, height: 960 }
+  { label: '1920', width: 1920, height: 960 },
+  { label: '1280', width: 1280, height: 720 },
+  { label: '768', width: 768, height: 1024 }
 ];
 const THEMES = process.argv.includes('--theme')
   ? [process.argv[process.argv.indexOf('--theme') + 1]]
@@ -103,6 +108,21 @@ const audit = () => {
     const subtitle = document.querySelector('.quick-help-subtitle');
     const brandName = document.querySelector('.brand-name');
 
+    // The navbar's controls do not all read --navbar-fg: several are pinned
+    // to --accent-fg, which is a different token. Recording the computed ink
+    // of one of each is what proves the bar stays readable when the band
+    // changes value, rather than only proving the band did.
+    const inkOf = (el) => (el ? getComputedStyle(el).color : null);
+    const navBar = document.querySelector('.nav-bar');
+    const navBarInk = navBar
+      ? {
+          bar: inkOf(navBar),
+          brandName: inkOf(brandName),
+          iconButton: inkOf(navBar.querySelector('.icon-btn')),
+          languageSelect: inkOf(navBar.querySelector('.language-select-container'))
+        }
+      : null;
+
     // The wordmark appears twice — the navbar name and the brand inside the
     // welcome heading — and only for the GENIE.AI brand. Every occurrence is
     // recorded, so a regression at either call site shows up as a shorter list
@@ -129,6 +149,7 @@ const audit = () => {
       resolved: {
         visualHero: readUrl('--visual-hero'),
         navbarBg: rootStyle.getPropertyValue('--navbar-bg').trim(),
+        navbarFg: rootStyle.getPropertyValue('--navbar-fg').trim(),
         brandMarkFrom: rootStyle.getPropertyValue('--brand-mark-from').trim(),
         brandMarkMid: rootStyle.getPropertyValue('--brand-mark-mid').trim(),
         brandMarkTo: rootStyle.getPropertyValue('--brand-mark-to').trim(),
@@ -166,6 +187,7 @@ const audit = () => {
           }
         : null,
       navBar: surface('.nav-bar'),
+      navBarInk,
       brandName: brandName
         ? {
             text: brandName.textContent.trim(),
@@ -175,7 +197,18 @@ const audit = () => {
         : null,
       wordmarks,
       wordmarkCount: wordmarks.length,
-      heading: heading ? { tag: heading.tagName, text: heading.textContent.trim() } : null,
+      // A locale that regressed to element tags would leak "<brandwordmark>"
+      // into the heading's text, and a broken placeholder would leak
+      // "{brandwordmark}". Both reach assistive technology as text, so the
+      // audit records the leak explicitly rather than leaving it to the eye.
+      heading: heading
+        ? {
+            tag: heading.tagName,
+            text: heading.textContent.trim(),
+            brandSlotCount: heading.querySelectorAll('.brand-wordmark').length,
+            leakedMarkup: /[<>{}]/.test(heading.textContent)
+          }
+        : null,
       subtitle: subtitle ? { text: subtitle.textContent.trim(), fontSize: getComputedStyle(subtitle).fontSize } : null,
       cards,
       cardCount: cards.length

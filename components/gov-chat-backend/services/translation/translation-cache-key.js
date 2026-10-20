@@ -23,8 +23,13 @@
  * @param {string} modelId - translation model id (e.g. 'google/gemma-3-4b-it')
  * @returns {string} Redis key
  */
-// Bump on any translation-logic change. 1 = edge-preservation + run-in normalize.
-const TRANSLATION_LOGIC_VERSION = '1';
+// Bump on any translation-logic change. 1 = edge-preservation + run-in
+// normalize. 2 = GPU output budget sized from the prompt instead of the whole
+// context window (MR !576) — the entries cached before it hold translations
+// produced under the old budget, including CPU/NLLB text written under the GPU
+// model id when a GPU request was rejected and fell back. The key embeds the
+// model id of the *primary* backend, so nothing else invalidates them.
+const TRANSLATION_LOGIC_VERSION = '2';
 
 function translationCacheKey(docHash, targetLang, modelId) {
   return `translation:${docHash}:${targetLang}:${modelId || 'unknown'}:${TRANSLATION_LOGIC_VERSION}`;

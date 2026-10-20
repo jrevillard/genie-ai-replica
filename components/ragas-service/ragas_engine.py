@@ -1153,6 +1153,14 @@ def _resolve_distribution(
                 f"bad query_distribution entry {spec}; synthesizer must be one of {sorted(factory)} with weight > 0"
             )
         out.append((_TolerantSynthesizer(cls(llm=llm), cancel_event, on_sample), weight))
+    # Normalize PERCENT-style weights (live 2026-10-20: the panel's inputs
+    # are 0-100 — 50/25/25 — and ragas's calculate_split_values does
+    # ceil(N x weight) with NO normalization, so a 100-question run with
+    # those weights generated 10,000 samples, 100x the requested suite).
+    # Fraction-style distributions (sum <= 1) pass through unchanged.
+    total = sum(w for _, w in out)
+    if total > 1.0 + 1e-9:
+        out = [(s, w / total) for s, w in out]
     return out
 
 

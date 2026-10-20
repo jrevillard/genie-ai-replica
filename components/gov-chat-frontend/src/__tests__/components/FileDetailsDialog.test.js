@@ -1574,3 +1574,26 @@ describe('FileDetailsDialog', () => {
     });
   });
 });
+
+describe('metadata editability on a degraded document', () => {
+  const withStatus = (status) => {
+    const wrapper = createFileDetailsDialogWrapper();
+    wrapper.setData({ file: { _key: 'f1', file_name: 'f1.pdf', labels: [], dataprep: { status } } });
+    return wrapper;
+  };
+
+  it('locks the metadata form once a document is ingested', () => {
+    expect(withStatus('Ingested').vm.isMetadataEditable).toBe(false);
+  });
+
+  it('locks it too for a degraded document, which nothing produced before', () => {
+    // A PATCH on an indexed document reindexes nothing: the chunks in the graph
+    // keep the labels they were indexed with. So "Metadata updated
+    // successfully" on one is a lie the admin has no way to see through.
+    expect(withStatus('Ingested with Warnings').vm.isMetadataEditable).toBe(false);
+  });
+
+  it('still allows editing while a document is only pending', () => {
+    expect(withStatus('Pending').vm.isMetadataEditable).toBe(true);
+  });
+});

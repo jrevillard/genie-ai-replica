@@ -7,6 +7,7 @@ import fcntl  # Added for file locking
 import json
 import os
 import re
+import time
 from contextlib import suppress
 from typing import Any
 
@@ -14,7 +15,15 @@ import aiohttp
 from opentelemetry import propagate
 
 from core.model_cache import get_model_id
-from core.model_http_policy import AIOHTTP_CONNECT_TIMEOUT_SECONDS, CONTROL_PLANE_TIMEOUT_SECONDS
+from core.model_http_policy import (
+    AIOHTTP_CONNECT_TIMEOUT_SECONDS,
+    CONTROL_PLANE_TIMEOUT_SECONDS,
+    LLM_MAX_RETRIES,
+    LLM_TIMEOUT_SECONDS,
+    http_timeout,
+    positive_float_env,
+)
+from core.span_attrs import ATTRIBUTE_NAMES
 from tracing import (
     background_span,
     get_meter,
@@ -111,6 +120,39 @@ def _overflow_message_from_exc(exc: BaseException) -> str:
     return " ".join(parts).lower()
 
 
+# Class-name fragments of the timeout exceptions the model-endpoint clients
+# raise: openai's APITimeoutError (its own class plus the httpx one it wraps),
+# httpx's TimeoutException, and aiohttp's ServerTimeoutError / asyncio's
+# TimeoutError. Matched on the class name rather than by importing the
+# libraries, so the classifier keeps working when one of them is absent — the
+# same reason _is_vllm_input_overflow inspects the message instead.
+_TIMEOUT_CLASS_MARKERS = ("Timeout",)
+
+
+def _is_timeout(exc: BaseException) -> bool:
+    """True if `exc` is a request timeout rather than any other failure.
+
+    Worth separating from the generic handler because it is the failure the
+    HTTP budget produces on purpose: a timeout means the model endpoint did not
+    answer within its allowance, which points at GPU contention and at a budget
+    that may need raising. A 500 or a JSON parse failure means something else
+    entirely, and conflating the two makes a saturated GPU look like a broken
+    prompt.
+
+    Walks the ``__cause__`` chain so a timeout wrapped by a client-specific
+    wrapper is still recognised.
+    """
+    seen = 0
+    cur: BaseException | None = exc
+    while cur is not None and seen < 10:
+        name = type(cur).__name__
+        if any(marker in name for marker in _TIMEOUT_CLASS_MARKERS):
+            return True
+        cur = cur.__cause__ or cur.__context__
+        seen += 1
+    return False
+
+
 def _is_vllm_input_overflow(exc: BaseException) -> bool:
     """True if `exc` represents a vLLM context-length rejection; False otherwise.
 
@@ -134,6 +176,43 @@ _dataprep_input_too_long_total = get_meter().create_counter(
         "silent-truncation regressions before they cascade into user-visible failure."
     ),
 )
+
+# Degradation counters. Every LLM phase here has a fallback that produces a
+# usable document without the model, which is a feature for availability and a
+# trap for observability: a document can end up labeled entirely from file
+# labels while every log line looks like a success. These counters are the only
+# way to see the degradation happen, since the fallback is a normal return path.
+_meter = get_meter()
+
+_dataprep_phase_budget_exhausted_total = _meter.create_counter(
+    "rag.dataprep.phase_budget_exhausted",
+    description=(
+        "LLM phases abandoned because they exceeded DATAPREP_LLM_PHASE_TIMEOUT_SECONDS. "
+        "The ingest continued on the phase's fallback, so this counts degraded "
+        "documents, not failed ones. A non-zero rate on a healthy GPU means the "
+        "per-request budget is too tight for the phase, not that the GPU is busy."
+    ),
+)
+
+_llm_fallback_total = _meter.create_counter(
+    "rag.dataprep.llm_fallback",
+    description=(
+        "LLM labeling/context batches that fell back to a cheaper path (per-chunk "
+        "call, file labels, or raw chunk). Counts degradation events across both "
+        "the per-batch and whole-phase paths, which the ingestion log alone cannot "
+        "distinguish from ordinary progress. Correlates with phase_budget_exhausted "
+        "via the same 'phase' label — both use PHASE_LABEL_*."
+    ),
+)
+
+# Metric label vocabulary. Both counters stamp these slugs, so a query joining
+# "how often did a phase blow its budget" to "how many batches fell back"
+# correlates on one value set. The human-readable stage name that goes into the
+# ingestion log is a separate argument — an operator-facing string has no
+# business being a metrics dimension, and a display name reused as a label
+# splits the join the moment one of them is reworded.
+PHASE_LABEL_LABELING = "labeling"
+PHASE_LABEL_CONTEXTUAL = "contextual"
 
 # Import exceptions for robust error handling
 # Import Parent Class
@@ -203,6 +282,234 @@ LABEL_LLM_BATCH_SIZE = max(1, int(os.getenv("DATAPREP_LLM_LABEL_BATCH_SIZE", "4"
 # format adherence (clean JSON) for a classification task; correct default for
 # every instruction model. Tunable per model if ever needed.
 LLM_LABEL_TEMPERATURE = float(os.getenv("DATAPREP_LLM_TEMPERATURE", "0.0"))
+
+# --- Phase budgets -------------------------------------------------------
+#
+# The per-request budget (core/model_http_policy.py) bounds one HTTP call. This
+# bounds the *phase* — every batch of that phase together. Both are needed:
+# a phase with no bound is what turns a slow GPU into an unbounded stall, since
+# a batch that fails only frees its slot after its own retry ladder finishes.
+#
+# A phase that exhausts its budget does not fail the ingest. Labeling degrades
+# to file labels and Contextual Retrieval degrades to the raw chunk, which is
+# exactly what a single batch failure already does — the phase bound only
+# decides how long the document waits before taking the same path.
+#
+# Sized against what one *batch task* can occupy, because the unit the phase
+# cancels is `_llm_suggest_labels` / the contextual equivalent, not an HTTP call.
+# That task holds its semaphore slot across the batched call AND the per-chunk
+# fallback it performs itself, so the ladder composes rather than picking one:
+#
+#   one batched HTTP call  (1 + LLM_MAX_RETRIES) x 180 =  540 s   no overlay loop
+#   one per-chunk call      3 x (1 + LLM_MAX_RETRIES) x 180 = 1620 s  3 attempts
+#   one batch task          540 + LABEL_LLM_BATCH_SIZE x 1620 = 7020 s at defaults
+#   one WAVE of the document 4 x 180 = 720 s  — the reference 260-chunk document
+#                                   runs 65 batches at concurrency 20
+#
+# The ceiling is spent over WAVES, not over one batch, and that is the
+# arithmetic that actually binds. A 260-chunk document is 65 batches at
+# concurrency 20 = 4 sequential waves, so even with every call inside its own
+# budget the phase needs 4 x 180 = 720 s. A 600 s ceiling put the break-even
+# per-call latency at 150 s — inside the 180 s budget — so a shared GPU
+# answering a batched call in 160 s would degrade EVERY such document to file
+# labels, permanently, while each individual call was well within its budget.
+# That is the topology this MR exists for, so 900 s is the default. It is not
+# four waves of EXHAUSTED ladders — those cost (1 + 2) x 180 = 540 s each, so
+# 900 s absorbs about one and two thirds. What it clears is four waves of calls
+# that each sit at their full per-request budget, which is the case that
+# degrades a document whose calls all technically succeeded. A call that
+# genuinely exhausts its ladder still gets cut, and that is the signal the bound
+# is for.
+#
+# It remains roughly an eighth of one batch task (7020 s at the defaults), so
+# no per-request budget can stop a runaway batch task — which is why the phase
+# bound exists at all: it fires while a straggler is still inside its own
+# ladder, so the document degrades at 900 s instead of at an unbounded time.
+#
+# It is a whole-phase ceiling, not a per-wave allowance: a 260-chunk document
+# runs 65 batches in 4 waves of MAX_CONCURRENT_BATCHES, and all of them plus the
+# queueing share the 900 s. A document large enough that its labelling would
+# legitimately take longer is degraded — the phase does not scale its budget
+# with the batch count. That is a deliberate ceiling, not an oversight: an
+# unbounded budget is what produced the stall this replaces, and the
+# degradation is visible (a WARN naming the phase, an `Ingested with Warnings`
+# status, a phase_budget_exhausted counter) rather than silent.
+#
+# THE CONSTRAINT — two of them, and the second is the one that usually binds:
+#   waves  x LLM_TIMEOUT_SECONDS  — 4 x 180 = 720 s at the defaults, against a
+#                                    900 s ceiling, a 180 s margin;
+#   ladder  (1 + LLM_MAX_RETRIES) x LLM_TIMEOUT_SECONDS  — 3 x 180 = 540 s,
+#                                    comfortably under, and NOT what binds.
+#                                    (720 s is the WAVE term above; the two are
+#                                    different numbers that look alike.)
+# Both are checked at import against the reference document rather than left to
+# prose in four files an operator may not be reading, because the degradation is
+# indistinguishable from a labelling-quality regression. Raising the per-call
+# budget for a slower model DOES cross one: 300 s per call is 4 x 300 = 1200 s
+# of waves, over the ceiling.
+DATAPREP_LLM_PHASE_TIMEOUT_SECONDS = positive_float_env("DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", default=900.0)
+
+# Why a phase degraded. A phase can stop early for reasons that have DIFFERENT
+# fixes — an expired budget is fixed by raising the budget, a vLLM client that
+# will not build is fixed by fixing the endpoint — so the phases report a reason
+# string and the operator is told which knob applies. A bare boolean produced a
+# message that named the budget for both, sending the operator to raise a knob
+# that could not help. See _apply_contextualization.
+#
+# Sentinels, not free text: each one is the prefix of the reason the phase
+# reports and keys its remedy in DEGRADED_REMEDIES. A reason carries detail its
+# sentinel does not (the client-init error, how many chunks fell back), which is
+# why causes are matched by prefix — see _degraded_cause.
+DEGRADED_PHASE_BUDGET = "the phase ran out of its wall-clock budget with work unfinished"
+DEGRADED_CLIENT_UNAVAILABLE = "the vLLM client could not be built"
+DEGRADED_NO_CONTEXTS = "context generation returned nothing usable for any chunk"
+DEGRADED_NO_LABELS = "the labelling model returned no labels for any chunk"
+
+# The complete set, in one place, rather than a tuple written into the matcher.
+# A sentinel missing from THIS list is invisible to _degraded_cause, which then
+# falls through to reporting the reason verbatim — no remedy, silently. Keeping
+# the roster here makes that a difference a test can assert on equality, instead
+# of two lists that can drift apart with nothing to notice.
+DEGRADED_CAUSES = (
+    DEGRADED_PHASE_BUDGET,
+    DEGRADED_CLIENT_UNAVAILABLE,
+    DEGRADED_NO_CONTEXTS,
+    DEGRADED_NO_LABELS,
+)
+
+
+def _degraded_cause(reason: str) -> str:
+    """The sentinel *reason* belongs to, or *reason* itself when unknown.
+
+    Prefix-matched because a phase appends its own detail to the sentinel: the
+    client-init error text, and the ``0/N`` counts on the two that can produce
+    nothing. Equality would only ever match a bare reason and quietly classify
+    the decorated ones as unrecognised, which is the state that produced a
+    remedy naming the wrong knob.
+
+    An unrecognised reason falls through to itself so an unmapped cause is
+    reported verbatim rather than filed under a cause that does not describe it.
+    """
+    for sentinel in DEGRADED_CAUSES:
+        if reason.startswith(sentinel):
+            return sentinel
+    return reason
+
+
+# What to tell the operator for each cause, keyed by its sentinel. Kept beside
+# the sentinels rather than inlined at the call site so that adding a cause
+# forces a decision about its remedy: a cause with no entry is reported verbatim
+# with no remedy, which is visible, instead of inheriting a diagnosis about
+# budgets or endpoints that may not apply to it.
+#
+# Every non-budget remedy says raising a budget will not help. That is the whole
+# reason the causes are distinguished — an operator told to raise a ceiling for
+# an endpoint that is down re-ingests into the identical failure.
+DEGRADED_REMEDIES = {
+    DEGRADED_PHASE_BUDGET: (
+        "{phase}: the phase budget ran out after {seconds:g}s, so the batches still running were "
+        "abandoned and fell back per chunk. Raise DATAPREP_LLM_PHASE_TIMEOUT_SECONDS, or the per-call "
+        "MODEL_LLM_TIMEOUT_SECONDS together with it."
+    ),
+    DEGRADED_CLIENT_UNAVAILABLE: (
+        "{phase}: the vLLM client could not be built. Raising a budget will not help — check "
+        "VLLM_ENDPOINT and the configured model id."
+    ),
+    DEGRADED_NO_CONTEXTS: (
+        "{phase}: every chunk came back without a generated context. Raising a budget will not help — "
+        "the endpoint must be reachable and the model must support guided JSON "
+        "(response_format=json_object)."
+    ),
+    DEGRADED_NO_LABELS: (
+        "{phase}: every chunk fell back to the document's own labels — none, if the document has none — "
+        "because the model returned nothing usable. Raising a budget will not help — the endpoint must "
+        "be reachable and the model must support guided JSON (response_format=json_object)."
+    ),
+}
+
+# Document size the wave arithmetic above is stated for: the one in the incident
+# report. Raising the ceiling is the fix for a larger document; this only makes
+# the startup check speak about a concrete case instead of an abstract one.
+_PHASE_REFERENCE_CHUNKS = 260
+
+
+# Worst case for one batched call: every attempt at the full per-request budget.
+def _one_batched_call_worst_case(retries: int, per_call_seconds: float) -> float:
+    return (1 + retries) * per_call_seconds
+
+
+def _phase_waves_for_reference_document(chunks: int | None = None) -> int:
+    """Waves the reference document costs at the configured concurrency.
+
+    ``_PHASE_REFERENCE_CHUNKS`` is the size of the document in the incident
+    report. It is a reference, not a limit: the real count depends on the
+    document being ingested, so this only says whether the SHIPPED default
+    survives a document of that size with every call at its full budget.
+
+    The default is read from the global inside the body, not as a default
+    argument: a default is bound once at ``def`` time, which would both freeze
+    the value and fail to resolve, since the constant is declared below.
+    """
+    if chunks is None:
+        chunks = _PHASE_REFERENCE_CHUNKS
+    batches = -(-chunks // LABEL_LLM_BATCH_SIZE)
+    return -(-batches // max(1, MAX_CONCURRENT_BATCHES))
+
+
+def _warn_if_phase_ceiling_too_low(phase_seconds: float, retries: int, per_call_seconds: float) -> bool:
+    """Warn when the phase ceiling cannot outlast one call's retry ladder.
+
+    Takes its arguments rather than reading the module globals so the condition
+    is testable: at import time the values are already fixed, and the case worth
+    testing is the one the shipped defaults never take.
+
+    Returns whether it warned.
+    """
+    worst = _one_batched_call_worst_case(retries, per_call_seconds)
+    waves = _phase_waves_for_reference_document()
+    # The wave check is the one that binds. The single-call constraint is
+    # necessary but not sufficient: a ceiling above one ladder still degrades a
+    # large document whose calls each finish inside their own budget, because the
+    # waves run back to back and share the one ceiling.
+    needed = max(worst, waves * per_call_seconds)
+    if phase_seconds > needed:
+        return False
+    logger.warning(
+        "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS (%.0f s) does not exceed what one "
+        "LLM phase needs: %d waves of the %d-chunk reference document x "
+        "MODEL_LLM_TIMEOUT_SECONDS (%.0f s) = %.0f s, against a single call's "
+        "worst case of %.0f s = (1 + MODEL_LLM_MAX_RETRIES=%d) x "
+        "MODEL_LLM_TIMEOUT_SECONDS. Calls that are cancelled before they can "
+        "return make labelling degrade to per-chunk and then to file labels — a "
+        "symptom that reads as a labelling-quality regression rather than as a "
+        "misconfiguration. Raise DATAPREP_LLM_PHASE_TIMEOUT_SECONDS above %.0f s, "
+        "or lower DATAPREP_LLM_LABEL_BATCH_SIZE / raise DATAPREP_MAX_CONCURRENT_BATCHES to "
+        "shorten the wave count.",
+        phase_seconds,
+        waves,
+        _PHASE_REFERENCE_CHUNKS,
+        per_call_seconds,
+        waves * per_call_seconds,
+        worst,
+        retries,
+        per_call_seconds,
+        needed,
+    )
+    return True
+
+
+_warn_if_phase_ceiling_too_low(DATAPREP_LLM_PHASE_TIMEOUT_SECONDS, LLM_MAX_RETRIES, LLM_TIMEOUT_SECONDS)
+# How often a still-running phase reports progress to the ingestion log. The log
+# is the only channel an operator watches during an ingest (the admin UI reads
+# it), so a phase that is alive but slow has to say so — silence is what made
+# the original stall undiagnosable.
+DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS = positive_float_env("DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", default=60.0)
+# How long a cancelled batch is given to unwind before the phase gives up on it.
+# Long enough for a cooperative cancellation to close its HTTP connection and
+# free its semaphore slot; short enough that the phase bound stays the outer
+# limit. A task that has not finished by then is abandoned, which is what the
+# caller's fallback is for.
+_PHASE_CANCEL_GRACE_SECONDS = 5.0
 
 # Contextual Retrieval (Anthropic-style): per-chunk LLM-generated document
 # context prepended to each chunk before embedding + labeling, so chunks carry
@@ -335,7 +642,17 @@ def _build_vllm_client() -> tuple[AsyncOpenAI, str]:
     """
     _api_key = os.getenv("VLLM_API_KEY", "EMPTY")
     _vllm_endpoint = os.getenv("VLLM_ENDPOINT")
-    client = AsyncOpenAI(api_key=_api_key, base_url=f"{_vllm_endpoint}/v1")
+    # Shared request budget (core/model_http_policy.py): the openai-python
+    # defaults (600 s, 2 retries) let a heavily contended shared GPU stall
+    # labeling/context batches for 10+ minutes with no feedback
+    # (live-observed). Env-tunable deck-wide; the fallback chain (batch ->
+    # per-chunk -> file labels) keeps ingestion alive either way.
+    client = AsyncOpenAI(
+        api_key=_api_key,
+        base_url=f"{_vllm_endpoint}/v1",
+        timeout=http_timeout(LLM_TIMEOUT_SECONDS),
+        max_retries=LLM_MAX_RETRIES,
+    )
     model = os.getenv("VLLM_MODEL_ID")
     if os.getenv("GPU_NODE_HOST"):
         detected = get_model_id(_vllm_endpoint)
@@ -525,11 +842,12 @@ def _read_index_params():
 
 
 async def _safe_log(write_ingestion_log, file_id, level, component, message):
-    """Invoke `await _safe_log(write_ingestion_log, ...)` but swallow any exception.
+    """Write one ingestion-log row, swallowing any exception it raises.
 
-    Critical: the helper must never let a logging failure escape. Otherwise a
-    transient backend HTTP timeout on `_write_ingestion_log` would propagate
-    out of `ensure_vector_index`, into the outer except in
+    Critical: the helper must never let a logging failure escape. Every caller
+    is inside the ingest path — `ensure_vector_index`, and the phase heartbeat
+    and budget-exhaustion reports of both LLM phases — where a propagated
+    backend HTTP timeout would be caught by the outer except in
     `ingest_file_with_guardrail`, triggering `retract_file()` and DELETING
     already-committed chunks. Visibility loss on logs is acceptable; data
     loss is not.
@@ -540,9 +858,530 @@ async def _safe_log(write_ingestion_log, file_id, level, component, message):
         await write_ingestion_log(file_id, level, component, message)
     except Exception as e:
         logger.error(
-            f"_write_ingestion_log failed inside ensure_vector_index: "
+            f"_write_ingestion_log failed while reporting {component!r}: "
             f"{type(e).__name__}: {str(e)[:200]} (message was: {message[:100]})"
         )
+
+
+async def _settle_and_retrieve(tasks, *, timeout=None) -> tuple[bool, BaseException | None]:
+    """Wait *tasks* out for *timeout* seconds, then drain their outcomes.
+
+    Returns ``(interrupted, absorbed)`` — whether an outer cancellation arrived
+    while the wait was running, and the ``CancelledError`` it delivered.
+
+    *timeout* defaults to ``_PHASE_CANCEL_GRACE_SECONDS``, read from the module
+    global at call time rather than as a default argument: a default is bound
+    once when the ``def`` runs, which would freeze the window and quietly
+    ignore a test (or a future operator hook) that retunes it.
+
+    The absorbed exception is returned rather than discarded because a caller
+    that has to raise *something* must raise THAT object. A freshly constructed
+    ``CancelledError`` carries none of the original's identity, so an enclosing
+    ``asyncio.timeout`` cannot recognise its own expiry and reports a generic
+    cancellation instead of ``TimeoutError``.
+
+    The wait runs as its own task behind ``asyncio.shield`` because an await in
+    a cancellation path is itself cancellable: without the shield, a second
+    cancellation — the kill endpoint is idempotent-callable, so a double-clicked
+    Kill re-enters it, and any shutdown sweep cancels the same task again —
+    propagates straight out and skips the window entirely. The batches would
+    then be abandoned running, which is the exact outcome the window exists to
+    prevent, and worse than the ``asyncio.gather`` this replaced: gather had no
+    window to lose.
+    """
+    tasks = [t for t in tasks if not t.done()]
+    if not tasks:
+        return False, None
+    if timeout is None:
+        timeout = _PHASE_CANCEL_GRACE_SECONDS
+    wait = asyncio.ensure_future(asyncio.wait(tasks, timeout=timeout))
+    absorbed: BaseException | None = None
+    while not wait.done():
+        try:
+            await asyncio.shield(wait)
+        except asyncio.CancelledError as exc:
+            # Deliberately swallowed: the settle is the thing we promised, and
+            # it has a timeout of its own, so it cannot hold the caller longer
+            # than the timeout regardless of how often we are cancelled.
+            #
+            # uncancel() with it. Since 3.11 a task that catches CancelledError
+            # to do cleanup is expected to decrement task.cancelling(), because
+            # asyncio.timeout and TaskGroup read that counter to decide whether
+            # a cancellation is still live. Leaving it at 1 on a task that then
+            # returns normally is how a swallowed deadline stops a timeout from
+            # ever firing. Nothing in this overlay wraps an ingest in one today —
+            # this is the documented pairing, not a reaction to a live outage.
+            #
+            # Kept rather than dropped: the caller re-raises this exact object so
+            # the signal survives, and an enclosing deadline can still tell it
+            # apart from a kill.
+            absorbed = exc
+            current = asyncio.current_task()
+            if current is not None:
+                current.uncancel()
+    for task in tasks:
+        if task.done() and not task.cancelled():
+            with suppress(Exception):
+                task.exception()
+    return absorbed is not None, absorbed
+
+
+async def _run_uninterruptible(coro, *, timeout: float, label: str) -> bool:
+    """Run *coro* to completion even if the caller is cancelled meanwhile.
+
+    Returns True if a cancellation was absorbed while it ran.
+
+    For work that destroys data: the kill handler's rollback is a chain of
+    awaits, and a second cancel — which a double-clicked Kill produces, the same
+    re-entrancy ``_settle_and_retrieve`` exists to absorb — used to land on its
+    first await and skip the rest, leaving the document half-retracted with a
+    status that never reached "Killed". The window bounds how long that can
+    hold the caller; past it the coroutine is left running rather than killed,
+    because an overrunning rollback is recoverable and an interrupted one is not.
+    """
+    task = asyncio.ensure_future(coro)
+    interrupted, _ = await _settle_and_retrieve([task], timeout=timeout)
+    if not task.done():
+        logger.error(
+            f"{label} did not finish within {timeout:g}s and is still running; "
+            "it was left to complete rather than cancelled. Note the file lock is "
+            "released when the caller unwinds, so a re-ingest of the same document "
+            "can start while this rollback is still deleting"
+        )
+    elif task.cancelled():
+        logger.error(f"{label} was cancelled before it could complete")
+    else:
+        # _settle_and_retrieve retrieves the exception to silence asyncio's
+        # "never retrieved" warning, which DISCARDS it. Left at that, a rollback
+        # that failed was completely silent: before the refactor the same
+        # exception propagated out of the handler and was at least visible, and
+        # nothing downstream reads it either. The AQL path self-reports through
+        # the ingestion log; a socket error, an unwrapped driver error, or a
+        # failure inside the status write itself does not, so it is logged here.
+        exc = task.exception()
+        if exc is not None:
+            logger.error(f"{label} FAILED and the document may be partially retracted: {exc!r}")
+    return interrupted
+
+
+# How long the kill switch's rollback may hold a cancelled ingest. Long enough
+# for the full cascade — chunks, edges, orphans — plus the status flip, on a
+# loaded database. Only reached when an operator cancels the same ingest twice.
+_ROLLBACK_CANCEL_GRACE_SECONDS = 60.0
+
+
+async def _gather_with_phase_budget(
+    tasks: list, *, phase: str, phase_label: str, total: int, file_id: str, write_ingestion_log
+) -> tuple[list, bool]:
+    """Run *tasks* concurrently under a wall-clock bound, reporting progress.
+
+    Wraps ``_gather_with_phase_budget_inner`` in a span, because the phase-bound
+    path is the one that had no span to write to. ``dataprep.llm.timed_out`` is
+    emitted from the per-call timeout handler inside a batch; a batch cancelled
+    by the phase ceiling never raises, so that handler never runs and the
+    attribute stayed dark on exactly the scenario the MR exists for — 65
+    batched calls, none returned, none failed. The ceiling needs its own span
+    to be observable at all.
+    """
+    # Literal span name: the attribute sweep derives span coverage by reading
+    # names out of the source, so an f-string here is invisible to it and would
+    # make this span untracked. The phase goes on as an attribute instead.
+    #
+    # The two CONSTANTS are attached at entry, not after the call. The inner
+    # helper raises on a failed batch and on an external cancel — and a kill is
+    # a routine path, not an edge case — so attributes set afterwards would be
+    # skipped on exactly the traces an operator opens to find out which phase
+    # was interrupted. `timed_out` is set in the finally so it is present on the
+    # success path too, as an explicit False rather than an absence.
+    with background_span(
+        "dataprep.llm.phase",
+        attributes={
+            ATTRIBUTE_NAMES["dataprep_llm_phase"]: phase_label,
+            ATTRIBUTE_NAMES["dataprep_llm_timeout_seconds"]: DATAPREP_LLM_PHASE_TIMEOUT_SECONDS,
+            ATTRIBUTE_NAMES["dataprep_llm_timed_out"]: False,
+        },
+    ) as span:
+        results, timed_out = await _gather_with_phase_budget_inner(
+            tasks,
+            phase=phase,
+            phase_label=phase_label,
+            total=total,
+            file_id=file_id,
+            write_ingestion_log=write_ingestion_log,
+        )
+        span.set_attribute(ATTRIBUTE_NAMES["dataprep_llm_timed_out"], timed_out)
+    return results, timed_out
+
+
+async def _gather_with_phase_budget_inner(
+    tasks: list, *, phase: str, phase_label: str, total: int, file_id: str, write_ingestion_log
+) -> tuple[list, bool]:
+    """Run *tasks* concurrently under a wall-clock bound, reporting progress.
+
+    Returns ``(results, timed_out)``. On timeout the batches that already
+    finished are returned, the rest are cancelled, and the caller maps
+    ``timed_out`` onto whatever its phase falls back to.
+
+    ``asyncio.gather`` cannot do this job. It carries no wall-clock bound of its
+    own — each task is bounded only by its own client timeout and retry ladder,
+    so on a contended endpoint the phase waits for its slowest task however long
+    that task has been running. It also yields nothing until every task is done,
+    which is what made a live ingest indistinguishable from a hung one: the
+    progress log that would have shown movement sat *after* the gather and was
+    never reached.
+
+    Progress is reported on a timer rather than per completion. A completion
+    counter floods the ingestion log on a fast phase (one line per batch, 65 for
+    a 260-chunk document) while a slow phase still needs a heartbeat; a timer
+    costs one line per interval whatever the throughput.
+    """
+    if not tasks:
+        # False, not []: an empty list happens to be falsy so the callers behave,
+        # but a list where the contract says bool makes every `if timed_out` read
+        # as working by coincidence.
+        return [], False
+
+    started = time.monotonic()
+    # Wrapped in submission order so a failed batch can be picked
+    # deterministically: asyncio.wait hands back a set, and iterating one would
+    # make "which exception aborts the ingest" depend on set ordering.
+    ordered = [asyncio.ensure_future(t) for t in tasks]
+    order = {id(task): n for n, task in enumerate(ordered)}
+    pending = set(ordered)
+    results: list = []
+    interval = DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS
+    next_report = started + interval
+    # A task that raised, held until the in-flight set is settled. Re-raising it
+    # has to happen AFTER the cancel-and-settle below, not at the point it was
+    # noticed: raising first would leave every sibling task running, holding its
+    # semaphore slot and its open HTTP connection until its own retry ladder
+    # finished — so one bad batch would stall the fallback that was about to
+    # run for it.
+    failure: BaseException | None = None
+    settle_interrupted = False
+    abandoned = 0
+
+    try:
+        while pending:
+            # Wait on whichever deadline comes first, so a progress tick is
+            # never held behind the phase deadline. When the remaining budget is
+            # the shorter of the two, this single wait IS the phase deadline —
+            # which is why the reporting below forces a tick whenever
+            # remaining_phase <= 0 rather than relying on the interval alone.
+            remaining_phase = DATAPREP_LLM_PHASE_TIMEOUT_SECONDS - (time.monotonic() - started)
+
+            settled = {t for t in pending if t.done()}
+            pending -= settled
+            if settled:
+                done = settled
+            else:
+                # FIRST_COMPLETED is stated explicitly: on this interpreter the
+                # implicit default over a task set does NOT return as soon as
+                # one task finishes, it waits out the whole timeout. That would
+                # make a phase whose first batch fails early sit idle until its
+                # budget elapsed before surfacing the error — the exact stall
+                # the bound exists to prevent, one error path later.
+                done, pending = await asyncio.wait(
+                    pending,
+                    timeout=max(min(interval, remaining_phase), 0.01),
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                # Recomputed, not carried over: the wait, and the heartbeat
+                # write inside the branch below it, both consume wall clock, so
+                # the value from before the wait understates how much of the
+                # budget is gone. Using it to decide whether to report and
+                # whether to break lets the phase overshoot its own deadline by
+                # up to one tick, which is the difference between a bound and
+                # an approximation of one.
+                remaining_phase = DATAPREP_LLM_PHASE_TIMEOUT_SECONDS - (time.monotonic() - started)
+
+            for task in sorted(done, key=lambda t: order[id(t)]):
+                # Propagate a raised task exactly as gather would — but record it
+                # and keep draining the loop first, so the settle-and-cancel in
+                # the finally block runs before it escapes. Iterating the set
+                # asyncio.wait returns would pick an arbitrary member, so which
+                # of two differently-failing batches decides whether the ingest
+                # aborts or degrades would change run to run.
+                # cancelled() first: Task.exception() raises
+                # CancelledError on a cancelled task, so one individually-
+                # cancelled batch would otherwise turn the whole phase into a
+                # CancelledError and the document would report "Killed" instead
+                # of the failure it actually had.
+                if task.cancelled():
+                    continue
+                exc = task.exception()
+                if exc is not None:
+                    if failure is None:
+                        failure = exc
+                    continue
+                results.append(task.result())
+
+            # Stop collecting once a batch has failed, the way gather would:
+            # the phase is going to raise, so the remaining batches' results
+            # would be discarded anyway and waiting for them only delays the
+            # error by up to the whole budget. The finally block cancels them.
+            if failure is not None:
+                break
+
+            # Report BEFORE the budget check. The wait ran for
+            # min(interval, remaining_phase), so if the operator set an interval
+            # at or above the budget the phase ends on this tick — and a check
+            # placed after the break would leave the final tick unreported,
+            # i.e. an operator who raised the interval to quiet a busy log
+            # would get silence for the whole phase instead.
+            now = time.monotonic()
+            # Report when the reporting interval has elapsed OR the phase is
+            # about to give up — the second clause is what keeps an interval
+            # set above the budget from silencing the phase, since in that case
+            # the single wait consumed the whole budget and the interval never
+            # elapsed on its own.
+            out_of_time = now >= next_report or remaining_phase <= 0
+            if pending and out_of_time:
+                next_report = now + interval
+                message = (
+                    f"{phase} in progress: {len(results)}/{total} batches completed, "
+                    f"{len(pending)} in flight, {now - started:.0f}s elapsed "
+                    f"(budget {DATAPREP_LLM_PHASE_TIMEOUT_SECONDS:g}s)"
+                )
+                logger.info(message)
+                await _safe_log(write_ingestion_log, file_id, "INFO", phase, message)
+                # Same reason as after the wait above: the write is a full
+                # ingestion-log round trip, and on a slow backend it can be the
+                # longest thing in the tick. Testing the deadline against the
+                # value from before it lets the phase run another whole tick
+                # past its budget.
+                remaining_phase = DATAPREP_LLM_PHASE_TIMEOUT_SECONDS - (time.monotonic() - started)
+
+                # The log write yields the event loop for a full ingestion-log
+                # round trip. A batch that answers during it holds a complete
+                # result, and discarding it would report the phase as having
+                # lost work the LLM actually did — pointing the operator at GPU
+                # contention instead of at the budget. Drain what settled.
+                late = {t for t in pending if t.done()}
+                pending -= late
+                for task in sorted(late, key=lambda t: order[id(t)]):
+                    # cancelled() first: Task.exception() raises CancelledError on
+                    # a cancelled task, so an individually-cancelled batch would
+                    # otherwise turn the whole phase into a CancelledError.
+                    if task.cancelled():
+                        continue
+                    exc = task.exception()
+                    if exc is not None:
+                        if failure is None:
+                            failure = exc
+                        continue
+                    results.append(task.result())
+
+                if failure is not None:
+                    # A failure seen here must end the loop exactly as one seen
+                    # in the main drain does. Falling through would park the
+                    # remaining batches in asyncio.wait for a whole progress
+                    # interval before the finally cancels them — holding their
+                    # semaphore slots and connections while the fallback that
+                    # was about to run for the failed batch waits behind them.
+                    break
+
+            if not pending or remaining_phase <= 0:
+                break
+
+        # Tasks still in flight at the deadline — not a raised batch, the phase
+        # simply outran its budget.
+        abandoned = len(pending)
+    finally:
+        # Cancel whatever is still running, on the timeout path AND on the
+        # error path, and give it a bounded window to notice.
+        #
+        # Cancelling is a REQUEST, not a guarantee: a coroutine that swallows
+        # CancelledError, or that is parked in a non-cancellable await, keeps
+        # its semaphore slot after this returns. That is bounded and safe for
+        # the LLM phases — their awaits are cancellation-cooperative and each
+        # attempt has a budget of its own, so an abandoned one finishes on its
+        # own — but it means the phase can return `timed_out` while a straggler
+        # is still writing. Do not read this block as "nothing runs after we
+        # return"; read it as "nothing runs unbounded after we return".
+        if pending:
+            for task in pending:
+                task.cancel()
+            # Bounded settle. An unbounded gather here would make the phase
+            # bound advisory: a task sitting in a non-cancellable await (a
+            # thread offload, a client swallowing CancelledError) never
+            # completes, so the gather never returns and the caller waits past
+            # its budget anyway — the exact unbounded stall this helper exists
+            # to end. Waiting briefly lets well-behaved tasks release their slot
+            # and their connection; anything still stuck is abandoned, and the
+            # caller gets its fallback.
+            # Settle and retrieve together, shielded: a task that turned its
+            # cancellation into a real exception — a client catching
+            # CancelledError, or a typed failure raised between the last drain
+            # and the cancel — would otherwise surface as "Task exception was
+            # never retrieved" with a full traceback, noise landing in the
+            # dataprep log during exactly the contended-GPU incidents this work
+            # exists to make diagnosable. gather retrieved every child; this
+            # restores that without giving up the bounded settle.
+            settle_interrupted, absorbed_cancel = await _settle_and_retrieve(pending)
+
+    if settle_interrupted and failure is None:
+        # The settle absorbed a cancellation, and this path has no exception of
+        # its own to re-raise — it was reached by the budget expiring or by the
+        # drains finishing, not by anything propagating. Dropping the signal here
+        # returns a normal (results, timed_out) tuple for an ingest the kill
+        # endpoint has already reported as killed: the caller falls back, logs a
+        # budget warning, and carries on writing the document.
+        # Re-raise the object the cancellation actually delivered. A fresh
+        # CancelledError would carry none of its identity, and an enclosing
+        # asyncio.timeout that expires inside this window could not tell its own
+        # expiry from a kill.
+        raise absorbed_cancel
+
+    if failure is not None:
+        # A batch that raised is an error the phase's caller already knows how
+        # to fall back from; swallowing it here would turn a visible failure
+        # into a silently degraded document.
+        #
+        # An absorbed cancellation does not displace it, but it is not silent
+        # either: without this the same situation logged a warning in
+        # _await_with_heartbeat and vanished here, so an operator who cancelled
+        # a failing phase saw "Ingestion Error" with no record that a kill had
+        # been requested. The failure wins because it is the more specific
+        # cause; the cancellation is recorded so the other is not lost.
+        if settle_interrupted:
+            logger.warning(
+                f"{phase}: cancelled externally while settling a failed batch; "
+                "reporting the batch failure, which is the more specific cause"
+            )
+        raise failure
+
+    if abandoned:
+        _dataprep_phase_budget_exhausted_total.add(1, {"phase": phase_label})
+        # Seconds render with one decimal: an integer format renders a
+        # sub-second budget as "0s", which reads as a misconfiguration rather
+        # than the fast test deadline it is.
+        message = (
+            f"{phase} exceeded its {DATAPREP_LLM_PHASE_TIMEOUT_SECONDS:g}s budget after "
+            f"{time.monotonic() - started:.1f}s: {len(results)}/{total} batches completed, "
+            f"{abandoned} abandoned. Falling back for the remaining batches."
+        )
+        logger.warning(message)
+        await _safe_log(write_ingestion_log, file_id, "WARN", phase, message)
+        return results, True
+
+    return results, False
+
+
+async def _await_with_heartbeat(tasks: list, *, phase: str, total: int, file_id: str, write_ingestion_log) -> None:
+    """Wait for every task, reporting progress as they settle.
+
+    The counterpart to ``_gather_with_phase_budget`` for a phase that has no
+    fallback: it has the same reporting but no deadline, because the only way to
+    bound a phase is to give up on part of it and this phase cannot lose work
+    without losing documents. Errors propagate as ``asyncio.gather`` raises them
+    (first failure wins), so the caller's existing error handling still applies.
+
+    Every exit other than the success path takes the still-pending batches with
+    it, by cancelling them and giving ``_PHASE_CANCEL_GRACE_SECONDS`` to settle.
+    That matters because the caller retracts the document on every one of those
+    exits: a batch still running writes into ArangoDB after ``retract_file`` has
+    deleted it, resurrecting chunks for a document the admin UI shows as failed.
+
+    Cancelling does not stop a batch already inside ``asyncio.to_thread`` — the
+    thread runs to completion either way, and that race is pre-existing and
+    documented at the call site. What it does stop is every batch still queued
+    on ``MAX_CONCURRENT_BATCHES``, which for a large document is most of them:
+    they have not reached the thread and would otherwise write the whole
+    document after the retraction. So the grace window is a courtesy for batches
+    that unwind promptly, not a licence to abandon the rest.
+    """
+    if not tasks:
+        return
+
+    started = time.monotonic()
+    interval = DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS
+    next_report = started + interval
+    pending = set(tasks)
+    # Submission order, for the same reason as the budgeted variant: the set
+    # asyncio.wait returns has no order, and which failing batch decides the
+    # ingest's outcome must not depend on it.
+    order = {id(task): n for n, task in enumerate(tasks)}
+    completed = 0
+    failure: BaseException | None = None
+
+    try:
+        while pending:
+            settled = {t for t in pending if t.done()}
+            pending -= settled
+            if not settled:
+                done, pending = await asyncio.wait(pending, timeout=interval, return_when=asyncio.FIRST_COMPLETED)
+                settled = done
+            for task in sorted(settled, key=lambda t: order[id(t)]):
+                # Re-raise the first failure, as gather would. Done before any
+                # further reporting so the phase fails on the real error rather than
+                # on the heartbeat's log write.
+                # cancelled() first: Task.exception() raises
+                # CancelledError on a cancelled task, so one individually-
+                # cancelled batch would otherwise turn the whole phase into a
+                # CancelledError and the document would report "Killed" instead
+                # of the failure it actually had.
+                if task.cancelled():
+                    continue
+                exc = task.exception()
+                completed += 1
+                if exc is not None and failure is None:
+                    failure = exc
+
+            if failure is not None:
+                # Cancelled and settled, like every other non-success exit here.
+                # The caller retracts the document the moment this raises, so a
+                # sibling left running writes into ArangoDB after the retraction
+                # and resurrects its chunks for a document the admin UI shows as
+                # failed. Batches already inside asyncio.to_thread are unaffected
+                # either way — that thread runs to completion whatever we do — so
+                # what cancelling actually stops is every batch still queued on
+                # the semaphore, which for a large document is most of them.
+                #
+                # _settle_and_retrieve absorbs a cancellation that arrives during
+                # the window: the settle is what was promised, it has a timeout of
+                # its own, and losing it to a second cancel would hand the caller
+                # exactly the abandoned-batch outcome described above.
+                for task in pending:
+                    task.cancel()
+                interrupted, _absorbed = await _settle_and_retrieve(pending)
+                if interrupted:
+                    # An external cancellation during the settle does not replace
+                    # the failure. The document is retracted either way, but the
+                    # kill switch would report "Killed by an administrator" and
+                    # the ArangoDB error underneath — the one thing the operator
+                    # needs — would never reach the ingestion log.
+                    logger.warning(
+                        f"{phase}: cancelled externally while settling a failed batch; "
+                        "reporting the batch failure, which is the more specific cause"
+                    )
+                raise failure
+
+            now = time.monotonic()
+            if pending and now >= next_report:
+                next_report = now + interval
+                message = (
+                    f"{phase} in progress: {completed}/{total} batches completed, "
+                    f"{len(pending)} in flight, {now - started:.0f}s elapsed"
+                )
+                logger.info(message)
+                await _safe_log(write_ingestion_log, file_id, "INFO", phase, message)
+
+    except asyncio.CancelledError:
+        # Every exit other than the success path has to take the still-pending
+        # batches with it, because the caller is retracted either way.
+        # asyncio.gather, which this helper replaced, did that implicitly by
+        # cancelling its children; a bare `while pending` loop does not, so an
+        # external cancellation — ingest_file_with_guardrail's kill switch, or
+        # a service shutdown — propagated straight out and left every queued
+        # graph batch running. They were parked on the semaphore at that point,
+        # so they would acquire it and write the whole document to ArangoDB
+        # AFTER retract_file() had already deleted it: chunks resurrected for a
+        # document the admin UI shows as Killed, and served to the retriever.
+        for task in pending:
+            task.cancel()
+        _, _absorbed = await _settle_and_retrieve(pending)
+        raise
 
 
 @OpeaComponentRegistry.register("GENIE_DATAPREP_ARANGODB")
@@ -892,38 +1731,129 @@ class GenieArangoDataprep(OpeaArangoDataprep):
     # --- Labeling Strategies (Spec 5.3, 5.4) ---
 
     async def _label_with_llm(self, chunks: list[str], all_labels: list[str], file_labels: list[str], file_id: str):
-        """Labels chunks using VLLM with Retry Logic and Advisory Warnings (Spec 5.3)."""
-        client, model = _build_vllm_client()
+        """Label chunks with the LLM, falling back to the document's own labels.
 
-        # Precompute the system prompt once (the taxonomy is identical for every chunk).
-        system_prompt = LABEL_SELECTOR_SYSTEM_PROMPT.replace("{labels_list}", str(all_labels))
-        logger.debug(
-            f"LLM LABELING INPUTS: taxonomy ({len(all_labels)} labels), "
-            f"file_labels: {file_labels}, system_prompt ({len(system_prompt)} chars), "
-            f"chunks: {len(chunks)}, batch_size: {LABEL_LLM_BATCH_SIZE}, "
-            f"concurrency: {MAX_CONCURRENT_BATCHES}"
-        )
+        Returns ``(results, reasons)``. ``results`` is one
+        ``{"text", "labels"}`` per input chunk, in order. ``reasons`` lists
+        human-readable causes, empty when labelling completed, and it is what
+        stops the document being reported as plainly Ingested — see
+        DEGRADED_REMEDIES for why a list rather than a flag.
+        """
+        # Guarded exactly as _apply_contextualization guards it, and for the same
+        # reason. Contextualization runs first, so an unbuildable client is caught
+        # there, recorded as a degradation, and the ingest carries on to labelling —
+        # where the same call would raise, land in the ingest's except handler, and
+        # retract a document that has a perfectly good file-label fallback. Which
+        # of the two phases is reached first must not decide whether the ingest
+        # survives a misconfigured endpoint.
+        #
+        # Falls through to the same tail the per-batch fallback uses rather than
+        # returning early: that tail resolves each chunk's labels against the
+        # taxonomy, so a client-less run produces the same result as a batch that
+        # failed, instead of a second, subtly different labelling path.
+        degraded: list[str] = []
+        client = model = None
+        try:
+            client, model = _build_vllm_client()
+        except Exception as e:
+            err = f"{type(e).__name__}: {str(e)[:200]}"
+            logger.error(f"LLM labeling disabled for {file_id}: vLLM client init failed ({err}); using file labels.")
+            await self._write_ingestion_log(
+                file_id,
+                "ERROR",
+                "Labeling",
+                f"vLLM client init failed ({err}); using file labels.",
+            )
+            degraded.append(f"{DEGRADED_CLIENT_UNAVAILABLE} ({err})")
+            # The metric covers the per-batch AND the whole-phase paths; a whole
+            # phase that never reached the model is the larger of the two and
+            # was counted nowhere.
+            _llm_fallback_total.add(len(chunks), {"phase": PHASE_LABEL_LABELING, "reason": "client_unavailable"})
 
-        semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)
-        logger.info(
-            f"LLM labeling: {len(chunks)} chunks "
-            f"(concurrency={MAX_CONCURRENT_BATCHES}, batch_size={LABEL_LLM_BATCH_SIZE}, "
-            f"model={model}, temperature={LLM_LABEL_TEMPERATURE})"
-        )
-
-        # Group indexed chunks into batches; each batch yields one LLM call (or,
-        # on parse failure, per-chunk calls). All gated by the semaphore.
+        # Enumerated once, above the client check: the batch split below and the
+        # fallback tail below both read it, and the tail runs whether or not a
+        # client was ever built. Computing it inside the branch left the second
+        # read rebinding the same value, which is a rename waiting to diverge.
         indexed = list(enumerate(chunks))
-        batches = [indexed[i : i + LABEL_LLM_BATCH_SIZE] for i in range(0, len(indexed), LABEL_LLM_BATCH_SIZE)]
+        partials: list = []
+        timed_out = False
+        if client is not None:
+            # Precompute the system prompt once (the taxonomy is identical for every chunk).
+            system_prompt = LABEL_SELECTOR_SYSTEM_PROMPT.replace("{labels_list}", str(all_labels))
+            logger.debug(
+                f"LLM LABELING INPUTS: taxonomy ({len(all_labels)} labels), "
+                f"file_labels: {file_labels}, system_prompt ({len(system_prompt)} chars), "
+                f"chunks: {len(chunks)}, batch_size: {LABEL_LLM_BATCH_SIZE}, "
+                f"concurrency: {MAX_CONCURRENT_BATCHES}"
+            )
 
-        async def _process_batch(batch):
-            async with semaphore:
-                return await self._llm_suggest_labels(client, model, system_prompt, batch, file_id, file_labels)
+            semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)
+            logger.info(
+                f"LLM labeling: {len(chunks)} chunks "
+                f"(concurrency={MAX_CONCURRENT_BATCHES}, batch_size={LABEL_LLM_BATCH_SIZE}, "
+                f"model={model}, temperature={LLM_LABEL_TEMPERATURE})"
+            )
 
-        batch_results = await asyncio.gather(*[_process_batch(b) for b in batches])
+            # Group indexed chunks into batches; each batch yields one LLM call (or,
+            # on parse failure, per-chunk calls). All gated by the semaphore.
+            batches = [indexed[i : i + LABEL_LLM_BATCH_SIZE] for i in range(0, len(indexed), LABEL_LLM_BATCH_SIZE)]
+
+            async def _process_batch(batch):
+                async with semaphore:
+                    return await self._llm_suggest_labels(client, model, system_prompt, batch, file_id, file_labels)
+
+            partials, timed_out = await _gather_with_phase_budget(
+                [_process_batch(b) for b in batches],
+                phase="LLM labeling",
+                phase_label=PHASE_LABEL_LABELING,
+                total=len(batches),
+                file_id=file_id,
+                write_ingestion_log=self._write_ingestion_log,
+            )
+
+            if timed_out:
+                abandoned = len(batches) - len(partials)
+                _llm_fallback_total.add(abandoned, {"phase": PHASE_LABEL_LABELING, "reason": "phase_budget"})
+                # Recorded here, where the cause is known, so the file-label
+                # fallback below can see that the phase degraded as a whole.
+                degraded.append(DEGRADED_PHASE_BUDGET)
+
+            fell_back = sum(f for _, f in partials)
+            # Every chunk answered by the document's own labels rather than the
+            # model: the endpoint is unreachable, or it is a model that rejects
+            # response_format=json_object, or a model id that resolves to nothing
+            # usable. Every chunk landed, so nothing looks broken, and without
+            # this the document reports a clean Ingested on a labelling phase
+            # that never ran. The contextual phase reports its equivalent
+            # (DEGRADED_NO_CONTEXTS); this is the labelling twin.
+            #
+            # All-or-nothing only. Some chunks falling back is what the per-batch
+            # fallback is for, and flagging the document for it would make the
+            # status fire on healthy documents.
+            if chunks and fell_back == len(chunks):
+                degraded.append(f"{DEGRADED_NO_LABELS} (0/{len(chunks)})")
+
         suggested_map: dict[int, list[str]] = {}
-        for partial in batch_results:
+        for partial, _fell_back in partials:
             suggested_map.update(partial)
+
+        # An abandoned batch contributes NOTHING — it was cancelled before
+        # reaching the per-chunk loop, so the file-label fallback at the end of
+        # _llm_suggest_labels never runs for its chunks. Left unfilled they are
+        # stored with an empty label list: unreachable by taxonomy, and the
+        # ingestion log reads "Final labels (0): []" for them, which looks like
+        # a labelling regression rather than the budget exhaustion it is.
+        #
+        # A client that never built is the same shape one step earlier: no chunk
+        # reaches the LLM at all, so every one of them would land unlabelled.
+        # Both are wholesale failures of the phase rather than a per-batch miss,
+        # so both fall back to the document's own labels — which is what a batch
+        # that failed rather than timed out ends up with, so a degraded document
+        # is uniform. Scoped to those two on purpose: a chunk the LLM
+        # legitimately returned nothing for is not force-labelled.
+        if degraded and file_labels:
+            for i, _ in indexed:
+                suggested_map.setdefault(i, list(file_labels))
 
         # Resolve suggestions against the taxonomy (exact + synonym match) and
         # emit a single consolidated ingestion-log entry per chunk.
@@ -934,7 +1864,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             results.append({"text": text, "labels": labels})
             if n % 200 == 0 or n == total:
                 logger.info(f"Labeling progress: {n}/{total} chunks finalized")
-        return results
+        return results, degraded
 
     def _build_doc_context(self, chunks: list[str], input, budget: int = DATAPREP_CONTEXTUAL_DOC_BUDGET) -> str:
         """Build the document-context string fed to the context-generation LLM.
@@ -965,16 +1895,25 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             )
         return "\n".join(parts)
 
-    async def _apply_contextualization(self, chunks: list[str], input, file_id: str) -> list[str]:
+    async def _apply_contextualization(self, chunks: list[str], input, file_id: str) -> tuple[list[str], list[str]]:
         """Prepend an LLM-generated document context to each chunk.
 
         No-op when CONTEXTUAL_RETRIEVAL_ENABLED is false (returns chunks
-        unchanged). When enabled, returns contextualized texts (same order and
-        length) of the form ``<context>\\n\\n<chunk>``. Chunks whose context
-        generation fails fall back to the raw chunk so ingestion never blocks.
+        unchanged). When enabled, returns ``(contextualized_texts, reasons)``
+        — the texts in the same order and length, of the form
+        ``<context>\\n\\n<chunk>``. Chunks whose context generation fails fall
+        back to the raw chunk so ingestion never blocks.
+
+        ``reasons`` lists human-readable causes, empty when the phase completed,
+        and it is what stops the document being reported as plainly Ingested. A
+        list rather than a flag because the causes have DIFFERENT REMEDIES: an
+        expired phase budget is fixed by raising the budget, a vLLM client that
+        will not build is fixed by fixing the endpoint. Telling an operator to
+        raise a budget for the second sends them to the wrong knob, with no
+        error anywhere to tell them otherwise.
         """
         if not CONTEXTUAL_RETRIEVAL_ENABLED or not chunks:
-            return list(chunks)
+            return list(chunks), []
 
         # Build the client outside the per-chunk retry loop. If construction fails
         # (e.g. model auto-detection failure on the GPU node), skip contextualization
@@ -992,7 +1931,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 "Contextualization",
                 f"vLLM client init failed ({err}); using raw chunks.",
             )
-            return list(chunks)
+            return list(chunks), [f"{DEGRADED_CLIENT_UNAVAILABLE} ({err})"]
 
         model = DATAPREP_CONTEXTUAL_MODEL.strip() or default_model
         total = len(chunks)
@@ -1001,7 +1940,14 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         # chunk (uses a larger doc budget — it is a single call; N× cheaper).
         if CONTEXTUAL_STRATEGY == "doc_level":
             doc_context = self._build_doc_context(chunks, input, DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL)
-            return await self._contextualize_doc_level(client, model, doc_context, chunks, file_id, total)
+            texts, generated = await self._contextualize_doc_level(client, model, doc_context, chunks, file_id, total)
+            # One call for the document, so there is no batch wave to exhaust a
+            # budget over — but that is not the same as "cannot degrade". A single
+            # call that returns nothing usable is the all-or-nothing case, exactly
+            # as a per_chunk phase where no chunk got a context, and it must name
+            # itself or doc_level deployments report every fully-uncontextualized
+            # document as a clean ingest.
+            return texts, [] if generated else [f"{DEGRADED_NO_CONTEXTS} (0/{total})"]
 
         # per_chunk (default): batched calls so the document context lives once
         # per batch (system prompt), not per chunk; per-chunk fallback on any
@@ -1010,7 +1956,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         system_prompt = CONTEXTUAL_RETRIEVAL_PROMPT.replace("{document_context}", doc_context)
         return await self._contextualize_per_chunk(client, model, system_prompt, chunks, file_id, total)
 
-    async def _contextualize_per_chunk(self, client, model, system_prompt, chunks, file_id, total) -> list[str]:
+    async def _contextualize_per_chunk(
+        self, client, model, system_prompt, chunks, file_id, total
+    ) -> tuple[list[str], list[str]]:
         """per_chunk strategy: batched LLM calls → one section-tailored context per chunk.
 
         Chunks are batched (``LABEL_LLM_BATCH_SIZE``) so the document context is
@@ -1030,9 +1978,21 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             async with semaphore:
                 return await self._context_batch_call(client, model, system_prompt, batch, file_id)
 
-        batch_results = await asyncio.gather(*[_process_batch(b) for b in batches])
+        partial_contexts, timed_out = await _gather_with_phase_budget(
+            [_process_batch(b) for b in batches],
+            phase="Contextual Retrieval",
+            phase_label=PHASE_LABEL_CONTEXTUAL,
+            total=len(batches),
+            file_id=file_id,
+            write_ingestion_log=self._write_ingestion_log,
+        )
+        if timed_out:
+            _llm_fallback_total.add(
+                len(batches) - len(partial_contexts), {"phase": PHASE_LABEL_CONTEXTUAL, "reason": "phase_budget"}
+            )
+
         contexts: dict[int, str] = {}
-        for partial in batch_results:
+        for partial in partial_contexts:
             contexts.update(partial)
 
         result = []
@@ -1071,7 +2031,27 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 f"Contextual Retrieval: {with_context}/{total} chunks contextualized "
                 f"({raw_count} using raw text after batch + per-chunk recovery failed)."
             )
-        return result
+        # Both a stalled phase and a phase that produced nothing are degradations,
+        # and they have different fixes — so both are named. Reporting only the
+        # budget case meant an endpoint that answers but returns nothing usable
+        # (a model without guided JSON, say) logged a loud ERROR and then left
+        # the document reading "Ingested", which is precisely the silent shortfall
+        # this status exists to make visible.
+        #
+        # Mutually exclusive, budget first: an exhausted phase produced no contexts
+        # *because* its batches were abandoned, so naming both would tell the
+        # operator to check their model supports guided JSON when the ceiling is
+        # what stopped it — the wrong knob, on top of the right one.
+        #
+        # Only the all-or-nothing case is a cause. A handful of chunks out of
+        # hundreds falling back is normal operation — it is what the per-batch
+        # fallback is for — and flagging the document for it would make the
+        # status fire on healthy documents and train operators to ignore it.
+        if timed_out:
+            return result, [DEGRADED_PHASE_BUDGET]
+        if with_context == 0:
+            return result, [f"{DEGRADED_NO_CONTEXTS} (0/{total})"]
+        return result, []
 
     async def _context_batch_call(self, client, model, system_prompt, batch, file_id) -> dict[int, str]:
         """One LLM call generating contexts for a batch of chunks.
@@ -1151,6 +2131,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         "Contextualization",
                         f"Batch context parse failure for chunks {[i for i, _ in batch]}; falling back to per-chunk.",
                     )
+                    _llm_fallback_total.add(1, {"phase": PHASE_LABEL_CONTEXTUAL, "reason": "batch_parse"})
                 except Exception as e:
                     err = f"{type(e).__name__}: {str(e)[:200]}"
                     if _is_vllm_input_overflow(e):
@@ -1165,6 +2146,11 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         )
                         raise DataprepInputTooLongError(f"vLLM context overflow at context_batch: {err}") from e
                     logger.warning(f"Batch context failed {[i for i, _ in batch]}: {err}; falling back to per-chunk.")
+                    if _is_timeout(e):
+                        with suppress(Exception):
+                            span.set_attribute(ATTRIBUTE_NAMES["dataprep_llm_timed_out"], True)
+                            span.set_attribute(ATTRIBUTE_NAMES["dataprep_llm_timeout_seconds"], LLM_TIMEOUT_SECONDS)
+                    _llm_fallback_total.add(1, {"phase": PHASE_LABEL_CONTEXTUAL, "reason": "batch_error"})
                     await self._write_ingestion_log(
                         file_id,
                         "WARN",
@@ -1177,8 +2163,16 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             fallback[i] = await self._context_single_call(client, model, system_prompt, i, text, file_id)
         return fallback
 
-    async def _contextualize_doc_level(self, client, model, doc_context, chunks, file_id, total) -> list[str]:
-        """doc_level strategy: one LLM call → one document context prepended to every chunk."""
+    async def _contextualize_doc_level(
+        self, client, model, doc_context, chunks, file_id, total
+    ) -> tuple[list[str], bool]:
+        """doc_level strategy: one LLM call → one document context prepended to every chunk.
+
+        Returns ``(texts, generated)``. ``generated`` is False when the single
+        call produced nothing usable, which is the doc_level equivalent of a
+        per_chunk phase where no chunk got a context — the caller needs it to
+        report the degradation rather than infer it from the text.
+        """
         system_prompt = _CONTEXTUAL_DOC_PROMPT_DEFAULT.replace("{document_context}", doc_context)
         logger.info(f"Contextual Retrieval (doc_level): 1 call for {total} chunks (model={model}).")
         summary = (await self._context_doc_call(client, model, system_prompt, file_id) or "").strip()
@@ -1193,9 +2187,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 "Contextualization",
                 "0 doc-level contexts generated — verify the model supports guided JSON and is reachable.",
             )
-            return list(chunks)
+            return list(chunks), False
         logger.info(f"Contextual Retrieval (doc_level): context generated, prepending to {total} chunks.")
-        return [f"{summary}\n\n{chunk}" for chunk in chunks]
+        return [f"{summary}\n\n{chunk}" for chunk in chunks], True
 
     async def _context_doc_call(self, client, model, system_prompt, file_id: str) -> str:
         """One LLM call generating a single document-level context (3 retries).
@@ -1226,7 +2220,24 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         response_format={"type": "json_object"},
                     )
                     parsed = json.loads(response.choices[0].message.content)
-                    ctx = parsed.get("context", "")
+                    # A body with no "context" key is not an answer saying the
+                    # chunk needs no context — it is a body in a shape we never
+                    # asked for, which is what a model ignoring
+                    # response_format=json_object produces. `parsed.get("context",
+                    # "")` made the two indistinguishable and then logged "empty
+                    # context", a statement about the model that is simply false.
+                    if not isinstance(parsed, dict) or "context" not in parsed:
+                        shape = type(parsed).__name__ if not isinstance(parsed, dict) else "object without 'context'"
+                        await self._write_ingestion_log(
+                            file_id,
+                            "WARN",
+                            "Contextualization",
+                            f"{'Doc-level'}: LLM returned a {shape}, not "
+                            '{"context": "..."}. Retrying '
+                            f"({attempt}/3)...",
+                        )
+                        continue
+                    ctx = parsed["context"]
                     if isinstance(ctx, str) and ctx.strip():
                         _usage = getattr(response, "usage", None)
                         if getattr(_usage, "completion_tokens", None) is not None:
@@ -1255,6 +2266,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         )
                         raise DataprepInputTooLongError(f"vLLM context overflow at context_doc: {err}") from e
                     logger.warning(f"Doc-level context attempt {attempt}/3 failed: {err}")
+                    if _is_timeout(e):
+                        with suppress(Exception):
+                            span.set_attribute(ATTRIBUTE_NAMES["dataprep_llm_timed_out"], True)
+                            span.set_attribute(ATTRIBUTE_NAMES["dataprep_llm_timeout_seconds"], LLM_TIMEOUT_SECONDS)
                     await self._write_ingestion_log(
                         file_id,
                         "WARN",
@@ -1267,6 +2282,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             "Contextualization",
             "Doc-level context generation failed after 3 attempts — using raw chunks.",
         )
+        _llm_fallback_total.add(1, {"phase": PHASE_LABEL_CONTEXTUAL, "reason": "doc_level_raw"})
         return ""
 
     async def _context_single_call(self, client, model, system_prompt, index: int, text: str, file_id: str) -> str:
@@ -1298,7 +2314,24 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         response_format={"type": "json_object"},
                     )
                     parsed = json.loads(response.choices[0].message.content)
-                    ctx = parsed.get("context", "")
+                    # A body with no "context" key is not an answer saying the
+                    # chunk needs no context — it is a body in a shape we never
+                    # asked for, which is what a model ignoring
+                    # response_format=json_object produces. `parsed.get("context",
+                    # "")` made the two indistinguishable and then logged "empty
+                    # context", a statement about the model that is simply false.
+                    if not isinstance(parsed, dict) or "context" not in parsed:
+                        shape = type(parsed).__name__ if not isinstance(parsed, dict) else "object without 'context'"
+                        await self._write_ingestion_log(
+                            file_id,
+                            "WARN",
+                            "Contextualization",
+                            f"{f'Chunk {index}'}: LLM returned a {shape}, not "
+                            '{"context": "..."}. Retrying '
+                            f"({attempt}/3)...",
+                        )
+                        continue
+                    ctx = parsed["context"]
                     if isinstance(ctx, str) and ctx.strip():
                         _usage = getattr(response, "usage", None)
                         if getattr(_usage, "completion_tokens", None) is not None:
@@ -1327,6 +2360,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         )
                         raise DataprepInputTooLongError(f"vLLM context overflow at context_single: {err}") from e
                     logger.warning(f"Chunk {index}: context attempt {attempt}/3 failed: {err}")
+                    if _is_timeout(e):
+                        with suppress(Exception):
+                            span.set_attribute(ATTRIBUTE_NAMES["dataprep_llm_timed_out"], True)
+                            span.set_attribute(ATTRIBUTE_NAMES["dataprep_llm_timeout_seconds"], LLM_TIMEOUT_SECONDS)
                     await self._write_ingestion_log(
                         file_id,
                         "WARN",
@@ -1339,21 +2376,56 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             "Contextualization",
             f"Chunk {index}: context generation failed after 3 attempts — using raw chunk.",
         )
+        _llm_fallback_total.add(1, {"phase": PHASE_LABEL_CONTEXTUAL, "reason": "raw_chunk"})
         return ""
 
     async def _llm_suggest_labels(
         self, client, model, system_prompt, batch, file_id, file_labels
-    ) -> dict[int, list[str]]:
-        """Return raw suggested labels per chunk index for one batch.
+    ) -> tuple[dict[int, list[str]], int]:
+        """Return ``(suggestions, fell_back)`` for one batch.
 
-        Uses a single batched LLM call when ``len(batch) > 1``; any parse failure
-        falls back to one call per chunk so labeling always completes.
+        ``suggestions`` maps chunk index to raw suggested labels. Uses a single
+        batched LLM call when ``len(batch) > 1``; any parse failure falls back to
+        one call per chunk so labeling always completes.
+
+        ``fell_back`` counts the chunks whose labels came from the document's own
+        scope because the model did not answer, NOT the ones the model answered
+        with an empty list. The two are indistinguishable in ``suggestions`` —
+        a chunk the model genuinely found no matching label for and a chunk
+        whose call failed three times both arrive as ``[]`` or as the file's
+        labels — and only the second one is a degradation. The caller needs the
+        distinction to tell a total labelling failure from a document that
+        legitimately matched nothing.
         """
         if len(batch) > 1:
             try:
-                suggestions = await self._llm_call_batch(client, model, system_prompt, batch, file_id)
-                if suggestions is not None:
-                    return suggestions
+                result = await self._llm_call_batch(client, model, system_prompt, batch, file_id)
+                if result is not None:
+                    suggestions, missing = result
+                    if not missing:
+                        return suggestions, 0
+                    # Keep what the model DID answer and re-ask only the rest.
+                    # Falling through to the per-chunk path below would re-ask
+                    # every chunk in the batch, spending a second call on each
+                    # one already labelled by the call we just made.
+                    out = dict(suggestions)
+                    fell_back = 0
+                    by_index = dict(batch)
+                    for i in missing:
+                        labels, used_file_labels = await self._llm_call_single(
+                            client, model, system_prompt, i, by_index[i], file_id, file_labels
+                        )
+                        out[i] = labels
+                        fell_back += used_file_labels
+                    return out, fell_back
+                # _llm_call_batch already counted the failure (parse or call) —
+                # it swallows both and returns None, so nothing reaches the
+                # handlers below for a failed call.
+                # Wording is a published contract: this substring is listed in
+                # site/content/en/docs/operate/ingestion-log.md as one of the
+                # "canonical messages you will grep for", with the guided-JSON
+                # remedy attached. Renaming it here silently breaks the
+                # runbook, so the doc moves with the string, not the reverse.
                 await self._write_ingestion_log(
                     file_id,
                     "WARN",
@@ -1370,6 +2442,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 # raise the same typed exception cleanly when they hit the cap.
                 raise
             except Exception as e:
+                # Reached only for a failure _llm_call_batch did not handle —
+                # it is the last resort before per-chunk, not the common path.
+                # No counter here on purpose: _llm_call_batch swallows every
+                # failure it sees and returns None, so this handler only runs
+                # for an exception raised outside its own try, and a counter
+                # there would report a permanently-zero label that reads as
+                # "no batch errors ever happen".
                 err = f"{type(e).__name__}: {str(e)[:200]}"
                 batch_indices = [i for i, _ in batch]
                 await self._write_ingestion_log(
@@ -1380,12 +2459,25 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 )
         # Per-chunk path (default, and batch fallback for transient/non-overflow errors).
         out: dict[int, list[str]] = {}
+        fell_back = 0
         for i, text in batch:
-            out[i] = await self._llm_call_single(client, model, system_prompt, i, text, file_id, file_labels)
-        return out
+            labels, used_file_labels = await self._llm_call_single(
+                client, model, system_prompt, i, text, file_id, file_labels
+            )
+            out[i] = labels
+            fell_back += used_file_labels
+        return out, fell_back
 
-    async def _llm_call_single(self, client, model, system_prompt, index, text, file_id, file_labels) -> list[str]:
-        """One LLM call for a single chunk with up to 3 retries. Emits an OTel span."""
+    async def _llm_call_single(
+        self, client, model, system_prompt, index, text, file_id, file_labels
+    ) -> tuple[list[str], bool]:
+        """One LLM call for a single chunk with up to 3 retries. Emits an OTel span.
+
+        Returns ``(labels, fell_back)``. ``fell_back`` is True only when the
+        model did not answer and the document's own labels were substituted —
+        not when the model answered that the chunk matches nothing, which is a
+        correct answer and not a degradation.
+        """
         for attempt in range(1, 4):
             with background_span(
                 "dataprep.llm.label_chunk",
@@ -1408,7 +2500,25 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         response_format={"type": "json_object"},
                     )
                     parsed = json.loads(response.choices[0].message.content)
-                    suggested = parsed.get("labels", [])
+                    # A body with no "labels" key is not an answer saying "no match" —
+                    # it is a body in a shape we did not ask for, which is what a model
+                    # ignoring response_format=json_object produces. `parsed.get("labels", [])`
+                    # made the two indistinguishable: the key missing became an empty list,
+                    # so the call counted as ANSWERED, fell_back stayed False, and a document
+                    # with every chunk unlabelled reported a clean Ingested. An explicit
+                    # {"labels": []} is a real answer and still takes the path below.
+                    if not isinstance(parsed, dict) or "labels" not in parsed:
+                        shape = type(parsed).__name__ if not isinstance(parsed, dict) else "object without 'labels'"
+                        await self._write_ingestion_log(
+                            file_id,
+                            "WARN",
+                            "Labeling",
+                            f"Chunk {index}: LLM returned a {shape}, not "
+                            '{"labels": [...]}. Retrying '
+                            f"({attempt}/3)...",
+                        )
+                        continue
+                    suggested = parsed["labels"]
                     # Lenient: null -> []; a bare string -> [string]; drop non-strings.
                     if suggested is None:
                         suggested = []
@@ -1420,7 +2530,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         _usage = getattr(response, "usage", None)
                         if getattr(_usage, "completion_tokens", None) is not None:
                             span.set_attribute("dataprep.llm.completion_tokens", _usage.completion_tokens)
-                        return suggested
+                        return suggested, False
                     await self._write_ingestion_log(
                         file_id,
                         "WARN",
@@ -1447,6 +2557,15 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         )
                         raise DataprepInputTooLongError(f"vLLM context overflow on chunk {index}: {err}") from e
                     logger.warning(f"Chunk {index}: LLM label attempt {attempt}/3 failed: {err}")
+                    # A timeout is the failure this deck is budgeted against, and
+                    # the one that says nothing useful unless it is labelled:
+                    # the span otherwise closes with no tokens, no duration
+                    # reason and no status, which is indistinguishable from a
+                    # call that is still in flight.
+                    if _is_timeout(e):
+                        with suppress(Exception):
+                            span.set_attribute(ATTRIBUTE_NAMES["dataprep_llm_timed_out"], True)
+                            span.set_attribute(ATTRIBUTE_NAMES["dataprep_llm_timeout_seconds"], LLM_TIMEOUT_SECONDS)
                     await self._write_ingestion_log(
                         file_id,
                         "WARN",
@@ -1459,10 +2578,30 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             "Labeling",
             f"Chunk {index}: LLM failed to return valid labels after 3 attempts. Falling back to file labels.",
         )
-        return list(file_labels) if file_labels else []
+        _llm_fallback_total.add(1, {"phase": PHASE_LABEL_LABELING, "reason": "file_labels"})
+        return (list(file_labels) if file_labels else []), True
 
-    async def _llm_call_batch(self, client, model, system_prompt, batch, file_id) -> dict[int, list[str]] | None:
-        """One LLM call labeling a whole batch of chunks. Returns None on parse failure."""
+    async def _llm_call_batch(self, client, model, system_prompt, batch, file_id):
+        """One LLM call labeling a whole batch of chunks.
+
+        Returns ``(suggestions, missing)`` where ``missing`` lists the requested
+        indices the response never mentioned, or ``None`` when the response
+        cannot be used as a batch answer AT ALL — malformed JSON, not an object,
+        or a failed call.
+
+        The two are different failures with different costs. ``None`` throws the
+        whole call away, so the caller re-asks every chunk. An incomplete answer
+        is mostly good: the model labelled N-1 of N chunks, and re-asking all N
+        discards N-1 answers it already paid for. On a contended GPU — exactly
+        where the batch call is slowest and a drop most likely — that turns a
+        2-call batch into 5 calls each carrying its own retry ladder, holding the
+        same semaphore slot for the lot, which is more than the phase ceiling is
+        sized for. So an incomplete answer is returned, not discarded, and only
+        the missing indices are re-asked.
+
+        An index present with an unusable VALUE is neither case — it becomes []
+        in place, without re-asking, which is what the model means by it.
+        """
         indices = [i for i, _ in batch]
         user_content = (
             "For each numbered chunk below, assign labels. Respond with ONLY a JSON object "
@@ -1499,9 +2638,16 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 )
                 parsed = json.loads(response.choices[0].message.content)
                 if not isinstance(parsed, dict):
+                    _llm_fallback_total.add(1, {"phase": PHASE_LABEL_LABELING, "reason": "batch_parse"})
                     return None
                 index_set = set(indices)
                 suggestions: dict[int, list[str]] = {}
+                # Which indices the response MENTIONED, tracked apart from which
+                # it managed to give a usable value for. The two used to be the
+                # same set, so an index the model never mentioned and one it
+                # mentioned with an unusable value both ended up as [] filed
+                # under "the model chose not to label them".
+                mentioned: set[int] = set()
                 for key, labels in parsed.items():
                     try:
                         idx = int(key)
@@ -1509,6 +2655,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         continue
                     if idx not in index_set:
                         continue
+                    mentioned.add(idx)
                     # Lenient: accept the model's varied shapes (null / string / list);
                     # an unusable value skips the chunk (-> empty) instead of failing the batch.
                     if labels is None:
@@ -1519,15 +2666,53 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         continue
                     labels = [x for x in labels if isinstance(x, str)]
                     suggestions[idx] = labels
-                # Missing indices = the model chose not to label them (valid → empty).
+                # An index the response never mentioned is a contract violation,
+                # not an answer: the prompt this same call sends says "Every index
+                # MUST be present" and "use [] for chunks with no matching label",
+                # so [] is how the model says no-match and absence says something
+                # else. Filling those with [] and filing them under "the model
+                # chose not to label them" stored the document's chunks unlabelled
+                # and reported a clean Ingested.
+                #
+                # Returns the partial map plus the missing indices, NOT None.
+                # The caller keeps what the model DID answer and re-asks only
+                # the absent ones: returning None told it the whole batch was
+                # unusable, so it re-asked every chunk in it — five calls with
+                # their own retry ladders, one semaphore slot, against a phase
+                # ceiling sized on batch count and blind to the expansion. This
+                # is what _context_batch_call already does for the same
+                # violation on the contextual side.
+                #
+                # A value that is present but unusable stays lenient and becomes
+                # [], as before — the batch parser has always recovered from a bad
+                # VALUE without re-asking. Only an absent KEY is a failure.
+                missing = [i for i in indices if i not in mentioned]
+                if missing:
+                    _llm_fallback_total.add(len(missing), {"phase": PHASE_LABEL_LABELING, "reason": "batch_parse"})
+                    # _safe_log, not _write_ingestion_log: a logging failure
+                    # escaping into the ingest path is caught by the outer
+                    # except in ingest_file_with_guardrail, which then retracts
+                    # every chunk the finished batches committed. See _safe_log.
+                    await _safe_log(
+                        self._write_ingestion_log,
+                        file_id,
+                        "WARN",
+                        "Labeling",
+                        f"Batch labeling response omitted chunk indices {missing}; "
+                        f"re-asking those {len(missing)} of {len(indices)} only.",
+                    )
+                # Every index that was mentioned is answered: absent from
+                # `suggestions` means its value was unusable, which is a [] the
+                # model did ask for.
                 for i in indices:
-                    suggestions.setdefault(i, [])
+                    if i not in missing:
+                        suggestions.setdefault(i, [])
                 span.set_attribute("dataprep.labels_suggested", sum(len(v) for v in suggestions.values()))
                 _usage = getattr(response, "usage", None)
                 if getattr(_usage, "completion_tokens", None) is not None:
                     span.set_attribute("dataprep.llm.completion_tokens", _usage.completion_tokens)
                     span.set_attribute("dataprep.llm.prompt_tokens", getattr(_usage, "prompt_tokens", 0))
-                return suggestions
+                return suggestions, missing
             except Exception as e:
                 err = f"{type(e).__name__}: {str(e)[:200]}"
                 if _is_vllm_input_overflow(e):
@@ -1541,12 +2726,29 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         f"Batch labeling vLLM context overflow ({err}). Aborting.",
                     )
                     raise DataprepInputTooLongError(f"vLLM context overflow at llm_call_batch: {err}") from e
+                # The batched call IS the path that stalls in practice (a
+                # 260-chunk document issues 65 of them), so the timeout marker
+                # belongs here as much as on the per-chunk call. Without it this
+                # span closes with no tokens and no status — indistinguishable
+                # from one still in flight.
+                if _is_timeout(e):
+                    with suppress(Exception):
+                        span.set_attribute(ATTRIBUTE_NAMES["dataprep_llm_timed_out"], True)
+                        span.set_attribute(ATTRIBUTE_NAMES["dataprep_llm_timeout_seconds"], LLM_TIMEOUT_SECONDS)
                 await self._write_ingestion_log(
                     file_id,
                     "WARN",
                     "Labeling",
                     f"Batch labeling call failed for chunks {indices} ({err}); returning None for per-chunk fallback.",
                 )
+                # Counted here, not in the caller: this function swallows every
+                # failure and returns None, so the caller's own error handler
+                # never runs for a call that failed — only for one whose parse
+                # failed. Counting there would leave batch_error permanently
+                # zero and file every timeout under batch_parse, which is the
+                # opposite of what an operator querying a contended GPU needs to
+                # see.
+                _llm_fallback_total.add(1, {"phase": PHASE_LABEL_LABELING, "reason": "batch_error"})
                 return None
 
     async def _finalize_chunk_labels(self, index, suggested, all_labels, file_id, file_labels=None) -> list[str]:
@@ -1634,20 +2836,31 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         return results
 
     async def _apply_labels(self, plain_chunks: list[str], all_labels: list[str], file_labels: list[str], file_id: str):
+        """Returns ``(labelled_docs, reasons)``.
+
+        ``reasons`` lists human-readable causes, empty when labelling completed,
+        and it is what stops the document being reported as plainly Ingested. A
+        list rather than a flag because the causes have DIFFERENT REMEDIES — see
+        DEGRADED_REMEDIES. The non-LLM strategies have no budget and no failure
+        mode of their own, and an empty taxonomy is a configured state rather
+        than a degraded one.
+        """
         if not all_labels:
             await self._write_ingestion_log(
                 file_id, "WARN", "Labeling", "No labels found in Taxonomy. Using only file labels."
             )
-            return [{"text": c, "labels": file_labels if file_labels else []} for c in plain_chunks]
+            return [{"text": c, "labels": file_labels if file_labels else []} for c in plain_chunks], []
 
         logger.info(f"Labeling using strategy: {LABELING_STRATEGY}")
 
         if LABELING_STRATEGY == "embedding":
             # Offload CPU-bound embedding calculations to a thread
-            return await asyncio.to_thread(self._label_with_embedding, plain_chunks, all_labels)
+            docs = await asyncio.to_thread(self._label_with_embedding, plain_chunks, all_labels)
+            return docs, []
         elif LABELING_STRATEGY == "bm25":
             # Offload CPU-bound BM25 calculations to a thread
-            return await asyncio.to_thread(self._label_with_bm25, plain_chunks, all_labels)
+            docs = await asyncio.to_thread(self._label_with_bm25, plain_chunks, all_labels)
+            return docs, []
         else:
             # Default to LLM (with retry fix and advisory logic)
             return await self._label_with_llm(plain_chunks, all_labels, file_labels, file_id)
@@ -1779,13 +2992,28 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     # chunk so the embedding carries the document's subject (see
                     # spec-contextual-retrieval.md). No-op (returns chunks unchanged)
                     # when CONTEXTUAL_RETRIEVAL_ENABLED=false.
-                    contextualized = await self._apply_contextualization(original_chunks, input, input.file_id)
+                    contextualized, contextual_reasons = await self._apply_contextualization(
+                        original_chunks, input, input.file_id
+                    )
                     # Decoupled mode (CONTEXTUAL_LABEL_RAW, default true): label the
                     # RAW chunk (the context prefix distorts labeling — over/under-
                     # label) and use the contextualized text ONLY for the embedding.
                     # When false, the context is fed to both (label contextualized).
                     label_input = original_chunks if CONTEXTUAL_LABEL_RAW else contextualized
-                    labelled_docs = await self._apply_labels(label_input, all_labels, file_labels, input.file_id)
+                    labelled_docs, labelling_reasons = await self._apply_labels(
+                        label_input, all_labels, file_labels, input.file_id
+                    )
+                    # (phase, why) pairs rather than names: the two causes have
+                    # different fixes, and telling an operator to raise a budget
+                    # for a client that will not build wastes their afternoon.
+                    degraded_phases = [
+                        (name, reason)
+                        for name, reasons in (
+                            ("Contextual Retrieval", contextual_reasons),
+                            ("LLM labeling", labelling_reasons),
+                        )
+                        for reason in reasons
+                    ]
 
                     # 5. Graph Insertion (BATCHED & CONCURRENT)
                     # BREAKING CHANGE (v1.3 → v1.5): default changed from "genie_graph" to "GRAPH".
@@ -1833,13 +3061,41 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         tasks.append(task)
 
                     # Wait for all batches to complete
+                    #
+                    # Not run through _gather_with_phase_budget, unlike the two
+                    # LLM phases above. That helper cancels stragglers on its
+                    # deadline, which is only safe because the labeling and
+                    # context phases have a fallback that turns an abandoned
+                    # batch into a degraded-but-present result. This phase has
+                    # none: a cancelled batch loses its chunks outright and the
+                    # ingest still ends "Ingested" — silently dropping documents
+                    # from the knowledge graph is strictly worse than a slow one.
+                    # So this phase is unbounded, but it still HEARTBEATS, because a
+                    # wedged graph phase is just as silent as the LLM phases
+                    # were and the whole point is that it is visible.
+                    #
+                    # Its clients are not ours to bound. The embedding half runs
+                    # inside the vendored comps dataprep, which reads VLLM_TIMEOUT
+                    # from a bare os.getenv — so a value would reach httpx as a
+                    # string, which 0.28 does not coerce, and the client raises
+                    # TypeError instead of timing out. That is why no compose
+                    # line injects it (see OVERRIDES.yaml). The ArangoDB writes
+                    # go through langchain-arangodb / py-arango, which carry
+                    # their own socket timeouts and take no HTTP budget.
                     if tasks:
-                        await asyncio.gather(*tasks)
+                        await _await_with_heartbeat(
+                            tasks,
+                            phase="Graph insertion",
+                            total=len(tasks),
+                            file_id=input.file_id,
+                            write_ingestion_log=self._write_ingestion_log,
+                        )
 
                     # Ensure the vector index matches the embedder dim
                     # (recreate if dim drift). Failures are swallowed — see
-                    # ensure_vector_index() docstring. Runs AFTER gather so
-                    # all batches are visible for index creation, and
+                    # ensure_vector_index() docstring. Runs once every graph
+                    # task has settled so all chunks are visible for index
+                    # creation, and
                     # BEFORE Ingested status flip so the retriever never
                     # queries a missing/stale index.
                     _metric, _n_lists = _read_index_params()
@@ -1854,9 +3110,63 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     )
 
                     # 6. Final Status Update
-                    await self._update_doc_status(input.file_id, "Ingested", chunk_count=len(chunks))
+                    # A phase that ran out of budget leaves the document
+                    # incomplete: some chunks carry the document's file labels
+                    # instead of model labels, or raw text instead of generated
+                    # context. "Ingested" claims the whole document landed, so a
+                    # degraded one is reported as "Ingested with Warnings" — a
+                    # state the API schema, the i18n catalogue and the admin
+                    # badge all already carry, and which nothing produced until
+                    # now. Not retracted: the batches that did finish are real
+                    # work, and the warning state is what makes the shortfall
+                    # visible instead of silent.
+                    ingest_status = "Ingested with Warnings" if degraded_phases else "Ingested"
+                    await self._update_doc_status(input.file_id, ingest_status, chunk_count=len(chunks))
+                    if degraded_phases:
+                        # One sentence per cause, each naming the knob that fixes
+                        # THAT cause. A single combined sentence either lies
+                        # about what happened or gives a remedy that does not
+                        # apply — an operator who raises a budget because the
+                        # message says to, re-ingests, and gets the identical
+                        # failure because the endpoint was the problem.
+                        #
+                        # Every cause is reported, not just the first: two phases
+                        # degrading for two different reasons is the normal case
+                        # when a GPU node is unhealthy, and naming one of them
+                        # sends the operator to fix it and find the other still
+                        # broken.
+                        remedy_sentences = []
+                        for name, reason in degraded_phases:
+                            remedy = DEGRADED_REMEDIES.get(_degraded_cause(reason))
+                            if remedy is None:
+                                # No remedy mapped for this cause: report it
+                                # verbatim rather than borrowing another cause's
+                                # advice, which would be a guess presented as
+                                # a diagnosis.
+                                remedy_sentences.append(f"{name}: {reason}.")
+                            else:
+                                # The reason comes first and verbatim, so the line
+                                # is greppable on the phrase the runbook quotes and
+                                # keeps the (0/N) counts the remedy drops. Then the
+                                # advice for this cause specifically.
+                                remedy_sentences.append(
+                                    f"{name}: {reason} — "
+                                    + remedy.format(phase=name, seconds=DATAPREP_LLM_PHASE_TIMEOUT_SECONDS)
+                                )
+                        await self._write_ingestion_log(
+                            input.file_id,
+                            "WARN",
+                            "System",
+                            "Ingestion completed DEGRADED — status set to 'Ingested with Warnings'. "
+                            + " ".join(remedy_sentences),
+                        )
                     await self._write_ingestion_log(
-                        input.file_id, "INFO", "System", "Ingestion completed successfully."
+                        input.file_id,
+                        "WARN" if degraded_phases else "INFO",
+                        "System",
+                        "Ingestion completed with warnings."
+                        if degraded_phases
+                        else "Ingestion completed successfully.",
                     )
 
                     return {
@@ -1871,20 +3181,24 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     kill_msg = f"Ingestion for {input.file_id} was KILLED by an administrator. Rolling back..."
                     logger.warning(kill_msg)
 
-                    # Log the termination event
-                    await self._write_ingestion_log(
-                        input.file_id, "WARN", "System", "Ingestion process killed. Starting cleanup..."
+                    # The rollback runs uninterruptible. This handler is a chain of
+                    # awaits, and an await inside a cancellation path is itself
+                    # cancellable: a second task.cancel() — a double-clicked Kill,
+                    # which this endpoint allows, or a shutdown sweep — used to land
+                    # on the first await and skip the rest. The result was a
+                    # document with its chunks half-deleted, still served to the
+                    # retriever, and a status that never reached "Killed" because
+                    # the flip was after the retracted cascade.
+                    interrupted = await _run_uninterruptible(
+                        self._rollback_killed_ingest(input.file_id, getattr(input, "graph_name", "GRAPH")),
+                        timeout=_ROLLBACK_CANCEL_GRACE_SECONDS,
+                        label=f"rollback of {input.file_id}",
                     )
-
-                    # Perform graceful rollback (retraction)
-                    await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH"))
-
-                    # Set final status to "Killed" as per state machine specification
-                    await self._update_doc_status(input.file_id, "Killed")
-
-                    await self._write_ingestion_log(
-                        input.file_id, "INFO", "System", "Cleanup complete. Document state set to Killed."
-                    )
+                    if interrupted:
+                        logger.warning(
+                            f"{input.file_id}: cancelled again during the kill rollback; "
+                            "the rollback was allowed to finish anyway"
+                        )
                     raise  # Re-raise to ensure the task terminates properly
 
                 except Exception as e:
@@ -1909,6 +3223,26 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             if lock_file:
                 fcntl.flock(lock_file, fcntl.LOCK_UN)
                 lock_file.close()
+
+    async def _rollback_killed_ingest(self, file_id: str, graph_name: str) -> None:
+        """Undo a killed ingest: retract what was written, then mark it Killed.
+
+        Split out of the ``except asyncio.CancelledError`` block so the whole
+        sequence can be handed to ``_run_uninterruptible`` as one unit. Inline,
+        a second cancellation could abort it between any two steps; as a single
+        coroutine, nothing lands inside it.
+        """
+        await self._write_ingestion_log(file_id, "WARN", "System", "Ingestion process killed. Starting cleanup...")
+        try:
+            await self.retract_file(file_id=file_id, graph_name=graph_name)
+        finally:
+            # The status flip runs even when the retract fails. Inlined it was
+            # simply the statement after the call, so a failed retract left the
+            # document on whatever status it last had — partially deleted, with
+            # nothing on the record that an operator killed it.
+            with suppress(Exception):
+                await self._update_doc_status(file_id, "Killed")
+        await self._write_ingestion_log(file_id, "INFO", "System", "Cleanup complete. Document state set to Killed.")
 
     async def retract_file(self, file_id: str, graph_name: str):
         """

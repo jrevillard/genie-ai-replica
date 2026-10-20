@@ -114,7 +114,11 @@ class MetadataService {
         bindVars.author = author;
       }
       if (status) {
-        filters.push('file.dataprep.status == @status');
+        // Case-insensitive, like fileService's own dataprepStatus filter. The
+        // stored value is capitalised ("Ingested with Warnings") and the
+        // parameter is not, so an exact match returns nothing for every status
+        // an operator can pick from the UI.
+        filters.push('LOWER(file.dataprep.status) == LOWER(@status)');
         bindVars.status = status;
       }
       if (language) {

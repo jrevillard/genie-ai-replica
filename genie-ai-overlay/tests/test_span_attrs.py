@@ -60,6 +60,7 @@ OWNED_SPAN_NAMES = {
     "dataprep.llm.context_chunk",
     "dataprep.llm.context_doc",
     "dataprep.llm.label_batch",
+    "dataprep.llm.phase",
     "dataprep.llm.label_chunk",
     "dataprep.log_environment_variables",
     "dataprep.retract",
@@ -154,8 +155,15 @@ class TestVocabularyShape:
     def test_values_are_unique(self):
         assert len(set(VOCABULARY)) == len(VOCABULARY)
 
-    def test_vocabulary_size_is_explicit(self):
-        assert len(ATTRIBUTE_NAMES) == 80
+    def test_vocabulary_entry_count_is_pinned(self):
+        # Pin on the vocabulary size, raised 80 → 83 for the three bounded-LLM
+        # attributes (dataprep.llm.timed_out / .timeout_seconds / .phase). The
+        # pin exists so growth is a deliberate edit rather than a drifting
+        # default, not to forbid adding a key — a bounded-timeout trace needs a
+        # key that distinguishes "hit the budget" from "still running", and a
+        # shared phase ceiling needs one that says which phase ran out. Bump
+        # this with the addition it accounts for.
+        assert len(ATTRIBUTE_NAMES) == 83
 
 
 class TestLegacyAttributeNames:
@@ -248,7 +256,9 @@ class TestLegacyAttributeNames:
         ]
 
     def test_registering_the_backlog_did_not_inflate_the_vocabulary(self):
-        assert len(ATTRIBUTE_NAMES) == 80
+        # See test_vocabulary_entry_count_is_pinned — raised 80 → 83 alongside the
+        # three bounded-LLM attributes, not by the legacy sweep.
+        assert len(ATTRIBUTE_NAMES) == 83
         assert len(LEGACY_ATTRIBUTE_NAMES) == 21
 
 
@@ -857,6 +867,40 @@ class TestOwnedSpanCoverage:
             "represent natively, EVAL_HARNESS_KEYS for a key the RAG harness "
             "reads, LEGACY_ATTRIBUTE_NAMES only for a key that already ships "
             "and cannot change."
+        )
+
+    def test_timeout_attributes_are_emitted_through_the_vocabulary(self, overlay_sources):
+        """The two timeout keys must be read from the register, not retyped.
+
+        ``test_every_attribute_key_written_in_the_overlay_is_registered`` checks
+        that a written key is *registered*, not that the emitter reads the
+        register. Writing ``span.set_attribute("dataprep.llm.timed_out", True)``
+        passes while ``ATTRIBUTE_NAMES["dataprep_llm_timed_out"]`` is renamed:
+        the vocabulary and the emitters then disagree, and the size pin above
+        still passes because the vocabulary did not shrink.
+
+        Scoped to the keys this work added rather than to dataprep's whole span
+        surface: the pre-existing attributes there are written as literals and
+        converting them is a separate change, not something this test should
+        make a prerequisite for.
+        """
+        keys = {ATTRIBUTE_NAMES["dataprep_llm_timed_out"], ATTRIBUTE_NAMES["dataprep_llm_timeout_seconds"]}
+        offenders: list[str] = []
+        for path in overlay_sources:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "set_attribute"
+                    and node.args
+                    and isinstance(node.args[0], ast.Constant)
+                    and node.args[0].value in keys
+                ):
+                    offenders.append(f"{path.name}:{node.lineno} {node.args[0].value}")
+        assert not offenders, (
+            f"timeout attributes written as literals instead of read from ATTRIBUTE_NAMES: "
+            f"{offenders}. Index the vocabulary so a rename propagates."
         )
 
     def test_the_derivation_covers_most_registered_keys(self, overlay_sources):

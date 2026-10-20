@@ -1277,6 +1277,8 @@ services:
       # The LLM timeout and retry budget are set at the top of this block,
       # where the two-name split is explained.
       MODEL_CONTROL_PLANE_TIMEOUT_SECONDS: ${MODEL_CONTROL_PLANE_TIMEOUT_SECONDS:-30}
+      DATAPREP_LLM_PHASE_TIMEOUT_SECONDS: ${DATAPREP_LLM_PHASE_TIMEOUT_SECONDS:-900}
+      DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS: ${DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS:-60}
     extra_hosts:
       - "localhost:host-gateway"
     networks:

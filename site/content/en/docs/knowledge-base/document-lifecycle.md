@@ -28,7 +28,7 @@ admin UI shows them lowercased (`pending`, `ingesting`, etc.) — see the
 | `Pending` | `pending` | File received and virus-scanned; stored on disk. Not yet searchable. |
 | `Ingesting` | `ingesting` | Dataprep is parsing, chunking, labelling, and embedding. |
 | `Ingested` | `ingested` | All chunks indexed; the document is **retrievable**. |
-| `Ingested with Warnings` | `ingested with warnings` | Ingestion succeeded but at least one chunk used a fallback (raw chunk / fallback embedding). Retrievable, but inspect the ingestion log. |
+| `Ingested with Warnings` | `ingested with warnings` | Ingestion finished, but a whole phase accomplished nothing: the labels or the generated contexts for every chunk came from the file labels or the raw text. Retrievable, but the model did no work on it — re-ingest, and read the ingestion log for which phase stopped and why. A few chunks falling back while the rest succeeded is normal operation and leaves the status plain `Ingested`. |
 | `Ingestion Error` | `ingestion error` | Processing failed; the document is **not** searchable. Check the ingestion log for the reason. |
 | `Killed` | `killed` | Ingestion was aborted by an admin (see "Kill an in-flight ingest" below). |
 | `Retracted` | `retracted` | The document was deliberately removed via the retract flow. Not searchable. |

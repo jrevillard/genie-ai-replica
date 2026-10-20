@@ -183,9 +183,83 @@ describe('GpuTranslateBackend streaming', () => {
       expect(body.max_tokens).toBeLessThan(capped.maxModelLen / 2);
     });
 
-    it('degrades to a minimal budget rather than a negative one on an oversized prompt', () => {
-      const body = capped.formatRequest('google/gemma-3-4b-it', 'en', 'fr', 'x'.repeat(40000));
-      expect(body.max_tokens).toBeGreaterThanOrEqual(1);
+    it('refuses a prompt that does not fit the window at all', () => {
+      // Sending this with a minimal budget would earn a 200 with a near-empty
+      // translation, which the markdown path would substitute for the paragraph.
+      // Refusing it here routes the request to the CPU backend instead.
+      expect(() => capped.formatRequest('google/gemma-3-4b-it', 'en', 'fr', 'x'.repeat(40000))).toThrow(/does not fit/);
+    });
+
+    it('refuses to size a budget for a body with no messages', () => {
+      expect(() => capped._capMaxTokens({ model: 'google/gemma-3-4b-it' })).toThrow(/no messages array/);
+    });
+  });
+
+  describe('truncation detection', () => {
+    let backend;
+    beforeAll(() => {
+      backend = new GpuTranslateBackend();
+      backend.initialized = true;
+    });
+    afterEach(() => jest.clearAllMocks());
+
+    const serveBody = (body) => {
+      const res = new EventEmitter();
+      res.statusCode = 200;
+      res.setEncoding = () => {};
+      http.request.mockImplementation((opts, cb) => {
+        const req = new EventEmitter();
+        req.write = () => {};
+        req.end = () => {};
+        process.nextTick(() => {
+          cb(res);
+          res.emit('data', JSON.stringify(body));
+          res.emit('end');
+        });
+        return req;
+      });
+    };
+
+    it('rejects a non-streaming translation that stopped at max_tokens', async () => {
+      // A budget is a ceiling: without this the caller cannot tell a short text
+      // from a cut-off one, and the shortened answer reaches the cache.
+      serveBody({
+        choices: [{ finish_reason: 'length', message: { content: 'Une traduc' } }]
+      });
+      await expect(
+        backend.callVllmService({ model: 'm', messages: [{ role: 'user', content: 'hi' }] })
+      ).rejects.toThrow(/truncated/);
+    });
+
+    it('resolves a completed non-streaming translation', async () => {
+      serveBody({
+        choices: [{ finish_reason: 'stop', message: { content: ' Hola ' } }]
+      });
+      await expect(backend.callVllmService({ model: 'm', messages: [{ role: 'user', content: 'hi' }] })).resolves.toBe(
+        'Hola'
+      );
+    });
+
+    it('rejects a stream that stopped at max_tokens', async () => {
+      const res = new EventEmitter();
+      res.statusCode = 200;
+      res.setEncoding = () => {};
+      http.request.mockImplementation((opts, cb) => {
+        const req = new EventEmitter();
+        req.write = () => {};
+        req.end = () => {};
+        process.nextTick(() => {
+          cb(res);
+          res.emit('data', 'data: {"choices":[{"delta":{"content":"Hola"}}]}\n\n');
+          res.emit('data', 'data: {"choices":[{"finish_reason":"length","delta":{}}]}\n\n');
+          res.emit('data', 'data: [DONE]\n\n');
+          res.emit('end');
+        });
+        return req;
+      });
+      await expect(backend.callVllmStream({ model: 'm', messages: [{ role: 'user', content: 'hi' }] })).rejects.toThrow(
+        /truncated/
+      );
     });
   });
 

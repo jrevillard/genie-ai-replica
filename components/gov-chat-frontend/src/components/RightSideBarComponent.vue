@@ -551,7 +551,10 @@ export default {
   padding-left: var(--space-lg);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767px) {
+  /* Off-canvas until made visible. The boundary is (max-width: 767px)
+     so it does NOT overlap with the in-flow rule elsewhere at exactly
+     768 px (the same 768 px seam that SideBarComponent has). */
   .sidebar {
     position: fixed;
     right: 0;
@@ -567,6 +570,22 @@ export default {
 
   .sidebar.collapsed {
     transform: translateX(calc(100% - 50px));
+  }
+}
+
+@media (max-width: 1023px) and (min-width: 768px) {
+  /* 768-1023 px viewport: the right sidebar narrows to a 50 px rail so
+     the centre column has room (left sidebar reserves 450 px in flow;
+     the right must give the centre enough to render at least one
+     grid column without clipping). The toggle, the header chevron and
+     the rail background stay visible — users on a narrow window can
+     resize wider to reach the full panel (≥1024 px) or smaller to
+     reach the overlay (<768 px). The right sidebar's content stays
+     discoverable: the toggle is the same button they use everywhere
+     else, and the rail's presence tells the user the panel exists. */
+  .sidebar {
+    width: 50px;
+    overflow: hidden;
   }
 }
 </style>

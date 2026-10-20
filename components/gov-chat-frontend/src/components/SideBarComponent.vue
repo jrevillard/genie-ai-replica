@@ -470,8 +470,12 @@ export default {
   width: 100%;
 }
 
-/* Mobile: offscreen unless side-bar-open is set */
-@media screen and (max-width: 768px) {
+/* Mobile: offscreen unless side-bar-open is set.
+   The boundary is (max-width: 767px) so it does NOT overlap with the
+   (min-width: 768px) in-flow rule below at exactly 768 px. The two
+   earlier both-matched-768 queries fought over position, transform
+   and width on .side-bar; this single-pixel gap is the fix. */
+@media screen and (max-width: 767px) {
   .side-bar {
     position: fixed;
     top: 60px;
@@ -503,7 +507,9 @@ export default {
   }
 }
 
-/* Desktop: if not open, set width=0 or transform */
+/* Desktop: if not open, set width=0 or transform. Matches at 768 px
+   exactly and above; pairs with the (max-width: 767px) rule above
+   so the boundary at 768 px is unambiguous. */
 @media screen and (min-width: 768px) {
   .side-bar {
     position: relative;

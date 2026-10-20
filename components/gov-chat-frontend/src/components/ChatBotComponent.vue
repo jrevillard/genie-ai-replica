@@ -1907,6 +1907,16 @@ export default {
   position: relative;
   flex: 1;
   overflow: hidden;
+  /* Named container source for the quick-help grid below. The grid lives
+     inside .quick-help-overlay, which carries its own unnamed
+     container-type for the hero's @container (min-width: 1700px); using
+     container-name "qh-panel" here lets the grid resolve against the
+     chat column width (this element) rather than the overlay's inner
+     content box (which is 48 px narrower because of the overlay's
+     padding). The width the brief refers to as "the column" is this
+     element, not the inner .quick-help-content. */
+  container-type: inline-size;
+  container-name: qh-panel;
 }
 
 /* System Status Panel */
@@ -2257,11 +2267,9 @@ export default {
   color: var(--muted);
 }
 
-.quick-help-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--space-xl);
-}
+/* The grid's column count is driven by container queries on the panel
+   width below. The base rule is the single-column fallback used when
+   the panel is too narrow for two columns. */
 
 .quick-help-item {
   display: flex;
@@ -2348,23 +2356,57 @@ export default {
   }
 }
 
-@media (max-width: 1024px) {
-  .quick-help-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
+/* The grid follows the chat column, not the viewport. The two fixed
+   sidebars reserve ~770 px of horizontal space from the 768 px
+   breakpoint up, so a viewport-driven grid breaks at 1280 px and
+   below. Container queries on the panel keep the column count and
+   the reference's own 4-column cap intact at every window size.
+
+   The container is .chatbot-container (named "qh-panel"); the grid's
+   keying uses that name so the rules resolve against the chat column
+   width rather than the narrower .quick-help-content.
+
+   Each N-column breakpoint is the minimum panel width that fits
+   N * 217 px cards with (N-1) * --space-xl gaps between them, with
+   --space-xl = 32 px:
+     2 cols = 2 * 217 + 1 * 32 = 466 px
+     3 cols = 3 * 217 + 2 * 32 = 715 px
+     4 cols = 4 * 217 + 3 * 32 = 964 px
+
+   These are hard-coded px values rather than calc() expressions: at
+   the moment, Chromium does not resolve var() inside @container
+   conditions, so the calc(var(--space-xl)) form silently fails to
+   match and the base 1-column rule wins at every width. If
+   --space-xl is changed at the deployment, update these four values
+   in lock-step — the comments above carry the formula so the new
+   values can be recomputed. auto-fit minmax() is rejected because
+   the reference mocks a maximum of 4 columns regardless of panel
+   width. */
+.quick-help-grid {
+  display: grid;
+  gap: var(--space-xl);
+  grid-template-columns: 1fr;
 }
 
-@media (max-width: 768px) {
+@container qh-panel (min-width: 466px) {
   .quick-help-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
-@media (max-width: 480px) {
+@container qh-panel (min-width: 715px) {
   .quick-help-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, 1fr);
   }
+}
 
+@container qh-panel (min-width: 964px) {
+  .quick-help-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
   /* Weight, not size: at --text-lg the heading is 20px, which is under
      WCAG's 24px limb for large text, so the brand ramp inside it has to
      clear 4.5:1 rather than the 3:1 large-text allowance. 20px at weight

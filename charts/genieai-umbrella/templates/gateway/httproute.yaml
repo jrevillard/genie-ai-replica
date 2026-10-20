@@ -31,7 +31,12 @@ spec:
     # origin (issuer, redirects) but forbidden in HTTPRoute hostnames.
     - {{ include "genieai-umbrella.ingressHostname" . | quote }}
   rules:
-    {{- /* document-repository API paths: longest-prefix exceptions that beat the /api/ rule below. */}}
+    {{- /* document-repository API paths: longest-prefix exceptions that beat the /api/ rule below.
+       A rule whose backend Service is not rendered must not be rendered at all: a
+       backendRef to a Service that does not exist leaves the whole HTTPRoute
+       with ResolvedRefs=False, and the edge answers 500 on every path it
+       carries — including the ones that are fine. */}}
+    {{- if .Values.services.documentRepository.enabled }}
     - matches:
         - path:
             type: PathPrefix
@@ -46,6 +51,7 @@ spec:
       backendRefs:
         - name: document-repository
           port: 80
+    {{- end }}
     {{- /* Backend BFF: /api + swagger. The chat SSE stream lives here:
            Envoy's default route timeout kills long streams mid-flight
            (live-observed: backend finished in 20s, browser got a 504 at
@@ -53,6 +59,7 @@ spec:
            (CHATQNA_STREAM_TIMEOUT, default 3600s) and aborts on its own;
            the edge sits above it so the application timeout governs —
            1h10m = the backend default + margin. */}}
+    {{- if .Values.services.backend.enabled }}
     - matches:
         # PathPrefix "/api/" does not match the bare "/api" (the prefix
         # includes the slash) — real flows always carry subpaths, but the
@@ -79,6 +86,7 @@ spec:
       backendRefs:
         - name: backend
           port: 80
+    {{- end }}
     {{- /* Keycloak OIDC endpoints, same-origin with the SPA. The /auth
            prefix reaches Keycloak as-is (its http-relative-path is
            /auth). Envoy's upstream request carries the Host without the
@@ -88,6 +96,7 @@ spec:
            RequestHeaderModifier re-pins X-Forwarded-Host to the full
            public origin (ingress.host, port included) so every URL in
            the discovery document matches the issuer's origin. */}}
+    {{- if .Values.data.keycloak.enabled }}
     - matches:
         # Both forms: like /api, PathPrefix "/auth/" misses the bare
         # "/auth" some OIDC clients request.
@@ -106,6 +115,7 @@ spec:
       backendRefs:
         - name: keycloak-service
           port: 8080
+    {{- end }}
     {{- /* Grafana (opt-in tier). Before the SPA catch-all: /grafana
            would otherwise be served by the frontend. The Service name is
            pinned by spec.service.metadata.name in the Grafana CR, so this
@@ -120,6 +130,7 @@ spec:
           port: 80
     {{- end }}
     {{- /* Frontend SPA catch-all. */}}
+    {{- if .Values.services.frontend.enabled }}
     - matches:
         - path:
             type: PathPrefix
@@ -127,4 +138,5 @@ spec:
       backendRefs:
         - name: frontend
           port: 80
+    {{- end }}
 {{- end -}}

@@ -28,7 +28,7 @@ spec:
   ports:
     - name: http
       port: 80
-      targetPort: 8090
+      targetPort: http
   selector:
     {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "frontend") | nindent 4 }}
 ---

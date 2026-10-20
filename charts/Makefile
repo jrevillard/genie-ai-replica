@@ -17,8 +17,16 @@ lint-umbrella: lint-common deps
 
 template: template-umbrella
 
+# ingress.host and data.keycloak.adminEmail are `required`, so this
+# target is unusable without them — it rendered nothing but the error
+# "ingress.host is required" while charts/README.md presented it as THE
+# render gate. The values below are render-only (the placeholder guard is
+# off for the same reason); nothing here reaches a cluster.
 template-umbrella: deps
-	helm template test genieai-umbrella -n genieai --set data.keycloak.failOnPlaceholderSecrets=false > /tmp/genieai-rendered.yaml
+	helm template test genieai-umbrella -n genieai \
+		--set data.keycloak.failOnPlaceholderSecrets=false \
+		--set data.keycloak.adminEmail=ci-render@example.org \
+		--set ingress.host=ci-render.local > /tmp/genieai-rendered.yaml
 
 test: test-umbrella
 

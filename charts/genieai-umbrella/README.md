@@ -9,7 +9,7 @@ Gateway/HTTPRoute/Certificate; nginx is NOT part of the k8s data path), and
 the Keycloak realm-convergence + ArangoDB migrations hook Jobs — with one
 `helm install`.
 
-Chart version: **0.2.33**. `appVersion` mirrors `version` deliberately
+Chart version: **0.2.59**. `appVersion` mirrors `version` deliberately
 (chart layout, not product release; deployed image tags are governed by
 `values.yaml`, never `latest`).
 
@@ -34,8 +34,20 @@ kubectl get crd | grep -E 'keycloak|sealedsecret|cluster\.arangodb|cnpg'
 # 2. Render + install. The chart creates the `genieai` namespace;
 #    pass --create-namespace so helm propagates it before any pre-install
 #    hooks (which create ServiceAccounts inside the namespace) run.
+#
+#    ingress.host and data.keycloak.adminEmail are `required`: without a
+#    public hostname Keycloak's issuer is unresolvable and the realm gets
+#    no operator contact, so the render fails on the knob rather than at
+#    the first browser request. The three client secrets are required
+#    too — with failOnPlaceholderSecrets on (the default, prod posture),
+#    a `change-me-*` value aborts the render.
 helm install genieai charts/genieai-umbrella/ \
-  --create-namespace --namespace genieai
+  --create-namespace --namespace genieai \
+  --set ingress.host=genie.example.org \
+  --set data.keycloak.adminEmail=ops@example.org \
+  --set data.keycloak.clientSecrets.proxyClient="$(openssl rand -hex 16)" \
+  --set data.keycloak.clientSecrets.dataprep="$(openssl rand -hex 16)" \
+  --set data.keycloak.clientSecrets.grafana="$(openssl rand -hex 16)"
 
 # 3. Smoke-test the release.
 helm test genieai -n genieai
@@ -47,6 +59,11 @@ tag/policy (laptop-build workflow with local minikube images):
 ```bash
 helm install genieai charts/genieai-umbrella/ \
   --create-namespace --namespace genieai \
+  --set ingress.host=genie.example.org \
+  --set data.keycloak.adminEmail=ops@example.org \
+  --set data.keycloak.clientSecrets.proxyClient="$PROXY_SECRET" \
+  --set data.keycloak.clientSecrets.dataprep="$DATAPREP_SECRET" \
+  --set data.keycloak.clientSecrets.grafana="$GRAFANA_SECRET" \
   --set global.imageRegistry=my-registry.example.com/myproject \
   --set services.backend.image.repository=genie-ai-backend \
   --set services.backend.image.tag=dev \

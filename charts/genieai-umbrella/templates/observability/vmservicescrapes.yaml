@@ -92,8 +92,8 @@ spec:
   endpoints:
     - port: redis
       interval: 30s
-{{- end }}
-{{- if .Values.opea.enabled }}
+{{ end }}
+{{ if .Values.opea.enabled }}
 {{- /* All six OPEA orchestrators render together — the per-service
 templates are gated on the umbrella .Values.opea.enabled flag. */ -}}
 ---

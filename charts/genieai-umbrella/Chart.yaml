@@ -3,7 +3,7 @@ name: genieai-umbrella
 description: |
   Single-install umbrella chart for GENIE.AI. Renders the entire 28-service
   stack with one `helm install` — typically consumed via per-env Kustomize
-  overlays at `deploy/environments/<env>/`.
+  overlays at `overlays/<pays>/<env>/` in the genie-ai-deploy repo.
 type: application
 version: 0.2.59
 # `appVersion` mirrors the chart version deliberately: it tracks the chart

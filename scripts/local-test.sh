@@ -35,6 +35,13 @@ helm version --short
 
 echo
 echo "=== STEP 1: helm lint ==="
+# charts/.gitignore excludes */charts/, so the vendored dependency
+# tarballs are not in the tree after a fresh clone: without this the lint
+# fails with "chart directory is missing these dependencies:
+# genieai-common, gateway-helm" and then "no template
+# 'genieai-common.fullname'", which reads like a chart defect. The
+# Makefile's lint-umbrella target does the same via its `deps` prereq.
+( cd "$(dirname "$CHART")/.." && helm dependency update genieai-umbrella >/dev/null )
 helm lint "$CHART" --strict
 
 echo

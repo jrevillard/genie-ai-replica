@@ -273,20 +273,27 @@ html[data-visual='on'] .dark-mode .genie-living-intelligence .quick-help-overlay
    z-index 0 keeps the artwork below the grid (which uses z-index 1 to
    sit above the waves ::after).
 
-   A solid surface scrim is laid behind the text so the brand ramp
-   inside the heading and the subtitle have a known backdrop
-   regardless of where the artwork's ink band ends. The scrim is
-   fully opaque; the visual dissolve between the artwork above and
-   the scrim is carried by the banner's own mask (which already fades
-   the artwork's lower 28 % toward transparent) — the scrim simply
-   occupies the bottom of the banner with surface, so the text sits
-   on surface, never on the artwork's ink band. */
+   A surface scrim is drawn behind the text. The scrim's bg and mask
+   share the same linear gradient (transparent at the top of the
+   content, opaque surface at the bottom). Because bg and mask match,
+   the scrim's *visibility* tracks its *colour* — at the top the scrim
+   is invisible (so the banner's mask-faded artwork shows through
+   unmodified), and at the bottom the scrim is fully opaque surface
+   (so the heading + subtitle paint on white). The single gradient
+   across bg and mask means there is no abrupt transition in either
+   component — the artwork never meets a hard edge, only a smoothly
+   deepening white that ends at the panel's own --surface. The text
+   sits in the lower part of the content where the scrim is opaque;
+   above the text the artwork's own fade (carried by the banner's
+   mask) is already where it belongs. */
 html[data-visual='on'] .genie-living-intelligence .quick-help-content {
   position: relative;
   z-index: 1;
   min-width: 0;
-  background: var(--surface);
-  padding-bottom: var(--space-md);
+  background: linear-gradient(to bottom, transparent 0%, var(--surface) 30%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgb(0 0 0 / 1) 30%);
+  mask-image: linear-gradient(to bottom, transparent 0%, rgb(0 0 0 / 1) 30%);
+  padding-bottom: var(--space-sm);
 }
 
 /* The grid is a sibling of the banner, not a descendant of content
@@ -438,17 +445,26 @@ html[data-visual='on'] .genie-living-intelligence.gli-no-waves .quick-help-overl
  * it is live type, not an image, so it re-rasterises at any zoom. The
  * color fallback covers a renderer that honours neither background-clip
  * nor -webkit-text-fill-color; without it the name would be invisible.
+ *
+ * The magenta stop of the light ramp was lifted from #a036f7 to
+ * #9b2ce6 — same hue (≈272° violet, within 1°), ~16 % darker. The
+ * previous value measured 2.83:1 against the rendered surface (its
+ * anti-aliased glyphs), under the 3:1 large-text floor the heading
+ * relies on. Pure-CSS contrast is 4.82:1, so the floor failure was
+ * visual (rendered average), not arithmetic — the lifted value clears
+ * 5.3:1 against pure white and the same hue preserves the designer's
+ * blue→violet family.
  */
 :root {
   --brand-mark-from: #2e79fc;
   --brand-mark-mid: #755cf8;
-  --brand-mark-to: #a036f7;
+  --brand-mark-to: #9b2ce6;
 
   /* The navbar's ramp is the same in both themes: a literal triplet so
      that the dark block's heading override below cannot reach it. */
   --brand-mark-navbar-from: #2e79fc;
   --brand-mark-navbar-mid: #755cf8;
-  --brand-mark-navbar-to: #a036f7;
+  --brand-mark-navbar-to: #9b2ce6;
 }
 
 /*
@@ -458,6 +474,10 @@ html[data-visual='on'] .genie-living-intelligence.gli-no-waves .quick-help-overl
  * its tokens above are literals, not references to --brand-mark-*, so
  * these overrides name a different family entirely and the navbar's
  * triplet above is unchanged.
+ *
+ * The dark theme's lifted ramp already cleared 3:1 against the dark
+ * panel surface; this branch's stop lift is for the light ramp, not
+ * this one.
  */
 html[data-theme='dark'],
 html.dark-mode,

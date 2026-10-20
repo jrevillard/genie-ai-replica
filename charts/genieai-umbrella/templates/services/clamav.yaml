@@ -224,7 +224,7 @@ spec:
     {{- end }}
 {{- end }}
 ---
-{{- if .Values.services.clamav.cache.enabled }}
+{{- if and .Values.services.clamav.enabled .Values.services.clamav.cache.enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

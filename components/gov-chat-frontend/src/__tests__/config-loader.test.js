@@ -23,6 +23,11 @@ describe('loadConfig', () => {
     global.fetch = jest.fn();
     loadConfig = freshModule();
     setProperty = jest.spyOn(document.documentElement.style, 'setProperty');
+    // The decorative layer writes a real attribute onto documentElement, and
+    // unlike the spied setProperty above that write outlives the mock. Clear
+    // it so an assertion about the attribute's absence tests the config under
+    // test rather than whichever test happened to run before it.
+    delete document.documentElement.dataset.visual;
   });
 
   afterEach(() => {

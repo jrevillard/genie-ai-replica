@@ -2450,7 +2450,11 @@ and that do not exclude the repository's own topics/entities. Prefer broad
 subject tags over query-specific ones. Respond with ONLY a JSON object:
 {"tags": ["...", "..."], "notes": "<one sentence covering rationale>"}`;
         const resp = await frontmatterService.vllmChatCompletions([{ role: 'user', content: prompt }], {
-          maxTokens: 300,
+          // 800, not 300 (live 2026-10-20): 300 starves a thinking model on
+          // rung one by construction and is tight even for the JSON alone —
+          // the adaptive ladder rescues it, but every rung is a full model
+          // round trip; start where the answer actually fits.
+          maxTokens: 800,
           temperature: 0.2
         });
         const content = resp.data && resp.data.choices && resp.data.choices[0] && resp.data.choices[0].message;
@@ -2722,7 +2726,10 @@ exclude the repository's own topics/entities. Do NOT propose anything for
 positive queries — those are fixed by REMOVING over-broad tags, not adding.
 Respond with ONLY: {"add": ["...", "..."]}`;
       const resp = await frontmatterService.vllmChatCompletions([{ role: 'user', content: prompt }], {
-        maxTokens: 300,
+        // 800, not 300 (live 2026-10-20): same reasoning as the batch-advice
+        // call — start where the JSON answer actually fits so a thinking
+        // model saves a ladder rung and a plain model never truncates.
+        maxTokens: 800,
         temperature: 0.2
       });
       const content = resp.data && resp.data.choices && resp.data.choices[0] && resp.data.choices[0].message;
@@ -2943,6 +2950,144 @@ Respond with ONLY: {"add": ["...", "..."]}`;
   });
 }
 
+// 2026-10-20 — the advisor's async wrapper (202 + poll). Live: with a
+// thinking model active, the comprehensive advisor takes MINUTES — embed
+// every query of the recent runs, gate simulation, and an LLM call that
+// climbs the adaptive ladder toward its ceiling — behind ONE synchronous
+// POST the gateway killed it at ~60s ("The upstream server is timing
+// out") while the server worked on to an answer nobody saw. Same
+// DB-backed job shape as beginExplainFailures (1-8g-y): placeholder doc
+// in the runs collection, an in-flight lock per repo, and a poll whose
+// every path reaches a terminal state.
+const recommendInFlight = new Map(); // repo_id -> job key
+
+async function beginRecommendTagSet(repoId, payload = {}, opts = {}) {
+  const db = await dbService.getConnection();
+  await ensureCollection(db);
+  // Synchronous pre-flight so the instant mistakes (no head, no runs)
+  // stay 404/409 instead of becoming a 202 that fails on the first poll.
+  const repo = await repositoryService.getById(repoId, { authz: opts.authz });
+  if (!repo.head || !Array.isArray(repo.head.vector)) {
+    const err = new Error('repo has no vectorized head — rebuild it before asking for advice');
+    err.code = 'NO_HEAD';
+    err.status = 409;
+    throw err;
+  }
+  const runRows = await (
+    await db.query(
+      'FOR r IN okf_head_test_runs FILTER r.repo_id == @k && r.kind == "run" SORT r.created_at DESC LIMIT 1 RETURN r._key',
+      { k: repoId }
+    )
+  ).all();
+  if (!runRows.length) {
+    const err = new Error('no runs found — run a suite first');
+    err.code = 'RUN_NOT_FOUND';
+    err.status = 404;
+    throw err;
+  }
+  const inflight = recommendInFlight.get(repoId);
+  if (inflight) {
+    const err = new Error('an advisor run is already running for this repository');
+    err.code = 'RECOMMEND_IN_FLIGHT';
+    err.status = 409;
+    // Same shape as RUN_IN_FLIGHT / EXPLAIN_IN_FLIGHT: the client adopts
+    // the in-flight job and keeps polling instead of dead-ending.
+    err.details = { job_key: inflight };
+    throw err;
+  }
+  const jobKey = `a${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
+  recommendInFlight.set(repoId, jobKey);
+  const placeholder = {
+    _key: jobKey,
+    repo_id: repoId,
+    kind: 'recommend',
+    status: 'running',
+    created_at: new Date().toISOString(),
+    created_by: (opts.actor && opts.actor.user_id) || 'system',
+    payload: {}
+  };
+  try {
+    await db.collection(HEAD_TEST_RUNS_COLLECTION).save(placeholder);
+  } catch (e) {
+    // The lock is set BEFORE this awaited save; leaking it would wedge the
+    // repo behind a permanent RECOMMEND_IN_FLIGHT with no doc behind the key.
+    recommendInFlight.delete(repoId);
+    throw e;
+  }
+  logger.info('head-suite.recommend_started', { repo_id: repoId, job_key: jobKey });
+  const done = recommendTagSet(repoId, payload, opts)
+    .then(async (result) => {
+      await db
+        .collection(HEAD_TEST_RUNS_COLLECTION)
+        .update(jobKey, { status: 'done', updated_at: new Date().toISOString(), payload: result })
+        .catch((dbErr) =>
+          logger.error('head-suite.recommend.done_persist_failed', {
+            repo_id: repoId,
+            job_key: jobKey,
+            error: dbErr.message
+          })
+        );
+      return result;
+    })
+    .catch(async (e) => {
+      // The placeholder must reach a terminal state or the poll hangs on
+      // 'running' forever. Never leak a numeric driver code (the Arango
+      // driver sets e.code=409 on conflicts, masking the real error).
+      const code = typeof e.code === 'string' && e.code ? e.code : 'RECOMMEND_FAILED';
+      await db
+        .collection(HEAD_TEST_RUNS_COLLECTION)
+        .update(jobKey, { status: 'failed', error: { code, message: e.message }, updated_at: new Date().toISOString() })
+        .catch((dbErr) =>
+          logger.error('head-suite.recommend.fail_persist_failed', {
+            repo_id: repoId,
+            job_key: jobKey,
+            error: dbErr.message
+          })
+        );
+      throw e;
+    })
+    .finally(() => recommendInFlight.delete(repoId));
+  done.catch((e) =>
+    logger.error('head-suite.recommend.async_failed', { repo_id: repoId, job_key: jobKey, error: e.message })
+  );
+  return { job_key: jobKey, done };
+}
+
+/** 2026-10-20 — the async advisor's poll: {status:'running'} keep waiting,
+ * {status:'failed', error}, or the finished advice in `payload`. */
+async function getRecommendJob(repoId, jobKey) {
+  const db = await dbService.getConnection();
+  await ensureCollection(db);
+  if (recommendInFlight.get(repoId) === jobKey) {
+    // The live envelope comes from the Map, not the doc, so the very first
+    // poll after the 202 cannot read a placeholder that has not landed yet.
+    return { job_key: jobKey, kind: 'recommend', status: 'running', payload: {} };
+  }
+  let doc;
+  try {
+    doc = await db.collection(HEAD_TEST_RUNS_COLLECTION).document(jobKey);
+  } catch (err) {
+    // Same not-found discriminator the rest of the codebase uses — the
+    // driver surfaces 404 as errorNum 1202/1204 depending on the path.
+    const code = err && (err.errorNum || err.statusCode || err.code);
+    if (code === 404 || code === 1202 || code === 1204) {
+      const e = new Error(`advisor job ${jobKey} not found`);
+      e.code = 'JOB_NOT_FOUND';
+      e.status = 404;
+      throw e;
+    }
+    throw err;
+  }
+  if (doc.repo_id !== repoId || doc.kind !== 'recommend') {
+    // Anti-enumeration: a key from another repo is "not found", not 403.
+    const e = new Error(`advisor job ${jobKey} not found`);
+    e.code = 'JOB_NOT_FOUND';
+    e.status = 404;
+    throw e;
+  }
+  return doc;
+}
+
 module.exports = {
   generateSuite,
   beginSuiteGeneration,
@@ -2967,6 +3112,8 @@ module.exports = {
   beginExplainFailures,
   getExplainFailures,
   recommendTagSet,
+  beginRecommendTagSet,
+  getRecommendJob,
   // test surface
   _internals: {
     suitePrompt,

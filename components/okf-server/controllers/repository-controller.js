@@ -1554,15 +1554,37 @@ async function routingTest(req, res, next) {
  * (all classes), simulates candidate tag-set configurations against the
  * production gate, and recommends the globally-optimal add/remove set
  * under a hard zero-positive-harm constraint. Admin-scoped (LLM call).
+ *
+ * 2026-10-20 — ASYNC (202 + poll): with a thinking model configured the
+ * advisor takes minutes (embed every query, simulate, an LLM call that
+ * climbs the adaptive ladder) and the synchronous POST died at the
+ * gateway while the server kept working. Same shape as the run/explain
+ * endpoints: 202 {job_key, status:'running'}, poll
+ * GET /routing-advisor/jobs/:job_key.
  */
 async function recommendTagSet(req, res, next) {
   try {
     const headSuiteService = require('../services/head-suite-service');
-    const result = await headSuiteService.recommendTagSet(req.params.repo_id, req.body || {}, {
+    const started = await headSuiteService.beginRecommendTagSet(req.params.repo_id, req.body || {}, {
       authz: authzForService(req),
       actor: actorFrom(req)
     });
-    res.status(200).json(result);
+    res.status(202).json({ repo_id: req.params.repo_id, job_key: started.job_key, status: 'running' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * 2026-10-20 — GET /api/okf/repos/:repo_id/routing-advisor/jobs/:job_key.
+ * The async advisor's poll: {status:'running'} | {status:'failed', error}
+ * | the finished advice in `payload`.
+ */
+async function recommendJob(req, res, next) {
+  try {
+    const headSuiteService = require('../services/head-suite-service');
+    const doc = await headSuiteService.getRecommendJob(req.params.repo_id, req.params.job_key);
+    res.json(doc);
   } catch (err) {
     next(err);
   }
@@ -2151,6 +2173,7 @@ module.exports = {
   putStudioDraft,
   deleteStudioDraft,
   recommendTagSet,
+  recommendJob,
   generateTestSuite,
   addTestSuiteQueries,
   getTestSuite,

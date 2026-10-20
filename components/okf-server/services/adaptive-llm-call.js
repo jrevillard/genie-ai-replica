@@ -32,9 +32,17 @@
 const axios = require('axios');
 const { logger } = require('../shared-lib/logger');
 
-const MAX_TOKENS_CEILING = 8192;
+// 32768 (live 2026-10-20): M3.1-Flash burned 300→1200→4800→8192 ENTIRELY
+// on reasoning against the routing-advisor prompt (244 queries) and wrote
+// zero content at every rung — 8192 was not "safe", it was a starve for
+// big-task thinking models. The ceiling is a runaway guard, not a
+// capability cap: non-reasoning models never climb (the ladder only
+// triggers on reasoning burn), so only models that genuinely need the
+// room ever see it. Same day, the 8192 rung took ~97s — a 32768 rung
+// needs ~6-7 min, hence the 10-min clock ceiling (async callers only).
+const MAX_TOKENS_CEILING = 32768;
 const BUDGET_SCALE = 4;
-const TIMEOUT_CEILING_MS = 300000; // 5 min — async callers hand thinking models minutes
+const TIMEOUT_CEILING_MS = 600000; // 10 min — async callers hand thinking models minutes
 const TIMEOUT_SCALE = 2;
 /** The standard no-think request params, both wire conventions. */
 const NO_THINK_PARAMS = { thinking: { type: 'disabled' }, enable_thinking: false };

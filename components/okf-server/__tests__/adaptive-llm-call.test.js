@@ -118,14 +118,12 @@ describe('adaptiveChatCompletion', () => {
   });
 
   test('budget and clock respect their ceilings; a starved answer AT the ceiling does not retry', async () => {
-    axios.post
-      .mockResolvedValueOnce(ok('', { finish: 'length', reasoning: 4000, completion: 4096 }))
-      .mockResolvedValueOnce(ok('', { finish: 'length', reasoning: 8192, completion: 8192 }));
-    const body = { model: 'm', messages: [], max_tokens: 4096 };
-    const r = await adaptiveChatCompletion({ url: ENDPOINT, headers: HEADERS, body, timeoutMs: 120000 });
-    expect(axios.post).toHaveBeenCalledTimes(2);
-    expect(body.max_tokens).toBe(MAX_TOKENS_CEILING); // 4096x4 capped, not 16384
-    expect(lastCall()[2].timeout).toBe(240000); // 120s x2 = 240s, under the 300s ceiling
+    axios.post.mockResolvedValueOnce(ok('', { finish: 'length', reasoning: 32767, completion: 32768 }));
+    const body = { model: 'm', messages: [], max_tokens: MAX_TOKENS_CEILING };
+    const r = await adaptiveChatCompletion({ url: ENDPOINT, headers: HEADERS, body, timeoutMs: 300000 });
+    expect(axios.post).toHaveBeenCalledTimes(1); // already at the ceiling — another rung is a runaway
+    expect(body.max_tokens).toBe(MAX_TOKENS_CEILING);
+    expect(lastCall()[2].timeout).toBe(300000); // the clock is never raised without a retry
     expect(r.data.choices[0].finish_reason).toBe('length'); // honest: still starved at ceiling
   });
 
@@ -159,8 +157,8 @@ describe('adaptiveChatCompletion', () => {
     const r = await adaptiveChatCompletion({ url: ENDPOINT, headers: HEADERS, body, timeoutMs: 300000 });
     expect(r.data.choices[0].message.content).toBe('{"a":1}');
     expect(axios.post).toHaveBeenCalledTimes(3);
-    expect(body.max_tokens).toBe(8192); // 1500 -> 6000 -> 8192 (capped)
-    // a 5-min async clock only doubles once past the 5-min ceiling
-    expect(lastCall()[2].timeout).toBe(300000);
+    expect(body.max_tokens).toBe(24000); // 1500 -> 6000 -> 24000 (the 8192 ceiling was a starve — live 2026-10-20)
+    // a 5-min async base clock doubles once, capped at the 10-min ceiling
+    expect(lastCall()[2].timeout).toBe(600000);
   });
 });

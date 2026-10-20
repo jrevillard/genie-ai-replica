@@ -651,7 +651,7 @@ describe('explainSuiteFailures (Story 1-8c — batch advice for the latest run)'
     expect(messages[0].content).not.toContain('capital of France');
     expect(messages[0].content).not.toContain('breast cancer screening age');
     expect(messages[0].content).toContain('mental-health');
-    expect(opts).toMatchObject({ maxTokens: 300, temperature: 0.2 });
+    expect(opts).toMatchObject({ maxTokens: 800, temperature: 0.2 }); // 800 since 2026-10-20 — 300 starved thinking models on rung one
     // Story 1-8d — the advice is persisted as an auditable explain doc.
     const explain = Object.values(__mockDb._stores.okf_head_test_runs).find((d) => d.kind === 'explain');
     expect(explain).toMatchObject({ repo_id: 'me', suite_key: 's1', run_key: 'r1' });
@@ -1029,6 +1029,63 @@ describe('recommendTagSet damping (1-8e — the anti-treadmill guard)', () => {
     expect(out.changes.add).toEqual([]);
     expect(out.changes.remove).toEqual([]);
     expect(out.current_scorecard.negative_suppressed).toBe(out.recommended_scorecard.negative_suppressed);
+  });
+
+  // 2026-10-20 — the async advisor (202 + poll): the synchronous POST died
+  // at the gateway ("The upstream server is timing out") while a thinking
+  // model kept climbing the adaptive ladder server-side. The job shape must
+  // answer running/done/failed from a poll and never hang on 'running'.
+  it('runs the advisor as a job: 202 shape, running envelope, done payload', async () => {
+    seedAdvisor();
+    const begun = await svc.beginRecommendTagSet('me', {}, {});
+    expect(begun.job_key).toMatch(/^a\d+-/);
+    // While in flight the poll answers the live envelope from the Map —
+    // the first poll cannot read a placeholder that has not landed.
+    const running = await svc.getRecommendJob('me', begun.job_key);
+    expect(running).toMatchObject({ status: 'running', kind: 'recommend' });
+    const result = await begun.done;
+    expect(result.changes).toBeDefined(); // the advice itself
+    const doc = await svc.getRecommendJob('me', begun.job_key);
+    expect(doc.status).toBe('done');
+    expect(doc.payload.changes).toBeDefined();
+  });
+
+  it('a second advisor for the same repo while one runs is RECOMMEND_IN_FLIGHT (adopt, do not dead-end)', async () => {
+    seedAdvisor();
+    let release;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    frontmatterService.vllmChatCompletions.mockImplementation(() => gate.then(() => llmResponse({ add: [] })));
+    const first = await svc.beginRecommendTagSet('me', {}, {});
+    await expect(svc.beginRecommendTagSet('me', {}, {})).rejects.toMatchObject({
+      code: 'RECOMMEND_IN_FLIGHT',
+      status: 409
+    });
+    release();
+    await first.done;
+    // The lock is released — a new advisor may start.
+    const second = await svc.beginRecommendTagSet('me', {}, {});
+    await second.done;
+  });
+
+  it('a failing advisor run lands a failed job doc with the real error (the poll never hangs)', async () => {
+    seedAdvisor();
+    headTestService.embedQueryBatch.mockRejectedValue(new Error('embed host down'));
+    const begun = await svc.beginRecommendTagSet('me', {}, {});
+    await expect(begun.done).rejects.toThrow('embed host down');
+    const doc = await svc.getRecommendJob('me', begun.job_key);
+    expect(doc.status).toBe('failed');
+    expect(doc.error).toMatchObject({ code: 'RECOMMEND_FAILED', message: 'embed host down' });
+  });
+
+  it('pre-flight stays synchronous: no head and no runs are instant 409/404, not 202s that fail later', async () => {
+    seedAdvisor();
+    repositoryService.getById.mockResolvedValue({ _key: 'me', head: null });
+    await expect(svc.beginRecommendTagSet('me', {}, {})).rejects.toMatchObject({ code: 'NO_HEAD', status: 409 });
+    seedAdvisor();
+    __mockDb.query.mockImplementation(async () => ({ all: async () => [] }));
+    await expect(svc.beginRecommendTagSet('me', {}, {})).rejects.toMatchObject({ code: 'RUN_NOT_FOUND', status: 404 });
   });
 });
 

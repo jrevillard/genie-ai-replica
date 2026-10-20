@@ -120,13 +120,13 @@ beforeEach(() => {
   dispatch.mockResolvedValue({ ok: true, runs: [] });
 });
 
-it('renders the five tabs and a fresh-head badge', async () => {
+it('renders the four tabs and a fresh-head badge', async () => {
   const w = mountDialog();
   await w.vm.$nextTick();
-  // Story 8-6: the fourth tab (Benchmarks) hosts the RAGAS panel.
-  // Story 8-7: the fifth tab (Models) hosts the model-config panel.
+  // Story 8-6: the fourth tab (Benchmarks) hosts the RAGAS panel. The Models
+  // tab moved to the Admin Dashboard (David 2026-10-20).
   const tabs = w.vm.tabDefs.map((t) => t.value);
-  expect(tabs).toEqual(['head', 'test', 'suites', 'ragas', 'models']);
+  expect(tabs).toEqual(['head', 'test', 'suites', 'ragas']);
   expect(w.vm.headStatus).toBe('present');
 });
 

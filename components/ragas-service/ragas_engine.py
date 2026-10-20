@@ -80,6 +80,69 @@ def _doc_char_cap() -> int:
 # Model wiring
 # --------------------------------------------------------------------------
 
+_PERSONA_LOOKUP_PATCHED = False
+
+
+def _patch_persona_lookup():
+    """Tolerant persona-name matching for ragas's PersonaList (live 2026-10-20).
+
+    ragas 0.4.3's PersonaList.__getitem__ matches the judge's returned
+    persona name by EXACT string. Frontier judges echo the name with the
+    role annotation reattached — 'Maya Chen (Equity research analyst)' vs
+    the registry's 'Maya Chen' — and every synthesizer then drops its
+    questions ("No persona found with name …"), which surfaces as
+    "no questions could be synthesized" with ZERO candidates dropped.
+    The patch matches exact, then casefolded/punctuation-insensitive, then
+    containment, then best token-overlap (>= 0.5), then falls back to the
+    first persona rather than nuking the whole suite — each non-exact hit
+    logs a warning so the drift stays visible.
+    """
+    global _PERSONA_LOOKUP_PATCHED
+    if _PERSONA_LOOKUP_PATCHED:
+        return
+    import re
+
+    from ragas.testset.persona import PersonaList
+
+    def _norm(s: str) -> str:
+        return re.sub(r"[^a-z0-9]+", " ", str(s).lower()).strip()
+
+    def tolerant_getitem(self, key):
+        for p in self.personas:
+            if p.name == key:
+                return p
+        nk = _norm(key)
+        for p in self.personas:
+            if _norm(p.name) == nk:
+                logger.warning("persona name matched case/punctuation-insensitively: %r", key)
+                return p
+        for p in self.personas:
+            a, b = _norm(p.name), nk
+            if a and b and (a in b or b in a):
+                logger.warning("persona name matched by containment: %r -> %r", key, p.name)
+                return p
+        best, best_score = None, 0.0
+        kw = set(nk.split())
+        for p in self.personas:
+            tw = set(_norm(p.name).split())
+            if not tw or not kw:
+                continue
+            score = len(tw & kw) / len(tw | kw)
+            if score > best_score:
+                best, best_score = p, score
+        if best is not None and best_score >= 0.5:
+            logger.warning("persona name fuzzy-matched (score %.2f): %r -> %r", best_score, key, best.name)
+            return best
+        if self.personas:
+            # A stylistic persona must never void the whole suite; the
+            # synthesis prompt still carries the requested name.
+            logger.warning("persona name %r unmatched — falling back to first persona", key)
+            return self.personas[0]
+        raise KeyError(f"No persona found with name '{key}'")
+
+    PersonaList.__getitem__ = tolerant_getitem
+    _PERSONA_LOOKUP_PATCHED = True
+
 
 def _make_fanout_class(ChatOpenAI):  # noqa: N802 — mirrors his validated subclass
     """_FanoutChatOpenAI, ported from tests/rag-benchmarks/eval/run_ragas_eval.py.
@@ -797,6 +860,8 @@ async def generate_testset(
     judge / embed (8-7 model configs): optional per-request model overrides
     resolved by okf-server (build_llm / build_embeddings carry the shapes).
     """
+    _patch_persona_lookup()
+
     from langchain_core.documents import Document as LCDocument
     from ragas.run_config import RunConfig
     from ragas.testset import TestsetGenerator

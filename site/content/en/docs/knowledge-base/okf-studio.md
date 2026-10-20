@@ -185,17 +185,17 @@ minimums are documented in the deployment guide.
 
 ## Model configurations
 
-The Lab's fifth tab — **Models** (platform admins) — manages **named
-remote-model configurations**: any OpenAI-compatible endpoint (OpenAI
-direct, a LiteLLM gateway, vLLM, Gemini's compat surface, Ollama) or
-Anthropic's native API. Each carries a name, provider, base URL, API key
-and a default model; as soon as a URL and key are configured — **even
-before the configuration is saved** — the model field becomes a
-**dropdown combo populated live from the endpoint** (the server performs
-the listing; for a saved configuration it uses the stored key, for an
-unsaved form the typed key makes one server-side round trip and is never
-stored). Keys are held server-side, shown only as a masked hint, and
-never reach the browser.
+The Admin Dashboard's **Models** tab — the last tab, platform admins —
+manages **named remote-model configurations**: any OpenAI-compatible
+endpoint (OpenAI direct, a LiteLLM gateway, vLLM, Gemini's compat
+surface, Ollama) or Anthropic's native API. Each carries a name,
+provider, base URL, API key and a default model; as soon as a URL and
+key are configured — **even before the configuration is saved** — the
+model field becomes a **dropdown combo populated live from the
+endpoint** (the server performs the listing; for a saved configuration
+it uses the stored key, for an unsaved form the typed key makes one
+server-side round trip and is never stored). Keys are held server-side,
+shown only as a masked hint, and never reach the browser.
 
 A **Test connection** action (in the form and on every table row) probes
 the configuration before you rely on it: it verifies the endpoint and
@@ -204,21 +204,28 @@ generation to that model, reporting latency and exactly which layer
 failed if anything does. Testing is always available; activating is a
 separate, explicit act.
 
-Each configuration declares **which features use it** (checkboxes):
-**benchmarks** (the RAGAS judge and advisor), **concept curation**
-(labels, types, summaries) and **topics & tags** (frontmatter
-suggestions and routing explain). The active configuration only serves
-the features on its list — an unchecked configuration is dormant even
-while active. Concept curation and topics/tags speak the OpenAI wire
-format, so those two boxes require an OpenAI-compatible provider; an
-Anthropic-provider configuration can serve benchmarks only.
+Each configuration declares **which features use it**, grouped by
+pipeline. The **Test Lab Pipelines** group is live: **benchmarks** (the
+RAGAS judge and advisor), **benchmark answers** (by default benchmarks
+answer with the deployment's chat — check this to make the benchmark
+measure the configured model instead; the run's fidelity block records
+which), **concept curation** and **topics & tags**. The active
+configuration only serves the features on its list — an unchecked
+configuration is dormant even while active. Everything except benchmark
+judging speaks the OpenAI wire format, so those boxes require an
+OpenAI-compatible provider; an Anthropic-provider configuration can
+serve benchmark judging only. The **Data Prep Pipeline** (contextual
+retrieval, chunk labeling, knowledge-graph extraction) and **Inference
+Pipeline** (chat answering, chat translation) groups are shown as
+planned — those endpoints are not yet configurable, and embeddings and
+reranking stay deployment-local by design.
 
 Configurations can be **named, renamed, copied, modified, activated,
 deactivated and deleted**. Exactly **one** can be active at a time; the
-active configuration is the judge for benchmark generation and scoring
-unless an operation picks another explicitly. With **none** active, the
-deployment's env-configured default model (`RAGAS_JUDGE_*`) applies — the
-behavior before any configuration exists. Every lifecycle action is
+active configuration applies unless an operation picks another
+explicitly. With **none** active, the deployment's env-configured
+default model (`RAGAS_JUDGE_*`) applies — the behavior before any
+configuration exists. Every lifecycle action is
 written to the audit log.
 
 ## Where things are recorded

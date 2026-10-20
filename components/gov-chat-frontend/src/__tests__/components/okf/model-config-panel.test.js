@@ -137,6 +137,33 @@ describe('ModelConfigPanel', () => {
     expect(judge.attributes('disabled')).toBeUndefined();
   });
 
+  test('pipeline groups: Test Lab boxes are live (incl. benchmark answers); Data Prep and Inference boxes are disabled mocks', async () => {
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    w.vm.openCreate();
+    await w.vm.$nextTick();
+    // the live benchmark-answers box exists and is enabled for an openai form
+    const answers = w.find('input[type="checkbox"][value="ragas_answers"]');
+    expect(answers.exists()).toBe(true);
+    expect(answers.attributes('disabled')).toBeUndefined();
+    // the five mock boxes render DISABLED with no value binding (never stored)
+    const boxes = w.findAll('input[type="checkbox"]');
+    const disabled = boxes.filter((b) => b.attributes('disabled') !== undefined);
+    expect(disabled.length).toBe(5); // 3 data-prep + 2 inference
+    expect(disabled.map((b) => b.attributes('value'))).toEqual([undefined, undefined, undefined, undefined, undefined]);
+    // group titles render (asserted with the form OPEN — save closes it)
+    expect(w.text()).toContain('Test Lab Pipelines');
+    expect(w.text()).toContain('Data Prep Pipeline');
+    expect(w.text()).toContain('Inference Pipeline');
+    // saving carries only live keys — a mock can never leak into the payload
+    w.vm.form.services = ['ragas_answers'];
+    w.vm.form.name = 'N2';
+    w.vm.form.base_url = 'https://y/v1';
+    await w.vm.save();
+    const call = dispatch.mock.calls.find((c) => c[0] === 'okf/modelConfigCreate');
+    expect(call[1].services).toEqual(['ragas_answers']);
+  });
+
   test('create posts the form; edit keeps an absent key (payload carries no api_key)', async () => {
     const w = mountPanel();
     await new Promise((r) => setTimeout(r, 0));

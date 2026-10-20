@@ -3189,6 +3189,29 @@ chart:lint:
       --set observability.grafana.enabled=true
       --set data.arangodb.mode=cluster
       > /tmp/rendered-full.yaml
+    # Production topology render. clusterProfile=prod is enum-legal and
+    # nothing else in CI ever selects it, so the whole prod surface was
+    # unvalidated: it is the only configuration that emits a
+    # PodDisruptionBudget, it multiplies the backend to 3 and the
+    # document-repository and frontend to 2, and it puts the Keycloak
+    # database at 3 CNPG instances. ingress.tls.enabled adds the
+    # cert-manager Certificate, which no other render emits either.
+    - >-
+      helm template test charts/genieai-umbrella -n genieai
+      --set data.keycloak.failOnPlaceholderSecrets=false
+      --set data.keycloak.adminEmail=ci-render@example.org
+      --set ingress.host=ci-render.local
+      --set ingress.enabled=true
+      --set ingress.createGatewayClass=true
+      --set 'data.keycloak.clientSecrets.proxyClient=lint-dummy'
+      --set 'data.keycloak.clientSecrets.dataprep=lint-dummy'
+      --set 'data.keycloak.clientSecrets.grafana=lint-dummy'
+      --set clusterProfile=prod
+      --set ingress.tls.enabled=true
+      --set ingress.tls.issuerName=selfsigned
+      --set observability.metrics.enabled=true
+      --set observability.traces.enabled=true
+      > /tmp/rendered-prod.yaml
     # Same render with the in-cluster GPU tier: every orchestrator's
     # endpoint, model Deployment, NetworkPolicy port and model-cache PVC
     # differs between the two modes.
@@ -3215,8 +3238,9 @@ chart:lint:
       | tar -xz -C /usr/local/bin kubeconform
     - kubeconform -summary -ignore-missing-schemas -kubernetes-version 1.33.0 /tmp/rendered.yaml
     - kubeconform -summary -ignore-missing-schemas -kubernetes-version 1.33.0 /tmp/rendered-full.yaml
+    - kubeconform -summary -ignore-missing-schemas -kubernetes-version 1.33.0 /tmp/rendered-prod.yaml
     - kubeconform -summary -ignore-missing-schemas -kubernetes-version 1.33.0 /tmp/rendered-incluster.yaml
-    - python3 /tmp/strict-yaml.py /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-incluster.yaml
+    - python3 /tmp/strict-yaml.py /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-prod.yaml /tmp/rendered-incluster.yaml
     # NetworkPolicy cross-check: the chart renders an ingress and an egress
     # side for every component, in different templates, edited
     # independently. A flow declared on one side and absent from the other
@@ -3224,14 +3248,14 @@ chart:lint:
     # only on a CNI that enforces NetworkPolicy (the default minikube and
     # kind CNIs store the objects and drop them, so a laptop cluster looks
     # healthy while carrying a broken egress graph).
-    - python3 scripts/networkpolicy-crosscheck.py /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-incluster.yaml
+    - python3 scripts/networkpolicy-crosscheck.py /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-prod.yaml /tmp/rendered-incluster.yaml
     # The schema types every boolean leaf of values.yaml so a wrongly-typed
     # knob fails with the operator's path instead of "wrong type for value;
     # expected bool". This check keeps the two lists from drifting.
     - python3 scripts/values-schema-bools-check.py charts/genieai-umbrella/values.yaml charts/genieai-umbrella/values.schema.json
     - >-
       python3 /tmp/cluster-scope-check.py test genieai 1 envoy
-      /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-incluster.yaml
+      /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-prod.yaml /tmp/rendered-incluster.yaml
   rules:
     # First-match semantics: a bare second merge_request_event rule would
     # make this job run on every MR and render the changes filter dead.

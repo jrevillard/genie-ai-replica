@@ -44,13 +44,16 @@
 # (sync-options disabling automated prune, or finalizers), not with a
 # Helm hook — a Helm hook only protects `helm uninstall`.
 #
-# Per-env overlays under deploy/environments/<env>/ land with the
-# environment-tier work — until then this example installs the umbrella
-# chart DIRECTLY from its repo path (ArgoCD auto-detects the Helm chart via
-# the Chart.yaml in the path; no valueFiles are set, so chart defaults
-# apply). When the overlays exist, point path at
-# deploy/environments/<env>/ (the Kustomize overlay composing the chart
-# with that env's values), and for el-salvador-style envs also change
+# This example installs the umbrella chart DIRECTLY from its repo path
+# (ArgoCD auto-detects the Helm chart via the Chart.yaml in the path; no
+# valueFiles are set, so chart defaults apply).
+#
+# That is a simplification for the example, not the deployment model. The
+# real one is Flux v2 with a HelmRelease per target, in the genie-ai-deploy
+# repo under overlays/<pays>/<env>/, each with that target's values — see
+# docs/charts/laptop-cluster-bootstrap.md and .claude/rules/K8s-WORKFLOW.md.
+# To drive ArgoCD with per-target values instead, point path at the
+# overlay and set valueFiles, and for el-salvador-style targets also change
 # targetRevision: HEAD -> release/<env> and namespace: genieai ->
 # genieai-<env>.
 ---

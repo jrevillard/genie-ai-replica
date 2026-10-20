@@ -1745,6 +1745,146 @@ class TestUnboundedPhaseKeepsItsSiblings:
         with pytest.raises(RuntimeError, match="the real failure"):
             _run(scenario())
 
+    def test_the_heartbeat_path_does_not_let_a_cancelled_batch_mask_the_failure(self, monkeypatch):
+        """The same hazard on the no-fallback runner, which had no test for it.
+
+        ``_await_with_heartbeat`` drains its own batches, so it needs its own
+        ``cancelled()`` check — and had none covered. Deleting that check makes
+        the graph-insertion phase report CancelledError for a write that failed
+        with a real error, which the kill switch reads as "Killed by an
+        administrator": the operator is told someone pressed stop, and the
+        ArangoDB failure underneath never reaches the ingestion log.
+
+        Proven by mutation, not assumed: with the check removed this test fails
+        with CancelledError instead of RuntimeError.
+        """
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
+
+        async def scenario():
+            async def boom():
+                await asyncio.sleep(0.05)
+                raise RuntimeError("the real failure")
+
+            async def self_cancelling():
+                await asyncio.sleep(0.05)
+                asyncio.current_task().cancel()
+
+            await dataprep._await_with_heartbeat(
+                [asyncio.ensure_future(boom()), asyncio.ensure_future(self_cancelling())],
+                phase="Graph insertion",
+                total=2,
+                file_id="f1",
+                write_ingestion_log=_noop_log,
+            )
+
+        with pytest.raises(RuntimeError, match="the real failure"):
+            _run(scenario())
+
+    def test_a_batch_cancelled_during_the_heartbeat_write_does_not_mask_the_failure(self, monkeypatch):
+        """The LATE drain is a third drain, and it needed its own check too.
+
+        The batches that settle while the heartbeat awaits its ingestion-log
+        write are recovered by a loop of their own, so a cancelled one reaches
+        ``Task.exception()`` there without passing the main drain's check.
+        Without it the same "Killed instead of failed" outcome arrives by a
+        different route. Proven by mutation: removing the check fails this.
+        """
+        # The budget expires INSIDE the heartbeat write, so the phase leaves the
+        # loop as soon as the write returns and the main drain never sees these
+        # two again -- the same shape the sibling late-drain test relies on.
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 0.08)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 0.05)
+
+        async def scenario():
+            recorder = _Recorder(yield_for=0.15)
+
+            async def fails_during_the_log_write():
+                await asyncio.sleep(0.06)
+                raise RuntimeError("the real failure")
+
+            async def cancels_during_the_log_write():
+                await asyncio.sleep(0.06)
+                asyncio.current_task().cancel()
+
+            async def wedged():
+                await asyncio.sleep(30)
+
+            await dataprep._gather_with_phase_budget(
+                [
+                    fails_during_the_log_write(),
+                    cancels_during_the_log_write(),
+                    wedged(),
+                ],
+                phase="Labeling",
+                phase_label=dataprep.PHASE_LABEL_LABELING,
+                total=3,
+                file_id="f1",
+                write_ingestion_log=recorder,
+            )
+
+        with pytest.raises(RuntimeError, match="the real failure"):
+            _run(scenario())
+
+    def test_a_failure_seen_in_the_main_drain_does_not_wait_out_another_interval(self, monkeypatch):
+        """A batch that has already failed ends the loop; it does not get polled.
+
+        The phase is going to raise, so the remaining batches' results are
+        discarded and the ``finally`` cancels them a moment later. Falling
+        through instead parks them in ``asyncio.wait`` for a whole progress
+        interval first — 60 s at the default — holding their semaphore slots
+        while the per-chunk fallback for the batch that just failed waits
+        behind them. The ingest is already degrading; this makes it degrade
+        later, silently, with no log line to explain the gap.
+
+        Counted rather than timed: a wall-clock assertion here would be a flaky
+        test in a suite that already runs on a loaded CI runner. The number of
+        ``asyncio.wait`` calls is the mechanism, and it does not drift.
+        """
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 5.0)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+
+        real_wait = asyncio.wait
+        calls = []
+
+        async def counting_wait(*args, **kwargs):
+            # Only the LOOP's waits. The finally's grace window calls
+            # asyncio.wait too, with a timeout and no return_when, and that one
+            # is the bounded settle the whole design rests on — counting it
+            # would make the assertion depend on the thing it protects.
+            if kwargs.get("return_when") is asyncio.FIRST_COMPLETED:
+                calls.append(1)
+            return await real_wait(*args, **kwargs)
+
+        monkeypatch.setattr(dataprep.asyncio, "wait", counting_wait)
+
+        async def scenario():
+            async def fails_at_once():
+                raise RuntimeError("the real failure")
+
+            async def wedged():
+                await asyncio.sleep(30)
+
+            await dataprep._gather_with_phase_budget(
+                [fails_at_once(), wedged()],
+                phase="Labeling",
+                phase_label=dataprep.PHASE_LABEL_LABELING,
+                total=2,
+                file_id="f1",
+                write_ingestion_log=_noop_log,
+            )
+
+        with pytest.raises(RuntimeError, match="the real failure"):
+            _run(scenario())
+
+        # One wait is what it takes to SEE the failure. A second means the loop
+        # kept polling after it already had the answer.
+        assert len(calls) == 1, (
+            f"the phase waited {len(calls)} times after a batch had already failed; "
+            "the remaining batches are cancelled in the finally, so every wait past "
+            "the first holds their semaphore slots for a whole progress interval"
+        )
+
     def test_a_sibling_is_cancelled_rather_than_left_writing(self, monkeypatch):
         """The failure path takes its in-flight batches with it.
 

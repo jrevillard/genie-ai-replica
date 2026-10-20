@@ -99,12 +99,12 @@ async function callVllm(messages, { timeoutMs = CURATION_TIMEOUT_MS } = {}) {
   const headers = {};
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   const body = { model, messages, temperature: 0.0, max_tokens: 300, response_format: { type: 'json_object' } };
-  if (viaOverride) body.thinking = { type: 'disabled' };
   const r = await require('./adaptive-llm-call').adaptiveChatCompletion({
     url: `${base}/v1/chat/completions`,
     headers,
     body,
-    timeoutMs
+    timeoutMs,
+    disableThinking: viaOverride
   });
   // DEBUG (David, 2026-09-08 "prove the LLM ran"): every call logs its
   // target, latency and token usage when OKF_CONVERSION_DEBUG=1.

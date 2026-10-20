@@ -375,13 +375,13 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
     temperature: opts.temperature || 0.0,
     response_format: { type: 'json_object' }
   };
-  if (viaOverride) body.thinking = { type: 'disabled' };
   const fn = () =>
     require('./adaptive-llm-call').adaptiveChatCompletion({
       url: `${host}/v1/chat/completions`,
       headers,
       body,
-      timeoutMs: 60000
+      timeoutMs: 60000,
+      disableThinking: viaOverride
     });
   return withVllmRetry(fn, { endpoint: '/v1/chat/completions' });
 }

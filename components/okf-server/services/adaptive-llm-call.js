@@ -2,30 +2,42 @@
 // SPDX-License-Identifier: Apache-2.0
 // Adaptive OpenAI-wire chat call for internal strict-JSON tasks
 // (David, 2026-10-20: "this needs to work within reason for any selected
-// model"). Model-agnostic layers — no vendor special-casing beyond the
-// de-facto disable param:
+// model"; "do not implement a tactical fix just for minimax-m3.1-flash").
+// Vendor-neutral layers — capability negotiation, no vendor branches:
 //
-//   1. The caller may set body.thinking = {type:'disabled'} (MiniMax/GLM
-//      convention) so reasoning models spend the budget on the ANSWER.
-//      Endpoints that reject unknown body params (OpenAI: 400 "unknown
-//      parameter") get ONE automatic retry without it.
-//   2. Budget adaptation: some models cannot disable reasoning
-//      (DeepSeek-R1 / o1-style). When a call finishes with
-//      finish_reason "length" AND either reasoning tokens were burned or
-//      the answer content is empty, retry ONCE with max_tokens ×4
-//      (capped) — reasoning gets room, the strict JSON still gets written.
-//   3. Whatever survives is the caller's to parse; errors propagate with
-//      the raw response evidence intact.
+//   1. NO-THINK NEGOTIATION: with disableThinking, the call carries the
+//      standard request params for turning reasoning off — both the
+//      thinking-object convention (GLM/MiniMax-M2 family) and
+//      enable_thinking=false (Qwen-style; live-verified accepted by
+//      MiniMax M3.1-Flash, which rejects the thinking object with
+//      "requires adaptive thinking"). An endpoint's 400 that NAMES a param
+//      ("unknown parameter thinking" / "invalid params … thinking.type")
+//      drops exactly that param and retries — every vendor converges on
+//      the subset it understands, at most a few fast 400s.
+//   2. BUDGET ADAPTATION: models whose reasoning cannot be disabled at all
+//      starve the answer (finish_reason "length" with reasoning burn or
+//      empty content, or reasoning delivered separately with empty
+//      content). Retry ONCE with max_tokens ×4 (capped) AND a doubled
+//      wall clock (capped) — more thinking room without the previous
+//      failure mode where 4× tokens met the same 60s timeout
+//      (live 2026-10-20: "upstream server is timing out").
+//   3. Non-starved truncation (partial JSON, no reasoning) belongs to the
+//      caller's JSON-repair path; everything else propagates with the
+//      response evidence intact.
 //
-// Live origin (2026-10-20): MiniMax M3.1-Flash spent 1499/1500 output
-// tokens reasoning and wrote zero answer chars — every internal task 502'd
-// with "LLM returned unparseable JSON" while the model itself was fine.
+// Live origins (2026-10-20): MiniMax M3.1-Flash spent 1499/1500 output
+// tokens reasoning and wrote zero answer chars; its endpoint then rejected
+// the thinking object and the 6000-token retry timed out at 60s.
 
 const axios = require('axios');
 const { logger } = require('../shared-lib/logger');
 
 const MAX_TOKENS_CEILING = 8192;
 const BUDGET_SCALE = 4;
+const TIMEOUT_CEILING_MS = 180000;
+const TIMEOUT_SCALE = 2;
+/** The standard no-think request params, both wire conventions. */
+const NO_THINK_PARAMS = { thinking: { type: 'disabled' }, enable_thinking: false };
 
 function statusOf(err) {
   return err && err.response && err.response.status;
@@ -37,9 +49,11 @@ function bodyText(err) {
   return typeof d === 'string' ? d : JSON.stringify(d);
 }
 
-/** 400 that names the param — the endpoint doesn't know `thinking`. */
-function rejectsParam(err, param) {
-  return statusOf(err) === 400 && new RegExp(`\\b${param}\\b`, 'i').test(bodyText(err));
+/** The param names the endpoint's 400 explicitly rejects, if any. */
+function rejectedParams(err, candidates) {
+  if (statusOf(err) !== 400) return [];
+  const text = bodyText(err);
+  return candidates.filter((p) => new RegExp(`\\b${p}\\b`).test(text));
 }
 
 function contentOf(resp) {
@@ -49,7 +63,7 @@ function contentOf(resp) {
 
 function reasoningTokensOf(resp) {
   const u = resp && resp.data && resp.data.usage;
-  const d = u && (u.completion_tokens_details || u.completion_tokens_details === null);
+  const d = u && u.completion_tokens_details;
   return (d && Number(d.reasoning_tokens)) || 0;
 }
 
@@ -67,35 +81,47 @@ function starvedAnswer(resp) {
 
 /**
  * POST {url}/v1/chat/completions with the adaptive layers above.
- * `body` is MUTATED by the retries (thinking removed / max_tokens raised)
- * so the caller's error logging reflects what was actually sent last.
+ * `body` is MUTATED by the retries (params dropped / budget raised) so the
+ * caller's error logging reflects what was actually sent last.
  * @returns the final axios response; re-throws the last error otherwise.
  */
-async function adaptiveChatCompletion({ url, headers, body, timeoutMs = 60000 }) {
-  const post = () => axios.post(url, body, { headers, timeout: timeoutMs });
+async function adaptiveChatCompletion({ url, headers, body, timeoutMs = 60000, disableThinking = false }) {
+  if (disableThinking) Object.assign(body, NO_THINK_PARAMS);
+  let timeout = timeoutMs;
+
+  const post = () => axios.post(url, body, { headers, timeout });
 
   let resp;
-  try {
-    resp = await post();
-  } catch (e) {
-    if (body.thinking && rejectsParam(e, 'thinking')) {
-      logger.info('adaptive_llm.thinking_param_unsupported_retry', { url });
-      delete body.thinking;
-      resp = await post(); // may still throw — that one is real
-    } else {
-      throw e;
+  // Layer 1 — no-think negotiation: each 400 that names one of the params
+  // drops it and retries; bounded by the number of params (all named →
+  // plain call, exactly the pre-negotiation behavior).
+  for (let round = 0; round <= Object.keys(NO_THINK_PARAMS).length; round += 1) {
+    try {
+      resp = await post();
+      break;
+    } catch (e) {
+      const present = Object.keys(NO_THINK_PARAMS).filter((p) => body[p] !== undefined);
+      const rejected = rejectedParams(e, present);
+      if (!rejected.length) throw e; // a REAL 400 (bad model, bad shape…) — not ours to fix
+      logger.info('adaptive_llm.no_think_param_rejected', { url, dropped: rejected.join(',') });
+      for (const p of rejected) delete body[p];
+      if (round === Object.keys(NO_THINK_PARAMS).length) throw e; // safety: never loop unbounded
     }
   }
 
+  // Layer 2 — budget + wall-clock adaptation for answers starved by
+  // reasoning that could not be turned off.
   if (starvedAnswer(resp) && body.max_tokens && body.max_tokens < MAX_TOKENS_CEILING) {
     const raised = Math.min(MAX_TOKENS_CEILING, body.max_tokens * BUDGET_SCALE);
+    timeout = Math.min(TIMEOUT_CEILING_MS, timeout * TIMEOUT_SCALE);
     logger.warn('adaptive_llm.budget_starved_retry', {
       url,
       finish_reason: 'length',
       reasoning_tokens: reasoningTokensOf(resp),
       content_chars: contentOf(resp).length,
       max_tokens: body.max_tokens,
-      raised_to: raised
+      raised_to: raised,
+      timeout_ms: timeout
     });
     body.max_tokens = raised;
     resp = await post();
@@ -103,4 +129,4 @@ async function adaptiveChatCompletion({ url, headers, body, timeoutMs = 60000 })
   return resp;
 }
 
-module.exports = { adaptiveChatCompletion, MAX_TOKENS_CEILING };
+module.exports = { adaptiveChatCompletion, NO_THINK_PARAMS, MAX_TOKENS_CEILING };

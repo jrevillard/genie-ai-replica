@@ -506,7 +506,7 @@ describe('1-8g-m — suggestTags integration', () => {
     await svc.suggestTags(REPO_ID);
     expect(axios.post).toHaveBeenCalledWith(
       'https://frontier.example/v1/chat/completions',
-      expect.objectContaining({ model: 'frontier-tagger', thinking: { type: 'disabled' } }),
+      expect.objectContaining({ model: 'frontier-tagger', thinking: { type: 'disabled' }, enable_thinking: false }),
       expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer fk-2' }) })
     );
     expect(modelConfig.resolveModelOverride).toHaveBeenCalledWith({ service: 'okf_tagging' });

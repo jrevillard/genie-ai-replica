@@ -177,7 +177,9 @@ describe('curateRepoConcepts (#980)', () => {
     await service.curateRepoConcepts(REPO, { classification: 'llm' });
     expect(axios.post).toHaveBeenCalledWith(
       'https://frontier.example/v1/chat/completions',
-      expect.objectContaining({ model: 'frontier-curator', thinking: { type: 'disabled' } }),
+      // BOTH no-think conventions ride the override-routed call — the
+      // adaptive layer negotiates away whichever the endpoint rejects.
+      expect.objectContaining({ model: 'frontier-curator', thinking: { type: 'disabled' }, enable_thinking: false }),
       expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer fk-1' }) })
     );
     // an anthropic-provider active config is NOT usable by this openai-wire

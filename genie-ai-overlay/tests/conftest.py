@@ -311,6 +311,7 @@ OWNED_SPAN_NAMES = frozenset(
         "dataprep.llm.context_chunk",
         "dataprep.llm.context_doc",
         "dataprep.llm.label_batch",
+        "dataprep.llm.phase",
         "dataprep.llm.label_chunk",
         "dataprep.log_environment_variables",
         "dataprep.retract",

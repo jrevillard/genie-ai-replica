@@ -540,11 +540,11 @@ class TestApplyLabels:
                 dp,
                 "_label_with_llm",
                 new_callable=AsyncMock,
-                return_value=[{"text": "chunk", "labels": ["A"]}],
+                return_value=([{"text": "chunk", "labels": ["A"]}], []),
             ),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._apply_labels(["chunk"], ["A", "B"], [], "file1")
+            result, _degraded = await dp._apply_labels(["chunk"], ["A", "B"], [], "file1")
 
         assert result == [{"text": "chunk", "labels": ["A"]}]
 
@@ -556,7 +556,7 @@ class TestApplyLabels:
             patch.object(dp_module, "LABELING_STRATEGY", "embedding"),
             patch.object(dp, "_label_with_embedding", return_value=[{"text": "chunk", "labels": ["A"]}]),
         ):
-            result = await dp._apply_labels(["chunk"], ["A", "B"], [], "file1")
+            result, _degraded = await dp._apply_labels(["chunk"], ["A", "B"], [], "file1")
 
         assert result == [{"text": "chunk", "labels": ["A"]}]
 
@@ -568,7 +568,7 @@ class TestApplyLabels:
             patch.object(dp_module, "LABELING_STRATEGY", "bm25"),
             patch.object(dp, "_label_with_bm25", return_value=[{"text": "chunk", "labels": ["A"]}]),
         ):
-            result = await dp._apply_labels(["chunk"], ["A", "B"], [], "file1")
+            result, _degraded = await dp._apply_labels(["chunk"], ["A", "B"], [], "file1")
 
         assert result == [{"text": "chunk", "labels": ["A"]}]
 
@@ -577,7 +577,7 @@ class TestApplyLabels:
         dp = create_dataprep()
 
         with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
-            result = await dp._apply_labels(["chunk"], [], ["FileLabel"], "file1")
+            result, _degraded = await dp._apply_labels(["chunk"], [], ["FileLabel"], "file1")
 
         assert result == [{"text": "chunk", "labels": ["FileLabel"]}]
 
@@ -586,7 +586,7 @@ class TestApplyLabels:
         dp = create_dataprep()
 
         with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
-            result = await dp._apply_labels(["chunk"], [], [], "file1")
+            result, _degraded = await dp._apply_labels(["chunk"], [], [], "file1")
 
         assert result == [{"text": "chunk", "labels": []}]
 
@@ -615,7 +615,7 @@ class TestLabelWithLlm:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._label_with_llm(["test chunk"], ["Healthcare", "Education"], [], "file1")
+            result, _degraded = await dp._label_with_llm(["test chunk"], ["Healthcare", "Education"], [], "file1")
 
         assert len(result) == 1
         assert result[0]["labels"] == ["Healthcare"]
@@ -642,7 +642,7 @@ class TestLabelWithLlm:
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
             # File labels must be in the taxonomy for synonym matching to accept them
-            result = await dp._label_with_llm(["chunk"], ["FallbackLabel"], ["FallbackLabel"], "file1")
+            result, _degraded = await dp._label_with_llm(["chunk"], ["FallbackLabel"], ["FallbackLabel"], "file1")
 
         assert result[0]["labels"] == ["FallbackLabel"]
         assert mock_client.chat.completions.create.call_count == 3
@@ -663,7 +663,7 @@ class TestLabelWithLlm:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._label_with_llm(["chunk"], ["Healthcare"], [], "file1")
+            result, _degraded = await dp._label_with_llm(["chunk"], ["Healthcare"], [], "file1")
 
         assert "Healthcare" in result[0]["labels"]
 
@@ -691,7 +691,7 @@ class TestLabelWithLlm:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._label_with_llm(
+            result, _degraded = await dp._label_with_llm(
                 ["chunk"],
                 ["Cucumber", "Tomato", "Water"],  # full taxonomy (all_labels)
                 ["Tomato", "Water"],  # document scope (file_labels)
@@ -723,7 +723,7 @@ class TestLabelWithLlm:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._label_with_llm(["chunk"], ["Healthcare"], [], "file1")
+            result, _degraded = await dp._label_with_llm(["chunk"], ["Healthcare"], [], "file1")
 
         assert result[0]["labels"] == ["Healthcare"]
 
@@ -744,7 +744,7 @@ class TestLabelWithLlm:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._label_with_llm(
+            result, _degraded = await dp._label_with_llm(
                 ["health chunk", "school chunk"], ["Healthcare", "Education"], [], "file1"
             )
 
@@ -772,7 +772,7 @@ class TestLabelWithLlm:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._label_with_llm(["chunk0", "chunk1"], ["Healthcare"], [], "file1")
+            result, _degraded = await dp._label_with_llm(["chunk0", "chunk1"], ["Healthcare"], [], "file1")
 
         # 1 batch attempt (fails) + 2 per-chunk fallback calls.
         assert mock_client.chat.completions.create.call_count == 3
@@ -797,7 +797,7 @@ class TestLabelWithLlm:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._label_with_llm(["chunk0", "chunk1"], ["Healthcare"], [], "file1")
+            result, _degraded = await dp._label_with_llm(["chunk0", "chunk1"], ["Healthcare"], [], "file1")
 
         # No fallback — one batch call, null coerced to [].
         assert mock_client.chat.completions.create.call_count == 1
@@ -820,7 +820,7 @@ class TestLabelWithLlm:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._label_with_llm(["chunk"], ["Healthcare"], [], "file1")
+            result, _degraded = await dp._label_with_llm(["chunk"], ["Healthcare"], [], "file1")
 
         assert result[0]["labels"] == []
         assert mock_client.chat.completions.create.call_count == 1  # no retry
@@ -842,7 +842,7 @@ class TestLabelWithLlm:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._label_with_llm(["chunk0", "chunk1"], ["Healthcare", "Education"], [], "file1")
+            result, _degraded = await dp._label_with_llm(["chunk0", "chunk1"], ["Healthcare", "Education"], [], "file1")
 
         assert mock_client.chat.completions.create.call_count == 1  # no fallback
         assert result[0]["labels"] == ["Healthcare"]
@@ -866,7 +866,7 @@ class TestLabelWithLlm:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._label_with_llm(["chunk0", "chunk1"], ["Education"], [], "file1")
+            result, _degraded = await dp._label_with_llm(["chunk0", "chunk1"], ["Education"], [], "file1")
 
         assert mock_client.chat.completions.create.call_count == 1  # no fallback
         assert result[0]["labels"] == []  # unusable -> skipped
@@ -890,7 +890,7 @@ class TestLabelWithLlm:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new=log_mock),
         ):
-            result = await dp._label_with_llm(["chunk"], ["Healthcare", "Education"], [], "file1")
+            result, _degraded = await dp._label_with_llm(["chunk"], ["Healthcare", "Education"], [], "file1")
 
         assert set(result[0]["labels"]) == {"Healthcare", "Education"}
         assert log_mock.call_count == 1  # one consolidated summary, not per-label
@@ -944,9 +944,15 @@ class TestLabelWithLlm:
         ):
             await dp._label_with_llm(["chunk"], ["Healthcare"], [], "file1")
 
-        ws.assert_called_once()
-        assert ws.call_args.args[0] == "dataprep.llm.label_chunk"
-        assert ws.call_args.kwargs["attributes"]["dataprep.chunk_index"] == 0
+        # Two spans now open around a labelling phase: the phase-level one that
+        # carries the budget outcome, and one label_chunk per call. This test is
+        # about the second, so it selects it rather than asserting a total.
+        label_chunk_calls = [c for c in ws.call_args_list if c.args[0] == "dataprep.llm.label_chunk"]
+        assert len(label_chunk_calls) == 1, [c.args[0] for c in ws.call_args_list]
+        assert label_chunk_calls[0].kwargs["attributes"]["dataprep.chunk_index"] == 0
+        # The phase span is what makes a budget exhaustion visible; without it
+        # the whole incident this policy exists for leaves no span trace.
+        assert [c.args[0] for c in ws.call_args_list].count("dataprep.llm.phase") == 1
 
     @pytest.mark.asyncio
     async def test_failed_attempt_logs_exception_reason(self, monkeypatch):
@@ -964,7 +970,7 @@ class TestLabelWithLlm:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new=log_mock),
         ):
-            result = await dp._label_with_llm(["chunk"], ["Healthcare"], ["Healthcare"], "file1")
+            result, _degraded = await dp._label_with_llm(["chunk"], ["Healthcare"], ["Healthcare"], "file1")
 
         # 3 failed attempts → fallback to file labels (Healthcare is in taxonomy, survives).
         assert result[0]["labels"] == ["Healthcare"]
@@ -1094,7 +1100,7 @@ class TestDataprepInputTooLong:
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
             # File labels in taxonomy → synonym-matching fallback succeeds.
-            result = await dp._label_with_llm(["chunk"], ["FallbackLabel"], ["FallbackLabel"], "file1")
+            result, _degraded = await dp._label_with_llm(["chunk"], ["FallbackLabel"], ["FallbackLabel"], "file1")
 
         assert result[0]["labels"] == ["FallbackLabel"]
 
@@ -1370,14 +1376,27 @@ class TestIngestFileWithGuardrail:
             patch.object(dp, "_fetch_all_labels", new_callable=AsyncMock, return_value=["Healthcare"]),
             patch.object(dp, "_load_and_chunk", new_callable=AsyncMock, return_value=["chunk1", "chunk2"]),
             patch.object(dp, "_run_guardrail", new_callable=AsyncMock, return_value={"success": True}),
+            # Not degraded: this test is about graph insertion, and with no vLLM
+            # reachable the real _apply_contextualization reports its own
+            # client-init failure as a degradation, which would flip the status
+            # for reasons that have nothing to do with what is under test here.
+            patch.object(
+                dp,
+                "_apply_contextualization",
+                new_callable=AsyncMock,
+                side_effect=lambda chunks, inp, fid: (list(chunks), []),
+            ),
             patch.object(
                 dp,
                 "_apply_labels",
                 new_callable=AsyncMock,
-                return_value=[
-                    {"text": "chunk1", "labels": ["A"]},
-                    {"text": "chunk2", "labels": ["B"]},
-                ],
+                return_value=(
+                    [
+                        {"text": "chunk1", "labels": ["A"]},
+                        {"text": "chunk2", "labels": ["B"]},
+                    ],
+                    [],
+                ),
             ),
             patch.object(dp, "_process_batch", new_callable=AsyncMock),
             patch.object(dp_module, "ArangoGraph"),
@@ -1487,9 +1506,12 @@ class TestIngestFileWithGuardrail:
                 dp,
                 "_apply_labels",
                 new_callable=AsyncMock,
-                return_value=[
-                    {"text": "chunk1", "labels": ["Healthcare"]},
-                ],
+                return_value=(
+                    [
+                        {"text": "chunk1", "labels": ["Healthcare"]},
+                    ],
+                    [],
+                ),
             ),
             patch.object(dp, "_process_batch", new_callable=AsyncMock, side_effect=capture_batch),
             patch.object(dp_module, "ArangoGraph"),
@@ -1524,11 +1546,14 @@ class TestIngestFileWithGuardrail:
                 dp,
                 "_apply_labels",
                 new_callable=AsyncMock,
-                return_value=[
-                    {"text": "c1", "labels": ["A"]},
-                    {"text": "c2", "labels": ["B"]},
-                    {"text": "c3", "labels": ["A"]},
-                ],
+                return_value=(
+                    [
+                        {"text": "c1", "labels": ["A"]},
+                        {"text": "c2", "labels": ["B"]},
+                        {"text": "c3", "labels": ["A"]},
+                    ],
+                    [],
+                ),
             ),
             patch.object(dp, "_process_batch", new_callable=AsyncMock, side_effect=capture_batch),
             patch.object(dp_module, "ArangoGraph"),
@@ -2078,7 +2103,7 @@ class TestContextualRetrieval:
         mock_client = AsyncMock()
         chunks = ["chunk one", "chunk two"]
         with patch.object(dp_module, "AsyncOpenAI", return_value=mock_client):
-            result = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "file1")
+            result, _degraded = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "file1")
         assert result == chunks
         mock_client.chat.completions.create.assert_not_called()
 
@@ -2087,7 +2112,7 @@ class TestContextualRetrieval:
         dp = create_dataprep()
         monkeypatch.setattr(dp_module, "CONTEXTUAL_RETRIEVAL_ENABLED", False)
         with patch.object(dp_module, "AsyncOpenAI", return_value=AsyncMock()):
-            result = await dp._apply_contextualization([], create_mock_ingest_input(), "file1")
+            result, _degraded = await dp._apply_contextualization([], create_mock_ingest_input(), "file1")
         assert result == []
 
     def test_build_doc_context_includes_filename_labels_and_truncates(self, monkeypatch):
@@ -2120,7 +2145,7 @@ class TestContextualRetrieval:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "file1")
+            result, _degraded = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "file1")
 
         assert len(result) == 2
         assert result[0].startswith("CTX[alpha") and result[0].endswith("alpha chunk text")
@@ -2152,7 +2177,9 @@ class TestContextualRetrieval:
             patch.object(dp, "_context_batch_call", new=AsyncMock(side_effect=fake_batch)),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._apply_contextualization(["raw zero", "raw one"], create_mock_ingest_input(), "f")
+            result, _degraded = await dp._apply_contextualization(
+                ["raw zero", "raw one"], create_mock_ingest_input(), "f"
+            )
 
         assert result[0] == "raw zero"  # empty context → raw chunk
         assert result[1] == "GOOD CONTEXT\n\nraw one"
@@ -2213,11 +2240,11 @@ class TestContextualRetrieval:
 
         async def fake_context(chunks, _inp, file_id):
             captured["ctx_in"] = list(chunks)
-            return contextualized
+            return contextualized, []
 
         async def fake_labels(chunks, all_labels, file_labels, file_id):
             captured["labels_in"] = list(chunks)
-            return [{"text": c, "labels": ["L"]} for c in chunks]
+            return [{"text": c, "labels": ["L"]} for c in chunks], []
 
         async def fake_process_batch(batch_docs, *a, **k):
             built.extend(batch_docs)
@@ -2254,7 +2281,7 @@ class TestContextualRetrieval:
 
         async def fake_labels(chunks, all_labels, file_labels, file_id):
             captured["labels_in"] = list(chunks)
-            return [{"text": c, "labels": ["L"]} for c in chunks]
+            return [{"text": c, "labels": ["L"]} for c in chunks], []
 
         async def fake_process_batch(batch_docs, *a, **k):
             built.extend(batch_docs)
@@ -2287,7 +2314,7 @@ class TestContextualRetrieval:
             patch.object(dp_module, "_build_vllm_client", side_effect=RuntimeError("init failed")),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock) as log,
         ):
-            result = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "f")
+            result, _degraded = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "f")
         assert result == chunks  # raw; ingestion must not be blocked
         assert any(call.args[1] == "ERROR" for call in log.call_args_list)
 
@@ -2305,7 +2332,7 @@ class TestContextualRetrieval:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock) as log,
         ):
-            result = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "f")
+            result, _degraded = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "f")
         assert result == chunks  # all raw
         assert any(call.args[1] == "ERROR" for call in log.call_args_list)
 
@@ -2325,7 +2352,7 @@ class TestContextualRetrieval:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "f")
+            result, _degraded = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "f")
         # doc_level = ONE call for the whole document
         assert mock_client.chat.completions.create.call_count == 1
         # the same context is prepended to every chunk
@@ -2347,7 +2374,7 @@ class TestContextualRetrieval:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock) as log,
         ):
-            result = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "f")
+            result, _degraded = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "f")
         assert result == chunks  # all raw; ingestion not blocked
         assert mock_client.chat.completions.create.call_count == 3  # 3 retries, single doc call
         assert any(call.args[1] == "ERROR" for call in log.call_args_list)
@@ -2374,7 +2401,7 @@ class TestContextualRetrieval:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "f")
+            result, _degraded = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "f")
         assert mock_client.chat.completions.create.call_count == 3  # 6 chunks / batch_size 2
         assert [r.split("\n\n", 1)[1] for r in result] == chunks  # originals preserved, in order
         assert result[0] == "C0\n\nc0" and result[5] == "C5\n\nc5"
@@ -2401,7 +2428,7 @@ class TestContextualRetrieval:
             patch.object(dp, "_context_single_call", new=AsyncMock(side_effect=fake_single)),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._apply_contextualization(["c0", "c1"], create_mock_ingest_input(), "f")
+            result, _degraded = await dp._apply_contextualization(["c0", "c1"], create_mock_ingest_input(), "f")
         assert sorted(called) == [0, 1]  # both chunks fell back to per-chunk
         assert result[0] == "S0\n\nc0" and result[1] == "S1\n\nc1"
 
@@ -2419,11 +2446,11 @@ class TestContextualRetrieval:
 
         async def fake_context(chunks, _inp, file_id):
             captured["ctx_in"] = list(chunks)
-            return contextualized
+            return contextualized, []
 
         async def fake_labels(chunks, all_labels, file_labels, file_id):
             captured["labels_in"] = list(chunks)
-            return [{"text": c, "labels": ["L"]} for c in chunks]
+            return [{"text": c, "labels": ["L"]} for c in chunks], []
 
         async def fake_process_batch(batch_docs, *a, **k):
             built.extend(batch_docs)

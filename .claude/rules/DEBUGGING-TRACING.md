@@ -78,8 +78,23 @@ if phase:
 | `dataprep.ingest` | ingest entry | `dataprep.file_type`, `dataprep.file_size_bytes`, `dataprep.file_id` |
 | `dataprep.retract` | retract entry | `dataprep.file_id` |
 | `dataprep.chunking` | docling + chunk | `dataprep.chunk_count` |
-| `dataprep.llm.label_chunk` | single-chunk label call | `dataprep.chunk_index`, `dataprep.llm_attempt`, `dataprep.llm_batched=False`, `dataprep.llm_model`, `dataprep.labels_suggested`, `dataprep.llm.completion_tokens` |
-| `dataprep.llm.label_batch` | batched label call | `dataprep.llm_batched=True`, `dataprep.llm_batch_size`, `dataprep.chunk_indices`, `dataprep.llm_model`, `dataprep.labels_suggested`, `dataprep.llm.completion_tokens`, `dataprep.llm.prompt_tokens` |
+| `dataprep.llm.label_chunk` | single-chunk label call | `dataprep.chunk_index`, `dataprep.llm_attempt`, `dataprep.llm_batched=False`, `dataprep.llm_model`, `dataprep.labels_suggested`, `dataprep.llm.completion_tokens`, `dataprep.llm.timed_out`, `dataprep.llm.timeout_seconds` |
+| `dataprep.llm.label_batch` | batched label call | `dataprep.llm_batched=True`, `dataprep.llm_batch_size`, `dataprep.chunk_indices`, `dataprep.llm_model`, `dataprep.labels_suggested`, `dataprep.llm.completion_tokens`, `dataprep.llm.prompt_tokens`, `dataprep.llm.timed_out`, `dataprep.llm.timeout_seconds` |
+
+| `dataprep.llm.context_batch` | batched doc-context call | `dataprep.llm_batched=True`, `dataprep.llm_batch_size`, `dataprep.llm_model`, `dataprep.contextual_retrieval`, `dataprep.contextual_strategy`, `dataprep.llm.timed_out`, `dataprep.llm.timeout_seconds` |
+| `dataprep.llm.context_doc` | one doc-context call per document | `dataprep.llm_batched=False`, `dataprep.llm_model`, `dataprep.context_chars`, `dataprep.llm.timed_out`, `dataprep.llm.timeout_seconds` |
+| `dataprep.llm.context_chunk` | per-chunk doc-context call | `dataprep.llm_batched=False`, `dataprep.chunk_index`, `dataprep.llm_attempt`, `dataprep.llm_model`, `dataprep.llm.timed_out`, `dataprep.llm.timeout_seconds` |
+| `dataprep.llm.phase` | one bounded LLM phase | `dataprep.llm.phase`, `dataprep.llm.timed_out`, `dataprep.llm.timeout_seconds` |
+
+`dataprep.llm.timed_out` / `dataprep.llm.timeout_seconds` are what separate a
+call that was abandoned at its budget from one still in flight — a closed span
+with no completion tokens and `dataprep.llm.timed_out=true` is a timeout, the
+same shape without the marker is a wedge.
+
+One attribute, two meanings: on the per-call spans it means "this call hit
+`MODEL_LLM_TIMEOUT_SECONDS`"; on `dataprep.llm.phase` it means "the phase
+ceiling expired". A cross-span query on the attribute alone mixes the two, so
+read `dataprep.llm.timeout_seconds` (180 vs 900) or group by span name.
 
 How to **add** a span (Python): `from tracing import with_span` then
 `with with_span("dataprep.<name>", attributes={...}) as span: span.set_attribute(...)`.

@@ -46,37 +46,6 @@ _ENV_KEYS = (
 OVERLAY_ROOT = Path(__file__).resolve().parent.parent
 
 
-def _dataprep_budget_present() -> bool:
-    """True once dataprep's own vLLM client carries the shared budget.
-
-    This MR bounds every model-endpoint client EXCEPT the one in
-    ``dataprep/genieai_dataprep_arangodb.py``, whose budget arrives with the
-    phase-budget work that owns that module. The guards below are marked xfail
-    for exactly that reason and nothing else — the four control-plane sessions
-    in that module, and the retriever's four httpx clients, ARE converted here.
-    """
-    src = (OVERLAY_ROOT / "dataprep" / "genieai_dataprep_arangodb.py").read_text(encoding="utf-8")
-    return "http_timeout(LLM_TIMEOUT_SECONDS)" in src
-
-
-# xfail(strict=True), NOT skipif.
-#
-# skipif makes the guards VANISH when the condition flips, so the moment the
-# budget lands the suite reports the same green it reported while they were
-# dormant — the coverage quietly stops and nobody notices. strict=True turns
-# that into an XPASS, which pytest reports as a FAILURE: the follow-on MR that
-# adds the budget must delete this marker or go red, which is what makes the
-# dormancy impossible to forget.
-requires_dataprep_budget = pytest.mark.xfail(
-    not _dataprep_budget_present(),
-    reason=(
-        "dataprep's own vLLM client is still at its pre-policy state; its budget lands with "
-        "the phase-budget MR. strict=True so that landing FAILS until this marker is deleted."
-    ),
-    strict=True,
-)
-
-
 def _reload_with(**env):
     """Reload the policy with *env* applied; return a VALUE snapshot.
 
@@ -811,7 +780,6 @@ class TestCallSitesConsumeThePolicy:
     fails here by name.
     """
 
-    @requires_dataprep_budget
     def test_dataprep_vllm_client_is_bounded(self):
         source = OVERLAY_ROOT / "dataprep" / "genieai_dataprep_arangodb.py"
         calls = [
@@ -824,7 +792,6 @@ class TestCallSitesConsumeThePolicy:
             assert _kwarg(call, "timeout") is not None, "AsyncOpenAI built without an explicit timeout"
             assert _kwarg(call, "max_retries") is not None, "AsyncOpenAI built without an explicit max_retries"
 
-    @requires_dataprep_budget
     def test_dataprep_vllm_client_timeout_comes_from_the_policy(self):
         source = OVERLAY_ROOT / "dataprep" / "genieai_dataprep_arangodb.py"
         calls = [
@@ -993,13 +960,15 @@ class TestCallSitesConsumeThePolicy:
         the SDK's 5 s connect ceiling, so this asserts on the call shape at every
         site rather than on the value any one of them happens to carry.
 
-        Split from the "has a timeout at all" check below so that a module not
-        yet converted cannot take this guard down with it: as one combined test
-        carrying the xfail, it left FOUR modules unverified — chatqna,
-        keycloak, the retriever and the dataprep control-plane sessions — three
-        of which this MR changed. Verified by mutation: reverting a chatqna site
-        to ``ClientTimeout(total=30)``, a dataprep one to ``total=45``, or the
-        retriever probe to ``timeout=VLLM_TIMEOUT`` each fails HERE.
+        Split from the "has a timeout at all" check below because they answer
+        different questions, and one combined test answers neither well: while
+        dataprep's client was still unbounded, the combined form had to carry an
+        xfail for it, and that xfail took chatqna, keycloak, the retriever and
+        the dataprep control-plane sessions down with it — four modules
+        unverified, three of them carrying live code. Verified by mutation:
+        reverting a chatqna site to ``ClientTimeout(total=30)``, a dataprep one
+        to ``total=45``, or the retriever probe to ``timeout=VLLM_TIMEOUT``
+        fails HERE rather than being skipped.
 
         No escape hatch for a bare Name: VLLM_TIMEOUT and friends are plain
         floats, so accepting one would accept exactly the shape this rejects.
@@ -1016,7 +985,7 @@ class TestCallSitesConsumeThePolicy:
                 checked += 1
                 value = _kwarg(call, "timeout")
                 if value is None:
-                    continue  # the guard below owns that case, and is xfail
+                    continue  # the guard below owns that case; it is not skippable
                 assert "http_timeout" in _source_names(value), (
                     f"{rel}: {ast.unparse(call.func)} builds its timeout as "
                     f"{ast.unparse(value)}, which replaces the httpx.Timeout object instead of "
@@ -1024,11 +993,12 @@ class TestCallSitesConsumeThePolicy:
                 )
         assert checked, "no httpx-backed client constructor was found — the probe is broken"
 
-    @requires_dataprep_budget
     def test_every_httpx_client_carries_a_budget(self):
-        """Every httpx-backed client has an explicit budget, not the library's.
+        """Every httpx-backed SDK client has an explicit budget, not the library's.
 
-        Dormant for exactly one client — dataprep's own — and nothing else.
+        The other half of the split above, and it is the half that can still
+        regress on its own: adding a client with no ``timeout=`` at all passes
+        the shape check, which only inspects sites that have one.
         """
         for rel, names in (
             ("dataprep/genieai_dataprep_arangodb.py", ("AsyncOpenAI",)),
@@ -1040,7 +1010,6 @@ class TestCallSitesConsumeThePolicy:
                     "library's — which is the stall this policy exists to bound"
                 )
 
-    @requires_dataprep_budget
     def test_every_dataprep_llm_call_site_marks_a_timeout(self):
         """All five LLM call sites stamp the timeout, not just the first three.
 

@@ -528,7 +528,13 @@ class GenieaiArangoRetriever(OpeaComponent):
                     # knob, not this one's.
                     #
                     # The LLM budget, not the summarizer budget, and the two
-                    # differ in what a timeout costs. This probe sits inside the
+                    # differ in what a timeout costs. That depends on the except
+                    # clause below being reachable: it once read
+                    # `openai.error.AuthenticationError`, and openai has no
+                    # `error` attribute, so the AttributeError fired while
+                    # Python was still matching and escaped instead of the
+                    # `except Exception` that makes this degradation story true.
+                    # This probe sits inside the
                     # `except Exception` below, so exhausting the budget leaves
                     # the summarizer uninitialised and documents come back
                     # unsummarised — degraded, not failed, which is why the

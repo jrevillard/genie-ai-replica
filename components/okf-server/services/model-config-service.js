@@ -443,10 +443,15 @@ async function listModelsPreview(payload = {}) {
 
 /**
  * Connection test (David, 2026-10-19: "the user must have the ability to
- * test the connection to the model before enabling it"). Two layers, both
- * reported honestly so the UI can say WHERE it broke:
- *   1. endpoint + credentials — the model listing (auth-level proof);
- *   2. the chosen model — a one-token generation ping.
+ * test the connection to the model before enabling it"; 2026-10-20: "just
+ * ping the model not list"). ONE layer: a one-token generation to the
+ * selected model over the provider's native wire — the truest end-to-end
+ * proof (creds + base + model in a single call). The previous layer-1
+ * model LISTING hard-failed providers that generate perfectly but serve
+ * no list (live: DeepSeek's Anthropic surface — /anthropic/v1/messages
+ * answers 200, /anthropic/v1/models is 404; they split the features).
+ * The dropdown combo keeps its listing (with free-text fallback) — the
+ * TEST no longer depends on it. No model selected = nothing to test.
  * Credentials resolve as: typed fields win, a saved config key fills the
  * gaps (so the form can test unsaved edits against the stored key, and a
  * table row can test with just {key}). NEVER throws for a probe failure —
@@ -470,41 +475,36 @@ async function testConnection(payload = {}) {
     if (!PROVIDERS.has(provider) || !base_url || !api_key) {
       throw httpErr('VALIDATION_ERROR', 400, 'provider, base_url and api_key (typed or via key) are required');
     }
-    const t0 = Date.now();
-    let models;
-    try {
-      models = await fetchModelList({ provider, base_url, api_key });
-    } catch (e) {
+    if (!model) {
       span.setAttribute('okf.model_config.test_ok', false);
       return {
         ok: false,
-        endpoint_ok: false,
+        endpoint_ok: null,
         models_n: null,
-        model: model || null,
+        model: null,
         model_listed: null,
         generation_ok: null,
-        latency_ms: Date.now() - t0,
-        error: e.message
+        latency_ms: 0,
+        error: 'no model to test — type or pick a model first'
       };
     }
-    const base = {
-      ok: true,
-      endpoint_ok: true,
-      models_n: models.length,
-      model: model || null,
-      model_listed: model ? models.includes(model) : null,
-      generation_ok: null,
+    const t0 = Date.now();
+    const ping = await pingModel({ provider, base_url, api_key, model });
+    const out = {
+      ok: ping.ok,
+      // A real HTTP answer (even 401/404) proves the endpoint was REACHED —
+      // only transport failures mean "could not reach".
+      endpoint_ok: ping.ok || !/could not reach/.test(ping.error || ''),
+      models_n: null,
+      model,
+      model_listed: null,
+      generation_ok: ping.ok,
       latency_ms: Date.now() - t0
     };
-    if (!model) return base; // endpoint + creds proven; nothing selected to ping
-    const ping = await pingModel({ provider, base_url, api_key, model });
-    base.generation_ok = ping.ok;
-    base.ok = ping.ok;
-    base.latency_ms = Date.now() - t0;
-    if (!ping.ok) base.error = ping.error;
-    span.setAttribute('okf.model_config.test_ok', base.ok);
-    span.setAttribute('okf.model_config.test_generation_ok', base.generation_ok === true);
-    return base;
+    if (!ping.ok) out.error = ping.error;
+    span.setAttribute('okf.model_config.test_ok', out.ok);
+    span.setAttribute('okf.model_config.test_generation_ok', out.generation_ok === true);
+    return out;
   });
 }
 

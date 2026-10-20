@@ -198,14 +198,19 @@ server-side round trip and is never stored). Keys are held server-side,
 shown only as a masked hint, and never reach the browser.
 
 A **Test connection** action (in the form and on every table row) probes
-the configuration before you rely on it: it verifies the endpoint and
-credentials, and — when a model is selected — sends a one-token
-generation to that model, reporting latency and exactly which layer
-failed if anything does. Testing is always available; activating is a
-separate, explicit act. The Provider and Base URL fields carry **ⓘ
-info tips** with live-verified example endpoints (OpenAI, Anthropic,
-MiniMax, z.ai, LiteLLM) and the exact paths the server appends for
-listing and generation.
+the configuration before you rely on it: it sends a **one-token
+generation to the selected model** over the provider's native wire —
+the truest end-to-end proof (credentials, base URL and model in a
+single call), reporting latency and the raw error if anything fails.
+It deliberately does **not** depend on the model listing: some
+providers serve generation but no list (DeepSeek's Anthropic surface,
+for example, answers `/v1/messages` but has no `/v1/models`) — there
+the dropdown falls back to free text while the test still passes. With
+no model selected there is nothing to test. Testing is always
+available; activating is a separate, explicit act. The Provider and
+Base URL fields carry **ⓘ info tips** with live-verified example
+endpoints (OpenAI, Anthropic, MiniMax, z.ai, LiteLLM) and the exact
+paths the server appends for listing and generation.
 
 The configuration works within reason for **any** selected model:
 config-routed internal tasks ask reasoning-capable models not to think

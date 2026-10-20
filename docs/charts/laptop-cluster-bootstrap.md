@@ -142,6 +142,29 @@ minikube delete
 The script is idempotent: re-running it re-applies the operators and
 the secret restores without touching the deployment.
 
+## The laptop node is memory-tight
+
+The chart gives the backend a 12 Gi memory limit, and it needs that
+much: when the GPU translation endpoint is unreachable, the backend
+falls back to an in-process CPU translation model
+(`Xenova/nllb-200-distilled-600M`, 4 threads, 5 batches) whose ONNX
+load peaks **above 8 Gi**.
+
+The laptop node has 8 Gi in total. A GPU that blips — and the shared
+GPU node does — therefore makes the backend load a model that cannot
+fit: the container is OOMKilled (exit 137), and on a node that close to
+its limit the OOM reaches the node too (the control plane dies with
+it, and the cluster comes back with an empty etcd).
+
+Two things follow for the laptop:
+
+- keep the GPU translation endpoint reachable — the fallback is not
+  survivable on an 8 Gi node;
+- the node's own memory is the real constraint, not the pod's limit.
+
+On a real cluster the 12 Gi limit is what keeps a GPU blip a degraded
+translation instead of a backend outage.
+
 ## Validating the result
 
 The six live checks, in order. The first four are HTTP; the last two

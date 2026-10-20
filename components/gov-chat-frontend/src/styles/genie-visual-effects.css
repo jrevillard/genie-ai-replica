@@ -70,14 +70,20 @@ html[data-visual='on'] .genie-living-intelligence .chatbot-container {
  * The welcome overlay. The mesh is painted on the overlay rather than
  * on the chat window: the overlay is opaque, so anything painted on the
  * window behind it would never be seen.
+ *
+ * The mesh is sized to its natural 1600:580 aspect and pinned to the top
+ * of the overlay. A vertical gradient on top of the mesh fades it to
+ * surface above the card row, so the field behind the cards reads clean
+ * while the mesh stays faintly present in the hero region.
  */
 html[data-visual='on'] .genie-living-intelligence .quick-help-overlay {
   isolation: isolate;
-  background-image:
-    linear-gradient(180deg, transparent, color-mix(in srgb, var(--surface) 30%, transparent)), var(--visual-mesh);
-  background-position: center, center;
+  background-image: linear-gradient(180deg, transparent 0 28%, var(--surface) 58% 100%), var(--visual-mesh);
+  background-position:
+    center top,
+    center top;
   background-size:
-    cover,
+    100% 100%,
     min(900px, 100%) auto;
   background-repeat: no-repeat;
 }
@@ -89,11 +95,11 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::before {
   z-index: 0;
   flex: 0 0 auto;
   align-self: center;
-  width: min(100%, 860px);
-  height: clamp(96px, 19vw, 218px);
-  background: var(--visual-hero) center / contain no-repeat;
+  width: min(100%, 920px);
+  height: clamp(180px, 28vw, 282px);
+  background: var(--visual-hero) center 45.7% / cover no-repeat;
   pointer-events: none;
-  filter: drop-shadow(0 12px 25px color-mix(in srgb, var(--accent) 14%, transparent));
+  filter: drop-shadow(0 12px 30px color-mix(in srgb, var(--accent) 16%, transparent));
   animation: gli-enter 650ms ease-out both;
 }
 
@@ -101,11 +107,12 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::after {
   content: '';
   position: absolute;
   inset: auto 0 0;
-  height: min(32%, 220px);
+  height: min(40%, 280px);
   background: var(--visual-waves) bottom / 100% auto no-repeat;
   opacity: var(--gli-deco-strength);
+  mix-blend-mode: multiply;
   pointer-events: none;
-  z-index: -1;
+  z-index: 0;
 }
 
 html[data-visual='on'] .genie-living-intelligence .quick-help-content {
@@ -169,7 +176,7 @@ html[data-visual='on'] .genie-living-intelligence .document-item {
 
 @media (max-width: 900px) {
   html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::before {
-    height: clamp(76px, 22vw, 160px);
+    height: clamp(140px, 30vw, 230px);
   }
 
   html[data-visual='on'] .genie-living-intelligence .sidebar:not(.collapsed)::before {
@@ -181,7 +188,7 @@ html[data-visual='on'] .genie-living-intelligence .document-item {
 
 @media (max-width: 600px) {
   html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::before {
-    height: 90px;
+    height: clamp(110px, 28vw, 160px);
   }
 
   html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::after {

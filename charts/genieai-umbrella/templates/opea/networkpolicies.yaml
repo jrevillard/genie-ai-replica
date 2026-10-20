@@ -563,9 +563,12 @@ spec:
         - podSelector:
             matchLabels:
               genieai.io/component: chatqna
-        # backend BFF: auto-probes the in-cluster translation Service when
-        # services.backend.translation.endpoint is empty — a dropped probe
-        # silently falls back to the in-process CPU translation model.
+        # backend BFF: dials the OPEA translation Service when
+        # services.backend.translation.endpoint points at it — a dropped
+        # probe silently falls back to the in-process CPU translation
+        # model. (The backend's DEFAULT in-cluster endpoint is the
+        # vllm-translation model Service, which this policy does not
+        # select: the backend's own egress carries the peer for it.)
         - podSelector:
             matchLabels:
               genieai.io/component: backend

@@ -3,6 +3,8 @@
 
 import os
 
+from core.model_http_policy import EMBEDDING_TIMEOUT_SECONDS, LLM_TIMEOUT_SECONDS
+
 
 #######################################################
 #                Common Functions                     #
@@ -261,7 +263,21 @@ VLLM_MODEL_ID = os.getenv("VLLM_MODEL_ID", "ibm-granite/granite-3.3-2b-instruct"
 VLLM_MAX_NEW_TOKENS = os.getenv("VLLM_MAX_NEW_TOKENS", 512)
 VLLM_TOP_P = os.getenv("VLLM_TOP_P", 0.9)
 VLLM_TEMPERATURE = os.getenv("VLLM_TEMPERATURE", 0.8)
-VLLM_TIMEOUT = os.getenv("VLLM_TIMEOUT", 600)
+# Deck-wide budgets, resolved once by core/model_http_policy.py (imported at the
+# top of this file). Both aliases keep their historical names because the
+# retriever source and its tests reference them; what they carry is now the
+# shared budget rather than a retriever-local constant. Neither container
+# receives VLLM_TIMEOUT any more - MODEL_LLM_TIMEOUT_SECONDS is injected instead,
+# and the policy reads that name first - so leaving the legacy name in the
+# environment made `docker exec ... env` report a value this service never uses.
+VLLM_TIMEOUT = LLM_TIMEOUT_SECONDS
+EMBEDDING_TIMEOUT = EMBEDDING_TIMEOUT_SECONDS
+# The summarizer's budget is deliberately NOT aliased here. It has no degradation
+# route, so it keeps the openai default rather than the tightened LLM one, and
+# its two call sites import SUMMARIZER_TIMEOUT_SECONDS straight from the policy
+# module — an alias nothing in production reads would be a second name for one
+# budget, guarded by nothing.
+
 
 # OpenAI configuration (alternative to VLLM & TEI)
 OPENAI_CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o")

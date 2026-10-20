@@ -23,6 +23,7 @@ from metrics import (
 
 from core.embedding_query_prefix import TEI_EMBED_MODEL, get_query_instruction
 from core.model_cache import get_max_model_len, get_model_id
+from core.model_http_policy import CONTROL_PLANE_TIMEOUT_SECONDS
 from core.span_attrs import ATTRIBUTE_NAMES, QUERY_ID_KEY, query_id_from_baggage
 from tracing import (
     get_tracer,
@@ -1347,7 +1348,7 @@ class GenieUserProfileClient:
         inject(headers)
 
         try:
-            _timeout = aiohttp.ClientTimeout(total=30)
+            _timeout = aiohttp.ClientTimeout(total=CONTROL_PLANE_TIMEOUT_SECONDS)
             async with (
                 aiohttp.ClientSession(timeout=_timeout) as session,
                 session.get(url, headers=headers) as response,
@@ -2334,7 +2335,7 @@ class ChatQnAService:
 
         try:
             async with (
-                aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session,
+                aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=CONTROL_PLANE_TIMEOUT_SECONDS)) as session,
                 session.get(file_get_metadata_url, headers=headers) as response,
             ):
                 if response.status == 200:

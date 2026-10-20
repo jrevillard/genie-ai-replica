@@ -89,7 +89,8 @@ if _VLLM_API_KEY:
     except ImportError:
         pass
 
-    # Patch for requests: inject Authorization header + force verify=False.
+    # Patch for requests: inject Authorization header (+ disable verification
+    # only when SSL bypass is on).
     # The OPEA orchestrator uses sync requests.post(stream=True) for LLM streaming.
     # ChatOpenAI/httpx send Authorization natively, but requests does not.
     try:
@@ -98,7 +99,29 @@ if _VLLM_API_KEY:
         _orig_req_request = req_lib.Session.request
 
         def _patched_req_request(self, method, url, **kwargs):
-            kwargs["verify"] = False
+            # Certificate verification follows OPEA_SSL_SKIP_VERIFY, matching the
+            # TLS block above, and is NOT implied by the presence of a
+            # VLLM_API_KEY. Setting that key authenticates the call to the GPU
+            # node; it says nothing about whether the certificate that node
+            # presents can be trusted.
+            #
+            # Blast radius, stated precisely because the list is short: this is
+            # the whole of the `requests` surface in an OPEA overlay image.
+            #   - the model endpoints (comps' mega orchestrator streams over
+            #     requests.post(stream=True)) — the destination that actually
+            #     presents the self-signed certificate on the remote-GPU
+            #     topology this opt-out exists for;
+            #   - ArangoDB, via python-arango, whose DefaultHTTPClient calls
+            #     session.request() (arango/http.py) — reached over plain
+            #     http:// by default, so verify is moot unless a deployment
+            #     fronts ArangoDB with TLS.
+            # The backend and the document repository are NOT on this path: they
+            # are Node images with no .pth hook, and the overlay reaches them
+            # over aiohttp, which this hook only ever gave an Authorization
+            # header to. Keep it that way — a new `requests` call to an internal
+            # service inherits this decision.
+            if _SSL_SKIP:
+                kwargs["verify"] = False
             headers = kwargs.setdefault("headers", {})
             headers.setdefault("Authorization", f"Bearer {_VLLM_API_KEY}")
             return _orig_req_request(self, method, url, **kwargs)

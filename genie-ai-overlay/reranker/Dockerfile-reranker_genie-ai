@@ -58,6 +58,13 @@ COPY genie-ai-overlay/tracing.py /app/tracing.py
 # chunk-key sentinel; without this the image fails at import, not at runtime.
 COPY genie-ai-overlay/core/span_attrs.py /app/core/span_attrs.py
 
+# Copy the shared model-endpoint HTTP budget policy (core.model_http_policy).
+# The reranker reads RERANK_TIMEOUT_SECONDS from it to bound the /rerank call.
+# The default matches aiohttp's own 300 s so behaviour is unchanged out of the
+# box, but the budget is now named, knob-driven and shared with the rest of the
+# deck instead of being an accident of which session object is constructed.
+COPY genie-ai-overlay/core/model_http_policy.py /app/core/model_http_policy.py
+
 # Step E: "Overlay" custom GENIE-AI files
 # 1. Place the custom reranker class into the integrations folder
 COPY genie-ai-overlay/reranker/genieai_tei_reranker.py /app/comps/rerankings/src/integrations/genieai_tei_reranker.py

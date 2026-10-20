@@ -37,6 +37,7 @@ SERVICE_IMAGES: dict[str, Path] = {
     "retriever/config.py": OVERLAY_ROOT / "retriever" / "Dockerfile-retriever_genie-ai",
     "reranker/genieai_tei_reranker.py": OVERLAY_ROOT / "reranker" / "Dockerfile-reranker_genie-ai",
     "dataprep/genieai_dataprep_arangodb.py": OVERLAY_ROOT / "dataprep" / "Dockerfile-dataprep_genie-ai",
+    "dataprep/keycloak_service_account.py": OVERLAY_ROOT / "dataprep" / "Dockerfile-dataprep_genie-ai",
 }
 
 _COPY_CORE = re.compile(r"^COPY\s+genie-ai-overlay/core/(?P<module>[\w.]+)\.py\s+\S+", re.MULTILINE)

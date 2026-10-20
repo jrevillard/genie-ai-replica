@@ -25,6 +25,7 @@ from opentelemetry import propagate
 from opentelemetry.trace import Status, StatusCode
 from pydantic import Field
 
+from core.model_http_policy import RERANK_TIMEOUT_SECONDS
 from core.span_attrs import ATTRIBUTE_NAMES, QUERY_ID_KEY, UNRESOLVED, query_id_from_baggage
 from tracing import (
     get_meter,
@@ -351,7 +352,12 @@ class GenieTEIReranking(OpeaTEIReranking):
 
                 try:
                     async with (
-                        aiohttp.ClientSession() as session,
+                        # Shared rerank budget (core/model_http_policy.py) — a bare
+                        # session inherits aiohttp's 300 s by accident rather than by
+                        # decision. Note this path has no fallback: the timeout
+                        # propagates to a 500, which is why the default is not
+                        # tighter than what aiohttp would have applied anyway.
+                        aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=RERANK_TIMEOUT_SECONDS)) as session,
                         session.post(
                             f"{self.base_url}/rerank",
                             # truncate=False forces TEI's strict input check;

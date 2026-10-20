@@ -22,6 +22,7 @@ from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from core.model_cache import get_model_id
+from core.model_http_policy import LLM_MAX_RETRIES, SUMMARIZER_TIMEOUT_SECONDS, http_timeout
 from core.span_attrs import ATTRIBUTE_NAMES as A
 from core.span_attrs import QUERY_ID_KEY, label_digest, query_id_from_baggage
 from tracing import (
@@ -49,6 +50,7 @@ from .config import (
     ARANGO_URL,
     ARANGO_USE_APPROX_SEARCH,
     ARANGO_USERNAME,
+    EMBEDDING_TIMEOUT,
     HF_TOKEN,
     HYBRID_BM25_ANALYZER,
     HYBRID_BM25_CANDIDATES,
@@ -509,11 +511,31 @@ class GenieaiArangoRetriever(OpeaComponent):
                 openai.api_key = OPENAI_API_KEY
 
                 try:
-                    openai.models.list()
+                    # The probe is bounded by a client scoped to this one call,
+                    # so the budget cannot reach anything built later off the
+                    # same module state — the module-level ``openai.api_key``
+                    # assigned just above is process-wide, and this way only the
+                    # timeout stays local.
+                    #
+                    # Closed explicitly: the client owns an httpx connection pool
+                    # that would otherwise live until the GC finaliser runs.
+                    with openai.OpenAI(api_key=OPENAI_API_KEY, timeout=http_timeout(VLLM_TIMEOUT)) as probe:
+                        probe.models.list()
                     if logflag:
                         logger.debug("OpenAI API Key is valid.")
+                    # Budgeted but not retry-capped: same reasoning as the
+                    # OpenAI embeddings branch above — this is a third-party
+                    # endpoint, and MODEL_LLM_MAX_RETRIES is the shared GPU's
+                    # knob, not this one's. Summarizer budget, not LLM_*: this
+                    # call has no fallback (its except clause re-raises
+                    # anything but vLLM input overflow, so a timeout becomes a
+                    # 500 on the chat request), which is why the default stays
+                    # at the openai default rather than at LLM_TIMEOUT.
                     self.llm = ChatOpenAI(
-                        temperature=OPENAI_CHAT_TEMPERATURE, model=OPENAI_CHAT_MODEL, max_tokens=OPENAI_CHAT_MAX_TOKENS
+                        temperature=OPENAI_CHAT_TEMPERATURE,
+                        model=OPENAI_CHAT_MODEL,
+                        max_tokens=OPENAI_CHAT_MAX_TOKENS,
+                        timeout=http_timeout(SUMMARIZER_TIMEOUT_SECONDS),
                     )
                     self._llm_model_id = OPENAI_CHAT_MODEL
                 except openai.error.AuthenticationError:
@@ -553,7 +575,15 @@ class GenieaiArangoRetriever(OpeaComponent):
             temperature=VLLM_TEMPERATURE,
             max_tokens=VLLM_MAX_NEW_TOKENS,
             top_p=VLLM_TOP_P,
-            timeout=VLLM_TIMEOUT,
+            # Not LLM_TIMEOUT_SECONDS: no degradation route on this call, so
+            # the ceiling stays at the openai default. See
+            # core/model_http_policy.py SUMMARIZER_TIMEOUT_SECONDS.
+            #
+            # Imported unaliased on purpose: the AST call-site guard resolves a
+            # client's timeout back to the policy constant by name, and an
+            # `as` clause hides the constant from it.
+            timeout=http_timeout(SUMMARIZER_TIMEOUT_SECONDS),
+            max_retries=LLM_MAX_RETRIES,
         )
 
     def _get_llm(self) -> ChatOpenAI:
@@ -1221,8 +1251,35 @@ class GenieaiArangoRetriever(OpeaComponent):
                 # OpenAI embeddings are not contrastive / instruction-tuned —
                 # get_query_instruction(OPENAI_EMBED_MODEL) returns None for
                 # any OpenAI model id, so the wrapper is never installed here.
-                embeddings = OpenAIEmbeddings(model=OPENAI_EMBED_MODEL, dimensions=dimension)
+                # Shared embedding budget: this client is otherwise unbounded,
+                # and the retrieval request it serves has no deadline of its own.
+                #
+                # No max_retries here on purpose. MODEL_LLM_MAX_RETRIES exists to
+                # cap the retry ladder of a contended shared GPU, and this
+                # branch talks to the OpenAI API instead, where the dominant
+                # transient failure is a 429 that the SDK's own retry handling
+                # exists to absorb. An operator setting the knob to 0 for a busy
+                # vLLM node would silently turn that off here as well.
+                embeddings = OpenAIEmbeddings(
+                    model=OPENAI_EMBED_MODEL,
+                    dimensions=dimension,
+                    timeout=http_timeout(EMBEDDING_TIMEOUT),
+                )
             elif TEI_EMBEDDING_ENDPOINT and HF_TOKEN:
+                # Left unbudgeted on purpose. langchain_huggingface's
+                # HuggingFaceEndpointEmbeddings is a pydantic model whose
+                # accepted field set depends on the pinned version; it is not
+                # documented as taking a timeout, and a rejected kwarg raises
+                # ValidationError at construction — which, on the remote-GPU
+                # path this branch selects, would 500 every retrieval request
+                # rather than merely leave one call unbounded.
+                #
+                # The bound belongs on the huggingface_hub client underneath
+                # (its InferenceClient does take a timeout; comps does not pass
+                # one either). Closing it means passing a pre-built client via
+                # model_kwargs, which needs the field set verified against the
+                # pinned langchain-huggingface first. Recorded with the rest of
+                # the vendored-client debt in genie-ai-overlay/OVERRIDES.yaml.
                 embeddings = HuggingFaceEndpointEmbeddings(
                     model=TEI_EMBEDDING_ENDPOINT,
                     task="feature-extraction",

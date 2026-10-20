@@ -86,6 +86,12 @@ COPY genie-ai-overlay/tracing.py /app/tracing.py
 # Copy shared TTL-cached model probe (importable as core.model_cache from PYTHONPATH=/app)
 COPY genie-ai-overlay/core/model_cache.py /app/core/model_cache.py
 
+# Copy the shared model-endpoint HTTP budget policy (importable as
+# core.model_http_policy). Retriever's config resolves both the LLM budget (for
+# the ChatOpenAI summarizer) and the TEI budget (for the embedding client)
+# through it, so the two cannot drift apart from the other services.
+COPY genie-ai-overlay/core/model_http_policy.py /app/core/model_http_policy.py
+
 # Copy the shared span-attribute vocabulary (importable as core.span_attrs).
 # The retriever imports it for every attribute name it stamps on
 # retriever.hybrid_search; without this the image fails at import, not at runtime.

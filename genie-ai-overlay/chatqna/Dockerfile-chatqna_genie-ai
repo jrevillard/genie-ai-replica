@@ -90,6 +90,11 @@ COPY genie-ai-overlay/tracing.py /app/tracing.py
 # Copy shared TTL-cached model probe (importable as core.model_cache from PYTHONPATH=/app)
 COPY genie-ai-overlay/core/model_cache.py /app/core/model_cache.py
 
+# Copy the shared model-endpoint HTTP budget policy (importable as
+# core.model_http_policy). Chatqna reads the control-plane budget from it for
+# the backend and document-repository calls on the chat path.
+COPY genie-ai-overlay/core/model_http_policy.py /app/core/model_http_policy.py
+
 # Copy the shared span-attribute vocabulary (importable as core.span_attrs).
 # chatqna, retriever and reranker all stamp attribute names from it; without
 # this the image fails at import, not at runtime.

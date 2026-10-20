@@ -33,6 +33,22 @@ metadata:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
 spec:
   mode: deployment
+  {{- /* The operator's default image is the `k8s` distribution, which
+         ships NO prometheus exporter of any kind — verified against the
+         image itself (`/otelcol-k8s components` → debug, file,
+         load_balancing, nop, otelarrow, otlp_grpc, otlp_http). With the
+         metrics tier on, the prometheusremotewrite exporter below makes
+         the collector fail to start:
+           'exporters' unknown type: "prometheusremotewrite" for id:
+           "prometheusremotewrite/victoriametrics"
+         and it takes the LOGS and TRACES pipelines down with it, since
+         one process serves all three. The `contrib` distribution is the
+         one that carries it. Only the GATEWAY gets this image: the
+         filelog agent needs nothing but otlphttp and runs on every node,
+         where the extra size is pure cost. */}}
+  {{- if .Values.observability.metrics.enabled }}
+  image: {{ .Values.observability.collectorImage | quote }}
+  {{- end }}
   # config as a map (otel-operator v1beta1 rejects string configs)
   config:
     receivers:

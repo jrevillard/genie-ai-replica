@@ -6,13 +6,15 @@ The PDB is rendered only when both are true:
   - podDisruptionBudget is a non-null map with a numeric minAvailable
 
 Caller context keys (top-level, not merged into Values):
-  component  - service slug read by labels/selector helpers
+  name       - service slug; indexes .Values.services for the replica
+               count and the podDisruptionBudget block
+  component  - workload class read by the labels/selector helpers
   Values     - chart values
   Chart      - chart metadata
   Release    - release metadata
 
 Usage:
-  {{- include "genieai-umbrella.pdbForService" (dict "component" "backend" "Values" .Values "Chart" .Chart "Release" .Release) }}
+  {{- include "genieai-umbrella.pdbForService" (dict "name" "backend" "component" "backend" "Values" .Values "Chart" .Chart "Release" .Release) }}
 */}}
 {{- define "genieai-umbrella.pdbForService" -}}
 {{- $ctx := . -}}

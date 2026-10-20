@@ -6,7 +6,20 @@ the contracts that matter when editing `charts/genieai-umbrella/**` or the
 
 ## Cluster topology
 
-- **Cluster**: local **minikube** on the developer's laptop.
+- **Cluster**: local **minikube** on the developer's laptop, started with
+  `--cni=calico`. **The CNI is not optional**: minikube's default (kubenet)
+  has no policy engine, so the chart's NetworkPolicies are stored and never
+  applied — a laptop cluster stays green while carrying a broken egress
+  graph, and the defect only surfaces in production as a timeout with no
+  error anywhere. Rebuild with `scripts/laptop-cluster-bootstrap.sh`
+  (procedure: `docs/charts/laptop-cluster-bootstrap.md`).
+- **The sealed-secrets key is cluster state**: the committed SealedSecrets
+  in `genie-ai-deploy` are encrypted against it. A `minikube delete`
+  destroys it — capture and restore it (same Secret name, same
+  `tls.crt`/`tls.key`, PLUS the
+  `sealedsecrets.bitnami.com/sealed-secrets-key=active` label, PLUS a
+  controller restart), or every committed SealedSecret fails with
+  "no key could decrypt secret".
 - **App namespace**: `genieai` (created by `install.createNamespace: true`
   on the HelmRelease — pre-install/pre-upgrade hooks must NOT assume it
   exists).

@@ -422,10 +422,16 @@ services:
       allowPrivilegeEscalation: false
       capabilities: { drop: ["ALL"] }
     # The backend loads the Xenova nllb-200-distilled-600M translation
-    # model in-process (CPU worker) — peak ~5-6 Gi during ONNX model
-    # load (weights + arena + copies). Limits below the peak
-    # OOMKill the container mid-initialization (exit 137, silent).
-    resources: { requests: { cpu: 100m, memory: 1Gi }, limits: { cpu: 1, memory: 8Gi } }
+    # model in-process (CPU worker) when the GPU translation endpoint
+    # is unreachable — 4 threads, 5 batches. The ONNX load (weights +
+    # arena + per-thread copies) peaks ABOVE 8 Gi: measured on the
+    # laptop, an 8 Gi limit ended in OOMKill (exit 137) mid-load, and
+    # on a node whose own memory is close to the limit, that OOM
+    # reached the node and took the control plane down with it. A
+    # limit below the peak turns a degraded translation into a
+    # crash-looping backend. The compose path imposes no limit at all,
+    # so this one is a chart-only constraint.
+    resources: { requests: { cpu: 100m, memory: 1Gi }, limits: { cpu: 1, memory: 12Gi } }
     env: []
     secrets:
       # KEYCLOAK_PROXY_CLIENT_SECRET for the genie-proxy-client service

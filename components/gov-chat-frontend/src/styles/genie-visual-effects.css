@@ -48,8 +48,8 @@ html[data-visual='on'] .dark-mode .genie-living-intelligence {
  * renders.
  *
  * In light mode the configured tint is a pale 50-step used almost
- * directly; in dark mode it is mixed into the dark surface, because a
- * literal pale background would glare against it.
+ * directly; in dark mode the card has to be a saturated dark version
+ * of the operator's hue — see the dark rule below.
  */
 html[data-visual='on'] .genie-living-intelligence .quick-help-item {
   --ds-card-bg: var(--qh-bg, var(--surface));
@@ -61,18 +61,57 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-item:hover {
   --ds-card-border-color: color-mix(in srgb, var(--qh-outline, var(--accent)) 47%, var(--border));
 }
 
+/*
+ * Dark cards.
+ *
+ * The card surface comes from `--qh-outline` (a Tailwind-200/300 step
+ * with a real category colour), not from `--qh-bg` (a pale 50 step
+ * whose chroma is below the noise floor): mixing a pale source into
+ * the dark surface cannot carry a hue, which is why earlier dark
+ * cards came out colourless. Relative colour syntax takes the source's
+ * own chroma and hue and replaces only the lightness with the dark
+ * surface's, so the operator-configured hue survives at surface depth.
+ *
+ * The top-lit wash is a low-opacity overlay above the card surface
+ * (Card.vue paints --ds-card-bg itself; the wash sits on a pseudo so
+ * the DS primitive is untouched). The wash colour is the card's own
+ * outline mixed into transparent, so the highlight and the body share
+ * the same hue without introducing a hard-coded colour.
+ */
 html[data-theme='dark'][data-visual='on'] .genie-living-intelligence .quick-help-item,
 html[data-visual='on'] .dark-mode .genie-living-intelligence .quick-help-item {
-  --ds-card-bg: color-mix(in srgb, var(--qh-bg, var(--surface)) 14%, var(--surface));
-  --ds-card-border-color: color-mix(in srgb, var(--qh-outline, var(--gli-frost-border)) 30%, var(--border));
+  position: relative;
+  /* The card surface uses the dark --surface's lightness (0.22 — the
+     literal L of the dark --surface token, kept here as a number for
+     the relative-colour-source slot). chroma and hue come from the
+     category's --qh-outline, so each card stays the operator-configured
+     hue at panel depth. */
+  --ds-card-bg: oklch(from var(--qh-outline, var(--accent)) 0.22 c h);
+  /* Parity with light: full --qh-outline at rest, 47 %-mix on hover.
+     The --gli-frost-border fallback the previous round let through is
+     dropped here — only the un-configured path used it, and the two
+     themes should follow the same rule rather than diverge. */
+  --ds-card-border-color: var(--qh-outline, var(--accent));
+}
+
+html[data-theme='dark'][data-visual='on'] .genie-living-intelligence .quick-help-item::before,
+html[data-visual='on'] .dark-mode .genie-living-intelligence .quick-help-item::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklch, var(--qh-outline, var(--accent)) 24%, transparent) 0%,
+    transparent 55%
+  );
 }
 
 html[data-theme='dark'][data-visual='on'] .genie-living-intelligence .quick-help-item:hover,
 html[data-visual='on'] .dark-mode .genie-living-intelligence .quick-help-item:hover {
-  --ds-card-bg: color-mix(in srgb, var(--qh-hover, var(--qh-bg, var(--surface))) 20%, var(--surface));
-  /* Parity with the light hover rule: the border also shifts, otherwise
-     dark hover feedback would be background-only. */
-  --ds-card-border-color: color-mix(in srgb, var(--qh-outline, var(--gli-frost-border)) 45%, var(--border));
+  --ds-card-bg: oklch(from var(--qh-hover, var(--qh-outline, var(--accent))) 0.22 c h);
+  --ds-card-border-color: color-mix(in srgb, var(--qh-outline, var(--accent)) 47%, var(--border));
 }
 
 /* Keep the existing chat, data and scroll behavior intact. */

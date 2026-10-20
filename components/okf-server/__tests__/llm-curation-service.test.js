@@ -177,7 +177,9 @@ describe('curateRepoConcepts (#980)', () => {
     await service.curateRepoConcepts(REPO, { classification: 'llm' });
     expect(axios.post).toHaveBeenCalledWith(
       'https://frontier.example/v1/chat/completions',
-      expect.objectContaining({ model: 'frontier-curator' }),
+      // BOTH no-think conventions ride the override-routed call — the
+      // adaptive layer negotiates away whichever the endpoint rejects.
+      expect.objectContaining({ model: 'frontier-curator', thinking: { type: 'disabled' }, enable_thinking: false }),
       expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer fk-1' }) })
     );
     // an anthropic-provider active config is NOT usable by this openai-wire
@@ -198,6 +200,9 @@ describe('curateRepoConcepts (#980)', () => {
       expect.objectContaining({ model: 'test-model' }),
       expect.anything()
     );
+    // env path: NO thinking param — only override-routed calls ask for it
+    const envCall = axios.post.mock.calls.find((c) => c[0] === 'http://vllm:8000/v1/chat/completions');
+    expect(envCall[1].thinking).toBeUndefined();
     // and the service tag it resolved with
     expect(modelConfig.resolveModelOverride).toHaveBeenCalledWith({ service: 'okf_curation' });
   });

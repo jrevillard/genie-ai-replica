@@ -27,7 +27,6 @@
  * -> services History/Culture/Politics/...).
  */
 
-const axios = require('axios');
 const dbService = require('../shared-lib/db-connection-service');
 const config = require('../config');
 const { logger } = require('../shared-lib/logger');
@@ -70,18 +69,27 @@ async function resolveAreaContext(domain) {
  * 8-7 model configs: an ACTIVE configuration checked for 'okf_curation'
  * (openai-wire provider only — this client speaks chat/completions) takes
  * precedence over env. Resolution failure falls back to env silently: a
- * model-config outage must never break curation. */
+ * model-config outage must never break curation.
+ *
+ * Model-agnostic adaptivity (David 2026-10-20: "work within reason for any
+ * selected model"): override-routed calls ask for thinking-disabled and a
+ * starved answer gets one budget-raised retry — see
+ * services/adaptive-llm-call.js. Curation's 300-token budget was sized for
+ * non-reasoning models; a reasoning model gets room instead of an empty
+ * JSON 502. */
 async function callVllm(messages, { timeoutMs = CURATION_TIMEOUT_MS } = {}) {
   const t0 = Date.now();
   let rawBase = config?.llm?.endpoint || process.env.VLLM_ENDPOINT;
   let model = config?.llm?.model || process.env.VLLM_MODEL_ID;
   let apiKey = process.env.VLLM_API_KEY || config?.llm?.apiKey;
+  let viaOverride = false;
   try {
     const ovr = await require('./model-config-service').resolveModelOverride({ service: 'okf_curation' });
     if (ovr && ovr.provider === 'openai') {
       rawBase = ovr.base_url;
       model = ovr.model || model;
       if (ovr.api_key) apiKey = ovr.api_key;
+      viaOverride = true;
     }
   } catch {
     /* env fallback — see docblock */
@@ -90,11 +98,14 @@ async function callVllm(messages, { timeoutMs = CURATION_TIMEOUT_MS } = {}) {
   const base = rawBase.replace(/\/+$/, '').replace(/\/v1$/, '');
   const headers = {};
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-  const r = await axios.post(
-    `${base}/v1/chat/completions`,
-    { model, messages, temperature: 0.0, max_tokens: 300, response_format: { type: 'json_object' } },
-    { timeout: timeoutMs, headers }
-  );
+  const body = { model, messages, temperature: 0.0, max_tokens: 300, response_format: { type: 'json_object' } };
+  const r = await require('./adaptive-llm-call').adaptiveChatCompletion({
+    url: `${base}/v1/chat/completions`,
+    headers,
+    body,
+    timeoutMs,
+    disableThinking: viaOverride
+  });
   // DEBUG (David, 2026-09-08 "prove the LLM ran"): every call logs its
   // target, latency and token usage when OKF_CONVERSION_DEBUG=1.
   if (debugEnabled()) {

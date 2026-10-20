@@ -207,6 +207,14 @@ info tips** with live-verified example endpoints (OpenAI, Anthropic,
 MiniMax, z.ai, LiteLLM) and the exact paths the server appends for
 listing and generation.
 
+The configuration works within reason for **any** selected model:
+config-routed internal tasks ask reasoning-capable models not to think
+(the wire convention for it, dropped automatically if the endpoint
+doesn't know the parameter), and a call whose answer was starved by
+reasoning — the model spent its whole budget thinking and wrote nothing
+— is retried once with a larger budget, so strict-JSON tasks (tags,
+curation, advice, benchmark answers) survive frontier reasoning models.
+
 Each configuration declares **which features use it**, grouped by
 pipeline. The **Test Lab Pipelines** group is live: **benchmarks** (the
 RAGAS judge and advisor), **benchmark answers** (by default benchmarks

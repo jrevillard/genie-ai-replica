@@ -340,11 +340,19 @@ Output ONLY a JSON object: {"results": [{"index": <int>, "match": "yes"|"no", "r
  * (default 'okf_tagging' — this one client fronts every
  * frontmatter/topic/head-test-explain LLM call; the RAGAS benchmark answer
  * leg passes 'ragas_answers') takes precedence over the env consts.
- * Openai-wire provider only. Resolution failure falls back to env silently. */
+ * Openai-wire provider only. Resolution failure falls back to env silently.
+ *
+ * Model-agnostic adaptivity (David 2026-10-20: "work within reason for any
+ * selected model", "not a tactical fix for one model"): override-routed
+ * calls ask for thinking-disabled (the emerging wire convention) and every
+ * call retries with a raised budget when the answer was starved — see
+ * services/adaptive-llm-call.js. Env-path calls behave exactly as before
+ * unless they starve, in which case they too get the budget retry. */
 async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
   let host = VLLM_LLM_HOST;
   let model = VLLM_LLM_MODEL_ID;
   let apiKey = VLLM_LLM_API_KEY;
+  let viaOverride = false;
   try {
     const ovr = await require('./model-config-service').resolveModelOverride({
       service: opts.service || 'okf_tagging'
@@ -353,6 +361,7 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
       host = ovr.base_url.replace(/\/+$/, '').replace(/\/v1$/, '');
       if (ovr.model) model = ovr.model;
       if (ovr.api_key) apiKey = ovr.api_key;
+      viaOverride = true;
     }
   } catch {
     /* env fallback — see docblock */
@@ -366,7 +375,14 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
     temperature: opts.temperature || 0.0,
     response_format: { type: 'json_object' }
   };
-  const fn = () => axios.post(`${host}/v1/chat/completions`, body, { headers, timeout: 60000 });
+  const fn = () =>
+    require('./adaptive-llm-call').adaptiveChatCompletion({
+      url: `${host}/v1/chat/completions`,
+      headers,
+      body,
+      timeoutMs: 60000,
+      disableThinking: viaOverride
+    });
   return withVllmRetry(fn, { endpoint: '/v1/chat/completions' });
 }
 

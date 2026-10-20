@@ -995,6 +995,59 @@ describe('AdminDashboard', () => {
       expect(result[0]._key).toBe('a');
     });
 
+    it('filtering by "Ingested" does not hide degraded documents silently', () => {
+      // A degraded phase lands the document as "Ingested with Warnings", not
+      // "Ingested". That is the whole point: the badge must not lie. But it
+      // means the exact-status filter drops those documents, so the dropdown
+      // needs its own option or the operator can never isolate them.
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { _key: 'a', dataprep: { status: 'Ingested' } },
+        { _key: 'b', dataprep: { status: 'Ingested with Warnings' } }
+      ];
+
+      // DsSelect is stubbed as an auto-stub in this suite, so its <option>
+      // children never reach the DOM. Assert the option exists in the component
+      // source instead — otherwise the filter below would be reachable only by
+      // assignment, which is exactly the silent gap this guards.
+      const fs = require('fs');
+      const path = require('path');
+      const source = fs.readFileSync(path.resolve(__dirname, '../../components/AdminDashboard.vue'), 'utf-8');
+      expect(source).toContain('<option value="ingested with warnings">');
+      expect(source).toContain("translate('admin.documents.statusWarning'");
+
+      wrapper.vm.documentFilters.status = 'ingested with warnings';
+      const degraded = wrapper.vm.filteredDocuments;
+      expect(degraded).toHaveLength(1);
+      expect(degraded[0]._key).toBe('b');
+    });
+
+    it('getStatusVariant renders a degraded document as a warning badge', () => {
+      const wrapper = createAdminDashboardWrapper();
+      expect(wrapper.vm.getStatusVariant({ dataprep: { status: 'Ingested with Warnings' } })).toBe('warning');
+      // And a clean one is still the success badge, so the state means something.
+      expect(wrapper.vm.getStatusVariant({ dataprep: { status: 'Ingested' } })).toBe('success');
+    });
+
+    it('a degraded document can still be re-ingested', () => {
+      // The remedy for a degraded document is to raise the budget and ingest
+      // again, so the Ingest button must stay available for it. This is the one
+      // place where "not exactly 'Ingested'" is the correct behaviour, and it
+      // is load-bearing: widening that comparison to include the warning state
+      // would hide the remedy.
+      const wrapper = createAdminDashboardWrapper();
+      // selectedDocuments holds file_ids — showIngestButton resolves them back
+      // through `documents`, so a document with only a _key matches nothing and
+      // the assertion would pass for the wrong reason.
+      wrapper.vm.documents = [{ file_id: 'b', dataprep: { status: 'Ingested with Warnings' } }];
+      wrapper.vm.selectedDocuments = ['b'];
+      expect(wrapper.vm.showIngestButton).toBe(true);
+
+      wrapper.vm.documents = [{ file_id: 'a', dataprep: { status: 'Ingested' } }];
+      wrapper.vm.selectedDocuments = ['a'];
+      expect(wrapper.vm.showIngestButton).toBe(false);
+    });
+
     it('filteredDocuments matches Retracted/Pending status case-insensitively', () => {
       const wrapper = createAdminDashboardWrapper();
       wrapper.vm.documents = [

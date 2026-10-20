@@ -334,7 +334,82 @@ fidelity and for a zero-toolchain deployment story.
 
 ---
 
+## Visual fidelity gate
+
+**Fidelity to the reference mockups is the acceptance criterion for this work.**
+Not "the layer is present and token-driven" — the render must match
+`docs/reference-light.png` and `docs/reference-dark.png`. Everything else in
+this spec is a means to that end.
+
+This is an iterating loop, not a single check at the end:
+
+```
+implement → code review → fix → screenshot → compare against reference
+          → fix the delta → code review → … until the delta is nil
+```
+
+Do not declare the work done on a passing unit suite. A green Jest run and a
+faithful render are independent facts, and only the second one is the goal.
+
+### Procedure
+
+1. Bring the frontend up locally with the base config (`docker compose` or
+   `npm run dev`), at the viewport the mockup was captured at.
+2. Capture the dashboard welcome screen in **both** light and dark.
+3. Put the capture next to the reference and diff them by eye, region by
+   region: hero placement and scale, mesh opacity, wave height and position,
+   corner network, card grid geometry, card tint per category, heading scale,
+   navbar treatment.
+4. Every difference is either **fixed** or **recorded with a reason**. Silent
+   divergence is not an option — the loop does not close until each item is
+   resolved one way or the other.
+5. Repeat from step 1 after each fix round.
+
+### Screenshot discipline
+
+A screenshot alone is not evidence. Per the standing rule in this repo, a PNG
+read back only yields a URL — never a claim about how it looks. Every capture
+therefore ships with a **DOM audit** alongside it, asserting the things a
+picture cannot prove:
+
+- `naturalWidth` / `naturalHeight` of each decoration asset (a 0 means it failed
+  to load and the "comparison" was of an empty box)
+- `getComputedStyle` on `.quick-help-overlay`, `.quick-help-item`,
+  `.nav-bar` — background, border, radius, `backdrop-filter`
+- presence and count of `[data-visual]`, `.quick-help-item`,
+  `.quick-help-overlay::before` content box dimensions
+- the resolved value of `--visual-hero`, `--accent`, `--brand`
+
+If the DOM audit disagrees with what the screenshot appears to show, the audit
+wins.
+
+### Deterministic fixture
+
+A faithful comparison needs a populated screen, and a fresh local database
+renders an empty left tree and a failing weather panel — which would make the
+comparison meaningless. Seed, deterministically and once:
+
+- the knowledge-area / service-category nodes visible in the mockup
+- at least one document in the right-hand "Info & Resources" panel
+- the quick-help buttons from the base config (already present — no seeding)
+- the weather panel response (stubbed or seeded — its live data is not the
+  subject of the comparison)
+
+Record the seed as a repeatable script, not an ad-hoc sequence, so every round
+of the loop starts from the same state. Without this, round 3 is not comparable
+to round 1.
+
+### Existing harness
+
+`tests/e2e/theme-runtime-config.spec.js` already exercises the runtime config
+path this work extends. Extend it rather than standing up a second Playwright
+project; `playwright.config.js` takes `BASE_URL` from the environment.
+
+---
+
 ## Testing strategy
+
+### Automated
 
 **Unit (Jest, existing suites):**
 - `src/__tests__/config-loader.test.js` — extend. `theme.visual` absent →
@@ -416,6 +491,10 @@ Three independent levers, no code change required for any of them:
       screen (no broken images, no layout collapse).
 - [ ] `npm run lint`, `npm run format:check` and `npm test` pass in
       `components/gov-chat-frontend`.
+- [ ] **Visual fidelity gate passed**: the light and dark dashboard renders
+      match `docs/reference-light.png` and `docs/reference-dark.png`, verified
+      by screenshot against reference with a DOM audit beside each capture.
+      Every residual difference is either fixed or recorded with a reason.
 
 ---
 

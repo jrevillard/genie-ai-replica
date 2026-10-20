@@ -3142,6 +3142,10 @@ export default {
       }
     },
     ragas: {
+      corpus: {
+        capped: 'Основано на {parts} (бюджет корпуса)',
+        part: '{used} из {total} фрагментов'
+      },
       gen: {
         eta: 'осталось ~{t}',
         elapsed: 'выполняется {t}',

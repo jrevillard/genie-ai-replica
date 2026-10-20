@@ -3107,6 +3107,10 @@ export default {
       }
     },
     ragas: {
+      corpus: {
+        capped: 'อ้างอิงจาก {parts} (งบคลังข้อมูล)',
+        part: '{used} จาก {total} ชิ้น'
+      },
       gen: {
         eta: 'เหลืออีก ~{t}',
         elapsed: 'กำลังทำงาน {t}',

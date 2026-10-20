@@ -3068,6 +3068,10 @@ export default {
       }
     },
     ragas: {
+      corpus: {
+        capped: '基于 {parts}（语料预算）',
+        part: '{total} 个分块中的 {used} 个'
+      },
       gen: {
         eta: '剩余约 {t}',
         elapsed: '已运行 {t}',

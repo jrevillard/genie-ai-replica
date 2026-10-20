@@ -3155,6 +3155,10 @@ export default {
       }
     },
     ragas: {
+      corpus: {
+        capped: 'Basiert auf {parts} (Korpus-Budget)',
+        part: '{used} von {total} Chunks'
+      },
       gen: {
         eta: '~{t} verbleibend',
         elapsed: 'läuft seit {t}',

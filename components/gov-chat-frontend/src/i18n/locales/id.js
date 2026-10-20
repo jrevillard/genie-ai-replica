@@ -3133,6 +3133,10 @@ export default {
       }
     },
     ragas: {
+      corpus: {
+        capped: 'Didasarkan pada {parts} (anggaran korpus)',
+        part: '{used} dari {total} potongan'
+      },
       gen: {
         eta: '~{t} tersisa',
         elapsed: 'berjalan {t}',

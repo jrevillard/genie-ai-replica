@@ -3143,6 +3143,10 @@ export default {
       }
     },
     ragas: {
+      corpus: {
+        capped: 'E thehile ho {parts} (morero oa corpus)',
+        part: '{used} ho tse {total} tsa dikarolo'
+      },
       gen: {
         eta: '~{t} e tengile',
         elapsed: 'e sebetsa {t}',

@@ -3101,6 +3101,10 @@ export default {
       }
     },
     ragas: {
+      corpus: {
+        capped: 'مبني على {parts} (حد المجموعة)',
+        part: '{used} من {total} مقطع'
+      },
       gen: {
         eta: 'يتبقى ~{t}',
         elapsed: 'يعمل منذ {t}',

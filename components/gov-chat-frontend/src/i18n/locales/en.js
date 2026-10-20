@@ -1780,6 +1780,10 @@ export default {
       }
     },
     ragas: {
+      corpus: {
+        capped: 'Grounded in {parts} (corpus budget)',
+        part: '{used} of {total} chunks'
+      },
       gen: {
         eta: '~{t} left',
         elapsed: 'running {t}',

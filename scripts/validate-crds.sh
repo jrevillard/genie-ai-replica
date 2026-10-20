@@ -54,6 +54,9 @@ for name, docs in (('namespaces', ns), ('serviceaccounts', sa), ('rest', rest)):
     with open(f'${WORK}/{name}.yaml', 'w') as fh:
         yaml.safe_dump_all(docs, fh)
 
+with open(f'${WORK}/nsnames.txt', 'w') as fh:
+    fh.write('\n'.join(d['metadata']['name'] for d in ns) + '\n')
+
 print(f"  split: {len(ns)} Namespace, {len(sa)} ServiceAccount, {len(rest)} to validate")
 PY
 
@@ -62,12 +65,24 @@ PY
 # computed patch carries nulls for defaulted fields, which the API server
 # then rejects ("must be specified for an update"). Create semantics do
 # not touch storage, so the check is purely schema + admission.
-for phase in namespaces serviceaccounts; do
-  if [ -s "${WORK}/${phase}.yaml" ]; then
-    printf '==> applying %s\n' "${phase}"
-    kubectl apply -f "${WORK}/${phase}.yaml" >/dev/null
-  fi
-done
+if [ -s "${WORK}/namespaces.yaml" ]; then
+  printf '==> applying namespaces\n'
+  kubectl apply -f "${WORK}/namespaces.yaml" >/dev/null
+  # A Namespace object is accepted by the API server while the namespace
+  # controller is still finalizing it, and creating anything inside that
+  # window fails with `namespaces "genieai" not found` — CI's first run of
+  # this script hit exactly that. Wait for Active.
+  while read -r ns; do
+    [ -n "${ns}" ] || continue
+    kubectl wait --for=jsonpath='{.status.phase}'=Active "namespace/${ns}" --timeout=60s >/dev/null
+    printf '    namespace/%s Active\n' "${ns}"
+  done < "${WORK}/nsnames.txt"
+fi
+
+if [ -s "${WORK}/serviceaccounts.yaml" ]; then
+  printf '==> applying serviceaccounts\n'
+  kubectl apply -f "${WORK}/serviceaccounts.yaml" >/dev/null
+fi
 
 printf '==> server-side dry run\n'
 # AlreadyExists is noise, not a schema failure: on a cluster that already

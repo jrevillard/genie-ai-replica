@@ -2,8 +2,10 @@
 # Idempotent installer for the 7 cluster operators that the genie-ai
 # chart requires as cluster-wide bootstrap (NOT chart dependencies).
 #
-# Usage: KUBECONFIG=/path/to/kubeconfig ./scripts/install-prereqs.sh
+# Usage: KUBECONFIG=/path/to/kubeconfig ./scripts/install-prereqs.sh [--with-grafana]
 #        (no KUBECONFIG = kubectl's current context)
+#        --with-grafana additionally installs grafana-operator, the
+#        prerequisite for observability.grafana.enabled=true
 #
 # Operators installed:
 #   - keycloak-operator 26.8.0   (namespace keycloak-system; Kustomize install of the official modern Quarkus-based operator; 4 CRDs in k8s.keycloak.org group)
@@ -35,6 +37,10 @@ CERT_MANAGER_VERSION="${CERT_MANAGER_VERSION:-v1.18.2}"
 # operator.victoriametrics.com/v1, which this chart's CRs require).
 VM_OPERATOR_VERSION="${VM_OPERATOR_VERSION:-0.68.1}"
 OTEL_OPERATOR_VERSION="${OTEL_OPERATOR_VERSION:-0.126.0}"
+# grafana-operator is a CONDITIONAL prerequisite: the chart's Grafana
+# CRs are opt-in (observability.grafana.enabled, default false). Opt in
+# with --with-grafana, which CI's CRD gate uses — see that job.
+GRAFANA_OPERATOR_VERSION="${GRAFANA_OPERATOR_VERSION:-5.25.0}"
 
 READY_TIMEOUT="${READY_TIMEOUT:-5m}"
 
@@ -281,6 +287,26 @@ install_otel_operator() {
   wait_deploy_ready "${ns}" "opentelemetry-operator"
 }
 
+install_grafana_operator() {
+  # Reconciles the chart's Grafana / GrafanaDataSource / GrafanaDashboard /
+  # GrafanaAlertRuleGroup CRs (grafana.integreatly.org group). Only
+  # required when observability.grafana.enabled is true.
+  local ns="grafana-operator-system" release="grafana-operator"
+  ensure_namespace "${ns}"
+  if helm list -n "${ns}" -q 2>/dev/null | grep -qx "${release}"; then
+    log "grafana-operator ${GRAFANA_OPERATOR_VERSION} (release ${release}): already installed, skip"
+    return 0
+  fi
+  log "grafana-operator ${GRAFANA_OPERATOR_VERSION}: helm install"
+  helm repo add grafana https://grafana.github.io/helm-charts >/dev/null 2>&1 || true
+  helm repo update >/dev/null 2>&1
+  helm install "${release}" grafana/grafana-operator \
+    --version "${GRAFANA_OPERATOR_VERSION}" \
+    --namespace "${ns}" --create-namespace=false \
+    --wait --timeout "${READY_TIMEOUT}"
+  wait_deploy_ready "${ns}" "grafana-operator"
+}
+
 main() {
   log "install 7 cluster operators (keycloak/cnpg/arango/sealed-secrets/cert-manager/vmoperator/otel-operator)"
   install_keycloak_operator
@@ -290,10 +316,17 @@ main() {
   install_cert_manager
   install_vmoperator
   install_otel_operator
-  # grafana-operator is NOT installed here: the chart's Grafana CRs are
-  # opt-in (observability.grafana.enabled, default false). A cluster
-  # enabling them installs grafana-operator per charts/README.md.
-  log "7 operators installed; all namespaces Ready"
+  # grafana-operator is NOT installed by default: the chart's Grafana
+  # CRs are opt-in (observability.grafana.enabled, default false). A
+  # cluster enabling them opts in with --with-grafana.
+  local installed="7 operators installed"
+  if [[ "${1:-}" == "--with-grafana" ]]; then
+    install_grafana_operator
+    installed="${installed} + grafana-operator"
+  else
+    log "skipping grafana-operator (opt-in: --with-grafana); the chart's Grafana CRs render only when observability.grafana.enabled=true"
+  fi
+  log "${installed}; all namespaces Ready"
 }
 
 main "$@"

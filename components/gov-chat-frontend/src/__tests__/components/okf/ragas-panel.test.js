@@ -227,6 +227,38 @@ describe('RagasPanel', () => {
     );
   });
 
+  it('renders the generation sub-step line: active transform, ETA, elapsed (2026-10-20)', async () => {
+    // David: "the progress bar keeps flashing by without any sense of what
+    // is happening or how long it is going to take" — the KG phase now
+    // streams the active transform's own bar; the panel must surface it.
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    w.vm.generateBusy = true;
+    w.vm.genProgress = {
+      phase: 'building-knowledge-graph',
+      done: 337,
+      total: 1075,
+      step: 'Applying CustomNodeFilter',
+      eta_s: 840,
+      elapsed_s: 1830
+    };
+    expect(w.vm.genProgressPct).toBe(31); // 337/1075
+    expect(w.vm.genProgressLabel).toContain('337/1075');
+    const detail = w.vm.genProgressDetail;
+    expect(detail).toContain('Applying CustomNodeFilter');
+    expect(detail).toContain('14 min');
+    expect(detail).toContain('31 min');
+    // durations: under a minute, plain minutes, hours+minutes, NaN-safe
+    expect(w.vm.fmtDuration(20)).toContain('minute');
+    expect(w.vm.fmtDuration(2700)).toContain('45');
+    expect(w.vm.fmtDuration(7500)).toContain('2');
+    expect(w.vm.fmtDuration(7500)).toContain('5');
+    expect(w.vm.fmtDuration(NaN)).toBe('');
+    // no sub-step payload yet → the detail line is just the elapsed clock
+    w.vm.genProgress = { phase: 'building-knowledge-graph', elapsed_s: 60 };
+    expect(w.vm.genProgressDetail).toContain('1');
+  });
+
   it('renders explain attributions and guarded advice chips', async () => {
     const w = mountPanel();
     await new Promise((r) => setTimeout(r, 0));

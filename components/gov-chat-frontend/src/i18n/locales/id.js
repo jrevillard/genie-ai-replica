@@ -3133,6 +3133,13 @@ export default {
       }
     },
     ragas: {
+      gen: {
+        eta: '~{t} tersisa',
+        elapsed: 'berjalan {t}',
+        underMin: 'kurang dari satu menit',
+        minutes: '{m} mnt',
+        hours: '{h} jam {m} mnt'
+      },
       paneTitle: 'Tolok ukur RAGAS',
       about:
         'RAGAS menilai seberapa baik asisten menemukan dan menjawab informasi — kesetiaan, presisi dan recall konteks, relevansi jawaban, dan lainnya. Jalankan suite tolok ukur untuk mengukur repositori sebagai basis pengetahuan.',

@@ -3152,6 +3152,13 @@ export default {
       }
     },
     ragas: {
+      gen: {
+        eta: 'quedan ~{t}',
+        elapsed: 'en ejecución {t}',
+        underMin: 'menos de un minuto',
+        minutes: '{m} min',
+        hours: '{h} h {m} min'
+      },
       paneTitle: 'Pruebas comparativas de RAGAS',
       about:
         'RAGAS puntúa qué tan bien el asistente recupera y responde — fidelidad, precisión y recuperación de contexto, relevancia de la respuesta y más. Ejecute una suite de pruebas comparativas para medir el repositorio como base de conocimiento.',

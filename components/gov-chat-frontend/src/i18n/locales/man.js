@@ -3101,6 +3101,13 @@ export default {
       }
     },
     ragas: {
+      gen: {
+        eta: '~{t} left',
+        elapsed: 'running {t}',
+        underMin: 'under a minute',
+        minutes: '{m} min',
+        hours: '{h} h {m} min'
+      },
       paneTitle: 'RAGAS Benchmarks',
       about:
         'RAGAS scores how well the assistant retrieves and answers — faithfulness, context precision and recall, answer relevancy and more. Run a benchmark suite to measure the repository as a knowledge base.',

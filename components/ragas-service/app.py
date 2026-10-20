@@ -155,10 +155,12 @@ async def _start_job(kind: str) -> str:
 
 
 def _phase_tracker(job_id: str):
-    """Progress callback for engine jobs: phase + optional done/total counts
-    (David 2026-10-18: per-phase progress bars, granular status)."""
+    """Progress callback for engine jobs: phase + optional counts and, since
+    2026-10-20, the active transform's own bar (step/done/total/eta/rate —
+    David: "the user needs more feedback than this") and the job's elapsed
+    time, so the UI can show WHAT is running and HOW LONG it has run."""
 
-    def _update(phase: str, done=None, total=None) -> None:
+    def _update(phase: str, done=None, total=None, step=None, rate_s=None, eta_s=None) -> None:
         job = JOBS.get(job_id)
         if job is not None and job.get("status") == "running":
             job["phase"] = phase
@@ -167,6 +169,13 @@ def _phase_tracker(job_id: str):
                 prog["done"] = done
             if total is not None:
                 prog["total"] = total
+            if step:
+                prog["step"] = step
+            if rate_s:
+                prog["rate_s"] = rate_s
+            if eta_s is not None:
+                prog["eta_s"] = eta_s
+            prog["elapsed_s"] = round(time.time() - job.get("started_at", time.time()), 1)
             job["progress"] = prog
 
     return _update

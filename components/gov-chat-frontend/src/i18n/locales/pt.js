@@ -3145,6 +3145,13 @@ export default {
       }
     },
     ragas: {
+      gen: {
+        eta: 'faltam ~{t}',
+        elapsed: 'a decorrer há {t}',
+        underMin: 'menos de um minuto',
+        minutes: '{m} min',
+        hours: '{h} h {m} min'
+      },
       paneTitle: 'Testes comparativos de RAGAS',
       about:
         'O RAGAS pontua quão bem o assistente recupera e responde — fidelidade, precisão e recall de contexto, relevância da resposta e mais. Execute uma suíte de testes comparativos para medir o repositório como base de conhecimento.',

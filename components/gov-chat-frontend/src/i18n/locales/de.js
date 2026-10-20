@@ -3155,6 +3155,13 @@ export default {
       }
     },
     ragas: {
+      gen: {
+        eta: '~{t} verbleibend',
+        elapsed: 'läuft seit {t}',
+        underMin: 'unter einer Minute',
+        minutes: '{m} Min.',
+        hours: '{h} Std. {m} Min.'
+      },
       paneTitle: 'RAGAS-Vergleichstests',
       about:
         'RAGAS bewertet, wie gut der Assistent abruft und antwortet — Treue, Kontextgenauigkeit und -treffer, Antwortrelevanz und mehr. Führen Sie eine Vergleichstestsuite aus, um das Repository als Wissensbasis zu messen.',

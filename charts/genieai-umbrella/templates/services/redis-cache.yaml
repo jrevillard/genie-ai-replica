@@ -159,6 +159,19 @@ spec:
       ports:
         - protocol: TCP
           port: 6379
+  {{- if .Values.observability.metrics.enabled }}
+  # Prometheus scrape peer (VMServiceScrape targets this Service).
+  # VictoriaMetrics runs as a vm-operator-managed pod in this namespace;
+  # without this peer its scrapes are dropped by the default-deny.
+    - from:
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: vmetrics
+      ports:
+        - protocol: TCP
+          port: 6379
+  {{- end }}
   egress:
     - to:
         - namespaceSelector:

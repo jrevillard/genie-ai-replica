@@ -26,10 +26,8 @@ both rows must be set explicitly. */ -}}
     (dict "name" "KEYCLOAK_URL" "value" (include "genieai-umbrella.keycloakInternalURL" .))
     (dict "name" "KC_REALM" "value" (.Values.data.keycloak.realm | default "genie"))
     (dict "name" "KEYCLOAK_EXPECTED_ISSUER" "value" (printf "%s/realms/%s" (include "genieai-umbrella.keycloakPublicIssuer" .) (.Values.data.keycloak.realm | default "genie")))
-    (dict "name" "KC_CLIENT_ID" "value" "dataprep-service-client")
     (dict "name" "ARANGO_URL" "value" (include "genieai-umbrella.arangoURL" .))
     (dict "name" "ARANGO_DB" "value" "_system")
-    (dict "name" "BACKEND_URL" "value" (include "genieai-umbrella.serviceURL" (dict "root" . "name" "backend" "port" 80)))
     (dict "name" "DATAPREP_HOST" "value" "http://dataprep")
     (dict "name" "DATAPREP_PORT" "value" "5000")
     (dict "name" "CLAMSCAN_HOST" "value" .Values.services.documentRepository.clamavHost)
@@ -101,6 +99,19 @@ spec:
       ports:
         - protocol: TCP
           port: 3001
+  {{- if .Values.observability.metrics.enabled }}
+  # Prometheus scrape peer (VMServiceScrape targets this Service).
+  # VictoriaMetrics runs as a vm-operator-managed pod in this namespace;
+  # without this peer its scrapes are dropped by the default-deny.
+    - from:
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: vmetrics
+      ports:
+        - protocol: TCP
+          port: 3001
+  {{- end }}
   egress:
     # DNS resolution to kube-system.
     - to:
@@ -137,6 +148,26 @@ spec:
       ports:
         - protocol: TCP
           port: 8529
+    {{- /* Web-crawler egress: POST /api/files/crawl/schedule fetches
+    arbitrary user-supplied URLs (and every redirect hop). NetworkPolicy
+    peers cannot express a domain, so this is a port-scoped ipBlock over
+    80/443 — the same approximation the ClamAV signature-update rule
+    documents. Empty list = allow every IPv4 destination on the HTTP(S)
+    ports, matching the compose deployment's unrestricted network. */}}
+    - to:
+        {{- range $cidr := .Values.services.documentRepository.crawlAllowedCIDRs }}
+        - ipBlock:
+            cidr: {{ $cidr }}
+        {{- end }}
+        {{- if not .Values.services.documentRepository.crawlAllowedCIDRs }}
+        - ipBlock:
+            cidr: 0.0.0.0/0
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
     # Ingestion trigger: POST /api/files/<id>/ingest calls the dataprep
     # Service directly (fileController _ingestFileById).
     - to:
@@ -148,10 +179,15 @@ spec:
           port: 5000
     # Remote JWKS fetch (jose createRemoteJWKSet) on the first
     # authenticated request — KEYCLOAK_URL points at keycloak-service.
+    # The Keycloak pod is operator-managed and carries no
+    # genieai.io/component label; these are its real pod labels (verified
+    # live, and the same pair templates/data/keycloak-networkpolicy.yaml
+    # selects on).
     - to:
         - podSelector:
             matchLabels:
-              genieai.io/component: keycloak
+              app.kubernetes.io/instance: keycloak
+              app.kubernetes.io/managed-by: keycloak-operator
       ports:
         - protocol: TCP
           port: 8080

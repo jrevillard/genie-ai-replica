@@ -78,6 +78,14 @@ observability:
   # when the cluster-side Collector Service exposes a non-default
   # port (e.g. port collisions on a shared node).
   collectorPort: 4318
+  # The filelog agent's k8sattributes processor needs the Kubernetes API.
+  # A NetworkPolicy cannot name the API server (it is not a pod), so the
+  # peer is a CIDR: list the control plane's address range here. Empty
+  # (the default) means the CNI's own default applies — Calico's
+  # failsafe ports include the API server's 6443, and the laptop
+  # cluster's agent reaches it with no rule at all.
+  collectorAgent:
+    apiServerCIDRs: []
 
 # data layer values
 
@@ -375,7 +383,8 @@ dependencyGraph:
 #   enabled: master toggle for the rendered resource
 #   replicas: pod count baseline; prod/staging overrides in clusterProfileReplicas
 #   image.repository / image.tag: container image pulled at deploy time
-#   port: container port (also the Service port)
+#   port: the CONTAINER port. The Service always listens on 80 and
+#     forwards to it; the probes read it too.
 #   resources: k8s requests + limits (CPU + memory)
 #   env: raw env entries appended to the rendered Deployment
 #   secrets: K8s Secret refs consumed via envFrom (each entry: {name: <secret-name>};
@@ -449,9 +458,9 @@ services:
       # would envFrom-mount the whole Secret and duplicate the var.
     pvc: null
     probes:
-      readiness: { httpGet: { path: /api/health, port: 3000 }, initialDelaySeconds: 10, periodSeconds: 10 }
-      liveness:  { httpGet: { path: /api/health, port: 3000 }, initialDelaySeconds: 30, periodSeconds: 30 }
-      startup:   { httpGet: { path: /api/health, port: 3000 }, initialDelaySeconds: 5, failureThreshold: 12 }
+      readiness: { httpGet: { path: /api/health, port: http }, initialDelaySeconds: 10, periodSeconds: 10 }
+      liveness:  { httpGet: { path: /api/health, port: http }, initialDelaySeconds: 30, periodSeconds: 30 }
+      startup:   { httpGet: { path: /api/health, port: http }, initialDelaySeconds: 5, failureThreshold: 12 }
     podDisruptionBudget: { minAvailable: 1 }
 
   frontend:
@@ -499,8 +508,8 @@ services:
     secrets: []
     pvc: null
     probes:
-      readiness: { httpGet: { path: /health, port: 8090 }, initialDelaySeconds: 5, periodSeconds: 10 }
-      liveness:  { httpGet: { path: /health, port: 8090 }, initialDelaySeconds: 30, periodSeconds: 30 }
+      readiness: { httpGet: { path: /health, port: http }, initialDelaySeconds: 5, periodSeconds: 10 }
+      liveness:  { httpGet: { path: /health, port: http }, initialDelaySeconds: 30, periodSeconds: 30 }
     podDisruptionBudget: null
 
   documentRepository:
@@ -572,8 +581,8 @@ services:
     command: ["node"]
     args: ["src/server.js"]
     probes:
-      readiness: { httpGet: { path: /health, port: 3001 }, initialDelaySeconds: 10, periodSeconds: 10 }
-      liveness:  { tcpSocket: { port: 3001 }, initialDelaySeconds: 30, periodSeconds: 30 }
+      readiness: { httpGet: { path: /health, port: http }, initialDelaySeconds: 10, periodSeconds: 10 }
+      liveness:  { tcpSocket: { port: http }, initialDelaySeconds: 30, periodSeconds: 30 }
     podDisruptionBudget: null
 
   clamav:

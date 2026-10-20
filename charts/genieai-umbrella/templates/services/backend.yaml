@@ -82,7 +82,7 @@ spec:
   ports:
     - name: http
       port: 80
-      targetPort: 3000
+      targetPort: http
   selector:
     {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "backend") | nindent 4 }}
 ---
@@ -119,8 +119,30 @@ spec:
         - protocol: TCP
           port: 3000
     {{- end }}
+    # The same-namespace consumers, named. A `podSelector: {}` peer
+    # matches EVERY pod in the namespace — the operator's ArangoDB, the
+    # CNPG keycloak-db, the VictoriaMetrics/Logs/Traces pods, any Job
+    # that lands here — and it voids the default-deny this policy
+    # exists for: /api/admin/* would be reachable from all of them. The
+    # list is the chart's own egress rules towards the backend:
+    # frontend (SPA-initiated calls), documentRepository, chatqna and
+    # dataprep (user context), plus the helm-test probe.
     - from:
-        - podSelector: {}
+        - podSelector:
+            matchLabels:
+              genieai.io/component: frontend
+        - podSelector:
+            matchLabels:
+              genieai.io/component: documentRepository
+        - podSelector:
+            matchLabels:
+              genieai.io/component: chatqna
+        - podSelector:
+            matchLabels:
+              genieai.io/component: dataprep
+        - podSelector:
+            matchLabels:
+              genieai.io/component: test
       ports:
         - protocol: TCP
           port: 3000
@@ -192,6 +214,23 @@ spec:
       ports:
         - protocol: TCP
           port: 8888
+    # The OPEA translation Service (component "translation"), which
+    # serves the same OpenAI-compatible API on 8888 (its Service maps
+    # 9031 to it). An endpoint pointing at it — the natural choice for
+    # an in-cluster deployment — was dropped by the backend's own
+    # default-deny egress, and the BFF silently fell back to the
+    # in-process CPU model: several Gi of RAM for a degraded path the
+    # operator never asked for. (The vllm-translation MODEL Service,
+    # the default in-cluster endpoint, has its own rule below.)
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: translation
+      ports:
+        - protocol: TCP
+          port: 8888
+        - protocol: TCP
+          port: 9031
     {{- end }}
     {{- if and .Values.opea.enabled (eq .Values.opea.gpu.mode "in-cluster") }}
     # In-cluster translation model (VLLM_TRANSLATION_ENDPOINT default).

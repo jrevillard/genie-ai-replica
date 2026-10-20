@@ -57,6 +57,18 @@ metadata:
     # alert rules silently unimported.
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "grafana") | nindent 4 }}
 spec:
+  # Resource overrides: the operator's own defaults are 100m/256Mi
+  # request and 1024Mi limit. The container-level block is what the
+  # CRD accepts (see the note below) and the operator merges it by
+  # container name.
+  deployment:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: grafana
+              resources:
+                {{- toYaml (.Values.observability.grafana.resources | default (dict "requests" (dict "cpu" "100m" "memory" "128Mi") "limits" (dict "cpu" "500m" "memory" "1Gi"))) | nindent 16 }}
   # Service spec the operator MUST materialise for the edge route to
   # resolve. Two contracts live here:
   #   - the port: grafana-operator defaults the Service to Grafana's own
@@ -70,29 +82,35 @@ spec:
   service:
     spec:
       type: ClusterIP
+      # The operator labels the Grafana pods with EXACTLY {app: <cr-name>}
+      # (reconcilers/grafana/deployment_reconciler.go, getSelectorLabels) and
+      # selects them with the same label. A selector on
+      # app.kubernetes.io/* matches nothing here: the Service gets zero
+      # endpoints and every request 503s at the edge.
       selector:
-        app.kubernetes.io/name: grafana
-        app.kubernetes.io/instance: genieai-grafana
+        app: genieai-grafana
       ports:
         - name: http
           port: 80
           targetPort: 3000
           protocol: TCP
-  # Operator-managed admin credentials; values are not rendered —
-  # the SealedSecret materializes a Secret named
-  # "grafana-admin-credentials" with `user` and `password` keys.
-  # The chart references the secret by name; the operator wires
-  # GF_SECURITY_ADMIN_USER__PASSWORD__FILE from there.
-  credentialsEx:
-    secretName: grafana-admin-credentials
-    usernameKey: user
-    passwordKey: password
-  # Resource block: modest defaults; per-environment overrides via
-  # the `observability.grafana.resources` values knob in the overlay
-  # ConfigMap. Hard cap of 1Gi to keep the laptop overlay under
-  # 4Gi effective memory.
-  resources:
-    {{- toYaml (.Values.observability.grafana.resources | default (dict "requests" (dict "cpu" "100m" "memory" "128Mi") "limits" (dict "cpu" "500m" "memory" "1Gi"))) | nindent 4 }}
+  # Admin credentials: the operator owns them. It creates
+  # "<cr-name>-admin-credentials" (resources.GetGrafanaAdminSecret, the
+  # name is built as "%s-admin-credentials") and uses it when it already
+  # exists — so an operator-provided Secret named
+  # "genieai-grafana-admin-credentials" pins the password, and without
+  # one the operator generates it. The CR has no field for it: the
+  # grafana-operator v5 CRD decodes strictly, and an unknown
+  # `credentialsEx` field makes the API server reject the WHOLE Grafana
+  # resource.
+  # Resource block: the operator sets its own defaults (100m/256Mi
+  # request, 1024Mi limit) and the CR cannot override them at the top
+  # level either — `spec.resources` is not in the CRD, and the same
+  # strict decoding rejects the whole resource. The container-level
+  # block below is the only place the CRD accepts one: the operator
+  # merges `spec.deployment` over its generated Deployment with a
+  # STRATEGIC merge patch, whose container list merges by name, so the
+  # operator keeps its image and args and only the resources change.
   config:
     # The edge mounts this tier at /grafana (see gateway/httproute.yaml).
     # root_url + serve_from_sub_path are what make that work: without
@@ -106,7 +124,11 @@ spec:
       {{- else }}
       root_url: "%(protocol)s://%(domain)s:%(http_port)s/grafana"
       {{- end }}
-      serve_from_sub_path: true
+      # spec.config is a map[string]string (the ini-file form): every
+      # value must be a STRING. A YAML boolean is rejected by the API
+      # server with "must be of type string: boolean" — the whole Grafana
+      # resource goes with it.
+      serve_from_sub_path: "true"
     log:
       mode: console
     security:

@@ -121,6 +121,17 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
+    # Kubernetes API. The agent's k8sattributes processor
+    # (auth_type: serviceAccount) watches pods/namespaces to attach
+    # k8s.pod.* and service.name to each log line; without this rule it
+    # logs auth/connection errors and every row stays un-enriched.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+      ports:
+        - protocol: TCP
+          port: 443
     # Forward to the collector gateway (OTLP/HTTP :4318) in the stack
     # namespace — the gateway pods carry the otel-operator managed-by
     # label.

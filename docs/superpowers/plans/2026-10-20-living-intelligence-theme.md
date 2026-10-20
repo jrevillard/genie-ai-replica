@@ -1660,10 +1660,13 @@ Expected: all pass. `npm run format:check` covers `src/**/*.css`, so if Prettier
 - [ ] **Step 8: Verify the layer is inert without the config**
 
 ```bash
-cd components/gov-chat-frontend && grep -c "html\[data-visual='on'\]" src/styles/genie-visual-effects.css
+cd components/gov-chat-frontend && grep -c "data-visual" src/styles/genie-visual-effects.css
 ```
 
-Expected: every rule in the file is behind the gate — the count must equal the number of rule blocks, and no selector in the file may start with a bare `.genie-living-intelligence`.
+Expected: the count equals the total number of rule selectors in the file, and no selector
+may start with a bare `.genie-living-intelligence`. (The gate is not always the contiguous
+substring `html[data-visual='on']`: three selectors combine it with `[data-theme='dark']`,
+so a grep for that exact substring undercounts. `data-visual` is the property to count.)
 
 - [ ] **Step 9: Commit**
 

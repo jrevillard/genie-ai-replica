@@ -52,7 +52,7 @@ export default {
 
 <style scoped>
 .ds-card {
-  background: var(--surface);
+  background: var(--ds-card-bg, var(--surface));
   color: var(--fg);
   transition:
     transform 0.2s ease,

@@ -547,6 +547,46 @@ def test_resolve_distribution_wraps_both_paths(monkeypatch, engine_env):
     assert dist2[0][1] == 0.7
 
 
+def test_resolve_distribution_normalizes_percent_weights(monkeypatch, engine_env):
+    """Live 2026-10-20: the panel's distribution inputs are 0-100 percents
+    (50/25/25) and ragas's calculate_split_values does ceil(N x weight)
+    with NO normalization — a 100-question run became 10,000 sample
+    generations. Percent-style specs must be normalized to fractions;
+    fraction-style specs pass through unchanged."""
+    import ragas.testset.synthesizers as synth_mod
+
+    class _UserSynth:
+        def __init__(self, llm=None):
+            self.name = "user_synth"
+
+    for cls_name in (
+        "SingleHopSpecificQuerySynthesizer",
+        "MultiHopAbstractQuerySynthesizer",
+        "MultiHopSpecificQuerySynthesizer",
+    ):
+        monkeypatch.setattr(synth_mod, cls_name, _UserSynth)
+
+    # percent style — exactly what the panel sends for 50/25/25
+    dist = ragas_engine._resolve_distribution(
+        [
+            {"synthesizer": "single_hop_specific", "weight": 50},
+            {"synthesizer": "multi_hop_abstract", "weight": 25},
+            {"synthesizer": "multi_hop_specific", "weight": 25},
+        ],
+        llm=object(),
+    )
+    assert [w for _, w in dist] == [0.5, 0.25, 0.25]
+    # ragas's own split of ceil(N x w) now targets ~N, not ~100N
+    import math
+
+    splits = [math.ceil(100 * w) for _, w in dist]
+    assert sum(splits) == 100
+
+    # fraction style — unchanged
+    dist2 = ragas_engine._resolve_distribution([{"synthesizer": "multi_hop_abstract", "weight": 0.7}], llm=object())
+    assert dist2[0][1] == 0.7
+
+
 def test_transform_sequence_matches_ragas_default_plus_seeder():
     """The explicit chain must be exactly ragas 0.4.3 default_transforms()
     with ONE insertion (the headlines seeder, long-doc branch only). If a

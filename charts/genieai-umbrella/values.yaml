@@ -502,6 +502,13 @@ services:
     clamavPort: 3310
     # Toggles the doc-repo virus-scan step (CLAMSCAN_* wiring above).
     virusScanning: true
+    # Web-crawler egress (POST /api/files/crawl/schedule fetches
+    # arbitrary user-supplied URLs + redirect hops). NetworkPolicy peers
+    # cannot express a domain, so the rule is port-scoped over 80/443:
+    # pin resolved CIDRs here (dig +short <site> against the operators'
+    # authoritative resolver) to restrict it, or leave empty for the
+    # compose-equivalent open egress on the HTTP(S) ports.
+    crawlAllowedCIDRs: []
     resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 1, memory: 1Gi } }
     env: []
     secrets: []

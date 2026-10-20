@@ -1311,12 +1311,6 @@
       <div v-show="tab === 'ragas'" class="okf-headtest__pane">
         <OkfRagasPanel ref="ragasPanel" :repo="repo" :read-only="readOnly" @changed="refreshRagasSuites()" />
       </div>
-      <!-- Story 8-7 — named remote-model configurations. Platform-level
-           (not repo-scoped); the server enforces the tools-admin role and
-           the panel renders an honest access note for everyone else. -->
-      <div v-show="tab === 'models'" class="okf-headtest__pane">
-        <OkfModelConfigPanel />
-      </div>
       <!-- 1-8g-t (David): suite deletion MUST be confirmed with a dialog —
            the × button only ARMS the confirmation; the delete fires solely
            from the dialog's Confirm. Names the suite + the consequence. -->
@@ -1358,7 +1352,6 @@ import translateMixin from '../../../mixins/translateMixin';
 import DsDialog from '../../ds/Dialog.vue';
 import DsTabs from '../../ds/Tabs.vue';
 import OkfRagasPanel from './RagasPanel.vue';
-import OkfModelConfigPanel from './ModelConfigPanel.vue';
 import DsButton from '../../ds/Button.vue';
 import DsInput from '../../ds/Input.vue';
 import DsSelect from '../../ds/Select.vue';
@@ -1388,7 +1381,6 @@ export default {
     DsInput,
     DsSelect,
     DsPill,
-    OkfModelConfigPanel,
     DsTag,
     DsSpinner,
     DsInfoTip,
@@ -1545,8 +1537,7 @@ export default {
         { value: 'head', label: this.translate('okf.headTest.tab.head', 'Head') },
         { value: 'test', label: this.translate('okf.headTest.tab.test', 'Test') },
         { value: 'suites', label: this.translate('okf.headTest.tab.suites', 'Suites & analytics') },
-        { value: 'ragas', label: this.translate('okf.headTest.tab.ragas', 'RAGAS Benchmarks') },
-        { value: 'models', label: this.translate('okf.headTest.tab.models', 'Models') }
+        { value: 'ragas', label: this.translate('okf.headTest.tab.ragas', 'RAGAS Benchmarks') }
       ];
     },
     /** Story 8-6: the unified saved-suites list — head suites and RAGAS

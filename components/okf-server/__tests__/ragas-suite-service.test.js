@@ -578,6 +578,19 @@ describe('run', () => {
     const user = call[0][1].content;
     expect(user).toContain('Relevant content from the knowledge base');
     expect(user).not.toContain('Answer the question using ONLY');
+    // 8-7 (David 2026-10-20): the answer leg resolves its OWN model-config
+    // service — 'ragas_answers', never the tagging default. Unchecked (the
+    // default) it answers with the deployment chat; the fidelity block below
+    // records that honestly.
+    expect(call[1]).toMatchObject({ service: 'ragas_answers' });
+  });
+
+  it('the run fidelity block records the ANSWER leg (deployment-chat unless a ragas_answers config is active)', async () => {
+    const sk = await makeSuite();
+    const begun = await svc.beginRunSuite('me', sk, {}, {});
+    await begun.done;
+    const doc = await svc.getRunSuite('me', sk, begun.run_key);
+    expect(doc.payload.fidelity.answers).toMatchObject({ source: 'deployment-chat', config: null });
   });
 
   it('a pinned CHATQNA_SYSTEM_PROMPT overrides the built-in chat default', async () => {

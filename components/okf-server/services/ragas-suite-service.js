@@ -472,7 +472,12 @@ async function generateAnswer(query, contexts) {
       { role: 'system', content: ANSWER_SYSTEM_PROMPT() },
       { role: 'user', content: user }
     ],
-    { maxTokens: 800, temperature: 0.0 }
+    // 'ragas_answers' (David 2026-10-20): the answer leg measures the
+    // DEPLOYED answerer by default — it follows an ACTIVE model config only
+    // when that config is explicitly checked for benchmark answers. When it
+    // is, the benchmark measures the configured model instead (and the run's
+    // fidelity block says so). Openai-wire only, like every okf-server leg.
+    { maxTokens: 800, temperature: 0.0, service: 'ragas_answers' }
   );
   const content =
     resp && resp.data && resp.data.choices && resp.data.choices[0] && resp.data.choices[0].message
@@ -493,6 +498,21 @@ function matchAbstention(answer) {
   const a = String(answer || '').toLowerCase();
   if (!a) return true;
   return ABSTENT_PATTERNS.some((p) => a.includes(p));
+}
+
+/** What the run's fidelity block records about the ANSWER leg — mirrors the
+ * openai-only guard the answer call itself applies, so the record never
+ * claims a config steered answers when it couldn't. */
+async function answerFidelity() {
+  try {
+    const ovr = await modelConfigService.resolveModelOverride({ service: 'ragas_answers' });
+    if (ovr && ovr.provider === 'openai') {
+      return { source: 'config', config: ovr.config_name, model: ovr.model };
+    }
+  } catch {
+    /* resolution failure — the deployment answerer applies */
+  }
+  return { source: 'deployment-chat', config: null, model: process.env.VLLM_LLM_MODEL_ID || null };
 }
 
 // ---------- suite generation ----------------------------------------------
@@ -1272,7 +1292,11 @@ async function runSuite(repoId, suiteKey, opts = {}) {
             ...modelConfigService.judgeFidelity(judgeOverride),
             sidecar_reported_model: evaluation.model || null,
             embed_model: null
-          }
+          },
+          // Which model answered (David 2026-10-20): the deployment's chat
+          // by default; a config explicitly checked for benchmark answers
+          // takes over — and the benchmark then measures THAT model.
+          answers: await answerFidelity()
         }
       }
     };
@@ -1616,7 +1640,9 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
               })
             }
           ],
-          { maxTokens: 1200, temperature: 0.2 }
+          // The advisor rides the judge's model config (memlog 90: a frontier
+          // judge gives better advice; same service family as scoring).
+          { maxTokens: 1200, temperature: 0.2, service: 'ragas_judge' }
         );
         const content =
           resp && resp.data && resp.data.choices && resp.data.choices[0] && resp.data.choices[0].message

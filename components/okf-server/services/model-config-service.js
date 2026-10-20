@@ -26,11 +26,12 @@ const auditService = require('./audit-service');
 const COLLECTION = 'okf_model_configs';
 const PROVIDERS = new Set(['openai', 'anthropic']);
 // The features a configuration can serve (David, 2026-10-19: "checkboxes for
-// the various services that will be configured to use the selected model").
-// The two Studio consumers speak the OpenAI wire format ONLY — the RAGAS
-// sidecar is the one consumer that can also drive an anthropic-provider
-// config (langchain-anthropic). The UI disables the incompatible boxes.
-const SERVICES = new Set(['ragas_judge', 'okf_curation', 'okf_tagging']);
+// the various services that will be configured to use the selected model";
+// 2026-10-20: benchmark answers became a live fourth). Every okf-server
+// consumer speaks the OpenAI wire format ONLY — the RAGAS sidecar is the one
+// consumer that can also drive an anthropic-provider config
+// (langchain-anthropic). The UI disables the incompatible boxes.
+const SERVICES = new Set(['ragas_judge', 'okf_curation', 'okf_tagging', 'ragas_answers']);
 const NAME_MAX = 120;
 const LIST_TIMEOUT_MS = 15000;
 const TEST_TIMEOUT_MS = 20000;

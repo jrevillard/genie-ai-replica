@@ -114,30 +114,57 @@
       </div>
       <div class="okf-models__field okf-models__field--full">
         <span>{{ translate('okf.models.services', 'Use this configuration for') }}</span>
-        <div class="okf-models__services">
-          <label
-            v-for="sv in SERVICE_DEFS"
-            :key="sv.key"
-            class="okf-models__svc"
-            :class="{ 'okf-models__svc--off': sv.openaiOnly && form.provider === 'anthropic' }"
-          >
-            <input
-              v-model="form.services"
-              type="checkbox"
-              :value="sv.key"
-              :disabled="busy || (sv.openaiOnly && form.provider === 'anthropic')"
-            />
-            <span>{{ translate(sv.i18n, sv.label) }}</span>
-          </label>
+        <div class="okf-models__groups">
+          <div class="okf-models__group">
+            <div class="okf-models__group-title">{{ translate('okf.models.group.testLab', 'Test Lab Pipelines') }}</div>
+            <div class="okf-models__services">
+              <label
+                v-for="sv in SERVICE_DEFS"
+                :key="sv.key"
+                class="okf-models__svc"
+                :class="{ 'okf-models__svc--off': sv.openaiOnly && form.provider === 'anthropic' }"
+                :title="
+                  sv.openaiOnly && form.provider === 'anthropic'
+                    ? translate('okf.models.svcOpenaiOnlyShort', 'OpenAI-compatible endpoints only')
+                    : ''
+                "
+              >
+                <input
+                  v-model="form.services"
+                  type="checkbox"
+                  :value="sv.key"
+                  :disabled="busy || (sv.openaiOnly && form.provider === 'anthropic')"
+                />
+                <span>{{ translate(sv.i18n, sv.label) }}</span>
+              </label>
+            </div>
+            <p v-if="form.provider === 'anthropic'" class="okf-models__hint-inline">
+              {{
+                translate(
+                  'okf.models.svcOpenaiOnly',
+                  'Benchmark answers, concept curation and topics/tags speak the OpenAI wire format — they need an OpenAI-compatible endpoint.'
+                )
+              }}
+            </p>
+          </div>
+          <!-- Mock groups (David 2026-10-20): the full system surface, shown
+               honestly — these pipelines exist but are not yet configurable
+               through a model config. Display-only; never stored. -->
+          <div v-for="grp in MOCK_GROUPS" :key="grp.title" class="okf-models__group okf-models__group--mock">
+            <div class="okf-models__group-title">
+              {{ translate(grp.titleI18n, grp.title) }}
+              <span class="okf-models__mock-note">
+                {{ translate('okf.models.mockNote', 'planned — not yet configurable') }}
+              </span>
+            </div>
+            <div class="okf-models__services">
+              <label v-for="m in grp.items" :key="m.key" class="okf-models__svc okf-models__svc--off">
+                <input type="checkbox" disabled />
+                <span>{{ translate(m.i18n, m.label) }}</span>
+              </label>
+            </div>
+          </div>
         </div>
-        <p v-if="form.provider === 'anthropic'" class="okf-models__hint-inline">
-          {{
-            translate(
-              'okf.models.svcOpenaiOnly',
-              'Concept curation and topics/tags speak the OpenAI wire format — they need an OpenAI-compatible endpoint.'
-            )
-          }}
-        </p>
       </div>
       <div class="okf-models__form-actions">
         <DsButton small :disabled="busy || !form.name || !form.base_url" @click="save">
@@ -303,6 +330,17 @@ const SERVICE_DEFS = [
     openaiOnly: false
   },
   {
+    // David 2026-10-20: benchmark answers measure the DEPLOYED answerer by
+    // default; checking this steers the benchmark's answer leg through this
+    // config — the benchmark then measures THIS model instead.
+    key: 'ragas_answers',
+    i18n: 'okf.models.svcAnswers',
+    label: 'Benchmark answers (instead of the deployment chat)',
+    shortI18n: 'okf.models.svcAnswersShort',
+    short: 'benchmark answers',
+    openaiOnly: true
+  },
+  {
     key: 'okf_curation',
     i18n: 'okf.models.svcCuration',
     label: 'Concept curation',
@@ -320,13 +358,37 @@ const SERVICE_DEFS = [
   }
 ];
 
+// The not-yet-configurable surface (David 2026-10-20): every model endpoint
+// in the system except embeddings and reranking, shown honestly as planned.
+// Display-only — these keys are never stored on a config.
+const MOCK_GROUPS = [
+  {
+    title: 'Data Prep Pipeline',
+    titleI18n: 'okf.models.group.dataPrep',
+    items: [
+      { key: 'contextual_retrieval', i18n: 'okf.models.mockContextual', label: 'Contextual retrieval (doc context)' },
+      { key: 'chunk_labeling', i18n: 'okf.models.mockChunkLabeling', label: 'Chunk labeling' },
+      { key: 'graph_extraction', i18n: 'okf.models.mockGraphExtraction', label: 'Knowledge-graph extraction' }
+    ]
+  },
+  {
+    title: 'Inference Pipeline',
+    titleI18n: 'okf.models.group.inference',
+    items: [
+      { key: 'chat_serving', i18n: 'okf.models.mockChatServing', label: 'Chat answering' },
+      { key: 'translation', i18n: 'okf.models.mockTranslation', label: 'Chat translation' }
+    ]
+  }
+];
+
 export default {
   name: 'OkfModelConfigPanel',
   components: { DsButton, DsPill },
   mixins: [translateMixin],
   data() {
     return {
-      SERVICE_DEFS, // module const → template-visible via data
+      SERVICE_DEFS, // module consts → template-visible via data
+      MOCK_GROUPS,
       configs: [],
       error: '',
       busy: false,
@@ -643,6 +705,33 @@ export default {
 }
 .okf-models__field--full {
   grid-column: 1 / -1;
+}
+.okf-models__groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.okf-models__group {
+  border-left: 2px solid var(--border);
+  padding-left: 10px;
+}
+.okf-models__group--mock {
+  opacity: 0.6;
+}
+.okf-models__group-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+.okf-models__mock-note {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  margin-left: 6px;
+  font-style: italic;
 }
 .okf-models__services {
   display: flex;

@@ -778,3 +778,57 @@ def test_evaluate_batches_rows_and_reports_progress(monkeypatch, engine_env):
         asyncio.run(
             ragas_engine.evaluate_samples(samples[:4], ["faithfulness"], progress=progress_cancel, cancel_event=ev)
         )
+
+
+# ---------------------------------------------------------------------------
+# Persona-name tolerance (live 2026-10-20: MiniMax judge echoed
+# 'Maya Chen (Equity research analyst)' against the registry's 'Maya Chen'
+# and EVERY synthesizer dropped its questions — suite generation died with
+# "no questions could be synthesized").
+# ---------------------------------------------------------------------------
+
+
+def _persona_list(*names):
+    from ragas.testset.persona import Persona, PersonaList
+
+    return PersonaList(personas=[Persona(name=n, role_description="role") for n in names])
+
+
+def test_persona_lookup_exact_still_matches():
+    ragas_engine._patch_persona_lookup()
+    pl = _persona_list("Maya Chen", "Robert Liu")
+    assert pl["Maya Chen"].name == "Maya Chen"
+
+
+def test_persona_lookup_survives_the_live_drift_case():
+    ragas_engine._patch_persona_lookup()
+    pl = _persona_list("Maya Chen", "Robert Liu")
+    # the exact live failure: role annotation reattached by the judge
+    hit = pl["Maya Chen (Equity research analyst)"]
+    assert hit.name == "Maya Chen"  # containment matched the registry entry
+    # case + punctuation drift
+    assert pl["maya   chen"].name == "Maya Chen"
+    assert pl["ROBERT LIU"].name == "Robert Liu"
+
+
+def test_persona_lookup_fuzzy_and_fallback():
+    ragas_engine._patch_persona_lookup()
+    pl = _persona_list("Equity Research Analyst Maya Chen", "Robert Liu")
+    # token overlap >= 0.5
+    assert pl["Maya Chen Equity Research"].name == "Equity Research Analyst Maya Chen"
+    # nothing close: first-persona fallback beats voiding the suite
+    assert pl["completely unrelated name"].name == "Equity Research Analyst Maya Chen"
+
+
+def test_persona_lookup_empty_list_still_raises():
+    ragas_engine._patch_persona_lookup()
+    pl = _persona_list()
+    with pytest.raises(KeyError):
+        pl["anyone"]
+
+
+def test_persona_patch_is_idempotent():
+    ragas_engine._patch_persona_lookup()
+    ragas_engine._patch_persona_lookup()  # second call must not re-wrap
+    pl = _persona_list("Maya Chen")
+    assert pl["Maya Chen (Analyst)"].name == "Maya Chen"

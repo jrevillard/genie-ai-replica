@@ -112,6 +112,19 @@
                   <span>{{ translate('admin.tabs.security', 'Security') }}</span>
                 </a>
               </li>
+              <!-- Story 8-7 (David 2026-10-20): model configurations are a
+                   PLATFORM concern — the LAST Admin Dashboard tab, not a tab
+                   buried in the OKF Lab dialog. -->
+              <li class="nav-item">
+                <a
+                  href="#"
+                  :class="['nav-link', { active: activeTab === 'models' }]"
+                  @click.prevent="setActiveTab('models')"
+                >
+                  <i>🤖</i>
+                  <span>{{ translate('admin.tabs.models', 'Models') }}</span>
+                </a>
+              </li>
             </ul>
           </div>
         </div>
@@ -1562,6 +1575,19 @@
                     </DsButton>
                   </div>
                 </div>
+
+                <!-- Story 8-7 (David 2026-10-20): the Models tab — the LAST
+                     Admin Dashboard tab. Named remote-model configurations are
+                     platform-level (tools-admin enforced server-side; the panel
+                     renders an honest access note for everyone else). -->
+                <div v-if="activeTab === 'models'" class="dashboard-card" style="grid-column: span 2">
+                  <div class="card-header">
+                    <div class="card-title">
+                      {{ translate('admin.tabs.models', 'Models') }}
+                    </div>
+                  </div>
+                  <OkfModelConfigPanel />
+                </div>
               </div>
             </DsTabs>
           </div>
@@ -1633,6 +1659,7 @@ import DsStateDisplay from './ds/StateDisplay.vue';
 import DsTabs from './ds/Tabs.vue';
 import DsSelect from './ds/Select.vue';
 import OkfStudioTab from './okf/StudioTab.vue';
+import OkfModelConfigPanel from './okf/editor/ModelConfigPanel.vue';
 import { Loader2 } from '@lucide/vue';
 import { eventBus } from '../eventBus.js';
 import { getAvailableLanguages } from '../config/languageConfig.js';
@@ -1646,6 +1673,7 @@ export default {
   components: {
     OperationResultsModal,
     LogSearchDialog,
+    OkfModelConfigPanel,
     ConfirmDialog,
     UploadFilesDialog,
     AddFromLinkDialog,

@@ -108,6 +108,14 @@ envoyGateway:
   enabled: true
 
 ingress:
+  # Create the cluster-scoped GatewayClass. Cluster-scoped singleton:
+  # Envoy Gateway documents creating it once per cluster out of band, so
+  # an install into a cluster that already has it fails with "already
+  # exists", and uninstalling this release would delete a class other
+  # Gateways depend on. Default false — set true only in an environment
+  # where this release owns it (single-stack dev cluster), or pre-create
+  # the class yourself.
+  createGatewayClass: false
   # Public hostname (may carry :port, e.g. genieai.local:4443) — the OIDC
   # issuer, redirect URLs and TLS dnsNames all derive from it. Deployment
   # data, supplied per environment; no chart default.

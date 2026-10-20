@@ -1788,10 +1788,27 @@ describe('ChatBotComponent', () => {
       });
     });
 
-    it('leaves the tint unset when a button declares no styles', () => {
+    it('returns undefined when a button declares no styles', () => {
       const wrapper = createChatBotWrapper();
 
       expect(wrapper.vm.buttonTintStyle(untintedButton)).toBeUndefined();
+    });
+
+    it('returns undefined when a button styles block is empty', () => {
+      const wrapper = createChatBotWrapper();
+
+      expect(wrapper.vm.buttonTintStyle({ styles: {} })).toBeUndefined();
+    });
+
+    it('returns only the declared properties for a partial styles block', () => {
+      const wrapper = createChatBotWrapper();
+
+      // toStrictEqual distinguishes {a: undefined} from {} — toEqual
+      // does not, so a regression that emits unused undefined bindings
+      // would slip past the loose matcher.
+      expect(wrapper.vm.buttonTintStyle({ styles: { backgroundColor: '#ecfdf5' } })).toStrictEqual({
+        '--qh-bg': '#ecfdf5'
+      });
     });
 
     it('binds the tint onto the quick-help card', async () => {
@@ -1802,11 +1819,16 @@ describe('ChatBotComponent', () => {
       expect(card.attributes('style') || '').toContain('--qh-bg');
     });
 
-    it('binds nothing onto a card whose button declares no styles', async () => {
+    it('does not paint a visible tint on an untinted card', async () => {
       const wrapper = await mountWithButtons([untintedButton]);
 
       const card = wrapper.find('.quick-help-item');
       expect(card.exists()).toBe(true);
+      // An empty-string binding is CSSOM-indistinguishable from a missing
+      // declaration (CSS `setProperty(name, '')` removes the property), so
+      // a naive impl that returned `{'--qh-bg': '', ...}` would pass this
+      // byte-identical DOM check. The empty-value contract is enforced at
+      // the method boundary by the `returns undefined` tests above.
       expect(card.attributes('style') || '').not.toContain('--qh-bg');
     });
   });

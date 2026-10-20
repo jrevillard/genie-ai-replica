@@ -586,10 +586,12 @@ export default {
     },
 
     /**
-     * Exposes the per-button tint to CSS as custom properties, so the card
-     * picks it up without a style rule per category. Absent values are left
-     * out rather than set to an empty string — the theme layer falls back to
-     * the design-system accent when a button declares no styles.
+     * Returns CSS custom-property bindings for the per-button tint —
+     * `--qh-bg`, `--qh-hover`, `--qh-outline` — read from the button's
+     * styles block. Properties whose value is absent are omitted, and the
+     * method returns undefined entirely when nothing is declared, so the
+     * template emits no style attribute and the theme layer's accent
+     * fallback takes over.
      */
     buttonTintStyle(button) {
       const styles = button.styles;

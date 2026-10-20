@@ -35,6 +35,28 @@
             "type",
             "value"
           ]
+        },
+        "splash": {
+          "type": "object",
+          "description": "Splash screen image shown while the application boots",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "file"
+              ],
+              "description": "Splash images are file references; inline content is not supported",
+              "default": "file"
+            },
+            "value": {
+              "type": "string",
+              "description": "Path to the splash image, served from the /config/ directory"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ]
         }
       },
       "required": [
@@ -301,6 +323,10 @@
     "icon": {
       "type": "file",
       "value": "/config/logo-genie-ai.jpeg"
+    },
+    "splash": {
+      "type": "file",
+      "value": "/config/splash-living-intelligence.png"
     }
   },
   "theme": {

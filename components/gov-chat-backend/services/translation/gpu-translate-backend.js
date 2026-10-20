@@ -550,6 +550,14 @@ class GpuTranslateBackend {
             reject(new Error(`vLLM truncated the translation at max_tokens=${requestBody.max_tokens}`));
             return;
           }
+          if (!full) {
+            // A refusal, a moderation block or an empty completion is not a
+            // translation. The non-streaming path rejects a contentless choice
+            // for the same reason; resolving '' here would blank the caller.
+            logger.error(`[GPU-BACKEND] vLLM stream produced no content (finish_reason=${finishReason})`);
+            reject(new Error(`vLLM returned no content for the translation (finish_reason=${finishReason})`));
+            return;
+          }
           resolve(full);
         });
       });

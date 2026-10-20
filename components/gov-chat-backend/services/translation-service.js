@@ -183,8 +183,12 @@ class TranslationService {
    */
   async _cpuFallback() {
     if (!this.cpuFallbackBackend) {
-      this.cpuFallbackBackend = new CpuTranslateBackend();
-      await this.cpuFallbackBackend.init();
+      // Assign only after init resolves: an instance whose worker failed to
+      // start is not a fallback, and caching it would hand the same broken
+      // backend to every later failure for the life of the process.
+      const backend = new CpuTranslateBackend();
+      await backend.init();
+      this.cpuFallbackBackend = backend;
     }
     return this.cpuFallbackBackend;
   }

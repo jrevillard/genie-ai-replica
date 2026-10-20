@@ -284,6 +284,30 @@ describe('GpuTranslateBackend streaming', () => {
         /truncated/
       );
     });
+
+    it('rejects a stream that produced no content', async () => {
+      // A refusal or a moderation block answers 200 with no deltas. Resolving
+      // the empty string would let the markdown path substitute it for the
+      // paragraph, so the stream rejects like the non-streaming path does.
+      const res = new EventEmitter();
+      res.statusCode = 200;
+      res.setEncoding = () => {};
+      http.request.mockImplementation((opts, cb) => {
+        const req = new EventEmitter();
+        req.write = () => {};
+        req.end = () => {};
+        process.nextTick(() => {
+          cb(res);
+          res.emit('data', 'data: {"choices":[{"finish_reason":"content_filter","delta":{}}]}\n\n');
+          res.emit('data', 'data: [DONE]\n\n');
+          res.emit('end');
+        });
+        return req;
+      });
+      await expect(backend.callVllmStream({ model: 'm', messages: [{ role: 'user', content: 'hi' }] })).rejects.toThrow(
+        /no content/
+      );
+    });
   });
 
   describe('pre-existing methods (coverage)', () => {

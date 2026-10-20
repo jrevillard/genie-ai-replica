@@ -56,7 +56,13 @@ PAYS="jrevillard-laptop"
 ENV="dev"
 K8S_VERSION="v1.32.0"
 CPUS=4
-MEMORY=8192
+# The node's REAL memory. The kubelet inside minikube reports the HOST's
+# memory to the scheduler, not this container's limit — so the scheduler
+# over-commits and the DOCKER oom killer (not the kubernetes one) fires.
+# The sum of the chart's memory REQUESTS (~7.7 Gi) plus the control
+# plane (~1.5 Gi) has to fit in here, or a pod that balloons takes the
+# node — and the control plane — down with it.
+MEMORY=10240
 DISK=20000
 SEALED_KEYS_FILE=""
 FLUX_GIT_AUTH_FILE=""

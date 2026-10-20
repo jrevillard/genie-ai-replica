@@ -564,11 +564,12 @@ spec:
             matchLabels:
               genieai.io/component: chatqna
         # backend BFF: dials the OPEA translation Service when
-        # services.backend.translation.endpoint points at it — a dropped
-        # probe silently falls back to the in-process CPU translation
-        # model. (The backend's DEFAULT in-cluster endpoint is the
-        # vllm-translation model Service, which this policy does not
-        # select: the backend's own egress carries the peer for it.)
+        # services.backend.translation.endpoint points at it — a named
+        # translation API is mandatory, so a dropped probe stops the
+        # backend from starting. (The backend's DEFAULT in-cluster
+        # endpoint is the vllm-translation model Service, which this
+        # policy does not select: the backend's own egress carries the
+        # peer for it.)
         - podSelector:
             matchLabels:
               genieai.io/component: backend
@@ -735,8 +736,8 @@ spec:
               genieai.io/component: chatqna
         # backend BFF: its in-cluster translation endpoint defaults to
         # this Service when services.backend.translation.endpoint is
-        # unset; a dropped probe silently falls back to the in-process
-        # CPU translation model.
+        # unset; a named translation API is mandatory, so a dropped
+        # probe stops the backend from starting.
         - podSelector:
             matchLabels:
               genieai.io/component: backend

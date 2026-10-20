@@ -3,11 +3,10 @@
  *
  * An additive decorative layer over the existing design system. The
  * design-system tokens stay canonical; every colour here is derived from
- * one with color-mix(). The literal colours are eight chromatic brand
- * hues, all declared below: the two secondary hues the layer mixes its
- * own tints from, and the two three-stop brand-wordmark ramps. The only
- * other literal is white, which is a neutral rather than a hue and is
- * used once, for the dark navbar's wordmark.
+ * one with color-mix(). The only literal colours are the two three-stop
+ * brand-wordmark ramps declared below; everything else the layer paints
+ * is a token. The one other literal is white, which is a neutral rather
+ * than a hue and is used for the dark navbar's wordmark.
  *
  * Two gates, both required:
  *   - .genie-living-intelligence scopes the layer to the dashboard route
@@ -25,9 +24,6 @@
  * rule stays inert for every other flavour.
  */
 html[data-visual='on'] .genie-living-intelligence {
-  --gli-blue: var(--accent);
-  --gli-cyan: color-mix(in oklch, var(--accent) 52%, #5de9f4);
-  --gli-violet: color-mix(in oklch, var(--accent) 50%, #b875f8);
   --gli-frost-border: color-mix(in srgb, var(--accent) 17%, var(--border));
   /* The waves carry their own contrast, so they read at near-full
      strength on the light surface and are held back on the dark one,

@@ -76,8 +76,16 @@ transform/extract_envelope_trace_context:
   log_statements:
     - context: log
       statements:
-        - 'set(trace_id, ExtractPatterns(body, "trace_id[\": ]+(?P<tid>[0-9a-f]{32})")["tid"]) where IsString(body) and IsMatch(body, "trace_id[\": ]+[0-9a-f]{32}")'
-        - 'set(span_id, ExtractPatterns(body, "span_id[\": ]+(?P<sid>[0-9a-f]{16})")["sid"]) where IsString(body) and IsMatch(body, "span_id[\": ]+[0-9a-f]{16}")'
+        # trace_id and span_id are pcommon.TraceID / pcommon.SpanID, not
+        # strings: assigning the extracted string is REJECTED by OTTL
+        # ("expects pcommon.TraceID but got string") and, under
+        # error_mode: ignore, the failure is swallowed — the record is
+        # emitted with an EMPTY trace id, so the log-to-trace link (the
+        # Grafana datasource derivedField, the `trace_id:*` variable in
+        # service-logs.json) never resolves. The converters build the
+        # typed value from the hex string.
+        - 'set(trace_id, TraceID(ExtractPatterns(body, "trace_id[\": ]+(?P<tid>[0-9a-f]{32})")["tid"])) where IsString(body) and IsMatch(body, "trace_id[\": ]+[0-9a-f]{32}")'
+        - 'set(span_id, SpanID(ExtractPatterns(body, "span_id[\": ]+(?P<sid>[0-9a-f]{16})")["sid"])) where IsString(body) and IsMatch(body, "span_id[\": ]+[0-9a-f]{16}")'
 transform/stamp_log_metadata_from_msg:
   error_mode: ignore
   log_statements:

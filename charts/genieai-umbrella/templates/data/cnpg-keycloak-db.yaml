@@ -75,6 +75,12 @@ spec:
       # them; two independent sources of truth here would let a
       # db.secretName override split that contract silently.
       database: {{ .Values.data.keycloak.db.database | default "keycloak" }}
+      # The bootstrap role. CNPG derives it from the Secret's `username`
+      # key, so `owner` and data.keycloak.db.secretName must agree: a
+      # Secret carrying username: someone-else creates role
+      # `someone-else` and this line then names a role that does not
+      # exist, which fails at initdb time with a CNPG error rather than
+      # at render time. Both default to keycloak.
       owner: keycloak
       # CNPG expects this Secret to carry BOTH `username` and `password`
       # keys (username-only fails validation). The Secret is

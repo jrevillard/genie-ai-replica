@@ -124,9 +124,18 @@ spec:
   # ("Please don't use this flag for the first startup or use kc.sh
   # build"). Default to false; custom pre-built images override to true.
   startOptimized: {{ .Values.data.keycloak.startOptimized | default false }}
-  # Image-bump = single-pod recreate (DB migrations need exclusive access).
-  # Chart defaults to instances: 1; prod instances: 2 with manual drain on
-  # operator image bumps.
+  # Image-bump = recreate, not roll: Keycloak needs exclusive access for
+  # its schema migrations, so the operator deletes the pod and starts a
+  # new one rather than overlapping two.
+  #
+  # Read that against the replica count. At the chart default
+  # (instances: 1) a bump is a short outage of the single replica. On
+  # the prod profile (instances: 2) `RecreateOnImageChange` takes BOTH
+  # replicas down together — the operator has no drain hook, so there
+  # is no rolling option here. Draining first (scale the CR to 0, bump
+  # the operator image, scale back) is an operator step, not something
+  # this chart performs; `update.strategy: RollingUpdate` is the
+  # alternative if the site can tolerate overlapping migrations.
   update:
     strategy: {{ .Values.data.keycloak.update.strategy | default "RecreateOnImageChange" }}
   # KC 26 default probe timing is fine (10min startup grace). Memory request

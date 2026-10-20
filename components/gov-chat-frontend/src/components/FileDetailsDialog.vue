@@ -535,7 +535,20 @@ export default {
       return false;
     },
     isMetadataEditable() {
-      return this.file && this.file.dataprep.status?.toLowerCase() !== 'ingested';
+      // Agrees with isFileLocked on the two INDEXED statuses, for the same
+      // reason. Before this MR nothing produced "Ingested with Warnings", so the
+      // branch below was unreachable and the two could disagree without
+      // consequence. Now it is reachable: an admin editing a degraded document
+      // would get "Metadata updated successfully." from a PATCH that reindexes
+      // nothing — the chunks already in the graph keep the labels they were
+      // indexed with.
+      //
+      // Not a full mirror of isFileLocked, which also locks 'ingesting'. Metadata
+      // stays editable mid-ingest: labels are snapshotted into the ingest request
+      // when it is made, so an edit during a run takes effect on the next ingest
+      // rather than correcting the one in flight.
+      const status = this.file?.dataprep?.status?.toLowerCase();
+      return this.file && status !== 'ingested' && status !== 'ingested with warnings';
     },
     // Determine what status text to show
     displayStatus() {

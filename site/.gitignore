@@ -10,7 +10,10 @@
 /_vendor/
 
 # Node tooling installed by Docsy's PostCSS pipeline on first build
-/node_modules/
+# No trailing slash: with one this matches directories only, so a node_modules
+# symlinked from a shared checkout is not ignored and gets committed as a
+# symlink to an absolute path from whichever machine created it.
+/node_modules
 /package.json
 /package-lock.json
 /hugo_stats.json

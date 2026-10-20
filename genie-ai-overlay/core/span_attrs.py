@@ -233,6 +233,15 @@ ATTRIBUTE_NAMES = {
     "dataprep_llm_attempt": "dataprep.llm_attempt",
     "dataprep_llm_prompt_tokens": "dataprep.llm.prompt_tokens",
     "dataprep_llm_completion_tokens": "dataprep.llm.completion_tokens",
+    # Set when the call hit its HTTP budget. Without it a timed-out span closes
+    # with no tokens and no distinguishing attribute, so a wedged GPU and a
+    # call still in flight are indistinguishable in the trace.
+    "dataprep_llm_timed_out": "dataprep.llm.timed_out",
+    "dataprep_llm_timeout_seconds": "dataprep.llm.timeout_seconds",
+    # Set on the phase-level span (dataprep.llm.phase) so one trace says which
+    # phase exhausted its budget when a document runs both labelling and
+    # Contextual Retrieval under the same ceiling.
+    "dataprep_llm_phase": "dataprep.llm.phase",
     # Contextual Retrieval — the per-chunk doc-context generation
     "dataprep_contextual_retrieval": "dataprep.contextual_retrieval",
     "dataprep_contextual_strategy": "dataprep.contextual_strategy",

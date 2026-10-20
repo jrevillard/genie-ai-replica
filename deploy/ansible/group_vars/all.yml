@@ -152,9 +152,17 @@ keycloak_ssl_skip_verify: ""
 # blocking, so a budget set too low degrades quality instead of stalling.
 #   model_llm_timeout_seconds: 180        # vLLM chat completions. Raise if
 #                                         #   labelling exceeds it on a slow model
+#                                         #   — but see dataprep_llm_phase_timeout_seconds
+#                                         #   below: the phase ceiling must stay
+#                                         #   above (1 + retries) x this.
 #   model_llm_max_retries: 2              # SDK retries on 5xx / connection
-#                                         #   errors. 0 is a real value and means
-#                                         #   no SDK retries.
+#                                         #   errors. Raising it raises what
+#                                         #   the phase ceiling must outlast:
+#                                         #   3 retries x 180s needs 720s, which
+#                                         #   still fits under the 900s default
+#                                         #   below; it is raising the PER-CALL
+#                                         #   budget that crosses it (300s/call
+#                                         #   needs 1200s of waves).
 #   model_summarizer_timeout_seconds: 600 # retriever summarizer. No fallback
 #                                         #   path, so a tighter budget turns a
 #                                         #   slow success into a 500 on the chat
@@ -202,6 +210,25 @@ keycloak_ssl_skip_verify: ""
 #                                         #   default), so this changes nothing —
 #                                         #   it makes the value explicit.
 #   model_control_plane_timeout_seconds: 30  # doc-repo calls, ingestion-log writes
+#   dataprep_llm_phase_timeout_seconds: 900   # wall clock for a whole LLM phase;
+#                                         #   must cover the document's WAVES
+#                                         #   CONSTRAINT: must stay above BOTH
+#                                         #   waves x model_llm_timeout_seconds
+#                                         #   (4 x 180 = 720 s at the defaults
+#                                         #   above — a 260-chunk document is 65
+#                                         #   batches at concurrency 20 = 4 waves
+#                                         #   sharing one ceiling, which is what
+#                                         #   usually binds) AND
+#                                         #   (1 + model_llm_max_retries) x
+#                                         #   model_llm_timeout_seconds (540 s).
+#                                         #   Below either, chunks fall back per
+#                                         #   chunk and the document lands as
+#                                         #   'Ingested with Warnings'. That reads
+#                                         #   as a labelling-quality regression
+#                                         #   rather than a misconfiguration, so
+#                                         #   dataprep warns at startup naming both.
+#   dataprep_llm_progress_interval_seconds: 60  # how often a phase reports to the
+#                                         #   document ingestion log the admin UI reads
 #
 # There is deliberately no `vllm_timeout` knob, and there must not be one added
 # back. The vendored comps graph transformer reads VLLM_TIMEOUT verbatim from

@@ -551,11 +551,30 @@ export default {
   padding-left: var(--space-lg);
 }
 
-@media (max-width: 767px) {
-  /* Off-canvas until made visible. The boundary is (max-width: 767px)
-     so it does NOT overlap with the in-flow rule elsewhere at exactly
-     768 px (the same 768 px seam that SideBarComponent has). */
-  .sidebar {
+@media (max-width: 1023px) {
+  /* Off-canvas until made visible. The boundary is (max-width: 1023px)
+     so the off-canvas behaviour spans 769 - 1023 px as well as
+     <768 px — at 1280 px and wider the right sidebar stays in flow at
+     320 px so the chat column receives the reference 486 px width.
+     The boundary is unambiguous (max-width: 1023px pairs with no
+     other sidebar-position rule at exactly 1024 px), and the seam
+     with the left sidebar's 768 px boundary is closed:
+     SideBarComponent declares its off-canvas at (max-width: 767px)
+     so 768 - 1023 has the left in flow (450 px) and the right
+     off-canvas, and the chat column receives the remainder of the
+     viewport.
+
+     The selector shape mirrors the Living Intelligence layer's
+     corner-network rule at @media screen and (min-width: 769px)
+     (which sets position: relative on .sidebar), so Vue scoped CSS
+     adds the same data-v-XXX on this rule too — the two rules end
+     up at the same specificity, and source order lets our position:
+     fixed win. The corner network still anchors on the expanded
+     sidebar above 1024 px; below 1024 the right sidebar is off-canvas
+     and the corner art is hidden by transform: translateX(100%). */
+  html[data-visual='on'] .genie-living-intelligence .sidebar:not(.collapsed),
+  html[data-visual='off'] .genie-living-intelligence .sidebar:not(.collapsed),
+  html:not([data-visual]) .genie-living-intelligence .sidebar:not(.collapsed) {
     position: fixed;
     right: 0;
     top: 0;
@@ -564,28 +583,20 @@ export default {
     transform: translateX(100%);
   }
 
-  .sidebar.visible {
+  html[data-visual='on'] .genie-living-intelligence .sidebar:not(.collapsed).visible,
+  html[data-visual='off'] .genie-living-intelligence .sidebar:not(.collapsed).visible,
+  html:not([data-visual]) .genie-living-intelligence .sidebar:not(.collapsed).visible {
     transform: translateX(0);
   }
 
-  .sidebar.collapsed {
+  html[data-visual='on'] .genie-living-intelligence .sidebar:not(.collapsed).collapsed,
+  html[data-visual='off'] .genie-living-intelligence .sidebar:not(.collapsed).collapsed,
+  html:not([data-visual]) .genie-living-intelligence .sidebar:not(.collapsed).collapsed {
     transform: translateX(calc(100% - 50px));
   }
-}
 
-@media (max-width: 1023px) and (min-width: 768px) {
-  /* 768-1023 px viewport: the right sidebar narrows to a 50 px rail so
-     the centre column has room (left sidebar reserves 450 px in flow;
-     the right must give the centre enough to render at least one
-     grid column without clipping). The toggle, the header chevron and
-     the rail background stay visible — users on a narrow window can
-     resize wider to reach the full panel (≥1024 px) or smaller to
-     reach the overlay (<768 px). The right sidebar's content stays
-     discoverable: the toggle is the same button they use everywhere
-     else, and the rail's presence tells the user the panel exists. */
-  .sidebar {
+  .sidebar.collapsed {
     width: 50px;
-    overflow: hidden;
   }
 }
 </style>

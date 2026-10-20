@@ -1907,16 +1907,6 @@ export default {
   position: relative;
   flex: 1;
   overflow: hidden;
-  /* Named container source for the quick-help grid below. The grid lives
-     inside .quick-help-overlay, which carries its own unnamed
-     container-type for the hero's @container (min-width: 1700px); using
-     container-name "qh-panel" here lets the grid resolve against the
-     chat column width (this element) rather than the overlay's inner
-     content box (which is 48 px narrower because of the overlay's
-     padding). The width the brief refers to as "the column" is this
-     element, not the inner .quick-help-content. */
-  container-type: inline-size;
-  container-name: qh-panel;
 }
 
 /* System Status Panel */
@@ -2245,8 +2235,37 @@ export default {
   overflow-y: auto;
 }
 
+/* At narrow viewports the chat column is too small to spare a 24 px
+   gutter on each side of the grid — that 48 px would otherwise eat
+   the panel below the 466 px needed for two cards at the reference's
+   card width. Stripping the overlay's padding at viewports below
+   1300 px gives the grid the full chat column (panel ≈ vw − 794,
+   so panel ≈ 506 − 48 = 458 right at the threshold) and lets auto-fit
+   deliver 2 cols at 1280 px (panel 486 px), 1 col at 1024 px (panel
+   230 px), and 1 col at 769 px (panel 311 px) without any further
+   rule. The hero's full-bleed negative margin still uses --space-lg
+   (24 px) at every width, so the banner extends the same distance
+   past the visible edge regardless of viewport — the banner art
+   and its container query are unaffected. Above 1300 px the padding
+   is restored and the grid keeps the same gutter as before (the
+   reference's own look at 1920 px). */
+@media (max-width: 1299px) {
+  .quick-help-overlay {
+    padding: 0;
+  }
+}
+
 .quick-help-content {
   width: 100%;
+  /* The minimum card width the quick-help grid lays out at. The
+     reference mocks a 217 px card; this is a component-local extension
+     point (the same shape as the Living Intelligence layer's per-button
+     --qh-bg / --qh-hover tokens), derived from the mockup, not a new
+     token in theme-variables.css. The grid's auto-fit lower bound and
+     the four-column cap below both reference it, so a deployment that
+     wants wider or narrower cards only has to change this one
+     declaration. */
+  --qh-card-min: 217px;
 }
 
 /* The heading and the subtitle under it share one gap: the heading
@@ -2356,54 +2375,26 @@ export default {
   }
 }
 
-/* The grid follows the chat column, not the viewport. The two fixed
+/* The grid follows its container, not the viewport. The two fixed
    sidebars reserve ~770 px of horizontal space from the 768 px
    breakpoint up, so a viewport-driven grid breaks at 1280 px and
-   below. Container queries on the panel keep the column count and
-   the reference's own 4-column cap intact at every window size.
+   below. The grid uses auto-fit minmax() so the column count tracks
+   the panel width at every size, and a max-width cap so a wider
+   panel never grows a fifth column — the reference mocks exactly
+   four.
 
-   The container is .chatbot-container (named "qh-panel"); the grid's
-   keying uses that name so the rules resolve against the chat column
-   width rather than the narrower .quick-help-content.
-
-   Each N-column breakpoint is the minimum panel width that fits
-   N * 217 px cards with (N-1) * --space-xl gaps between them, with
-   --space-xl = 32 px:
-     2 cols = 2 * 217 + 1 * 32 = 466 px
-     3 cols = 3 * 217 + 2 * 32 = 715 px
-     4 cols = 4 * 217 + 3 * 32 = 964 px
-
-   These are hard-coded px values rather than calc() expressions: at
-   the moment, Chromium does not resolve var() inside @container
-   conditions, so the calc(var(--space-xl)) form silently fails to
-   match and the base 1-column rule wins at every width. If
-   --space-xl is changed at the deployment, update these four values
-   in lock-step — the comments above carry the formula so the new
-   values can be recomputed. auto-fit minmax() is rejected because
-   the reference mocks a maximum of 4 columns regardless of panel
-   width. */
+   auto-fit's lower bound and the cap both reference --qh-card-min
+   (declared on .quick-help-content, default 217 px) and --space-xl,
+   so a deployment that changes either token gets a grid that
+   recomputes its column count and the cap in step. Changing
+   --space-xl does NOT require updating these rules. */
 .quick-help-grid {
   display: grid;
   gap: var(--space-xl);
-  grid-template-columns: 1fr;
-}
-
-@container qh-panel (min-width: 466px) {
-  .quick-help-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@container qh-panel (min-width: 715px) {
-  .quick-help-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-@container qh-panel (min-width: 964px) {
-  .quick-help-grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
+  grid-template-columns: repeat(auto-fit, minmax(var(--qh-card-min), 1fr));
+  /* The four-column cap. The formula is 4 cards + 3 gaps. */
+  max-width: calc(4 * var(--qh-card-min) + 3 * var(--space-xl));
+  margin-inline: auto;
 }
 
 @media (max-width: 480px) {

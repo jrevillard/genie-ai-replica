@@ -1137,6 +1137,7 @@ services:
       # Shared model-endpoint HTTP budgets (core/model_http_policy.py). This
       # service's environment block is a sequence, so the form is KEY=VALUE.
       - MODEL_RERANK_TIMEOUT_SECONDS=${MODEL_RERANK_TIMEOUT_SECONDS:-300}
+      - MODEL_CONNECT_TIMEOUT_SECONDS=${MODEL_CONNECT_TIMEOUT_SECONDS:-30}
     # Internal only
     # ports:
     #   - "6100:8000"
@@ -1196,6 +1197,7 @@ services:
       # The service-account token fetch every control-plane write depends on.
       # Single attempt, no retry: 300 s is what aiohttp applied anyway.
       MODEL_AUTH_TIMEOUT_SECONDS: ${MODEL_AUTH_TIMEOUT_SECONDS:-300}
+      MODEL_CONNECT_TIMEOUT_SECONDS: ${MODEL_CONNECT_TIMEOUT_SECONDS:-30}
       # The model-id probe behind the TTL cache. Degrades to the configured
       # model id, so 10 s suits a warm endpoint — but a vLLM still loading
       # weights answers in minutes, and the fallback then silently picks the

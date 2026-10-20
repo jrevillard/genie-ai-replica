@@ -107,6 +107,95 @@ def _reload_with(**env):
         importlib.reload(policy)
 
 
+class TestRetrieverProbeErrorHandling:
+    """The probe's degradation story depends on this except clause resolving.
+
+    Python evaluates each ``except`` clause's expression while matching, so an
+    expression that raises does not fall through to a later handler — it
+    propagates. ``except openai.error.AuthenticationError`` raised
+    ``AttributeError: module 'openai' has no attribute 'error'`` on every
+    pinned openai, which escaped ``_initialize_llm``. That function is called
+    unguarded from ``__init__``, so on the ``OPENAI_API_KEY`` branch a bad key,
+    a timeout or a refused connection took the whole retriever service down at
+    startup, and the "API Key is invalid" branch below it was unreachable.
+
+    This guard belongs on the branch that carries the FIX. It briefly lived on
+    the follow-on MR instead, which left the fix unguarded on its own branch
+    and one surviving copy of the bug in a file nothing collects.
+    """
+
+    _SOURCE = "retriever/genieai_retriever_arangodb.py"
+
+    def test_no_except_clause_reaches_a_non_existent_openai_attribute(self):
+        tree = ast.parse((OVERLAY_ROOT / self._SOURCE).read_text(encoding="utf-8"))
+        local_aliases = {
+            alias.asname or alias.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Import)
+            for alias in node.names
+            if alias.name == "openai"
+        }
+
+        def bad(node) -> bool:
+            """True if the expression reaches `<openai>.error.<anything>`.
+
+            Walks the attribute chain rather than matching the unparsed source.
+            A string prefix missed BOTH shapes that reintroduced this in
+            testing: a tuple-valued clause — ``except (KeyError,
+            openai.error.AuthenticationError):`` is idiomatic — and an import
+            alias. Both passed while the AttributeError was back in the file.
+            """
+            if isinstance(node, ast.Tuple):
+                return any(bad(e) for e in node.elts)
+            if isinstance(node, ast.Attribute):
+                if node.attr == "error" and isinstance(node.value, ast.Name):
+                    return node.value.id == "openai" or node.value.id in local_aliases
+                return bad(node.value)
+            return False
+
+        offenders = [
+            f"line {node.lineno}: {ast.unparse(node.type)}"
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ExceptHandler) and node.type is not None and bad(node.type)
+        ]
+        assert not offenders, (
+            f"openai exposes no `error` attribute; an except clause naming it at {offenders} raises "
+            "AttributeError while Python is still matching, so it escapes every handler below it"
+        )
+
+    def test_the_specific_handler_precedes_the_catch_all_in_the_same_try(self):
+        """Reversed, every AuthenticationError is swallowed by the generic arm.
+
+        The specific clause also has to be in the SAME try block: comparing two
+        text positions passes after the arms are swapped, because the generic
+        one is searched FROM the specific one. That was demonstrated.
+        """
+        text = (OVERLAY_ROOT / self._SOURCE).read_text(encoding="utf-8")
+        tree = ast.parse(text)
+        blocks = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Try)
+            and any(
+                isinstance(h, ast.ExceptHandler)
+                and h.type is not None
+                and ast.unparse(h.type) == "openai.AuthenticationError"
+                for h in node.handlers
+            )
+        ]
+        assert len(blocks) == 1, f"expected exactly one probe try block, found {len(blocks)}"
+        names = [ast.unparse(h.type) for h in blocks[0].handlers if h.type is not None]
+        assert "Exception" in names, (
+            f"the AuthenticationError arm has no catch-all beside it ({names}), so the probe's "
+            "documented degradation path does not exist"
+        )
+        assert names.index("openai.AuthenticationError") < names.index("Exception"), (
+            f"handler order is {names}: the catch-all comes first, so every AuthenticationError is "
+            "swallowed by it and the 'API Key is invalid' branch is dead code that reads as a "
+            "working diagnostic"
+        )
+
+
 class TestProbeBudget:
     """core/model_cache.py was the one model-endpoint call outside this policy.
 
@@ -117,18 +206,31 @@ class TestProbeBudget:
     """
 
     def test_the_probe_derives_its_timeout_from_the_policy(self):
-        tree = ast.parse((OVERLAY_ROOT / "core" / "model_cache.py").read_text(encoding="utf-8"))
+        text = (OVERLAY_ROOT / "core" / "model_cache.py").read_text(encoding="utf-8")
+        tree = ast.parse(text)
+        client_names: set[str] = set()
+        for node in ast.walk(tree):
+            # `with httpx.Client() as c:` and `c = httpx.Client()`
+            if isinstance(node, (ast.With, ast.AsyncWith)):
+                for item in node.items:
+                    if item.optional_vars is not None and ast.unparse(item.context_expr).startswith("httpx."):
+                        client_names |= {n.id for n in ast.walk(item.optional_vars) if isinstance(n, ast.Name)}
+            if isinstance(node, ast.Assign) and ast.unparse(node.value).startswith("httpx."):
+                for target in node.targets:
+                    client_names |= {n.id for n in ast.walk(target) if isinstance(n, ast.Name)}
         calls = [
             n
             for n in ast.walk(tree)
             if isinstance(n, ast.Call)
             and isinstance(n.func, ast.Attribute)
-            and n.func.attr == "get"
+            and n.func.attr in ("get", "post", "request", "stream")
             # On the RECEIVER, not the method name: this module also calls
             # ``entry.get(...)`` on its cache dict, and a bare ``.get`` match
-            # picks those up as HTTP calls that have no timeout.
-            and isinstance(n.func.value, ast.Name)
-            and n.func.value.id == "httpx"
+            # picks those up as HTTP calls that have no timeout. The receiver
+            # is `httpx` itself OR a name bound to an httpx client — the second
+            # is how `with httpx.Client() as c: c.get(url)` writes a probe, and
+            # matching only the first left that shape unbounded and green.
+            and self._is_httpx_receiver(n.func.value, client_names)
         ]
         assert calls, "httpx.get call not found — the probe moved and this guard must follow it"
         for call in calls:
@@ -138,6 +240,13 @@ class TestProbeBudget:
                 f"httpx.get at line {call.lineno} builds its timeout as {ast.unparse(value)}, "
                 "so the model-id probe is back on a literal the operator cannot reach"
             )
+
+    @staticmethod
+    def _is_httpx_receiver(value, client_names) -> bool:
+        """True when *value* is `httpx` itself or a name bound to an httpx client."""
+        if isinstance(value, ast.Name):
+            return value.id == "httpx" or value.id in client_names
+        return ast.unparse(value).split(".")[0] == "httpx"
 
     def test_the_policy_imports_cleanly_without_the_probe_knob(self):
         """model_cache must not become the reason an image fails to import.
@@ -940,6 +1049,20 @@ class TestCallSitesConsumeThePolicy:
             if isinstance(node, ast.ImportFrom) and node.module == "core.model_http_policy":
                 for alias in node.names:
                     bound[alias.asname or alias.name] = alias.name
+        # An import alias is not the only way to point a name at the wrong
+        # budget: `CONTROL_PLANE_TIMEOUT_SECONDS = AUTH_TIMEOUT_SECONDS` at
+        # module level looks identical at every call site and defeats an
+        # ImportFrom-only resolver. Follow module-level assignments too — the
+        # same indirection already guarded for retriever/config.py.
+        for node in tree.body:
+            if not isinstance(node, ast.Assign):
+                continue
+            names = _source_names(node.value)
+            if not names:
+                continue
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id in bound:
+                    bound[target.id] = next(iter(names))
         offenders = []
         for node in ast.walk(tree):
             if not (isinstance(node, ast.Call) and _called_name(node.func) == "ClientTimeout"):
@@ -986,7 +1109,31 @@ class TestCallSitesConsumeThePolicy:
                 f"{ast.unparse(call.func)} at line {call.lineno} builds its timeout as {ast.unparse(timeout)}"
             )
 
-    @pytest.mark.parametrize("rel", ["reranker/genieai_tei_reranker.py", "dataprep/keycloak_service_account.py"])
+    # Every module that can hold a policy-built aiohttp timeout, with NO
+    # exemption. An earlier version listed two modules and exempted the rest on
+    # the grounds that their sites predate the policy and never had a ceiling to
+    # lose — true, and irrelevant: a NEW ClientTimeout in dataprep or chatqna is
+    # exactly the regression this guards, and a module allowlist let one through
+    # (proven by adding one and watching the suite stay green). Those six
+    # pre-existing sites now carry the same 30 s ceiling, so the invariant needs
+    # no carve-out — and a carve-out pinned to line numbers rots the moment an
+    # unrelated comment shifts one, which it did within the hour.
+    _AIOHTTP_MODULES = (
+        "reranker/genieai_tei_reranker.py",
+        "dataprep/keycloak_service_account.py",
+        "dataprep/genieai_dataprep_arangodb.py",
+        "chatqna/genieai_chatqna.py",
+        "dataprep/genieai_dataprep_utils.py",
+    )
+    _POLICY_TIMEOUTS = frozenset(
+        {
+            "RERANK_TIMEOUT_SECONDS",
+            "AUTH_TIMEOUT_SECONDS",
+            "CONTROL_PLANE_TIMEOUT_SECONDS",
+        }
+    )
+
+    @pytest.mark.parametrize("rel", _AIOHTTP_MODULES)
     def test_an_aiohttp_budget_keeps_the_connect_ceiling(self, rel):
         """``ClientTimeout(total=X)`` DROPS aiohttp's 30 s connect ceiling.
 
@@ -1002,6 +1149,11 @@ class TestCallSitesConsumeThePolicy:
         for node in ast.walk(ast.parse(text)):
             if not (isinstance(node, ast.Call) and _called_name(node.func) == "ClientTimeout"):
                 continue
+            # A `total` built from a literal is not a policy budget, so it is
+            # somebody else's exemption and not this guard's business.
+            total = _kwarg(node, "total")
+            if total is None or not _source_names(total) & self._POLICY_TIMEOUTS:
+                continue
             checked += 1
             sock = _kwarg(node, "sock_connect")
             assert sock is not None, (
@@ -1011,4 +1163,7 @@ class TestCallSitesConsumeThePolicy:
             assert "AIOHTTP_CONNECT_TIMEOUT_SECONDS" in _source_names(sock), (
                 f"{rel}:{node.lineno} hardcodes its connect ceiling as {ast.unparse(sock)}"
             )
-        assert checked, f"{rel} builds no ClientTimeout — the guard is covering nothing"
+        # Only the two modules this policy converted have to build one; the rest
+        # are scanned for NEW sites and may legitimately build none yet.
+        if rel in ("reranker/genieai_tei_reranker.py", "dataprep/keycloak_service_account.py"):
+            assert checked, f"{rel} builds no policy ClientTimeout — the guard is covering nothing"

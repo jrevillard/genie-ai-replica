@@ -337,6 +337,16 @@ HUGGING_FACE_HUB_TOKEN=
 #                                 #   no-fallback call is as unlikely as
 #                                 #   possible to turn a working deployment
 #                                 #   into a failing one.
+# MODEL_CONNECT_TIMEOUT_SECONDS=30  # The CONNECT phase ceiling for the two
+#                                 #   aiohttp clients that this policy gave a
+#                                 #   budget to. aiohttp's default session
+#                                 #   already carried 30 s here; passing an
+#                                 #   explicit ClientTimeout(total=...) DROPS
+#                                 #   it, and None means no limit, not
+#                                 #   "inherit" — so bounding those calls would
+#                                 #   otherwise have removed a ceiling rather
+#                                 #   than added one. Raise it for slow DNS or a
+#                                 #   routed mesh; nothing else reads it.
 # MODEL_PROBE_TIMEOUT_SECONDS=10     # The /v1/models probe behind the TTL-
 #                                 #   cached model-id lookup (retriever
 #                                 #   summarizer init, dataprep graph). It

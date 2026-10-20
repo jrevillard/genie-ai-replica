@@ -176,6 +176,14 @@ keycloak_ssl_skip_verify: ""
 #                                         #   HF_TOKEN) is deliberately unbudgeted
 #                                         #   — and that is the REMOTE-GPU branch,
 #                                         #   so this knob does not reach it.
+#   model_connect_timeout_seconds: 30    # the CONNECT ceiling for the two aiohttp
+#                                         #   clients this policy budgeted. aiohttp's
+#                                         #   default session carried 30 s; an explicit
+#                                         #   ClientTimeout(total=...) drops it and
+#                                         #   None means no limit, so bounding those
+#                                         #   calls would have removed a ceiling
+#                                         #   rather than added one. Raise for slow
+#                                         #   DNS or a routed mesh.
 #   model_probe_timeout_seconds: 10       # the /v1/models model-id probe.
 #                                         #   Degrades to the configured model
 #                                         #   id on failure, but a vLLM still

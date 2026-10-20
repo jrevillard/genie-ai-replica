@@ -529,7 +529,7 @@ class GenieaiArangoRetriever(OpeaComponent):
                     #
                     # The LLM budget, not the summarizer budget, and the two
                     # differ in what a timeout costs. This probe sits inside the
-                    # `except Exception` above, so exhausting the budget leaves
+                    # `except Exception` below, so exhausting the budget leaves
                     # the summarizer uninitialised and documents come back
                     # unsummarised — degraded, not failed, which is why the
                     # shorter LLM budget is the right one here. The ChatOpenAI

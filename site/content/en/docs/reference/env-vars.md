@@ -68,6 +68,15 @@ source first** (the file in the repo), then regenerate.
 | `EMBEDDING_MODEL_ID` | `BAAI/bge-large-en-v1.5` | embedding | Any TEI-supported encoder |
 | `RERANKER_MODEL_ID` | `BAAI/bge-reranker-v2-m3` | reranker | Any TEI-supported cross-encoder |
 | `VLLM_LLM_MODEL_ID` | `meta-llama/Meta-Llama-3.1-8B-Instruct` | vllm | Must support guided JSON (`response_format={"type":"json_object"}`) |
+| `MODEL_LLM_TIMEOUT_SECONDS` | `180` | dataprep, retriever | vLLM chat completions. Read by `core/model_http_policy.py`. On every shipped topology it is parsed but unused: its only consumer is the retriever's OpenAI-key probe, and no service is given `OPENAI_API_KEY`. |
+| `MODEL_LLM_MAX_RETRIES` | `2` | dataprep, retriever | SDK retries on 408/409/429/5xx and connection errors. `0` is honoured as a real value. Values above 10 are rejected. |
+| `MODEL_SUMMARIZER_TIMEOUT_SECONDS` | `600` | retriever | Document summarizer. A NEW ceiling, not the openai default kept. Not lowered: the call has no fallback, so its timeout becomes a 500 on the chat request. |
+| `MODEL_EMBEDDING_TIMEOUT_SECONDS` | `600` | retriever | Embedding client, OpenAI-API branch ONLY. Also a NEW ceiling — `langchain-openai` forwards `request_timeout` (default `None`), which overrides the SDK default. Lowering it yields a silently EMPTY retrieval: the except clause returns `[]` ahead of the BM25 leg. |
+| `MODEL_RERANK_TIMEOUT_SECONDS` | `300` | reranker | TEI rerank. Not lowered for the same reason as the summarizer. |
+| `MODEL_AUTH_TIMEOUT_SECONDS` | `300` | dataprep | Keycloak service-account token fetch. Separate from the control-plane budget because every ingestion-log write and status update waits on it, one attempt, no retry, re-raises on failure. |
+| `MODEL_CONTROL_PLANE_TIMEOUT_SECONDS` | `30` | dataprep, chatqna | Ingestion-log writes, doc-status updates, doc-repo callbacks. Not the Keycloak token fetch. |
+| `MODEL_CONNECT_TIMEOUT_SECONDS` | `30` | dataprep, reranker | The CONNECT phase ceiling for every aiohttp session this policy budgeted. `aiohttp`'s default session already carried 30 s; passing an explicit `ClientTimeout(total=...)` drops it, and `None` means no limit rather than "inherit". Raise for slow DNS or a routed mesh. |
+| `MODEL_PROBE_TIMEOUT_SECONDS` | `10` | dataprep, retriever, chatqna | The `/v1/models` probe behind the TTL-cached model-id lookup. Degrades to the configured model id. Raise it on a remote GPU node whose models load slowly — the fallback otherwise picks the configured id instead of the served one. |
 | `RERANKING_STRATEGY` | `slice` | chatqna | `slice` / `threshold` / `slice_threshold` / `knee_threshold` / `adaptive` |
 | `RERANKER_TOP_N` | `3` | chatqna | Top chunks kept by `slice`/`slice_threshold` |
 | `CONTEXTUAL_RETRIEVAL_ENABLED` | `true` | dataprep | On by default; prepends doc-context prefix |

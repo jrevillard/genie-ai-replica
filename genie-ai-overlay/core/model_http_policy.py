@@ -336,7 +336,12 @@ RERANK_TIMEOUT_SECONDS = positive_float_env("MODEL_RERANK_TIMEOUT_SECONDS", defa
 # explicitly. The control-plane sessions are exempt: they already constructed an
 # explicit ClientTimeout(total=30) before this policy existed, so they never had
 # a ceiling to lose.
-AIOHTTP_CONNECT_TIMEOUT_SECONDS = 30.0
+# Wrapped in the same env parser as every other budget here, deliberately: a
+# constant no operator can raise is a ceiling that stays wrong for exactly the
+# deployments that hit it — slow DNS, a routed mesh, a cross-host vLLM. 30 s is
+# what aiohttp applied by default, so the default changes nothing; the point is
+# that raising it is now a `.env` line rather than a patch.
+AIOHTTP_CONNECT_TIMEOUT_SECONDS = positive_float_env("MODEL_CONNECT_TIMEOUT_SECONDS", default=30.0)
 
 # Control-plane calls (Keycloak token refresh, ingestion-log writes, doc status
 # updates, taxonomy fetch). These are in-cluster HTTP services with no model

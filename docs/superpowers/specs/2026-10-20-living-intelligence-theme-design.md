@@ -412,7 +412,7 @@ by "tidying" the path — hence this line.
 | `src/main.js` | `import './styles/genie-visual-effects.css';` **after** `./theme-components.css` (designer's stated order) |
 | `src/views/DashboardView.vue` | Add `genie-living-intelligence` to the existing root class — 1 line |
 | `src/components/ds/Card.vue` | **New escape hatch**: `background: var(--ds-card-bg, var(--surface))` |
-| `src/components/ChatBotComponent.vue` | Carry `button.styles` through the `quickHelpButtons` projection (`:730-740`) and bind it on the card (`:149-158`). Two edits in two places |
+| `src/components/ChatBotComponent.vue` | Carry `button.styles` through the `quickHelpButtons` projection (`:730-740`) and bind it on the card (`:149-158`). **Plus** the D1 grid fix: drop the 600px `.quick-help-content` cap, base `repeat(4, 1fr)`, descending `max-width` breakpoints 1024→3, 768→2, 480→1, gap `--space-xl` |
 | `public/config/genie-ai-config.json` | `theme.visual`; `styles` block on all nine buttons |
 | the 6 flavour configs | `theme.visual` only (`styles` already populated) |
 | all 7 `$schema` blocks | Declare `theme.visual`; repair the four drift causes |
@@ -527,30 +527,64 @@ breaks. A missing `styles` block likewise falls back to `--accent`.
 
 ### Open decisions
 
-None block the core layer.
+None. D1–D3 are decided below.
 
-**D1 — quick-help grid width.** `@media (min-width: 1024px)` already forces
-`repeat(4, 1fr)` (`ChatBotComponent.vue:2295-2299`), and `@media (min-width:
-768px)` forces 3 columns (`:2290`). The grid is **already** four columns at
-desktop — they are simply crushed into `.quick-help-content { max-width: 600px }`
-(`:2201`), giving roughly 130 px per card against a 40 px icon. The mockup's
-cards are ~230 px wide. **Recommend widening `.quick-help-content` to ~1040 px
-in the scoped layer**: it does not add columns, it un-crushes existing ones, and
-that is what makes the mockup's card legible. Defer to a follow-up if the
-welcome screen must not change layout in this MR.
+### D1 — quick-help grid width — **decided: follow the el-salvador precedent**
 
-**D2 — card subtitles.** The mockup shows a second line ("Get answers and
-explore information"). Adding it means a locale dictionary per button across
-14 locales × 7 files. **Recommend deferring** — that is copy authoring, not
-theming, and it is the single largest cost in this spec.
+Measured on `reference-light.png` (1775×886): left sidebar ends at x=412, right
+sidebar starts at x=1442, the quick-help grid spans x=440→1409 — **969 px in a
+1030 px centre panel, four cards of ~217 px, gap ~35 px**.
 
-**D3 — hero weight.** 1.2 MB, does not compress (gzip 1.19 MB). Served under
-`location ^~ /config/` with `no-cache, must-revalidate` (`nginx.conf:20`), so
-nginx answers `304` on repeat loads — the cost is a revalidation round-trip, not
-a re-download. Moving the assets out of `/config/` to gain immutable caching
-would make them non-swappable, which is the point. **Recommend shipping as-is.**
-Converting to WebP/AVIF would save ~1 MB but adds an asset pipeline and a
-toolchain dependency to a repo that has neither.
+`main` today caps `.quick-help-content` at 600px (`:2201`) while
+`@media (min-width: 1024px)` forces `repeat(4, 1fr)` (`:2295-2299`). The column
+count is driven by the **viewport** inside a **fixed-width container**, so at a
+1024px viewport the centre panel is ~450px and the four columns come out at
+~90px each, around a 40px icon. The cards are already crushed today, before
+any of this work.
+
+`release/el-salvador` already solved it, and it is in the repo:
+
+| | `main` | `release/el-salvador` |
+|---|---|---|
+| `.quick-help-content` | `max-width: 600px` | **absent — no cap** |
+| columns (base) | `repeat(auto-fill, minmax(250px, 1fr))` | `repeat(4, 1fr)` |
+| breakpoints | `min-width` 768→3, 1024→4 | `max-width` 1024→3, 768→2, 480→1 |
+| gap | `--space-md` (16px) | `--space-sm` (8px) |
+
+At the mockup's 1775px viewport that yields four cards of ~240px against the
+mockup's 217px — the card width matches.
+
+**So: mirror el-salvador, in `ChatBotComponent.vue`.** Drop the 600px cap, make
+the base `repeat(4, 1fr)`, switch to descending `max-width` breakpoints
+1024→3, 768→2, 480→1, and set the gap to `--space-xl` (32px, the closest DS
+token to the mockup's ~35px).
+
+Two consequences worth stating:
+
+- The grid geometry is fixed **once, in the component**, so every deployment
+  benefits — including those that never enable the visual layer. The theme
+  layer then needs **no geometry override at all**, which means **no
+  specificity war** on the grid. The C2 hazard stays confined to `Card.vue`,
+  which has an official extension point.
+- No upper cap, so at a 2560px viewport the four cards stretch. el-salvador
+  accepts this. A cap is to be added **only if the visual fidelity check shows
+  it** — which is what the fidelity loop is for.
+
+### D2 — card subtitles — **decided: defer**
+
+The mockup shows a second line per card ("Get answers and explore information").
+Adding it means a locale dictionary per button across 14 locales × 7 config
+files. That is copy authoring, not theming, and it is the single largest cost in
+this spec. Deferred to its own change.
+
+### D3 — hero weight — **decided: ship as-is**
+
+1.2 MB, does not compress (gzip 1.19 MB). Served under `location ^~ /config/`
+with `no-cache, must-revalidate` (`nginx.conf:20`), so nginx answers `304` on
+repeat loads — the cost is a revalidation round-trip, not a re-download. Moving
+the assets out of `/config/` to gain immutable caching would make them
+non-swappable, which is the point. Converting to WebP/AVIF would save ~1 MB but
+adds an asset pipeline and a toolchain dependency to a repo that has neither.
 
 ---
 
@@ -669,6 +703,11 @@ hardcoded hex palette (`--brand: #1e5631`, `--accent-hover: #3f9b43`, bespoke
 - **Load-time validation is a live risk there.** Its config is not in this
   repo's `public/config/` set and could not be validated from here. It must be
   checked before that branch receives commit 2.
+- **Its `styles` blocks are empty.** All nine AgroGenio buttons carry
+  `styles: {}` — unlike the six flavour configs on `main`, which populate
+  `backgroundColor` / `hoverColor` / `outlineColor` on every button. Its
+  per-category values will have to be authored during that convergence, or its
+  cards fall back to `--accent`.
 
 Noted for that workstream, not to be backported to `main`: four rules across
 three selectors in el-salvador's `theme-components.css` hardcode

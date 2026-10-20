@@ -23,7 +23,9 @@
           <span v-else class="govt-logo" v-html="config.app.icon.value"></span>
         </router-link>
         <!-- Title from GENIE.AI config - Hide on mobile -->
-        <router-link to="/dashboard" class="brand-name hide-on-mobile">{{ config.app.title }}</router-link>
+        <router-link to="/dashboard" class="brand-name hide-on-mobile" :class="brandWordmarkClass">{{
+          config.app.title
+        }}</router-link>
 
         <!-- Mobile controls - Only shown on mobile devices -->
         <div class="mobile-controls">
@@ -313,6 +315,13 @@ export default {
     return {};
   },
   computed: {
+    // Only the GENIE.AI brand carries the gradient wordmark; the flavour
+    // configs ship their own titles and are left as plain text. Comparing
+    // the title keeps this off the config schema and off the decoration
+    // switch, either of which an operator could turn off by accident.
+    brandWordmarkClass() {
+      return this.config?.app?.title === 'GENIE.AI' ? 'brand-wordmark' : '';
+    },
     isAdmin() {
       const user = this.$store.getters.currentUser;
       if (!user) return false;
@@ -397,6 +406,19 @@ export default {
   letter-spacing: 0.5px;
   color: var(--accent-fg);
   text-decoration: none;
+}
+
+/*
+ * The wordmark. .brand-wordmark in genie-visual-effects.css paints the
+ * gradient; this only sets the type it is painted in, and outranks
+ * .brand-name above on specificity so the two compose instead of
+ * competing.
+ */
+.brand-name.brand-wordmark {
+  font-family: var(--font-display);
+  font-size: clamp(var(--text-lg), 1.6vw, var(--text-xl));
+  font-weight: 800;
+  letter-spacing: -0.035em;
 }
 
 /* Logo styling and animations */

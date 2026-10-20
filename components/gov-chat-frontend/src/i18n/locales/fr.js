@@ -1400,7 +1400,8 @@ export default {
     clearContext: 'Effacer le contexte et démarrer une nouvelle discussion',
     unsavedChanges:
       'Vous avez des modifications non enregistrées. Êtes-vous sûr de vouloir commencer une nouvelle discussion ?',
-    whatCanIHelp: "Comment puis-je vous aider aujourd'hui ?",
+    whatCanIHelp: "Comment {brandwordmark} peut-il vous aider aujourd'hui ?",
+    quickHelpSubtitle: 'Votre portail vers des services publics intelligents.',
 
     queryContext: 'Contexte de la requête',
     contextAdded: 'Contexte ajouté à votre requête',

@@ -1335,7 +1335,8 @@ export default {
     newChat: 'Kuma Kura',
     clearContext: 'Kuma fiti ani kuma kura damina',
     unsavedChanges: 'I la yailamawol ti mara. I lafiya la ka kuma kura damina le ti?',
-    whatCanIHelp: 'Mbe ñaadi ka i makaamoo bii?',
+    whatCanIHelp: 'Mbe {brandwordmark} v’ee naghin m’aynnaght dy choail lhiam bii?',
+    quickHelpSubtitle: 'Goll dy red as Baaragh Scaa-Soois Jeemid.',
 
     queryContext: 'Ñiningo Coko',
     contextAdded: 'Cokoyaa kafuta i la ñiningo to',

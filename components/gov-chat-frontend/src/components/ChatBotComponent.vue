@@ -141,9 +141,12 @@
       <!-- Quick Help Overlay -->
       <div v-if="showQuickHelp && selectedContextItems.length === 0" class="quick-help-overlay">
         <div class="quick-help-content">
-          <h2 class="quick-help-heading">
-            {{ translate('chatbot.whatCanIHelp') }}
-          </h2>
+          <i18n-t keypath="chatbot.whatCanIHelp" tag="h2" class="quick-help-heading">
+            <template #brandwordmark>
+              <span :class="brandWordmarkClass">{{ brandName }}</span>
+            </template>
+          </i18n-t>
+          <p class="quick-help-subtitle">{{ translate('chatbot.quickHelpSubtitle') }}</p>
 
           <div class="quick-help-grid">
             <DsCard
@@ -465,6 +468,18 @@ export default {
 
   computed: {
     ...mapGetters('chatHistory', ['getAllFolders', 'getChatById']),
+
+    // The heading's brand comes from the runtime config through a slot,
+    // never through an HTML string, so the operator-editable title is
+    // rendered as escaped text and stays translatable in place.
+    brandName() {
+      return this.cachedConfig?.app?.title || '';
+    },
+
+    // As in the navbar, only the GENIE.AI brand carries the gradient.
+    brandWordmarkClass() {
+      return this.brandName === 'GENIE.AI' ? 'brand-wordmark' : '';
+    },
 
     folders() {
       return this.getAllFolders;
@@ -2224,12 +2239,22 @@ export default {
   width: 100%;
 }
 
+/* The heading and the subtitle under it share one gap: the heading
+   gives up all but --space-sm and the subtitle carries the rest down to
+   the card row, so the pair needs no negative margin to sit tight. */
 .quick-help-heading {
   text-align: center;
   font-size: var(--text-xl);
   font-weight: 600;
-  margin-bottom: var(--space-lg);
+  margin-bottom: var(--space-sm);
   color: var(--fg);
+}
+
+.quick-help-subtitle {
+  text-align: center;
+  font-size: var(--text-md);
+  margin: 0 0 var(--space-lg);
+  color: var(--muted);
 }
 
 .quick-help-grid {

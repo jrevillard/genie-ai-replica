@@ -34,8 +34,10 @@ const THEMES = process.argv.includes('--theme')
   : ['light', 'dark'];
 
 const audit = () => {
+  const rootStyle = getComputedStyle(document.documentElement);
+
   const readUrl = (property) => {
-    const raw = getComputedStyle(document.documentElement).getPropertyValue(property).trim();
+    const raw = rootStyle.getPropertyValue(property).trim();
     if (!raw) return null;
     return raw.replace(/^url\(["']?/, '').replace(/["']?\)$/, '');
   };
@@ -94,6 +96,31 @@ const audit = () => {
 
     const overlay = document.querySelector('.quick-help-overlay');
     const overlayBefore = overlay ? getComputedStyle(overlay, '::before') : null;
+    const overlayAfter = overlay ? getComputedStyle(overlay, '::after') : null;
+    const sidebar = document.querySelector('.sidebar:not(.collapsed)');
+    const sidebarBefore = sidebar ? getComputedStyle(sidebar, '::before') : null;
+    const heading = document.querySelector('.quick-help-heading');
+    const subtitle = document.querySelector('.quick-help-subtitle');
+    const brandName = document.querySelector('.brand-name');
+
+    // The wordmark appears twice — the navbar name and the brand inside the
+    // welcome heading — and only for the GENIE.AI brand. Every occurrence is
+    // recorded, so a regression at either call site shows up as a shorter list
+    // rather than a silently absent entry.
+    const wordmarks = [...document.querySelectorAll('.brand-wordmark')].map((el) => {
+      const style = getComputedStyle(el);
+      return {
+        text: el.textContent.trim(),
+        tag: el.tagName,
+        parent: el.parentElement ? el.parentElement.tagName.toLowerCase() + '.' + el.parentElement.className : null,
+        backgroundImage: style.backgroundImage,
+        backgroundClip: style.backgroundClip,
+        textFillColor: style.getPropertyValue('-webkit-text-fill-color'),
+        color: style.color,
+        fontSize: style.fontSize,
+        fontFamily: style.fontFamily
+      };
+    });
 
     return {
       dataVisual: document.documentElement.getAttribute('data-visual'),
@@ -101,18 +128,55 @@ const audit = () => {
       assets,
       resolved: {
         visualHero: readUrl('--visual-hero'),
-        brand: getComputedStyle(document.documentElement).getPropertyValue('--brand').trim(),
-        accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()
+        navbarBg: rootStyle.getPropertyValue('--navbar-bg').trim(),
+        brandMarkFrom: rootStyle.getPropertyValue('--brand-mark-from').trim(),
+        brandMarkMid: rootStyle.getPropertyValue('--brand-mark-mid').trim(),
+        brandMarkTo: rootStyle.getPropertyValue('--brand-mark-to').trim(),
+        brand: rootStyle.getPropertyValue('--brand').trim(),
+        accent: rootStyle.getPropertyValue('--accent').trim()
       },
       overlay: surface('.quick-help-overlay'),
       overlayBefore: overlayBefore
         ? {
             width: overlayBefore.width,
             height: overlayBefore.height,
-            backgroundImage: overlayBefore.backgroundImage
+            backgroundImage: overlayBefore.backgroundImage,
+            // Both spellings are recorded: Safari only honours the -webkit-
+            // one, so a mask present in one and missing in the other is a
+            // real, Firefox-only regression.
+            maskImage: overlayBefore.maskImage,
+            webkitMaskImage: overlayBefore.webkitMaskImage
+          }
+        : null,
+      overlayAfter: overlayAfter
+        ? {
+            width: overlayAfter.width,
+            height: overlayAfter.height,
+            backgroundImage: overlayAfter.backgroundImage,
+            opacity: overlayAfter.opacity,
+            mixBlendMode: overlayAfter.mixBlendMode
+          }
+        : null,
+      sidebarBefore: sidebarBefore
+        ? {
+            width: sidebarBefore.width,
+            height: sidebarBefore.height,
+            backgroundImage: sidebarBefore.backgroundImage,
+            opacity: sidebarBefore.opacity
           }
         : null,
       navBar: surface('.nav-bar'),
+      brandName: brandName
+        ? {
+            text: brandName.textContent.trim(),
+            fontSize: getComputedStyle(brandName).fontSize,
+            fontWeight: getComputedStyle(brandName).fontWeight
+          }
+        : null,
+      wordmarks,
+      wordmarkCount: wordmarks.length,
+      heading: heading ? { tag: heading.tagName, text: heading.textContent.trim() } : null,
+      subtitle: subtitle ? { text: subtitle.textContent.trim(), fontSize: getComputedStyle(subtitle).fontSize } : null,
       cards,
       cardCount: cards.length
     };
@@ -145,7 +209,10 @@ const audit = () => {
       await page.screenshot({ path: file, fullPage: false });
       fs.writeFileSync(path.join(OUT_DIR, `${theme}-${viewport.label}.audit.json`), JSON.stringify(data, null, 2));
 
-      results[`${theme}-${viewport.label}`] = { file, audit: path.join(OUT_DIR, `${theme}-${viewport.label}.audit.json`) };
+      results[`${theme}-${viewport.label}`] = {
+        file,
+        audit: path.join(OUT_DIR, `${theme}-${viewport.label}.audit.json`)
+      };
       console.log(`${theme}-${viewport.label}: ${file}`);
       await context.close();
     }

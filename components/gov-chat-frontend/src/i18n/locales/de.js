@@ -1395,7 +1395,8 @@ export default {
     newChat: 'Neuer Chat',
     clearContext: 'Kontext löschen und neues Gespräch starten',
     unsavedChanges: 'Sie haben ungespeicherte Änderungen. Sind Sie sicher, dass Sie einen neuen Chat starten möchten?',
-    whatCanIHelp: 'Wie kann ich Ihnen heute helfen?',
+    whatCanIHelp: 'Wie kann {brandwordmark} Ihnen heute helfen?',
+    quickHelpSubtitle: 'Ihr Tor zu intelligenten öffentlichen Diensten.',
 
     queryContext: 'Anfragekontext',
     contextAdded: 'Kontext zu Ihrer Anfrage hinzugefügt',

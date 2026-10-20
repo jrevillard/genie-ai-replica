@@ -1383,7 +1383,8 @@ export default {
     newChat: 'New Chat',
     clearContext: 'Clear context and start a new conversation',
     unsavedChanges: 'You have unsaved changes. Are you sure you want to start a new chat?',
-    whatCanIHelp: 'How can I help you today?',
+    whatCanIHelp: 'How can {brandwordmark} help you today?',
+    quickHelpSubtitle: 'Your gateway to intelligent public services.',
 
     queryContext: 'Query Context',
     contextAdded: 'Context added to your query',

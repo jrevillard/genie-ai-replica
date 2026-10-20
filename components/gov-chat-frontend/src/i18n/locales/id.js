@@ -1381,7 +1381,8 @@ export default {
     newChat: 'Obrolan Baru',
     clearContext: 'Hapus konteks dan mulai percakapan baru',
     unsavedChanges: 'Anda memiliki perubahan yang belum disimpan. Apakah Anda yakin ingin memulai obrolan baru?',
-    whatCanIHelp: 'Ada yang bisa saya bantu hari ini?',
+    whatCanIHelp: 'Bagaimana {brandwordmark} dapat membantu Anda hari ini?',
+    quickHelpSubtitle: 'Gerbang Anda menuju layanan publik yang cerdas.',
 
     queryContext: 'Konteks Pertanyaan',
     contextAdded: 'Konteks ditambahkan ke pertanyaan Anda',

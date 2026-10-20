@@ -1383,7 +1383,8 @@ export default {
     newChat: 'Mazungumzo Mapya',
     clearContext: 'Futa muktadha na anza mazungumzo mapya',
     unsavedChanges: 'Una mabadiliko ambayo hayajahifadhiwa. Una uhakika unataka kuanza mazungumzo mapya?',
-    whatCanIHelp: 'Naweza kukusaidia vipi leo?',
+    whatCanIHelp: 'Jinsi {brandwordmark} inaweza kukusaidia leo?',
+    quickHelpSubtitle: 'Lango lako kwenye huduma za umma zenye akili.',
 
     queryContext: 'Muktadha wa Hoja',
     contextAdded: 'Muktadha umeongezwa kwenye swali lako',

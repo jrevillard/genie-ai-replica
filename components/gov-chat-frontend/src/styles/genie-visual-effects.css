@@ -3,8 +3,11 @@
  *
  * An additive decorative layer over the existing design system. The
  * design-system tokens stay canonical; every colour here is derived from
- * one with color-mix(), and the only literal colours are the two
- * secondary hues the layer mixes its own tints from.
+ * one with color-mix(). The literal colours are eight brand hues, all
+ * declared below: the two secondary hues the layer mixes its own tints
+ * from, and the two three-stop brand-wordmark ramps. The navbar's ramp
+ * is the themed one tinted towards white with color-mix(), so it adds no
+ * literal of its own.
  *
  * Two gates, both required:
  *   - .genie-living-intelligence scopes the layer to the dashboard route
@@ -13,20 +16,32 @@
  * The asset paths are configuration, not CSS: --visual-hero and its
  * siblings are written onto the document element by config-loader from
  * the theme.visual block of the runtime config.
+ *
+ * One block in this file is deliberately ungated: .brand-wordmark paints
+ * the navbar wordmark and the brand inside the welcome heading. Those
+ * are identity, not decoration — binding them to [data-visual] would
+ * silently strip a deployment's name when decoration is switched off.
+ * The components apply the class only for the GENIE.AI brand, so the
+ * rule stays inert for every other flavour.
  */
 html[data-visual='on'] .genie-living-intelligence {
   --gli-blue: var(--accent);
   --gli-cyan: color-mix(in oklch, var(--accent) 52%, #5de9f4);
   --gli-violet: color-mix(in oklch, var(--accent) 50%, #b875f8);
   --gli-frost-border: color-mix(in srgb, var(--accent) 17%, var(--border));
-  --gli-deco-strength: 0.65;
+  /* The waves carry their own contrast, so they read at near-full
+     strength on the light surface and are held back on the dark one,
+     where they would otherwise glare. */
+  --gli-deco-strength: 0.92;
+  /* The corner network keeps the same strength in both themes. */
+  --gli-corner-strength: 0.85;
   min-width: 0;
   isolation: isolate;
 }
 
 html[data-theme='dark'][data-visual='on'] .genie-living-intelligence,
 html[data-visual='on'] .dark-mode .genie-living-intelligence {
-  --gli-deco-strength: 0.82;
+  --gli-deco-strength: 0.53;
   --gli-frost-border: color-mix(in srgb, var(--accent) 27%, var(--border));
 }
 
@@ -109,6 +124,11 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::before {
      width — both the 114 px left and the 69 px right transparent margins
      fall outside the box (measured L=0, R≈0 at 1775×886 and 1920×960). */
   background: var(--visual-hero) center 45.7% / 115% auto no-repeat;
+  /* Dissolve the lower edge into the panel so the heading reads as
+     sitting inside the artwork rather than below a hard cut. The ramp
+     starts where the globe's own falloff already thins out. */
+  -webkit-mask-image: linear-gradient(to bottom, rgb(0 0 0 / 1) 0 72%, transparent 100%);
+  mask-image: linear-gradient(to bottom, rgb(0 0 0 / 1) 0 72%, transparent 100%);
   pointer-events: none;
   filter: drop-shadow(0 12px 30px color-mix(in srgb, var(--accent) 16%, transparent));
   animation: gli-enter 650ms ease-out both;
@@ -118,7 +138,14 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::after {
   content: '';
   position: absolute;
   inset: auto 0 0;
-  height: min(40%, 280px);
+  /* The asset's painted band is only 5.05:1 — it fills the 3.46:1
+     viewBox's full width but paints only y 162-518 of its 520 rows, so
+     the top third of the viewBox is transparent. Sizing the box from the
+     viewBox would spend its height on that empty strip; this height
+     keeps the whole painted band inside the box at every measured
+     viewport (194 px of ink on the 981 px overlay at 1775x886, 224 px
+     on the wider one at 1920x960). */
+  height: min(28%, 300px);
   background: var(--visual-waves) bottom / 100% auto no-repeat;
   opacity: var(--gli-deco-strength);
   /* Multiply sinks the light-blue strokes into the white surface (light
@@ -163,10 +190,14 @@ html[data-visual='on'] .genie-living-intelligence .sidebar:not(.collapsed)::befo
   position: absolute;
   top: 0;
   right: 0;
-  width: min(48%, 190px);
-  height: 205px;
+  /* `contain` fits the whole viewBox, and this asset paints only its
+     right 49 % and top 88 %. A 190x205 box therefore showed 64 px of
+     artwork; 300x420 shows 131 px, close to the ~160 px the approved
+     mockup gives it, and keeps the painted band inside the box. */
+  width: min(78%, 300px);
+  height: 420px;
   background: var(--visual-corner) right top / contain no-repeat;
-  opacity: var(--gli-deco-strength);
+  opacity: var(--gli-corner-strength);
   pointer-events: none;
   z-index: 0;
 }
@@ -199,8 +230,8 @@ html[data-visual='on'] .genie-living-intelligence .document-item {
   }
 
   html[data-visual='on'] .genie-living-intelligence .sidebar:not(.collapsed)::before {
-    width: 125px;
-    height: 140px;
+    width: 150px;
+    height: 230px;
     opacity: 0.36;
   }
 }
@@ -244,4 +275,79 @@ html[data-visual='on'] .genie-living-intelligence.gli-no-corner .sidebar::before
 
 html[data-visual='on'] .genie-living-intelligence.gli-no-waves .quick-help-overlay::after {
   display: none;
+}
+
+/*
+ * The brand wordmark - the gradient painted into the navbar name and the
+ * brand inside the welcome heading. Ungated, for the reason given in the
+ * preamble: this is identity, and it must survive decoration being
+ * switched off. Both call sites pass the brand through as a slot, so
+ * the name is rendered as text and stays selectable and translatable.
+ *
+ * Two grounds, two ramps. The heading's mark sits on the panel surface,
+ * which is pale in light and deep navy in dark, so its ramp is themed.
+ * The navbar's mark sits on --navbar-bg, which config-loader writes once
+ * from theme.navbar.background and never re-derives per theme: that band
+ * is a saturated gradient in both themes, so the mark on it has to be
+ * light in both, and the navbar ramp tints the themed one towards white
+ * until it clears 3.3:1 against the band's violet end. The approved
+ * mockup sidesteps this by giving its light navbar a pale band; the
+ * navbar's own controls are pinned to --accent-fg, the brand colour
+ * lightened, so a pale band is not available here.
+ *
+ * background-clip: text is what keeps the mark resolution-independent -
+ * it is live type, not an image, so it re-rasterises at any zoom. The
+ * color fallback covers a renderer that honours neither background-clip
+ * nor -webkit-text-fill-color; without it the name would be invisible.
+ */
+:root {
+  --brand-mark-from: #2e79fc;
+  --brand-mark-mid: #755cf8;
+  --brand-mark-to: #a036f7;
+
+  --brand-mark-navbar-from: color-mix(in oklch, var(--brand-mark-from) 40%, white);
+  --brand-mark-navbar-mid: color-mix(in oklch, var(--brand-mark-mid) 40%, white);
+  --brand-mark-navbar-to: color-mix(in oklch, var(--brand-mark-to) 40%, white);
+}
+
+/*
+ * In dark the ramp is lifted rather than replaced: the mockup's dark
+ * heading samples #4ea3f8 and #9489f7 at the two positions visible in the
+ * crop, which these three stops match to within a few percent per channel,
+ * and they reach 8.6:1 on the deep panel where the light ramp would not
+ * clear 3:1 at all.
+ */
+html[data-theme='dark'],
+html.dark-mode,
+body.dark-mode {
+  --brand-mark-from: #58bcff;
+  --brand-mark-mid: #a48bff;
+  --brand-mark-to: #ec82ff;
+}
+
+.brand-wordmark {
+  display: inline-block;
+  background-image: linear-gradient(
+    100deg,
+    var(--brand-mark-from) 5%,
+    var(--brand-mark-mid) 62%,
+    var(--brand-mark-to) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: var(--accent);
+}
+
+.nav-bar .brand-wordmark {
+  background-image: linear-gradient(
+    100deg,
+    var(--brand-mark-navbar-from) 5%,
+    var(--brand-mark-navbar-mid) 62%,
+    var(--brand-mark-navbar-to) 100%
+  );
+  /* The band is saturated, so the no-background-clip fallback is the
+     navbar's own foreground rather than the accent, which is what the
+     heading on the panel surface wants. */
+  color: var(--navbar-fg, var(--accent-fg));
 }

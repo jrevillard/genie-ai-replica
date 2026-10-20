@@ -1396,7 +1396,8 @@ export default {
     newChat: 'Novo Chat',
     clearContext: 'Limpar contexto e iniciar uma nova conversa',
     unsavedChanges: 'Você tem alterações não salvas. Tem certeza de que deseja iniciar um novo chat?',
-    whatCanIHelp: 'Como posso ajudá-lo hoje?',
+    whatCanIHelp: 'Como o {brandwordmark} pode ajudá-lo hoje?',
+    quickHelpSubtitle: 'A sua porta de entrada para serviços públicos inteligentes.',
 
     queryContext: 'Contexto da Consulta',
     contextAdded: 'Contexto adicionado à sua consulta',

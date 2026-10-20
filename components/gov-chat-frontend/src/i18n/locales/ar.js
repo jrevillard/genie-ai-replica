@@ -1374,7 +1374,8 @@ export default {
     newChat: 'محادثة جديدة',
     clearContext: 'مسح السياق وبدء محادثة جديدة',
     unsavedChanges: 'لديك تغييرات غير محفوظة. هل أنت متأكد من أنك تريد بدء محادثة جديدة؟',
-    whatCanIHelp: 'كيف يمكنني مساعدتك اليوم؟',
+    whatCanIHelp: 'كيف يمكن لـ {brandwordmark} مساعدتك اليوم؟',
+    quickHelpSubtitle: 'بوابتك إلى الخدمات العامة الذكية.',
 
     queryContext: 'سياق الاستعلام',
     contextAdded: 'تم إضافة السياق إلى استفسارك',

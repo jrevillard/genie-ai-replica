@@ -1321,7 +1321,8 @@ export default {
     newChat: '新聊天',
     clearContext: '清除上下文并开始新对话',
     unsavedChanges: '您有未保存的更改。您确定要开始新聊天吗？',
-    whatCanIHelp: '今天我能帮您什么？',
+    whatCanIHelp: '今天 {brandwordmark} 能为您做些什么？',
+    quickHelpSubtitle: '您通往智能公共服务的门户。',
 
     queryContext: '查询上下文',
     contextAdded: '上下文添加到您的查询',

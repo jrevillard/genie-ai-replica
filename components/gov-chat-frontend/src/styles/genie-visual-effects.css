@@ -72,15 +72,18 @@ html[data-visual='on'] .genie-living-intelligence .chatbot-container {
  * on the chat window: the overlay is opaque, so anything painted on the
  * window behind it would never be seen.
  *
- * The mesh is sized to its natural 1600:580 aspect and pinned to the top
- * of the overlay. A vertical gradient on top of the mesh fades it to
- * surface above the card row, so the field behind the cards reads clean
- * while the mesh stays faintly present in the hero region.
+ * The mesh fades only across the card row (25-55 %), not as a monotonic
+ * ramp to the panel bottom. The cards hide the field on their own
+ * (--ds-card-bg is a solid color-mix), so the fade is a band, not a
+ * mask — the mesh stays faintly present in the hero and again below
+ * the cards, where the reference's particle field lives.
  */
 html[data-visual='on'] .genie-living-intelligence .quick-help-overlay {
   isolation: isolate;
   justify-content: flex-start;
-  background-image: linear-gradient(180deg, transparent 0 28%, var(--surface) 58% 100%), var(--visual-mesh);
+  background-image:
+    linear-gradient(180deg, transparent 0 25%, var(--surface) 40%, var(--surface) 55%, transparent 70% 100%),
+    var(--visual-mesh);
   background-position:
     center top,
     center top;
@@ -102,10 +105,10 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::before {
   margin-right: calc(-1 * var(--space-lg));
   margin-top: calc(-1 * var(--space-lg));
   height: clamp(180px, 28vw, 282px);
-  /* The 112% scales the asset so its 1592 px visible-art band fills the box
-     width; the asset's 114 px left and 69 px right transparent margins fall
-     outside the box. */
-  background: var(--visual-hero) center 45.7% / 112% auto no-repeat;
+  /* 115% scales the asset so its 1592 px visible-art band fills the box
+     width — both the 114 px left and the 69 px right transparent margins
+     fall outside the box (measured L=0, R≈0 at 1775×886 and 1920×960). */
+  background: var(--visual-hero) center 45.7% / 115% auto no-repeat;
   pointer-events: none;
   filter: drop-shadow(0 12px 30px color-mix(in srgb, var(--accent) 16%, transparent));
   animation: gli-enter 650ms ease-out both;
@@ -118,9 +121,17 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::after {
   height: min(40%, 280px);
   background: var(--visual-waves) bottom / 100% auto no-repeat;
   opacity: var(--gli-deco-strength);
+  /* Multiply sinks the light-blue strokes into the white surface (light
+     mode). In dark mode the strokes need to *lighten* the dark surface,
+     so we switch to screen — same blend-mode mechanism, opposite effect. */
   mix-blend-mode: multiply;
   pointer-events: none;
   z-index: 0;
+}
+
+html[data-theme='dark'][data-visual='on'] .genie-living-intelligence .quick-help-overlay::after,
+html[data-visual='on'] .dark-mode .genie-living-intelligence .quick-help-overlay::after {
+  mix-blend-mode: screen;
 }
 
 html[data-visual='on'] .genie-living-intelligence .quick-help-content {

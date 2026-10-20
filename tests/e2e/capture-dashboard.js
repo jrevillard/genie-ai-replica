@@ -23,7 +23,12 @@ const { loginViaUI } = require('./helpers/chatbot');
 
 const BASE_URL = process.env.BASE_URL || 'https://localhost';
 const OUT_DIR = path.join(__dirname, '..', '..', 'artifacts', 'living-intelligence');
-const VIEWPORT = { width: 1775, height: 886 };
+// Two viewports: 1775×886 is the reference, 1920×960 is what the user sees
+// in production (the welcome banner's full-bleed needs to hold at both).
+const VIEWPORTS = [
+  { label: '1775', width: 1775, height: 886 },
+  { label: '1920', width: 1920, height: 960 }
+];
 const THEMES = process.argv.includes('--theme')
   ? [process.argv[process.argv.indexOf('--theme') + 1]]
   : ['light', 'dark'];
@@ -119,28 +124,31 @@ const audit = () => {
   const browser = await chromium.launch();
   const results = {};
 
-  for (const theme of THEMES) {
-    const context = await browser.newContext({
-      viewport: VIEWPORT,
-      colorScheme: theme,
-      ignoreHTTPSErrors: true
-    });
-    const page = await context.newPage();
+  for (const viewport of VIEWPORTS) {
+    for (const theme of THEMES) {
+      const context = await browser.newContext({
+        viewport: { width: viewport.width, height: viewport.height },
+        colorScheme: theme,
+        ignoreHTTPSErrors: true
+      });
+      const page = await context.newPage();
 
-    await loginViaUI(page);
-    await page.waitForSelector('.quick-help-overlay', { timeout: 30000 });
-    // Wait for the splash overlay to fade out (5s display + 1s fade)
-    await page.waitForSelector('.splash-screen', { state: 'detached', timeout: 15000 }).catch(() => {});
-    await page.waitForTimeout(1500);
+      await loginViaUI(page);
+      await page.waitForSelector('.quick-help-overlay', { timeout: 30000 });
+      // Wait for the splash overlay to fade out (5s display + 1s fade)
+      await page.waitForSelector('.splash-screen', { state: 'detached', timeout: 15000 }).catch(() => {});
+      await page.waitForTimeout(1500);
 
-    const data = await page.evaluate(audit);
-    const file = path.join(OUT_DIR, `${theme}.png`);
-    await page.screenshot({ path: file, fullPage: false });
-    fs.writeFileSync(path.join(OUT_DIR, `${theme}.audit.json`), JSON.stringify(data, null, 2));
+      const data = await page.evaluate(audit);
+      data.viewport = { width: viewport.width, height: viewport.height };
+      const file = path.join(OUT_DIR, `${theme}-${viewport.label}.png`);
+      await page.screenshot({ path: file, fullPage: false });
+      fs.writeFileSync(path.join(OUT_DIR, `${theme}-${viewport.label}.audit.json`), JSON.stringify(data, null, 2));
 
-    results[theme] = { file, audit: path.join(OUT_DIR, `${theme}.audit.json`) };
-    console.log(`${theme}: ${file}`);
-    await context.close();
+      results[`${theme}-${viewport.label}`] = { file, audit: path.join(OUT_DIR, `${theme}-${viewport.label}.audit.json`) };
+      console.log(`${theme}-${viewport.label}: ${file}`);
+      await context.close();
+    }
   }
 
   await browser.close();

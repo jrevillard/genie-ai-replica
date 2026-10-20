@@ -659,7 +659,8 @@ class TestPhaseBoundIsAHardWall:
                     "f1",
                 )
 
-        results = _run(scenario())
+        results, degraded = _run(scenario())
+        assert degraded is True, "the phase was abandoned, so it must report degraded"
         assert len(results) == 4, results
         unlabelled = [r["text"] for r in results if not r["labels"]]
         assert not unlabelled, (
@@ -1283,6 +1284,67 @@ class TestTheKillRollbackCannotBeCancelled:
             "cancel aborts the retraction mid-cascade, leaving chunks in the graph and the "
             "document status unset"
         )
+
+
+class TestADegradedPhaseNeverReportsIngested:
+    """ "Ingested" claims the whole document landed. A degraded one must not say so.
+
+    An abandoned phase leaves real work undone — some chunks carry the document's
+    file labels instead of model labels, others raw text instead of generated
+    context — and the document was still being marked Ingested, which is an
+    operator-visible claim that it was not. The symptom then looks like a
+    labelling regression instead of the budget exhaustion that caused it.
+
+    "Ingested with Warnings" is not a new state: the API schema's Joi enum, the
+    i18n catalogue in every locale, and the admin dashboard's status badge
+    (`variant="warning"`) all already carry it. Nothing produced it.
+    """
+
+    def _run_ingest(self, monkeypatch, *, degraded):
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        dp = _stub_dataprep()
+        dp.db = MagicMock()
+        dp._fetch_all_labels = AsyncMock(return_value=["Tax:IVA"])
+        dp._load_and_chunk = AsyncMock(return_value=["chunk one", "chunk two"])
+        dp._run_guardrail = AsyncMock(return_value={"success": True})
+        dp._update_doc_status = AsyncMock()
+        dp._apply_contextualization = AsyncMock(side_effect=lambda c, i, f: (list(c), False))
+        dp._apply_labels = AsyncMock(
+            return_value=([{"text": "a", "labels": ["Tax:IVA"]}, {"text": "b", "labels": ["Tax:IVA"]}], degraded)
+        )
+        dp._process_batch = AsyncMock()
+        dp.ensure_vector_index = AsyncMock(return_value=(None, None))
+
+        from unittest.mock import MagicMock as MM
+
+        inp = MM(file_id="f1", file_path="/tmp/f1.pdf", graph_name="GRAPH", file_labels=[])
+
+        async def scenario():
+            with (
+                patch.object(dataprep, "ArangoGraph"),
+                patch.object(dataprep, "Document", side_effect=lambda **kw: MM(metadata=dict(kw))),
+            ):
+                return await dp.ingest_file_with_guardrail(inp, lock_file=None)
+
+        return _run(scenario()), dp
+
+    def test_a_degraded_phase_reports_ingested_with_warnings(self, monkeypatch):
+        _result, dp = self._run_ingest(monkeypatch, degraded=True)
+        statuses = [c.args[1] for c in dp._update_doc_status.call_args_list]
+        assert "Ingested" not in statuses, (
+            f"a document with an abandoned phase was reported as plainly Ingested: {statuses}"
+        )
+        assert statuses[-1] == "Ingested with Warnings", statuses
+
+    def test_a_clean_ingest_still_reports_ingested(self, monkeypatch):
+        """The new state must not become the default — it means something."""
+        _result, dp = self._run_ingest(monkeypatch, degraded=False)
+        statuses = [c.args[1] for c in dp._update_doc_status.call_args_list]
+        assert statuses[-1] == "Ingested", statuses
 
 
 class TestUnboundedPhaseSurvivesExternalCancellation:

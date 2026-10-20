@@ -342,11 +342,13 @@ class TestEnsureVectorIndexHook:
         async def fake_run_guardrail(self, chunks):
             return {"success": True, "message": "ok"}
 
+        # Both phases return (value, degraded); this test is about the vector
+        # index hook, and neither phase is degraded here.
         async def fake_apply_contextualization(self, chunks, *a, **kw):
-            return chunks
+            return chunks, False
 
         async def fake_apply_labels(self, chunks, *a, **kw):
-            return [{"text": c.get("text", ""), "labels": []} for c in chunks]
+            return [{"text": c.get("text", ""), "labels": []} for c in chunks], False
 
         async def fake_fetch_all_labels(self):
             return []

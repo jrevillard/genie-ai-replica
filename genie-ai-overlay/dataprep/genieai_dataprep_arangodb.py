@@ -1690,7 +1690,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             results.append({"text": text, "labels": labels})
             if n % 200 == 0 or n == total:
                 logger.info(f"Labeling progress: {n}/{total} chunks finalized")
-        return results
+        return results, timed_out
 
     def _build_doc_context(self, chunks: list[str], input, budget: int = DATAPREP_CONTEXTUAL_DOC_BUDGET) -> str:
         """Build the document-context string fed to the context-generation LLM.
@@ -1721,16 +1721,20 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             )
         return "\n".join(parts)
 
-    async def _apply_contextualization(self, chunks: list[str], input, file_id: str) -> list[str]:
+    async def _apply_contextualization(self, chunks: list[str], input, file_id: str) -> tuple[list[str], bool]:
         """Prepend an LLM-generated document context to each chunk.
 
         No-op when CONTEXTUAL_RETRIEVAL_ENABLED is false (returns chunks
-        unchanged). When enabled, returns contextualized texts (same order and
-        length) of the form ``<context>\\n\\n<chunk>``. Chunks whose context
-        generation fails fall back to the raw chunk so ingestion never blocks.
+        unchanged). When enabled, returns ``(contextualized_texts, degraded)``
+        — the texts in the same order and length, of the form
+        ``<context>\\n\\n<chunk>``. Chunks whose context generation fails fall
+        back to the raw chunk so ingestion never blocks.
+
+        ``degraded`` means the phase ran out of budget with work unfinished, and
+        is what stops the document from being reported as plainly Ingested.
         """
         if not CONTEXTUAL_RETRIEVAL_ENABLED or not chunks:
-            return list(chunks)
+            return list(chunks), False
 
         # Build the client outside the per-chunk retry loop. If construction fails
         # (e.g. model auto-detection failure on the GPU node), skip contextualization
@@ -1748,7 +1752,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 "Contextualization",
                 f"vLLM client init failed ({err}); using raw chunks.",
             )
-            return list(chunks)
+            return list(chunks), True
 
         model = DATAPREP_CONTEXTUAL_MODEL.strip() or default_model
         total = len(chunks)
@@ -1757,7 +1761,8 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         # chunk (uses a larger doc budget — it is a single call; N× cheaper).
         if CONTEXTUAL_STRATEGY == "doc_level":
             doc_context = self._build_doc_context(chunks, input, DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL)
-            return await self._contextualize_doc_level(client, model, doc_context, chunks, file_id, total)
+            texts = await self._contextualize_doc_level(client, model, doc_context, chunks, file_id, total)
+            return texts, False  # one call for the document; no phase to run out of
 
         # per_chunk (default): batched calls so the document context lives once
         # per batch (system prompt), not per chunk; per-chunk fallback on any
@@ -1839,7 +1844,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 f"Contextual Retrieval: {with_context}/{total} chunks contextualized "
                 f"({raw_count} using raw text after batch + per-chunk recovery failed)."
             )
-        return result
+        return result, timed_out
 
     async def _context_batch_call(self, client, model, system_prompt, batch, file_id) -> dict[int, str]:
         """One LLM call generating contexts for a batch of chunks.
@@ -2461,20 +2466,28 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         return results
 
     async def _apply_labels(self, plain_chunks: list[str], all_labels: list[str], file_labels: list[str], file_id: str):
+        """Returns ``(labelled_docs, degraded)``.
+
+        ``degraded`` is True only when the LLM phase ran out of budget. The
+        non-LLM strategies have no budget and no failure mode of their own, and
+        an empty taxonomy is a configured state rather than a degraded one.
+        """
         if not all_labels:
             await self._write_ingestion_log(
                 file_id, "WARN", "Labeling", "No labels found in Taxonomy. Using only file labels."
             )
-            return [{"text": c, "labels": file_labels if file_labels else []} for c in plain_chunks]
+            return [{"text": c, "labels": file_labels if file_labels else []} for c in plain_chunks], False
 
         logger.info(f"Labeling using strategy: {LABELING_STRATEGY}")
 
         if LABELING_STRATEGY == "embedding":
             # Offload CPU-bound embedding calculations to a thread
-            return await asyncio.to_thread(self._label_with_embedding, plain_chunks, all_labels)
+            docs = await asyncio.to_thread(self._label_with_embedding, plain_chunks, all_labels)
+            return docs, False
         elif LABELING_STRATEGY == "bm25":
             # Offload CPU-bound BM25 calculations to a thread
-            return await asyncio.to_thread(self._label_with_bm25, plain_chunks, all_labels)
+            docs = await asyncio.to_thread(self._label_with_bm25, plain_chunks, all_labels)
+            return docs, False
         else:
             # Default to LLM (with retry fix and advisory logic)
             return await self._label_with_llm(plain_chunks, all_labels, file_labels, file_id)
@@ -2606,13 +2619,25 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     # chunk so the embedding carries the document's subject (see
                     # spec-contextual-retrieval.md). No-op (returns chunks unchanged)
                     # when CONTEXTUAL_RETRIEVAL_ENABLED=false.
-                    contextualized = await self._apply_contextualization(original_chunks, input, input.file_id)
+                    contextualized, contextual_degraded = await self._apply_contextualization(
+                        original_chunks, input, input.file_id
+                    )
                     # Decoupled mode (CONTEXTUAL_LABEL_RAW, default true): label the
                     # RAW chunk (the context prefix distorts labeling — over/under-
                     # label) and use the contextualized text ONLY for the embedding.
                     # When false, the context is fed to both (label contextualized).
                     label_input = original_chunks if CONTEXTUAL_LABEL_RAW else contextualized
-                    labelled_docs = await self._apply_labels(label_input, all_labels, file_labels, input.file_id)
+                    labelled_docs, labelling_degraded = await self._apply_labels(
+                        label_input, all_labels, file_labels, input.file_id
+                    )
+                    degraded_phases = [
+                        name
+                        for name, hit in (
+                            ("Contextual Retrieval", contextual_degraded),
+                            ("LLM labeling", labelling_degraded),
+                        )
+                        if hit
+                    ]
 
                     # 5. Graph Insertion (BATCHED & CONCURRENT)
                     # BREAKING CHANGE (v1.3 → v1.5): default changed from "genie_graph" to "GRAPH".
@@ -2709,7 +2734,29 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     )
 
                     # 6. Final Status Update
-                    await self._update_doc_status(input.file_id, "Ingested", chunk_count=len(chunks))
+                    # A phase that ran out of budget leaves the document
+                    # incomplete: some chunks carry the document's file labels
+                    # instead of model labels, or raw text instead of generated
+                    # context. "Ingested" claims the whole document landed, so a
+                    # degraded one is reported as "Ingested with Warnings" — a
+                    # state the API schema, the i18n catalogue and the admin
+                    # badge all already carry, and which nothing produced until
+                    # now. Not retracted: the batches that did finish are real
+                    # work, and the warning state is what makes the shortfall
+                    # visible instead of silent.
+                    ingest_status = "Ingested with Warnings" if degraded_phases else "Ingested"
+                    await self._update_doc_status(input.file_id, ingest_status, chunk_count=len(chunks))
+                    if degraded_phases:
+                        await self._write_ingestion_log(
+                            input.file_id,
+                            "WARN",
+                            "System",
+                            f"Ingestion completed DEGRADED — {', '.join(degraded_phases)} ran out of its "
+                            f"{DATAPREP_LLM_PHASE_TIMEOUT_SECONDS:g}s budget and fell back per chunk. "
+                            "Status set to 'Ingested with Warnings'. Raise "
+                            "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS, or the per-call "
+                            "MODEL_LLM_TIMEOUT_SECONDS together with it.",
+                        )
                     await self._write_ingestion_log(
                         input.file_id, "INFO", "System", "Ingestion completed successfully."
                     )

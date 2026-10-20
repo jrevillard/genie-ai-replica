@@ -343,6 +343,36 @@ describe('fileController', () => {
         expect(metadataService.updateMetadata).toHaveBeenCalledWith('f1', { chunk_count: 0 });
       });
 
+      it('completes the re-ingest when zeroing the chunk count fails', async () => {
+        const metadataService = require('../../../services/metadataService');
+        // The graph is already empty by this point, so a metadata write failure
+        // is cosmetic. Aborting on it would strand the document cleared but
+        // still showing the previous run's count — the exact state the zeroing
+        // exists to prevent — and would report a failed re-ingest for a
+        // successful one.
+        // Only the CLEARING write fails, i.e. the first of the two. The success
+        // path writes the real count afterwards and that one is pre-existing
+        // behaviour for every re-ingest, not this MR's business — pinning it
+        // here would quietly widen the change to a path nobody asked about.
+        //
+        // Distinguished by ORDER, not by value: clearedPreviously makes the
+        // success-path write `chunk_count: 0` too, so both calls carry the
+        // same number.
+        let calls = 0;
+        metadataService.updateMetadata = jest.fn(async () => {
+          calls += 1;
+          if (calls === 1) throw new Error('arango down');
+          return {};
+        });
+        axios.post.mockResolvedValue({
+          data: { success: true, status: 200, message: 'Ingestion started in background.' }
+        });
+
+        const result = await fileController._ingestFileById('f1');
+
+        expect(result.success).toBe(true);
+      });
+
       it('keeps the ingestion log: it is the diagnosis the operator is reading', async () => {
         const fileService = require('../../../services/fileService');
         await fileController._ingestFileById('f1');

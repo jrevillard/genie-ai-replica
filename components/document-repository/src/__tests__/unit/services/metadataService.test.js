@@ -262,9 +262,14 @@ describe('metadataService', () => {
 
       jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
 
+      // Case-insensitive on BOTH sides. The stored value is capitalised
+      // ("Ingested with Warnings") and the parameter is whatever the caller
+      // passed, so an exact `== @status` matches nothing for any status an
+      // operator can pick. fileService's own dataprepStatus filter has always
+      // used LOWER() on both sides; this was the only one that did not.
       await metadataService.searchMetadata(null, null, null, null, null, null, null, null, 'Ingested');
       const query = mockDb.query.mock.calls[0][0];
-      expect(query).toContain('file.dataprep.status == @status');
+      expect(query).toContain('LOWER(file.dataprep.status) == LOWER(@status)');
     });
 
     it('should add FILTER for language', async () => {

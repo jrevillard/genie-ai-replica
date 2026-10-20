@@ -1064,7 +1064,20 @@ class FileController {
         };
       }
       clearedPreviously = true;
-      await metadataService.updateMetadata(fileId, { chunk_count: 0 });
+      // The graph is already empty at this point, so a failure to zero the
+      // count is cosmetic, not structural: it leaves the document showing the
+      // PREVIOUS run's chunk_count over an empty graph until the re-ingest
+      // reports a new one. Aborting here instead would strand the document in
+      // exactly the state this block exists to avoid — cleared, but with a count
+      // describing chunks that no longer exist — and would make a metadata
+      // write failure look like a failed re-ingest.
+      try {
+        await metadataService.updateMetadata(fileId, { chunk_count: 0 });
+      } catch (countErr) {
+        logger.warn(
+          `[FILE-CONTROLLER] Could not zero chunk_count for cleared file ${fileId}, continuing: ${countErr.message}`
+        );
+      }
     }
     const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.ingestPath}`;
     logger.debug(`[FILE-CONTROLLER] Sending file to dataprep service at ${dataprepUrl}`);

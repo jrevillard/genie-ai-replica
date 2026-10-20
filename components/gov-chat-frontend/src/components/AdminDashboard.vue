@@ -3130,8 +3130,24 @@ export default {
         if (s === 'pending') return 'Crawl Scheduled';
       }
 
-      // 3. Fallback to dataprep status or 'Unknown'
-      return doc.dataprep ? doc.dataprep.status : 'Unknown';
+      // 3. Fallback to dataprep status or 'Unknown'.
+      //
+      // Translated, unlike the crawl arms above: this MR added a TRANSLATED
+      // <option> for "Ingested with Warnings" to the filter a few lines up, so
+      // leaving the badge in raw English put two languages on one screen for
+      // the same value. The crawl statuses stay as they were — pre-existing,
+      // and translating them belongs with their own keys rather than here.
+      if (!doc.dataprep || !doc.dataprep.status) return 'Unknown';
+      const keys = {
+        pending: ['statusPending', 'Pending'],
+        ingested: ['statusIngested', 'Ingested'],
+        'ingested with warnings': ['statusWarning', 'Ingested with Warnings'],
+        retracted: ['statusRetracted', 'Retracted'],
+        ingesting: ['statusIngesting', 'Ingesting'],
+        'ingestion error': ['statusError', 'Ingestion Error']
+      };
+      const key = keys[String(doc.dataprep.status).toLowerCase().trim()];
+      return key ? this.translate(`admin.documents.${key[0]}`, key[1]) : doc.dataprep.status;
     },
 
     selectAllDocuments(event) {

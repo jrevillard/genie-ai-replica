@@ -91,7 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   filter values in production, so an id written with separators
   (`Contrat_de_Jean_Dupont_Q3.pdf`) still reaches the trace store. Constraining
   it means validating the ingest payload, not changing the vocabulary. (#1093)
-  **What the sweep sees, precisely:** 97 of the 105 registered attribute keys are
+  **What the sweep sees, precisely:** 98 of the 106 registered attribute keys are
   read from the source. The eight it cannot read are named in
   `genie-ai-overlay/tests/test_span_attrs.py` — seven
   (`llm.request.{max_tokens,top_p,temperature,frequency_penalty}`,

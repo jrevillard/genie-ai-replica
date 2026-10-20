@@ -1449,10 +1449,29 @@ describe('AdminDashboard', () => {
       expect(wrapper.vm.getDisplayStatus(doc)).toBe('Crawl Scheduled');
     });
 
-    it('falls back to dataprep.status when no crawl job', () => {
+    it('translates dataprep.status when no crawl job', () => {
+      // Translated, not passed through: the filter on this same screen offers a
+      // TRANSLATED option for each of these values, so an English badge put two
+      // languages side by side. Only the LABEL is translated — the badge colour
+      // comes from getStatusVariant(doc), which reads doc.dataprep.status
+      // directly, so this cannot change how a status is styled.
       const wrapper = createAdminDashboardWrapper();
-      const doc = { dataprep: { status: 'ingested' } };
-      expect(wrapper.vm.getDisplayStatus(doc)).toBe('ingested');
+      expect(wrapper.vm.getDisplayStatus({ dataprep: { status: 'ingested' } })).toBe('Ingested');
+      expect(wrapper.vm.getDisplayStatus({ dataprep: { status: 'Ingested' } })).toBe('Ingested');
+      expect(wrapper.vm.getDisplayStatus({ dataprep: { status: 'Ingested with Warnings' } })).toBe(
+        'Ingested with Warnings'
+      );
+      expect(wrapper.vm.getDisplayStatus({ dataprep: { status: 'ingested with warnings' } })).toBe(
+        'Ingested with Warnings'
+      );
+    });
+
+    it('passes an unrecognised dataprep status through unchanged', () => {
+      // The translation table is not a gate: a status this build has never
+      // heard of must still render, because swallowing it would show "Unknown"
+      // for a document that is in fact indexed.
+      const wrapper = createAdminDashboardWrapper();
+      expect(wrapper.vm.getDisplayStatus({ dataprep: { status: 'Quarantined' } })).toBe('Quarantined');
     });
 
     it('returns "Unknown" when no dataprep and no crawl job', () => {

@@ -482,7 +482,7 @@ def _warn_if_phase_ceiling_too_low(phase_seconds: float, retries: int, per_call_
         "return make labelling degrade to per-chunk and then to file labels — a "
         "symptom that reads as a labelling-quality regression rather than as a "
         "misconfiguration. Raise DATAPREP_LLM_PHASE_TIMEOUT_SECONDS above %.0f s, "
-        "or lower LABEL_BATCH_SIZE / raise DATAPREP_MAX_CONCURRENT_BATCHES to "
+        "or lower DATAPREP_LLM_LABEL_BATCH_SIZE / raise DATAPREP_MAX_CONCURRENT_BATCHES to "
         "shorten the wave count.",
         phase_seconds,
         waves,
@@ -1187,8 +1187,17 @@ async def _gather_with_phase_budget_inner(
         # simply outran its budget.
         abandoned = len(pending)
     finally:
-        # Cancel whatever is still running — on the timeout path AND on the
-        # error path — so no task outlives this call holding a semaphore slot.
+        # Cancel whatever is still running, on the timeout path AND on the
+        # error path, and give it a bounded window to notice.
+        #
+        # Cancelling is a REQUEST, not a guarantee: a coroutine that swallows
+        # CancelledError, or that is parked in a non-cancellable await, keeps
+        # its semaphore slot after this returns. That is bounded and safe for
+        # the LLM phases — their awaits are cancellation-cooperative and each
+        # attempt has a budget of its own, so an abandoned one finishes on its
+        # own — but it means the phase can return `timed_out` while a straggler
+        # is still writing. Do not read this block as "nothing runs after we
+        # return"; read it as "nothing runs unbounded after we return".
         if pending:
             for task in pending:
                 task.cancel()

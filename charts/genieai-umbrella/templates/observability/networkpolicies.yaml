@@ -123,15 +123,29 @@ spec:
           port: 53
     # Kubernetes API. The agent's k8sattributes processor
     # (auth_type: serviceAccount) watches pods/namespaces to attach
-    # k8s.pod.* and service.name to each log line; without this rule it
-    # logs auth/connection errors and every row stays un-enriched.
+    # k8s.pod.* and service.name to each log line; without access every
+    # row stays un-enriched.
+    #
+    # A NetworkPolicy cannot NAME the API server: it is not a pod, so a
+    # namespaceSelector on `default` selects no peer at all (proved on
+    # the laptop's Calico: the rule was in place and the traffic went
+    # through anyway, because the destination is the control plane's
+    # host endpoint). Only a CIDR can express it — the same shape as
+    # the document-repository's crawlAllowedCIDRs. Empty (the default)
+    # means the CNI's own default applies, which is what the laptop
+    # runs on: Calico's failsafe ports include the API server's 6443.
+    {{- with .Values.observability.collectorAgent.apiServerCIDRs }}
     - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: default
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . }}
+        {{- end }}
       ports:
         - protocol: TCP
           port: 443
+        - protocol: TCP
+          port: 6443
+    {{- end }}
     # Forward to the collector gateway (OTLP/HTTP :4318) in the stack
     # namespace — the gateway pods carry the otel-operator managed-by
     # label.

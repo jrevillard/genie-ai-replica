@@ -114,6 +114,13 @@ spec:
           max_interval: 30s
           max_elapsed_time: 300s
         timeout: 15s
+{{- else }}
+      # Traces sink when the traces tier is off. Same reasoning as the
+      # metrics `nop` above: the app SDKs build a TracerProvider whenever
+      # ENABLE_OBSERVABILITY=1, and the OTLP receiver only registers
+      # /v1/traces when a traces pipeline consumes it — without one,
+      # every span export 404s and retries forever.
+      nop/traces: {}
 {{- end }}
     extensions:
       health_check:
@@ -155,5 +162,10 @@ spec:
           receivers: [otlp]
           processors: [memory_limiter, batch]
           exporters: [otlphttp/victoriatraces]
+{{- else }}
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter]
+          exporters: [nop/traces]
 {{- end }}
 {{- end }}

@@ -235,6 +235,13 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
+  # Render the storage class ONLY when set: an empty-string
+  # storageClassName means "NO default storage class" and strands the
+  # PVC on most clusters. Same contract as the document-repository and
+  # redis PVCs.
+  {{- with .Values.pluggable.storageClassName }}
+  storageClassName: {{ . }}
+  {{- end }}
   resources:
     requests:
       storage: {{ .Values.services.clamav.cache.size | default "2Gi" }}

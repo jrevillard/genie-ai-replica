@@ -23,13 +23,18 @@
 {{- $t := .tier -}}
 {{- $subs := list }}
 {{- if $t.metrics -}}
-{{- $subs = concat $subs (list (dict "inputName" "DS_VICTORIAMETRICS" "datasourceName" "victoriametrics") (dict "inputName" "DS_PROMETHEUS" "datasourceName" "victoriametrics") (dict "inputName" "datasource" "datasourceName" "victoriametrics")) -}}
+{{- $subs = concat $subs (list (dict "inputName" "DS_VICTORIAMETRICS" "datasourceName" "victoriametrics") (dict "inputName" "DS_PROMETHEUS" "datasourceName" "victoriametrics")) -}}
 {{- end -}}
 {{- if $t.traces -}}
 {{- $subs = concat $subs (list (dict "inputName" "DS_VICTORIATRACES" "datasourceName" "victoriatraces")) -}}
 {{- end -}}
 {{- if $t.logs -}}
-{{- $subs = concat $subs (list (dict "inputName" "DS_VICTORIALOGS" "datasourceName" "victorialogs")) -}}
+{{- /* The bare "datasource" placeholder belongs to the LOGS datasource:
+     every panel of service-logs.json is a
+     "victoriametrics-logs-datasource" panel, and the operator's
+     substitution is a blind ReplaceAll — pointing it at the Prometheus
+     datasource makes the Logs panels query the wrong backend. */}}
+{{- $subs = concat $subs (list (dict "inputName" "DS_VICTORIALOGS" "datasourceName" "victorialogs") (dict "inputName" "datasource" "datasourceName" "victorialogs")) -}}
 {{- end -}}
 {{- if $subs }}
   datasources:
@@ -164,7 +169,14 @@ spec:
        a path traversal in Helm's `get`. */ -}}
 {{- range $group := ($alertFile | fromYaml).groups }}
 {{- $any := or $.Values.observability.metrics.enabled $.Values.observability.logs.enabled $.Values.observability.traces.enabled }}
-{{- $needsMetrics := or (eq $group.name "observability.vm_storage") (eq $group.name "observability.pipeline_health") }}
+{{- /* Every group's queries are PromQL over the COLLECTOR's own metrics
+       (otelcol_receiver_accepted_log_points, vt_http_errors_total,
+       vm_free_disk_space_bytes, ...) — they live in VictoriaMetrics, not
+       in the log/trace store the rule is ABOUT. A group that queries
+       "victoriametrics" therefore needs the METRICS tier whatever its
+       subject is: without it the datasource is not provisioned and the
+       rule can never evaluate, while the pipeline stays green. */}}
+{{- $needsMetrics := true }}
 {{- $needsLogs := or (eq $group.name "observability.vlog_ingestion") (eq $group.name "observability.otel_log_stamping") (eq $group.name "observability.pipeline_health") }}
 {{- $needsTraces := or (eq $group.name "observability.vtrace_ingestion") (eq $group.name "observability.pipeline_health") }}
 {{- $onMetrics := or (not $needsMetrics) $.Values.observability.metrics.enabled }}
@@ -175,7 +187,12 @@ spec:
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaAlertRuleGroup
 metadata:
-  name: {{ $group.name | replace "." "-" }}
+  # RFC 1123: lowercase alphanumerics and "-", no underscore. The group
+  # names carry both a dot and an underscore ("observability.vm_storage"),
+  # so both have to be replaced — a name with an underscore is rejected
+  # by the API server, and every GrafanaAlertRuleGroup in the release
+  # would fail to apply (no alerting at all).
+  name: {{ $group.name | replace "." "-" | replace "_" "-" }}
   namespace: {{ $.Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" $.Chart "Release" $.Release "Values" $.Values "component" "alerts") | nindent 4 }}

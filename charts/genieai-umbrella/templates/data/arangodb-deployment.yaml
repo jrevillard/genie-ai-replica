@@ -137,5 +137,7 @@ spec:
     passwordSecretNames:
       root: arango-root-secret
   imagePullPolicy: IfNotPresent
+{{- else -}}
+{{- fail (printf "data.arangodb.mode must be \"single\" or \"cluster\", got %q" $mode) -}}
 {{- end -}}
 {{- end -}}

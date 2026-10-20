@@ -78,6 +78,13 @@ observability:
   # when the cluster-side Collector Service exposes a non-default
   # port (e.g. port collisions on a shared node).
   collectorPort: 4318
+  # Collector image for the GATEWAY, applied only when the metrics tier
+  # is on: it is the one signal that needs prometheusremotewrite, and the
+  # operator's default image (the `k8s` distribution) has no prometheus
+  # exporter — the collector then refuses to start and the logs and
+  # traces pipelines die with it. The filelog agent keeps the operator
+  # default: it only forwards over otlphttp.
+  collectorImage: "ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.161.0"
   # The filelog agent's k8sattributes processor needs the Kubernetes API.
   # A NetworkPolicy cannot name the API server (it is not a pod), so the
   # peer is a CIDR: list the control plane's address range here. Empty

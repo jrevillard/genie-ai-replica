@@ -3078,6 +3078,48 @@ chart:lint:
           docs = [d for d in yaml.load_all(open(path), Loader=Strict) if d]
           print("%s: %d documents, strict parse OK" % (path, len(docs)))
       PY
+    - |
+      cat > /tmp/cluster-scope-check.py <<'PY'
+      # Cluster-scoped resources are the only thing that can make two
+      # GENIE releases collide on one cluster: a cluster-scoped name that
+      # does not carry the release name means release B fails its install
+      # with "already exists" (and release A's uninstall removes a class
+      # or role the other still needs).
+      #
+      # A name may carry EITHER the release name (chart-owned resources) or
+      # the namespace (the gateway-helm subchart names its topology-injector
+      # webhook after the namespace it installs into) — both are stable
+      # across a second release in a different namespace / under a different
+      # release name.
+      #
+      # Usage: cluster-scope-check.py <release> <namespace> <n-allowed> <allowed>... <render>...
+      import sys
+      import yaml
+
+      CLUSTER_SCOPED = {
+          "ClusterRole", "ClusterRoleBinding", "GatewayClass",
+          "CustomResourceDefinition", "PriorityClass", "APIService",
+          "MutatingWebhookConfiguration", "ValidatingWebhookConfiguration",
+          "StorageClass", "CSIDriver", "IngressClass", "Node",
+      }
+
+      release, namespace, n_allowed = sys.argv[1], sys.argv[2], int(sys.argv[3])
+      allowed = set(sys.argv[4:4 + n_allowed])
+      paths = sys.argv[4 + n_allowed:]
+      for path in paths:
+          for doc in yaml.safe_load_all(open(path)):
+              if not doc or doc.get("kind") not in CLUSTER_SCOPED:
+                  continue
+              name = doc["metadata"]["name"]
+              if name in allowed or release in name or namespace in name:
+                  print("ok cluster-scoped %s/%s" % (doc["kind"], name))
+                  continue
+              raise SystemExit(
+                  "cluster-scoped %s/%s carries neither the release name (%s), the "
+                  "namespace (%s) nor an explicit allow-list entry — a second GENIE "
+                  "release on this cluster would fail with 'already exists'"
+                  % (doc["kind"], name, release, namespace))
+      PY
     - helm dependency update charts/genieai-umbrella
   script:
     # The realm file is duplicated: this copy is for the chart's
@@ -3153,6 +3195,9 @@ chart:lint:
     - kubeconform -summary -ignore-missing-schemas -kubernetes-version 1.33.0 /tmp/rendered-full.yaml
     - kubeconform -summary -ignore-missing-schemas -kubernetes-version 1.33.0 /tmp/rendered-incluster.yaml
     - python3 /tmp/strict-yaml.py /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-incluster.yaml
+    - >-
+      python3 /tmp/cluster-scope-check.py test genieai 1 envoy
+      /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-incluster.yaml
   rules:
     # First-match semantics: a bare second merge_request_event rule would
     # make this job run on every MR and render the changes filter dead.

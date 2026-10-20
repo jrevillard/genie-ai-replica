@@ -1437,6 +1437,7 @@ services:
       # Control-plane budget for the backend / document-repository calls on the
       # chat path (core/model_http_policy.py).
       MODEL_CONTROL_PLANE_TIMEOUT_SECONDS: ${MODEL_CONTROL_PLANE_TIMEOUT_SECONDS:-30}
+      MODEL_CONNECT_TIMEOUT_SECONDS: ${MODEL_CONNECT_TIMEOUT_SECONDS:-30}
       # The model-id probe behind the TTL cache, shared with the retriever and
       # dataprep. Same knob, same 10 s: a failure degrades to the configured
       # model id rather than propagating.

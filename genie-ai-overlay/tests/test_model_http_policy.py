@@ -18,6 +18,7 @@ default in production.
 import ast
 import importlib
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -193,6 +194,203 @@ class TestRetrieverProbeErrorHandling:
             f"handler order is {names}: the catch-all comes first, so every AuthenticationError is "
             "swallowed by it and the 'API Key is invalid' branch is dead code that reads as a "
             "working diagnostic"
+        )
+
+
+class TestEveryServiceReceivesTheKnobsItsCodeReads:
+    """A knob a service's code reads but its container does not get is dead.
+
+    This family keeps recurring: chatqna's control-plane sessions read the
+    connect ceiling, but the compose block did not inject it, so an operator
+    raising it would have moved the reranker and dataprep and left chatqna
+    alone — the "raises the knob, sees it change in one service and not
+    another" case this module's own docstring denies.
+
+    The mapping is derived, not declared: a service's Dockerfile names the
+    overlay directory it runs, that directory's modules are scanned for the
+    `MODEL_*` names they read, and the service's compose `environment:` block
+    must carry every one of them. A declared list would rot exactly like the
+    hand-maintained lists this MR has been fixing.
+    """
+
+    @staticmethod
+    def _service_block(compose: str, service: str) -> str:
+        """The text of ONE service's block, bounded by the next service.
+
+        Bounded, because an unbounded slice reads every LATER service's
+        environment too — and a guard that sees the whole tail of the file
+        passes whatever it is supposed to catch. The first version did that
+        and reported a service as fully wired when its knob had just been
+        deleted from it.
+        """
+        start = compose.find(f"\n  {service}:\n")
+        if start == -1:
+            return ""
+        rest = compose[start + 1 :]
+        # Skip the service's OWN declaration before looking for the next one.
+        # The end-pattern matches that line too, so searching the whole `rest`
+        # found the service as its own end and returned an empty block — which
+        # is why the guard passed with a knob deleted from the service.
+        _, _, body = rest.partition("\n")
+        end = re.search(r"^  [a-z0-9_-]+:\s*$", body, re.M)
+        return body[: end.start()] if end else body
+
+    @staticmethod
+    def _service_source_dir(compose: str, service: str) -> Path | None:
+        """The overlay directory a service's image is built from, if any."""
+        block = TestEveryServiceReceivesTheKnobsItsCodeReads._service_block(compose, service)
+        m = re.search(r"dockerfile:\s*(genie-ai-overlay/([a-z0-9_]+)/Dockerfile-[^\s]+)", block)
+        return OVERLAY_ROOT / m.group(2) if m else None
+
+    @staticmethod
+    def _env_names(block: str) -> set[str]:
+        """The env-var names a compose service's environment block declares.
+
+        Scans the ``environment:`` sub-block and stops when the indentation
+        returns to the key's own level. Scanning the whole service block
+        instead picked up names from OUTSIDE the environment — and a comment
+        line mentioning a knob is not a declaration, so the two are separated.
+        """
+        names = set()
+        inside = False
+        key_indent = 0
+        for line in block.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            indent = len(line) - len(line.lstrip())
+            if not inside:
+                if stripped == "environment:":
+                    inside = True
+                    key_indent = indent
+                continue
+            if indent <= key_indent:
+                break
+            m = re.match(r"(?:-\s*)?([A-Z][A-Z0-9_]*)\s*[:=]", stripped)
+            if m:
+                names.add(m.group(1))
+        return names
+
+    @staticmethod
+    def _known_present(compose: str, service: str) -> set[str]:
+        """Knobs this service provably declares — used as the guard's own check.
+
+        A guard that cannot tell "nothing wrong" from "could not see" is the
+        failure mode this MR keeps hitting, and this one hit it: for two
+        services it extracted NO names at all, and a list with nothing in it
+        contains no missing knob, so the guard passed with the knob deleted.
+        The self-check below makes an empty extraction a failure rather than a
+        pass.
+        """
+        block = TestEveryServiceReceivesTheKnobsItsCodeReads._service_block(compose, service)
+        declared = TestEveryServiceReceivesTheKnobsItsCodeReads._env_names(block)
+        # Every service in this set declares at least one MODEL_* knob, so an
+        # empty extraction is the extractor failing, not the service.
+        return declared
+
+    @staticmethod
+    def _constant_to_knob() -> dict[str, str]:
+        """Map each policy CONSTANT to the env knob that backs it.
+
+        Two hops, because the service never reads the env var itself: it
+        imports a constant from the policy, and the policy reads the env var.
+        The first version of this guard looked for the env name in the
+        SERVICE's modules, found nothing, and therefore asserted nothing —
+        it passed with the knob deleted from the reranker.
+
+        Scoped to the policy's own vocabulary on purpose. A blanket
+        "MODEL_[A-Z0-9_]+" also matches the tail of a longer name
+        (``VLLM_LLM_MODEL_ID`` yields ``MODEL_ID``), and it sweeps in knobs this
+        MR did not introduce — ``MODEL_DETECT_TTL`` is a cache TTL, not a
+        budget, and whether chatqna receives it is somebody else's question.
+        """
+        source = (OVERLAY_ROOT / "core" / "model_http_policy.py").read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        mapping = {}
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+                continue
+            target = node.targets[0]
+            if not isinstance(target, ast.Name):
+                continue
+            for call in ast.walk(node.value):
+                if not isinstance(call, ast.Call):
+                    continue
+                fn = ast.unparse(call.func)
+                if fn not in ("positive_float_env", "non_negative_int_env"):
+                    continue
+                for arg in call.args:
+                    if isinstance(arg, ast.Constant) and isinstance(arg.value, str) and arg.value.startswith("MODEL_"):
+                        mapping[target.id] = arg.value
+        return mapping
+
+    @staticmethod
+    def _policy_constants_in(path: Path) -> set[str]:
+        """The policy constants a module imports."""
+        names = set()
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module == "core.model_http_policy":
+                names |= {alias.name for alias in node.names}
+        return names
+
+    @staticmethod
+    def _core_modules_imported_by(path: Path) -> set[str]:
+        """Which `core.<name>` modules a file imports."""
+        names = set()
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("core."):
+                names.add(node.module.split(".", 1)[1])
+        return names
+
+    @classmethod
+    def _knobs_needed_by(cls, directory: Path, mapping: dict[str, str]) -> set[str]:
+        """Which knobs the directory's modules need, via the constants they import.
+
+        Three hops, because the import chain is three deep for some knobs: a
+        service imports `core.model_cache`, `core/model_cache.py` imports
+        PROBE_TIMEOUT_SECONDS from the policy, and the policy reads
+        MODEL_PROBE_TIMEOUT_SECONDS from the environment. A two-hop version
+        found the constants the service's OWN module imports and missed every
+        knob reached through a shared core module — the probe among them.
+        """
+        needed = set()
+        core_dir = OVERLAY_ROOT / "core"
+        for path in sorted(directory.glob("*.py")):
+            constants = cls._policy_constants_in(path)
+            # Follow one level into the shared core modules this file imports.
+            for module in cls._core_modules_imported_by(path):
+                core_path = core_dir / f"{module}.py"
+                if core_path.is_file():
+                    constants |= cls._policy_constants_in(core_path)
+            for name in constants:
+                knob = mapping.get(name)
+                if knob:
+                    needed.add(knob)
+        return needed
+
+    def test_no_service_reads_a_knob_its_container_does_not_receive(self):
+        compose = (OVERLAY_ROOT.parent / "docker-compose.yaml").read_text(encoding="utf-8")
+        offenders = []
+        for service in ("reranker", "dataprep-arango-service", "chatqna-xeon-backend-server"):
+            directory = self._service_source_dir(compose, service)
+            if directory is None or not directory.is_dir():
+                continue
+            declared = self._known_present(compose, service)
+            needed = self._knobs_needed_by(directory, self._constant_to_knob())
+            assert declared or not needed, (
+                f"the extractor found no environment names in the {service} block — it cannot "
+                "distinguish 'nothing wrong' from 'could not see', and a list with nothing in it "
+                "contains no missing knob. The guard would pass with the knob deleted."
+            )
+            for knob in sorted(needed):
+                if knob not in declared:
+                    offenders.append(f"{service} reads {knob} but does not receive it")
+        assert not offenders, (
+            f"{offenders}. A service that reads a knob its container does not receive is a knob "
+            "the operator can move in one service and not another — the deck-wide claim these "
+            "knobs make, denied by the wiring"
         )
 
 

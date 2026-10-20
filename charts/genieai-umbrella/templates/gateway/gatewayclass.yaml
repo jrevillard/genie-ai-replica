@@ -1,12 +1,15 @@
 {{- /*
-  GatewayClass binding the chart's Gateway to the Envoy Gateway
-  controller installed by the envoyGateway dependency. Rendered only when
-  that dependency is enabled: with envoyGateway.enabled=false another
-  controller owns the class (its own install provides it), and rendering
-  a class pointing at Envoy's controller name would claim Gateways nobody
-  reconciles.
+  GatewayClass binding the chart's Gateway to the Envoy Gateway controller
+  installed by the envoyGateway dependency.
+
+  Cluster-scoped and a per-cluster SINGLETON: Envoy Gateway documents
+  creating it out of band (one kubectl apply per cluster), so a chart that
+  unconditionally owns it fails with "already exists" on any cluster that
+  followed that instruction — while a chart uninstall deletes the class out
+  from under every other Gateway in the cluster. Opt-in via
+  ingress.createGatewayClass (default false).
 */ -}}
-{{- if and .Values.ingress.enabled .Values.envoyGateway.enabled -}}
+{{- if and .Values.ingress.enabled .Values.ingress.createGatewayClass .Values.envoyGateway.enabled -}}
 apiVersion: gateway.networking.k8s.io/v1
 kind: GatewayClass
 metadata:

@@ -70,7 +70,19 @@ spec:
           port: 9428
     {{- end }}
     {{- if .Values.observability.metrics.enabled }}
-    # VMSingle Prometheus remote-write (VM default 8428).
+    # VMSingle Prometheus remote-write. The port is 8429, NOT the 8428
+    # the collector's endpoint names: the vm-operator Service publishes
+    # 8428 as an ALIAS that DNATs to the pod's 8429, and a
+    # NetworkPolicy is evaluated after that translation. A rule on 8428
+    # therefore admits nothing, and the failure is silent — the
+    # collector's prometheusremotewrite exporter just times out
+    # ("context deadline exceeded") and drops every batch, while logs
+    # and traces keep flowing because VictoriaLogs and VictoriaTraces
+    # map their Service port straight through. Verified on the laptop:
+    # deleting this policy took otelcol_exporter_sent_metric_points from
+    # 0 to 556 in under a minute.
+    # Same trap as every other pod-to-pod peer in this chart: use the
+    # container port, not the Service port.
     - to:
         - podSelector:
             matchLabels:
@@ -78,7 +90,7 @@ spec:
               app.kubernetes.io/instance: vmetrics
       ports:
         - protocol: TCP
-          port: 8428
+          port: 8429
     {{- end }}
     {{- if .Values.observability.traces.enabled }}
     # VTSingle is single-port (-httpListenAddr=:10428): the Jaeger query

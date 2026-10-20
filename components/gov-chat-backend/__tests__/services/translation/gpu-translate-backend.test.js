@@ -136,6 +136,31 @@ describe('GpuTranslateBackend streaming', () => {
     });
   });
 
+  describe('formatRequest context budget', () => {
+    let capped;
+    beforeAll(() => {
+      capped = new GpuTranslateBackend();
+      capped.initialized = true;
+      capped.maxModelLen = 8192;
+    });
+
+    it('leaves room in max_tokens for the prompt it builds', () => {
+      // vLLM rejects a request whose prompt plus max_tokens exceeds the
+      // model's context window, so the output budget has to be derived from
+      // the prompt the request actually carries — not from the context length
+      // alone.
+      const unit = 'the recovery code for the migrated tenant is recorded '.repeat(12);
+      const body = capped.formatRequest('google/gemma-3-4b-it', 'en', 'fr', unit);
+      const inputTokens = Math.ceil(JSON.stringify(body.messages).length / 4);
+      expect(body.max_tokens + inputTokens).toBeLessThanOrEqual(capped.maxModelLen);
+    });
+
+    it('keeps a generous output budget for a short input', () => {
+      const body = capped.formatRequest('google/gemma-3-4b-it', 'en', 'fr', 'Bonjour.');
+      expect(body.max_tokens).toBeGreaterThan(4000);
+    });
+  });
+
   describe('pre-existing methods (coverage)', () => {
     it('getLanguageCode returns the model-specific code from the language map', () => {
       // Real assertion: the gemma-3 map maps ISO codes to model-specific codes

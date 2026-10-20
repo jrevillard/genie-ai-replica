@@ -269,13 +269,37 @@ class GpuTranslateBackend {
    * @param {string} text - Text to translate
    * @returns {Object} Formatted request body
    */
-  formatRequest(modelId, sourceCode, targetCode, text) {
-    // Reserve tokens for the prompt (~128 tokens) so total stays within maxModelLen
-    const maxTokens = Math.max(128, this.maxModelLen - 128);
+  /**
+   * Lower `max_tokens` so the request's INPUT plus its OUTPUT budget fits
+   * `maxModelLen`.
+   *
+   * `max_tokens` is the OUTPUT budget, and vLLM rejects a request whose prompt
+   * plus `max_tokens` exceeds the model's context window. Deriving it from the
+   * context length alone (`maxModelLen - 128`) therefore caps the PROMPT at
+   * ~128 tokens: on an 8192-token model every request asks for 8064 output
+   * tokens, so anything longer than a short sentence is refused outright
+   * ("maximum context length is 8192 tokens. However, you requested 8064
+   * output tokens and your prompt contains at least 129"). The prompt has to
+   * come out of the same window.
+   *
+   * Idempotent — it only ever lowers the budget — so it is safe to apply again
+   * after a caller has grown the messages (see translateStream's context
+   * window).
+   *
+   * @param {Object} requestBody - OpenAI-compatible request body; mutated
+   * @returns {Object} the same body, with `max_tokens` capped
+   */
+  _capMaxTokens(requestBody) {
+    const inputTokens = Math.ceil(JSON.stringify(requestBody.messages).length / 4);
+    const safeMaxTokens = Math.max(256, this.maxModelLen - inputTokens - 128);
+    requestBody.max_tokens = Math.min(requestBody.max_tokens || safeMaxTokens, safeMaxTokens);
+    return requestBody;
+  }
 
+  formatRequest(modelId, sourceCode, targetCode, text) {
     // TranslateGemma format (structured chat with language codes)
     if (modelId.includes('translategemma')) {
-      return {
+      return this._capMaxTokens({
         model: modelId,
         messages: [
           {
@@ -290,9 +314,8 @@ class GpuTranslateBackend {
             ]
           }
         ],
-        temperature: 0.0,
-        max_tokens: maxTokens
-      };
+        temperature: 0.0
+      });
     }
 
     // Gemma-3 format (prompt-based translation)
@@ -303,7 +326,7 @@ class GpuTranslateBackend {
         ? this.languageMap.promptTemplate(sourceCode, targetCode, sourceLangName, targetLangName, text)
         : `Translate the following text from ${sourceLangName} to ${targetLangName}. Only return the translation, no explanation.\n\nText: ${text}`;
 
-      return {
+      return this._capMaxTokens({
         model: modelId,
         messages: [
           {
@@ -311,13 +334,12 @@ class GpuTranslateBackend {
             content: prompt
           }
         ],
-        temperature: 0.3,
-        max_tokens: maxTokens
-      };
+        temperature: 0.3
+      });
     }
 
     // Default/fallback format (OpenAI-compatible)
-    return {
+    return this._capMaxTokens({
       model: modelId,
       messages: [
         {
@@ -325,9 +347,8 @@ class GpuTranslateBackend {
           content: `Translate from ${sourceCode} to ${targetCode}: ${text}`
         }
       ],
-      temperature: 0.3,
-      max_tokens: maxTokens
-    };
+      temperature: 0.3
+    });
   }
 
   /**
@@ -566,13 +587,9 @@ class GpuTranslateBackend {
         requestBody.messages[0].content;
     }
 
-    // Dynamically cap max_tokens AFTER context injection so input (messages +
-    // context window) + output never exceeds maxModelLen. formatRequest derives
-    // max_tokens from maxModelLen assuming only the text input; the context window
-    // adds extra input tokens that can overflow (vLLM 400).
-    const inputTokens = Math.ceil(JSON.stringify(requestBody.messages).length / 4);
-    const safeMaxTokens = Math.max(256, this.maxModelLen - inputTokens - 128);
-    requestBody.max_tokens = Math.min(requestBody.max_tokens || safeMaxTokens, safeMaxTokens);
+    // Re-cap after context injection: the injected block grows the prompt, so
+    // the budget formatRequest derived is no longer the whole story.
+    this._capMaxTokens(requestBody);
 
     return this.callVllmStream(requestBody, onToken);
   }

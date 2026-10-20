@@ -3057,6 +3057,7 @@ chart:lint:
       # trims the newline before a `---`) or emit duplicate mapping keys;
       # both are invalid Kubernetes YAML and both pass Helm's own parser and
       # a default YAML load. This checks both, for every render the job made.
+      import re
       import sys
       import yaml
 
@@ -3093,6 +3094,7 @@ chart:lint:
       # release name.
       #
       # Usage: cluster-scope-check.py <release> <namespace> <n-allowed> <allowed>... <render>...
+      import re
       import sys
       import yaml
 
@@ -3111,8 +3113,24 @@ chart:lint:
               if not doc or doc.get("kind") not in CLUSTER_SCOPED:
                   continue
               name = doc["metadata"]["name"]
-              if name in allowed or release in name or namespace in name:
-                  print("ok cluster-scoped %s/%s" % (doc["kind"], name))
+              # Segment match, not substring: "latest" contains "test",
+              # so a bare `in` would wave through names that a second
+              # release would collide with.
+              # The release/namespace may appear as any DELIMITED segment
+              # (some names are suffixed, some prefixed, some joined with
+              # ":" or "."), but never merely as a substring — "latest"
+              # contains "test".
+              segments = set(re.split(r"[-:.]", name))
+              qualified = release in segments or namespace in segments
+              # The GatewayClass is a deliberate per-cluster singleton
+              # (ingress.createGatewayClass defaults to false precisely so
+              # no release owns it) — its name comes from
+              # ingress.className, so allow it by KIND, not by a literal
+              # that would go stale on an override.
+              singleton = doc["kind"] == "GatewayClass"
+              if singleton or name in allowed or qualified:
+                  print("ok cluster-scoped %s/%s%s" % (
+                      doc["kind"], name, " (singleton)" if singleton else ""))
                   continue
               raise SystemExit(
                   "cluster-scoped %s/%s carries neither the release name (%s), the "
@@ -3143,6 +3161,8 @@ chart:lint:
       --set data.keycloak.failOnPlaceholderSecrets=false
       --set data.keycloak.adminEmail=ci-render@example.org
       --set ingress.host=ci-render.local
+      --set ingress.enabled=true
+      --set ingress.createGatewayClass=true
       --set 'data.keycloak.clientSecrets.proxyClient=lint-dummy'
       --set 'data.keycloak.clientSecrets.dataprep=lint-dummy'
       --set 'data.keycloak.clientSecrets.grafana=lint-dummy'
@@ -3157,6 +3177,8 @@ chart:lint:
       --set data.keycloak.failOnPlaceholderSecrets=false
       --set data.keycloak.adminEmail=ci-render@example.org
       --set ingress.host=ci-render.local
+      --set ingress.enabled=true
+      --set ingress.createGatewayClass=true
       --set 'data.keycloak.clientSecrets.proxyClient=lint-dummy'
       --set 'data.keycloak.clientSecrets.dataprep=lint-dummy'
       --set 'data.keycloak.clientSecrets.grafana=lint-dummy'
@@ -3165,7 +3187,6 @@ chart:lint:
       --set observability.metrics.enabled=true
       --set observability.traces.enabled=true
       --set observability.grafana.enabled=true
-      --set ingress.createGatewayClass=true
       --set data.arangodb.mode=cluster
       > /tmp/rendered-full.yaml
     # Same render with the in-cluster GPU tier: every orchestrator's
@@ -3176,6 +3197,8 @@ chart:lint:
       --set data.keycloak.failOnPlaceholderSecrets=false
       --set data.keycloak.adminEmail=ci-render@example.org
       --set ingress.host=ci-render.local
+      --set ingress.enabled=true
+      --set ingress.createGatewayClass=true
       --set 'data.keycloak.clientSecrets.proxyClient=lint-dummy'
       --set 'data.keycloak.clientSecrets.dataprep=lint-dummy'
       --set 'data.keycloak.clientSecrets.grafana=lint-dummy'
@@ -3184,7 +3207,6 @@ chart:lint:
       --set observability.metrics.enabled=true
       --set observability.traces.enabled=true
       --set observability.grafana.enabled=true
-      --set ingress.createGatewayClass=true
       --set data.arangodb.mode=cluster
       > /tmp/rendered-incluster.yaml
     - >-

@@ -1497,6 +1497,12 @@ export default {
       mockChatServing: 'الإجابة في المحادثة',
       mockTranslation: 'ترجمة المحادثة',
       svcOpenaiOnlyShort: 'نقاط نهاية متوافقة مع OpenAI فقط',
+      providerTipOpenai:
+        'نقاط نهاية متوافقة مع OpenAI تم التحقق منها: OpenAI https://api.openai.com/v1 · MiniMax https://api.minimax.io/v1 · z.ai https://api.z.ai/api/paas/v4 · بوابة LiteLLM http://your-gateway:4000/v1',
+      providerTipAnthropic:
+        'نقاط نهاية Anthropic الأصلية التي تم التحقق منها: Anthropic https://api.anthropic.com · MiniMax https://api.minimax.io/anthropic · z.ai https://api.z.ai/api/anthropic',
+      baseUrlTip:
+        'يسرد الخادم النماذج على هذا الأساس + /models (متوافق مع OpenAI) أو + /v1/models (Anthropic — تتم تسوية /v1 الختامية)، ويولّد اختبار الاتصال على + /chat/completions أو + /v1/messages. تم التحقق من المسارات القياسية الأربعة مباشرة في 2026-10-20.',
       save: 'حفظ التغييرات',
       create: 'إنشاء',
       cancel: 'إلغاء',

@@ -1481,6 +1481,12 @@ export default {
       mockChatServing: '聊天应答',
       mockTranslation: '聊天翻译',
       svcOpenaiOnlyShort: '仅限 OpenAI 兼容端点',
+      providerTipOpenai:
+        '已验证的 OpenAI 兼容端点：OpenAI https://api.openai.com/v1 · MiniMax https://api.minimax.io/v1 · z.ai https://api.z.ai/api/paas/v4 · LiteLLM 网关 http://your-gateway:4000/v1',
+      providerTipAnthropic:
+        '已验证的 Anthropic 原生端点：Anthropic https://api.anthropic.com · MiniMax https://api.minimax.io/anthropic · z.ai https://api.z.ai/api/anthropic',
+      baseUrlTip:
+        '服务器在此基础地址 + /models（OpenAI 兼容）或 + /v1/models（Anthropic — 结尾的 /v1 会被规范化）列出模型，Test connection 在 + /chat/completions 或 + /v1/messages 生成。四条标准路径已于 2026-10-20 实测验证。',
       save: '保存更改',
       create: '创建',
       cancel: '取消',

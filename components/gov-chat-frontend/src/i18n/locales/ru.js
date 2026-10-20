@@ -1509,6 +1509,12 @@ export default {
       mockChatServing: 'Ответы чата',
       mockTranslation: 'Перевод чата',
       svcOpenaiOnlyShort: 'Только OpenAI-совместимые эндпоинты',
+      providerTipOpenai:
+        'Проверенные OpenAI-совместимые эндпоинты: OpenAI https://api.openai.com/v1 · MiniMax https://api.minimax.io/v1 · z.ai https://api.z.ai/api/paas/v4 · шлюз LiteLLM http://your-gateway:4000/v1',
+      providerTipAnthropic:
+        'Проверенные Anthropic-нативные эндпоинты: Anthropic https://api.anthropic.com · MiniMax https://api.minimax.io/anthropic · z.ai https://api.z.ai/api/anthropic',
+      baseUrlTip:
+        'Сервер запрашивает список моделей по этой базе + /models (OpenAI-совместимо) или + /v1/models (Anthropic — завершающее /v1 нормализуется), а Test connection генерирует по + /chat/completions или + /v1/messages. Все четыре стандартных пути проверены вживую 2026-10-20.',
       save: 'Сохранить',
       create: 'Создать',
       cancel: 'Отмена',

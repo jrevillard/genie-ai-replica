@@ -1728,7 +1728,9 @@ export default {
         { id: 'logs', label: 'Logs' },
         { id: 'queryInspector', label: 'Query Inspector' },
         { id: 'security', label: 'Security' },
-        { id: 'users', label: 'Users' }
+        { id: 'users', label: 'Users' },
+        // Story 8-7 (David 2026-10-20): model configurations — the LAST tab.
+        { id: 'models', label: 'Models' }
       ],
 
       // Loading state

@@ -42,7 +42,23 @@
         <input v-model="form.name" type="text" maxlength="120" :disabled="busy" />
       </label>
       <label class="okf-models__field">
-        <span>{{ translate('okf.models.provider', 'Provider') }}</span>
+        <span>
+          {{ translate('okf.models.provider', 'Provider') }}
+          <DsInfoTip
+            :label="translate('okf.models.provider', 'Provider')"
+            :text="
+              form.provider === 'anthropic'
+                ? translate(
+                    'okf.models.providerTipAnthropic',
+                    'Verified Anthropic-native endpoints: Anthropic https://api.anthropic.com · MiniMax https://api.minimax.io/anthropic · z.ai https://api.z.ai/api/anthropic'
+                  )
+                : translate(
+                    'okf.models.providerTipOpenai',
+                    'Verified OpenAI-compatible endpoints: OpenAI https://api.openai.com/v1 · MiniMax https://api.minimax.io/v1 · z.ai https://api.z.ai/api/paas/v4 · a LiteLLM gateway http://your-gateway:4000/v1'
+                  )
+            "
+          />
+        </span>
         <select v-model="form.provider" :disabled="busy">
           <option value="openai">
             {{ translate('okf.models.providerOpenai', 'OpenAI-compatible (OpenAI, LiteLLM, vLLM…)') }}
@@ -51,7 +67,18 @@
         </select>
       </label>
       <label class="okf-models__field">
-        <span>{{ translate('okf.models.baseUrl', 'Base URL') }}</span>
+        <span>
+          {{ translate('okf.models.baseUrl', 'Base URL') }}
+          <DsInfoTip
+            :label="translate('okf.models.baseUrl', 'Base URL')"
+            :text="
+              translate(
+                'okf.models.baseUrlTip',
+                'The server lists models at this base + /models (OpenAI-compatible) or + /v1/models (Anthropic — a trailing /v1 is normalized away), and Test connection generates at + /chat/completions or + /v1/messages. All four standard paths verified live 2026-10-20.'
+              )
+            "
+          />
+        </span>
         <input v-model="form.base_url" type="text" placeholder="https://api.openai.com/v1" :disabled="busy" />
       </label>
       <label class="okf-models__field">
@@ -300,6 +327,7 @@
 import translateMixin from '../../../mixins/translateMixin';
 import DsButton from '../../ds/Button.vue';
 import DsPill from '../../ds/Pill.vue';
+import DsInfoTip from '../../ds/InfoTip.vue';
 
 let uidCounter = 0;
 
@@ -383,7 +411,7 @@ const MOCK_GROUPS = [
 
 export default {
   name: 'OkfModelConfigPanel',
-  components: { DsButton, DsPill },
+  components: { DsButton, DsPill, DsInfoTip },
   mixins: [translateMixin],
   data() {
     return {

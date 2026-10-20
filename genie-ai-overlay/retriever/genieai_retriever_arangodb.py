@@ -523,14 +523,19 @@ class GenieaiArangoRetriever(OpeaComponent):
                         probe.models.list()
                     if logflag:
                         logger.debug("OpenAI API Key is valid.")
-                    # Budgeted but not retry-capped: same reasoning as the
-                    # OpenAI embeddings branch above — this is a third-party
+                    # Budgeted but not retry-capped: this is a third-party
                     # endpoint, and MODEL_LLM_MAX_RETRIES is the shared GPU's
-                    # knob, not this one's. Summarizer budget, not LLM_*: this
-                    # call has no fallback (its except clause re-raises
-                    # anything but vLLM input overflow, so a timeout becomes a
-                    # 500 on the chat request), which is why the default stays
-                    # at the openai default rather than at LLM_TIMEOUT.
+                    # knob, not this one's.
+                    #
+                    # The LLM budget, not the summarizer budget, and the two
+                    # differ in what a timeout costs. This probe sits inside the
+                    # `except Exception` above, so exhausting the budget leaves
+                    # the summarizer uninitialised and documents come back
+                    # unsummarised — degraded, not failed, which is why the
+                    # shorter LLM budget is the right one here. The ChatOpenAI
+                    # built just below re-raises anything but vLLM input
+                    # overflow, so ITS timeout becomes a 500 on the chat
+                    # request; that call takes SUMMARIZER_TIMEOUT_SECONDS.
                     self.llm = ChatOpenAI(
                         temperature=OPENAI_CHAT_TEMPERATURE,
                         model=OPENAI_CHAT_MODEL,

@@ -31,6 +31,8 @@ import time
 
 import httpx
 
+from core.model_http_policy import PROBE_TIMEOUT_SECONDS
+
 logger = logging.getLogger(__name__)
 
 # Default TTL in seconds. Overridable per-deployment via MODEL_DETECT_TTL env var.
@@ -77,7 +79,12 @@ def _probe(endpoint_url: str) -> dict | None:
     # is correct regardless of patch state.
     verify = os.getenv("OPEA_SSL_SKIP_VERIFY", "") != "1"
     try:
-        resp = httpx.get(f"{endpoint_url}/v1/models", headers=headers, timeout=10, verify=verify)
+        resp = httpx.get(
+            f"{endpoint_url}/v1/models",
+            headers=headers,
+            timeout=PROBE_TIMEOUT_SECONDS,
+            verify=verify,
+        )
         resp.raise_for_status()
         models = resp.json()
         if models.get("data"):

@@ -1185,15 +1185,21 @@ services:
       VLLM_ENDPOINT: ${VLLM_ENDPOINT:-http://vllm:8000}
       # Two names, two consumers, and they are NOT the same knob.
       #
-      # MODEL_LLM_TIMEOUT_SECONDS reaches this repo's own clients (the labelling
-      # and context-generation SDK client). Every call behind it degrades on
-      # timeout - batch -> per-chunk -> file labels - so bounding it costs
-      # quality, not work, and 180 s is the deliberate default.
+      # MODEL_LLM_TIMEOUT_SECONDS is the budget this repo's own vLLM clients
+      # degrade under: every call behind it falls back (batch -> per-chunk ->
+      # file labels), so bounding it costs quality, not work, and 180 s is the
+      # deliberate default. No client in THIS image reads it yet -- dataprep's
+      # SDK client is still unbounded and is the one gap left open.
       MODEL_LLM_TIMEOUT_SECONDS: ${MODEL_LLM_TIMEOUT_SECONDS:-180}
       MODEL_LLM_MAX_RETRIES: ${MODEL_LLM_MAX_RETRIES:-2}
       # The service-account token fetch every control-plane write depends on.
       # Single attempt, no retry: 300 s is what aiohttp applied anyway.
       MODEL_AUTH_TIMEOUT_SECONDS: ${MODEL_AUTH_TIMEOUT_SECONDS:-300}
+      # The model-id probe behind the TTL cache. Degrades to the configured
+      # model id, so 10 s suits a warm endpoint — but a vLLM still loading
+      # weights answers in minutes, and the fallback then silently picks the
+      # configured id instead of the served one.
+      MODEL_PROBE_TIMEOUT_SECONDS: ${MODEL_PROBE_TIMEOUT_SECONDS:-10}
       #
       # VLLM_TIMEOUT is deliberately NOT injected here, even though the vendored
       # comps reads it: OpeaArangoDataprep builds its LLMGraphTransformer with
@@ -1363,15 +1369,17 @@ services:
 
       GPU_NODE_HOST: ${GPU_NODE_HOST:-}
       # Shared model-endpoint HTTP budgets (core/model_http_policy.py).
-      # Only the shared name is injected here. The policy reads
-      # MODEL_LLM_TIMEOUT_SECONDS first, so a VLLM_TIMEOUT in this container
-      # could never win, and leaving it in made `docker exec ... env` report a
-      # value the retriever does not actually use. The vendored comps client
-      # that reads VLLM_TIMEOUT directly is the dataprep graph transformer,
-      # which does not run in this image.
+      # Only the shared name is injected here. VLLM_TIMEOUT is the retriever's
+      # historical alias for the same budget (config.py resolves one to the
+      # other), so injecting both would put two names for one value in
+      # `docker exec ... env` and let an operator edit the one this service
+      # never reads. The vendored comps client that reads VLLM_TIMEOUT
+      # directly is the dataprep graph transformer, which does not run in this
+      # image.
       MODEL_LLM_TIMEOUT_SECONDS: ${MODEL_LLM_TIMEOUT_SECONDS:-180}
+      MODEL_PROBE_TIMEOUT_SECONDS: ${MODEL_PROBE_TIMEOUT_SECONDS:-10}
       MODEL_LLM_MAX_RETRIES: ${MODEL_LLM_MAX_RETRIES:-2}
-      MODEL_EMBEDDING_TIMEOUT_SECONDS: ${MODEL_EMBEDDING_TIMEOUT_SECONDS:-120}
+      MODEL_EMBEDDING_TIMEOUT_SECONDS: ${MODEL_EMBEDDING_TIMEOUT_SECONDS:-600}
       # Deliberately 600, the openai default: the summarizer has no fallback
       # path, so its ceiling is not tightened the way the LLM budgets are.
       MODEL_SUMMARIZER_TIMEOUT_SECONDS: ${MODEL_SUMMARIZER_TIMEOUT_SECONDS:-600}
@@ -1421,6 +1429,10 @@ services:
       # Control-plane budget for the backend / document-repository calls on the
       # chat path (core/model_http_policy.py).
       MODEL_CONTROL_PLANE_TIMEOUT_SECONDS: ${MODEL_CONTROL_PLANE_TIMEOUT_SECONDS:-30}
+      # The model-id probe behind the TTL cache, shared with the retriever and
+      # dataprep. Same knob, same 10 s: a failure degrades to the configured
+      # model id rather than propagating.
+      MODEL_PROBE_TIMEOUT_SECONDS: ${MODEL_PROBE_TIMEOUT_SECONDS:-10}
       MEGA_SERVICE_HOST_IP: chatqna-xeon-backend-server
       LOG_LEVEL: ${LOG_LEVEL:-info}
       EMBEDDING_SERVER_HOST_IP: embedding

@@ -151,6 +151,59 @@ def test_the_overlay_runs_that_module_in_process():
     )
 
 
+# ``[:=]`` because the two spellings separate the key from its value with
+# different characters — a mapping entry writes ``KEY: value``, a sequence
+# entry ``- KEY=value`` — and anchoring on ``:`` alone misses every sequence
+# entry, which is the half of the hole that matters.
+_ABSENT_PATTERN = r"^\s*(?:-\s*)?VLLM_TIMEOUT\s*[:=]"
+_PRESENT_PATTERN = r"^\s*(?:-\s*)?MODEL_LLM_TIMEOUT_SECONDS\s*[:=]"
+
+
+def test_the_compose_guards_see_both_environment_spellings():
+    """A guard that only reads one spelling of an env entry guards nothing.
+
+    Compose accepts a service's environment as a mapping or as a sequence, and
+    this repo uses both: the dataprep block writes ``KEY: value`` while the
+    reranker block writes ``- KEY=value``. A pattern anchored on ``KEY:``
+    alone reads the dataprep block correctly and reports the reranker block as
+    clean no matter what it contains — so the guard passes on the exact
+    regression it was written to catch, and does so silently.
+
+    Both patterns are exercised here against synthetic blocks rather than the
+    real file, because the real file currently contains only the form each one
+    was written for; a mutation to either pattern has to fail here, not in a
+    deployment.
+    """
+    sequence_form = """  dataprep-arango-service:
+    environment:
+      - VLLM_TIMEOUT=${VLLM_TIMEOUT:-600}
+"""
+    mapping_form = """  dataprep-arango-service:
+    environment:
+      VLLM_TIMEOUT: ${VLLM_TIMEOUT:-600}
+"""
+    for form, label in ((sequence_form, "sequence"), (mapping_form, "mapping")):
+        block = _service_block(form, "dataprep-arango-service")
+        assert block, f"the {label} form did not parse out of the block"
+        assert re.search(_ABSENT_PATTERN, block, re.M), (
+            f"the {label} spelling of an environment entry evades the VLLM_TIMEOUT guard"
+        )
+        assert not re.search(
+            _ABSENT_PATTERN,
+            _service_block(form.replace("VLLM_TIMEOUT", "VLLM_DEADLINE"), "dataprep-arango-service"),
+            re.M,
+        ), f"the {label} guard fires on a different variable — it is matching nothing useful"
+    # And the converse, for the guard that REQUIRES a key: its block is the one
+    # carrying the shared name, in the sequence spelling.
+    present_seq = _service_block(
+        sequence_form.replace("VLLM_TIMEOUT", "MODEL_LLM_TIMEOUT_SECONDS"), "dataprep-arango-service"
+    )
+    assert re.search(_PRESENT_PATTERN, present_seq, re.M), (
+        "the present guard misses the sequence spelling, so dropping the key from a "
+        "sequence-style environment block would go unnoticed"
+    )
+
+
 def test_compose_does_not_inject_vllm_timeout_into_the_dataprep_service():
     """The regression this guards, stated as an absence.
 
@@ -171,7 +224,7 @@ def test_compose_does_not_inject_vllm_timeout_into_the_dataprep_service():
     root = _require_repo_root()
     block = _service_block((root / "docker-compose.yaml").read_text(encoding="utf-8"), "dataprep-arango-service")
     assert block, "no dataprep-arango-service block found in docker-compose.yaml"
-    assert not re.search(r"^\s*VLLM_TIMEOUT:", block, re.M), (
+    assert not re.search(_ABSENT_PATTERN, block, re.M), (
         "the dataprep service injects VLLM_TIMEOUT. The vendored comps reads it with a bare "
         "os.getenv, so it reaches httpx as a string; httpx 0.28 does not coerce it and the "
         "client raises TypeError instead of timing out. _process_batch swallows that, so graph "
@@ -182,12 +235,13 @@ def test_compose_does_not_inject_vllm_timeout_into_the_dataprep_service():
 def test_the_dataprep_block_still_exposes_its_own_budget_knob():
     """The operator's knob must reach the container the overlay actually runs in.
 
-    ``MODEL_LLM_TIMEOUT_SECONDS`` is what the dataprep service's own labelling
-    and context clients read (``core/model_http_policy.py``). Drop the compose
-    line and nothing raises — the policy falls back to its 180 s default — but
-    every ``.env`` an operator edits becomes inert for this one service, with
-    no error anywhere. That is the same class of silent no-op as injecting the
-    key in the first place, so it is worth its own assertion.
+    ``MODEL_LLM_TIMEOUT_SECONDS`` is the budget dataprep's own vLLM client reads
+    (``core/model_http_policy.py``) — which is the one gap still open here, so
+    today the line is carried rather than consumed. Drop the compose line and
+    nothing raises: the policy falls back to its 180 s default, and every
+    ``.env`` an operator edits becomes inert for this one service with no error
+    anywhere. That is the same class of silent no-op as injecting the key in the
+    first place, so it is worth its own assertion.
 
     Deliberately NOT asserted here: that the graph transformer keeps comps' own
     600 s. Nothing this MR writes can move it — there is no shared key left to
@@ -196,7 +250,7 @@ def test_the_dataprep_block_still_exposes_its_own_budget_knob():
     root = _require_repo_root()
     block = _service_block((root / "docker-compose.yaml").read_text(encoding="utf-8"), "dataprep-arango-service")
     assert block, "no dataprep-arango-service block found in docker-compose.yaml"
-    assert re.search(r"^\s*MODEL_LLM_TIMEOUT_SECONDS:", block, re.M), (
+    assert re.search(_PRESENT_PATTERN, block, re.M), (
         "the dataprep service no longer injects MODEL_LLM_TIMEOUT_SECONDS — the policy then "
         "falls back to its built-in 180 s default and MODEL_LLM_TIMEOUT_SECONDS in the operator's "
         ".env becomes inert for this service, silently"

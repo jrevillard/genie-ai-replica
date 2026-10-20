@@ -160,12 +160,26 @@ keycloak_ssl_skip_verify: ""
 #                                         #   fallback path, so a tighter budget
 #                                         #   turns a slow success into a 500 on the
 #                                         #   chat request.
-#   model_embedding_timeout_seconds: 120  # the retriever's embedding client,
-#                                         #   OpenAI-API branch ONLY. The TEI
-#                                         #   branch (TEI_EMBEDDING_ENDPOINT and
+#   model_embedding_timeout_seconds: 600 # the retriever's embedding client,
+#                                         #   OpenAI-API branch ONLY, and NOT a
+#                                         #   cut: an unconfigured client already
+#                                         #   inherited httpx.Timeout(600,
+#                                         #   connect=5.0) from the openai SDK.
+#                                         #   Lowering it yields a silently empty
+#                                         #   retrieval — the retriever's except
+#                                         #   clause returns [] ahead of the
+#                                         #   hybrid/BM25 leg. The TEI branch
+#                                         #   (TEI_EMBEDDING_ENDPOINT and
 #                                         #   HF_TOKEN) is deliberately unbudgeted
 #                                         #   — and that is the REMOTE-GPU branch,
 #                                         #   so this knob does not reach it.
+#   model_probe_timeout_seconds: 10       # the /v1/models model-id probe.
+#                                         #   Degrades to the configured model
+#                                         #   id on failure, but a vLLM still
+#                                         #   loading weights answers in minutes,
+#                                         #   not seconds — and the fallback then
+#                                         #   silently picks the wrong id.
+#                                         #   Raise it on a remote GPU node.
 #   model_rerank_timeout_seconds: 300     # TEI rerank — no fallback path, so a
 #                                         #   tighter budget turns slow successes
 #                                         #   into 500s on the chat request

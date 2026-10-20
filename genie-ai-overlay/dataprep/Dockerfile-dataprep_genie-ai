@@ -137,9 +137,10 @@ COPY genie-ai-overlay/tracing.py /app/tracing.py
 COPY genie-ai-overlay/core/model_cache.py /app/core/model_cache.py
 
 # Copy the shared model-endpoint HTTP budget policy (importable as
-# core.model_http_policy). Dataprep reads the LLM budget from it for the vLLM
-# chat-completion client and the control-plane budget for the Keycloak token
-# refresh; without them the image fails at import, not at runtime.
+# core.model_http_policy). Dataprep reads the control-plane budget from it for
+# the in-cluster calls and the auth budget for the Keycloak service-account
+# token fetch; without them the image fails at import, not at runtime. Its own
+# vLLM chat-completion client is NOT yet wired to this module.
 COPY genie-ai-overlay/core/model_http_policy.py /app/core/model_http_policy.py
 
 # Copy the shared span-attribute vocabulary (importable as core.span_attrs).

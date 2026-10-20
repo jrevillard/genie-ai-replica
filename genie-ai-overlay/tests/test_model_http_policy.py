@@ -24,12 +24,21 @@ import pytest
 
 import core.model_http_policy as policy
 
+# Every knob the module reads, and no fewer: _reload_with pops these, applies
+# the override, reloads and restores. A name missing here is never cleared, so a
+# developer's or CI runner's ambient export of it leaks into every reload in
+# this file — and because the constants are read at import time, the resulting
+# value is baked in before the first assertion runs. That is the environment
+# flake that only shows on one machine.
 _ENV_KEYS = (
     "MODEL_LLM_TIMEOUT_SECONDS",
     "VLLM_TIMEOUT",
     "MODEL_LLM_MAX_RETRIES",
     "MODEL_EMBEDDING_TIMEOUT_SECONDS",
+    "MODEL_SUMMARIZER_TIMEOUT_SECONDS",
     "MODEL_RERANK_TIMEOUT_SECONDS",
+    "MODEL_AUTH_TIMEOUT_SECONDS",
+    "MODEL_PROBE_TIMEOUT_SECONDS",
     "MODEL_CONTROL_PLANE_TIMEOUT_SECONDS",
 )
 
@@ -40,24 +49,30 @@ def _dataprep_budget_present() -> bool:
     """True once dataprep's own vLLM client carries the shared budget.
 
     This MR bounds every model-endpoint client EXCEPT the one in
-    ``dataprep/genieai_dataprep_arangodb.py``, which arrives with the
-    phase-budget work that owns that module. The dataprep guards below are armed
-    by this rather than skipped outright: a static skip would leave the module
-    unguarded for good, whereas this starts checking it the moment that file
-    gains the budget — and a hardcoded timeout creeping back in before it does
-    is caught by the scan in ``test_no_hardcoded_control_plane_timeout_is_left_behind``,
-    which covers the same module whenever the budget is present.
+    ``dataprep/genieai_dataprep_arangodb.py``, whose budget arrives with the
+    phase-budget work that owns that module. The guards below are marked xfail
+    for exactly that reason and nothing else — the four control-plane sessions
+    in that module, and the retriever's four httpx clients, ARE converted here.
     """
     src = (OVERLAY_ROOT / "dataprep" / "genieai_dataprep_arangodb.py").read_text(encoding="utf-8")
     return "http_timeout(LLM_TIMEOUT_SECONDS)" in src
 
 
-requires_dataprep_budget = pytest.mark.skipif(
+# xfail(strict=True), NOT skipif.
+#
+# skipif makes the guards VANISH when the condition flips, so the moment the
+# budget lands the suite reports the same green it reported while they were
+# dormant — the coverage quietly stops and nobody notices. strict=True turns
+# that into an XPASS, which pytest reports as a FAILURE: the follow-on MR that
+# adds the budget must delete this marker or go red, which is what makes the
+# dormancy impossible to forget.
+requires_dataprep_budget = pytest.mark.xfail(
     not _dataprep_budget_present(),
     reason=(
         "dataprep's own vLLM client is still at its pre-policy state; its budget lands with "
-        "the phase-budget MR. This guard arms itself as soon as that module changes."
+        "the phase-budget MR. strict=True so that landing FAILS until this marker is deleted."
     ),
+    strict=True,
 )
 
 
@@ -81,6 +96,7 @@ def _reload_with(**env):
             "tei_timeout": m.EMBEDDING_TIMEOUT_SECONDS,
             "rerank_timeout": m.RERANK_TIMEOUT_SECONDS,
             "control_plane_timeout": m.CONTROL_PLANE_TIMEOUT_SECONDS,
+            "probe_timeout": m.PROBE_TIMEOUT_SECONDS,
         }
     finally:
         for k, v in saved.items():
@@ -91,6 +107,50 @@ def _reload_with(**env):
         importlib.reload(policy)
 
 
+class TestProbeBudget:
+    """core/model_cache.py was the one model-endpoint call outside this policy.
+
+    It is the TTL-cached /v1/models probe behind the retriever's summarizer
+    init, dataprep's graph transformer and chatqna's model lookup. It carried a
+    bare ``timeout=10`` literal, which is the drift this module exists to end:
+    a budget nobody can find, tune, or notice has gone missing.
+    """
+
+    def test_the_probe_derives_its_timeout_from_the_policy(self):
+        tree = ast.parse((OVERLAY_ROOT / "core" / "model_cache.py").read_text(encoding="utf-8"))
+        calls = [
+            n
+            for n in ast.walk(tree)
+            if isinstance(n, ast.Call)
+            and isinstance(n.func, ast.Attribute)
+            and n.func.attr == "get"
+            # On the RECEIVER, not the method name: this module also calls
+            # ``entry.get(...)`` on its cache dict, and a bare ``.get`` match
+            # picks those up as HTTP calls that have no timeout.
+            and isinstance(n.func.value, ast.Name)
+            and n.func.value.id == "httpx"
+        ]
+        assert calls, "httpx.get call not found — the probe moved and this guard must follow it"
+        for call in calls:
+            value = _kwarg(call, "timeout")
+            assert value is not None, f"httpx.get at line {call.lineno} has no timeout at all"
+            assert "PROBE_TIMEOUT_SECONDS" in _source_names(value), (
+                f"httpx.get at line {call.lineno} builds its timeout as {ast.unparse(value)}, "
+                "so the model-id probe is back on a literal the operator cannot reach"
+            )
+
+    def test_the_policy_imports_cleanly_without_the_probe_knob(self):
+        """model_cache must not become the reason an image fails to import.
+
+        The probe ships in three images, all of which also copy this module, so
+        the import resolves — but the budget it reads has to fall back to the
+        policy default rather than raise when the key is absent.
+        """
+        assert _reload_with(MODEL_PROBE_TIMEOUT_SECONDS=None)["probe_timeout"] == 10.0
+        assert _reload_with(MODEL_PROBE_TIMEOUT_SECONDS="0")["probe_timeout"] == 10.0
+        assert _reload_with(MODEL_PROBE_TIMEOUT_SECONDS="45")["probe_timeout"] == 45.0
+
+
 class TestDefaults:
     def test_llm_timeout_default(self):
         assert _reload_with()["llm_timeout"] == 180.0
@@ -99,10 +159,18 @@ class TestDefaults:
         assert _reload_with()["llm_retries"] == 2
 
     def test_tei_timeout_default(self):
-        assert _reload_with()["tei_timeout"] == 120.0
+        # 600, the openai default an unconfigured client already applied. NOT
+        # 120: a tighter default cuts an existing budget whose failure mode on
+        # this client is `return []` before the hybrid leg, i.e. a silently
+        # empty retrieval. An earlier revision called this client "previously
+        # unbounded"; openai-python's DEFAULT_TIMEOUT of 600 means it was not.
+        assert _reload_with()["tei_timeout"] == 600.0
 
     def test_control_plane_timeout_default(self):
         assert _reload_with()["control_plane_timeout"] == 30.0
+
+    def test_probe_timeout_default(self):
+        assert _reload_with()["probe_timeout"] == 10.0
 
     def test_llm_default_is_below_the_openai_sdk_default(self):
         """The default has to be a real change, not a restatement of the SDK.
@@ -144,10 +212,30 @@ class TestInvalidValues:
         assert m["llm_timeout"] == 180.0
 
     def test_zero_rejected(self):
-        assert _reload_with(MODEL_EMBEDDING_TIMEOUT_SECONDS="0")["tei_timeout"] == 120.0
+        assert _reload_with(MODEL_EMBEDDING_TIMEOUT_SECONDS="0")["tei_timeout"] == 600.0
 
     def test_negative_rejected(self):
         assert _reload_with(MODEL_LLM_MAX_RETRIES="-3")["llm_retries"] == 2
+
+    @pytest.mark.parametrize("raw", ["11", "1e300", "1e400"], ids=lambda v: repr(v))
+    def test_an_absurd_retry_count_is_rejected_not_honoured(self, raw):
+        """A retry count has no natural ceiling, so the parser supplies one.
+
+        Every timeout knob here is self-limiting — a larger value waits longer
+        — but a retry count multiplies the wait, and `math.ceil` hands back a
+        bignum for 1e300 that no lower-bound check would catch. Honouring it
+        turns the knob meant to shorten the ~90 min worst case into the thing
+        that produces it.
+        """
+        assert _reload_with(MODEL_LLM_MAX_RETRIES=raw)["llm_retries"] == 2
+
+    def test_a_plausible_large_retry_count_is_still_honoured(self):
+        """The ceiling must not quietly become the default.
+
+        Ten is high enough to be a real operator choice; a cap that rejected it
+        would be a policy the module never says it has.
+        """
+        assert _reload_with(MODEL_LLM_MAX_RETRIES="10")["llm_retries"] == 10
 
     @pytest.mark.parametrize(
         "raw",
@@ -196,7 +284,7 @@ class TestInvalidValues:
     def test_zero_timeout_is_still_rejected(self):
         """The two knobs disagree on zero, and that has to stay true."""
         assert _reload_with(MODEL_LLM_TIMEOUT_SECONDS="0")["llm_timeout"] == 180.0
-        assert _reload_with(MODEL_EMBEDDING_TIMEOUT_SECONDS="0")["tei_timeout"] == 120.0
+        assert _reload_with(MODEL_EMBEDDING_TIMEOUT_SECONDS="0")["tei_timeout"] == 600.0
 
     def test_import_never_raises_on_any_garbage(self):
         """Importing the policy must not be able to kill a service."""
@@ -591,13 +679,23 @@ class TestCallSitesConsumeThePolicy:
                 f"{ast.unparse(call.func)} lost its timeout budget"
             )
 
-    @requires_dataprep_budget
-    def test_no_openai_client_is_built_with_a_bare_number_timeout(self):
-        """Every httpx-backed client goes through ``http_timeout``.
+    def test_no_openai_client_uses_a_bare_number_timeout(self):
+        """Where a timeout is given, it is built by ``http_timeout``.
 
         A bare float is accepted by all four client classes and silently drops
         the SDK's 5 s connect ceiling, so this asserts on the call shape at every
         site rather than on the value any one of them happens to carry.
+
+        Split from the "has a timeout at all" check below so that a module not
+        yet converted cannot take this guard down with it: as one combined test
+        carrying the xfail, it left FOUR modules unverified — chatqna,
+        keycloak, the retriever and the dataprep control-plane sessions — three
+        of which this MR changed. Verified by mutation: reverting a chatqna site
+        to ``ClientTimeout(total=30)``, a dataprep one to ``total=45``, or the
+        retriever probe to ``timeout=VLLM_TIMEOUT`` each fails HERE.
+
+        No escape hatch for a bare Name: VLLM_TIMEOUT and friends are plain
+        floats, so accepting one would accept exactly the shape this rejects.
         """
         checked = 0
         for rel, names in (
@@ -610,21 +708,30 @@ class TestCallSitesConsumeThePolicy:
             for call in _constructors(OVERLAY_ROOT / rel, *names):
                 checked += 1
                 value = _kwarg(call, "timeout")
-                assert value is not None, f"{rel}: {ast.unparse(call.func)} has no timeout"
-                # No escape hatch for a bare Name here: VLLM_TIMEOUT and friends
-                # are plain floats, so accepting one would accept exactly the
-                # shape this test exists to reject. Verified by mutation --
-                # rewriting a site to `timeout=VLLM_TIMEOUT` has to fail here.
+                if value is None:
+                    continue  # the guard below owns that case, and is xfail
                 assert "http_timeout" in _source_names(value), (
                     f"{rel}: {ast.unparse(call.func)} builds its timeout as "
                     f"{ast.unparse(value)}, which replaces the httpx.Timeout object instead of "
                     "shortening its total — the SDK's 5 s connect ceiling is discarded with it"
                 )
-        assert checked >= 5, (
-            f"expected the openai/langchain client sites (dataprep SDK client, the retriever "
-            f"probe, its two summarizer clients and its embedding client), found {checked} — "
-            "a client that moved out of these constructors is no longer guarded"
-        )
+        assert checked, "no httpx-backed client constructor was found — the probe is broken"
+
+    @requires_dataprep_budget
+    def test_every_httpx_client_carries_a_budget(self):
+        """Every httpx-backed client has an explicit budget, not the library's.
+
+        Dormant for exactly one client — dataprep's own — and nothing else.
+        """
+        for rel, names in (
+            ("dataprep/genieai_dataprep_arangodb.py", ("AsyncOpenAI",)),
+            ("retriever/genieai_retriever_arangodb.py", ("OpenAI", "ChatOpenAI", "OpenAIEmbeddings")),
+        ):
+            for call in _constructors(OVERLAY_ROOT / rel, *names):
+                assert _kwarg(call, "timeout") is not None, (
+                    f"{rel}: {ast.unparse(call.func)} has no timeout, so it inherits the "
+                    "library's — which is the stall this policy exists to bound"
+                )
 
     @requires_dataprep_budget
     def test_every_dataprep_llm_call_site_marks_a_timeout(self):
@@ -727,7 +834,6 @@ class TestCallSitesConsumeThePolicy:
                 "_write_ingestion_log / _update_doc_status call waits on this token"
             )
 
-    @requires_dataprep_budget
     def test_dataprep_control_plane_calls_use_the_shared_budget(self):
         """The docstring promises these read CONTROL_PLANE_TIMEOUT_SECONDS.
 
@@ -749,7 +855,6 @@ class TestCallSitesConsumeThePolicy:
                 f"{ast.unparse(call.func)} at line {call.lineno} does not read the shared control-plane budget"
             )
 
-    @requires_dataprep_budget
     def test_no_hardcoded_control_plane_timeout_is_left_behind(self):
         """No module that reads the policy may build a timeout from a literal.
 

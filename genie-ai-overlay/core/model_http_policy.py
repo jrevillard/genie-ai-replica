@@ -29,9 +29,10 @@ here, and why):
 ============================  ==========================  ==============
 service / site               client                      budget
 ============================  ==========================  ==============
-dataprep  ``_build_vllm_client``  ``AsyncOpenAI``          LLM_* (timeout + retries)
-dataprep  Keycloak token, ingestion-log writes, doc status,
+dataprep  Keycloak token fetch  ``aiohttp``              AUTH_*
+dataprep  ingestion-log writes, doc status,
           guardrail calls   ``aiohttp``                 CONTROL_PLANE_*
+retriever/chatqna vLLM model-id probe  ``httpx.get``      PROBE_*
 reranker  TEI ``/rerank``     ``aiohttp``                 RERANK_*
 chatqna   backend user profile, document-repository metadata  ``aiohttp``  CONTROL_PLANE_*
 retriever document summarizer ``ChatOpenAI``  ``langchain_openai``  SUMMARIZER_*
@@ -71,6 +72,11 @@ already carries its own ``DOCLING_ENDPOINT_TIMEOUT`` budget.
 
 import math
 import os
+
+# Upper bound for any retry-count knob. Ten attempts past the point where a
+# contended endpoint has either answered or not is not a tuning decision, and a
+# value this large can only be a typo or a stray exponent.
+_MAX_RETRY_COUNT = 10
 
 
 def positive_float_env(*names: str, default: float) -> float:
@@ -135,6 +141,15 @@ def non_negative_int_env(*names: str, default: int) -> int:
     Like ``positive_float_env``, a name that is set but malformed ends the
     search rather than yielding to the next name — otherwise a typo in the
     preferred knob is answered for by a lower-precedence one.
+
+    Capped at :data:`_MAX_RETRY_COUNT`. A retry count is the one knob here with
+    no natural bound: ``1e300`` parses as a float, passes ``>= 0``, and
+    ``math.ceil`` hands back a bignum that no upper check would catch. The SDK
+    would then retry a wedged endpoint for as long as the budget allows each
+    attempt, which is the ~90 min worst case this module exists to shorten —
+    entered through the knob meant to shorten it. An out-of-range value is
+    rejected outright rather than clamped, so the operator reads the default in
+    the log instead of a number they never typed.
     """
     for name in names:
         raw = os.getenv(name)
@@ -144,7 +159,7 @@ def non_negative_int_env(*names: str, default: int) -> int:
             value = float(raw)
         except ValueError:
             return default
-        if math.isfinite(value) and value >= 0:
+        if math.isfinite(value) and 0 <= value <= _MAX_RETRY_COUNT:
             return math.ceil(value)
         return default
     return default
@@ -197,6 +212,21 @@ LLM_MAX_RETRIES = non_negative_int_env("MODEL_LLM_MAX_RETRIES", default=2)
 # instead of accidental. Raise it for a Keycloak that is slow under load.
 AUTH_TIMEOUT_SECONDS = positive_float_env("MODEL_AUTH_TIMEOUT_SECONDS", default=300.0)
 
+# The /v1/models probe behind the TTL-cached model-id lookup, shared by the
+# retriever's summarizer init and dataprep's graph transformer. It was a bare
+# ``timeout=10`` literal in core/model_cache.py — the only model-endpoint call
+# in this overlay whose budget was not declared here, which is exactly the
+# drift this module exists to stop.
+#
+# 10 s is right for a warm endpoint, and the probe degrades: it catches every
+# exception, logs, and returns None so the caller falls back to the configured
+# model id. But a vLLM still loading weights answers /v1/models slowly or not at
+# all, and on first start that is minutes, not seconds — the fallback then
+# silently picks the configured id instead of the served one, which on a remote
+# GPU node is the wrong model rather than no model. Deployments that hit that
+# raise this; it is left low so the common case cannot pay for it.
+PROBE_TIMEOUT_SECONDS = positive_float_env("MODEL_PROBE_TIMEOUT_SECONDS", default=10.0)
+
 # The retriever's document summarizer, a ChatOpenAI with no fallback: its
 # except clause degrades only vLLM input overflow and re-raises everything
 # else, so a timeout propagates out of retrieve() and the microservice maps it
@@ -229,10 +259,18 @@ SUMMARIZER_TIMEOUT_SECONDS = positive_float_env("MODEL_SUMMARIZER_TIMEOUT_SECOND
 # leg is ever reached. So hitting this budget costs the retrieval entirely, and
 # surfaces as one logger.error line and a silently empty answer.
 #
-# That makes it the same shape as the reranker, and it is bounded for the same
-# reason: it was previously unbounded, not because failing cheap is available.
-# Raise it for a slow endpoint rather than lowering it.
-EMBEDDING_TIMEOUT_SECONDS = positive_float_env("MODEL_EMBEDDING_TIMEOUT_SECONDS", default=120.0)
+# That makes it the same shape as the reranker, and it is budgeted on the same
+# terms: the openai default, which is what an unconfigured client already
+# applied. 600, not 120.
+#
+# An earlier revision of this comment said the client "was previously
+# unbounded". It was not: openai-python's DEFAULT_TIMEOUT is
+# httpx.Timeout(timeout=600, connect=5.0), so 120 was a 5x cut of an existing
+# budget whose failure mode is the silent empty answer described above — worse
+# than the summarizer's visible 500 that SUMMARIZER_TIMEOUT_SECONDS declines to
+# cut. The knob exists so a deployment that wants a hard ceiling sets one
+# deliberately; lowering the default converts slow successes into nothing.
+EMBEDDING_TIMEOUT_SECONDS = positive_float_env("MODEL_EMBEDDING_TIMEOUT_SECONDS", default=600.0)
 
 # TEI RERANK is budgeted separately and, at its default, no tighter than the
 # 300 s aiohttp would have applied anyway — deliberately.

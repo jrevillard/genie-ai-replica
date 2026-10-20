@@ -266,10 +266,10 @@ VLLM_TEMPERATURE = os.getenv("VLLM_TEMPERATURE", 0.8)
 # Deck-wide budgets, resolved once by core/model_http_policy.py (imported at the
 # top of this file). Both aliases keep their historical names because the
 # retriever source and its tests reference them; what they carry is now the
-# shared budget rather than a retriever-local constant. Neither container
-# receives VLLM_TIMEOUT any more - MODEL_LLM_TIMEOUT_SECONDS is injected instead,
-# and the policy reads that name first - so leaving the legacy name in the
-# environment made `docker exec ... env` report a value this service never uses.
+# shared budget rather than a retriever-local constant. Only the shared name is
+# injected into the container: VLLM_TIMEOUT is that same budget under its
+# historical name, so injecting both would leave an operator two names to edit
+# and no way to tell that only one of them is ever read.
 VLLM_TIMEOUT = LLM_TIMEOUT_SECONDS
 EMBEDDING_TIMEOUT = EMBEDDING_TIMEOUT_SECONDS
 # The summarizer's budget is deliberately NOT aliased here. It has no degradation

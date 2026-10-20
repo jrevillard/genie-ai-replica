@@ -14,6 +14,7 @@ import aiohttp
 from opentelemetry import propagate
 
 from core.model_cache import get_model_id
+from core.model_http_policy import CONTROL_PLANE_TIMEOUT_SECONDS
 from tracing import (
     background_span,
     get_meter,
@@ -673,7 +674,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             # Also apply semaphore here to be safe
             async with (
                 self._log_semaphore,
-                aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session,
+                aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=CONTROL_PLANE_TIMEOUT_SECONDS)) as session,
                 session.patch(url, json=payload, headers=headers) as response,
             ):
                 if response.status != 200:
@@ -700,7 +701,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             # FIX: Limit concurrency of log writes to prevent 429 flooding
             async with (
                 self._log_semaphore,
-                aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session,
+                aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=CONTROL_PLANE_TIMEOUT_SECONDS)) as session,
                 session.post(url, json=payload, headers=headers) as response,
             ):
                 # Ignore 429s in logs specifically to prevent recursion or spam
@@ -727,7 +728,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             propagate.inject(headers)
             async with (
                 self._log_semaphore,
-                aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session,
+                aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=CONTROL_PLANE_TIMEOUT_SECONDS)) as session,
                 session.get(url, headers=headers) as response,
             ):
                 if response.status == 200:
@@ -857,7 +858,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         if not GUARDRAIL_ENABLED:
             return {"success": True}
 
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=CONTROL_PLANE_TIMEOUT_SECONDS)) as session:
             for i, text in enumerate(plain_chunks):
                 try:
                     async with session.post(GUARDRAIL_URL, json={"text": text}) as resp:

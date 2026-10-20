@@ -283,20 +283,20 @@ HUGGING_FACE_HUB_TOKEN=
 # MODEL_LLM_TIMEOUT_SECONDS wins, and a rejected value resolves to the default
 # rather than deferring to VLLM_TIMEOUT beside it.
 #
-# MODEL_LLM_TIMEOUT_SECONDS=180   # vLLM completions made by THIS repo: dataprep
-#                                 #   labelling and context generation, and the
-#                                 #   retriever's summarizer client. Embedding
-#                                 #   is MODEL_EMBEDDING_TIMEOUT_SECONDS below, and
-#                                 #   not this knob. Not the chat path — that call
-#                                 #   lives inside the vendored comps
-#                                 #   orchestrator graph, which has no
-#                                 #   configurable budget at all (see
+# MODEL_LLM_TIMEOUT_SECONDS=180   # vLLM completions made by THIS repo: the
+#                                 #   retriever's API-key probe. Embedding is
+#                                 #   MODEL_EMBEDDING_TIMEOUT_SECONDS below, and
+#                                 #   the summarizer MODEL_SUMMARIZER_TIMEOUT_
+#                                 #   SECONDS below — neither is this knob. Not
+#                                 #   the chat path — that call lives inside the
+#                                 #   vendored comps orchestrator graph, which has
+#                                 #   no configurable budget at all (see
 #                                 #   OVERRIDES.yaml).
 #                                 #   Lower than the openai-python default of
-#                                 #   600 on purpose: every phase behind it
-#                                 #   degrades (batch -> per-chunk -> file
-#                                 #   labels), so a request that has not
-#                                 #   answered in 3 min is delaying an
+#                                 #   600 on purpose: the phase behind it
+#                                 #   degrades (a probe that misses its budget
+#                                 #   leaves documents unsummarised), so a request
+#                                 #   that has not answered in 3 min is delaying an
 #                                 #   otherwise usable document.
 #                                 #   Total only. The 5 s connect ceiling the
 #                                 #   openai SDK ships is kept regardless — a GPU
@@ -305,7 +305,7 @@ HUGGING_FACE_HUB_TOKEN=
 # MODEL_LLM_MAX_RETRIES=2         # SDK-level retries on 408/409/429/5xx and
 #                                 #   connection errors. 0 is a real value and
 #                                 #   means no SDK retries.
-# MODEL_EMBEDDING_TIMEOUT_SECONDS=120   # The retriever's embedding client,
+# MODEL_EMBEDDING_TIMEOUT_SECONDS=600 # The retriever's embedding client,
 #                                 #   OpenAI-API branch ONLY. The TEI branch
 #                                 #   (TEI_EMBEDDING_ENDPOINT and HF_TOKEN)
 #                                 #   uses HuggingFaceEndpointEmbeddings and is
@@ -313,12 +313,32 @@ HUGGING_FACE_HUB_TOKEN=
 #                                 #   is the REMOTE-GPU topology, so on a remote
 #                                 #   deployment this knob does not reach it.
 #                                 #   HuggingFaceBgeEmbeddings is in-process.
+#                                 #   600 is NOT a cut: an unconfigured
+#                                 #   OpenAIEmbeddings already inherited
+#                                 #   httpx.Timeout(600, connect=5.0) from the
+#                                 #   openai SDK, so this records the value that
+#                                 #   was really in force. Lower it only knowing
+#                                 #   how this call fails: the retriever's except
+#                                 #   clause returns [] and that short-circuits
+#                                 #   ahead of the hybrid/BM25 leg, so too low a
+#                                 #   value yields a silently EMPTY retrieval,
+#                                 #   not a visible error.
 # MODEL_SUMMARIZER_TIMEOUT_SECONDS=600 # The retriever's document summarizer.
 #                                 #   Deliberately NOT tightened to the LLM
 #                                 #   budget: its except clause re-raises
 #                                 #   anything but vLLM input overflow, so a
 #                                 #   timeout becomes a 500 on the chat request.
 #                                 #   600 s is the openai SDK default, kept.
+# MODEL_PROBE_TIMEOUT_SECONDS=10     # The /v1/models probe behind the TTL-
+#                                 #   cached model-id lookup (retriever
+#                                 #   summarizer init, dataprep graph). It
+#                                 #   degrades — a failure logs and falls back
+#                                 #   to the configured model id — but a vLLM
+#                                 #   still loading weights takes MINUTES to
+#                                 #   answer, and the fallback then silently
+#                                 #   picks the configured id instead of the
+#                                 #   served one. Raise it on a remote GPU node
+#                                 #   whose models load slowly.
 # MODEL_RERANK_TIMEOUT_SECONDS=300 # TEI rerank. Deliberately NOT tighter than the
 #                                 #   300 s an unconfigured aiohttp session would
 #                                 #   have used: the rerank path has no fallback, so
@@ -333,8 +353,10 @@ HUGGING_FACE_HUB_TOKEN=
 #                                 #   is no degradation route and the value
 #                                 #   stays at what aiohttp applied. Raise it
 #                                 #   for a Keycloak slow to start.
-# MODEL_CONTROL_PLANE_TIMEOUT_SECONDS=30  # Keycloak token refresh and the other
-#                                 #   in-cluster control-plane calls.
+# MODEL_CONTROL_PLANE_TIMEOUT_SECONDS=30  # The in-cluster control-plane calls:
+#                                 #   ingestion-log writes, doc-status updates,
+#                                 #   doc-repo callbacks. NOT the Keycloak token
+#                                 #   fetch, which is the knob above.
 # VLLM_TIMEOUT                     # NOT SETTABLE THROUGH THIS FILE. The only
 #                                 #   reader is the vendored comps graph
 #                                 #   transformer, and it takes the value
@@ -1078,6 +1100,15 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   the remote GPU node uses a self-signed certificate. Baked into Docker images
 #   via genie_ssl_patch.py — no volume mounts needed. Default: 0 (verify certs).
 #   When using Let's Encrypt or a recognized CA, leave at 0 (default).
+#   BREAKING: this used to be implied by setting VLLM_API_KEY, so a deployment
+#   with a self-signed GPU cert that never set it here worked anyway. It is now
+#   explicit and no longer inferred. If GPU_NODE_HOST is set and the GPU node's
+#   certificate is self-signed, set OPEA_SSL_SKIP_VERIFY=1 — otherwise the
+#   deployment succeeds and every call to a model fails with
+#   CERTIFICATE_VERIFY_FAILED. Under Ansible it is `opea_ssl_skip_verify: "1"`
+#   in group_vars/<env>/vars.yml; it is NOT derived automatically, because
+#   silently disabling certificate verification is not a decision a template
+#   should make on your behalf.
 #
 # KEYCLOAK_SSL_SKIP_VERIFY=0
 #   Set to 1 to disable SSL certificate verification for dataprep's Keycloak

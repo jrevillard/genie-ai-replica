@@ -155,11 +155,7 @@ class TestVocabularyShape:
         assert len(set(VOCABULARY)) == len(VOCABULARY)
 
     def test_vocabulary_size_is_explicit(self):
-        # Was 80 before this branch. Two entries added: dataprep.llm.timed_out
-        # and dataprep.llm.timeout_seconds, so a wedged GPU is distinguishable
-        # from a call still in flight in the trace. Raised deliberately, not
-        # accidentally — the guard exists to make a change here visible.
-        assert len(ATTRIBUTE_NAMES) == 82
+        assert len(ATTRIBUTE_NAMES) == 80
 
 
 class TestLegacyAttributeNames:
@@ -252,7 +248,7 @@ class TestLegacyAttributeNames:
         ]
 
     def test_registering_the_backlog_did_not_inflate_the_vocabulary(self):
-        assert len(ATTRIBUTE_NAMES) == 82
+        assert len(ATTRIBUTE_NAMES) == 80
         assert len(LEGACY_ATTRIBUTE_NAMES) == 21
 
 

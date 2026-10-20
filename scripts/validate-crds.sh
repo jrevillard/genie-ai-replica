@@ -54,8 +54,21 @@ for name, docs in (('namespaces', ns), ('serviceaccounts', sa), ('rest', rest)):
     with open(f'${WORK}/{name}.yaml', 'w') as fh:
         yaml.safe_dump_all(docs, fh)
 
+# The chart renders the genieai-obs Namespace but NOT its own: the release
+# namespace is the installer's job, which is why the HelmRelease sets
+# install.createNamespace and why every pre-install hook assumes nothing.
+# This script is that installer, so it creates the namespaces the render
+# REFERENCES but does not declare. Deriving them from the objects is
+# safer than passing one in: a hook Job, a test pod and the obs namespace
+# all have to exist before anything can be validated against them.
+#
+# NOTE: this heredoc is UNQUOTED on purpose — ${WORK} has to expand. That
+# also means bash expands backticks and $ inside it, so this python block
+# must contain neither.
+referenced = {d['metadata']['namespace'] for d in rest + sa if d['metadata'].get('namespace')}
+declared = {d['metadata']['name'] for d in ns}
 with open(f'${WORK}/nsnames.txt', 'w') as fh:
-    fh.write('\n'.join(d['metadata']['name'] for d in ns) + '\n')
+    fh.write('\n'.join(sorted(declared | referenced)) + '\n')
 
 print(f"  split: {len(ns)} Namespace, {len(sa)} ServiceAccount, {len(rest)} to validate")
 PY
@@ -65,9 +78,21 @@ PY
 # computed patch carries nulls for defaulted fields, which the API server
 # then rejects ("must be specified for an update"). Create semantics do
 # not touch storage, so the check is purely schema + admission.
+printf '==> ensuring namespaces exist: %s\n' "$(tr '\n' ' ' < "${WORK}/nsnames.txt")"
 if [ -s "${WORK}/namespaces.yaml" ]; then
-  printf '==> applying namespaces\n'
   kubectl apply -f "${WORK}/namespaces.yaml" >/dev/null
+fi
+# Declared ones come from the render; referenced-only ones (the release
+# namespace) are created here, the way `helm install --create-namespace`
+# would.
+while read -r ns; do
+  [ -n "${ns}" ] || continue
+  if ! kubectl get namespace "${ns}" >/dev/null 2>&1; then
+    kubectl create namespace "${ns}" >/dev/null
+  fi
+done < "${WORK}/nsnames.txt"
+
+if [ -s "${WORK}/namespaces.yaml" ]; then
   # A Namespace object is accepted by the API server while the namespace
   # controller is still finalizing it, and creating anything inside that
   # window fails with `namespaces "genieai" not found` — CI's first run of

@@ -275,3 +275,42 @@ def test_cancel_of_a_terminal_job_is_idempotent(client, monkeypatch):
     d = client.delete(f"/jobs/{job_id}", headers=_auth())
     assert d.status_code == 200
     assert d.json()["status"] == "done"
+
+
+def test_phase_tracker_forwards_substep_and_elapsed():
+    """2026-10-20 — the KG phase streams the ACTIVE transform's bar
+    (step/done/total/eta) plus the job's elapsed time, so the UI can show
+    WHAT runs and HOW LONG it has run (David: "the user needs more
+    feedback than this")."""
+    tracker = app_module._phase_tracker("t-substep")
+    app_module.JOBS["t-substep"] = {
+        "status": "running",
+        "started_at": time.time() - 61,
+    }
+    try:
+        tracker("building-knowledge-graph", 337, 1075, step="Applying CustomNodeFilter", rate_s=0.7, eta_s=1100.0)
+        prog = app_module.JOBS["t-substep"]["progress"]
+        assert prog["phase"] == "building-knowledge-graph"
+        assert prog["done"] == 337
+        assert prog["total"] == 1075
+        assert prog["step"] == "Applying CustomNodeFilter"
+        assert prog["eta_s"] == 1100.0
+        assert prog["rate_s"] == 0.7
+        assert 55 <= prog["elapsed_s"] <= 75  # the clock survives re-attach
+    finally:
+        app_module.JOBS.pop("t-substep", None)
+
+
+def test_phase_tracker_keeps_working_for_plain_phase_calls():
+    """The old call shape (phase only, or phase+counts) must still produce a
+    valid progress payload — synthesis bumps positions, not kwargs."""
+    tracker = app_module._phase_tracker("t-plain")
+    app_module.JOBS["t-plain"] = {"status": "running", "started_at": time.time()}
+    try:
+        tracker("synthesizing-questions")
+        prog = app_module.JOBS["t-plain"]["progress"]
+        assert prog == {"phase": "synthesizing-questions", "elapsed_s": prog["elapsed_s"]}
+        tracker("synthesizing-questions", 7, None)
+        assert app_module.JOBS["t-plain"]["progress"]["done"] == 7
+    finally:
+        app_module.JOBS.pop("t-plain", None)

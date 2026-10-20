@@ -21,6 +21,7 @@ import asyncio
 import logging
 import os
 import threading
+import weakref
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -765,6 +766,72 @@ def _empty_sample():
     return SingleTurnSample(user_input="")
 
 
+# --- tqdm sub-step tracking (David 2026-10-20: "the user needs more
+# feedback than this") -------------------------------------------------------
+# ragas's transforms report their own progress as tqdm bars ("Applying
+# CustomNodeFilter: 337/1075 …"); the KG phase otherwise shows the user ONE
+# indeterminate bar for its whole (longest) duration. Hook tqdm so the
+# ACTIVE transform's bar is readable live. Transforms run sequentially, so
+# the newest not-yet-closed bar is the current step. Registry is weakref'd
+# and bounded — a long-lived process cannot accumulate.
+_TQDM_HOOKED = False
+_TQDM_BARS: list = []  # [weakref(bar)] — newest last
+
+
+def _hook_tqdm() -> None:
+    global _TQDM_HOOKED
+    if _TQDM_HOOKED:
+        return
+    _TQDM_HOOKED = True
+    try:
+        from tqdm import std as _tstd
+    except ImportError:
+        return
+    _orig_init = _tstd.tqdm.__init__
+    _orig_close = _tstd.tqdm.close
+
+    def _init(self, *args, **kwargs):
+        _orig_init(self, *args, **kwargs)
+        try:
+            self._genie_open = True
+            _TQDM_BARS.append(weakref.ref(self))
+            del _TQDM_BARS[:-64]
+        except Exception:  # noqa: BLE001 — tracking may never break tqdm
+            pass
+
+    def _close(self, *args, **kwargs):
+        try:
+            self._genie_open = False
+        except Exception:  # noqa: BLE001
+            pass
+        return _orig_close(self, *args, **kwargs)
+
+    _tstd.tqdm.__init__ = _init
+    _tstd.tqdm.close = _close
+
+
+def _current_tqdm_step() -> dict | None:
+    """The active transform's bar as {step, done, total, eta_s, rate_s}."""
+    for ref in reversed(_TQDM_BARS):
+        bar = ref()
+        if bar is None or not getattr(bar, "_genie_open", False):
+            continue
+        fd = getattr(bar, "format_dict", None) or {}
+        out = {"step": str(getattr(bar, "desc", "") or "working").strip()}
+        total = fd.get("total")
+        if total:
+            out["done"] = fd.get("n", getattr(bar, "n", 0))
+            out["total"] = total
+        eta = fd.get("eta")
+        if isinstance(eta, (int, float)) and eta == eta and 0 <= eta < 10**7:
+            out["eta_s"] = eta
+        rate = fd.get("rate")
+        if isinstance(rate, (int, float)) and rate == rate and rate > 0:
+            out["rate_s"] = rate
+        return out
+    return None
+
+
 class _TolerantSynthesizer:
     """Proxy that keeps one failed question from killing the whole run.
 
@@ -923,7 +990,41 @@ async def generate_testset(
         for doc in docs
     ]
     kg = KnowledgeGraph(nodes=nodes)
-    await asyncio.to_thread(apply_transforms, kg, transforms, run_config=RunConfig())
+    # Sub-step streaming: the KG phase is the longest and previously showed
+    # one indeterminate bar while ragas internally churned through extract →
+    # summaries → node filter → relationships, each with its own tqdm bar.
+    # A 1 Hz ticker reads the ACTIVE bar (see _hook_tqdm) and feeds the
+    # job's progress {step, done, total, eta_s} — the UI renders counts and
+    # a real ETA instead of a flashing bar.
+    kg_stop = threading.Event()
+
+    def _kg_ticker():
+        while not kg_stop.wait(1.0):
+            try:
+                step = _current_tqdm_step()
+            except Exception:  # noqa: BLE001 — progress may never fail a job
+                step = None
+            if step and progress is not None:
+                try:
+                    progress(
+                        "building-knowledge-graph",
+                        step.get("done"),
+                        step.get("total"),
+                        step=step.get("step"),
+                        rate_s=step.get("rate_s"),
+                        eta_s=step.get("eta_s"),
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+
+    _hook_tqdm()
+    ticker = threading.Thread(target=_kg_ticker, daemon=True, name="kg-progress")
+    ticker.start()
+    try:
+        await asyncio.to_thread(apply_transforms, kg, transforms, run_config=RunConfig())
+    finally:
+        kg_stop.set()
+        ticker.join(timeout=2)
     _check_cancel(cancel_event)
     generator.knowledge_graph = kg
 

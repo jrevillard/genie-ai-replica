@@ -832,3 +832,53 @@ def test_persona_patch_is_idempotent():
     ragas_engine._patch_persona_lookup()  # second call must not re-wrap
     pl = _persona_list("Maya Chen")
     assert pl["Maya Chen (Analyst)"].name == "Maya Chen"
+
+
+# --- tqdm sub-step tracking (David 2026-10-20: "the user needs more
+# feedback than this") — the KG phase streams the ACTIVE transform's bar
+# instead of one indeterminate flash for its whole duration. -------------
+
+
+def _quiet_bar(**kwargs):
+    import io
+
+    from tqdm import std as tstd
+
+    return tstd.tqdm(file=io.StringIO(), **kwargs)
+
+
+def test_current_tqdm_step_reads_the_newest_open_bar():
+    ragas_engine._hook_tqdm()
+    finished = _quiet_bar(total=10, desc="Summaries")
+    finished.update(5)
+    finished.close()
+    live = _quiet_bar(total=40, desc="Applying CustomNodeFilter")
+    live.update(12)
+    try:
+        step = ragas_engine._current_tqdm_step()
+        assert step["step"] == "Applying CustomNodeFilter"
+        assert step["done"] == 12
+        assert step["total"] == 40
+    finally:
+        live.close()
+
+
+def test_current_tqdm_step_none_when_all_bars_closed():
+    ragas_engine._hook_tqdm()
+    bar = _quiet_bar(total=4, desc="done step")
+    bar.close()
+    assert ragas_engine._current_tqdm_step() is None
+
+
+def test_current_tqdm_step_never_leaks_nan_or_missing_desc():
+    ragas_engine._hook_tqdm()
+    live = _quiet_bar(total=10)  # no desc at all
+    live.update(0)
+    try:
+        step = ragas_engine._current_tqdm_step()
+        assert step is not None
+        assert isinstance(step["step"], str) and step["step"]
+        assert "eta_s" not in step or step["eta_s"] == step["eta_s"]
+        assert "rate_s" not in step
+    finally:
+        live.close()

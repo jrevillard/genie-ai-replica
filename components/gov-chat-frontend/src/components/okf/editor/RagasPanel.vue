@@ -159,9 +159,15 @@
         <DsSpinner v-if="importBusy" size="sm">{{ translate('okf.ragas.import.working', 'Importing…') }}</DsSpinner>
       </div>
       <div v-if="generateBusy && genProgress" class="okf-ragas__progress">
-        <!-- count-less phases (the KG rebuild) animate instead of sitting
-             at a dead zero — honest "working, no counts yet" (2026-10-18) -->
+        <!-- count-less moments animate instead of sitting at a dead zero —
+             honest "working, no counts yet" (2026-10-18). Since 2026-10-20
+             the KG phase also streams the ACTIVE transform's own bar
+             (step, x/y, ETA, elapsed) — no more one flashing bar for the
+             whole (longest) phase. -->
         <DsProgress :value="genProgressPct" :indeterminate="!genProgress.total" />
+        <span v-if="genProgressDetail" class="okf-ragas__muted okf-ragas__progress-detail">
+          {{ genProgressDetail }}
+        </span>
       </div>
     </div>
 
@@ -788,6 +794,25 @@ export default {
       const phase = this.translate(`okf.ragas.run.phase.${p.phase}`, p.phase);
       return p.total ? `${phase} ${p.done}/${p.total}` : phase;
     },
+    /** The sub-step line: active transform + counts + ETA + elapsed
+     * (David 2026-10-20: "the user needs more feedback than this" — a
+     * flashing bar with no sense of what or how long is not feedback). */
+    genProgressDetail() {
+      const p = this.genProgress;
+      if (!p) return '';
+      const parts = [];
+      if (p.step) parts.push(p.step);
+      else if (p.total) parts.push(`${p.done}/${p.total}`);
+      const eta = this.fmtDuration(p.eta_s);
+      if (eta) {
+        parts.push(this.translate('okf.ragas.gen.eta', '~{t} left').replace('{t}', eta));
+      }
+      const elapsed = this.fmtDuration(p.elapsed_s);
+      if (elapsed) {
+        parts.push(this.translate('okf.ragas.gen.elapsed', 'running {t}').replace('{t}', elapsed));
+      }
+      return parts.join(' · ');
+    },
     /** Column model for the per-query results table: id, question, one per
      *  selected metric, the answer, the state — drives the colgroup and the
      *  per-header drag grips. */
@@ -879,6 +904,19 @@ export default {
     else this.loadLatest();
   },
   methods: {
+    /** Coarse human duration for ETAs and elapsed clocks. Type-safe: the
+     * progress payload is server JSON that evolves — a malformed eta must
+     * render as "unknown", never crash the panel. */
+    fmtDuration(s) {
+      if (typeof s !== 'number' || Number.isNaN(s) || s < 0) return '';
+      const m = Math.round(s / 60);
+      if (m < 1) return this.translate('okf.ragas.gen.underMin', 'under a minute');
+      if (m < 60) return this.translate('okf.ragas.gen.minutes', '{m} min').replace('{m}', String(m));
+      const h = Math.floor(m / 60);
+      return this.translate('okf.ragas.gen.hours', '{h} h {m} min')
+        .replace('{h}', String(h))
+        .replace('{m}', String(m % 60));
+    },
     /** 8-7: the judge-config dropdown — a 403 (non-admin) or an empty list
      *  simply hides the selector; the deployment default keeps applying. */
     async loadJudgeConfigs() {

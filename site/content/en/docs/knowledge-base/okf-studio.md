@@ -124,9 +124,14 @@ which judge scored it.
   it generates, and pressing Generate while one is already running attaches
   to it rather than failing. Nothing is ever discarded on a timer —
   a healthy long run
-  ends only when it completes or when you cancel it. A disk cache of judge
-  responses makes **repeat** generations of the same repositories nearly
-  instant (the knowledge-graph phase is skipped; disable with
+  ends only when it completes or when you cancel it. The progress display
+  streams the pipeline's own steps live: during the knowledge-graph build
+  (the longest phase on a fresh judge cache) the active transform is shown
+  by name with its counts, estimated time remaining, and the run's elapsed
+  clock — extraction, summaries, node filtering, themes, relationships —
+  and question synthesis reports i/n as scenarios complete. A disk cache of
+  judge responses makes **repeat** generations of the same repositories
+  nearly instant (the knowledge-graph phase is skipped; disable with
   `RAGAS_LLM_CACHE=0`).
 - **Manage** entries with full parity to the other suites: edit the question
   or expected answer, flip an entry in-scope/out-of-scope, remove it, add

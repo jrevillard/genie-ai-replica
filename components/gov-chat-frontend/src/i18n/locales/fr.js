@@ -3154,6 +3154,13 @@ export default {
       }
     },
     ragas: {
+      gen: {
+        eta: '~{t} restantes',
+        elapsed: 'en cours depuis {t}',
+        underMin: 'moins d’une minute',
+        minutes: '{m} min',
+        hours: '{h} h {m} min'
+      },
       paneTitle: 'Bancs d’essai RAGAS',
       about:
         'RAGAS évalue la qualité de récupération et de réponse de l’assistant — fidélité, précision et rappel du contexte, pertinence des réponses, etc. Lancez une suite de bancs d’essai pour mesurer le dépôt comme base de connaissances.',

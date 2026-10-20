@@ -6,7 +6,7 @@
  * Covers: empty render, user message submission, input clearing,
  * loading state, and error state.
  */
-const { mount } = require('@vue/test-utils');
+const { mount, flushPromises } = require('@vue/test-utils');
 const { createStore } = require('vuex');
 const { createAuthenticatedState } = require('../fixtures/store-state');
 
@@ -1735,6 +1735,79 @@ describe('ChatBotComponent', () => {
     it('returns key when key is missing and no fallback provided', () => {
       const wrapper = createChatBotWrapper();
       expect(wrapper.vm.translate('chatbot.thinking')).toBe('chatbot.thinking');
+    });
+  });
+
+  describe('quick-help card tint', () => {
+    const configLoader = require('../../config-loader');
+
+    const tintedButton = {
+      id: 'identity-civil',
+      title: { en: 'Apply for ID' },
+      icon: { type: 'file', value: '/config/quickhelp/identity-civil.svg' },
+      category: 'civil',
+      styles: {
+        backgroundColor: '#ecfdf5',
+        hoverColor: '#d1fae5',
+        outlineColor: '#a7f3d0'
+      }
+    };
+
+    const untintedButton = {
+      id: 'just-chat',
+      title: { en: 'Just Chat' },
+      icon: { type: 'file', value: '/config/quickhelp/just-chat.svg' },
+      category: null
+    };
+
+    const mountWithButtons = async (buttons) => {
+      configLoader.default.mockResolvedValue({
+        features: { chat: { quickHelp: { buttons } } }
+      });
+      const wrapper = createChatBotWrapper();
+      await flushPromises();
+      return wrapper;
+    };
+
+    afterEach(() => {
+      // The config-loader mock is module-level, and clearAllMocks() does
+      // not reset an implementation — restore the empty-button default so
+      // the rest of the suite is unaffected.
+      configLoader.default.mockResolvedValue({
+        features: { chat: { quickHelp: { buttons: [] } } }
+      });
+    });
+
+    it('exposes the button tint as custom properties', () => {
+      const wrapper = createChatBotWrapper();
+
+      expect(wrapper.vm.buttonTintStyle(tintedButton)).toEqual({
+        '--qh-bg': '#ecfdf5',
+        '--qh-hover': '#d1fae5',
+        '--qh-outline': '#a7f3d0'
+      });
+    });
+
+    it('leaves the tint unset when a button declares no styles', () => {
+      const wrapper = createChatBotWrapper();
+
+      expect(wrapper.vm.buttonTintStyle(untintedButton)).toBeUndefined();
+    });
+
+    it('binds the tint onto the quick-help card', async () => {
+      const wrapper = await mountWithButtons([tintedButton]);
+
+      const card = wrapper.find('.quick-help-item');
+      expect(card.exists()).toBe(true);
+      expect(card.attributes('style') || '').toContain('--qh-bg');
+    });
+
+    it('binds nothing onto a card whose button declares no styles', async () => {
+      const wrapper = await mountWithButtons([untintedButton]);
+
+      const card = wrapper.find('.quick-help-item');
+      expect(card.exists()).toBe(true);
+      expect(card.attributes('style') || '').not.toContain('--qh-bg');
     });
   });
 });

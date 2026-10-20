@@ -154,6 +154,7 @@
               :hoverable="true"
               class="quick-help-item"
               :class="{ 'just-chat': !button.category }"
+              :style="buttonTintStyle(button)"
               @click="selectQuickHelpOption(button)"
             >
               <img class="quick-help-icon" :src="button.icon" alt="Quick Help Icon" />
@@ -584,6 +585,25 @@ export default {
       return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     },
 
+    /**
+     * Exposes the per-button tint to CSS as custom properties, so the card
+     * picks it up without a style rule per category. Absent values are left
+     * out rather than set to an empty string — the theme layer falls back to
+     * the design-system accent when a button declares no styles.
+     */
+    buttonTintStyle(button) {
+      const styles = button.styles;
+      if (!styles) return undefined;
+      const bindings = {
+        '--qh-bg': styles.backgroundColor,
+        '--qh-hover': styles.hoverColor,
+        '--qh-outline': styles.outlineColor
+      };
+      const defined = Object.entries(bindings).filter(([, value]) => value);
+      if (!defined.length) return undefined;
+      return Object.fromEntries(defined);
+    },
+
     // *** UPDATED: Use serviceTreeService to load and transform categories ***
     async loadServiceCategories() {
       try {
@@ -736,6 +756,7 @@ export default {
               hiddenPrompt: hiddenPrompt,
               icon: button.icon?.value,
               category: button.category,
+              styles: button.styles,
               id: button.id
             };
           });

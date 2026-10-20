@@ -1658,20 +1658,28 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             write_ingestion_log=self._write_ingestion_log,
         )
 
-        # Every batch that finished under the budget returns a complete map for
-        # all of its chunks, so those suggestions are kept — an abandoned batch
-        # contributes nothing, and its chunks fall through to the file-label
-        # fallback in _finalize_chunk_labels exactly as they would if that one
-        # batch had failed on its own. Counted here so a budget-driven
-        # degradation shows up in metrics the same way a per-batch one does.
         if timed_out:
-            _llm_fallback_total.add(
-                len(batches) - len(partial_maps), {"phase": PHASE_LABEL_LABELING, "reason": "phase_budget"}
-            )
+            abandoned = len(batches) - len(partial_maps)
+            _llm_fallback_total.add(abandoned, {"phase": PHASE_LABEL_LABELING, "reason": "phase_budget"})
 
         suggested_map: dict[int, list[str]] = {}
         for partial in partial_maps:
             suggested_map.update(partial)
+
+        # An abandoned batch contributes NOTHING — it was cancelled before
+        # reaching the per-chunk loop, so the file-label fallback at the end of
+        # _llm_suggest_labels never runs for its chunks. Left unfilled they are
+        # stored with an empty label list: unreachable by taxonomy, and the
+        # ingestion log reads "Final labels (0): []" for them, which looks like
+        # a labelling regression rather than the budget exhaustion it is.
+        #
+        # Filled with the document's own labels, which is what a batch that
+        # failed rather than timed out ends up with, so a degraded document is
+        # uniform. Scoped to the budget path on purpose: a chunk the LLM
+        # legitimately returned nothing for is not force-labelled.
+        if timed_out and file_labels:
+            for i, _ in indexed:
+                suggested_map.setdefault(i, list(file_labels))
 
         # Resolve suggestions against the taxonomy (exact + synonym match) and
         # emit a single consolidated ingestion-log entry per chunk.

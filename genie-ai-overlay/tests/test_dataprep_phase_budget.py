@@ -58,6 +58,20 @@ class _Recorder:
             await asyncio.sleep(self.yield_for)
 
 
+def _stub_dataprep():
+    """A dataprep instance with only what _label_with_llm touches.
+
+    __new__ bypasses __init__, which chains through parents that connect to
+    ArangoDB — the same trick tests/test_dataprep.py uses.
+    """
+    from unittest.mock import AsyncMock, MagicMock
+
+    dp = dataprep.GenieArangoDataprep.__new__(dataprep.GenieArangoDataprep)
+    dp._write_ingestion_log = AsyncMock()
+    dp.llm_transformer = MagicMock()
+    return dp
+
+
 def _run(coro):
     return asyncio.run(coro)
 
@@ -603,6 +617,56 @@ class TestPhaseBoundIsAHardWall:
     a non-cancellable await never finishes, so the settle never returns), and
     result-collection that depended on which set iteration order it got.
     """
+
+    def test_a_degraded_document_is_uniformly_labelled(self, monkeypatch):
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        """Chunks from abandoned batches must not be stored with no labels.
+
+        A batch that RUNS fills every chunk index — ``_llm_suggest_labels``
+        loops over the batch and ``_llm_call_single`` returns the document's
+        file labels when its call fails. A batch that is ABANDONED is cancelled
+        before that loop, so it contributes nothing at all, and its chunks used
+        to be stored with an empty label list: unreachable by taxonomy, and the
+        ingestion log reads "Final labels (0): []", which looks like a labelling
+        regression rather than the budget exhaustion that caused it.
+        """
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 0.4)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
+
+        from unittest.mock import MagicMock, patch
+
+        async def scenario():
+            dp = _stub_dataprep()
+
+            async def never_answers(**_kwargs):
+                # A real coroutine, not an AsyncMock side_effect: AsyncMock
+                # RETURNS whatever the side_effect produces, so a side_effect
+                # of sleep(30) hands back an un-awaited coroutine and the call
+                # fails immediately — exercising the per-batch failure path
+                # instead of the budget path this test is about.
+                await asyncio.sleep(30)
+
+            hung = MagicMock()
+            hung.chat.completions.create = never_answers
+            with patch.object(dataprep, "AsyncOpenAI", return_value=hung):
+                return await dp._label_with_llm(
+                    ["alpha text", "beta text", "gamma text", "delta text"],
+                    ["Tax:IVA", "Topic:Property"],
+                    ["Tax:IVA"],
+                    "f1",
+                )
+
+        results = _run(scenario())
+        assert len(results) == 4, results
+        unlabelled = [r["text"] for r in results if not r["labels"]]
+        assert not unlabelled, (
+            f"chunks were stored with no labels: {unlabelled} — a degraded document must be "
+            "uniform, or the unlabelled chunks are invisible to taxonomy search and the symptom "
+            "reads as a labelling bug"
+        )
 
     def test_a_task_that_ignores_cancellation_does_not_hold_the_phase(self, monkeypatch):
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 0.3)

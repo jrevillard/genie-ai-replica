@@ -49,8 +49,14 @@ spec:
     {{- with .Values.pluggable.storageClassName }}
     storageClass: {{ . }}
     {{- end }}
-    accessModes:
-      - ReadWriteOnce
+    # Access modes live under pvcTemplate, NOT directly on storage:
+    # the CNPG Cluster CRD exposes only size / storageClass /
+    # resizeInUseVolumes / pvcTemplate, and it decodes strictly, so a
+    # sibling `accessModes:` key rejects the whole Cluster — the
+    # Keycloak database, and with it the whole install.
+    pvcTemplate:
+      accessModes:
+        - ReadWriteOnce
   postgresql:
     parameters:
       max_connections: "200"

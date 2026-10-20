@@ -31,12 +31,23 @@ from tests.conftest import OVERLAY_ROOT
 # mapping above is what decides whether a given import is checked at all. Keying
 # it by service would let ``retriever/config.py`` import ``core.*`` with no entry
 # naming it — which is exactly how ``retriever/config.py`` slipped through.
-SERVICE_IMAGES: dict[str, Path] = {
-    "chatqna/genieai_chatqna.py": OVERLAY_ROOT / "chatqna" / "Dockerfile-chatqna_genie-ai",
-    "retriever/genieai_retriever_arangodb.py": OVERLAY_ROOT / "retriever" / "Dockerfile-retriever_genie-ai",
-    "retriever/config.py": OVERLAY_ROOT / "retriever" / "Dockerfile-retriever_genie-ai",
-    "reranker/genieai_tei_reranker.py": OVERLAY_ROOT / "reranker" / "Dockerfile-reranker_genie-ai",
-    "dataprep/genieai_dataprep_arangodb.py": OVERLAY_ROOT / "dataprep" / "Dockerfile-dataprep_genie-ai",
+SERVICE_IMAGES: dict[str, tuple[Path, ...]] = {
+    "chatqna/genieai_chatqna.py": (OVERLAY_ROOT / "chatqna" / "Dockerfile-chatqna_genie-ai",),
+    "retriever/genieai_retriever_arangodb.py": (OVERLAY_ROOT / "retriever" / "Dockerfile-retriever_genie-ai",),
+    "retriever/config.py": (OVERLAY_ROOT / "retriever" / "Dockerfile-retriever_genie-ai",),
+    "reranker/genieai_tei_reranker.py": (OVERLAY_ROOT / "reranker" / "Dockerfile-reranker_genie-ai",),
+    "dataprep/genieai_dataprep_arangodb.py": (OVERLAY_ROOT / "dataprep" / "Dockerfile-dataprep_genie-ai",),
+    "dataprep/keycloak_service_account.py": (OVERLAY_ROOT / "dataprep" / "Dockerfile-dataprep_genie-ai",),
+    # core/ is not one image. model_cache ships in all three services that talk
+    # to a model endpoint, and it now imports core.model_http_policy, so a
+    # single-image mapping would let two of those three build an image whose
+    # import fails at startup — the exact failure this pin exists to catch, in
+    # the two places a one-to-one key cannot name.
+    "core/model_cache.py": (
+        OVERLAY_ROOT / "chatqna" / "Dockerfile-chatqna_genie-ai",
+        OVERLAY_ROOT / "retriever" / "Dockerfile-retriever_genie-ai",
+        OVERLAY_ROOT / "dataprep" / "Dockerfile-dataprep_genie-ai",
+    ),
 }
 
 _COPY_CORE = re.compile(r"^COPY\s+genie-ai-overlay/core/(?P<module>[\w.]+)\.py\s+\S+", re.MULTILINE)
@@ -90,18 +101,22 @@ def _copied_core_modules(dockerfile: Path) -> set[str]:
 # unguarded while this file still reported the tree clean.
 
 
-@pytest.mark.parametrize("service", sorted(SERVICE_IMAGES), ids=sorted(SERVICE_IMAGES))
-def test_image_ships_every_core_module_the_service_imports(service: str) -> None:
+@pytest.mark.parametrize(
+    ("service", "dockerfile"),
+    [(svc, df) for svc in sorted(SERVICE_IMAGES) for df in SERVICE_IMAGES[svc]],
+    ids=[f"{svc}->{df.name}" for svc in sorted(SERVICE_IMAGES) for df in SERVICE_IMAGES[svc]],
+)
+def test_image_ships_every_core_module_the_service_imports(service: str, dockerfile: Path) -> None:
     source_path = OVERLAY_ROOT / service
     imported = _core_imports(source_path)
     if not imported:
         pytest.skip(f"{service} imports nothing from core")
 
-    copied = _copied_core_modules(SERVICE_IMAGES[service])
+    copied = _copied_core_modules(dockerfile)
     missing = sorted(imported - copied)
     assert not missing, (
         f"{service} imports core.{', core.'.join(missing)} but "
-        f"{SERVICE_IMAGES[service].name} copies none of them. Add a "
+        f"{dockerfile.name} copies none of them. Add a "
         f"'COPY genie-ai-overlay/core/<module>.py /app/core/<module>.py' line — "
         "the local suite cannot catch this, the image fails at import."
     )
@@ -116,7 +131,7 @@ def test_the_pin_covers_every_service_directory_with_a_dockerfile() -> None:
     than a derivation.
     """
     present = {p.name for p in OVERLAY_ROOT.glob("*/Dockerfile-*")}
-    named = {p.name for p in SERVICE_IMAGES.values()}
+    named = {p.name for paths in SERVICE_IMAGES.values() for p in paths}
     assert named <= present, f"pinned Dockerfiles that do not exist: {sorted(named - present)}"
 
     services_with_core_imports = {service for service in SERVICE_IMAGES if _core_imports(OVERLAY_ROOT / service)}

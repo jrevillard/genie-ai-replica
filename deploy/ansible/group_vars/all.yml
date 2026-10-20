@@ -124,6 +124,14 @@ vllm_api_key: ""
 # These are independent of gpu_node_host. For example:
 #   - Remote GPU node with Let's Encrypt: no need to set opea_ssl_skip_verify
 #   - Remote GPU node with self-signed cert: set opea_ssl_skip_verify = "1"
+# REQUIRED, not implied, when gpu_node_host is set AND gpu_self_signed_certs is
+# true (which is this file's default): the GPU node's certificate is then
+# self-signed by construction, and OPEA-side verification is opt-in. Before the
+# verify=False gating, the bypass was implied by setting VLLM_API_KEY; now that
+# it is explicit, such a deployment passes `ansible-playbook` and fails at its
+# first model call with CERTIFICATE_VERIFY_FAILED. Set "1" there. It is NOT
+# derived automatically from the two variables above: silently turning off
+# certificate verification is not a decision a template should make.
 opea_ssl_skip_verify: ""
 
 # Keycloak SSL verification (independent of OPEA settings)
@@ -137,7 +145,72 @@ keycloak_ssl_skip_verify: ""
 #   dataprep_llm_label_batch_size: 4     # chunks per LLM call (code default 4); raise to 8 on
 #                                        #   capable models (e.g. granite-4.1-8b). Batches fall
 #                                        #   back to per-chunk on parse failure.
-# Contextual Retrieval (optional, default OFF) — per-chunk LLM doc-context prefix
+#
+# Model-endpoint HTTP budgets. Defaults live in code (core/model_http_policy.py);
+# override here if a model is slower than the default budget allows. A request
+# that misses its budget falls back (file labels, raw chunk) rather than
+# blocking, so a budget set too low degrades quality instead of stalling.
+#   model_llm_timeout_seconds: 180        # vLLM chat completions. Raise if
+#                                         #   labelling exceeds it on a slow model
+#   model_llm_max_retries: 2              # SDK retries on 5xx / connection
+#                                         #   errors. 0 is a real value and means
+#                                         #   no SDK retries.
+#   model_summarizer_timeout_seconds: 600 # retriever summarizer. No fallback
+#                                         #   path, so a tighter budget turns a
+#                                         #   slow success into a 500 on the chat
+#                                         #   request. The client was unbounded;
+#                                         #   600 matches the openai SDK default so
+#                                         #   this is the least likely ceiling to
+#                                         #   break a working deployment.
+#   model_embedding_timeout_seconds: 600 # the retriever's embedding client,
+#                                         #   OpenAI-API branch ONLY. A NEW
+#                                         #   ceiling: langchain-openai forwards
+#                                         #   request_timeout (default None),
+#                                         #   which overrides the openai SDK
+#                                         #   default, so the call was unbounded.
+#                                         #   Lowering it yields a silently empty
+#                                         #   retrieval — the retriever's except
+#                                         #   clause returns [] ahead of the
+#                                         #   hybrid/BM25 leg. The TEI branch
+#                                         #   (TEI_EMBEDDING_ENDPOINT and
+#                                         #   HF_TOKEN) is deliberately unbudgeted
+#                                         #   — and that is the REMOTE-GPU branch,
+#                                         #   so this knob does not reach it.
+#   model_connect_timeout_seconds: 30    # the CONNECT ceiling for the two aiohttp
+#                                         #   clients this policy budgeted. aiohttp's
+#                                         #   default session carried 30 s; an explicit
+#                                         #   ClientTimeout(total=...) drops it and
+#                                         #   None means no limit, so bounding those
+#                                         #   calls would have removed a ceiling
+#                                         #   rather than added one. Raise for slow
+#                                         #   DNS or a routed mesh.
+#   model_probe_timeout_seconds: 10       # the /v1/models model-id probe.
+#                                         #   Degrades to the configured model
+#                                         #   id on failure, but a vLLM still
+#                                         #   loading weights answers in minutes,
+#                                         #   not seconds — and the fallback then
+#                                         #   silently picks the wrong id.
+#                                         #   Raise it on a remote GPU node.
+#   model_rerank_timeout_seconds: 300     # TEI rerank — no fallback path, so a
+#                                         #   tighter budget turns slow successes
+#                                         #   into 500s on the chat request
+#   model_auth_timeout_seconds: 300    # dataprep's Keycloak service-account
+#                                         #   token fetch. NOT the control-plane
+#                                         #   30 s: every control-plane write waits
+#                                         #   on this token, one attempt, no retry,
+#                                         #   no fallback. Already 300 (aiohttp's
+#                                         #   default), so this changes nothing —
+#                                         #   it makes the value explicit.
+#   model_control_plane_timeout_seconds: 30  # doc-repo calls, ingestion-log writes
+#
+# There is deliberately no `vllm_timeout` knob, and there must not be one added
+# back. The vendored comps graph transformer reads VLLM_TIMEOUT verbatim from
+# os.getenv, so a value reaches httpx as a string; httpx 0.28 does not coerce it
+# and the client raises TypeError instead of timing out. The graph phase keeps
+# comps' own int 600 s default. No template line can reach it in any case —
+# compose forwards only keys a service declares in `environment:` — so a knob
+# here would be rendered and silently dropped.
+# Contextual Retrieval (default ON since v1.5) — per-chunk LLM doc-context prefix
 # prepended before embedding + labeling (Anthropic-style). Adds one vLLM
 # call/chunk at ingest; never blocks ingestion (raw-chunk fallback). Override in
 # group_vars/<env>/vars.yml:

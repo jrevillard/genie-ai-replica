@@ -154,7 +154,7 @@ class TestVocabularyShape:
     def test_values_are_unique(self):
         assert len(set(VOCABULARY)) == len(VOCABULARY)
 
-    def test_vocabulary_has_eighty_entries(self):
+    def test_vocabulary_size_is_explicit(self):
         assert len(ATTRIBUTE_NAMES) == 80
 
 

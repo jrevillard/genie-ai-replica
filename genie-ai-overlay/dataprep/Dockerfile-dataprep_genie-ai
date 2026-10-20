@@ -136,6 +136,20 @@ COPY genie-ai-overlay/tracing.py /app/tracing.py
 # Copy shared TTL-cached model probe (importable as core.model_cache from PYTHONPATH=/app)
 COPY genie-ai-overlay/core/model_cache.py /app/core/model_cache.py
 
+# Copy the shared model-endpoint HTTP budget policy (importable as
+# core.model_http_policy). Dataprep reads the control-plane budget from it for
+# the in-cluster calls and the auth budget for the Keycloak service-account
+# token fetch; without them the image fails at import, not at runtime. Its own
+# vLLM chat-completion client is NOT yet wired to this module.
+COPY genie-ai-overlay/core/model_http_policy.py /app/core/model_http_policy.py
+
+# Copy the shared span-attribute vocabulary (importable as core.span_attrs).
+# The LLM timeout attributes this overlay added are stamped through it rather
+# than by literal, so a renamed key cannot diverge between the vocabulary and
+# the emitters. The older dataprep attributes are still literals; converting
+# them is a separate change.
+COPY genie-ai-overlay/core/span_attrs.py /app/core/span_attrs.py
+
 # Step H: Fix docarray circular import (proactive fix, shared with retriever/reranker)
 # The vendored comps/cores/proto/docarray.py shadows the real 'docarray' PyPI
 # package on PYTHONPATH. docarray_alias_shim.py (wired via zz_genie_startup.pth at

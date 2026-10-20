@@ -8,7 +8,16 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-19)
 
-- Chart `genieai-umbrella` at **0.2.43** on `feat/k8s-migration`; deployed on
+- **CRD blind spot closed (0.2.55–0.2.56)**: `kubeconform
+  -ignore-missing-schemas` never validated a Custom Resource, and several
+  operators decode their CRs strictly — `chart:crd-validate` runs the full
+  render through `kubectl create --dry-run=server` against the installed
+  CRDs (`scripts/validate-crds.sh`). It caught two real defects on its
+  first run: `GrafanaDashboard.spec.resyncInterval` (the field is
+  `resyncPeriod`, so all nine dashboards were rejected) and
+  `Cluster.spec.storage.accessModes` (pruned silently; access modes
+  belong under `storage.pvcTemplate`).
+- Chart `genieai-umbrella` at **0.2.56** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto main after issue #998 (runtime-theme model, 81 commits) —
   tip `7a20c5913` at rebase time, theme delivery ported to the operator
@@ -163,6 +172,11 @@ the compose config, kept verbatim; backlog.
   duplicates possible; scoping `include` in 0.2.20 did not change this).
   Add `file_storage` + wire it into the receiver if that gap ever matters
   operationally.
+- **The Grafana tier has never run live.** `observability.grafana.enabled`
+  is false by default and the laptop overlay leaves it off, so the CRs were
+  only ever validated by the schema gate above. The instance CR → operator
+  Deployment → Service selector → `/grafana` route chain is unproven at
+  runtime; enabling it on the laptop is the next validation step.
 - Dataprep vendored `llm_transformer` (sync langchain in `to_thread`) has no
   effective request timeout; long ingestions can pin threads on a stalled
   upstream (observed once against the shared GPU node; pod restart recovered).

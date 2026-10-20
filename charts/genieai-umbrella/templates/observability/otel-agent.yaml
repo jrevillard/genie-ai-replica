@@ -52,9 +52,16 @@ spec:
         # normalisation transform leaves those raw, the admin logs TYPE
         # column renders `{"time"` fragments, and the dashboard error
         # counts report the cluster's controllers instead of the stack.
+        # The app namespace only. The agent's own namespace (<ns>-obs)
+        # holds nothing but this DaemonSet: the gateway collector runs in
+        # the app namespace. Tailing it would be self-tailing, and the
+        # rows would be dropped anyway — k8sattributes watches the app
+        # namespace only (the Role is namespaced there), so an entry from
+        # <ns>-obs finds no pod to associate with and passthrough:false
+        # discards it. Reading the files would cost I/O for rows that
+        # never ship.
         include:
           - /var/log/pods/{{ .Values.namespace }}_*/*/*.log
-          - /var/log/pods/{{ .Values.namespace }}-obs_*/*/*.log
         start_at: end
         include_file_path: true
         operators:

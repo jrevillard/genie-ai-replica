@@ -17,15 +17,7 @@ top-level `.Values.component` (default: "umbrella") instead.
 {{- $ctx := . -}}
 {{- $svcName := $ctx.name -}}
 {{- $svc := index $ctx.Values.services $svcName -}}
-{{- $replicas := $svc.replicas | default 1 -}}
-{{- with $ctx.Values.clusterProfileReplicas -}}
-{{- if hasKey . $ctx.Values.clusterProfile -}}
-{{- $profileReplicas := index . $ctx.Values.clusterProfile -}}
-{{- if hasKey $profileReplicas $svcName -}}
-{{- $replicas = index $profileReplicas $svcName -}}
-{{- end -}}
-{{- end -}}
-{{- end -}}
+{{- $replicas := include "genieai-umbrella.resolveReplicas" (dict "Values" $ctx.Values "service" $svcName) | int -}}
 {{- $component := $ctx.component | default $svcName -}}
 {{- $objectName := lower $svcName -}}
 apiVersion: apps/v1

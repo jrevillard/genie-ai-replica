@@ -1127,9 +1127,9 @@ cd /home/jerome/git_projects/ITU/genie-ai && git add components/gov-chat-fronten
 git commit -m "feat(chat): carry the quick-help per-button tint into CSS
 
 Every quick-help button already declares a styles block in the config
-schema, and six of the seven config files populate all three of its
-keys — with huduma carrying eight distinct outline colours. Nothing
-in the frontend read it.
+schema, and all seven config files populate all three of its keys on
+all nine of their buttons — with huduma carrying eight distinct
+outline colours. Nothing in the frontend read it.
 
 The tint now reaches the card as three custom properties, so a
 category colour needs no CSS rule and no new token. A button that

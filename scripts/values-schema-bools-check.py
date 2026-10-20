@@ -31,7 +31,15 @@ import yaml
 
 
 def boolean_leaves(values, prefix=""):
-    """Every dotted path in `values` whose value is a YAML boolean."""
+    """Every dotted path in `values` whose value is a YAML boolean.
+
+    Lists are walked too, and a boolean inside one yields an indexed
+    path (`foo.bar[0].enabled`). Such a path can never match the schema
+    side — JSON Schema types an array's ITEMS, not each index — so
+    `main` reports those separately instead of failing on them: they are
+    a real coverage gap, but demanding a dotted constraint for them
+    would be asking for something the schema cannot express.
+    """
     found = set()
     if isinstance(values, dict):
         for key, value in values.items():
@@ -40,6 +48,12 @@ def boolean_leaves(values, prefix=""):
                 found.add(path)
             else:
                 found |= boolean_leaves(value, path)
+    elif isinstance(values, list):
+        for index, value in enumerate(values):
+            if isinstance(value, bool):
+                found.add(f"{prefix}[{index}]")
+            else:
+                found |= boolean_leaves(value, f"{prefix}[{index}]")
     return found
 
 
@@ -72,7 +86,13 @@ def main(argv):
     in_values = boolean_leaves(values)
     in_schema = schema_boolean_leaves(schema)
 
-    missing = sorted(in_values - in_schema)
+    # Indexed paths live inside an array: the schema types the array's
+    # items, not each index, so there is no dotted constraint that could
+    # ever match. Reported, never failed on — but no longer invisible.
+    indexed = sorted(p for p in in_values if "[" in p)
+    dotted = in_values - set(indexed)
+
+    missing = sorted(dotted - in_schema)
     extra = sorted(in_schema - in_values)
 
     if missing:
@@ -82,6 +102,15 @@ def main(argv):
     if extra:
         print("schema boolean constraints with no matching values.yaml leaf:")
         for path in extra:
+            print(f"  - {path}")
+    if indexed:
+        print(
+            "booleans inside a list — OUTSIDE this gate's reach (JSON Schema types"
+        )
+        print(
+            "  an array's items, not each index), so a wrong type there is not caught:"
+        )
+        for path in indexed:
             print(f"  - {path}")
 
     if missing or extra:
@@ -94,7 +123,7 @@ def main(argv):
         return 1
 
     print(
-        f"values.schema.json types all {len(in_values)} boolean leaves of values.yaml"
+        f"values.schema.json types all {len(dotted)} boolean leaves of values.yaml"
     )
     return 0
 

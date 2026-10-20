@@ -128,4 +128,72 @@ describe('loadConfig', () => {
     expect(result.theme.brandColor).toBe(DEFAULT_BRAND_COLOR);
     expect(cssPropsSet()).toEqual(['--brand']);
   });
+
+  it('rejects when the fetched config does not satisfy its own schema', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          $schema: 'http://json-schema.org/draft-07/schema#',
+          type: 'object',
+          required: ['theme'],
+          properties: {
+            theme: {
+              type: 'object',
+              required: ['brandColor'],
+              properties: { brandColor: { type: 'string' } }
+            }
+          },
+          theme: { brandColor: 42 }
+        })
+    });
+
+    await expect(loadConfig()).rejects.toThrow(/failed schema validation/i);
+  });
+
+  it('names the failing path when the config is invalid', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          $schema: 'http://json-schema.org/draft-07/schema#',
+          type: 'object',
+          required: ['theme'],
+          properties: {
+            theme: {
+              type: 'object',
+              required: ['brandColor'],
+              properties: { brandColor: { type: 'string' } }
+            }
+          },
+          theme: {}
+        })
+    });
+
+    await expect(loadConfig()).rejects.toThrow(/brandColor/);
+  });
+
+  it('accepts a config that satisfies its schema', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          $schema: 'http://json-schema.org/draft-07/schema#',
+          type: 'object',
+          required: ['theme'],
+          properties: {
+            theme: {
+              type: 'object',
+              required: ['brandColor'],
+              properties: { brandColor: { type: 'string' } }
+            }
+          },
+          theme: { brandColor: '#123456' }
+        })
+    });
+
+    const result = await loadConfig();
+
+    expect(result.theme.brandColor).toBe('#123456');
+  });
 });

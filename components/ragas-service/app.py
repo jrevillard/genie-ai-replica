@@ -160,7 +160,7 @@ def _phase_tracker(job_id: str):
     David: "the user needs more feedback than this") and the job's elapsed
     time, so the UI can show WHAT is running and HOW LONG it has run."""
 
-    def _update(phase: str, done=None, total=None, step=None, rate_s=None, eta_s=None) -> None:
+    def _update(phase: str, done=None, total=None, step=None, rate_s=None, eta_s=None, calls=None) -> None:
         job = JOBS.get(job_id)
         if job is not None and job.get("status") == "running":
             job["phase"] = phase
@@ -175,6 +175,11 @@ def _phase_tracker(job_id: str):
                 prog["rate_s"] = rate_s
             if eta_s is not None:
                 prog["eta_s"] = eta_s
+            # The judge-call count — a progress number that ALWAYS advances
+            # with the work, for when the transform bar itself does not move
+            # (2026-10-21: a frozen "0/1075" for 20 minutes).
+            if calls is not None:
+                prog["calls"] = calls
             prog["elapsed_s"] = round(time.time() - job.get("started_at", time.time()), 1)
             job["progress"] = prog
 

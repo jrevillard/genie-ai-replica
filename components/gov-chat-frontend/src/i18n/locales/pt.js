@@ -3152,6 +3152,7 @@ export default {
       gen: {
         eta: 'faltam ~{t}',
         elapsed: 'a decorrer há {t}',
+        calls: '{n} chamadas ao LLM',
         underMin: 'menos de um minuto',
         minutes: '{m} min',
         hours: '{h} h {m} min'

@@ -3140,6 +3140,7 @@ export default {
       gen: {
         eta: '~{t} tersisa',
         elapsed: 'berjalan {t}',
+        calls: '{n} panggilan LLM',
         underMin: 'kurang dari satu menit',
         minutes: '{m} mnt',
         hours: '{h} jam {m} mnt'

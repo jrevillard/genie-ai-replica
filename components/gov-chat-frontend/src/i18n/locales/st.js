@@ -3150,6 +3150,7 @@ export default {
       gen: {
         eta: '~{t} e tengile',
         elapsed: 'e sebetsa {t}',
+        calls: '{n} mealo ea LLM',
         underMin: 'ka tlase ho motsotso',
         minutes: '{m} metsotso',
         hours: '{h} lihora {m} metsotso'

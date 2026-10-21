@@ -167,6 +167,9 @@ describe('Locale consistency', () => {
     // measurement — both messages carry placeholders consumed via .replace().
     'okf.ragas.results.invalidErrors',
     'okf.ragas.results.invalidCoverage',
+    // RAGAS generation progress (2026-10-21): the LLM-call counter that
+    // moves even when the transform bar does not.
+    'okf.ragas.gen.calls',
     // Model-config connection test (2026-10-19): composed in
     // ModelConfigPanel.testMessage() via .replace() for {n}/{ms}/{model}.
     'okf.models.modelsLoaded',

@@ -164,7 +164,9 @@
              the KG phase also streams the ACTIVE transform's own bar
              (step, x/y, ETA, elapsed) — no more one flashing bar for the
              whole (longest) phase. -->
-        <DsProgress :value="genProgressPct" :indeterminate="!genProgress.total" />
+        <!-- A zero count is "no count yet", not a dead determinate bar: the
+             bar animates until the first batch completes (2026-10-21). -->
+        <DsProgress :value="genProgressPct" :indeterminate="!genProgress.total || !genProgress.done" />
         <span v-if="genProgressDetail" class="okf-ragas__muted okf-ragas__progress-detail">
           {{ genProgressDetail }}
         </span>
@@ -832,7 +834,14 @@ export default {
       const p = this.genProgress;
       if (!p || !p.phase) return '';
       const phase = this.translate(`okf.ragas.run.phase.${p.phase}`, p.phase);
-      return p.total ? `${phase} ${p.done}/${p.total}` : phase;
+      // A count of ZERO is "not counted yet", not "nothing happened" (David
+      // 2026-10-21: "this has been running for quite some time with no
+      // progress bar… completely unacceptable UX"). Printing "0/1075" for
+      // 30 minutes reads as a broken benchmark; the phase name plus the
+      // step and the elapsed clock below tell the truth. The counts appear
+      // as soon as the first batch completes.
+      if (!p.total || !p.done) return phase;
+      return `${phase} ${p.done}/${p.total}`;
     },
     /** Coverage note for a corpus-capped suite: "grounded in 1600 of 5590
      * chunks" per capped repo (2026-10-21 — a capped corpus is shown, never
@@ -860,6 +869,13 @@ export default {
       const parts = [];
       if (p.step) parts.push(p.step);
       else if (p.total) parts.push(`${p.done}/${p.total}`);
+      // The LLM-call count (2026-10-21): the transform's own bar did NOT
+      // move during a 20-minute KG phase — the UI showed "0/1075" the whole
+      // time while the work was demonstrably running. This counter advances
+      // with every model call, so the line always shows MOVEMENT.
+      if (typeof p.calls === 'number' && p.calls > 0) {
+        parts.push(this.translate('okf.ragas.gen.calls', '{n} LLM calls').replace('{n}', String(p.calls)));
+      }
       const eta = this.fmtDuration(p.eta_s);
       if (eta) {
         parts.push(this.translate('okf.ragas.gen.eta', '~{t} left').replace('{t}', eta));

@@ -3135,6 +3135,7 @@ export default {
       gen: {
         eta: '~{t} zimebaki',
         elapsed: 'inaendelea {t}',
+        calls: '{n} miito ya LLM',
         underMin: 'chini ya dakika moja',
         minutes: 'dakika {m}',
         hours: 'saa {h} dakika {m}'

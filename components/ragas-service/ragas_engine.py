@@ -381,6 +381,7 @@ def _make_caching_wrapper(LangchainLLMWrapper, model_tag=None, cancel_event=None
 
         def generate_text(self, prompt, n=1, temperature=0.01, stop=None, callbacks=None):
             self._check_cancel()
+            _count_llm_call()
             key = self._key(prompt, n, temperature, stop)
             hit = self._load(key)
             if hit is not None:
@@ -393,6 +394,7 @@ def _make_caching_wrapper(LangchainLLMWrapper, model_tag=None, cancel_event=None
 
         async def agenerate_text(self, prompt, n=1, temperature=0.01, stop=None, callbacks=None):
             self._check_cancel()
+            _count_llm_call()
             key = self._key(prompt, n, temperature, stop)
             hit = self._load(key)
             if hit is not None:
@@ -848,6 +850,36 @@ def _empty_sample():
 _TQDM_HOOKED = False
 _TQDM_BARS: list = []  # [weakref(bar)] — newest last
 
+# The LLM-call counter (2026-10-21, live): ragas's own transform bar did NOT
+# move during a 20-minute KG phase — the UI showed "0/1075" the whole time
+# while the phase was demonstrably working (network I/O climbing, model
+# calls in flight). A progress number that never moves is worse than none:
+# it reads as a broken benchmark. The LLM wrapper is OURS, so it counts its
+# own calls — a counter that always advances with the work, reported next to
+# the transform name and the elapsed clock.
+_LLM_CALLS = 0
+_LLM_CALLS_LOCK = threading.Lock()
+
+
+def _llm_calls() -> int:
+    with _LLM_CALLS_LOCK:
+        return _LLM_CALLS
+
+
+def _count_llm_call(n: int = 1) -> None:
+    global _LLM_CALLS
+    with _LLM_CALLS_LOCK:
+        _LLM_CALLS += n
+
+
+def _reset_llm_calls() -> None:
+    """Zero the counter at the start of a phase — the number must describe
+    THIS job, not the process (the sidecar serves many jobs in one
+    interpreter, and a cumulative count reads as a jump)."""
+    global _LLM_CALLS
+    with _LLM_CALLS_LOCK:
+        _LLM_CALLS = 0
+
 
 def _hook_tqdm() -> None:
     global _TQDM_HOOKED
@@ -882,25 +914,54 @@ def _hook_tqdm() -> None:
 
 
 def _current_tqdm_step() -> dict | None:
-    """The active transform's bar as {step, done, total, eta_s, rate_s}."""
-    for ref in reversed(_TQDM_BARS):
+    """The active transform's progress as {step, done, total, eta_s, rate_s}.
+
+    AGGREGATED over the workers (2026-10-21, live): the KG phase runs the
+    transforms through a 16-worker thread pool, so a transform's bar exists
+    ONCE PER WORKER. Reading a single bar therefore reported whichever
+    worker happened to be newest — usually a bar that had just opened, at
+    n=0 — and the UI showed "Building the knowledge graph 0/1075" for the
+    whole 30-minute phase while the work was demonstrably running.
+
+    The rule: the NEWEST open bar names the active transform; the count is
+    the SUM over the open bars of that transform (the workers cover disjoint
+    slices, so the sum is the corpus progress) against that transform's
+    per-bar total.
+    """
+    open_bars = []
+    for ref in _TQDM_BARS:
         bar = ref()
         if bar is None or not getattr(bar, "_genie_open", False):
             continue
         fd = getattr(bar, "format_dict", None) or {}
-        out = {"step": str(getattr(bar, "desc", "") or "working").strip()}
-        total = fd.get("total")
-        if total:
-            out["done"] = fd.get("n", getattr(bar, "n", 0))
-            out["total"] = total
-        eta = fd.get("eta")
-        if isinstance(eta, (int, float)) and eta == eta and 0 <= eta < 10**7:
-            out["eta_s"] = eta
-        rate = fd.get("rate")
-        if isinstance(rate, (int, float)) and rate == rate and rate > 0:
-            out["rate_s"] = rate
-        return out
-    return None
+        open_bars.append(
+            (
+                str(getattr(bar, "desc", "") or "working").strip(),
+                fd.get("n", getattr(bar, "n", 0)) or 0,
+                fd.get("total") or 0,
+                fd.get("eta"),
+                fd.get("rate"),
+            )
+        )
+    if not open_bars:
+        return None
+    # The newest open bar names the active transform.
+    desc = open_bars[-1][0]
+    group = [b for b in open_bars if b[0] == desc]
+    done = sum(b[1] for b in group)
+    total = max((b[2] or 0) for b in group)
+    out = {"step": desc}
+    if total:
+        out["done"] = done
+        out["total"] = total
+    for value, key in ((group[-1][3], "eta_s"), (group[-1][4], "rate_s")):
+        if isinstance(value, (int, float)) and value == value:
+            if key == "rate_s" and value <= 0:
+                continue
+            if key == "eta_s" and not (0 <= value < 10**7):
+                continue
+            out[key] = value
+    return out
 
 
 class _TolerantSynthesizer:
@@ -1084,11 +1145,16 @@ async def generate_testset(
                         step=step.get("step"),
                         rate_s=step.get("rate_s"),
                         eta_s=step.get("eta_s"),
+                        # The LLM-call count ALWAYS advances with the work —
+                        # the fallback when the transform bar itself does not
+                        # move (2026-10-21: a frozen "0/1075" for 20 minutes).
+                        calls=_llm_calls(),
                     )
                 except Exception:  # noqa: BLE001
                     pass
 
     _hook_tqdm()
+    _reset_llm_calls()  # the count describes THIS phase, not the process
     ticker = threading.Thread(target=_kg_ticker, daemon=True, name="kg-progress")
     ticker.start()
     try:

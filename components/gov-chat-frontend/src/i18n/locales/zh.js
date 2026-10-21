@@ -3075,6 +3075,7 @@ export default {
       gen: {
         eta: '剩余约 {t}',
         elapsed: '已运行 {t}',
+        calls: '{n} 次 LLM 调用',
         underMin: '不到一分钟',
         minutes: '{m} 分钟',
         hours: '{h} 小时 {m} 分钟'

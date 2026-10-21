@@ -3114,6 +3114,7 @@ export default {
       gen: {
         eta: 'เหลืออีก ~{t}',
         elapsed: 'กำลังทำงาน {t}',
+        calls: '{n} ครั้งที่เรียก LLM',
         underMin: 'ไม่ถึงหนึ่งนาที',
         minutes: '{m} นาที',
         hours: '{h} ชม. {m} นาที'

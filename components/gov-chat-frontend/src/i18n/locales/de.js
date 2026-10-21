@@ -3162,6 +3162,7 @@ export default {
       gen: {
         eta: '~{t} verbleibend',
         elapsed: 'läuft seit {t}',
+        calls: '{n} LLM-Aufrufe',
         underMin: 'unter einer Minute',
         minutes: '{m} Min.',
         hours: '{h} Std. {m} Min.'

@@ -3108,6 +3108,7 @@ export default {
       gen: {
         eta: 'يتبقى ~{t}',
         elapsed: 'يعمل منذ {t}',
+        calls: '{n} استدعاءات للنموذج',
         underMin: 'أقل من دقيقة',
         minutes: '{m} دقيقة',
         hours: '{h} س {m} دقيقة'

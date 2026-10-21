@@ -3149,6 +3149,7 @@ export default {
       gen: {
         eta: 'осталось ~{t}',
         elapsed: 'выполняется {t}',
+        calls: '{n} вызовов LLM',
         underMin: 'меньше минуты',
         minutes: '{m} мин',
         hours: '{h} ч {m} мин'

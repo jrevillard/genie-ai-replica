@@ -3133,6 +3133,7 @@ export default {
       gen: {
         eta: '~{t} বাকি',
         elapsed: '{t} ধরে চলছে',
+        calls: '{n}টি LLM কল',
         underMin: 'এক মিনিটেরও কম',
         minutes: '{m} মিনিট',
         hours: '{h} ঘণ্টা {m} মিনিট'

@@ -479,6 +479,85 @@ def test_cache_key_includes_the_judge_endpoint(monkeypatch, tmp_path):
     assert "a.example" in _key_for("https://a.example/v1")
 
 
+def test_llm_call_counter_advances_with_the_work(monkeypatch, tmp_path):
+    """2026-10-21 (live): the transform bar did NOT move during a 20-minute
+    KG phase — the UI showed "Building the knowledge graph 0/1075" the whole
+    time while the phase was demonstrably working. A progress number that
+    never moves is worse than none. The judge wrapper is OURS, so it counts
+    its own calls: a counter that always advances with the work."""
+
+    calls = {"n": 0}
+
+    class _Gen:
+        def __init__(self, text):
+            self.text = text
+
+    class _Res:
+        def __init__(self, text):
+            self.generations = [[_Gen(text)]]
+            self.llm_output = None
+
+    class _FakeBase:
+        def __init__(self, *a, **k):
+            pass
+
+        def generate_text(self, prompt, n=1, temperature=0.01, stop=None, callbacks=None):
+            calls["n"] += 1
+            return _Res("answer")
+
+    class _Prompt:
+        def to_string(self):
+            return "p"
+
+    monkeypatch.setenv("RAGAS_LLM_CACHE_DIR", str(tmp_path / "cache"))
+    before = ragas_engine._llm_calls()
+    wrapper_cls = ragas_engine._make_caching_wrapper(_FakeBase)
+    w = wrapper_cls(object())
+    w.generate_text(_Prompt(), n=1, temperature=0.2)
+    w.generate_text(_Prompt(), n=1, temperature=0.3)
+    assert ragas_engine._llm_calls() == before + 2
+    assert calls["n"] == 2
+
+
+def test_llm_call_counter_resets_per_phase():
+    """2026-10-21: the sidecar serves many jobs in ONE interpreter — a
+    process-cumulative count would jump when a new job starts, reading as
+    progress that did not happen. The count is zeroed at the phase start."""
+    before = ragas_engine._llm_calls()
+    ragas_engine._count_llm_call(7)
+    assert ragas_engine._llm_calls() == before + 7
+    ragas_engine._reset_llm_calls()
+    assert ragas_engine._llm_calls() == 0
+
+
+def test_progress_reader_aggregates_parallel_worker_bars(monkeypatch):
+    """2026-10-21: with a 16-worker pool there is one bar PER WORKER, so
+    "the newest open bar" is almost always a bar at n=0. The reader must
+    SUM the counts of the workers of the same transform."""
+    import contextlib
+    import io
+
+    ragas_engine._hook_tqdm()
+    from tqdm import tqdm
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+        bars = [tqdm(total=100, desc="Applying TestAggregate", disable=False) for _ in range(4)]
+        for i, b in enumerate(bars):
+            # Worker 0 is still at n=0 — the exact shape that made the UI
+            # read "0/1075" while the pool was working.
+            for _ in range(i):
+                b.update(1)
+    step = ragas_engine._current_tqdm_step()
+    assert step is not None
+    assert step["step"] == "Applying TestAggregate"
+    # 0+1+2+3 = 6 across the four workers, against the per-bar total
+    assert step["done"] == 6
+    assert step["total"] == 100
+    for b in bars:
+        b.close()
+
+
 def test_tolerant_synthesizer_never_raises_to_the_executor(engine_env):
     """Regression (live 2026-10-18, bug #9): with raise_exceptions=False,
     ragas's Executor turns a raised call into np.nan (executor.py:84) and
@@ -1218,6 +1297,9 @@ def test_current_tqdm_step_reads_the_newest_open_bar():
         assert step["total"] == 40
     finally:
         live.close()
+        # The registry is a module global — this test's bar must not leak
+        # into the next one.
+        finished.close()
 
 
 def test_current_tqdm_step_none_when_all_bars_closed():

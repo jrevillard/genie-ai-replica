@@ -463,3 +463,50 @@ Chrome Custom Tab (CCT) web content is **not accessible** via UiAutomator select
 6. `patrol-wrapper.sh` disables ROPC automatically after tests (cleanup)
 
 **No app code modifications required** — the injection uses existing `InMemoryTokenStorage` and `ProviderScope.overrides` in `TestApp`.
+
+## Visual Fidelity
+
+How to work on this app's **visible** behaviour. The web frontend has a Playwright suite with real screenshots;
+this app has no pixel-level harness, so the equivalents are named below rather than glossed over.
+
+### What the web has, and what this app has instead
+
+| | Web frontend | Mobile |
+|---|---|---|
+| Rendered result | Playwright screenshots + DOM audit | Device screenshot on an emulator, read by a human |
+| Automated assertion | geometry, contrast, computed styles | widget tests: structure, resolved token values |
+| Harness | `tests/e2e/` | `flutter test` + `test/helpers/` |
+
+**There is no golden-image test here.** Do not write one claim into a report. A widget test asserts *structure and
+resolved values*; the pixels are verified by a device screenshot, and the two must be reported together.
+
+### Traps
+
+| Trap | What happens | What to do |
+|---|---|---|
+| `ThemeManager` is a singleton | Its theme, font scale and config map survive the test that set them, so the next test asserts against a stale theme and fails for the wrong reason — or passes for the wrong one. | `resetThemeManager()` in `tearDown`; `setupLightTokens()` / `setupDarkTokens()` / `setupTokensWithConfig()` in `test/helpers/theme_helper.dart` set the state a test means to assert on. |
+| A widget under a plain `MaterialApp` | The theme resolves to Material's defaults, not the DS tokens. The widget test passes, and the real app renders a different colour. | Wrap with `TestApp` (`test/helpers/test_app.dart`) so the app's own `ThemeData` is in play. |
+| `Theme.of(context)` inside a widget | The widget reads Material's resolved theme and **ignores `ThemeManager().tokens`** — so it does not follow the deployment's palette. | Read the token (`ThemeManager().tokens`) in the widget, and assert the token in the test. |
+| A fixed height around text | The font scale is user-controlled (`setFontSize`), and a widget that fits at the default scale overflows at a large one. | Assert at the scale a user can actually reach, and let the height follow the text. |
+| Asserting a colour literal | A hex string copied from the current build is a table, not an invariant: it fails on every palette change and proves nothing about the token. | Assert the token's resolved value, or the relationship between two tokens (contrast), and let the palette move. |
+
+### The discipline
+
+- **Measure, never eyeball.** A screenshot says what it looks like; the resolved value says what it *is*.
+- **Prove the assertion can fail.** Break the widget, watch the test go red, revert. A test that stays green under a
+  deliberate break is decorative.
+- **A test that exercises the code path but not the user's path is not evidence.** Drive the gesture the user makes —
+  `tester.tap`, `tester.enterText`, `tester.drag` — not a direct state mutation.
+- **Rebuild before you measure, and verify the content, not the timestamp.** A build from the working tree before
+  the commit is legitimate and content-identical.
+- **Fix the cause, not the symptom.** A colour that is wrong in two places is one wrong token.
+
+### Verify with
+
+```bash
+flutter test                       # widget + unit tests
+flutter test test/design_system/  # the DS surface only
+dart analyze                       # dead code, wrong types
+```
+
+and a device run on the emulator, in **both** themes, before claiming a visual result.

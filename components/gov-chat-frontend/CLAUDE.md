@@ -35,6 +35,7 @@ Vue 3 web app with Vuex state management and vue-i18n internationalization.
 
 - Root `CLAUDE.md` — GENIE.AI architecture, deployment, full tech stack
 - `.claude/rules/TESTING.md` — Test commands and patterns for all components
+- `../../tests/e2e/` — the Playwright suite that verifies this component's rendered result
 
 ## Design System
 
@@ -122,3 +123,88 @@ DsTabs supports `--ds-tabs-active-color`, `--ds-tabs-active-border-color`.
 ### i18n
 
 Use `this.$t('key')` or the component's `translate()` helper. All user-facing strings must go through i18n. DS components do not handle translation internally — consumers pass translated text via props or slots.
+
+## Visual Fidelity
+
+How to work on this component's **visible** behaviour. The rules are not "be careful" — each one names a defect that
+shipped once because the rule was missing.
+
+### The layer and the app are two systems
+
+`src/styles/genie-visual-effects.css` is an **additive** layer, gated on `html[data-visual='on']` and
+`.genie-living-intelligence`. The app must lay out and behave **identically with the layer switched off** — that is
+how the layout defects fixed in 2026-10 were found, and how they must stay detectable.
+
+**The layer must never dictate the app's layout, and app code must never learn the layer's selector shape.** They
+have already fought over one property: the layer anchors its corner artwork on `.sidebar` with `position: relative`,
+and a component rule at lower specificity simply did not apply — no error, the policy just did not happen. The fix
+belongs in the layer (bound the rule to the range where the panel is really in flow). **If a component rule seems to
+need to out-specify the layer, that is the signal to fix the layer instead.**
+
+### Traps in this codebase
+
+| Trap | What happens | What to do |
+|---|---|---|
+| `var()` inside an `@container` condition | Chromium **silently drops the whole rule**. Every `@container` with `var()` in its condition never matches, and the base fallback wins. | Keep the token out of the condition: `auto-fit` + `minmax(var(--x), 1fr)` with a `max-width` cap, or a literal. Verified on Chromium 147. |
+| The overlay's `::before` full-bleed | `width: calc(100% + 2 * var(--space-lg))` **needs** matching negative margins, or it overflows its panel by that much on the right. | The extra width and the negative margins are a pair — copy the pattern whole. |
+| A gradient `mask-image` with `transparent` | `mask-mode`'s `match-source` default resolves `transparent` (luminance 0) to a fully-off mask, and the artwork bleeds through. | Force `mask-mode: alpha` when the gradient's stops carry alpha. |
+| `overflow: visible` children | A child sticking out reports **no** scrollable overflow, so `scrollWidth > clientWidth` finds nothing. | Compare the child's `getBoundingClientRect()` against the container's content box. |
+| A flex `gap` between panels | A gap sits between the *items*, so it also separates a collapsed panel from the content. | Put the spacing on the panels, where it can be dropped conditionally — or drop it, the panels have borders. |
+| `elementFromPoint` on a page with a splash overlay | The splash sits on top, so probes hit the splash and the page is never measured. | Wait for `.splash-screen` to detach before probing. |
+| Reading a build's freshness by timestamp | A build from the working tree before the commit is legitimate and content-identical. | Check the **built content** (`grep <token> /app/dist/css/app.*.css`). |
+
+### Measuring
+
+- **The capture script**: `../../tests/e2e/capture-dashboard.js` captures the welcome screen and the DOM facts a
+  screenshot cannot prove, and writes a `.audit.json` beside each PNG. `BASE_URL=<origin> node
+  tests/e2e/capture-dashboard.js` from the repository root, where `playwright` resolves.
+- **A capture named after a state it never reached is worse than no capture.** The script aborts when a sidebar state
+  it claims to capture did not actually collapse, and when the panel did not widen. Keep that behaviour.
+- A screenshot read back yields a URL. **Pair every image with the audit; where the two disagree, the audit wins.**
+- **Direct access grants are disabled on the realm.** The browser login is the only path:
+  `tests/e2e/helpers/chatbot.js` → `loginViaUI(page)`. A spec that walks a page unauthenticated is bounced to the
+  login by the router guard, and that navigation destroys the execution context its assertions read from — the spec
+  then fails on a race, not on what it meant to check.
+
+### Writing the spec
+
+- **Assert the invariant, not a table.** A hardcoded expectation per viewport is a table written before the layout
+  existed, and it will steer the layout. Derive it: `columns = clamp(1, floor((P + G) / (M + G)), 4)` from the measured
+  panel width `P`, the gap token `G` and the card minimum `M` — so a deployment that overrides the token is checked
+  too.
+- **Mutation-test every assertion.** Break the code, watch it go red, revert. The spec's value is the red; an
+  assertion that stays green under a deliberate break is decorative.
+- **Drive the real interaction** — `page.mouse`, `page.keyboard`. `dispatchEvent` bypasses the browser's
+  hit-testing, and a gesture the user cannot perform is a gesture nobody tests.
+- **Add a viewport that exercises the cap.** The four-column cap is not exercised at 1920; it needs 2400.
+- **A layout assertion that can pass for the wrong reason is a defect.** If the geometry is right but the mechanism is
+  not, the next change breaks it silently.
+
+### The serving stack for a visual check
+
+Never measure against the stack someone else is looking at. Bring up a **separate compose project** — own network,
+own volumes, own published ports, own image tag:
+
+```bash
+export NGINX_HTTPS_PORT=9443 NGINX_HTTP_PORT=9080
+docker compose -f docker-compose.yaml -f <override>.yml up -d <services>
+```
+
+Two facts about it that cost time:
+
+- Keycloak binds its HTTP listener to the **resolved address of `KC_HOSTNAME`**. With `KC_HOSTNAME=localhost` it
+  binds `127.0.0.1` inside its own container and every other container gets "Connection refused", while the
+  healthcheck still passes because it tests from inside. Override `KC_HOSTNAME_STRICT=false` and `KC_HTTP_HOST=0.0.0.0`.
+- The frontend container is the app; the nginx in front of it is the public entry. The app's real root is
+  `/app/dist`, **not** `/usr/share/nginx/html`, which is a stock page this image never uses.
+
+**Never `docker compose down -v` on a stack someone is watching** — it destroys the volumes.
+
+### Known gaps
+
+Carried openly rather than discovered later:
+
+- The **dark banner artwork was never shipped by the designer**. Dark mode uses the light artwork, which reads well
+  on the dark surface but is not the reference's own illustration.
+- The **Manx locale** needs a native reviewer for the new strings.
+

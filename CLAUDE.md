@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Before implementing code, read `_bmad-output/project-context.md`** — it contains critical rules, conventions, and anti-patterns that AI agents must follow. This file covers unobvious details that are not duplicated here.
 
+→ Archiving a completed BMAD initiative: `.claude/rules/POST-PRD-ARCHIVAL.md`
+
 ## Project Overview
 
 GENIE.AI is an open-source generative AI framework for the public sector, providing a sovereign, DPG-compliant RAG (Retrieval-Augmented Generation) system with multilingual support. It integrates with [OPEA (Open Platform for Enterprise AI)](https://opea.dev) for AI/ML services.
@@ -195,6 +197,15 @@ Test frameworks: Jest (backend, frontend, doc-repo), pytest (OPEA), flutter_test
 
 → Full commands, patterns, CI details: `.claude/rules/TESTING.md`
 
+**Visible behaviour** has its own rules, per client — read the one that matches what you are changing:
+
+- **Web** (`components/gov-chat-frontend/`) → `components/gov-chat-frontend/CLAUDE.md` § *Visual Fidelity*. The
+  rendered result is verified by the Playwright suite in `tests/e2e/`: measure it, mutation-test every assertion,
+  and never judge a screenshot by eye.
+- **Mobile** (`mobile/genie_ai_mobile/`) → `mobile/genie_ai_mobile/CLAUDE.md` § *Visual Fidelity*. No golden-image
+  harness exists here: widget tests assert structure and resolved tokens, and the device screenshot is verified by
+  a human in both themes.
+
 ## Code Standards Summary
 
 ### JavaScript/Vue 3
@@ -228,6 +239,8 @@ Test frameworks: Jest (backend, frontend, doc-repo), pytest (OPEA), flutter_test
 - All services configured via `env` file (copy to `.env` for local dev)
 - Key tokens: `HUGGING_FACE_HUB_TOKEN`, `VLLM_API_KEY`
 - Database: `ARANGO_URL`, `ARANGO_DB`, `ARANGO_USER`, `ARANGO_PASSWORD`
+
+→ Which file is which, what must never be committed, the service port map: `.claude/rules/ENVIRONMENT.md`
 
 #### Environment Variables Structure (Best Practices)
 

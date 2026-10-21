@@ -169,6 +169,15 @@ void main() {
     });
   });
 
+  test('non-development flavors never allow insecure connections', () {
+    // The vendored flutter_appauth fork disables TLS verification when this
+    // flag is on. That is acceptable for the dev and e2e flavors, which talk
+    // to a self-signed Keycloak, and unacceptable for any flavor that reaches
+    // a real deployment, so prod and staging must keep it off.
+    expect(flavors.config.allowInsecureConnections, isFalse);
+    expect(stagingConfig.allowInsecureConnections, isFalse);
+  });
+
   group('equality & locale whitelist', () {
     test('allSupportedLocaleCodes lists every shipped locale', () {
       expect(allSupportedLocaleCodes, hasLength(14));

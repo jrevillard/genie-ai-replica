@@ -82,9 +82,7 @@ test.describe('chat-composer mounted state', () => {
     const composerCenterY = await welcome.evaluate(
       (el) => el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2
     );
-    const gridTop = await page
-      .locator('.quick-help-grid')
-      .evaluate((el) => el.getBoundingClientRect().top);
+    const gridTop = await page.locator('.quick-help-grid').evaluate((el) => el.getBoundingClientRect().top);
     expect(
       bannerTop < composerCenterY && composerCenterY < gridTop,
       `banner(${bannerTop}) < composer(${composerCenterY}) < grid(${gridTop})`
@@ -150,10 +148,7 @@ test.describe('composer send pathway', () => {
       const items = Array.from(document.querySelectorAll('.context-panel .context-items > *'));
       return items.map((el) => el.textContent.trim());
     });
-    expect(
-      pills.length,
-      `one active-context pill (just-chat) expected (got ${JSON.stringify(pills)})`
-    ).toBe(1);
+    expect(pills.length, `one active-context pill (just-chat) expected (got ${JSON.stringify(pills)})`).toBe(1);
     // The just-chat item carries category: null, serviceLabels: [] —
     // equivalent to "unfiltered" downstream. A category-formatted pill
     // ("Category NN") would mean the filter IS set.
@@ -226,9 +221,7 @@ test.describe('grid after placement extraction', () => {
     // The "just chat" string is the entry's localised title. A tile that
     // still carries it would mean the placement filter bypassed the grid.
     const tiles = page.locator('.quick-help-grid .quick-help-item');
-    const justChatTexts = await tiles.evaluateAll((nodes) =>
-      nodes.map((n) => n.textContent.trim())
-    );
+    const justChatTexts = await tiles.evaluateAll((nodes) => nodes.map((n) => n.textContent.trim()));
     const hasJustChatTile = justChatTexts.some((t) => /just.{0,2}chat/i.test(t));
     expect(hasJustChatTile, `tile text never contains "just chat" (got ${JSON.stringify(justChatTexts)})`).toBe(false);
     await ctx.close();
@@ -247,8 +240,8 @@ test.describe('grid after placement extraction', () => {
     // locale still fails this gate.
     const probes = ['fr', 'sw', 'es', 'ru'];
     const allTilesHaveKeys = await page.evaluate(() => {
-      return Array.from(document.querySelectorAll('.quick-help-grid .quick-help-item')).map(
-        (n) => n.textContent.trim()
+      return Array.from(document.querySelectorAll('.quick-help-grid .quick-help-item')).map((n) =>
+        n.textContent.trim()
       );
     });
     for (const locale of probes) {
@@ -284,12 +277,16 @@ test.describe('config / composer identity', () => {
     expect(jc, 'just-chat entry exists').toBeTruthy();
     expect(jc.placement, `placement field on just-chat (got ${jc.placement})`).toBe('composer');
     // Confirm the schema declared the field, otherwise the config is junk.
-    const prop = cfg?.properties?.features?.properties?.chat?.properties?.quickHelp?.properties?.buttons?.items?.properties?.placement;
+    const prop =
+      cfg?.properties?.features?.properties?.chat?.properties?.quickHelp?.properties?.buttons?.items?.properties
+        ?.placement;
     expect(prop, 'placement is in the button schema').toBeTruthy();
     expect(prop.enum, 'placement has an enum').toEqual(expect.arrayContaining(['tile', 'composer']));
   });
 
-  test('welcome composer carries the entry\'s icon, tint and accessible name', async ({ browser }) => {
+  test("welcome composer carries the reference's leading mark, the entry's tint and its accessible name", async ({
+    browser
+  }) => {
     const { ctx, page } = await freshSignedIn(browser);
     await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
     await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
@@ -303,37 +300,77 @@ test.describe('config / composer identity', () => {
     });
     const jc = cfg.features.chat.quickHelp.buttons.find((b) => b.id === 'just-chat');
     const expected = {
-      iconPath: jc.icon.value,
       bg: jc.styles.backgroundColor,
       outline: jc.styles.outlineColor,
       title: jc.title.en // base config carries a localised map; English serves as a fallback
     };
 
     const composerRoot = page.locator('[data-testid="welcome-composer"]');
-    // Leading image is the just-chat icon.
-    const leadingSrc = await page
-      .locator('[data-testid="welcome-composer-leading-img"]')
-      .getAttribute('src');
-    expect(leadingSrc, 'composer leading icon src').toBe(expected.iconPath);
 
-    // Tint bindings are present as inline style (the `--qh-bg` style
-    // pattern used by the existing tile). The chat-composer uses
-    // `--composer-bg` and `--composer-outline`; check the inline style
-    // is non-empty and references both.
+    // The leading mark is the reference's sparkles (a four-pointed star
+    // with two smaller ones), not the entry's chat bubble: the reference
+    // draws that mark at the head of the welcome bar.
+    await expect(page.locator('[data-testid="welcome-composer-leading-mark"]')).toHaveCount(1);
+
+    // The entry's colours are emitted as the *tint*; the bar's own
+    // background is derived from the theme's surface and that tint, so a
+    // light-mode colour never lands on the dark theme. The inline style
+    // therefore carries the tint, and the rendered background is a mix.
     const inlineStyle = await composerRoot.getAttribute('style');
-    expect(inlineStyle || '', `composer inline style (got ${inlineStyle})`).toMatch(
-      /--composer-bg:\s*#?[0-9a-f]+/i
-    );
+    expect(inlineStyle || '', `composer inline style (got ${inlineStyle})`).toMatch(/--composer-tint:\s*#?[0-9a-f]+/i);
     expect(inlineStyle || '', `composer outline (got ${inlineStyle})`).toMatch(
-      /--composer-outline:\s*#?[0-9a-f]+/i
+      /--composer-tint-outline:\s*#?[0-9a-f]+/i
     );
 
-    // Accessible name: aria-label on the composer root OR the leading image
-    // alt. Either is acceptable evidence.
+    // Accessible name: aria-label on the composer root OR the leading
+    // image alt. Either is acceptable evidence.
     const ariaLabel = await composerRoot.getAttribute('aria-label');
     expect(ariaLabel, `composer aria-label (got ${ariaLabel})`).toBeTruthy();
 
     await ctx.close();
+  });
+
+  test("the composer's background follows the theme, not the entry's light-mode colour", async ({ browser }) => {
+    // The entry's `styles.backgroundColor` is a light-mode value. Applied
+    // as the bar's background it paints a white bar in the dark theme,
+    // where the reference shows a dark glass one. So the bar is the
+    // theme's surface tinted with the entry's colour, and the two themes
+    // must land on opposite sides of mid-grey.
+    for (const theme of ['light', 'dark']) {
+      const { ctx, page } = await freshSignedIn(browser, { width: 1440, height: 900 }, theme);
+      await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
+      await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+      await page.waitForTimeout(300);
+
+      const bg = await page.evaluate(() => {
+        const el = document.querySelector('[data-testid="welcome-composer"]');
+        if (!el) return null;
+        const raw = getComputedStyle(el).backgroundColor;
+        const m = raw.match(/[\d.]+/g);
+        if (!m) return null;
+        // Chromium resolves a color-mix() to `color(srgb r g b)`, whose
+        // components are 0-1 fractions, while an rgb() is 0-255. Both
+        // forms have to be read, or the luminance below is off by 255x.
+        const scale = raw.startsWith('color(') ? 255 : 1;
+        return { r: +m[0] * scale, g: +m[1] * scale, b: +m[2] * scale, raw };
+      });
+      expect(bg, `${theme}: the composer has a background`).not.toBeNull();
+      const luminance = 0.2126 * bg.r + 0.7152 * bg.g + 0.0722 * bg.b;
+      if (theme === 'dark') {
+        expect(
+          luminance,
+          `the dark composer's background is ${JSON.stringify(bg)} (luminance ${luminance.toFixed(1)}) — ` +
+            `it must be a dark surface, not the entry's light-mode colour`
+        ).toBeLessThan(140);
+      } else {
+        expect(
+          luminance,
+          `the light composer's background is ${JSON.stringify(bg)} (luminance ${luminance.toFixed(1)}) — ` +
+            `it must stay a light surface`
+        ).toBeGreaterThan(200);
+      }
+      await ctx.close();
+    }
   });
 
   test('disabled attach and mic carry a "not available yet" tooltip', async ({ browser }) => {
@@ -403,6 +440,70 @@ test.describe('visual-layer off', () => {
     await page.evaluate(() => {
       document.documentElement.dataset.visual = 'on';
     });
+    await ctx.close();
+  });
+});
+
+// -------- the field does not draw a box of its own --------
+
+test.describe('composer field', () => {
+  test('the field inside the pill draws no border and no background of its own', async ({ browser }) => {
+    const { ctx, page } = await freshSignedIn(browser);
+    await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
+    await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+
+    // The DsInput primitive carries a border, a background and a radius.
+    // Inside the composer pill they would draw a box around the text — the
+    // pill is supposed to be the only shape on show. A reset written as a
+    // descendant selector (`.field .ds-input`) matches nothing, because the
+    // class lands on the primitive's own root; this asserts the rendered
+    // result, not the selector.
+    const field = await page.evaluate(() => {
+      const ta = document.querySelector('[data-testid="welcome-composer"] textarea');
+      if (!ta) return null;
+      const cs = getComputedStyle(ta);
+      return {
+        borderTopWidth: cs.borderTopWidth,
+        borderTopStyle: cs.borderTopStyle,
+        background: cs.backgroundColor,
+        radius: cs.borderTopLeftRadius,
+        resize: cs.resize
+      };
+    });
+    expect(field, 'the welcome composer has a field').not.toBeNull();
+    expect(
+      parseFloat(field.borderTopWidth),
+      `the field draws a ${field.borderTopWidth} ${field.borderTopStyle} border inside the pill`
+    ).toBe(0);
+    expect(field.background, 'the field paints its own background inside the pill').toMatch(
+      /rgba\(0, 0, 0, 0\)|transparent/
+    );
+    expect(field.resize, 'the field is resizable by the user').toBe('none');
+    await ctx.close();
+  });
+
+  test('the pill carries the focus ring, not the field inside it', async ({ browser }) => {
+    const { ctx, page } = await freshSignedIn(browser);
+    await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
+    await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+
+    const field = page.locator('[data-testid="welcome-composer"] textarea');
+    await field.click();
+    await page.waitForTimeout(150);
+
+    const rings = await page.evaluate(() => {
+      const pill = document.querySelector('[data-testid="welcome-composer"] .chat-composer');
+      const ta = document.querySelector('[data-testid="welcome-composer"] textarea');
+      const p = pill ? getComputedStyle(pill) : null;
+      const t = ta ? getComputedStyle(ta) : null;
+      return {
+        pillShadow: p ? p.boxShadow : null,
+        pillBorder: p ? p.borderTopColor : null,
+        fieldShadow: t ? t.boxShadow : null
+      };
+    });
+    expect(rings.pillShadow, 'the pill shows no focus ring').not.toBe('none');
+    expect(rings.fieldShadow, 'the field draws its own focus box inside the pill').toBe('none');
     await ctx.close();
   });
 });

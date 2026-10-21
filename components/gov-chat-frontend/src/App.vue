@@ -147,9 +147,9 @@ export default {
           sessionStorage.setItem('splashShown', 'true');
           setTimeout(() => {
             this.showSplash = true;
-            setTimeout(() => {
-              this.showSplash = false;
-            }, 3000);
+            // The splash owns its own timing: it displays for 5 s, fades
+            // over 1 s, then emits `splash-complete` and this template
+            // hides it. A second timer here would cut the fade short.
           }, 100);
         }
       }

@@ -96,6 +96,16 @@ async function freshSignedIn(browser, vp, theme) {
   const page = await ctx.newPage();
   await loginViaUI(page);
   await page.evaluate(() => localStorage.setItem('sidebarOpen', 'true'));
+  // The splash is a full-screen overlay (z-index 30000, opaque
+  // background) and it shows on the first authenticated load of a
+  // session — the login above already triggered it. It has to be gone
+  // before a single pixel is sampled, or the sampler reads the splash
+  // image instead of the scrim. A reload skips it (the session flag is
+  // set) and leaves the page ready to sample. Without the reload, every
+  // one of the eight sessions in a test would sit through the splash's
+  // 5 s + 1 s fade, and the test would run past its own timeout.
+  await page.waitForSelector('.quick-help-banner', { timeout: 15000 });
+  await page.reload({ waitUntil: 'networkidle', timeout: 30000 });
   await page.waitForSelector('.quick-help-banner', { timeout: 15000 });
   // The banner's entrance animation finishes at 650 ms, but Chromium's
   // mask compositing layer takes a few extra seconds to settle after
@@ -135,7 +145,10 @@ async function scrimAlpha(page) {
     let usedAlpha = null;
     const slash = used.lastIndexOf('/');
     if (slash !== -1) {
-      const tail = used.slice(slash + 1).replace(/[)\s]+$/, '').trim();
+      const tail = used
+        .slice(slash + 1)
+        .replace(/[)\s]+$/, '')
+        .trim();
       usedAlpha = tail.endsWith('%') ? parseFloat(tail) / 100 : parseFloat(tail);
     } else {
       const m = used.match(/rgba?\([^)]*,\s*([\d.]+)\s*\)/);
@@ -201,12 +214,7 @@ async function wordmarkContrast(page) {
           img.onerror = reject;
           img.src = `data:image/png;base64,${b64}`;
         });
-      const [imA, imB, imK, imW] = await Promise.all([
-        load(aB64),
-        load(bB64),
-        load(hkB64),
-        load(hwB64)
-      ]);
+      const [imA, imB, imK, imW] = await Promise.all([load(aB64), load(bB64), load(hkB64), load(hwB64)]);
       const pixels = (img) => {
         const c = document.createElement('canvas');
         c.width = img.width;
@@ -405,9 +413,7 @@ async function scrimDoesNotOcclude(page) {
   // The scrim's plateau is the lower part of its own box, past the ramp.
   const geo = await page.evaluate(() => {
     const c = document.querySelector('.quick-help-content').getBoundingClientRect();
-    const surface = getComputedStyle(document.documentElement)
-      .getPropertyValue('--surface')
-      .trim();
+    const surface = getComputedStyle(document.documentElement).getPropertyValue('--surface').trim();
     // Resolve the surface to an sRGB triplet the same way a paint would:
     // fill a 1x1 canvas with it and read the byte back.
     const cv = document.createElement('canvas');
@@ -523,9 +529,7 @@ async function boxGeometry(page) {
 }
 
 test.describe('Welcome banner invariants', () => {
-  test('1. the scrim alpha is at or above its theme floor and is the alpha it paints with', async ({
-    browser
-  }) => {
+  test('1. the scrim alpha is at or above its theme floor and is the alpha it paints with', async ({ browser }) => {
     for (const vp of VIEWPORTS) {
       for (const theme of ['light', 'dark']) {
         const { ctx, page } = await freshSignedIn(browser, vp, theme);
@@ -625,10 +629,10 @@ test.describe('Welcome banner invariants', () => {
         ).toBeGreaterThanOrEqual(m.bandH);
         // Full bleed: the banner reaches past the overlay's padding box on
         // both sides by the same amount, so it never gains a gutter.
-        expect(
-          Math.abs(m.leftBleed),
-          `${vp.label}/${theme} left bleed ${m.leftBleed}px`
-        ).toBeCloseTo(Math.abs(m.rightBleed), 1);
+        expect(Math.abs(m.leftBleed), `${vp.label}/${theme} left bleed ${m.leftBleed}px`).toBeCloseTo(
+          Math.abs(m.rightBleed),
+          1
+        );
         expect(
           m.overflow,
           `${vp.label}/${theme} the panel overflows the viewport by ${m.overflow}px`

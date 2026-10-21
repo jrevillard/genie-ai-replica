@@ -102,19 +102,19 @@
         data-testid="composer-send-btn"
         @click="onSend"
       >
-        <Send :size="18" aria-hidden="true" />
+        <ArrowRight :size="18" aria-hidden="true" />
       </button>
     </div>
   </div>
 </template>
 
 <script>
-import { Paperclip, Mic, Send, Save, FileText, Loader2 } from '@lucide/vue';
+import { ArrowRight, Paperclip, Mic, Save, FileText, Loader2 } from '@lucide/vue';
 import DsInput from './ds/Input.vue';
 
 export default {
   name: 'ChatComposer',
-  components: { Paperclip, Mic, Send, Save, FileText, Loader2, DsInput },
+  components: { ArrowRight, Paperclip, Mic, Save, FileText, Loader2, DsInput },
   props: {
     // Standard v-model — the parent owns the text state.
     modelValue: {
@@ -191,11 +191,17 @@ export default {
       // Only emit declared bindings; CSSOM-set property with empty value
       // would silently erase the theme layer's fallback. Mirror the
       // contract used by ChatBotComponent.buttonTintStyle.
+      //
+      // The entry's colours are emitted as the *tint*, not as the final
+      // background: they are light-mode values, and painting them as-is
+      // puts a white bar in the dark theme, where the reference shows a
+      // dark glass one. The stylesheet mixes the theme's surface with
+      // them, so the bar follows the theme and keeps the entry's hue.
       const t = this.tint;
       if (!t || typeof t !== 'object') return undefined;
       const out = {
-        '--composer-bg': t.backgroundColor,
-        '--composer-outline': t.outlineColor
+        '--composer-tint': t.backgroundColor,
+        '--composer-tint-outline': t.outlineColor
       };
       const defined = Object.entries(out).filter(([, v]) => v);
       if (!defined.length) return undefined;
@@ -221,8 +227,15 @@ export default {
 
 <style scoped>
 .chat-composer {
-  --composer-bg: var(--surface);
-  --composer-outline: var(--border);
+  /* The bar's own colours are derived from the theme's surface and the
+     entry's tint, never from the tint alone: the entry's colours are
+     light-mode values (the reference's light bar is a pale blue), and
+     used as they are they would paint a white bar over the dark theme.
+     Measured against the reference: the light bar is the tint on the
+     surface, the dark one is the surface with the tint's hue mixed
+     back in. */
+  --composer-bg: color-mix(in srgb, var(--surface) 25%, var(--composer-tint, var(--surface)));
+  --composer-outline: color-mix(in srgb, var(--border) 45%, var(--composer-tint-outline, var(--border)));
   display: flex;
   align-items: center;
   gap: var(--space-sm);
@@ -233,6 +246,15 @@ export default {
   min-height: 44px;
   width: 100%;
   box-sizing: border-box;
+}
+
+/* In the dark theme the reference shows a dark glass bar: the surface,
+  with only a hint of the entry's hue. ThemeManager writes the
+  `dark-mode` class on the document element and the body, so both are
+  covered here. */
+.dark-mode .chat-composer {
+  --composer-bg: color-mix(in srgb, var(--surface) 90%, var(--composer-tint, var(--surface)));
+  --composer-outline: color-mix(in srgb, var(--border) 75%, var(--composer-tint-outline, var(--border)));
 }
 
 .chat-composer__leading {
@@ -247,14 +269,33 @@ export default {
 .chat-composer__field {
   flex: 1 1 auto;
   min-width: 0;
-  /* The DsInput child uses its own border + background; reset them so
-     the composer's pill shape is what shows. */
 }
-.chat-composer__field :deep(.ds-input) {
+/* The DsInput carries its own border, background and radius. Inside the
+   pill they would draw a box around the text, so they are reset here.
+   The class lands on the primitive's root element, so the selector has
+   to match that element itself — a descendant selector
+   (`.chat-composer__field .ds-input`) never matches anything, and the
+   reset silently does nothing while the comment above it claims it
+   works. The wrapper class is part of the selector to out-specify the
+   primitive's own rule, whatever order the two stylesheets land in. */
+.chat-composer .chat-composer__field {
   background: transparent;
   border: none;
-  padding: 8px 4px;
+  border-radius: 0;
+  padding: var(--space-xs) var(--space-xs);
   resize: none;
+}
+
+/* The focus ring belongs to the pill the field lives in, not to a box
+   drawn inside it. */
+.chat-composer:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-muted);
+}
+.chat-composer .chat-composer__field:focus,
+.chat-composer .chat-composer__field:focus-visible {
+  box-shadow: none;
+  outline: none;
 }
 
 .chat-composer__actions {

@@ -178,12 +178,11 @@
             @send="handleWelcomeSend"
           >
             <template #leading>
-              <img
-                v-if="composerEntry.icon"
-                class="composer-leading-img"
-                :src="composerEntry.icon"
-                alt=""
-                data-testid="welcome-composer-leading-img"
+              <Sparkles
+                class="composer-leading-mark"
+                :size="22"
+                aria-hidden="true"
+                data-testid="welcome-composer-leading-mark"
               />
             </template>
           </ChatComposer>
@@ -235,7 +234,7 @@
               data-testid="composer-new-chat-btn"
               @click="startNewChat"
             >
-              <Plus :size="20" aria-hidden="true" />
+              <SquarePlus :size="20" aria-hidden="true" />
             </button>
           </template>
         </ChatComposer>
@@ -318,7 +317,7 @@
 </template>
 
 <script>
-import { Brain, Loader2, Plus, Sparkles } from '@lucide/vue';
+import { Brain, Loader2, Sparkles, SquarePlus } from '@lucide/vue';
 import { eventBus } from '../eventBus.js';
 import notificationService from '../services/notificationService';
 import { mapGetters, mapActions } from 'vuex';
@@ -441,8 +440,8 @@ export default {
   components: {
     Brain,
     Loader2,
-    Plus,
     Sparkles,
+    SquarePlus,
     ChatResponseFeedbackDialog,
     ModalDialog,
     RightSideBarComponent,
@@ -2527,6 +2526,31 @@ export default {
   width: 100%;
   max-width: calc(4 * var(--qh-card-min) + 3 * var(--space-xl));
   margin: var(--space-lg) auto;
+}
+
+/* The welcome composer's leading mark is the reference's sparkles, drawn
+   in the accent's light blue rather than in the text colour. */
+.composer-leading-mark {
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+
+/* The chat view's leading control is the new-chat button, in the
+   reference's rounded square. */
+.composer-leading-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+.composer-leading-btn:hover {
+  background: var(--accent-muted);
 }
 
 /* The grid's column count is driven by container queries on the panel

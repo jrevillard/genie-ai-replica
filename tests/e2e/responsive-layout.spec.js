@@ -75,9 +75,7 @@ async function measureLayout(page) {
     const right = document.querySelector('.sidebar');
     const grid = document.querySelector('.quick-help-grid');
     const items = grid ? Array.from(grid.querySelectorAll('.quick-help-item')) : [];
-    const distinctLefts = new Set(
-      items.map((it) => Math.round(it.getBoundingClientRect().left))
-    );
+    const distinctLefts = new Set(items.map((it) => Math.round(it.getBoundingClientRect().left)));
     const cardWidths = items.map((it) => Math.round(it.getBoundingClientRect().width));
     const lr = left && left.getBoundingClientRect();
     const rr = right && right.getBoundingClientRect();
@@ -90,16 +88,10 @@ async function measureLayout(page) {
       centreWidth: cr ? Math.round(cr.width) : null,
       centreLeft: cr ? Math.round(cr.left) : null,
       centreRight: cr ? Math.round(cr.right) : null,
-      centreRect: cr
-        ? { left: Math.round(cr.left), right: Math.round(cr.right), width: Math.round(cr.width) }
-        : null,
+      centreRect: cr ? { left: Math.round(cr.left), right: Math.round(cr.right), width: Math.round(cr.width) } : null,
       gridWidth: gr ? Math.round(gr.width) : null,
-      leftRect: lr
-        ? { left: Math.round(lr.left), right: Math.round(lr.right), width: Math.round(lr.width) }
-        : null,
-      rightRect: rr
-        ? { left: Math.round(rr.left), right: Math.round(rr.right), width: Math.round(rr.width) }
-        : null,
+      leftRect: lr ? { left: Math.round(lr.left), right: Math.round(lr.right), width: Math.round(lr.width) } : null,
+      rightRect: rr ? { left: Math.round(rr.left), right: Math.round(rr.right), width: Math.round(rr.width) } : null,
       columnCount: distinctLefts.size,
       cardWidths,
       cardMin: Math.min(...(cardWidths.length ? cardWidths : [0]))
@@ -110,13 +102,7 @@ async function measureLayout(page) {
   // clamp(1, floor((P + G) / (M + G)), 4).
   const expected =
     Number.isFinite(layout.gridWidth) && tokens.cardMin > 0 && tokens.gap > 0
-      ? Math.max(
-          1,
-          Math.min(
-            4,
-            Math.floor((layout.gridWidth + tokens.gap) / (tokens.cardMin + tokens.gap))
-          )
-        )
+      ? Math.max(1, Math.min(4, Math.floor((layout.gridWidth + tokens.gap) / (tokens.cardMin + tokens.gap))))
       : null;
 
   return { ...layout, expectedColumns: expected, tokens };
@@ -167,10 +153,8 @@ test.describe('Responsive layout (quick-help grid + sidebar policy)', () => {
 
       expect(m.viewport, 'viewport should match').toBe(vp);
       expect(m.centreWidth, `centre width should be > 0 (got ${m.centreWidth})`).toBeGreaterThan(0);
-      expect(m.scrollWidth, 'page should not overflow horizontally')
-        .toBeLessThanOrEqual(m.viewport);
-      expect(m.cardMin, `every card width >= ${CARD_MIN} (got ${m.cardMin})`)
-        .toBeGreaterThanOrEqual(CARD_MIN);
+      expect(m.scrollWidth, 'page should not overflow horizontally').toBeLessThanOrEqual(m.viewport);
+      expect(m.cardMin, `every card width >= ${CARD_MIN} (got ${m.cardMin})`).toBeGreaterThanOrEqual(CARD_MIN);
       // The invariant: column count is determined by panel width, the
       // card minimum and the gap. The spec reads these values from the
       // live DOM rather than carrying a table per viewport.

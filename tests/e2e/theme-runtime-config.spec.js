@@ -61,10 +61,9 @@ test.describe('Keycloak runtime theme mount', () => {
     // green while silently breaking every OIDC redirect.
     const base = process.env.BASE_URL || 'https://localhost';
     const body = await response.json();
-    expect(
-      body.issuer,
-      'issuer must use the public origin the browser reaches'
-    ).toContain(`${base.replace(/^https?:\/\//, '')}/auth/realms/genie`);
+    expect(body.issuer, 'issuer must use the public origin the browser reaches').toContain(
+      `${base.replace(/^https?:\/\//, '')}/auth/realms/genie`
+    );
   });
 
   // A deployment may select any mounted theme via KEYCLOAK_THEME (default
@@ -94,9 +93,8 @@ test.describe('Keycloak runtime theme mount', () => {
     // Theme assets are referenced as /auth/resources/<hash>/login/<theme>/...;
     // referencing the selected theme proves the MOUNTED theme resolved — the
     // built-in fallback would reference login/keycloak[.v2] instead.
-    expect(
-      html,
-      `login page should load the mounted ${expectedTheme} theme assets`
-    ).toContain(`login/${expectedTheme}/`);
+    expect(html, `login page should load the mounted ${expectedTheme} theme assets`).toContain(
+      `login/${expectedTheme}/`
+    );
   });
 });

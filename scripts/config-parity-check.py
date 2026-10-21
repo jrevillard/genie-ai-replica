@@ -100,17 +100,30 @@ DEFAULT_COMPOSE = "docker-compose.yaml"
 DEFAULT_VALUES = "charts/genieai-umbrella/values.yaml"
 DEFAULT_ALLOWLIST = "scripts/config-parity-allowlist.json"
 
-# Source roots and what counts as shipped application source. The `notRead`
-# claims are checked against these: a variable declared unreadable must not
-# appear in any file that actually runs. Tests, docs and vendored trees are
-# excluded because they mention configuration without reading it.
+# Source roots and what counts as shipped application source.
+#
+# The claim being checked is "read by no SERVICE". Tests are excluded
+# because that is what the claim says: a variable a test reads is still
+# unread by anything a deployment runs, so a test-only read leaves the
+# claim true. This filter is correct for THAT claim and would be wrong for
+# the opposite one ("must be read somewhere"), where excluding tests turns
+# a false pass into a silent one. State the claim first; the filter
+# follows from it.
+#
+# Excluded for the same reason: `contracts/` (the suite that runs against
+# the real vendored comps) and vendored/installed trees — node_modules is
+# installed in the working tree this script walks, so skipping it is load-
+# bearing, not decoration.
 SOURCE_ROOTS = ("components", "genie-ai-overlay")
 SOURCE_SKIP_DIRS = {
     "node_modules", ".git", ".venv", "venv", "__pycache__", ".pytest_cache",
     "dist", "build", "coverage", "tests", "test", "__tests__", ".cache",
-    "migrations_backup",
+    "migrations_backup", "contracts",
 }
-SOURCE_SUFFIXES = (".js", ".py", ".vue", ".ts", ".mjs", ".cjs")
+# `.sh` because the frontend and backend entrypoints write the runtime
+# configuration the browser reads (`window.APP_CONFIG`), so they are a
+# delivery surface for `VUE_APP_*`, not plumbing.
+SOURCE_SUFFIXES = (".js", ".py", ".vue", ".ts", ".mjs", ".cjs", ".sh")
 SOURCE_SKIP_RE = re.compile(r"(^|/)(test_[^/]*\.py|[^/]*\.(test|spec)\.js)$")
 
 

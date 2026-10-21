@@ -752,6 +752,14 @@ opea:
     # e.g. https://10.0.0.110:444 — empty disables endpoint rendering
     # (callers receive an empty string and gate accordingly).
     nodeHost: ""
+    # Disables TLS verification towards the model endpoints
+    # (OPEA_SSL_SKIP_VERIFY=1 on the six orchestrators). Default false,
+    # which is what Compose does, and it is NOT inferred from `nodeHost`:
+    # an https:// endpoint says nothing about whether its certificate is
+    # trusted, and turning verification off is not a decision a chart
+    # should make on the operator's behalf. Set it when the GPU node
+    # serves a certificate the trust store does not carry.
+    skipTlsVerify: false
     paths:
       llm: /llm
       embedding: /embed

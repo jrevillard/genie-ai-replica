@@ -182,8 +182,20 @@ need to out-specify the layer, that is the signal to fix the layer instead.**
 
 ### The serving stack for a visual check
 
-Never measure against the stack someone else is looking at. Bring up a **separate compose project** — own network,
-own volumes, own published ports, own image tag:
+A visual check needs six things from whatever stack it runs on, whichever orchestrator that is:
+
+1. **An origin of its own** — a URL the browser and Playwright can reach, serving the app and proxying the API.
+2. **An image of its own** — the code under test, on a tag nobody else runs.
+3. **A reachable data tier** — shared when the stack allows it, per-instance when it does not.
+4. **A rebuild→serve step measured in seconds.**
+5. **A way to prove the running instance has the new code.**
+6. **A login path** — a browser login, since direct access grants are disabled on the realm.
+
+**Never measure against the stack someone else is looking at.**
+
+#### Docker Compose — the current dev loop
+
+A separate compose project: own network, own volumes, own published ports, own image tag.
 
 ```bash
 export NGINX_HTTPS_PORT=9443 NGINX_HTTP_PORT=9080
@@ -199,6 +211,42 @@ Two facts about it that cost time:
   `/app/dist`, **not** `/usr/share/nginx/html`, which is a stock page this image never uses.
 
 **Never `docker compose down -v` on a stack someone is watching** — it destroys the volumes.
+
+#### Kubernetes — the migration target
+
+A slot is **a namespace + a Helm release + an ingress host**: the three things the chart requires for a second
+release on one cluster. The chart lives in this repository at `charts/genieai-umbrella` (on `feat/k8s-migration`
+until it merges); the per-slot values belong with the environment overlays.
+
+| Primitive | Kubernetes form |
+|---|---|
+| own origin | `ingress.host` per slot (`genieai-a.local:4443`) — the chart renders a Gateway + HTTPRoute per namespace, TLS from cert-manager |
+| own image | `services.frontend.image: {repository, tag, pullPolicy: Never}`, built into minikube's daemon with `eval $(minikube docker-env)` |
+| prove the code | `kubectl exec -n <ns> <frontend-pod> -- grep <token> /app/dist/assets/*` |
+| serve | `helm upgrade` the slot's release, **bypassing Flux** — see the cadence below |
+| login | the shared realm, with the slot's origin added to the client's `redirectUris` (admin API, no restart) |
+| data tier | **per namespace by design** — kube-arangodb is single-namespace, and the Keycloak convergence Job runs per namespace |
+
+**Three things the chart does not allow yet.** They shape the design, so read them before proposing a slot:
+
+1. **A slot cannot borrow another release's Keycloak.** `VUE_APP_KEYCLOAK_URL` is computed by the template from
+   `ingress.host` and appended *after* the values' `env` list; Kubernetes takes the last duplicate, so a
+   values-level override loses. A frontend-only slot pointing at a shared issuer needs a chart knob.
+2. **A slot cannot reach the shared backend across namespaces.** The frontend's default-deny NetworkPolicy allows
+   the backend by `podSelector` with no `namespaceSelector` — same namespace only. Sharing the BFF across slots
+   needs a chart change.
+3. **A slot is not reachable by a published port.** The same NetworkPolicy admits only the Envoy data plane, so
+   the slot's origin is an HTTPRoute on the edge, not a NodePort.
+
+**Cost.** A full slot carries its own ArangoDB, Keycloak and backend. On the laptop node (10 Gi, a backend limit
+of 8 Gi) two full slots do not fit — slots are sequential there whatever the method allows.
+
+**Cadence.** Flux re-applies on a 1m/10m interval with 5m health windows and 15m timeouts. A visual loop is
+seconds, so a slot's release is updated directly (`helm upgrade`) or with `kubectl set image` + `kubectl rollout
+status`, and reconciled with Flux afterwards.
+
+> This mapping is read off the chart. **No slot has been run this way yet** — treat it as the shape, not as a
+> verified recipe, and verify each step before relying on it.
 
 ### Known gaps
 

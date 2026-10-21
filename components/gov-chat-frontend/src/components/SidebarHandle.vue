@@ -111,8 +111,14 @@ export default {
       if (this.side === 'left') return !this.collapsed;
       return this.collapsed;
     },
-    clampedValue() {
-      return Math.max(this.min, Math.min(this.max, this.value));
+    // How a horizontal movement of the strip maps onto the panel's
+    // width. The strip is the panel's RIGHT edge on the left side and
+    // its LEFT edge on the right, so moving it right grows one panel
+    // and shrinks the other. Both the drag and the arrow keys route
+    // through this, which is what keeps the two gestures from
+    // disagreeing about which way is "wider".
+    widthSign() {
+      return this.side === 'left' ? 1 : -1;
     }
   },
   beforeUnmount() {
@@ -155,13 +161,7 @@ export default {
     },
     onPointerMove(e) {
       if (!this.isDragging) return;
-      const delta = e.clientX - this.dragOrigin;
-      // For the right sidebar the panel sits to the left of the strip,
-      // so a positive delta (drag toward the right) widens it. For the
-      // left sidebar the panel sits to the right, so the same delta
-      // narrows it. The sign flip keeps one drag function for both.
-      const sign = this.side === 'right' ? 1 : -1;
-      const next = this.dragStartWidth + sign * delta;
+      const next = this.dragStartWidth + this.widthSign * (e.clientX - this.dragOrigin);
       const clamped = Math.max(this.min, Math.min(this.max, next));
       if (clamped !== this.value) this.$emit('input', clamped);
     },
@@ -183,38 +183,40 @@ export default {
       this.$emit('drag-end');
     },
     onKeyDown(e) {
-      // Keyboard arrows resize. The mapping is consistent with the
-      // pointer behaviour: on the right side, ArrowRight widens (the
-      // panel sits to the left, so moving the strip toward the right
-      // moves its left edge — the panel's right edge — into more
-      // space); on the left side, ArrowRight also widens (the panel
-      // sits to the right, so moving the strip toward the right moves
-      // its right edge — the panel's left edge — into more space).
-      // A single direction always grows or shrinks regardless of side.
+      // Keyboard moves the strip, exactly as the pointer does: the
+      // named direction is a movement in screen space, and the panel
+      // follows. ArrowRight slides the strip right, which widens a
+      // LEFT panel (the strip is its right edge) and narrows a RIGHT
+      // panel (the strip is its left edge). `widthSign` carries that,
+      // so the two gestures cannot disagree — an earlier revision had
+      // ArrowRight widen on both sides while the drag narrowed the
+      // right, and the e2e drag assertions caught the split.
+      //
+      // Only the horizontal arrows, matching aria-orientation=
+      // "vertical": the strip is a vertical divider that moves
+      // horizontally, so Up/Down would have no meaning here.
       const step = e.shiftKey ? KEY_STEP_FAST_PX : KEY_STEP_PX;
       let next = this.value;
       let handled = true;
       switch (e.key) {
         case 'ArrowRight':
-        case 'ArrowUp':
-          next = this.value + step;
+          next = this.value + this.widthSign * step;
           break;
         case 'ArrowLeft':
-        case 'ArrowDown':
-          next = this.value - step;
+          next = this.value - this.widthSign * step;
           break;
         case 'Home':
-          next = this.max;
+          // Range-widget convention: Home is the low end, End the high.
+          next = this.min;
           break;
         case 'End':
-          next = this.min;
+          next = this.max;
           break;
         case 'Enter':
         case ' ':
-          // The Enter/Space on the strip collapses — Enter/Space is
-          // also the button's activation key, and the strip's keyboard
-          // behaviour should mirror the button so a screen reader user
-          // does not have to Tab past the strip to find the toggle.
+          // The same keys the button inside activates. Mirroring the
+          // chevron's activation on the strip means a screen reader
+          // user does not have to Tab past the strip to find collapse.
           this.onCollapseClick();
           break;
         default:
@@ -238,17 +240,29 @@ export default {
 
 <style scoped>
 /*
- * Strip = a 24 px-wide strip on the panel's inner edge. Sits in the
- * flex flow between the panel and the centre so a drag mutates the
- * panel width via the parent's style binding rather than fighting
- * position: absolute layout. Half-overlaps the centre — the panel's
- * edge plus 12 px visible to the right of the panel boundary — so
- * the chevron sits centred on the actual seam, which is the gesture
- * the reference image carries.
+ * The strip is a 24 px-wide column on the panel's inner edge, inside
+ * the panel's own box. It is a flex child rather than an overlay, so
+ * a drag mutates the panel's width through the parent's style binding
+ * instead of fighting absolute positioning.
  *
- * Tokens only. The strip is a thin surface, painted as a slightly
- * translucent surface with a hover accent, so it reads as a handle
- * rather than a panel boundary.
+ * It sits INSIDE the panel rather than half-overlapping the centre,
+ * which departs from the Material reference on purpose. An earlier
+ * revision pulled the chevron across the panel boundary with a
+ * negative margin, which put it underneath the centre's content — and
+ * the centre's own z-index won. The handle was in the DOM, focusable,
+ * and carried the right ARIA, and neither the chevron click nor the
+ * drag reached it: Playwright reported the centre "intercepting
+ * pointer events" on the element it was trying to click. A control
+ * the centre paints over is not a control. Flush against the edge
+ * costs nothing and cannot be occluded by the neighbour it shares a
+ * boundary with.
+ *
+ * The panel's declared width therefore includes the strip: a panel
+ * set to 450 px shows 426 px of content beside a 24 px handle.
+ *
+ * Tokens only. The strip is a thin translucent surface that takes an
+ * accent on hover, focus and drag, so it reads as a grab target
+ * rather than as a border.
  */
 .sidebar-handle {
   flex: 0 0 24px;
@@ -262,7 +276,6 @@ export default {
   cursor: col-resize;
   touch-action: none;
   outline: none;
-  z-index: 2;
   transition: background-color 0.15s ease;
 }
 
@@ -272,28 +285,27 @@ export default {
   background: color-mix(in oklch, var(--accent) 22%, var(--surface));
 }
 
-/* The chevron button. Visually identical on both sides per the brief
-   ("visuellement identique"). Half the button's 28 px box straddles
-   the strip's boundary, anchored on the centre side so the chevron
-   reads as a fold/unfold gesture against the centre panel. */
+/* The chevron. 24 x 24 is the WCAG 2.5.8 minimum target size, and it
+   fills the strip's width exactly, so the control a user aims at and
+   the surface they aim at are the same object. Everything else in the
+   strip's height is drag surface. */
 .sidebar-handle__button {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 0;
   background: var(--surface);
   color: var(--muted);
   border: 1px solid var(--border);
-  border-radius: 50%;
+  border-radius: var(--radius-sm);
   box-shadow: var(--shadow-sm);
   cursor: pointer;
   transition:
     color 0.15s ease,
     border-color 0.15s ease,
-    box-shadow 0.15s ease,
-    transform 0.15s ease;
-  position: relative;
+    box-shadow 0.15s ease;
 }
 
 .sidebar-handle__button:hover,
@@ -304,16 +316,11 @@ export default {
   outline: none;
 }
 
-.sidebar-handle--left .sidebar-handle__button {
-  /* Anchor half on the strip and half into the centre. Negative left
-     pulls the button off the strip's content box so the chevron sits
-     centred on the seam itself, where the user expects to find the
-     affordance. */
-  margin-left: -16px;
-}
-
-.sidebar-handle--right .sidebar-handle__button {
-  margin-right: -16px;
+/* A focus ring on the strip itself, since the strip is the resize
+   target and the button inside it is the collapse target — each needs
+   to show which one has focus. */
+.sidebar-handle:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -21,27 +21,36 @@
 export const SIDEBAR_DEFAULTS = Object.freeze({ left: 450, right: 320 });
 
 // Minimums, derived from each panel's own content rather than from a
-// round number:
+// round number.
 //
-//   left 240 px — the services tree renders a category row of
-//     icon + label, and its sub-items indent by 16 px with a
-//     disclosure caret. At 240 px minus the panel's 8 px padding
-//     either side, a sub-item has 208 px of text before it starts
-//     truncating mid-word. Below that the tree stops being
-//     navigable, which is the only thing the panel is for.
+// left 300 px — MEASURED, not reasoned. The panel is
+//   300 (sidebar) − 24 (handle) − 1 (border) = 275 px,
+// and the weather widget inside it takes 16 px of padding and a 1 px
+// border, leaving a 227 px content box. Rendered on the running build
+// with the widget's populated markup, the three-day forecast row fits
+// at 227 px and overflows below it: at a 259 px widget (a 280 px
+// sidebar) the row ran 16 px past the content box, at 239 px
+// (a 260 px sidebar) 36 px, at 199 px (a 240 px sidebar) 52 px. The
+// overflow was invisible to a scrollWidth check — the widget does not
+// scroll — and was found by comparing each child's bounding rect
+// against the content box. 300 px is also two thirds of the shipped
+// 450 px default, so it reads as a deliberate half-way mark rather
+// than a measurement that happened to land there.
 //
-//   right 240 px — the document cards show a title and a URL on
-//     their own lines, plus a 5-row detail list whose labels and
-//     values sit on one flex row. The widest label ("Confidence:")
-//     plus the widest plausible value ("100.00%") needs ~150 px;
-//     240 leaves room for the icon column and the card's 16 px
-//     padding on both sides with a margin.
+// The widget now reflows instead of overflowing (`flex-wrap` plus
+// `min-width: 0` on the day), so 300 px is about the forecast keeping
+// its three days on one row rather than about content being cut. The
+// floor would be lower if the widget could reflow and stay readable.
 //
-//   Both are GUESSES in the sense that no measurement of the content
-//   was taken at these widths — they are read off the CSS the panels
-//   already ship. They are stated as such rather than dressed up as
-//   measurements.
-export const SIDEBAR_MIN_WIDTHS = Object.freeze({ left: 240, right: 240 });
+// right 240 px — a READ-OFF-THE-CSS judgement, not a measurement. The
+// panel's document cards show a title and a URL on their own lines
+// plus a five-row detail list whose label and value share a flex row;
+// the widest label ("Confidence:") plus a plausible value ("100.00%")
+// needs about 150 px, which leaves room for the icon column and the
+// card's 16 px padding at 240. It could not be measured: the fidelity
+// environment has no related documents, so the panel renders empty.
+// Stated as a judgement rather than dressed up as a measurement.
+export const SIDEBAR_MIN_WIDTHS = Object.freeze({ left: 300, right: 240 });
 
 // Hard caps: the width past which a panel looks disproportionate to
 // its content. 600 px for the left is roughly the width the tree
@@ -62,11 +71,20 @@ export const SIDEBAR_MAX_WIDTHS = Object.freeze({ left: 600, right: 480 });
 // own floor.
 export const CENTRE_MIN_WIDTH = 480;
 
-// The gap the flex layout puts between a sidebar and the centre.
-// `--space-sm` = 8 px, from App.vue's `.main-container { gap }` and
-// ChatBotComponent's `.app-container { gap }`. Two of them sit
-// between the two sidebars' inner edges.
-const LAYOUT_GAP_PX = 8;
+// The horizontal space inside the viewport that the centre column
+// does not get. Not a gap token: it is what the two sidebars cannot
+// have, so the clamp has to account for all of it or the floor is
+// missed by however much is unaccounted for.
+//
+//   16 px — the two `--space-sm` (8 px) inter-panel gaps, from
+//           App.vue's `.main-container` and ChatBotComponent's
+//           `.app-container`;
+//    8 px — `.content-area`'s own left padding, also `--space-sm`.
+//
+// The third term is the one an earlier revision left out, and it is
+// why the measured centre came out 8 px under its floor at exactly
+// the viewport where the clamp bound.
+const CENTRE_CHROME_PX = 24;
 
 // The breakpoint at which both sidebars stop being off-canvas and
 // become in-flow reservations. Shared with the CSS in both sidebar
@@ -144,12 +162,23 @@ function write(key, value) {
 //
 // The dynamic maximum for one side: the smaller of the hard cap and
 // whatever leaves the centre its usable minimum once the *other*
-// sidebar's current width is subtracted. Passing the other side's
-// width is what makes the two clamps compose — each side alone
-// cannot see the reservation the other has already made.
+// sidebar's width is subtracted. Passing the other side's width is
+// what makes the two clamps compose — each side alone cannot see the
+// reservation the other has already made.
+//
+// `otherWidth` must be the width that side is *currently in force*,
+// not the one it has stored. Clamping against the stored value
+// over-reserves whenever both sides hold a width that neither can
+// currently use, and the over-reservation differs per viewport: at
+// 1400 px the two clamps measured 424 and 304 against stored 600 and
+// 480, at 1600 px they released to 600 and 480, and the centre went
+// 648 -> 496 as the window *widened*. The ladder has to be monotonic
+// in the viewport, and only clamping against the in-force width makes
+// it so: the pair then sums to exactly the budget rather than to some
+// per-viewport approximation of it.
 export function computeMaxFor(side, otherWidth, viewport) {
   const hardCap = SIDEBAR_MAX_WIDTHS[side];
-  const centreFloor = viewport - CENTRE_MIN_WIDTH - otherWidth - LAYOUT_GAP_PX * 2;
+  const centreFloor = viewport - CENTRE_MIN_WIDTH - otherWidth - CENTRE_CHROME_PX;
   return Math.min(hardCap, Math.max(SIDEBAR_MIN_WIDTHS[side], centreFloor));
 }
 
@@ -157,6 +186,11 @@ export function computeMaxFor(side, otherWidth, viewport) {
 // restore-from-storage and on every viewport change — a width stored
 // at 1920 px is meaningless at 1400 px, and applying it blindly is
 // exactly the failure the spec must catch.
+//
+// This is a RENDERING bound, not a stored one. The caller keeps the
+// stored value untouched when the clamp binds, so a user who sets a
+// wide panel on a large monitor and later narrows the window gets it
+// back when they widen the window again.
 export function clampWidth(side, value, otherWidth, viewport) {
   const max = computeMaxFor(side, otherWidth, viewport);
   return Math.max(SIDEBAR_MIN_WIDTHS[side], Math.min(max, value));

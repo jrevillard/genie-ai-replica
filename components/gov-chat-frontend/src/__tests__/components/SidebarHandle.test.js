@@ -3,8 +3,7 @@ import SidebarHandle from '@/components/SidebarHandle.vue';
 
 const PROPS = { value: 450, min: 240, max: 600 };
 
-const mountHandle = (props = {}) =>
-  mount(SidebarHandle, { props: { ...PROPS, ...props }, attachTo: document.body });
+const mountHandle = (props = {}) => mount(SidebarHandle, { props: { ...PROPS, ...props }, attachTo: document.body });
 
 // jsdom gives every element a zero-width rect, so a drag has nothing to
 // read. The handler only needs the strip's identity (to reject a
@@ -38,7 +37,7 @@ describe('SidebarHandle', () => {
     // accessibility defect, not a refinement — so the strip is focusable
     // and carries the arrow-key contract.
     it('is reachable by keyboard and resizes on the arrow keys', async () => {
-      const wrapper = mountHandle();
+      const wrapper = mountHandle({ side: 'left' });
       await wrapper.find('.sidebar-handle').trigger('keydown', { key: 'ArrowRight' });
       expect(wrapper.emitted('input')[0]).toEqual([458]);
 
@@ -46,22 +45,44 @@ describe('SidebarHandle', () => {
       expect(wrapper.emitted('input')[1]).toEqual([442]);
     });
 
+    // The keys move the strip in screen space; the panel follows. On
+    // the right the strip is the panel's LEFT edge, so ArrowRight
+    // narrows. Keyboard and pointer must not disagree about which way
+    // is wider — an earlier revision widened on both sides while the
+    // drag narrowed the right, and only the drag assertion caught it.
+    it('mirrors the arrow direction on the right side, matching the drag', async () => {
+      const wrapper = mountHandle({ side: 'right' });
+      await wrapper.find('.sidebar-handle').trigger('keydown', { key: 'ArrowRight' });
+      expect(wrapper.emitted('input')[0]).toEqual([442]);
+
+      await wrapper.find('.sidebar-handle').trigger('keydown', { key: 'ArrowLeft' });
+      expect(wrapper.emitted('input')[1]).toEqual([458]);
+    });
+
     it('clamps the arrow-key step to min and max', async () => {
-      const wrapper = mountHandle({ value: 596 });
+      // Side pinned to left so ArrowRight is the widening direction;
+      // on the right it would step away from the cap being tested.
+      const wrapper = mountHandle({ side: 'left', value: 596 });
       await wrapper.find('.sidebar-handle').trigger('keydown', { key: 'ArrowRight' });
       expect(wrapper.emitted('input')[0]).toEqual([600]);
 
-      const atFloor = mountHandle({ value: 244 });
+      const atFloor = mountHandle({ side: 'left', value: 244 });
       await atFloor.find('.sidebar-handle').trigger('keydown', { key: 'ArrowLeft' });
       expect(atFloor.emitted('input')[0]).toEqual([240]);
+    });
+
+    it('takes a larger step with Shift held', async () => {
+      const wrapper = mountHandle({ side: 'left' });
+      await wrapper.find('.sidebar-handle').trigger('keydown', { key: 'ArrowRight', shiftKey: true });
+      expect(wrapper.emitted('input')[0]).toEqual([490]);
     });
 
     it('jumps to the bounds on Home and End', async () => {
       const wrapper = mountHandle();
       await wrapper.find('.sidebar-handle').trigger('keydown', { key: 'Home' });
-      expect(wrapper.emitted('input')[0]).toEqual([600]);
+      expect(wrapper.emitted('input')[0]).toEqual([240]);
       await wrapper.find('.sidebar-handle').trigger('keydown', { key: 'End' });
-      expect(wrapper.emitted('input')[1]).toEqual([240]);
+      expect(wrapper.emitted('input')[1]).toEqual([600]);
     });
 
     it('collapses from the keyboard with Enter and Space', async () => {
@@ -86,7 +107,11 @@ describe('SidebarHandle', () => {
     });
 
     it('labels the button with the opposite action when collapsed', () => {
-      const wrapper = mountHandle({ collapsed: true, collapseLabel: 'Collapse sidebar', expandLabel: 'Expand sidebar' });
+      const wrapper = mountHandle({
+        collapsed: true,
+        collapseLabel: 'Collapse sidebar',
+        expandLabel: 'Expand sidebar'
+      });
       const button = wrapper.find('.sidebar-handle__button');
       expect(button.attributes('aria-label')).toBe('Expand sidebar');
       expect(button.attributes('aria-expanded')).toBe('false');
@@ -94,19 +119,40 @@ describe('SidebarHandle', () => {
   });
 
   describe('pointer drag', () => {
-    it('widens when the pointer moves toward the panel (left side)', async () => {
+    // A drag moves the strip in screen space; the panel follows. The
+    // strip is the LEFT panel's right edge, so moving it right grows
+    // it, and it is the RIGHT panel's left edge, so moving it right
+    // shrinks that. The keyboard keys route through the same sign —
+    // see the mirror assertion under accessibility.
+    it('widens the left panel when the strip moves right', async () => {
+      const wrapper = mountHandle({ side: 'left' });
+      stubStripGeometry(wrapper);
+      await wrapper.find('.sidebar-handle').trigger('pointerdown', { pointerId: 1, button: 0, clientX: 450 });
+      await wrapper.find('.sidebar-handle').trigger('pointermove', { pointerId: 1, clientX: 500 });
+      expect(wrapper.emitted('input')[0]).toEqual([500]);
+    });
+
+    it('narrows the left panel when the strip moves left', async () => {
       const wrapper = mountHandle({ side: 'left' });
       stubStripGeometry(wrapper);
       await wrapper.find('.sidebar-handle').trigger('pointerdown', { pointerId: 1, button: 0, clientX: 450 });
       await wrapper.find('.sidebar-handle').trigger('pointermove', { pointerId: 1, clientX: 400 });
-      expect(wrapper.emitted('input')[0]).toEqual([500]);
+      expect(wrapper.emitted('input')[0]).toEqual([400]);
     });
 
-    it('widens when the pointer moves away from the panel (right side)', async () => {
+    it('widens the right panel when the strip moves left', async () => {
       const wrapper = mountHandle({ side: 'right' });
       stubStripGeometry(wrapper);
       await wrapper.find('.sidebar-handle').trigger('pointerdown', { pointerId: 1, button: 0, clientX: 1400 });
       await wrapper.find('.sidebar-handle').trigger('pointermove', { pointerId: 1, clientX: 1450 });
+      expect(wrapper.emitted('input')[0]).toEqual([400]);
+    });
+
+    it('narrows the right panel when the strip moves right', async () => {
+      const wrapper = mountHandle({ side: 'right' });
+      stubStripGeometry(wrapper);
+      await wrapper.find('.sidebar-handle').trigger('pointerdown', { pointerId: 1, button: 0, clientX: 1400 });
+      await wrapper.find('.sidebar-handle').trigger('pointermove', { pointerId: 1, clientX: 1350 });
       expect(wrapper.emitted('input')[0]).toEqual([500]);
     });
 

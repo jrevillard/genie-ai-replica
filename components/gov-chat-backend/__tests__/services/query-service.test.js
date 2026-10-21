@@ -705,6 +705,23 @@ describe('QueryService', () => {
         workerSpy.mockRestore();
       }
     });
+
+    it('falls back to the documented OPEA service name on the worker path too', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      const workerSpy = jest
+        .spyOn(queryService, 'runOPEAWorker')
+        .mockResolvedValue({ responseTime: 12, response: 'answer', metadata: null });
+
+      try {
+        await withEnv({ OPEA_HOST: undefined, OPEA_PORT: undefined, CONTEXT_OPTION: undefined }, () =>
+          queryService.createQuery(createAttackerShapedQueryData())
+        );
+
+        expect(workerSpy.mock.calls[0][0]).toBe('http://chatqna-xeon-backend-server:8888/v1/chatqna');
+      } finally {
+        workerSpy.mockRestore();
+      }
+    });
   });
 
   describe('initStreamQuery', () => {
@@ -801,6 +818,19 @@ describe('QueryService', () => {
       );
 
       expect(result.opeaUrl).toBe('http://chatqna.internal:8899/v1/chatqna');
+    });
+
+    // Both call sites used to carry their own copy of the default, so each
+    // path is checked: a fallback that names a host nobody can resolve sends
+    // the query into a connection error instead of the ChatQnA service.
+    it('falls back to the documented OPEA service name when OPEA_HOST is unset', async () => {
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-default' });
+
+      const result = await withEnv({ OPEA_HOST: undefined, OPEA_PORT: undefined }, () =>
+        queryService.initStreamQuery(createMockQueryData(), {})
+      );
+
+      expect(result.opeaUrl).toBe('http://chatqna-xeon-backend-server:8888/v1/chatqna');
     });
   });
 

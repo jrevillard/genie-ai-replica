@@ -69,6 +69,12 @@ is required, which is a fact the chart has to reproduce (through a Secret).
 
 Usage:
   config-parity-check.py RENDERED.yaml [--compose ...] [--values ...] [--allowlist ...]
+                     [--min-compared=N]
+
+`--min-compared=N` puts a floor on how many variables the run actually
+compared. Every allowlist category removes variables from that set, so
+without a floor, growing the allowlist is a way to make this gate green
+without touching either surface.
 
 Exits non-zero and prints one `GAP` line per difference. A surface the
 script cannot compare (a Compose service with no chart counterpart, or the
@@ -201,6 +207,7 @@ def main(argv):
     compose_path = DEFAULT_COMPOSE
     values_path = DEFAULT_VALUES
     allowlist_path = DEFAULT_ALLOWLIST
+    min_compared = 0
     for arg in args[1:]:
         if arg.startswith("--compose="):
             compose_path = arg.split("=", 1)[1]
@@ -208,6 +215,8 @@ def main(argv):
             values_path = arg.split("=", 1)[1]
         elif arg.startswith("--allowlist="):
             allowlist_path = arg.split("=", 1)[1]
+        elif arg.startswith("--min-compared="):
+            min_compared = int(arg.split("=", 1)[1])
 
     with open(rendered_path) as handle:
         docs = [d for d in yaml.safe_load_all(handle) if d]
@@ -324,6 +333,18 @@ def main(argv):
             print(f"  not compared: {compose_name} — {unpaired[compose_name]}")
     for gap in gaps:
         print(f"  GAP {gap}")
+    if checked < min_compared:
+        # Every suppression category (mayDiffer, notRead, codeDefault,
+        # notApplicable, composeOnly) removes variables from the compared
+        # set, so growing the allowlist is a way to turn this gate green
+        # without touching either surface. A floor on the number actually
+        # compared makes that move visible.
+        print(
+            f"\nonly {checked} variables were compared, below the floor of "
+            f"{min_compared}. Either the chart stopped configuring something "
+            "Compose configures, or the allowlist grew. Both deserve a look."
+        )
+        return 1
     if gaps:
         print(
             f"\n{len(gaps)} variable(s) are configured on one surface and not the other, "

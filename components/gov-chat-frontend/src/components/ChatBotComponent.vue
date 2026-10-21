@@ -572,20 +572,26 @@ export default {
       return typeof window !== 'undefined' && window.innerWidth >= SIDEBAR_INFLOW_MIN_WIDTH;
     },
 
-    // The just-chat config entry becomes the welcome composer. The
-    // entry carries the composer's leading icon, tint and accessible
-    // name (its localised `title`) — the composer itself stays a
-    // product feature, not a DS primitive, and reads only what the
-    // entry says.
+    // The welcome composer is whichever config entry opts into the
+    // `placement: "composer"` slot. `placement` is the explicit signal —
+    // the brief forbade inferring "this is the just-chat entry" from
+    // the absence of a category and an action, because a second
+    // such entry on a deployment would silently share the slot and
+    // make the deployment's mistake look like a feature. When several
+    // entries declare `placement: "composer"`, the first one in the
+    // button list wins — the grid's `tileButtons` filter reads the
+    // same field, so both sides agree on the routing by construction.
     composerEntry() {
-      return this.quickHelpButtons.find((b) => b && b.id === 'just-chat') || null;
+      return this.quickHelpButtons.find((b) => b && b.placement === 'composer') || null;
     },
-    // The grid filters out any entry that asks to be placed in the
-    // composer instead of a tile — the placement field is the explicit
-    // signal, no inference from category absence or action emptiness
-    // (a second category-less entry would silently share the slot).
+    // The grid keeps every entry whose placement is not the composer —
+    // again, the explicit field, not a heuristic from category / action
+    // presence. The seven product configs only ever set this on the
+    // well-known just-chat entry; any deployment that adds a second one
+    // gets the second routed to the grid (default placement is `tile`,
+    // no schema change needed for that).
     tileButtons() {
-      return this.quickHelpButtons.filter((b) => b.placement !== 'composer');
+      return this.quickHelpButtons.filter((b) => b && b.placement !== 'composer');
     }
   },
 
@@ -2452,6 +2458,7 @@ export default {
   align-items: center;
   justify-content: center;
   padding: var(--space-lg);
+  gap: var(--space-lg);
   overflow-y: auto;
 }
 
@@ -2493,8 +2500,22 @@ export default {
 .quick-help-subtitle {
   text-align: center;
   font-size: var(--text-md);
-  margin: 0 0 var(--space-lg);
+  /* No bottom margin: the overlay's flex `gap` carries the rhythm
+     to the composer (and the composer to the grid). */
+  margin: 0;
   color: var(--muted);
+}
+
+/* The welcome composer shares the grid's measured width — same cap,
+   same auto-margin centering — so the bar and the card row present
+   one visual strip rather than a shrinking pill next to a wide grid.
+   Without `width: 100%`, the flex shrink-to-fit on a column with
+   `align-items: center` would collapse the bar to its intrinsic width
+   and contradict the panel-rhythm the composer is meant to belong to. */
+.quick-help-composer {
+  width: 100%;
+  max-width: calc(4 * var(--qh-card-min) + 3 * var(--space-xl));
+  margin-inline: auto;
 }
 
 /* The grid's column count is driven by container queries on the panel
@@ -2531,20 +2552,14 @@ export default {
   font-weight: 500;
 }
 
-/* Chat Input Styles */
+/* Chat Input Styles — the chat-view composer sits in this wrapper.
+   The composer itself owns its internal layout; this block is just
+   the panel that hugs the bottom of the chatbot container and
+   inherits the existing top border / background. */
 .chat-input {
-  display: flex;
-  flex-direction: column;
   background: var(--bg-tertiary);
   border-top: 1px solid var(--border);
   padding: var(--space-sm);
-}
-
-.input-actions {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-sm);
-  align-items: center;
 }
 
 /* Form Styles for Save Dialog */
@@ -2557,20 +2572,6 @@ export default {
   margin-bottom: var(--space-sm);
   font-weight: 500;
   color: var(--fg);
-}
-
-/* Responsive Adjustments */
-@media (min-width: 768px) {
-  .chat-input {
-    flex-direction: row;
-    align-items: flex-end;
-  }
-
-  .prompt-textarea {
-    margin-bottom: 0;
-    margin-right: var(--space-sm);
-    flex: 1;
-  }
 }
 
 @media (max-width: 768px) {

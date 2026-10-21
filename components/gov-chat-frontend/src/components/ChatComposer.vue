@@ -42,7 +42,7 @@
       type="textarea"
       :rows="1"
       :placeholder="placeholder"
-      class="chat-composer__field"
+      class="chat-composer__field prompt-textarea"
       :input-id="inputId"
       @focus="$emit('focus', $event)"
     />
@@ -76,7 +76,7 @@
         :title="saveTitle"
         :aria-label="saveTitle"
         :disabled="isSaving"
-        data-testid="composer-save-btn"
+        data-testid="save-chat-btn"
         @click="$emit('save')"
       >
         <Loader2 v-if="isSaving" :size="18" class="animate-spin" aria-hidden="true" />

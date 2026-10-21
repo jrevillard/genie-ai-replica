@@ -173,6 +173,88 @@
       "mayDiffer": {
         "LLM_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose at its own guardrail service"
       }
+    },
+    "clamav": {
+      "compose": "clamav",
+      "chart": "clamav"
+    },
+    "frontend": {
+      "compose": "frontend",
+      "chart": "frontend",
+      "codeDefault": {
+        "PORT": "the frontend reads 8090 as its own default and the chart's container port is 8090",
+        "VUE_APP_AVAILABLE_LOCALES": "empty in Compose; the frontend treats an unset value as 'every locale available'"
+      },
+      "mayDiffer": {
+        "VUE_APP_CSP_CONNECT_SRC": "the browser's origin is the deployment's public origin (ingress.scheme + ingress.host); Compose's list names the localhost development origins"
+      },
+      "notApplicable": {
+        "VUE_PROXY_HOST": "the chart serves the SPA and the API from the same origin, so the development proxy host is never dialled"
+      }
+    },
+    "redisCache": {
+      "compose": "redis-cache",
+      "chart": "redis-cache"
+    },
+    "migrations": {
+      "compose": "db-migrations",
+      "chart": "migrate-db",
+      "mayDiffer": {
+        "ARANGO_DB": "the chart's ArangoDB instance serves the _system database; the Compose deployment uses a dedicated genie-ai one",
+        "ARANGO_URL": "in-cluster Service DNS instead of the Compose service name"
+      }
+    },
+    "keycloakConvergence": {
+      "compose": "keycloak-config",
+      "chart": "identity",
+      "mayDiffer": {
+        "EMAIL_FROM": "the chart's convergence Job takes its SMTP settings from data.keycloak.smtp; its defaults are placeholders for a deployment with no SMTP, and Compose takes them from the root env file",
+        "EMAIL_HOST": "see EMAIL_FROM",
+        "EMAIL_PORT": "see EMAIL_FROM",
+        "EMAIL_SMTP_AUTH": "see EMAIL_FROM",
+        "EMAIL_SMTP_STARTTLS": "see EMAIL_FROM",
+        "EMAIL_USER": "see EMAIL_FROM",
+        "GENIE_ADMIN_EMAIL": "the operator supplies it on both surfaces; the chart's value comes from data.keycloak.adminEmail",
+        "KC_MOBILE_CLIENT_ID": "the chart carries a working default (genie-mobile) that the realm file needs; Compose leaves it to the operator",
+        "KC_MOBILE_REDIRECT_SCHEME": "the chart carries a working default (genieai) that the realm file needs; Compose leaves it to the operator",
+        "KC_PUBLIC_ORIGIN": "the public origin, spelled from ingress.scheme + ingress.host on the chart side and from NGINX_PUBLIC_DOMAIN on the Compose side",
+        "KEYCLOAK_RESET_PASSWORD": "the chart's default realm leaves it off — it is an operator choice (data.keycloak.resetPasswordAllowed); Compose's realm import turns it on",
+        "KEYCLOAK_URL": "the Job reaches Keycloak in-cluster; Compose reaches it through its own service name",
+        "KEYCLOAK_VERIFY_EMAIL": "the chart's default realm leaves it off because a deployment without SMTP cannot verify an address (data.keycloak.verifyEmail); Compose's realm import turns it on"
+      },
+      "secretProvided": {
+        "EMAIL_PASSWORD": "carried by the email-password Secret through the convergence Job's envSecrets rows; the operator provides it, so there is no value to compare",
+        "GENIE_ADMIN_PASSWORD": "carried by the keycloak-admin-credentials Secret through the convergence Job's envSecrets rows",
+        "KC_DATAPREP_CLIENT_SECRET": "carried by the kc-dataprep-client-secret Secret through the convergence Job's envSecrets rows",
+        "KC_GRAFANA_CLIENT_SECRET": "carried by the kc-grafana-client-secret Secret through the convergence Job's envSecrets rows",
+        "KC_PROXY_CLIENT_SECRET": "carried by the keycloak-proxy-client-secret Secret through the convergence Job's envSecrets rows"
+      }
     }
+  },
+  "unpaired": {
+    "arango-vector-db": "the chart's ArangoDB is a kube-arangodb operator custom resource, configured through the CR rather than through an environment; the operator owns the database and its creation",
+    "certbot": "the chart terminates TLS with cert-manager; there is no certbot container",
+    "chatqna-xeon-nginx-server": "the OPEA demo UI is not deployed by the chart",
+    "chatqna-xeon-ui-server": "the OPEA demo UI is not deployed by the chart",
+    "grafana": "the chart's Grafana is a grafana-operator custom resource, configured through the CR",
+    "guardrail": "the chart deploys no guardrail; the orchestrators tolerate an unreachable one and carry its default address",
+    "keycloak": "the chart's Keycloak is a keycloak-operator custom resource, configured through the CR",
+    "kong": "the chart's edge is Envoy Gateway (Gateway API), not Kong",
+    "kong-config": "the chart's edge is Envoy Gateway (Gateway API), not Kong",
+    "kong-migrations": "the chart's edge is Envoy Gateway (Gateway API), not Kong",
+    "nginx": "the chart's edge is Envoy Gateway; the standalone nginx is gone from the data path",
+    "otel-collector": "the chart's collector is an OpenTelemetry Operator custom resource, configured through the CR",
+    "otel-collector-init": "the chart ships the collector's configuration as a ConfigMap the operator consumes; there is no init container",
+    "postgres": "the chart's PostgreSQL is CloudNativePG, configured through the CR",
+    "postgres-init": "the chart's PostgreSQL is CloudNativePG; the operator creates the database and its owner",
+    "tei": "the chart's in-cluster embedding model is a Deployment whose model and endpoint come from the OPEA tier's values, not from an environment list",
+    "tei_reranker": "the chart's in-cluster reranking model is a Deployment configured through the OPEA tier's values",
+    "tempo-proxy": "the chart's traces go to the vmoperator's VMSingle, not through a tempo proxy",
+    "textgen": "the chart's in-cluster LLM is a vLLM Deployment configured through the OPEA tier's values",
+    "victorialogs": "the chart's log store is a vmoperator VMSingle custom resource",
+    "victoriametrics": "the chart's metrics store is a vmoperator VMSingle custom resource",
+    "victoriatraces": "the chart's trace store is a vmoperator VMSingle custom resource",
+    "vllm": "the chart's in-cluster LLM is a vLLM Deployment configured through the OPEA tier's values",
+    "vllm-translation-guardrail": "the chart's translation model belongs to the OPEA tier and is configured through the tier's values"
   }
 }

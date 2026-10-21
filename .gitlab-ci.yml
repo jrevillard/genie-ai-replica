@@ -3240,7 +3240,12 @@ chart:lint:
     - kubeconform -summary -ignore-missing-schemas -kubernetes-version 1.33.0 /tmp/rendered-full.yaml
     - kubeconform -summary -ignore-missing-schemas -kubernetes-version 1.33.0 /tmp/rendered-prod.yaml
     - kubeconform -summary -ignore-missing-schemas -kubernetes-version 1.33.0 /tmp/rendered-incluster.yaml
-    - python3 /tmp/strict-yaml.py /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-prod.yaml /tmp/rendered-incluster.yaml
+    # values.yaml goes through the same duplicate-key check as the renders:
+    # Helm resolves a repeated key last-wins BEFORE anything downstream sees
+    # it, so a `services.<svc>.env` declared twice renders identically whether
+    # one copy or two are present — and an operator editing the copy Helm
+    # ignores gets no error anywhere.
+    - python3 /tmp/strict-yaml.py charts/genieai-umbrella/values.yaml /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-prod.yaml /tmp/rendered-incluster.yaml
     # NetworkPolicy cross-check: the chart renders an ingress and an egress
     # side for every component, in different templates, edited
     # independently. A flow declared on one side and absent from the other

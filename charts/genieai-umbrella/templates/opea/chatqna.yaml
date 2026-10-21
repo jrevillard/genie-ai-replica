@@ -109,6 +109,12 @@ end-to-end for multi-line prompts). */ -}}
 {{- $promptEnv = append $promptEnv (dict "name" "CHATQNA_SYSTEM_PROMPT" "value" $systemPrompt) -}}
 {{- end -}}
 {{- $gpuSecretEnv := include "genieai-umbrella.gpuApiKeyEnv" (dict "keys" (list "VLLM_API_KEY")) | fromJsonArray -}}
+{{- /* opea.chatqna.env: the variables the chart must configure the way
+Compose configures them (parity gate: scripts/config-parity-check.py).
+A MAP, so an overlay that sets one variable keeps the others. The rows
+come last: a container env list applies in order and the last row for a
+name wins. */ -}}
+{{- $opeaEnvRows := include "genieai-umbrella.envMapRows" (.Values.opea.chatqna.env | default dict) | fromJsonArray -}}
 {{- /* workingDir: the image ENTRYPOINT runs `python genieai_chatqna.py`
 with a RELATIVE path; the script lives in /app/ChatQnA/. Without it the container starts in /app and
 exits immediately ("can't open file"). */ -}}
@@ -117,7 +123,7 @@ exits immediately ("can't open file"). */ -}}
     "workingDir" "/app/ChatQnA"
     "port" 8888
     "resources" (dict "requests" (dict "cpu" "200m" "memory" "512Mi") "limits" (dict "cpu" "2" "memory" "4Gi"))
-    "env" (concat $tuningEnv $promptEnv $gpuSecretEnv)
+    "env" (concat $tuningEnv $promptEnv $gpuSecretEnv $opeaEnvRows)
     "probes" (dict
       "readiness" (dict "httpGet" (dict "path" "/health" "port" "http") "initialDelaySeconds" 120 "periodSeconds" 15)
       "liveness"  (dict "httpGet" (dict "path" "/health" "port" "http") "initialDelaySeconds" 180 "periodSeconds" 30)

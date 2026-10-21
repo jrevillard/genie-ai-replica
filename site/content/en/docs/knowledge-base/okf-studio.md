@@ -101,7 +101,15 @@ model** selector rides the Generate and Run controls: the deployment's
 **active model configuration** applies automatically, and picking a
 configuration (and optionally a specific model from its live dropdown)
 overrides it for that operation only — the run's fidelity block records
-which judge scored it.
+which judge scored it. **The selection is remembered per suite**: reopening
+the Lab restores the judge the suite was last used with — the generation
+pick on a suite that has never run, the latest run's pick once it has runs
+(so repeat runs stay comparable), and viewing a run restores *that* run's
+judge — instead of falling back to the deployment default. The suite
+records the judge it was generated with, and each run records both the
+pick as made and the resolved judge that scored it; a configuration
+deleted in the meantime falls back to the default, since the dropdown
+cannot offer what no longer exists.
 
 - **Generate** a benchmark suite from one or more repositories (the current
   one alone, or with any number of related repositories — multi-hop

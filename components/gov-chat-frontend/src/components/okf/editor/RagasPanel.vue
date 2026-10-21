@@ -955,6 +955,42 @@ export default {
       if (res && res.ok) this.judgeModels = res.models || [];
       // listing failure leaves the free-text input — honest fallback
     },
+    /** 8-7 judge memory (David 2026-10-21: the model selection must not fall
+     *  back to the deployment default whenever the dialog is left and
+     *  re-entered). Restore the pick this suite was last used with: the
+     *  viewed run's pick when loading that run, else the suite's latest
+     *  run's pick, else the generation pick. A config deleted since then
+     *  falls back to default — the dropdown cannot offer what no longer
+     *  exists. */
+    async restoreJudgePick(preferred) {
+      if (!this.suite) return;
+      // Mount race: loadJudgeConfigs may still be in flight when a suite
+      // loads — without the list we cannot tell "deleted" from "not yet
+      // loaded" and would wrongly reset to default.
+      if (!this.modelConfigs.length) await this.loadJudgeConfigs();
+      let pick = null;
+      if (preferred && preferred.config_key) {
+        pick = preferred;
+      } else if (!preferred) {
+        // preferred === null/undefined means "no run-specific opinion";
+        // a preferred WITHOUT config_key is an explicit default pick and
+        // must NOT fall through to older picks.
+        const run = (this.runHistory || []).find(
+          (r) => r.kind === 'ragas_run' && r.suite_key === this.suite.suite_key && r.judge_pick
+        );
+        pick = (run && run.judge_pick) || (this.suite.payload && this.suite.payload.judge_pick) || null;
+      }
+      const key = pick && pick.config_key;
+      if (key && this.modelConfigs.some((c) => c._key === key)) {
+        this.judgeConfigKey = key;
+        await this.onJudgeConfigChange();
+        if (pick.model && this.judgeModels.includes(pick.model)) this.judgeModel = pick.model;
+      } else {
+        this.judgeConfigKey = '';
+        this.judgeModel = '';
+        this.judgeModels = [];
+      }
+    },
     metricLabel(m) {
       return this.translate(`okf.ragas.metric.${m}`, m.replace(/_/g, ' '));
     },
@@ -1122,7 +1158,11 @@ export default {
           ...new Set([...DEFAULT_METRICS, ...((this.suite.payload && this.suite.payload.metrics_config) || [])])
         ];
         this.$emit('changed');
-        this.adoptInFlight(suiteKey);
+        await this.adoptInFlight(suiteKey);
+        // Judge memory: reopen/refresh restores the pick this suite was last
+        // used with, not the deployment default. Awaited so a run-specific
+        // restore (onLoadRun) always runs after and wins.
+        await this.restoreJudgePick();
       }
     },
     /** Re-attach to server-side work that outlived this page load. */
@@ -1419,6 +1459,10 @@ export default {
           })
           .catch(() => null);
         if (ex && ex.ok) this.explainDoc = ex.result;
+        // Judge memory: viewing a run restores the judge pick THAT run was
+        // made with — the selector mirrors the results on screen.
+        const fid = this.runDoc && this.runDoc.payload && this.runDoc.payload.fidelity;
+        if (fid && fid.judge && fid.judge.pick) this.restoreJudgePick(fid.judge.pick);
       } else if (!opts.silent && res) this.error = res.message;
     },
     async onExplain() {

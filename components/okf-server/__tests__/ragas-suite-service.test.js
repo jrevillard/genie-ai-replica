@@ -202,7 +202,10 @@ beforeEach(() => {
             error: d.error || null,
             progress: d.progress || null,
             summary: (d.payload && d.payload.summary) || null,
-            entries: d.payload && d.payload.entries ? d.payload.entries.length : null
+            entries: d.payload && d.payload.entries ? d.payload.entries.length : null,
+            // mirrors the listRuns AQL projection (judge memory, 2026-10-21)
+            judge_pick:
+              (d.payload && d.payload.fidelity && d.payload.fidelity.judge && d.payload.fidelity.judge.pick) || null
           }))
       };
     }
@@ -237,6 +240,34 @@ describe('beginSuiteGeneration / getSuite', () => {
     expect(sent.documents[0].page_content).toBe('Plant after the last frost date.');
     expect(sent.documents[0].metadata.chunk_key).toBe('k1');
     expect(sent.testset_size).toBe(2);
+    // Judge memory (2026-10-21): the suite records the pick AS MADE (nulls =
+    // deployment default) plus the resolved judge that generated it.
+    expect(doc.payload.judge_pick).toEqual({ config_key: null, model: null });
+    expect(doc.payload.judge).toMatchObject({ source: expect.stringMatching(/^(env|builtin-default)$/), config: null });
+  });
+
+  it('records an explicit judge pick on the suite — pick as made + resolved fidelity', async () => {
+    __mockDb._stores.okf_model_configs = {
+      mm: {
+        _key: 'mm',
+        name: 'MiniMax',
+        provider: 'openai',
+        base_url: 'https://api.minimax.io/v1',
+        default_model: 'mm-flash',
+        api_key: 'k',
+        services: ['ragas_judge'],
+        active: false
+      }
+    };
+    const begun = await svc.beginSuiteGeneration(
+      'me',
+      { judge_config_key: 'mm', judge_model: 'mm-large', testset_size: 1 },
+      {}
+    );
+    await begun.done;
+    const doc = await svc.getSuite('me', begun.suite_key);
+    expect(doc.payload.judge_pick).toEqual({ config_key: 'mm', model: 'mm-large' });
+    expect(doc.payload.judge).toEqual({ source: 'picked', config: 'MiniMax', model: 'mm-large' });
   });
 
   it('stores reference passages WHOLE — a 1200-char chunk reference survives (no 500-char slice)', async () => {
@@ -584,6 +615,9 @@ describe('run', () => {
     expect(doc.payload.summary.metrics.faithfulness).toBe(1.0);
     expect(doc.payload.fidelity.retrieval.algorithm).toContain('APPROX_NEAR_COSINE');
     expect(doc.payload.fidelity.prompt.system_prompt_sha).toBeTruthy();
+    // Judge memory (2026-10-21): the pick AS MADE rides next to the resolved
+    // judge — nulls mean the deployment default was selected.
+    expect(doc.payload.fidelity.judge.pick).toEqual({ config_key: null, model: null });
     const evalCall = global.fetch.mock.calls.find((c) => String(c[0]).includes('/evaluate'));
     const sent = JSON.parse(evalCall[1].body);
     expect(sent.samples[0].user_input).toBe(GEN_SAMPLES[0].user_input);
@@ -631,6 +665,37 @@ describe('run', () => {
     await begun.done;
     const doc = await svc.getRunSuite('me', sk, begun.run_key);
     expect(doc.payload.fidelity.answers).toMatchObject({ source: 'deployment-chat', config: null });
+  });
+
+  it('an explicit judge pick lands in the run fidelity (resolved judge + pick as made)', async () => {
+    __mockDb._stores.okf_model_configs = {
+      mm: {
+        _key: 'mm',
+        name: 'MiniMax',
+        provider: 'openai',
+        base_url: 'https://api.minimax.io/v1',
+        default_model: 'mm-flash',
+        api_key: 'k',
+        services: ['ragas_judge'],
+        active: false
+      }
+    };
+    const sk = await makeSuite();
+    const begun = await svc.beginRunSuite('me', sk, { judge_config_key: 'mm', judge_model: 'mm-large' }, {});
+    await begun.done;
+    const doc = await svc.getRunSuite('me', sk, begun.run_key);
+    expect(doc.payload.fidelity.judge).toMatchObject({
+      source: 'picked',
+      config: 'MiniMax',
+      model: 'mm-large',
+      pick: { config_key: 'mm', model: 'mm-large' }
+    });
+    // The scoring sidecar received the picked endpoint, not the default.
+    const evalCall = global.fetch.mock.calls.find((c) => String(c[0]).includes('/evaluate'));
+    expect(JSON.parse(evalCall[1].body).judge).toMatchObject({
+      base_url: 'https://api.minimax.io/v1',
+      model: 'mm-large'
+    });
   });
 
   it('a pinned CHATQNA_SYSTEM_PROMPT overrides the built-in chat default', async () => {
@@ -879,8 +944,12 @@ describe('xlsx passthrough + listing', () => {
     const runs = await svc.listRuns('me', { kind: 'ragas_run' });
     expect(runs).toHaveLength(1);
     expect(runs[0].kind).toBe('ragas_run');
+    // Judge memory: the run row carries the pick as made — the panel's
+    // restore source for the suite's latest run.
+    expect(runs[0].judge_pick).toEqual({ config_key: null, model: null });
     const suites = await svc.listRuns('me', { kind: 'ragas_suite' });
     expect(suites[0].kind).toBe('ragas_suite');
+    expect(suites[0].judge_pick).toBeNull();
     const all = await svc.listRuns('me', { kind: 'all' });
     expect(all).toHaveLength(2);
   });

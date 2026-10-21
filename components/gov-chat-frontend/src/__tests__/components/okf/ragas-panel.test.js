@@ -496,4 +496,161 @@ describe('RagasPanel', () => {
     expect(writeText).toHaveBeenCalledWith('Plant after the last frost.');
     expect(w.vm.copiedId).toBe('new-1');
   });
+
+  // David 2026-10-21: "once a model is selected for a specific generation or
+  // execution of a benchmark, the system must remember which model was
+  // selected and used" — the judge selector restores from the suite's
+  // recorded pick on reopen instead of resetting to the deployment default.
+  describe('judge pick memory', () => {
+    const flush = () => new Promise((r) => setTimeout(r, 0));
+
+    function pickDispatch({ configs, models, runs, run, suite, getRun }) {
+      return async (action, payload) => {
+        if (action === 'okf/modelConfigList') return { ok: true, configs };
+        if (action === 'okf/modelConfigModels') return { ok: true, models: (models && models[payload.key]) || [] };
+        if (action === 'okf/ragasListRuns') return { ok: true, runs: runs || [] };
+        if (action === 'okf/ragasGetSuite') return { ok: true, result: suite || suiteFixture() };
+        if (action === 'okf/ragasGetRunQuiet') return { ok: true, result: getRun ? getRun() : run || runFixture() };
+        if (action === 'okf/fetchRepos') return { ok: true, repos: [] };
+        return { ok: true, result: null, runs: [] };
+      };
+    }
+
+    it('reopening restores the generation pick recorded on the suite', async () => {
+      const suite = suiteFixture();
+      suite.payload.judge_pick = { config_key: 'mm', model: 'mm-large' };
+      dispatch.mockImplementation(
+        pickDispatch({
+          suite,
+          configs: [{ _key: 'mm', name: 'MiniMax', active: false }],
+          models: { mm: ['mm-small', 'mm-large'] },
+          runs: [
+            // a run row WITHOUT a pick — the generation pick is the source
+            {
+              kind: 'ragas_run',
+              _key: 'rr1-run',
+              suite_key: 'rs1-test',
+              status: 'done',
+              created_at: '2026-10-17T12:00:00.000Z'
+            },
+            {
+              kind: 'ragas_suite',
+              _key: 'rs1-test',
+              suite_key: 'rs1-test',
+              name: 'Agri benchmark',
+              created_at: '2026-10-17T11:00:00.000Z',
+              entries: 2
+            }
+          ]
+        })
+      );
+      const w = mountPanel();
+      await flush();
+      await flush();
+      expect(w.vm.judgeConfigKey).toBe('mm');
+      expect(w.vm.judgeModel).toBe('mm-large');
+    });
+
+    it('a config deleted since the pick falls back to the deployment default', async () => {
+      const suite = suiteFixture();
+      suite.payload.judge_pick = { config_key: 'mm', model: 'mm-large' };
+      dispatch.mockImplementation(
+        pickDispatch({
+          configs: [{ _key: 'other', name: 'Other', active: false }],
+          runs: []
+        })
+      );
+      const w = mountPanel();
+      await flush();
+      await flush();
+      expect(w.vm.judgeConfigKey).toBe('');
+      expect(w.vm.judgeModel).toBe('');
+    });
+
+    it('the latest run pick wins over the generation pick (run-over-run comparability)', async () => {
+      const suite = suiteFixture();
+      suite.payload.judge_pick = { config_key: 'mm', model: 'mm-large' };
+      dispatch.mockImplementation(
+        pickDispatch({
+          configs: [
+            { _key: 'mm', name: 'MiniMax', active: false },
+            { _key: 'zz', name: 'z.ai', active: false }
+          ],
+          models: { mm: ['mm-large'], zz: ['zz-1'] },
+          runs: [
+            {
+              kind: 'ragas_run',
+              _key: 'rr1-run',
+              suite_key: 'rs1-test',
+              status: 'done',
+              created_at: '2026-10-17T12:00:00.000Z',
+              judge_pick: { config_key: 'zz', model: 'zz-1' }
+            },
+            {
+              kind: 'ragas_suite',
+              _key: 'rs1-test',
+              suite_key: 'rs1-test',
+              name: 'Agri benchmark',
+              created_at: '2026-10-17T11:00:00.000Z',
+              entries: 2
+            }
+          ]
+        })
+      );
+      const w = mountPanel();
+      await flush();
+      await flush();
+      expect(w.vm.judgeConfigKey).toBe('zz');
+      expect(w.vm.judgeModel).toBe('zz-1');
+    });
+
+    it('viewing a run restores THAT run pick — the selector mirrors the results on screen', async () => {
+      const suite = suiteFixture();
+      suite.payload.judge_pick = { config_key: 'mm', model: 'mm-large' };
+      // The latest run loads WITHOUT a pick at mount (generation pick
+      // applies); clicking a run whose fidelity carries a pick switches the
+      // selector to that run's judge.
+      let runResult = runFixture();
+      dispatch.mockImplementation(
+        pickDispatch({
+          suite,
+          configs: [
+            { _key: 'mm', name: 'MiniMax', active: false },
+            { _key: 'zz', name: 'z.ai', active: false }
+          ],
+          models: { mm: ['mm-large'], zz: ['zz-1'] },
+          runs: [
+            {
+              kind: 'ragas_run',
+              _key: 'rr1-run',
+              suite_key: 'rs1-test',
+              status: 'done',
+              created_at: '2026-10-17T12:00:00.000Z'
+            },
+            {
+              kind: 'ragas_suite',
+              _key: 'rs1-test',
+              suite_key: 'rs1-test',
+              name: 'Agri benchmark',
+              created_at: '2026-10-17T11:00:00.000Z',
+              entries: 2
+            }
+          ],
+          getRun: () => runResult
+        })
+      );
+      const w = mountPanel();
+      await flush();
+      await flush();
+      expect(w.vm.judgeConfigKey).toBe('mm'); // suite pick first…
+      runResult = runFixture();
+      runResult.payload.fidelity = {
+        judge: { source: 'picked', config: 'z.ai', model: 'zz-1', pick: { config_key: 'zz', model: 'zz-1' } }
+      };
+      await w.vm.onLoadRun('rr1-run', 'rs1-test');
+      await flush();
+      expect(w.vm.judgeConfigKey).toBe('zz'); // …then the viewed run's pick
+      expect(w.vm.judgeModel).toBe('zz-1');
+    });
+  });
 });

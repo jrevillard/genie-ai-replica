@@ -338,6 +338,46 @@ describe('POST /stream', () => {
     expect(response.headers['content-type']).toBe('text/event-stream');
   });
 
+  it('posts to the upstream the service resolved, never to one from the request body', async () => {
+    // The `nosemgrep` annotations on these axios.post sinks rest on this: the
+    // route takes the upstream from initStreamQuery — env-derived, pinned in
+    // query-service.test.js — and never from req.body. The body fields below
+    // would win if the route consulted them, so they are sent on purpose.
+    queryService.initStreamQuery.mockResolvedValue({
+      queryId: 'q1',
+      opeaUrl: 'http://chatqna.internal:8899/v1/chatqna',
+      opeaPayload: { messages: [] }
+    });
+
+    queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
+    queryService.finalizeStreamQuery.mockResolvedValue(undefined);
+
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ data: mockStream });
+
+    const responsePromise = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hello' }],
+      context: { language: 'EN' },
+      opeaUrl: 'http://169.254.169.254/latest/meta-data/',
+      baseURL: 'http://169.254.169.254',
+      host: '169.254.169.254',
+      url: 'http://169.254.169.254'
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    mockStream.push('data: {"type":"chunk","content":"Hello"}\n\n');
+    mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+    mockStream.push(null);
+    await responsePromise;
+
+    expect(axios.post).toHaveBeenCalledWith(
+      'http://chatqna.internal:8899/v1/chatqna',
+      expect.any(Object),
+      expect.any(Object)
+    );
+  });
+
   it('should stream the target-language translation when STREAMING_TRANSLATION_ENABLED (#829)', async () => {
     process.env.STREAMING_TRANSLATION_ENABLED = '1';
     queryService.initStreamQuery.mockResolvedValue({

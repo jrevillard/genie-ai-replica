@@ -454,32 +454,6 @@ services:
       # so it has to cover a cold TLS handshake to a remote GPU node
       # that is busy serving another workload.
       probeTimeoutSeconds: 30
-    # Environment rows the chart adds to the backend, beyond the ones its
-    # templates derive. Docker Compose sets the same variables on the
-    # `backend` service, and the two must stay in step: the parity gate
-    # (scripts/config-parity-check.py) fails the build when Compose names
-    # a variable the chart does not, or when the two disagree on a value
-    # that is not a Kubernetes address. Keep the values here identical to
-    # the Compose defaults.
-    #
-    # A MAP, not a list: Helm merges maps key by key, so an overlay that
-    # sets one variable keeps every default declared here beside it. A
-    # list would be replaced wholesale and one overlay value would
-    # silently drop the rest.
-    env:
-      LOG_LEVEL: info
-      OTEL_SERVICE_NAME: backend
-      # Which retrieval context the chat assembles.
-      CONTEXT_OPTION: conversation-with-context-labels
-      # The service account the admin API proxy authenticates as.
-      KEYCLOAK_PROXY_CLIENT_ID: genie-proxy-client
-      # TLS verification towards the model endpoints. 1 = verify (the
-      # default here and in Compose); a deployment whose GPU node serves
-      # a self-signed certificate sets 0, exactly as Compose does.
-      NODE_TLS_REJECT_UNAUTHORIZED: "1"
-      # VictoriaLogs tenancy and query budget for the admin log views.
-      VICTORIALOGS_TENANT_ID: "0:0"
-      VL_QUERY_TIMEOUT_MS: "30000"
     # OPEA chat pipeline host (chatqna service). Empty = the code's
     # image default — set it to the chatqna Service when the OPEA
     # chart (in-cluster Service name).

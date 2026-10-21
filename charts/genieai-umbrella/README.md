@@ -240,9 +240,17 @@ path. An empty `nodeHost` fails the render — empty strings would reach
 the pods as a literal empty-string endpoint and only fail at runtime.
 
 `opeaGpuHostname` strips scheme + port + path and feeds `GPU_NODE_HOST`
-to the model-id auto-detection gates. `opeaSslSkipVerify` returns `"1"`
-when `nodeHost` starts with `https://` (the GPU node's certificate is
-signed by an internal CA).
+to the model-id auto-detection gates.
+
+`opeaSslSkipVerify` returns `"1"` only when `opea.gpu.skipTlsVerify` is
+true, which is `OPEA_SSL_SKIP_VERIFY=1` on the five orchestrators. It is
+**not** inferred from `nodeHost`: an `https://` endpoint says nothing
+about whether its certificate is in the trust store, and Compose —
+where the variable exists with the same meaning — defaults it to `0`
+and is not derived either. Set it per environment when the GPU node
+serves a certificate the trust store does not carry; the alternative is
+a model endpoint that answers `CERTIFICATE_VERIFY_FAILED` on every
+call.
 
 ### `opea.gpu.mode=in-cluster`
 
@@ -436,7 +444,7 @@ feeds backend `ARANGO_URL`.
 | `genieai-umbrella.otlpEndpoint` | `include "..." .` | `http://<cr>-collector.<ns>.svc.cluster.local:4318` |
 | `genieai-umbrella.opeaGpuEndpoint` | `include "..." (dict "root" . "path" "<key>")` | Mode-aware GPU endpoint (`external` joins `nodeHost` + `paths.<key>`; `in-cluster` returns a fixed `service:port` map) |
 | `genieai-umbrella.opeaGpuHostname` | `include "..." .` | Bare host of `opea.gpu.nodeHost` (scheme + port + path stripped; feeds `GPU_NODE_HOST` to model-id auto-detection) |
-| `genieai-umbrella.opeaSslSkipVerify` | `include "..." .` | `"1"` when `nodeHost` starts with `https://`, else `"0"` (Node `NODE_TLS_REJECT_UNAUTHORIZED=0` analogue) |
+| `genieai-umbrella.opeaSslSkipVerify` | `include "..." .` | `"1"` when `opea.gpu.skipTlsVerify` is true, else `"0"` (Node `NODE_TLS_REJECT_UNAUTHORIZED=0` analogue) |
 | `genieai-umbrella.secretKeyRefEnv` | `include "..." (dict "var" "X" "secret" "Y" "key" "Z" "optional" true)` | One env row as JSON object |
 | `genieai-umbrella.gpuApiKeyEnv` | `include "..." (dict "keys" (list "HF_TOKEN" "VLLM_API_KEY"))` | Array of `vllm-api-key` Secret env rows (`HUGGINGFACEHUB_API_TOKEN` alias reads the same `VLLM_API_KEY` key) |
 | `genieai-umbrella.serviceDeployment` | `include "..." (dict "name" "X" "component" "X" "Values" .Values ...)` | Standard Deployment body. Per-service call passes `component` at the TOP of the dict (not merged into `.Values`) so `genieai-common.labels` reads it directly |

@@ -810,6 +810,56 @@ def test_evaluate_batches_rows_and_reports_progress(monkeypatch, engine_env):
     assert out["aggregate"]["faithfulness"] == 1.0
 
 
+def test_evaluate_reports_the_judge_that_actually_scored(monkeypatch, engine_env):
+    """sidecar_reported_model (2026-10-21, live): a judge override replaces
+    the env default for every scoring call, but the result's model field
+    still named RAGAS_JUDGE_MODEL — a GLM-judged run was recorded under the
+    granite default's name. The field must name the effective judge."""
+    import asyncio
+
+    import ragas as ragas_mod
+
+    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None: object())
+    monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: object())
+
+    class _M:
+        name = "faithfulness"
+
+    class _Frame:
+        def __init__(self, rows):
+            self._rows = rows
+            self.columns = list(rows[0].keys()) if rows else []
+
+        def iterrows(self):
+            return iter(enumerate(self._rows))
+
+    class _Result:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def to_pandas(self):
+            return _Frame(self._rows)
+
+    def fake_evaluate(dataset, metrics, llm, embeddings, run_config, show_progress, raise_exceptions):
+        return _Result([{"user_input": s.user_input, "faithfulness": 1.0} for s in dataset.samples])
+
+    monkeypatch.setattr(ragas_mod, "evaluate", fake_evaluate)
+    monkeypatch.setattr(ragas_engine, "resolve_metrics", lambda metrics: ([_M()], []))
+
+    samples = [{"user_input": "q", "response": "a", "reference": "r", "retrieved_contexts": ["c"]}]
+
+    no_override = asyncio.run(ragas_engine.evaluate_samples(samples, ["faithfulness"]))
+    assert no_override["model"] == "test-model"  # env default (engine_env fixture)
+
+    glm_override = {
+        "provider": "openai",
+        "base_url": "https://api.z.ai/api/coding/paas/v4",
+        "model": "glm-5.3",
+    }
+    overridden = asyncio.run(ragas_engine.evaluate_samples(samples, ["faithfulness"], judge=glm_override))
+    assert overridden["model"] == "glm-5.3"
+
+
 def test_evaluate_maps_parameterized_metric_columns(monkeypatch, engine_env):
     """RAGAS 0.4.3 suffixes parameterized metrics' frame columns with their
     mode — factual_correctness(mode=f1), noise_sensitivity(mode=relevant) —

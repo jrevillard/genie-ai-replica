@@ -95,12 +95,13 @@ async function callVllm(messages, { timeoutMs = CURATION_TIMEOUT_MS } = {}) {
     /* env fallback — see docblock */
   }
   if (!rawBase || !model) throw new Error('llm-not-configured');
-  const base = rawBase.replace(/\/+$/, '').replace(/\/v1$/, '');
   const headers = {};
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   const body = { model, messages, temperature: 0.0, max_tokens: 300, response_format: { type: 'json_object' } };
   const r = await require('./adaptive-llm-call').adaptiveChatCompletion({
-    url: `${base}/v1/chat/completions`,
+    // Shared URL rule (services/llm-url.js): a versioned base (…/v1,
+    // …/paas/v4) takes /chat/completions directly; a bare host gets /v1.
+    url: require('./llm-url').openAiChatUrl(rawBase),
     headers,
     body,
     timeoutMs,

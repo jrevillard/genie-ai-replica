@@ -226,12 +226,12 @@ async function callVllm(messages, { timeoutMs = TIMEOUT_MS } = {}) {
   const rawBase = config?.llm?.endpoint || process.env.VLLM_ENDPOINT;
   const model = config?.llm?.model || process.env.VLLM_MODEL_ID;
   if (!rawBase || !model) throw new Error('llm-not-configured');
-  const base = rawBase.replace(/\/+$/, '').replace(/\/v1$/, '');
   const headers = {};
   const apiKey = process.env.VLLM_API_KEY || config?.llm?.apiKey;
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   const r = await axios.post(
-    `${base}/v1/chat/completions`,
+    // Shared URL rule (services/llm-url.js) — versioned base or bare host.
+    require('./llm-url').openAiChatUrl(rawBase),
     {
       model,
       messages,

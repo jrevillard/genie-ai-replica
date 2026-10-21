@@ -1286,10 +1286,15 @@ async def evaluate_samples(
     for name in metric_names:
         vals = [p[name] for p in per_query if p.get(name) is not None and p[name] == p[name]]
         aggregate[name] = (sum(vals) / len(vals)) if vals else None
+    # Report the judge that ACTUALLY scored the run: a judge override (8-7
+    # model configs) replaces the env default for every call, but this field
+    # still reported RAGAS_JUDGE_MODEL — a live GLM-judged run was recorded
+    # with the granite default's name (2026-10-21).
+    effective_model = str(judge.get("model")) if judge and judge.get("model") else os.getenv("RAGAS_JUDGE_MODEL")
     return {
         "aggregate": aggregate,
         "per_query": per_query,
-        "model": os.getenv("RAGAS_JUDGE_MODEL"),
+        "model": effective_model,
         "n": len(per_query),
         "dropped": dropped,
     }

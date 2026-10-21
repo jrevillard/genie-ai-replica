@@ -358,7 +358,10 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
       service: opts.service || 'okf_tagging'
     });
     if (ovr && ovr.provider === 'openai') {
-      host = ovr.base_url.replace(/\/+$/, '').replace(/\/v1$/, '');
+      // Version segment (…/v1, …/paas/v4) stays — openAiChatUrl appends only
+      // /chat/completions to it (2026-10-21: force-appending /v1/chat/… to a
+      // …/paas/v4 base 404'd every benchmark answer row).
+      host = ovr.base_url.replace(/\/+$/, '');
       if (ovr.model) model = ovr.model;
       if (ovr.api_key) apiKey = ovr.api_key;
       viaOverride = true;
@@ -375,15 +378,16 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
     temperature: opts.temperature || 0.0,
     response_format: { type: 'json_object' }
   };
+  const url = require('./llm-url').openAiChatUrl(host);
   const fn = () =>
     require('./adaptive-llm-call').adaptiveChatCompletion({
-      url: `${host}/v1/chat/completions`,
+      url,
       headers,
       body,
       timeoutMs: opts.timeoutMs || 60000,
       disableThinking: viaOverride
     });
-  return withVllmRetry(fn, { endpoint: '/v1/chat/completions' });
+  return withVllmRetry(fn, { endpoint: url });
 }
 
 // When the model runs out of tokens mid-object the content is a valid JSON

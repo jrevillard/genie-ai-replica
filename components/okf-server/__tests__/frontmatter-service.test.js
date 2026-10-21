@@ -512,6 +512,32 @@ describe('1-8g-m — suggestTags integration', () => {
     expect(modelConfig.resolveModelOverride).toHaveBeenCalledWith({ service: 'okf_tagging' });
   });
 
+  // Regression (2026-10-21, live): an active z.ai config (…/paas/v4) had
+  // /v1/chat/completions FORCE-APPENDED → /paas/v4/v1/chat/completions →
+  // 404 on every benchmark answer row (all metrics 0) while the sidecar's
+  // SDK-built URL on the same base returned 200. A versioned base keeps its
+  // segment; /chat/completions is appended directly.
+  test('8-7 routing: a VERSIONED config base (z.ai …/paas/v4) is called at {base}/chat/completions — no /v1 forced', async () => {
+    const modelConfig = require('../services/model-config-service');
+    seedDb();
+    axios.post.mockResolvedValue(vllmResponse(JSON.stringify({ topic: ['x'], forbidden: [], summary: '' })));
+    modelConfig.resolveModelOverride.mockResolvedValueOnce({
+      provider: 'openai',
+      base_url: 'https://api.z.ai/api/coding/paas/v4',
+      model: 'glm-5.3',
+      api_key: 'zk-1',
+      source: 'active',
+      config_key: 'mc2',
+      config_name: 'GLM-5.3 ITU - OpenAI'
+    });
+    await svc.suggestTags(REPO_ID);
+    expect(axios.post).toHaveBeenCalledWith(
+      'https://api.z.ai/api/coding/paas/v4/chat/completions',
+      expect.objectContaining({ model: 'glm-5.3' }),
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer zk-1' }) })
+    );
+  });
+
   test('async suggest job (David 2026-10-20: let thinking models think): 202-style lifecycle with the old response shape', async () => {
     seedDb();
     axios.post.mockResolvedValue(

@@ -725,14 +725,13 @@ async function runLlmSummary(prompt, { timeoutMs = 5000 } = {}) {
   if (!rawBase) return null;
   const model = config?.llm?.model || process.env.VLLM_MODEL_ID;
   if (!model) return null;
-  // Normalize: strip a trailing /v1 (and any trailing slash) so the
-  // /v1/chat/completions append is exactly right for both endpoint shapes.
-  const base = rawBase.replace(/\/+$/, '').replace(/\/v1$/, '');
   const headers = {};
   const apiKey = process.env.VLLM_API_KEY || config?.llm?.apiKey;
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   const r = await axios.post(
-    `${base}/v1/chat/completions`,
+    // Shared URL rule (services/llm-url.js): a versioned base keeps its
+    // segment and takes /chat/completions; a bare host gets /v1 appended.
+    require('./llm-url').openAiChatUrl(rawBase),
     {
       model,
       messages: [{ role: 'user', content: prompt }],

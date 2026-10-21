@@ -11,6 +11,7 @@ jest.mock(
 );
 
 const http = require('http');
+const https = require('https');
 const GpuTranslateBackend = require('../../../services/translation/gpu-translate-backend');
 
 describe('GpuTranslateBackend streaming', () => {
@@ -505,5 +506,156 @@ describe('GpuTranslateBackend startup probe', () => {
     expect(backendWithEnv({ VLLM_TRANSLATION_ENDPOINT: 'https://gpu-node:444/translation' }).endpointExplicit).toBe(
       true
     );
+  });
+});
+
+describe('GpuTranslateBackend endpoint addressing', () => {
+  // Where the request goes and what it carries. The backend moved into
+  // `services/translation/` for #829 and this file came with it, but the
+  // addressing coverage stayed behind under the old path — so the file that
+  // documents this module had nothing about it.
+  let savedEnv;
+
+  // A response that ends on its own: `healthCheck` reads only `statusCode`,
+  // the other two read data and wait for 'end'.
+  const responding = (statusCode, chunks = []) => {
+    const res = new EventEmitter();
+    res.statusCode = statusCode;
+    res.setEncoding = () => {};
+    res.end = () =>
+      process.nextTick(() => {
+        chunks.forEach((c) => res.emit('data', c));
+        res.emit('end');
+      });
+    return res;
+  };
+
+  const captures = (sink) => (opts, cb) => {
+    sink.opts = opts;
+    const req = new EventEmitter();
+    req.write = () => {};
+    req.setTimeout = () => {};
+    req.destroy = jest.fn();
+    req.end = () => {
+      const res = sink.res();
+      cb(res);
+      // `healthCheck` reads only `statusCode` and returns; the other two read
+      // 'data' and wait for 'end', so the response has to finish itself.
+      if (typeof res.end === 'function') res.end();
+    };
+    return req;
+  };
+
+  // `VLLM_API_KEY` is read once at module load, so a backend with a key needs
+  // a fresh module rather than a mutated instance.
+  const backendWithKey = () => {
+    let instance;
+    jest.isolateModules(() => {
+      process.env.VLLM_API_KEY = 'test-key-123';
+      instance = new (require('../../../services/translation/gpu-translate-backend'))();
+    });
+    return instance;
+  };
+
+  beforeEach(() => {
+    savedEnv = {
+      key: process.env.VLLM_API_KEY,
+      endpoint: process.env.VLLM_TRANSLATION_ENDPOINT
+    };
+    delete process.env.VLLM_API_KEY;
+    process.env.VLLM_TRANSLATION_ENDPOINT = 'http://vllm:9031';
+  });
+
+  afterEach(() => {
+    for (const [name, value] of Object.entries(savedEnv)) {
+      const key = name === 'key' ? 'VLLM_API_KEY' : 'VLLM_TRANSLATION_ENDPOINT';
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    jest.clearAllMocks();
+  });
+
+  describe('_buildHeaders', () => {
+    it('sends the configured API key as a bearer token', () => {
+      expect(backendWithKey()._buildHeaders()['Authorization']).toBe('Bearer test-key-123');
+    });
+
+    it('sends no Authorization header when no key is configured', () => {
+      expect(new GpuTranslateBackend()._buildHeaders()).toEqual({});
+    });
+
+    it('keeps the extra headers it is given', () => {
+      const headers = backendWithKey()._buildHeaders({ 'Content-Type': 'application/json' });
+      expect(headers['Content-Type']).toBe('application/json');
+      expect(headers['Authorization']).toBe('Bearer test-key-123');
+    });
+
+    it('does not let a caller-supplied header stand in for the configured key', () => {
+      // The key is the deployment's credential. A caller passing its own
+      // `Authorization` must not be able to replace it.
+      expect(backendWithKey()._buildHeaders({ Authorization: 'other' })['Authorization']).toBe('Bearer test-key-123');
+    });
+  });
+
+  describe('addressing', () => {
+    const REMOTE = 'https://gpu-node.example.com/translation';
+
+    it.each([
+      ['health check', (b) => b.healthCheck(), '/health', []],
+      ['model info', (b) => b.fetchModelInfo(), '/v1/models', []],
+      [
+        'chat completion',
+        (b) => b.callVllmService({ messages: [] }),
+        '/v1/chat/completions',
+        [JSON.stringify({ choices: [{ message: { content: 'traduit' } }] })]
+      ]
+    ])('prefixes the %s path with the endpoint path', async (_label, invoke, suffix, body) => {
+      process.env.VLLM_TRANSLATION_ENDPOINT = REMOTE;
+      const sink = { res: () => responding(200, body) };
+      https.request.mockImplementation(captures(sink));
+
+      const backend = new GpuTranslateBackend();
+      backend.initialized = true;
+      await invoke(backend);
+
+      expect(sink.opts.path).toBe(`/translation${suffix}`);
+    });
+
+    it('drops a trailing slash so the prefix does not double up', async () => {
+      process.env.VLLM_TRANSLATION_ENDPOINT = `${REMOTE}/`;
+      const sink = { res: () => responding(200, []) };
+      https.request.mockImplementation(captures(sink));
+
+      await new GpuTranslateBackend().healthCheck();
+
+      expect(sink.opts.path).toBe('/translation/health');
+    });
+
+    it('sends a remote https endpoint to the default port', async () => {
+      process.env.VLLM_TRANSLATION_ENDPOINT = REMOTE;
+      const sink = { res: () => responding(200, []) };
+      https.request.mockImplementation(captures(sink));
+
+      await new GpuTranslateBackend().healthCheck();
+
+      expect(sink.opts.hostname).toBe('gpu-node.example.com');
+      expect(sink.opts.port).toBe(443);
+    });
+
+    it('carries the bearer token on a real request, not just on the helper', async () => {
+      const sink = {
+        res: () => responding(200, [JSON.stringify({ choices: [{ message: { content: 'traduit' } }] })])
+      };
+      https.request.mockImplementation(captures(sink));
+      process.env.VLLM_TRANSLATION_ENDPOINT = REMOTE;
+
+      const backend = backendWithKey();
+      backend.initialized = true;
+      backend.endpoint = REMOTE;
+
+      expect(await backend.callVllmService({ messages: [{ role: 'user', content: 'hello' }] })).toBe('traduit');
+      expect(sink.opts.headers.Authorization).toBe('Bearer test-key-123');
+      expect(sink.opts.method).toBe('POST');
+    });
   });
 });

@@ -76,10 +76,14 @@
 endpoint = in-process docling converter, non-empty
 = remote docling-serve. The helper returns empty whenever no docling
 target exists (no in-cluster Deployment; an external deployment with no
-/docling path clears opea.gpu.paths.docling). */ -}}
-{{- if $doclingEndpoint -}}
-{{- $tuningEnv = append $tuningEnv (dict "name" "DOCLING_ENDPOINT" "value" $doclingEndpoint) -}}
-{{- end -}}
+/docling path clears opea.gpu.paths.docling).
+
+The row is rendered even when empty, unlike the prompt variables below:
+`os.getenv("DOCLING_ENDPOINT", "")` cannot tell an empty variable from an
+absent one, and Compose always sets it (to empty by default). Omitting it
+in the modes where there is no remote docling made the two surfaces look
+different for a value they both leave empty. */ -}}
+{{- $tuningEnv = append $tuningEnv (dict "name" "DOCLING_ENDPOINT" "value" ($doclingEndpoint | default "" | toString)) -}}
 {{- /* LABEL_SELECTOR_SYSTEM_PROMPT / CONTEXTUAL_RETRIEVAL_PROMPT default
 empty; the dataprep Python code falls through
 to its built-in prompt when the env is empty/falsy. Rendering the env

@@ -768,6 +768,12 @@ opea:
     # should make on the operator's behalf. Set it when the GPU node
     # serves a certificate the trust store does not carry.
     skipTlsVerify: false
+    # Egress CIDRs the orchestrators may reach the GPU node on. A
+    # NetworkPolicy cannot express a hostname, so a nodeHost that is a DNS
+    # name needs one here; an IPv4 literal becomes its own /32 and needs
+    # nothing. Empty with a DNS name falls back to 0.0.0.0/0 on the port
+    # from the URL — the same approximation the crawler tier documents.
+    allowedCIDRs: []
     paths:
       llm: /llm
       embedding: /embed

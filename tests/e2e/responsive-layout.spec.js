@@ -24,6 +24,11 @@
 // the page does not horizontally overflow, every card is at least
 // the reference's 217 px minus a 20 px tolerance, and the sidebars
 // do not overlap the centre by bounding-rect intersection.
+//
+// A companion describe block checks the welcome panel itself:
+// .quick-help-overlay must not scroll horizontally at any of the
+// viewports above, in either theme — a separate invariant with its
+// own assertion rather than a column table bolted onto this spec.
 
 const { test, expect } = require('@playwright/test');
 const { loginViaUI } = require('./helpers/chatbot');
@@ -167,5 +172,112 @@ test.describe('Responsive layout (quick-help grid + sidebar policy)', () => {
       ).toBe(m.expectedColumns);
       assertNoOverlap(m);
     });
+  }
+});
+
+// Welcome overlay horizontal-overflow invariant.
+//
+// The wave band (.quick-help-overlay::after) must not extend past
+// the welcome panel's right edge: the painted band must end where
+// the panel ends, never run past it. The .quick-help-banner inside
+// the panel intentionally bleeds --space-lg on each side at narrow
+// viewports so the artwork reaches the panel's edges (the banner
+// itself is correct and the brief tells us not to touch it), which
+// means measuring the overlay's own scrollWidth against its
+// clientWidth would catch that intentional bleed too. The test
+// hides the banner for the duration of the measurement so only
+// the wave band can add to the horizontal scroll; after the fix
+// that contribution is zero. The Living Intelligence visual layer
+// is expected to be on (the deployment config enables it for this
+// build); the test asserts it so a build that silently drops the
+// layer cannot vacuously pass against a missing ::after.
+
+const WELCOME_OVERFLOW_VIEWPORTS = [2400, 1920, 1600, 1400, 1280, 1024, 769, 414];
+const WELCOME_OVERFLOW_THEMES = ['light', 'dark'];
+
+async function freshWelcomeOverlay(browser, width, theme) {
+  const ctx = await browser.newContext({
+    viewport: { width, height: 800 },
+    colorScheme: theme,
+    ignoreHTTPSErrors: true
+  });
+  const page = await ctx.newPage();
+  await loginViaUI(page);
+  await page.evaluate(() => localStorage.setItem('sidebarOpen', 'true'));
+  await page.waitForSelector('.quick-help-banner', { timeout: 15000 });
+  // The splash shows once per session; the login above triggered it.
+  // A reload clears it before the sampler reads and locks in the
+  // color-scheme set on the context. Without the reload the next
+  // measurement would race the splash's 5 s + 1 s fade.
+  await page.reload({ waitUntil: 'networkidle', timeout: 30000 });
+  await page.waitForSelector('.quick-help-banner', { timeout: 15000 });
+  // Past the 650 ms entrance animation and Chromium's mask-layer
+  // settle window so the banner's box has its final width.
+  await page.waitForTimeout(2500);
+  return { ctx, page };
+}
+
+async function readOverlayOverflow(page) {
+  // Hide the banner — its full-bleed is intentional — and read the
+  // remaining overlay width. After the fix the only ::after band
+  // is sized to the panel's padding box, so its contribution to
+  // horizontal overflow is zero. Without the fix the band is sized
+  // to padding-box-width + 2*--space-lg, so the contribution is the
+  // positive 24 px the brief measured.
+  const tag = await page.addStyleTag({
+    content: '.quick-help-overlay .quick-help-banner { display: none !important; }'
+  });
+  try {
+    return await page.evaluate(() => {
+      const overlay = document.querySelector('.quick-help-overlay');
+      const html = document.documentElement;
+      const visualOn = html.getAttribute('data-visual') === 'on';
+      // The .genie-living-intelligence class lives on .dashboard-content,
+      // an ancestor of .quick-help-overlay (DashboardView wraps the
+      // ChatBotComponent). closest() walks the ancestor chain.
+      const gliOn = overlay ? overlay.closest('.genie-living-intelligence') !== null : false;
+      if (!overlay) return { ok: false, visualOn, gliOn };
+      return {
+        ok: true,
+        visualOn,
+        gliOn,
+        scrollWidth: overlay.scrollWidth,
+        clientWidth: overlay.clientWidth,
+        overflow: overlay.scrollWidth - overlay.clientWidth
+      };
+    });
+  } finally {
+    await tag.evaluate((n) => n.remove());
+  }
+}
+
+test.describe('Welcome overlay does not scroll horizontally (waves only)', () => {
+  for (const vp of WELCOME_OVERFLOW_VIEWPORTS) {
+    for (const theme of WELCOME_OVERFLOW_THEMES) {
+      test(`${vp}px @${theme}: with banner hidden, overlay.scrollWidth <= overlay.clientWidth`, async ({ browser }) => {
+        const { ctx, page } = await freshWelcomeOverlay(browser, vp, theme);
+        try {
+          const m = await readOverlayOverflow(page);
+
+          expect(m.ok, 'welcome overlay should be present in the DOM').toBe(true);
+          expect(
+            m.visualOn,
+            'data-visual="on" must be set for the wave layer to render'
+          ).toBe(true);
+          expect(
+            m.gliOn,
+            '.genie-living-intelligence must be on <html> or an ancestor for the wave layer'
+          ).toBe(true);
+          expect(
+            m.scrollWidth,
+            `with banner hidden, overlay scrollWidth (${m.scrollWidth}px) must be <= clientWidth (${m.clientWidth}px) ` +
+              `at viewport ${vp}px (${theme}); wave-only horizontal overflow=${m.overflow}px ` +
+              `(the brief measures +24 here when the ::after box bleeds past the panel)`
+          ).toBeLessThanOrEqual(m.clientWidth);
+        } finally {
+          await ctx.close();
+        }
+      });
+    }
   }
 });

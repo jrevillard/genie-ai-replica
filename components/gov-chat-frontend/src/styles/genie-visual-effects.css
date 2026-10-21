@@ -244,13 +244,14 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::after {
   content: '';
   position: absolute;
   inset: auto 0 0;
-  /* The waves fill the panel's width, the same as the banner. Their
-     asset's top 31 % is transparent (y 0-162 of 520), so cropping into
-     it is invisible — bg-position bottom keeps the ink in the box
+  /* The waves span the overlay's padding box exactly. The pseudo is
+     absolutely positioned, so left/right/width/margin is over-
+     constrained and the right offset is dropped when `right` and
+     `width` are both set; inset: auto 0 0 with the box's natural
+     width sizes the band to the panel, edge to edge. Their asset's
+     top 31 % is transparent (y 0-162 of 520), so cropping into it is
+     invisible — bg-position bottom keeps the ink in the box
      regardless of how the box is sized. */
-  width: calc(100% + 2 * var(--space-lg));
-  margin-left: calc(-1 * var(--space-lg));
-  margin-right: calc(-1 * var(--space-lg));
   aspect-ratio: 1800 / 356;
   max-height: calc(var(--visual-waves-set, 0) * 320px);
   background: var(--visual-waves) bottom / 100% auto no-repeat;

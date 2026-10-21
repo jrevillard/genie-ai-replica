@@ -3311,6 +3311,11 @@ export default {
         statusNote:
           'Chaque question de la suite dans cette exécution, empilée par issue : réussie, échouée (une métrique choisie sous son seuil), abstention ou erreur de pipeline.',
         allPass: 'toutes réussies',
+        invalidTitle: "Cette exécution n'est pas une mesure valide",
+        invalidPill: 'exécution non valide',
+        invalidErrors: '{n} réponses sur {total} ont échoué — ces scores ne mesurent pas le système. Relancez le test.',
+        invalidCoverage:
+          'Le juge a évalué {measured} lignes sur {total} — les moyennes ci-dessous ne couvrent que les lignes notées.',
         failingShort: 'en échec',
         answer: 'Réponse',
         state: 'État',

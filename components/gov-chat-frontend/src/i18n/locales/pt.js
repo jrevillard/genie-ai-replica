@@ -3302,6 +3302,12 @@ export default {
         statusNote:
           'Cada pergunta da suíte nesta execução, empilhada por desfecho: aprovada, reprovada (alguma métrica escolhida abaixo do limiar), abstenção ou erro de pipeline.',
         allPass: 'todas aprovadas',
+        invalidTitle: 'Esta execução não é uma medição válida',
+        invalidPill: 'execução inválida',
+        invalidErrors:
+          '{n} de {total} respostas falharam — estas pontuações não medem o sistema. Execute o benchmark novamente.',
+        invalidCoverage:
+          'O avaliador mediu {measured} de {total} linhas — as médias abaixo cobrem apenas as linhas avaliadas.',
         failingShort: 'com falha',
         answer: 'Resposta',
         state: 'Estado',

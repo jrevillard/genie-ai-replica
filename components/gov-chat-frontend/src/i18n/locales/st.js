@@ -3300,6 +3300,12 @@ export default {
         statusNote:
           'Potso e nngwe le e nngwe ea sehlooho sening samong, ka phetho: e phalletse, e hlotse (teko e kgethilweng e tlase ho moelo oa eona), e ile ka thoko, kapa phoso ea moralo.',
         allPass: 'tsohle li feta',
+        invalidTitle: 'Sena ena ha se ne e na e sehang',
+        invalidPill: 'sena e se ntlha',
+        invalidErrors:
+          '{n} ho {total} tseeba tse hlehlehetse — lintlha tseo ha se etsahale lenatefiso lenkomo. Phapama benchmark.',
+        invalidCoverage:
+          'Mohloli o ile {measured} ho {total} mohlare — mepe e ka hare monyedong o ka sebetsa feela tse neng tse lengoe.',
         failingShort: 'li hlolehile',
         answer: 'Karabo',
         state: 'Seemo',

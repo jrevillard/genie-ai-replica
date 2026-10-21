@@ -163,6 +163,10 @@ describe('Locale consistency', () => {
     // RAGAS advisor hint (2026-10-19): failing-count banner, consumed via
     // translate().replace('{n}') in RagasPanel.vue.
     'okf.ragas.results.advisorHint',
+    // RAGAS invalid-run banner (2026-10-21): an errored/partial run is not a
+    // measurement — both messages carry placeholders consumed via .replace().
+    'okf.ragas.results.invalidErrors',
+    'okf.ragas.results.invalidCoverage',
     // Model-config connection test (2026-10-19): composed in
     // ModelConfigPanel.testMessage() via .replace() for {n}/{ms}/{model}.
     'okf.models.modelsLoaded',

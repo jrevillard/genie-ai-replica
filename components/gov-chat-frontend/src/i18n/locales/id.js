@@ -3290,6 +3290,11 @@ export default {
         statusNote:
           'Setiap pertanyaan suite pada run ini, ditumpuk per hasil: lulus, gagal (metrik terpilih di bawah ambangnya), menolak jawab, atau error pipeline.',
         allPass: 'semua lulus',
+        invalidTitle: 'Run ini bukan pengukuran yang valid',
+        invalidPill: 'run tidak valid',
+        invalidErrors: '{n} dari {total} jawaban gagal — skor ini tidak mengukur sistem. Jalankan ulang benchmark.',
+        invalidCoverage:
+          'Penilai mengukur {measured} dari {total} baris — rata-rata di bawah ini hanya mencakup baris yang dinilai.',
         failingShort: 'gagal',
         answer: 'Jawaban',
         state: 'Status',

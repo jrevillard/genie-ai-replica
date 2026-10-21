@@ -3258,6 +3258,11 @@ export default {
         statusNote:
           'Every suite question in this run, stacked by outcome: passing, failing (any selected metric below its threshold), abstained (the answerer declined), or errored (the pipeline failed that row).',
         allPass: 'all passing',
+        invalidTitle: 'eregenere run wencike emu measuring',
+        invalidPill: 'run gebu',
+        invalidErrors:
+          '{n} ferege {total} de alingge baha — eregene score ere arai emu measuring system. Run benchmark weiya.',
+        invalidCoverage: 'Judge alima {measured} ferege {total} — average dowa arai emu latun mang hede.',
         failingShort: 'failing',
         answer: 'Answer',
         state: 'State',

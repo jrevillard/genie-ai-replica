@@ -3309,6 +3309,12 @@ export default {
         statusNote:
           'Cada pregunta de la suite en esta ejecución, apilada por resultado: aprobada, reprobada (alguna métrica elegida bajo su umbral), abstención o error de pipeline.',
         allPass: 'todas superadas',
+        invalidTitle: 'Esta ejecución no es una medición válida',
+        invalidPill: 'ejecución no válida',
+        invalidErrors:
+          '{n} de {total} respuestas fallaron — estas puntuaciones no miden el sistema. Vuelve a ejecutar la prueba.',
+        invalidCoverage:
+          'El juez midió {measured} de {total} filas — los promedios siguientes cubren solo las filas evaluadas.',
         failingShort: 'con fallos',
         answer: 'Respuesta',
         state: 'Estado',

@@ -3285,6 +3285,12 @@ export default {
         statusNote:
           'Kila swali la suite katika uendeshaji huu, kwa matokeo: limoefaulu, kushindwa (kipimo kuchaguliwa chini ya kikomo chake), kukataa kujibu, au hitilafu ya mnyororo.',
         allPass: 'zote zimefaulu',
+        invalidTitle: 'Kimbio hiki hakitoshi kipimo halali',
+        invalidPill: 'kimbio batili',
+        invalidErrors:
+          'Majibu {n} kati ya {total} yamekoseka — hakiki hizi hazielezi kipimo cha mfumo. Endesha benchmark tena.',
+        invalidCoverage:
+          'Mtathmini wa alipima mistari {measured} kati ya {total} — wastani hapa chini zinalenga mistari iliyopimwa tu.',
         failingShort: 'zimeshindwa',
         answer: 'Jibu',
         state: 'Hali',

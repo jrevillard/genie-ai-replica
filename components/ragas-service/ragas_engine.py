@@ -1102,10 +1102,17 @@ async def generate_testset(
             f"no questions could be synthesized ({dropped} candidate(s) dropped — every synthesis "
             "failed); see ragas-service logs for per-question failures (judge output quality / window fit)"
         )
+    # The generator model that ACTUALLY produced the suite: a judge override
+    # (8-7 model configs) replaced the env default for every call, but this
+    # field still reported RAGAS_JUDGE_MODEL — a suite generated under GLM
+    # was recorded under the granite default's name (2026-10-21 review F9,
+    # the sibling of the evaluate-path fix).
+    generator_model = str(judge.get("model")) if judge and judge.get("model") else os.getenv("RAGAS_JUDGE_MODEL")
+    generator_embed = str(embed.get("model")) if embed and embed.get("model") else os.getenv("RAGAS_EMBED_MODEL")
     return {
         "samples": samples,
         "dropped": dropped,
-        "generator": {"model": os.getenv("RAGAS_JUDGE_MODEL"), "embed_model": os.getenv("RAGAS_EMBED_MODEL")},
+        "generator": {"model": generator_model, "embed_model": generator_embed},
     }
 
 
@@ -1290,8 +1297,15 @@ async def evaluate_samples(
     _check_cancel(cancel_event)
 
     aggregate = {}
+    coverage: dict[str, int] = {}
     for name in metric_names:
         vals = [p[name] for p in per_query if p.get(name) is not None and p[name] == p[name]]
+        # The scored-row COUNT travels with the mean (2026-10-21 sidecar
+        # review F2): a judge that failed on half the rows still produced a
+        # healthy-looking mean over the survivors — the run looked valid while
+        # half of it was never measured. The consumer (okf-server) can now
+        # refuse to chart an aggregate with thin coverage.
+        coverage[name] = len(vals)
         aggregate[name] = (sum(vals) / len(vals)) if vals else None
     # Report the judge that ACTUALLY scored the run: a judge override (8-7
     # model configs) replaces the env default for every call, but this field
@@ -1300,6 +1314,7 @@ async def evaluate_samples(
     effective_model = str(judge.get("model")) if judge and judge.get("model") else os.getenv("RAGAS_JUDGE_MODEL")
     return {
         "aggregate": aggregate,
+        "coverage": coverage,
         "per_query": per_query,
         "model": effective_model,
         "n": len(per_query),

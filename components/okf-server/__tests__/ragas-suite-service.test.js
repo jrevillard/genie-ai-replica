@@ -577,6 +577,25 @@ describe('management parity', () => {
     expect(suite.payload.entries[2].source).toBe('manual');
   });
 
+  // Review F8 (2026-10-21): flipping a row out of scope CLEARED its
+  // reference passages irreversibly — flipping it back left the row
+  // measuring against an empty reference and every later run degraded
+  // silently.
+  it('flipping a row out of scope and back RESTORES its reference passages', async () => {
+    const sk = await makeSuite();
+    const entryId = (await svc.getSuite('me', sk)).payload.entries[0].id;
+    const before = (await svc.getSuite('me', sk)).payload.entries[0].reference_passages;
+    expect(before.length).toBeGreaterThan(0);
+    await svc.updateSuiteRows('me', sk, { modifications: [{ id: entryId, flip_oos: true }] }, {});
+    const oos = (await svc.getSuite('me', sk)).payload.entries[0];
+    expect(oos.oos).toBe(true);
+    expect(oos.reference_passages).toEqual([]);
+    await svc.updateSuiteRows('me', sk, { modifications: [{ id: entryId, flip_oos: false }] }, {});
+    const back = (await svc.getSuite('me', sk)).payload.entries[0];
+    expect(back.oos).toBe(false);
+    expect(back.reference_passages).toEqual(before);
+  });
+
   it('rename and delete work; delete refuses mid-run', async () => {
     const sk = await makeSuite();
     const renamed = await svc.renameSuite('me', sk, { name: 'My benchmark' }, {});

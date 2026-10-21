@@ -352,20 +352,31 @@
 
     <!-- RUN RESULTS -->
     <div v-if="runDoc && runDoc.payload" class="okf-ragas__section">
+      <!-- INVALID RUN (2026-10-21 review C1/F2): a run whose answers errored,
+           or whose judge measured only part of the suite, is NOT a benchmark
+           result. It used to render as normal-looking zeros (or as an
+           "all passing" pill) — the admin read a broken run as a failing
+           system. The banner states the truth before any number is shown. -->
+      <div v-if="invalidRunReason" class="okf-ragas__invalid-run">
+        <strong>{{ translate('okf.ragas.results.invalidTitle', 'This run is not a valid measurement') }}</strong>
+        <span>{{ invalidRunReason }}</span>
+      </div>
       <div class="okf-ragas__suite-head">
         <h4 class="okf-headtest__pane-title">
           {{ translate('okf.ragas.results.title', 'Benchmark results') }}
         </h4>
         <DsPill
           v-if="runDoc.payload.summary"
-          :variant="runDoc.payload.summary.failing_count ? 'warning' : 'success'"
+          :variant="invalidRunReason ? 'danger' : runDoc.payload.summary.failing_count ? 'warning' : 'success'"
           :label="
-            runDoc.payload.summary.failing_count
-              ? translate('okf.ragas.results.failing', '{n} failing').replace(
-                  '{n}',
-                  String(runDoc.payload.summary.failing_count)
-                )
-              : translate('okf.ragas.results.allPass', 'all passing')
+            invalidRunReason
+              ? translate('okf.ragas.results.invalidPill', 'invalid run')
+              : runDoc.payload.summary.failing_count
+                ? translate('okf.ragas.results.failing', '{n} failing').replace(
+                    '{n}',
+                    String(runDoc.payload.summary.failing_count)
+                  )
+                : translate('okf.ragas.results.allPass', 'all passing')
           "
         />
         <DsButton variant="secondary" small :disabled="pdfBusy" @click="downloadPdf">
@@ -887,6 +898,38 @@ export default {
         'okf.ragas.results.advisorHint',
         '{n} questions are below their metric thresholds. Run the advisor to attribute each failure to a pipeline stage and get concrete actions.'
       ).replace('{n}', String(failing));
+    },
+    /**
+     * Why this run is NOT a valid measurement — empty when it is one.
+     * Two causes, both real (2026-10-21 review C1/F2):
+     *   - rows errored (the answer leg failed) → the numbers are zeros, not
+     *     measurements;
+     *   - the judge measured only part of the suite (a judge that died on
+     *     some rows) → the mean is over the survivors.
+     */
+    invalidRunReason() {
+      const p = this.runDoc && this.runDoc.payload;
+      if (!p) return '';
+      const summary = p.summary || {};
+      const nErrors = summary.n_errors || 0;
+      if (nErrors > 0) {
+        return this.translate(
+          'okf.ragas.results.invalidErrors',
+          '{n} of {total} answers failed — these scores are not a measurement of the system. Re-run the benchmark.'
+        )
+          .replace('{n}', String(nErrors))
+          .replace('{total}', String(summary.n || p.coverage?.total_rows || 0));
+      }
+      const cov = p.coverage;
+      if (cov && cov.total_rows && cov.measured_rows < cov.total_rows) {
+        return this.translate(
+          'okf.ragas.results.invalidCoverage',
+          'The judge measured {measured} of {total} rows — the averages below cover only the rows that scored.'
+        )
+          .replace('{measured}', String(cov.measured_rows))
+          .replace('{total}', String(cov.total_rows));
+      }
+      return '';
     },
     adviceChips() {
       const advice = this.explainDoc && this.explainDoc.advice;
@@ -1827,6 +1870,23 @@ export default {
   background: var(--surface);
   padding: 10px 12px;
   margin: 8px 0;
+}
+
+/* An invalid run (errored answers / partial judge coverage) must not read
+   like a result — the banner is deliberately loud (2026-10-21 review C1). */
+.okf-ragas__invalid-run {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--danger);
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: var(--danger-bg);
+  color: var(--fg);
+  padding: 10px 12px;
+  margin: 8px 0;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .okf-ragas__judge-row {

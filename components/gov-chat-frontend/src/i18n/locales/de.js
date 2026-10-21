@@ -3312,6 +3312,12 @@ export default {
         statusNote:
           'Jede Suite-Frage dieses Laufs, gestapelt nach Ausgang: bestanden, durchgefallen (eine gewählte Metrik unter ihrer Schwelle), enthalten (Antwort verweigert) oder Fehler (Pipeline fehlgeschlagen).',
         allPass: 'alle bestanden',
+        invalidTitle: 'Dieser Lauf ist keine gültige Messung',
+        invalidPill: 'ungültiger Lauf',
+        invalidErrors:
+          '{n} von {total} Antworten sind fehlgeschlagen — diese Werte messen das System nicht. Benchmark erneut ausführen.',
+        invalidCoverage:
+          'Der Prüfer hat {measured} von {total} Zeilen bewertet — die Mittelwerte unten decken nur die bewerteten Zeilen ab.',
         failingShort: 'fehlgeschlagen',
         answer: 'Antwort',
         state: 'Status',

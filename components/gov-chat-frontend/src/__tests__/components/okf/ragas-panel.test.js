@@ -676,4 +676,92 @@ describe('RagasPanel', () => {
       expect(w.vm.judgeModel).toBe('zz-1');
     });
   });
+
+  // 2026-10-21 review C1: a run whose answers all errored rendered as
+  // normal-looking zeros (or an "all passing" pill) — the admin read a
+  // broken run as a failing system. The banner states the truth.
+  describe('invalid run honesty', () => {
+    const flush = () => new Promise((r) => setTimeout(r, 0));
+    it('a run with errored rows is flagged invalid (not a measurement)', async () => {
+      const bad = runFixture();
+      bad.payload.summary.n_errors = 2;
+      dispatch.mockImplementation(async (action) => {
+        if (action === 'okf/fetchRepos') return { ok: true, repos: [{ repo_id: 'me', name: 'Agri', head: {} }] };
+        if (action === 'okf/ragasListRuns')
+          return {
+            ok: true,
+            runs: [
+              {
+                kind: 'ragas_run',
+                _key: 'rr1-run',
+                suite_key: 'rs1-test',
+                status: 'done',
+                created_at: '2026-10-17T12:00:00.000Z'
+              },
+              {
+                kind: 'ragas_suite',
+                _key: 'rs1-test',
+                suite_key: 'rs1-test',
+                name: 'Agri benchmark',
+                created_at: '2026-10-17T11:00:00.000Z',
+                entries: 2
+              }
+            ]
+          };
+        if (action === 'okf/ragasGetSuite') return { ok: true, result: suiteFixture() };
+        if (action === 'okf/ragasGetRunQuiet') return { ok: true, result: bad };
+        return { ok: true, result: null, runs: [] };
+      });
+      const w = mountPanel();
+      await flush();
+      await flush();
+      expect(w.vm.invalidRunReason).toBeTruthy();
+      expect(w.vm.invalidRunReason).toMatch(/2/);
+      expect(w.text()).toContain('not a valid measurement');
+    });
+
+    it('a run the judge measured only partially is flagged invalid', async () => {
+      const partial = runFixture();
+      partial.payload.coverage = { measured_rows: 1, total_rows: 2, per_metric: { faithfulness: 1 } };
+      dispatch.mockImplementation(async (action) => {
+        if (action === 'okf/fetchRepos') return { ok: true, repos: [{ repo_id: 'me', name: 'Agri', head: {} }] };
+        if (action === 'okf/ragasListRuns')
+          return {
+            ok: true,
+            runs: [
+              {
+                kind: 'ragas_run',
+                _key: 'rr1-run',
+                suite_key: 'rs1-test',
+                status: 'done',
+                created_at: '2026-10-17T12:00:00.000Z'
+              },
+              {
+                kind: 'ragas_suite',
+                _key: 'rs1-test',
+                suite_key: 'rs1-test',
+                name: 'Agri benchmark',
+                created_at: '2026-10-17T11:00:00.000Z',
+                entries: 2
+              }
+            ]
+          };
+        if (action === 'okf/ragasGetSuite') return { ok: true, result: suiteFixture() };
+        if (action === 'okf/ragasGetRunQuiet') return { ok: true, result: partial };
+        return { ok: true, result: null, runs: [] };
+      });
+      const w = mountPanel();
+      await flush();
+      await flush();
+      expect(w.vm.invalidRunReason).toBeTruthy();
+      expect(w.vm.invalidRunReason).toMatch(/1/);
+    });
+
+    it('a clean run is NOT flagged invalid', async () => {
+      const w = mountPanel();
+      await flush();
+      await flush();
+      expect(w.vm.invalidRunReason).toBe('');
+    });
+  });
 });

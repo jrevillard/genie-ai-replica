@@ -1937,6 +1937,12 @@ export default {
         statusNote:
           'Every suite question in this run, stacked by outcome: passing, failing (any selected metric below its threshold), abstained (the answerer declined), or errored (the pipeline failed that row).',
         allPass: 'all passing',
+        invalidTitle: 'This run is not a valid measurement',
+        invalidPill: 'invalid run',
+        invalidErrors:
+          '{n} of {total} answers failed — these scores are not a measurement of the system. Re-run the benchmark.',
+        invalidCoverage:
+          'The judge measured {measured} of {total} rows — the averages below cover only the rows that scored.',
         failingShort: 'failing',
         answer: 'Answer',
         state: 'State',

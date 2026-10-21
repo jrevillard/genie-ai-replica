@@ -127,6 +127,13 @@ function ANSWER_SYSTEM_PROMPT() {
   );
 }
 
+// The abstention patterns are matched as SUBSTRINGS, so a bare
+// 'knowledge base' flagged any legitimate answer that mentioned the
+// knowledge base — a phrase the answer leg's OWN system prompt elicits
+// ("using only the content provided from the knowledge base"). Such an
+// answer was marked abstained, inflating n_abstained and misrouting its
+// failures to the 'abstention contract' stage (2026-10-21 review F11).
+// The abstention now needs the phrase in a NEGATED construction.
 const ABSTENT_PATTERNS = [
   'cannot find',
   "can't find",
@@ -139,8 +146,17 @@ const ABSTENT_PATTERNS = [
   "don't have",
   'unable to find',
   'no relevant information',
-  'not available in',
-  'knowledge base'
+  'not available in'
+];
+const ABSTENT_NEGATED_KB = [
+  'not in the knowledge base',
+  'not in this knowledge base',
+  'no knowledge base',
+  'knowledge base does not',
+  'knowledge base contains no',
+  'knowledge base has no',
+  'knowledge base is empty',
+  'not found in the knowledge base'
 ];
 
 let _collectionEnsured = false;
@@ -540,7 +556,9 @@ async function generateAnswer(query, contexts) {
 function matchAbstention(answer) {
   const a = String(answer || '').toLowerCase();
   if (!a) return true;
-  return ABSTENT_PATTERNS.some((p) => a.includes(p));
+  if (ABSTENT_PATTERNS.some((p) => a.includes(p))) return true;
+  // The knowledge-base phrasing only counts when NEGATED (see F11).
+  return ABSTENT_NEGATED_KB.some((p) => a.includes(p));
 }
 
 /** What the run's fidelity block records about the ANSWER leg — mirrors the
@@ -686,6 +704,18 @@ async function beginSuiteGeneration(repoId, payload = {}, opts = {}) {
     MAX_ENTRIES
   );
   const suiteKey = `rs${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
+  // Reserve the lock SYNCHRONOUSLY after the awaits (2026-10-21 review F12):
+  // the check-then-set straddled the awaited repo lookups, so a double-click
+  // (or two clients) passed the check twice and started TWO GPU generations
+  // — the second overwrote the first's key and the first finisher's
+  // .finally deleted the lock while the second still ran.
+  if (genInFlight.has(repoId)) {
+    const err = new Error('a benchmark-suite generation is already running for this repository');
+    err.code = 'GENERATION_IN_FLIGHT';
+    err.status = 409;
+    err.details = { suite_key: genInFlight.get(repoId) };
+    throw err;
+  }
   genInFlight.set(repoId, suiteKey);
   // Seed the phase immediately so the synthetic list row (and any adoption)
   // has something to show before the sidecar's first poll lands.
@@ -704,7 +734,9 @@ async function beginSuiteGeneration(repoId, payload = {}, opts = {}) {
   )
     .then((suite) => suite)
     .finally(() => {
-      genInFlight.delete(repoId);
+      // Key-scoped release: a finisher never deletes a DIFFERENT
+      // generation's lock (2026-10-21 review F12).
+      if (genInFlight.get(repoId) === suiteKey) genInFlight.delete(repoId);
       genProgress.delete(suiteKey);
     });
   done.catch((e) => {
@@ -975,8 +1007,20 @@ async function updateSuiteRows(repoId, suiteKey, payload = {}, opts = {}) {
       if (typeof m.source_doc === 'string') e.source_doc = m.source_doc;
       if (typeof m.difficulty === 'string') e.difficulty = m.difficulty;
       if (m.flip_oos !== undefined) {
+        const wasOos = e.oos === true;
         e.oos = m.flip_oos === true;
-        if (e.oos) e.reference_passages = [];
+        // Flipping a row OUT of scope parks its reference passages in
+        // `_oos_reference_passages` (not deleted) so flipping it BACK
+        // restores them — the old code CLEARED them irreversibly, so a row
+        // returned to scope measured against an empty reference and every
+        // later run degraded silently (2026-10-21 review F8).
+        if (e.oos) {
+          if (!wasOos) e._oos_reference_passages = Array.isArray(e.reference_passages) ? e.reference_passages : [];
+          e.reference_passages = [];
+        } else if (wasOos && Array.isArray(e._oos_reference_passages)) {
+          e.reference_passages = e._oos_reference_passages;
+          delete e._oos_reference_passages;
+        }
       }
       modified += 1;
     }
@@ -1064,11 +1108,23 @@ async function addQueries(repoId, suiteKey, payload = {}, _opts = {}) {
       q.id = `new-${nextId}`;
       suite.payload.entries.push(q);
     }
-    suite.payload.entries = suite.payload.entries.slice(0, ROW_CAPS.entries);
+    // The cap keeps the FIRST rows — appending then slicing silently dropped
+    // exactly the NEW queries while the response still said "added: N"
+    // (2026-10-21 review F7). The newest additions win the last slots; the
+    // overflow is reported, never silently swallowed.
+    const overflow = Math.max(0, suite.payload.entries.length - ROW_CAPS.entries);
+    if (overflow > 0) {
+      suite.payload.entries = suite.payload.entries.slice(suite.payload.entries.length - ROW_CAPS.entries);
+    }
     suite.updated_at = new Date().toISOString();
     await db.collection(COLLECTION).replace(suite._key, suite);
     span.setAttribute('okf.ragas.added', fresh.length);
-    return { suite, added: fresh.length, duplicates_dropped: duplicatesDropped };
+    return {
+      suite,
+      added: Math.max(0, fresh.length - overflow),
+      duplicates_dropped: duplicatesDropped,
+      dropped_over_cap: overflow
+    };
   });
 }
 
@@ -1491,6 +1547,16 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       delete results[i].metrics.reference;
       results[i].ragas_nan = q.ragas_nan === 'ALL_NAN';
     }
+    // Judge COVERAGE (2026-10-21 sidecar review F2): the sidecar averages the
+    // rows that scored and nulls the ones that failed, so a judge that died
+    // on half the rows still produced a healthy-looking mean over the
+    // survivors. The run records the per-metric scored-row count so the
+    // panel can say "12 of 20 rows measured" instead of presenting a partial
+    // average as the benchmark.
+    const judgeCoverage = evaluation.coverage && typeof evaluation.coverage === 'object' ? evaluation.coverage : null;
+    const measuredRows = judgeCoverage
+      ? Math.max(0, ...Object.values(judgeCoverage).map((v) => Number(v) || 0))
+      : perQuery.filter((q) => q && q.ragas_nan !== 'ALL_NAN').length;
     const summary = summarizeRun(suite, results, opts.metrics);
     const runDoc = {
       _key: opts.runKey,
@@ -1513,6 +1579,13 @@ async function runSuite(repoId, suiteKey, opts = {}) {
         })),
         results,
         summary,
+        // How much of the suite the judge actually measured — a partial
+        // average is not a benchmark result (sidecar review F2).
+        coverage: {
+          measured_rows: measuredRows,
+          total_rows: results.length,
+          per_metric: judgeCoverage
+        },
         fidelity: {
           retrieval: {
             algorithm: 'per-graph APPROX_NEAR_COSINE + unified rerank',
@@ -1979,6 +2052,19 @@ function arr(v) {
 
 async function exportSuiteXlsx(repoId, suiteKey) {
   const suite = await getSuite(repoId, suiteKey);
+  // A generating or failed suite has no payload (getSuite returns the
+  // envelope) — exporting it dereferenced undefined and answered a raw 500
+  // (2026-10-21 review F14). Say what is wrong instead.
+  if (!suite.payload || !Array.isArray(suite.payload.entries)) {
+    const err = new Error(
+      suite.status === 'generating'
+        ? 'the suite is still generating — export it once generation finishes'
+        : 'the suite has no exportable content'
+    );
+    err.code = 'SUITE_NOT_EXPORTABLE';
+    err.status = 409;
+    throw err;
+  }
   const resp = await sidecar('/xlsx/export-suite', {
     json: { name: suite.name || 'benchmark-suite', entries: suite.payload.entries }
   });

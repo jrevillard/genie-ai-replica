@@ -326,15 +326,12 @@ export default {
   display: flex;
   flex-direction: row;
   align-items: stretch;
-  /* The panel's own spacing to the centre, in place of the flex gap
-     this used to sit in — a gap is between the items, so it separated
-     a collapsed rail from the content as well. Collapsed, the panel
-     drops it and the rail sits flush. */
-  margin-right: var(--space-sm);
+  /* No gap between the panel and the content beside it. The panel's
+     own border is the separation; a margin drew a second line, and
+     the user read that band as a stray strip around the chat. */
   transition:
     transform 0.3s ease,
-    width 0.3s ease,
-    margin-right 0.3s ease;
+    width 0.3s ease;
 }
 
 /*
@@ -358,9 +355,6 @@ export default {
  */
 .side-bar.side-bar-collapsed-state {
   width: var(--side-bar-collapsed-width, var(--sidebar-handle-width));
-  /* A collapsed rail owns no spacing: the content it was pushing away
-     comes right back, with no channel left over. */
-  margin-right: 0;
   /* The content is zero-width, so without this the 24 px handle would
      sit at the rail's OUTER edge and leave the rest of the strip
      blank — a collapsed panel whose control moves to the far end of

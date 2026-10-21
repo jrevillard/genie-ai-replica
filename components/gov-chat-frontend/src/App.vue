@@ -515,7 +515,12 @@ body {
 .content-area {
   flex: 1;
   overflow-y: auto;
-  padding: var(--space-sm) var(--space-sm) var(--space-sm) 0;
+  /* No padding. The area's 8 px inset drew a thin frame around the
+     chat container — a band along the top, the bottom and the right
+     that the user read as a stray strip rather than as the page's
+     own surface. The panels carry their own borders, so nothing is
+     lost by letting the content meet them. */
+  padding: 0;
   transition: margin-left 0.3s ease;
   background-color: var(--bg);
 }

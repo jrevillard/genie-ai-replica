@@ -1,6 +1,7 @@
 // tests/e2e/living-intelligence.spec.js
 const { test, expect } = require('@playwright/test');
 const { expectRevalidated } = require('./helpers/cache-headers');
+const { loginViaUI } = require('./helpers/chatbot');
 
 // The decorative layer is configuration, and its assets live in the
 // bind-mounted /config/ directory, so they must be revalidated like the
@@ -30,7 +31,14 @@ test.describe('Living Intelligence visual layer', () => {
     // rendering entirely — the layer is conditional on the loader having
     // written `data-visual=on` AND run for a real page. Walking the home
     // page and reading the live DOM is what proves the wiring.
-    await page.goto('/');
+    //
+    // The walk needs an authenticated session: an anonymous visit is
+    // bounced to the login by the router guard, and that navigation
+    // destroys the execution context the assertions read from — the
+    // spec failed on the race, not on the wiring. Direct access grants
+    // are disabled on the realm, so the browser login is the only path.
+    await loginViaUI(page);
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
     await expect
       .poll(async () => page.evaluate(() => document.documentElement.getAttribute('data-visual')), { timeout: 15000 })
       .toBe('on');

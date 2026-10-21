@@ -368,9 +368,7 @@ async function pingModel({ provider, base_url, api_key, model }) {
   // must never disagree on the path (2026-10-21: a versioned base pinged OK
   // while the benchmark answer leg force-appended /v1 and 404'd every row).
   const url =
-    provider === 'anthropic'
-      ? `${base.replace(/\/v1$/, '')}/v1/messages`
-      : require('./llm-url').openAiChatUrl(base);
+    provider === 'anthropic' ? `${base.replace(/\/v1$/, '')}/v1/messages` : require('./llm-url').openAiChatUrl(base);
   const headers =
     provider === 'anthropic'
       ? { 'x-api-key': api_key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }

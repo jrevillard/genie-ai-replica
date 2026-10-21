@@ -26,15 +26,6 @@ const emptyStreamMetadata = () => ({
   abstention_reason: null
 });
 
-// Emitted once per stream when a configured translation backend cannot answer.
-// The per-unit and post-stream paths both send it, so it is built once here:
-// two copies of a client-visible contract string is how they drift.
-const SSE_TRANSLATION_FAILED = `data: ${JSON.stringify({
-  type: 'error',
-  message: 'Translation failed',
-  code: 'TRANSLATION_FAILED'
-})}\n\n`;
-
 module.exports = (queryService) => {
   // Apply authentication middleware to all routes
   router.use(keycloakAuthMiddleware.authenticate);
@@ -310,14 +301,6 @@ module.exports = (queryService) => {
             if (!res.writableEnded) {
               res.write(`data: ${JSON.stringify({ type: 'chunk', content: `${content}${separator}` })}\n\n`);
             }
-            if (!streamingTranslationFailed && !res.writableEnded) {
-              // The English unit above is already on the wire and cannot be
-              // recalled. What can still be done is say the translation failed:
-              // without this frame the client receives a fully English answer
-              // and no signal whatsoever, because the flag below only
-              // suppresses the post-stream retry.
-              res.write(SSE_TRANSLATION_FAILED);
-            }
             streamingTranslationFailed = true;
           }
         });
@@ -342,7 +325,17 @@ module.exports = (queryService) => {
             // so the chain never rejects; awaiting it just orders completion before 'done'.
             await translationChain;
           }
-          await handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res, capturedMetadata, true);
+          await handleStreamDone(
+            queryId,
+            fullResponseText,
+            startTime,
+            queryData,
+            req,
+            res,
+            capturedMetadata,
+            true,
+            streamingTranslationFailed
+          );
         } else {
           handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res, capturedMetadata, false);
         }
@@ -474,9 +467,15 @@ module.exports = (queryService) => {
     req,
     res,
     capturedMetadata,
-    skipPostStreamTranslation = false
+    skipPostStreamTranslation = false,
+    alreadyFailedTranslation = false
   ) {
     if (res.writableEnded) return;
+
+    // Set by whichever translation path ran: a per-unit failure upstream, or the
+    // post-stream attempt below. Either way the answer the client receives is
+    // the English original and it is told so on `done`.
+    let translationFailed = alreadyFailedTranslation;
 
     const responseTime = Date.now() - startTime;
     // Source documents + grounding come from chatqna's in-stream metadata event
@@ -496,8 +495,13 @@ module.exports = (queryService) => {
         );
         res.write(`data: ${JSON.stringify({ type: 'translation', content: translated })}\n\n`);
       } catch (error) {
+        // Not an `error` frame. The client treats that as terminal and stops
+        // reading, and reports the whole system as down — neither is true when
+        // only the translator failed and the answer is complete in English.
+        // The outcome travels on `done` instead, where the client already
+        // expects the stream to end.
         logger.warn('QueryService.stream_translation_failed', { queryId, error: error.message });
-        res.write(SSE_TRANSLATION_FAILED);
+        translationFailed = true;
       }
     }
 
@@ -507,7 +511,7 @@ module.exports = (queryService) => {
       logger.error('QueryService.stream_finalize_failed', { queryId, error: error.message });
     }
 
-    res.write(`data: ${JSON.stringify({ type: 'done', queryId })}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: 'done', queryId, translationFailed })}\n\n`);
     res.end();
     logger.info('QueryService.stream_complete', { queryId, responseTime });
   }

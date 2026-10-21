@@ -195,11 +195,17 @@ Shortening any of these converts a slow-but-successful call into a visible failu
   milliseconds once connected, so the previous 5 s was a false-negative waiting
   to happen rather than a bound on anything.
 - **A streaming answer now says when its translation failed.** When the
-  translation backend could not answer mid-stream, the untranslated unit was
-  emitted and the stream carried on with no signal at all — the client received
-  a fully English answer and no indication that anything had gone wrong. The
-  stream now also emits a `TRANSLATION_FAILED` error frame, once per stream,
-  the same frame the post-stream path already sent.
+  translation backend could not answer, the untranslated text was emitted and
+  the stream carried on with no signal — the client received a fully English
+  answer and no indication anything had gone wrong. The `done` event now
+  carries `translationFailed`, and the answer it belongs to shows a short
+  "translation unavailable" notice. It is deliberately **not** an `error`
+  event: the web client treats that as terminal, stops reading the stream, and
+  reports the whole system as down, none of which is true when only the
+  translator failed and the answer is complete. This also fixes the same
+  misreporting on the existing post-stream path, which has been emitting an
+  `error` event ahead of `done` — so a translation failure at the end of an
+  answer used to mark the deployment offline.
 - **Legacy benchmark suite removed** (`tests/rag-benchmarks/{benchmark_*.py, run_benchmarks.sh}`, 2549 lines): the scripts were run-once-and-never-rerun, had no live test, and produced numbers that drifted from the rest of the eval surface. Latency and load-testing now live on the OTel trace waterfall (Grafana RAG Pipeline Trace Waterfall dashboard) — the OTel collector already captures every request with `latency` and `http.status_code` attributes, so the dashboards cover the same question without a separate harness. The site docs (`source-tree-analysis.md`) no longer mention the deleted files.
 - **Wrapper ROPC `EVAL_DEPLOY_ENV` is no longer defaulted:** the wrapper used to silently fall back to `/opt/genieai-el-salvador/.env` when the env var was unset — a stack-specific hardcode inside a script that should be generic. The wrapper now fails LOUD with `:?` and a message naming the expected `/opt/<stack>/.env` pattern (per `deploy/ansible/templates/env.j2` layout) when neither the env var nor `GENIE_ADMIN_PASSWORD` is set. The MR replaces the runbook / docs and the wrapper's "wrapper / argparse defaults" table to make the override path explicit.
 - **Per-context manual slicing heredocs removed from the root `CLAUDE.md` golden-dataset recipe:** the manual `for i in range(N): chunk = dict(gold); chunk['entries'] = gold['entries'][i::N]; open(f'/tmp/batches/gold_{i:02d}.json', 'w').write(json.dumps(chunk))` loop is gone — `run_eval.py` now slices the gold internally when `EVAL_CHUNK_SIZE` is set, and the sidecar already records per-chunk progress so a manual round-robin shell loop is no longer needed.

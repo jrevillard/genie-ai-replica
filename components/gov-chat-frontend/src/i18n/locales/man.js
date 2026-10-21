@@ -1314,6 +1314,7 @@ export default {
   chatbot: {
     streamingError: 'Jɛɛmɔgɔya labɛnnen na. A ñaa ma ñɔɔrɔ.',
     aiGeneratedNoDocs: 'AI-generated — not based on library documents',
+    translationUnavailable: 'Translation unavailable — showing the original response',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'Configuration mismatch: {warnings}. Please check the Quick Help and knowledge hierarchy configuration.',

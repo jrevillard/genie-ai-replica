@@ -1,4 +1,4 @@
-const { logger } = require('../../shared-lib');
+const { logger, parsePositiveInt } = require('../../shared-lib');
 const http = require('http');
 const https = require('https');
 
@@ -11,10 +11,9 @@ const VLLM_API_KEY = process.env.VLLM_API_KEY || '';
 // than sent with a token or two.
 const MIN_OUTPUT_BUDGET = 256;
 
-// Budget for the startup health check. This gate is no longer a selector — when
-// a GPU API is configured, failing it stops the service instead of quietly
-// switching models — so the budget is set for a cold TLS handshake to a remote
-// node, not for the 32 ms an established local connection needs.
+// Budget for the startup health check. Failing it stops the service when a GPU
+// API is configured, so the budget is sized for a cold TLS handshake to a remote
+// node rather than for a connection that is already established.
 const DEFAULT_HEALTH_TIMEOUT_MS = 30000;
 
 // Budget for the /v1/models read. It only widens the output budget ceiling, so
@@ -46,8 +45,15 @@ class GpuTranslateBackend {
     // non-empty, so on its own it cannot answer "is a GPU API configured?".
     this.endpointExplicit = this.endpoint !== IN_CLUSTER_ENDPOINT;
 
+    // `parsePositiveInt`, not `parseInt(x, 10) * 1000 || DEFAULT`: a negative
+    // budget parses to a negative number, which is truthy and therefore survives
+    // the fallback — and Node's HTTP layer does not honour a negative `timeout`
+    // predictably, so the gate would fall back to OS defaults instead of
+    // expiring. Values below one second are treated the same way: they cannot be
+    // a real remote handshake.
     this.healthTimeoutMs =
-      parseInt(process.env.TRANSLATION_PROBE_TIMEOUT_SECONDS, 10) * 1000 || DEFAULT_HEALTH_TIMEOUT_MS;
+      parsePositiveInt(process.env.TRANSLATION_PROBE_TIMEOUT_SECONDS, DEFAULT_HEALTH_TIMEOUT_MS / 1000, { min: 1 }) *
+      1000;
     this.modelInfoTimeoutMs = DEFAULT_MODEL_INFO_TIMEOUT_MS;
 
     // Runtime state

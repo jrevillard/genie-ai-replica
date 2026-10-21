@@ -1301,6 +1301,7 @@ export default {
   chatbot: {
     streamingError: '回复已中断。请重试。',
     aiGeneratedNoDocs: 'AI 生成 — 不基于文库文档',
+    translationUnavailable: '翻译不可用 — 显示原始回复',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning: '配置不匹配：{warnings}。请检查快速帮助和知识层次结构的配置。',
     categoryNotFound: '在知识层次结构中未找到类别"{label}"',

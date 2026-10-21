@@ -185,7 +185,6 @@ Everything else requires a valid Keycloak JWT.
 | `INTERNAL_ERROR` | 500 | `keycloak-auth-middleware.js:165` |
 | `STREAMING_DISABLED` | 501 | `query-routes.js:146` |
 | `STREAM_ERROR` | varies | `query-routes.js:389` (generic upstream stream failure) |
-| `TRANSLATION_FAILED` | varies | `query-routes.js:427` (translation upstream failure) |
 | `CITY_NOT_FOUND` | 503 | `services/weather-service.js:199` (no city within lookup radius) |
 | `CHATQNA_UNAVAILABLE` | 504 | `query-routes.js:384` (ChatQnA timeout / aborted) |
 | `INVALID_FILTERS_JSON` | 400 | `analytics-routes.js:289` (malformed `filters` query param) |
@@ -764,7 +763,7 @@ stable; renaming a field is a breaking change.
 | `translation` | `content: string` | Emitted by `/api/translate/*` only when `STREAMING_TRANSLATION_ENABLED=0` (the English-then-flip path) |
 | `chunk` | `content: string` (translated) | Emitted by streaming-translation path — see below |
 | `error` | `message: string`, `code: string` | Closes the stream after emission |
-| `done` | `queryId: string` | Always last; closes the stream |
+| `done` | `queryId: string`, `translationFailed: boolean` | Always last; closes the stream. `translationFailed` is `true` when the answer was not translated and the client is showing the English original |
 
 Example stream (English-then-flip path):
 
@@ -777,7 +776,7 @@ data: {"type":"chunk","content":"applicants must..."}
 
 data: {"type":"translation","content":"La politique indique que les candidats doivent..."}
 
-data: {"type":"done","queryId":"abc123"}
+data: {"type":"done","queryId":"abc123","translationFailed":false}
 ```
 
 Keepalive comment lines (`: keepalive`) are emitted on a fixed interval so
@@ -845,7 +844,7 @@ The 501 response body:
 | HTTP 401 `UNAUTHENTICATED` | Bearer token missing or invalid |
 | Stream starts then stops with `CHATQNA_STREAM_ERROR` | Upstream OPEA ChatQnA failure (timeouts, refused) |
 | Stream starts then stops with `STREAM_ERROR` | Generic upstream stream error |
-| Stream starts then stops with `TRANSLATION_FAILED` | Translation service failure on the English-then-flip path |
+| Answer arrives in English, `done` carries `translationFailed: true` | The translation backend did not answer. Not a stream failure — the answer is complete, only its language is not |
 | Stream silently hangs and times out | Upstream ChatQnA unresponsive; check `CHATQNA_STREAM_TIMEOUT` (default 3600000 ms = 60 min) |
 
 ## Static & operational endpoints

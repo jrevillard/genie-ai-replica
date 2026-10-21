@@ -1383,6 +1383,7 @@ export default {
       "Incohérence de configuration : {warnings}. Vérifiez la configuration de l'Aide rapide et la hiérarchie de connaissances.",
     streamingError: 'La réponse a été interrompue. Veuillez réessayer.',
     aiGeneratedNoDocs: 'Généré par IA — non basé sur les documents de la bibliothèque',
+    translationUnavailable: 'Traduction indisponible — réponse originale affichée',
     placeholder: 'Tapez votre requête ici...',
     sendButton: 'Envoyer',
     fileReceived: 'Fichier reçu avec succès.',

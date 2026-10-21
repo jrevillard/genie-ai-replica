@@ -5,6 +5,9 @@ jest.mock('https', () => ({ request: jest.fn() }));
 jest.mock(
   '../../../shared-lib',
   () => ({
+    // The real helpers, not copies: a test that asserts the timeout parser
+    // rejects a negative budget is worthless against a reimplementation of it.
+    ...jest.requireActual('../../../../shared/lib/validation-utils'),
     logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }
   }),
   { virtual: true }
@@ -481,6 +484,20 @@ describe('GpuTranslateBackend startup probe', () => {
     expect(captured.opts.timeout).toBe(7000);
   });
 
+  it.each(['-1', '0', 'abc', ''])('refuses a budget of "%s" and keeps the default', async (value) => {
+    const captured = {};
+    requestThatTimesOut(captured);
+    const backend = backendWithEnv({ TRANSLATION_PROBE_TIMEOUT_SECONDS: value });
+
+    await expect(backend.healthCheck()).rejects.toThrow();
+
+    // `-1` is the case that matters: `parseInt('-1') * 1000` is -1000, which is
+    // truthy and therefore survives an `|| DEFAULT` fallback. Node's HTTP layer
+    // does not honour a negative timeout, so the gate would stop expiring and
+    // fall back to OS defaults instead.
+    expect(captured.opts.timeout).toBe(30000);
+  });
+
   it('keeps a default budget generous enough for a cold TLS handshake', async () => {
     const captured = {};
     requestThatTimesOut(captured);
@@ -510,10 +527,8 @@ describe('GpuTranslateBackend startup probe', () => {
 });
 
 describe('GpuTranslateBackend endpoint addressing', () => {
-  // Where the request goes and what it carries. The backend moved into
-  // `services/translation/` for #829 and this file came with it, but the
-  // addressing coverage stayed behind under the old path — so the file that
-  // documents this module had nothing about it.
+  // Where the request goes and what it carries: the bearer token, and the
+  // endpoint path prefix that a remote GPU API is addressed through.
   let savedEnv;
 
   // A response that ends on its own: `healthCheck` reads only `statusCode`,
@@ -576,8 +591,12 @@ describe('GpuTranslateBackend endpoint addressing', () => {
   });
 
   describe('_buildHeaders', () => {
-    it('sends the configured API key as a bearer token', () => {
-      expect(backendWithKey()._buildHeaders()['Authorization']).toBe('Bearer test-key-123');
+    it('sends the configured API key as a bearer token and nothing else', () => {
+      const headers = backendWithKey()._buildHeaders();
+      expect(headers['Authorization']).toBe('Bearer test-key-123');
+      // Pins the header set, so a later change cannot quietly start sending
+      // something on every request to the GPU API.
+      expect(Object.keys(headers)).toHaveLength(1);
     });
 
     it('sends no Authorization header when no key is configured', () => {

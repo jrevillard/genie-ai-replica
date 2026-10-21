@@ -1353,6 +1353,7 @@ export default {
   chatbot: {
     streamingError: 'تمت مقاطعة الاستجابة. يرجى المحاولة مرة أخرى.',
     aiGeneratedNoDocs: 'مُولّد بواسطة الذكاء الاصطناعي — لا يعتمد على وثائق المكتبة',
+    translationUnavailable: 'الترجمة غير متاحة — يتم عرض الرد الأصلي',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'عدم تطابق في التكوين: {warnings}. يرجى التحقق من تكوين المساعدة السريعة والتسلسل الهرمي للمعرفة.',

@@ -110,10 +110,9 @@ class TranslationService {
         // the knob is not an input to this decision and none of its values
         // gets special treatment.
         //
-        // A failure below propagates: the backend is not optional
-        // (`index.js`, initPromises), so the service refuses to start rather
-        // than quietly translating with a different model than the one the
-        // deployment asked for.
+        // A failure below propagates: the backend is not optional in
+        // `index.js`, so the service refuses to start rather than translating
+        // with a model the deployment did not ask for.
         await gpuBackend.init();
         this.backend = gpuBackend;
         this.backendType = 'gpu';

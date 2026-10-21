@@ -313,6 +313,57 @@ describe('ChatBotComponent', () => {
   });
 
   // -----------------------------------------------------------------------
+  // Translation failure — the answer arrived, only its language did not
+  // -----------------------------------------------------------------------
+  describe('translation failure reported on done', () => {
+    it('flags the message and leaves the system healthy', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.newMessage = 'Hola';
+      await vm.sendMessage();
+      await wrapper.vm.$nextTick();
+
+      capturedCallbacks.onDone({ queryId: 'q-1', translationFailed: true });
+      await wrapper.vm.$nextTick();
+
+      const bot = vm.chatMessages[vm.chatMessages.length - 1];
+      expect(bot.translationFailed).toBe(true);
+      // The chat pipeline worked; only the translator did not. Reporting the
+      // system as down here would be a false status and a false alarm.
+      expect(vm.systemStatus.online).not.toBe(false);
+    });
+
+    it('leaves the flag unset when translation succeeded', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.newMessage = 'Hola';
+      await vm.sendMessage();
+      await wrapper.vm.$nextTick();
+
+      capturedCallbacks.onDone({ queryId: 'q-1', translationFailed: false });
+      await wrapper.vm.$nextTick();
+
+      expect(vm.chatMessages[vm.chatMessages.length - 1].translationFailed).toBe(false);
+    });
+
+    it('shows the notice on the message that failed to translate', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.newMessage = 'Hola';
+      await vm.sendMessage();
+      await wrapper.vm.$nextTick();
+      capturedCallbacks.onChunk?.('Hello');
+      capturedCallbacks.onDone({ queryId: 'q-1', translationFailed: true });
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.find('.translation-flag').exists()).toBe(true);
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // AC5 — Error state when API call fails
   // -----------------------------------------------------------------------
   describe('AC5 — error state on API failure', () => {

@@ -1362,6 +1362,7 @@ export default {
   chatbot: {
     streamingError: 'Jibu lilikatika. Tafadhali jaribu tena.',
     aiGeneratedNoDocs: 'Imezalishwa na AI — haizingatii nyaraka za maktaba',
+    translationUnavailable: 'Tafsiri hazipatikani — jibu asili linaonyeshwa',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'Hitilafu ya usanidi: {warnings}. Tafadhali angalia usanidi wa Msaada wa Haraka na mpangilio wa maarifa.',

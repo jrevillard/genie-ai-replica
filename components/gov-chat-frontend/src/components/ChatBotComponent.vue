@@ -126,6 +126,16 @@
               <Sparkles :size="16" />
               <span>{{ translate('chatbot.aiGeneratedNoDocs', 'AI-generated — not based on library documents') }}</span>
             </div>
+            <!-- The translation backend did not answer. The text above is the
+                 original response, not a translation of it. -->
+            <div v-if="msg.translationFailed" class="translation-flag">
+              <Languages :size="16" />
+              <span>
+                {{
+                  translate('chatbot.translationUnavailable', 'Translation unavailable — showing the original response')
+                }}
+              </span>
+            </div>
             <div class="feedback-trigger">
               <DsPill>
                 <DsButton variant="ghost" :small="true" @click="openFeedbackDialog(index)">
@@ -271,7 +281,7 @@
 </template>
 
 <script>
-import { Brain, Loader2, Plus, Save, FileText, Sparkles } from '@lucide/vue';
+import { Brain, Loader2, Plus, Save, FileText, Sparkles, Languages } from '@lucide/vue';
 import { eventBus } from '../eventBus.js';
 import notificationService from '../services/notificationService';
 import { mapGetters, mapActions } from 'vuex';
@@ -386,6 +396,7 @@ export default {
     Save,
     FileText,
     Sparkles,
+    Languages,
     ChatResponseFeedbackDialog,
     ModalDialog,
     RightSideBarComponent,
@@ -919,7 +930,8 @@ export default {
         timestamp: new Date().toISOString(),
         isSaved: false,
         metadata: {},
-        isStreaming: true
+        isStreaming: true,
+        translationFailed: false
       });
 
       try {
@@ -1048,6 +1060,9 @@ export default {
             this.streamingQueryId = data.queryId;
             this.chatMessages[lastMessageIndex].isStreaming = false;
             this.chatMessages[lastMessageIndex].isSaved = false;
+            // The answer is complete either way; only its language is affected,
+            // and only the message carries that — `systemStatus` stays healthy.
+            this.chatMessages[lastMessageIndex].translationFailed = Boolean(data.translationFailed);
             if (data.queryId) {
               this.chatMessages[lastMessageIndex].queryId = data.queryId;
             }
@@ -2160,6 +2175,14 @@ export default {
   background: var(--warning-bg);
   padding: var(--space-xs) var(--space-sm);
   border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.translation-flag {
+  font-size: var(--text-sm);
+  color: var(--muted);
   display: flex;
   align-items: center;
   gap: var(--space-xs);

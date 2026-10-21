@@ -1357,6 +1357,7 @@ export default {
   chatbot: {
     streamingError: 'การตอบกลับถูกขัดจังหวะ โปรดลองอีกครั้ง',
     aiGeneratedNoDocs: 'สร้างโดย AI — ไม่อิงจากเอกสารในคลังเอกสาร',
+    translationUnavailable: 'ไม่สามารถแปลได้ — กำลังแสดงคำตอบต้นฉบับ',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'การกำหนดค่าไม่ตรงกัน: {warnings}. กรุณาตรวจสอบการกำหนดค่าความช่วยเหลือด่วนและลำดับชั้นความรู้',

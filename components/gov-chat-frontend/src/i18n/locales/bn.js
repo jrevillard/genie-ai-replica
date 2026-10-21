@@ -1341,6 +1341,7 @@ export default {
   chatbot: {
     streamingError: 'প্রতিক্রিয়া ব্যাহত হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।',
     aiGeneratedNoDocs: 'এআই-উৎপাদিত — লাইব্রেরির নথিপত্রের উপর ভিত্তি করে নয়',
+    translationUnavailable: 'অনুবাদ অনুপলব্ধ — মূল উত্তর দেখানো হচ্ছে',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'কনফিগারেশন অসমঞ্জতা: {warnings}. দয়া করে দ্রুত সাহায্য এবং জ্ঞান শ্রেণিবিন্যাস কনফিগারেশন পরীক্ষা করুন।',

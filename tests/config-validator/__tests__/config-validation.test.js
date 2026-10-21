@@ -1016,9 +1016,12 @@ describe('Configuration Validation Suite', () => {
       }
     });
 
-    test('frontend and kong-config both receive the flag', () => {
+    test('frontend, kong-config and backend all receive the flag', () => {
       expect(composeText).toMatch(/VUE_APP_OKF_ENABLED=\$\{OKF_ENABLED:-0\}/);
-      expect(composeText).toMatch(/- OKF_ENABLED=\$\{OKF_ENABLED:-0\}/);
+      // Backend + kong-config (the backend has no .env passthrough — without
+      // this entry a parked deployment leaves it timing out against the
+      // zero-replica okf-server).
+      expect((composeText.match(/- OKF_ENABLED=\$\{OKF_ENABLED:-0\}/g) || []).length).toBeGreaterThanOrEqual(2);
     });
 
     test('env.j2 renders OKF_ENABLED (default 0) and all.yml pins okf_enabled 0', () => {

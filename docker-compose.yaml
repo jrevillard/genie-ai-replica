@@ -593,6 +593,10 @@ services:
       # matches (http://okf-server:3002); the entry exists so an operator can
       # override it without an image rebuild.
       - OKF_SERVER_URL=${OKF_SERVER_URL:-http://okf-server:3002}
+      # OKF feature flag: must reach the backend explicitly (no .env passthrough)
+      # — a parked deployment (0) short-circuits the retrieval-config client to
+      # the legacy default instead of timing out against a zero-replica okf-server.
+      - OKF_ENABLED=${OKF_ENABLED:-0}
       # The legacy graph name the BFF prepends in hybrid mode — MUST match the
       # retriever's ARANGO_GRAPH_NAME or the legacy leg diverges.
       - ARANGO_GRAPH_NAME=${ARANGO_GRAPH_NAME:-GRAPH}

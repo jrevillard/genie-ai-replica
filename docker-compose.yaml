@@ -202,6 +202,9 @@ services:
       - TARGET_HOST=backend
       - TARGET_PORT=3000
       - ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}
+      # OKF feature flag: 0 strips the okf-server service + /api/okf route
+      # from the declarative apply (and deletes any existing okf entities).
+      - OKF_ENABLED=${OKF_ENABLED:-0}
     command: ["-b", "/opt/kong-config/kong_config.json"]
     deploy:
       replicas: 1
@@ -399,6 +402,11 @@ services:
       - VUE_PROXY_HOST=${VUE_PROXY_HOST:-localhost}
       - VUE_APP_CSP_CONNECT_SRC=${VUE_APP_CSP_CONNECT_SRC:-'self' http://localhost:3000 http://localhost:8090 http://127.0.0.1:8090 ws://localhost:3000 ws://localhost:8090}
       - VUE_APP_AVAILABLE_LOCALES=${VUE_APP_AVAILABLE_LOCALES:-}
+      # OKF feature flag (2026-10-21): the entrypoint writes it into
+      # window.APP_CONFIG.okfEnabled; the Admin Dashboard hides the OKF
+      # Studio and Models tabs (and their sidebar entries) when '0'.
+      # Same variable that parks the okf containers and the Kong route.
+      - VUE_APP_OKF_ENABLED=${OKF_ENABLED:-0}
     volumes:
       - ${CONFIG_DIR_FRONTEND:-./components/gov-chat-frontend/public/config}:/app/dist/config:ro
     # Port 8090 is internal only - outer nginx on 80/443 is the public entry point
@@ -634,6 +642,11 @@ services:
         max_attempts: 10
 
   okf-server:
+    # OKF feature flag (merge prep 2026-10-21): OKF_ENABLED=1 activates the OKF
+    # stack. Off = parked — compose mode needs --profile okf to start it, swarm
+    # runs 0 replicas, Kong gets no /api/okf route, the frontend hides the OKF
+    # surfaces. Same variable gates all four (env template documents it).
+    profiles: ["okf"]
     logging: *fluent-logging
     depends_on:
       keycloak-config:
@@ -862,7 +875,7 @@ services:
     networks:
       - genieai_network
     deploy:
-      replicas: 1
+      replicas: ${OKF_ENABLED:-0}
       placement:
         constraints:
           - node.labels.genieai == true
@@ -872,6 +885,8 @@ services:
         max_attempts: 10
 
   pii-service:
+    # OKF feature flag: parked with the okf-server (see okf-server block).
+    profiles: ["okf"]
     logging: *fluent-logging
     restart: unless-stopped
     environment:
@@ -901,7 +916,7 @@ services:
     networks:
       - genieai_network
     deploy:
-      replicas: 1
+      replicas: ${OKF_ENABLED:-0}
       placement:
         constraints:
           - node.labels.genieai == true
@@ -919,6 +934,8 @@ services:
   # vLLM/TEI (RAGAS_JUDGE_* / RAGAS_EMBED_* below); NO feature is indexed
   # on a specific model — minimums live in the spec's model-requirements.
   ragas-service:
+    # OKF feature flag: parked with the okf-server (see okf-server block).
+    profiles: ["okf"]
     logging: *fluent-logging
     restart: unless-stopped
     environment:
@@ -964,7 +981,7 @@ services:
     networks:
       - genieai_network
     deploy:
-      replicas: 1
+      replicas: ${OKF_ENABLED:-0}
       placement:
         constraints:
           - node.labels.genieai == true

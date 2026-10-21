@@ -318,6 +318,31 @@ describe('AdminDashboard', () => {
     // left the menu with no active item), and Settings listed users before
     // security against the rack's order. The sidebar must navigate to every
     // tab, in rack order.
+    // OKF feature flag (2026-10-21): OKF_ENABLED=0 parks the OKF surfaces —
+    // the Studio and Models tabs (rack + sidebar) disappear; Query Inspector
+    // is platform tooling and STAYS (David's call).
+    it('OKF flag off hides Studio and Models from rack and sidebar, keeps Query Inspector', async () => {
+      window.APP_CONFIG = { okfEnabled: '0' };
+      try {
+        const wrapper = createAdminDashboardWrapper(
+          {},
+          {},
+          { OkfStudioTab: true, OkfModelConfigPanel: true, QueryInspector: true }
+        );
+        const tabIds = wrapper.vm.adminTabs.map((t) => t.value);
+        expect(tabIds).not.toContain('studio');
+        expect(tabIds).not.toContain('models');
+        expect(tabIds).toContain('queryInspector'); // platform tooling stays
+        expect(tabIds).toHaveLength(8);
+        const linkText = wrapper.findAll('.sidebar .nav-link').map((l) => l.text());
+        expect(linkText.join(' | ')).not.toContain('OKF Studio');
+        expect(linkText.join(' | ')).not.toContain('admin.tabs.models');
+        expect(wrapper.findAll('.sidebar .nav-link')).toHaveLength(8);
+      } finally {
+        delete window.APP_CONFIG;
+      }
+    });
+
     it('sidebar nav mirrors the tab rack: every tab reachable, in rack order', async () => {
       // The heavy tab panels (Studio fetches repos on mount, Models fetches
       // configs, Inspector mounts its own store calls) are stubbed — this

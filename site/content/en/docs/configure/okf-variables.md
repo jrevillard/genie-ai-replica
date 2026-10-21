@@ -14,6 +14,36 @@ All defaults are safe for small deployments — every feature works out of the
 box with no variables set. Tune them when your sources get large or your
 machine has spare capacity.
 
+## The OKF master switch (`OKF_ENABLED`)
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `OKF_ENABLED` | `0` (parked) | `1` runs the full OKF stack; `0` parks every OKF surface. Must be `0` or `1`. |
+
+With the flag **parked** (`0`):
+
+- The three OKF containers — **okf-server**, **pii-service**, **ragas-service** —
+  run at **zero replicas** (nothing OKF executes anywhere).
+- The `/api/okf` gateway route is **not created** — the API surface does not
+  exist from outside.
+- The Admin Dashboard hides the **OKF Studio** and **Models** tabs. The
+  Query Inspector tab is not gated and stays visible.
+- The chat backend answers with the **legacy retrieval posture** — no OKF
+  connection is attempted, so a parked deployment never burns timeouts
+  against a service that is not running.
+
+With the flag **on** (`1`) everything described on this page and in the
+[OKF Studio docs](/docs/knowledge-base/okf-studio/) works as documented.
+
+{{% alert title="Deployments that use OKF must set the flag" color="warning" %}}
+The default is parked. If your deployment uses OKF Studio, set
+`OKF_ENABLED=1` in `.env` (Compose) or `okf_enabled: "1"` in your Ansible
+`group_vars` — otherwise the stack comes up parked after an upgrade and the
+OKF tabs and containers will be absent. Changing the value requires
+recreating the affected containers (and re-applying the gateway config), not
+just a restart.
+{{% /alert %}}
+
 ## Creating repositories from crawls
 
 A crawled website (a single large Markdown file produced by the crawler) is

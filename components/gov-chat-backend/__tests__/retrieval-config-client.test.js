@@ -289,4 +289,29 @@ describe('retrieval-config-client (Story 1.1)', () => {
     expect(second).toBe(first);
     expect(first.engaged).toBe(true);
   });
+
+  // OKF feature flag (2026-10-21, merge prep): OKF_ENABLED=0 parks the OKF
+  // stack — the client resolves the legacy default DIRECTLY, no connection
+  // attempt, no warn noise. With the okf-server parked every caller would
+  // otherwise burn one timeout attempt per TTL window.
+  describe('OKF_ENABLED=0 short-circuit', () => {
+    it('resolves the legacy default with zero HTTP attempts', async () => {
+      process.env.OKF_ENABLED = '0';
+      try {
+        // The flag is read once at module load — reload the client under the
+        // parked env (beforeEach already loaded it with the flag unset) and
+        // bind the axios mock of the SAME registry generation for the assertion.
+        jest.resetModules();
+        const parked = require('../services/retrieval-config-client');
+        const axiosParked = require('axios');
+        const cfg = await parked.getRetrievalConfig(makeBearer());
+        expect(cfg).toMatchObject({ config: { mode: 'legacy' }, engaged: false, source: 'bff-fail-closed-default' });
+        const graphs = await parked.getAuthorizedGraphs(makeBearer());
+        expect(graphs).toEqual({ graph_names: [] });
+        expect(axiosParked.get).not.toHaveBeenCalled();
+      } finally {
+        delete process.env.OKF_ENABLED;
+      }
+    });
+  });
 });

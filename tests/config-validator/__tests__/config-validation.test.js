@@ -988,4 +988,46 @@ describe('Configuration Validation Suite', () => {
       expect(Number(m[1])).toBeGreaterThan(200000);
     });
   });
+
+  // OKF feature flag (2026-10-21, merge prep): one variable parks the whole
+  // OKF stack — containers (replicas), Kong route (restore script), UI
+  // (entrypoint APP_CONFIG), BFF posture (short-circuit). Parity here guards
+  // that all four surfaces keep reading the SAME variable with the SAME
+  // default, and that the shipped default is parked (0) — main must behave
+  // pre-OKF until a deployment opts in.
+  describe('AC9: OKF feature flag consistency', () => {
+    const composeText = fs.readFileSync(COMPOSE_FILE, 'utf8');
+    const ansibleVars = parseAnsibleEnvVars(
+      fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+    );
+    const allVarsYml = fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/group_vars/all.yml'), 'utf8');
+
+    test('every OKF container scales on OKF_ENABLED with default 0', () => {
+      for (const svc of ['okf-server:', 'pii-service:', 'ragas-service:']) {
+        const start = composeText.indexOf('  ' + svc);
+        expect(start).toBeGreaterThan(-1);
+        // Block ends at the next line indented exactly 2 spaces (the next
+        // top-level key) — body lines are 4+ so /\n  \S/ skips them.
+        const rest = composeText.slice(start + 10);
+        const next = rest.match(/\n  \S/);
+        const block = composeText.slice(start, next ? start + 10 + next.index : undefined);
+        expect(block).toMatch(/profiles: \["okf"\]/);
+        expect(block).toMatch(/replicas: \$\{OKF_ENABLED:-0\}/);
+      }
+    });
+
+    test('frontend and kong-config both receive the flag', () => {
+      expect(composeText).toMatch(/VUE_APP_OKF_ENABLED=\$\{OKF_ENABLED:-0\}/);
+      expect(composeText).toMatch(/- OKF_ENABLED=\$\{OKF_ENABLED:-0\}/);
+    });
+
+    test('env.j2 renders OKF_ENABLED (default 0) and all.yml pins okf_enabled 0', () => {
+      expect(ansibleVars.OKF_ENABLED).toBeDefined();
+      // `{{ okf_enabled | default('0') }}` is classified as literal default
+      // '0' (not a jinja expression) — same shape as ENABLE_OBSERVABILITY.
+      expect(ansibleVars.OKF_ENABLED.default).toBe('0');
+      expect(ansibleVars.OKF_ENABLED.defaultIsJinja).toBe(false);
+      expect(allVarsYml).toMatch(/^okf_enabled: "0"$/m);
+    });
+  });
 });

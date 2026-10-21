@@ -1139,6 +1139,20 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 #   or Swarm:  ENABLE_OBSERVABILITY=1 in .env (MUST be 0 or 1, not true/false)
 #   or Ansible: enable_observability: "1" in group_vars/all.yml
 #
+# --- OKF feature flag (2026-10-21, merge prep) -----------------------------
+# OKF_ENABLED parks the entire OKF stack behind one variable:
+#   0 (default) — okf-server, ragas-service and pii-service run ZERO replicas
+#                 (compose: they sit behind the `okf` profile), Kong gets no
+#                 /api/okf route (any existing one is deleted), the Admin
+#                 Dashboard hides the OKF Studio and Models tabs, and the
+#                 backend's retrieval posture resolves straight to legacy mode
+#                 with no dead-connection attempts. Nothing is deleted — data,
+#                 collections and configs stay; flipping to 1 restores everything.
+#   1           — the full OKF feature set (current feat/okf-server behavior).
+# MUST be 0 or 1, not true/false. Ansible: okf_enabled in group_vars.
+# The local/dev build and el-salvador run with 1; main ships 0.
+# OKF_ENABLED=1
+#
 # Uncomment to override defaults (all have sensible defaults in docker-compose):
 # ENABLE_OBSERVABILITY=0
 # GRAFANA_ADMIN_USER=admin

@@ -49,8 +49,8 @@
               <!-- Sidebar mirrors the tab rack 1:1 (David 2026-10-21: the
                    Studio tab had no sidebar entry — clicking it left the
                    menu with no active item). Rack position: after Document
-                   Management, before Database. -->
-              <li class="nav-item">
+                   Management, before Database. Hidden with the OKF flag. -->
+              <li v-if="okfEnabled" class="nav-item">
                 <a
                   href="#"
                   :class="['nav-link', { active: activeTab === 'studio' }]"
@@ -128,8 +128,9 @@
               </li>
               <!-- Story 8-7 (David 2026-10-20): model configurations are a
                    PLATFORM concern — the LAST Admin Dashboard tab, not a tab
-                   buried in the OKF Lab dialog. -->
-              <li class="nav-item">
+                   buried in the OKF Lab dialog. Rides the OKF flag (its
+                   storage/API live in okf-server). -->
+              <li v-if="okfEnabled" class="nav-item">
                 <a
                   href="#"
                   :class="['nav-link', { active: activeTab === 'models' }]"
@@ -1905,11 +1906,22 @@ export default {
         ? '\u2014'
         : `${this.metrics.errorRate}%`;
     },
+    // OKF feature flag (2026-10-21): window.APP_CONFIG.okfEnabled, written by
+    // the frontend entrypoint from OKF_ENABLED. Absent = enabled (dev builds
+    // and pre-flag deployments keep the surfaces; compose always writes it).
+    // Hides the OKF Studio and Models tabs (Query Inspector is platform
+    // tooling and stays — David's call 2026-10-21).
+    okfEnabled() {
+      const cfg = typeof window !== 'undefined' ? window.APP_CONFIG : null;
+      return !cfg || String(cfg.okfEnabled == null ? '1' : cfg.okfEnabled) !== '0';
+    },
     adminTabs() {
-      return this.tabs.map((t) => ({
-        label: this.translate(`admin.tabs.${t.id}`, t.label),
-        value: t.id
-      }));
+      return this.tabs
+        .filter((t) => this.okfEnabled || (t.id !== 'studio' && t.id !== 'models'))
+        .map((t) => ({
+          label: this.translate(`admin.tabs.${t.id}`, t.label),
+          value: t.id
+        }));
     },
     keycloakAdminUrl() {
       const keycloakUrl = window.location.origin + '/auth/admin';

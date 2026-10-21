@@ -135,6 +135,25 @@ restore_config() {
     # Read JSON config
     config_json=$(cat "$backup_file")
 
+    # OKF feature flag (2026-10-21, merge prep): OKF_ENABLED=0 parks the OKF
+    # API surface. The okf-server service and /api/okf route are stripped from
+    # the declarative config before apply, and any okf-tagged entities from an
+    # earlier enabled run are deleted so a disable is idempotent. The OKF
+    # containers (okf-server/ragas-service/pii-service) and the frontend's OKF
+    # surfaces are gated by the same variable.
+    if [ "${OKF_ENABLED:-0}" != "1" ]; then
+        log "OKF_ENABLED=${OKF_ENABLED:-0} — parking the OKF API surface"
+        for route_id in $(curl -s "$KONG_ADMIN_URL/routes" < /dev/null | jq -r '.data[] | select((.tags // []) | index("okf")) | .id'); do
+            response=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$KONG_ADMIN_URL/routes/$route_id" < /dev/null)
+            log "Deleted okf route $route_id (HTTP $response)"
+        done
+        if [ "$(curl -s "$KONG_ADMIN_URL/services/okf-server" < /dev/null | jq -r '.id // empty')" ]; then
+            response=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$KONG_ADMIN_URL/services/okf-server" < /dev/null)
+            log "Deleted okf-server service (HTTP $response)"
+        fi
+        config_json=$(echo "$config_json" | jq 'del(.services[] | select(.name == "okf-server")) | del(.routes[] | select((.tags // []) | index("okf")))')
+    fi
+
     errors=0
 
     # Update or create ALL services and build name->ID mapping

@@ -71,6 +71,17 @@ const REQUEST_TIMEOUT_MS = envPositiveInt(
   100
 );
 
+/**
+ * OKF feature flag (2026-10-21, merge prep): OKF_ENABLED=0 parks the OKF
+ * stack (containers, Kong route, UI). The fail-safe paths below already
+ * degrade to the legacy default on connection failure — but with the
+ * okf-server parked every caller would burn one 3s connection attempt per
+ * TTL window and log a warn about it. This short-circuit resolves the same
+ * legacy answer with no attempt and no noise. Read once at module load,
+ * like the other constants.
+ */
+const OKF_ENABLED = (process.env.OKF_ENABLED ?? '1').trim() === '1';
+
 /** The fail-closed default: legacy mode, fan-out never engaged. */
 function legacyDefaultConfig() {
   return {
@@ -247,6 +258,7 @@ async function resolveCached(kind, bearerHeader, policy, opts = {}) {
  * construction). On 401: throws OkfAuthzUnauthorizedError (propagate).
  */
 async function getRetrievalConfig(bearerHeader, opts = {}) {
+  if (!OKF_ENABLED) return legacyDefaultConfig();
   return resolveCached(
     'retrieval-config',
     bearerHeader,
@@ -309,6 +321,7 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
  * On 401: throws OkfAuthzUnauthorizedError (propagate).
  */
 async function getAuthorizedGraphs(bearerHeader, opts = {}) {
+  if (!OKF_ENABLED) return { graph_names: [] };
   return resolveCached(
     'authz-graphs',
     bearerHeader,

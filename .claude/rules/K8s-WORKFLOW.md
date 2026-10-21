@@ -54,6 +54,15 @@ rtk proxy helm template genieai charts/genieai-umbrella/ \
 #    - charts/genieai-umbrella/Chart.yaml (version + appVersion if changed)
 #    - genie-ai-deploy overlay: overlays/jrevillard-laptop/dev/helmrelease.yaml
 #      spec.chart.spec.version
+#
+#    The version is not bookkeeping — it is the artifact identity Flux
+#    reconciles on. The helm-controller compares the HelmRelease's
+#    `spec.chart.spec.version` with the running release and reports
+#    "release in-sync with desired state" when they match, so chart
+#    content that changed WITHOUT a version bump is pushed, linted,
+#    merged — and never installed. The symptom is a reconcile that
+#    prints "applied revision 0.2.64" and leaves every object at its
+#    creationTimestamp. Bump per push, not per batch.
 
 # 5. Commit chart + push genie-ai-deploy (overlay version bump). Order:
 #    a) push chart repo (chart publish first, otherwise overlay can pull

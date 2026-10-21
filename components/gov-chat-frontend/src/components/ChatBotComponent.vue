@@ -2480,13 +2480,12 @@ export default {
   align-items: center;
   justify-content: center;
   padding: var(--space-lg);
-  /* The waves' ::after and the banner's full-bleed extend a fraction past
-     the overlay's right edge by design (the artwork reaches the panel
-     edges, not centred in a smaller box). overflow-x: hidden clips the
-     overshoot at the panel's edge so it cannot scroll the panel
-     horizontally — the brief ruled the bleed intentional and this
-     property is the property that controls whether a horizontal
-     scrollbar is drawn. */
+  /* The waves' ::after and the banner's full-bleed reach past the
+     overlay's content box on purpose: the artwork has to touch the
+     panel's edges, not sit centred inside them. overflow-x: hidden clips
+     that overshoot at the panel's edge, so the panel never offers a
+     horizontal scrollbar — the property that decides whether one is
+     drawn. */
   overflow-y: auto;
   overflow-x: hidden;
 }

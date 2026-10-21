@@ -1,0 +1,178 @@
+{
+  "_comment": [
+    "Service pairs: the Compose service and the chart component that runs the",
+    "same application. The parity gate (scripts/config-parity-check.py) compares",
+    "the environment both surfaces give that application.",
+    "",
+    "Three categories, per service. Every entry carries the reason it is one —",
+    "an entry without a reason is a gap in disguise.",
+    "",
+    "  mayDiffer    : the chart sets the variable and its value is the",
+    "                 Kubernetes one — an address, a topology fact, or a",
+    "                 deliberate policy difference. The variable must still be",
+    "                 present: the application needs it on both surfaces.",
+    "  composeOnly  : the variable only makes sense on the Compose surface.",
+    "  notRead      : no code in the repository reads the variable.",
+    "",
+    "A variable in none of the three must be configured the same way on both",
+    "surfaces — that is the parity this gate protects."
+  ],
+  "services": {
+    "backend": {
+      "compose": "backend",
+      "chart": "backend",
+      "mayDiffer": {
+        "ARANGO_DB": "the chart's ArangoDB instance serves the _system database; the Compose deployment uses a dedicated genie-ai one",
+        "ARANGO_URL": "in-cluster Service DNS instead of the Compose service name",
+        "ARANGO_PASSWORD": "carried by the arango-root-secret Secret the operator provides",
+        "ENABLE_OBSERVABILITY": "the chart's observability tier is an operator-enabled install of its own; Compose gates the same services behind a profile",
+        "KEYCLOAK_URL": "the backend resolves JWKS in-cluster; Compose reaches Keycloak through the public origin",
+        "OPEA_HOST": "in-cluster Service DNS instead of the Compose service name",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "the collector is an operator-managed instance with its own Service name",
+        "TRANSLATION_BACKEND": "the chart names a translation API, and the application treats a named API as mandatory; Compose leaves the choice to the startup probe",
+        "TRANSLATION_CACHE_HOST": "in-cluster Service DNS instead of the Compose service name",
+        "VICTORIALOGS_URL": "the collector is an operator-managed instance with its own Service name",
+        "VLLM_API_KEY": "carried by the vllm-api-key Secret the operator provides",
+        "VLLM_TRANSLATION_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose at its own guardrail service",
+        "CORS_ALLOWED_ORIGINS": "same allowlist intent, expressed with the deployment's public origin (ingress.host) instead of Compose's localhost list",
+        "CSP_CONNECT_SRC": "same policy intent, expressed with the deployment's public origin",
+        "GPU_NODE_HOST": "the chart names the GPU node it was configured with; Compose leaves it empty unless the remote-GPU topology is used"
+      },
+      "notRead": {
+        "EMAIL_FROM": "read by no service in the repository — the Keycloak convergence job is the only consumer of the EMAIL_* names, and it takes the password from a Secret",
+        "EMAIL_HOST": "read by no service in the repository — see EMAIL_FROM",
+        "EMAIL_PORT": "read by no service in the repository — see EMAIL_FROM",
+        "EMAIL_SECURE": "read by no service in the repository — see EMAIL_FROM",
+        "EMAIL_USER": "read by no service in the repository — see EMAIL_FROM",
+        "EMAIL_PASSWORD": "read by no service in the repository — see EMAIL_FROM"
+      },
+      "codeDefault": {
+        "KEYCLOAK_ADDITIONAL_REALMS": "empty in Compose; the backend parses an unset value as an empty JSON array, so leaving it unset is the same result",
+        "OPEA_SSL_SKIP_VERIFY": "empty in Compose; the code treats an unset value as 'verify', and the chart's NODE_TLS_REJECT_UNAUTHORIZED=1 says the same thing for the Node client"
+      },
+      "secretProvided": {
+        "KEYCLOAK_PROXY_CLIENT_SECRET": "carried by the keycloak-proxy-client-secret Secret through envFrom; the operator provides the key, so there is no value to compare",
+        "TRANSLATION_CACHE_PASSWORD": "carried by the translation-cache-password Secret through envFrom; the operator provides the key, so there is no value to compare"
+      }
+    },
+    "documentRepository": {
+      "compose": "document-repository",
+      "chart": "documentRepository",
+      "mayDiffer": {
+        "ARANGO_DB": "the chart's ArangoDB instance serves the _system database; the Compose deployment uses a dedicated genie-ai one",
+        "ARANGO_URL": "in-cluster Service DNS instead of the Compose service name",
+        "ARANGO_PASSWORD": "carried by the arango-root-secret Secret the operator provides",
+        "ENABLE_OBSERVABILITY": "the chart's observability tier is an operator-enabled install of its own; Compose gates the same services behind a profile",
+        "KEYCLOAK_URL": "the service resolves JWKS in-cluster; Compose reaches Keycloak through the public origin",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "the collector is an operator-managed instance with its own Service name",
+        "VICTORIALOGS_URL": "the collector is an operator-managed instance with its own Service name"
+      }
+    },
+    "chatqna": {
+      "compose": "chatqna-xeon-backend-server",
+      "chart": "chatqna",
+      "mayDiffer": {
+        "BACKEND_SERVICE_URL": "in-cluster Service DNS instead of the Compose service name",
+        "DOC_REPO_URL": "in-cluster Service DNS instead of the Compose service name",
+        "ENABLE_OBSERVABILITY": "the chart's observability tier is an operator-enabled install of its own; Compose gates the same services behind a profile",
+        "GPU_NODE_HOST": "the chart names the GPU node it was configured with; Compose leaves it empty unless the remote-GPU topology is used",
+        "KEYCLOAK_URL": "the chart pins the public issuer, which is what the token's iss claim carries; Compose reaches Keycloak through the same public origin",
+        "MEGA_SERVICE_HOST_IP": "in-cluster Service DNS instead of the Compose service name",
+        "OPEA_SSL_SKIP_VERIFY": "the GPU node serves a self-signed certificate in the external topology, so verification is skipped there",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "the collector is an operator-managed instance with its own Service name",
+        "RETRIEVER_SERVICE_HOST_IP": "in-cluster Service DNS instead of the Compose service name",
+        "TRANSLATION_SERVICE_HOST_IP": "in-cluster Service DNS instead of the Compose service name",
+        "VLLM_API_KEY": "carried by the vllm-api-key Secret the operator provides",
+        "VLLM_LLM_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose leaves it to the in-cluster default",
+        "VLLM_TRANSLATION_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose leaves it to the in-cluster default"
+      },
+      "notRead": {
+        "LLM_SERVER_HOST_IP": "the chatqna code takes the endpoint form (VLLM_LLM_ENDPOINT / LLM_ENDPOINT), which the chart sets",
+        "LLM_SERVER_PORT": "the chatqna code takes the endpoint form (VLLM_LLM_ENDPOINT / LLM_ENDPOINT), which the chart sets"
+      },
+      "codeDefault": {
+        "CHATQNA_SYSTEM_PROMPT": "empty in Compose; the chart has its own prompt knob (opea.chatqna.systemPrompt) and omits the row when it is empty, so the code's built-in prompt applies on both surfaces",
+        "MAX_MODEL_LEN_TEXTGEN": "empty in Compose; the code reads 0 as 'not set' and falls back to its own limit, and the chart leaves it unset",
+        "MAX_TRANSLATION_CHARS": "empty in Compose; the code reads 0 as 'not set' and falls back to its own limit, and the chart leaves it unset",
+        "MULTI_TURN_CONDENSE_SYSTEM_PROMPT": "empty in Compose; the code falls back to its built-in rewrite prompt when the variable is unset, and the chart leaves it unset",
+        "OPENAI_API_KEY": "empty in Compose; the chart carries the GPU key as VLLM_API_KEY, and the code reads the unset value as 'no key'"
+      }
+    },
+    "dataprep": {
+      "compose": "dataprep-arango-service",
+      "chart": "dataprep",
+      "mayDiffer": {
+        "ARANGO_DB": "the chart's ArangoDB instance serves the _system database; the Compose deployment uses a dedicated genie-ai one",
+        "ARANGO_URL": "in-cluster Service DNS instead of the Compose service name",
+        "ARANGO_PASSWORD": "carried by the arango-root-secret Secret the operator provides",
+        "BACKEND_SERVICE_URL": "in-cluster Service DNS instead of the Compose service name",
+        "DOCLING_ENDPOINT": "the chart points at the OPEA tier's docling endpoint; Compose runs docling in-process",
+        "DOCUMENT_REPOSITORY_URL": "in-cluster Service DNS instead of the Compose service name",
+        "ENABLE_OBSERVABILITY": "the chart's observability tier is an operator-enabled install of its own; Compose gates the same services behind a profile",
+        "GPU_NODE_HOST": "the chart names the GPU node it was configured with; Compose leaves it empty unless the remote-GPU topology is used",
+        "HUGGINGFACEHUB_API_TOKEN": "carried by the huggingface-hub-token Secret the operator provides",
+        "KC_DATAPREP_CLIENT_SECRET": "carried by the keycloak-proxy-client-secret Secret the operator provides",
+        "KEYCLOAK_URL": "the service authenticates in-cluster; Compose reaches Keycloak through the public origin",
+        "OPEA_SSL_SKIP_VERIFY": "the GPU node serves a self-signed certificate in the external topology, so verification is skipped there",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "the collector is an operator-managed instance with its own Service name",
+        "TEI_EMBEDDING_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose at its own TEI service",
+        "VLLM_API_KEY": "carried by the vllm-api-key Secret the operator provides",
+        "VLLM_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose at its own vLLM service"
+      },
+      "composeOnly": {
+        "NVIDIA_VISIBLE_DEVICES": "Docker GPU passthrough — Kubernetes expresses the same thing with the device plugin and a node selector, not with this variable"
+      },
+      "codeDefault": {
+        "CONTEXTUAL_RETRIEVAL_PROMPT": "empty in Compose; the code falls back to its built-in prompt when the variable is unset, and the chart has its own knob (opea.dataprep.contextualRetrievalPrompt)",
+        "LABEL_SELECTOR_SYSTEM_PROMPT": "empty in Compose; the code falls back to its built-in prompt when the variable is unset, and the chart has its own knob (opea.dataprep.labelSelectorPrompt)"
+      }
+    },
+    "retriever": {
+      "compose": "retriever-arango-service",
+      "chart": "retriever",
+      "mayDiffer": {
+        "ARANGO_DB": "the chart's ArangoDB instance serves the _system database; the Compose deployment uses a dedicated genie-ai one",
+        "ARANGO_URL": "in-cluster Service DNS instead of the Compose service name",
+        "ARANGO_PASSWORD": "carried by the arango-root-secret Secret the operator provides",
+        "ENABLE_OBSERVABILITY": "the chart's observability tier is an operator-enabled install of its own; Compose gates the same services behind a profile",
+        "GPU_NODE_HOST": "the chart names the GPU node it was configured with; Compose leaves it empty unless the remote-GPU topology is used",
+        "HF_TOKEN": "carried by the vllm-api-key Secret the operator provides",
+        "OPEA_SSL_SKIP_VERIFY": "the GPU node serves a self-signed certificate in the external topology, so verification is skipped there",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "the collector is an operator-managed instance with its own Service name",
+        "TEI_EMBEDDING_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose at its own TEI service",
+        "VLLM_API_KEY": "carried by the vllm-api-key Secret the operator provides",
+        "VLLM_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose at its own vLLM service"
+      }
+    },
+    "reranker": {
+      "compose": "reranker",
+      "chart": "reranker",
+      "mayDiffer": {
+        "ENABLE_OBSERVABILITY": "the chart's observability tier is an operator-enabled install of its own; Compose gates the same services behind a profile",
+        "HF_TOKEN": "carried by the vllm-api-key Secret the operator provides",
+        "OPEA_SSL_SKIP_VERIFY": "the GPU node serves a self-signed certificate in the external topology, so verification is skipped there",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "the collector is an operator-managed instance with its own Service name",
+        "TEI_RERANKING_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose at its own TEI service",
+        "VLLM_API_KEY": "carried by the vllm-api-key Secret the operator provides"
+      }
+    },
+    "embedding": {
+      "compose": "embedding",
+      "chart": "embedding",
+      "mayDiffer": {
+        "EMBEDDING_MODEL_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose at its own TEI service",
+        "HF_TOKEN": "carried by the vllm-api-key Secret the operator provides",
+        "OPEA_SSL_SKIP_VERIFY": "the GPU node serves a self-signed certificate in the external topology, so verification is skipped there",
+        "TEI_EMBEDDING_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose at its own TEI service",
+        "VLLM_API_KEY": "carried by the vllm-api-key Secret the operator provides"
+      }
+    },
+    "translation": {
+      "compose": "translation",
+      "chart": "translation",
+      "mayDiffer": {
+        "LLM_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose at its own guardrail service"
+      }
+    }
+  }
+}

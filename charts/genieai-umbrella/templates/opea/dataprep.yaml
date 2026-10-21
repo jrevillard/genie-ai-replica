@@ -105,6 +105,9 @@ in the values file is honored end-to-end for multi-line prompts). */ -}}
     (dict "name" "KC_DATAPREP_CLIENT_SECRET" "valueFrom" (dict "secretKeyRef" (dict "name" "kc-dataprep-client-secret" "key" "KC_DATAPREP_CLIENT_SECRET")))
 -}}
 {{- $gpuSecretEnv := include "genieai-umbrella.gpuApiKeyEnv" (dict "keys" (list "HF_TOKEN" "VLLM_API_KEY" "HUGGINGFACEHUB_API_TOKEN")) | fromJsonArray -}}
+{{- /* opea.dataprep.env: see the parity gate. The rows come last so an
+operator's value wins over a derived row of the same name. */ -}}
+{{- $opeaEnvRows := include "genieai-umbrella.envMapRows" (.Values.opea.dataprep.env | default dict) | fromJsonArray -}}
 {{- $arangoEnv := list
     (dict "name" "ARANGO_URL" "value" (printf "http://%s.%s.svc.cluster.local:8529" $arangoHost $ns))
     (dict "name" "ARANGO_DB" "value" "_system")
@@ -114,7 +117,7 @@ in the values file is honored end-to-end for multi-line prompts). */ -}}
     "image" (dict "repository" "genie-ai-dataprep-arango" "tag" "main")
     "port" 5000
     "resources" (dict "requests" (dict "cpu" "200m" "memory" "512Mi") "limits" (dict "cpu" "2" "memory" "4Gi"))
-    "env" (concat $arangoEnv $tuningEnv $promptEnv $arangoSecretEnv $kcSecretEnv $gpuSecretEnv)
+    "env" (concat $arangoEnv $tuningEnv $promptEnv $arangoSecretEnv $kcSecretEnv $gpuSecretEnv $opeaEnvRows)
     "probes" (dict
       "readiness" (dict "tcpSocket" (dict "port" 5000) "initialDelaySeconds" 30 "periodSeconds" 15)
       "liveness"  (dict "tcpSocket" (dict "port" 5000) "initialDelaySeconds" 60 "periodSeconds" 30)

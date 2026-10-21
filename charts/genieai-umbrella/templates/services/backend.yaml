@@ -102,6 +102,27 @@ against an operator's explicit off switch. */ -}}
     (dict "name" "TRANSLATION_CACHE_PORT" "value" "6379")
     (dict "name" "STREAMING_TRANSLATION_ENABLED" "value" (ternary "1" "0" $streamingTranslation))
 -}}
+{{- /* The public origin: the browser's origin is the deployment's ingress,
+not a localhost list. Compose derives the same two rows from
+NGINX_PUBLIC_DOMAIN; the chart derives them from ingress.scheme +
+ingress.host, and the operator's own value (services.backend.env) wins
+over both — the rows below come first, the operator's last. */ -}}
+{{- $publicHost := .Values.ingress.host -}}
+{{- $publicScheme := .Values.ingress.scheme | default "https" -}}
+{{- $publicOrigin := printf "%s://%s" $publicScheme $publicHost -}}
+{{- $urls = concat $urls (list
+    (dict "name" "CORS_ALLOWED_ORIGINS" "value" $publicOrigin)
+    (dict "name" "CSP_CONNECT_SRC" "value" (printf "'self' %s ws://%s %s" $publicOrigin $publicHost (include "genieai-umbrella.keycloakInternalURL" .)))
+) -}}
+{{- /* GPU_NODE_HOST is the signal the application uses to tell a named GPU
+API from its in-cluster worker, and it reaches the backend only when the
+OPEA tier is on: with no GPU API named there is no GPU host to name, and
+the backend's translation endpoint is what declares one. */ -}}
+{{- if .Values.opea.enabled -}}
+{{- $urls = concat $urls (list
+    (dict "name" "GPU_NODE_HOST" "value" (include "genieai-umbrella.opeaGpuHostname" .))
+) -}}
+{{- end -}}
 {{- /* Admin logs UI data source — the vmoperator-managed VLSingle
       Service (<cr-name> pattern). Rendered only when the log tier is
       on; without it the backend treats VL as absent and every
@@ -112,8 +133,12 @@ against an operator's explicit off switch. */ -}}
 {{- $urls = concat $urls $translationEnv -}}
 {{- $secretEnv := list (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "ARANGO_PASSWORD" "secret" "arango-root-secret" "key" "password" "optional" true) | fromJson) -}}
 {{- $secretEnv = concat $secretEnv $translationSecrets -}}
-{{- $existing := index $backendVals.services.backend "env" | default list -}}
-{{- $_ := set $backendVals.services.backend "env" (concat $existing $urls $secretEnv) -}}
+{{- $existing := index $backendVals.services.backend "env" | default dict -}}
+{{- $existingRows := include "genieai-umbrella.envMapRows" $existing | fromJsonArray -}}
+{{- /* The operator's rows come LAST: a container env list applies in order,
+so the last row for a name wins and the operator's value overrides the
+one the chart derives. */ -}}
+{{- $_ := set $backendVals.services.backend "env" (concat $urls $secretEnv $existingRows) -}}
 {{- $ctx := dict "name" "backend" "component" "backend" "Values" $backendVals "Chart" .Chart "Release" .Release -}}
 {{- include "genieai-umbrella.serviceDeployment" $ctx }}
 ---

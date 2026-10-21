@@ -267,9 +267,34 @@ node; multi-GPU clusters need RWX or per-model claims).
 
 The backend's chat and translation endpoints derive from values + OPEA tier state:
 
-- `services.backend.translation.endpoint` empty + `opea.enabled` + `opea.gpu.mode=in-cluster` → defaults to `http://vllm-translation.<ns>.svc.cluster.local:9031`. Otherwise the explicit value wins (point at a remote GPU's translation API). Fully empty → backend's auto mode (compose-era default probe, in-process CPU fallback).
+- `services.backend.translation.endpoint` empty + `opea.enabled` + `opea.gpu.mode=in-cluster` → defaults to `http://vllm-translation.<ns>.svc.cluster.local:9031`. Otherwise the explicit value wins (point at a remote GPU's translation API). Fully empty → no translation API is named, and the answer is translated by the in-process CPU model.
+- A named translation API is **mandatory**: the backend waits for it at startup and refuses to start when it does not answer. It will not fall back to another model — a GPU blip takes the backend down instead of quietly loading ~6 GiB of in-process model. `services.backend.translation.probeTimeoutSeconds` (default 30 s) is the budget for that startup probe; raise it for a cold TLS handshake to a busy GPU node.
 - `services.backend.opeaHost` empty + `opea.enabled` → defaults to `chatqna.<ns>.svc.cluster.local`. Empty without `opea.enabled` → no `OPEA_HOST` env row (the BFF's chat route expects a value when the OPEA tier is enabled).
 - `services.backend.translation.streamingEnabled` must be a YAML boolean — non-bool values fail the render (`0`, `"0"`, `"false"` are not coerced).
+
+## Per-service environment
+
+Every service takes its environment as a **map**, not a list:
+
+```yaml
+services:
+  backend:
+    env:
+      CORS_ALLOWED_ORIGINS: "https://genieai.example.org"
+      NODE_TLS_REJECT_UNAUTHORIZED: "0"
+```
+
+Helm merges maps key by key, so an overlay that sets one variable keeps
+every default the chart declares beside it. A list would be replaced
+wholesale, and one overlay value would silently drop the rest. The same
+map exists for the OPEA tier under `opea.<service>.env`.
+
+The values the chart sets by default are the ones Docker Compose sets on
+the same service: the parity gate (`scripts/config-parity-check.py`, the
+`chart:parity` CI job) fails the build when the two surfaces drift. The
+differences that ARE the Kubernetes adaptation — the addresses each surface
+reaches — are declared in `scripts/config-parity-allowlist.json`, each
+with its reason.
 
 ## Stateless service tier
 

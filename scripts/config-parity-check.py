@@ -223,6 +223,7 @@ def main(argv):
     services = allowlist.get("services") or {}
 
     gaps = []
+    unjudged = []
     checked = 0
     for component, pair in sorted(services.items()):
         compose_name = pair.get("compose")
@@ -233,6 +234,19 @@ def main(argv):
             continue
         rendered_rows = rendered.get(chart_name, {})
         declared_rows = declared.get(chart_name, {})
+        if not rendered_rows:
+            # The chart rendered no row for this component — a tier that is
+            # off for this render (the OPEA services with `opea.enabled:
+            # false`). Reporting each of its variables as "absent from the
+            # chart" would bury a real gap under noise and teach the reader
+            # to ignore the output. Say the pair was not judged instead; CI
+            # renders with the full tier on, which is the render the claim
+            # is about.
+            unjudged.append(
+                f"{component}: not rendered in this chart render — nothing compared "
+                "(render with the tier enabled to judge it)"
+            )
+            continue
         may_differ = pair.get("mayDiffer") or {}
         compose_only = pair.get("composeOnly") or {}
         not_read = pair.get("notRead") or {}
@@ -285,7 +299,12 @@ def main(argv):
                     "the difference is the Kubernetes adaptation"
                 )
 
-    print(f"{compose_path} vs {rendered_path}: {len(services)} service pairs, {checked} variables compared")
+    for line in unjudged:
+        print(f"  not judged: {line}")
+    print(
+        f"{compose_path} vs {rendered_path}: {len(services)} service pairs "
+        f"({len(services) - len(unjudged)} judged), {checked} variables compared"
+    )
 
     # Every Compose service must be accounted for: paired with a chart
     # component, or declared as having no comparable counterpart. A service

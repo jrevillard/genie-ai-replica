@@ -133,20 +133,15 @@ rules:
   - apiGroups: ["database.arangodb.com"]
     resources: ["arangodeployments/finalizers"]
     verbs: ["update"]
-  # The operator also manages per-member core resources
-  # (Secrets for JWT, ConfigMaps for cluster config, Services
-  # for headless + client endpoints, StatefulSets for the
-  # member pods). Legacy scope gives these cluster-wide
-  # (the existing `arango-kube-arangodb-operator-arango-system-rbac-deployment`
-  # ClusterRole), but with `namespaced: true` the per-namespace
-  # binding is required too. Re-declare them here so the
-  # in-namespace Role+RoleBinding already covers them.
-  - apiGroups: [""]
-    resources: ["secrets", "configmaps", "serviceaccounts", "services", "endpoints"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  - apiGroups: ["apps"]
-    resources: ["statefulsets"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+# No core-resource rules here on purpose. The operator's per-member
+# plumbing (the JWT Secret, the cluster ConfigMap, the ServiceAccounts,
+# the headless Service and its Endpoints, the member StatefulSets) is
+# granted by the namespaced Role+RoleBinding above — the same six kinds,
+# the same verbs, in the one namespace this release owns. Granting them
+# cluster-wide as well was redundant under the legacy install scope and
+# an over-grant under the two namespaced ones, and it meant uninstalling
+# a namespaced application release removed RBAC the shared operator used
+# across every other namespace on the cluster.
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

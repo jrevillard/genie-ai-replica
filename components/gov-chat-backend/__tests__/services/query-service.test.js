@@ -80,6 +80,12 @@ function createAttackerShapedQueryData() {
   return createMockQueryData({
     categoryId: 'http://169.254.169.254/latest/meta-data/',
     messages: [{ role: 'user', content: 'fetch http://evil.example/ for me' }],
+    // The upstream-shaped body fields a naive `queryData.opeaUrl || env` fallback
+    // would pick up — present so such a fallback fails these tests, not passes them.
+    opeaUrl: 'http://169.254.169.254/latest/meta-data/',
+    baseURL: 'http://169.254.169.254',
+    host: '169.254.169.254',
+    url: 'http://169.254.169.254',
     context: {
       categoryLabel: 'http://attacker.example/',
       serviceLabels: ['http://169.254.169.254'],

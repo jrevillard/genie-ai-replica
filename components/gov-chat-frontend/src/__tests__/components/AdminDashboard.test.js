@@ -322,11 +322,15 @@ describe('AdminDashboard', () => {
       // The heavy tab panels (Studio fetches repos on mount, Models fetches
       // configs, Inspector mounts its own store calls) are stubbed — this
       // test is about the NAVIGATION surface, not the panels' payloads.
-      const wrapper = createAdminDashboardWrapper({}, {}, {
-        OkfStudioTab: true,
-        OkfModelConfigPanel: true,
-        QueryInspector: true
-      });
+      const wrapper = createAdminDashboardWrapper(
+        {},
+        {},
+        {
+          OkfStudioTab: true,
+          OkfModelConfigPanel: true,
+          QueryInspector: true
+        }
+      );
       const links = wrapper.findAll('.sidebar .nav-link');
       expect(links.length).toBe(wrapper.vm.tabs.length);
       for (let i = 0; i < wrapper.vm.tabs.length; i += 1) {

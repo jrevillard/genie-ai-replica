@@ -65,7 +65,13 @@ const config = {
   // Security configuration
   security: {
     keycloakUrl: process.env.KEYCLOAK_URL,
-    keycloakRealm: process.env.KC_REALM
+    keycloakRealm: process.env.KC_REALM,
+    // Overrides the issuer claim validated on incoming tokens. Set when
+    // tokens are issued for a public origin that differs from the
+    // in-cluster KEYCLOAK_URL (edge proxy or port-forward in front):
+    // JWKS keeps resolving in-cluster while `iss` must match the public
+    // issuer. Defaults to `${KEYCLOAK_URL}/realms/${KC_REALM}`.
+    keycloakExpectedIssuer: process.env.KEYCLOAK_EXPECTED_ISSUER || null
   },
 
   //Controls whether or not the clamav service is used for uploaded documents

@@ -1322,9 +1322,9 @@ services:
     # ports:
     #   - "${LLM_SERVER_PORT:-8000}:8000"
     command: >
-      --model ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      --model ${VLLM_LLM_MODEL_ID:-ibm-granite/granite-4.1-8b}
       --gpu_memory_utilization ${VLLM_GPU_UTILIZATION:-0.55}
-      --served-model-name ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      --served-model-name ${VLLM_LLM_MODEL_ID:-ibm-granite/granite-4.1-8b}
       --max_model_len ${VLLM_MAX_MODEL_LEN:-65536}
       --max_num_seqs ${VLLM_MAX_NUM_SEQS:-16}
       --dtype=${VLLM_DTYPE:-half}
@@ -1367,7 +1367,7 @@ services:
     image: ${GENIE_AI_TEXTGEN_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-textgen}:${GENIE_AI_TEXTGEN_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
     environment:
       - LLM_ENDPOINT=${VLLM_ENDPOINT:-http://vllm:8000}
-      - LLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      - LLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-ibm-granite/granite-4.1-8b}
       - OPEA_SSL_SKIP_VERIFY=${OPEA_SSL_SKIP_VERIFY:-0}
 
     # Internal only

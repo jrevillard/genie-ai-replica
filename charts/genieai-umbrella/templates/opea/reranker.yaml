@@ -20,11 +20,13 @@
     (dict "name" "MIN_VALUE_THRESHOLD" "value" (.Values.opea.reranker.minValueThreshold | default "-1.0" | toString))
 -}}
 {{- $secretEnv := include "genieai-umbrella.gpuApiKeyEnv" (dict "keys" (list "HF_TOKEN" "VLLM_API_KEY")) | fromJsonArray -}}
+{{- /* opea.reranker.env: see the parity gate. */ -}}
+{{- $opeaEnvRows := include "genieai-umbrella.envMapRows" (.Values.opea.reranker.env | default dict) | fromJsonArray -}}
 {{- $svcVals := dict
     "image" (dict "repository" "genie-ai-reranker" "tag" "main")
     "port" 8000
     "resources" (dict "requests" (dict "cpu" "200m" "memory" "256Mi") "limits" (dict "cpu" "2" "memory" "2Gi"))
-    "env" (concat $urls $secretEnv)
+    "env" (concat $urls $secretEnv $opeaEnvRows)
     "probes" (dict
       "readiness" (dict "tcpSocket" (dict "port" 8000) "initialDelaySeconds" 30 "periodSeconds" 15)
       "liveness"  (dict "tcpSocket" (dict "port" 8000) "initialDelaySeconds" 60 "periodSeconds" 30)

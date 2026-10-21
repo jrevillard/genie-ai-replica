@@ -159,9 +159,10 @@ ingress:
   # the overlay sets http:// there or every login redirect mismatches.
   scheme: https
   # Gateway API tier (Plan 6 Phase 2). Off by default: the laptop overlay
-  # reach the stack through `kubectl port-forward` of the Envoy data-plane
-  # an Envoy Gateway (or any controller implementing the `envoy` class)
-  # flip this on.
+  # reaches the stack through `kubectl port-forward` of the Envoy
+  # data-plane Service, which needs no Gateway. Turn this on when an
+  # Envoy Gateway (or any controller implementing the `envoy` class)
+  # fronts the release.
   enabled: false
   # GatewayClass the Gateway binds to. The controller that owns the class
   # is a cluster prerequisite (scripts/install-prereqs.sh installs Envoy
@@ -177,13 +178,13 @@ ingress:
     # ClusterIssuer (cluster-scoped) or Issuer (namespace-scoped).
     issuerKind: ClusterIssuer
     secretName: ""
-  # Cross-origin API access. Empty list = no CORS SecurityPolicy rendered
-  # (same-origin deployments — the default topology — need none).
   # Namespace of the Envoy data plane. Empty = the Gateway's own
   # namespace (EG 1.x default — the proxy pods carry
   # gateway.envoyproxy.io/owning-gateway-* labels there). Set only when
   # an EnvoyProxy CR moves the data plane elsewhere.
   dataplaneNamespace: ""
+  # Cross-origin API access. Empty list = no CORS SecurityPolicy rendered
+  # (same-origin deployments — the default topology — need none).
   cors:
     allowOrigins: []
 
@@ -211,6 +212,13 @@ data:
     # for mode switches; see docs/charts/arangodb-mode-migration.md). Operators
     # switch by editing this value, then running helm uninstall + helm install.
     mode: single
+    # The database every service connects to (ARANGO_DB). `_system` is
+    # ArangoDB's own database and always exists, which is why the chart
+    # defaults to it; a dedicated database would have to be created and,
+    # for an existing deployment, migrated collection by collection.
+    # Compose uses `genie-ai` (docker-compose.yaml) — an intentional
+    # divergence, declared in scripts/config-parity-allowlist.json.
+    database: _system
     storageSize: 50Gi
     agentsStorageSize: 2Gi             # cluster-mode Agency volume — config state (MBs), not document data
   keycloak:

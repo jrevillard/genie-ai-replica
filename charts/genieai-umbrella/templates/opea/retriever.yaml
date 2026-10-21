@@ -59,7 +59,7 @@
 {{- $opeaEnvRows := include "genieai-umbrella.envMapRows" (.Values.opea.retriever.env | default dict) | fromJsonArray -}}
 {{- $arangoEnv := list
     (dict "name" "ARANGO_URL" "value" (include "genieai-umbrella.arangoURL" .))
-    (dict "name" "ARANGO_DB" "value" "_system")
+    (dict "name" "ARANGO_DB" "value" (.Values.data.arangodb.database | default "_system" | toString))
     (dict "name" "ARANGO_USERNAME" "value" "root")
 -}}
 {{- $svcVals := dict

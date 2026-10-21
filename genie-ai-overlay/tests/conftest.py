@@ -4,6 +4,7 @@ import os
 import sys
 
 os.makedirs("reports", exist_ok=True)
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -263,37 +264,57 @@ def pytest_unconfigure(config):
 
 # Spans whose attributes the vocabulary sweep polices.
 #
-# COVERS every span this project emits that records vocabulary-governed
-# attributes, across chatqna, retriever and reranker. Each name here is one a
-# later task adds attributes to, so an unswept name is one where a new leak
-# would go uncaught — that is why ``chatqna.orchestrate`` and ``reranker.rerank``
-# are included alongside the obvious five.
+# COVERS every span this project opens with an explicit name, across chatqna,
+# retriever, reranker and dataprep. The list is not a judgement about
+# importance — it is "everything", and
+# ``TestOwnedSpanCoverage::test_every_emitted_span_is_swept`` re-derives it from
+# the sources so a span added tomorrow fails CI instead of starting unswept.
 #
-# DOES NOT COVER, deliberately:
+# ONE SOURCE OF SPANS IS NOT OURS and is excluded:
 #   * FastAPI auto-instrumentation (``http.method`` / ``url.full`` /
 #     ``http.status_code`` …). Legitimately outside our vocabulary; sweeping them
 #     would mean suppressing failures we do not understand.
-#   * ``dataprep.*`` — all 14 spans the service emits (``ingest``,
-#     ``ingest.background``, ``retract``, ``kill_ingest``, ``chunking``,
-#     ``healthcheck``, ``ensure_vector_index``, ``initialize_client``,
-#     ``log_environment_variables``, and the five ``llm.*`` ones). Known unswept
-#     debt: dataprep is a separate service outside this issue's scope, and its
-#     spans carry vocabulary-bearing attributes — ``dataprep.ingest`` records
-#     ``dataprep.file_type`` / ``dataprep.file_id`` straight from the upload
-#     payload, and ``dataprep.llm.label_chunk`` / ``dataprep.llm.context_doc``
-#     record ``dataprep.llm_model``. Exactly the emissions this sweep exists to
-#     catch. Recorded as follow-up debt in the task report rather than fixed or
-#     silently omitted here; ``TestOwnedSpanCoverage::test_dataprep_pin_matches_the_code``
-#     re-derives the list from the source so the pin cannot drift.
+#
+# Nothing else is excluded by name. The derivation reads span openers out of the
+# AST, so a name that appears only in a docstring — ``service.operation``, the
+# usage example in ``tracing.with_span`` — is not a span and needs no exclusion;
+# an earlier text-matching derivation read it as one and needed a hand-written
+# exemption list to keep it out. Any further exclusion added here is a claim that
+# a real emitted span is safe to leave unguarded, and must be justified on those
+# terms.
+#
+# Dataprep was swept in a follow-up. It is the one service where document content
+# is closest to a span: ``dataprep.ingest`` records ``dataprep.file_type`` and
+# ``dataprep.file_id`` straight from the upload payload — an externally supplied
+# HTTP body, not an internal value — and the ``llm.*`` spans sit one attribute
+# away from the chunk text they are labelling.
 OWNED_SPAN_NAMES = frozenset(
     {
         "llm.invoke",
         "chatqna.orchestrate",
+        "chatqna.query_condense",
         "chatqna.reranker_selection",
         "chatqna.stream_outcome",
+        "retriever.check_health",
         "retriever.hybrid_search",
+        "retriever.initialize_client",
+        "retriever.initialize_llm",
         "reranker.rerank",
         "reranker.tei_invoke",
+        "dataprep.chunking",
+        "dataprep.ensure_vector_index",
+        "dataprep.ingest",
+        "dataprep.ingest.background",
+        "dataprep.initialize_client",
+        "dataprep.kill_ingest",
+        "dataprep.llm.context_batch",
+        "dataprep.llm.context_chunk",
+        "dataprep.llm.context_doc",
+        "dataprep.llm.label_batch",
+        "dataprep.llm.phase",
+        "dataprep.llm.label_chunk",
+        "dataprep.log_environment_variables",
+        "dataprep.retract",
     }
 )
 
@@ -341,6 +362,43 @@ def owned_span_names():
     return OWNED_SPAN_NAMES
 
 
+# ---------------------------------------------------------------------------
+# One answer to "what is overlay source?", shared by the two guards that need it.
+#
+# Both the span-coverage derivation (test_span_attrs) and the core-import pin
+# (test_image_ships_imported_core_modules) ask the same question and must not
+# answer it differently: a span opened in a directory the span derivation skips
+# but the import pin walks would be unguarded while the pin still reported
+# clean.
+#
+# Recursive, and pruned in place. ``Path.rglob`` cannot skip a directory it has
+# already descended into, and CI creates ``.venv`` at the overlay root and
+# caches it — so an unpruned walk visits every site-packages file before a
+# filter can throw it away.
+OVERLAY_ROOT = Path(__file__).resolve().parent.parent
+
+OVERLAY_SKIP_DIRS = frozenset(
+    {"tests", "contracts", ".venv", "reports", ".ruff_cache", "__pycache__", ".git", "build-patches", "site"}
+)
+
+
+def overlay_source_files() -> list[Path]:
+    """Every Python file under the overlay that is project source, recursively."""
+    found: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(OVERLAY_ROOT):
+        dirnames[:] = [d for d in dirnames if d not in OVERLAY_SKIP_DIRS]
+        for name in sorted(filenames):
+            if name.endswith(".py"):
+                found.append(Path(dirpath, name))
+    return sorted(found)
+
+
+@pytest.fixture
+def overlay_sources():
+    """Expose :func:`overlay_source_files` to both guards, so they cannot drift."""
+    return overlay_source_files()
+
+
 @pytest.fixture
 def span_sweep():
     """Expose ``assert_spans_clean`` so tests can prove the sweep bites."""
@@ -349,15 +407,20 @@ def span_sweep():
 
 @pytest.fixture
 def span_exporter():
-    """Expose the in-memory exporter, so a deliberate leak can be cleaned up.
+    """Expose the in-memory exporter to a test that emits a leak ON PURPOSE.
 
-    Only for tests that emit a leaking span ON PURPOSE to assert the sweep
-    catches it. The autouse sweep reads the same exporter at teardown, so
-    without a ``clear()`` at the end of such a test the leak is reported twice
-    -- once by the test's own assertion and once by the sweep -- and the test
-    fails for the wrong reason, which trains a reader to ignore the sweep.
+    Requesting this fixture is itself the signal that the test leaks
+    deliberately, so it clears the exporter on the way out — unconditionally,
+    including when the test failed. Clearing on the success path only, as a
+    trailing ``span_exporter.clear()`` in the body does, leaves the leak in place
+    exactly when the test broke, and the autouse sweep then reports it a second
+    time: two failures where there is one, the second one about a span the
+    reader has already been looking at.
+
+    The cleanup is therefore a teardown, not a line the caller has to remember.
     """
-    return _SPAN_EXPORTER
+    yield _SPAN_EXPORTER
+    _SPAN_EXPORTER.clear()
 
 
 @pytest.fixture

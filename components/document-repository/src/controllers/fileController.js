@@ -1105,8 +1105,70 @@ class FileController {
   async _ingestFileById(fileId, chunkOverlap) {
     const { file, base64String } = await this._getFileBase64(fileId);
     // Case-insensitive: dataprep persists the status capitalized ('Ingested'), not lowercase
-    if (file.dataprep && (file.dataprep.status || '').toLowerCase() === 'ingested') {
+    const status = file.dataprep ? (file.dataprep.status || '').toLowerCase() : '';
+    if (status === 'ingested') {
       return { success: false, error: 'File has already been ingested' };
+    }
+    // 'Ingested with Warnings' is indexed but incomplete, and re-ingesting it after
+    // raising the phase budget is its documented remedy — so it must pass the
+    // guard above. But its chunks are still in the graph, and dataprep appends
+    // rather than replaces, so a plain re-ingest leaves a second copy of every
+    // chunk under the same file_id. The chunk_count written back afterwards
+    // describes only the new copy, so nothing visible reports the duplicate.
+    //
+    // The dataprep retract endpoint is called directly rather than through
+    // _retractFileById: that one also wipes the ingestion log, and for this case
+    // the log is the diagnosis the operator is in the middle of reading.
+    //
+    // It has one side effect worth naming: dataprep's retract_file ends by
+    // setting the document's status to 'Retracted'. That is accurate — the graph
+    // genuinely is empty — and the ingest sets 'Ingesting' on success below. But
+    // between the two the document is left showing 'Retracted' next to the
+    // PREVIOUS run's chunk_count, which describes chunks that no longer exist.
+    // Zeroing it here keeps the two consistent in that window, and `clearedPreviously`
+    // stops the success path from reinstating the same stale number from
+    // `file.chunk_count`.
+    // True only when this call cleared the document's existing chunks below.
+    let clearedPreviously = false;
+    if (status === 'ingested with warnings') {
+      const retractUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.retractPath}`;
+      logger.debug(
+        `[FILE-CONTROLLER] Clearing previously ingested chunks for degraded file ${fileId} before re-ingest`
+      );
+      let retractResponse;
+      try {
+        retractResponse = await axios.post(retractUrl, { fileId: file.file_id });
+      } catch (retractErr) {
+        // Continuing would double-index the document, and a duplicated knowledge
+        // base entry is far harder to notice than a failed re-ingest.
+        logger.error(`[FILE-CONTROLLER] Failed to clear degraded chunks for ${fileId}: ${retractErr.message}`);
+        return {
+          success: false,
+          error: 'Could not clear the previous chunks of the degraded document; re-ingest aborted'
+        };
+      }
+      if (!retractResponse.data || !retractResponse.data.success) {
+        return {
+          success: false,
+          error: 'Could not clear the previous chunks of the degraded document; re-ingest aborted',
+          details: retractResponse.data
+        };
+      }
+      clearedPreviously = true;
+      // The graph is already empty at this point, so a failure to zero the
+      // count is cosmetic, not structural: it leaves the document showing the
+      // PREVIOUS run's chunk_count over an empty graph until the re-ingest
+      // reports a new one. Aborting here instead would strand the document in
+      // exactly the state this block exists to avoid — cleared, but with a count
+      // describing chunks that no longer exist — and would make a metadata
+      // write failure look like a failed re-ingest.
+      try {
+        await metadataService.updateMetadata(fileId, { chunk_count: 0 });
+      } catch (countErr) {
+        logger.warn(
+          `[FILE-CONTROLLER] Could not zero chunk_count for cleared file ${fileId}, continuing: ${countErr.message}`
+        );
+      }
     }
     const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.ingestPath}`;
     logger.debug(`[FILE-CONTROLLER] Sending file to dataprep service at ${dataprepUrl}`);
@@ -1147,7 +1209,13 @@ class FileController {
     }
     if (response.data.success) {
       await metadataService.updateMetadata(fileId, {
-        chunk_count: response.data.chunk_count || file.chunk_count || 0, // Update chunk count if provided
+        // After a degraded clear, `file.chunk_count` is the PREVIOUS run's count of
+        // chunks that no longer exist — dataprep's ingest response carries no
+        // chunk_count of its own ("Ingestion started in background"), so the
+        // `|| file.chunk_count` fallback below would reinstate exactly the stale
+        // number the clear removed. Report 0 and let dataprep's background task
+        // write the real count when the ingest finishes.
+        chunk_count: response.data.chunk_count || (clearedPreviously ? 0 : file.chunk_count) || 0,
         dataprep: {
           status: 'Ingesting',
           ingest_date: new Date().toISOString(),

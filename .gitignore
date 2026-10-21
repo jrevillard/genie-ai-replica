@@ -21,7 +21,11 @@ api-gateway-solution/nginx/certs/
 api-gateway-solution/nginx/conf/default.conf
 
 # Node modules
-node_modules/
+# No trailing slash on purpose: with one, this matches DIRECTORIES only, so a
+# `node_modules` symlinked from a shared checkout (a common worktree shortcut)
+# is not ignored and gets committed as a symlink to an absolute path from
+# whichever machine created it.
+node_modules
 
 # Build outputs
 dist/

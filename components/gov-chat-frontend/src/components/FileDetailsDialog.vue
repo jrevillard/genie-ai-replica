@@ -750,6 +750,13 @@ export default {
       // ingested but ALSO while the ingest is running — dataprep writes
       // chunks under the file's identity; a mid-ingest rename races it.
       // Mirrors isFileLocked (which gates Delete) for consistency.
+      //
+      // Stricter than the legacy-pipeline stance (which keeps metadata
+      // editable mid-ingest because labels are snapshotted into the ingest
+      // request when it is made — an edit takes effect on the NEXT ingest).
+      // That argument covers label edits but not a rename: chunk identity
+      // is written by the in-flight run, so the rename field stays locked
+      // until the drain finishes (live race, drain-wedge fix bc498ef3f).
       const s = this.file?.dataprep?.status?.toLowerCase();
       return this.file && s !== 'ingested' && s !== 'ingested with warnings' && s !== 'ingesting';
     },

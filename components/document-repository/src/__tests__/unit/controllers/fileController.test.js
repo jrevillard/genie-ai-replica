@@ -232,6 +232,180 @@ describe('fileController', () => {
       expect(result.error).toMatch(/already been ingested/i);
       expect(axios.post).not.toHaveBeenCalled();
     });
+
+    // 'Ingested with Warnings' is indexed but incomplete, and re-ingesting it after
+    // raising the phase budget is its documented remedy — so it must NOT be
+    // blocked. The hazard is the opposite one: dataprep appends to the graph, so
+    // re-ingesting without clearing first leaves two copies of every chunk under
+    // one file_id, and the chunk_count written back describes only the new copy.
+    describe('a degraded document is re-ingestable, and is cleared first', () => {
+      const config = require('../../../config/appConfig');
+
+      beforeEach(() => {
+        // The module-level mocks are empty objects; each describe supplies the
+        // methods its path actually calls.
+        const metadataService = require('../../../services/metadataService');
+        const fileService = require('../../../services/fileService');
+        metadataService.updateMetadata = jest.fn().mockResolvedValue({});
+        fileService.deleteIngestionLogs = jest.fn().mockResolvedValue({});
+
+        jest.spyOn(fileController, '_getFileBase64').mockResolvedValue({
+          file: { file_id: 'f1', chunk_count: 260, dataprep: { status: 'Ingested with Warnings' } },
+          base64String: 'b64'
+        });
+        axios.post.mockResolvedValue({ data: { success: true, chunk_count: 3 } });
+      });
+
+      it('clears the previous chunks before ingesting', async () => {
+        const result = await fileController._ingestFileById('f1');
+
+        expect(result.success).toBe(true);
+        const urls = axios.post.mock.calls.map((c) => c[0]);
+        const retractIdx = urls.findIndex((u) => String(u).includes(config.dataprep.retractPath));
+        const ingestIdx = urls.findIndex((u) => String(u).includes(config.dataprep.ingestPath));
+
+        expect(retractIdx).toBeGreaterThanOrEqual(0);
+        expect(ingestIdx).toBeGreaterThanOrEqual(0);
+        // Order is the whole point: clearing after the ingest would still duplicate.
+        expect(retractIdx).toBeLessThan(ingestIdx);
+      });
+
+      it('clears by file_id, not by display name', async () => {
+        await fileController._ingestFileById('f1');
+
+        const retractCall = axios.post.mock.calls.find((c) => String(c[0]).includes(config.dataprep.retractPath));
+        expect(retractCall[1]).toEqual({ fileId: 'f1' });
+      });
+
+      it('leaves a non-degraded re-ingest chunk count alone', async () => {
+        // clearedPreviously only guards the degraded path. Initialising it true,
+        // or hoisting the assignment out of the branch, would zero the count of a
+        // document that was never cleared — Retracted, Ingestion Error, or never
+        // ingested — where file.chunk_count is still meaningful. The guard's
+        // positive direction is well pinned; this is its negative.
+        const metadataService = require('../../../services/metadataService');
+        for (const status of ['Retracted', 'Ingestion Error', 'Pending']) {
+          jest.clearAllMocks();
+          metadataService.updateMetadata = jest.fn().mockResolvedValue({});
+          axios.post.mockResolvedValue({
+            data: { success: true, status: 200, message: 'Ingestion started in background.' }
+          });
+          jest.spyOn(fileController, '_getFileBase64').mockResolvedValue({
+            file: { file_id: 'f1', chunk_count: 42, dataprep: { status } },
+            base64String: 'b64'
+          });
+
+          await fileController._ingestFileById('f1');
+
+          const counts = metadataService.updateMetadata.mock.calls.map((c) => c[1].chunk_count);
+          expect(counts[counts.length - 1]).toBe(42);
+        }
+      });
+
+      it('does not reinstate the pre-clear count when the ingest succeeds', async () => {
+        // dataprep's ingest response carries no chunk_count ("Ingestion started
+        // in background"), so the write-back falls through to `file.chunk_count`
+        // — read at the top of the function, i.e. the PREVIOUS run's count of
+        // chunks the clear just deleted. That is the same stale number the
+        // reset exists to remove, restored 20 lines later.
+        const metadataService = require('../../../services/metadataService');
+
+        // dataprep's real ingest response — it starts the ingest in the
+        // background and reports no chunk_count, so the write-back has to come
+        // from somewhere else. The shared fixture above supplies one, which is
+        // not what any deployment returns and would mask this entirely.
+        axios.post.mockResolvedValue({
+          data: { success: true, status: 200, message: 'Ingestion started in background.' }
+        });
+
+        const result = await fileController._ingestFileById('f1');
+
+        expect(result.success).toBe(true);
+        const counts = metadataService.updateMetadata.mock.calls.map((c) => c[1].chunk_count);
+        // Assert the pre-clear value never comes back, not merely that 0 appears
+        // somewhere: the reset already puts a 0 in the list, so `toContain(0)`
+        // passed with the stale-number guard removed.
+        expect(counts).not.toContain(260);
+        expect(counts[counts.length - 1]).toBe(0);
+      });
+
+      it('zeroes the chunk count, so a failed ingest does not leave a stale one', async () => {
+        // dataprep's retract_file sets the status to 'Retracted'. If the ingest
+        // POST then fails, the document would show 'Retracted' beside the
+        // previous run's chunk count — a number describing chunks that are gone.
+        const metadataService = require('../../../services/metadataService');
+        axios.post.mockResolvedValueOnce({ data: { success: true } }).mockRejectedValueOnce(new Error('ingest down'));
+
+        // The ingest POST's rejection propagates to the route's handler, which is
+        // where the document is left in exactly the state under test.
+        await expect(fileController._ingestFileById('f1')).rejects.toThrow('ingest down');
+
+        expect(metadataService.updateMetadata).toHaveBeenCalledWith('f1', { chunk_count: 0 });
+      });
+
+      it('completes the re-ingest when zeroing the chunk count fails', async () => {
+        const metadataService = require('../../../services/metadataService');
+        // The graph is already empty by this point, so a metadata write failure
+        // is cosmetic. Aborting on it would strand the document cleared but
+        // still showing the previous run's count — the exact state the zeroing
+        // exists to prevent — and would report a failed re-ingest for a
+        // successful one.
+        // Only the CLEARING write fails, i.e. the first of the two. The success
+        // path writes the real count afterwards and that one is pre-existing
+        // behaviour for every re-ingest, not this MR's business — pinning it
+        // here would quietly widen the change to a path nobody asked about.
+        //
+        // Distinguished by ORDER, not by value: clearedPreviously makes the
+        // success-path write `chunk_count: 0` too, so both calls carry the
+        // same number.
+        let calls = 0;
+        metadataService.updateMetadata = jest.fn(async () => {
+          calls += 1;
+          if (calls === 1) throw new Error('arango down');
+          return {};
+        });
+        axios.post.mockResolvedValue({
+          data: { success: true, status: 200, message: 'Ingestion started in background.' }
+        });
+
+        const result = await fileController._ingestFileById('f1');
+
+        expect(result.success).toBe(true);
+      });
+
+      it('keeps the ingestion log: it is the diagnosis the operator is reading', async () => {
+        const fileService = require('../../../services/fileService');
+        await fileController._ingestFileById('f1');
+
+        // _retractFileById would have called this. The degraded re-ingest path
+        // must not: the log is what names the cause that made the document
+        // degraded in the first place.
+        expect(fileService.deleteIngestionLogs).not.toHaveBeenCalled();
+      });
+
+      it('aborts rather than double-indexing when the clear fails', async () => {
+        axios.post.mockRejectedValueOnce(new Error('dataprep down'));
+
+        const result = await fileController._ingestFileById('f1');
+
+        expect(result.success).toBe(false);
+        expect(result.error).toMatch(/previous chunks/i);
+        // The ingest must not have been attempted — that is the corrupting call.
+        const urls = axios.post.mock.calls.map((c) => String(c[0]));
+        expect(urls.some((u) => u.includes(config.dataprep.ingestPath))).toBe(false);
+      });
+
+      it('aborts when dataprep reports the clear as unsuccessful', async () => {
+        axios.post.mockResolvedValueOnce({ data: { success: false, error: 'no such graph' } });
+
+        const result = await fileController._ingestFileById('f1');
+
+        expect(result.success).toBe(false);
+        expect(result.error).toMatch(/previous chunks/i);
+        const urls = axios.post.mock.calls.map((c) => String(c[0]));
+        expect(urls.some((u) => u.includes(config.dataprep.ingestPath))).toBe(false);
+      });
+    });
   });
 
   describe('_retractFileById (retraction guard)', () => {

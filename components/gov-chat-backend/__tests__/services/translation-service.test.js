@@ -214,40 +214,62 @@ describe('TranslationService', () => {
     });
   });
 
-  describe('GPU to CPU fallback', () => {
-    it('should fall back to CPU when GPU fails in auto mode', async () => {
+  describe('auto mode backend commitment', () => {
+    // `auto` probes once at startup and commits to whichever backend answers.
+    // A request that fails afterwards is reported, not rerouted: switching
+    // models mid-answer would serve a different, lower-quality translation of
+    // the same content with nothing in the output to say so.
+    const withGpuBackend = () => {
       setEnv('TRANSLATION_BACKEND', 'auto');
       jest.isolateModules(() => {
         translationService = require('../../services/translation-service');
       });
       translationService.initialized = true;
       translationService.backendType = 'gpu';
-
       const badGpu = new GpuTranslateBackend();
-      badGpu.translate.mockRejectedValueOnce(new Error('GPU OOM'));
+      badGpu.translate.mockRejectedValue(new Error('GPU OOM'));
       translationService.backend = badGpu;
+    };
 
-      const result = await translationService.translate(['hello'], 'en', 'fr');
-      expect(result).toEqual(['translated text']);
+    it('propagates a GPU failure instead of translating on CPU', async () => {
+      withGpuBackend();
+      await expect(translationService.translate(['hello'], 'en', 'fr')).rejects.toThrow('GPU OOM');
+      // The harm was the construction, not just the call: a CpuTranslateBackend
+      // spawns a worker thread and loads the NLLB model at construction time.
+      expect(CpuTranslateBackend).not.toHaveBeenCalled();
+      expect(mockCpuTranslate).not.toHaveBeenCalled();
     });
 
-    it('should throw when both backends fail', async () => {
+    it('propagates a GPU stream failure instead of translating on CPU', async () => {
+      withGpuBackend();
+      translationService.backend.translateStream = jest.fn().mockRejectedValue(new Error('GPU OOM'));
+      await expect(translationService.translateStream('hello', 'en', 'fr')).rejects.toThrow('GPU OOM');
+      expect(CpuTranslateBackend).not.toHaveBeenCalled();
+      expect(mockCpuTranslate).not.toHaveBeenCalled();
+    });
+
+    it('does not leave a CPU backend behind when selectBackend fails to start one', async () => {
+      // `selectBackend` short-circuits on `this.backend`, so an instance
+      // assigned before its init rejects would be reused for the life of the
+      // process while the service reported itself ready on a dead backend.
       setEnv('TRANSLATION_BACKEND', 'auto');
       jest.isolateModules(() => {
         translationService = require('../../services/translation-service');
       });
-      translationService.initialized = true;
-      translationService.backendType = 'gpu';
+      // selectBackend constructs its own instances, so the failures have to be
+      // queued on the constructors rather than on an instance held here.
+      GpuTranslateBackend.mockImplementationOnce(() => ({
+        init: jest.fn().mockRejectedValue(new Error('GPU OOM')),
+        getLanguageCode: (l) => l,
+        translate: mockGpuTranslate
+      }));
+      CpuTranslateBackend.mockImplementationOnce(() => ({
+        init: jest.fn().mockRejectedValue(new Error('NLLB worker failed to start')),
+        getLanguageCode: (l) => l
+      }));
 
-      const badGpu = new GpuTranslateBackend();
-      badGpu.translate.mockRejectedValueOnce(new Error('GPU OOM'));
-      translationService.backend = badGpu;
-
-      mockCpuTranslate.mockRejectedValueOnce(new Error('CPU fail'));
-
-      await expect(translationService.translate(['hello'], 'en', 'fr')).rejects.toThrow(
-        'Translation failed on both GPU and CPU'
-      );
+      await expect(translationService.selectBackend()).rejects.toThrow('NLLB worker failed to start');
+      expect(translationService.backend).toBeNull();
     });
   });
 
@@ -291,17 +313,17 @@ describe('TranslationService', () => {
       expect(onToken).toHaveBeenCalledWith('batch-result');
     });
 
-    it('falls back to CPU backend when GPU translateStream throws (auto mode)', async () => {
+    it('propagates a stream failure instead of falling back mid-stream', async () => {
       translationService.backendType = 'gpu';
       translationService.backend = {
         getLanguageCode: (l) => l,
         isLanguageSupported: () => true,
         translateStream: jest.fn().mockRejectedValue(new Error('GPU down'))
       };
-      // CpuTranslateBackend is mocked at the top of this file (translate ->
-      // mockCpuTranslate -> ['translated text']).
-      const result = await translationService.translateStream('hi', 'en', 'es');
-      expect(result).toBe('translated text');
+      // A fallback here would emit into a caller that has already rendered the
+      // first attempt's deltas, so the second translation arrives glued to it.
+      await expect(translationService.translateStream('hi', 'en', 'es')).rejects.toThrow('GPU down');
+      expect(mockCpuTranslate).not.toHaveBeenCalled();
     });
 
     it('uses fallback language when target is not directly supported', async () => {

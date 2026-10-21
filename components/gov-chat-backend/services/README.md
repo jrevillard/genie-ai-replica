@@ -1473,8 +1473,9 @@ grep "CACHE MISS" logs/app.log | wc -l
 # Monitor worker thread issues
 grep "Worker error" logs/app.log
 
-# Track backend fallbacks
-grep "falling back to CPU" logs/app.log
+# Which backend `auto` chose, and any translation that failed on it.
+# There is no per-request backend switch: a failure is a failure.
+grep -E "TRANSLATION-SERVICE.*(Auto mode:|Translation failed)" logs/app.log
 ```
 
 ## Deployment

@@ -23,6 +23,27 @@ from dataprep.genieai_dataprep_arangodb import GenieArangoDataprep
 # ---------------------------------------------------------------------------
 
 
+def llm_response(content, prompt_tokens=80, completion_tokens=20):
+    """A chat-completion response shaped like the real client's returns.
+
+    ``usage`` carries INTEGER counters, and that is the whole point. A bare
+    ``MagicMock`` answers ``response.usage.completion_tokens`` with another
+    MagicMock, which passes production's ``getattr(_usage, "completion_tokens",
+    None) is not None`` guard and is then handed to ``span.set_attribute``. The
+    OTel SDK rejects the type and substitutes the mock's ``__str__`` — a
+    free-text attribute that reaches VictoriaTraces verbatim.
+
+    The span privacy sweep catches it, which is exactly why the fixture is
+    shaped like the real response rather than the guard being loosened: the
+    guard was right and the mock was lying about the contract.
+    """
+    response = MagicMock()
+    response.choices = [MagicMock()]
+    response.choices[0].message.content = content
+    response.usage = MagicMock(completion_tokens=completion_tokens, prompt_tokens=prompt_tokens)
+    return response
+
+
 def create_dataprep(db_mock=None, embeddings_mock=None, graph_mock=None):
     """Create a GenieArangoDataprep with mocked dependencies.
 
@@ -525,11 +546,11 @@ class TestApplyLabels:
                 dp,
                 "_label_with_llm",
                 new_callable=AsyncMock,
-                return_value=[{"text": "chunk", "labels": ["A"]}],
+                return_value=([{"text": "chunk", "labels": ["A"]}], []),
             ),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._apply_labels(["chunk"], ["A", "B"], [], "file1")
+            result, _degraded = await dp._apply_labels(["chunk"], ["A", "B"], [], "file1")
 
         assert result == [{"text": "chunk", "labels": ["A"]}]
 
@@ -541,7 +562,7 @@ class TestApplyLabels:
             patch.object(dp_module, "LABELING_STRATEGY", "embedding"),
             patch.object(dp, "_label_with_embedding", return_value=[{"text": "chunk", "labels": ["A"]}]),
         ):
-            result = await dp._apply_labels(["chunk"], ["A", "B"], [], "file1")
+            result, _degraded = await dp._apply_labels(["chunk"], ["A", "B"], [], "file1")
 
         assert result == [{"text": "chunk", "labels": ["A"]}]
 
@@ -553,7 +574,7 @@ class TestApplyLabels:
             patch.object(dp_module, "LABELING_STRATEGY", "bm25"),
             patch.object(dp, "_label_with_bm25", return_value=[{"text": "chunk", "labels": ["A"]}]),
         ):
-            result = await dp._apply_labels(["chunk"], ["A", "B"], [], "file1")
+            result, _degraded = await dp._apply_labels(["chunk"], ["A", "B"], [], "file1")
 
         assert result == [{"text": "chunk", "labels": ["A"]}]
 
@@ -562,7 +583,7 @@ class TestApplyLabels:
         dp = create_dataprep()
 
         with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
-            result = await dp._apply_labels(["chunk"], [], ["FileLabel"], "file1")
+            result, _degraded = await dp._apply_labels(["chunk"], [], ["FileLabel"], "file1")
 
         assert result == [{"text": "chunk", "labels": ["FileLabel"]}]
 
@@ -571,7 +592,7 @@ class TestApplyLabels:
         dp = create_dataprep()
 
         with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
-            result = await dp._apply_labels(["chunk"], [], [], "file1")
+            result, _degraded = await dp._apply_labels(["chunk"], [], [], "file1")
 
         assert result == [{"text": "chunk", "labels": []}]
 
@@ -591,9 +612,7 @@ class TestLabelWithLlm:
         monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
 
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps({"labels": ["Healthcare"]})
+        mock_response = llm_response(json.dumps({"labels": ["Healthcare"]}))
 
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
@@ -602,7 +621,7 @@ class TestLabelWithLlm:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._label_with_llm(["test chunk"], ["Healthcare", "Education"], [], "file1")
+            result, _degraded = await dp._label_with_llm(["test chunk"], ["Healthcare", "Education"], [], "file1")
 
         assert len(result) == 1
         assert result[0]["labels"] == ["Healthcare"]
@@ -629,7 +648,7 @@ class TestLabelWithLlm:
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
             # File labels must be in the taxonomy for synonym matching to accept them
-            result = await dp._label_with_llm(["chunk"], ["FallbackLabel"], ["FallbackLabel"], "file1")
+            result, _degraded = await dp._label_with_llm(["chunk"], ["FallbackLabel"], ["FallbackLabel"], "file1")
 
         assert result[0]["labels"] == ["FallbackLabel"]
         assert mock_client.chat.completions.create.call_count == 3
@@ -641,9 +660,7 @@ class TestLabelWithLlm:
         monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
 
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps({"labels": ["healthcare"]})
+        mock_response = llm_response(json.dumps({"labels": ["healthcare"]}))
 
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
@@ -652,7 +669,7 @@ class TestLabelWithLlm:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._label_with_llm(["chunk"], ["Healthcare"], [], "file1")
+            result, _degraded = await dp._label_with_llm(["chunk"], ["Healthcare"], [], "file1")
 
         assert "Healthcare" in result[0]["labels"]
 
@@ -670,10 +687,8 @@ class TestLabelWithLlm:
         monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
 
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
         # LLM suggests a sibling crop (Cucumber) plus the in-scope Tomato.
-        mock_response.choices[0].message.content = json.dumps({"labels": ["Cucumber", "Tomato"]})
+        mock_response = llm_response(json.dumps({"labels": ["Cucumber", "Tomato"]}))
 
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
@@ -682,7 +697,7 @@ class TestLabelWithLlm:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._label_with_llm(
+            result, _degraded = await dp._label_with_llm(
                 ["chunk"],
                 ["Cucumber", "Tomato", "Water"],  # full taxonomy (all_labels)
                 ["Tomato", "Water"],  # document scope (file_labels)
@@ -705,9 +720,7 @@ class TestLabelWithLlm:
         monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
 
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps({"labels": ["Healthcare"]})
+        mock_response = llm_response(json.dumps({"labels": ["Healthcare"]}))
 
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
@@ -716,7 +729,7 @@ class TestLabelWithLlm:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._label_with_llm(["chunk"], ["Healthcare"], [], "file1")
+            result, _degraded = await dp._label_with_llm(["chunk"], ["Healthcare"], [], "file1")
 
         assert result[0]["labels"] == ["Healthcare"]
 
@@ -729,9 +742,7 @@ class TestLabelWithLlm:
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
         monkeypatch.setattr(dp_module, "LABEL_LLM_BATCH_SIZE", 2)
 
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps({"0": ["Healthcare"], "1": ["Education"]})
+        mock_response = llm_response(json.dumps({"0": ["Healthcare"], "1": ["Education"]}))
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
@@ -739,7 +750,7 @@ class TestLabelWithLlm:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._label_with_llm(
+            result, _degraded = await dp._label_with_llm(
                 ["health chunk", "school chunk"], ["Healthcare", "Education"], [], "file1"
             )
 
@@ -757,12 +768,8 @@ class TestLabelWithLlm:
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
         monkeypatch.setattr(dp_module, "LABEL_LLM_BATCH_SIZE", 2)
 
-        bad = MagicMock()
-        bad.choices = [MagicMock()]
-        bad.choices[0].message.content = "not json"
-        good = MagicMock()
-        good.choices = [MagicMock()]
-        good.choices[0].message.content = json.dumps({"labels": ["Healthcare"]})
+        bad = llm_response("not json")
+        good = llm_response(json.dumps({"labels": ["Healthcare"]}))
 
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(side_effect=[bad, good, good])
@@ -771,7 +778,7 @@ class TestLabelWithLlm:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._label_with_llm(["chunk0", "chunk1"], ["Healthcare"], [], "file1")
+            result, _degraded = await dp._label_with_llm(["chunk0", "chunk1"], ["Healthcare"], [], "file1")
 
         # 1 batch attempt (fails) + 2 per-chunk fallback calls.
         assert mock_client.chat.completions.create.call_count == 3
@@ -787,10 +794,8 @@ class TestLabelWithLlm:
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
         monkeypatch.setattr(dp_module, "LABEL_LLM_BATCH_SIZE", 2)
 
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
         # chunk 0 -> labels, chunk 1 -> null (model's "no labels" convention)
-        mock_response.choices[0].message.content = json.dumps({"0": ["Healthcare"], "1": None})
+        mock_response = llm_response(json.dumps({"0": ["Healthcare"], "1": None}))
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
@@ -798,7 +803,7 @@ class TestLabelWithLlm:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._label_with_llm(["chunk0", "chunk1"], ["Healthcare"], [], "file1")
+            result, _degraded = await dp._label_with_llm(["chunk0", "chunk1"], ["Healthcare"], [], "file1")
 
         # No fallback — one batch call, null coerced to [].
         assert mock_client.chat.completions.create.call_count == 1
@@ -813,9 +818,7 @@ class TestLabelWithLlm:
         monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
 
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps({"labels": None})
+        mock_response = llm_response(json.dumps({"labels": None}))
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
@@ -823,7 +826,7 @@ class TestLabelWithLlm:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._label_with_llm(["chunk"], ["Healthcare"], [], "file1")
+            result, _degraded = await dp._label_with_llm(["chunk"], ["Healthcare"], [], "file1")
 
         assert result[0]["labels"] == []
         assert mock_client.chat.completions.create.call_count == 1  # no retry
@@ -837,9 +840,7 @@ class TestLabelWithLlm:
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
         monkeypatch.setattr(dp_module, "LABEL_LLM_BATCH_SIZE", 2)
 
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps({"0": "Healthcare", "1": ["Education"]})
+        mock_response = llm_response(json.dumps({"0": "Healthcare", "1": ["Education"]}))
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
@@ -847,7 +848,7 @@ class TestLabelWithLlm:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._label_with_llm(["chunk0", "chunk1"], ["Healthcare", "Education"], [], "file1")
+            result, _degraded = await dp._label_with_llm(["chunk0", "chunk1"], ["Healthcare", "Education"], [], "file1")
 
         assert mock_client.chat.completions.create.call_count == 1  # no fallback
         assert result[0]["labels"] == ["Healthcare"]
@@ -862,10 +863,8 @@ class TestLabelWithLlm:
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
         monkeypatch.setattr(dp_module, "LABEL_LLM_BATCH_SIZE", 2)
 
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
         # chunk 0 -> number (unusable), chunk 1 -> valid list
-        mock_response.choices[0].message.content = json.dumps({"0": 123, "1": ["Education"]})
+        mock_response = llm_response(json.dumps({"0": 123, "1": ["Education"]}))
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
@@ -873,7 +872,7 @@ class TestLabelWithLlm:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._label_with_llm(["chunk0", "chunk1"], ["Education"], [], "file1")
+            result, _degraded = await dp._label_with_llm(["chunk0", "chunk1"], ["Education"], [], "file1")
 
         assert mock_client.chat.completions.create.call_count == 1  # no fallback
         assert result[0]["labels"] == []  # unusable -> skipped
@@ -887,10 +886,8 @@ class TestLabelWithLlm:
         monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
 
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
         # Two exact-match labels → previously 2 per-label logs + 1 final = 3.
-        mock_response.choices[0].message.content = json.dumps({"labels": ["Healthcare", "Education"]})
+        mock_response = llm_response(json.dumps({"labels": ["Healthcare", "Education"]}))
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
@@ -899,7 +896,7 @@ class TestLabelWithLlm:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new=log_mock),
         ):
-            result = await dp._label_with_llm(["chunk"], ["Healthcare", "Education"], [], "file1")
+            result, _degraded = await dp._label_with_llm(["chunk"], ["Healthcare", "Education"], [], "file1")
 
         assert set(result[0]["labels"]) == {"Healthcare", "Education"}
         assert log_mock.call_count == 1  # one consolidated summary, not per-label
@@ -912,9 +909,7 @@ class TestLabelWithLlm:
         monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
 
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps({"labels": ["Healthcare", "QuantumAgriculture"]})
+        mock_response = llm_response(json.dumps({"labels": ["Healthcare", "QuantumAgriculture"]}))
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
@@ -939,9 +934,7 @@ class TestLabelWithLlm:
         monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
 
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps({"labels": ["Healthcare"]})
+        mock_response = llm_response(json.dumps({"labels": ["Healthcare"]}))
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
@@ -957,9 +950,15 @@ class TestLabelWithLlm:
         ):
             await dp._label_with_llm(["chunk"], ["Healthcare"], [], "file1")
 
-        ws.assert_called_once()
-        assert ws.call_args.args[0] == "dataprep.llm.label_chunk"
-        assert ws.call_args.kwargs["attributes"]["dataprep.chunk_index"] == 0
+        # Two spans now open around a labelling phase: the phase-level one that
+        # carries the budget outcome, and one label_chunk per call. This test is
+        # about the second, so it selects it rather than asserting a total.
+        label_chunk_calls = [c for c in ws.call_args_list if c.args[0] == "dataprep.llm.label_chunk"]
+        assert len(label_chunk_calls) == 1, [c.args[0] for c in ws.call_args_list]
+        assert label_chunk_calls[0].kwargs["attributes"]["dataprep.chunk_index"] == 0
+        # The phase span is what makes a budget exhaustion visible; without it
+        # the whole incident this policy exists for leaves no span trace.
+        assert [c.args[0] for c in ws.call_args_list].count("dataprep.llm.phase") == 1
 
     @pytest.mark.asyncio
     async def test_failed_attempt_logs_exception_reason(self, monkeypatch):
@@ -977,7 +976,7 @@ class TestLabelWithLlm:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new=log_mock),
         ):
-            result = await dp._label_with_llm(["chunk"], ["Healthcare"], ["Healthcare"], "file1")
+            result, _degraded = await dp._label_with_llm(["chunk"], ["Healthcare"], ["Healthcare"], "file1")
 
         # 3 failed attempts → fallback to file labels (Healthcare is in taxonomy, survives).
         assert result[0]["labels"] == ["Healthcare"]
@@ -1107,7 +1106,7 @@ class TestDataprepInputTooLong:
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
             # File labels in taxonomy → synonym-matching fallback succeeds.
-            result = await dp._label_with_llm(["chunk"], ["FallbackLabel"], ["FallbackLabel"], "file1")
+            result, _degraded = await dp._label_with_llm(["chunk"], ["FallbackLabel"], ["FallbackLabel"], "file1")
 
         assert result[0]["labels"] == ["FallbackLabel"]
 
@@ -1552,14 +1551,27 @@ class TestIngestFileWithGuardrail:
             patch.object(dp, "_fetch_all_labels", new_callable=AsyncMock, return_value=["Healthcare"]),
             patch.object(dp, "_load_and_chunk", new_callable=AsyncMock, return_value=["chunk1", "chunk2"]),
             patch.object(dp, "_run_guardrail", new_callable=AsyncMock, return_value={"success": True}),
+            # Not degraded: this test is about graph insertion, and with no vLLM
+            # reachable the real _apply_contextualization reports its own
+            # client-init failure as a degradation, which would flip the status
+            # for reasons that have nothing to do with what is under test here.
+            patch.object(
+                dp,
+                "_apply_contextualization",
+                new_callable=AsyncMock,
+                side_effect=lambda chunks, inp, fid: (list(chunks), []),
+            ),
             patch.object(
                 dp,
                 "_apply_labels",
                 new_callable=AsyncMock,
-                return_value=[
-                    {"text": "chunk1", "labels": ["A"]},
-                    {"text": "chunk2", "labels": ["B"]},
-                ],
+                return_value=(
+                    [
+                        {"text": "chunk1", "labels": ["A"]},
+                        {"text": "chunk2", "labels": ["B"]},
+                    ],
+                    [],
+                ),
             ),
             patch.object(dp, "_process_batch", new_callable=AsyncMock),
             patch.object(dp_module, "ArangoGraph"),
@@ -1669,9 +1681,12 @@ class TestIngestFileWithGuardrail:
                 dp,
                 "_apply_labels",
                 new_callable=AsyncMock,
-                return_value=[
-                    {"text": "chunk1", "labels": ["Healthcare"]},
-                ],
+                return_value=(
+                    [
+                        {"text": "chunk1", "labels": ["Healthcare"]},
+                    ],
+                    [],
+                ),
             ),
             patch.object(dp, "_process_batch", new_callable=AsyncMock, side_effect=capture_batch),
             patch.object(dp_module, "ArangoGraph"),
@@ -1712,10 +1727,13 @@ class TestIngestFileWithGuardrail:
                 dp,
                 "_apply_labels",
                 new_callable=AsyncMock,
-                return_value=[
-                    {"text": "chunk1", "labels": ["Healthcare"]},
-                    {"text": "chunk2", "labels": ["Healthcare"]},
-                ],
+                return_value=(
+                    [
+                        {"text": "chunk1", "labels": ["Healthcare"]},
+                        {"text": "chunk2", "labels": ["Healthcare"]},
+                    ],
+                    [],
+                ),
             ),
             patch.object(dp, "_process_batch", new_callable=AsyncMock, side_effect=capture_batch),
             patch.object(dp_module, "ArangoGraph"),
@@ -1748,11 +1766,14 @@ class TestIngestFileWithGuardrail:
                 dp,
                 "_apply_labels",
                 new_callable=AsyncMock,
-                return_value=[
-                    {"text": "c1", "labels": ["A"]},
-                    {"text": "c2", "labels": ["B"]},
-                    {"text": "c3", "labels": ["A"]},
-                ],
+                return_value=(
+                    [
+                        {"text": "c1", "labels": ["A"]},
+                        {"text": "c2", "labels": ["B"]},
+                        {"text": "c3", "labels": ["A"]},
+                    ],
+                    [],
+                ),
             ),
             patch.object(dp, "_process_batch", new_callable=AsyncMock, side_effect=capture_batch),
             patch.object(dp_module, "ArangoGraph"),
@@ -2448,7 +2469,7 @@ class TestContextualRetrieval:
         mock_client = AsyncMock()
         chunks = ["chunk one", "chunk two"]
         with patch.object(dp_module, "AsyncOpenAI", return_value=mock_client):
-            result = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "file1")
+            result, _degraded = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "file1")
         assert result == chunks
         mock_client.chat.completions.create.assert_not_called()
 
@@ -2457,7 +2478,7 @@ class TestContextualRetrieval:
         dp = create_dataprep()
         monkeypatch.setattr(dp_module, "CONTEXTUAL_RETRIEVAL_ENABLED", False)
         with patch.object(dp_module, "AsyncOpenAI", return_value=AsyncMock()):
-            result = await dp._apply_contextualization([], create_mock_ingest_input(), "file1")
+            result, _degraded = await dp._apply_contextualization([], create_mock_ingest_input(), "file1")
         assert result == []
 
     def test_build_doc_context_includes_filename_labels_and_truncates(self, monkeypatch):
@@ -2686,10 +2707,7 @@ class TestContextualRetrieval:
             # per_chunk batches chunks → user message is a JSON list of {index, text}.
             items = json.loads(kwargs["messages"][1]["content"])
             contexts = {str(it["index"]): f"CTX[{it['text'][:5]}]" for it in items}
-            r = MagicMock()
-            r.choices = [MagicMock()]
-            r.choices[0].message.content = json.dumps({"contexts": contexts})
-            r.usage = MagicMock(completion_tokens=20, prompt_tokens=80)
+            r = llm_response(json.dumps({"contexts": contexts}))
             return r
 
         mock_client = AsyncMock()
@@ -2699,7 +2717,7 @@ class TestContextualRetrieval:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "file1")
+            result, _degraded = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "file1")
 
         assert len(result) == 2
         assert result[0].startswith("CTX[alpha") and result[0].endswith("alpha chunk text")
@@ -2731,7 +2749,9 @@ class TestContextualRetrieval:
             patch.object(dp, "_context_batch_call", new=AsyncMock(side_effect=fake_batch)),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._apply_contextualization(["raw zero", "raw one"], create_mock_ingest_input(), "f")
+            result, _degraded = await dp._apply_contextualization(
+                ["raw zero", "raw one"], create_mock_ingest_input(), "f"
+            )
 
         assert result[0] == "raw zero"  # empty context → raw chunk
         assert result[1] == "GOOD CONTEXT\n\nraw one"
@@ -2739,10 +2759,7 @@ class TestContextualRetrieval:
     @pytest.mark.asyncio
     async def test_context_single_call_parses_json_context(self, monkeypatch):
         dp = create_dataprep()
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps({"context": "doc context"})
-        mock_response.usage = MagicMock(completion_tokens=7)
+        mock_response = llm_response(json.dumps({"context": "doc context"}))
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
         with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
@@ -2761,10 +2778,7 @@ class TestContextualRetrieval:
         """
         dp = create_dataprep()
         monkeypatch.setattr(dp_module, "CONTEXTUAL_MAX_TOKENS", 333)
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps({"context": "ctx"})
-        mock_response.usage = MagicMock(completion_tokens=3, prompt_tokens=10)
+        mock_response = llm_response(json.dumps({"context": "ctx"}))
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
         with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
@@ -2798,11 +2812,11 @@ class TestContextualRetrieval:
 
         async def fake_context(chunks, _inp, file_id):
             captured["ctx_in"] = list(chunks)
-            return contextualized
+            return contextualized, []
 
         async def fake_labels(chunks, all_labels, file_labels, file_id):
             captured["labels_in"] = list(chunks)
-            return [{"text": c, "labels": ["L"]} for c in chunks]
+            return [{"text": c, "labels": ["L"]} for c in chunks], []
 
         async def fake_process_batch(batch_docs, *a, **k):
             built.extend(batch_docs)
@@ -2839,7 +2853,7 @@ class TestContextualRetrieval:
 
         async def fake_labels(chunks, all_labels, file_labels, file_id):
             captured["labels_in"] = list(chunks)
-            return [{"text": c, "labels": ["L"]} for c in chunks]
+            return [{"text": c, "labels": ["L"]} for c in chunks], []
 
         async def fake_process_batch(batch_docs, *a, **k):
             built.extend(batch_docs)
@@ -2872,7 +2886,7 @@ class TestContextualRetrieval:
             patch.object(dp_module, "_build_vllm_client", side_effect=RuntimeError("init failed")),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock) as log,
         ):
-            result = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "f")
+            result, _degraded = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "f")
         assert result == chunks  # raw; ingestion must not be blocked
         assert any(call.args[1] == "ERROR" for call in log.call_args_list)
 
@@ -2890,7 +2904,7 @@ class TestContextualRetrieval:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock) as log,
         ):
-            result = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "f")
+            result, _degraded = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "f")
         assert result == chunks  # all raw
         assert any(call.args[1] == "ERROR" for call in log.call_args_list)
 
@@ -2902,10 +2916,7 @@ class TestContextualRetrieval:
         monkeypatch.setenv("VLLM_API_KEY", "k")
         monkeypatch.setenv("VLLM_ENDPOINT", "http://x")
         monkeypatch.setenv("VLLM_MODEL_ID", "m")
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps({"context": "CUCUMBER GUIDE"})
-        mock_response.usage = MagicMock(completion_tokens=10, prompt_tokens=40)
+        mock_response = llm_response(json.dumps({"context": "CUCUMBER GUIDE"}))
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
         chunks = ["c1", "c2", "c3"]
@@ -2913,7 +2924,7 @@ class TestContextualRetrieval:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "f")
+            result, _degraded = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "f")
         # doc_level = ONE call for the whole document
         assert mock_client.chat.completions.create.call_count == 1
         # the same context is prepended to every chunk
@@ -2935,7 +2946,7 @@ class TestContextualRetrieval:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock) as log,
         ):
-            result = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "f")
+            result, _degraded = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "f")
         assert result == chunks  # all raw; ingestion not blocked
         assert mock_client.chat.completions.create.call_count == 3  # 3 retries, single doc call
         assert any(call.args[1] == "ERROR" for call in log.call_args_list)
@@ -2952,10 +2963,7 @@ class TestContextualRetrieval:
         async def fake_create(*args, **kwargs):
             items = json.loads(kwargs["messages"][1]["content"])
             ctxmap = {str(it["index"]): f"C{it['index']}" for it in items}
-            r = MagicMock()
-            r.choices = [MagicMock()]
-            r.choices[0].message.content = json.dumps({"contexts": ctxmap})
-            r.usage = MagicMock(completion_tokens=10, prompt_tokens=40)
+            r = llm_response(json.dumps({"contexts": ctxmap}))
             return r
 
         mock_client = AsyncMock()
@@ -2965,7 +2973,7 @@ class TestContextualRetrieval:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "f")
+            result, _degraded = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "f")
         assert mock_client.chat.completions.create.call_count == 3  # 6 chunks / batch_size 2
         assert [r.split("\n\n", 1)[1] for r in result] == chunks  # originals preserved, in order
         assert result[0] == "C0\n\nc0" and result[5] == "C5\n\nc5"
@@ -2978,10 +2986,7 @@ class TestContextualRetrieval:
         monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
         monkeypatch.setenv("VLLM_MODEL_ID", "m")
         # Batch response unparseable → _context_batch_call falls back to per-chunk.
-        bad = MagicMock()
-        bad.choices = [MagicMock()]
-        bad.choices[0].message.content = "not json"
-        bad.usage = MagicMock(completion_tokens=1, prompt_tokens=1)
+        bad = llm_response("not json")
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=bad)
         called = []
@@ -2995,7 +3000,7 @@ class TestContextualRetrieval:
             patch.object(dp, "_context_single_call", new=AsyncMock(side_effect=fake_single)),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._apply_contextualization(["c0", "c1"], create_mock_ingest_input(), "f")
+            result, _degraded = await dp._apply_contextualization(["c0", "c1"], create_mock_ingest_input(), "f")
         assert sorted(called) == [0, 1]  # both chunks fell back to per-chunk
         assert result[0] == "S0\n\nc0" and result[1] == "S1\n\nc1"
 
@@ -3013,11 +3018,11 @@ class TestContextualRetrieval:
 
         async def fake_context(chunks, _inp, file_id):
             captured["ctx_in"] = list(chunks)
-            return contextualized
+            return contextualized, []
 
         async def fake_labels(chunks, all_labels, file_labels, file_id):
             captured["labels_in"] = list(chunks)
-            return [{"text": c, "labels": ["L"]} for c in chunks]
+            return [{"text": c, "labels": ["L"]} for c in chunks], []
 
         async def fake_process_batch(batch_docs, *a, **k):
             built.extend(batch_docs)
@@ -3051,10 +3056,7 @@ class TestContextualRetrieval:
 
     def _make_batch_response(self, contexts_dict: dict):
         """Build a mock chat completion response returning ``{"contexts": {...}}``."""
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps({"contexts": contexts_dict})
-        mock_response.usage = MagicMock(completion_tokens=10, prompt_tokens=20)
+        mock_response = llm_response(json.dumps({"contexts": contexts_dict}))
         return mock_response
 
     @pytest.mark.asyncio
@@ -3291,8 +3293,8 @@ class TestApplyLabelsAclPoolSemantics:
             patch.object(dp, "_label_with_llm", new_callable=AsyncMock) as llm,
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            llm.return_value = [{"text": "chunk", "labels": ["Healthcare"]}]
-            result = await dp._apply_labels(["chunk"], ["Healthcare"], ["t:t1", "r:r1", "d:dom", "Healthcare"], "file1")
+            llm.return_value = ([{"text": "chunk", "labels": ["Healthcare"]}], [])
+            result, _reasons = await dp._apply_labels(["chunk"], ["Healthcare"], ["t:t1", "r:r1", "d:dom", "Healthcare"], "file1")
         llm.assert_called_once()
         assert result[0]["labels"] == ["Healthcare"]
 
@@ -3319,7 +3321,7 @@ class TestApplyLabelsAclPoolSemantics:
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
             emb.return_value = [{"text": "chunk", "labels": ["Healthcare"]}]
-            result = await dp._apply_labels(["chunk"], ["Healthcare"], ["t:t1", "Healthcare"], "file1")
+            result, _reasons = await dp._apply_labels(["chunk"], ["Healthcare"], ["t:t1", "Healthcare"], "file1")
         emb.assert_called_once()
         llm.assert_not_called()
         labels = result[0]["labels"]
@@ -3337,7 +3339,7 @@ class TestApplyLabelsAclPoolSemantics:
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
             bm25.return_value = [{"text": "chunk", "labels": ["Healthcare"]}]
-            result = await dp._apply_labels(["chunk"], ["Healthcare"], ["t:t1", "d:dom"], "file1")
+            result, _reasons = await dp._apply_labels(["chunk"], ["Healthcare"], ["t:t1", "d:dom"], "file1")
         bm25.assert_called_once()
         llm.assert_not_called()
         labels = result[0]["labels"]
@@ -3355,7 +3357,7 @@ class TestApplyLabelsAclPoolSemantics:
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
             emb.return_value = [{"text": "chunk", "labels": ["Healthcare"]}]
-            result = await dp._apply_labels(["chunk"], ["Healthcare"], ["Healthcare"], "file1")
+            result, _reasons = await dp._apply_labels(["chunk"], ["Healthcare"], ["Healthcare"], "file1")
         assert result[0]["labels"] == ["Healthcare"]
 
 
@@ -3382,7 +3384,7 @@ class TestPerChunkFallbackAclPreserve:
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
-            result = await dp._label_with_llm(
+            result, _reasons = await dp._label_with_llm(
                 ["chunk"],
                 ["Healthcare"],
                 ["t:t1", "r:r1", "d:dom", "Healthcare"],
@@ -3445,7 +3447,7 @@ class TestAclLabelPreserveE2E:
             patch.object(dp, "_run_guardrail", new_callable=AsyncMock, return_value={"success": True}),
             # Pass-through: contextualization returns chunks unchanged so the
             # labeling input is the raw chunk (CONTEXTUAL_LABEL_RAW default).
-            patch.object(dp, "_apply_contextualization", new_callable=AsyncMock, return_value=["chunk1"]),
+            patch.object(dp, "_apply_contextualization", new_callable=AsyncMock, return_value=(["chunk1"], [])),
             # The real _apply_labels dispatches to the (mocked) LLM strategy;
             # the REAL _finalize_chunk_labels then scopes to the pool and
             # preserves the ACL tokens verbatim.
@@ -3453,7 +3455,7 @@ class TestAclLabelPreserveE2E:
                 dp,
                 "_label_with_llm",
                 new_callable=AsyncMock,
-                return_value=[{"text": "chunk1", "labels": ["Healthcare", "t:tenant1", "r:repoA", "d:health"]}],
+                return_value=([{"text": "chunk1", "labels": ["Healthcare", "t:tenant1", "r:repoA", "d:health"]}], []),
             ),
             patch.object(dp, "_process_batch", new_callable=AsyncMock, side_effect=capture_batch),
             patch.object(dp_module, "ArangoGraph"),
@@ -3497,7 +3499,7 @@ class TestAclLabelPreserveE2E:
                 dp,
                 "_apply_labels",
                 new_callable=AsyncMock,
-                return_value=[{"text": "c1", "labels": ["L"]}, {"text": "c2", "labels": ["L"]}],
+                return_value=([{"text": "c1", "labels": ["L"]}, {"text": "c2", "labels": ["L"]}], []),
             ),
             patch.object(dp, "_process_batch", new=AsyncMock(side_effect=failing_batch)),
             patch.object(dp, "retract_file", new_callable=AsyncMock),
@@ -3531,7 +3533,16 @@ class TestAclLabelPreserveE2E:
             patch.object(dp, "_fetch_all_labels", new_callable=AsyncMock, return_value=["L"]),
             patch.object(dp, "_load_and_chunk", new_callable=AsyncMock, return_value=["c1"]),
             patch.object(dp, "_run_guardrail", new_callable=AsyncMock, return_value={"success": True}),
-            patch.object(dp, "_apply_labels", new_callable=AsyncMock, return_value=[{"text": "c1", "labels": ["L"]}]),
+            patch.object(dp, "_apply_labels", new_callable=AsyncMock, return_value=([{"text": "c1", "labels": ["L"]}], [])),
+            # Not degraded: no vLLM is reachable here, and the real
+            # _apply_contextualization would report a client-init degradation
+            # unrelated to the empty-extraction behavior under test.
+            patch.object(
+                dp,
+                "_apply_contextualization",
+                new_callable=AsyncMock,
+                side_effect=lambda chunks, inp, fid: (list(chunks), []),
+            ),
             patch.object(dp, "_process_batch", new=AsyncMock(side_effect=empty_batch)),
             patch.object(dp_module, "ArangoGraph"),
         ):
@@ -3566,7 +3577,16 @@ class TestAclLabelPreserveE2E:
                 dp,
                 "_apply_labels",
                 new_callable=AsyncMock,
-                return_value=[{"text": c, "labels": ["L"]} for c in ["c1", "c2", "c3", "c4"]],
+                return_value=([{"text": c, "labels": ["L"]} for c in ["c1", "c2", "c3", "c4"]], []),
+            ),
+            # Not degraded: with no vLLM reachable the real _apply_contextualization
+            # reports a client-init degradation that flips the status for reasons
+            # unrelated to the partial-batch behavior under test.
+            patch.object(
+                dp,
+                "_apply_contextualization",
+                new_callable=AsyncMock,
+                side_effect=lambda chunks, inp, fid: (list(chunks), []),
             ),
             patch.object(dp, "_process_batch", new=AsyncMock(side_effect=mixed_batch)),
             patch.object(dp_module, "ArangoGraph"),

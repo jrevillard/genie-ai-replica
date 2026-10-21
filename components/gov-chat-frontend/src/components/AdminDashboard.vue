@@ -456,6 +456,13 @@
                       <option value="ingested">
                         {{ translate('admin.documents.statusIngested', 'Ingested') }}
                       </option>
+                      <!-- FilteredDocuments matches the status string exactly, so without
+                           this option an "Ingested with Warnings" document shows only
+                           under All Statuses — the very documents an operator needs to
+                           isolate after raising a budget would be the ones that vanish. -->
+                      <option value="ingested with warnings">
+                        {{ translate('admin.documents.statusWarning', 'Ingested with Warnings') }}
+                      </option>
                       <option value="retracted">
                         {{ translate('admin.documents.statusRetracted', 'Retracted') }}
                       </option>
@@ -1981,6 +1988,14 @@ export default {
       const selectedDocObjects = this.documents.filter((doc) => selectedKeys.has(doc.file_id));
 
       // 4. Check if ANY of the selected documents have the status 'ingested'
+      //
+      // 'ingested with warnings' is deliberately NOT treated as ingested here. A
+      // degraded document is indexed and searchable, but part of it never landed
+      // — its chunks carry file labels instead of model labels, or raw text
+      // instead of a generated context. The useful action on it is to re-ingest
+      // after raising DATAPREP_LLM_PHASE_TIMEOUT_SECONDS, so the button must
+      // stay available for exactly those. Do not "fix" this by widening the
+      // comparison: that would hide the remedy.
       const hasIngestedFile = selectedDocObjects.some(
         (doc) => doc.dataprep && String(doc.dataprep.status).toLowerCase().trim() === 'ingested'
       );
@@ -3283,8 +3298,24 @@ export default {
         if (s === 'pending') return 'Crawl Scheduled';
       }
 
-      // 3. Fallback to dataprep status or 'Unknown'
-      return doc.dataprep ? doc.dataprep.status : 'Unknown';
+      // 3. Fallback to dataprep status or 'Unknown'.
+      //
+      // Translated, unlike the crawl arms above: this MR added a TRANSLATED
+      // <option> for "Ingested with Warnings" to the filter a few lines up, so
+      // leaving the badge in raw English put two languages on one screen for
+      // the same value. The crawl statuses stay as they were — pre-existing,
+      // and translating them belongs with their own keys rather than here.
+      if (!doc.dataprep || !doc.dataprep.status) return 'Unknown';
+      const keys = {
+        pending: ['statusPending', 'Pending'],
+        ingested: ['statusIngested', 'Ingested'],
+        'ingested with warnings': ['statusWarning', 'Ingested with Warnings'],
+        retracted: ['statusRetracted', 'Retracted'],
+        ingesting: ['statusIngesting', 'Ingesting'],
+        'ingestion error': ['statusError', 'Ingestion Error']
+      };
+      const key = keys[String(doc.dataprep.status).toLowerCase().trim()];
+      return key ? this.translate(`admin.documents.${key[0]}`, key[1]) : doc.dataprep.status;
     },
 
     selectAllDocuments(event) {

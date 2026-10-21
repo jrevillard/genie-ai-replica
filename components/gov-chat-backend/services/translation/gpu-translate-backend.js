@@ -5,6 +5,12 @@ const https = require('https');
 // API key for remote GPU node authentication (standard OpenAI Bearer token)
 const VLLM_API_KEY = process.env.VLLM_API_KEY || '';
 
+// Smallest output budget worth asking for. Below this a reply cannot hold a
+// sentence, and a caller that gets one has no way to tell it apart from a real
+// translation — so a prompt that cannot leave this much room is refused rather
+// than sent with a token or two.
+const MIN_OUTPUT_BUDGET = 256;
+
 /**
  * GPU Translation Backend
  *
@@ -86,7 +92,9 @@ class GpuTranslateBackend {
       logger.info('[GPU-BACKEND] Initialized successfully. vLLM service is ready.');
     } catch (error) {
       logger.error(`[GPU-BACKEND] Initialization failed: ${error.message}`);
-      // Don't throw - allow fallback to CPU backend
+      // Rethrow: this is the startup probe `auto` runs to choose a backend,
+      // and its failure is what selects the CPU model. Swallowing it would
+      // leave `auto` with a GPU backend that never answered.
       this.healthCheckPassed = false;
       throw error;
     }
@@ -262,6 +270,67 @@ class GpuTranslateBackend {
   }
 
   /**
+   * Lower `max_tokens` so the request's INPUT plus its OUTPUT budget fits
+   * `maxModelLen`, without asking for output the translation cannot use.
+   *
+   * `max_tokens` is the OUTPUT budget, and vLLM rejects a request whose prompt
+   * plus `max_tokens` exceeds the model's context window. Deriving it from the
+   * context length alone (`maxModelLen - 128`) therefore caps the PROMPT at
+   * ~128 tokens: on an 8192-token model every request asked for 8064 output
+   * tokens, so anything longer than a short sentence was refused outright
+   * ("maximum context length is 8192 tokens. However, you requested 8064
+   * output tokens and your prompt contains at least 129"). The prompt has to
+   * come out of the same window.
+   *
+   * The budget is the smaller of two bounds: what the window can carry
+   * (`room`), and what a translation of this prompt can plausibly produce
+   * (`needed` — a translation runs about as long as its source, so a prompt of
+   * N tokens needs on the order of N, not the ~8000 the window would otherwise
+   * hand over).
+   *
+   * `needed` is what keeps the input estimate from being load-bearing. Input
+   * size is estimated at `chars / 4`, which is optimistic for CJK (zh is in
+   * both the gemma-3 and translategemma language maps, where the tokenizer
+   * runs nearer one token per character). An over-generous budget is what
+   * turns that miscount into a rejected request; a budget sized by need leaves
+   * the window room to absorb it. The miscount is not eliminated — a CJK node
+   * beyond roughly 4 000 characters still overflows and is rejected — so the
+   * estimate is treated as a guess to be survived, not a measurement.
+   *
+   * A budget is a ceiling, so a translation that genuinely needs more stops at
+   * `max_tokens`. That is not left as a quiet shortfall: `callVllmService` and
+   * `callVllmStream` reject on `finish_reason === 'length'`, so a truncated
+   * translation surfaces as a failed request rather than being accepted and
+   * cached as a shortened answer. A prompt that cannot fit at all is refused
+   * here rather than sent with an unusable budget.
+   *
+   * Re-applying after a caller has grown the messages only lowers the budget
+   * further (see `translateStream`'s context window), which is what that
+   * second pass is for: the injection must not be able to overflow the window.
+   *
+   * @param {Object} requestBody - OpenAI-compatible request body; mutated
+   * @returns {Object} the same body, with `max_tokens` capped
+   * @throws {Error} if the prompt leaves too little of the window to translate
+   */
+  _capMaxTokens(requestBody) {
+    if (!Array.isArray(requestBody.messages)) {
+      throw new Error('Cannot size the output budget: request body has no messages array');
+    }
+    const inputTokens = Math.ceil(JSON.stringify(requestBody.messages).length / 4);
+    const room = this.maxModelLen - inputTokens - 128;
+    if (room < MIN_OUTPUT_BUDGET) {
+      // A budget this small would earn a reply of a few tokens, which the
+      // markdown path would substitute for the whole paragraph. Refuse instead:
+      // an oversized prompt is the caller's to split, and a refusal has to
+      // stay visible rather than becoming a silently shorter answer.
+      throw new Error(`Prompt leaves ${room} of ${this.maxModelLen} tokens, too little for a translation`);
+    }
+    const needed = 4 * inputTokens + 256;
+    requestBody.max_tokens = Math.min(requestBody.max_tokens ?? room, room, needed);
+    return requestBody;
+  }
+
+  /**
    * Format request for specific model
    * @param {string} modelId - Model identifier
    * @param {string} sourceCode - Source language code (model-specific)
@@ -270,12 +339,9 @@ class GpuTranslateBackend {
    * @returns {Object} Formatted request body
    */
   formatRequest(modelId, sourceCode, targetCode, text) {
-    // Reserve tokens for the prompt (~128 tokens) so total stays within maxModelLen
-    const maxTokens = Math.max(128, this.maxModelLen - 128);
-
     // TranslateGemma format (structured chat with language codes)
     if (modelId.includes('translategemma')) {
-      return {
+      return this._capMaxTokens({
         model: modelId,
         messages: [
           {
@@ -290,9 +356,8 @@ class GpuTranslateBackend {
             ]
           }
         ],
-        temperature: 0.0,
-        max_tokens: maxTokens
-      };
+        temperature: 0.0
+      });
     }
 
     // Gemma-3 format (prompt-based translation)
@@ -303,7 +368,7 @@ class GpuTranslateBackend {
         ? this.languageMap.promptTemplate(sourceCode, targetCode, sourceLangName, targetLangName, text)
         : `Translate the following text from ${sourceLangName} to ${targetLangName}. Only return the translation, no explanation.\n\nText: ${text}`;
 
-      return {
+      return this._capMaxTokens({
         model: modelId,
         messages: [
           {
@@ -311,13 +376,12 @@ class GpuTranslateBackend {
             content: prompt
           }
         ],
-        temperature: 0.3,
-        max_tokens: maxTokens
-      };
+        temperature: 0.3
+      });
     }
 
     // Default/fallback format (OpenAI-compatible)
-    return {
+    return this._capMaxTokens({
       model: modelId,
       messages: [
         {
@@ -325,9 +389,8 @@ class GpuTranslateBackend {
           content: `Translate from ${sourceCode} to ${targetCode}: ${text}`
         }
       ],
-      temperature: 0.3,
-      max_tokens: maxTokens
-    };
+      temperature: 0.3
+    });
   }
 
   /**
@@ -369,12 +432,28 @@ class GpuTranslateBackend {
               const response = JSON.parse(data);
 
               // Parse response based on format
-              let translatedText = '';
-              if (response.choices && response.choices.length > 0) {
-                translatedText = response.choices[0].message.content.trim();
+              const choice = response.choices && response.choices.length > 0 && response.choices[0];
+              if (choice && choice.finish_reason === 'length') {
+                // The model ran into the output budget instead of finishing. The
+                // caller cannot tell a short text from a truncated one, so treat
+                // it as a failed request: it surfaces to the caller and never
+                // reaches the translation cache.
+                logger.error(
+                  `[GPU-BACKEND] vLLM stopped at max_tokens=${requestBody.max_tokens} without finishing the translation`
+                );
+                reject(new Error(`vLLM truncated the translation at max_tokens=${requestBody.max_tokens}`));
+                return;
               }
 
-              resolve(translatedText);
+              const content = choice && choice.message ? choice.message.content : undefined;
+              if (typeof content !== 'string') {
+                // A choice with no content (null, or a tool-call shape) is not a
+                // translation. Resolving it as an empty string would blank the
+                // paragraph, so the request fails visibly instead.
+                reject(new Error('vLLM returned a choice with no message content'));
+                return;
+              }
+              resolve(content.trim());
             } else {
               logger.error(`[GPU-BACKEND] vLLM service returned status ${res.statusCode}: ${data}`);
               reject(new Error(`vLLM service error: ${res.statusCode}`));
@@ -430,6 +509,7 @@ class GpuTranslateBackend {
     return new Promise((resolve, reject) => {
       let full = '';
       let buffer = '';
+      let finishReason = null;
       const req = client.request(options, (res) => {
         if (res.statusCode < 200 || res.statusCode >= 300) {
           let errBody = '';
@@ -449,7 +529,9 @@ class GpuTranslateBackend {
             if (payload === '[DONE]') continue;
             try {
               const parsed = JSON.parse(payload);
-              const delta = parsed.choices?.[0]?.delta?.content || '';
+              const choice = parsed.choices?.[0];
+              if (choice?.finish_reason) finishReason = choice.finish_reason;
+              const delta = choice?.delta?.content || '';
               if (delta) {
                 full += delta;
                 if (onToken) onToken(delta);
@@ -459,7 +541,26 @@ class GpuTranslateBackend {
             }
           }
         });
-        res.on('end', () => resolve(full));
+        res.on('end', () => {
+          // Deltas have already been emitted by this point, so a truncation is
+          // only detectable here — reject rather than hand back a partial text.
+          if (finishReason === 'length') {
+            logger.error(
+              `[GPU-BACKEND] vLLM stream stopped at max_tokens=${requestBody.max_tokens} without finishing the translation`
+            );
+            reject(new Error(`vLLM truncated the translation at max_tokens=${requestBody.max_tokens}`));
+            return;
+          }
+          if (!full) {
+            // A refusal, a moderation block or an empty completion is not a
+            // translation. The non-streaming path rejects a contentless choice
+            // for the same reason; resolving '' here would blank the caller.
+            logger.error(`[GPU-BACKEND] vLLM stream produced no content (finish_reason=${finishReason})`);
+            reject(new Error(`vLLM returned no content for the translation (finish_reason=${finishReason})`));
+            return;
+          }
+          resolve(full);
+        });
       });
 
       req.on('error', (error) => {
@@ -566,13 +667,9 @@ class GpuTranslateBackend {
         requestBody.messages[0].content;
     }
 
-    // Dynamically cap max_tokens AFTER context injection so input (messages +
-    // context window) + output never exceeds maxModelLen. formatRequest derives
-    // max_tokens from maxModelLen assuming only the text input; the context window
-    // adds extra input tokens that can overflow (vLLM 400).
-    const inputTokens = Math.ceil(JSON.stringify(requestBody.messages).length / 4);
-    const safeMaxTokens = Math.max(256, this.maxModelLen - inputTokens - 128);
-    requestBody.max_tokens = Math.min(requestBody.max_tokens || safeMaxTokens, safeMaxTokens);
+    // Re-cap after context injection: the injected block grows the prompt, so
+    // the budget formatRequest derived is no longer the whole story.
+    this._capMaxTokens(requestBody);
 
     return this.callVllmStream(requestBody, onToken);
   }

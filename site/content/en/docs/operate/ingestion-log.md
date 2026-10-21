@@ -94,7 +94,7 @@ Stored in ArangoDB `ingestion_log` collection:
 | `message` | string | Human-readable event description — see canonical messages below. |
 | `timestamp` | ISO 8601 | When the event happened. |
 | `level` | string | `INFO`, `WARN`, `ERROR` (uppercase — set by the Joi schema in `components/document-repository/src/controllers/fileController.js:85-89`; dataprep emits these strings verbatim). |
-| `stage` | string | Pipeline stage emitting the event — one of `Labeling`, `Contextualization`, `Chunking`, `Graph`, `System`, `Guardrail`, `Retract` (PascalCase strings; not dot-separated). |
+| `stage` | string | Pipeline stage emitting the event. Free-form, not a validated enum — Joi only checks `level`. Common values: `Labeling`, `Contextualization`, `Chunking`, `Graph`, `System`, `Guardrail`, `Retract`, and the phase-level reports below (`LLM labeling`, `Contextual Retrieval`, `Graph insertion`), which carry spaces rather than the PascalCase of the older ones. Group by it with care: an exact-match filter written against the older values will not see the newer rows. |
 
 ## Canonical messages you will grep for
 
@@ -107,7 +107,8 @@ via `_write_ingestion_log(...)`. Learning them saves hours of debugging.
 | `failed` | `Chunk 7: Batch labeling call failed for chunks [7, 8] (vLLM timeout); falling back to per-chunk.` | A stage failed for this chunk/file. Read the surrounding message for the cause. | Cross-reference the trace in VictoriaTraces and the service logs. |
 | `using raw chunks` | `Doc-level context generation failed after 3 attempts — using raw chunks.` | Contextual Retrieval / doc-context generation failed; ingestion continued with raw chunks (no contextual prefix). | Investigate per-chunk cause. Common: vLLM client init failed, LLM timeout, JSON parse error. |
 | `using raw chunk` | `Chunk 14: context generation failed after 3 attempts — using raw chunk.` | A single chunk's context-generation retries were exhausted; that chunk ingested with the raw text. | Usually transient (vLLM load). Investigate per chunk if persistent. |
-| `Batch labeling parse failure` | `Batch labeling parse failure for chunks [3, 4, 5]; falling back to per-chunk.` | The labelling LLM returned non-JSON despite guided JSON (batched path). | Model compatibility issue — see [RAG &rarr; Choosing models]({{< relref "/docs/rag-pipeline/choosing-models" >}}). |
+| `Batch labeling parse failure` | `Batch labeling parse failure for chunks [3, 4, 5]; falling back to per-chunk.` | The batched labelling answer was unusable: non-JSON, not a JSON object, or missing one of the requested chunk indices (the prompt requires every index present). | Model compatibility issue — see [RAG &rarr; Choosing models]({{< relref "/docs/rag-pipeline/choosing-models" >}}). |
+| `in progress` | Two shapes, one grep key. A budgeted phase: `LLM labeling in progress: 18/65 batches completed, 20 in flight, 124s elapsed (budget 900s)`. The graph phase, which has no budget: `Graph insertion in progress: 40/65 batches completed, 20 in flight, 124s elapsed`. | A phase is still running and reporting on its timer. The presence of these rows is what distinguishes a slow phase from a stalled one. | None while it keeps ticking. If the elapsed time stops advancing between rows, the phase is stuck — check the trace. |
 | `Batch labeling call failed` | `Batch labeling call failed for chunks [7, 8] (vLLM timeout); falling back to per-chunk.` | A labelling batch failed; per-chunk fallback engaged. | Usually transient (vLLM load). Retry; if persistent, lower `DATAPREP_LLM_LABEL_BATCH_SIZE`. |
 | `context generation failed` | `Chunk 14: context generation failed after 3 attempts — using raw chunk.` | Contextual Retrieval's per-chunk doc-context call failed; chunk ingested without the context prefix. | Non-fatal — the chunk is still retrievable but with weaker labels. |
 
@@ -178,6 +179,8 @@ gotcha), see [`.claude/rules/DEBUGGING-TRACING.md`](https://opensource.unicc.org
 | Symptom in the log | First action | Re-ingest? |
 |---|---|---|
 | `Batch labeling parse failure` on every chunk | Check the model supports `response_format=json_object` ([RAG &rarr; Choosing models]({{< relref "/docs/rag-pipeline/choosing-models" >}})). | No — fix the model config, then re-ingest. |
+| A document lands as `Ingested with Warnings` instead of `Ingested` | One LLM phase degraded. The `System` log line names which cause and the knob that fixes it: **budget exhausted** → raise `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS` (or `MODEL_LLM_TIMEOUT_SECONDS` with it); **client could not be built** → check `VLLM_ENDPOINT` and the model id; **no context generated** or **no labels generated** → the endpoint is unreachable or the model does not support `response_format=json_object`. The affected chunks carry the document's file labels (labelling) or raw text (Contextual Retrieval) instead of the model's output. | Yes, after fixing the cause — the document is indexed and searchable, only the enrichment is incomplete. Re-ingesting a degraded document clears its existing chunks first, so it replaces rather than duplicates. |
+| `in progress` rows whose elapsed time stops advancing | The phase is stuck rather than slow, or it has hit `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS` and is about to degrade. Check the trace, then `MODEL_LLM_TIMEOUT_SECONDS` and `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS` (raise both — the phase budget is the binding ceiling). | No — the document still ingests on its fallback (file labels / raw chunk). |
 | `failed` on the **context generation** step only | The context call did not fit the model's context window. Lower `DATAPREP_CONTEXTUAL_MAX_TOKENS` or `DATAPREP_LLM_LABEL_BATCH_SIZE` (the output reservation is per chunk in the batch), or disable Contextual Retrieval (`CONTEXTUAL_RETRIEVAL_ENABLED=false`) temporarily. With `DATAPREP_CONTEXTUAL_DOC_BUDGET=0` the budget is derived from `VLLM_MAX_MODEL_LEN` and already fits — check that the window actually reaching the dataprep container is the one vLLM is serving. | Only if you want the context prefix on existing documents. |
 | `raw-chunk fallback` on isolated chunks (most chunks labelled) | Usually transient vLLM load. Re-ingest if labels are critical. | Optional. |
 | `failed` on **parsing** (docling) | Check the source file — scanned PDFs, password-protected files, etc. | After fixing the file (re-upload). |
@@ -294,9 +297,40 @@ Two parse-failure modes exist: batch-failures cite the chunk indices and trigger
 
 ### Symptom: file in `Ingested with Warnings`
 
-Ingestion succeeded but at least one chunk used a fallback. The document IS
-retrievable, but quality may be reduced. Open the ingestion log, count
-warnings per chunk, and decide whether to retract + re-upload.
+Ingestion succeeded but at least one LLM phase could not complete. The document
+IS retrievable, but part of it was indexed from a fallback rather than from the
+model. Open the ingestion log: the `System` line written at the end of the
+ingest names each cause and the knob that fixes it.
+
+The status is `Ingested with Warnings` rather than `Ingested` because some of
+the document really did not land. The document is not retracted — the batches
+that did finish are real work and the chunks are indexed and searchable — but
+the operator is not told "Ingested" for a document that was only partially
+processed.
+
+Four causes, with different fixes:
+
+| Cause in the `System` line | What happened | Fix |
+|---|---|---|
+| the phase budget ran out | The labelling or Contextual Retrieval batches still running when `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS` expired were abandoned. Their chunks carry the document's own file labels (labelling) or raw text (context) instead of the model's output. Look for `exceeded its ...s budget`, which names how many batches completed and how many were abandoned. | Raise `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS`, or `MODEL_LLM_TIMEOUT_SECONDS` together with it. |
+| the vLLM client could not be built | The client could not be constructed at all — a bad `VLLM_ENDPOINT`, or no model id and auto-detection failed. No chunk reached the model, in either phase. | Fix the endpoint or the model id. Raising a budget will not help. |
+| context generation returned nothing | The endpoint answered but no usable context came back — typically a model that does not support `response_format=json_object`. Every chunk was stored raw. | Use a model that supports guided JSON, or set `CONTEXTUAL_RETRIEVAL_ENABLED=false` deliberately. Raising a budget will not help. |
+| the labelling model returned no labels | The endpoint answered but in a shape neither parser can read — typically a model that does not support `response_format=json_object`. Every chunk fell back to the document's own file labels rather than model-chosen ones, so the document is scoped to the labels it was uploaded with and not to what the model would have chosen. (With no file labels of its own, its chunks are stored unlabelled and unreachable by taxonomy search.) | Use a model that supports guided JSON. Raising a budget will not help. |
+
+A handful of chunks falling back while the rest succeeded is normal operation
+and does **not** set this status — that is what the per-batch fallback is for.
+The status is reserved for a phase that accomplished nothing, so it keeps
+meaning something.
+
+After fixing the cause, re-ingest for a clean result. Do it from the **Documents
+table in the admin dashboard**: tick the document's row checkbox, then the batch
+**Ingest** action. Re-ingesting a degraded document clears its existing chunks
+first, so it replaces the previous copy rather than adding a second one to the
+knowledge base.
+
+Do not use **Retract** in the file-details dialog for this. Retract is the right
+tool when you want the document gone, but it also deletes its ingestion log —
+the record of which cause degraded it, which you need before you can fix it.
 
 ## Related
 

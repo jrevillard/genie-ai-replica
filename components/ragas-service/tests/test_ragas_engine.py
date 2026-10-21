@@ -410,6 +410,75 @@ def test_caching_wrapper_serves_hits_without_calling_the_judge(tmp_path, monkeyp
     assert calls["sync"] == 4  # both went through
 
 
+def test_empty_completions_are_never_cached(monkeypatch, tmp_path):
+    """2026-10-21 sidecar review F5: a 200 with an EMPTY body was written
+    to the disk cache and replayed forever (no TTL, survives recreates) — one
+    bad judge response permanently degraded every later generation with a
+    correct-looking empty result. Blank text must not be cached."""
+    import asyncio
+
+    calls = {"n": 0}
+
+    class _Gen:
+        def __init__(self, text):
+            self.text = text
+
+    class _Res:
+        def __init__(self, text):
+            self.generations = [[_Gen(text)]]
+            self.llm_output = None
+
+    class _FakeBase:
+        def __init__(self, *a, **k):
+            pass
+
+        def generate_text(self, prompt, n=1, temperature=0.01, stop=None, callbacks=None):
+            calls["n"] += 1
+            return _Res("")
+
+        async def agenerate_text(self, prompt, n=1, temperature=0.01, stop=None, callbacks=None):
+            calls["n"] += 1
+            return _Res("   ")
+
+    class _Prompt:
+        def to_string(self):
+            return "the same prompt text"
+
+    monkeypatch.setenv("RAGAS_LLM_CACHE_DIR", str(tmp_path / "cache"))
+    wrapper_cls = ragas_engine._make_caching_wrapper(_FakeBase)
+    w = wrapper_cls(object())
+
+    w.generate_text(_Prompt(), n=1, temperature=0.2)
+    w.generate_text(_Prompt(), n=1, temperature=0.2)
+    assert calls["n"] == 2  # the empty answer was NOT cached — the judge was asked again
+
+    asyncio.run(w.agenerate_text(_Prompt(), n=1, temperature=0.3))
+    asyncio.run(w.agenerate_text(_Prompt(), n=1, temperature=0.3))
+    assert calls["n"] == 4  # same for the async path
+
+
+def test_cache_key_includes_the_judge_endpoint(monkeypatch, tmp_path):
+    """2026-10-21 sidecar review F5: the env-path cache key carried the
+    MODEL alone, so repointing RAGAS_JUDGE_BASE_URL while keeping the model
+    id silently replayed the OLD endpoint's cached answers. The key must
+    carry the endpoint too."""
+
+    class _FakeBaseForTag:
+        def __init__(self, *a, **k):
+            pass
+
+    monkeypatch.setenv("RAGAS_LLM_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("RAGAS_JUDGE_MODEL", "granite-x")
+
+    def _key_for(base_url):
+        monkeypatch.setenv("RAGAS_JUDGE_BASE_URL", base_url)
+        w = ragas_engine._make_caching_wrapper(_FakeBaseForTag)(object())
+        return w._model_tag
+
+    assert _key_for("https://a.example/v1") != _key_for("https://b.example/v1")
+    assert "a.example" in _key_for("https://a.example/v1")
+
+
 def test_tolerant_synthesizer_never_raises_to_the_executor(engine_env):
     """Regression (live 2026-10-18, bug #9): with raise_exceptions=False,
     ragas's Executor turns a raised call into np.nan (executor.py:84) and

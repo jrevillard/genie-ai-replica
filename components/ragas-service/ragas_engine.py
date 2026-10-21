@@ -54,6 +54,27 @@ def _judge_base_url() -> str:
     return (os.getenv("RAGAS_JUDGE_BASE_URL") or "").rstrip("/")
 
 
+def _tls_client_kwargs() -> dict[str, Any]:
+    """httpx client kwargs for the OpenAI-dialect EMBEDDINGS clients.
+
+    The judge gets `verify=False` clients because the sovereign vLLM/TEI
+    endpoints sit behind nginx with a self-signed cert (a verify-only client
+    fails with CERTIFICATE_VERIFY_FAILED). The embeddings path had NO such
+    clients — so the openai dialect (or an embed override) against a
+    self-signed endpoint failed with a certificate error while the TEI
+    dialect worked (2026-10-21 sidecar review F6). Same treatment now.
+    `RAGAS_VERIFY_SSL=1` restores strict verification for hardened
+    deployments."""
+    import httpx
+
+    if (os.getenv("RAGAS_VERIFY_SSL") or "0").strip().lower() in ("1", "true", "yes", "on"):
+        return {}
+    return {
+        "http_client": httpx.Client(verify=False, timeout=300),
+        "http_async_client": httpx.AsyncClient(verify=False, timeout=300),
+    }
+
+
 def judge_configured() -> bool:
     return bool(_judge_base_url() and os.getenv("RAGAS_JUDGE_MODEL"))
 
@@ -259,7 +280,16 @@ def _make_caching_wrapper(LangchainLLMWrapper, model_tag=None, cancel_event=None
     class _CachingLlmWrapper(LangchainLLMWrapper):
         def __init__(self, llm):
             super().__init__(llm)
-            self._model_tag = model_tag if model_tag is not None else os.getenv("RAGAS_JUDGE_MODEL")
+            # The cache key carries the judge IDENTITY: the model AND the
+            # endpoint. The override path always did (provider:base:model);
+            # the env path keyed on the MODEL alone, so repointing
+            # RAGAS_JUDGE_BASE_URL while keeping the model id silently
+            # replayed the OLD endpoint's cached answers (2026-10-21 sidecar
+            # review F5). One cold cache is the price; wrong answers served
+            # as fresh is not.
+            self._model_tag = (
+                model_tag if model_tag is not None else f"env:{_judge_base_url()}:{os.getenv('RAGAS_JUDGE_MODEL')}"
+            )
             self._cache_dir = os.getenv("RAGAS_LLM_CACHE_DIR") or "/tmp/ragas-llm-cache"
             self._enabled = (os.getenv("RAGAS_LLM_CACHE") or "1").strip().lower() not in ("0", "off", "false", "no")
             # The cancel seam (2026-10-21 sidecar review F1): the KG phase
@@ -339,6 +369,14 @@ def _make_caching_wrapper(LangchainLLMWrapper, model_tag=None, cancel_event=None
                 llm_output = result.llm_output or None
             except AttributeError:
                 llm_output = None
+            # An EMPTY completion is not a cacheable answer (2026-10-21 sidecar
+            # review F5): a 200 with an empty/blank body was written to the
+            # disk cache and replayed FOREVER (the cache has no TTL and
+            # survives container recreates), so one bad judge response
+            # permanently degraded every later generation with a correct-looking
+            # but empty result. Blank text is not cached.
+            if texts and all(not str(t or "").strip() for t in texts):
+                return None
             return texts, llm_output
 
         def generate_text(self, prompt, n=1, temperature=0.01, stop=None, callbacks=None):
@@ -528,7 +566,12 @@ def build_embeddings(embed: dict | None = None):
         from langchain_openai import OpenAIEmbeddings
 
         return LangchainEmbeddingsWrapper(
-            OpenAIEmbeddings(model=model, api_key=embed.get("api_key") or "sk-no-key", base_url=base)
+            OpenAIEmbeddings(
+                model=model,
+                api_key=embed.get("api_key") or "sk-no-key",
+                base_url=base,
+                **_tls_client_kwargs(),
+            )
         )
 
     model = os.getenv("RAGAS_EMBED_MODEL")
@@ -540,7 +583,14 @@ def build_embeddings(embed: dict | None = None):
     if dialect == "openai":
         from langchain_openai import OpenAIEmbeddings
 
-        return LangchainEmbeddingsWrapper(OpenAIEmbeddings(model=model, api_key=api_key or "sk-no-key", base_url=base))
+        return LangchainEmbeddingsWrapper(
+            OpenAIEmbeddings(
+                model=model,
+                api_key=api_key or "sk-no-key",
+                base_url=base,
+                **_tls_client_kwargs(),
+            )
+        )
     return LangchainEmbeddingsWrapper(_TeiEmbeddings(base, api_key, model))
 
 

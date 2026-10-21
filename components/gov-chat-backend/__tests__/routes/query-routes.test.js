@@ -374,7 +374,10 @@ describe('POST /stream', () => {
     expect(axios.post).toHaveBeenCalledTimes(1);
     expect(axios.post).toHaveBeenCalledWith(
       'http://chatqna.internal:8899/v1/chatqna',
-      expect.any(Object),
+      // The payload the service built, not the one in the request body: the
+      // body carries a non-empty `messages`, so a merge or substitution here
+      // would change it.
+      expect.objectContaining({ messages: [] }),
       expect.any(Object)
     );
   });

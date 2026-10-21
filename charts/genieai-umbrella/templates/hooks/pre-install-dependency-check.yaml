@@ -22,6 +22,16 @@
 {{- fail (printf "data.%s.enabled is true but dependencyGraph.data has no '%s' entry; add it to dependencyGraph.data.%s (with deps: [...]) so the pre-install dep-check validates its requirements" $name $name $name) -}}
 {{- end }}
 {{- end }}
+{{- /* The OPEA tier is one switch over six orchestrators, and every
+       orchestrator dials at least one in-cluster Service. With no node
+       for the tier, `opea.enabled: true` with the document repository
+       switched off installs cleanly and leaves DOC_REPO_URL pointing at a
+       Service nobody renders. Turning the tier on therefore requires
+       declaring its nodes. */ -}}
+{{- $opeaGraph := dig "dependencyGraph" "opea" dict $vals -}}
+{{- if and (dig "opea" "enabled" false $vals) (not $opeaGraph) }}
+{{- fail "opea.enabled is true but dependencyGraph.opea declares no node; add an entry per rendered orchestrator (chatqna, dataprep, retriever, reranker, embedding, translation) with its deps, so the pre-install dep-check validates them" -}}
+{{- end }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -98,16 +108,19 @@ spec:
               except (FileNotFoundError, json.JSONDecodeError) as e:
                   print(f"FAIL: enabled.json is missing or corrupt: {e}"); sys.exit(1)
               # Dependency names resolve against the graph's own
-              # namespaces: a name present under services.* is a service
-              # dep, anything else a data dep.
+              # namespaces, in tier order: services, then the OPEA tier,
+              # then data.
+              def dep_tier(dep):
+                  for tier in ("services", "opea", "data"):
+                      if dep in graph.get(tier, {}):
+                          return tier
+                  return "data"
               def dep_enabled(dep):
-                  if dep in graph.get("services", {}):
-                      return enabled.get(f"services.{dep}.enabled", False)
-                  return enabled.get(f"data.{dep}.enabled", False)
+                  return enabled.get(f"{dep_tier(dep)}.{dep}.enabled", False)
               def dep_kind(dep):
-                  return "service" if dep in graph.get("services", {}) else "data"
+                  return {"services": "service", "opea": "opea"}.get(dep_tier(dep), "data")
               failures = []
-              for tier in ("services", "data"):
+              for tier in ("services", "data", "opea"):
                   for svc, deps in graph.get(tier, {}).items():
                       if not enabled.get(f"{tier}.{svc}.enabled", False):
                           continue
@@ -167,6 +180,11 @@ data:
     {{- $flat := dict }}
     {{- range $name, $deps := dig "dependencyGraph" "services" dict $vals }}
     {{- $_ := set $flat (printf "services.%s.enabled" $name) (dig "services" $name "enabled" false $vals) }}
+    {{- end }}
+    {{- /* The OPEA tier has no per-service toggle: one switch renders all
+           six orchestrators. A node is on only when that switch is on. */}}
+    {{- range $name, $deps := dig "dependencyGraph" "opea" dict $vals }}
+    {{- $_ := set $flat (printf "opea.%s.enabled" $name) (dig "opea" "enabled" false $vals) }}
     {{- end }}
     {{- range $name, $deps := dig "dependencyGraph" "data" dict $vals }}
     {{- $_ := set $flat (printf "data.%s.enabled" $name) (dig "data" $name "enabled" false $vals) }}

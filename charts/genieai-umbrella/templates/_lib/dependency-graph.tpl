@@ -9,9 +9,14 @@ by this hook — intentional. The hook is the contract, not
 values.yaml. `enabled.json` only mirrors graph nodes; non-graph enables
 (e.g. a feature flag toggle that does not add a node) are accepted as
 out-of-scope and validated by whichever component owns the toggle.
+
+Tiers are a list rather than two hardcoded keys: the OPEA tier has the
+same shape as the others and was missing only because it was written
+second. A dep name resolves against services, then opea, then data.
 */}}
 {{- define "genieai-umbrella.dependencyGraph.json" -}}
 {{- $graph := .Values.dependencyGraph -}}
+{{- $tiers := list "services" "data" "opea" -}}
 {{- /* Type guard: a user override like `backend.deps: "keycloak,arangodb"`
        (a string) would otherwise emit `"deps": "keycloak,arangodb"` and
        the python evaluator's `for dep in deps` would iterate the chars
@@ -21,22 +26,20 @@ out-of-scope and validated by whichever component owns the toggle.
        list varies between releases (slice in some, map with int keys
        in others), so accept any collection kind; the failure case is
        specifically a scalar (string) which would iterate per char. */ -}}
-{{- range $service, $deps := $graph.services }}
+{{- range $tier := $tiers }}
+{{- $nodes := (index $graph $tier) | default dict }}
+{{- range $node, $deps := $nodes }}
 {{- if or (kindIs "string" $deps) (kindIs "bool" $deps) }}
-{{- fail (printf "dependencyGraph.services.%s.deps must be a list, got %s" $service (kindOf $deps)) -}}
+{{- fail (printf "dependencyGraph.%s.%s.deps must be a list, got %s" $tier $node (kindOf $deps)) -}}
 {{- end }}
 {{- end }}
-{{- range $data, $deps := $graph.data }}
-{{- if or (kindIs "string" $deps) (kindIs "bool" $deps) }}
-{{- fail (printf "dependencyGraph.data.%s.deps must be a list, got %s" $data (kindOf $deps)) -}}
 {{- end }}
-{{- end }}
-{{- $json := dict "services" dict "data" dict -}}
-{{- range $service, $deps := $graph.services -}}
-{{- $_ := set $json.services $service (dict "deps" $deps) -}}
+{{- $json := dict "services" dict "data" dict "opea" dict -}}
+{{- range $tier := $tiers }}
+{{- $nodes := (index $graph $tier) | default dict }}
+{{- range $node, $deps := $nodes -}}
+{{- $_ := set (index $json $tier) $node (dict "deps" $deps) -}}
 {{- end -}}
-{{- range $data, $deps := $graph.data -}}
-{{- $_ := set $json.data $data (dict "deps" $deps) -}}
 {{- end -}}
 {{- $json | toJson -}}
 {{- end -}}

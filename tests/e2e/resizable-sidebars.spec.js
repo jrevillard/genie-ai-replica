@@ -548,48 +548,131 @@ test.describe('Resizable sidebars behind one handle', () => {
     }
   });
 
-  // The waves are full-bleed BY DESIGN and are clipped, not contained:
-  // the `::after` carries the same +48 px width and the same -24 px
-  // margins as the banner, so it bleeds 24 px symmetrically out of each
-  // side and the panel's `overflow: hidden` takes it back. Asserting
-  // that symmetry is what distinguishes "full-bleed, clipped" from
-  // "48 px too wide", which is what it was reported as.
-  test('the decorative full-bleed bleeds symmetrically and is clipped', async ({ page }) => {
-    const m = await page.evaluate(() => {
+  // The decorative wave band's box must span the welcome panel's
+  // padding box exactly — no bleed past either edge — and the panel
+  // must clip what does bleed. The banner underneath, by contrast, is
+  // full-bleed by design (`width: calc(100% + 2*--space-lg)` plus two
+  // negative margins, in flow, so the panel clips the banner's
+  // overshoot with `overflow-x: hidden`).
+  //
+  // Two invariants, in two viewports:
+  //
+  //   A. At the file's 1920×900 default the waves' `::after` resolves
+  //      to used `margin-left: 0`, used `margin-right: 0`, and used
+  //      width equal to the panel's client width (±1 px). The defect
+  //      the prior version of this test guarded — "48 px too wide on
+  //      one side" — is now stated as the positive "band spans the
+  //      panel and overshoots neither edge".
+  //
+  //   B. Below 1299 px the app strips the overlay's padding
+  //      (`@media (max-width: 1299px) { .quick-help-overlay { padding: 0 } }`),
+  //      so the banner's bleed becomes real (its box reports past
+  //      the overlay's content box on both sides by exactly the
+  //      --space-lg token). The panel's `overflow-x` must STILL be
+  //      hidden — that's the property doing the clipping work, and
+  //      it's the property that decides whether a horizontal scrollbar
+  //      is drawn. The clipper is read on the WELCOME OVERLAY itself,
+  //      not on `.chatbot-container` (a different element — the
+  //      overlay is the scroller that bounds the welcome panel).
+  test('the waves span the panel and the panel clips what bleeds', async ({ page, browser }) => {
+    // (A) — 1920×900 from `beforeEach`.
+    const a = await page.evaluate(() => {
       const overlay = document.querySelector('.quick-help-overlay');
       if (!overlay) return { none: true };
-      const panel = document.querySelector('.chatbot-container');
       const after = getComputedStyle(overlay, '::after');
-      const ml = parseFloat(after.marginLeft) || 0;
-      const panelWidth = overlay.getBoundingClientRect().width;
-      const boxWidth = parseFloat(after.width) || 0;
-      // `left: 0` with a non-auto width makes the box over-constrained,
-      // so `right` is ignored and the box starts at marginLeft. It
-      // therefore bleeds |marginLeft| out of the panel's LEFT edge and
-      // (marginLeft + width - panelWidth) out of its RIGHT edge. A
-      // full-bleed is past BOTH by the same amount; the defect is past
-      // one by 48 and the other by 0.
+      const rect = overlay.getBoundingClientRect();
       return {
-        marginLeft: after.marginLeft,
-        marginRight: after.marginRight,
-        width: after.width,
-        panelWidth: Math.round(panelWidth),
-        leftBleed: -ml,
-        rightBleed: ml + boxWidth - panelWidth,
-        clipper: getComputedStyle(panel).overflow
+        none: false,
+        afterMarginLeft: parseFloat(after.marginLeft) || 0,
+        afterMarginRight: parseFloat(after.marginRight) || 0,
+        afterWidth: parseFloat(after.width) || 0,
+        panelClientWidth: overlay.clientWidth,
+        panelBboxWidth: Math.round(rect.width),
+        overlayOverflowX: getComputedStyle(overlay).overflowX
       };
     });
-    if (m.none) return; // the layer is off on this route; nothing to assert
-    expect(m.marginLeft, 'the waves must carry the negative margin that cancels their extra width').toBe(m.marginRight);
+    if (a.none) return; // the layer is off on this route; nothing to assert
+    // The wave band's box overshoots neither edge after the fix:
     expect(
-      Math.abs(m.leftBleed - m.rightBleed),
-      `the waves' box should bleed the same amount out of both panel edges; measured ` +
-        `${Math.round(m.leftBleed)} px left and ${Math.round(m.rightBleed)} px right`
+      Math.abs(a.afterMarginLeft),
+      `the waves' used margin-left must be 0 px (the round-2 fix dropped the ` +
+        `over-constrained -24 px); got ${a.afterMarginLeft}px`
+    ).toBeLessThanOrEqual(0.5);
+    expect(
+      Math.abs(a.afterMarginRight),
+      `the waves' used margin-right must be 0 px (the round-2 fix dropped the ` +
+        `over-constrained -24 px); got ${a.afterMarginRight}px`
+    ).toBeLessThanOrEqual(0.5);
+    expect(
+      Math.abs(a.afterWidth - a.panelClientWidth),
+      `the waves' used width (${a.afterWidth}px) must equal the panel's client width ` +
+        `(${a.panelClientWidth}px) ±1 px — the band spans the panel exactly`
     ).toBeLessThanOrEqual(1);
-    // …and the bleed is real rather than zero, which is the difference
-    // between a full-bleed and a box that happens to fit.
-    expect(m.leftBleed).toBeGreaterThan(0);
-    expect(m.clipper, 'the panel must clip the bleed').toBe('hidden');
+    // The panel clips what does bleed (the banner).
+    expect(
+      a.overlayOverflowX,
+      `the welcome overlay's overflow-x must be 'hidden' or 'clip' — that property ` +
+        `decides whether the panel draws a horizontal scrollbar; got '${a.overlayOverflowX}'`
+    ).toMatch(/^(hidden|clip)$/);
+
+    // (B) — switch to 1024×800 (overlay padding stripped by the
+    // @media (max-width: 1299px) rule). At this width the banner's
+    // box really DOES extend past the overlay's content box by
+    // --space-lg on each side; the assertion turns the rule from
+    // "trust the computed value" into a measurement.
+    await page.setViewportSize({ width: 1024, height: 800 });
+    await page.waitForTimeout(2500);
+
+    const spaceLg = parseFloat(
+      await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--space-lg'))
+    ) || 24;
+
+    const b = await page.evaluate(() => {
+      const overlay = document.querySelector('.quick-help-overlay');
+      const banner = overlay ? overlay.querySelector('.quick-help-banner') : null;
+      if (!overlay || !banner) return { none: true };
+      const oRect = overlay.getBoundingClientRect();
+      const bRect = banner.getBoundingClientRect();
+      return {
+        none: false,
+        overlayLeft: oRect.left,
+        overlayRight: oRect.right,
+        overlayOverflowX: getComputedStyle(overlay).overflowX,
+        overlayPadding: getComputedStyle(overlay).padding,
+        bannerLeft: bRect.left,
+        bannerRight: bRect.right
+      };
+    });
+    expect(b.none, 'overlay and banner should be readable at 1024×800').toBe(false);
+    expect(
+      b.overlayPadding,
+      `at 1024×800 the overlay's padding must be stripped by ` +
+        `@media (max-width: 1299px); got padding=${b.overlayPadding}`
+    ).toBe('0px');
+    const rightBleed = b.bannerRight - b.overlayRight;
+    const leftBleed = b.bannerLeft - b.overlayLeft;
+    expect(
+      rightBleed,
+      `the banner's box must bleed past the panel's right edge by ≈ --space-lg ` +
+        `(${spaceLg}px) at 1024×800 (the @media (max-width: 1299px) rule strips the ` +
+        `overlay's padding, so the intentional +48 px width no longer has padding to ` +
+        `absorb it); measured right bleed = ${rightBleed}px`
+    ).toBeGreaterThanOrEqual(spaceLg - 2);
+    expect(
+      leftBleed,
+      `same on the left side; measured left bleed = ${leftBleed}px`
+    ).toBeLessThanOrEqual(-(spaceLg - 2));
+    // And the clipper is what keeps the bleed from becoming a
+    // scrollbar. The clipper is the WELCOME OVERLAY, not
+    // .chatbot-container — the prior version of this test read on
+    // .chatbot-container, which is a different element and not the
+    // one bounding the welcome panel's content.
+    expect(
+      b.overlayOverflowX,
+      `the welcome overlay's overflow-x must still be 'hidden' or 'clip' at 1024×800 ` +
+        `(this is the property that clips the banner's intentional bleed and decides ` +
+        `whether the panel draws a horizontal scrollbar); got '${b.overlayOverflowX}'`
+    ).toMatch(/^(hidden|clip)$/);
   });
 
   test('a drag that starts on the chevron resizes the panel', async ({ page }) => {

@@ -431,6 +431,14 @@ The Arango `Service` hostname derives from the mode via
 `arangoURL` (`templates/_lib/_urls.tpl`) prepends the scheme + port and
 feeds backend `ARANGO_URL`.
 
+`data.arangodb.database` feeds `ARANGO_DB` on the backend, the document
+repository, dataprep, the retriever and the migrations Job. It defaults to
+`_system`, ArangoDB's own database, which exists on a fresh instance — the
+Compose deployment uses a dedicated `genie-ai` database instead, and that
+difference is declared in `scripts/config-parity-allowlist.json`. Pointing
+an existing deployment at another database moves every collection: the
+migrations Job creates collections, it does not move them.
+
 ## Template helpers (`templates/_lib/`)
 
 | Helper | Signature | Purpose |

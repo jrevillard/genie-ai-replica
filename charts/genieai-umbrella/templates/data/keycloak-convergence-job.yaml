@@ -23,7 +23,7 @@ would catch it.
 {{- range $k := list "proxyClient" "dataprep" "grafana" -}}
 {{- $v := dig $k "" $cs -}}
 {{- if or (not $v) (eq $v "") (hasPrefix "change-me" $v) -}}
-{{- fail (printf "data.keycloak.clientSecrets.%s is empty or a placeholder (change-me-*); the convergence Job wires it into the realm, and a placeholder produces an OIDC client whose secret no consumer holds. Set data.keycloak.failOnPlaceholderSecrets=false only where the placeholder is acceptable" $k) -}}
+{{- fail (printf "data.keycloak.clientSecrets.%s is empty or a placeholder (change-me-*); the convergence Job wires it into the realm, and a placeholder produces an OIDC client whose secret no consumer holds. The realm file declares this client unconditionally, so the value is required even when observability.grafana.enabled=false — the same requirement the Compose deployment carries. Set data.keycloak.failOnPlaceholderSecrets=false only where the placeholder is acceptable" $k) -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}

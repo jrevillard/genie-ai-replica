@@ -108,11 +108,11 @@ overlays/<cluster>/<env>/
 The `HelmRelease` references two values sources — a `ConfigMap` of
 operator-owned values, and a `Secret` of SOPS-decrypted values — and
 materializes them via `valuesFrom`. Inline `values:` carries only the
-Application Secrets consumed by the chart (the table above) are
-materialized in the `genieai` namespace as regular Secrets by the
-SealedSecret controller (one `SealedSecret` per Secret, committed in the
-overlay's `secrets/` directory) and mounted by the chart's pods directly
-— they do not flow through `valuesFrom`.
+per-pays overrides. The Application Secrets consumed by the chart (the
+table above) are materialized in the `genieai` namespace as regular
+Secrets by the SealedSecret controller (one `SealedSecret` per Secret,
+committed in the overlay's `secrets/` directory) and mounted by the
+chart's pods directly — they do not flow through `valuesFrom`.
 
 per-overlay deltas:
 

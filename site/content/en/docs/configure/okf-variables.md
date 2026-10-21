@@ -39,9 +39,11 @@ With the flag **on** (`1`) everything described on this page and in the
 The default is parked. If your deployment uses OKF Studio, set
 `OKF_ENABLED=1` in `.env` (Compose) or `okf_enabled: "1"` in your Ansible
 `group_vars` — otherwise the stack comes up parked after an upgrade and the
-OKF tabs and containers will be absent. Changing the value requires
-recreating the affected containers (and re-applying the gateway config), not
-just a restart.
+OKF tabs and containers will be absent. On plain Compose the containers also
+sit behind the `okf` profile (`docker compose --profile okf up -d` — the same
+convention as the observability stack); Docker Swarm ignores profiles and
+scales on the variable instead. Changing the value requires recreating the
+affected containers (and re-applying the gateway config), not just a restart.
 {{% /alert %}}
 
 ## Creating repositories from crawls

@@ -524,6 +524,58 @@ describe('RagasPanel', () => {
   // execution of a benchmark, the system must remember which model was
   // selected and used" — the judge selector restores from the suite's
   // recorded pick on reopen instead of resetting to the deployment default.
+  describe('the judge the run is really using (2026-10-21)', () => {
+    const flush = () => new Promise((r) => setTimeout(r, 0));
+
+    it('"deployment default" NAMES the active configuration', async () => {
+      // The run went to a personal MiniMax key while the panel said
+      // "deployment default" — the operator believed the active GLM config
+      // was in use. The default must never be a guess.
+      const w = mountPanel();
+      await flush();
+      w.vm.modelConfigs = [
+        { _key: 'mm', name: 'Minimax David OpenAI', active: false, default_model: 'MiniMax-M3.1-Flash' },
+        { _key: 'glm', name: 'GLM-5.3 ITU - OpenAI', active: true, default_model: 'glm-5.3' }
+      ];
+      const label = w.vm.defaultJudgeLabel;
+      expect(label).toContain('GLM-5.3 ITU - OpenAI');
+      expect(label).toContain('glm-5.3');
+      expect(label).not.toContain('Minimax');
+    });
+
+    it('the in-flight generation names the model it is ACTUALLY using', async () => {
+      const w = mountPanel();
+      await flush();
+      w.vm.generateBusy = true;
+      w.vm.genProgress = {
+        phase: 'building-knowledge-graph',
+        done: 0,
+        total: 1075,
+        judge: { source: 'picked', config: 'Minimax David OpenAI', model: 'MiniMax-M3.1-Flash' }
+      };
+      const label = w.vm.effectiveJudgeLabel;
+      expect(label).toContain('Minimax David OpenAI');
+      expect(label).toContain('MiniMax-M3.1-Flash');
+      // and it is RENDERED, not just computed
+      await w.vm.$nextTick();
+      expect(w.text()).toContain('Minimax David OpenAI');
+    });
+
+    it('a pick the dropdown cannot display is dropped, never sent silently', async () => {
+      // The v-model/select desync: the state held a key with no matching
+      // option, so the browser showed "deployment default" while the
+      // request carried the stale key. A list change that removes the key
+      // must clear it.
+      const w = mountPanel();
+      await flush();
+      w.vm.judgeConfigKey = 'mm';
+      w.vm.judgeModel = 'MiniMax-M3.1-Flash';
+      await w.setData({ modelConfigs: [{ _key: 'glm', name: 'GLM-5.3 ITU - OpenAI', active: true }] });
+      expect(w.vm.judgeConfigKey).toBe('');
+      expect(w.vm.judgeModel).toBe('');
+    });
+  });
+
   describe('judge pick memory', () => {
     const flush = () => new Promise((r) => setTimeout(r, 0));
 

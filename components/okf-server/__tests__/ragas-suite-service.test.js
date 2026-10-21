@@ -250,6 +250,56 @@ describe('beginSuiteGeneration / getSuite', () => {
     expect(doc.payload.judge).toMatchObject({ source: expect.stringMatching(/^(env|builtin-default)$/), config: null });
   });
 
+  it('the IN-FLIGHT generation names the judge it is using (2026-10-21)', async () => {
+    // The run went to a personal MiniMax key while the panel said
+    // "deployment default" — the operator believed the active GLM config
+    // was in use. The in-flight envelope must carry the EFFECTIVE judge,
+    // because the suite doc (and its pick) does not exist until the end.
+    __mockDb._stores.okf_model_configs = {
+      mm: {
+        _key: 'mm',
+        name: 'Minimax David OpenAI',
+        provider: 'openai',
+        base_url: 'https://api.minimax.io/v1',
+        default_model: 'MiniMax-M3.1-Flash',
+        api_key: 'k',
+        services: ['ragas_judge'],
+        active: false
+      }
+    };
+    // The sidecar call hangs, so the generation stays in flight.
+    let release;
+    const held = new Promise((r) => {
+      release = r;
+    });
+    const base = global.fetch.getMockImplementation();
+    global.fetch = jest.fn(async (u, opts) => {
+      if (String(u).includes('/generate-testset')) {
+        await held;
+        return base(u, opts);
+      }
+      return base(u, opts);
+    });
+    try {
+      const begun = await svc.beginSuiteGeneration('me', { judge_config_key: 'mm', testset_size: 1 }, {});
+      // let the resolution + submit settle
+      await new Promise((r) => setTimeout(r, 20));
+      const env = await svc.getSuite('me', begun.suite_key);
+      expect(env.status).toBe('generating');
+      expect(env.progress.judge).toMatchObject({
+        source: 'picked',
+        config: 'Minimax David OpenAI',
+        model: 'MiniMax-M3.1-Flash'
+      });
+      // let the generation finish so the in-flight lock is released
+      release();
+      await begun.done;
+    } finally {
+      release();
+      global.fetch = jest.fn(base);
+    }
+  });
+
   it('records an explicit judge pick on the suite — pick as made + resolved fidelity', async () => {
     __mockDb._stores.okf_model_configs = {
       mm: {
@@ -1183,7 +1233,10 @@ describe('xlsx passthrough + listing', () => {
     expect(gen).toBeTruthy();
     expect(gen.suite_key).toBe(begun.suite_key);
     expect(gen.kind).toBe('ragas_suite');
-    expect(gen.progress).toEqual({ phase: 'synthesizing-questions', done: 1, total: 2 });
+    // The live progress carries the sidecar's counts AND the effective
+    // judge (2026-10-21) — the panel shows which model the run is using.
+    expect(gen.progress).toMatchObject({ phase: 'synthesizing-questions', done: 1, total: 2 });
+    expect(gen.progress.judge).toMatchObject({ source: expect.any(String) });
     // Newest-first: the live generation leads the list.
     expect(suites[0].status).toBe('generating');
     // The synthetic suite row must NOT leak into ragas_run listings.

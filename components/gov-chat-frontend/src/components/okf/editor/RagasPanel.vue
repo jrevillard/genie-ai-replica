@@ -90,10 +90,10 @@
            pick beats the deployment's active configuration; default = env. -->
       <div v-if="modelConfigs.length" class="okf-ragas__judge-row">
         <label class="okf-ragas__dim">
-          <span>{{ translate('okf.ragas.judge.config', 'Judge model configuration') }}</span>
+          <span>{{ translate('okf.ragas.generate.config', 'Judge model configuration') }}</span>
           <select v-model="judgeConfigKey" :disabled="generateBusy" @change="onJudgeConfigChange">
             <option value="">
-              {{ translate('okf.ragas.judge.default', 'Deployment default (active configuration / env)') }}
+              {{ defaultJudgeLabel }}
             </option>
             <option v-for="c in modelConfigs" :key="c._key" :value="c._key">
               {{ c.name }}{{ c.active ? ' ★' : '' }}
@@ -101,24 +101,24 @@
           </select>
         </label>
         <label v-if="judgeConfigKey" class="okf-ragas__dim">
-          <span>{{ translate('okf.ragas.judge.model', 'Model') }}</span>
+          <span>{{ translate('okf.ragas.generate.model', 'Model') }}</span>
           <select v-if="judgeModels.length" v-model="judgeModel" :disabled="generateBusy">
-            <option value="">{{ translate('okf.ragas.judge.modelPick', 'Configuration default') }}</option>
+            <option value="">{{ translate('okf.ragas.generate.modelPick', 'Configuration default') }}</option>
             <option v-for="m in judgeModels" :key="m" :value="m">{{ m }}</option>
           </select>
           <input
             v-else
             v-model="judgeModel"
             type="text"
-            :placeholder="translate('okf.ragas.judge.modelDefault', 'configuration default')"
+            :placeholder="translate('okf.ragas.generate.modelDefault', 'configuration default')"
             :disabled="generateBusy"
           />
         </label>
         <DsInfoTip
-          :label="translate('okf.ragas.judge.config', 'Judge model configuration')"
+          :label="translate('okf.ragas.generate.config', 'Judge model configuration')"
           :text="
             translate(
-              'okf.ragas.judge.note',
+              'okf.ragas.generate.note',
               'The model that synthesizes questions and scores answers. An active configuration (★, Models tab) applies automatically; picking one here overrides it for this operation only. Stronger judges make entity-recall and advice quality markedly better on small local models.'
             )
           "
@@ -170,6 +170,13 @@
         <span v-if="genProgressDetail" class="okf-ragas__muted okf-ragas__progress-detail">
           {{ genProgressDetail }}
         </span>
+        <!-- The model this run is ACTUALLY using, by name (live 2026-10-21:
+             the run went to a personal MiniMax key while the panel said
+             "deployment default" — the active GLM config. The dropdown is
+             the selection; this is the truth. -->
+        <span v-if="effectiveJudgeLabel" class="okf-ragas__muted okf-ragas__progress-detail">
+          {{ effectiveJudgeLabel }}
+        </span>
       </div>
     </div>
 
@@ -218,7 +225,7 @@
         <label v-if="modelConfigs.length" class="okf-ragas__metric okf-ragas__judge-inline">
           <select v-model="judgeConfigKey" :disabled="runBusy" @change="onJudgeConfigChange">
             <option value="">
-              {{ translate('okf.ragas.judge.default', 'Deployment default (active configuration / env)') }}
+              {{ defaultJudgeLabel }}
             </option>
             <option v-for="c in modelConfigs" :key="c._key" :value="c._key">
               {{ c.name }}{{ c.active ? ' ★' : '' }}
@@ -230,7 +237,7 @@
             :disabled="runBusy"
             class="okf-ragas__judge-model"
           >
-            <option value="">{{ translate('okf.ragas.judge.modelPick', 'Configuration default') }}</option>
+            <option value="">{{ translate('okf.ragas.generate.modelPick', 'Configuration default') }}</option>
             <option v-for="m in judgeModels" :key="m" :value="m">{{ m }}</option>
           </select>
         </label>
@@ -726,6 +733,35 @@ export default {
     };
   },
   computed: {
+    /** What "Deployment default" RESOLVES to, by name (live 2026-10-21:
+     * the dropdown said "default" and the operator believed the active
+     * GLM config was in use — it was not. The default is now spelled out
+     * so the choice is never a guess. */
+    defaultJudgeLabel() {
+      const active = this.modelConfigs.find((c) => c.active);
+      if (!active)
+        return this.translate('okf.ragas.generate.default', 'Deployment default (active configuration / env)');
+      const model = active.default_model ? ` (${active.default_model})` : '';
+      return this.translate('okf.ragas.generate.defaultNamed', 'Deployment default — {name}{model}')
+        .replace('{name}', active.name)
+        .replace('{model}', model);
+    },
+    /** The model the RUNNING generation is actually using, by name. The
+     * dropdown shows the SELECTION; for an in-flight generation that
+     * selection is reset to "default" (the suite doc does not exist yet),
+     * so this is the only honest answer to "which model is this?".
+     */
+    effectiveJudgeLabel() {
+      const j = this.genProgress && this.genProgress.judge;
+      if (!j) return '';
+      const name =
+        j.config || (j.source === 'env' ? this.translate('okf.ragas.generate.envDefault', 'environment default') : '');
+      const model = j.model ? ` (${j.model})` : '';
+      if (!name && !model) return '';
+      return this.translate('okf.ragas.generate.effective', 'Judging with {name}{model}')
+        .replace('{name}', name)
+        .replace('{model}', model);
+    },
     /** The every-control reference rendered by the Help panel — titles and
      *  text straight from i18n so every locale carries the full glossary. */
     helpItems() {
@@ -1034,6 +1070,21 @@ export default {
         legend: { labels: { colors: t.textColor } },
         plotOptions: { bar: { horizontal: true } }
       };
+    }
+  },
+  watch: {
+    /** A pick the dropdown cannot DISPLAY must never travel with the
+     * request (live 2026-10-21): the run went to a personal MiniMax key
+     * while the panel showed "Deployment default" — the active GLM config
+     * the operator believed was in use. A stale key is dropped the moment
+     * it stops being an option, so the panel can never lie about the
+     * model a run uses. */
+    modelConfigs(list) {
+      if (this.judgeConfigKey && !list.some((c) => c._key === this.judgeConfigKey)) {
+        this.judgeConfigKey = '';
+        this.judgeModel = '';
+        this.judgeModels = [];
+      }
     }
   },
   mounted() {

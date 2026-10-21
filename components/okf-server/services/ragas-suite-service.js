@@ -858,6 +858,18 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
     // An override without a model is unusable — the env judge applies and
     // the suite's fidelity records the EFFECTIVE judge.
     const effectiveJudge = judgeOverride && judgeOverride.model ? judgeOverride : null;
+    // The EFFECTIVE judge goes into the live progress envelope (live
+    // 2026-10-21): the panel's judge dropdown shows the SELECTION, and for
+    // an in-flight generation that selection is reset to "deployment
+    // default" (the suite doc does not exist yet) — so the operator saw
+    // "default" (the active GLM config) while the run was actually on a
+    // different, explicitly picked endpoint. The run now NAMES the model it
+    // is using, from the first tick.
+    const effectiveJudgeFidelity = modelConfigService.judgeFidelity(effectiveJudge);
+    genProgress.set(opts.suiteKey, {
+      ...(genProgress.get(opts.suiteKey) || {}),
+      judge: effectiveJudgeFidelity
+    });
     // 202 + poll: the sidecar starts a background job and we poll it — no
     // connection is held open for the (potentially hour-long) generation.
     const genResp = await sidecarSubmitWithRetry(
@@ -887,8 +899,11 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
         suite_key: opts.suiteKey
       },
       {
-        // live KG/synthesis counts land on the generating envelope (getSuite)
-        onProgress: (p) => genProgress.set(opts.suiteKey, p)
+        // live KG/synthesis counts land on the generating envelope (getSuite).
+        // MERGED, not replaced: the envelope also carries the effective
+        // judge, and a sidecar progress tick must not wipe it (the panel
+        // shows the model the run is actually using).
+        onProgress: (p) => genProgress.set(opts.suiteKey, { ...(genProgress.get(opts.suiteKey) || {}), ...p })
       }
     );
     genProgress.delete(opts.suiteKey);

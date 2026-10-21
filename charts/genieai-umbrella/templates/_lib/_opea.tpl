@@ -56,17 +56,21 @@ an empty env var produces). */ -}}
 {{- end -}}
 
 {{/*
-genieai-umbrella.opeaSslSkipVerify — returns "1" when the GPU node uses a
-self-signed certificate (nodeHost starts with https://), else "0".
+genieai-umbrella.opeaSslSkipVerify — returns "1" when the operator declared
+the GPU node's certificate untrusted, else "0".
 
-This mirrors the backend's NODE_TLS_REJECT_UNAUTHORIZED=0 rationale: the
-GPU node's certificate is signed by an internal CA that the trust store
-does not carry.
+Driven by opea.gpu.skipTlsVerify, NOT by the nodeHost scheme. An https://
+endpoint says nothing about whether its certificate is in the trust store,
+and disabling verification is not a decision a template takes on the
+operator's behalf — Compose exposes the same variable and defaults it to 0
+for the same reason. The alternative reads as "the chart trusts whatever
+answers on that port", and prompts, the VLLM_API_KEY bearer and translated
+answers all cross it.
 
 Signature: {{ include "genieai-umbrella.opeaSslSkipVerify" . }}
 */}}
 {{- define "genieai-umbrella.opeaSslSkipVerify" -}}
-{{- if hasPrefix "https://" .Values.opea.gpu.nodeHost -}}1{{- else -}}0{{- end -}}
+{{- if .Values.opea.gpu.skipTlsVerify -}}1{{- else -}}0{{- end -}}
 {{- end -}}
 
 {{/*

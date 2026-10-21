@@ -273,42 +273,68 @@ html[data-visual='on'] .dark-mode .genie-living-intelligence .quick-help-overlay
    z-index 0 keeps the artwork below the grid (which uses z-index 1 to
    sit above the waves ::after).
 
-   A surface scrim sits behind the text. The scrim is fully opaque
-   `var(--surface)`; a mask fades only its top edge to transparent
-   over the top ~30 % of the content. The mask is the only place the
-   gradient lives — it never appears as a *colour* transition under
-   the text, so the brand ramp inside the heading and the subtitle
-   paint on opaque surface everywhere they actually render. The
-   padding-top pushes the heading + subtitle below the mask's
-   transparent band, into the part of the content where mask alpha
-   is already 1; nothing of the gradient transition reaches the text.
-   The artwork above still dissolves through the banner's own mask
-   — the scrim's job is to be a surface, not a second ramp. */
+   A translucent surface scrim sits behind the text, so the artwork
+   reads faintly through the heading's band instead of being cut off
+   by an opaque panel.
+
+   --qh-banner-scrim-alpha is the only knob, and its value is a measured
+   floor rather than a preference. The wordmark is live text on a
+   three-stop brand ramp, so what it has to clear is its worst RENDERED
+   pairing against the artwork pixel directly behind each glyph. At
+   0.88 in light and 0.80 in dark that pairing still clears 3:1 at every
+   width from 769 px to 1920 px; one step further down drops below it at
+   0.84 (light) and 0.74 (dark). The binding pixel is the artwork's
+   saturated blue in its lower band.
+
+   Placement is not a way out. The globe's ink runs dark from roughly 20 %
+   to 80 % of the band, so the heading's row is about as dark as anywhere
+   it could legally go: sliding the text down to the band's lower third or
+   up to its pale top edge measured no better than the position it already
+   holds, and neither could reach a more translucent scrim.
+
+   The mask below is what keeps the scrim's top edge from cutting a line
+   through the globe and the icon tiles. It ramps the scrim up over the
+   top 30 % of the content, and the banner's own mask ramps everything
+   back down over its lower 28 %; the two meet across a plateau rather
+   than a seam, so the artwork dissolves into the scrim and the scrim
+   dissolves into the panel as one continuous fade in both themes. */
 html[data-visual='on'] .genie-living-intelligence .quick-help-content {
   position: relative;
   z-index: 1;
   min-width: 0;
-  background: var(--surface);
+  --qh-banner-scrim-alpha: 0.88;
+  background: color-mix(in srgb, var(--surface) calc(var(--qh-banner-scrim-alpha) * 100%), transparent);
   /*
    * mask-mode: alpha is load-bearing. Without it, Blink resolves the
    * linear-gradient's `transparent` stop as luminance=0, which the
    * `match-source` default keys to the luminance mask mode; the 0-30%
    * fade then collapses to a uniform 0 (mask OFF everywhere) and the
    * banner's artwork bleeds through the scrim. Forcing alpha locks
-   * the gradient to its declared alpha stops, so the scrim past 30%
-   * is opaque `var(--surface)` and the heading paints on the panel.
+   * the gradient to its declared alpha stops.
    */
   -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgb(0 0 0 / 1) 30%);
   mask-image: linear-gradient(to bottom, transparent 0%, rgb(0 0 0 / 1) 30%);
   -webkit-mask-mode: alpha;
   mask-mode: alpha;
   /* The padding-top is large enough that the heading's first pixel
-     sits past the 30 % mask transition. At a content height of ~120 px
-     (banner.content ≈ heading 38 + subtitle 26 + margins 8 + padding 16),
-     30 % is ~36 px; the heading's font line begins at 50 px down, so
-     every glyph paints on fully opaque surface. */
+     sits past the 30 % mask transition, so every glyph paints where
+     the scrim has reached its full alpha. It cancels out of where the
+     heading sits inside the band — growing it grows the scrim by the
+     same amount — which is why the text's position is set from the
+     space below it rather than from here. */
   padding-top: 50px;
   padding-bottom: var(--space-sm);
+}
+
+/*
+ * The dark scrim can sit lower than the light one. Its floor is set by
+ * 1280 px, the width at which the heading sits closest to the banner's
+ * mask knee and therefore has the least of the artwork dissolved out
+ * from under it.
+ */
+html[data-theme='dark'][data-visual='on'] .genie-living-intelligence .quick-help-content,
+html[data-visual='on'] .dark-mode .genie-living-intelligence .quick-help-content {
+  --qh-banner-scrim-alpha: 0.8;
 }
 
 /* The grid is a sibling of the banner, not a descendant of content

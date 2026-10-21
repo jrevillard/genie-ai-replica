@@ -1,0 +1,283 @@
+#!/usr/bin/env python3
+"""Check that the Helm chart and Docker Compose configure a service the same way.
+
+Why this exists
+---------------
+
+The stack has two deployment surfaces: `docker-compose.yaml` and the
+`charts/genieai-umbrella/` chart. They configure the SAME applications, so
+every environment variable an operator can set on one of them must have a
+counterpart on the other, with the same default. When they drift, a
+deployment behaves differently depending on which surface it runs on — and
+the difference is invisible until something misbehaves in one of them.
+
+Nothing else in the pipeline catches this. `helm lint` checks the chart
+against itself, the Compose file against itself, and the tests exercise the
+code with whatever environment the CI job happens to have. A variable added
+to one surface and forgotten in the other is a green pipeline.
+
+The drift is silent and it is easy to produce: a rebase brings in an
+upstream commit that adds an environment variable to Compose, and the chart
+— which has a fixed, hand-written list of environment rows — never learns
+about it. This script is the gate that makes the drift loud.
+
+The model
+---------
+
+For every service pair (a Compose service and the chart component that runs
+the same application), every variable Compose sets must be configured by the
+chart — rendered, or declared in the chart's values. A variable the chart
+never mentions is a knob an operator can turn on one surface and not the
+other.
+
+The VALUES, on the other hand, are allowed to differ for one class of
+variable only: the WIRING — the addresses and topology each surface
+addresses. Compose reaches `http://tei:80` where Kubernetes reaches
+`https://10.0.0.110:444/embed`; the chart reaches
+`arangodb-single.genieai.svc.cluster.local` where Compose reaches
+`arango-vector-db`. Those are not drift: they are the adaptation to
+Kubernetes, and the point of the gate is to force each of them to be
+DECLARED (in the allowlist, with the reason) rather than to be equal. A
+wiring variable the chart forgot to set at all is still a gap: the
+application needs it whichever surface it runs on.
+
+Everything else — timeouts, retries, feature flags, log levels, identity —
+must carry the same effective value on both surfaces. That is the parity
+that matters: the same deployment, configured the same way, wherever it
+runs.
+
+Three categories in the allowlist, per service:
+
+  * `mayDiffer`  — the variable names an address, a topology fact, or a
+                   deliberate policy difference. The chart must set it; its
+                   value is the Kubernetes one.
+  * `composeOnly` — the variable only makes sense on the Compose surface
+                   (Docker GPU passthrough). The chart must not need it.
+  * `notRead`    — the variable is read by no code in the repository. It
+                   is configuration theatre on both surfaces.
+  * `codeDefault` — Compose leaves the variable empty and the code's own
+                   default applies when it is unset, so the chart leaving
+                   it unset produces the same result.
+
+"Effective value" means what the variable resolves to, not how it is
+spelled: Compose's `${NAME:-fallback}` resolves to `fallback` when NAME is
+unset, and to a bare `${NAME}` it resolves to nothing at all — the variable
+is required, which is a fact the chart has to reproduce (through a Secret).
+
+Usage:
+  config-parity-check.py RENDERED.yaml [--compose ...] [--values ...] [--allowlist ...]
+
+Exits non-zero and prints one `GAP` line per difference. A surface the
+script cannot compare (a Compose service with no chart counterpart, or the
+other way round) is reported and does not fail the run — the pairing is
+declared in the allowlist file, and a service absent from it was never
+declared comparable.
+"""
+
+import json
+import re
+import sys
+
+import yaml
+
+DEFAULT_COMPOSE = "docker-compose.yaml"
+DEFAULT_VALUES = "charts/genieai-umbrella/values.yaml"
+DEFAULT_ALLOWLIST = "scripts/config-parity-allowlist.json"
+
+# Marker for a variable the chart carries from a Secret: the chart asks the
+# operator for it, and its value cannot be compared with Compose's.
+SECRET = "(secret)"
+
+# `${NAME}` / `${NAME:-fallback}` / `${NAME-fallback}` inside a Compose value.
+_INTERP = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::?-([^}]*))?\}")
+
+
+def compose_default(value):
+    """The value a Compose variable resolves to when the operator sets nothing.
+
+    Returns (resolved, required). `required` is True for `${NAME}` with no
+    fallback: the operator MUST set it, which the chart has to reproduce
+    (through a Secret), so it is not comparable to a chart default.
+    """
+    text = str(value)
+    if not text.startswith("${") or not text.endswith("}"):
+        return text, False
+    match = _INTERP.fullmatch(text)
+    if not match:
+        return text, False
+    fallback = match.group(2)
+    if fallback is None:
+        return "", True
+    return fallback, False
+
+
+def compose_vars(service):
+    """{name: (effective value, required)} for a Compose service."""
+    environment = service.get("environment") or []
+    if isinstance(environment, dict):
+        environment = [f"{k}={v}" for k, v in environment.items()]
+    out = {}
+    for entry in environment:
+        text = str(entry)
+        name = text.split("=", 1)[0].strip()
+        if not name:
+            continue
+        raw = text.split("=", 1)[1] if "=" in text else ""
+        out[name] = compose_default(raw)
+    return out
+
+
+def chart_rendered(docs):
+    """{component: {name: value}} from the rendered chart.
+
+    A variable carried by a Secret has no literal value: its value lives in
+    a Secret the operator provides, and the rendered row only proves the
+    chart asks for it. Those rows are recorded as SECRET so the comparison
+    skips them — the chart and Compose then agree that the variable is
+    required, and the operator supplies it either way.
+    """
+    out = {}
+    for doc in docs:
+        if not isinstance(doc, dict) or doc.get("kind") != "Deployment":
+            continue
+        labels = doc.get("spec", {}).get("template", {}).get("metadata", {}).get("labels", {})
+        component = labels.get("genieai.io/component")
+        if not component:
+            continue
+        rows = out.setdefault(component, {})
+        for container in doc.get("spec", {}).get("template", {}).get("spec", {}).get("containers", []):
+            for entry in container.get("env") or []:
+                if "name" in entry:
+                    value = entry.get("value")
+                    if value is None and "valueFrom" in entry:
+                        value = SECRET
+                    rows[entry["name"]] = value
+    return out
+
+
+def chart_declared(values):
+    """{component: {name: value}} from the chart's own values.
+
+    The chart keeps the operator's environment in `services.<svc>.env` and
+    `opea.<svc>.env`, as a MAP (Helm merges maps key by key, so an overlay
+    that sets one variable keeps the others — a list would be replaced
+    wholesale). A row declared there but not rendered still counts as
+    declared: the operator can set it.
+    """
+    out = {}
+    for section in ("services", "opea"):
+        for name, block in (values.get(section) or {}).items():
+            if not isinstance(block, dict):
+                continue
+            rows = block.get("env")
+            if not rows:
+                continue
+            if isinstance(rows, dict):
+                for var, value in rows.items():
+                    out.setdefault(name, {})[var] = value
+            else:
+                for row in rows:
+                    if isinstance(row, dict) and "name" in row:
+                        out.setdefault(name, {})[row["name"]] = row.get("value")
+    return out
+
+
+def main(argv):
+    if len(argv) < 2:
+        print(__doc__)
+        return 2
+
+    args = argv[1:]
+    rendered_path = args[0]
+    compose_path = DEFAULT_COMPOSE
+    values_path = DEFAULT_VALUES
+    allowlist_path = DEFAULT_ALLOWLIST
+    for arg in args[1:]:
+        if arg.startswith("--compose="):
+            compose_path = arg.split("=", 1)[1]
+        elif arg.startswith("--values="):
+            values_path = arg.split("=", 1)[1]
+        elif arg.startswith("--allowlist="):
+            allowlist_path = arg.split("=", 1)[1]
+
+    with open(rendered_path) as handle:
+        docs = [d for d in yaml.safe_load_all(handle) if d]
+    with open(compose_path) as handle:
+        compose = yaml.safe_load(handle) or {}
+    with open(values_path) as handle:
+        values = yaml.safe_load(handle) or {}
+    with open(allowlist_path) as handle:
+        allowlist = json.load(handle)
+
+    rendered = chart_rendered(docs)
+    declared = chart_declared(values)
+    services = allowlist.get("services") or {}
+
+    gaps = []
+    checked = 0
+    for component, pair in sorted(services.items()):
+        compose_name = pair.get("compose")
+        chart_name = pair.get("chart", component)
+        service = (compose.get("services") or {}).get(compose_name)
+        if service is None:
+            print(f"  SKIPPED {component}: no Compose service named {compose_name!r}")
+            continue
+        rendered_rows = rendered.get(chart_name, {})
+        declared_rows = declared.get(chart_name, {})
+        may_differ = pair.get("mayDiffer") or {}
+        compose_only = pair.get("composeOnly") or {}
+        not_read = pair.get("notRead") or {}
+        code_default = pair.get("codeDefault") or {}
+        secret_provided = pair.get("secretProvided") or {}
+
+        for name, (value, required) in sorted(compose_vars(service).items()):
+            if name in compose_only or name in not_read or name in code_default:
+                continue
+            if name in secret_provided:
+                # The chart asks the operator for the value through a
+                # Secret; there is no literal to compare.
+                continue
+            checked += 1
+            if name in rendered_rows:
+                chart_value = rendered_rows[name]
+            elif name in declared_rows:
+                chart_value = declared_rows[name]
+            else:
+                reason = (
+                    "required in Compose, so the chart must carry it in a Secret"
+                    if required
+                    else "absent from the chart"
+                )
+                gaps.append(f"{component}.{name}: {reason} (Compose resolves to {value!r})")
+                continue
+            if name in may_differ:
+                # The chart must set it; the value is the Kubernetes one.
+                continue
+            if chart_value == SECRET:
+                # Carried by a Secret on the chart side: the operator
+                # supplies it, so the value cannot be compared.
+                continue
+            if str(chart_value) != str(value):
+                gaps.append(
+                    f"{component}.{name}: chart has {chart_value!r}, "
+                    f"Compose resolves to {value!r} — declare it under mayDiffer if "
+                    "the difference is the Kubernetes adaptation"
+                )
+
+    print(f"{compose_path} vs {rendered_path}: {len(services)} service pairs, {checked} variables compared")
+    for gap in gaps:
+        print(f"  GAP {gap}")
+    if gaps:
+        print(
+            f"\n{len(gaps)} variable(s) are configured on one surface and not the other, "
+            "or configured differently. A deployment must behave the same on both. Set the "
+            "variable on the missing surface, or record why it is deliberately different "
+            f"in {allowlist_path}."
+        )
+        return 1
+    print("every variable Compose sets is configured the same way by the chart")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

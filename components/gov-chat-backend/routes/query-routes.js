@@ -26,6 +26,15 @@ const emptyStreamMetadata = () => ({
   abstention_reason: null
 });
 
+// Emitted once per stream when a configured translation backend cannot answer.
+// The per-unit and post-stream paths both send it, so it is built once here:
+// two copies of a client-visible contract string is how they drift.
+const SSE_TRANSLATION_FAILED = `data: ${JSON.stringify({
+  type: 'error',
+  message: 'Translation failed',
+  code: 'TRANSLATION_FAILED'
+})}\n\n`;
+
 module.exports = (queryService) => {
   // Apply authentication middleware to all routes
   router.use(keycloakAuthMiddleware.authenticate);
@@ -301,6 +310,14 @@ module.exports = (queryService) => {
             if (!res.writableEnded) {
               res.write(`data: ${JSON.stringify({ type: 'chunk', content: `${content}${separator}` })}\n\n`);
             }
+            if (!streamingTranslationFailed && !res.writableEnded) {
+              // The English unit above is already on the wire and cannot be
+              // recalled. What can still be done is say the translation failed:
+              // without this frame the client receives a fully English answer
+              // and no signal whatsoever, because the flag below only
+              // suppresses the post-stream retry.
+              res.write(SSE_TRANSLATION_FAILED);
+            }
             streamingTranslationFailed = true;
           }
         });
@@ -480,9 +497,7 @@ module.exports = (queryService) => {
         res.write(`data: ${JSON.stringify({ type: 'translation', content: translated })}\n\n`);
       } catch (error) {
         logger.warn('QueryService.stream_translation_failed', { queryId, error: error.message });
-        res.write(
-          `data: ${JSON.stringify({ type: 'error', message: 'Translation failed', code: 'TRANSLATION_FAILED' })}\n\n`
-        );
+        res.write(SSE_TRANSLATION_FAILED);
       }
     }
 

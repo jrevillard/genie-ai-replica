@@ -243,7 +243,12 @@ Environment variables for translation service:
 
 ```bash
 # Backend Selection
+# A configured GPU API (GPU_NODE_HOST set, or VLLM_TRANSLATION_ENDPOINT naming
+# something other than the in-cluster worker) is mandatory: TRANSLATION_BACKEND
+# is not consulted, and a GPU API that does not answer stops the service from
+# starting. It is consulted only when no GPU API is configured.
 TRANSLATION_BACKEND=cpu|gpu|auto  # Default: auto
+TRANSLATION_PROBE_TIMEOUT_SECONDS=30  # Startup probe budget
 
 # CPU Backend Configuration
 TRANSLATION_CPU_MODEL_ID=Xenova/nllb-200-distilled-600M

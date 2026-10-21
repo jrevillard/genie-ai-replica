@@ -51,6 +51,10 @@ jest.mock('../../services/translation/cpu-translate-backend', () =>
 
 jest.mock('../../services/translation/gpu-translate-backend', () =>
   jest.fn().mockImplementation(() => ({
+    // Stands for "the deployment named no endpoint of its own". The service
+    // reads this to tell a configured GPU API from the in-cluster worker, so a
+    // mock without it would silently take the configured path in every test.
+    endpointExplicit: false,
     translate: mockGpuTranslate,
     getSupportedLanguages: jest.fn().mockReturnValue({ en: 'English', fr: 'French', es: 'Spanish' }),
     getLanguageCode: jest.fn().mockImplementation((lang) => lang),
@@ -100,7 +104,13 @@ afterEach(() => {
 
 function setEnv(key, value) {
   savedEnvVars[key] = process.env[key];
-  process.env[key] = value;
+  // Assigning `undefined` to process.env stores the string "undefined", which
+  // is truthy — an unset knob would then read as a set one. Delete instead.
+  if (value === undefined) {
+    delete process.env[key];
+  } else {
+    process.env[key] = value;
+  }
 }
 
 describe('TranslationService', () => {
@@ -156,6 +166,101 @@ describe('TranslationService', () => {
       translationService.initialized = false;
       translationService.backend = null;
       await expect(translationService.selectBackend()).rejects.toThrow('Invalid TRANSLATION_BACKEND');
+    });
+  });
+
+  describe('configured GPU API', () => {
+    // A deployment that named a GPU API gets it, always. CPU is not a degraded
+    // mode to slide into: on a remote-GPU deployment it silently moves the
+    // deployer's content onto a local model, with nothing in the output to say
+    // so. When no GPU API is configured the choice is legitimate and
+    // TRANSLATION_BACKEND decides.
+
+    // A fresh instance per case — `translationBackend` and `gpuNodeHost` are
+    // read at module load, so changing env after the require proves nothing.
+    const serviceWithEnv = (env) => {
+      setEnv('TRANSLATION_BACKEND', env.backend);
+      setEnv('GPU_NODE_HOST', env.gpuNodeHost);
+      jest.isolateModules(() => {
+        translationService = require('../../services/translation-service');
+      });
+      translationService.initialized = false;
+      translationService.backend = null;
+      translationService.backendType = null;
+      return translationService;
+    };
+
+    // An endpoint of its own says "GPU API configured" even with no GPU node
+    // host — a deployment may route through a proxy that sets only this.
+    const gpuApi = (overrides = {}) => ({
+      endpointExplicit: true,
+      init: jest.fn().mockResolvedValue(undefined),
+      getLanguageCode: (l) => l,
+      translate: mockGpuTranslate,
+      ...overrides
+    });
+
+    it.each(['cpu', 'gpu', 'auto', undefined])(
+      'uses the GPU and ignores TRANSLATION_BACKEND=%s when a GPU API is configured',
+      async (backend) => {
+        const svc = serviceWithEnv({ backend, gpuNodeHost: 'gpu-node.internal' });
+
+        await svc.selectBackend();
+
+        expect(svc.backendType).toBe('gpu');
+        expect(CpuTranslateBackend).not.toHaveBeenCalled();
+      }
+    );
+
+    it.each(['cpu', 'gpu', 'auto', undefined])(
+      'uses the GPU when only an explicit endpoint says one is configured (TRANSLATION_BACKEND=%s)',
+      async (backend) => {
+        const svc = serviceWithEnv({ backend, gpuNodeHost: '' });
+        GpuTranslateBackend.mockImplementationOnce(() => gpuApi());
+
+        await svc.selectBackend();
+
+        expect(svc.backendType).toBe('gpu');
+        expect(CpuTranslateBackend).not.toHaveBeenCalled();
+      }
+    );
+
+    it.each(['cpu', 'gpu', 'auto', undefined])(
+      'refuses to start when the configured GPU API does not answer (TRANSLATION_BACKEND=%s)',
+      async (backend) => {
+        const svc = serviceWithEnv({ backend, gpuNodeHost: 'gpu-node.internal' });
+        GpuTranslateBackend.mockImplementationOnce(() =>
+          gpuApi({ init: jest.fn().mockRejectedValue(new Error('vLLM service health check timeout')) })
+        );
+
+        await expect(svc.selectBackend()).rejects.toThrow('health check timeout');
+
+        // The point of the rule: no CPU, not even an initialised one.
+        expect(CpuTranslateBackend).not.toHaveBeenCalled();
+        expect(mockCpuTranslate).not.toHaveBeenCalled();
+        expect(svc.backend).toBeNull();
+      }
+    );
+
+    it('still honours TRANSLATION_BACKEND=cpu when no GPU API is configured', async () => {
+      const svc = serviceWithEnv({ backend: 'cpu', gpuNodeHost: '' });
+
+      await svc.selectBackend();
+
+      expect(svc.backendType).toBe('cpu');
+    });
+
+    it('still falls back to CPU in auto mode when no GPU API is configured', async () => {
+      // The one branch where CPU is a legitimate outcome rather than a silent
+      // substitution: nothing was configured to be mandatory.
+      const svc = serviceWithEnv({ backend: 'auto', gpuNodeHost: '' });
+      GpuTranslateBackend.mockImplementationOnce(() =>
+        gpuApi({ endpointExplicit: false, init: jest.fn().mockRejectedValue(new Error('ECONNREFUSED')) })
+      );
+
+      await svc.selectBackend();
+
+      expect(svc.backendType).toBe('cpu');
     });
   });
 

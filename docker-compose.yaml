@@ -559,6 +559,18 @@ services:
       - VLLM_TRANSLATION_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
       # Remote GPU node translation endpoint override
       - VLLM_TRANSLATION_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT:-http://vllm-translation-guardrail:9031}
+      # "A GPU API is configured" — the backend needs this to decide whether the
+      # GPU translation endpoint is mandatory or one candidate among two. Without
+      # it the backend cannot tell a remote GPU node from the in-cluster worker,
+      # and would quietly fall back to CPU whenever a configured endpoint stops
+      # answering. chatqna, retriever and dataprep already receive it.
+      - GPU_NODE_HOST=${GPU_NODE_HOST:-}
+      # Backend preference. `auto` (default) probes once and commits; `cpu` and
+      # `gpu` skip the probe. Ignored when a GPU API is configured — see above.
+      - TRANSLATION_BACKEND=${TRANSLATION_BACKEND:-auto}
+      # Budget for the startup translation probe. Failing it stops the service,
+      # so it must cover a cold TLS handshake to a remote GPU node.
+      - TRANSLATION_PROBE_TIMEOUT_SECONDS=${TRANSLATION_PROBE_TIMEOUT_SECONDS:-30}
       # Stream the target-language translation during chat (#829): stream the UI
       # language while generating instead of English-then-flip. 0 = current behavior.
       - STREAMING_TRANSLATION_ENABLED=${STREAMING_TRANSLATION_ENABLED:-0}

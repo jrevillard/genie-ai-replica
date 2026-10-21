@@ -416,3 +416,94 @@ describe('GpuTranslateBackend streaming', () => {
     });
   });
 });
+
+describe('GpuTranslateBackend startup probe', () => {
+  // The health check is a boot gate, not a selector: with a configured GPU
+  // API, failing it stops the service rather than sliding to another model.
+  // A gate that produces false negatives kills the container, so both the
+  // outcome and the budget are asserted here.
+  let savedEnv;
+
+  const requestThatTimesOut = (captured) => {
+    http.request.mockImplementation((opts) => {
+      captured.opts = opts;
+      const req = new EventEmitter();
+      req.write = () => {};
+      req.setTimeout = () => {};
+      req.destroy = jest.fn();
+      req.end = () => process.nextTick(() => req.emit('timeout'));
+      return req;
+    });
+  };
+
+  beforeEach(() => {
+    savedEnv = {
+      endpoint: process.env.VLLM_TRANSLATION_ENDPOINT,
+      probe: process.env.TRANSLATION_PROBE_TIMEOUT_SECONDS
+    };
+    delete process.env.VLLM_TRANSLATION_ENDPOINT;
+    delete process.env.TRANSLATION_PROBE_TIMEOUT_SECONDS;
+  });
+
+  afterEach(() => {
+    for (const [key, value] of Object.entries(savedEnv)) {
+      const envKey = key === 'endpoint' ? 'VLLM_TRANSLATION_ENDPOINT' : 'TRANSLATION_PROBE_TIMEOUT_SECONDS';
+      if (value === undefined) delete process.env[envKey];
+      else process.env[envKey] = value;
+    }
+    jest.clearAllMocks();
+  });
+
+  const backendWithEnv = (env) => {
+    Object.entries(env).forEach(([k, v]) => {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    });
+    let instance;
+    jest.isolateModules(() => {
+      instance = new (require('../../../services/translation/gpu-translate-backend'))();
+    });
+    return instance;
+  };
+
+  it('rejects when the health check times out', async () => {
+    requestThatTimesOut({});
+    await expect(new GpuTranslateBackend().healthCheck()).rejects.toThrow(/health check timeout/);
+  });
+
+  it('spends the configured probe budget on the health check', async () => {
+    const captured = {};
+    requestThatTimesOut(captured);
+
+    await expect(backendWithEnv({ TRANSLATION_PROBE_TIMEOUT_SECONDS: '7' }).healthCheck()).rejects.toThrow();
+
+    expect(captured.opts.timeout).toBe(7000);
+  });
+
+  it('keeps a default budget generous enough for a cold TLS handshake', async () => {
+    const captured = {};
+    requestThatTimesOut(captured);
+
+    await expect(new GpuTranslateBackend().healthCheck()).rejects.toThrow();
+
+    // The endpoint answered /health in 32 ms in production, so any budget that
+    // can expire on a healthy remote node is a false-negative gate.
+    expect(captured.opts.timeout).toBeGreaterThanOrEqual(30000);
+  });
+
+  it('does not let the model-info read fail the service', async () => {
+    requestThatTimesOut({});
+
+    await expect(new GpuTranslateBackend().fetchModelInfo()).resolves.toBeUndefined();
+  });
+
+  it('does not treat the in-cluster worker as a configured GPU API', () => {
+    expect(new GpuTranslateBackend().endpointExplicit).toBe(false);
+  });
+
+  it('treats any other endpoint as a configured GPU API', () => {
+    expect(backendWithEnv({ VLLM_TRANSLATION_ENDPOINT: 'https://gpu-node:444/translation' }).endpointExplicit).toBe(
+      true
+    );
+  });
+});

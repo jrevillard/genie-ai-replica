@@ -175,11 +175,31 @@ Shortening any of these converts a slow-but-successful call into a visible failu
   endpoint once — a remote API or the in-network service, whichever
   `VLLM_TRANSLATION_ENDPOINT` points at — and stays with whatever answered,
   the way the dataprep device is resolved at load time. The CPU model is
-  selected only when that startup probe itself fails. **A deployment that
-  relied on the fallback will now see the affected text served in English:**
-  the unit that failed is left untranslated and the rest of the answer
-  follows. To keep the old behaviour, set `TRANSLATION_BACKEND` explicitly to
-  the backend you want and treat its failure as a real failure.
+  selected only when that startup probe itself fails **and no GPU API is
+  configured** (see below). **A deployment that relied on the fallback will
+  now see the affected text served in English:** the unit that failed is left
+  untranslated and the rest of the answer follows.
+- **A configured GPU API is mandatory: the backend now refuses to start rather
+  than falling back to the CPU model.** A deployment that names a GPU API —
+  `GPU_NODE_HOST` set, or a `VLLM_TRANSLATION_ENDPOINT` other than the
+  in-cluster worker — always uses it, and `TRANSLATION_BACKEND` is not
+  consulted: `cpu`, `gpu`, `auto` and unset all resolve to the GPU. If the API
+  does not answer, the backend does not start. **Deployer impact:** a GPU node
+  that is unreachable at boot now crash-loops the backend instead of silently
+  serving English answers from a local model — content you routed to a remote
+  GPU API will no longer quietly move onto one running inside the backend
+  container. `TRANSLATION_BACKEND` keeps its meaning when no GPU API is
+  configured. The startup probe budget is now `TRANSLATION_PROBE_TIMEOUT_SECONDS`
+  (default 30, previously a hardcoded 5 s); it has to cover a cold TLS
+  handshake to a remote node, and the endpoint's `/health` answers in tens of
+  milliseconds once connected, so the previous 5 s was a false-negative waiting
+  to happen rather than a bound on anything.
+- **A streaming answer now says when its translation failed.** When the
+  translation backend could not answer mid-stream, the untranslated unit was
+  emitted and the stream carried on with no signal at all — the client received
+  a fully English answer and no indication that anything had gone wrong. The
+  stream now also emits a `TRANSLATION_FAILED` error frame, once per stream,
+  the same frame the post-stream path already sent.
 - **Legacy benchmark suite removed** (`tests/rag-benchmarks/{benchmark_*.py, run_benchmarks.sh}`, 2549 lines): the scripts were run-once-and-never-rerun, had no live test, and produced numbers that drifted from the rest of the eval surface. Latency and load-testing now live on the OTel trace waterfall (Grafana RAG Pipeline Trace Waterfall dashboard) — the OTel collector already captures every request with `latency` and `http.status_code` attributes, so the dashboards cover the same question without a separate harness. The site docs (`source-tree-analysis.md`) no longer mention the deleted files.
 - **Wrapper ROPC `EVAL_DEPLOY_ENV` is no longer defaulted:** the wrapper used to silently fall back to `/opt/genieai-el-salvador/.env` when the env var was unset — a stack-specific hardcode inside a script that should be generic. The wrapper now fails LOUD with `:?` and a message naming the expected `/opt/<stack>/.env` pattern (per `deploy/ansible/templates/env.j2` layout) when neither the env var nor `GENIE_ADMIN_PASSWORD` is set. The MR replaces the runbook / docs and the wrapper's "wrapper / argparse defaults" table to make the override path explicit.
 - **Per-context manual slicing heredocs removed from the root `CLAUDE.md` golden-dataset recipe:** the manual `for i in range(N): chunk = dict(gold); chunk['entries'] = gold['entries'][i::N]; open(f'/tmp/batches/gold_{i:02d}.json', 'w').write(json.dumps(chunk))` loop is gone — `run_eval.py` now slices the gold internally when `EVAL_CHUNK_SIZE` is set, and the sidecar already records per-chunk progress so a manual round-robin shell loop is no longer needed.

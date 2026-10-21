@@ -379,7 +379,7 @@ describe('POST /stream', () => {
     delete process.env.STREAMING_TRANSLATION_ENABLED;
   });
 
-  it('should fall back to the EN unit when stream translation fails (#829)', async () => {
+  it('should fall back to the EN unit and announce the failure (#829)', async () => {
     process.env.STREAMING_TRANSLATION_ENABLED = '1';
     queryService.initStreamQuery.mockResolvedValue({
       queryId: 'q1',
@@ -410,6 +410,12 @@ describe('POST /stream', () => {
     const body = response.text || '';
     expect(body).toContain('Hello world');
     expect(body).not.toMatch(/"type":"translation"/);
+    // The EN unit is already on the wire and cannot be recalled, but the
+    // client must not be left reading an English answer with no signal that
+    // the translation backend never answered.
+    expect(body).toMatch(/"type":"error","message":"Translation failed","code":"TRANSLATION_FAILED"/);
+    // Once per stream, not once per unit.
+    expect(body.match(/TRANSLATION_FAILED/g)).toHaveLength(1);
     delete process.env.STREAMING_TRANSLATION_ENABLED;
   });
 

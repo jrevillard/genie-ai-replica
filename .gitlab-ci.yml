@@ -3548,7 +3548,37 @@ chart:crd-validate:
         --set observability.grafana.enabled=true \
         --set data.arangodb.mode=cluster \
         > /tmp/crd-validate.yaml
-      ./scripts/validate-crds.sh /tmp/crd-validate.yaml
+    # The second render exists because the first one is not the deployment
+    # that ships: clusterProfile=prod multiplies the replicas and puts the
+    # Keycloak database at 3 CNPG instances, and ingress.tls.enabled adds
+    # the cert-manager Certificate. Both are custom resources, and a
+    # custom resource is exactly what `kubeconform -ignore-missing-schemas`
+    # skips — so without a render that includes them, the only objects a
+    # real API server ever validated are the ones the laptop profile emits.
+    # A typo in a CRD field is rejected by the operator's strict decoder
+    # with helm lint, kubeconform and the CI YAML parse all green.
+    - |
+      set -e
+      helm template test charts/genieai-umbrella -n genieai \
+        --set data.keycloak.failOnPlaceholderSecrets=false \
+        --set data.keycloak.adminEmail=ci-render@example.org \
+        --set ingress.host=ci-render.local \
+        --set ingress.enabled=true \
+        --set ingress.createGatewayClass=true \
+        --set 'data.keycloak.clientSecrets.proxyClient=lint-dummy' \
+        --set 'data.keycloak.clientSecrets.dataprep=lint-dummy' \
+        --set 'data.keycloak.clientSecrets.grafana=lint-dummy' \
+        --set clusterProfile=prod \
+        --set ingress.tls.enabled=true \
+        --set ingress.tls.issuerName=selfsigned \
+        --set opea.enabled=true \
+        --set opea.gpu.nodeHost=https://gpu-node:444 \
+        --set observability.metrics.enabled=true \
+        --set observability.traces.enabled=true \
+        --set observability.grafana.enabled=true \
+        --set data.arangodb.mode=cluster \
+        > /tmp/crd-validate-prod.yaml
+      ./scripts/validate-crds.sh /tmp/crd-validate.yaml /tmp/crd-validate-prod.yaml
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:

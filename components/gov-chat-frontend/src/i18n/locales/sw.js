@@ -705,6 +705,12 @@ export default {
     collapse: 'Kunja upande wa kando',
     expand: 'Panua upande wa kando',
     resize: 'Badilisha ukubwa wa kando',
+    resizeLeft: 'Badilisha ukubwa wa kando wa kushoto',
+    resizeRight: 'Badilisha ukubwa wa kando wa kulia',
+    collapseLeft: 'Funga kando wa kushoto',
+    expandLeft: 'Panua kando wa kushoto',
+    collapseRight: 'Funga kando wa kulia',
+    expandRight: 'Panua kando wa kulia',
     weatherRefresh: 'Sasisha Hali ya Hewa',
     weatherConditions: {
       clear: 'Wazi',

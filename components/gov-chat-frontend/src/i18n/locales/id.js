@@ -707,6 +707,12 @@ export default {
     collapse: 'Perkecil sidebar',
     expand: 'Perbesar sidebar',
     resize: 'Ubah ukuran sidebar',
+    resizeLeft: 'Ubah ukuran sidebar kiri',
+    resizeRight: 'Ubah ukuran sidebar kanan',
+    collapseLeft: 'Ciutkan sidebar kiri',
+    expandLeft: 'Perbesar sidebar kiri',
+    collapseRight: 'Ciutkan sidebar kanan',
+    expandRight: 'Perbesar sidebar kanan',
     weatherRefresh: 'Segarkan Cuaca',
     weatherConditions: {
       clear: 'Cerah',

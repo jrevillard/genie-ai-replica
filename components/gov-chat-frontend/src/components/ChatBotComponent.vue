@@ -271,14 +271,22 @@
         </template>
       </modal-dialog>
     </div>
-    <!-- Right Sidebar - Now using the dedicated component -->
+    <!-- Right Sidebar - the width and collapsed state are owned here
+         so both sidebars stay in sync via localStorage. The handle's
+         on-panel edge replaces the old inline chevron button, but
+         the gesture (collapse / expand) reads the same. -->
     <right-side-bar-component
       :current-chat-id="currentChatId"
       :current-locale="currentLocale"
       :related-documents="relatedDocuments"
+      :width="rightSidebarWidth"
+      :max-width="rightSidebarMaxWidth"
+      :collapsed="rightSidebarCollapsed"
+      :show-handle="showRightHandle"
       @load-chat="loadChatFromHistory"
       @open-document="handleOpenDocument"
-      @sidebar-toggle="handleSidebarToggle"
+      @update:width="onRightWidthChange"
+      @update:collapsed="onRightCollapsedChange"
     />
   </div>
 </template>
@@ -298,6 +306,17 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import chatHistoryService from '../services/chatHistoryService';
 import DsSpinner from './ds/Spinner.vue';
 import DsPill from './ds/Pill.vue';
+import {
+  SIDEBAR_DEFAULTS,
+  SIDEBAR_MIN_WIDTHS,
+  SIDEBAR_INFLOW_MIN_WIDTH,
+  computeMaxFor,
+  clampWidth,
+  persistWidth,
+  persistOpen,
+  readStoredWidth,
+  readStoredOpen
+} from '../composables/sidebarLayout.js';
 import DsButton from './ds/Button.vue';
 import DsCard from './ds/Card.vue';
 import DsInput from './ds/Input.vue';
@@ -471,7 +490,16 @@ export default {
       streamingQueryId: null, // Query ID of the current streaming response
       streamController: null, // AbortController for cancelling active streams
       relatedDocuments: [], // Holds documents for the right sidebar
-      hiddenPromptForNextMessage: null // Stores hidden prompt for dual-prompt mechanism
+      hiddenPromptForNextMessage: null, // Stores hidden prompt for dual-prompt mechanism
+      // Right sidebar width / collapsed state, both persisted in
+      // localStorage and restored clamped against the current viewport.
+      rightSidebarWidth: SIDEBAR_DEFAULTS.right,
+      rightSidebarCollapsed: false,
+      // The left sidebar's width, mirrored here so the max computed
+      // has a reactive dependency. App.vue is the single writer.
+      leftWidthSnapshot: SIDEBAR_DEFAULTS.left,
+      // rAF handle for the resize coalescing; 0 = no pending frame.
+      resizeRaf: 0
     };
   },
 
@@ -500,6 +528,22 @@ export default {
         return userMessage.content.length > 50 ? userMessage.content.substring(0, 47) + '...' : userMessage.content;
       }
       return 'New conversation';
+    },
+
+    // The dynamic max the right handle clamps against. The left sidebar's
+    // current width is the other input, and it lives in App.vue — a
+    // different subtree from this one. It is mirrored into
+    // `leftWidthSnapshot` on mount, on resize, on the eventBus signal
+    // App.vue emits when the left is dragged, and on a cross-tab
+    // `storage` event; reading it here gives the computed a dependency
+    // to invalidate on.
+    rightSidebarMaxWidth() {
+      return computeMaxFor('right', this.leftWidthSnapshot, window.innerWidth);
+    },
+    showRightHandle() {
+      // The handle only exists where the sidebar is an in-flow
+      // reservation — the same threshold App.vue applies on the left.
+      return typeof window !== 'undefined' && window.innerWidth >= SIDEBAR_INFLOW_MIN_WIDTH;
     }
   },
 
@@ -555,6 +599,27 @@ export default {
   },
 
   mounted() {
+    // Restore the right sidebar's persisted width and collapsed state.
+    // The width is clamped on the way IN, not just on drag: a value
+    // saved at 1920 px must not be applied blind at 1400 px, where it
+    // would push the centre below its usable floor.
+    this.leftWidthSnapshot = readStoredWidth('left');
+    this.rightSidebarWidth = clampWidth('right', readStoredWidth('right'), this.leftWidthSnapshot, window.innerWidth);
+    this.rightSidebarCollapsed = readStoredOpen('right', false);
+    window.addEventListener('resize', this.handleResize);
+    window.addEventListener('storage', this.handleStorage);
+    // Bound, because the eventBus invokes handlers as bare functions —
+    // an unbound method reference arrives with `this` undefined and the
+    // `$emit` swallows the resulting TypeError into a console error.
+    // The wrapper is kept on the instance so `beforeUnmount` can remove
+    // exactly what it added.
+    this.onLeftWidthChanged = (width) => this.refreshLeftWidth(width);
+    eventBus.$on('sidebar-left-width-changed', this.onLeftWidthChanged);
+    // Announce the width actually in force on first paint, so the left
+    // sidebar clamps against this rather than against a stored value
+    // it may never be able to use at this viewport.
+    eventBus.$emit('sidebar-right-width-changed', this.rightSidebarWidth);
+
     if (this.chatMessages.length === 0) {
       this.chatMessages.push({
         sender: 'bot',
@@ -589,6 +654,9 @@ export default {
   },
 
   beforeUnmount() {
+    window.removeEventListener('resize', this.handleResize);
+    window.removeEventListener('storage', this.handleStorage);
+    eventBus.$off('sidebar-left-width-changed', this.onLeftWidthChanged);
     eventBus.$off('treeNodeSelected', this.handleTreeNodeSelected);
     eventBus.$off('open-chat', this.loadChatFromHistory);
     eventBus.$off('chat-deleted'); // Clean up the chat-deleted listener
@@ -602,6 +670,79 @@ export default {
 
   methods: {
     ...mapActions('chatHistory', ['createChat', 'updateChat']),
+
+    // --- Right sidebar resize + collapse ---
+    onRightWidthChange(value) {
+      const clamped = Math.max(SIDEBAR_MIN_WIDTHS.right, Math.min(this.rightSidebarMaxWidth, value));
+      this.rightSidebarWidth = clamped;
+      // A user gesture is the one thing that writes storage: the
+      // clamped result IS what the user asked for, within the bounds
+      // the current viewport allows.
+      persistWidth('right', clamped);
+      // The left sidebar lives outside this subtree (App.vue), so it
+      // cannot see this component's reactive state. The event bus is
+      // the in-tab signal that its maximum moved — without it,
+      // widening the right would let the left keep a width that no
+      // longer leaves the centre its floor.
+      eventBus.$emit('sidebar-right-width-changed', clamped);
+    },
+    onRightCollapsedChange(value) {
+      this.rightSidebarCollapsed = value;
+      persistOpen('right', value);
+    },
+    handleResize() {
+      // Coalesced onto a single animation frame — a window-edge drag
+      // fires resize dozens of times per second and the re-clamp
+      // below does not need that cadence.
+      if (this.resizeRaf) return;
+      this.resizeRaf = requestAnimationFrame(() => {
+        this.resizeRaf = 0;
+        this.refreshLeftWidth(this.leftWidthSnapshot);
+        // `refreshLeftWidth` already rebinds, but the viewport itself
+        // also moved — and that is the viewport half of "the clamp
+        // applies on restore, not only on drag". Storage is
+        // deliberately NOT rewritten: a width the user chose at a wide
+        // viewport comes back when they widen the window again.
+      });
+    },
+    handleStorage(e) {
+      // Cross-tab only: the left sidebar's width landed from another
+      // tab, which changes this side's maximum.
+      if (e.key === 'sidebarWidthLeft') {
+        this.refreshLeftWidth();
+      }
+    },
+    refreshLeftWidth(inForce) {
+      // The left sidebar's width is the one input to this side's
+      // maximum that lives in another component. It is mirrored into
+      // reactive state (rather than read inside the computed) so the
+      // computed has a dependency to invalidate on.
+      //
+      // The argument is the width the left is CURRENTLY painting. It
+      // matters that it is the in-force width and not the stored one:
+      // clamping against the stored value over-reserves when both
+      // sides hold a width neither can currently use, and the
+      // over-reservation is per-viewport — which is exactly what made
+      // the centre narrow from 648 px at 1400 to 496 px at 1600 as
+      // the window widened. The fallback covers the cross-tab
+      // `storage` path and first paint, where there is no payload.
+      this.leftWidthSnapshot = typeof inForce === 'number' ? inForce : readStoredWidth('left');
+      this.rebindRightWidth();
+    },
+    // The mirror of App.vue's `rebindLeftWidth`: the rendered width is
+    // recomputed from the STORED width against whatever the left is
+    // currently painting, rather than carried forward from the previous
+    // clamp. Storage is not written here — only a user-driven change
+    // (a drag, a keyboard step, a double-click reset) writes it, so a
+    // panel squeezed down at a narrow viewport comes back when the
+    // window widens again.
+    rebindRightWidth() {
+      if (this.rightSidebarCollapsed) return;
+      const next = clampWidth('right', readStoredWidth('right'), this.leftWidthSnapshot, window.innerWidth);
+      if (next === this.rightSidebarWidth) return;
+      this.rightSidebarWidth = next;
+      eventBus.$emit('sidebar-right-width-changed', next);
+    },
 
     formatMessageTime(timestamp) {
       if (!timestamp) return '';
@@ -801,10 +942,6 @@ export default {
     },
 
     // formatUptime method removed
-
-    handleSidebarToggle(_collapsed) {
-      // Sidebar toggle state change
-    },
 
     handleOpenDocument(_doc) {
       // Document opened

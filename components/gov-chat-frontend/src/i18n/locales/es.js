@@ -709,6 +709,12 @@ export default {
     collapse: 'Contraer barra lateral',
     expand: 'Expandir barra lateral',
     resize: 'Redimensionar barra lateral',
+    resizeLeft: 'Redimensionar barra lateral izquierda',
+    resizeRight: 'Redimensionar barra lateral derecha',
+    collapseLeft: 'Contraer barra lateral izquierda',
+    expandLeft: 'Expandir barra lateral izquierda',
+    collapseRight: 'Contraer barra lateral derecha',
+    expandRight: 'Expandir barra lateral derecha',
     weatherRefresh: 'Actualizar Tiempo',
     weatherConditions: {
       clear: 'Despejado',

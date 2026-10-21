@@ -710,6 +710,12 @@ export default {
     collapse: 'Recolher barra lateral',
     expand: 'Expandir barra lateral',
     resize: 'Redimensionar barra lateral',
+    resizeLeft: 'Redimensionar barra lateral esquerda',
+    resizeRight: 'Redimensionar barra lateral direita',
+    collapseLeft: 'Recolher barra lateral esquerda',
+    expandLeft: 'Expandir barra lateral esquerda',
+    collapseRight: 'Recolher barra lateral direita',
+    expandRight: 'Expandir barra lateral direita',
     weatherRefresh: 'Atualizar Tempo',
     weatherConditions: {
       clear: 'Limpo',

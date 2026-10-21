@@ -702,6 +702,12 @@ export default {
     collapse: '收起侧边栏',
     expand: '展开侧边栏',
     resize: '调整侧边栏大小',
+    resizeLeft: '调整左侧边栏大小',
+    resizeRight: '调整右侧边栏大小',
+    collapseLeft: '收起左侧边栏',
+    expandLeft: '展开左侧边栏',
+    collapseRight: '收起右侧边栏',
+    expandRight: '展开右侧边栏',
     weatherRefresh: '刷新天气',
     weatherConditions: {
       clear: '晴朗',

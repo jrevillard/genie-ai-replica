@@ -144,11 +144,16 @@ describe('NavBarComponent', () => {
       expect(ariaLabels).toContain('Log out');
     });
 
-    it('renders the sidebar toggle button', () => {
+    it('carries no sidebar toggle — both sidebars collapse from their own handle', () => {
+      // The hamburger is gone. Collapsing moved to the edge handle on
+      // each panel (SidebarHandle.vue), so a control in the navbar
+      // that collapses one side but not the other would reintroduce
+      // exactly the asymmetry the handle replaced. Asserting its
+      // absence is what keeps it from creeping back.
       const wrapper = createNavBarWrapper();
-      const toggleBtn = wrapper.findAll('button');
-      const ariaLabels = toggleBtn.map((b) => b.attributes('aria-label'));
-      expect(ariaLabels).toContain('Toggle sidebar');
+      const ariaLabels = wrapper.findAll('button').map((b) => b.attributes('aria-label'));
+      expect(ariaLabels).not.toContain('Toggle sidebar');
+      expect(wrapper.emitted('toggleSidebar')).toBeFalsy();
     });
 
     it('renders all buttons when unauthenticated (admin buttons disabled)', () => {
@@ -158,7 +163,7 @@ describe('NavBarComponent', () => {
       expect(ariaLabels).toContain('Settings');
       expect(ariaLabels).toContain('User profile');
       expect(ariaLabels).toContain('Log out');
-      expect(ariaLabels).toContain('Toggle sidebar');
+      expect(ariaLabels).not.toContain('Toggle sidebar');
     });
   });
 
@@ -288,18 +293,6 @@ describe('NavBarComponent', () => {
       adminBtns.forEach((btn) => {
         expect(btn.attributes('disabled')).toBeDefined();
       });
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // Sidebar toggle
-  // -----------------------------------------------------------------------
-  describe('sidebar toggle', () => {
-    it('emits toggleSidebar when hamburger button is clicked', async () => {
-      const wrapper = createNavBarWrapper();
-      const toggleBtn = wrapper.findAll('button').find((b) => b.attributes('aria-label') === 'Toggle sidebar');
-      await toggleBtn.trigger('click');
-      expect(wrapper.emitted('toggleSidebar')).toBeTruthy();
     });
   });
 });

@@ -711,6 +711,12 @@ export default {
     collapse: 'Seitenleiste einklappen',
     expand: 'Seitenleiste ausklappen',
     resize: 'Seitenleiste anpassen',
+    resizeLeft: 'Linke Seitenleiste anpassen',
+    resizeRight: 'Rechte Seitenleiste anpassen',
+    collapseLeft: 'Linke Seitenleiste einklappen',
+    expandLeft: 'Linke Seitenleiste ausklappen',
+    collapseRight: 'Rechte Seitenleiste einklappen',
+    expandRight: 'Rechte Seitenleiste ausklappen',
     weatherRefresh: 'Wetter aktualisieren',
     weatherConditions: {
       clear: 'Klar',

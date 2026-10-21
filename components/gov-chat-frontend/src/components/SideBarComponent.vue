@@ -3,13 +3,15 @@
     ref="sideBar"
     class="side-bar"
     :class="{
-      'side-bar-open': isOpen,
+      'side-bar-open': !collapsed,
+      'side-bar-collapsed-state': collapsed,
       'keyboard-active': isKeyboardActive,
       'android-device': isAndroid
     }"
     :data-theme="$route.meta.theme || 'light'"
+    :style="{ '--side-bar-width': `${width}px` }"
   >
-    <div v-if="isOpen" class="mobile-sidebar-overlay" @click="closeOverlay"></div>
+    <div v-if="!collapsed" class="mobile-sidebar-overlay" @click="closeOverlay"></div>
 
     <div class="sidebar-inner">
       <DsTabs
@@ -85,6 +87,21 @@
         </div>
       </DsTabs>
     </div>
+
+    <SidebarHandle
+      v-if="showHandle"
+      side="left"
+      :value="width"
+      :min="minWidth"
+      :max="maxWidth"
+      :collapsed="collapsed"
+      :aria-label="$t('sidebar.resizeLeft')"
+      :expand-label="$t('sidebar.expandLeft')"
+      :collapse-label="$t('sidebar.collapseLeft')"
+      @input="$emit('update:width', $event)"
+      @collapse="toggleCollapsed"
+      @reset="$emit('update:width', defaultWidth)"
+    />
   </aside>
 </template>
 
@@ -95,6 +112,10 @@ import WeatherPanel from './WeatherPanel.vue';
 import { List, History } from '@lucide/vue';
 import DsButton from './ds/Button.vue';
 import DsTabs from './ds/Tabs.vue';
+import SidebarHandle from './SidebarHandle.vue';
+import { SIDEBAR_DEFAULTS, SIDEBAR_MIN_WIDTHS, SIDEBAR_MAX_WIDTHS } from '../composables/sidebarLayout.js';
+
+const SIDEBAR_MAX_WIDTHS_FALLBACK = SIDEBAR_MAX_WIDTHS.left;
 
 export default {
   name: 'SideBarComponent',
@@ -105,15 +126,41 @@ export default {
     ChatFolders,
     WeatherPanel,
     List,
-    History
+    History,
+    SidebarHandle
   },
   props: {
-    isOpen: {
+    // Whether the sidebar is currently expanded. Replaces the prior
+    // `isOpen` prop with the same semantics — open vs collapsed —
+    // so the layout's CSS class names (`side-bar-open`,
+    // `side-bar-collapsed-state`) read the same.
+    collapsed: {
+      type: Boolean,
+      default: false
+    },
+    // The panel's current width in pixels. The parent owns this so
+    // both sidebars can be clamped against each other and against
+    // the centre's usable minimum at a single place.
+    width: {
+      type: Number,
+      default: SIDEBAR_DEFAULTS.left
+    },
+    // The dynamic max the handle should enforce. Recomputed by the
+    // parent on every viewport change and every resize of the other
+    // sidebar. The handle itself stays free of viewport math.
+    maxWidth: {
+      type: Number,
+      default: SIDEBAR_MAX_WIDTHS_FALLBACK
+    },
+    // Whether the resize handle should render. Off below the
+    // breakpoint where the sidebar slides off-canvas — the handle
+    // would anchor to nothing visible.
+    showHandle: {
       type: Boolean,
       default: true
     }
   },
-  emits: ['open-chat', 'close-sidebar'],
+  emits: ['open-chat', 'close-sidebar', 'update:width', 'update:collapsed'],
   data() {
     return {
       activeTab: 'services',
@@ -126,6 +173,14 @@ export default {
       sidebarHeight: 0,
       currentLocale: 'en'
     };
+  },
+  computed: {
+    defaultWidth() {
+      return SIDEBAR_DEFAULTS.left;
+    },
+    minWidth() {
+      return SIDEBAR_MIN_WIDTHS.left;
+    }
   },
   mounted() {
     this.initialHeight = window.innerHeight;
@@ -240,24 +295,65 @@ export default {
     },
     closeOverlay() {
       this.$emit('close-sidebar');
+    },
+    toggleCollapsed() {
+      this.$emit('update:collapsed', !this.collapsed);
     }
   }
 };
 </script>
 
 <style scoped>
-/* Base styles - applied to all themes */
+/* Base styles - applied to all themes. The width arrives as the
+   `--side-bar-width` custom property, bound inline on the <aside>.
+   A custom property rather than a direct `width` binding on purpose:
+   an inline `width` outranks every stylesheet rule, so it would also
+   outrank the off-canvas rule below — a 450 px panel would keep that
+   width on a 414 px phone. Binding the variable and letting each rule
+   decide what to do with it keeps the responsive policy in CSS,
+   where it belongs. */
 .side-bar {
-  width: 450px;
+  width: var(--side-bar-width, 450px);
   background: var(--bg-sidebar);
   border-right: 1px solid var(--border);
   height: 100%;
   color: var(--fg);
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
   transition:
     transform 0.3s ease,
     width 0.3s ease;
 }
 
+/*
+ * The collapsed state keeps a 50 px strip rather than collapsing to
+ * zero — the same width the right sidebar uses, because the two sides
+ * are meant to behave identically.
+ *
+ * Zero was the width here before the handle existed, and it is the
+ * wrong width now: the handle lives inside the panel, so a zero-width
+ * panel clips the one control that could bring it back. The strip is
+ * the handle's home. Playwright found this — clicking the chevron on
+ * a collapsed left reported the CENTRE intercepting pointer events,
+ * because the clipped strip's bounding box still reported 24 px while
+ * nothing was painted there.
+ */
+.side-bar.side-bar-collapsed-state {
+  width: var(--side-bar-collapsed-width, 50px);
+}
+
+.side-bar.side-bar-collapsed-state .sidebar-inner {
+  display: none;
+}
+
+/* The panel's content. `flex: 1; min-width: 0` rather than
+   `width: 100%` because the aside is a flex row: the 24 px handle
+   strip is a sibling, and a 100 %-wide content box beside it would
+   overflow the panel by exactly the strip's width. `min-width: 0`
+   lets the flex line shrink below the content's intrinsic minimum
+   when the user drags the panel to its own floor. */
 .sidebar-inner {
   height: 100%;
   display: flex;
@@ -266,7 +362,8 @@ export default {
   z-index: 1001;
   background: var(--bg-sidebar);
   color: var(--fg);
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .sidebar-section-title,
@@ -515,19 +612,16 @@ export default {
 }
 
 /* In flow at 1400 px and above. Pairs with the (max-width: 1399px)
-   rule above so the boundary at 1400 px is unambiguous. */
+   rule above so the boundary at 1400 px is unambiguous. The width is
+   the user's, delivered as `--side-bar-width`; this rule only
+   restores the in-flow positioning that the narrow-viewport
+   transform overrides. The collapsed strip needs no rule here — the
+   base rule's `--side-bar-collapsed-width` already carries it. */
 @media screen and (min-width: 1400px) {
   .side-bar {
     position: relative;
     transform: translateX(0);
-    width: 450px;
     z-index: 5;
-  }
-
-  .side-bar:not(.side-bar-open) {
-    width: 0;
-    padding: 0;
-    overflow: hidden;
   }
 
   .mobile-sidebar-overlay {

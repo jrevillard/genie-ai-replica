@@ -14,17 +14,25 @@
       This guarantees no child component will render until the user object is fully loaded.
     -->
     <template v-else-if="!isLoading && isAuthenticated && currentUser">
-      <!-- Top navigation bar -->
-      <nav-bar-component
-        :is-sidebar-open="isSidebarOpen"
-        :config="$config"
-        @toggle-sidebar="toggleSidebar"
-        @logout="handleLogout"
-      />
+      <!-- Top navigation bar. The collapse control has moved to the
+           sidebar's own handle (see SidebarHandle.vue), so the navbar
+           no longer toggles the sidebar — it shows only the brand and
+           the user-facing controls. -->
+      <nav-bar-component :config="$config" @logout="handleLogout" />
 
       <div class="main-container">
-        <!-- Sidebar (collapsible, only on routes with showSidebar meta) -->
-        <side-bar-component v-if="showSidebar" :is-open="isSidebarOpen" />
+        <!-- Sidebar (collapsible + resizable, only on routes with
+             showSidebar meta). The handle on the inner edge handles
+             both gestures. -->
+        <side-bar-component
+          v-if="showSidebar"
+          :collapsed="isSidebarOpen === false"
+          :width="leftSidebarWidth"
+          :max-width="leftSidebarMaxWidth"
+          :show-handle="showLeftHandle"
+          @update:collapsed="onLeftCollapsedChange"
+          @update:width="onLeftWidthChange"
+        />
 
         <!-- Main content area with router view -->
         <main class="content-area">
@@ -52,6 +60,16 @@ import { eventBus } from './eventBus.js';
 import chatHistoryService from './services/chatHistoryService';
 import { getUserId } from './utils/userUtils';
 import { themeManager } from './utils/ThemeManager';
+import {
+  SIDEBAR_MIN_WIDTHS,
+  SIDEBAR_INFLOW_MIN_WIDTH,
+  clampWidth,
+  computeMaxFor,
+  persistWidth,
+  persistOpen,
+  readStoredWidth,
+  readStoredOpen
+} from './composables/sidebarLayout.js';
 
 export default {
   name: 'App',
@@ -62,8 +80,28 @@ export default {
   },
 
   data() {
+    // The left sidebar is App-owned. The right sidebar lives inside
+    // ChatBotComponent (under the router-view, so not a descendant of
+    // App.vue in a way that makes a shared reactive object reachable).
+    // localStorage is the bus between them: one writer per key, and
+    // each side reads the other's stored width to compute its own
+    // dynamic maximum. See composables/sidebarLayout.js.
+    const viewport = typeof window !== 'undefined' ? window.innerWidth : 1920;
+    // `sidebarOpen` stores "open", not "collapsed" — read it in its
+    // own polarity so an existing value still means what it meant.
+    const storedOpen = readStoredOpen('left', true);
     return {
-      isSidebarOpen: true,
+      isSidebarOpen: storedOpen,
+      // The clamp runs on the stored value at construction, not only
+      // on drag: a width saved at 1920 px must not be applied blind
+      // at 1400 px.
+      leftSidebarWidth: clampWidth('left', readStoredWidth('left'), readStoredWidth('right'), viewport),
+      // The right sidebar's width, mirrored here so `leftSidebarMaxWidth`
+      // has a reactive dependency. The right's writer is
+      // ChatBotComponent; it signals through the event bus and
+      // persists to localStorage.
+      rightWidthSnapshot: readStoredWidth('right'),
+      viewportWidth: viewport,
       theme: 'light',
       notification: {
         visible: false,
@@ -72,7 +110,8 @@ export default {
         timer: null
       },
       showSplash: false,
-      isLoading: true
+      isLoading: true,
+      resizeRaf: 0
     };
   },
   computed: {
@@ -83,6 +122,20 @@ export default {
     splashImagePath() {
       // Prefer runtime config (per-deployment splash asset), fall back to bundled default.
       return this.$config?.app?.splash?.value || '/config/splash.png';
+    },
+    // The dynamic maximum the left handle clamps against. Reading the
+    // right's width is what makes the two clamps compose: without it,
+    // a left drag could take more than the centre can spare once the
+    // right has already reserved its share.
+    leftSidebarMaxWidth() {
+      return computeMaxFor('left', this.rightWidthSnapshot, this.viewportWidth);
+    },
+    // The handle only exists where the sidebar is an in-flow
+    // reservation. Below the breakpoint both sidebars slide
+    // off-canvas and there is nothing to resize against; the
+    // collapse gesture there is the mobile overlay's own tap.
+    showLeftHandle() {
+      return this.viewportWidth >= SIDEBAR_INFLOW_MIN_WIDTH;
     }
   },
   watch: {
@@ -102,6 +155,27 @@ export default {
       }
     }
   },
+  // The right sidebar's in-tab signal, subscribed in `created` rather
+  // than at the end of `mounted` on purpose. `mounted` here is async and
+  // awaits the store's initialisation before it reaches its
+  // subscriptions — and a child's `mounted` fires before its parent's,
+  // so the right sidebar announced its in-force width into a bus nobody
+  // was listening to yet. The announcement was silently dropped and the
+  // two sides never converged: the e2e ladder measured the pair settling
+  // from their stored values instead, and the centre fell from 664 px to
+  // 496 px as the window widened. `created` runs before any child
+  // mounts, which is the earliest a subscription can exist.
+  created() {
+    // The eventBus calls handlers as bare functions (`handler(payload)`), so
+    // a method reference arrives with `this` undefined — every `this.x =`
+    // inside it throws, and `$emit` swallows the throw into a console
+    // error. Passing the bound wrapper is what makes the subscription
+    // work at all; the arrow is kept on the instance so `beforeUnmount`
+    // can remove exactly what it added.
+    this.onRightWidthChanged = (width) => this.refreshRightWidth(width);
+    eventBus.$on('sidebar-right-width-changed', this.onRightWidthChanged);
+  },
+
   // --- REPLACED YOUR MOUNTED HOOK WITH THIS ---
   async mounted() {
     try {
@@ -126,23 +200,20 @@ export default {
       });
     }
 
-    // The rest of your original mounted hook
-    const savedSidebarState = localStorage.getItem('sidebarOpen');
-    if (savedSidebarState !== null) {
-      this.isSidebarOpen = savedSidebarState === 'true';
-    }
-
     this.initTheme();
     this.initFontSize();
     this.checkScreenSize();
-    window.addEventListener('resize', this.checkScreenSize);
+    window.addEventListener('resize', this.handleResize);
+    window.addEventListener('storage', this.handleStorage);
     this.setupSystemThemeListener();
     window.addEventListener('themeChange', this.handleThemeChange);
     eventBus.$on('notification:show', this.showNotification);
   },
   beforeUnmount() {
-    window.removeEventListener('resize', this.checkScreenSize);
+    window.removeEventListener('resize', this.handleResize);
+    window.removeEventListener('storage', this.handleStorage);
     window.removeEventListener('themeChange', this.handleThemeChange);
+    eventBus.$off('sidebar-right-width-changed', this.onRightWidthChanged);
     if (this.systemThemeListener) {
       window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', this.systemThemeListener);
     }
@@ -284,34 +355,117 @@ export default {
       }
     },
 
-    toggleSidebar() {
-      this.isSidebarOpen = !this.isSidebarOpen;
-      try {
-        localStorage.setItem('sidebarOpen', this.isSidebarOpen.toString());
-      } catch {
-        // Silently fail - sidebar state is optional
+    onLeftCollapsedChange(collapsed) {
+      this.isSidebarOpen = !collapsed;
+      persistOpen('left', collapsed);
+    },
+
+    onLeftWidthChange(value) {
+      // The handle already clamps to [min, max]. This second pass
+      // re-derives the bound against the right sidebar's IN-FORCE
+      // width, so a value that arrived while the other side moved
+      // cannot slip past the centre's usable minimum.
+      const clamped = Math.max(SIDEBAR_MIN_WIDTHS.left, Math.min(this.leftSidebarMaxWidth, value));
+      this.leftSidebarWidth = clamped;
+      persistWidth('left', clamped);
+      // The right sidebar lives in a different subtree (inside the
+      // router-view), so it cannot read this component's reactive
+      // state. The event bus carries the width actually IN FORCE —
+      // not the stored one. That distinction is load-bearing: the
+      // right clamps against it, and clamping against the stored
+      // value over-reserves and is what made the ladder fall as the
+      // window widened.
+      eventBus.$emit('sidebar-left-width-changed', clamped);
+    },
+
+    handleResize() {
+      // Coalesced onto a single animation frame: a window-edge drag
+      // fires resize dozens of times per second and neither the
+      // re-clamp nor the collapse check needs that cadence.
+      if (this.resizeRaf) return;
+      this.resizeRaf = requestAnimationFrame(() => {
+        this.resizeRaf = 0;
+        this.viewportWidth = window.innerWidth;
+        this.refreshRightWidth(this.rightWidthSnapshot);
+        // Re-clamp against the new viewport. This is the viewport half
+        // of "the clamp applies on restore, not only on drag": a width
+        // the user set at 1920 px is re-bound when they later narrow
+        // the window rather than applied blind at a width that no
+        // longer leaves the centre its floor.
+        //
+        // Storage is deliberately NOT rewritten here. The clamp is a
+        // rendering bound; the stored width stays the one the user
+        // chose, so widening the window back to 1920 px gives them
+        // their panel again instead of the clamped-down value. Only a
+        // user-driven change (a drag, a keyboard step, a double-click
+        // reset) writes storage.
+        if (this.isSidebarOpen) this.rebindLeftWidth();
+        this.checkScreenSize();
+      });
+    },
+
+    handleStorage(e) {
+      // A `storage` event only fires in *other* tabs, so this is the
+      // cross-tab path. The in-tab path is the event bus below, which
+      // carries the in-force width directly.
+      if (e.key === 'sidebarWidthRight') {
+        this.refreshRightWidth(readStoredWidth('right'));
       }
+    },
+    refreshRightWidth(inForce) {
+      // The right sidebar lives in a different subtree, so its width
+      // is mirrored here rather than read inside the computed. Picking
+      // the new value up here is what re-runs `leftSidebarMaxWidth`.
+      // The argument is the width the right is CURRENTLY painting; the
+      // fallback covers the paths that carry no payload — the
+      // cross-tab `storage` event, and first paint before the right
+      // has spoken.
+      this.rightWidthSnapshot = typeof inForce === 'number' ? inForce : readStoredWidth('right');
+      // Re-clamp this side against what the other actually painted.
+      this.rebindLeftWidth();
+    },
+    // The rendered width is a PURE FUNCTION of the stored width, the
+    // counterpart's in-force width and the viewport — recomputed from
+    // the stored value each time, never carried forward from whatever
+    // the previous clamp produced.
+    //
+    // Carrying it forward is what broke the ladder. A clamp only ever
+    // shrinks, so a panel already squeezed down to 416 px stayed at
+    // 416 px when its counterpart gave the room back, and the pair
+    // never re-summed to the budget. The e2e ladder measured the
+    // centre at 664 px at 1400 and 496 px at 1600 from one stored pair
+    // of 600/480 — it fell as the window widened. Recomputing from the
+    // stored value releases the clamp the moment the room returns, and
+    // that is what makes the centre monotonic.
+    //
+    // Storage is not written here. The stored width stays the one the
+    // user chose; only a user-driven change writes it.
+    rebindLeftWidth() {
+      const next = clampWidth('left', readStoredWidth('left'), this.rightWidthSnapshot, this.viewportWidth);
+      if (next === this.leftSidebarWidth) return;
+      this.leftSidebarWidth = next;
+      eventBus.$emit('sidebar-left-width-changed', next);
     },
 
     checkScreenSize() {
-      // The default app state is both sidebars open (the left's
-      // `isOpen` prop is bound to this flag). Below 1400 px the
-      // sidebar component's own CSS off-canvases the sidebar via
-      // transform: translateX(-100%), but the default isOpen=true
-      // would render the sidebar as an overlay on top of the chat
-      // (the .side-bar.side-bar-open rule overrides the transform
-      // to translateX(0)). Auto-close it here so the user's first
-      // view at narrow viewports shows the chat, not the overlay.
-      // The 1400 px threshold must match the CSS breakpoint in
-      // SideBarComponent; if the two diverge, a resize can leave
-      // the app in a state its CSS does not describe. The hamburger
-      // button still toggles isOpen and the SidebarComponent
-      // slides the sidebar in/out; only the initial state at
-      // < 1400 px changes. The check is one-directional (does not
-      // reset isOpen on resize upward), matching the existing
-      // < 768 px behaviour.
-      if (window.innerWidth < 1400 && this.isSidebarOpen) {
+      // The app's default is the left sidebar open (the
+      // `isSidebarOpen` flag). Below the in-flow breakpoint the
+      // sidebar component's CSS off-canvases it via
+      // transform: translateX(-100%), but an open flag would render
+      // it as an overlay on top of the chat (the `.side-bar-open`
+      // rule overrides the transform to translateX(0)). Auto-close
+      // it here so the first view at a narrow viewport shows the
+      // chat, not the overlay.
+      //
+      // One-directional, matching the pre-existing behaviour: it
+      // closes below the breakpoint but never re-opens above it, so
+      // widening the window does not override a user's collapse.
+      // The threshold must match the CSS breakpoint in
+      // SideBarComponent — if the two diverge, a resize leaves the
+      // app in a state its CSS does not describe.
+      if (window.innerWidth < SIDEBAR_INFLOW_MIN_WIDTH && this.isSidebarOpen) {
         this.isSidebarOpen = false;
+        persistOpen('left', true);
       }
     }
   }

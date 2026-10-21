@@ -696,6 +696,12 @@ export default {
     collapse: 'Collapse sidebar',
     expand: 'Expand sidebar',
     resize: 'Resize sidebar',
+    resizeLeft: 'Resize left sidebar',
+    resizeRight: 'Resize right sidebar',
+    collapseLeft: 'Collapse left sidebar',
+    expandLeft: 'Expand left sidebar',
+    collapseRight: 'Collapse right sidebar',
+    expandRight: 'Expand right sidebar',
     weatherRefresh: 'Sanoo Kurandi',
     weatherConditions: {
       clear: 'A keta-le (Clear)',

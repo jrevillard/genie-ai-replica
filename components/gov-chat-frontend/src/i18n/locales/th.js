@@ -705,6 +705,12 @@ export default {
     collapse: 'ยุบแถบด้านข้าง',
     expand: 'ขยายแถบด้านข้าง',
     resize: 'ปรับขนาดแถบด้านข้าง',
+    resizeLeft: 'ปรับขนาดแถบด้านซ้าย',
+    resizeRight: 'ปรับขนาดแถบด้านขวา',
+    collapseLeft: 'ยุบแถบด้านซ้าย',
+    expandLeft: 'ขยายแถบด้านซ้าย',
+    collapseRight: 'ยุบแถบด้านขวา',
+    expandRight: 'ขยายแถบด้านขวา',
     weatherRefresh: 'รีเฟรชสภาพอากาศ',
     weatherConditions: {
       clear: 'แจ่มใส',

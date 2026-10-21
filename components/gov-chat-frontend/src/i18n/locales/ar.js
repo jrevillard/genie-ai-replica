@@ -707,6 +707,12 @@ export default {
     collapse: 'طي الشريط الجانبي',
     expand: 'توسيع الشريط الجانبي',
     resize: 'تغيير حجم الشريط الجانبي',
+    resizeLeft: 'تغيير حجم الشريط الجانبي الأيسر',
+    resizeRight: 'تغيير حجم الشريط الجانبي الأيمن',
+    collapseLeft: 'طي الشريط الجانبي الأيسر',
+    expandLeft: 'توسيع الشريط الجانبي الأيسر',
+    collapseRight: 'طي الشريط الجانبي الأيمن',
+    expandRight: 'توسيع الشريط الجانبي الأيمن',
     weatherRefresh: 'تحديث الطقس',
     weatherConditions: {
       clear: 'صاف',

@@ -2,21 +2,16 @@
 <template>
   <div class="nav-container">
     <header class="nav-bar" data-test-id="nav-bar">
-      <!-- Left section with hamburger menu, logo, and title -->
+      <!-- Left section with logo and title. The hamburger collapse
+           control has been retired: both sidebars collapse from
+           their own edge handle (SidebarHandle.vue), so the navbar
+           no longer carries the toggle. The brand keeps the slot it
+           used to occupy via the new top padding on .logo-container
+           below — visually unchanged for users who never collapse
+           either sidebar. -->
       <div class="nav-left">
-        <!-- Hamburger button for sidebar toggle -->
-        <DsButton
-          variant="ghost"
-          class="icon-btn hamburger-btn"
-          :class="{ 'is-active': isSidebarOpen }"
-          aria-label="Toggle sidebar"
-          @click="toggleSidebar"
-        >
-          <span class="hamburger-inner"></span>
-        </DsButton>
-
         <!-- Logo container for GENIE.AI configured icon -->
-        <router-link to="/dashboard" class="logo-container">
+        <router-link to="/dashboard" class="logo-container logo-container--no-hamburger">
           <!-- Display SVG icon from config (file or inline) -->
           <img v-if="config.app.icon.type === 'file'" :src="config.app.icon.value" class="govt-logo" alt="App Icon" />
           <!-- eslint-disable-next-line vue/no-v-html -->
@@ -292,14 +287,10 @@ export default {
     DsButton
   },
   props: {
-    isSidebarOpen: {
-      type: Boolean,
-      default: true
-    },
-    sidebarWidth: {
-      type: Number,
-      default: 250 // Default sidebar width in pixels
-    },
+    // The left sidebar's open/closed state used to be passed in so
+    // the hamburger button could show its active styling. The
+    // hamburger is gone; both sidebars collapse from their edge
+    // handle (SidebarHandle.vue). The prop is left removed.
     // GENIE.AI configuration for title, icon, and navbar styling
     config: {
       type: Object,
@@ -310,7 +301,7 @@ export default {
       })
     }
   },
-  emits: ['toggleSidebar', 'logout'],
+  emits: ['logout'],
   data() {
     return {};
   },
@@ -347,9 +338,6 @@ export default {
       } catch {
         this.$emit('logout');
       }
-    },
-    toggleSidebar() {
-      this.$emit('toggleSidebar');
     }
   }
 };
@@ -432,7 +420,11 @@ export default {
   letter-spacing: -0.035em;
 }
 
-/* Logo styling and animations */
+/* Logo styling and animations. The `--no-hamburger` modifier
+   preserves the visual layout that the retired hamburger button
+   used to occupy; without the hamburger the logo would otherwise
+   shift left to the navbar's padding edge and the brand layout
+   would lose its anchor. */
 .logo-container {
   display: flex;
   align-items: center;
@@ -442,6 +434,14 @@ export default {
   margin-left: var(--space-sm);
   background-color: var(--accent-muted);
   border-radius: 50%;
+}
+
+.logo-container--no-hamburger {
+  /* Reclaims the 40 px the hamburger used to occupy, plus a
+     comfortable gap before the brand. Keeps the logo where it
+     was on a desktop so the branding does not slide after the
+     hamburger was removed. */
+  margin-left: calc(40px + var(--space-md));
 }
 
 .govt-logo {
@@ -624,69 +624,6 @@ export default {
   visibility: visible;
 }
 
-/* Hamburger menu styling - Layout only, colors handled by DsButton ghost variant */
-.hamburger-btn {
-  position: relative;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.hamburger-inner {
-  position: relative;
-  width: 18px;
-  height: 2px;
-  background-color: var(--accent-fg);
-  transition: background-color 0.2s ease;
-}
-
-.hamburger-inner::before,
-.hamburger-inner::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  width: 18px;
-  height: 2px;
-  background-color: var(--accent-fg);
-  transition:
-    transform 0.3s ease,
-    background-color 0.2s ease;
-}
-
-.hamburger-inner::before {
-  top: -5px;
-}
-
-.hamburger-inner::after {
-  bottom: -5px;
-}
-
-.hamburger-btn:hover .hamburger-inner,
-.hamburger-btn:hover .hamburger-inner::before,
-.hamburger-btn:hover .hamburger-inner::after {
-  background-color: var(--fg);
-}
-
-/* Centered X state */
-.hamburger-btn.is-active .hamburger-inner {
-  background-color: transparent;
-  transform: translateX(0);
-}
-
-.hamburger-btn.is-active .hamburger-inner::before {
-  transform: translateY(5px) rotate(45deg);
-  top: 0;
-}
-
-.hamburger-btn.is-active .hamburger-inner::after {
-  transform: translateY(-5px) rotate(-45deg);
-  bottom: 0;
-}
-
 /* Language dropdown styling */
 .language-select-container {
   position: relative;
@@ -807,11 +744,6 @@ export default {
   .icon-btn svg {
     width: 20px;
     height: 20px;
-  }
-
-  .hamburger-btn {
-    width: 36px;
-    height: 36px;
   }
 
   .tooltip {

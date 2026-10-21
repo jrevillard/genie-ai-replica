@@ -1,79 +1,92 @@
 <template>
-  <div class="sidebar" :class="{ collapsed: sidebarCollapsed }">
-    <div class="sidebar-header">
-      <h3 v-if="!sidebarCollapsed">{{ $t('sidebar.title') }}</h3>
-      <DsButton
-        variant="ghost"
-        :small="true"
-        class="sidebar-toggle"
-        :aria-label="sidebarCollapsed ? $t('sidebar.expand') : $t('sidebar.collapse')"
-        @click="toggleSidebar"
-      >
-        <ChevronRight v-if="!sidebarCollapsed" :size="20" /><ChevronLeft v-else :size="20" />
-      </DsButton>
-    </div>
+  <div class="sidebar" :class="{ collapsed: sidebarCollapsed }" :style="{ '--sidebar-width': `${width}px` }">
+    <!-- The handle comes FIRST in the flex row. On the right panel
+         the seam with the centre is the panel's LEFT edge, so a handle
+         placed after the content lands on the far edge — against the
+         viewport, nowhere near the boundary a user aims at. The left
+         panel is the mirror image and therefore the reverse order. -->
+    <SidebarHandle
+      v-if="showHandle"
+      side="right"
+      :value="width"
+      :min="minWidth"
+      :max="maxWidth"
+      :collapsed="sidebarCollapsed"
+      :aria-label="$t('sidebar.resizeRight')"
+      :expand-label="$t('sidebar.expandRight')"
+      :collapse-label="$t('sidebar.collapseRight')"
+      @input="$emit('update:width', $event)"
+      @collapse="toggleSidebar"
+      @reset="$emit('update:width', defaultWidth)"
+    />
 
-    <div v-if="!sidebarCollapsed">
-      <div class="sidebar-section">
-        <h4 class="section-title">
-          <FileText :size="16" />
-          {{ $t('sidebar.relatedDocs') }}
-        </h4>
-        <div class="related-documents">
-          <DsCard v-for="doc in relatedDocuments" :key="doc.id" variant="flat" padding="md" class="document-item">
-            <div class="document-header" @click="openDocument(doc)">
-              <div class="document-icon">
-                <component :is="documentIconClass(doc)" :size="20" />
-              </div>
-              <div class="document-info">
-                <div class="document-title">{{ doc.title }}</div>
-                <div class="document-url-link">
-                  {{ getDisplayUrl(doc) }}
+    <div class="sidebar-inner-wrap">
+      <div class="sidebar-header">
+        <h3 v-if="!sidebarCollapsed">{{ $t('sidebar.title') }}</h3>
+      </div>
+
+      <div v-if="!sidebarCollapsed">
+        <div class="sidebar-section">
+          <h4 class="section-title">
+            <FileText :size="16" />
+            {{ $t('sidebar.relatedDocs') }}
+          </h4>
+          <div class="related-documents">
+            <DsCard v-for="doc in relatedDocuments" :key="doc.id" variant="flat" padding="md" class="document-item">
+              <div class="document-header" @click="openDocument(doc)">
+                <div class="document-icon">
+                  <component :is="documentIconClass(doc)" :size="20" />
+                </div>
+                <div class="document-info">
+                  <div class="document-title">{{ doc.title }}</div>
+                  <div class="document-url-link">
+                    {{ getDisplayUrl(doc) }}
+                  </div>
                 </div>
               </div>
-            </div>
-            <div class="document-details">
-              <div v-if="doc.documentName" class="detail-item">
-                <span class="detail-label">Document Name:</span>
-                <span class="detail-value">{{ doc.documentName }}</span>
+              <div class="document-details">
+                <div v-if="doc.documentName" class="detail-item">
+                  <span class="detail-label">Document Name:</span>
+                  <span class="detail-value">{{ doc.documentName }}</span>
+                </div>
+                <div v-if="doc.fileName" class="detail-item">
+                  <span class="detail-label">File Name:</span>
+                  <span class="detail-value">{{ doc.fileName }}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">{{ $t('sidebar.id') }}:</span>
+                  <span class="detail-value">{{ doc.id }}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">{{ $t('sidebar.labels') }}:</span>
+                  <span class="detail-value small-text">{{ formatLabels(doc) }}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">{{ $t('sidebar.confidence') }}:</span>
+                  <span class="detail-value">{{ formatScore(doc.score) }}</span>
+                </div>
               </div>
-              <div v-if="doc.fileName" class="detail-item">
-                <span class="detail-label">File Name:</span>
-                <span class="detail-value">{{ doc.fileName }}</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">{{ $t('sidebar.id') }}:</span>
-                <span class="detail-value">{{ doc.id }}</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">{{ $t('sidebar.labels') }}:</span>
-                <span class="detail-value small-text">{{ formatLabels(doc) }}</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">{{ $t('sidebar.confidence') }}:</span>
-                <span class="detail-value">{{ formatScore(doc.score) }}</span>
-              </div>
-            </div>
-          </DsCard>
-          <DsStateDisplay v-if="relatedDocuments.length === 0" type="empty">
-            {{ $t('sidebar.noDocuments') }}
-          </DsStateDisplay>
+            </DsCard>
+            <DsStateDisplay v-if="relatedDocuments.length === 0" type="empty">
+              {{ $t('sidebar.noDocuments') }}
+            </DsStateDisplay>
+          </div>
         </div>
-      </div>
-      <div class="sidebar-section">
-        <h4 class="section-title">
-          <HelpCircle :size="16" />
-          {{ $t('sidebar.faq') }}
-        </h4>
-        <div class="faq-list">
-          <div v-for="(faq, index) in frequentlyAskedQuestions" :key="index" class="faq-item">
-            <div class="faq-question" :class="{ active: expandedFaqs.includes(index) }" @click="toggleFaq(index)">
+        <div class="sidebar-section">
+          <h4 class="section-title">
+            <HelpCircle :size="16" />
+            {{ $t('sidebar.faq') }}
+          </h4>
+          <div class="faq-list">
+            <div v-for="(faq, index) in frequentlyAskedQuestions" :key="index" class="faq-item">
+              <div class="faq-question" :class="{ active: expandedFaqs.includes(index) }" @click="toggleFaq(index)">
+                <!-- eslint-disable-next-line vue/no-v-html -->
+                <span v-html="faq.question"></span>
+                <ChevronUp v-if="expandedFaqs.includes(index)" :size="14" /><ChevronDown v-else :size="14" />
+              </div>
               <!-- eslint-disable-next-line vue/no-v-html -->
-              <span v-html="faq.question"></span>
-              <ChevronUp v-if="expandedFaqs.includes(index)" :size="14" /><ChevronDown v-else :size="14" />
+              <div v-if="expandedFaqs.includes(index)" class="faq-answer" v-html="faq.answer"></div>
             </div>
-            <!-- eslint-disable-next-line vue/no-v-html -->
-            <div v-if="expandedFaqs.includes(index)" class="faq-answer" v-html="faq.answer"></div>
           </div>
         </div>
       </div>
@@ -85,30 +98,19 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { formatFileSize } from '../utils/fileUtils.js';
-import {
-  ChevronLeft,
-  ChevronRight,
-  FileText,
-  HelpCircle,
-  ChevronUp,
-  ChevronDown,
-  Globe,
-  FileSpreadsheet,
-  FileImage
-} from '@lucide/vue';
+import { FileText, HelpCircle, ChevronUp, ChevronDown, Globe, FileSpreadsheet, FileImage } from '@lucide/vue';
 import DsCard from './ds/Card.vue';
-import DsButton from './ds/Button.vue';
 import DsStateDisplay from './ds/StateDisplay.vue';
+import SidebarHandle from './SidebarHandle.vue';
+import { SIDEBAR_DEFAULTS, SIDEBAR_MIN_WIDTHS, SIDEBAR_MAX_WIDTHS } from '../composables/sidebarLayout.js';
 
 export default {
   name: 'RightSideBarComponent',
 
   components: {
-    DsButton,
     DsCard,
     DsStateDisplay,
-    ChevronLeft,
-    ChevronRight,
+    SidebarHandle,
     FileText,
     HelpCircle,
     ChevronUp,
@@ -130,18 +132,61 @@ export default {
     relatedDocuments: {
       type: Array,
       default: () => []
+    },
+    // The panel's current width in pixels. Driven by the parent (the
+    // chatbot component owns both sidebars' clamp).
+    width: {
+      type: Number,
+      default: SIDEBAR_DEFAULTS.right
+    },
+    // The dynamic max the handle should enforce. The parent
+    // recomputes it on every viewport change and every resize of
+    // the other sidebar.
+    maxWidth: {
+      type: Number,
+      default: SIDEBAR_MAX_WIDTHS.right
+    },
+    // Whether the resize handle should render. Off below the
+    // breakpoint where the sidebar slides off-canvas.
+    showHandle: {
+      type: Boolean,
+      default: true
+    },
+    // Whether the panel is currently collapsed. Replaces the prior
+    // internal-only `sidebarCollapsed` so the state lives outside
+    // the component and survives a route change.
+    collapsed: {
+      type: Boolean,
+      default: false
     }
   },
-  emits: ['sidebar-toggle', 'open-document'],
+  emits: ['open-document', 'update:width', 'update:collapsed'],
 
   data() {
     return {
-      sidebarCollapsed: false,
       expandedFaqs: [],
       frequentlyAskedQuestions: []
     };
   },
-
+  computed: {
+    // The collapsed state is owned by the parent (it is persisted, and
+    // the two sidebars' clamps have to agree). This writable alias
+    // lets the existing `sidebarCollapsed` reads in the template stay.
+    sidebarCollapsed: {
+      get() {
+        return this.collapsed;
+      },
+      set(v) {
+        this.$emit('update:collapsed', v);
+      }
+    },
+    defaultWidth() {
+      return SIDEBAR_DEFAULTS.right;
+    },
+    minWidth() {
+      return SIDEBAR_MIN_WIDTHS.right;
+    }
+  },
   watch: {
     currentLocale: {
       handler() {
@@ -233,8 +278,10 @@ export default {
     },
 
     toggleSidebar() {
+      // The setter emits `update:collapsed`, which the parent owns —
+      // the panel no longer keeps this state to itself, so it survives
+      // a route change and the two sidebars' clamps stay in agreement.
       this.sidebarCollapsed = !this.sidebarCollapsed;
-      this.$emit('sidebar-toggle', this.sidebarCollapsed);
     },
 
     toggleFaq(index) {
@@ -336,20 +383,40 @@ export default {
 </script>
 
 <style scoped>
-/* Sidebar Styles */
+/* Sidebar Styles. The width arrives as the `--sidebar-width` custom
+   property, bound inline on the root .sidebar div. A custom property
+   rather than a direct `width` binding on purpose: an inline `width`
+   outranks every stylesheet rule, so it would also outrank the
+   off-canvas rule below — a 320 px panel would keep that width on a
+   414 px phone. Binding the variable and letting each rule decide
+   keeps the responsive policy in CSS, where it belongs. */
 .sidebar {
-  width: 320px;
+  width: var(--sidebar-width, 320px);
   background: var(--surface);
   border-left: 1px solid var(--border);
-  overflow-y: auto;
   display: flex;
-  flex-direction: column;
-  transition: width 0.3s ease;
+  flex-direction: row;
+  align-items: stretch;
+  flex: 0 0 auto;
+  overflow: hidden;
+  transition:
+    width 0.3s ease,
+    transform 0.3s ease;
 }
 
+/* Collapsed keeps the 50 px strip the panel has always used, and the
+   handle lives inside it — which is why the panel is never collapsed
+   to zero. Zero would clip the one control that brings it back. */
 .sidebar.collapsed {
-  width: 50px;
-  overflow: visible;
+  width: var(--sidebar-collapsed-width, 50px);
+}
+
+.sidebar-inner-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
 }
 
 .sidebar-header {
@@ -365,20 +432,6 @@ export default {
   padding: var(--space-md) 0;
   justify-content: center;
   border-bottom: none;
-}
-
-.sidebar-toggle {
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-}
-
-.sidebar-toggle:hover {
-  background: var(--bg);
-  color: var(--muted);
 }
 
 .sidebar-section {
@@ -556,10 +609,10 @@ export default {
      — both sidebars step aside together at this width: the left
      sidebar's CSS in SideBarComponent sets the same breakpoint so
      the layout has a single, monotonic threshold. The right stays
-     in flow at every width ≥ 1400 px (where the layout reserves
-     450 + 320 = 770 px for two sidebars); below 1400 px the chat
-     column never has to reserve space for both, so the centre
-     never narrows as the user widens the window. The Living
+     in flow at every width ≥ 1400 px, where the layout reserves
+     the two users' chosen widths for the sidebars; below 1400 px
+     the chat column never has to reserve space for both, so the
+     centre never narrows as the user widens the window. The Living
      Intelligence layer's corner-network rule in
      genie-visual-effects.css is bounded to @media screen and
      (min-width: 1400px), so it does not compete for position
@@ -569,6 +622,11 @@ export default {
     right: 0;
     top: 0;
     bottom: 0;
+    /* Off-canvas, so the user's width no longer applies — a 480 px
+       panel has no business reserving width it is translated out of.
+       The width is restated here rather than inherited from the base
+       rule, so the off-canvas panel is as wide as the sheet it is. */
+    width: min(100%, 480px);
     z-index: 100;
     transform: translateX(100%);
   }

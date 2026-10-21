@@ -700,6 +700,12 @@ export default {
     collapse: 'Kgutla thalamo ya mahlakore',
     expand: 'Bula thalamo ya mahlakore',
     resize: 'Fetola thalamo ya mahlakore',
+    resizeLeft: 'Fetola barasiding ya nako e ya ho hobaneng',
+    resizeRight: 'Fetola barasiding ya nako e ya ho ho right',
+    collapseLeft: 'Ko patsa barasiding ya nako e ya ho hobaneng',
+    expandLeft: 'Ho bula barasiding ya nako e ya ho hobaneng',
+    collapseRight: 'Ko patsa barasiding ya nako e ya ho right',
+    expandRight: 'Ho bula barasiding ya nako e ya ho right',
     weatherRefresh: 'Ntlafatsa Boemo ba Lehodimo',
     weatherConditions: {
       clear: 'Hlakileng',

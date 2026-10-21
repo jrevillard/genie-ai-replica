@@ -698,6 +698,12 @@ export default {
     collapse: 'সাইডবার সংকুচিত করুন',
     expand: 'সাইডবার প্রসারিত করুন',
     resize: 'সাইডবারের আকার পরিবর্তন করুন',
+    resizeLeft: 'বাম দিকের সাইডবারের আকার পরিবর্তন করুন',
+    resizeRight: 'ডান দিকের সাইডবারের আকার পরিবর্তন করুন',
+    collapseLeft: 'বাম সাইডবার ভাঁজ করুন',
+    expandLeft: 'বাম সাইডবার প্রসারিত করুন',
+    collapseRight: 'ডান সাইডবার ভাঁজ করুন',
+    expandRight: 'ডান সাইডবার প্রসারিত করুন',
     weatherRefresh: 'আবহাওয়া রিফ্রেশ করুন',
     weatherConditions: {
       clear: 'পরিষ্কার',

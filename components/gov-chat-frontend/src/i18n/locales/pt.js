@@ -1389,7 +1389,7 @@ export default {
       'Serviço "{label}" usa um rótulo de UI que pode não corresponder à hierarquia de conhecimento',
     noFilterWarning: 'Sem filtro de contexto ativo — a consulta não será filtrada.',
     placeholder: 'Digite sua consulta aqui...',
-    composerPlaceholder: 'Faça uma pergunta, explore o conhecimento ou comece uma tarefa...',
+    composerPlaceholder: 'Faça uma pergunta, explore o conhecimento...',
     composerAttachTitle: 'Os anexos ainda não estão disponíveis',
     composerMicTitle: 'A entrada de voz ainda não está disponível',
     composerSendTitle: 'Enviar',

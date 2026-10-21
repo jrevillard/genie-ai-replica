@@ -1388,7 +1388,7 @@ export default {
       'Dienst "{label}" verwendet ein UI-Label, das möglicherweise nicht zur Wissenshierarchie passt',
     noFilterWarning: 'Kein Kontextfilter aktiv — Abfrage wird ungefiltert sein.',
     placeholder: 'Geben Sie Ihre Anfrage hier ein...',
-    composerPlaceholder: 'Stellen Sie eine Frage, erkunden Sie Wissen oder starten Sie eine Aufgabe...',
+    composerPlaceholder: 'Stellen Sie eine Frage, erkunden Sie Wissen...',
     composerAttachTitle: 'Anhänge sind noch nicht verfügbar',
     composerMicTitle: 'Spracheingabe ist noch nicht verfügbar',
     composerSendTitle: 'Senden',

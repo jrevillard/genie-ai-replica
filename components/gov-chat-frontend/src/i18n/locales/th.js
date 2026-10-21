@@ -1371,7 +1371,7 @@ export default {
     serviceLabelMismatch: 'บริการ "{label}" ใช้ป้าย UI ที่อาจไม่ตรงกับลำดับชั้นความรู้',
     noFilterWarning: 'ไม่มีตัวกรองบริบทที่ใช้งานอยู่ — คำค้นจะไม่ถูกกรอง',
     placeholder: 'พิมพ์คำถามของคุณที่นี่...',
-    composerPlaceholder: 'ถามคำถาม สำรวจความรู้ หรือเริ่มงาน...',
+    composerPlaceholder: 'ถามคำถาม สำรวจความรู้...',
     composerAttachTitle: 'ไฟล์แนบยังไม่พร้อมใช้งาน',
     composerMicTitle: 'การป้อนด้วยเสียงยังไม่พร้อมใช้งาน',
     composerSendTitle: 'ส่ง',

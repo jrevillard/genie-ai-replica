@@ -1376,7 +1376,7 @@ export default {
     serviceLabelMismatch: 'Huduma "{label}" inatumia lebo ya UI ambayo huenda isilingane na mpangilio wa maarifa',
     noFilterWarning: 'Hakuna kichujio cha muktadha kinachofanya kazi — hoja itakuwa bila kichujio.',
     placeholder: 'Andika swali lako hapa...',
-    composerPlaceholder: 'Uliza swali, chunguza maarifa, au anza kazi...',
+    composerPlaceholder: 'Uliza swali, chunguza maarifa...',
     composerAttachTitle: 'Viambatisho havipatikani bado',
     composerMicTitle: 'Ingizo la sauti halipatikani bado',
     composerSendTitle: 'Tuma',

@@ -1367,7 +1367,7 @@ export default {
     serviceLabelMismatch: 'الخدمة "{label}" تستخدم تسمية واجهة مستخدم قد لا تتطابق مع التسلسل الهرمي للمعرفة',
     noFilterWarning: 'لا يوجد عامل تصفية سياق نشط — سيكون الاستعلام غير مُصفى.',
     placeholder: 'اكتب استفسارك هنا...',
-    composerPlaceholder: 'اطرح سؤالاً، استكشف المعرفة، أو ابدأ مهمة...',
+    composerPlaceholder: 'اطرح سؤالاً، استكشف المعرفة...',
     composerAttachTitle: 'المرفقات غير متاحة بعد',
     composerMicTitle: 'الإدخال الصوتي غير متاح بعد',
     composerSendTitle: 'إرسال',

@@ -1388,7 +1388,7 @@ export default {
       'Servicio "{label}" utiliza una etiqueta de UI que puede no coincidir con la jerarquía de conocimiento',
     noFilterWarning: 'Sin filtro de contexto activo — la consulta no será filtrada.',
     placeholder: 'Escriba su consulta aquí...',
-    composerPlaceholder: 'Haz una pregunta, explora conocimientos o inicia una tarea...',
+    composerPlaceholder: 'Haz una pregunta, explora conocimientos...',
     composerAttachTitle: 'Los archivos adjuntos aún no están disponibles',
     composerMicTitle: 'La entrada de voz aún no está disponible',
     composerSendTitle: 'Enviar',

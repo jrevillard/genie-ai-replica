@@ -1374,7 +1374,7 @@ export default {
     serviceLabelMismatch: 'Layanan "{label}" menggunakan label UI yang mungkin tidak cocok dengan hierarki pengetahuan',
     noFilterWarning: 'Tidak ada filter konteks aktif — kueri akan tidak difilter.',
     placeholder: 'Ketik pertanyaan Anda di sini...',
-    composerPlaceholder: 'Ajukan pertanyaan, jelajahi pengetahuan, atau mulai tugas...',
+    composerPlaceholder: 'Ajukan pertanyaan, jelajahi pengetahuan...',
     composerAttachTitle: 'Lampiran belum tersedia',
     composerMicTitle: 'Input suara belum tersedia',
     composerSendTitle: 'Kirim',

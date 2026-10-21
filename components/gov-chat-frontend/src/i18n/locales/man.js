@@ -1328,7 +1328,7 @@ export default {
     serviceLabelMismatch: 'Service "{label}" uses a UI label that may not match the knowledge hierarchy',
     noFilterWarning: 'No context filter active — query will be unfiltered.',
     placeholder: 'I la ñiningo nyining jang...',
-    composerPlaceholder: 'Ask a question, explore knowledge, or start a task...',
+    composerPlaceholder: 'Ask a question, explore knowledge...',
     composerAttachTitle: 'Attachments are not available yet',
     composerMicTitle: 'Voice input is not available yet',
     composerSendTitle: 'Send',

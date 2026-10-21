@@ -1381,7 +1381,7 @@ export default {
     serviceLabelMismatch: 'Service "{label}" uses a UI label that may not match the knowledge hierarchy',
     noFilterWarning: 'No context filter active — query will be unfiltered.',
     placeholder: 'Ngola potso ya hao mona...',
-    composerPlaceholder: 'Botsa potso, hlahloba tsebo, kapa qala mosebetsi...',
+    composerPlaceholder: 'Botsa potso, hlahloba tsebo...',
     composerAttachTitle: 'Lihokelo ha li fumanehe hajoale',
     composerMicTitle: 'Ho kenya lentswe ho fumaneha hajoale',
     composerSendTitle: 'Romela',

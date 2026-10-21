@@ -52,6 +52,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Virus scanning could not reach a ClamAV service running beside the
+  document repository.** `CLAMSCAN_HOST` was read into the configuration and
+  then dropped before it reached the scanner, so the scanner always dialled
+  `localhost`. Any deployment that runs ClamAV as its own service — the
+  Docker Compose topology — never had a working scan: the connection probe at
+  initialization failed and every scan errored out. The configured host is now
+  passed through.
+- **The document repository could not validate tokens issued behind an edge
+  proxy.** The expected issuer was derived from `KEYCLOAK_URL`, which is the
+  address the service itself reaches. When TLS terminates upstream and the
+  tokens carry the public issuer, every request was rejected as an invalid
+  token. `KEYCLOAK_EXPECTED_ISSUER` now pins the issuer; leaving it unset
+  keeps the derived value.
 - **Model-endpoint calls no longer carry per-site, drifting budgets — and one of them was silently emptying retrievals.** Each in-repo client to an LLM, embedding, rerank or control-plane endpoint had its own timeout: some inherited a library default, some had a literal nobody could find. A new shared module, `genie-ai-overlay/core/model_http_policy.py`, resolves them all from one place, and every call site now reads its budget from it. Three of those sites were actively harmful rather than merely undeclared:
   - **The retriever's embedding client and its document summarizer were unbounded, and both fail in ways an operator cannot see.** Neither was given a timeout at all: `langchain-openai` forwards `request_timeout` (default `None`) into the openai client, and an explicit `None` overrides the SDK's own 600 s default — a detail worth knowing because the openai default is the first thing anyone assumes is in force. A hung call on the embedding client returns `[]` from its `except` clause, and that short-circuits *ahead of* the hybrid/BM25 leg, so a contended GPU produced no documents at all and the chat answered from nothing without saying so. A hung summarizer re-raises, and the microservice maps it to a 500. Both now carry a budget (600 s each) — a new ceiling, not a restatement, so there is no pre-existing floor to reason from. **Lower the embedding one only knowing this**: the empty result is its failure mode, not an error.
   - **Bounding an `aiohttp` call can remove a ceiling it already had.** aiohttp's default session carries `sock_connect=30`, but constructing `ClientTimeout(total=X)` explicitly leaves `sock_connect=None`, which is no limit rather than "inherit". Two calls that were bounded by giving them a budget would therefore have traded a 30 s give-up on an unreachable endpoint for an unbounded wait — the exact failure this change exists to stop, introduced by the act of stopping it. Those two sites now set the connect ceiling explicitly.

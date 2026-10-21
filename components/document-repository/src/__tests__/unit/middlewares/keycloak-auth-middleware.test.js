@@ -309,3 +309,63 @@ describe('keycloak-auth-middleware', () => {
     });
   });
 });
+
+describe('keycloak-auth-middleware issuer override', () => {
+  beforeEach(() => {
+    jest.resetModules();
+
+    jest.mock('jose', () => ({
+      createRemoteJWKSet: jest.fn(),
+      jwtVerify: jest.fn()
+    }));
+
+    // The edge terminates TLS and tokens carry the public issuer, while the
+    // JWKS is only reachable in-cluster.
+    jest.mock('../../../config/appConfig', () => ({
+      security: {
+        keycloakUrl: 'https://keycloak.genieai.svc.cluster.local:8080',
+        keycloakRealm: 'genie',
+        keycloakExpectedIssuer: 'https://genie.example.org/auth/realms/genie'
+      }
+    }));
+
+    jest.mock('../../../../shared-lib', () => ({
+      logger: {
+        info: jest.fn(),
+        error: jest.fn(),
+        debug: jest.fn(),
+        warn: jest.fn()
+      }
+    }));
+  });
+
+  it('validates the token against the pinned issuer while the JWKS stays in-cluster', async () => {
+    const localJose = require('jose');
+    const { authenticateToken } = require('../../../middlewares/keycloak-auth-middleware');
+    localJose.createRemoteJWKSet.mockReturnValue({});
+    localJose.jwtVerify.mockResolvedValue({
+      payload: {
+        sub: 'user-123',
+        iss: 'https://genie.example.org/auth/realms/genie',
+        realm_access: { roles: ['admin'] },
+        exp: Math.floor(Date.now() / 1000) + 3600
+      }
+    });
+
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn().mockReturnThis() };
+    const next = jest.fn();
+    await authenticateToken(
+      { originalUrl: '/api/files', headers: { authorization: 'Bearer edge-token' }, user: undefined },
+      res,
+      next
+    );
+
+    expect(next).toHaveBeenCalledWith();
+    expect(localJose.jwtVerify).toHaveBeenCalledWith(
+      'edge-token',
+      expect.anything(),
+      expect.objectContaining({ issuer: 'https://genie.example.org/auth/realms/genie' })
+    );
+    expect(localJose.createRemoteJWKSet.mock.calls[0][0].toString()).toContain('keycloak.genieai.svc.cluster.local');
+  });
+});

@@ -34,6 +34,7 @@ class SecurityService {
       debugMode: appConfig.clamscan.debugMode,
       clamdscan: {
         socket: appConfig.clamscan.socket,
+        host: appConfig.clamscan.host,
         port: appConfig.clamscan.port,
         timeout: parseInt(appConfig.clamscan.timeout, 10) || 60000,
         localFallback: appConfig.clamscan.localFallback,

@@ -6,8 +6,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Before implementing code, read `_bmad-output/project-context.md`** — it contains critical rules, conventions, and anti-patterns that AI agents must follow. This file covers unobvious details that are not duplicated here.
 
-→ Archiving a completed BMAD initiative: `.claude/rules/POST-PRD-ARCHIVAL.md`
-
 ## Project Overview
 
 GENIE.AI is an open-source generative AI framework for the public sector, providing a sovereign, DPG-compliant RAG (Retrieval-Augmented Generation) system with multilingual support. It integrates with [OPEA (Open Platform for Enterprise AI)](https://opea.dev) for AI/ML services.
@@ -150,6 +148,7 @@ User-facing and dev-internal docs live in **separate** places — no duplication
 - **User-facing docs → `site/content/en/docs/`** — canonical, published to the GitLab Pages docs site, editable in the GitLab Web IDE. Grouped by section (`core/`, `rag/`, `observability/`, `knowledge-base/`, `operations/`, `deployment/`, `configuration/`, `architecture/`, `frontend/`, `backend/`, `mobile/`). Hugo + Docsy; see `.claude/rules/SITE-LOCAL-DEV.md` to run locally.
 - **Dev-internal docs → `docs/`** — repo-resident, referenced by code/developers (e.g. `docs/e2e-tests/`, `docs/database-migrations.md`, `docs/RELEASE.md`). NOT published.
 - **Agent instructions → `.claude/rules/`** — step-by-step commands for AI agents (e.g. `RELEASE.md`, `TESTING.md`, `SERVER-TESTING.md`). Referenced by CLAUDE.md.
+- **Archiving a completed BMAD initiative → `.claude/rules/POST-PRD-ARCHIVAL.md`** — when a PRD initiative closes and the next one starts.
 
 When adding a doc, pick one home based on audience. Do not duplicate across both.
 

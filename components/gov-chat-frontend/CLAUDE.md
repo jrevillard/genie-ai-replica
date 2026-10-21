@@ -133,7 +133,7 @@ shipped once because the rule was missing.
 
 `src/styles/genie-visual-effects.css` is an **additive** layer, gated on `html[data-visual='on']` and
 `.genie-living-intelligence`. The app must lay out and behave **identically with the layer switched off** — that is
-how the layout defects fixed in 2026-10 were found, and how they must stay detectable.
+how a defect in the layer is separated from a defect in the app, and how both stay detectable.
 
 **The layer must never dictate the app's layout, and app code must never learn the layer's selector shape.** They
 have already fought over one property: the layer anchors its corner artwork on `.sidebar` with `position: relative`,
@@ -145,11 +145,11 @@ need to out-specify the layer, that is the signal to fix the layer instead.**
 
 | Trap | What happens | What to do |
 |---|---|---|
-| `var()` inside an `@container` condition | Chromium **silently drops the whole rule**. Every `@container` with `var()` in its condition never matches, and the base fallback wins. | Keep the token out of the condition: `auto-fit` + `minmax(var(--x), 1fr)` with a `max-width` cap, or a literal. Verified on Chromium 147. |
+| `var()` inside an `@container` condition | Chromium **silently drops the whole rule**. Every `@container` with `var()` in its condition never matches, and the base fallback wins. | Keep the token out of the condition: `auto-fit` + `minmax(var(--x), 1fr)` with a `max-width` cap, or a literal. Verified empirically on Chromium. |
 | The overlay's `::before` full-bleed | `width: calc(100% + 2 * var(--space-lg))` **needs** matching negative margins, or it overflows its panel by that much on the right. | The extra width and the negative margins are a pair — copy the pattern whole. |
 | A gradient `mask-image` with `transparent` | `mask-mode`'s `match-source` default resolves `transparent` (luminance 0) to a fully-off mask, and the artwork bleeds through. | Force `mask-mode: alpha` when the gradient's stops carry alpha. |
 | `overflow: visible` children | A child sticking out reports **no** scrollable overflow, so `scrollWidth > clientWidth` finds nothing. | Compare the child's `getBoundingClientRect()` against the container's content box. |
-| A flex `gap` between panels | A gap sits between the *items*, so it also separates a collapsed panel from the content. | Put the spacing on the panels, where it can be dropped conditionally — or drop it, the panels have borders. |
+| A flex `gap` between panels | A gap sits between the *items*, so it also separates a collapsed panel from the content. | Put the spacing on the panels, where it can be dropped conditionally. |
 | `elementFromPoint` on a page with a splash overlay | The splash sits on top, so probes hit the splash and the page is never measured. | Wait for `.splash-screen` to detach before probing. |
 | Reading a build's freshness by timestamp | A build from the working tree before the commit is legitimate and content-identical. | Check the **built content** (`grep <token> /app/dist/css/app.*.css`). |
 
@@ -161,10 +161,12 @@ need to out-specify the layer, that is the signal to fix the layer instead.**
 - **A capture named after a state it never reached is worse than no capture.** The script aborts when a sidebar state
   it claims to capture did not actually collapse, and when the panel did not widen. Keep that behaviour.
 - A screenshot read back yields a URL. **Pair every image with the audit; where the two disagree, the audit wins.**
-- **Direct access grants are disabled on the realm.** The browser login is the only path:
-  `tests/e2e/helpers/chatbot.js` → `loginViaUI(page)`. A spec that walks a page unauthenticated is bounced to the
-  login by the router guard, and that navigation destroys the execution context its assertions read from — the spec
-  then fails on a race, not on what it meant to check.
+- **Direct access grants are disabled on the realm**, so a *page* session has to log in through the browser:
+  `tests/e2e/helpers/chatbot.js` → `loginViaUI(page)`. (Minting a token for a direct API call is a different
+  route — `tests/e2e/helpers/auth.js` → `getUserToken` — but it gives an API call a token, not a page a session.)
+  A spec that walks a page unauthenticated is bounced to the login by the router guard, and that navigation
+  destroys the execution context its assertions read from — the spec then fails on a race, not on what it meant
+  to check.
 
 ### Writing the spec
 
@@ -182,6 +184,10 @@ need to out-specify the layer, that is the signal to fix the layer instead.**
 
 ### The serving stack for a visual check
 
+**Two orchestrators, two levels of evidence.** The Docker Compose path is **verified** — every name in it matches
+a running container. The Kubernetes path is **read off the chart and not yet run**: it states the shape and the
+costs, not a recipe to follow blind.
+
 A visual check needs six things from whatever stack it runs on, whichever orchestrator that is:
 
 1. **An origin of its own** — a URL the browser and Playwright can reach, serving the app and proxying the API.
@@ -198,15 +204,22 @@ for a change that lives above the frontend, nothing below it changed, so duplica
 **Never rebuild the shared stack's own frontend while someone is looking at it, and never `down -v` the shared
 project** — the volumes carry the data.
 
-#### Docker Compose — the current dev loop
+#### Docker Compose — the current dev loop (verified)
 
 The shared project (`living-intelligence`) holds Kong, the backend, Keycloak, ArangoDB, Postgres and Redis —
 one instance of each. A worker adds **two containers** and nothing else: the frontend on **its own image
 tag**, and an nginx in front of it publishing **its own port**, proxying `/api` to the shared Kong.
 
+**Run every command below from the repository root** — the paths are relative to it — and copy the env template
+first if the checkout has no `.env` (`cp env .env`), because the stack reads its secrets from there and has no
+defaults for them.
+
 ```bash
-# the shared stack, once
-docker compose -p living-intelligence up -d
+# the shared stack, once. The override carries the two Keycloak keys the
+# compose file does not set (see below); without it the stack comes up
+# "healthy" and refuses every container's connections.
+export NGINX_HTTPS_PORT=9443 NGINX_HTTP_PORT=9080
+docker compose -p living-intelligence -f docker-compose.yaml -f <override>.yml up -d
 
 # one worker
 docker build -t genie-ai-frontend:lot-a components/gov-chat-frontend/
@@ -221,51 +234,80 @@ docker run -d --name li-a-nginx --network living-intelligence_genieai_network \
   registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-nginx:latest
 ```
 
-Bind-mount `public/config` at `/app/dist/config`: the runtime config is generated at container start, so a config
-edit then needs no rebuild — only a container restart.
+The override the shared stack needs — the compose file sets neither key, and without them Keycloak listens on
+`127.0.0.1` inside its own container:
 
-The shared Keycloak must accept the worker's origin: add its `redirectUris` and `webOrigins` through the admin
-API — no restart, no repo change.
+```yaml
+services:
+  keycloak:
+    environment:
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_HOST: "0.0.0.0"
+```
 
-Two facts that cost time:
+Four things that cost time:
 
-- Keycloak binds its HTTP listener to the **resolved address of `KC_HOSTNAME`**. With `KC_HOSTNAME=localhost` it
-  binds `127.0.0.1` inside its own container and every other container gets "Connection refused", while the
-  healthcheck still passes because it tests from inside. Override `KC_HOSTNAME_STRICT=false` and `KC_HTTP_HOST=0.0.0.0`.
-- The frontend container is the app; the nginx in front of it is the public entry. The app's real root is
+- **Keycloak binds its HTTP listener to the resolved address of `KC_HOSTNAME`.** The compose file sets
+  `KC_HOSTNAME=${NGINX_PUBLIC_DOMAIN:-localhost}`, so on a machine where that variable is unset the listener
+  binds `127.0.0.1` and every other container gets "Connection refused" — while the healthcheck still passes,
+  because it tests from inside. Hence the two keys above.
+- **The nginx serves a self-signed certificate.** Its entrypoint mints one with `CN=localhost` on every start
+  when the certificate volume is empty — which is why the origin is `https://localhost:<port>`, and why a
+  browser shows an interstitial. Playwright needs `ignoreHTTPSErrors: true` (the capture script sets it); a
+  human accepts the warning once.
+- **The bind-mount carries the operator-editable assets, not the runtime config.** `public/config/` holds
+  `theme-variables.css`, the brand JSON and the splash images, served straight off disk by
+  `location ^~ /config/`. Editing one needs **no restart at all**. The runtime config (`window.APP_CONFIG`) is
+  generated at container start into `/app/dist/runtime/config.js` — deliberately outside the mount, so it follows
+  the environment variables; changing one needs a container **restart**.
+- **The frontend container is the app; the nginx in front of it is the public entry.** The app's real root is
   `/app/dist`, **not** `/usr/share/nginx/html`, which is a stock page this image never uses.
 
-#### Kubernetes — the migration target
+The shared Keycloak must also accept the worker's origin: add its `redirectUris` and `webOrigins` through the
+admin API — no restart, no repo change.
+
+#### Kubernetes — the migration target (read off the chart, not yet run)
 
 Same shape: the shared release is the stack, and a worker adds **a frontend instance with its own image tag**
-plus a way to reach it. The chart renders one frontend per release, so a worker's instance is a hand-written
-Deployment + Service **in the shared namespace** — not a second release, and no second ArangoDB, Keycloak or
-backend.
+plus a way to reach it. The chart renders one frontend per release, so a worker's instance would be a
+hand-written Deployment + Service **in the shared namespace** — not a second release, and no second ArangoDB,
+Keycloak or backend.
 
-Why that works:
+**But the shared network policies decide whether that is possible, and today they say no.** A NetworkPolicy's
+`podSelector` picks the pod being *protected*; the `from[].podSelector` entries decide who may *connect* to it.
+The chart's policies are allow-lists keyed on the **source** pod's `genieai.io/component` label:
 
-- The chart's NetworkPolicies select by `genieai.io/component: <service>`, so a pod carrying its own labels is
-  not governed by them: the worker's instance reaches the shared backend and Keycloak Services.
-- The worker's origin serves the SPA **and** proxies `/api` to the shared backend, so the browser stays
-  same-origin — no CORS change, no second realm.
-- The image is the same one the stack runs: `eval $(minikube docker-env)` + `pullPolicy: Never` for a local
-  build, or a registry tag. Then `kubectl set image` + `kubectl rollout status`.
+- the backend admits `frontend`, `documentRepository`, `chatqna`, `dataprep` and `test`;
+- the Keycloak admits `backend`, `documentRepository`, `chatqna`, `dataprep` and `identity`.
 
-What it costs:
+A worker pod carrying its own label is on **neither** list, so the shared backend and the shared Keycloak refuse
+it. **A worker instance is therefore a chart change, not a values change** — either the allow-lists have to admit
+the worker's label, or the worker wears `genieai.io/component: frontend` and is reached the way the real frontend
+is: through the edge.
 
-- **The edge owns the API path matrix.** The Envoy route sends `/api/files` and `/api/labels` to the
-  document-repository and the rest of `/api` to the backend. A worker's own proxy must reproduce that split, or
-  the document paths break for that worker only. The alternative — giving the worker its own host on the edge
-  (`ingress.host` + a cert-manager certificate + an HTTPRoute) — costs a host, a certificate and a `/etc/hosts`
-  entry, and buys the edge's own routing.
-- **The realm must accept the worker's origin** — `redirectUris` and `webOrigins` through the admin API, exactly
-  as in compose. And the worker's origin must be a **secure context** for the PKCE login: `localhost` over plain
-  HTTP qualifies; a custom hostname over plain HTTP does not.
-- **The shared stack must be up.** If it is not, bring it up first (`helm upgrade` the release, or
-  `flux reconcile hr genieai -n flux-system`) — a worker instance has nothing to lean on otherwise.
+Reaching it through the edge costs:
 
-> This mapping is read off the chart, and **no worker instance has been run this way yet** — treat it as the
-> shape, not as a verified recipe, and verify each step before relying on it.
+- **Its own host.** `ingress.host` is a single per-release scalar: it feeds the HTTPRoute hostname, the
+  certificate's SANs, the Keycloak hostname and `KC_PUBLIC_ORIGIN`. Changing it moves the **shared** stack's
+  public origin. A worker's host comes from a hand-written HTTPRoute attached to the same Gateway, with a
+  certificate of its own — not from a values change.
+- **Its own copy of the path matrix.** The edge routes `/api/files` and `/api/labels` to the
+  document-repository, `/api` and `/api-docs` to the backend, `/auth` to the Keycloak — with `X-Forwarded-Host`
+  re-pinned to the public host, or Keycloak's discovery URLs point at the wrong host — and `/` to the SPA.
+  Envoy matches **first match wins, not longest-prefix**, so the more specific paths are listed first. A second
+  hostname needs that matrix again: a second Gateway carrying it, or a second HTTPRoute that duplicates it and
+  can drift.
+- **Its own realm entry.** The worker's origin must be in the client's `redirectUris` and `webOrigins` (admin
+  API, no restart). The browser login also needs a **secure context** for PKCE: `localhost` over plain HTTP
+  qualifies; a custom hostname over plain HTTP does not.
+- **Its own issuer setting.** The chart sets the release's `VUE_APP_KEYCLOAK_URL` from the public issuer; a
+  hand-written pod has to set it itself, or the SPA falls back to `${origin}/auth` and needs the worker's
+  hostname to carry the edge's `/auth` route too.
+
+The rest carries over unchanged: the image is the one the stack runs (`eval $(minikube docker-env)` +
+`pullPolicy: Never` for a local build, or a registry tag), then `kubectl set image` + `kubectl rollout status`;
+the shared stack must be up (`helm upgrade`, or `flux reconcile hr genieai -n flux-system`); and the proof that
+the pod runs the new code is `kubectl exec … -- grep <token> /app/dist/assets/*`.
 
 ### Known gaps
 

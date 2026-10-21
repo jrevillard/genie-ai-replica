@@ -485,7 +485,8 @@ resolved values*; the pixels are verified by a device screenshot, and the two mu
 | Trap | What happens | What to do |
 |---|---|---|
 | `ThemeManager` is a singleton | Its theme, font scale and config map survive the test that set them, so the next test asserts against a stale theme and fails for the wrong reason — or passes for the wrong one. | `resetThemeManager()` in `tearDown`; `setupLightTokens()` / `setupDarkTokens()` / `setupTokensWithConfig()` in `test/helpers/theme_helper.dart` set the state a test means to assert on. |
-| A widget under a plain `MaterialApp` | The theme resolves to Material's defaults, not the DS tokens. The widget test passes, and the real app renders a different colour. | Wrap with `TestApp` (`test/helpers/test_app.dart`) so the app's own `ThemeData` is in play. |
+| A widget under a plain `MaterialApp` | The theme resolves to Material's defaults, not the DS tokens. The widget test passes, and the real app renders a different colour. | Wrap with `testApp()` (`test/helpers/test_app.dart`) so the app's own `ThemeData` is in play. It hardcodes the **light** theme, so a dark-mode test has to build its own wrapper — and `setupDarkTokens()` alone does not make that wrapper dark. |
+| `TestApp` is not `testApp()` | `TestApp` is the patrol widget (`patrol_test/helpers/test_app.dart`), which needs an injected container and `ProviderScope` overrides; `testApp()` is the widget-test wrapper. Grepping the wrong one produces a test that cannot compile. | `testApp()` for widget tests, `TestApp` for patrol. The name and the file have to match. |
 | `Theme.of(context)` inside a widget | The widget reads Material's resolved theme and **ignores `ThemeManager().tokens`** — so it does not follow the deployment's palette. | Read the token (`ThemeManager().tokens`) in the widget, and assert the token in the test. |
 | A fixed height around text | The font scale is user-controlled (`setFontSize`), and a widget that fits at the default scale overflows at a large one. | Assert at the scale a user can actually reach, and let the height follow the text. |
 | Asserting a colour literal | A hex string copied from the current build is a table, not an invariant: it fails on every palette change and proves nothing about the token. | Assert the token's resolved value, or the relationship between two tokens (contrast), and let the palette move. |
@@ -502,6 +503,8 @@ resolved values*; the pixels are verified by a device screenshot, and the two mu
 - **Fix the cause, not the symptom.** A colour that is wrong in two places is one wrong token.
 
 ### Verify with
+
+From `mobile/genie_ai_mobile/`:
 
 ```bash
 flutter test                       # widget + unit tests

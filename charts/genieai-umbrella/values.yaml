@@ -371,6 +371,12 @@ data:
 # fails the install if a service is enabled but any of its listed targets
 # is not.
 dependencyGraph:
+  # Edges are unconditional: a node's deps are checked whenever the node is
+  # on. A dependency that only exists in some profiles (the backend reaching
+  # chatqna, which only exists with the OPEA tier) is deliberately NOT an
+  # edge — declaring it would fail the install of every API-only deployment
+  # that runs with the tier off. The dangling URL such a deployment carries
+  # is inherited from Compose, which has the same shape.
   services:
     backend:
       - keycloak
@@ -379,8 +385,11 @@ dependencyGraph:
     redisCache: []
     frontend:
       - backend
+      - keycloak                         # the /auth/ proxy terminates at Keycloak
     documentRepository:
-      - backend
+      - keycloak
+      - arangodb
+      - clamav
     clamav: []
   data:
     postgres:
@@ -389,6 +398,28 @@ dependencyGraph:
       - ""
     keycloak:
       - postgres
+  # One switch renders all six orchestrators, so every node below is on
+  # exactly when opea.enabled is. Edges are the in-cluster Services each
+  # orchestrator dials, read off its rendered env rows.
+  opea:
+    chatqna:
+      - documentRepository
+      - backend
+      - keycloak
+      - retriever
+      - reranker
+    dataprep:
+      - documentRepository
+      - backend
+      - keycloak
+      - arangodb
+      - embedding
+    retriever:
+      - arangodb
+      - embedding
+    reranker: []                          # the model endpoint is the GPU node, off-cluster
+    embedding: []                         # ditto
+    translation: []                       # ditto
 
 # Stateless application tier. Each entry drives a per-service Deployment
 # rendered by the corresponding template under templates/services/.

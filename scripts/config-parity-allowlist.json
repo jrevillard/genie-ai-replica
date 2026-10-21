@@ -22,7 +22,7 @@
       "compose": "backend",
       "chart": "backend",
       "mayDiffer": {
-        "ARANGO_DB": "the chart's ArangoDB instance serves the _system database; the Compose deployment uses a dedicated genie-ai one",
+        "ARANGO_DB": "the chart's ArangoDB instance serves _system, ArangoDB's own database, which always exists; Compose uses a dedicated genie-ai database. Intentional divergence: moving an existing deployment means migrating every collection, not switching a value. The knob is data.arangodb.database (default _system)",
         "ARANGO_URL": "in-cluster Service DNS instead of the Compose service name",
         "ARANGO_PASSWORD": "carried by the arango-root-secret Secret the operator provides",
         "ENABLE_OBSERVABILITY": "the chart's observability tier is an operator-enabled install of its own; Compose gates the same services behind a profile",
@@ -59,7 +59,7 @@
       "compose": "document-repository",
       "chart": "documentRepository",
       "mayDiffer": {
-        "ARANGO_DB": "the chart's ArangoDB instance serves the _system database; the Compose deployment uses a dedicated genie-ai one",
+        "ARANGO_DB": "the chart's ArangoDB instance serves _system, ArangoDB's own database, which always exists; Compose uses a dedicated genie-ai database. Intentional divergence: moving an existing deployment means migrating every collection, not switching a value. The knob is data.arangodb.database (default _system)",
         "ARANGO_URL": "in-cluster Service DNS instead of the Compose service name",
         "ARANGO_PASSWORD": "carried by the arango-root-secret Secret the operator provides",
         "ENABLE_OBSERVABILITY": "the chart's observability tier is an operator-enabled install of its own; Compose gates the same services behind a profile",
@@ -102,7 +102,7 @@
       "compose": "dataprep-arango-service",
       "chart": "dataprep",
       "mayDiffer": {
-        "ARANGO_DB": "the chart's ArangoDB instance serves the _system database; the Compose deployment uses a dedicated genie-ai one",
+        "ARANGO_DB": "the chart's ArangoDB instance serves _system, ArangoDB's own database, which always exists; Compose uses a dedicated genie-ai database. Intentional divergence: moving an existing deployment means migrating every collection, not switching a value. The knob is data.arangodb.database (default _system)",
         "ARANGO_URL": "in-cluster Service DNS instead of the Compose service name",
         "ARANGO_PASSWORD": "carried by the arango-root-secret Secret the operator provides",
         "BACKEND_SERVICE_URL": "in-cluster Service DNS instead of the Compose service name",
@@ -131,7 +131,7 @@
       "compose": "retriever-arango-service",
       "chart": "retriever",
       "mayDiffer": {
-        "ARANGO_DB": "the chart's ArangoDB instance serves the _system database; the Compose deployment uses a dedicated genie-ai one",
+        "ARANGO_DB": "the chart's ArangoDB instance serves _system, ArangoDB's own database, which always exists; Compose uses a dedicated genie-ai database. Intentional divergence: moving an existing deployment means migrating every collection, not switching a value. The knob is data.arangodb.database (default _system)",
         "ARANGO_URL": "in-cluster Service DNS instead of the Compose service name",
         "ARANGO_PASSWORD": "carried by the arango-root-secret Secret the operator provides",
         "ENABLE_OBSERVABILITY": "the chart's observability tier is an operator-enabled install of its own; Compose gates the same services behind a profile",
@@ -200,7 +200,7 @@
       "compose": "db-migrations",
       "chart": "migrate-db",
       "mayDiffer": {
-        "ARANGO_DB": "the chart's ArangoDB instance serves the _system database; the Compose deployment uses a dedicated genie-ai one",
+        "ARANGO_DB": "the chart's ArangoDB instance serves _system, ArangoDB's own database, which always exists; Compose uses a dedicated genie-ai database. Intentional divergence: moving an existing deployment means migrating every collection, not switching a value. The knob is data.arangodb.database (default _system)",
         "ARANGO_URL": "in-cluster Service DNS instead of the Compose service name"
       }
     },

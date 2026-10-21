@@ -58,6 +58,9 @@ Three categories in the allowlist, per service:
   * `codeDefault` — Compose leaves the variable empty and the code's own
                    default applies when it is unset, so the chart leaving
                    it unset produces the same result.
+  * `notApplicable` — the variable has no role in the Kubernetes topology
+                   (a development proxy host, when the SPA and the API are
+                   served from the same origin).
 
 "Effective value" means what the variable resolves to, not how it is
 spelled: Compose's `${NAME:-fallback}` resolves to `fallback` when NAME is
@@ -130,6 +133,11 @@ def compose_vars(service):
 def chart_rendered(docs):
     """{component: {name: value}} from the rendered chart.
 
+    Deployments and Jobs both carry a pod template with the same shape, so
+    both are read: a service the chart runs as a hook Job (the database
+    migrations, the Keycloak convergence) is configured just as much as
+    one it runs as a Deployment.
+
     A variable carried by a Secret has no literal value: its value lives in
     a Secret the operator provides, and the rendered row only proves the
     chart asks for it. Those rows are recorded as SECRET so the comparison
@@ -138,14 +146,15 @@ def chart_rendered(docs):
     """
     out = {}
     for doc in docs:
-        if not isinstance(doc, dict) or doc.get("kind") != "Deployment":
+        if not isinstance(doc, dict) or doc.get("kind") not in ("Deployment", "Job"):
             continue
-        labels = doc.get("spec", {}).get("template", {}).get("metadata", {}).get("labels", {})
+        template = doc.get("spec", {}).get("template", {})
+        labels = template.get("metadata", {}).get("labels", {})
         component = labels.get("genieai.io/component")
         if not component:
             continue
         rows = out.setdefault(component, {})
-        for container in doc.get("spec", {}).get("template", {}).get("spec", {}).get("containers", []):
+        for container in template.get("spec", {}).get("containers", []):
             for entry in container.get("env") or []:
                 if "name" in entry:
                     value = entry.get("value")
@@ -229,9 +238,15 @@ def main(argv):
         not_read = pair.get("notRead") or {}
         code_default = pair.get("codeDefault") or {}
         secret_provided = pair.get("secretProvided") or {}
+        not_applicable = pair.get("notApplicable") or {}
 
         for name, (value, required) in sorted(compose_vars(service).items()):
-            if name in compose_only or name in not_read or name in code_default:
+            if (
+                name in compose_only
+                or name in not_read
+                or name in code_default
+                or name in not_applicable
+            ):
                 continue
             if name in secret_provided:
                 # The chart asks the operator for the value through a
@@ -253,6 +268,12 @@ def main(argv):
             if name in may_differ:
                 # The chart must set it; the value is the Kubernetes one.
                 continue
+            if required:
+                # Compose has no default for it: the operator MUST set it
+                # on that surface. The chart has the variable, so both
+                # surfaces take it from the operator; the two values are
+                # the operator's business, not a drift.
+                continue
             if chart_value == SECRET:
                 # Carried by a Secret on the chart side: the operator
                 # supplies it, so the value cannot be compared.
@@ -265,6 +286,23 @@ def main(argv):
                 )
 
     print(f"{compose_path} vs {rendered_path}: {len(services)} service pairs, {checked} variables compared")
+
+    # Every Compose service must be accounted for: paired with a chart
+    # component, or declared as having no comparable counterpart. A service
+    # that is neither is a silent hole in the coverage — the gate would
+    # report green while comparing nothing for it.
+    unpaired = allowlist.get("unpaired") or {}
+    paired_compose = {pair.get("compose") for pair in services.values()}
+    for compose_name in sorted((compose.get("services") or {})):
+        if compose_name in paired_compose:
+            continue
+        if compose_name not in unpaired:
+            gaps.append(
+                f"compose service {compose_name!r}: no chart counterpart declared — "
+                "pair it under `services` or declare it under `unpaired` with the reason"
+            )
+        else:
+            print(f"  not compared: {compose_name} — {unpaired[compose_name]}")
     for gap in gaps:
         print(f"  GAP {gap}")
     if gaps:

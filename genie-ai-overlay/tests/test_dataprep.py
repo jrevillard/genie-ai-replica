@@ -3294,7 +3294,9 @@ class TestApplyLabelsAclPoolSemantics:
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
             llm.return_value = ([{"text": "chunk", "labels": ["Healthcare"]}], [])
-            result, _reasons = await dp._apply_labels(["chunk"], ["Healthcare"], ["t:t1", "r:r1", "d:dom", "Healthcare"], "file1")
+            result, _reasons = await dp._apply_labels(
+                ["chunk"], ["Healthcare"], ["t:t1", "r:r1", "d:dom", "Healthcare"], "file1"
+            )
         llm.assert_called_once()
         assert result[0]["labels"] == ["Healthcare"]
 
@@ -3533,7 +3535,9 @@ class TestAclLabelPreserveE2E:
             patch.object(dp, "_fetch_all_labels", new_callable=AsyncMock, return_value=["L"]),
             patch.object(dp, "_load_and_chunk", new_callable=AsyncMock, return_value=["c1"]),
             patch.object(dp, "_run_guardrail", new_callable=AsyncMock, return_value={"success": True}),
-            patch.object(dp, "_apply_labels", new_callable=AsyncMock, return_value=([{"text": "c1", "labels": ["L"]}], [])),
+            patch.object(
+                dp, "_apply_labels", new_callable=AsyncMock, return_value=([{"text": "c1", "labels": ["L"]}], [])
+            ),
             # Not degraded: no vLLM is reachable here, and the real
             # _apply_contextualization would report a client-init degradation
             # unrelated to the empty-extraction behavior under test.

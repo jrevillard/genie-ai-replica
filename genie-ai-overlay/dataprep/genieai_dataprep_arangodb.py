@@ -1066,6 +1066,8 @@ async def _call_llm_resilient(afn, *, what: str):
             )
             await asyncio.sleep(delay)
     raise last
+
+
 async def _settle_and_retrieve(tasks, *, timeout=None) -> tuple[bool, BaseException | None]:
     """Wait *tasks* out for *timeout* seconds, then drain their outcomes.
 
@@ -1471,7 +1473,9 @@ async def _gather_with_phase_budget_inner(
     return results, False
 
 
-async def _await_with_heartbeat(tasks: list, *, phase: str, total: int, file_id: str, write_ingestion_log) -> list | None:
+async def _await_with_heartbeat(
+    tasks: list, *, phase: str, total: int, file_id: str, write_ingestion_log
+) -> list | None:
     """Wait for every task, reporting progress as they settle.
 
     The counterpart to ``_gather_with_phase_budget`` for a phase that has no
@@ -3898,7 +3902,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             file_id=input.file_id,
                             write_ingestion_log=self._write_ingestion_log,
                         )
-
 
                     # Empty-graph refusal (P0, David 2026-09-09): a batch/model
                     # failure used to be swallowed per batch while the pipeline

@@ -399,9 +399,15 @@ export default {
   align-items: stretch;
   flex: 0 0 auto;
   overflow: hidden;
+  /* The panel's own spacing to the centre, in place of the flex gap
+     this used to sit in — a gap is between the items, so it separated
+     a collapsed rail from the content as well. Collapsed, the panel
+     drops it. */
+  margin-left: var(--space-sm);
   transition:
     width 0.3s ease,
-    transform 0.3s ease;
+    transform 0.3s ease,
+    margin-left 0.3s ease;
 }
 
 /* Collapsed keeps the 50 px strip the panel has always used, and the
@@ -409,6 +415,8 @@ export default {
    to zero. Zero would clip the one control that brings it back. */
 .sidebar.collapsed {
   width: var(--sidebar-collapsed-width, 50px);
+  /* A collapsed rail owns no spacing. */
+  margin-left: 0;
 }
 
 .sidebar-inner-wrap {

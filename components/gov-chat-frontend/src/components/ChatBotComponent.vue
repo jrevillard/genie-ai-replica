@@ -605,7 +605,7 @@ export default {
     // would push the centre below its usable floor.
     this.leftWidthSnapshot = readStoredWidth('left');
     this.rightSidebarWidth = clampWidth('right', readStoredWidth('right'), this.leftWidthSnapshot, window.innerWidth);
-    this.rightSidebarCollapsed = readStoredOpen('right', false);
+    this.rightSidebarCollapsed = !readStoredOpen('right', true);
     window.addEventListener('resize', this.handleResize);
     window.addEventListener('storage', this.handleStorage);
     // Bound, because the eventBus invokes handlers as bare functions —
@@ -688,7 +688,7 @@ export default {
     },
     onRightCollapsedChange(value) {
       this.rightSidebarCollapsed = value;
-      persistOpen('right', value);
+      persistOpen('right', !value);
     },
     handleResize() {
       // Coalesced onto a single animation frame — a window-edge drag
@@ -2038,11 +2038,14 @@ export default {
   }
 }
 
+/* No `gap` — see the note on `.main-container` in App.vue. A flex gap
+   sits between the items, so a collapsed right rail was separated
+   from the content by a channel it should not have had; the spacing
+   is the panel's own margin, and a collapsed panel drops it. */
 .app-container {
   display: flex;
   height: 100vh;
   overflow: hidden;
-  gap: var(--space-sm);
 }
 
 .chatbot-container {

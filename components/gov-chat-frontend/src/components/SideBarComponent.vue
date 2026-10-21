@@ -322,9 +322,15 @@ export default {
   display: flex;
   flex-direction: row;
   align-items: stretch;
+  /* The panel's own spacing to the centre, in place of the flex gap
+     this used to sit in — a gap is between the items, so it separated
+     a collapsed rail from the content as well. Collapsed, the panel
+     drops it and the rail sits flush. */
+  margin-right: var(--space-sm);
   transition:
     transform 0.3s ease,
-    width 0.3s ease;
+    width 0.3s ease,
+    margin-right 0.3s ease;
 }
 
 /*
@@ -342,10 +348,28 @@ export default {
  */
 .side-bar.side-bar-collapsed-state {
   width: var(--side-bar-collapsed-width, 50px);
+  /* A collapsed rail owns no spacing: the content it was pushing away
+     comes right back, with no channel left over. */
+  margin-right: 0;
+  /* The content is zero-width, so without this the 24 px handle would
+     sit at the rail's OUTER edge and leave the rest of the strip
+     blank — a collapsed panel whose control moves to the far end of
+     the panel. Hugging the end puts the handle on the inner edge in
+     both states, which is where the user last saw it. */
+  justify-content: flex-end;
 }
 
+/*
+ * The content collapses to zero width rather than leaving the flow:
+ * a zero-width flex item keeps its place in the line, so the handle
+ * stays the second child, while `display: none` would drop it to the
+ * only child. `overflow: hidden` keeps the collapsed content from
+ * painting over the handle.
+ */
 .side-bar.side-bar-collapsed-state .sidebar-inner {
-  display: none;
+  flex: 0 0 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 /* The panel's content. `flex: 1; min-width: 0` rather than

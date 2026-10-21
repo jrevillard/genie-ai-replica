@@ -97,9 +97,9 @@ export const SIDEBAR_INFLOW_MIN_WIDTH = 1400;
 //
 // One key per concern, reusing the mechanism the collapsed state
 // already used (localStorage) rather than inventing a second store.
-// `sidebarOpen` is the app's existing key for the left's collapsed
+// `sidebarOpen` is the app's existing key for the left panel's open
 // state and is read verbatim, so an upgrade does not reset anyone's
-// preference.
+// preference. Both open keys store "open".
 export const KEY_WIDTH_LEFT = 'sidebarWidthLeft';
 export const KEY_WIDTH_RIGHT = 'sidebarWidthRight';
 export const KEY_OPEN_LEFT = 'sidebarOpen';
@@ -119,12 +119,14 @@ export function persistWidth(side, value) {
   write(side === 'left' ? KEY_WIDTH_LEFT : KEY_WIDTH_RIGHT, Math.round(value));
 }
 
-export function persistOpen(side, collapsed) {
-  // The left's key predates the feature and stores "open", not
-  // "collapsed" — it is kept in its own polarity so an existing
-  // value still reads correctly.
+export function persistOpen(side, open) {
+  // Both keys store "open", the polarity their names and their
+  // reader use. Storing "collapsed" on the right instead made the
+  // same key mean opposite things on the two sides: a stored `'true'`
+  // was an open left panel and a collapsed right one, so a value
+  // written by either side was misread by anything that read it back.
   const key = side === 'left' ? KEY_OPEN_LEFT : KEY_OPEN_RIGHT;
-  write(key, side === 'left' ? (collapsed ? 'false' : 'true') : collapsed ? 'true' : 'false');
+  write(key, open ? 'true' : 'false');
 }
 
 function readInt(key, fallback) {

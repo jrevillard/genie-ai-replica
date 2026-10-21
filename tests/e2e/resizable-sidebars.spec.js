@@ -102,6 +102,16 @@ async function measure(page) {
   );
 }
 
+// The two open keys, as the browser actually holds them. Reading them
+// pins the polarity — the render can be right by coincidence, as each
+// side was when the keys meant opposite things.
+async function storedOpen(page) {
+  return await page.evaluate(() => ({
+    left: localStorage.getItem('sidebarOpen'),
+    right: localStorage.getItem('sidebarOpenRight')
+  }));
+}
+
 // A real pointer drag. Playwright's mouse produces trusted events, and
 // the handle reads `pointerdown`/`pointermove` off the strip — a
 // synthetic dispatchEvent would not exercise the same path a user's
@@ -330,6 +340,236 @@ test.describe('Resizable sidebars behind one handle', () => {
     expect(Math.abs(rightDelta + centreDelta)).toBeLessThanOrEqual(2);
     expect(after.left.width).toBe(before.left.width);
     expect(after.scrollWidth).toBeLessThanOrEqual(after.viewport);
+  });
+
+  // The collapsed layout. A flex `gap` sits between the ITEMS, so a
+  // collapsed 50 px rail used to be separated from the content by a
+  // full 8 px channel on each side — the spacing belongs to the
+  // panel, and a collapsed panel owns none of it.
+  test('a collapsed rail sits flush against the centre', async ({ page }) => {
+    await page.evaluate(() => {
+      localStorage.setItem('sidebarOpen', 'false');
+      localStorage.setItem('sidebarOpenRight', 'false');
+    });
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector('.quick-help-grid .quick-help-item', { timeout: 15000 });
+    await page.waitForTimeout(2000);
+
+    const m = await measure(page);
+    expect(m.left.width, 'left rail should be the collapsed strip').toBe(50);
+    expect(m.right.width, 'right rail should be the collapsed strip').toBe(50);
+    expect(
+      m.centre.left,
+      `no channel between the left rail and the centre: rail ends at ${m.left.right}, centre starts at ${m.centre.left}`
+    ).toBe(m.left.right);
+    expect(
+      m.centre.right,
+      `no channel between the centre and the right rail: centre ends at ${m.centre.right}, rail starts at ${m.right.left}`
+    ).toBe(m.right.left);
+    // The space the channels gave back is now the centre's.
+    expect(m.scrollWidth).toBeLessThanOrEqual(m.viewport);
+  });
+
+  // The handle must stay on the panel's INNER edge in both states. The
+  // left panel used to hide its content with `display: none` when
+  // collapsed, which left the handle as the sole flex child — and a
+  // sole child lands first, so the handle jumped to the panel's outer
+  // edge. A user who collapsed the panel and then decided to widen it
+  // had to grab the opposite end from where they had clicked.
+  test('the handle stays on the inner edge in both states', async ({ page }) => {
+    await page.evaluate(() => {
+      localStorage.setItem('sidebarOpen', 'true');
+      localStorage.setItem('sidebarOpenRight', 'true');
+    });
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector('.sidebar-handle', { timeout: 15000 });
+    await page.waitForTimeout(2000);
+
+    const openLeft = await measure(page);
+    expect(
+      openLeft.leftHandle.left,
+      'open: the left handle must be inside its panel, at the inner edge'
+    ).toBeGreaterThan(openLeft.left.left);
+    // One pixel of slack: the panel's 1 px border sits outside the
+    // strip's box.
+    expect(
+      Math.abs(openLeft.rightHandle.left - openLeft.right.left),
+      'open: the right handle must be at its panel inner edge'
+    ).toBeLessThanOrEqual(1);
+
+    // Collapse the left and re-measure.
+    await page.locator(`${LEFT_HANDLE} .sidebar-handle__button`).click();
+    await page.waitForTimeout(800);
+    const collapsedLeft = await measure(page);
+    expect(collapsedLeft.left.width).toBe(50);
+    expect(
+      collapsedLeft.leftHandle.left,
+      'collapsed: the left handle must still be on the inner edge, not the outer one'
+    ).toBeGreaterThan(collapsedLeft.left.left);
+    // The same 1 px of slack as the open state: the panel's border
+    // box includes the 1 px right border, the handle's box does not.
+    expect(
+      Math.abs(collapsedLeft.leftHandle.right - collapsedLeft.left.right),
+      'collapsed: the left handle must reach the panel inner edge'
+    ).toBeLessThanOrEqual(1);
+
+    await page.locator(`${RIGHT_HANDLE} .sidebar-handle__button`).click();
+    await page.waitForTimeout(800);
+    const collapsedBoth = await measure(page);
+    expect(
+      Math.abs(collapsedBoth.rightHandle.left - collapsedBoth.right.left),
+      'collapsed: the right handle must stay on its inner edge'
+    ).toBeLessThanOrEqual(1);
+  });
+
+  // A collapse the user cannot keep. The two open keys used to store
+  // opposite polarities — the left "open", the right "collapsed" — so
+  // `'true'` was an open left panel and a collapsed right one. Nothing
+  // noticed, because each side read back its own polarity: the round
+  // trip closed on the key that wrote it, and a stored `'true'` on the
+  // right rendered a collapsed panel to anyone reading the key by its
+  // name. This is the user's path — collapse, reload, look.
+  test('a collapse survives a reload on both sides, and "true" means open', async ({ page }) => {
+    await page.evaluate(() => {
+      localStorage.setItem('sidebarOpen', 'true');
+      localStorage.setItem('sidebarOpenRight', 'true');
+    });
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector('.sidebar-handle', { timeout: 15000 });
+    await page.waitForTimeout(2000);
+
+    const openState = async () => {
+      const m = await measure(page);
+      return { left: m.left.width, right: m.right.width, stored: await storedOpen(page) };
+    };
+
+    let s = await openState();
+    expect(s.left, 'a stored "true" must render the left panel open').toBeGreaterThan(300);
+    expect(s.right, 'a stored "true" must render the right panel open').toBeGreaterThan(300);
+
+    // Collapse each side with the chevron, then reload. Both must come
+    // back collapsed.
+    await page.locator(`${LEFT_HANDLE} .sidebar-handle__button`).click();
+    await page.waitForTimeout(700);
+    expect((await storedOpen(page)).left, 'collapsing stores "false"').toBe('false');
+
+    await page.locator(`${RIGHT_HANDLE} .sidebar-handle__button`).click();
+    await page.waitForTimeout(700);
+    expect((await storedOpen(page)).right, 'collapsing stores "false"').toBe('false');
+
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector('.sidebar-handle', { timeout: 15000 });
+    await page.waitForTimeout(2000);
+    const collapsed = await measure(page);
+    expect(collapsed.left.width, 'the left stays collapsed across a reload').toBe(50);
+    expect(collapsed.right.width, 'the right stays collapsed across a reload').toBe(50);
+
+    // And expanding round-trips the other way.
+    await page.locator(`${LEFT_HANDLE} .sidebar-handle__button`).click();
+    await page.locator(`${RIGHT_HANDLE} .sidebar-handle__button`).click();
+    await page.waitForTimeout(900);
+    expect(await storedOpen(page), 'expanding stores "true" on both keys').toEqual({
+      left: 'true',
+      right: 'true'
+    });
+
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector('.sidebar-handle', { timeout: 15000 });
+    await page.waitForTimeout(2000);
+    s = await openState();
+    expect(s.left, 'the left comes back open').toBeGreaterThan(300);
+    expect(s.right, 'the right comes back open').toBeGreaterThan(300);
+  });
+
+  // An overflow that only appears on hover slips straight through a
+  // suite that never hovers. This one was real: the navbar tooltips
+  // were centred on their button and `white-space: nowrap`, so in
+  // French "Déconnexion" spanned 1839..1929 at a 1920 px viewport —
+  // 9 px past the edge, visible only while hovered.
+  test('nothing overflows the viewport with a tooltip hovered, in the longest locale', async ({ page }) => {
+    // French carries the longest labels in the set; the assertion is
+    // about the viewport, not about one translation.
+    await page.evaluate(() => {
+      localStorage.setItem('userLocale', 'fr');
+      localStorage.setItem('sidebarOpen', 'false');
+      localStorage.setItem('sidebarOpenRight', 'true');
+    });
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector('.nav-right .icon-btn', { timeout: 15000 });
+    await page.waitForTimeout(2000);
+
+    const buttons = page.locator('.nav-right .icon-btn');
+    const count = await buttons.count();
+    expect(count, 'the navbar should have icon buttons to hover').toBeGreaterThan(0);
+
+    for (let i = 0; i < count; i++) {
+      await buttons.nth(i).hover();
+      await page.waitForTimeout(250);
+      const r = await page.evaluate(() => {
+        const vp = window.innerWidth;
+        const offenders = [];
+        document.querySelectorAll('body *').forEach((el) => {
+          const cs = getComputedStyle(el);
+          if (cs.position === 'fixed' || cs.visibility === 'hidden' || cs.display === 'none') return;
+          const b = el.getBoundingClientRect();
+          if (b.width === 0 || b.height === 0) return;
+          if (b.right > vp + 0.5) {
+            offenders.push({
+              tag: el.tagName,
+              cls: (el.getAttribute('class') || '').slice(0, 30),
+              right: Math.round(b.right)
+            });
+          }
+        });
+        return { vp, scrollW: document.documentElement.scrollWidth, offenders: offenders.slice(0, 5) };
+      });
+      expect(r.offenders, `button ${i} hovered: nothing may reach past the ${r.vp} px viewport`).toEqual([]);
+      expect(r.scrollW, `button ${i} hovered: the document must not have widened`).toBeLessThanOrEqual(r.vp);
+    }
+  });
+
+  // The waves are full-bleed BY DESIGN and are clipped, not contained:
+  // the `::after` carries the same +48 px width and the same -24 px
+  // margins as the banner, so it bleeds 24 px symmetrically out of each
+  // side and the panel's `overflow: hidden` takes it back. Asserting
+  // that symmetry is what distinguishes "full-bleed, clipped" from
+  // "48 px too wide", which is what it was reported as.
+  test('the decorative full-bleed bleeds symmetrically and is clipped', async ({ page }) => {
+    const m = await page.evaluate(() => {
+      const overlay = document.querySelector('.quick-help-overlay');
+      if (!overlay) return { none: true };
+      const panel = document.querySelector('.chatbot-container');
+      const after = getComputedStyle(overlay, '::after');
+      const ml = parseFloat(after.marginLeft) || 0;
+      const panelWidth = overlay.getBoundingClientRect().width;
+      const boxWidth = parseFloat(after.width) || 0;
+      // `left: 0` with a non-auto width makes the box over-constrained,
+      // so `right` is ignored and the box starts at marginLeft. It
+      // therefore bleeds |marginLeft| out of the panel's LEFT edge and
+      // (marginLeft + width - panelWidth) out of its RIGHT edge. A
+      // full-bleed is past BOTH by the same amount; the defect is past
+      // one by 48 and the other by 0.
+      return {
+        marginLeft: after.marginLeft,
+        marginRight: after.marginRight,
+        width: after.width,
+        panelWidth: Math.round(panelWidth),
+        leftBleed: -ml,
+        rightBleed: ml + boxWidth - panelWidth,
+        clipper: getComputedStyle(panel).overflow
+      };
+    });
+    if (m.none) return; // the layer is off on this route; nothing to assert
+    expect(m.marginLeft, 'the waves must carry the negative margin that cancels their extra width').toBe(m.marginRight);
+    expect(
+      Math.abs(m.leftBleed - m.rightBleed),
+      `the waves' box should bleed the same amount out of both panel edges; measured ` +
+        `${Math.round(m.leftBleed)} px left and ${Math.round(m.rightBleed)} px right`
+    ).toBeLessThanOrEqual(1);
+    // …and the bleed is real rather than zero, which is the difference
+    // between a full-bleed and a box that happens to fit.
+    expect(m.leftBleed).toBeGreaterThan(0);
+    expect(m.clipper, 'the panel must clip the bleed').toBe('hidden');
   });
 
   test('a drag that starts on the chevron resizes the panel', async ({ page }) => {

@@ -588,6 +588,22 @@ export default {
 }
 
 /* Tooltip styling */
+/*
+ * A tooltip may not reach past the viewport.
+ *
+ * Centred on its button and `white-space: nowrap`, this opened
+ * outward from the right-hand group and crossed the window's edge:
+ * measured in French at 1920 px, "Déconnexion" spanned 1839..1929 —
+ * 9 px past the viewport. It only shows on hover, which is why the
+ * overflow is intermittent: one measurement saw scrollWidth 1920 and
+ * the next 1932.
+ *
+ * A tooltip is anchored to the button's outer edge and opens INWARD,
+ * so it can only ever grow away from the edge it would have crossed.
+ * The two groups are mirrored; within a group every tooltip opens the
+ * same way, so the row reads consistently rather than flickering
+ * between orientations as the labels change length.
+ */
 .tooltip {
   position: absolute;
   bottom: -34px;
@@ -599,6 +615,14 @@ export default {
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
   white-space: nowrap;
+  /* A backstop under the inward anchoring: however long a translation
+     turns out to be, the label cannot exceed the viewport's width, so
+     it can never become the thing that widens the page. Truncates
+     rather than wraps — a tooltip that reflows to three lines is a
+     tooltip that has stopped being a tooltip. */
+  max-width: calc(100vw - 2 * var(--space-md));
+  overflow: hidden;
+  text-overflow: ellipsis;
   opacity: 0;
   visibility: hidden;
   transition:
@@ -622,6 +646,23 @@ export default {
 .icon-btn:hover .tooltip {
   opacity: 1;
   visibility: visible;
+}
+
+/* Right-hand group: anchored to the button's right edge, opening
+   leftward into the page. */
+.nav-right .icon-btn .tooltip,
+.nav-right .language-select-container .tooltip {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+/* Left-hand group: the mirror, opening rightward. */
+.nav-left .icon-btn .tooltip,
+.nav-left .language-select-container .tooltip {
+  left: 0;
+  right: auto;
+  transform: none;
 }
 
 /* Language dropdown styling */

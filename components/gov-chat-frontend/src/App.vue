@@ -357,7 +357,7 @@ export default {
 
     onLeftCollapsedChange(collapsed) {
       this.isSidebarOpen = !collapsed;
-      persistOpen('left', collapsed);
+      persistOpen('left', !collapsed);
     },
 
     onLeftWidthChange(value) {
@@ -465,7 +465,7 @@ export default {
       // app in a state its CSS does not describe.
       if (window.innerWidth < SIDEBAR_INFLOW_MIN_WIDTH && this.isSidebarOpen) {
         this.isSidebarOpen = false;
-        persistOpen('left', true);
+        persistOpen('left', false);
       }
     }
   }
@@ -496,11 +496,20 @@ body {
   overflow: hidden;
 }
 
+/*
+ * No `gap` here. A flex gap sits between the ITEMS, so a collapsed
+ * 50 px rail was separated from the content by a full 8 px channel
+ * — measured with both panels collapsed at 1920 px: left rail 0..50,
+ * a gap 50..58, centre 58..1854, a gap 1854..1862, right rail
+ * 1862..1912. The spacing belongs to the PANEL, and a collapsed
+ * panel owns none of it, so each panel carries its own margin and
+ * drops it when collapsed (see SideBarComponent.vue). Flexbox cannot
+ * make a gap conditional per item; a margin can.
+ */
 .main-container {
   display: flex;
   flex: 1;
   overflow: hidden;
-  gap: var(--space-sm);
 }
 
 .content-area {

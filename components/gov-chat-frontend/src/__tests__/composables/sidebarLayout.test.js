@@ -5,7 +5,11 @@ import {
   CENTRE_MIN_WIDTH,
   SIDEBAR_INFLOW_MIN_WIDTH,
   computeMaxFor,
-  clampWidth
+  clampWidth,
+  persistOpen,
+  readStoredOpen,
+  KEY_OPEN_LEFT,
+  KEY_OPEN_RIGHT
 } from '@/composables/sidebarLayout';
 
 // The horizontal space inside the viewport the centre does not get:
@@ -173,5 +177,40 @@ describe('sidebarLayout — the clamp arithmetic', () => {
     // A first-run user sees the layout they saw before, and a
     // double-click lands on it.
     expect(SIDEBAR_DEFAULTS).toEqual({ left: 450, right: 320 });
+  });
+});
+
+// One polarity for both open keys. The right used to store "collapsed"
+// while the left stored "open", so the same `'true'` was an open left
+// panel and a collapsed right one, and a stored `'true'` on the right
+// rendered a collapsed panel. These are the assertions that would have
+// caught it.
+describe('sidebarLayout — the open-state polarity', () => {
+  beforeEach(() => localStorage.clear());
+
+  it.each([
+    ['left', KEY_OPEN_LEFT],
+    ['right', KEY_OPEN_RIGHT]
+  ])('stores "open" for the %s panel, not "collapsed"', (side, key) => {
+    persistOpen(side, true);
+    expect(localStorage.getItem(key)).toBe('true');
+    persistOpen(side, false);
+    expect(localStorage.getItem(key)).toBe('false');
+  });
+
+  it.each([
+    ['left', KEY_OPEN_LEFT],
+    ['right', KEY_OPEN_RIGHT]
+  ])('reads the %s panel back with the polarity it was written', (side, key) => {
+    [true, false].forEach((open) => {
+      persistOpen(side, open);
+      expect(readStoredOpen(side, !open)).toBe(open);
+    });
+    expect(localStorage.getItem(key)).toBe('false');
+  });
+
+  it.each(['left', 'right'])('gives the %s panel the fallback when nothing is stored', (side) => {
+    expect(readStoredOpen(side, true)).toBe(true);
+    expect(readStoredOpen(side, false)).toBe(false);
   });
 });

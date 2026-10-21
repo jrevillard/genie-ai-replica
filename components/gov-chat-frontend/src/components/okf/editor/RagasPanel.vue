@@ -868,7 +868,13 @@ export default {
       if (!p) return '';
       const parts = [];
       if (p.step) parts.push(p.step);
-      else if (p.total) parts.push(`${p.done}/${p.total}`);
+      // A count of ZERO is "not counted yet", not "nothing happened" (David
+      // 2026-10-21: "this has been running for quite a while with no
+      // progress bar… completely unacceptable UX"). Printing "0/100" next
+      // to a running clock reads as a broken benchmark — the phase name,
+      // the call count and the elapsed clock tell the truth. The counts
+      // appear as soon as the first item completes.
+      else if (p.total && p.done) parts.push(`${p.done}/${p.total}`);
       // The LLM-call count (2026-10-21): the transform's own bar did NOT
       // move during a 20-minute KG phase — the UI showed "0/1075" the whole
       // time while the work was demonstrably running. This counter advances

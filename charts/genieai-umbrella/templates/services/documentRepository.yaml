@@ -59,7 +59,7 @@ both rows must be set explicitly. */ -}}
     (dict "name" "KC_REALM" "value" (.Values.data.keycloak.realm | default "genie"))
     (dict "name" "KEYCLOAK_EXPECTED_ISSUER" "value" (printf "%s/realms/%s" (include "genieai-umbrella.keycloakPublicIssuer" .) (.Values.data.keycloak.realm | default "genie")))
     (dict "name" "ARANGO_URL" "value" (include "genieai-umbrella.arangoURL" .))
-    (dict "name" "ARANGO_DB" "value" "_system")
+    (dict "name" "ARANGO_DB" "value" (.Values.data.arangodb.database | default "_system" | toString))
     (dict "name" "DATAPREP_HOST" "value" "http://dataprep")
     (dict "name" "DATAPREP_PORT" "value" "5000")
     (dict "name" "CLAMSCAN_HOST" "value" .Values.services.documentRepository.clamavHost)

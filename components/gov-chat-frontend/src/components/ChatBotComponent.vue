@@ -2480,7 +2480,15 @@ export default {
   align-items: center;
   justify-content: center;
   padding: var(--space-lg);
+  /* The waves' ::after and the banner's full-bleed extend a fraction past
+     the overlay's right edge by design (the artwork reaches the panel
+     edges, not centred in a smaller box). overflow-x: hidden clips the
+     overshoot at the panel's edge so it cannot scroll the panel
+     horizontally — the brief ruled the bleed intentional and this
+     property is the property that controls whether a horizontal
+     scrollbar is drawn. */
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* At narrow viewports the chat column is too small to spare a 24 px

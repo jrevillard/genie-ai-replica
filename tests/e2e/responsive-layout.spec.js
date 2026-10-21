@@ -25,10 +25,16 @@
 // the reference's 217 px minus a 20 px tolerance, and the sidebars
 // do not overlap the centre by bounding-rect intersection.
 //
-// A companion describe block checks the welcome panel itself:
-// .quick-help-overlay must not scroll horizontally at any of the
-// viewports above, in either theme — a separate invariant with its
-// own assertion rather than a column table bolted onto this spec.
+// A companion describe block checks the welcome panel itself, in
+// two parts:
+//   - the wave ::after must not extend past the panel's right
+//     edge (with the banner hidden for the read so only the wave
+//     band can contribute to the overlay's horizontal scroll)
+//   - the panel must never offer a horizontal scrollbar; the
+//     computed overflow-x must be 'hidden' or 'clip' at every
+//     viewport and in both themes. That is the property that
+//     decides whether a scrollbar is drawn, and is the property
+//     the brief's ruling fixes.
 
 const { test, expect } = require('@playwright/test');
 const { loginViaUI } = require('./helpers/chatbot');
@@ -175,22 +181,37 @@ test.describe('Responsive layout (quick-help grid + sidebar policy)', () => {
   }
 });
 
-// Welcome overlay horizontal-overflow invariant.
+// Welcome panel invariants.
 //
-// The wave band (.quick-help-overlay::after) must not extend past
-// the welcome panel's right edge: the painted band must end where
-// the panel ends, never run past it. The .quick-help-banner inside
-// the panel intentionally bleeds --space-lg on each side at narrow
-// viewports so the artwork reaches the panel's edges (the banner
-// itself is correct and the brief tells us not to touch it), which
-// means measuring the overlay's own scrollWidth against its
-// clientWidth would catch that intentional bleed too. The test
-// hides the banner for the duration of the measurement so only
-// the wave band can add to the horizontal scroll; after the fix
-// that contribution is zero. The Living Intelligence visual layer
-// is expected to be on (the deployment config enables it for this
-// build); the test asserts it so a build that silently drops the
-// layer cannot vacuously pass against a missing ::after.
+// Two describe blocks guard the welcome panel.
+//
+// 1. "Welcome panel does not scroll horizontally" — on the REAL
+//    page (nothing hidden) the computed `overflow-x` of the panel
+//    must be 'hidden' or 'clip' at every viewport the layout spec
+//    covers, in either theme. That is the property the brief's
+//    ruling fixes, and the property that decides whether a
+//    horizontal scrollbar is drawn.
+//
+// 2. "Wave ::after does not extend past the panel" — with the
+//    banner hidden for the read (its full-bleed is intentional, see
+//    below), the overlay's scrollWidth must not exceed its
+//    clientWidth. After the ::after fix the wave band's contribution
+//    is zero; before it, the band was sized to clientWidth +
+//    2*--space-lg and produced the +24 px the brief measured.
+//
+// Why the waves test hides the banner: below 1299 px the overlay
+// declares `padding: 0`, and the banner's `width: calc(100% + 2 *
+// var(--space-lg))` + two negative margins bleeds the banner past
+// the overlay's right edge by --space-lg. That bleed is intentional
+// — the brief: "the banner … is correct … do not touch the banner's
+// rule" — so reading the overlay's scrollWidth without isolating the
+// ::after would catch that intentional bleed too. With the banner
+// hidden, only the wave band can contribute; the regression guards
+// the ::after's contribution exactly.
+//
+// Both suites assert that the Living Intelligence visual layer is
+// actually on, so a build that silently drops it cannot vacuously
+// pass against a missing wave pseudo.
 
 const WELCOME_OVERFLOW_VIEWPORTS = [2400, 1920, 1600, 1400, 1280, 1024, 769, 414];
 const WELCOME_OVERFLOW_THEMES = ['light', 'dark'];
@@ -217,33 +238,41 @@ async function freshWelcomeOverlay(browser, width, theme) {
   return { ctx, page };
 }
 
-async function readOverlayOverflow(page) {
-  // Hide the banner — its full-bleed is intentional — and read the
-  // remaining overlay width. After the fix the only ::after band
-  // is sized to the panel's padding box, so its contribution to
-  // horizontal overflow is zero. Without the fix the band is sized
-  // to padding-box-width + 2*--space-lg, so the contribution is the
-  // positive 24 px the brief measured.
+async function readVisualLayerState(page) {
+  return await page.evaluate(() => {
+    const overlay = document.querySelector('.quick-help-overlay');
+    const html = document.documentElement;
+    const visualOn = html.getAttribute('data-visual') === 'on';
+    // .genie-living-intelligence lives on .dashboard-content, an ancestor
+    // of .quick-help-overlay (DashboardView wraps the ChatBotComponent).
+    const gliOn = overlay ? overlay.closest('.genie-living-intelligence') !== null : false;
+    return { hasOverlay: !!overlay, visualOn, gliOn };
+  });
+}
+
+async function readOverlayOverflowX(page) {
+  return await page.evaluate(() => {
+    const overlay = document.querySelector('.quick-help-overlay');
+    if (!overlay) return null;
+    const cs = getComputedStyle(overlay);
+    return { overflowX: cs.overflowX, overflowY: cs.overflowY };
+  });
+}
+
+async function readOverlayScrollWidth(page) {
+  // Hide the banner (its full-bleed is intentional) so only the wave
+  // band can contribute to horizontal overflow. Inline style tag is
+  // removed before the test returns.
   const tag = await page.addStyleTag({
     content: '.quick-help-overlay .quick-help-banner { display: none !important; }'
   });
   try {
     return await page.evaluate(() => {
       const overlay = document.querySelector('.quick-help-overlay');
-      const html = document.documentElement;
-      const visualOn = html.getAttribute('data-visual') === 'on';
-      // The .genie-living-intelligence class lives on .dashboard-content,
-      // an ancestor of .quick-help-overlay (DashboardView wraps the
-      // ChatBotComponent). closest() walks the ancestor chain.
-      const gliOn = overlay ? overlay.closest('.genie-living-intelligence') !== null : false;
-      if (!overlay) return { ok: false, visualOn, gliOn };
+      if (!overlay) return null;
       return {
-        ok: true,
-        visualOn,
-        gliOn,
         scrollWidth: overlay.scrollWidth,
-        clientWidth: overlay.clientWidth,
-        overflow: overlay.scrollWidth - overlay.clientWidth
+        clientWidth: overlay.clientWidth
       };
     });
   } finally {
@@ -251,29 +280,67 @@ async function readOverlayOverflow(page) {
   }
 }
 
-test.describe('Welcome overlay does not scroll horizontally (waves only)', () => {
+test.describe('Welcome panel does not scroll horizontally', () => {
+  for (const vp of WELCOME_OVERFLOW_VIEWPORTS) {
+    for (const theme of WELCOME_OVERFLOW_THEMES) {
+      test(`${vp}px @${theme}: overlay computed overflow-x is 'hidden' or 'clip'`, async ({ browser }) => {
+        const { ctx, page } = await freshWelcomeOverlay(browser, vp, theme);
+        try {
+          const layer = await readVisualLayerState(page);
+          expect(layer.hasOverlay, 'welcome overlay should be present in the DOM').toBe(true);
+          expect(
+            layer.visualOn,
+            'data-visual="on" must be set for the wave layer to render'
+          ).toBe(true);
+          expect(
+            layer.gliOn,
+            '.genie-living-intelligence must be on <html> or an ancestor for the wave layer'
+          ).toBe(true);
+
+          const ox = await readOverlayOverflowX(page);
+          expect(ox, 'overlay should be readable').not.toBeNull();
+          expect(
+            ox.overflowX,
+            `overlay computed overflow-x must be 'hidden' or 'clip' (the property that decides ` +
+              `whether the panel draws a horizontal scrollbar). Got '${ox.overflowX}' at ` +
+              `viewport ${vp}px (${theme}). Setting it back to 'auto' (the previous default after ` +
+              `overflow-y: auto) would draw the very scrollbar the brief rules out.`
+          ).toMatch(/^(hidden|clip)$/);
+        } finally {
+          await ctx.close();
+        }
+      });
+    }
+  }
+});
+
+test.describe('Wave ::after does not extend past the panel', () => {
   for (const vp of WELCOME_OVERFLOW_VIEWPORTS) {
     for (const theme of WELCOME_OVERFLOW_THEMES) {
       test(`${vp}px @${theme}: with banner hidden, overlay.scrollWidth <= overlay.clientWidth`, async ({ browser }) => {
         const { ctx, page } = await freshWelcomeOverlay(browser, vp, theme);
         try {
-          const m = await readOverlayOverflow(page);
-
-          expect(m.ok, 'welcome overlay should be present in the DOM').toBe(true);
+          const layer = await readVisualLayerState(page);
+          expect(layer.hasOverlay, 'welcome overlay should be present in the DOM').toBe(true);
           expect(
-            m.visualOn,
+            layer.visualOn,
             'data-visual="on" must be set for the wave layer to render'
           ).toBe(true);
           expect(
-            m.gliOn,
+            layer.gliOn,
             '.genie-living-intelligence must be on <html> or an ancestor for the wave layer'
           ).toBe(true);
+
+          const sw = await readOverlayScrollWidth(page);
+          expect(sw, 'overlay should be readable').not.toBeNull();
+          const overflow = sw.scrollWidth - sw.clientWidth;
           expect(
-            m.scrollWidth,
-            `with banner hidden, overlay scrollWidth (${m.scrollWidth}px) must be <= clientWidth (${m.clientWidth}px) ` +
-              `at viewport ${vp}px (${theme}); wave-only horizontal overflow=${m.overflow}px ` +
-              `(the brief measures +24 here when the ::after box bleeds past the panel)`
-          ).toBeLessThanOrEqual(m.clientWidth);
+            sw.scrollWidth,
+            `with banner hidden, overlay scrollWidth (${sw.scrollWidth}px) must be <= ` +
+              `clientWidth (${sw.clientWidth}px) at viewport ${vp}px (${theme}); ` +
+              `wave-only horizontal overflow=${overflow}px ` +
+              `(the brief measured +24 here when the ::after box was sized to clientWidth + 2*--space-lg)`
+          ).toBeLessThanOrEqual(sw.clientWidth);
         } finally {
           await ctx.close();
         }

@@ -146,11 +146,12 @@ async function scrimAlpha(page) {
 }
 
 // Inside the page: read the wordmark's box, then recover the ink colour at
-// every core glyph pixel from three renders of that box.
+// every core glyph pixel from four renders of that box.
 //
-//   A = as rendered        (gradient ink over its real backdrop)
-//   B = backdrop alone     (wordmark hidden)
-//   H = flat black ink     -> H = (1-c)*B, so c = 1 - H/B is exact
+//   A = as rendered         (gradient ink over its real backdrop)
+//   B = backdrop alone      (wordmark hidden)
+//   Hk = flat black ink     -> Hk = (1-c)*B,  c = 1 - Hk/B
+//   Hw = flat white ink     -> Hw = c*255 + (1-c)*B,  c = (Hw - B)/(255 - B)
 //
 // Recovering the ink as I = (A - (1-c)*B)/c removes the anti-aliasing
 // dilution that a raw "is this pixel dark?" threshold cannot: an edge pixel
@@ -159,6 +160,12 @@ async function scrimAlpha(page) {
 // pixel is then paired with the backdrop pixel directly behind it, so the
 // number reported is the contrast under the glyph and not the worst pixel
 // anywhere in the band.
+//
+// Both probes are needed because neither one is legible against every
+// backdrop: black loses its range under a light panel, white loses its
+// range under a dark one. Taking the ink as fully black would make this
+// assertion unable to report a contrast at all on a dark backdrop, which is
+// exactly the case it exists to catch.
 async function wordmarkContrast(page) {
   const box = await page.evaluate(() => {
     const el = document.querySelector('.quick-help-heading .brand-wordmark');
@@ -178,12 +185,15 @@ async function wordmarkContrast(page) {
 
   const aB64 = await shot(null);
   const bB64 = await shot('.brand-wordmark{visibility:hidden !important;}');
-  const hB64 = await shot(
+  const hkB64 = await shot(
     '.brand-wordmark{-webkit-text-fill-color:#000 !important;background-image:none !important;color:#000 !important;}'
+  );
+  const hwB64 = await shot(
+    '.brand-wordmark{-webkit-text-fill-color:#fff !important;background-image:none !important;color:#fff !important;}'
   );
 
   return await page.evaluate(
-    async ({ aB64, bB64, hB64 }) => {
+    async ({ aB64, bB64, hkB64, hwB64 }) => {
       const load = (b64) =>
         new Promise((resolve, reject) => {
           const img = new Image();
@@ -191,7 +201,12 @@ async function wordmarkContrast(page) {
           img.onerror = reject;
           img.src = `data:image/png;base64,${b64}`;
         });
-      const [imA, imB, imH] = await Promise.all([load(aB64), load(bB64), load(hB64)]);
+      const [imA, imB, imK, imW] = await Promise.all([
+        load(aB64),
+        load(bB64),
+        load(hkB64),
+        load(hwB64)
+      ]);
       const pixels = (img) => {
         const c = document.createElement('canvas');
         c.width = img.width;
@@ -202,7 +217,8 @@ async function wordmarkContrast(page) {
       };
       const A = pixels(imA);
       const B = pixels(imB);
-      const H = pixels(imH);
+      const K = pixels(imK);
+      const W = pixels(imW);
 
       const lum = (r, g, b) => {
         const toLin = (v) => {
@@ -218,38 +234,40 @@ async function wordmarkContrast(page) {
         return (hi + 0.05) / (lo + 0.05);
       };
 
-      // A pixel only counts as glyph if the black-ink render shows a real
-      // share of ink over it. Below the backdrop's own darkest channel the
-      // coverage estimate is noise, so those pixels are skipped.
       let core = 0;
       let worst = Infinity;
       let worstInk = null;
       let worstBg = null;
       for (let i = 0; i < A.length; i += 4) {
-        const bR = B[i];
-        const bG = B[i + 1];
-        const bB = B[i + 2];
-        const channels = [
-          [bR, H[i]],
-          [bG, H[i + 1]],
-          [bB, H[i + 2]]
-        ];
-        channels.sort((u, v) => v[0] - u[0]);
-        const [brightest, inked] = channels[0];
-        if (brightest < 20) continue;
-        const coverage = 1 - inked / brightest;
-        if (coverage < 0.55) continue;
+        const bg = [B[i], B[i + 1], B[i + 2]];
+        let coverage = null;
+        // Black probe, solved on the brightest backdrop channel.
+        const bright = Math.max(bg[0], bg[1], bg[2]);
+        if (bright >= 24) {
+          const ch = [0, 1, 2].reduce((m, k) => (bg[k] > bg[m] ? k : m), 0);
+          coverage = 1 - [K[i], K[i + 1], K[i + 2]][ch] / bg[ch];
+        }
+        // White probe, solved on the darkest backdrop channel. Covers the
+        // backdrops the black probe cannot read.
+        if (coverage === null) {
+          const dark = Math.min(bg[0], bg[1], bg[2]);
+          if (dark <= 231) {
+            const ch = [0, 1, 2].reduce((m, k) => (bg[k] < bg[m] ? k : m), 0);
+            coverage = ([W[i], W[i + 1], W[i + 2]][ch] - bg[ch]) / (255 - bg[ch]);
+          }
+        }
+        if (coverage === null || coverage < 0.55) continue;
         core++;
         const ink = [
-          Math.min(255, Math.max(0, (A[i] - (1 - coverage) * bR) / coverage)),
-          Math.min(255, Math.max(0, (A[i + 1] - (1 - coverage) * bG) / coverage)),
-          Math.min(255, Math.max(0, (A[i + 2] - (1 - coverage) * bB) / coverage))
+          Math.min(255, Math.max(0, (A[i] - (1 - coverage) * bg[0]) / coverage)),
+          Math.min(255, Math.max(0, (A[i + 1] - (1 - coverage) * bg[1]) / coverage)),
+          Math.min(255, Math.max(0, (A[i + 2] - (1 - coverage) * bg[2]) / coverage))
         ];
-        const r = ratio(ink, [bR, bG, bB]);
+        const r = ratio(ink, bg);
         if (r < worst) {
           worst = r;
           worstInk = ink.map((v) => Math.round(v));
-          worstBg = [bR, bG, bB];
+          worstBg = bg;
         }
       }
       return {
@@ -260,7 +278,7 @@ async function wordmarkContrast(page) {
         core
       };
     },
-    { aB64, bB64, hB64 }
+    { aB64, bB64, hkB64, hwB64 }
   );
 }
 
@@ -525,9 +543,14 @@ test.describe('Welcome banner invariants', () => {
         ).toBeGreaterThanOrEqual(floor);
         expect(
           a.usedAlpha,
+          `${vp.label}/${theme} could not read an alpha back out of the scrim's own colour ` +
+            `(${a.used}) — the background is not the translucent colour the token declares`
+        ).not.toBeNull();
+        expect(
+          Math.abs(a.usedAlpha - a.token),
           `${vp.label}/${theme} the token is ${a.raw} but the scrim paints ${a.used} — ` +
             `the background is not reading the alpha it declares`
-        ).toBeCloseTo(a.token, 2);
+        ).toBeLessThan(0.01);
         await ctx.close();
       }
     }
@@ -539,7 +562,12 @@ test.describe('Welcome banner invariants', () => {
         const { ctx, page } = await freshSignedIn(browser, vp, theme);
         const c = await wordmarkContrast(page);
         expect(c.ok, `${vp.label}/${theme} wordmark measured (${c.why || 'ok'})`).toBe(true);
-        expect(c.core, `${vp.label}/${theme} no core wordmark pixels found`).toBeGreaterThan(0);
+        expect(
+          c.core,
+          `${vp.label}/${theme} no glyph pixel reached the 0.55 ink-coverage floor — the scrim ` +
+            `is masking the wordmark itself, not just the artwork behind it, so the mark has ` +
+            `been dissolved rather than merely veiled`
+        ).toBeGreaterThan(0);
         expect(
           c.worst,
           `${vp.label}/${theme} worst local wordmark contrast ${c.worst}:1 ` +
@@ -577,8 +605,8 @@ test.describe('Welcome banner invariants', () => {
         expect(
           o.maxGap,
           `${vp.label}/${theme} the scrim renders the icon tiles identically to an opaque ` +
-            `scrim (darkest pixel ${o.shippedDarkest} either way) across ${o.rows} rows — ` +
-            `the artwork is being annihilated at the scrim's edge, not faded`
+            `scrim (artwork departure from the panel ${o.shippedDeparture} either way) across ` +
+            `${o.rows} rows — the artwork is being annihilated at the scrim's edge, not faded`
         ).toBeGreaterThan(0);
         await ctx.close();
       }

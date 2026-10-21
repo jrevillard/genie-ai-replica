@@ -2481,7 +2481,23 @@ export default {
 }
 
 .quick-help-content {
-  width: 100%;
+  /* The veil wraps the title and its subtitle instead of spanning the
+     banner: the reference carries the text directly on the artwork, and
+     a band across the whole width washes the icon tiles as well. The
+     padding is the landing ground for the veil's horizontal ramp (the
+     layer's mask fades over 24 px), so the ramp never reaches the
+     glyphs whatever the title's length. The box's height is unchanged —
+     the layer's padding is what sets it — so the title stays where it
+     is relative to the artwork's fade. */
+  width: fit-content;
+  /* The padding sits outside the text's own box: with the global
+     border-box it would eat the title's line and wrap it. The max-width
+     is the banner's width less the two paddings, so the veil never
+     overflows the artwork it covers. */
+  box-sizing: content-box;
+  max-width: calc(100% - 64px);
+  margin-inline: auto;
+  padding-inline: 32px;
 }
 
 /* The heading and the subtitle under it share one gap: the heading

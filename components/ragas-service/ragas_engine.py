@@ -1244,6 +1244,18 @@ async def evaluate_samples(
         if progress is not None:
             progress("scoring", min(offset + len(chunk), total), total)
         frame = result.to_pandas()
+        # RAGAS 0.4.3 names parameterized metrics' DataFrame columns with
+        # their parameters — factual_correctness(mode=f1),
+        # noise_sensitivity(mode=relevant) — while metric.name (and our
+        # request/response vocabulary) stays the bare key. Reading the bare
+        # key missed the column and nulled EVERY row of exactly those two
+        # (live NCD run 2026-10-21: 79/79 rows null, both metrics invisible
+        # in the results table and charts while scoring fine — the metric
+        # computes 0.83 called directly). Map each requested key to its frame
+        # column by prefix so both spellings resolve.
+        colmap: dict[str, str] = {}
+        for col in frame.columns:
+            colmap.setdefault(str(col).split("(", 1)[0], str(col))
         for _, row in frame.iterrows():
             item = {
                 "user_input": row.get("user_input"),
@@ -1253,7 +1265,7 @@ async def evaluate_samples(
             }
             all_nan = True
             for name in metric_names:
-                v = row.get(name)
+                v = row.get(colmap.get(name, name))
                 try:
                     f = float(v) if v is not None else None
                 except (TypeError, ValueError):

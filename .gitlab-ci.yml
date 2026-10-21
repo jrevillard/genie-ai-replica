@@ -3451,7 +3451,11 @@ chart:parity:
       --set opea.enabled=true
       --set opea.gpu.nodeHost=https://gpu-node:444
       > /tmp/rendered.yaml
-    - python3 scripts/config-parity-check.py /tmp/rendered.yaml
+    # --min-compared is the floor on variables actually compared (259 at
+    # the time of writing). Every allowlist category removes variables from
+    # that set, so a growing allowlist is otherwise a quiet way to make
+    # this gate green without touching either deployment surface.
+    - python3 scripts/config-parity-check.py /tmp/rendered.yaml --min-compared=250
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:

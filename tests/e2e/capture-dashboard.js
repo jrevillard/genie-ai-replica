@@ -50,6 +50,12 @@ const SIDEBAR_STATES = [
   { label: 'collapsed-both', collapsed: 'both' }
 ];
 
+// The width at which the sidebars become an in-flow reservation and
+// grow their edge handles. Below it they are pinned and cannot be
+// collapsed. Mirrors SIDEBAR_INFLOW_MIN_WIDTH in
+// src/composables/sidebarLayout.js.
+const IN_FLOW_MIN_WIDTH = 1400;
+
 const audit = () => {
   const rootStyle = getComputedStyle(document.documentElement);
 
@@ -242,6 +248,18 @@ const audit = () => {
   for (const viewport of VIEWPORTS) {
     for (const theme of THEMES) {
       for (const sidebar of SIDEBAR_STATES) {
+        // Below the in-flow threshold the sidebars are pinned: there is
+        // no edge handle and nothing to collapse, so the collapsed state
+        // does not exist at this width. Capturing it would write a
+        // misnamed copy of the open state. The threshold mirrors
+        // SIDEBAR_INFLOW_MIN_WIDTH in src/composables/sidebarLayout.js.
+        if (sidebar.collapsed && viewport.width < IN_FLOW_MIN_WIDTH) {
+          console.log(
+            `${theme}-${viewport.label}-${sidebar.label}: skipped ` +
+              `(the sidebars are pinned below ${IN_FLOW_MIN_WIDTH}px)`
+          );
+          continue;
+        }
         const context = await browser.newContext({
           viewport: { width: viewport.width, height: viewport.height },
           colorScheme: theme,
@@ -271,27 +289,28 @@ const audit = () => {
             () => document.querySelector('.quick-help-overlay').getBoundingClientRect().width
           );
 
-          // The actual toggle buttons: the navbar's hamburger
-          // (.hamburger-btn) and the right sidebar's chevron
-          // (.sidebar-toggle). The aria-label of the latter is just
-          // "Collapse" / "Réduire" in the user's locale — no "sidebar"
-          // word — so any aria-label pattern that demands the word
-          // "sidebar" alongside never matches it and the right panel
-          // never collapses. Use the class names directly.
-          const left = await page.$('.hamburger-btn');
-          const right = await page.$('.sidebar-toggle');
+          // The collapse controls: each panel carries an edge handle
+          // whose button toggles it — `.side-bar .sidebar-handle__button`
+          // on the left, `.sidebar .sidebar-handle__button` on the
+          // right. The navbar's hamburger is gone, and the handle's
+          // aria-label is just "Collapse" / "Réduire" in the user's
+          // locale — no "sidebar" word — so any aria-label pattern
+          // that demands the word never matches. Use the class names,
+          // the same ones the sidebar spec uses.
+          const left = await page.$('.side-bar .sidebar-handle__button');
+          const right = await page.$('.sidebar .sidebar-handle__button');
           const wantBoth = sidebar.collapsed === 'both';
           if (wantBoth && (!left || !right)) {
             throw new Error(
               `Capture wants ${sidebar.label} but the toggles are absent ` +
-                `(hamburger=${!!left}, sidebar-toggle=${!!right}). ` +
+                `(left handle=${!!left}, right handle=${!!right}). ` +
                 `Either the desktop layout has pinned the sidebar or the ` +
                 `selectors are stale; refusing to write a misnamed capture.`
             );
           }
           if (!wantBoth && !left) {
             throw new Error(
-              `Capture wants ${sidebar.label} but the left hamburger is absent; ` +
+              `Capture wants ${sidebar.label} but the left handle's button is absent; ` +
                 `refusing to write a misnamed capture.`
             );
           }

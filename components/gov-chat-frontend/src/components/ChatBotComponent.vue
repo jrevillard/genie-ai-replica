@@ -2445,6 +2445,29 @@ export default {
 
 /* Quick Help Overlay */
 .quick-help-overlay {
+  /* The card measure lives here, on the element that contains BOTH the
+     composer wrapper and the card row, so the two caps below resolve
+     against one declared value. Declared on the grid alone it is an
+     unresolved var() in the wrapper's max-width: the whole declaration
+     is invalid at computed-value time, the wrapper silently falls back
+     to `none`, and the bar takes the overlay's full content width —
+     wider than the row it is meant to sit above, with no error
+     anywhere.
+
+     --qh-measure is the resulting four-column cap (4 cards + 3 gaps),
+     964 px at the default tokens. The grid's auto-fit bound and both
+     max-widths reference these two, so a deployment that overrides
+     --space-xl or the card minimum moves the row, the wrapper and the
+     bar's inset in step.
+
+     --qh-card-min is a component-local extension point (the same shape
+     as the Living Intelligence layer's per-button --qh-bg / --qh-hover
+     tokens) rather than a new token in theme-variables.css: 217 px is
+     the card width measured off the reference mockup. It is declared
+     HERE and not on the grid because the composer wrapper is its
+     sibling and needs it too. */
+  --qh-card-min: 217px;
+  --qh-measure: calc(4 * var(--qh-card-min) + 3 * var(--space-xl));
   position: absolute;
   top: 0;
   left: 0;
@@ -2540,8 +2563,26 @@ export default {
    child that needs the explicit spacing to its siblings. */
 .quick-help-composer {
   width: 100%;
-  max-width: calc(4 * var(--qh-card-min) + 3 * var(--space-xl));
+  max-width: var(--qh-measure);
   margin: var(--space-lg) auto;
+}
+
+/* The bar itself is inset from the row it sits above, and the inset is
+   measured against the CARD ROW, not against the wrapper: the
+   reference's bar spans 805 px of a 989 px card row — 0.81 — at both
+   themes. The wrapper already carries the row's own measure (both caps
+   read --qh-measure and both are width: 100% of the same overlay
+   content box), so 81 % of the wrapper is 81 % of the row at every
+   viewport: where the cap binds the two are equal by construction, and
+   where it does not the wrapper is simply the overlay's content width
+   on both sides.
+
+   Measured before this rule the bar was the wrapper's full 1102 px at a
+   1920 viewport — 114 % of the 964 px row, i.e. wider than the row it
+   belongs to. */
+.quick-help-composer .chat-composer {
+  width: 81%;
+  margin-inline: auto;
 }
 
 /* The welcome composer's leading mark is the reference's sparkles, drawn
@@ -2646,27 +2687,19 @@ export default {
    panel never grows a fifth column — the reference mocks exactly
    four.
 
-   auto-fit's lower bound and the cap both reference --qh-card-min
-   (declared on .quick-help-content, default 217 px) and --space-xl,
-   so a deployment that changes either token gets a grid that
-   recomputes its column count and the cap in step. Changing
-   --space-xl does NOT require updating these rules. */
+   auto-fit's lower bound and the cap both read --qh-card-min and
+   --qh-measure, declared on .quick-help-overlay — the common ancestor
+   of this grid and the composer wrapper — so a deployment that changes
+   either token gets a grid that recomputes its column count, a cap and
+   a composer wrapper in step. Changing --space-xl does NOT require
+   updating these rules. */
 .quick-help-grid {
-  /* The minimum card width the quick-help grid lays out at. The
-     reference mocks a 217 px card; this is a component-local extension
-     point (the same shape as the Living Intelligence layer's per-button
-     --qh-bg / --qh-hover tokens), derived from the mockup, not a new
-     token in theme-variables.css. The auto-fit lower bound and the
-     four-column cap below both reference it, so a deployment that
-     wants wider or narrower cards only has to change this one
-     declaration. */
-  --qh-card-min: 217px;
   display: grid;
   width: 100%;
   gap: var(--space-xl);
   grid-template-columns: repeat(auto-fit, minmax(var(--qh-card-min), 1fr));
-  /* The four-column cap. The formula is 4 cards + 3 gaps. */
-  max-width: calc(4 * var(--qh-card-min) + 3 * var(--space-xl));
+  /* The four-column cap, shared with the composer wrapper. */
+  max-width: var(--qh-measure);
   margin-inline: auto;
 }
 

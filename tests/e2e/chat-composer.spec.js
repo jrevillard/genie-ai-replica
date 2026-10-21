@@ -538,6 +538,15 @@ const RATIO_TOLERANCE = 0.005;
 const REFERENCE_BAR_HEIGHT = 50;
 // One line of 14 px text plus the field's own 4 px padding either side.
 const ONE_LINE_FIELD_MAX = 32;
+// Two lines (the narrowest panel, where the wrap is inherent): the
+// field's resting height is 27 px per line, two lines plus the line
+// gap push this to 46 px at the running baseline. Allow a 10-px
+// margin for font-fallback drift across platforms.
+const TWO_LINE_FIELD_MAX = 56;
+// The bar's reference is 50 px (one line); it grows to 56 px when
+// the field wraps to two lines and never past that. Set the bar cap
+// the same way.
+const TWO_LINE_BAR_MAX = 56;
 // The DS primitive's textarea floor — the defect (E) guards.
 const PRIMITIVE_FIELD_FLOOR = 80;
 
@@ -763,30 +772,38 @@ test.describe('welcome bar measure', () => {
     }
   });
 
-  test("every locale's placeholder fits the field at the narrowest viewport", async ({ browser }) => {
+  test("every locale's placeholder fits the welcome composer at 1440 (one line) and at 1400 (at most two lines)", async ({
+    browser
+  }) => {
     // The third clause of the welcome composer's placeholder — the
     // "or start a task" half — pushed the rendered width past the
     // 330 px field at a 1440 viewport in 10 of the 14 locales (en: 337,
     // fr: 495, the longest), and even en overflowed by 7 px. Dropping it
-    // was a UX-correctness bug, not a styling choice. This spec keeps that
-    // fix from regressing: every locale, measured against the running
-    // page's computed font, must fit in the field that the welcome
-    // composer actually renders.
+    // was a UX-correctness bug, not a styling choice.
     //
-    // The gate is the same recipe the bug was diagnosed with: a
-    // <canvas>.measureText() with the field's computed font (the same
-    // font the layout uses to lay the text out), required to be
-    // strictly narrower than the field's getBoundingClientRect().width —
+    // The welcome composer's field is what the textarea actually lays text
+    // out in, NOT its border box: the field has 4 px of padding on each
+    // side, so at 1440 the border box is 329.81 px and the content box
+    // is 321.81 px. Measuring against the border box lets a placeholder
+    // overflow by up to 8 px and still pass — the French placeholder
+    // ("Posez une question, explorez les connaissances...") was exactly
+    // that case: rendered 323.0 px in a 329.81 px border box, so the
+    // border-box check was green while the page wrapped it to two lines.
+    //
+    // The narrowest panel is not 1440 — the sidebars go in-flow at 1400,
+    // so the content box there is only 289.41 px. At that panel width
+    // the field can legitimately wrap to TWO lines (the reference's own
+    // 337 px English does not fit a 289 px field either; the wrap is
+    // inherent to a bar that is 81 % of a narrow row). Three lines
+    // would never be acceptable. So the gate has two cases:
+    //
+    //   - At 1440 and above: renderedW ≤ contentW (one line).
+    //   - At 1400: renderedW ≤ 2 × contentW AND fieldH ≤ 56 AND
+    //     barH ≤ 56 (at most two lines, never three).
+    //
+    // The rendered-vs-content-box comparison is the layout's own gate —
     // a table of expected widths written before the locales existed
     // would steer the layout instead of describing it.
-    //
-    // The field's own height (one line vs two) is reported for every
-    // locale but NOT asserted in this spec — the rendered-vs-field-width
-    // comparison is the brief's spec, and adding a field-height gate
-    // introduces a font-fallback coupling: headless Chromium on Linux
-    // rasterises French ~50 px wider than macOS / Inter-loaded Chromium,
-    // so the same source string passes the field-width gate on a
-    // developer machine and fails the field-height gate in CI.
     const LOCALES = ['ar', 'bn', 'de', 'en', 'es', 'fr', 'id', 'man', 'pt', 'ru', 'st', 'sw', 'th', 'zh'];
 
     const ctx = await browser.newContext({
@@ -804,70 +821,131 @@ test.describe('welcome bar measure', () => {
     await page.waitForSelector('.quick-help-banner', { timeout: 15000 });
     await page.waitForTimeout(600);
 
-    const measurements = {};
-    for (const locale of LOCALES) {
-      // The locale is read by main.js before the app mounts, so the
-      // reload must come AFTER the localStorage write — that is the
-      // app's own boot path, not a private channel.
-      await page.evaluate((l) => localStorage.setItem('userLocale', l), locale);
-      await page.reload({ waitUntil: 'networkidle', timeout: 30000 });
-      await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
-      await page.waitForTimeout(500);
+    // Two viewports, measured in order: the strict one-line case at 1440
+    // FIRST (so a regression there fails fast), then the relaxed
+    // ≤-two-lines case at 1400.
+    const VIEWPORTS = [
+      { name: '1440', width: 1440, height: 900 },
+      { name: '1400', width: 1400, height: 900 }
+    ];
 
-      const m = await page.evaluate(() => {
-        const ta = document.querySelector('[data-testid="welcome-composer"] textarea');
-        if (!ta) return null;
-        const cs = getComputedStyle(ta);
-        // Chromium's <canvas> shorthand `font` setter takes the same
-        // combination the layout engine uses — `font-style font-variant
-        // font-weight font-size/line-height font-family`. Reading the
-        // longhand properties and joining avoids drift between the
-        // measurement and what the page actually rendered with.
-        const font =
-          `${cs.fontStyle} ${cs.fontVariant} ${cs.fontWeight} ` +
-          `${cs.fontSize}/${cs.lineHeight} ${cs.fontFamily}`.trim();
-        const canvas = document.createElement('canvas');
-        const cctx = canvas.getContext('2d');
-        cctx.font = font;
-        const renderedW = cctx.measureText(ta.placeholder).width;
-        const fieldRect = ta.getBoundingClientRect();
-        const bar = document.querySelector('.quick-help-composer .chat-composer');
-        const barRect = bar ? bar.getBoundingClientRect() : null;
-        return {
-          lang: document.documentElement.lang,
-          placeholder: ta.placeholder,
-          renderedW: +renderedW.toFixed(2),
-          fieldW: +fieldRect.width.toFixed(2),
-          fieldH: +fieldRect.height.toFixed(2),
-          barH: barRect ? +barRect.height.toFixed(2) : null
-        };
-      });
-      measurements[locale] = m;
+    const measurements = {}; // measurements[locale][viewport] = { rendered, contentW, fieldH, barH }
+
+    for (const vp of VIEWPORTS) {
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      await page.waitForTimeout(300);
+
+      for (const locale of LOCALES) {
+        // The locale is read by main.js before the app mounts, so the
+        // reload must come AFTER the localStorage write — that is the
+        // app's own boot path, not a private channel.
+        await page.evaluate((l) => localStorage.setItem('userLocale', l), locale);
+        await page.reload({ waitUntil: 'networkidle', timeout: 30000 });
+        await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+        await page.waitForTimeout(500);
+
+        const m = await page.evaluate(() => {
+          const ta = document.querySelector('[data-testid="welcome-composer"] textarea');
+          if (!ta) return null;
+          const cs = getComputedStyle(ta);
+          // Chromium's <canvas> shorthand `font` setter takes the same
+          // combination the layout engine uses — `font-style font-variant
+          // font-weight font-size/line-height font-family`. Reading the
+          // longhand properties and joining avoids drift between the
+          // measurement and what the page actually rendered with.
+          const font =
+            `${cs.fontStyle} ${cs.fontVariant} ${cs.fontWeight} ` +
+            `${cs.fontSize}/${cs.lineHeight} ${cs.fontFamily}`.trim();
+          const canvas = document.createElement('canvas');
+          const cctx = canvas.getContext('2d');
+          cctx.font = font;
+          const renderedW = cctx.measureText(ta.placeholder).width;
+          const fieldRect = ta.getBoundingClientRect();
+          // The text is laid out in the CONTENT box, not the border box:
+          // `getBoundingClientRect()` reports border-box, the textarea's
+          // padding eats 4 px on each side, so subtract it before
+          // comparing the rendered text against the field.
+          const padL = parseFloat(cs.paddingLeft) || 0;
+          const padR = parseFloat(cs.paddingRight) || 0;
+          const contentW = fieldRect.width - padL - padR;
+          const bar = document.querySelector('.quick-help-composer .chat-composer');
+          const barRect = bar ? bar.getBoundingClientRect() : null;
+          return {
+            lang: document.documentElement.lang,
+            placeholder: ta.placeholder,
+            renderedW: +renderedW.toFixed(2),
+            contentW: +contentW.toFixed(2),
+            fieldH: +fieldRect.height.toFixed(2),
+            barH: barRect ? +barRect.height.toFixed(2) : null
+          };
+        });
+        if (!measurements[locale]) measurements[locale] = {};
+        measurements[locale][vp.name] = m;
+      }
     }
 
     // Surface every locale's numbers in one summary so a failure can be
     // cross-referenced against all 14 measurements in one block.
-    const summary = LOCALES.map((l) => {
-      const m = measurements[l];
-      return `${l}=${m.renderedW}/${m.fieldW} (h=${m.fieldH} bar=${m.barH})`;
-    }).join('\n  ');
-    console.log(`[placeholder-fit @ 1440]\n  ${summary}`);
+    const header = (vp) => `${vp}=rendered/content (field_h bar_h)`;
+    for (const vp of VIEWPORTS) {
+      const lines = LOCALES.map((l) => {
+        const m = measurements[l][vp.name];
+        return `${l.padEnd(4)}=${String(m.renderedW).padEnd(7)} / ${String(m.contentW).padEnd(7)} (h=${m.fieldH} bar=${m.barH})`;
+      });
+      console.log(`[placeholder-fit @ ${vp.name}]\n  ${header(vp.name)}\n  ${lines.join('\n  ')}`);
+    }
 
     for (const locale of LOCALES) {
-      const m = measurements[locale];
-      expect(m.lang, `the app booted in ${locale} (got ${m.lang})`).toBe(locale);
-      // The widths are the gate. Both numbers in the message so a
-      // regression that overflows one locale flags the offender with
-      // the exact gap, in pixels — mutation-test it by re-adding the
-      // third clause to ONE locale (e.g. en) and watching this assertion
-      // go red with the two widths in the failure message.
+      // 1440 — must be ONE line.
+      const m1440 = measurements[locale]['1440'];
       expect(
-        m.renderedW <= m.fieldW,
-        `${locale} @ 1440: placeholder rendered ${m.renderedW} px in a ${m.fieldW} px field ` +
-          `(overflow by ${(m.renderedW - m.fieldW).toFixed(2)} px) — ` +
-          `"${m.placeholder}" pushes past the field. ` +
-          `Drop the third clause from chatbot.composerPlaceholder in ${locale}.js.`
+        m1440.lang,
+        `the app booted in ${locale} (got ${m1440.lang}) at 1440`
+      ).toBe(locale);
+      expect(
+        m1440.renderedW <= m1440.contentW,
+        `${locale} @ 1440: placeholder rendered ${m1440.renderedW} px in a ${m1440.contentW} px content box ` +
+          `(overflow by ${(m1440.renderedW - m1440.contentW).toFixed(2)} px) — ` +
+          `"${m1440.placeholder}" wraps the field at 1440. ` +
+          `Shorten chatbot.composerPlaceholder in ${locale}.js so it fits the field's content box.`
       ).toBe(true);
+      expect(
+        m1440.fieldH,
+        `${locale} @ 1440: the field is ${m1440.fieldH} px high (one line ≤ ${ONE_LINE_FIELD_MAX} px) — ` +
+          `"${m1440.placeholder}" wraps to two lines. ` +
+          `Shorten chatbot.composerPlaceholder in ${locale}.js so it fits the field's content box.`
+      ).toBeLessThanOrEqual(ONE_LINE_FIELD_MAX);
+      expect(
+        m1440.barH,
+        `${locale} @ 1440: the bar is ${m1440.barH} px (one-line bar = ${REFERENCE_BAR_HEIGHT} px) — ` +
+          `the wrapped field pushed the bar past its reference height.`
+      ).toBe(REFERENCE_BAR_HEIGHT);
+
+      // 1400 — AT MOST TWO lines (the wrap at the narrowest panel is
+      // inherent to a 81 % bar on a narrow row, not a copy defect;
+      // three lines would never be acceptable).
+      const m1400 = measurements[locale]['1400'];
+      expect(
+        m1400.lang,
+        `the app booted in ${locale} (got ${m1400.lang}) at 1400`
+      ).toBe(locale);
+      expect(
+        m1400.renderedW <= m1400.contentW * 2,
+        `${locale} @ 1400: placeholder rendered ${m1400.renderedW} px in a ${m1400.contentW} px content box ` +
+          `(overflow by ${(m1400.renderedW - m1400.contentW * 2).toFixed(2)} px above a two-line fit) — ` +
+          `"${m1400.placeholder}" wraps the field to THREE lines at 1400. ` +
+          `Shorten chatbot.composerPlaceholder in ${locale}.js.`
+      ).toBe(true);
+      expect(
+        m1400.fieldH,
+        `${locale} @ 1400: the field is ${m1400.fieldH} px high (two-line cap ≤ ${TWO_LINE_FIELD_MAX} px) — ` +
+          `"${m1400.placeholder}" wraps the field to three lines at 1400.`
+      ).toBeLessThanOrEqual(TWO_LINE_FIELD_MAX);
+      expect(
+        m1400.barH,
+        `${locale} @ 1400: the bar is ${m1400.barH} px (two-line bar cap = ${TWO_LINE_BAR_MAX} px) — ` +
+          `the three-line field pushed the bar past the two-line cap.`
+      ).toBeLessThanOrEqual(TWO_LINE_BAR_MAX);
     }
 
     await ctx.close();

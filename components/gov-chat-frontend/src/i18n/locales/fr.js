@@ -1391,7 +1391,7 @@ export default {
     streamingError: 'La réponse a été interrompue. Veuillez réessayer.',
     aiGeneratedNoDocs: 'Généré par IA — non basé sur les documents de la bibliothèque',
     placeholder: 'Tapez votre requête ici...',
-    composerPlaceholder: 'Posez une question, explorez les connaissances...',
+    composerPlaceholder: 'Posez une question, explorez les savoirs...',
     composerAttachTitle: 'Les pièces jointes ne sont pas encore disponibles',
     composerMicTitle: "La saisie vocale n'est pas encore disponible",
     composerSendTitle: 'Envoyer',

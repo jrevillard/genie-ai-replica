@@ -359,10 +359,13 @@ export default {
 }
 
 .chat-composer__send:disabled {
-  background: var(--bg, var(--surface));
+  /* The reference draws the send control as a filled circle even before
+     there is anything to send, so the resting state keeps the circle and
+     only drains its colour — a bar whose send button vanishes reads as
+     broken. */
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface));
   color: var(--muted);
   cursor: not-allowed;
-  opacity: 0.6;
 }
 
 .animate-spin {

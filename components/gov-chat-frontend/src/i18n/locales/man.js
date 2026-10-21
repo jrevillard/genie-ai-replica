@@ -3101,6 +3101,12 @@ export default {
       }
     },
     ragas: {
+      dropped: {
+        note: '{kept} of {requested} — {dropped} no fandegew',
+        reason: {
+          rate_limited: 'model limiteda yiimuhang rate'
+        }
+      },
       corpus: {
         capped: 'Grounded in {parts} (corpus budget)',
         part: '{used} of {total} chunks'

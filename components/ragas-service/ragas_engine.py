@@ -20,8 +20,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import random
 import re
 import threading
+import time
 import weakref
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -255,6 +257,161 @@ def _make_fanout_class(ChatOpenAI):  # noqa: N802 — mirrors his validated subc
     return _FanoutChatOpenAI
 
 
+# --- judge rate limiting (live 2026-10-21) ---------------------------------
+#
+# The synthesis of a 100-question suite made ~500 calls to the configured
+# model. MiniMax answered 82 of them with 429 Too Many Requests, the
+# openai SDK's own retry fired them back in LOCKSTEP (its backoff has no
+# jitter), they were throttled again, and 35 questions were DROPPED —
+# the user received 63 of the 100 questions they asked for, silently.
+#
+# Two client-side controls fix that, and both belong HERE — this is the one
+# choke point every judge call passes through:
+#   * a concurrency cap, so we never out-run the upstream's rate limit
+#     (ragas' own executor runs 16 workers; the cap is the real limit)
+#   * a jittered retry on 429, so a throttled batch does not return as a
+#     synchronised herd
+_LLM_SEMAPHORES: dict = {}  # event loop -> asyncio.Semaphore
+_LLM_SYNC_SEMAPHORE = None
+_LLM_SYNC_LOCK = threading.Lock()
+
+
+_SYNTH_FAILURES: dict = {}
+_SYNTH_FAILURES_LOCK = threading.Lock()
+
+
+def _classify_failure(err: BaseException) -> str:
+    """Why a question was lost — 'rate_limited' is the one an operator can
+    act on (lower the count / wait), the rest are per-model problems."""
+    if _is_rate_limited(err):
+        return "rate_limited"
+    return type(err).__name__
+
+
+def _record_synth_failure(reason: str) -> None:
+    with _SYNTH_FAILURES_LOCK:
+        _SYNTH_FAILURES[reason] = _SYNTH_FAILURES.get(reason, 0) + 1
+
+
+def _synth_failures() -> dict:
+    with _SYNTH_FAILURES_LOCK:
+        return dict(_SYNTH_FAILURES)
+
+
+def _reset_synth_failures() -> None:
+    with _SYNTH_FAILURES_LOCK:
+        _SYNTH_FAILURES.clear()
+
+
+def _llm_max_concurrency() -> int:
+    try:
+        return max(1, int(os.getenv("RAGAS_LLM_MAX_CONCURRENCY") or "8"))
+    except ValueError:
+        return 8
+
+
+def _llm_max_retries() -> int:
+    try:
+        return max(0, int(os.getenv("RAGAS_LLM_MAX_RETRIES") or "5"))
+    except ValueError:
+        return 5
+
+
+def _async_semaphore():
+    """A per-event-loop semaphore (the KG phase runs its own loop per
+    transform, so the semaphore cannot be a single shared object)."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return None
+    sem = _LLM_SEMAPHORES.get(loop)
+    if sem is None:
+        sem = asyncio.Semaphore(_llm_max_concurrency())
+        _LLM_SEMAPHORES[loop] = sem
+    return sem
+
+
+def _sync_semaphore():
+    global _LLM_SYNC_SEMAPHORE
+    with _LLM_SYNC_LOCK:
+        if _LLM_SYNC_SEMAPHORE is None:
+            _LLM_SYNC_SEMAPHORE = threading.BoundedSemaphore(_llm_max_concurrency())
+        return _LLM_SYNC_SEMAPHORE
+
+
+def _is_rate_limited(err: BaseException) -> bool:
+    """True for an upstream 429 (the openai SDK nests it under the
+    langchain error as __cause__)."""
+    for candidate in (err, getattr(err, "__cause__", None), getattr(err, "original_exception", None)):
+        if candidate is None:
+            continue
+        code = getattr(candidate, "status_code", None) or getattr(candidate, "code", None)
+        if code == 429:
+            return True
+        if "ratelimit" in type(candidate).__name__.lower():
+            return True
+        response = getattr(candidate, "response", None)
+        if getattr(response, "status_code", None) == 429:
+            return True
+    return False
+
+
+def _retry_after_seconds(err: BaseException) -> float | None:
+    response = getattr(err, "response", None)
+    headers = getattr(response, "headers", None) or {}
+    raw = headers.get("retry-after") or headers.get("Retry-After")
+    if raw is None:
+        return None
+    try:
+        return max(0.0, float(raw))
+    except (TypeError, ValueError):
+        return None
+
+
+def _backoff_seconds(err: BaseException, attempt: int) -> float:
+    """Exponential backoff WITH jitter. The SDK's own backoff has none, so
+    a throttled batch returns as a synchronised herd and is throttled
+    again — the reason 82 retries produced 0 rescued calls."""
+    hinted = _retry_after_seconds(err)
+    if hinted is not None:
+        return min(hinted, 60.0)
+    return min(2.0**attempt, 30.0) + random.uniform(0.0, 1.5)
+
+
+def _sync_call_with_retry(call):
+    """Call through the concurrency cap, retrying a 429 with jitter."""
+    semaphore = _sync_semaphore()
+    with semaphore:
+        attempts = _llm_max_retries()
+        for attempt in range(attempts + 1):
+            try:
+                return call()
+            except Exception as err:  # noqa: BLE001 — only a 429 is retried
+                if attempt >= attempts or not _is_rate_limited(err):
+                    raise
+                wait = _backoff_seconds(err, attempt)
+                logger.warning(
+                    "judge rate-limited (429) — retrying in %.1fs (attempt %d/%d)", wait, attempt + 1, attempts + 1
+                )
+                time.sleep(wait)
+
+
+async def _async_call_with_retry(call):
+    """Call through the concurrency cap, retrying a 429 with jitter."""
+    attempts = _llm_max_retries()
+    for attempt in range(attempts + 1):
+        try:
+            return await call()
+        except Exception as err:  # noqa: BLE001 — only a 429 is retried
+            if attempt >= attempts or not _is_rate_limited(err):
+                raise
+            wait = _backoff_seconds(err, attempt)
+            logger.warning(
+                "judge rate-limited (429) — retrying in %.1fs (attempt %d/%d)", wait, attempt + 1, attempts + 1
+            )
+            await asyncio.sleep(wait)
+
+
 def _make_caching_wrapper(LangchainLLMWrapper, model_tag=None, cancel_event=None):  # noqa: N802 — factory, like _make_fanout_class
     """Disk-backed response cache around the judge client (2026-10-18).
 
@@ -421,7 +578,11 @@ def _make_caching_wrapper(LangchainLLMWrapper, model_tag=None, cancel_event=None
             hit = self._read(key, prompt, n, temperature, stop)
             if hit is not None:
                 return self._rebuild(*hit)
-            result = super().generate_text(prompt, n=n, temperature=temperature, stop=stop, callbacks=callbacks)
+            result = _sync_call_with_retry(
+                lambda: super(_CachingLlmWrapper, self).generate_text(
+                    prompt, n=n, temperature=temperature, stop=stop, callbacks=callbacks
+                )
+            )
             extracted = self._extract(result)
             if extracted is not None:
                 self._save(key, *extracted)
@@ -434,7 +595,20 @@ def _make_caching_wrapper(LangchainLLMWrapper, model_tag=None, cancel_event=None
             hit = self._read(key, prompt, n, temperature, stop)
             if hit is not None:
                 return self._rebuild(*hit)
-            result = await super().agenerate_text(prompt, n=n, temperature=temperature, stop=stop, callbacks=callbacks)
+            sem = _async_semaphore()
+            if sem is None:
+                result = await _async_call_with_retry(
+                    lambda: super(_CachingLlmWrapper, self).agenerate_text(
+                        prompt, n=n, temperature=temperature, stop=stop, callbacks=callbacks
+                    )
+                )
+            else:
+                async with sem:
+                    result = await _async_call_with_retry(
+                        lambda: super(_CachingLlmWrapper, self).agenerate_text(
+                            prompt, n=n, temperature=temperature, stop=stop, callbacks=callbacks
+                        )
+                    )
             extracted = self._extract(result)
             if extracted is not None:
                 self._save(key, *extracted)
@@ -1061,6 +1235,7 @@ class _TolerantSynthesizer:
                 return await self._inner.generate_sample(scenario=scenario, callbacks=callbacks)
             except Exception as e:  # noqa: BLE001 — dropping this question IS the recovery
                 logger.warning("sample synthesis failed for %s (dropping question): %s", self.name, e)
+                _record_synth_failure(_classify_failure(e))
                 return _empty_sample()
         finally:
             if self._on_sample is not None:
@@ -1095,6 +1270,7 @@ async def generate_testset(
     resolved by okf-server (build_llm / build_embeddings carry the shapes).
     """
     _patch_persona_lookup()
+    _reset_synth_failures()  # the reasons describe THIS generation
 
     from langchain_core.documents import Document as LCDocument
     from ragas.run_config import RunConfig
@@ -1286,6 +1462,10 @@ async def generate_testset(
     return {
         "samples": samples,
         "dropped": dropped,
+        # WHY the questions were lost (live 2026-10-21: 35 of 100 dropped
+        # to upstream 429s and nobody could tell). 'rate_limited' is the
+        # actionable one.
+        "dropped_reasons": _synth_failures(),
         "generator": {"model": generator_model, "embed_model": generator_embed},
     }
 

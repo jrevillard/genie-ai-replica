@@ -980,6 +980,11 @@ services:
       # has NOT been repointed replay the entries the previous key wrote, and
       # migrates each one to the new key on read. 0 = strict (default).
       - RAGAS_LLM_CACHE_LEGACY=${RAGAS_LLM_CACHE_LEGACY:-0}
+      # Judge call discipline (2026-10-21): the upstream answered 82 of ~500
+      # synthesis calls with 429 and 35 questions were dropped. The client
+      # now caps its own concurrency and retries a 429 with jitter.
+      - RAGAS_LLM_MAX_CONCURRENCY=${RAGAS_LLM_MAX_CONCURRENCY:-8}
+      - RAGAS_LLM_MAX_RETRIES=${RAGAS_LLM_MAX_RETRIES:-5}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
       - ragas_llm_cache:/tmp/ragas-llm-cache

@@ -117,6 +117,10 @@ describe('OkfStudioDashboard — five lifecycle lanes', () => {
     { repo_id: 'rt', name: 'Pully', lifecycle_state: 'retracted', version: 1, concept_count: 2 }
   ];
 
+  // 20s: mounting the whole five-lane dashboard is heavy, and the 104-file
+  // suite runs it in parallel with the other component suites — it blew
+  // jest's 5s default on the CI runner (2026-10-21, pipeline 14045). A load
+  // artefact, not a behaviour change.
   it('renders all five lanes with their repos in the right one', async () => {
     const store = buildStore();
     const wrapper = mount(OkfStudioDashboard, {
@@ -133,7 +137,7 @@ describe('OkfStudioDashboard — five lifecycle lanes', () => {
     expect(text).toContain('Ingested v2');
     expect(text).toContain('Published v2');
     expect(text).toContain('Retracted');
-  });
+  }, 20000);
 
   it('offers the machine contextual action per state', async () => {
     const store = buildStore();

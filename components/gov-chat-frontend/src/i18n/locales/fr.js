@@ -3154,6 +3154,12 @@ export default {
       }
     },
     ragas: {
+      dropped: {
+        note: '{kept} questions sur {requested} — {dropped} n’ont pas pu être générées',
+        reason: {
+          rate_limited: 'le modèle a limité la génération par quota'
+        }
+      },
       corpus: {
         capped: 'Fondé sur {parts} (budget de corpus)',
         part: '{used} sur {total} segments'

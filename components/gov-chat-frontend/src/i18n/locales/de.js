@@ -3155,6 +3155,12 @@ export default {
       }
     },
     ragas: {
+      dropped: {
+        note: '{kept} von {requested} Fragen — {dropped} konnten nicht erzeugt werden',
+        reason: {
+          rate_limited: 'das Modell hat die Erzeugung ratenbegrenzt'
+        }
+      },
       corpus: {
         capped: 'Basiert auf {parts} (Korpus-Budget)',
         part: '{used} von {total} Chunks'

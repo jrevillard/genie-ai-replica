@@ -3107,6 +3107,12 @@ export default {
       }
     },
     ragas: {
+      dropped: {
+        note: 'สร้างได้ {kept} จาก {requested} คำถาม — สร้างไม่ได้ {dropped} คำถาม',
+        reason: {
+          rate_limited: 'โมเดลจำกัดอัตราการสร้าง'
+        }
+      },
       corpus: {
         capped: 'อ้างอิงจาก {parts} (งบคลังข้อมูล)',
         part: '{used} จาก {total} ชิ้น'

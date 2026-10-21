@@ -170,6 +170,9 @@ describe('Locale consistency', () => {
     // RAGAS generation progress (2026-10-21): the LLM-call counter that
     // moves even when the transform bar does not.
     'okf.ragas.gen.calls',
+    // RAGAS dropped questions (2026-10-21): the note that says how many
+    // questions the generation LOST and why — consumed via .replace().
+    'okf.ragas.dropped.note',
     // Model-config connection test (2026-10-19): composed in
     // ModelConfigPanel.testMessage() via .replace() for {n}/{ms}/{model}.
     'okf.models.modelsLoaded',

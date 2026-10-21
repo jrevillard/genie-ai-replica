@@ -1818,6 +1818,21 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   (the cache heals itself, one answer at a time). Leave 0 on a deployment
 #   whose judge was repointed — that is the case the fix protects.
 #   Used by: ragas-service.
+# RAGAS_LLM_MAX_CONCURRENCY=8
+#   Default: 8. How many judge calls may be in flight at once. The
+#   upstream answered 82 of ~500 synthesis calls with 429 Too Many
+#   Requests and the throttled questions were dropped (live 2026-10-21:
+#   a 100-question suite arrived with 63). ragas' own executor runs 16
+#   workers; this is the real ceiling, and it is what the upstream's rate
+#   limit has to accommodate. Lower it on a stricter or shared plan.
+#   Used by: ragas-service.
+# RAGAS_LLM_MAX_RETRIES=5
+#   Default: 5. How many times a rate-limited (429) call is retried
+#   before the question is lost. The backoff is exponential WITH jitter
+#   and honours Retry-After — the openai SDK's own retry has no jitter,
+#   so a throttled batch came back as a synchronised herd and was
+#   throttled again. 0 disables the retry.
+#   Used by: ragas-service.
 
 # --- okf-server: retrieval mode governance (Story 1.7, ADR-okf-039 D3) ---
 # OKF_RETRIEVAL_MODE=legacy

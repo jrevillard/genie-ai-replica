@@ -946,6 +946,11 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
         dimensions: {
           testset_size: entries.length,
           requested_size: payload.testset_size,
+          // The questions that were LOST and WHY (live 2026-10-21: 35 of
+          // 100 were dropped to upstream 429s and the panel said nothing —
+          // the user could not tell a short suite from a throttled one).
+          dropped: Number.isFinite(gen.dropped) ? gen.dropped : 0,
+          dropped_reasons: gen.dropped_reasons || {},
           query_distribution: payload.query_distribution || null,
           num_personas: payload.num_personas || 3
         },

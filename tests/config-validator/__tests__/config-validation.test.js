@@ -859,6 +859,25 @@ describe('Configuration Validation Suite', () => {
       expect(vars.RAGAS_LLM_CACHE_LEGACY && vars.RAGAS_LLM_CACHE_LEGACY.default).toBe('0');
     });
 
+    test('the judge call-discipline vars land in all four sites (2026-10-21)', () => {
+      // RAGAS_LLM_MAX_CONCURRENCY / RAGAS_LLM_MAX_RETRIES: the upstream
+      // answered 82 of ~500 synthesis calls with 429 and 35 questions were
+      // dropped. The client now caps its own concurrency and retries a 429
+      // with jitter.
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const ragasBlock = full.slice(full.indexOf('  ragas-service:'), full.indexOf('  document-repository:'));
+      expect(ragasBlock).toMatch(/- RAGAS_LLM_MAX_CONCURRENCY=\$\{RAGAS_LLM_MAX_CONCURRENCY:-8\}/);
+      expect(ragasBlock).toMatch(/- RAGAS_LLM_MAX_RETRIES=\$\{RAGAS_LLM_MAX_RETRIES:-5\}/);
+      const envText = fs.readFileSync(ENV_FILE, 'utf8');
+      expect(envText).toMatch(/^#\s*RAGAS_LLM_MAX_CONCURRENCY=8.*$/m);
+      expect(envText).toMatch(/^#\s*RAGAS_LLM_MAX_RETRIES=5.*$/m);
+      const vars = parseAnsibleEnvVars(
+        fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+      );
+      expect(vars.RAGAS_LLM_MAX_CONCURRENCY && vars.RAGAS_LLM_MAX_CONCURRENCY.default).toBe('8');
+      expect(vars.RAGAS_LLM_MAX_RETRIES && vars.RAGAS_LLM_MAX_RETRIES.default).toBe('5');
+    });
+
     test('the ragas vars are emitted by ansible env.j2 (inherited defaults)', () => {
       const vars = parseAnsibleEnvVars(
         fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')

@@ -543,6 +543,120 @@ def test_legacy_cache_entries_are_replayed_only_when_asked_and_migrate(monkeypat
     assert out3.generations[0][0].text == "legacy-answer"
 
 
+def test_rate_limited_judge_calls_are_retried_and_kept(monkeypatch, tmp_path):
+    """Live 2026-10-21: MiniMax answered 82 of ~500 synthesis calls with
+    429 Too Many Requests. The openai SDK's own retry has NO jitter, so the
+    throttled batch came back as a synchronised herd, was throttled again,
+    and 35 questions were DROPPED — the user received 63 of the 100
+    questions they asked for, silently. The wrapper must retry a 429 (with
+    jitter) and keep the question."""
+    import asyncio
+
+    calls = {"sync": 0, "async": 0}
+
+    class _RateLimited(Exception):
+        status_code = 429
+
+    class _Gen:
+        def __init__(self, text):
+            self.text = text
+
+    class _Res:
+        def __init__(self, text):
+            self.generations = [[_Gen(text)]]
+            self.llm_output = None
+
+    class _FakeBase:
+        def __init__(self, *a, **k):
+            pass
+
+        def generate_text(self, prompt, n=1, temperature=0.01, stop=None, callbacks=None):
+            calls["sync"] += 1
+            if calls["sync"] < 3:
+                raise _RateLimited("429 Too Many Requests")
+            return _Res("kept")
+
+        async def agenerate_text(self, prompt, n=1, temperature=0.01, stop=None, callbacks=None):
+            calls["async"] += 1
+            if calls["async"] < 3:
+                raise _RateLimited("429 Too Many Requests")
+            return _Res("kept-async")
+
+    class _Prompt:
+        def to_string(self):
+            return "p"
+
+    monkeypatch.setenv("RAGAS_LLM_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("RAGAS_JUDGE_MODEL", "granite-test")
+    monkeypatch.setenv("RAGAS_JUDGE_BASE_URL", "https://judge.example/llm/v1")
+    monkeypatch.setenv("RAGAS_LLM_MAX_RETRIES", "5")
+    # no real sleeping in the test
+    monkeypatch.setattr(ragas_engine, "_backoff_seconds", lambda err, attempt: 0.0)
+
+    wrapper_cls = ragas_engine._make_caching_wrapper(_FakeBase)
+    w = wrapper_cls(object())
+
+    out = w.generate_text(_Prompt(), n=1, temperature=0.2)
+    assert out.generations[0][0].text == "kept"  # the question was KEPT
+    assert calls["sync"] == 3  # two throttles, then the success
+
+    out_async = asyncio.run(w.agenerate_text(_Prompt(), n=1, temperature=0.3))
+    assert out_async.generations[0][0].text == "kept-async"
+    assert calls["async"] == 3
+
+
+def test_a_non_429_failure_is_not_retried(monkeypatch, tmp_path):
+    """Only a rate limit is worth retrying — anything else is a real
+    failure and must surface (retrying it would just burn the judge)."""
+
+    calls = {"n": 0}
+
+    class _Boom(Exception):
+        status_code = 400
+
+    class _FakeBase:
+        def __init__(self, *a, **k):
+            pass
+
+        def generate_text(self, prompt, n=1, temperature=0.01, stop=None, callbacks=None):
+            calls["n"] += 1
+            raise _Boom("bad request")
+
+    class _Prompt:
+        def to_string(self):
+            return "p"
+
+    monkeypatch.setenv("RAGAS_LLM_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setattr(ragas_engine, "_backoff_seconds", lambda err, attempt: 0.0)
+    wrapper_cls = ragas_engine._make_caching_wrapper(_FakeBase)
+    w = wrapper_cls(object())
+
+    with pytest.raises(_Boom):
+        w.generate_text(_Prompt(), n=1, temperature=0.2)
+    assert calls["n"] == 1  # NOT retried
+
+
+def test_a_dropped_question_is_attributed_to_its_cause():
+    """The suite must be able to say WHY a question was lost — 'rate_limited'
+    is the cause an operator can act on."""
+
+    class _RateLimited(Exception):
+        status_code = 429
+
+    class _Other(Exception):
+        pass
+
+    assert ragas_engine._classify_failure(_RateLimited("429")) == "rate_limited"
+    assert ragas_engine._classify_failure(_Other("x")) == "_Other"
+
+    ragas_engine._reset_synth_failures()
+    ragas_engine._record_synth_failure("rate_limited")
+    ragas_engine._record_synth_failure("rate_limited")
+    assert ragas_engine._synth_failures() == {"rate_limited": 2}
+    ragas_engine._reset_synth_failures()
+    assert ragas_engine._synth_failures() == {}
+
+
 def test_empty_completions_are_never_cached(monkeypatch, tmp_path):
     """2026-10-21 sidecar review F5: a 200 with an EMPTY body was written
     to the disk cache and replayed forever (no TTL, survives recreates) — one

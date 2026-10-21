@@ -3126,6 +3126,12 @@ export default {
       }
     },
     ragas: {
+      dropped: {
+        note: '{requested}টির মধ্যে {kept}টি প্রশ্ন — {dropped}টি তৈরি করা যায়নি',
+        reason: {
+          rate_limited: 'মডেল প্রতিশ্রুতির সীমায় কোয়োটা ছাড়িয়ে উৎপাদন সীমাবদ্ধ করেছে'
+        }
+      },
       corpus: {
         capped: '{parts} থেকে গঠিত (কর্পাস বাজেট)',
         part: '{total}-এর মধ্যে {used} খণ্ড'

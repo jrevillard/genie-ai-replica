@@ -3142,6 +3142,12 @@ export default {
       }
     },
     ragas: {
+      dropped: {
+        note: 'Создано {kept} из {requested} вопросов — {dropped} не удалось сгенерировать',
+        reason: {
+          rate_limited: 'модель ограничила генерацию по квоте'
+        }
+      },
       corpus: {
         capped: 'Основано на {parts} (бюджет корпуса)',
         part: '{used} из {total} фрагментов'

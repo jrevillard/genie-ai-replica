@@ -3128,6 +3128,12 @@ export default {
       }
     },
     ragas: {
+      dropped: {
+        note: '{kept} kati {requested} swali — {dropped} haweziwezi kutengenezwa',
+        reason: {
+          rate_limited: 'modeli ilipunguza kizazi kwa kikomo'
+        }
+      },
       corpus: {
         capped: 'Imeingizwa kwenye {parts} (bajeti ya makusanyo)',
         part: '{used} kati ya {total} vipande'

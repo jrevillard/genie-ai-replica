@@ -1780,6 +1780,12 @@ export default {
       }
     },
     ragas: {
+      dropped: {
+        note: '{kept} of {requested} questions — {dropped} could not be generated',
+        reason: {
+          rate_limited: 'the model rate-limited the generation'
+        }
+      },
       corpus: {
         capped: 'Grounded in {parts} (corpus budget)',
         part: '{used} of {total} chunks'

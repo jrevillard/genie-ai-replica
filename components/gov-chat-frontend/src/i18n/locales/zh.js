@@ -3068,6 +3068,12 @@ export default {
       }
     },
     ragas: {
+      dropped: {
+        note: '{requested} 个问题中生成了 {kept} 个 — 有 {dropped} 个无法生成',
+        reason: {
+          rate_limited: '模型对生成做了限流'
+        }
+      },
       corpus: {
         capped: '基于 {parts}（语料预算）',
         part: '{total} 个分块中的 {used} 个'

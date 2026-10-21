@@ -3143,6 +3143,12 @@ export default {
       }
     },
     ragas: {
+      dropped: {
+        note: '{kept} ho {requested} — {dropped} ha ka etsohleha ho hlaha',
+        reason: {
+          rate_limited: 'mohlola o lekanyeletsa sekamoo ka kotobatsa'
+        }
+      },
       corpus: {
         capped: 'E thehile ho {parts} (morero oa corpus)',
         part: '{used} ho tse {total} tsa dikarolo'

@@ -196,6 +196,10 @@
              budget is a property of the SUITE, shown where the suite lives —
              "grounded in 1600 of 5590 chunks" — never a silent slice. -->
         <span v-if="corpusCoverageNote" class="okf-ragas__muted">{{ corpusCoverageNote }}</span>
+        <!-- The questions that were LOST (live 2026-10-21: 35 of 100 were
+             dropped to upstream 429s and the panel said nothing — the user
+             could not tell a short suite from a throttled one). -->
+        <span v-if="droppedNote" class="okf-ragas__muted okf-ragas__dropped-note">{{ droppedNote }}</span>
       </div>
 
       <!-- metrics selection -->
@@ -859,6 +863,31 @@ export default {
         )
         .join(', ');
       return this.translate('okf.ragas.corpus.capped', 'Grounded in {parts} (corpus budget)').replace('{parts}', parts);
+    },
+    /** The questions the generation LOST, and why (live 2026-10-21: 35 of
+     * 100 were dropped to upstream 429s and the panel said NOTHING — the
+     * user could not tell a short suite from a throttled one). */
+    droppedNote() {
+      const dims = this.suite && this.suite.payload && this.suite.payload.dimensions;
+      if (!dims) return '';
+      const dropped = Number(dims.dropped || 0);
+      if (!dropped) return '';
+      const kept = Number(dims.testset_size || 0);
+      const requested = Number(dims.requested_size || kept + dropped);
+      const reasons = dims.dropped_reasons || {};
+      const reasonText = Object.keys(reasons)
+        .filter((k) => Number(reasons[k]) > 0)
+        .map((k) => `${this.translate(`okf.ragas.dropped.reason.${k}`, k.replace(/_/g, ' '))} ×${Number(reasons[k])}`)
+        .join(', ');
+      let note = this.translate(
+        'okf.ragas.dropped.note',
+        '{kept} of {requested} questions — {dropped} could not be generated'
+      )
+        .replace('{kept}', String(kept))
+        .replace('{requested}', String(requested))
+        .replace('{dropped}', String(dropped));
+      if (reasonText) note += ` (${reasonText})`;
+      return note;
     },
     /** The sub-step line: active transform + counts + ETA + elapsed
      * (David 2026-10-20: "the user needs more feedback than this" — a
@@ -1909,6 +1938,15 @@ export default {
   margin: 8px 0;
   font-size: 13px;
   line-height: 1.4;
+}
+
+.okf-ragas__dropped-note {
+  color: var(--warning);
+  border: 1px solid var(--warning);
+  border-radius: 6px;
+  background: var(--warning-bg);
+  padding: 2px 8px;
+  font-size: 12px;
 }
 
 .okf-ragas__judge-row {

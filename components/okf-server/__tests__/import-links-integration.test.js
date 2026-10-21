@@ -95,6 +95,10 @@ jest.mock('../middleware/auth', () => ({
 }));
 
 describe('R9 at the ROUTE layer: POST /import resolves fm links[] (real chain)', () => {
+  // 20s: this drives the WHOLE import chain through createApp. It takes
+  // ~0.8s alone, but the 64-file suite runs it in parallel with the other
+  // integration suites and it blew jest's 5s default on the CI runner
+  // (2026-10-21, pipeline 14045) — a load artefact, not a behaviour change.
   test('supertest through createApp: meta.links carries the resolved author link', async () => {
     const request = require('supertest');
     const { createApp } = require('../index');
@@ -125,5 +129,5 @@ describe('R9 at the ROUTE layer: POST /import resolves fm links[] (real chain)',
     const index = Object.values(mockDb._stores.okf_concepts_meta).find((m) => m.concept_id === 'index');
     expect(index).toBeTruthy();
     expect(index.links).toEqual([{ to_concept_id: 'alpha', label: 'Alpha' }]);
-  });
+  }, 20000);
 });

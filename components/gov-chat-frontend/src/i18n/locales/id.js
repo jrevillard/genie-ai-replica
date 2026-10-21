@@ -3133,6 +3133,12 @@ export default {
       }
     },
     ragas: {
+      dropped: {
+        note: '{kept} dari {requested} pertanyaan — {dropped} tidak dapat dibuat',
+        reason: {
+          rate_limited: 'model membatasi laju generate karena kuota'
+        }
+      },
       corpus: {
         capped: 'Didasarkan pada {parts} (anggaran korpus)',
         part: '{used} dari {total} potongan'

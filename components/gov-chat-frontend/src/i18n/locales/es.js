@@ -3152,6 +3152,12 @@ export default {
       }
     },
     ragas: {
+      dropped: {
+        note: '{kept} de {requested} preguntas — {dropped} no se pudieron generar',
+        reason: {
+          rate_limited: 'el modelo limitó la generación por cuota'
+        }
+      },
       corpus: {
         capped: 'Basado en {parts} (presupuesto de corpus)',
         part: '{used} de {total} fragmentos'

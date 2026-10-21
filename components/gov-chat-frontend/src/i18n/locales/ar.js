@@ -3101,6 +3101,12 @@ export default {
       }
     },
     ragas: {
+      dropped: {
+        note: '{kept} من {requested} سؤال — تعذّر توليد {dropped}',
+        reason: {
+          rate_limited: 'قيّد النموذج التوليد بسبب حد المعدّل'
+        }
+      },
       corpus: {
         capped: 'مبني على {parts} (حد المجموعة)',
         part: '{used} من {total} مقطع'

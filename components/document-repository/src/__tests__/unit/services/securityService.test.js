@@ -67,6 +67,21 @@ describe('securityService', () => {
 
       originalConfig.virusScanning = false;
     });
+
+    it('should pass the clamd host to the scanner options', async () => {
+      const NodeClam = require('clamscan');
+      const originalConfig = require('../../../config/appConfig');
+      originalConfig.virusScanning = true;
+
+      await securityService.initialize();
+
+      // Without the host the library dials localhost:port, so a scanner
+      // running in another pod is never reached.
+      const options = NodeClam.mock.results.at(-1).value.init.mock.calls.at(-1)[0];
+      expect(options.clamdscan.host).toBe(originalConfig.clamscan.host);
+
+      originalConfig.virusScanning = false;
+    });
   });
 
   describe('ensureInitialized', () => {

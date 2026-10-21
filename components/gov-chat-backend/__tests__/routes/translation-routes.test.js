@@ -211,6 +211,19 @@ describe('POST /api/translate', () => {
 
     expect(response.status).toBe(500);
   });
+
+  it('should return 400 when the language is not supported', async () => {
+    translationService.translate.mockRejectedValue(new Error('Unsupported target language: not-a-language'));
+
+    const response = await authPost('/api/translate', {
+      texts: ['Hello'],
+      source_lang: 'en',
+      target_lang: 'not-a-language'
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toContain('Unsupported target language');
+  });
 });
 
 // ============================================================
@@ -269,5 +282,18 @@ describe('POST /api/translate/markdown', () => {
     });
 
     expect(response.status).toBe(500);
+  });
+
+  it('should return 400 when the language is not supported', async () => {
+    translationService.translateMarkdown.mockRejectedValue(new Error('Unsupported target language: not-a-language'));
+
+    const response = await authPost('/api/translate/markdown', {
+      markdown: '# Hello',
+      source_lang: 'en',
+      target_lang: 'not-a-language'
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toContain('Unsupported target language');
   });
 });

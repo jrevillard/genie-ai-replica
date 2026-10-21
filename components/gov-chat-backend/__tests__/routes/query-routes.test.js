@@ -1157,6 +1157,32 @@ describe('GET /:queryId', () => {
       expect(response.status).toBe(200);
       expect(response.text).toContain('"type":"done","queryId":"q1","translationFailed":false');
     });
+
+    it('should ignore a language that is not a string', async () => {
+      // The language comes from the request body. A value that is not a
+      // string is not a language: the request still succeeds and no
+      // translation is attempted.
+      const mockStream = setupSSEStream();
+      translationService.init.mockResolvedValue(undefined);
+      translationService.translateMarkdown.mockResolvedValue('Bonjour monde');
+
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }],
+        context: { language: 42 }
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      mockStream.push('data: {"type":"chunk","content":"Hello world"}\n\n');
+      mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+      mockStream.push(null);
+
+      const response = await responsePromise;
+      expect(response.status).toBe(200);
+      expect(translationService.translateMarkdown).not.toHaveBeenCalled();
+      // The stream still completes: the answer is delivered in English.
+      expect(response.text).toContain('"type":"done"');
+    });
   });
 
   describe('SSE finalize failure resilience', () => {

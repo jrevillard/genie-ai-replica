@@ -334,7 +334,14 @@ describe('GpuTranslateBackend streaming', () => {
     });
 
     it('formatRequest builds a gemma-3 chat-completions request with translation instructions', () => {
-      const req = backend.formatRequest('google/gemma-3-4b-it', 'English', 'Spanish', 'Hello world');
+      // The request carries the model-specific codes; the prompt names the
+      // languages from the map.
+      const req = backend.formatRequest(
+        'google/gemma-3-4b-it',
+        backend.getLanguageCode('en'),
+        backend.getLanguageCode('es'),
+        'Hello world'
+      );
       expect(req.model).toBe('google/gemma-3-4b-it');
       expect(req.messages).toBeDefined();
       const prompt = JSON.stringify(req.messages);

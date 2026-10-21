@@ -88,6 +88,13 @@ module.exports = (translationService) => {
       res.json({ translated_texts: translatedTexts });
       logger.info(`[TRANSLATION-ROUTES] Successfully sent ${translatedTexts.length} translated texts to client.`);
     } catch (error) {
+      // An unsupported language is a bad request, not a server error: the
+      // language comes from the request body and the translator refuses the
+      // ones its language map does not know.
+      if (error.message && error.message.startsWith('Unsupported ')) {
+        logger.warn(`[TRANSLATION-ROUTES] Rejected request: ${error.message}`);
+        return res.status(400).json({ message: error.message });
+      }
       logger.error(`[TRANSLATION-ROUTES] Error translating content: ${error.message}`, { stack: error.stack });
       next(error); // Pass to the global error handler
     }
@@ -157,6 +164,11 @@ module.exports = (translationService) => {
       res.json({ translated_markdown: translatedMarkdown });
       logger.info('[TRANSLATION-ROUTES] Successfully sent translated markdown to client.');
     } catch (error) {
+      // An unsupported language is a bad request, not a server error.
+      if (error.message && error.message.startsWith('Unsupported ')) {
+        logger.warn(`[TRANSLATION-ROUTES] Rejected request: ${error.message}`);
+        return res.status(400).json({ message: error.message });
+      }
       logger.error(`[TRANSLATION-ROUTES] Error translating markdown: ${error.message}`, { stack: error.stack });
       next(error); // Pass to the global error handler
     }

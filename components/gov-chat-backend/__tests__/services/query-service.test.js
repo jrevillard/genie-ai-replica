@@ -772,6 +772,27 @@ describe('QueryService', () => {
       expect(result.opeaPayload.context.categoryLabel).toBe('Crops');
     });
 
+    it('should forward the language to OPEA', async () => {
+      const data = createMockQueryData({
+        context: { categoryLabel: 'Crops', serviceLabels: [], language: 'FR' }
+      });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      const result = await queryService.initStreamQuery(data, {});
+      expect(result.opeaPayload.context.language).toBe('FR');
+    });
+
+    it('should drop a language that is not a string instead of forwarding it', async () => {
+      // The language travels to OPEA, which validates it against its own
+      // language map. A value that is not a string is dropped here rather
+      // than handed over for OPEA to reject.
+      const data = createMockQueryData({
+        context: { categoryLabel: 'Crops', serviceLabels: [], language: { code: 'fr' } }
+      });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      const result = await queryService.initStreamQuery(data, {});
+      expect(result.opeaPayload.context.language).toBeUndefined();
+    });
+
     // Regression test for the Query Inspector empty-text bug: when the frontend
     // sends the dual-prompt shape (messages ends with a hidden persona prompt +
     // empty assistant placeholder + a separate `userQuestion` field), the saved

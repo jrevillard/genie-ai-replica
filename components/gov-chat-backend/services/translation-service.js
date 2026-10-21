@@ -221,6 +221,48 @@ class TranslationService {
   }
 
   /**
+   * @method resolveTargetLanguage
+   * @description Resolves a target language against the language map the loaded
+   * backend ships. The language arrives from the request body, so it is
+   * caller-controlled: only a code the map knows may reach the translation
+   * model, and a code the map does not know is refused rather than passed on.
+   * @param {string} targetLang - The target language as it arrived from the caller.
+   * @returns {string} The canonical (lower-case) language code to translate into.
+   * @throws {Error} When the language is unknown and has no usable fallback.
+   */
+  resolveTargetLanguage(targetLang) {
+    const requested = typeof targetLang === 'string' ? targetLang.trim().toLowerCase() : '';
+    if (!requested) {
+      logger.warn(`[TRANSLATION-SERVICE] Unsupported target language code: ${targetLang}`);
+      throw new Error(`Unsupported target language: ${targetLang}`);
+    }
+
+    // A fallback chain is followed until it lands on a language the map knows.
+    // The visited set stops a map that points a language at itself (or in a
+    // circle) from spinning here.
+    const visited = new Set();
+    let candidate = requested;
+    while (!visited.has(candidate)) {
+      visited.add(candidate);
+      if (this.backend.isLanguageSupported(candidate)) {
+        if (candidate !== requested) {
+          logger.warn(
+            `[TRANSLATION-SERVICE] Target language ${requested} not directly supported, using fallback ${candidate}`
+          );
+        }
+        return candidate;
+      }
+      const fallback =
+        typeof this.backend.getFallbackLanguage === 'function' ? this.backend.getFallbackLanguage(candidate) : null;
+      if (!fallback) break;
+      candidate = String(fallback).trim().toLowerCase();
+    }
+
+    logger.warn(`[TRANSLATION-SERVICE] Unsupported target language code: ${targetLang}`);
+    throw new Error(`Unsupported target language: ${targetLang}`);
+  }
+
+  /**
    * @method translate
    * @description Translates a batch of texts from a source language to a target language.
    * @param {string[]} texts - An array of text strings to translate.
@@ -248,22 +290,9 @@ class TranslationService {
       throw new Error(`Unsupported source language: ${sourceLang}`);
     }
 
-    // Check if target language is supported
-    if (!this.backend.isLanguageSupported(targetLang)) {
-      // Check for fallback language
-      const fallbackLang = this.backend.getFallbackLanguage(targetLang);
-      if (fallbackLang) {
-        logger.warn(
-          `[TRANSLATION-SERVICE] Target language ${targetLang} not directly supported, using fallback ${fallbackLang}`
-        );
-        // Recursively call translate with fallback language
-        return this.translate(texts, sourceLang, fallbackLang);
-      }
-      logger.warn(`[TRANSLATION-SERVICE] Unsupported target language code: ${targetLang}`);
-      throw new Error(`Unsupported target language: ${targetLang}`);
-    }
-
-    const targetLangCode = this.backend.getLanguageCode(targetLang);
+    // Only a language the map knows reaches the backend.
+    const resolvedTargetLang = this.resolveTargetLanguage(targetLang);
+    const targetLangCode = this.backend.getLanguageCode(resolvedTargetLang);
 
     try {
       // Delegate to backend
@@ -313,15 +342,9 @@ class TranslationService {
     const sourceLangCode = this.backend.getLanguageCode(sourceLang);
     if (!sourceLangCode) throw new Error(`Unsupported source language: ${sourceLang}`);
 
-    if (!this.backend.isLanguageSupported(targetLang)) {
-      const fallbackLang = this.backend.getFallbackLanguage(targetLang);
-      if (fallbackLang) {
-        logger.warn(`[TRANSLATION-SERVICE] Stream target ${targetLang} not supported, using fallback ${fallbackLang}`);
-        return this.translateStream(unit, sourceLang, fallbackLang, context, onToken);
-      }
-      throw new Error(`Unsupported target language: ${targetLang}`);
-    }
-    const targetLangCode = this.backend.getLanguageCode(targetLang);
+    // Only a language the map knows reaches the backend.
+    const resolvedTargetLang = this.resolveTargetLanguage(targetLang);
+    const targetLangCode = this.backend.getLanguageCode(resolvedTargetLang);
 
     try {
       if (typeof this.backend.translateStream === 'function') {
@@ -356,15 +379,20 @@ class TranslationService {
       throw new Error('TranslationService is not ready.');
     }
 
+    // The language is refused before anything is built from it: the cache key
+    // and the in-flight key both carry the language, so an unchecked value
+    // would end up in a Redis key as well as in the translation request.
+    const resolvedTargetLang = this.resolveTargetLanguage(targetLang);
+
     // --- REDIS CACHE LOGIC (GET) ---
     // Generate a unique <name> by hashing the markdown content.
     const docName = nodeCrypto.createHash('md5').update(markdownContent).digest('hex');
     // Cache key includes the model id so switching the translation model
     // invalidates the cache automatically (no stale translations on model change).
     const modelId = this.backend && this.backend.getBackendInfo ? this.backend.getBackendInfo().model : undefined;
-    const cacheKey = translationCacheKey(docName, targetLang, modelId);
+    const cacheKey = translationCacheKey(docName, resolvedTargetLang, modelId);
     // Key for in-flight tracking (combines doc hash and target language)
-    const inFlightKey = `${docName}:${targetLang}`;
+    const inFlightKey = `${docName}:${resolvedTargetLang}`;
 
     if (cacheEnabled && this.cacheClient) {
       try {
@@ -444,7 +472,7 @@ class TranslationService {
         // Create an array of promises, one for each batch
         const translationPromises = batches.map((batch, index) => {
           logger.debug(`[TRANSLATION-SERVICE] Starting parallel batch ${index + 1}/${batches.length}`);
-          return this.translate(batch, sourceLang, targetLang);
+          return this.translate(batch, sourceLang, resolvedTargetLang);
         });
 
         // Run all batches concurrently
@@ -519,15 +547,22 @@ class TranslationService {
 
     // Add timeout to prevent hanging (default 1 hour for large documents)
     const timeoutMs = 3600000; // 1 hour
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => {
+    let timeoutHandle;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutHandle = setTimeout(() => {
         this.inFlightTranslations.delete(inFlightKey);
         reject(new Error(`[TRANSLATION-SERVICE] Translation timeout after ${timeoutMs}ms for ${inFlightKey}`));
-      }, timeoutMs)
-    );
+      }, timeoutMs);
+    });
 
-    // Return the promise with timeout
-    return await Promise.race([translationPromise, timeoutPromise]);
+    // Return the promise with timeout. The timer is cleared once the race is
+    // settled: left pending, every translation would keep an hour-long timer
+    // alive, and the process could not exit while one was outstanding.
+    try {
+      return await Promise.race([translationPromise, timeoutPromise]);
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
   }
 
   /**

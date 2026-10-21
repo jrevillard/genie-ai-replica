@@ -29,7 +29,11 @@
 // produced under the old budget, including CPU/NLLB text written under the GPU
 // model id when a GPU request was rejected and fell back. The key embeds the
 // model id of the *primary* backend, so nothing else invalidates them.
-const TRANSLATION_LOGIC_VERSION = '2';
+// 3 = the language is resolved against the language map before the request is
+// built, and the prompt names the language from the map only (issue #1097).
+// Entries cached before it were keyed on the raw request language and may hold
+// a translation produced for a language the map does not know.
+const TRANSLATION_LOGIC_VERSION = '3';
 
 function translationCacheKey(docHash, targetLang, modelId) {
   return `translation:${docHash}:${targetLang}:${modelId || 'unknown'}:${TRANSLATION_LOGIC_VERSION}`;

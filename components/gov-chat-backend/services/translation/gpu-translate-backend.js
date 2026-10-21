@@ -263,13 +263,14 @@ class GpuTranslateBackend {
       throw new Error('[GPU-BACKEND] Language map not loaded');
     }
 
-    const code = this.languageMap.languageMap[isoCode];
-    if (!code) {
+    // Own properties only: an inherited key ('constructor', 'toString') is not
+    // a language, and handing it out would put it in a translation prompt.
+    if (!Object.prototype.hasOwnProperty.call(this.languageMap.languageMap, isoCode)) {
       logger.warn(`[GPU-BACKEND] No language code mapping for: ${isoCode}`);
       return null;
     }
 
-    return code;
+    return this.languageMap.languageMap[isoCode];
   }
 
   /**
@@ -279,6 +280,10 @@ class GpuTranslateBackend {
    */
   getFallbackLanguage(isoCode) {
     if (!this.fallbackMap) {
+      return null;
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(this.fallbackMap, isoCode)) {
       return null;
     }
 
@@ -364,6 +369,25 @@ class GpuTranslateBackend {
   }
 
   /**
+   * The language name a prompt is built from.
+   *
+   * The name comes from the language map or not at all: falling back to the
+   * code would put an unmapped value into the prompt, which is the one thing
+   * the map exists to prevent.
+   *
+   * @param {string} code - Model-specific language code
+   * @returns {string} The language name
+   */
+  _languageName(code) {
+    const names = this.languageMap ? this.languageMap.languageNames : null;
+    const name = names && Object.prototype.hasOwnProperty.call(names, code) ? names[code] : null;
+    if (!name) {
+      throw new Error(`[GPU-BACKEND] No language name for code: ${code}`);
+    }
+    return name;
+  }
+
+  /**
    * Format request for specific model
    * @param {string} modelId - Model identifier
    * @param {string} sourceCode - Source language code (model-specific)
@@ -395,8 +419,8 @@ class GpuTranslateBackend {
 
     // Gemma-3 format (prompt-based translation)
     if (modelId.includes('gemma-3')) {
-      const sourceLangName = this.languageMap.languageNames?.[sourceCode] || sourceCode;
-      const targetLangName = this.languageMap.languageNames?.[targetCode] || targetCode;
+      const sourceLangName = this._languageName(sourceCode);
+      const targetLangName = this._languageName(targetCode);
       const prompt = this.languageMap.promptTemplate
         ? this.languageMap.promptTemplate(sourceCode, targetCode, sourceLangName, targetLangName, text)
         : `Translate the following text from ${sourceLangName} to ${targetLangName}. Only return the translation, no explanation.\n\nText: ${text}`;

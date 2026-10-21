@@ -2963,7 +2963,9 @@ class TestExcessBlankCollapse:
         pre-collapse that re-introduce blanks on cache hit."""
         monkeypatch.setattr(chatqna_module, "LLM_SELF_CONFIDENCE_ENABLED", False)
         svc = create_chatqna_service()
-        svc.load_language_codes = MagicMock(return_value={})
+        # The map is what decides whether a language may be translated at
+        # all, so it must know the code the test uses.
+        svc.load_language_codes = MagicMock(return_value={"es": "Spanish"})
         captured = {}
 
         async def fake_translate(text, target_lang, original_language):
@@ -3295,7 +3297,9 @@ class TestSelfConfidenceSentinel:
         captured. Mocks only the translator — no megaservice harness needed."""
         monkeypatch.setattr(chatqna_module, "LLM_SELF_CONFIDENCE_ENABLED", True)
         svc = create_chatqna_service()
-        svc.load_language_codes = MagicMock(return_value={})
+        # The map is what decides whether a language may be translated at
+        # all, so it must know the code the test uses.
+        svc.load_language_codes = MagicMock(return_value={"es": "Spanish"})
         captured = {}
 
         async def fake_translate(text, target_lang, original_language):

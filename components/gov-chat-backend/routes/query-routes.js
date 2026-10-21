@@ -260,7 +260,11 @@ module.exports = (queryService) => {
       const streamingTranslationEnabled = ['1', 'true'].includes(
         (process.env.STREAMING_TRANSLATION_ENABLED || '').toLowerCase()
       );
-      const targetLanguage = queryData.context?.language?.toLowerCase();
+      // The language comes from the request body. It is only used as a string
+      // here — the translator validates it against the language map before it
+      // is used for anything.
+      const requestedLanguage = typeof queryData.context?.language === 'string' ? queryData.context.language : '';
+      const targetLanguage = requestedLanguage.toLowerCase();
       const useStreamingTranslation =
         streamingTranslationEnabled && targetLanguage && targetLanguage.toUpperCase() !== 'EN';
 
@@ -496,7 +500,7 @@ module.exports = (queryService) => {
 
     res.write(`data: ${JSON.stringify({ type: 'metadata', ...metadata, responseTime })}\n\n`);
 
-    const userLanguage = queryData.context?.language;
+    const userLanguage = typeof queryData.context?.language === 'string' ? queryData.context.language : '';
     if (!skipPostStreamTranslation && userLanguage && userLanguage.toUpperCase() !== 'EN' && fullResponseText) {
       try {
         await translationService.init();

@@ -227,13 +227,14 @@ class CpuTranslateBackend {
       throw new Error('[CPU-BACKEND] Language map not loaded');
     }
 
-    const code = this.languageMap.languageMap[isoCode];
-    if (!code) {
+    // Own properties only: an inherited key ('constructor', 'toString') is not
+    // a language, and handing it out would put it in a translation prompt.
+    if (!Object.prototype.hasOwnProperty.call(this.languageMap.languageMap, isoCode)) {
       logger.warn(`[CPU-BACKEND] No language code mapping for: ${isoCode}`);
       return null;
     }
 
-    return code;
+    return this.languageMap.languageMap[isoCode];
   }
 
   /**
@@ -243,6 +244,10 @@ class CpuTranslateBackend {
    */
   getFallbackLanguage(isoCode) {
     if (!this.fallbackMap) {
+      return null;
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(this.fallbackMap, isoCode)) {
       return null;
     }
 

@@ -57,6 +57,24 @@ function opeaChatQnaUrl() {
   return `http://${process.env.OPEA_HOST || DEFAULT_OPEA_HOST}:${process.env.OPEA_PORT || DEFAULT_OPEA_PORT}/v1/chatqna`;
 }
 
+// The target language the client asked for. It travels to OPEA, which
+// validates it against its own language map before it is used, so only a
+// string is forwarded: anything else is dropped rather than handed to the
+// request model as something it has to reject.
+function pickLanguage(context) {
+  const language = context ? context.language : undefined;
+  if (typeof language === 'string' && language.trim()) {
+    return language.trim();
+  }
+  if (language != null) {
+    logger.warn('pickLanguage.ignored_non_string_language', {
+      type: typeof language,
+      isArray: Array.isArray(language)
+    });
+  }
+  return undefined;
+}
+
 class QueryService {
   constructor() {
     this.dbService = dbService; // Store the service reference instead of the promise
@@ -451,7 +469,7 @@ class QueryService {
         context: {
           categoryLabel: queryData.context.categoryLabel,
           serviceLabels: queryData.context.serviceLabels,
-          language: queryData.context.language
+          language: pickLanguage(queryData.context)
         },
         stream: true
       };
@@ -684,7 +702,7 @@ class QueryService {
             messages: queryText,
             stream: false,
             context: {
-              language: queryData.context?.language
+              language: pickLanguage(queryData.context)
             }
           };
         } else {
@@ -694,7 +712,7 @@ class QueryService {
             context: {
               categoryLabel: queryData.context.categoryLabel,
               serviceLabels: queryData.context.serviceLabels,
-              language: queryData.context.language
+              language: pickLanguage(queryData.context)
             },
             stream: false
           };

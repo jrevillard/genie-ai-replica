@@ -840,6 +840,14 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
       created_by: (opts.actor && opts.actor.user_id) || 'system',
       payload: {
         generator: `ragas:${gen.generator && gen.generator.model}`,
+        // Judge memory (David 2026-10-21: the model selection must survive
+        // leaving and re-entering the dialog, not reset to the deployment
+        // default). judge_pick is the selection AS MADE in the Generate
+        // dialog (nulls = deployment default was chosen) — the panel's
+        // restore source; judge is the resolved judge that actually
+        // generated the suite (the fidelity record).
+        judge_pick: { config_key: opts.judge_config_key || null, model: opts.judge_model || null },
+        judge: modelConfigService.judgeFidelity(judgeOverride),
         repos: repos.map((r) => ({ id: r.repo_id || r._key, name: r.name })),
         dimensions: {
           testset_size: entries.length,
@@ -1336,7 +1344,11 @@ async function runSuite(repoId, suiteKey, opts = {}) {
           judge: {
             ...modelConfigService.judgeFidelity(judgeOverride),
             sidecar_reported_model: evaluation.model || null,
-            embed_model: null
+            embed_model: null,
+            // The selection AS MADE in the Run dialog (nulls = deployment
+            // default) — the panel's restore source, distinct from the
+            // resolved fidelity fields above.
+            pick: { config_key: opts.judge_config_key || null, model: opts.judge_model || null }
           },
           // Which model answered (David 2026-10-20): the deployment's chat
           // by default; a config explicitly checked for benchmark answers
@@ -1453,7 +1465,11 @@ async function listRuns(repoId, payload = {}) {
       '"name", "repo_ids", "created_at", "created_by", "metrics"]), ' +
       '{ status: d.status || null, error: HAS(d, "error") ? d.error : null, progress: d.progress || null, ' +
       'summary: HAS(d.payload, "summary") ? d.payload.summary : null, ' +
-      'entries: HAS(d.payload, "entries") ? LENGTH(d.payload.entries) : null })',
+      'entries: HAS(d.payload, "entries") ? LENGTH(d.payload.entries) : null, ' +
+      // The run's judge pick as made (judge memory, 2026-10-21) — the panel
+      // restores its selector from the latest run of the loaded suite.
+      'judge_pick: HAS(d, "payload") && HAS(d.payload, "fidelity") && HAS(d.payload.fidelity, "judge") && ' +
+      'HAS(d.payload.fidelity.judge, "pick") ? d.payload.fidelity.judge.pick : null })',
     { rid: repoId, kinds, lim: limit }
   );
   const rows = await cursor.all();

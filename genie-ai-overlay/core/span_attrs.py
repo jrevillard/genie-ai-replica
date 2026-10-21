@@ -122,6 +122,24 @@ ATTRIBUTE_NAMES = {
     "okf_fanout_legs_succeeded": "okf.fanout.legs_succeeded",
     "okf_fanout_legs_failed": "okf.fanout.legs_failed",
     "okf_fanout_fused_count": "okf.fanout.fused_count",
+    # rag.route.* — the Routing Lab's head-vector routing (feat/okf-server):
+    # which graphs a query fanned out to and why. Caught unregistered by
+    # main's vocabulary sweep when the branches merged (2026-10-21).
+    "rag_route_mode": "rag.route.mode",
+    "rag_route_applied": "rag.route.applied",
+    "rag_route_selected": "rag.route.selected",
+    "rag_route_probed": "rag.route.probed",
+    "rag_route_search_set": "rag.route.search_set",
+    "rag_route_head_weight": "rag.route.head_weight",
+    "rag_route_head_rows": "rag.route.head_rows",
+    "rag_route_heads_floored": "rag.route.heads_floored",
+    "rag_route_heads_gated": "rag.route.heads_gated",
+    "rag_route_heads_vetoed": "rag.route.heads_vetoed",
+    "rag_route_failed_probes": "rag.route.failed_probes",
+    "rag_route_sticky": "rag.route.sticky",
+    "rag_route_wall_ms": "rag.route.wall_ms",
+    "rag_route_degraded": "rag.route.degraded",
+    "rag_route_dropped": "rag.route.dropped",
     # LLM invoke
     "llm_model": "llm.model",
     "llm_service_path": "llm.service_path",

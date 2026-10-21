@@ -46,6 +46,9 @@ OWNED_SPAN_NAMES = {
     "chatqna.stream_outcome",
     "retriever.check_health",
     "retriever.hybrid_search",
+    "retriever.route",
+    "retriever.fanout",
+    "retriever.fanout.leg",
     "retriever.initialize_client",
     "retriever.initialize_llm",
     "reranker.rerank",
@@ -161,8 +164,10 @@ class TestVocabularyShape:
         # bump this with the addition it accounts for. History: 80 → 83 for the
         # three bounded-LLM attributes (dataprep.llm.timed_out / .timeout_seconds
         # / .phase, main); 83 → 93 for the ten okf.fanout.* routing attributes
-        # (feat/okf-server line, first registered in the 2026-10-18 rebase).
-        assert len(ATTRIBUTE_NAMES) == 93
+        # (feat/okf-server line, first registered in the 2026-10-18 rebase),
+        # 93 → 108 for the fifteen rag.route.* head-routing keys the same
+        # branch writes (caught by this sweep at the 2026-10-21 merge).
+        assert len(ATTRIBUTE_NAMES) == 108
 
 
 class TestLegacyAttributeNames:
@@ -256,8 +261,8 @@ class TestLegacyAttributeNames:
 
     def test_registering_the_backlog_did_not_inflate_the_vocabulary(self):
         # See test_vocabulary_entry_count_is_pinned — 83 (bounded-LLM wave)
-        # + 10 okf.fanout.* routing attributes from the okf line.
-        assert len(ATTRIBUTE_NAMES) == 93
+        # + 10 okf.fanout.* + 15 rag.route.* routing attributes from the okf line.
+        assert len(ATTRIBUTE_NAMES) == 108
         assert len(LEGACY_ATTRIBUTE_NAMES) == 21
 
 

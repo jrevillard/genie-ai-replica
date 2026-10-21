@@ -98,9 +98,13 @@ const config = {
     // FIX: Convert timeout string to a number
     timeout: parseInt(process.env.CLAMSCAN_TIMEOUT, 10) || 60000,
 
-    localFallback: process.env.CLAMSCAN_LOCAL_FALLBACK === 'true' || true,
+    // Default-on, opt-out: falling back to the local binary is what this
+    // deployment has always done, so `false` disables it rather than `true`
+    // enabling it. Read the variable — `=== 'true' || true` is always true
+    // and makes CLAMSCAN_LOCAL_FALLBACK inert.
+    localFallback: process.env.CLAMSCAN_LOCAL_FALLBACK !== 'false',
     path: process.env.CLAMSCAN_PATH || '/usr/bin/clamdscan',
-    active: process.env.CLAMSCAN_ACTIVE === 'true' || true
+    active: process.env.CLAMSCAN_ACTIVE !== 'false'
   },
 
   // Logging configuration

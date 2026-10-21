@@ -14,6 +14,17 @@ mounts. Context keys: `keys` — a list of env var names among HF_TOKEN,
 VLLM_API_KEY, HUGGINGFACEHUB_API_TOKEN. Every name resolves to the
 same-named key on the vllm-api-key Secret, except the
 HUGGINGFACEHUB_API_TOKEN alias, which reads the VLLM_API_KEY key.
+
+genieai-umbrella.envMapRows — the rows of a MAP of environment variables,
+as a JSON ARRAY. The chart takes the operator's environment as a map, not a
+list: Helm merges maps key by key, so an overlay that sets one variable
+replaces that one and keeps every default the chart declares beside it. A
+list would be replaced wholesale — an overlay setting one variable would
+silently drop all the others, and the deployment would come up with a
+different configuration than the chart documents. The values are stringified:
+a container env value is always a string, and `true`/`3` in the values file
+would otherwise render as a YAML boolean or number that the API server
+rejects.
 */}}
 {{- define "genieai-umbrella.secretKeyRefEnv" -}}
 {{- $ref := dict "name" .secret "key" .key -}}
@@ -29,4 +40,12 @@ HUGGINGFACEHUB_API_TOKEN alias, which reads the VLLM_API_KEY key.
 {{- $rows = append $rows (dict "name" . "valueFrom" (dict "secretKeyRef" (dict "name" "vllm-api-key" "key" $secretKey))) -}}
 {{- end -}}
 {{- $rows | toJson -}}
+{{- end -}}
+
+{{- define "genieai-umbrella.envMapRows" -}}
+{{- $rows := list -}}
+{{- range $name, $value := . -}}
+{{- $rows = append $rows (dict "name" $name "value" (toString $value)) -}}
+{{- end -}}
+{{- toJson $rows -}}
 {{- end -}}

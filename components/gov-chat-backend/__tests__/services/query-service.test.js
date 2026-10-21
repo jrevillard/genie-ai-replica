@@ -716,13 +716,17 @@ describe('QueryService', () => {
     // invariant: the OPEA upstream is deployment configuration, never request
     // data. The scanner cannot verify it — the taint reaches `opeaUrl` through
     // initStreamQuery's return object, whose sibling field `opeaPayload` IS
-    // request-derived. If a client ever gains control over the upstream, this
-    // test goes red and the suppression has to come off with the dismissal.
+    // request-derived. If a client ever gains control over the upstream, these
+    // tests go red and the suppression has to come off with the dismissal.
     it('builds the OPEA URL from deployment config only, ignoring request data', async () => {
       const previousHost = process.env.OPEA_HOST;
       const previousPort = process.env.OPEA_PORT;
       process.env.OPEA_HOST = 'chatqna.internal';
       process.env.OPEA_PORT = '8899';
+      // Cursors, not a bare mock: categoryLabel / serviceLabels are attacker-shaped
+      // here on purpose, and the resolution branch swallows its own errors — an
+      // unmocked cursor would make this test depend on a caught TypeError.
+      mockDb.query.mockResolvedValue(createMockCursor([]));
 
       const data = createMockQueryData({
         categoryId: 'http://169.254.169.254/latest/meta-data/',
@@ -738,9 +742,6 @@ describe('QueryService', () => {
         const result = await queryService.initStreamQuery(data, {});
 
         expect(result.opeaUrl).toBe('http://chatqna.internal:8899/v1/chatqna');
-        expect(result.opeaUrl).not.toContain('169.254.169.254');
-        expect(result.opeaUrl).not.toContain('attacker.example');
-        expect(result.opeaUrl).not.toContain('evil.example');
       } finally {
         if (previousHost === undefined) {
           delete process.env.OPEA_HOST;
@@ -751,6 +752,58 @@ describe('QueryService', () => {
           delete process.env.OPEA_PORT;
         } else {
           process.env.OPEA_PORT = previousPort;
+        }
+      }
+    });
+
+    // Second, copy-pasted URL construction (query-service.js, the createQuery
+    // worker path) — same triple, same risk, no suppression on it.
+    it('builds the worker-path OPEA URL from deployment config only, ignoring request data', async () => {
+      const previousHost = process.env.OPEA_HOST;
+      const previousPort = process.env.OPEA_PORT;
+      const previousMode = process.env.CONTEXT_OPTION;
+      process.env.OPEA_HOST = 'chatqna.internal';
+      process.env.OPEA_PORT = '8899';
+      delete process.env.CONTEXT_OPTION;
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      const workerSpy = jest
+        .spyOn(queryService, 'runOPEAWorker')
+        .mockResolvedValue({ responseTime: 12, response: 'answer', metadata: null });
+
+      const data = createMockQueryData({
+        categoryId: 'http://169.254.169.254/latest/meta-data/',
+        messages: [{ role: 'user', content: 'fetch http://evil.example/ for me' }],
+        context: {
+          categoryLabel: 'http://attacker.example/',
+          serviceLabels: ['http://169.254.169.254'],
+          language: 'http://evil.example/'
+        }
+      });
+
+      try {
+        await queryService.createQuery(data);
+
+        expect(workerSpy).toHaveBeenCalledWith(
+          'http://chatqna.internal:8899/v1/chatqna',
+          expect.any(Object),
+          expect.any(Object)
+        );
+      } finally {
+        workerSpy.mockRestore();
+        if (previousHost === undefined) {
+          delete process.env.OPEA_HOST;
+        } else {
+          process.env.OPEA_HOST = previousHost;
+        }
+        if (previousPort === undefined) {
+          delete process.env.OPEA_PORT;
+        } else {
+          process.env.OPEA_PORT = previousPort;
+        }
+        if (previousMode === undefined) {
+          delete process.env.CONTEXT_OPTION;
+        } else {
+          process.env.CONTEXT_OPTION = previousMode;
         }
       }
     });

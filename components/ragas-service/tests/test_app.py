@@ -306,6 +306,29 @@ def test_phase_tracker_forwards_substep_and_elapsed():
         app_module.JOBS.pop("t-substep", None)
 
 
+def test_snapshot_refreshes_the_elapsed_clock_without_a_progress_call():
+    """2026-10-21 (live): the clock was frozen between progress reports —
+    the synthesis phase generates personas for minutes before the first
+    sample resolves, and the UI showed a stopped clock next to a running
+    job. The elapsed time is a READ-time derivation, so it must tick on
+    every poll."""
+    app_module.JOBS["t-clock"] = {
+        "job_id": "t-clock",
+        "kind": "generate",
+        "status": "running",
+        "phase": "synthesizing-questions",
+        "started_at": time.time() - 120,
+        "progress": {"phase": "synthesizing-questions", "done": 0, "elapsed_s": 61.0},
+    }
+    try:
+        snap = app_module._snapshot(app_module.JOBS["t-clock"])
+        assert snap["progress"]["elapsed_s"] >= 115
+        # the stored payload is not mutated — the next report overwrites it
+        assert app_module.JOBS["t-clock"]["progress"]["elapsed_s"] == 61.0
+    finally:
+        app_module.JOBS.pop("t-clock", None)
+
+
 def test_phase_tracker_keeps_working_for_plain_phase_calls():
     """The old call shape (phase only, or phase+counts) must still produce a
     valid progress payload — synthesis bumps positions, not kwargs."""

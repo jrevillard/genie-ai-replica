@@ -119,7 +119,15 @@ def _nan_safe(value):
 def _snapshot(job: dict) -> dict:
     out = {k: job.get(k) for k in ("job_id", "kind", "status", "phase", "error", "started_at", "finished_at")}
     if job.get("progress"):
-        out["progress"] = job.get("progress")
+        prog = dict(job["progress"])
+        # The elapsed clock is recomputed on EVERY read: it was stored when
+        # the phase last reported, so a phase that reports nothing for
+        # minutes (the persona generation inside the synthesis phase) froze
+        # the clock — a frozen clock reads as a frozen job (David, live
+        # 2026-10-21: "the question synthesizing stage also blocks").
+        if job.get("status") == "running" and job.get("started_at"):
+            prog["elapsed_s"] = round(time.time() - job["started_at"], 1)
+        out["progress"] = prog
     if job.get("status") == "done":
         out["result"] = job.get("result")
     return _nan_safe(out)

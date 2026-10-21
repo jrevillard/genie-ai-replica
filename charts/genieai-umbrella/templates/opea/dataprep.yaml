@@ -114,7 +114,7 @@ operator's value wins over a derived row of the same name. */ -}}
 {{- $opeaEnvRows := include "genieai-umbrella.envMapRows" (.Values.opea.dataprep.env | default dict) | fromJsonArray -}}
 {{- $arangoEnv := list
     (dict "name" "ARANGO_URL" "value" (printf "http://%s.%s.svc.cluster.local:8529" $arangoHost $ns))
-    (dict "name" "ARANGO_DB" "value" "_system")
+    (dict "name" "ARANGO_DB" "value" (.Values.data.arangodb.database | default "_system" | toString))
     (dict "name" "ARANGO_USERNAME" "value" "root")
 -}}
 {{- $svcVals := dict

@@ -65,7 +65,7 @@ spec:
             - name: ARANGO_URL
               value: {{ include "genieai-umbrella.arangoURL" . | quote }}
             - name: ARANGO_DB
-              value: "_system"
+              value: {{ .Values.data.arangodb.database | default "_system" | quote }}
             - name: ARANGO_USER
               value: "root"
             - name: ARANGO_PASSWORD

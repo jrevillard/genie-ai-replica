@@ -71,6 +71,12 @@ Usage:
   config-parity-check.py RENDERED.yaml [--compose ...] [--values ...] [--allowlist ...]
                      [--min-compared=N]
 
+Every variable filed under `notRead` is also verified against the source
+it claims reads nothing: the run walks shipped application source under
+`components/` and `genie-ai-overlay/` (tests, docs and vendored trees
+excluded) and fails if the name appears there. A suppression category
+nobody checks is a way to make this gate green.
+
 `--min-compared=N` puts a floor on how many variables the run actually
 compared. Every allowlist category removes variables from that set, so
 without a floor, growing the allowlist is a way to make this gate green
@@ -84,6 +90,7 @@ declared comparable.
 """
 
 import json
+import os
 import re
 import sys
 
@@ -92,6 +99,57 @@ import yaml
 DEFAULT_COMPOSE = "docker-compose.yaml"
 DEFAULT_VALUES = "charts/genieai-umbrella/values.yaml"
 DEFAULT_ALLOWLIST = "scripts/config-parity-allowlist.json"
+
+# Source roots and what counts as shipped application source. The `notRead`
+# claims are checked against these: a variable declared unreadable must not
+# appear in any file that actually runs. Tests, docs and vendored trees are
+# excluded because they mention configuration without reading it.
+SOURCE_ROOTS = ("components", "genie-ai-overlay")
+SOURCE_SKIP_DIRS = {
+    "node_modules", ".git", ".venv", "venv", "__pycache__", ".pytest_cache",
+    "dist", "build", "coverage", "tests", "test", "__tests__", ".cache",
+    "migrations_backup",
+}
+SOURCE_SUFFIXES = (".js", ".py", ".vue", ".ts", ".mjs", ".cjs")
+SOURCE_SKIP_RE = re.compile(r"(^|/)(test_[^/]*\.py|[^/]*\.(test|spec)\.js)$")
+
+
+def iter_source_files(roots):
+    """Every file of shipped application source under `roots`."""
+    for root in roots:
+        if not os.path.isdir(root):
+            continue
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = sorted(d for d in dirnames if d not in SOURCE_SKIP_DIRS)
+            for name in filenames:
+                path = os.path.join(dirpath, name)
+                if not name.endswith(SOURCE_SUFFIXES):
+                    continue
+                if SOURCE_SKIP_RE.search(path):
+                    continue
+                yield path
+
+
+def verify_not_read(names):
+    """Map each declared-notRead variable to the source files that read it.
+
+    A claim is wrong when the name appears in shipped source; the gate is
+    the point of the claim, so an unverified claim is an untested one.
+    """
+    names = set(names)
+    if not names:
+        return {}
+    hits = {name: [] for name in names}
+    for path in iter_source_files(SOURCE_ROOTS):
+        try:
+            with open(path, encoding="utf-8", errors="ignore") as handle:
+                text = handle.read()
+        except OSError:
+            continue
+        for name in names:
+            if name in text:
+                hits[name].append(path)
+    return {name: paths for name, paths in hits.items() if paths}
 
 # Marker for a variable the chart carries from a Secret: the chart asks the
 # operator for it, and its value cannot be compared with Compose's.
@@ -306,6 +364,20 @@ def main(argv):
                     f"{component}.{name}: chart has {chart_value!r}, "
                     f"Compose resolves to {value!r} — declare it under mayDiffer if "
                     "the difference is the Kubernetes adaptation"
+                )
+
+    # The `notRead` claims, checked against the source they describe. They
+    # remove variables from the compared set, and a claim nobody verifies is
+    # a way to make this gate green. Every name must be absent from shipped
+    # application source — tests and docs are excluded because they mention
+    # configuration without reading it.
+    for component, pair in sorted(services.items()):
+        for name in sorted(pair.get("notRead") or {}):
+            readers = verify_not_read([name]).get(name) or []
+            if readers:
+                gaps.append(
+                    f"{component}.{name}: declared notRead, but {readers[0]} reads it "
+                    f"(reclassify it, or delete the claim)"
                 )
 
     for line in unjudged:

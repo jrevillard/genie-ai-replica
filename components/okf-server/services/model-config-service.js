@@ -381,7 +381,7 @@ async function pingModel({ provider, base_url, api_key, model }) {
     // production uses, and a param the endpoint rejects gets dropped here
     // exactly as it would mid-run.
     try {
-      await require('./adaptive-llm-call').adaptiveChatCompletion({
+      const resp = await require('./adaptive-llm-call').adaptiveChatCompletion({
         url,
         headers,
         body: {
@@ -392,8 +392,28 @@ async function pingModel({ provider, base_url, api_key, model }) {
           response_format: { type: 'json_object' }
         },
         timeoutMs: TEST_TIMEOUT_MS,
-        disableThinking: true
+        disableThinking: true,
+        // A ping must stay a ping: no budget ladder (a thinking model would
+        // climb ~7 rungs for tens of minutes with the UI hung). A starved
+        // 16-token answer is reported honestly instead.
+        disableBudgetLadder: true
       });
+      const starved =
+        resp &&
+        resp.data &&
+        resp.data.choices &&
+        resp.data.choices[0] &&
+        (!resp.data.choices[0].message || !resp.data.choices[0].message.content) &&
+        resp.data.usage &&
+        resp.data.usage.completion_tokens_details &&
+        Number(resp.data.usage.completion_tokens_details.reasoning_tokens) > 0;
+      if (starved) {
+        return {
+          ok: false,
+          error:
+            'the model spent all 16 ping tokens thinking and wrote nothing — it will starve strict-JSON calls; raise call budgets or pick a model that can answer'
+        };
+      }
       return { ok: true };
     } catch (e) {
       // Preserve the transport-vs-HTTP distinction testConnection keys on:

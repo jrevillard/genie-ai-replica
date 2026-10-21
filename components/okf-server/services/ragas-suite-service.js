@@ -236,6 +236,46 @@ async function sidecar(path, { method = 'POST', json, body, contentType, timeout
 }
 
 /**
+ * POST with a bounded transient-retry (2026-10-21 review F5): the job-submit
+ * POSTs (generate-testset, evaluate) are the EXPENSIVE boundaries — by the
+ * time /evaluate is called the whole answer phase has already run, and one
+ * momentary RAGAS_UNAVAILABLE (sidecar busy at MAX_CONCURRENT_JOBS, keep-
+ * alive reset, restart blip) discarded hours of computed answers. The poll
+ * loop already tolerates transient errors to the liveness horizon; the POSTs
+ * now retry 3x with backoff on RAGAS_UNAVAILABLE only — a 4xx is a real
+ * request defect and propagates immediately.
+ */
+async function sidecarSubmitWithRetry(path, json, ctx = {}) {
+  // Delays are env-tunable so tests run the full retry ladder in milliseconds
+  // (OKF_RAGAS_SUBMIT_RETRY_DELAYS_MS — read per call, never cached).
+  const raw = process.env.OKF_RAGAS_SUBMIT_RETRY_DELAYS_MS;
+  const DELAYS_MS = raw
+    ? raw
+        .split(',')
+        .map((v) => Math.max(0, parseInt(v, 10) || 0))
+        .filter((v) => v >= 0)
+    : [2000, 5000, 10000];
+  let lastErr;
+  for (let attempt = 0; attempt <= DELAYS_MS.length; attempt += 1) {
+    try {
+      return await sidecar(path, { json });
+    } catch (e) {
+      lastErr = e;
+      if (e.code !== 'RAGAS_UNAVAILABLE' || attempt === DELAYS_MS.length) throw e;
+      logger.warn('ragas-suite.sidecar_submit_retry', {
+        path,
+        attempt: attempt + 1,
+        delay_ms: DELAYS_MS[attempt],
+        reason: e.message,
+        ...ctx
+      });
+      await new Promise((r) => setTimeout(r, DELAYS_MS[attempt]));
+    }
+  }
+  throw lastErr;
+}
+
+/**
  * Poll a sidecar background job to completion (202 + poll — the same
  * contract this service itself exposes). Each individual HTTP call uses the
  * short default budget, so no connection is ever held open while the judge
@@ -766,24 +806,29 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
       model: opts.judge_model,
       service: 'ragas_judge'
     });
+    // An override without a model is unusable — the env judge applies and
+    // the suite's fidelity records the EFFECTIVE judge.
+    const effectiveJudge = judgeOverride && judgeOverride.model ? judgeOverride : null;
     // 202 + poll: the sidecar starts a background job and we poll it — no
     // connection is held open for the (potentially hour-long) generation.
-    const genResp = await sidecar('/generate-testset', {
-      json: {
+    const genResp = await sidecarSubmitWithRetry(
+      '/generate-testset',
+      {
         documents: docs,
         testset_size: clampCount(payload.testset_size, 1, MAX_ENTRIES),
         query_distribution: Array.isArray(payload.query_distribution) ? payload.query_distribution : null,
         num_personas: clampCount(payload.num_personas, 1, 10),
-        judge: judgeOverride
+        judge: effectiveJudge
           ? {
-              provider: judgeOverride.provider,
-              base_url: judgeOverride.base_url,
-              model: judgeOverride.model,
-              api_key: judgeOverride.api_key
+              provider: effectiveJudge.provider,
+              base_url: effectiveJudge.base_url,
+              model: effectiveJudge.model,
+              api_key: effectiveJudge.api_key
             }
           : null
-      }
-    });
+      },
+      { repo_id: repoId }
+    );
     const genStarted = await genResp.json();
     const gen = await pollSidecarJobOwned(
       genStarted.job_id,
@@ -847,7 +892,7 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
         // restore source; judge is the resolved judge that actually
         // generated the suite (the fidelity record).
         judge_pick: { config_key: opts.judge_config_key || null, model: opts.judge_model || null },
-        judge: modelConfigService.judgeFidelity(judgeOverride),
+        judge: modelConfigService.judgeFidelity(effectiveJudge),
         repos: repos.map((r) => ({ id: r.repo_id || r._key, name: r.name })),
         dimensions: {
           testset_size: entries.length,
@@ -1211,13 +1256,25 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     // marching on just repackages a broken benchmark as a zero-score "done"
     // run. First terminal error wins; unattempted rows are recorded SKIPPED.
     let abortErr = null;
+    // Terminal = a hard client error (except 429 rate-limit). BOTH error
+    // shapes count: axios carries .response.status, while fetch-wrapped
+    // callers (rerankTexts) throw err.status with no .response — missing
+    // the fetch shape let terminal reranker 401/404/422 march the run on.
+    const statusOfErr = (err) =>
+      (err && err.response && err.response.status) || (typeof (err && err.status) === 'number' ? err.status : null);
     const isTerminal = (err) => {
-      const s = err && err.response && err.response.status;
+      const s = statusOfErr(err);
       return typeof s === 'number' && s >= 400 && s < 500 && s !== 429;
     };
     async function worker() {
       for (;;) {
         if (abortErr) return;
+        // User cancel during the answer phase (2026-10-21 review F1): the
+        // cancel route only marks userCancelledRun + cancels sidecar jobs —
+        // no evaluate job exists yet in this phase, so without this check a
+        // "cancelled" run ground through every answer AND the judge leg and
+        // landed as done.
+        if (userCancelledRun.has(opts.runKey)) return;
         const i = cursorIdx++;
         if (i >= entries.length) return;
         const e = entries[i];
@@ -1252,7 +1309,7 @@ async function runSuite(repoId, suiteKey, opts = {}) {
             abstention_reason: '',
             error: {
               code: err.code || 'ENTRY_FAILED',
-              status: (err.response && err.response.status) || null,
+              status: statusOfErr(err),
               message: err.message
             }
           };
@@ -1262,7 +1319,7 @@ async function runSuite(repoId, suiteKey, opts = {}) {
               repo_id: repoId,
               suite_key: suiteKey,
               run_key: opts.runKey,
-              status: err.response && err.response.status,
+              status: statusOfErr(err),
               message: err.message
             });
           }
@@ -1300,6 +1357,14 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     }
     const erroredRows = results.filter((r) => r.error).length;
     const answeredRows = results.length - erroredRows;
+    // A user cancel observed by the workers routes through beginRunSuite's
+    // catch (userCancelledRun relabel) so the doc lands status 'cancelled'
+    // exactly like a judge-phase cancel — never as failed or done.
+    if (userCancelledRun.has(opts.runKey)) {
+      const cancelled = new Error('run cancelled by user');
+      cancelled.code = 'RAGAS_JOB_CANCELLED';
+      throw cancelled;
+    }
     if (abortErr || answeredRows === 0) {
       const firstErr = (results.find((r) => r.error && r.error.code !== 'SKIPPED_RUN_ABORTED') || {}).error || {
         code: 'ANSWER_LEG_FAILED',
@@ -1367,6 +1432,10 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       model: opts.judge_model,
       service: 'ragas_judge'
     });
+    // An override without a model is unusable (the sidecar validation would
+    // fail every judge leg) — the env judge applies, and the run's fidelity
+    // records the EFFECTIVE judge, not the unusable pick.
+    const effectiveJudge = judgeOverride && judgeOverride.model ? judgeOverride : null;
     const samples = entries.map((e, i) => ({
       user_input: e.query,
       retrieved_contexts: results[i].contexts,
@@ -1374,20 +1443,23 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       reference: e.reference_answer || '',
       reference_contexts: e.reference_passages || []
     }));
-    const evalStarted = await sidecar('/evaluate', {
-      json: {
+    const evalStarted = await sidecarSubmitWithRetry(
+      '/evaluate',
+      {
         samples,
         metrics: opts.metrics,
-        judge: judgeOverride
+        // An override without a model falls back to the env judge
+        judge: effectiveJudge
           ? {
-              provider: judgeOverride.provider,
-              base_url: judgeOverride.base_url,
-              model: judgeOverride.model,
-              api_key: judgeOverride.api_key
+              provider: effectiveJudge.provider,
+              base_url: effectiveJudge.base_url,
+              model: effectiveJudge.model,
+              api_key: effectiveJudge.api_key
             }
           : null
-      }
-    });
+      },
+      { repo_id: repoId, suite_key: suiteKey, run_key: opts.runKey }
+    );
     const evalStartedBody = await evalStarted.json();
     const evaluation = await pollSidecarJobOwned(
       evalStartedBody.job_id,
@@ -1453,7 +1525,7 @@ async function runSuite(repoId, suiteKey, opts = {}) {
             source: process.env.CHATQNA_SYSTEM_PROMPT ? 'CHATQNA_SYSTEM_PROMPT' : 'builtin-default'
           },
           judge: {
-            ...modelConfigService.judgeFidelity(judgeOverride),
+            ...modelConfigService.judgeFidelity(effectiveJudge),
             sidecar_reported_model: evaluation.model || null,
             embed_model: null,
             // The selection AS MADE in the Run dialog (nulls = deployment

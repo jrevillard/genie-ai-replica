@@ -99,20 +99,34 @@ function starvedAnswer(resp) {
  * caller's error logging reflects what was actually sent last.
  * @returns the final axios response; re-throws the last error otherwise.
  */
-async function adaptiveChatCompletion({ url, headers, body, timeoutMs = 60000, disableThinking = false }) {
+async function adaptiveChatCompletion({
+  url,
+  headers,
+  body,
+  timeoutMs = 60000,
+  disableThinking = false,
+  disableBudgetLadder = false
+}) {
   if (disableThinking) Object.assign(body, NO_THINK_PARAMS);
   let timeout = timeoutMs;
 
   const post = () => axios.post(url, body, { headers, timeout });
 
   let resp;
-  // Layer 1 — param negotiation: a 400 that NAMES a param drops it; a GENERIC
-  // 400 with optional params still present strips them ALL and retries bare
-  // once (live 2026-10-21: z.ai's response_format rejection names nothing —
-  // named-only negotiation propagated it and zeroed a whole benchmark run).
+  // Layer 1 — param negotiation, ordered least-to-most costly to lose:
+  //   1. a 400 that NAMES a param drops exactly that param;
+  //   2. a GENERIC 400 drops response_format ALONE first (every strict-JSON
+  //      consumer has a raw-content fallback — it is never load-bearing);
+  //   3. a still-generic 400 strips the remaining optional params as a LAST
+  //      RESORT — this can re-enable thinking on an endpoint that merely
+  //      rejected response_format, so it must not happen before (2) tried.
+  // (live 2026-10-21: z.ai's enable_thinking rejection names nothing — the
+  // sequence converges: thinking dropped by its prose 400, response_format
+  // dropped by round 2, enable_thinking by round 3 → bare 200.)
   // A bare 400 is a real error (bad model, bad shape…) and propagates.
+  let formatDropped = false;
   let bareRoundUsed = false;
-  for (let round = 0; round <= OPTIONAL_PARAMS.length + 1; round += 1) {
+  for (let round = 0; round <= OPTIONAL_PARAMS.length + 2; round += 1) {
     try {
       resp = await post();
       break;
@@ -123,6 +137,10 @@ async function adaptiveChatCompletion({ url, headers, body, timeoutMs = 60000, d
       if (rejected.length) {
         logger.info('adaptive_llm.param_rejected', { url, dropped: rejected.join(',') });
         for (const p of rejected) delete body[p];
+      } else if (!formatDropped && body.response_format !== undefined) {
+        formatDropped = true;
+        logger.info('adaptive_llm.unnamed_400_strip_response_format', { url });
+        delete body.response_format;
       } else if (present.length && !bareRoundUsed) {
         bareRoundUsed = true;
         logger.info('adaptive_llm.unnamed_400_strip_optional', { url, dropped: present.join(',') });
@@ -130,7 +148,7 @@ async function adaptiveChatCompletion({ url, headers, body, timeoutMs = 60000, d
       } else {
         throw e; // a REAL 400 (bad model, bad shape…) — not ours to fix
       }
-      if (round === OPTIONAL_PARAMS.length + 1) throw e; // safety: never loop unbounded
+      if (round === OPTIONAL_PARAMS.length + 2) throw e; // safety: never loop unbounded
     }
   }
 
@@ -138,6 +156,11 @@ async function adaptiveChatCompletion({ url, headers, body, timeoutMs = 60000, d
   // reasoning that could not be turned off. The ladder scales until the
   // ceiling (live 2026-10-20: M3.1-Flash starved at 1500 AND at 6000 — a
   // single retry was not enough); each rung doubles the wall clock.
+  // disableBudgetLadder (the model-config ping): a ping must stay a ping —
+  // a model that starves a 16-token call would climb ~7 rungs for up to
+  // tens of minutes with the caller's UI hung; report the starvation
+  // honestly instead so the operator picks a model that answers.
+  if (disableBudgetLadder) return resp;
   while (starvedAnswer(resp) && body.max_tokens && body.max_tokens < MAX_TOKENS_CEILING) {
     const raised = Math.min(MAX_TOKENS_CEILING, body.max_tokens * BUDGET_SCALE);
     timeout = Math.min(TIMEOUT_CEILING_MS, timeout * TIMEOUT_SCALE);

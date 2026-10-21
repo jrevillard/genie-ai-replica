@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import threading
 import weakref
 from concurrent.futures import ThreadPoolExecutor
@@ -406,6 +407,12 @@ def build_llm(temperature: float = 0.0, judge: dict | None = None):
         base = base.removesuffix("/v1")
     else:
         cls = ChatOpenAI
+        # The SAME version-segment rule as okf-server's llm-url.js (2026-10-21
+        # review F15): ChatOpenAI appends only /chat/completions, so a
+        # version-LESS base (http://vllm:8000) judged against a URL missing
+        # /v1 — the ping and the answer legs worked, every judge call 404'd.
+        if not re.search(r"/v\d+$", base):
+            base = f"{base}/v1"
 
     # Sovereign vLLM fronts nginx with a self-signed cert — bypass SSL
     # verify on BOTH sync and async clients (ragas uses the async path

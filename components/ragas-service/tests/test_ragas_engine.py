@@ -323,6 +323,36 @@ def test_build_llm_constructs_the_real_caching_wrapper(monkeypatch, engine_env):
     assert isinstance(w, BaseRagasLLM)  # set_run_config etc. keep flowing
 
 
+def test_build_llm_judge_override_base_gets_the_version_segment_rule(monkeypatch, engine_env):
+    """Review F15 (2026-10-21): ChatOpenAI appends only /chat/completions, so a
+    version-LESS override base judged against a URL missing /v1 — the ping and
+    the answer legs (okf-server's shared llm-url rule) worked while every
+    judge call 404'd. Same rule here: bare host gets /v1, versioned base
+    (…/v1, z.ai's …/paas/v4) keeps its segment."""
+    captured = {}
+
+    class _FakeChatOpenAI:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    import langchain_openai as lco
+
+    monkeypatch.setattr(lco, "ChatOpenAI", _FakeChatOpenAI)
+
+    ragas_engine.build_llm(judge={"provider": "openai", "base_url": "http://vllm:8000", "model": "m", "api_key": "k"})
+    assert captured["base_url"] == "http://vllm:8000/v1"
+
+    captured.clear()
+    zai_override = {
+        "provider": "openai",
+        "base_url": "https://api.z.ai/api/coding/paas/v4",
+        "model": "glm-5.3",
+        "api_key": "k",
+    }
+    ragas_engine.build_llm(judge=zai_override)
+    assert captured["base_url"] == "https://api.z.ai/api/coding/paas/v4"
+
+
 def test_caching_wrapper_serves_hits_without_calling_the_judge(tmp_path, monkeypatch):
     """The cache exists because repeat generations re-paid the whole KG
     phase: 5 questions over 2 small repos = ~211 transform calls ≈ 8 min

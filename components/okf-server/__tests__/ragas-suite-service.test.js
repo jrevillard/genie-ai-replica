@@ -38,6 +38,10 @@ jest.mock('../services/head-test-service', () => ({
 // a-live-job contract gets exercised below.
 process.env.OKF_RAGAS_JOB_POLL_MS = '5';
 process.env.OKF_RAGAS_LONG_TIMEOUT_MS = '1';
+// The sidecar-submit retry ladder (2026-10-21 review F5) runs in
+// milliseconds here — the production delays (2s/5s/10s) would blow the
+// 5s jest timeout and cascade a stuck generation lock across the suite.
+process.env.OKF_RAGAS_SUBMIT_RETRY_DELAYS_MS = '1,1,1';
 
 const svc = require('../services/ragas-suite-service');
 const frontmatterService = require('../services/frontmatter-service');
@@ -759,6 +763,63 @@ describe('run', () => {
     expect(errored).toHaveLength(1);
     expect(errored[0].error.status).toBe(503);
     expect(doc.payload.results.some((r) => !r.error)).toBe(true);
+  });
+
+  // Review F1 (2026-10-21): cancel during the answer phase used to be a
+  // silent no-op — the cancel route only cancels sidecar jobs, none exist
+  // yet in that phase, and the worker never checked the flag. A cancelled
+  // run ground through every answer AND the judge leg and landed 'done'.
+  it('cancel during the ANSWER phase stops the workers and records cancelled (never done)', async () => {
+    const sk = await makeSuite();
+    // The run key is only known after beginRunSuite returns; the first answer
+    // (in flight while the caller cancels) waits for it.
+    let resolveRunKey;
+    const runKeyPromise = new Promise((resolve) => {
+      resolveRunKey = resolve;
+    });
+    let answersServed = 0;
+    frontmatterService.vllmChatCompletions.mockImplementation(async () => {
+      answersServed += 1;
+      if (answersServed === 1) {
+        await svc.cancelSuiteRun('me', sk, await runKeyPromise);
+      }
+      return llmResponse({ answer: 'A grounded answer.', abstained: false });
+    });
+    const begun = await svc.beginRunSuite('me', sk, {}, {});
+    resolveRunKey(begun.run_key);
+    // A cancelled run REJECTS the done promise (the cancel is not a result)
+    await expect(begun.done).rejects.toThrow(/cancelled by user/);
+    const doc = await svc.getRunSuite('me', sk, begun.run_key);
+    expect(doc.status).toBe('cancelled');
+    // The judge leg never ran for a cancelled run
+    expect(global.fetch.mock.calls.some((c) => String(c[0]).includes('/evaluate'))).toBe(false);
+  });
+
+  // Review F2 (2026-10-21): a config saved without default_model resolved
+  // model:null and the null was forwarded to the sidecar, where
+  // ModelOverride validation failed EVERY generation and judge leg.
+  it('a resolved judge override with NO model falls back to env (judge:null to the sidecar, fidelity honest)', async () => {
+    __mockDb._stores.okf_model_configs = {
+      nomodel: {
+        _key: 'nomodel',
+        name: 'No model set',
+        provider: 'openai',
+        base_url: 'https://gw:4000/v1',
+        default_model: null,
+        api_key: 'k',
+        services: ['ragas_judge'],
+        active: false
+      }
+    };
+    const sk = await makeSuite();
+    const begun = await svc.beginRunSuite('me', sk, { judge_config_key: 'nomodel' }, {});
+    await begun.done;
+    const doc = await svc.getRunSuite('me', sk, begun.run_key);
+    expect(doc.status).toBe('done');
+    const evalCall = global.fetch.mock.calls.find((c) => String(c[0]).includes('/evaluate'));
+    expect(JSON.parse(evalCall[1].body).judge).toBeNull();
+    // The fidelity block records the EFFECTIVE judge — env, not the unusable pick
+    expect(doc.payload.fidelity.judge.source).not.toBe('picked');
   });
 
   it('409 RUN_IN_FLIGHT with the adoptable run_key', async () => {

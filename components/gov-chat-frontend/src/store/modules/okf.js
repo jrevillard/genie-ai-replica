@@ -1577,6 +1577,12 @@ const actions = {
             message: (doc.error && doc.error.message) || 'Run failed'
           };
         }
+        // A cancelled run is NOT a result (2026-10-21 review F4): the poll's
+        // own twin ragasAdoptRun handles this — without the branch a cancelled
+        // run resolved ok:true and rendered an empty results section.
+        if (doc.status === 'cancelled') {
+          return { ok: false, code: 'RUN_CANCELLED', message: 'Run cancelled by user', result: doc };
+        }
         return { ok: true, result: doc };
       }
     } catch (err) {

@@ -86,25 +86,61 @@ describe('adaptiveChatCompletion', () => {
   // Live 2026-10-21 (z.ai, the GLM-5.3 config): the endpoint rejects the
   // strict-JSON response_format with an UNNAMED 400. Named-only negotiation
   // propagated it and zeroed a whole 20-question benchmark run.
-  test('an UNNAMED 400 with optional params present strips them all and retries bare ONCE', async () => {
+  test('an UNNAMED 400 with optional params present strips response_format ALONE first', async () => {
     axios.post.mockRejectedValueOnce(err400('invalid request body')).mockResolvedValueOnce(ok('plain text'));
     const body = { model: 'm', messages: [], max_tokens: 800, response_format: { type: 'json_object' } };
     const r = await adaptiveChatCompletion({ url: ENDPOINT, headers: HEADERS, body, disableThinking: true });
     expect(r.data.choices[0].message.content).toBe('plain text');
     expect(axios.post).toHaveBeenCalledTimes(2);
     expect(body).not.toHaveProperty('response_format');
-    expect(body).not.toHaveProperty('thinking');
-    expect(body).not.toHaveProperty('enable_thinking');
+    // The no-think pair SURVIVED (review F12: stripping all params re-enabled
+    // thinking on endpoints that only rejected response_format — every row
+    // then climbed the budget ladder).
+    expect(body.thinking).toEqual({ type: 'disabled' });
+    expect(body.enable_thinking).toBe(false);
   });
 
-  test('an unnamed 400 that PERSISTS bare is a real error — exactly one strip-retry, then throw', async () => {
+  // The z.ai convergence sequence end-to-end: prose 400 names "thinking"
+  // (drops the object), enable_thinking rejection names nothing twice, and
+  // the ladder of last-resort strips reaches a bare 200.
+  test('the live z.ai sequence: prose-named thinking, then unnamed strip rounds, converges bare', async () => {
+    axios.post
+      .mockRejectedValueOnce(err400('this model always engages in thinking and cannot be disabled'))
+      .mockRejectedValueOnce(err400('this model always engages in thinking and cannot be disabled'))
+      .mockRejectedValueOnce(err400('this model always engages in thinking and cannot be disabled'))
+      .mockResolvedValueOnce(ok('answer'));
+    const body = { model: 'glm', messages: [], max_tokens: 800, response_format: { type: 'json_object' } };
+    const r = await adaptiveChatCompletion({ url: ENDPOINT, headers: HEADERS, body, disableThinking: true });
+    expect(r.data.choices[0].message.content).toBe('answer');
+    expect(axios.post).toHaveBeenCalledTimes(4);
+    expect(body).not.toHaveProperty('thinking');
+    expect(body).not.toHaveProperty('enable_thinking');
+    expect(body).not.toHaveProperty('response_format');
+  });
+
+  test('disableBudgetLadder (the model-config ping): a starved answer returns WITHOUT climbing', async () => {
+    axios.post.mockResolvedValueOnce(ok('', { finish: 'length', reasoning: 15, completion: 16 }));
+    const body = { model: 'm', messages: [], max_tokens: 16 };
+    const r = await adaptiveChatCompletion({
+      url: ENDPOINT,
+      headers: HEADERS,
+      body,
+      timeoutMs: 30000,
+      disableBudgetLadder: true
+    });
+    expect(axios.post).toHaveBeenCalledTimes(1); // no rung — the caller reports starvation
+    expect(r.data.choices[0].finish_reason).toBe('length');
+  });
+
+  test('an unnamed 400 that PERSISTS bare is a real error — strips exhausted, then throw', async () => {
     const e = err400('invalid request body');
     axios.post.mockRejectedValue(e);
     const body = { model: 'm', messages: [], max_tokens: 800, response_format: { type: 'json_object' } };
     await expect(adaptiveChatCompletion({ url: ENDPOINT, headers: HEADERS, body, disableThinking: true })).rejects.toBe(
       e
     );
-    expect(axios.post).toHaveBeenCalledTimes(2); // shaped, then bare — never more
+    // shaped → −response_format → bare — never more
+    expect(axios.post).toHaveBeenCalledTimes(3);
     expect(body).not.toHaveProperty('response_format');
   });
 

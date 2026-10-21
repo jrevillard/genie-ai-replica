@@ -704,6 +704,7 @@ export default {
     weatherGeolocationUnsupported: 'Geolokeshoni haikubaliwa na kivinjari chako.',
     collapse: 'Kunja upande wa kando',
     expand: 'Panua upande wa kando',
+    resize: 'Badilisha ukubwa wa kando',
     weatherRefresh: 'Sasisha Hali ya Hewa',
     weatherConditions: {
       clear: 'Wazi',

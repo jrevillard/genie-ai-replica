@@ -695,6 +695,7 @@ export default {
     weatherGeolocationUnsupported: 'Browser ti nying dulaa kumpabo faa.',
     collapse: 'Collapse sidebar',
     expand: 'Expand sidebar',
+    resize: 'Resize sidebar',
     weatherRefresh: 'Sanoo Kurandi',
     weatherConditions: {
       clear: 'A keta-le (Clear)',

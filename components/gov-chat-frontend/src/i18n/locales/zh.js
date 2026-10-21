@@ -701,6 +701,7 @@ export default {
     weatherGeolocationUnsupported: '您的浏览器不支持地理位置。',
     collapse: '收起侧边栏',
     expand: '展开侧边栏',
+    resize: '调整侧边栏大小',
     weatherRefresh: '刷新天气',
     weatherConditions: {
       clear: '晴朗',

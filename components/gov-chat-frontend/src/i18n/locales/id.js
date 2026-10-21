@@ -706,6 +706,7 @@ export default {
     weatherGeolocationUnsupported: 'Geolokasi tidak didukung oleh browser Anda.',
     collapse: 'Perkecil sidebar',
     expand: 'Perbesar sidebar',
+    resize: 'Ubah ukuran sidebar',
     weatherRefresh: 'Segarkan Cuaca',
     weatherConditions: {
       clear: 'Cerah',

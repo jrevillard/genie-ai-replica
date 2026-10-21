@@ -697,6 +697,7 @@ export default {
     weatherGeolocationUnsupported: 'ভৌগোলিক অবস্থান আপনার ব্রাউজার দ্বারা সমর্থিত নয়।',
     collapse: 'সাইডবার সংকুচিত করুন',
     expand: 'সাইডবার প্রসারিত করুন',
+    resize: 'সাইডবারের আকার পরিবর্তন করুন',
     weatherRefresh: 'আবহাওয়া রিফ্রেশ করুন',
     weatherConditions: {
       clear: 'পরিষ্কার',

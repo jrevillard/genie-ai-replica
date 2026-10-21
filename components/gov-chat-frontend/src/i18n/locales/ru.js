@@ -705,6 +705,7 @@ export default {
     weatherGeolocationUnsupported: 'Геолокация не поддерживается вашим браузером.',
     collapse: 'Свернуть боковую панель',
     expand: 'Развернуть боковую панель',
+    resize: 'Изменить размер боковой панели',
     weatherRefresh: 'Обновить погоду',
     weatherConditions: {
       clear: 'Ясно',

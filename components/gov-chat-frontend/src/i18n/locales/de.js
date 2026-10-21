@@ -710,6 +710,7 @@ export default {
     weatherGeolocationUnsupported: 'Geolokalisierung wird von Ihrem Browser nicht unterstützt.',
     collapse: 'Seitenleiste einklappen',
     expand: 'Seitenleiste ausklappen',
+    resize: 'Seitenleiste anpassen',
     weatherRefresh: 'Wetter aktualisieren',
     weatherConditions: {
       clear: 'Klar',

@@ -699,6 +699,7 @@ export default {
     weatherGeolocationUnsupported: 'Sebaka sa mmele ha se tshehetswe ke phetisi ya hao ya inthanete.',
     collapse: 'Kgutla thalamo ya mahlakore',
     expand: 'Bula thalamo ya mahlakore',
+    resize: 'Fetola thalamo ya mahlakore',
     weatherRefresh: 'Ntlafatsa Boemo ba Lehodimo',
     weatherConditions: {
       clear: 'Hlakileng',

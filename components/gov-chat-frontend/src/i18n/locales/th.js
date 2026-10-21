@@ -704,6 +704,7 @@ export default {
     weatherGeolocationUnsupported: 'เบราว์เซอร์ของคุณไม่รองรับการระบุตำแหน่งทางภูมิศาสตร์',
     collapse: 'ยุบแถบด้านข้าง',
     expand: 'ขยายแถบด้านข้าง',
+    resize: 'ปรับขนาดแถบด้านข้าง',
     weatherRefresh: 'รีเฟรชสภาพอากาศ',
     weatherConditions: {
       clear: 'แจ่มใส',

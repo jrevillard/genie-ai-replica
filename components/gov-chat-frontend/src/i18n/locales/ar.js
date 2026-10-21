@@ -706,6 +706,7 @@ export default {
     weatherGeolocationUnsupported: 'التحديد الجغرافي غير مدعوم من قبل متصفحك.',
     collapse: 'طي الشريط الجانبي',
     expand: 'توسيع الشريط الجانبي',
+    resize: 'تغيير حجم الشريط الجانبي',
     weatherRefresh: 'تحديث الطقس',
     weatherConditions: {
       clear: 'صاف',

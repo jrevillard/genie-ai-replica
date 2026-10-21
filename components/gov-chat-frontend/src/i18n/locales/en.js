@@ -698,6 +698,7 @@ export default {
     weatherTitle: 'Weather Forecast',
     collapse: 'Collapse sidebar',
     expand: 'Expand sidebar',
+    resize: 'Resize sidebar',
     weatherLoading: 'Loading weather data...',
     weatherLocationLoading: 'Loading location...',
     weatherAuthRequired: 'Please log in to view the weather.',

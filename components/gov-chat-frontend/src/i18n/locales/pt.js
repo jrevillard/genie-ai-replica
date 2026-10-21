@@ -709,6 +709,7 @@ export default {
     weatherGeolocationUnsupported: 'Geolocalização não suportada pelo seu navegador.',
     collapse: 'Recolher barra lateral',
     expand: 'Expandir barra lateral',
+    resize: 'Redimensionar barra lateral',
     weatherRefresh: 'Atualizar Tempo',
     weatherConditions: {
       clear: 'Limpo',

@@ -706,6 +706,7 @@ export default {
     weatherTitle: 'Prévisions météo',
     collapse: 'Réduire la barre latérale',
     expand: 'Développer la barre latérale',
+    resize: 'Redimensionner la barre latérale',
     weatherLoading: 'Chargement des données météo...',
     weatherLocationLoading: 'Chargement de la position...',
     weatherAuthRequired: 'Veuillez vous connecter pour afficher la météo.',

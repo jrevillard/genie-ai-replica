@@ -708,6 +708,7 @@ export default {
     weatherGeolocationUnsupported: 'La geolocalización no es compatible con su navegador.',
     collapse: 'Contraer barra lateral',
     expand: 'Expandir barra lateral',
+    resize: 'Redimensionar barra lateral',
     weatherRefresh: 'Actualizar Tiempo',
     weatherConditions: {
       clear: 'Despejado',

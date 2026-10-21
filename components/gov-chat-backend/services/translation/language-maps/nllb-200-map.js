@@ -29,11 +29,11 @@ module.exports = {
     pt: 'por_Latn', // Portuguese
     sw: 'swh_Latn', // Kiswahili
 
-    // Newly added languages (total 34)
+    // Newly added languages (total 41)
     am: 'amh_Ethi', // Amharic
     az: 'azj_Latn', // Azerbaijani (North/Latin)
     bn: 'ben_Beng', // Bengali
-    ckb: 'ckb_Arab', // Sorani Kurdish (34th language)
+    ckb: 'ckb_Arab', // Sorani Kurdish
     fa: 'pes_Arab', // Persian (Farsi)
     ff: 'fuv_Latn', // Fulah (Fulfulde)
     ha: 'hau_Latn', // Hausa
@@ -58,7 +58,10 @@ module.exports = {
     // Newly added languages - Mandinka and Sesotho
     man: 'dyu_Latn', // Mandinka (using Dyula as linguistic proxy - Mande language family)
     mnk: 'dyu_Latn', // Mandinka (alternative ISO code - maps to same Dyula proxy)
-    st: 'sot_Latn' // Sesotho (Southern Sotho)
+    st: 'sot_Latn', // Sesotho (Southern Sotho)
+    hi: 'hin_Deva', // Hindi
+    ja: 'jpn_Jpan', // Japanese
+    ko: 'kor_Hang' // Korean
   },
 
   // Language fallback chains for graceful degradation

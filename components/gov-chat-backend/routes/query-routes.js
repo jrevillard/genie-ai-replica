@@ -8,7 +8,25 @@ const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middlewa
 const { logger, spanAttrs, tracingBaggage } = require('../shared-lib');
 const translationService = require('../services/translation-service');
 const { extractCommittableUnit } = require('../services/translation/stream-boundary');
+const { languageForLog } = require('../services/translation/language-log');
 const { parsePositiveInt } = require('../shared-lib');
+
+/**
+ * @description The language the caller asked for, normalized.
+ *
+ * The language travels in the request body, so it is caller-controlled: it is
+ * trimmed and lower-cased once, here, and the translator checks it against the
+ * language map before it is used for anything. An empty result means "no
+ * language asked for".
+ *
+ * @param {object} queryData - The parsed request body.
+ * @returns {string} The normalized language code, or '' when none was asked for.
+ */
+function requestedTargetLanguage(queryData) {
+  const raw = queryData?.context?.language;
+  if (typeof raw !== 'string') return '';
+  return raw.trim().toLowerCase();
+}
 
 // Metadata persisted when chatqna never sent a metadata event (stream error,
 // or the answer ended before the envelope). One factory, so the two call sites
@@ -260,13 +278,11 @@ module.exports = (queryService) => {
       const streamingTranslationEnabled = ['1', 'true'].includes(
         (process.env.STREAMING_TRANSLATION_ENABLED || '').toLowerCase()
       );
-      // The language comes from the request body. It is only used as a string
-      // here — the translator validates it against the language map before it
-      // is used for anything.
-      const requestedLanguage = typeof queryData.context?.language === 'string' ? queryData.context.language : '';
-      const targetLanguage = requestedLanguage.toLowerCase();
-      const useStreamingTranslation =
-        streamingTranslationEnabled && targetLanguage && targetLanguage.toUpperCase() !== 'EN';
+      // The language comes from the request body. It is normalized once, here,
+      // and the translator validates it against the language map before it is
+      // used for anything.
+      const targetLanguage = requestedTargetLanguage(queryData);
+      const useStreamingTranslation = streamingTranslationEnabled && targetLanguage && targetLanguage !== 'en';
 
       let pendingEn = '';
       let translationChain = Promise.resolve();
@@ -310,8 +326,10 @@ module.exports = (queryService) => {
               res.write(`data: ${JSON.stringify({ type: 'chunk', content: body })}\n\n`);
             }
           } catch (error) {
+            // The language is caller-controlled: the log carries a bounded,
+            // printable form of it, never the raw value.
             logger.warn(
-              `QueryService.stream_translation_unit_failed: ${error.message} (lang=${targetLanguage}, unitLen=${content.length}, unitPreview=${content.slice(0, 80)})`,
+              `QueryService.stream_translation_unit_failed: ${error.message} (lang=${languageForLog(targetLanguage)}, unitLen=${content.length}, unitPreview=${content.slice(0, 80)})`,
               { queryId }
             );
             if (!res.writableEnded) {
@@ -377,7 +395,7 @@ module.exports = (queryService) => {
                 loggedStreamTranslateActive = true;
                 // Debug: confirms the streaming-translation path is active for
                 // this request (absent => flag/path not triggering).
-                logger.debug(`[STREAM-TRANSLATE] active lang=${targetLanguage}`, { queryId });
+                logger.debug(`[STREAM-TRANSLATE] active lang=${languageForLog(targetLanguage)}`, { queryId });
               }
               pendingEn += parsed.content;
               let extracted = extractCommittableUnit(pendingEn);
@@ -500,15 +518,11 @@ module.exports = (queryService) => {
 
     res.write(`data: ${JSON.stringify({ type: 'metadata', ...metadata, responseTime })}\n\n`);
 
-    const userLanguage = typeof queryData.context?.language === 'string' ? queryData.context.language : '';
-    if (!skipPostStreamTranslation && userLanguage && userLanguage.toUpperCase() !== 'EN' && fullResponseText) {
+    const userLanguage = requestedTargetLanguage(queryData);
+    if (!skipPostStreamTranslation && userLanguage && userLanguage !== 'en' && fullResponseText) {
       try {
         await translationService.init();
-        const translated = await translationService.translateMarkdown(
-          fullResponseText,
-          'en',
-          userLanguage.toLowerCase()
-        );
+        const translated = await translationService.translateMarkdown(fullResponseText, 'en', userLanguage);
         res.write(`data: ${JSON.stringify({ type: 'translation', content: translated })}\n\n`);
       } catch (error) {
         // Not an `error` frame. The client treats that as terminal and stops

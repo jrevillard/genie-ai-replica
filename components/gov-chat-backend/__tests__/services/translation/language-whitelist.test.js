@@ -14,7 +14,9 @@ const mockRedis = {
 jest.mock('ioredis', () => jest.fn().mockImplementation(() => mockRedis));
 
 // Only the logger is replaced — the backend and the service are the real ones,
-// with the real language map loaded from disk.
+// with the real language map loaded from disk. The numeric parser is the real
+// one too: a reimplementation here would let a test pass against a helper the
+// service does not use.
 jest.mock(
   '../../../shared-lib',
   () => ({
@@ -24,10 +26,7 @@ jest.mock(
       warn: jest.fn(),
       debug: jest.fn()
     },
-    parsePositiveInt: (value, fallback) => {
-      const parsed = parseInt(value, 10);
-      return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-    }
+    ...jest.requireActual('../../../../shared/lib/validation-utils')
   }),
   { virtual: true }
 );
@@ -86,6 +85,28 @@ describe('target language boundary (real service, real language map)', () => {
     expect(key).not.toContain(':FR:');
   });
 
+  it('keys the cache on the source language as well', async () => {
+    // A translation cached for one source language was produced from that
+    // source: the same content read as another language is another result.
+    service.backend.translate = jest.fn().mockRejectedValue(new Error('stop here'));
+
+    await service.translateMarkdown('# Hello', 'en', 'fr').catch(() => {});
+    const englishKey = mockRedis.get.mock.calls[0][0];
+
+    mockRedis.get.mockClear();
+    await service.translateMarkdown('# Hello', 'fr', 'fr').catch(() => {});
+    const frenchKey = mockRedis.get.mock.calls[0][0];
+
+    expect(frenchKey).not.toBe(englishKey);
+  });
+
+  it('does not look the cache up for a source language it refuses', async () => {
+    await expect(service.translateMarkdown('# Hello', 'constructor', 'fr')).rejects.toThrow(
+      /Unsupported source language/
+    );
+    expect(mockRedis.get).not.toHaveBeenCalled();
+  });
+
   it('resolves a supported language to its canonical code', () => {
     expect(service.resolveTargetLanguage('FR')).toBe('fr');
     expect(service.resolveTargetLanguage('  fr  ')).toBe('fr');
@@ -98,6 +119,22 @@ describe('target language boundary (real service, real language map)', () => {
 
   it('refuses an unsupported source language', async () => {
     await expect(service.translate(['hello'], 'constructor', 'fr')).rejects.toThrow(/Unsupported source language/);
+  });
+
+  it('refuses an unsupported target language on the streaming path too', async () => {
+    await expect(service.translateStream('hello', 'en', 'constructor')).rejects.toThrow(/Unsupported target language/);
+  });
+
+  it('refuses to translate before the backend is selected', async () => {
+    // A service with no backend has no language map to check against: it must
+    // refuse rather than pass an unchecked language on.
+    const savedBackend = service.backend;
+    service.backend = null;
+    try {
+      await expect(service.translate(['hello'], 'en', 'fr')).rejects.toThrow(/not ready/i);
+    } finally {
+      service.backend = savedBackend;
+    }
   });
 
   it('does not leave the translation timeout running after the call', async () => {
@@ -123,6 +160,31 @@ describe('backend language map lookups', () => {
   });
 
   it('still resolves a real language code', () => {
+    expect(backend.getLanguageCode('fr')).toBe('fr');
+  });
+
+  it('does not hand out an empty mapping as a language code', () => {
+    // A language mapped to an empty value is not a language: the empty code
+    // would reach the model in the prompt.
+    const saved = backend.languageMap.languageMap.fr;
+    backend.languageMap.languageMap.fr = '';
+    try {
+      expect(backend.getLanguageCode('fr')).toBeNull();
+    } finally {
+      backend.languageMap.languageMap.fr = saved;
+    }
+  });
+
+  it('answers with a boolean, not the map itself', () => {
+    expect(backend.isLanguageSupported('fr')).toBe(true);
+    expect(backend.isLanguageSupported('constructor')).toBe(false);
+  });
+
+  it('hands out a copy of the language map', () => {
+    // A caller that mutates the returned object would change which languages
+    // the backend accepts.
+    const languages = backend.getSupportedLanguages();
+    languages.fr = 'tampered';
     expect(backend.getLanguageCode('fr')).toBe('fr');
   });
 

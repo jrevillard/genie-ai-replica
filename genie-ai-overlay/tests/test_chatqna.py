@@ -1,6 +1,7 @@
 # Copyright (c) 2024-2026 International Telecommunication Union (ITU)
 
 import ast
+import contextlib
 import copy
 import json
 from datetime import date
@@ -1796,16 +1797,14 @@ class TestTranslationHelpers:
         assert "Hello" in prompt
         assert "French" in prompt
 
-    def test_load_language_codes_success(self, tmp_path):
-        svc = create_chatqna_service()
+    def test_read_language_codes_success(self, tmp_path):
         lang_file = tmp_path / "codes.json"
         lang_file.write_text('{"en": "English", "fr": "French"}')
-        result = svc.load_language_codes(str(lang_file))
+        result = chatqna_module._read_language_codes(str(lang_file))
         assert result == {"en": "English", "fr": "French"}
 
-    def test_load_language_codes_file_error(self):
-        svc = create_chatqna_service()
-        result = svc.load_language_codes("/nonexistent/path.json")
+    def test_read_language_codes_file_error(self):
+        result = chatqna_module._read_language_codes("/nonexistent/path.json")
         assert result == {}
 
     def test_split_text_into_chunks_short_text(self):
@@ -2045,7 +2044,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.TRANSLATION_COMPLETIONS_URL", "http://localhost/v1/completions"),
             patch("chatqna.genieai_chatqna.TRANSLATION_MODEL_ID", "translategemma-test"),
         ):
-            result = await svc._translate_text_chunk("Hello", "French", iso_code="fr")
+            result = await svc._translate_text_chunk("Hello", "fr")
         assert result == "Bonjour"
 
     @pytest.mark.asyncio
@@ -2066,7 +2065,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
             patch("chatqna.genieai_chatqna.TRANSLATION_MODEL_ID", "test-model"),
         ):
-            result = await svc._translate_text_chunk("Hello", "Spanish")
+            result = await svc._translate_text_chunk("Hello", "es")
         assert result == "Hola"
 
     @pytest.mark.asyncio
@@ -2077,7 +2076,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
         ):
-            result = await svc._translate_text_chunk("Original text", "French")
+            result = await svc._translate_text_chunk("Original text", "fr")
         assert result == "Original text"
 
     @pytest.mark.asyncio
@@ -2088,7 +2087,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
         ):
-            result = await svc._translate_text_chunk("Original text", "French")
+            result = await svc._translate_text_chunk("Original text", "fr")
         assert result == "Original text"
 
     @pytest.mark.asyncio
@@ -2110,7 +2109,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
             pytest.raises(TranslationInputTooLongError),
         ):
-            await svc._translate_text_chunk("x" * 10000, "French")
+            await svc._translate_text_chunk("x" * 10000, "fr")
 
     @pytest.mark.asyncio
     async def test_translate_text_chunk_classifier_matches_live_httpx_shape(self):
@@ -2159,7 +2158,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
             pytest.raises(TranslationInputTooLongError),
         ):
-            await svc._translate_text_chunk("x" * 10000, "French")
+            await svc._translate_text_chunk("x" * 10000, "fr")
 
     @pytest.mark.asyncio
     async def test_finalize_llm_response_propagates_translation_overflow(self):
@@ -2199,7 +2198,7 @@ class TestTranslationHelpers:
             patch.object(svc, "_split_text_into_chunks", return_value=["chunk1", "chunk2"]),
             patch.object(svc, "_translate_text_chunk", side_effect=mock_translate),
         ):
-            result = await svc._translate_with_chunking("long text", "French")
+            result = await svc._translate_with_chunking("long text", "fr")
         assert "translated_chunk_1" in result
         assert "translated_chunk_2" in result
 
@@ -2968,7 +2967,7 @@ class TestExcessBlankCollapse:
         svc.load_language_codes = MagicMock(return_value={"es": "Spanish"})
         captured = {}
 
-        async def fake_translate(text, target_lang, original_language):
+        async def fake_translate(text, iso_code):
             captured["text"] = text
             return f"[ES]{text}"
 
@@ -3302,7 +3301,7 @@ class TestSelfConfidenceSentinel:
         svc.load_language_codes = MagicMock(return_value={"es": "Spanish"})
         captured = {}
 
-        async def fake_translate(text, target_lang, original_language):
+        async def fake_translate(text, iso_code):
             captured["text"] = text
             return f"[ES]{text}"
 
@@ -3793,3 +3792,55 @@ async def test_reranker_input_too_long_defensive_chain_walk():
     assert payload["metadata"]["abstained"] is True
     assert payload["metadata"]["abstention_reason"] == "reranker_input_too_long"
     assert "exceed the reranker's input limit" in payload["response"]
+
+
+@pytest.mark.asyncio
+async def test_a_refused_language_leaves_the_answer_in_english_and_still_normalizes_the_history():
+    """A language the map does not know says nothing about the language the
+    user writes in.
+
+    The answer stays in English — a refused language must not steer it — but
+    the history is still translated to English, so it lands in the
+    English-only embedding space the retriever searches.
+    """
+    svc = create_chatqna_service()
+    svc.user_profile_client = MagicMock()
+    svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
+
+    history_calls = []
+    scheduled = {}
+
+    async def fake_history(history, target_language_code, source_lang_code="en"):
+        history_calls.append((target_language_code, source_lang_code))
+        return "USER: qu'est-ce que X ?"
+
+    svc._get_translated_history_string = fake_history
+
+    async def fake_schedule(initial_inputs=None, llm_parameters=None, genie_params=None, **_kwargs):
+        scheduled["original_language"] = genie_params.get("original_language")
+        raise RuntimeError("stop right after the language decision")
+
+    svc.megaservice.schedule = fake_schedule
+
+    req = create_mock_request(
+        data=create_mock_chat_request_data(
+            messages=[{"role": "user", "content": "qu'est-ce que X ?"}],
+        ),
+        headers={"Authorization": "Bearer dummy.jwt.token"},
+    )
+    with (
+        patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
+        patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
+        patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
+        patch.object(chatqna_module, "detect", return_value="fr"),
+        _patched_chat_request(
+            stream=False,
+            context=MagicMock(language="zz-not-a-language"),
+            messages=[{"role": "user", "content": "qu'est-ce que X ?"}],
+        ),
+        contextlib.suppress(Exception),
+    ):
+        await svc.handle_request(req)
+
+    assert history_calls == [("en", "fr")]
+    assert scheduled["original_language"] == "EN"

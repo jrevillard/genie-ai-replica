@@ -26,7 +26,7 @@ module.exports = {
   codeFormat: 'ISO-639-1',
 
   // Language code mappings from ISO 639-1 to ISO 639-1 (identity mapping for this model)
-  // TranslateGemma supports 55 languages, we map our 34 languages here
+  // TranslateGemma supports 55 languages, we map our 41 languages here
   languageMap: {
     // Original 11 languages
     en: 'en', // English
@@ -41,7 +41,7 @@ module.exports = {
     pt: 'pt', // Portuguese
     sw: 'sw', // Kiswahili
 
-    // Newly added languages (total 34)
+    // Newly added languages (total 41)
     am: 'am', // Amharic
     az: 'az', // Azerbaijani
     bn: 'bn', // Bengali
@@ -65,12 +65,15 @@ module.exports = {
     ur: 'ur', // Urdu
     uz: 'uz', // Uzbek
     yo: 'yo', // Yoruba
-    ckb: 'ckb', // Sorani Kurdish (34th language)
+    ckb: 'ckb', // Sorani Kurdish
 
     // Newly added languages - Mandinka and Sesotho
     man: 'man', // Mandinka (ISO 639-2)
     mnk: 'mnk', // Mandinka (ISO 639-3)
-    st: 'st' // Sesotho
+    st: 'st', // Sesotho
+    hi: 'hi', // Hindi
+    ja: 'ja', // Japanese
+    ko: 'ko' // Korean
   },
 
   // Language fallback chains for graceful degradation

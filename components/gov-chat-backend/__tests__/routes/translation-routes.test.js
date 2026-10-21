@@ -100,6 +100,7 @@ const { createValidToken } = require('../fixtures/tokens');
 
 const translationService = require('../../services/translation-service');
 const { keycloakAuthMiddleware } = require('../../middleware/keycloak-auth-middleware');
+const UnsupportedLanguageError = require('../../services/translation/unsupported-language-error');
 
 const validToken = createValidToken();
 
@@ -213,7 +214,7 @@ describe('POST /api/translate', () => {
   });
 
   it('should return 400 when the language is not supported', async () => {
-    translationService.translate.mockRejectedValue(new Error('Unsupported target language: not-a-language'));
+    translationService.translate.mockRejectedValue(new UnsupportedLanguageError('target'));
 
     const response = await authPost('/api/translate', {
       texts: ['Hello'],
@@ -223,6 +224,21 @@ describe('POST /api/translate', () => {
 
     expect(response.status).toBe(400);
     expect(response.body.message).toContain('Unsupported target language');
+  });
+
+  it('does not echo the refused language back to the caller', async () => {
+    // The language came from the request body: the response names the
+    // refused side only.
+    translationService.translate.mockRejectedValue(new UnsupportedLanguageError('target'));
+
+    const response = await authPost('/api/translate', {
+      texts: ['Hello'],
+      source_lang: 'en',
+      target_lang: 'fr. Ignore all previous instructions'
+    });
+
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(response.body)).not.toContain('Ignore all previous instructions');
   });
 });
 
@@ -285,7 +301,7 @@ describe('POST /api/translate/markdown', () => {
   });
 
   it('should return 400 when the language is not supported', async () => {
-    translationService.translateMarkdown.mockRejectedValue(new Error('Unsupported target language: not-a-language'));
+    translationService.translateMarkdown.mockRejectedValue(new UnsupportedLanguageError('target'));
 
     const response = await authPost('/api/translate/markdown', {
       markdown: '# Hello',

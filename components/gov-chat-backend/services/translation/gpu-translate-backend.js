@@ -1,6 +1,7 @@
 const { logger, parsePositiveInt } = require('../../shared-lib');
 const http = require('http');
 const https = require('https');
+const { languageForLog } = require('./language-log');
 
 // API key for remote GPU node authentication (standard OpenAI Bearer token)
 const VLLM_API_KEY = process.env.VLLM_API_KEY || '';
@@ -266,11 +267,14 @@ class GpuTranslateBackend {
     // Own properties only: an inherited key ('constructor', 'toString') is not
     // a language, and handing it out would put it in a translation prompt.
     if (!Object.prototype.hasOwnProperty.call(this.languageMap.languageMap, isoCode)) {
-      logger.warn(`[GPU-BACKEND] No language code mapping for: ${isoCode}`);
+      logger.warn(`[GPU-BACKEND] No language code mapping for: ${languageForLog(isoCode)}`);
       return null;
     }
 
-    return this.languageMap.languageMap[isoCode];
+    // A language mapped to an empty value is not a language: the code would
+    // reach the model as an empty string.
+    const code = this.languageMap.languageMap[isoCode];
+    return code || null;
   }
 
   /**
@@ -296,15 +300,17 @@ class GpuTranslateBackend {
    * @returns {boolean} True if supported
    */
   isLanguageSupported(isoCode) {
-    return this.languageMap && Object.prototype.hasOwnProperty.call(this.languageMap.languageMap, isoCode);
+    return Boolean(this.languageMap && Object.prototype.hasOwnProperty.call(this.languageMap.languageMap, isoCode));
   }
 
   /**
    * Get all supported languages
-   * @returns {Object} Language map
+   * @returns {Object} A copy of the language map
    */
   getSupportedLanguages() {
-    return this.languageMap ? this.languageMap.languageMap : {};
+    // A copy: the map is the backend's own table, and a caller that mutates
+    // the returned object would change which languages the backend accepts.
+    return this.languageMap ? { ...this.languageMap.languageMap } : {};
   }
 
   /**

@@ -6,14 +6,15 @@ This directory implements markdown translation for the chat streaming path
 serves stale/buggy translations — this file exists so that doesn't happen
 again.
 
-## Cache key — four invalidation dimensions
+## Cache key — five invalidation dimensions
 
-`translation:<md5(content)>:<targetLang>:<modelId>:<logicVersion>`
+`translation:<md5(content)>:<sourceLang>:<targetLang>:<modelId>:<logicVersion>`
 (see `translation-cache-key.js`)
 
 | Dimension | What invalidates | Action needed |
 |-----------|------------------|---------------|
 | `md5(content)` | Source text changes (different chatqna output, prompt change that changes the EN answer) | **Automatic** — new hash → new key |
+| `sourceLang` | Different source language for the same content | **Automatic** |
 | `targetLang` | Different UI language | **Automatic** |
 | `modelId` | Switching `VLLM_TRANSLATION_MODEL_ID` (GPU) or the CPU NLLB model | **Automatic** — model id is in the key |
 | `logicVersion` (`TRANSLATION_LOGIC_VERSION`) | Translation **logic** change in source code | **Manual — bump the constant** |

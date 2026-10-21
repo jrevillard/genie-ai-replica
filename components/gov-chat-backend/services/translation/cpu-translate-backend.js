@@ -1,6 +1,7 @@
 const { logger } = require('../../shared-lib');
 const { Worker } = require('worker_threads');
 const path = require('path');
+const { languageForLog } = require('./language-log');
 
 /**
  * CPU Translation Backend
@@ -230,11 +231,14 @@ class CpuTranslateBackend {
     // Own properties only: an inherited key ('constructor', 'toString') is not
     // a language, and handing it out would put it in a translation prompt.
     if (!Object.prototype.hasOwnProperty.call(this.languageMap.languageMap, isoCode)) {
-      logger.warn(`[CPU-BACKEND] No language code mapping for: ${isoCode}`);
+      logger.warn(`[CPU-BACKEND] No language code mapping for: ${languageForLog(isoCode)}`);
       return null;
     }
 
-    return this.languageMap.languageMap[isoCode];
+    // A language mapped to an empty value is not a language: the code would
+    // reach the model as an empty string.
+    const code = this.languageMap.languageMap[isoCode];
+    return code || null;
   }
 
   /**
@@ -260,15 +264,17 @@ class CpuTranslateBackend {
    * @returns {boolean} True if supported
    */
   isLanguageSupported(isoCode) {
-    return this.languageMap && Object.prototype.hasOwnProperty.call(this.languageMap.languageMap, isoCode);
+    return Boolean(this.languageMap && Object.prototype.hasOwnProperty.call(this.languageMap.languageMap, isoCode));
   }
 
   /**
    * Get all supported languages
-   * @returns {Object} Language map
+   * @returns {Object} A copy of the language map
    */
   getSupportedLanguages() {
-    return this.languageMap ? this.languageMap.languageMap : {};
+    // A copy: the map is the backend's own table, and a caller that mutates
+    // the returned object would change which languages the backend accepts.
+    return this.languageMap ? { ...this.languageMap.languageMap } : {};
   }
 
   /**

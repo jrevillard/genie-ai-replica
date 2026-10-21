@@ -635,6 +635,12 @@ LANGUAGE_CODES_FILEPATH = os.getenv(
     "LANGUAGE_CODES_FILEPATH",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "language_codes.json"),
 )
+# How long an unreadable language map is remembered as unreadable. The map is
+# consulted on every request and on every translated chunk: re-reading (and
+# re-logging) a broken file that often is noise, but caching the failure for
+# the lifetime of the process would keep translation disabled after a transient
+# read error.
+LANGUAGE_MAP_RETRY_SECONDS = 60.0
 
 
 def _resolve_language_code(raw_language, language_codes: dict) -> str | None:
@@ -644,8 +650,8 @@ def _resolve_language_code(raw_language, language_codes: dict) -> str | None:
     used to be interpolated into the translation prompts as-is, which let a
     caller put free text ("fr. Ignore all previous instructions") where a
     language belongs. Only a code the language map knows is accepted here;
-    everything else is refused so the caller falls back to auto-detection
-    instead of steering the translator.
+    everything else is refused, and the answer stays in English rather than
+    letting the string steer the translator.
 
     The canonical form is upper case ("FR"), matching the auto-detected codes
     the rest of the service compares against ("EN").
@@ -658,6 +664,65 @@ def _resolve_language_code(raw_language, language_codes: dict) -> str | None:
     if candidate not in language_codes:
         return None
     return candidate.upper()
+
+
+def _language_display(raw_language) -> str:
+    """A short, log-safe form of a caller-supplied language.
+
+    The value is attacker-controlled, so it is cut to a bounded length and
+    reduced to the characters a language name is made of: a log line must not
+    become a channel for arbitrary text, nor for forged log lines through an
+    embedded newline. The backend applies the same rule to the value it logs
+    (services/translation/language-log.js).
+    """
+    if not isinstance(raw_language, str):
+        return f"<{type(raw_language).__name__}>"
+    printable = "".join(char for char in raw_language if char.isalnum() or char in "_-")
+    return printable[:32] if printable else "<empty>"
+
+
+# The language map (code → name), and the moment it was read. Module level
+# because the prompt-building hooks have no access to the service instance.
+_LANGUAGE_CODES_CACHE: dict | None = None
+_LANGUAGE_CODES_CACHE_AT: float | None = None
+
+
+def _read_language_codes(filepath: str) -> dict:
+    """Read the language map from disk. An unreadable map reads as empty."""
+    try:
+        with open(filepath) as file:
+            return json.load(file)
+    except Exception as e:
+        logger.error(f"Error loading language codes from {filepath}: {e}")
+        return {}
+
+
+def language_codes_map() -> dict:
+    """The language map (code → name), read once and cached.
+
+    The map is consulted on every request and again for every translated
+    chunk, so reading and parsing the file each time is pure overhead. A map
+    that could not be read is remembered only for
+    LANGUAGE_MAP_RETRY_SECONDS: a transient read failure must not disable
+    translation for the lifetime of the process, but it must not re-read
+    (and re-log) the file on every chunk either.
+
+    The map is never None: an unreadable map is an empty map, and an empty
+    map means every language is unknown.
+    """
+    global _LANGUAGE_CODES_CACHE, _LANGUAGE_CODES_CACHE_AT
+
+    cached = _LANGUAGE_CODES_CACHE
+    if cached:
+        return cached
+    now = time.monotonic()
+    if _LANGUAGE_CODES_CACHE_AT is not None and now - _LANGUAGE_CODES_CACHE_AT < LANGUAGE_MAP_RETRY_SECONDS:
+        # The last read failed and the retry window has not elapsed yet.
+        return {}
+    loaded = _read_language_codes(LANGUAGE_CODES_FILEPATH)
+    _LANGUAGE_CODES_CACHE = loaded
+    _LANGUAGE_CODES_CACHE_AT = now
+    return loaded
 
 
 # Fallback context window for the LLM, used when runtime discovery from the
@@ -1571,10 +1636,13 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         original_text = inputs["text"]
         original_language = _gp(kwargs, "original_language", "auto")
 
-        if original_language and original_language.strip().upper() == "EN":
-            target_language = "English"
-        else:
-            target_language = original_language
+        # No translator node is registered in the graph, but the branch is kept
+        # for parity with the upstream handler. The language it names comes
+        # from the caller, so it is resolved against the language map: the
+        # prompt carries the name the map knows, never the string the request
+        # carried.
+        requested_language = str(original_language).strip().lower()
+        target_language = language_codes_map().get(requested_language, "English")
 
         prompt = (
             f"Translate the following text to {target_language}. Only provide "
@@ -2420,11 +2488,10 @@ class ChatQnAService:
 
         if original_language and original_language.strip() != "EN":
             if logflag:
-                lang_type = type(original_language).__name__
-                logger.info(f"Translation requested - original_language: '{original_language}' (type: {lang_type})")
+                logger.info(f"Translation requested - original_language: '{_language_display(original_language)}'")
 
             # Load Language Codes
-            language_codes = self._language_map()
+            language_codes = language_codes_map()
 
             if logflag:
                 keys_preview = list(language_codes.keys())[:10]
@@ -2438,7 +2505,7 @@ class ChatQnAService:
             if resolved_language is None:
                 if language_codes:
                     logger.warning(
-                        f"Language '{original_language}' is not a known language code — "
+                        f"Language '{_language_display(original_language)}' is not a known language code — "
                         "refusing to translate and returning the English answer."
                     )
                 else:
@@ -2452,15 +2519,11 @@ class ChatQnAService:
                 target_lang_name = language_codes[resolved_language.lower()]
 
                 if logflag:
-                    logger.info(
-                        f"Found language code mapping: '{resolved_language.lower()}' -> '{target_lang_name}'"
-                    )
+                    logger.info(f"Found language code mapping: '{resolved_language.lower()}' -> '{target_lang_name}'")
                     logger.debug(f"LLM response to be translated into: {target_lang_name}")
 
                 try:
-                    final_text_response = await self._translate_with_chunking(
-                        llm_response, target_lang_name, resolved_language
-                    )
+                    final_text_response = await self._translate_with_chunking(llm_response, resolved_language)
                     if logflag:
                         logger.info("Translation completed successfully")
                 except TranslationInputTooLongError:
@@ -2890,7 +2953,8 @@ class ChatQnAService:
     ) -> str:
         """Build a prompt for TranslateGemma using the completions API.
 
-        Duplicated in document-translation/genieai_pdf_translator.py — keep in sync.
+        The language names come from the language map, so nothing a caller
+        controls reaches the prompt.
         """
         return (
             f"<bos><start_of_turn>user\n"
@@ -2944,15 +3008,18 @@ class ChatQnAService:
 
         Args:
             history: Chat history as list of dicts or plain string (single-message mode).
-            target_language: Target language name (e.g. "English").
+            target_language: Target language CODE (e.g. "en"). The name the
+                prompt carries comes from the language map, so a caller cannot
+                put free text in the prompt.
             source_lang_code: Source ISO language code (e.g. "st") for TranslateGemma.
         """
+        # The target language name comes from the language map: an unknown
+        # target falls back to English rather than reaching the prompt.
+        target_name = language_codes_map().get(str(target_language).strip().lower(), "English")
 
         # Single-message mode sends history as a plain string — translate it
         if isinstance(history, str):
-            return await self._translate_text_chunk(
-                history, target_language, source_lang_code=source_lang_code, iso_code="en"
-            )
+            return await self._translate_text_chunk(history, "en", source_lang_code=source_lang_code)
 
         max_translation_chars = _get_max_translation_chars()
         current_chars = 0
@@ -3019,7 +3086,7 @@ class ChatQnAService:
             url = TRANSLATION_COMPLETIONS_URL
         else:
             prompt = (
-                f"Translate the following chat history to {target_language}. "
+                f"Translate the following chat history to {target_name}. "
                 f"Preserve the role markers (e.g., 'USER:', 'ASSISTANT:')."
                 f"\n\nHISTORY:\n{flattened_history_string}"
             )
@@ -3127,31 +3194,35 @@ class ChatQnAService:
                 logger.warning(f"Condense rewrite failed ({reason}): {type(e).__name__}: {e}")
                 _raise_condense_503(reason, e)
 
-    def load_language_codes(self, filepath: str) -> dict:
-        """Load language codes from a JSON file."""
-        try:
-            with open(filepath) as file:
-                language_codes = json.load(file)
-            return language_codes
-        except Exception as e:
-            logger.error(f"Error loading language codes from {filepath}: {e}")
-            return {}
+    def _resolve_request_language(self, raw_language) -> tuple[str | None, bool]:
+        """The language a request asks for, and whether that language was refused.
 
-    def _language_map(self) -> dict:
-        """The language map, read once per service instance.
+        The language travels in the request body, so it is caller-controlled:
+        only a code the map knows may steer the translator. An unknown code is
+        refused — the answer stays in English — instead of being interpolated
+        into a translation prompt.
 
-        The map is consulted on every request and again for every translated
-        chunk, so reading and parsing the file each time is pure overhead.
-        An empty map is not cached: a transient read failure must not disable
-        translation for the lifetime of the process.
+        Returns ``(language, refused)``:
+
+        - ``(code, False)`` — the request asked for a language the map knows.
+        - ``(None, False)`` — the request asked for no language at all: the
+          caller falls back to language detection.
+        - ``(None, True)`` — the request asked for a language the map does not
+          know. The language is refused: it does not steer the answer, and the
+          caller detects the conversation's own language for the history
+          instead of trusting a code it just refused.
         """
-        cached = getattr(self, "_language_codes_cache", None)
-        if cached:
-            return cached
-        loaded = self.load_language_codes(LANGUAGE_CODES_FILEPATH)
-        if loaded:
-            self._language_codes_cache = loaded
-        return loaded
+        resolved = _resolve_language_code(raw_language, language_codes_map())
+        if resolved is not None:
+            return resolved, False
+        if raw_language is None or (isinstance(raw_language, str) and raw_language.strip().lower() in ("", "auto")):
+            # No language asked for: the caller falls back to detection.
+            return None, False
+        logger.warning(
+            f"Requested language '{_language_display(raw_language)}' is not a known language code — "
+            "translation is refused and the answer stays in English."
+        )
+        return None, True
 
     def _split_text_into_chunks(self, text: str, max_chars: int = 2000) -> list:
         """Split text into chunks, trying to break at sentence boundaries."""
@@ -3175,9 +3246,7 @@ class ChatQnAService:
 
         return chunks
 
-    async def _translate_text_chunk(
-        self, text: str, target_lang: str, iso_code: str = None, source_lang_code: str = "en"
-    ) -> str:
+    async def _translate_text_chunk(self, text: str, iso_code: str, source_lang_code: str = "en") -> str:
         """Translate a single chunk of text.
 
         Automatically uses TranslateGemma completions API (with pre-formatted prompt)
@@ -3189,28 +3258,28 @@ class ChatQnAService:
 
         Args:
             text: Text to translate.
-            target_lang: Target language name (e.g. "Sesotho").
-            iso_code: Target ISO language code (e.g. "st").
+            iso_code: Target ISO language code (e.g. "st"). The language name
+                the prompt carries comes from the language map, never from the
+                caller.
             source_lang_code: Source ISO language code (e.g. "en"). Defaults to "en".
         """
         # Last hop before the prompt: the language name and the code that go
         # into it are taken from the language map, so no caller-supplied text
         # can reach the translation model. An unknown code is refused and the
         # source text is returned untranslated.
-        if iso_code:
-            language_codes = self._language_map()
-            canonical_code = str(iso_code).strip().lower()
-            if canonical_code not in language_codes:
-                logger.warning(
-                    f"Language code '{iso_code}' is not a known language code — "
-                    "refusing to translate and returning the source text."
-                )
-                return text
-            target_lang = language_codes[canonical_code]
-            iso_code = canonical_code
+        language_codes = language_codes_map()
+        canonical_code = str(iso_code).strip().lower()
+        if canonical_code not in language_codes:
+            logger.warning(
+                f"Language code '{_language_display(iso_code)}' is not a known language code — "
+                "refusing to translate and returning the source text."
+            )
+            return text
+        target_lang = language_codes[canonical_code]
+        iso_code = canonical_code
 
         if _is_translategemma():
-            target_lang_code = iso_code.lower() if iso_code else target_lang.lower()
+            target_lang_code = iso_code
             prompt = self._build_translategemma_prompt(
                 text=text,
                 source_lang_code=source_lang_code,
@@ -3233,19 +3302,12 @@ class ChatQnAService:
                 "Mandinka": "NOTE: Mandinka is spoken in West Africa (Gambia, Senegal, Mali).",
             }
             note = language_notes.get(target_lang, "")
-            if iso_code:
-                prompt = (
-                    f"Translate the following text to {target_lang} "
-                    f"(ISO 639-1 code: {iso_code}). {note} "
-                    f"Only output the translated text, nothing else."
-                    f"\n\nText: {text}\n\nTranslation:"
-                )
-            else:
-                prompt = (
-                    f"Translate the following text to {target_lang}. "
-                    f"{note} Only output the translated text."
-                    f"\n\nText: {text}\n\nTranslation:"
-                )
+            prompt = (
+                f"Translate the following text to {target_lang} "
+                f"(ISO 639-1 code: {iso_code}). {note} "
+                f"Only output the translated text, nothing else."
+                f"\n\nText: {text}\n\nTranslation:"
+            )
             payload = {"messages": [{"role": "user", "content": prompt}], "temperature": 0, "stream": False}
             url = TRANSLATION_LLM_URL
 
@@ -3280,10 +3342,23 @@ class ChatQnAService:
             logger.warning(f"Failed to translate chunk, returning original: {type(e).__name__}: {e}")
             return text
 
-    async def _translate_with_chunking(
-        self, text: str, target_lang: str, iso_code: str = None, source_lang_code: str = "en"
-    ) -> str:
-        """Translate long text by splitting into chunks and translating separately."""
+    async def _translate_with_chunking(self, text: str, iso_code: str, source_lang_code: str = "en") -> str:
+        """Translate long text by splitting into chunks and translating separately.
+
+        The target language is checked against the language map before the
+        first chunk is sent: an unknown code is refused as a whole, so an
+        answer is never a mix of translated and untranslated chunks.
+        """
+        language_codes = language_codes_map()
+        canonical_code = str(iso_code).strip().lower()
+        if canonical_code not in language_codes:
+            logger.warning(
+                f"Language code '{_language_display(iso_code)}' is not a known language code — "
+                "refusing to translate and returning the source text."
+            )
+            return text
+        target_lang = language_codes[canonical_code]
+
         chunks = self._split_text_into_chunks(text, max_chars=2000)
 
         if logflag:
@@ -3291,10 +3366,7 @@ class ChatQnAService:
 
         # Translate chunks concurrently
         translated_chunks = await asyncio.gather(
-            *[
-                self._translate_text_chunk(chunk, target_lang, iso_code, source_lang_code=source_lang_code)
-                for chunk in chunks
-            ]
+            *[self._translate_text_chunk(chunk, canonical_code, source_lang_code=source_lang_code) for chunk in chunks]
         )
 
         return " ".join(translated_chunks)
@@ -3367,23 +3439,21 @@ class ChatQnAService:
         elif chat_request.language and chat_request.language != "auto":
             raw_language = chat_request.language
 
-        # The language comes from the request body, so it is caller-controlled.
-        # Only a code the map knows is kept; an unknown one falls through to
-        # auto-detection below instead of steering the translator.
-        original_language = _resolve_language_code(raw_language, self._language_map())
+        # The language comes from the request body, so it is caller-controlled:
+        # an unknown code is refused and the answer stays in English.
+        original_language, language_refused = self._resolve_request_language(raw_language)
 
         if logflag:
             logger.info(
-                f"Language from frontend - context.language: "
-                f"{chat_request.context.language if chat_request.context else None}, "
-                f"direct language: {chat_request.language}, "
-                f"final: {original_language}"
+                f"Language from frontend - requested: '{_language_display(raw_language)}', "
+                f"resolved: {original_language}"
             )
-            logger.info(
-                f"Language debug - type: {type(original_language)}, "
-                f"repr: {repr(original_language)} "
-                "if original_language else None"
-            )
+
+        # The language the conversation is written in, as opposed to the
+        # language the answer is written in. They differ when the request asks
+        # for a language that was refused: the answer stays in English, but the
+        # history is still normalized to English for the retriever.
+        detected_language = None
 
         # Re-enabled language detection as fallback ---
         try:
@@ -3394,7 +3464,7 @@ class ChatQnAService:
                     f"{original_language == '' if original_language else 'N/A'}"
                 )
 
-            if not original_language or original_language.strip() == "":
+            if language_refused or not original_language or original_language.strip() == "":
                 if logflag:
                     logger.info("Triggering auto-detection because original_language is falsy or empty")
 
@@ -3423,7 +3493,7 @@ class ChatQnAService:
                         )
 
                     # Load supported languages to validate the detection
-                    language_codes = self._language_map()
+                    language_codes = language_codes_map()
 
                     # Only use detected language if it's in our supported list OR if it's 'en'
                     is_supported = detected_lang and (
@@ -3439,7 +3509,8 @@ class ChatQnAService:
 
                     if is_supported:
                         if detected_lang.upper() != "EN":
-                            original_language = detected_lang.upper()
+                            detected_language = detected_lang.upper()
+                            original_language = detected_language
                             logger.info(f"Auto-detected language: {original_language}")
                     else:
                         msg = (
@@ -3455,14 +3526,25 @@ class ChatQnAService:
             if not original_language:
                 original_language = "EN"
 
+        if language_refused:
+            # A refused language does not steer the answer: it stays in English.
+            original_language = "EN"
+
+        # The language the history is written in. It is the requested language
+        # when that one is trusted, and the detected one when the request was
+        # refused: a language code the map does not know says nothing about
+        # the language the user writes in, and the history still has to be
+        # normalized to English for the English-only embedding space.
+        history_language = detected_language if language_refused else original_language
+
         translated_history_string = ""
-        if original_language and original_language.strip() != "EN":
+        if history_language and history_language.strip() != "EN":
             if logflag:
                 logger.debug(
-                    f"Original language detected: {original_language}. Proceeding with translation of chat history."
+                    f"Original language detected: {history_language}. Proceeding with translation of chat history."
                 )
             translated_history_string = await self._get_translated_history_string(
-                full_chat_history, "English", source_lang_code=original_language.lower()
+                full_chat_history, "en", source_lang_code=history_language.lower()
             )
         else:
             # If already English, flatten without translation

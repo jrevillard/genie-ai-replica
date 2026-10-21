@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Document Translation Service is a flexible, multi-backend translation system designed to translate markdown documents while preserving their structure. The service supports **34 languages** and provides configurable backends (CPU-based, GPU-based, or automatic fallback).
+The Document Translation Service is a flexible, multi-backend translation system designed to translate markdown documents while preserving their structure. The service supports **41 languages** and provides configurable backends (CPU-based, GPU-based, or automatic fallback).
 
 ### Key Features
 
@@ -35,7 +35,7 @@ The Document Translation Service is a flexible, multi-backend translation system
 │  (NLLB-200)      │      │  (vLLM)          │
 │                  │      │                  │
 │ • 10 tokens/sec  │      │ • 60-100 tokens/s│
-│ • 34 languages   │      │ • 34 languages   │
+│ • 41 languages   │      │ • 41 languages   │
 │ • No GPU needed  │      │ • Requires GPU   │
 │ • Free           │      │ • GPU cost       │
 └──────────────────┘      └──────────────────┘
@@ -522,9 +522,22 @@ If GPU costs $1/hour and saves 35 minutes per large document:
 ```
 
 **Solutions:**
-1. Check if language is in the 34 supported languages
-2. Verify language code is ISO 639-1 format (e.g., 'es', not 'spa')
-3. Check fallback chain for that language
+1. Check the language is in the map of the backend that is loaded
+   (`services/translation/language-maps/`): 41 languages, and the same list the
+   chatqna service accepts
+2. Verify the code is the one the map is keyed by — ISO 639-1 ('es', not 'spa').
+   The code is trimmed and case-insensitive
+3. Check whether the log line names the source or the target language: the
+   source has no fallback chain, so an unknown source is refused too
+   (`Unsupported source language`)
+4. The fallback chain applies only to a language the map lists as a fallback
+   without supporting it directly. Every fallback key in the shipped maps is
+   also a supported language, so an unknown language is refused rather than
+   silently downgraded to another one
+
+The language in the log line is sanitised (letters, digits, `_` and `-` only,
+32 characters max), so a value that looks truncated or empty is a language
+that was never accepted.
 
 ### Issue: Translation slower than expected
 

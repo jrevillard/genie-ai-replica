@@ -2,6 +2,20 @@ const express = require('express');
 const router = express.Router();
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
+const UnsupportedLanguageError = require('../services/translation/unsupported-language-error');
+
+/**
+ * @description Whether an error is a refused language.
+ *
+ * The check is on the error type, not on its message: a message-sniffing
+ * check would also match a translation failure whose text happens to start
+ * the same way, and it would break the day the message is reworded.
+ * @param {Error} error - The error the translation call raised.
+ * @returns {boolean} True when the error is a refused language.
+ */
+function isUnsupportedLanguage(error) {
+  return error instanceof UnsupportedLanguageError || error?.code === 'UNSUPPORTED_LANGUAGE';
+}
 
 /**
  * @swagger
@@ -90,8 +104,9 @@ module.exports = (translationService) => {
     } catch (error) {
       // An unsupported language is a bad request, not a server error: the
       // language comes from the request body and the translator refuses the
-      // ones its language map does not know.
-      if (error.message && error.message.startsWith('Unsupported ')) {
+      // ones its language map does not know. The response names the refused
+      // side only — the caller's value is never echoed back.
+      if (isUnsupportedLanguage(error)) {
         logger.warn(`[TRANSLATION-ROUTES] Rejected request: ${error.message}`);
         return res.status(400).json({ message: error.message });
       }
@@ -165,7 +180,7 @@ module.exports = (translationService) => {
       logger.info('[TRANSLATION-ROUTES] Successfully sent translated markdown to client.');
     } catch (error) {
       // An unsupported language is a bad request, not a server error.
-      if (error.message && error.message.startsWith('Unsupported ')) {
+      if (isUnsupportedLanguage(error)) {
         logger.warn(`[TRANSLATION-ROUTES] Rejected request: ${error.message}`);
         return res.status(400).json({ message: error.message });
       }

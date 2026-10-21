@@ -4,9 +4,10 @@
  * See CLAUDE.md (and AGENTS.md symlink) in this directory for the full cache
  * invalidation policy.
  *
- * The cache key has FOUR dimensions so the right change invalidates it:
- *   translation:<md5(content)>:<targetLang>:<modelId>:<logicVersion>
+ * The cache key has FIVE dimensions so the right change invalidates it:
+ *   translation:<md5(content)>:<sourceLang>:<targetLang>:<modelId>:<logicVersion>
  *   - md5(content)  : source text change -> new hash -> new key (automatic)
+ *   - sourceLang    : different source language (automatic)
  *   - targetLang    : different target language (automatic)
  *   - modelId       : switching the translation model -> new key (automatic)
  *   - logicVersion  : translation LOGIC change in source code -> bump manually
@@ -19,6 +20,7 @@
  * served until the cache was flushed).
  *
  * @param {string} docHash - md5 (or other stable hash) of the source markdown
+ * @param {string} sourceLang - source language code
  * @param {string} targetLang - target language code
  * @param {string} modelId - translation model id (e.g. 'google/gemma-3-4b-it')
  * @returns {string} Redis key
@@ -33,10 +35,13 @@
 // built, and the prompt names the language from the map only (issue #1097).
 // Entries cached before it were keyed on the raw request language and may hold
 // a translation produced for a language the map does not know.
-const TRANSLATION_LOGIC_VERSION = '3';
+// 4 = the source language joins the key: a translation cached for one source
+// language was produced from that source, and translating the same content
+// from another source language is a different result.
+const TRANSLATION_LOGIC_VERSION = '4';
 
-function translationCacheKey(docHash, targetLang, modelId) {
-  return `translation:${docHash}:${targetLang}:${modelId || 'unknown'}:${TRANSLATION_LOGIC_VERSION}`;
+function translationCacheKey(docHash, sourceLang, targetLang, modelId) {
+  return `translation:${docHash}:${sourceLang}:${targetLang}:${modelId || 'unknown'}:${TRANSLATION_LOGIC_VERSION}`;
 }
 
 module.exports = { translationCacheKey, TRANSLATION_LOGIC_VERSION };

@@ -299,7 +299,11 @@ const redis = new Redis({
 
 > **Sessions are NOT in Redis.** `services/session-service.js` stores user
 > sessions in ArangoDB (`sessions` collection). The Redis cache exists only
-> for translation, keyed on `translation:<lang>:<hash>` with a TTL.
+> for translation, keyed on
+> `translation:<md5(content)>:<sourceLang>:<targetLang>:<modelId>:<logicVersion>`.
+> The entries are stored permanently — there is no TTL — so a change to the
+> translation logic needs a `TRANSLATION_LOGIC_VERSION` bump to invalidate
+> them.
 
 ---
 

@@ -8,6 +8,8 @@ const GpuTranslateBackend = require('./translation/gpu-translate-backend');
 const { splitEdges } = require('./translation/text-edges');
 const { normalizeInlineSpacing } = require('./translation/markdown-normalize');
 const { translationCacheKey } = require('./translation/translation-cache-key');
+const UnsupportedLanguageError = require('./translation/unsupported-language-error');
+const { languageForLog } = require('./translation/language-log');
 
 // --- Read settings from environment variables ---
 const DEFAULT_THREADS = 4;
@@ -221,6 +223,20 @@ class TranslationService {
   }
 
   /**
+   * @method ensureReady
+   * @description The service needs an initialized backend before it can
+   * resolve or translate anything: without one there is no language map to
+   * check a language against.
+   * @throws {Error} When the service has no backend yet.
+   */
+  ensureReady() {
+    if (!this.initialized || !this.backend) {
+      logger.error('[TRANSLATION-SERVICE] Not initialized. Cannot perform translation.');
+      throw new Error('[TRANSLATION-SERVICE] Service is not ready.');
+    }
+  }
+
+  /**
    * @method resolveTargetLanguage
    * @description Resolves a target language against the language map the loaded
    * backend ships. The language arrives from the request body, so it is
@@ -228,18 +244,22 @@ class TranslationService {
    * model, and a code the map does not know is refused rather than passed on.
    * @param {string} targetLang - The target language as it arrived from the caller.
    * @returns {string} The canonical (lower-case) language code to translate into.
-   * @throws {Error} When the language is unknown and has no usable fallback.
+   * @throws {UnsupportedLanguageError} When the language is unknown and has no usable fallback.
    */
   resolveTargetLanguage(targetLang) {
+    this.ensureReady();
     const requested = typeof targetLang === 'string' ? targetLang.trim().toLowerCase() : '';
     if (!requested) {
-      logger.warn(`[TRANSLATION-SERVICE] Unsupported target language code: ${targetLang}`);
-      throw new Error(`Unsupported target language: ${targetLang}`);
+      logger.warn('[TRANSLATION-SERVICE] Unsupported target language: empty value');
+      throw new UnsupportedLanguageError('target');
     }
 
     // A fallback chain is followed until it lands on a language the map knows.
-    // The visited set stops a map that points a language at itself (or in a
-    // circle) from spinning here.
+    // The chain exists for a map that lists a language as a fallback without
+    // supporting it directly; in the shipped maps every fallback key is also
+    // a supported language, so the chain is a no-op there. The visited set
+    // stops a map that points a language at itself (or in a circle) from
+    // spinning here.
     const visited = new Set();
     let candidate = requested;
     while (!visited.has(candidate)) {
@@ -247,19 +267,90 @@ class TranslationService {
       if (this.backend.isLanguageSupported(candidate)) {
         if (candidate !== requested) {
           logger.warn(
-            `[TRANSLATION-SERVICE] Target language ${requested} not directly supported, using fallback ${candidate}`
+            `[TRANSLATION-SERVICE] Target language ${languageForLog(requested)} is not directly supported, using fallback ${languageForLog(candidate)}`
           );
         }
         return candidate;
       }
-      const fallback =
-        typeof this.backend.getFallbackLanguage === 'function' ? this.backend.getFallbackLanguage(candidate) : null;
+      const fallback = this.backend.getFallbackLanguage(candidate);
       if (!fallback) break;
       candidate = String(fallback).trim().toLowerCase();
     }
 
-    logger.warn(`[TRANSLATION-SERVICE] Unsupported target language code: ${targetLang}`);
-    throw new Error(`Unsupported target language: ${targetLang}`);
+    logger.warn(`[TRANSLATION-SERVICE] Unsupported target language: ${languageForLog(requested)}`);
+    throw new UnsupportedLanguageError('target');
+  }
+
+  /**
+   * @method resolveSourceLanguage
+   * @description Resolves a source language against the language map the loaded
+   * backend ships, the same way the target is resolved: the source travels in
+   * the request body too, so it is caller-controlled as well.
+   * @param {string} sourceLang - The source language as it arrived from the caller.
+   * @returns {string} The canonical (lower-case) language code to translate from.
+   * @throws {UnsupportedLanguageError} When the language is unknown.
+   */
+  resolveSourceLanguage(sourceLang) {
+    this.ensureReady();
+    const requested = typeof sourceLang === 'string' ? sourceLang.trim().toLowerCase() : '';
+    if (!requested) {
+      logger.warn('[TRANSLATION-SERVICE] Unsupported source language: empty value');
+      throw new UnsupportedLanguageError('source');
+    }
+    // The source is checked against the same map the target is: a language the
+    // map does not know is refused, and an inherited property is not a
+    // language. The source has no fallback chain — degrading the language a
+    // text is written in would translate the wrong text.
+    if (!this.modelLanguageCode(requested)) {
+      logger.warn(`[TRANSLATION-SERVICE] Unsupported source language: ${languageForLog(requested)}`);
+      throw new UnsupportedLanguageError('source');
+    }
+    return requested;
+  }
+
+  /**
+   * @method modelLanguageCode
+   * @description Maps a canonical language code onto the code the loaded
+   * backend's model expects ("fr" -> "fr_FR" for NLLB).
+   * @param {string} code - A canonical language code.
+   * @returns {string|null} The model-specific code, or null when the backend
+   *   does not map the language.
+   */
+  modelLanguageCode(code) {
+    return this.backend.getLanguageCode(code) || null;
+  }
+
+  /**
+   * @method resolveLanguagePair
+   * @description Resolves both languages of a request and returns the codes the
+   * model expects. Both languages travel in the request body, so both are
+   * resolved — and refused — before anything is built from them.
+   * @param {string} sourceLang - The source language as it arrived from the caller.
+   * @param {string} targetLang - The target language as it arrived from the caller.
+   * @returns {{sourceLang: string, targetLang: string, sourceLangCode: string, targetLangCode: string}}
+   *   The canonical languages and the model-specific codes.
+   * @throws {UnsupportedLanguageError} When either language is unknown.
+   */
+  resolveLanguagePair(sourceLang, targetLang) {
+    this.ensureReady();
+    const resolvedSourceLang = this.resolveSourceLanguage(sourceLang);
+    const resolvedTargetLang = this.resolveTargetLanguage(targetLang);
+    const sourceLangCode = this.modelLanguageCode(resolvedSourceLang);
+    const targetLangCode = this.modelLanguageCode(resolvedTargetLang);
+    if (!sourceLangCode) {
+      logger.warn(`[TRANSLATION-SERVICE] Unsupported source language: ${languageForLog(resolvedSourceLang)}`);
+      throw new UnsupportedLanguageError('source');
+    }
+    if (!targetLangCode) {
+      logger.warn(`[TRANSLATION-SERVICE] Unsupported target language: ${languageForLog(resolvedTargetLang)}`);
+      throw new UnsupportedLanguageError('target');
+    }
+    return {
+      sourceLang: resolvedSourceLang,
+      targetLang: resolvedTargetLang,
+      sourceLangCode,
+      targetLangCode
+    };
   }
 
   /**
@@ -271,29 +362,36 @@ class TranslationService {
    * @returns {Promise<string[]>} A promise that resolves to an array of translated text strings.
    */
   async translate(texts, sourceLang, targetLang) {
-    if (!this.initialized || !this.backend) {
-      logger.error('[TRANSLATION-SERVICE] Not initialized. Cannot perform translation.');
-      throw new Error('[TRANSLATION-SERVICE] Service is not ready.');
-    }
+    this.ensureReady();
 
     if (!texts || texts.length === 0) {
       logger.warn('[TRANSLATION-SERVICE] translate method called with empty array.');
       return [];
     }
 
-    logger.info(`[TRANSLATION-SERVICE] Translating ${texts.length} texts from ${sourceLang} to ${targetLang}`);
+    logger.info(
+      `[TRANSLATION-SERVICE] Translating ${texts.length} texts from ${languageForLog(sourceLang)} to ${languageForLog(targetLang)}`
+    );
 
-    // Get backend language code mappings
-    const sourceLangCode = this.backend.getLanguageCode(sourceLang);
-    if (!sourceLangCode) {
-      logger.warn(`[TRANSLATION-SERVICE] Unsupported source language code: ${sourceLang}`);
-      throw new Error(`Unsupported source language: ${sourceLang}`);
-    }
+    // Both languages are resolved against the map the backend ships: a
+    // language the map does not know never reaches the model.
+    const { sourceLangCode, targetLangCode } = this.resolveLanguagePair(sourceLang, targetLang);
 
-    // Only a language the map knows reaches the backend.
-    const resolvedTargetLang = this.resolveTargetLanguage(targetLang);
-    const targetLangCode = this.backend.getLanguageCode(resolvedTargetLang);
+    return this.translateWithBackend(texts, sourceLangCode, targetLangCode);
+  }
 
+  /**
+   * @method translateWithBackend
+   * @description Hands already-resolved language codes to the backend. The
+   * resolution happens once per request: the markdown path splits a document
+   * into batches, and resolving the same language again for every batch
+   * repeats the same work (and would repeat any future side effect of it).
+   * @param {string[]} texts - The texts to translate.
+   * @param {string} sourceLangCode - The model-specific source language code.
+   * @param {string} targetLangCode - The model-specific target language code.
+   * @returns {Promise<string[]>} The translated texts.
+   */
+  async translateWithBackend(texts, sourceLangCode, targetLangCode) {
     try {
       // Delegate to backend
       const translatedTexts = await this.backend.translate(texts, sourceLangCode, targetLangCode);
@@ -306,8 +404,8 @@ class TranslationService {
       // nothing in the output to say so.
       logger.error(`[TRANSLATION-SERVICE] Translation failed: ${error.message}`, {
         stack: error.stack,
-        sourceLang: sourceLang,
-        targetLang: targetLang,
+        sourceLang: sourceLangCode,
+        targetLang: targetLangCode,
         backend: this.backendType
       });
       throw error;
@@ -330,21 +428,13 @@ class TranslationService {
    * @returns {Promise<string>} Full translated unit
    */
   async translateStream(unit, sourceLang, targetLang, context, onToken) {
-    // Normalize to lowercase — the frontend may send uppercase locale codes
-    // (e.g. "ES") but the language maps use lowercase keys ("es").
-    sourceLang = (sourceLang || '').toLowerCase();
-    targetLang = (targetLang || '').toLowerCase();
-    if (!this.initialized || !this.backend) {
-      throw new Error('[TRANSLATION-SERVICE] Service is not ready.');
-    }
+    this.ensureReady();
     if (!unit || unit.trim() === '') return '';
 
-    const sourceLangCode = this.backend.getLanguageCode(sourceLang);
-    if (!sourceLangCode) throw new Error(`Unsupported source language: ${sourceLang}`);
-
-    // Only a language the map knows reaches the backend.
-    const resolvedTargetLang = this.resolveTargetLanguage(targetLang);
-    const targetLangCode = this.backend.getLanguageCode(resolvedTargetLang);
+    // Both languages are resolved the same way as in translate(): the frontend
+    // may send upper-case locale codes ("ES") while the language maps use
+    // lower-case keys ("es"), and a language the map does not know is refused.
+    const { sourceLangCode, targetLangCode } = this.resolveLanguagePair(sourceLang, targetLang);
 
     try {
       if (typeof this.backend.translateStream === 'function') {
@@ -374,15 +464,17 @@ class TranslationService {
    * @returns {Promise<string>} The translated markdown content as a string.
    */
   async translateMarkdown(markdownContent, sourceLang, targetLang) {
-    if (!this.initialized) {
-      logger.error('TranslationService not initialized. Cannot perform markdown translation.');
-      throw new Error('TranslationService is not ready.');
-    }
+    this.ensureReady();
 
-    // The language is refused before anything is built from it: the cache key
-    // and the in-flight key both carry the language, so an unchecked value
-    // would end up in a Redis key as well as in the translation request.
-    const resolvedTargetLang = this.resolveTargetLanguage(targetLang);
+    // Both languages are refused before anything is built from them: the
+    // cache key and the in-flight key carry them, so an unchecked value would
+    // end up in a Redis key as well as in the translation request.
+    const {
+      sourceLang: resolvedSourceLang,
+      targetLang: resolvedTargetLang,
+      sourceLangCode,
+      targetLangCode
+    } = this.resolveLanguagePair(sourceLang, targetLang);
 
     // --- REDIS CACHE LOGIC (GET) ---
     // Generate a unique <name> by hashing the markdown content.
@@ -390,9 +482,9 @@ class TranslationService {
     // Cache key includes the model id so switching the translation model
     // invalidates the cache automatically (no stale translations on model change).
     const modelId = this.backend && this.backend.getBackendInfo ? this.backend.getBackendInfo().model : undefined;
-    const cacheKey = translationCacheKey(docName, resolvedTargetLang, modelId);
-    // Key for in-flight tracking (combines doc hash and target language)
-    const inFlightKey = `${docName}:${resolvedTargetLang}`;
+    const cacheKey = translationCacheKey(docName, resolvedSourceLang, resolvedTargetLang, modelId);
+    // Key for in-flight tracking (combines doc hash and both languages)
+    const inFlightKey = `${docName}:${resolvedSourceLang}:${resolvedTargetLang}`;
 
     if (cacheEnabled && this.cacheClient) {
       try {
@@ -418,7 +510,9 @@ class TranslationService {
     }
 
     // --- IN-FLIGHT TRACKING: Create new translation promise ---
-    logger.info(`[TRANSLATION-SERVICE] Starting markdown translation from ${sourceLang} to ${targetLang}`);
+    logger.info(
+      `[TRANSLATION-SERVICE] Starting markdown translation from ${languageForLog(resolvedSourceLang)} to ${languageForLog(resolvedTargetLang)}`
+    );
 
     // Create the translation promise
     const translationPromise = (async () => {
@@ -472,7 +566,9 @@ class TranslationService {
         // Create an array of promises, one for each batch
         const translationPromises = batches.map((batch, index) => {
           logger.debug(`[TRANSLATION-SERVICE] Starting parallel batch ${index + 1}/${batches.length}`);
-          return this.translate(batch, sourceLang, resolvedTargetLang);
+          // The languages were resolved once, before the cache lookup: the
+          // batches go straight to the backend with the codes already checked.
+          return this.translateWithBackend(batch, sourceLangCode, targetLangCode);
         });
 
         // Run all batches concurrently
@@ -529,15 +625,11 @@ class TranslationService {
         logger.error(`[TRANSLATION-SERVICE] Translation failed: ${error.message}`, {
           stack: error.stack,
           inFlightKey: inFlightKey,
-          sourceLang: sourceLang,
-          targetLang: targetLang,
+          sourceLang: languageForLog(resolvedSourceLang),
+          targetLang: languageForLog(resolvedTargetLang),
           duration: Date.now() - startTime
         });
         throw error; // Re-throw to reject the promise
-      } finally {
-        // --- IN-FLIGHT TRACKING: Clean up after completion/failure ---
-        this.inFlightTranslations.delete(inFlightKey);
-        logger.info(`[TRANSLATION-SERVICE] Removed in-flight translation for ${inFlightKey}`);
       }
     })();
 
@@ -545,12 +637,33 @@ class TranslationService {
     this.inFlightTranslations.set(inFlightKey, translationPromise);
     logger.info(`[TRANSLATION-SERVICE] Added in-flight translation for ${inFlightKey}`);
 
+    // --- IN-FLIGHT TRACKING: Clean up after completion/failure ---
+    // Only the promise that registered this key may remove it: the timeout
+    // path deletes the entry too, and a later request for the same document
+    // may already have registered a new promise under the same key. An
+    // unconditional delete would evict that new promise and let a third
+    // request start a duplicate translation.
+    //
+    // The cleanup hangs off the promise itself rather than off the body of
+    // the translation: the body runs before the promise is registered, so a
+    // finally block there could fire before the entry exists.
+    translationPromise
+      .catch(() => {}) // the rejection is reported by the caller; this chain only cleans up
+      .then(() => {
+        if (this.inFlightTranslations.get(inFlightKey) === translationPromise) {
+          this.inFlightTranslations.delete(inFlightKey);
+          logger.info(`[TRANSLATION-SERVICE] Removed in-flight translation for ${inFlightKey}`);
+        }
+      });
+
     // Add timeout to prevent hanging (default 1 hour for large documents)
     const timeoutMs = 3600000; // 1 hour
     let timeoutHandle;
     const timeoutPromise = new Promise((_, reject) => {
       timeoutHandle = setTimeout(() => {
-        this.inFlightTranslations.delete(inFlightKey);
+        if (this.inFlightTranslations.get(inFlightKey) === translationPromise) {
+          this.inFlightTranslations.delete(inFlightKey);
+        }
         reject(new Error(`[TRANSLATION-SERVICE] Translation timeout after ${timeoutMs}ms for ${inFlightKey}`));
       }, timeoutMs);
     });

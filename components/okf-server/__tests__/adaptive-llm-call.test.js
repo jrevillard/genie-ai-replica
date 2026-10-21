@@ -75,14 +75,49 @@ describe('adaptiveChatCompletion', () => {
     expect(body).not.toHaveProperty('enable_thinking');
   });
 
-  test('a 400 that names NO no-think param is a real error — no negotiation', async () => {
+  test('a 400 that names no param, with a BARE body (nothing to strip), is a real error', async () => {
     const e = err400('invalid model id');
     axios.post.mockRejectedValue(e);
     const body = { model: 'm', messages: [], max_tokens: 800 };
+    await expect(adaptiveChatCompletion({ url: ENDPOINT, headers: HEADERS, body })).rejects.toBe(e);
+    expect(axios.post).toHaveBeenCalledTimes(1);
+  });
+
+  // Live 2026-10-21 (z.ai, the GLM-5.3 config): the endpoint rejects the
+  // strict-JSON response_format with an UNNAMED 400. Named-only negotiation
+  // propagated it and zeroed a whole 20-question benchmark run.
+  test('an UNNAMED 400 with optional params present strips them all and retries bare ONCE', async () => {
+    axios.post.mockRejectedValueOnce(err400('invalid request body')).mockResolvedValueOnce(ok('plain text'));
+    const body = { model: 'm', messages: [], max_tokens: 800, response_format: { type: 'json_object' } };
+    const r = await adaptiveChatCompletion({ url: ENDPOINT, headers: HEADERS, body, disableThinking: true });
+    expect(r.data.choices[0].message.content).toBe('plain text');
+    expect(axios.post).toHaveBeenCalledTimes(2);
+    expect(body).not.toHaveProperty('response_format');
+    expect(body).not.toHaveProperty('thinking');
+    expect(body).not.toHaveProperty('enable_thinking');
+  });
+
+  test('an unnamed 400 that PERSISTS bare is a real error — exactly one strip-retry, then throw', async () => {
+    const e = err400('invalid request body');
+    axios.post.mockRejectedValue(e);
+    const body = { model: 'm', messages: [], max_tokens: 800, response_format: { type: 'json_object' } };
     await expect(adaptiveChatCompletion({ url: ENDPOINT, headers: HEADERS, body, disableThinking: true })).rejects.toBe(
       e
     );
-    expect(axios.post).toHaveBeenCalledTimes(1);
+    expect(axios.post).toHaveBeenCalledTimes(2); // shaped, then bare — never more
+    expect(body).not.toHaveProperty('response_format');
+  });
+
+  test('a NAMED response_format rejection drops just that param and keeps the no-think pair', async () => {
+    axios.post
+      .mockRejectedValueOnce(err400("Unrecognized request argument: 'response_format'"))
+      .mockResolvedValueOnce(ok('{"a":1}'));
+    const body = { model: 'm', messages: [], max_tokens: 800, response_format: { type: 'json_object' } };
+    const r = await adaptiveChatCompletion({ url: ENDPOINT, headers: HEADERS, body, disableThinking: true });
+    expect(r.data.choices[0].message.content).toBe('{"a":1}');
+    expect(axios.post).toHaveBeenCalledTimes(2);
+    expect(body).not.toHaveProperty('response_format');
+    expect(body.enable_thinking).toBe(false); // the endpoint never complained about it
   });
 
   test('starved by reasoning: ONE retry with budget x4 AND a doubled wall clock', async () => {

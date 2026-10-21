@@ -46,6 +46,12 @@ const TIMEOUT_CEILING_MS = 600000; // 10 min — async callers hand thinking mod
 const TIMEOUT_SCALE = 2;
 /** The standard no-think request params, both wire conventions. */
 const NO_THINK_PARAMS = { thinking: { type: 'disabled' }, enable_thinking: false };
+/** Optional params the 400-negotiation may strip: the no-think pair plus the
+ * strict-JSON response_format (live 2026-10-21: z.ai rejects it with an
+ * UNNAMED 400 — named-only negotiation would propagate it and kill every
+ * benchmark answer row). Callers already tolerate its absence: every strict
+ * JSON consumer has a raw-content/repair fallback. */
+const OPTIONAL_PARAMS = [...Object.keys(NO_THINK_PARAMS), 'response_format'];
 
 function statusOf(err) {
   return err && err.response && err.response.status;
@@ -100,20 +106,31 @@ async function adaptiveChatCompletion({ url, headers, body, timeoutMs = 60000, d
   const post = () => axios.post(url, body, { headers, timeout });
 
   let resp;
-  // Layer 1 — no-think negotiation: each 400 that names one of the params
-  // drops it and retries; bounded by the number of params (all named →
-  // plain call, exactly the pre-negotiation behavior).
-  for (let round = 0; round <= Object.keys(NO_THINK_PARAMS).length; round += 1) {
+  // Layer 1 — param negotiation: a 400 that NAMES a param drops it; a GENERIC
+  // 400 with optional params still present strips them ALL and retries bare
+  // once (live 2026-10-21: z.ai's response_format rejection names nothing —
+  // named-only negotiation propagated it and zeroed a whole benchmark run).
+  // A bare 400 is a real error (bad model, bad shape…) and propagates.
+  let bareRoundUsed = false;
+  for (let round = 0; round <= OPTIONAL_PARAMS.length + 1; round += 1) {
     try {
       resp = await post();
       break;
     } catch (e) {
-      const present = Object.keys(NO_THINK_PARAMS).filter((p) => body[p] !== undefined);
+      if (statusOf(e) !== 400) throw e;
+      const present = OPTIONAL_PARAMS.filter((p) => body[p] !== undefined);
       const rejected = rejectedParams(e, present);
-      if (!rejected.length) throw e; // a REAL 400 (bad model, bad shape…) — not ours to fix
-      logger.info('adaptive_llm.no_think_param_rejected', { url, dropped: rejected.join(',') });
-      for (const p of rejected) delete body[p];
-      if (round === Object.keys(NO_THINK_PARAMS).length) throw e; // safety: never loop unbounded
+      if (rejected.length) {
+        logger.info('adaptive_llm.param_rejected', { url, dropped: rejected.join(',') });
+        for (const p of rejected) delete body[p];
+      } else if (present.length && !bareRoundUsed) {
+        bareRoundUsed = true;
+        logger.info('adaptive_llm.unnamed_400_strip_optional', { url, dropped: present.join(',') });
+        for (const p of present) delete body[p];
+      } else {
+        throw e; // a REAL 400 (bad model, bad shape…) — not ours to fix
+      }
+      if (round === OPTIONAL_PARAMS.length + 1) throw e; // safety: never loop unbounded
     }
   }
 

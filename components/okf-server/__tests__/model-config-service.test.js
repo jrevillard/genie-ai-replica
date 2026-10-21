@@ -16,8 +16,12 @@ jest.mock('../shared-lib/db-connection-service', () => {
   return { getConnection: jest.fn(() => Promise.resolve(mockDb)), __mockDb: mockDb };
 });
 jest.mock('../services/audit-service', () => ({ writeAudit: jest.fn(async () => null) }));
+// The openai generation ping rides the real adaptive wire (axios) — mock it
+// so tests never leave the process.
+jest.mock('axios', () => ({ post: jest.fn() }));
 
 const svc = require('../services/model-config-service');
+const axios = require('axios');
 const { __mockDb } = require('../shared-lib/db-connection-service');
 
 const store = () => __mockDb._stores.okf_model_configs || {};
@@ -294,15 +298,12 @@ describe('connection test (before enabling)', () => {
   // model listing hard-failed providers that generate perfectly but serve
   // no list (live: DeepSeek's Anthropic surface — messages 200, models 404).
   test('happy path: a single generation ping — no listing call at all', async () => {
-    const calls = [];
-    global.fetch = jest.fn(async (url, opts) => {
-      calls.push({ url, opts });
-      expect(url).toBe('https://gw:4000/v1/chat/completions');
-      expect(opts.method).toBe('POST');
-      expect(opts.headers.Authorization).toBe('Bearer kt');
-      expect(JSON.parse(opts.body)).toMatchObject({ model: 'gpt-x', max_tokens: 1 });
-      return { ok: true, json: async () => ({ choices: [] }) };
-    });
+    // The openai ping rides the REAL wire (adaptive-llm-call + the optional
+    // params production sends — 2026-10-21: a minimal ping passed while
+    // every real call 400'd on response_format), so it is mocked on axios,
+    // not fetch. Fetch stays untouched — the test must NEVER list.
+    global.fetch = jest.fn();
+    axios.post.mockResolvedValueOnce({ data: { choices: [{ message: { content: 'pong' } }] } });
     const r = await svc.testConnection({
       provider: 'openai',
       base_url: 'https://gw:4000/v1',
@@ -311,7 +312,17 @@ describe('connection test (before enabling)', () => {
     });
     expect(r).toMatchObject({ ok: true, endpoint_ok: true, model_listed: null, generation_ok: true, models_n: null });
     expect(typeof r.latency_ms).toBe('number');
-    expect(calls).toHaveLength(1);
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(axios.post).toHaveBeenCalledTimes(1);
+    const [url, body, cfg] = axios.post.mock.calls[0];
+    expect(url).toBe('https://gw:4000/v1/chat/completions'); // versioned base keeps its segment
+    expect(cfg.headers.Authorization).toBe('Bearer kt');
+    expect(body).toMatchObject({
+      model: 'gpt-x',
+      response_format: { type: 'json_object' }, // the REAL call shape, not a minimal ping
+      enable_thinking: false,
+      thinking: { type: 'disabled' }
+    });
   });
 
   test('the DeepSeek live shape: messages 200 while a listing would 404 — the test never lists, so it passes', async () => {
@@ -356,16 +367,18 @@ describe('connection test (before enabling)', () => {
   });
 
   test('transport failure: diagnostic payload, NOT a throw — ok false, endpoint NOT reached', async () => {
-    global.fetch = jest.fn(async () => {
-      throw new Error('ECONNREFUSED nope');
-    });
+    global.fetch = jest.fn();
+    axios.post.mockRejectedValueOnce(new Error('ECONNREFUSED nope'));
     const r = await svc.testConnection({ provider: 'openai', base_url: 'https://x/v1', api_key: 'k', model: 'm' });
     expect(r).toMatchObject({ ok: false, endpoint_ok: false, generation_ok: false });
     expect(r.error).toContain('could not reach');
   });
 
   test('an HTTP answer (401) proves the endpoint was REACHED — the error says creds, not transport', async () => {
-    global.fetch = jest.fn(async () => ({ ok: false, status: 401, text: async () => 'bad key' }));
+    global.fetch = jest.fn();
+    axios.post.mockRejectedValueOnce(
+      Object.assign(new Error('Request failed with status code 401'), { response: { status: 401, data: 'bad key' } })
+    );
     const r = await svc.testConnection({ provider: 'openai', base_url: 'https://x/v1', api_key: 'k', model: 'm' });
     expect(r).toMatchObject({ ok: false, endpoint_ok: true, generation_ok: false });
     expect(r.error).toContain('401');

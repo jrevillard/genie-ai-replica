@@ -373,10 +373,39 @@ async function pingModel({ provider, base_url, api_key, model }) {
     provider === 'anthropic'
       ? { 'x-api-key': api_key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }
       : { Authorization: `Bearer ${api_key}`, 'content-type': 'application/json' };
-  const body =
-    provider === 'anthropic'
-      ? JSON.stringify({ model, max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] })
-      : JSON.stringify({ model, max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] });
+  if (provider !== 'anthropic') {
+    // The REAL wire, not a minimal ping (David 2026-10-21: "the connection
+    // test works... no 404" while every real call failed): send the same
+    // optional params the answer/curation legs send, through the same
+    // adaptive negotiation — a passing test now proves the exact shape
+    // production uses, and a param the endpoint rejects gets dropped here
+    // exactly as it would mid-run.
+    try {
+      await require('./adaptive-llm-call').adaptiveChatCompletion({
+        url,
+        headers,
+        body: {
+          model,
+          max_tokens: 16,
+          temperature: 0,
+          messages: [{ role: 'user', content: 'Reply with the single word: pong' }],
+          response_format: { type: 'json_object' }
+        },
+        timeoutMs: TEST_TIMEOUT_MS,
+        disableThinking: true
+      });
+      return { ok: true };
+    } catch (e) {
+      // Preserve the transport-vs-HTTP distinction testConnection keys on:
+      // "could not reach" means the endpoint was never reached (endpoint_ok
+      // false); any HTTP status proves it WAS reached.
+      if (!e.response) return { ok: false, error: `could not reach ${url}: ${e.message}` };
+      const data = e.response.data;
+      const text = data ? (typeof data === 'string' ? data : JSON.stringify(data)) : e.message;
+      return { ok: false, error: `generation returned ${e.response.status}: ${String(text).slice(0, 200)}` };
+    }
+  }
+  const body = JSON.stringify({ model, max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] });
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TEST_TIMEOUT_MS);
   let resp;

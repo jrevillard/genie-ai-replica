@@ -713,6 +713,54 @@ describe('run', () => {
     }
   });
 
+  // Live 2026-10-21: a TERMINAL answer-leg error (the z.ai 400/404 class)
+  // marched through every row and shipped a zero-score "done" run — zeros
+  // presented as a measured benchmark (David: "do not allow this thing to
+  // keep blundering forward when it is getting errors"). Now the first
+  // terminal 4xx aborts the run: the doc is 'failed' with the cause, and
+  // the judge leg never runs.
+  it('a TERMINAL answer error fails the run loudly — failed doc with cause, no judge call', async () => {
+    const sk = await makeSuite();
+    frontmatterService.vllmChatCompletions.mockRejectedValue(
+      Object.assign(new Error('Request failed with status code 400'), {
+        code: 'ERR_BAD_REQUEST',
+        response: { status: 400, data: { error: { message: 'invalid request body' } } }
+      })
+    );
+    const begun = await svc.beginRunSuite('me', sk, {}, {});
+    await begun.done;
+    // getRunSuite strips a failed doc to {run_key, suite_key, status, error}
+    // — the envelope the panel renders.
+    const env = await svc.getRunSuite('me', sk, begun.run_key);
+    expect(env.status).toBe('failed');
+    expect(env.error).toMatchObject({ code: 'ERR_BAD_REQUEST', status: 400, aborted: true, failed_rows: 2 });
+    // The stored doc keeps the full forensics: every row errored, judge never ran.
+    const raw = __mockDb._stores.okf_head_test_runs[begun.run_key];
+    expect(raw.payload.results.every((r) => r.error)).toBe(true);
+    expect(raw.payload.fidelity.judge).toBeNull();
+    expect(global.fetch.mock.calls.some((c) => String(c[0]).includes('/evaluate'))).toBe(false);
+  });
+
+  it('a TRANSIENT answer error (503) does not abort the run — the row fails, the rest continue', async () => {
+    const sk = await makeSuite();
+    frontmatterService.vllmChatCompletions
+      .mockRejectedValueOnce(
+        Object.assign(new Error('upstream unavailable'), {
+          code: 'ERR_BAD_RESPONSE',
+          response: { status: 503, data: {} }
+        })
+      )
+      .mockResolvedValue(llmResponse({ answer: 'A grounded answer.', abstained: false }));
+    const begun = await svc.beginRunSuite('me', sk, {}, {});
+    await begun.done;
+    const doc = await svc.getRunSuite('me', sk, begun.run_key);
+    expect(doc.status).toBe('done'); // one row degraded, the run measured something
+    const errored = doc.payload.results.filter((r) => r.error);
+    expect(errored).toHaveLength(1);
+    expect(errored[0].error.status).toBe(503);
+    expect(doc.payload.results.some((r) => !r.error)).toBe(true);
+  });
+
   it('409 RUN_IN_FLIGHT with the adoptable run_key', async () => {
     const sk = await makeSuite();
     let releaseEval;

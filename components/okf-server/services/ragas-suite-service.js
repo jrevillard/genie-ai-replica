@@ -1205,8 +1205,19 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     const total = entries.length;
     await report(opts, { phase: 'retrieval', done: 0, total });
     let cursorIdx = 0;
+    // TERMINAL answer-leg errors abort the run (David 2026-10-21: "do not
+    // allow this thing to keep blundering forward when it is getting
+    // errors"). A 4xx (except 429 rate-limit) fails EVERY row identically —
+    // marching on just repackages a broken benchmark as a zero-score "done"
+    // run. First terminal error wins; unattempted rows are recorded SKIPPED.
+    let abortErr = null;
+    const isTerminal = (err) => {
+      const s = err && err.response && err.response.status;
+      return typeof s === 'number' && s >= 400 && s < 500 && s !== 429;
+    };
     async function worker() {
       for (;;) {
+        if (abortErr) return;
         const i = cursorIdx++;
         if (i >= entries.length) return;
         const e = entries[i];
@@ -1239,14 +1250,114 @@ async function runSuite(repoId, suiteKey, opts = {}) {
             answer: '',
             abstained: false,
             abstention_reason: '',
-            error: { code: err.code || 'ENTRY_FAILED', message: err.message }
+            error: {
+              code: err.code || 'ENTRY_FAILED',
+              status: (err.response && err.response.status) || null,
+              message: err.message
+            }
           };
+          if (isTerminal(err) && !abortErr) {
+            abortErr = err;
+            logger.error('ragas-suite.run_answer_leg_aborted', {
+              repo_id: repoId,
+              suite_key: suiteKey,
+              run_key: opts.runKey,
+              status: err.response && err.response.status,
+              message: err.message
+            });
+          }
         }
         doneCount += 1;
         await report(opts, { phase: 'retrieval', done: doneCount, total });
       }
     }
     await Promise.all(Array.from({ length: Math.min(RUN_CONCURRENCY, entries.length) }, worker));
+
+    // Fill any gaps left by an abort, then FAIL LOUD: a run whose answers
+    // failed is never a scored "done" run — zeros are not results. Judge
+    // only the rows that produced an answer; if none did (or a terminal
+    // error aborted the run), write status 'failed' with the cause and keep
+    // the partial rows for forensics.
+    for (let i = 0; i < entries.length; i += 1) {
+      if (!results[i]) {
+        results[i] = {
+          id: entries[i].id,
+          query: entries[i].query,
+          contexts: [],
+          context_keys: [],
+          candidate_keys: [],
+          candidates: [],
+          answer: '',
+          abstained: false,
+          abstention_reason: '',
+          error: {
+            code: 'SKIPPED_RUN_ABORTED',
+            status: null,
+            message: 'not attempted — run aborted on a terminal error'
+          }
+        };
+      }
+    }
+    const erroredRows = results.filter((r) => r.error).length;
+    const answeredRows = results.length - erroredRows;
+    if (abortErr || answeredRows === 0) {
+      const firstErr = (results.find((r) => r.error && r.error.code !== 'SKIPPED_RUN_ABORTED') || {}).error || {
+        code: 'ANSWER_LEG_FAILED',
+        message: 'every answer failed'
+      };
+      // Top-level `error` is the READ contract for failed runs — getRunSuite
+      // strips a failed doc to {run_key, suite_key, status, error} and the
+      // panel renders that envelope's error.
+      const runError = {
+        code: firstErr.code,
+        status: firstErr.status || null,
+        message: firstErr.message,
+        failed_rows: erroredRows,
+        total,
+        aborted: Boolean(abortErr)
+      };
+      const failedDoc = {
+        _key: opts.runKey,
+        repo_id: repoId,
+        kind: 'ragas_run',
+        status: 'failed',
+        suite_key: suiteKey,
+        created_at: opts.startedAt,
+        created_by: (opts.actor && opts.actor.user_id) || 'system',
+        repo_ids: repoIds,
+        metrics: opts.metrics,
+        error: runError,
+        payload: {
+          suite_created_at: suite.created_at,
+          entries: entries.map((e) => ({ id: e.id, query: e.query, oos: e.oos })),
+          results,
+          summary: null,
+          error: runError,
+          fidelity: {
+            retrieval: {
+              algorithm: 'per-graph APPROX_NEAR_COSINE + unified rerank',
+              candidate_k: CANDIDATE_K,
+              top_n: TOP_N,
+              graphs: graphNames
+            },
+            judge: null,
+            answers: await answerFidelity()
+          }
+        }
+      };
+      await db.collection(COLLECTION).replace(opts.runKey, failedDoc);
+      span.setAttribute('okf.ragas.failed_rows', erroredRows);
+      logger.error('ragas-suite.run_failed', {
+        repo_id: repoId,
+        suite_key: suiteKey,
+        run_key: opts.runKey,
+        failed_rows: erroredRows,
+        total,
+        aborted: Boolean(abortErr),
+        cause: firstErr.message
+      });
+      return failedDoc;
+    }
 
     // score with the sidecar — 8-7 model configs: the scoring judge resolves
     // picked > active > env (same chain as generation).

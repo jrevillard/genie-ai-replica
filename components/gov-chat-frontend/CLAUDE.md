@@ -184,9 +184,9 @@ need to out-specify the layer, that is the signal to fix the layer instead.**
 
 ### The serving stack for a visual check
 
-**Two orchestrators, two levels of evidence.** The Docker Compose path is **verified** — every name in it matches
-a running container. The Kubernetes path is **read off the chart and not yet run**: it states the shape and the
-costs, not a recipe to follow blind.
+**Two orchestrators, two levels of evidence.** The Docker Compose path is **verified** — every container, image,
+network and port in it matches a running one. The Kubernetes path is **read off the chart and not yet run**: it
+states the shape and the costs, not a recipe to follow blind.
 
 A visual check needs six things from whatever stack it runs on, whichever orchestrator that is:
 
@@ -208,7 +208,8 @@ project** — the volumes carry the data.
 
 The shared project (`living-intelligence`) holds Kong, the backend, Keycloak, ArangoDB, Postgres and Redis —
 one instance of each. A worker adds **two containers** and nothing else: the frontend on **its own image
-tag**, and an nginx in front of it publishing **its own port**, proxying `/api` to the shared Kong.
+tag**, and an nginx in front of it publishing **its own port**. The nginx's own template routes `/api`,
+`/api-docs` and `/auth` to the shared Kong — the worker does not have to reproduce the path matrix by hand.
 
 **Run every command below from the repository root** — the paths are relative to it — and copy the env template
 first if the checkout has no `.env` (`cp env .env`), because the stack reads its secrets from there and has no
@@ -217,9 +218,10 @@ defaults for them.
 ```bash
 # the shared stack, once. The override carries the two Keycloak keys the
 # compose file does not set (see below); without it the stack comes up
-# "healthy" and refuses every container's connections.
+# "healthy" and refuses every container's connections. Keep the override
+# outside the repository — it belongs to this machine, not to the tree.
 export NGINX_HTTPS_PORT=9443 NGINX_HTTP_PORT=9080
-docker compose -p living-intelligence -f docker-compose.yaml -f <override>.yml up -d
+docker compose -p living-intelligence -f docker-compose.yaml -f /tmp/docker-compose.li.yml up -d
 
 # one worker
 docker build -t genie-ai-frontend:lot-a components/gov-chat-frontend/
@@ -234,8 +236,8 @@ docker run -d --name li-a-nginx --network living-intelligence_genieai_network \
   registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-nginx:latest
 ```
 
-The override the shared stack needs — the compose file sets neither key, and without them Keycloak listens on
-`127.0.0.1` inside its own container:
+The override the shared stack needs — save it as `/tmp/docker-compose.li.yml`; the compose file sets neither key,
+and without them Keycloak listens on `127.0.0.1` inside its own container:
 
 ```yaml
 services:
@@ -307,7 +309,8 @@ Reaching it through the edge costs:
 The rest carries over unchanged: the image is the one the stack runs (`eval $(minikube docker-env)` +
 `pullPolicy: Never` for a local build, or a registry tag), then `kubectl set image` + `kubectl rollout status`;
 the shared stack must be up (`helm upgrade`, or `flux reconcile hr genieai -n flux-system`); and the proof that
-the pod runs the new code is `kubectl exec … -- grep <token> /app/dist/assets/*`.
+the pod runs the new code is `kubectl exec … -- grep <token> /app/dist/css/*.css /app/dist/js/*.js` — the build
+emits `css/` and `js/`, not `assets/`.
 
 ### Known gaps
 

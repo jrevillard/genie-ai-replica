@@ -290,6 +290,23 @@ def _make_caching_wrapper(LangchainLLMWrapper, model_tag=None, cancel_event=None
             self._model_tag = (
                 model_tag if model_tag is not None else f"env:{_judge_base_url()}:{os.getenv('RAGAS_JUDGE_MODEL')}"
             )
+            # The LEGACY tag (the model alone) — the env path's key before
+            # 2026-10-21. The endpoint entered the key to stop a repointed
+            # judge from replaying another endpoint's answers; the price is a
+            # cold cache, and the entries the previous deployment wrote are
+            # then unreachable. RAGAS_LLM_CACHE_LEGACY=1 lets an operator
+            # whose endpoint has NOT changed replay them: the read falls
+            # back to the legacy key and MIGRATES the entry to the new key
+            # on the spot, so the cache heals itself one answer at a time.
+            # It is OFF by default — replaying an answer from an endpoint we
+            # cannot vouch for is exactly the bug the new key fixed.
+            self._legacy_tag = None if model_tag is not None else os.getenv("RAGAS_JUDGE_MODEL")
+            self._legacy_enabled = (os.getenv("RAGAS_LLM_CACHE_LEGACY") or "0").strip().lower() in (
+                "1",
+                "true",
+                "yes",
+                "on",
+            )
             self._cache_dir = os.getenv("RAGAS_LLM_CACHE_DIR") or "/tmp/ragas-llm-cache"
             self._enabled = (os.getenv("RAGAS_LLM_CACHE") or "1").strip().lower() not in ("0", "off", "false", "no")
             # The cancel seam (2026-10-21 sidecar review F1): the KG phase
@@ -308,13 +325,13 @@ def _make_caching_wrapper(LangchainLLMWrapper, model_tag=None, cancel_event=None
         def _cache_enabled(self) -> bool:
             return self._enabled
 
-        def _key(self, prompt, n, temperature, stop) -> str:
+        def _key(self, prompt, n, temperature, stop, tag=None) -> str:
             import hashlib
             import json
 
             payload = json.dumps(
                 [
-                    self._model_tag,
+                    self._model_tag if tag is None else tag,
                     os.getenv("RAGAS_JUDGE_MAX_TOKENS") or "0",
                     prompt.to_string(),
                     n,
@@ -324,6 +341,24 @@ def _make_caching_wrapper(LangchainLLMWrapper, model_tag=None, cancel_event=None
                 default=str,
             )
             return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+        def _read(self, key, prompt, n, temperature, stop):
+            """Cache read for the CURRENT key, with the legacy fallback.
+
+            A legacy hit is MIGRATED: the entry is written under the new key
+            before it is returned, so the cache heals itself and the next
+            run is a plain hit."""
+            hit = self._load(key)
+            if hit is not None or not self._legacy_enabled or not self._legacy_tag:
+                return hit
+            legacy_key = self._key(prompt, n, temperature, stop, tag=self._legacy_tag)
+            if legacy_key == key:
+                return None
+            legacy_hit = self._load(legacy_key)
+            if legacy_hit is None:
+                return None
+            self._save(key, legacy_hit[0], legacy_hit[1])
+            return legacy_hit
 
         def _load(self, key):
             import json
@@ -383,7 +418,7 @@ def _make_caching_wrapper(LangchainLLMWrapper, model_tag=None, cancel_event=None
             self._check_cancel()
             _count_llm_call()
             key = self._key(prompt, n, temperature, stop)
-            hit = self._load(key)
+            hit = self._read(key, prompt, n, temperature, stop)
             if hit is not None:
                 return self._rebuild(*hit)
             result = super().generate_text(prompt, n=n, temperature=temperature, stop=stop, callbacks=callbacks)
@@ -396,7 +431,7 @@ def _make_caching_wrapper(LangchainLLMWrapper, model_tag=None, cancel_event=None
             self._check_cancel()
             _count_llm_call()
             key = self._key(prompt, n, temperature, stop)
-            hit = self._load(key)
+            hit = self._read(key, prompt, n, temperature, stop)
             if hit is not None:
                 return self._rebuild(*hit)
             result = await super().agenerate_text(prompt, n=n, temperature=temperature, stop=stop, callbacks=callbacks)
@@ -1183,13 +1218,22 @@ async def generate_testset(
     def _bump():
         synth_done[0] += 1
         if progress is not None:
-            progress("synthesizing-questions", synth_done[0], None)
+            # The call counter rides along here too — the sample count only
+            # moves when a sample RESOLVES, and the first one waits on the
+            # persona/scenario calls (2026-10-21: the count must always
+            # advance, whatever the phase).
+            progress("synthesizing-questions", synth_done[0], None, calls=_llm_calls())
 
     dist = _resolve_distribution(query_distribution, llm, kg=kg, cancel_event=cancel_event, on_sample=_bump)
     if progress is not None and dist:
         # ceil per entry (import-free): the bar's total is the expected count
         expected = sum(-(-round(int(testset_size) * w) // 1) or 1 for _, w in dist)
-        progress("synthesizing-questions", synth_done[0], max(expected, int(testset_size)))
+        progress(
+            "synthesizing-questions",
+            synth_done[0],
+            max(expected, int(testset_size)),
+            calls=_llm_calls(),
+        )
     testset = await asyncio.to_thread(
         generator.generate,
         testset_size=int(testset_size),

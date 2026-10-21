@@ -1807,6 +1807,17 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   Default: /tmp/ragas-llm-cache (inside the container — survives job
 #   churn, cleared when the container is recreated). Cache IO is
 #   best-effort: a cache failure can never fail a job.
+# RAGAS_LLM_CACHE_LEGACY=0
+#   Default: 0 (off). Migration switch for the 2026-10-21 cache-key fix:
+#   the judge identity in the cache key now carries the ENDPOINT as well as
+#   the model, so a repointed judge can never replay another endpoint's
+#   answers — at the price of a cold cache, and the entries written by an
+#   earlier deployment become unreachable. Set 1 ONLY when the judge
+#   endpoint has NOT changed since those entries were written: each read
+#   then falls back to the legacy key and MIGRATES the entry to the new key
+#   (the cache heals itself, one answer at a time). Leave 0 on a deployment
+#   whose judge was repointed — that is the case the fix protects.
+#   Used by: ragas-service.
 
 # --- okf-server: retrieval mode governance (Story 1.7, ADR-okf-039 D3) ---
 # OKF_RETRIEVAL_MODE=legacy

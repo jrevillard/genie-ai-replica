@@ -975,6 +975,11 @@ services:
       # best-effort only.
       - RAGAS_LLM_CACHE=${RAGAS_LLM_CACHE:-1}
       - RAGAS_LLM_CACHE_DIR=${RAGAS_LLM_CACHE_DIR:-/tmp/ragas-llm-cache}
+      # Migration switch for the 2026-10-21 cache-key fix (the judge identity
+      # in the key now carries the endpoint). 1 lets a deployment whose judge
+      # has NOT been repointed replay the entries the previous key wrote, and
+      # migrates each one to the new key on read. 0 = strict (default).
+      - RAGAS_LLM_CACHE_LEGACY=${RAGAS_LLM_CACHE_LEGACY:-0}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
       - ragas_llm_cache:/tmp/ragas-llm-cache

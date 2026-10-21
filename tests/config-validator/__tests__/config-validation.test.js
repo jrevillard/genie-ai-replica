@@ -843,6 +843,22 @@ describe('Configuration Validation Suite', () => {
       expect(vars.OKF_RAGAS_LONG_TIMEOUT_MS && vars.OKF_RAGAS_LONG_TIMEOUT_MS.default).toBe('3600000');
     });
 
+    test('the cache-migration switch lands in all four sites (2026-10-21)', () => {
+      // RAGAS_LLM_CACHE_LEGACY: the judge identity in the cache key now
+      // carries the endpoint, so the entries the previous key wrote are
+      // unreachable. 1 lets an operator whose judge has NOT been repointed
+      // replay them (and migrate each to the new key on read); 0 is strict.
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const ragasBlock = full.slice(full.indexOf('  ragas-service:'), full.indexOf('  document-repository:'));
+      expect(ragasBlock).toMatch(/- RAGAS_LLM_CACHE_LEGACY=\$\{RAGAS_LLM_CACHE_LEGACY:-0\}/);
+      const envText = fs.readFileSync(ENV_FILE, 'utf8');
+      expect(envText).toMatch(/^#\s*RAGAS_LLM_CACHE_LEGACY=0.*$/m);
+      const vars = parseAnsibleEnvVars(
+        fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+      );
+      expect(vars.RAGAS_LLM_CACHE_LEGACY && vars.RAGAS_LLM_CACHE_LEGACY.default).toBe('0');
+    });
+
     test('the ragas vars are emitted by ansible env.j2 (inherited defaults)', () => {
       const vars = parseAnsibleEnvVars(
         fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')

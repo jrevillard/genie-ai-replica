@@ -137,6 +137,63 @@ def test_generate_testset_passes_num_personas_to_generate(monkeypatch, engine_en
     assert out["samples"][0]["user_input"] == "what is the answer?"
 
 
+def test_generation_progress_calls_match_the_app_tracker_contract(monkeypatch, engine_env):
+    """Every progress call the engine makes must be ACCEPTED by the app's
+    tracker (app._phase_tracker -> _update). The engine grew a `calls` kwarg
+    on 2026-10-21 (the always-advancing LLM-call count) and a signature
+    drift here would break the job poll at runtime — a TypeError inside the
+    progress callback would take the whole generation down.
+
+    It also pins that the synthesis phase reports the count: the sample
+    count only moves when a sample RESOLVES, so the call count is what
+    proves the phase is alive.
+    """
+    import asyncio
+    import inspect
+
+    from ragas.testset import TestsetGenerator
+
+    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None, cancel_event=None: object())
+    monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: object())
+    monkeypatch.setattr(ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model: [])
+
+    def fake_generate(self, **kwargs):
+        return _testset_with(_StubTS())
+
+    monkeypatch.setattr(TestsetGenerator, "generate", fake_generate)
+    import ragas.testset.transforms as transforms_module
+
+    monkeypatch.setattr(transforms_module, "apply_transforms", lambda kg, transforms, run_config=None: None)
+    _stub_default_distribution(monkeypatch)
+
+    calls = []
+
+    def progress(phase, done=None, total=None, **kwargs):
+        calls.append((phase, done, total, kwargs))
+
+    asyncio.run(
+        ragas_engine.generate_testset(
+            [{"page_content": "body", "metadata": {"repo_id": "r"}}],
+            testset_size=2,
+            progress=progress,
+        )
+    )
+    assert calls, "the generation reported no progress at all"
+
+    import app as app_module
+
+    tracker = app_module._phase_tracker("job-contract")
+    accepted = set(inspect.signature(tracker).parameters) - {"job_id"}
+    for phase, done, total, kwargs in calls:
+        assert set(kwargs) <= accepted, f"phase {phase} sends unknown kwargs {set(kwargs) - accepted}"
+        # the tracker must survive the call it is handed
+        tracker(phase, done, total, **kwargs)
+
+    synthesis = [c for c in calls if c[0] == "synthesizing-questions"]
+    assert synthesis, "the synthesis phase reported nothing"
+    assert any("calls" in c[3] for c in synthesis), "the synthesis phase carries no call count"
+
+
 def test_generate_testset_caps_concept_text_for_the_kg(monkeypatch, engine_env):
     """The relationship builder joins PAIRS of node contents — a repo with
     concepts near the 200k-char corpus cap overflowed the judge's 65536-token
@@ -408,6 +465,82 @@ def test_caching_wrapper_serves_hits_without_calling_the_judge(tmp_path, monkeyp
     w_off.generate_text(_Prompt(), n=1, temperature=0.2)
     w_off.generate_text(_Prompt(), n=1, temperature=0.2)
     assert calls["sync"] == 4  # both went through
+
+
+def test_legacy_cache_entries_are_replayed_only_when_asked_and_migrate(monkeypatch, tmp_path):
+    """2026-10-21: the judge identity in the cache key now carries the
+    ENDPOINT as well as the model, so a repointed judge can never replay
+    another endpoint's answers. The price is a cold cache — and the entries
+    the previous key wrote become unreachable.
+
+    RAGAS_LLM_CACHE_LEGACY=1 is the operator's explicit acknowledgement that
+    the endpoint has NOT changed: each read then falls back to the legacy key
+    and MIGRATES the entry to the new key (the cache heals itself). OFF by
+    default — replaying an answer from an endpoint we cannot vouch for is
+    exactly the bug the new key fixed.
+    """
+    import json
+
+    class _Gen:
+        def __init__(self, text):
+            self.text = text
+
+    class _Res:
+        def __init__(self, text):
+            self.generations = [[_Gen(text)]]
+            self.llm_output = None
+
+    class _FakeBase:
+        def __init__(self, *a, **k):
+            pass
+
+        def generate_text(self, prompt, n=1, temperature=0.01, stop=None, callbacks=None):
+            return _Res("fresh")
+
+    class _Prompt:
+        def to_string(self):
+            return "the same prompt text"
+
+    cache_dir = tmp_path / "cache"
+    monkeypatch.setenv("RAGAS_LLM_CACHE_DIR", str(cache_dir))
+    monkeypatch.setenv("RAGAS_JUDGE_MODEL", "granite-test")
+    monkeypatch.setenv("RAGAS_JUDGE_BASE_URL", "https://judge.example/llm/v1")
+    monkeypatch.setenv("RAGAS_LLM_CACHE_LEGACY", "0")
+
+    wrapper_cls = ragas_engine._make_caching_wrapper(_FakeBase)
+
+    # Write an entry under the LEGACY key (the model alone), the way the
+    # pre-2026-10-21 deployment wrote it.
+    legacy_wrapper = ragas_engine._make_caching_wrapper(_FakeBase, model_tag=None)(object())
+    legacy_tag = "granite-test"  # the old env-path tag: the model alone
+    legacy_key = legacy_wrapper._key(_Prompt(), 1, 0.2, None, tag=legacy_tag)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    (cache_dir / f"{legacy_key}.json").write_text(
+        json.dumps({"texts": ["legacy-answer"], "llm_output": {"model_name": "granite-test"}}),
+        encoding="utf-8",
+    )
+
+    # 1. OFF (default): the legacy entry is invisible — the judge is called.
+    # (A different temperature = a different key, so this call cannot
+    # populate the key the legacy check below reads.)
+    w = wrapper_cls(object())
+    out = w.generate_text(_Prompt(), n=1, temperature=0.3)
+    assert out.generations[0][0].text == "fresh"
+    assert not (cache_dir / f"{legacy_key}.json.tmp").exists()
+
+    # 2. ON: the legacy entry is replayed AND migrated to the new key.
+    monkeypatch.setenv("RAGAS_LLM_CACHE_LEGACY", "1")
+    w2 = wrapper_cls(object())
+    out2 = w2.generate_text(_Prompt(), n=1, temperature=0.2)
+    assert out2.generations[0][0].text == "legacy-answer"  # replayed, judge NOT called
+    new_key = w2._key(_Prompt(), 1, 0.2, None)
+    assert new_key != legacy_key
+    migrated = json.loads((cache_dir / f"{new_key}.json").read_text(encoding="utf-8"))
+    assert migrated["texts"] == ["legacy-answer"]  # migrated on read
+
+    # 3. The migrated entry is a plain hit afterwards — the cache healed.
+    out3 = w2.generate_text(_Prompt(), n=1, temperature=0.2)
+    assert out3.generations[0][0].text == "legacy-answer"
 
 
 def test_empty_completions_are_never_cached(monkeypatch, tmp_path):

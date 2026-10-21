@@ -55,6 +55,8 @@
 -}}
 {{- $arangoSecretEnv := list (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "ARANGO_PASSWORD" "secret" "arango-root-secret" "key" "password" "optional" true) | fromJson) -}}
 {{- $gpuSecretEnv := include "genieai-umbrella.gpuApiKeyEnv" (dict "keys" (list "HF_TOKEN" "VLLM_API_KEY")) | fromJsonArray -}}
+{{- /* opea.retriever.env: see the parity gate. */ -}}
+{{- $opeaEnvRows := include "genieai-umbrella.envMapRows" (.Values.opea.retriever.env | default dict) | fromJsonArray -}}
 {{- $arangoEnv := list
     (dict "name" "ARANGO_URL" "value" (include "genieai-umbrella.arangoURL" .))
     (dict "name" "ARANGO_DB" "value" "_system")
@@ -64,7 +66,7 @@
     "image" (dict "repository" "genie-ai-retriever-arango" "tag" "main")
     "port" 7000
     "resources" (dict "requests" (dict "cpu" "200m" "memory" "256Mi") "limits" (dict "cpu" "2" "memory" "2Gi"))
-    "env" (concat $arangoEnv $tuningEnv $arangoSecretEnv $gpuSecretEnv)
+    "env" (concat $arangoEnv $tuningEnv $arangoSecretEnv $gpuSecretEnv $opeaEnvRows)
     "probes" (dict
       "readiness" (dict "tcpSocket" (dict "port" 7000) "initialDelaySeconds" 30 "periodSeconds" 15)
       "liveness"  (dict "tcpSocket" (dict "port" 7000) "initialDelaySeconds" 60 "periodSeconds" 30)

@@ -320,6 +320,26 @@ defeating the chart-driven install path. The backend's `ARANGO_PASSWORD`
 is the one exception — wired via explicit `secretKeyRef`, not `envFrom`,
 to avoid duplicating the var.
 
+### document-repository image requirement
+
+The chart points the document repository at the ClamAV Service
+(`services.documentRepository.clamavHost` / `clamavPort`), and at Keycloak
+for both the JWKS and the expected token issuer
+(`KEYCLOAK_EXPECTED_ISSUER`, derived from `ingress.scheme` + `ingress.host`
+when the service itself reaches a different origin). Two of those variables
+only take effect in an image that reads them:
+
+- `CLAMSCAN_HOST` — an image that drops it dials `localhost:3310`, fails the
+  scanner's connection probe at startup and errors on every scan.
+- `KEYCLOAK_EXPECTED_ISSUER` — an image without it validates tokens against
+  the in-cluster issuer and rejects every token issued at the public origin.
+
+Point `services.documentRepository.image.tag` at an image built from a commit
+that carries both. An image older than that fails loudly rather than quietly:
+without the first, every upload dies on `clamav.scan.failed` in the log (the
+file is written only after the scan returns); without the second, every
+request comes back `TOKEN_INVALID`.
+
 ### PodDisruptionBudget
 
 A PDB is rendered **only when `replicas >= 2`** for that service. With

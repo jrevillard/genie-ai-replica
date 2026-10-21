@@ -274,6 +274,14 @@
               }
             }
           }
+        },
+        "gpu": {
+          "type": "object",
+          "properties": {
+            "skipTlsVerify": {
+              "type": "boolean"
+            }
+          }
         }
       }
     }

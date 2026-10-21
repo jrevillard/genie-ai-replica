@@ -1,4 +1,4 @@
-const { logger } = require('../../shared-lib');
+const { logger, parsePositiveInt } = require('../../shared-lib');
 const http = require('http');
 const https = require('https');
 
@@ -10,6 +10,20 @@ const VLLM_API_KEY = process.env.VLLM_API_KEY || '';
 // translation — so a prompt that cannot leave this much room is refused rather
 // than sent with a token or two.
 const MIN_OUTPUT_BUDGET = 256;
+
+// Budget for the startup health check. Failing it stops the service when a GPU
+// API is configured, so the budget is sized for a cold TLS handshake to a remote
+// node rather than for a connection that is already established.
+const DEFAULT_HEALTH_TIMEOUT_MS = 30000;
+
+// Budget for the /v1/models read. It only widens the output budget ceiling, so
+// a miss degrades to the conservative default rather than failing the service.
+const DEFAULT_MODEL_INFO_TIMEOUT_MS = 5000;
+
+// The worker that ships with the stack. Naming it is not a statement that a GPU
+// API was configured — compose passes this very value through when the
+// deployment set nothing, so presence of the env var cannot distinguish the two.
+const IN_CLUSTER_ENDPOINT = 'http://vllm-translation-guardrail:9031';
 
 /**
  * GPU Translation Backend
@@ -23,8 +37,24 @@ class GpuTranslateBackend {
   constructor() {
     // Configuration from environment variables
     this.modelId = process.env.VLLM_TRANSLATION_MODEL_ID || 'google/gemma-3-4b-it';
-    this.endpoint = process.env.VLLM_TRANSLATION_ENDPOINT || 'http://vllm-translation-guardrail:9031';
+    this.endpoint = process.env.VLLM_TRANSLATION_ENDPOINT || IN_CLUSTER_ENDPOINT;
     this.port = parseInt(process.env.VLLM_TRANSLATION_SERVICE_PORT, 10) || 9031;
+
+    // Whether the deployment named an endpoint of its own, as opposed to
+    // leaving the in-cluster worker as the target. `this.endpoint` is always
+    // non-empty, so on its own it cannot answer "is a GPU API configured?".
+    this.endpointExplicit = this.endpoint !== IN_CLUSTER_ENDPOINT;
+
+    // `parsePositiveInt`, not `parseInt(x, 10) * 1000 || DEFAULT`: a negative
+    // budget parses to a negative number, which is truthy and therefore survives
+    // the fallback — and Node's HTTP layer does not honour a negative `timeout`
+    // predictably, so the gate would fall back to OS defaults instead of
+    // expiring. Values below one second are treated the same way: they cannot be
+    // a real remote handshake.
+    this.healthTimeoutMs =
+      parsePositiveInt(process.env.TRANSLATION_PROBE_TIMEOUT_SECONDS, DEFAULT_HEALTH_TIMEOUT_MS / 1000, { min: 1 }) *
+      1000;
+    this.modelInfoTimeoutMs = DEFAULT_MODEL_INFO_TIMEOUT_MS;
 
     // Runtime state
     this.initialized = false;
@@ -129,7 +159,7 @@ class GpuTranslateBackend {
           path: `${basePath}/health`,
           method: 'GET',
           headers: this._buildHeaders(),
-          timeout: 5000
+          timeout: this.healthTimeoutMs
         };
 
         const req = client.request(options, (res) => {
@@ -177,7 +207,10 @@ class GpuTranslateBackend {
           path: `${basePath}/v1/models`,
           method: 'GET',
           headers: this._buildHeaders(),
-          timeout: 5000
+          // Deliberately short, unlike `healthCheck`: this call only reads
+          // `max_model_len` and resolves with a default on failure, so it
+          // decides nothing about whether the service may start.
+          timeout: this.modelInfoTimeoutMs
         };
 
         const req = client.request(options, (res) => {

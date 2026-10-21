@@ -111,10 +111,17 @@ All configuration is done via `.env` files. **No code changes required.**
 ```bash
 # env or env-T4 file
 
-# Backend selection: cpu, gpu, or auto
-TRANSLATION_BACKEND=cpu    # Default, backward compatible
-# TRANSLATION_BACKEND=gpu  # Force GPU
-# TRANSLATION_BACKEND=auto # Try GPU, fallback to CPU
+# Backend selection: cpu, gpu, or auto. Default: auto
+# Only consulted when no GPU API is configured (GPU_NODE_HOST unset and no
+# VLLM_TRANSLATION_ENDPOINT of its own). A configured GPU API is mandatory:
+# the service refuses to start rather than translating with another model.
+TRANSLATION_BACKEND=auto   # Probe once at startup, GPU if it answers, else CPU
+# TRANSLATION_BACKEND=gpu  # Require GPU even with no GPU API configured
+# TRANSLATION_BACKEND=cpu  # Require CPU
+
+# Budget for that startup probe. Must cover a cold TLS handshake to a remote
+# GPU node — a budget that expires on a healthy endpoint stops the service.
+TRANSLATION_PROBE_TIMEOUT_SECONDS=30
 ```
 
 #### CPU Backend Configuration

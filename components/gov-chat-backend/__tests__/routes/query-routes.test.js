@@ -379,7 +379,7 @@ describe('POST /stream', () => {
     delete process.env.STREAMING_TRANSLATION_ENABLED;
   });
 
-  it('should fall back to the EN unit when stream translation fails (#829)', async () => {
+  it('should fall back to the EN unit and report the failure on done', async () => {
     process.env.STREAMING_TRANSLATION_ENABLED = '1';
     queryService.initStreamQuery.mockResolvedValue({
       queryId: 'q1',
@@ -410,6 +410,14 @@ describe('POST /stream', () => {
     const body = response.text || '';
     expect(body).toContain('Hello world');
     expect(body).not.toMatch(/"type":"translation"/);
+    // The EN unit is already on the wire and cannot be recalled, so the
+    // failure has to reach the client somehow. It travels on `done` because an
+    // `error` frame is terminal for the client: it stops reading the stream
+    // and reports the whole system as down.
+    expect(body).toMatch(/"type":"done","queryId":"q1","translationFailed":true/);
+    // Not an `error` frame — that would truncate the answer and raise a
+    // system-down notification for a translation-only failure.
+    expect(body).not.toMatch(/"type":"error"/);
     delete process.env.STREAMING_TRANSLATION_ENABLED;
   });
 
@@ -1015,7 +1023,7 @@ describe('GET /:queryId', () => {
       expect(response.text).toContain('"type":"translation","content":"Bonjour monde"');
     });
 
-    it('should emit TRANSLATION_FAILED error event when translation fails', async () => {
+    it('should report a post-stream translation failure on done, not as an error', async () => {
       const mockStream = setupSSEStream();
       translationService.init.mockResolvedValue(undefined);
       translationService.translateMarkdown.mockRejectedValue(new Error('Translation service down'));
@@ -1033,8 +1041,29 @@ describe('GET /:queryId', () => {
 
       const response = await responsePromise;
       expect(response.status).toBe(200);
-      expect(response.text).toContain('TRANSLATION_FAILED');
-      expect(response.text).toContain('"type":"done","queryId":"q1"');
+      expect(response.text).toContain('"type":"done","queryId":"q1","translationFailed":true');
+      expect(response.text).not.toContain('"type":"error"');
+    });
+
+    it('should report translationFailed=false when translation succeeds', async () => {
+      const mockStream = setupSSEStream();
+      translationService.init.mockResolvedValue(undefined);
+      translationService.translateMarkdown.mockResolvedValue('Hallo');
+
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }],
+        context: { language: 'DE' }
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      mockStream.push('data: {"type":"chunk","content":"Hello"}\n\n');
+      mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+      mockStream.push(null);
+
+      const response = await responsePromise;
+      expect(response.status).toBe(200);
+      expect(response.text).toContain('"type":"done","queryId":"q1","translationFailed":false');
     });
   });
 

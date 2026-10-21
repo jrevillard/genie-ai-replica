@@ -2458,7 +2458,6 @@ export default {
   align-items: center;
   justify-content: center;
   padding: var(--space-lg);
-  gap: var(--space-lg);
   overflow-y: auto;
 }
 
@@ -2500,9 +2499,16 @@ export default {
 .quick-help-subtitle {
   text-align: center;
   font-size: var(--text-md);
-  /* No bottom margin: the overlay's flex `gap` carries the rhythm
-     to the composer (and the composer to the grid). */
-  margin: 0;
+  /* The subtitle's `margin: 0 0 var(--space-lg)` is load-bearing:
+     the welcome scrim (.quick-help-content) is bottom-anchored in
+     the banner's art box, so changing the subtitle's bottom margin
+     moves the scrim and the heading inside or outside of the
+     banner's mask fade (which starts at 72% of the banner's
+     height). Keeping the original gap here also keeps the
+     composer→grid rhythm that the composer wrapper's own margin
+     carries on its own — the overlay stays gap-less so the
+     subtitle's natural margin is what positions the rest. */
+  margin: 0 0 var(--space-lg);
   color: var(--muted);
 }
 
@@ -2511,11 +2517,16 @@ export default {
    one visual strip rather than a shrinking pill next to a wide grid.
    Without `width: 100%`, the flex shrink-to-fit on a column with
    `align-items: center` would collapse the bar to its intrinsic width
-   and contradict the panel-rhythm the composer is meant to belong to. */
+   and contradict the panel-rhythm the composer is meant to belong to.
+
+   The `margin: var(--space-lg) 0` is the spacing the overlay used to
+   carry via its flex `gap`, which was removed when the subtitle's
+   bottom margin was restored — the composer is now the only flex
+   child that needs the explicit spacing to its siblings. */
 .quick-help-composer {
   width: 100%;
   max-width: calc(4 * var(--qh-card-min) + 3 * var(--space-xl));
-  margin-inline: auto;
+  margin: var(--space-lg) auto;
 }
 
 /* The grid's column count is driven by container queries on the panel

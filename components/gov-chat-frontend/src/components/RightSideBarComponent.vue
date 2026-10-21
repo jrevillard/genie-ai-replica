@@ -392,6 +392,10 @@ export default {
    keeps the responsive policy in CSS, where it belongs. */
 .sidebar {
   width: var(--sidebar-width, 320px);
+  /* The handle's width, declared here so the panel and the handle it
+     contains agree on one number: a collapsed panel is exactly as wide
+     as the control it carries. */
+  --sidebar-handle-width: 24px;
   background: var(--surface);
   border-left: 1px solid var(--border);
   display: flex;
@@ -410,11 +414,13 @@ export default {
     margin-left 0.3s ease;
 }
 
-/* Collapsed keeps the 50 px strip the panel has always used, and the
-   handle lives inside it — which is why the panel is never collapsed
-   to zero. Zero would clip the one control that brings it back. */
+/* Collapsed is exactly the handle's width, and the handle lives
+   inside the panel — which is why the panel is never collapsed to
+   zero. Zero would clip the one control that brings it back.
+   A wider rail than the handle leaves a band of empty panel beside
+   the control, and the user read that band as a stray strip. */
 .sidebar.collapsed {
-  width: var(--sidebar-collapsed-width, 50px);
+  width: var(--sidebar-collapsed-width, var(--sidebar-handle-width));
   /* A collapsed rail owns no spacing. */
   margin-left: 0;
 }

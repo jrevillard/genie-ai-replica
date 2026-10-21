@@ -356,8 +356,28 @@ test.describe('Resizable sidebars behind one handle', () => {
     await page.waitForTimeout(2000);
 
     const m = await measure(page);
-    expect(m.left.width, 'left rail should be the collapsed strip').toBe(50);
-    expect(m.right.width, 'right rail should be the collapsed strip').toBe(50);
+    // A collapsed rail is exactly as wide as the control it carries —
+    // not wider. The extra 26 px used to be a band of empty panel on
+    // the outer side of the chevron, and it read as a stray strip
+    // rather than as a collapsed panel. The width is derived from the
+    // handle, so the two cannot drift apart.
+    expect(m.left.width, 'the left rail is exactly its handle').toBe(m.leftHandle.width);
+    expect(m.right.width, 'the right rail is exactly its handle').toBe(m.rightHandle.width);
+    // The grip rules are what says "this edge drags". They stay on a
+    // collapsed rail — the user asked for them to survive it — so the
+    // collapsed control still reads as a splitter and not as a button
+    // that happens to sit on the panel's edge.
+    const grip = await page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      if (!el) return null;
+      return {
+        before: getComputedStyle(el, '::before').content,
+        after: getComputedStyle(el, '::after').content
+      };
+    }, LEFT_HANDLE);
+    expect(grip, 'the grip rules survive the collapse').not.toBeNull();
+    expect(grip.before, 'the grip rules survive the collapse').not.toBe('none');
+    expect(grip.after, 'the grip rules survive the collapse').not.toBe('none');
     expect(
       m.centre.left,
       `no channel between the left rail and the centre: rail ends at ${m.left.right}, centre starts at ${m.centre.left}`
@@ -401,13 +421,13 @@ test.describe('Resizable sidebars behind one handle', () => {
     await page.locator(`${LEFT_HANDLE} .sidebar-handle__button`).click();
     await page.waitForTimeout(800);
     const collapsedLeft = await measure(page);
-    expect(collapsedLeft.left.width).toBe(50);
-    expect(
-      collapsedLeft.leftHandle.left,
-      'collapsed: the left handle must still be on the inner edge, not the outer one'
-    ).toBeGreaterThan(collapsedLeft.left.left);
-    // The same 1 px of slack as the open state: the panel's border
-    // box includes the 1 px right border, the handle's box does not.
+    // A collapsed rail IS its handle, so "not on the outer edge" is no
+    // longer a question the geometry can ask: the rail is exactly as
+    // wide as the control. What must hold is that the control reaches
+    // the panel's INNER edge — the same 1 px of slack as the open
+    // state, the panel's border box including the 1 px right border
+    // while the handle's box does not.
+    expect(collapsedLeft.left.width, 'the collapsed rail is exactly its handle').toBe(collapsedLeft.leftHandle.width);
     expect(
       Math.abs(collapsedLeft.leftHandle.right - collapsedLeft.left.right),
       'collapsed: the left handle must reach the panel inner edge'
@@ -461,8 +481,8 @@ test.describe('Resizable sidebars behind one handle', () => {
     await page.waitForSelector('.sidebar-handle', { timeout: 15000 });
     await page.waitForTimeout(2000);
     const collapsed = await measure(page);
-    expect(collapsed.left.width, 'the left stays collapsed across a reload').toBe(50);
-    expect(collapsed.right.width, 'the right stays collapsed across a reload').toBe(50);
+    expect(collapsed.left.width, 'the left stays collapsed across a reload').toBe(collapsed.leftHandle.width);
+    expect(collapsed.right.width, 'the right stays collapsed across a reload').toBe(collapsed.rightHandle.width);
 
     // And expanding round-trips the other way.
     await page.locator(`${LEFT_HANDLE} .sidebar-handle__button`).click();

@@ -314,6 +314,10 @@ export default {
    where it belongs. */
 .side-bar {
   width: var(--side-bar-width, 450px);
+  /* The handle's width, declared here so the panel and the handle it
+     contains agree on one number: a collapsed panel is exactly as wide
+     as the control it carries. */
+  --sidebar-handle-width: 24px;
   background: var(--bg-sidebar);
   border-right: 1px solid var(--border);
   height: 100%;
@@ -334,9 +338,9 @@ export default {
 }
 
 /*
- * The collapsed state keeps a 50 px strip rather than collapsing to
- * zero — the same width the right sidebar uses, because the two sides
- * are meant to behave identically.
+ * The collapsed state is exactly as wide as the handle it carries —
+ * the same on both sides, because the two sides are meant to behave
+ * identically.
  *
  * Zero was the width here before the handle existed, and it is the
  * wrong width now: the handle lives inside the panel, so a zero-width
@@ -345,9 +349,15 @@ export default {
  * a collapsed left reported the CENTRE intercepting pointer events,
  * because the clipped strip's bounding box still reported 24 px while
  * nothing was painted there.
+ *
+ * It used to be 50 px, which is wider than the 24 px handle: the
+ * extra 26 px was a band of empty panel on the outer side of the
+ * control, and the user read it as a stray strip rather than as a
+ * collapsed panel. A collapsed rail now shows the control and
+ * nothing else.
  */
 .side-bar.side-bar-collapsed-state {
-  width: var(--side-bar-collapsed-width, 50px);
+  width: var(--side-bar-collapsed-width, var(--sidebar-handle-width));
   /* A collapsed rail owns no spacing: the content it was pushing away
      comes right back, with no channel left over. */
   margin-right: 0;

@@ -330,8 +330,12 @@ export default {
  * rather than as a border.
  */
 .sidebar-handle {
-  flex: 0 0 24px;
-  width: 24px;
+  /* The strip's width is one value, shared with the panel that owns
+     it: a collapsed panel is exactly as wide as its handle, so the
+     rail carries the control and nothing else. The panel declares
+     --sidebar-handle-width and inherits it down to here. */
+  flex: 0 0 var(--sidebar-handle-width, 24px);
+  width: var(--sidebar-handle-width, 24px);
   align-self: stretch;
   display: flex;
   align-items: center;
@@ -412,8 +416,8 @@ export default {
    `pointermove` instead of being claimed by the browser as a
    scroll. */
 .sidebar-handle__button {
-  width: 24px;
-  height: 24px;
+  width: var(--sidebar-handle-width, 24px);
+  height: var(--sidebar-handle-width, 24px);
   display: flex;
   align-items: center;
   justify-content: center;

@@ -2480,12 +2480,15 @@ export default {
   align-items: center;
   justify-content: center;
   padding: var(--space-lg);
-  /* The waves' ::after and the banner's full-bleed reach past the
-     overlay's content box on purpose: the artwork has to touch the
-     panel's edges, not sit centred inside them. overflow-x: hidden clips
-     that overshoot at the panel's edge, so the panel never offers a
-     horizontal scrollbar — the property that decides whether one is
-     drawn. */
+  /* The banner's full-bleed reaches past the overlay's content box
+     on purpose (the artwork has to touch the panel's edges, not sit
+     centred inside them). The wave ::after no longer reaches past
+     anything — it spans the panel's padding box exactly — so the
+     only overshoot that overflow-x: hidden has to clip is the
+     banner's, and that only when the overlay's padding is stripped
+     by `@media (max-width: 1299px)`. The clip is what keeps that
+     overshoot from becoming a horizontal scrollbar — the property
+     that decides whether one is drawn. */
   overflow-y: auto;
   overflow-x: hidden;
 }

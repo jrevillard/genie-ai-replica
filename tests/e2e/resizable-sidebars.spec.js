@@ -575,7 +575,35 @@ test.describe('Resizable sidebars behind one handle', () => {
   //      not on `.chatbot-container` (a different element — the
   //      overlay is the scroller that bounds the welcome panel).
   test('the waves span the panel and the panel clips what bleeds', async ({ page, browser }) => {
-    // (A) — 1920×900 from `beforeEach`.
+    // The Living Intelligence visual layer has to be on for the
+    // ::after to render at all (otherwise `getComputedStyle(...,
+    // '::after').width` is "auto" and parseFloat returns 0 — every
+    // assertion here would fail for an unrelated reason). Skip the
+    // block explicitly on routes that don't load the layer; the two
+    // companion blocks in `tests/e2e/responsive-layout.spec.js`
+    // guard the same precondition.
+    const visualOn = await page.evaluate(() => {
+      const overlay = document.querySelector('.quick-help-overlay');
+      if (!overlay) return { hasOverlay: false };
+      const html = document.documentElement;
+      const gliOn = overlay.closest('.genie-living-intelligence') !== null;
+      return {
+        hasOverlay: true,
+        visualOn: html.getAttribute('data-visual') === 'on',
+        gliOn
+      };
+    });
+    if (!visualOn.hasOverlay || !visualOn.visualOn || !visualOn.gliOn) {
+      // Either the welcome panel isn't on screen, or the Living
+      // Intelligence layer is off (no `::after`, no banner artwork,
+      // no clip — nothing to assert).
+      return;
+    }
+
+    // (A) — 1920×900 from `beforeEach`. The clamped-band regression
+    // was invisible at this width (panel ≈ 1150 px, below the
+    // 320 × 1800/356 ≈ 1617.97 px clamp). The wide-viewport case
+    // in (C) below is the one that exercises the clamp.
     const a = await page.evaluate(() => {
       const overlay = document.querySelector('.quick-help-overlay');
       if (!overlay) return { none: true };
@@ -591,7 +619,7 @@ test.describe('Resizable sidebars behind one handle', () => {
         overlayOverflowX: getComputedStyle(overlay).overflowX
       };
     });
-    if (a.none) return; // the layer is off on this route; nothing to assert
+    if (a.none) return; // layer off; nothing to assert
     // The wave band's box overshoots neither edge after the fix:
     expect(
       Math.abs(a.afterMarginLeft),
@@ -673,6 +701,81 @@ test.describe('Resizable sidebars behind one handle', () => {
         `(this is the property that clips the banner's intentional bleed and decides ` +
         `whether the panel draws a horizontal scrollbar); got '${b.overlayOverflowX}'`
     ).toMatch(/^(hidden|clip)$/);
+
+    // (C) — wide viewports that exercise the height cap. With
+    // `inset: auto 0 0; width: auto` and `max-height: 320px`, the
+    // band's width is not pinned to the panel's — the cap
+    // re-transfers the aspect ratio from the height to the width,
+    // and the band resolves to 320 × 1800/356 ≈ 1617.97 px and
+    // stops there. The user's screenshot was caught at 1920 with
+    // the sidebars collapsed (panel ≈ 1872 px). Repeating the band
+    // assertion at 2400 and 3200 makes the regression structurally
+    // visible — a band that tracks the panel reads at panel width
+    // here, not at 1617.97 px.
+    //
+    // The block collapses both sidebars via the same localStorage
+    // hints `beforeEach` sets (sidebarOpen=false / sidebarOpenRight
+    // absent so right sidebar follows the default-collapsed state);
+    // we only widen the viewport. The CSS doesn't gate the band's
+    // behaviour on viewport width — the cap binds at any width
+    // that resolves to a band-height > 320 px.
+    for (const wide of [2400, 3200]) {
+      await page.setViewportSize({ width: wide, height: 900 });
+      await page.waitForTimeout(2500);
+
+      const c = await page.evaluate(() => {
+        const overlay = document.querySelector('.quick-help-overlay');
+        if (!overlay) return { none: true };
+        const after = getComputedStyle(overlay, '::after');
+        return {
+          none: false,
+          afterWidth: parseFloat(after.width) || 0,
+          afterHeight: parseFloat(after.height) || 0,
+          panelClientWidth: overlay.clientWidth,
+          overlayOverflowX: getComputedStyle(overlay).overflowX
+        };
+      });
+      if (c.none) continue; // layer off at this width; nothing to assert
+      // The maximum band height any platform should hand the user:
+      const maxBandHeight = 320;
+      expect(
+        Math.abs(c.afterWidth - c.panelClientWidth),
+        `at viewport width ${wide} (panel = ${c.panelClientWidth}px, layer on), ` +
+          `the wave ::after's used width (${c.afterWidth}px) must equal the panel's ` +
+          `client width ±1 px. The defect that hid before the panel got past ` +
+          `~1618 px is "max-height: 320 re-transfers the aspect ratio to the width, ` +
+          `and the band stops at 320 × 1800/356 ≈ 1617.97 px". With width: 100% ` +
+          `and inset: auto auto 0 0, the band tracks the panel at every size.`
+      ).toBeLessThanOrEqual(1);
+      // The height may be capped — verify the cap actually binds
+      // here, not the width.
+      expect(
+        c.afterHeight,
+        `at viewport width ${wide}, the ::after's used height (${c.afterHeight}px) ` +
+          `must be ≤ ${maxBandHeight}px (the cap is supposed to bind — that is what ` +
+          `makes the band stop growing vertically past wide panels).`
+      ).toBeLessThanOrEqual(maxBandHeight + 0.5);
+      // And the panel still has to clip what does bleed.
+      expect(
+        c.overlayOverflowX,
+        `the welcome overlay's overflow-x at viewport ${wide} must still be 'hidden' ` +
+          `or 'clip'; got '${c.overlayOverflowX}'`
+      ).toMatch(/^(hidden|clip)$/);
+      // And no horizontal scrollbar: overlay.scrollWidth should not
+      // exceed clientWidth even at the very wide viewport.
+      const sw = await page.evaluate(() => {
+        const overlay = document.querySelector('.quick-help-overlay');
+        if (!overlay) return null;
+        return { scrollWidth: overlay.scrollWidth, clientWidth: overlay.clientWidth };
+      });
+      if (sw) {
+        expect(
+          sw.scrollWidth,
+          `at viewport ${wide}, overlay.scrollWidth (${sw.scrollWidth}px) must be <= ` +
+            `overlay.clientWidth (${sw.clientWidth}px); overflow=${sw.scrollWidth - sw.clientWidth}px`
+        ).toBeLessThanOrEqual(sw.clientWidth);
+      }
+    }
   });
 
   test('a drag that starts on the chevron resizes the panel', async ({ page }) => {

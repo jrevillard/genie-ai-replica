@@ -243,15 +243,18 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-banner {
 html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::after {
   content: '';
   position: absolute;
-  inset: auto 0 0;
-  /* The waves span the overlay's padding box exactly. The pseudo is
-     absolutely positioned, so left/right/width/margin is over-
-     constrained and the right offset is dropped when `right` and
-     `width` are both set; inset: auto 0 0 with the box's natural
-     width sizes the band to the panel, edge to edge. Their asset's
-     top 31 % is transparent (y 0-162 of 520), so cropping into it is
-     invisible — bg-position bottom keeps the ink in the box
-     regardless of how the box is sized. */
+  /* The width has to be definite. With `inset: auto 0 0` and
+     `width: auto`, the width is indefinite — it is solved from the
+     insets — and `max-height: 320px` then re-transfers the aspect
+     ratio from the height to the width: the band resolves to 320 ×
+     1800/356 ≈ 1617.97 px and stops there, whatever the panel's width.
+     Holding `width: 100%` of the overlay's padding box (= the panel's
+     width) keeps the width definite; aspect-ratio still sets height =
+     width * 356/1800, and max-height clamps the height without
+     re-deriving the width. The band therefore tracks the panel's width
+     at every size — width independent — and is at most 320 px tall. */
+  inset: auto auto 0 0;
+  width: 100%;
   aspect-ratio: 1800 / 356;
   max-height: calc(var(--visual-waves-set, 0) * 320px);
   background: var(--visual-waves) bottom / 100% auto no-repeat;

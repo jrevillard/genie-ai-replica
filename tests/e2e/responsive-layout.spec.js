@@ -60,9 +60,15 @@ async function measureLayout(page) {
   // Read the design tokens the spec is supposed to assert against so
   // a future token change doesn't silently invalidate this spec.
   // --qh-card-min is a component-local extension point declared on
-  // .quick-help-grid (the only element that reads it directly). The
-  // brief keeps it out of theme-variables.css on purpose, so this spec
-  // reads it from that element rather than from :root.
+  // .quick-help-overlay (the common ancestor of the grid AND the
+  // composer wrapper — both read --qh-card-min via the composite
+  // --qh-measure, while the grid's own auto-fit reads --qh-card-min
+  // directly). Declaring it on the grid alone leaves the wrapper's
+  // reference unresolved and the wrapper silently falls back to the
+  // overlay's full width — the cascade loss this comment exists to
+  // warn against. The brief keeps it out of theme-variables.css on
+  // purpose, so this spec reads it from that element rather than
+  // from :root.
   // --space-xl is the global token.
   const tokens = await page.evaluate(() => {
     const parsePx = (raw) => {

@@ -222,9 +222,49 @@ describe('ChatBotComponent', () => {
       expect(botMsgs.length).toBeGreaterThanOrEqual(1);
     });
 
-    it('renders a message input area', () => {
+    it('renders a message input area', async () => {
+      // The default config-loader mock returns an empty buttons list,
+      // so `composerEntry` is null and the welcome composer is gated
+      // out — the v-else chat composer then renders instead. Install
+      // a non-empty just-chat entry so the welcome composer is the
+      // input that lives in the DOM here, mirroring production.
+      const configLoader = require('../../config-loader');
+      configLoader.default.mockResolvedValue({
+        features: {
+          chat: {
+            quickHelp: {
+              buttons: [
+                {
+                  id: 'just-chat',
+                  title: { en: 'Just Chat' },
+                  icon: { type: 'file', value: '/config/quickhelp/just-chat.svg' },
+                  category: null,
+                  placement: 'composer'
+                },
+                {
+                  id: 'one',
+                  title: { en: 'One' },
+                  icon: { type: 'file', value: '/config/quickhelp/one.svg' },
+                  category: 'cat-1'
+                }
+              ]
+            }
+          }
+        }
+      });
       const wrapper = createChatBotWrapper();
-      expect(wrapper.find('input').exists() || wrapper.find('.ds-input').exists()).toBe(true);
+      await flushPromises();
+      // The composer slots between the welcome panel and the chat input
+      // area via v-if/v-else — only one is in the DOM at a time. The
+      // welcome screen is the default rendered state, so the welcome
+      // composer is the input that lives in the DOM here.
+      expect(
+        wrapper.find('input').exists() || wrapper.find('.ds-input').exists() || wrapper.find('.chat-composer').exists()
+      ).toBe(true);
+      // Restore the empty default for the rest of the suite.
+      configLoader.default.mockResolvedValue({
+        features: { chat: { quickHelp: { buttons: [] } } }
+      });
     });
   });
 

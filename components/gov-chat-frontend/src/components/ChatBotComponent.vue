@@ -146,7 +146,7 @@
              a hard cut. With the Living Intelligence layer switched
              off, the banner has no special styling and the layout is
              identical to the legacy version: heading + subtitle stack
-             above the grid as ordinary block-flow children. -->
+             above the composer / grid as ordinary block-flow children. -->
         <div class="quick-help-banner">
           <div class="quick-help-content">
             <i18n-t keypath="chatbot.whatCanIHelp" tag="h2" class="quick-help-heading">
@@ -158,9 +158,40 @@
           </div>
         </div>
 
+        <!-- The composer is the just-chat entry: between the banner and
+             the grid, inside the overlay. A second composer is mounted
+             at the chat-input slot under v-else, so the two positions
+             share exactly one composer instance, never two. The leading
+             slot carries the entry's chat-bubble icon; the parent
+             gives it the localised title as accessible name. -->
+        <div v-if="composerEntry" class="quick-help-composer">
+          <ChatComposer
+            v-model="newMessage"
+            input-id="welcome-composer-input"
+            :placeholder="translate('chatbot.composerPlaceholder')"
+            :accessible-name="composerEntry.service"
+            :tint="composerEntry.styles"
+            :attach-title="translate('chatbot.composerAttachTitle')"
+            :mic-title="translate('chatbot.composerMicTitle')"
+            :send-title="translate('chatbot.composerSendTitle')"
+            data-testid="welcome-composer"
+            @send="handleWelcomeSend"
+          >
+            <template #leading>
+              <img
+                v-if="composerEntry.icon"
+                class="composer-leading-img"
+                :src="composerEntry.icon"
+                alt=""
+                data-testid="welcome-composer-leading-img"
+              />
+            </template>
+          </ChatComposer>
+        </div>
+
         <div class="quick-help-grid">
           <DsCard
-            v-for="button in quickHelpButtons"
+            v-for="button in tileButtons"
             :key="button.id"
             variant="flat"
             padding="md"
@@ -176,43 +207,38 @@
         </div>
       </div>
       <!-- Input Area -->
-      <div class="chat-input">
-        <DsInput
+      <div v-else class="chat-input">
+        <ChatComposer
           v-model="newMessage"
-          type="textarea"
-          class="prompt-textarea"
-          :rows="4"
+          input-id="chat-composer-input"
           :placeholder="translate('chatbot.placeholder')"
-          @enter="sendMessage"
+          :attach-title="translate('chatbot.composerAttachTitle')"
+          :mic-title="translate('chatbot.composerMicTitle')"
+          :save-title="translate('chatbot.saveChat')"
+          :export-title="translate('chatbot.exportChat')"
+          :send-title="translate('chatbot.composerSendTitle')"
+          :show-save="chatMessages.length > 0"
+          :show-export="chatMessages.length > 0"
+          :is-saving="isSaving"
+          data-testid="chat-composer"
+          @send="sendMessage"
+          @save="saveChatToHistory"
+          @export="openExportDialog"
           @focus="handleTextareaFocus"
-        />
-        <div class="input-actions">
-          <DsButton variant="ghost" :title="translate('chatbot.newChat')" @click="startNewChat">
-            <Plus :size="16" />
-          </DsButton>
-          <DsButton
-            v-if="chatMessages.length > 0"
-            variant="ghost"
-            :title="translate('chatbot.saveChat')"
-            data-testid="save-chat-btn"
-            :disabled="isSaving"
-            @click="saveChatToHistory"
-          >
-            <Save v-if="!isSaving" :size="16" />
-            <Loader2 v-else :size="16" class="animate-spin" />
-          </DsButton>
-          <DsButton
-            v-if="chatMessages.length > 0"
-            variant="ghost"
-            :title="translate('chatbot.exportChat')"
-            @click="openExportDialog"
-          >
-            <FileText :size="16" />
-          </DsButton>
-          <DsButton variant="primary" @click="sendMessage">
-            {{ translate('chatbot.sendButton') }}
-          </DsButton>
-        </div>
+        >
+          <template #leading>
+            <button
+              type="button"
+              class="composer-leading-btn"
+              :title="translate('chatbot.newChat')"
+              :aria-label="translate('chatbot.newChat')"
+              data-testid="composer-new-chat-btn"
+              @click="startNewChat"
+            >
+              <Plus :size="20" aria-hidden="true" />
+            </button>
+          </template>
+        </ChatComposer>
       </div>
       <!-- Feedback Dialog -->
       <chat-response-feedback-dialog
@@ -292,7 +318,7 @@
 </template>
 
 <script>
-import { Brain, Loader2, Plus, Save, FileText, Sparkles } from '@lucide/vue';
+import { Brain, Loader2, Plus, Sparkles } from '@lucide/vue';
 import { eventBus } from '../eventBus.js';
 import notificationService from '../services/notificationService';
 import { mapGetters, mapActions } from 'vuex';
@@ -303,6 +329,7 @@ import RightSideBarComponent from './RightSideBarComponent.vue';
 import chatbotService from '../services/chatbotService';
 import serviceTreeService from '../services/serviceTreeService'; // *** NEW: Import serviceTreeService
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
+import ChatComposer from './ChatComposer.vue';
 import chatHistoryService from '../services/chatHistoryService';
 import DsSpinner from './ds/Spinner.vue';
 import DsPill from './ds/Pill.vue';
@@ -415,13 +442,12 @@ export default {
     Brain,
     Loader2,
     Plus,
-    Save,
-    FileText,
     Sparkles,
     ChatResponseFeedbackDialog,
     ModalDialog,
     RightSideBarComponent,
     ConfirmDialog,
+    ChatComposer,
     DsPill,
     DsSpinner,
     DsButton,
@@ -544,6 +570,22 @@ export default {
       // The handle only exists where the sidebar is an in-flow
       // reservation — the same threshold App.vue applies on the left.
       return typeof window !== 'undefined' && window.innerWidth >= SIDEBAR_INFLOW_MIN_WIDTH;
+    },
+
+    // The just-chat config entry becomes the welcome composer. The
+    // entry carries the composer's leading icon, tint and accessible
+    // name (its localised `title`) — the composer itself stays a
+    // product feature, not a DS primitive, and reads only what the
+    // entry says.
+    composerEntry() {
+      return this.quickHelpButtons.find((b) => b && b.id === 'just-chat') || null;
+    },
+    // The grid filters out any entry that asks to be placed in the
+    // composer instead of a tile — the placement field is the explicit
+    // signal, no inference from category absence or action emptiness
+    // (a second category-less entry would silently share the slot).
+    tileButtons() {
+      return this.quickHelpButtons.filter((b) => b.placement !== 'composer');
     }
   },
 
@@ -924,6 +966,9 @@ export default {
               icon: button.icon?.value,
               category: button.category,
               styles: button.styles,
+              // Pass the placement field through so the tile / composer
+              // routing in the welcome panel can read it directly.
+              placement: button.placement,
               id: button.id
             };
           });
@@ -1011,6 +1056,32 @@ export default {
 
     handleTextareaFocus() {
       this.showQuickHelp = false;
+    },
+
+    // Enter / send in the welcome composer. Mirrors selectQuickHelpOption
+    // for the just-chat branch (clears prior quickHelp context, pushes
+    // the just-chat item with empty serviceLabels — no label filter, an
+    // unfiltered query) then steps into the chat view and sends. The
+    // existing sendMessage path then reads the empty-array serviceLabels
+    // and selects no label filter, matching the previous "Just Chat"
+    // tile behaviour.
+    handleWelcomeSend() {
+      const entry = this.composerEntry;
+      this.selectedContextItems = this.selectedContextItems.filter((i) => i.source !== 'quickHelp');
+      if (entry) {
+        this.selectedContextItems.push({
+          service: entry.service,
+          serviceLabels: [],
+          serviceKey: entry.serviceKey || entry.id || entry.service,
+          source: 'quickHelp',
+          id: entry.id,
+          category: null,
+          selected: true
+        });
+      }
+      this.currentCategoryId = null;
+      this.showQuickHelp = false;
+      this.sendMessage();
     },
 
     handleTreeNodeSelected(item) {

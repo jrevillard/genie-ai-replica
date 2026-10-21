@@ -293,6 +293,15 @@
                           "visibleText",
                           "hiddenPrompt"
                         ]
+                      },
+                      "placement": {
+                        "type": "string",
+                        "enum": [
+                          "tile",
+                          "composer"
+                        ],
+                        "default": "tile",
+                        "description": "How the entry is rendered: a tile in the welcome grid, or the composer that replaces the Just Chat action."
                       }
                     },
                     "required": [
@@ -366,7 +375,8 @@
             "action": {
               "visibleText": "quickhelp.justChatUserPrompt",
               "hiddenPrompt": "quickhelp.justChatPrompt"
-            }
+            },
+            "placement": "composer"
           },
           {
             "id": "identity-civil",

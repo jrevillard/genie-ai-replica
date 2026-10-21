@@ -224,11 +224,18 @@ module.exports = (queryService) => {
       // Carry the query id into the trace so a trace joins to the stored query
       // document. When queryId is absent the request simply carries no baggage
       // and every service leaves the attribute unset — never a placeholder.
+      //
+      // The OPEA upstream is deployment configuration (OPEA_HOST/OPEA_PORT), never
+      // request data. The SSRF rule cannot see that: the taint reaches opeaUrl
+      // through initStreamQuery's return object, whose sibling field opeaPayload
+      // IS request-derived, and a tainted call result is tracked whole. The
+      // invariant is pinned by a test in __tests__/services/query-service.test.js.
       const opeaResponse = queryId
         ? await tracingBaggage.withBaggage(spanAttrs.QUERY_ID_KEY, queryId, () =>
+            // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
             axios.post(opeaUrl, opeaPayload, opeaRequestOptions)
           )
-        : await axios.post(opeaUrl, opeaPayload, opeaRequestOptions);
+        : await axios.post(opeaUrl, opeaPayload, opeaRequestOptions); // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
 
       const stream = opeaResponse.data;
       let fullResponseText = '';
@@ -291,6 +298,11 @@ module.exports = (queryService) => {
               { queryId }
             );
             if (!res.writableEnded) {
+              // An SSE frame, never an HTML document: JSON.stringify escapes
+              // quotes and newlines, so a value cannot terminate the `data:`
+              // frame or inject a second event. The client renders message
+              // content through DOMPurify (ChatBotComponent.vue).
+              // nosemgrep: nodejs_scan.javascript-xss-rule-express_xss
               res.write(`data: ${JSON.stringify({ type: 'chunk', content: body })}\n\n`);
             }
           } catch (error) {

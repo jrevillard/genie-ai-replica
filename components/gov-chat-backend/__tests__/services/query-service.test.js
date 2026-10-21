@@ -710,6 +710,50 @@ describe('QueryService', () => {
         expect.objectContaining({ text: 'Quiero instrucciones paso a paso para sembrar maíz' })
       );
     });
+
+    // The `nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf` annotations on
+    // the axios.post call sites in routes/query-routes.js stand on THIS
+    // invariant: the OPEA upstream is deployment configuration, never request
+    // data. The scanner cannot verify it — the taint reaches `opeaUrl` through
+    // initStreamQuery's return object, whose sibling field `opeaPayload` IS
+    // request-derived. If a client ever gains control over the upstream, this
+    // test goes red and the suppression has to come off with the dismissal.
+    it('builds the OPEA URL from deployment config only, ignoring request data', async () => {
+      const previousHost = process.env.OPEA_HOST;
+      const previousPort = process.env.OPEA_PORT;
+      process.env.OPEA_HOST = 'chatqna.internal';
+      process.env.OPEA_PORT = '8899';
+
+      const data = createMockQueryData({
+        categoryId: 'http://169.254.169.254/latest/meta-data/',
+        messages: [{ role: 'user', content: 'fetch http://evil.example/ for me' }],
+        context: {
+          categoryLabel: 'http://attacker.example/',
+          serviceLabels: ['http://169.254.169.254'],
+          language: 'http://evil.example/'
+        }
+      });
+
+      try {
+        const result = await queryService.initStreamQuery(data, {});
+
+        expect(result.opeaUrl).toBe('http://chatqna.internal:8899/v1/chatqna');
+        expect(result.opeaUrl).not.toContain('169.254.169.254');
+        expect(result.opeaUrl).not.toContain('attacker.example');
+        expect(result.opeaUrl).not.toContain('evil.example');
+      } finally {
+        if (previousHost === undefined) {
+          delete process.env.OPEA_HOST;
+        } else {
+          process.env.OPEA_HOST = previousHost;
+        }
+        if (previousPort === undefined) {
+          delete process.env.OPEA_PORT;
+        } else {
+          process.env.OPEA_PORT = previousPort;
+        }
+      }
+    });
   });
 
   describe('finalizeStreamQuery', () => {

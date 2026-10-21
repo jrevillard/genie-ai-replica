@@ -1367,7 +1367,7 @@ export default {
   chatbot: {
     streamingError: 'Karabo e emisetsoe. Re leke hape.',
     aiGeneratedNoDocs: 'AI-generated — not based on library documents',
-    translationUnavailable: 'Translation unavailable — showing the original response',
+    translationUnavailable: 'Translation unavailable — this answer may contain untranslated text.',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'Configuration mismatch: {warnings}. Please check the Quick Help and knowledge hierarchy configuration.',

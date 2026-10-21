@@ -1370,7 +1370,7 @@ export default {
   chatbot: {
     streamingError: 'Ответ был прерван. Повторите попытку.',
     aiGeneratedNoDocs: 'Сгенерировано ИИ — не основано на документах библиотеки',
-    translationUnavailable: 'Перевод недоступен — показан исходный ответ',
+    translationUnavailable: 'Перевод недоступен — в этом ответе может быть непереведённый текст.',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'Несоответствие конфигурации: {warnings}. Проверьте конфигурацию быстрой помощи и иерархии знаний.',

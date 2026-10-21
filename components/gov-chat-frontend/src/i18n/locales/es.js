@@ -1374,7 +1374,7 @@ export default {
     streamingError: 'Se interrumpió la respuesta. Inténtelo de nuevo.',
     welcomeMessage: 'Welcome! How can I assist you today?',
     aiGeneratedNoDocs: 'Generado por IA — no basado en los documentos de la biblioteca',
-    translationUnavailable: 'Traducción no disponible: se muestra la respuesta original',
+    translationUnavailable: 'Traducción no disponible: esta respuesta puede contener texto sin traducir.',
     configMismatchWarning:
       'Incoherencia de configuración: {warnings}. Verifique la configuración de Ayuda Rápida y la jerarquía de conocimiento.',
     categoryNotFound: 'Categoría "{label}" no encontrada en la jerarquía de conocimiento',

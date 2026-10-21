@@ -132,7 +132,10 @@
               <Languages :size="16" />
               <span>
                 {{
-                  translate('chatbot.translationUnavailable', 'Translation unavailable — showing the original response')
+                  translate(
+                    'chatbot.translationUnavailable',
+                    'Translation unavailable — this answer may contain untranslated text.'
+                  )
                 }}
               </span>
             </div>

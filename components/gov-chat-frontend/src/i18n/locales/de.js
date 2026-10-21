@@ -1373,7 +1373,7 @@ export default {
   chatbot: {
     streamingError: 'Die Antwort wurde unterbrochen. Bitte versuchen Sie es erneut.',
     aiGeneratedNoDocs: 'KI-generiert — nicht auf Bibliotheksdokumenten basierend',
-    translationUnavailable: 'Übersetzung nicht verfügbar — die Originalantwort wird angezeigt',
+    translationUnavailable: 'Übersetzung nicht verfügbar — diese Antwort kann unübersetzten Text enthalten.',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'Konfigurationsfehler: {warnings}. Bitte überprüfen Sie die Schnellhilfe- und Wissenshierarchie-Konfiguration.',

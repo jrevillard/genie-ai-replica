@@ -661,6 +661,21 @@ describe('GpuTranslateBackend endpoint addressing', () => {
       expect(sink.opts.port).toBe(443);
     });
 
+    it('authenticates the startup probe itself, not only the helper', async () => {
+      // The probe is the boot gate for a remote HTTPS GPU node, which rejects
+      // an unauthenticated request. A token applied everywhere except here
+      // would let boot succeed against a node every later call is refused by.
+      const sink = { res: () => responding(200, []) };
+      https.request.mockImplementation(captures(sink));
+      const backend = backendWithKey();
+      backend.endpoint = REMOTE;
+
+      await backend.healthCheck();
+
+      expect(sink.opts.headers.Authorization).toBe('Bearer test-key-123');
+      expect(sink.opts.method).toBe('GET');
+    });
+
     it('carries the bearer token on a real request, not just on the helper', async () => {
       const sink = {
         res: () => responding(200, [JSON.stringify({ choices: [{ message: { content: 'traduit' } }] })])

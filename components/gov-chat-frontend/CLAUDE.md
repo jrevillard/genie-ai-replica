@@ -186,23 +186,48 @@ A visual check needs six things from whatever stack it runs on, whichever orches
 
 1. **An origin of its own** — a URL the browser and Playwright can reach, serving the app and proxying the API.
 2. **An image of its own** — the code under test, on a tag nobody else runs.
-3. **A reachable data tier** — shared when the stack allows it, per-instance when it does not.
+3. **The stack behind it** — shared when it is already up, brought up first when it is not.
 4. **A rebuild→serve step measured in seconds.**
 5. **A way to prove the running instance has the new code.**
 6. **A login path** — a browser login, since direct access grants are disabled on the realm.
 
-**Never measure against the stack someone else is looking at.**
+**The shape is the same in both orchestrators: one extra frontend instance per worker, on top of a shared
+stack.** Only the frontend is duplicated. The backend, the identity provider and the data tier are not — and
+for a change that lives above the frontend, nothing below it changed, so duplicating it is pure cost.
+
+**Never rebuild the shared stack's own frontend while someone is looking at it, and never `down -v` the shared
+project** — the volumes carry the data.
 
 #### Docker Compose — the current dev loop
 
-A separate compose project: own network, own volumes, own published ports, own image tag.
+The shared project (`living-intelligence`) holds Kong, the backend, Keycloak, ArangoDB, Postgres and Redis —
+one instance of each. A worker adds **two containers** and nothing else: the frontend on **its own image
+tag**, and an nginx in front of it publishing **its own port**, proxying `/api` to the shared Kong.
 
 ```bash
-export NGINX_HTTPS_PORT=9443 NGINX_HTTP_PORT=9080
-docker compose -f docker-compose.yaml -f <override>.yml up -d <services>
+# the shared stack, once
+docker compose -p living-intelligence up -d
+
+# one worker
+docker build -t genie-ai-frontend:lot-a components/gov-chat-frontend/
+docker run -d --name li-a-frontend --network living-intelligence_genieai_network \
+  -e VUE_APP_API_URL=/api \
+  -v "$PWD/components/gov-chat-frontend/public/config:/app/dist/config:ro" \
+  genie-ai-frontend:lot-a
+docker run -d --name li-a-nginx --network living-intelligence_genieai_network \
+  -p 9444:443 -e NGINX_PUBLIC_DOMAIN=localhost -e NGINX_HTTPS_PORT=9444 \
+  -e NGINX_FRONTEND_HOST=li-a-frontend -e NGINX_FRONTEND_PORT=8090 \
+  -e KONG_PROXY_HOST=living-intelligence-kong-1 \
+  registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-nginx:latest
 ```
 
-Two facts about it that cost time:
+Bind-mount `public/config` at `/app/dist/config`: the runtime config is generated at container start, so a config
+edit then needs no rebuild — only a container restart.
+
+The shared Keycloak must accept the worker's origin: add its `redirectUris` and `webOrigins` through the admin
+API — no restart, no repo change.
+
+Two facts that cost time:
 
 - Keycloak binds its HTTP listener to the **resolved address of `KC_HOSTNAME`**. With `KC_HOSTNAME=localhost` it
   binds `127.0.0.1` inside its own container and every other container gets "Connection refused", while the
@@ -210,43 +235,37 @@ Two facts about it that cost time:
 - The frontend container is the app; the nginx in front of it is the public entry. The app's real root is
   `/app/dist`, **not** `/usr/share/nginx/html`, which is a stock page this image never uses.
 
-**Never `docker compose down -v` on a stack someone is watching** — it destroys the volumes.
-
 #### Kubernetes — the migration target
 
-A slot is **a namespace + a Helm release + an ingress host**: the three things the chart requires for a second
-release on one cluster. The chart lives in this repository at `charts/genieai-umbrella` (on `feat/k8s-migration`
-until it merges); the per-slot values belong with the environment overlays.
+Same shape: the shared release is the stack, and a worker adds **a frontend instance with its own image tag**
+plus a way to reach it. The chart renders one frontend per release, so a worker's instance is a hand-written
+Deployment + Service **in the shared namespace** — not a second release, and no second ArangoDB, Keycloak or
+backend.
 
-| Primitive | Kubernetes form |
-|---|---|
-| own origin | `ingress.host` per slot (`genieai-a.local:4443`) — the chart renders a Gateway + HTTPRoute per namespace, TLS from cert-manager |
-| own image | `services.frontend.image: {repository, tag, pullPolicy: Never}`, built into minikube's daemon with `eval $(minikube docker-env)` |
-| prove the code | `kubectl exec -n <ns> <frontend-pod> -- grep <token> /app/dist/assets/*` |
-| serve | `helm upgrade` the slot's release, **bypassing Flux** — see the cadence below |
-| login | the shared realm, with the slot's origin added to the client's `redirectUris` (admin API, no restart) |
-| data tier | **per namespace by design** — kube-arangodb is single-namespace, and the Keycloak convergence Job runs per namespace |
+Why that works:
 
-**Three things the chart does not allow yet.** They shape the design, so read them before proposing a slot:
+- The chart's NetworkPolicies select by `genieai.io/component: <service>`, so a pod carrying its own labels is
+  not governed by them: the worker's instance reaches the shared backend and Keycloak Services.
+- The worker's origin serves the SPA **and** proxies `/api` to the shared backend, so the browser stays
+  same-origin — no CORS change, no second realm.
+- The image is the same one the stack runs: `eval $(minikube docker-env)` + `pullPolicy: Never` for a local
+  build, or a registry tag. Then `kubectl set image` + `kubectl rollout status`.
 
-1. **A slot cannot borrow another release's Keycloak.** `VUE_APP_KEYCLOAK_URL` is computed by the template from
-   `ingress.host` and appended *after* the values' `env` list; Kubernetes takes the last duplicate, so a
-   values-level override loses. A frontend-only slot pointing at a shared issuer needs a chart knob.
-2. **A slot cannot reach the shared backend across namespaces.** The frontend's default-deny NetworkPolicy allows
-   the backend by `podSelector` with no `namespaceSelector` — same namespace only. Sharing the BFF across slots
-   needs a chart change.
-3. **A slot is not reachable by a published port.** The same NetworkPolicy admits only the Envoy data plane, so
-   the slot's origin is an HTTPRoute on the edge, not a NodePort.
+What it costs:
 
-**Cost.** A full slot carries its own ArangoDB, Keycloak and backend. On the laptop node (10 Gi, a backend limit
-of 8 Gi) two full slots do not fit — slots are sequential there whatever the method allows.
+- **The edge owns the API path matrix.** The Envoy route sends `/api/files` and `/api/labels` to the
+  document-repository and the rest of `/api` to the backend. A worker's own proxy must reproduce that split, or
+  the document paths break for that worker only. The alternative — giving the worker its own host on the edge
+  (`ingress.host` + a cert-manager certificate + an HTTPRoute) — costs a host, a certificate and a `/etc/hosts`
+  entry, and buys the edge's own routing.
+- **The realm must accept the worker's origin** — `redirectUris` and `webOrigins` through the admin API, exactly
+  as in compose. And the worker's origin must be a **secure context** for the PKCE login: `localhost` over plain
+  HTTP qualifies; a custom hostname over plain HTTP does not.
+- **The shared stack must be up.** If it is not, bring it up first (`helm upgrade` the release, or
+  `flux reconcile hr genieai -n flux-system`) — a worker instance has nothing to lean on otherwise.
 
-**Cadence.** Flux re-applies on a 1m/10m interval with 5m health windows and 15m timeouts. A visual loop is
-seconds, so a slot's release is updated directly (`helm upgrade`) or with `kubectl set image` + `kubectl rollout
-status`, and reconciled with Flux afterwards.
-
-> This mapping is read off the chart. **No slot has been run this way yet** — treat it as the shape, not as a
-> verified recipe, and verify each step before relying on it.
+> This mapping is read off the chart, and **no worker instance has been run this way yet** — treat it as the
+> shape, not as a verified recipe, and verify each step before relying on it.
 
 ### Known gaps
 

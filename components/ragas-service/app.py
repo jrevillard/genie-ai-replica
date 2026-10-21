@@ -206,6 +206,15 @@ async def _run_job(job_id: str, coro) -> None:
         logger.exception("job %s (%s) failed", job_id, job.get("kind"))
         job["status"] = "failed"
         job["error"] = f"{type(e).__name__}: {e}"
+    except BaseException as e:  # noqa: BLE001 — a BaseException (SystemExit, a
+        # library's KeyboardInterrupt) would otherwise leave the job 'running'
+        # FOREVER: it counted against MAX_CONCURRENT_JOBS (a slot leak) and the
+        # okf-server poller extends its liveness horizon on any non-terminal
+        # status, so the poller never gave up either (2026-10-21 sidecar
+        # review F4). Two of those brick the sidecar with 503 busy.
+        job["status"] = "failed"
+        job["error"] = f"{type(e).__name__}: {e}"
+        logger.exception("job %s (%s) died on a BaseException", job_id, job.get("kind"))
     finally:
         job["finished_at"] = time.time()
 
@@ -218,7 +227,14 @@ def _spawn_job(job_id: str, coro) -> None:
 async def get_job(job_id: str):
     job = JOBS.get(job_id)
     if job is None:
-        raise HTTPException(status_code=404, detail="unknown or expired job (sidecar restarted?)")
+        # Name the REAL causes (2026-10-21 sidecar review F3): the old
+        # "sidecar restarted?" text sent every operator chasing a container
+        # that had never restarted, when the real cause was the job's own
+        # TTL eviction.
+        raise HTTPException(
+            status_code=404,
+            detail="unknown job (never submitted, already evicted by the retention window, or the sidecar restarted)",
+        )
     return _snapshot(job)
 
 
@@ -240,8 +256,11 @@ async def cancel_job(job_id: str):
                 break
             await asyncio.sleep(0.1)
     snapshot = _snapshot(job)
-    if job.get("status") in ("done", "failed", "cancelled"):
-        JOBS.pop(job_id, None)
+    # A CANCELLED job STAYS in the registry (2026-10-21 sidecar review F3):
+    # popping it made the caller's next poll a 404 — which the caller read as
+    # "the sidecar restarted" and the okf-server poller turned into a
+    # "job vanished" FAILURE for a cancel that had actually worked. Terminal
+    # jobs age out through the TTL reap instead.
     return snapshot
 
 

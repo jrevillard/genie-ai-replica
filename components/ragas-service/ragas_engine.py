@@ -234,7 +234,7 @@ def _make_fanout_class(ChatOpenAI):  # noqa: N802 â€” mirrors his validated subc
     return _FanoutChatOpenAI
 
 
-def _make_caching_wrapper(LangchainLLMWrapper, model_tag=None):  # noqa: N802 â€” factory, like _make_fanout_class
+def _make_caching_wrapper(LangchainLLMWrapper, model_tag=None, cancel_event=None):  # noqa: N802 â€” factory, like _make_fanout_class
     """Disk-backed response cache around the judge client (2026-10-18).
 
     Live cost anatomy of a 5-question generation over two SMALL repos (21
@@ -262,6 +262,18 @@ def _make_caching_wrapper(LangchainLLMWrapper, model_tag=None):  # noqa: N802 â€
             self._model_tag = model_tag if model_tag is not None else os.getenv("RAGAS_JUDGE_MODEL")
             self._cache_dir = os.getenv("RAGAS_LLM_CACHE_DIR") or "/tmp/ragas-llm-cache"
             self._enabled = (os.getenv("RAGAS_LLM_CACHE") or "1").strip().lower() not in ("0", "off", "false", "no")
+            # The cancel seam (2026-10-21 sidecar review F1): the KG phase
+            # runs apply_transforms as ONE uninterruptible thread â€” ~200 LLM
+            # calls with no checkpoint between them, so a cancelled generation
+            # kept burning the judge for minutes after the user cancelled
+            # (the "zombie" that also produced the bogus "job vanished"
+            # verdict). Every LLM call now checks the event, so a cancel
+            # drains the phase within ONE in-flight call.
+            self._cancel = cancel_event
+
+        def _check_cancel(self) -> None:
+            if self._cancel is not None and self._cancel.is_set():
+                raise EngineCancelled("cancelled by user")
 
         def _cache_enabled(self) -> bool:
             return self._enabled
@@ -330,6 +342,7 @@ def _make_caching_wrapper(LangchainLLMWrapper, model_tag=None):  # noqa: N802 â€
             return texts, llm_output
 
         def generate_text(self, prompt, n=1, temperature=0.01, stop=None, callbacks=None):
+            self._check_cancel()
             key = self._key(prompt, n, temperature, stop)
             hit = self._load(key)
             if hit is not None:
@@ -341,6 +354,7 @@ def _make_caching_wrapper(LangchainLLMWrapper, model_tag=None):  # noqa: N802 â€
             return result
 
         async def agenerate_text(self, prompt, n=1, temperature=0.01, stop=None, callbacks=None):
+            self._check_cancel()
             key = self._key(prompt, n, temperature, stop)
             hit = self._load(key)
             if hit is not None:
@@ -354,7 +368,7 @@ def _make_caching_wrapper(LangchainLLMWrapper, model_tag=None):  # noqa: N802 â€
     return _CachingLlmWrapper
 
 
-def build_llm(temperature: float = 0.0, judge: dict | None = None):
+def build_llm(temperature: float = 0.0, judge: dict | None = None, cancel_event: threading.Event | None = None):
     """Wrap the judge endpoint as a ragas LLM. Deferred-imported so /health
     never pays the langchain import cost and tests can stub this module.
 
@@ -439,7 +453,7 @@ def build_llm(temperature: float = 0.0, judge: dict | None = None):
         timeout=300,
         **kwargs,
     )
-    return _make_caching_wrapper(LangchainLLMWrapper, model_tag)(inner)
+    return _make_caching_wrapper(LangchainLLMWrapper, model_tag, cancel_event)(inner)
 
 
 class _TeiEmbeddings:
@@ -942,7 +956,7 @@ async def generate_testset(
     from ragas.testset.graph import KnowledgeGraph, Node, NodeType
     from ragas.testset.transforms import apply_transforms
 
-    llm = build_llm(temperature=0.3, judge=judge)  # generation benefits from mild creativity
+    llm = build_llm(temperature=0.3, judge=judge, cancel_event=cancel_event)  # generation benefits from mild creativity
     embeddings = build_embeddings(embed=embed)
     if embeddings is None:
         raise RuntimeError("RAGAS_EMBED_MODEL is required for testset generation (KG transforms embed)")
@@ -1210,7 +1224,7 @@ async def evaluate_samples(
     if not metric_instances:
         raise RuntimeError("no metrics available (embedder unconfigured and only embedding metrics requested?)")
 
-    llm = build_llm(temperature=0.0, judge=judge)
+    llm = build_llm(temperature=0.0, judge=judge, cancel_event=cancel_event)
     embeddings = build_embeddings(embed=embed)
 
     rows = []

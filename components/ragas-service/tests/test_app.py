@@ -239,7 +239,7 @@ def test_unknown_job_404(client):
     assert r.status_code == 404
 
 
-def test_cancel_stops_a_running_job_and_drops_it(client, monkeypatch):
+def test_cancel_stops_a_running_job_and_keeps_it_readable(client, monkeypatch):
     async def slow_generate(*args, **kwargs):
         await asyncio.sleep(30)
         return {"samples": []}
@@ -256,8 +256,13 @@ def test_cancel_stops_a_running_job_and_drops_it(client, monkeypatch):
     d = client.delete(f"/jobs/{job_id}", headers=_auth())
     assert d.status_code == 200
     assert d.json()["status"] == "cancelled"
-    # terminal job is dropped from the registry by the delete
-    assert client.get(f"/jobs/{job_id}", headers=_auth()).status_code == 404
+    # 2026-10-21 sidecar review F3: a cancelled job STAYS readable. Popping
+    # it made the caller's next poll a 404, which the caller read as "the
+    # sidecar restarted" and turned a WORKING cancel into a "job vanished"
+    # failure.
+    after = client.get(f"/jobs/{job_id}", headers=_auth())
+    assert after.status_code == 200
+    assert after.json()["status"] == "cancelled"
 
 
 def test_cancel_of_a_terminal_job_is_idempotent(client, monkeypatch):

@@ -316,7 +316,16 @@ async function pollSidecarJob(jobId, { onProgress } = {}) {
       job = await resp.json();
     } catch (e) {
       if (e.status === 404) {
-        const err = new Error(`ragas-service job ${jobId} vanished (sidecar restarted mid-job?)`);
+        // A 404 after OUR OWN cancel is not a vanished job (2026-10-21 sidecar
+        // review F3): the sidecar used to pop a cancelled job from its
+        // registry, so the poller's next GET 404'd and the whole cancel
+        // surfaced as "job vanished (sidecar restarted?)" — a failure for a
+        // cancel that had actually worked. The sidecar now keeps cancelled
+        // jobs until the TTL reap, but the caller may still have raced a
+        // restart: report the truth either way.
+        const err = new Error(
+          `ragas-service job ${jobId} is unknown to the sidecar (it finished and was evicted, was never registered, or the sidecar restarted)`
+        );
         err.code = 'RAGAS_UNAVAILABLE';
         err.status = 503;
         throw err;
@@ -372,6 +381,14 @@ async function cancelSidecarJob(jobId, why) {
     await sidecar(`/jobs/${jobId}`, { method: 'DELETE' });
     logger.info('ragas-suite.sidecar_job_cancelled', { job_id: jobId, why });
   } catch (e) {
+    // A 404 here means the job was ALREADY gone (cancelled earlier, evicted
+    // by the retention window, or the sidecar restarted) — the cancel goal is
+    // met, so it is a log line, not a warning that implies a live GPU burn
+    // (2026-10-21 sidecar review F3).
+    if (e.status === 404) {
+      logger.info('ragas-suite.sidecar_job_cancel_noop', { job_id: jobId, why, error: e.message });
+      return;
+    }
     logger.warn('ragas-suite.sidecar_job_cancel_failed', { job_id: jobId, why, error: e.message });
   }
 }

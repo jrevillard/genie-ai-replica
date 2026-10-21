@@ -91,7 +91,7 @@ def _stub_default_distribution(monkeypatch, stub=None):
 def test_generate_testset_passes_num_personas_to_generate(monkeypatch, engine_env):
     from ragas.testset import TestsetGenerator
 
-    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None: object())
+    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None, cancel_event=None: object())
     monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: object())
 
     seen = {}
@@ -143,7 +143,7 @@ def test_generate_testset_caps_concept_text_for_the_kg(monkeypatch, engine_env):
     window and killed the job (live bug #7). The KG input must be capped."""
     from ragas.testset import TestsetGenerator
 
-    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None: object())
+    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None, cancel_event=None: object())
     monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: object())
 
     seen = {}
@@ -228,7 +228,7 @@ def test_generate_testset_seeds_missing_headlines_before_splitter(monkeypatch, e
         async def embed_text(self, _text):
             return [0.1, 0.2]
 
-    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None: object())
+    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None, cancel_event=None: object())
     monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: _FakeEmbedder())
 
     # Stub every LLM touchpoint in the chain (prompts are patched at the
@@ -464,7 +464,7 @@ def test_generate_testset_filters_dropped_samples(monkeypatch, engine_env):
 
     from ragas.testset import TestsetGenerator
 
-    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None: object())
+    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None, cancel_event=None: object())
     monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: object())
     monkeypatch.setattr(ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model: [])
     import ragas.testset.transforms as transforms_module
@@ -499,7 +499,7 @@ def test_generate_testset_all_dropped_raises_an_honest_error(monkeypatch, engine
 
     from ragas.testset import TestsetGenerator
 
-    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None: object())
+    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None, cancel_event=None: object())
     monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: object())
     monkeypatch.setattr(ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model: [])
     import ragas.testset.transforms as transforms_module
@@ -517,6 +517,57 @@ def test_generate_testset_all_dropped_raises_an_honest_error(monkeypatch, engine
         asyncio.run(ragas_engine.generate_testset([{"page_content": "b", "metadata": {}}], testset_size=2))
 
 
+def test_cancelled_generation_stops_the_kg_phase_within_one_llm_call(monkeypatch, engine_env):
+    """2026-10-21 sidecar review F1 — the ZOMBIE: the KG phase runs
+    apply_transforms as ONE uninterruptible thread (~200 LLM calls, no
+    checkpoint between them), so a cancelled generation kept burning the
+    judge for MINUTES after the user cancelled (live: the accidental
+    Generate cancel left the sidecar working for 6 more minutes, and the
+    okf-server poller read the job's disappearance as a sidecar restart).
+
+    The judge wrapper now carries the cancel event, so the phase drains
+    within ONE in-flight LLM call: EngineCancelled propagates out of the
+    transform thread and the job lands 'cancelled'."""
+    import asyncio
+    import threading
+
+    monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: object())
+    monkeypatch.setattr(ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model: [])
+    import ragas.testset.transforms as transforms_module
+
+    cancel_event = threading.Event()
+    calls = {"n": 0}
+
+    class _CancellingLlm:
+        """Stands in for the judge wrapper: it raises the way the real
+        wrapper now does once the cancel event is set."""
+
+        def generate_text(self, prompt, n=1, temperature=0.01, stop=None, callbacks=None):
+            calls["n"] += 1
+            cancel_event.set()
+            raise ragas_engine.EngineCancelled("cancelled by user")
+
+    monkeypatch.setattr(
+        ragas_engine, "build_llm", lambda temperature=0.0, judge=None, cancel_event=None: _CancellingLlm()
+    )
+
+    def fake_apply(kg, transforms, run_config=None):
+        # The real transform loop calls the LLM repeatedly; one call that
+        # raises must abort the phase.
+        _CancellingLlm().generate_text("p")
+
+    monkeypatch.setattr(transforms_module, "apply_transforms", fake_apply)
+    _stub_default_distribution(monkeypatch)
+
+    with pytest.raises(ragas_engine.EngineCancelled):
+        asyncio.run(
+            ragas_engine.generate_testset(
+                [{"page_content": "b", "metadata": {}}], testset_size=1, cancel_event=cancel_event
+            )
+        )
+    assert calls["n"] == 1  # ONE call — the phase stopped, it did not grind on
+
+
 def test_generate_testset_cancel_beats_partial_results(monkeypatch, engine_env):
     """If the user cancels while synthesis is finishing, the job reports
     cancelled — partial samples are never shipped as a surprise result."""
@@ -525,7 +576,7 @@ def test_generate_testset_cancel_beats_partial_results(monkeypatch, engine_env):
 
     from ragas.testset import TestsetGenerator
 
-    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None: object())
+    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None, cancel_event=None: object())
     monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: object())
     monkeypatch.setattr(ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model: [])
     import ragas.testset.transforms as transforms_module
@@ -774,7 +825,7 @@ def test_evaluate_batches_rows_and_reports_progress(monkeypatch, engine_env):
 
     import ragas as ragas_mod
 
-    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None: object())
+    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None, cancel_event=None: object())
     monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: object())
     monkeypatch.setenv("RAGAS_EVAL_BATCH_ROWS", "2")
 
@@ -849,7 +900,7 @@ def test_evaluate_reports_the_judge_that_actually_scored(monkeypatch, engine_env
 
     import ragas as ragas_mod
 
-    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None: object())
+    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None, cancel_event=None: object())
     monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: object())
 
     class _M:
@@ -901,7 +952,7 @@ def test_evaluate_maps_parameterized_metric_columns(monkeypatch, engine_env):
 
     import ragas as ragas_mod
 
-    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None: object())
+    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None, cancel_event=None: object())
     monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: object())
 
     class _M:
@@ -961,7 +1012,7 @@ def test_evaluate_cancel_between_batches(monkeypatch, engine_env):
 
     import ragas as ragas_mod
 
-    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None: object())
+    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0, judge=None, cancel_event=None: object())
     monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: object())
     monkeypatch.setenv("RAGAS_EVAL_BATCH_ROWS", "2")
 

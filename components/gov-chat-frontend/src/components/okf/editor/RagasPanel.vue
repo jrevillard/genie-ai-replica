@@ -388,6 +388,13 @@
         </DsButton>
       </div>
 
+      <!-- explain progress (2026-10-21): the advisor is ONE reasoning-judge
+           call that can legitimately think for minutes — a dead button read
+           as broken. Phase + failing count + elapsed clock from the job poll. -->
+      <div v-if="explainBusy" class="okf-ragas__explain-progress">
+        <DsSpinner size="sm">{{ explainProgressLabel }}</DsSpinner>
+      </div>
+
       <!-- aggregate gauges — every metric chart carries its ⓘ RAGAS note -->
       <div v-if="aggregateRows.length" class="okf-ragas__gauges">
         <div v-for="g in aggregateRows" :key="g.key" class="okf-ragas__gauge">
@@ -686,6 +693,7 @@ export default {
       runCancelBusy: false,
       runBusy: false,
       explainBusy: false,
+      explainProgress: null, // {phase, failing, elapsed_s} from the explain job's poll
       importBusy: false,
       exportBusy: false,
       pdfBusy: false,
@@ -775,6 +783,23 @@ export default {
         { name: this.translate('okf.ragas.results.failingShort', 'failing'), data: [s.failing_count || 0] },
         { name: this.translate('okf.ragas.results.error', 'error'), data: [s.n_errors || 0] }
       ];
+    },
+    explainProgressLabel() {
+      const p = this.explainProgress;
+      if (!p) return this.translate('okf.ragas.explain.working', 'Explaining failures…');
+      let base;
+      if (p.phase === 'advising') {
+        base = this.translate('okf.ragas.explain.advising', 'Advisor thinking — {n} failing rows').replace(
+          '{n}',
+          String(typeof p.failing === 'number' ? p.failing : '?')
+        );
+      } else if (p.phase === 'guarding') {
+        base = this.translate('okf.ragas.explain.guarding', 'Guarding tag suggestions…');
+      } else {
+        base = this.translate('okf.ragas.explain.working', 'Explaining failures…');
+      }
+      const elapsed = this.fmtDuration(p.elapsed_s);
+      return elapsed ? `${base} · ${elapsed}` : base;
     },
     progressPct() {
       const p = this.runProgress;
@@ -1468,16 +1493,21 @@ export default {
     async onExplain() {
       this.error = '';
       this.explainBusy = true;
+      this.explainProgress = null;
       try {
         const res = await this.$store.dispatch('okf/ragasExplain', {
           repoId: this.repo && this.repo.repo_id,
           suiteKey: this.suite.suite_key,
-          runKey: this.runDoc && this.runDoc._key
+          runKey: this.runDoc && this.runDoc._key,
+          onProgress: (p) => {
+            this.explainProgress = p || null;
+          }
         });
         if (res.ok) this.explainDoc = res.result;
         else this.error = res.message;
       } finally {
         this.explainBusy = false;
+        this.explainProgress = null;
       }
     },
     async onExportSuite() {

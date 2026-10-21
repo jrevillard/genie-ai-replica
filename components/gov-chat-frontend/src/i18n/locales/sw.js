@@ -3295,6 +3295,9 @@ export default {
       },
       explain: {
         button: 'Eleza makosa',
+        working: 'Inaeleza hitilafu…',
+        advising: 'Mshauri anafikiri — mistari {n} iliyofera',
+        guarding: 'Inathibitisha mapendekezo ya lebo…',
         title: 'Chanzo cha makosa na ushauri',
         none: 'Hakuna safu zilizoshindwa za kuelezwa.',
         stage: 'Hatua',

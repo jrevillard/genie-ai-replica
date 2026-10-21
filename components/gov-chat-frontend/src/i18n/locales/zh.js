@@ -3233,6 +3233,9 @@ export default {
       },
       explain: {
         button: '解释失败项',
+        working: '正在分析失败项…',
+        advising: '顾问思考中 — {n} 个失败行',
+        guarding: '正在检查标签建议…',
         title: '失败归因与建议',
         none: '没有可归因的失败行。',
         stage: '阶段',

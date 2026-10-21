@@ -1501,6 +1501,14 @@ async function listRuns(repoId, payload = {}) {
 // ---------- explain / advise ----------------------------------------------
 
 const explainInFlight = new Map(); // suite_key -> explain_key
+// Explain progress (David 2026-10-21: "clicked explain… the UX is terrible as
+// it does not show a progress bar"). The explain is ONE advisor LLM call that
+// a reasoning judge can legitimately think over for minutes (live: MiniMax
+// starved 1200→4800→19200 reasoning tokens before writing advice — the
+// adaptive ladder doing its job, invisibly). The map carries the phase +
+// start time so the poll envelope can render "advisor thinking, N failing
+// rows, X elapsed" instead of a dead button.
+const explainProgress = new Map(); // suite_key -> {phase, started_ms, failing}
 
 async function beginExplainFailures(repoId, suiteKey, payload = {}, opts = {}) {
   const db = await dbService.getConnection();
@@ -1549,7 +1557,19 @@ async function getExplainFailures(repoId, suiteKey, runKey) {
   await ensureCollection(db);
   const inflight = explainInFlight.get(suiteKey);
   if (inflight && inflight.run_key === runKey) {
-    return { run_key: runKey, suite_key: suiteKey, status: 'running' };
+    const prog = explainProgress.get(suiteKey) || null;
+    return {
+      run_key: runKey,
+      suite_key: suiteKey,
+      status: 'running',
+      progress: prog
+        ? {
+            phase: prog.phase,
+            failing: typeof prog.failing === 'number' ? prog.failing : null,
+            elapsed_s: Math.round((Date.now() - prog.started_ms) / 1000)
+          }
+        : null
+    };
   }
   const rows = await (
     await db.query(
@@ -1669,97 +1689,102 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
       throw err;
     }
     const attributions = attributeFailures(suite, runDoc);
-
-    // ONE guided-JSON advice call; tag suggestions pass the existing guardrail.
-    let advice = {
-      source: 'none',
-      note: 'no LLM advice (attribution only)',
-      knob_changes: [],
-      repo_tag_changes: [],
-      content_curation: [],
-      prompt_tweaks: []
-    };
-    if (attributions.length) {
-      try {
-        const resp = await frontmatterService.vllmChatCompletions(
-          [
-            {
-              role: 'system',
-              content:
-                'You are a RAG pipeline tuning advisor. Given benchmark failures with stage attributions, ' +
-                'propose concrete actions. Respond as JSON: {"knob_changes": ["..."], "repo_tag_changes": ["..."], ' +
-                '"content_curation": [{"concept": "...", "gap": "..."}], "prompt_tweaks": ["..."]}. ' +
-                'Every item must name the surface it changes. Do not invent failures.'
-            },
-            {
-              role: 'user',
-              content: JSON.stringify({
-                repo: suite.name,
-                metrics: runDoc.metrics,
-                summary: runDoc.payload.summary,
-                attributions: attributions.slice(0, 40)
-              })
-            }
-          ],
-          // The advisor rides the judge's model config (memlog 90: a frontier
-          // judge gives better advice; same service family as scoring).
-          { maxTokens: 1200, temperature: 0.2, service: 'ragas_judge' }
-        );
-        const content =
-          resp && resp.data && resp.data.choices && resp.data.choices[0] && resp.data.choices[0].message
-            ? resp.data.choices[0].message.content
-            : null;
-        const match = content && typeof content === 'string' ? content.match(/\{[\s\S]*\}/) : null;
-        if (match) {
-          const parsed = JSON.parse(match[0]);
-          advice = {
-            source: 'llm',
-            knob_changes: arr(parsed.knob_changes),
-            repo_tag_changes: arr(parsed.repo_tag_changes),
-            content_curation: Array.isArray(parsed.content_curation)
-              ? parsed.content_curation
-                  .slice(0, 20)
-                  .map((c) => ({ concept: String(c.concept || ''), gap: String(c.gap || '') }))
-              : [],
-            prompt_tweaks: arr(parsed.prompt_tweaks),
-            note: ''
-          };
+    explainProgress.set(suiteKey, { phase: 'advising', started_ms: Date.now(), failing: attributions.length });
+    try {
+      // ONE guided-JSON advice call; tag suggestions pass the existing guardrail.
+      let advice = {
+        source: 'none',
+        note: 'no LLM advice (attribution only)',
+        knob_changes: [],
+        repo_tag_changes: [],
+        content_curation: [],
+        prompt_tweaks: []
+      };
+      if (attributions.length) {
+        try {
+          const resp = await frontmatterService.vllmChatCompletions(
+            [
+              {
+                role: 'system',
+                content:
+                  'You are a RAG pipeline tuning advisor. Given benchmark failures with stage attributions, ' +
+                  'propose concrete actions. Respond as JSON: {"knob_changes": ["..."], "repo_tag_changes": ["..."], ' +
+                  '"content_curation": [{"concept": "...", "gap": "..."}], "prompt_tweaks": ["..."]}. ' +
+                  'Every item must name the surface it changes. Do not invent failures.'
+              },
+              {
+                role: 'user',
+                content: JSON.stringify({
+                  repo: suite.name,
+                  metrics: runDoc.metrics,
+                  summary: runDoc.payload.summary,
+                  attributions: attributions.slice(0, 40)
+                })
+              }
+            ],
+            // The advisor rides the judge's model config (memlog 90: a frontier
+            // judge gives better advice; same service family as scoring).
+            { maxTokens: 1200, temperature: 0.2, service: 'ragas_judge' }
+          );
+          const content =
+            resp && resp.data && resp.data.choices && resp.data.choices[0] && resp.data.choices[0].message
+              ? resp.data.choices[0].message.content
+              : null;
+          const match = content && typeof content === 'string' ? content.match(/\{[\s\S]*\}/) : null;
+          if (match) {
+            const parsed = JSON.parse(match[0]);
+            advice = {
+              source: 'llm',
+              knob_changes: arr(parsed.knob_changes),
+              repo_tag_changes: arr(parsed.repo_tag_changes),
+              content_curation: Array.isArray(parsed.content_curation)
+                ? parsed.content_curation
+                    .slice(0, 20)
+                    .map((c) => ({ concept: String(c.concept || ''), gap: String(c.gap || '') }))
+                : [],
+              prompt_tweaks: arr(parsed.prompt_tweaks),
+              note: ''
+            };
+          }
+        } catch (e) {
+          advice.note = `LLM advice failed (${e.message}) — mechanical attribution stands`;
         }
-      } catch (e) {
-        advice.note = `LLM advice failed (${e.message}) — mechanical attribution stands`;
       }
-    }
-    // Guard the tag suggestions through the existing machinery.
-    if (advice.repo_tag_changes.length) {
-      try {
-        const guarded = await headTestService.guardSuggestions(repoId, advice.repo_tag_changes.slice(0, 10), {
-          positiveQueries: suite.payload.entries.filter((e) => !e.oos).map((e) => e.query)
-        });
-        advice.repo_tag_changes = guarded.accepted || [];
-        advice.rejected_tags = (guarded.rejected || []).map((r) => `${r.tag} — ${r.reason}`);
-      } catch (e) {
-        advice.rejected_tags = [`guardrail unavailable (${e.message}) — treat tag suggestions as unvetted`];
+      // Guard the tag suggestions through the existing machinery.
+      explainProgress.set(suiteKey, { phase: 'guarding', started_ms: Date.now(), failing: attributions.length });
+      if (advice.repo_tag_changes.length) {
+        try {
+          const guarded = await headTestService.guardSuggestions(repoId, advice.repo_tag_changes.slice(0, 10), {
+            positiveQueries: suite.payload.entries.filter((e) => !e.oos).map((e) => e.query)
+          });
+          advice.repo_tag_changes = guarded.accepted || [];
+          advice.rejected_tags = (guarded.rejected || []).map((r) => `${r.tag} — ${r.reason}`);
+        } catch (e) {
+          advice.rejected_tags = [`guardrail unavailable (${e.message}) — treat tag suggestions as unvetted`];
+        }
       }
-    }
 
-    const doc = {
-      _key: opts.explainKey,
-      repo_id: repoId,
-      kind: 'ragas_explain',
-      suite_key: suiteKey,
-      created_at: new Date().toISOString(),
-      created_by: (opts.actor && opts.actor.user_id) || 'system',
-      payload: {
-        run_key: runKey,
-        run_created_at: runDoc.created_at,
-        failing_count: attributions.length,
-        attributions,
-        advice
-      }
-    };
-    await db.collection(COLLECTION).save(doc);
-    span.setAttribute('okf.ragas.failing', attributions.length);
-    return doc;
+      const doc = {
+        _key: opts.explainKey,
+        repo_id: repoId,
+        kind: 'ragas_explain',
+        suite_key: suiteKey,
+        created_at: new Date().toISOString(),
+        created_by: (opts.actor && opts.actor.user_id) || 'system',
+        payload: {
+          run_key: runKey,
+          run_created_at: runDoc.created_at,
+          failing_count: attributions.length,
+          attributions,
+          advice
+        }
+      };
+      await db.collection(COLLECTION).save(doc);
+      span.setAttribute('okf.ragas.failing', attributions.length);
+      return doc;
+    } finally {
+      explainProgress.delete(suiteKey);
+    }
   });
 }
 

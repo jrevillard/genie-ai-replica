@@ -472,6 +472,29 @@ describe('RagasPanel', () => {
     expect(hint.text().toLowerCase()).toContain('advisor');
   });
 
+  // David 2026-10-21: explain showed a dead button for minutes while the
+  // advisor call thought. The phase + failing count + elapsed must render.
+  it('explain in flight shows the advisor phase, failing count and elapsed clock', async () => {
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    w.vm.runDoc = runFixture();
+    w.vm.explainBusy = true;
+    w.vm.explainProgress = { phase: 'advising', failing: 12, elapsed_s: 185 };
+    await w.vm.$nextTick();
+    const line = w.find('.okf-ragas__explain-progress');
+    expect(line.exists()).toBe(true);
+    // DsSpinner is stubbed slot-less in this harness — assert on the label
+    // computed the template feeds it.
+    expect(w.vm.explainProgressLabel).toContain('12');
+    expect(w.vm.explainProgressLabel).toContain('3 min');
+    w.vm.explainProgress = { phase: 'guarding', failing: 12, elapsed_s: 200 };
+    await w.vm.$nextTick();
+    expect(w.vm.explainProgressLabel).toContain('Guarding');
+    w.vm.explainBusy = false;
+    await w.vm.$nextTick();
+    expect(w.find('.okf-ragas__explain-progress').exists()).toBe(false);
+  });
+
   // David 2026-10-19: the results table must be resizable and the answers
   // copyable (suite-table parity), and the full answer text is present —
   // not a 60-char ellipsis.

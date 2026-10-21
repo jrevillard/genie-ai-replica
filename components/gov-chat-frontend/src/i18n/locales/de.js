@@ -3322,6 +3322,9 @@ export default {
       },
       explain: {
         button: 'Fehlschläge erklären',
+        working: 'Fehler werden erklärt…',
+        advising: 'Berater denkt nach — {n} fehlgeschlagene Zeilen',
+        guarding: 'Tag-Vorschläge werden geprüft…',
         title: 'Fehlerzuordnung und Empfehlungen',
         none: 'Keine fehlgeschlagenen Zeilen zuzuordnen.',
         stage: 'Phase',

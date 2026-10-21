@@ -220,7 +220,7 @@ function createUnauthenticatedStore() {
 // Mount helper
 // ---------------------------------------------------------------------------
 
-function createAdminDashboardWrapper(storeOverrides = {}, extraMocks = {}) {
+function createAdminDashboardWrapper(storeOverrides = {}, extraMocks = {}, extraStubs = {}) {
   const store = createAdminStore(storeOverrides);
   return mount(AdminDashboard, {
     global: {
@@ -257,7 +257,8 @@ function createAdminDashboardWrapper(storeOverrides = {}, extraMocks = {}) {
         AddFromLinkDialog: true,
         FileDetailsDialog: true,
         ConfirmDialog: true,
-        Loader2: true
+        Loader2: true,
+        ...extraStubs
       }
     }
   });
@@ -310,6 +311,28 @@ describe('AdminDashboard', () => {
         'users',
         'models'
       ]);
+    });
+
+    // David 2026-10-21: "the left sidebar menus need to be aligned with the
+    // tabs in the tab rack" — the Studio tab had NO sidebar entry (clicking it
+    // left the menu with no active item), and Settings listed users before
+    // security against the rack's order. The sidebar must navigate to every
+    // tab, in rack order.
+    it('sidebar nav mirrors the tab rack: every tab reachable, in rack order', async () => {
+      // The heavy tab panels (Studio fetches repos on mount, Models fetches
+      // configs, Inspector mounts its own store calls) are stubbed — this
+      // test is about the NAVIGATION surface, not the panels' payloads.
+      const wrapper = createAdminDashboardWrapper({}, {}, {
+        OkfStudioTab: true,
+        OkfModelConfigPanel: true,
+        QueryInspector: true
+      });
+      const links = wrapper.findAll('.sidebar .nav-link');
+      expect(links.length).toBe(wrapper.vm.tabs.length);
+      for (let i = 0; i < wrapper.vm.tabs.length; i += 1) {
+        await links[i].trigger('click');
+        expect(wrapper.vm.activeTab).toBe(wrapper.vm.tabs[i].id);
+      }
     });
   });
 

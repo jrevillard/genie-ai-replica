@@ -1947,6 +1947,9 @@ export default {
       },
       explain: {
         button: 'Explain failures',
+        working: 'Explaining failures…',
+        advising: 'Advisor thinking — {n} failing rows',
+        guarding: 'Guarding tag suggestions…',
         title: 'Failure attribution and advice',
         none: 'No failing rows to attribute.',
         stage: 'Stage',

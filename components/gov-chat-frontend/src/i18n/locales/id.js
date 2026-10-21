@@ -3300,6 +3300,9 @@ export default {
       },
       explain: {
         button: 'Jelaskan kegagalan',
+        working: 'Menjelaskan kegagalan…',
+        advising: 'Advisor sedang berpikir — {n} baris gagal',
+        guarding: 'Memeriksa saran tag…',
         title: 'Atribusi kegagalan dan saran',
         none: 'Tidak ada baris gagal untuk diatribusikan.',
         stage: 'Tahap',

@@ -777,6 +777,63 @@ describe('explain', () => {
     expect(explained.payload.advice).toBeTruthy();
   });
 
+  // David 2026-10-21: "clicked explain… the UX is terrible as it does not show
+  // a progress bar". The advisor is ONE reasoning-judge call that can think for
+  // minutes (live: MiniMax starved 1200→4800→19200 reasoning tokens). The poll
+  // envelope must carry the phase + failing count + elapsed while it runs.
+  it('reports explaining phase + failing count while the advisor call is in flight', async () => {
+    // Force failing rows — the advisor call only runs when something failed.
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-prog', status: 'queued' }));
+      if (u.includes('/jobs/j-prog'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-prog',
+            status: 'done',
+            result: {
+              aggregate: {},
+              per_query: GEN_SAMPLES.map(() => ({ context_recall: 0.3, faithfulness: 1.0 })),
+              model: 'm',
+              n: 2
+            }
+          })
+        );
+      return baseFetch(url);
+    });
+    const begunSuite = await svc.beginSuiteGeneration('me', { testset_size: 2 }, {});
+    await begunSuite.done;
+    const run = await svc.beginRunSuite('me', begunSuite.suite_key, {}, {});
+    await run.done;
+    global.fetch = baseFetch;
+
+    let releaseAdvisor;
+    const baseLlm = frontmatterService.vllmChatCompletions;
+    frontmatterService.vllmChatCompletions.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releaseAdvisor = () => resolve({ data: { choices: [{ message: { content: '{}' } }] } });
+        })
+    );
+    try {
+      const begun = await svc.beginExplainFailures('me', begunSuite.suite_key, { run_key: run.run_key }, {});
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+      const mid = await svc.getExplainFailures('me', begunSuite.suite_key, run.run_key);
+      expect(mid.status).toBe('running');
+      expect(mid.progress).toMatchObject({ phase: 'advising', failing: expect.any(Number) });
+      expect(mid.progress.failing).toBeGreaterThan(0);
+      expect(mid.progress.elapsed_s).toBeGreaterThanOrEqual(0);
+      releaseAdvisor();
+      await begun.done;
+      const after = await svc.getExplainFailures('me', begunSuite.suite_key, run.run_key);
+      expect(after.kind).toBe('ragas_explain'); // the saved doc, no running envelope
+    } finally {
+      frontmatterService.vllmChatCompletions.mockImplementation(baseLlm);
+    }
+  });
+
   // Live 2026-10-19 (verification run rr1792392548082): the reference chunk
   // was retrieved VERBATIM — context recall 1.0, every reference token in the
   // retrieved union — and entity recall still scored 0.4–0.5, because the

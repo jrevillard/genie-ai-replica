@@ -1823,7 +1823,7 @@ const actions = {
   },
 
   /** Explain failures (202 + store-side poll). */
-  async ragasExplain(_ctx, { repoId, suiteKey, runKey } = {}) {
+  async ragasExplain(_ctx, { repoId, suiteKey, runKey, onProgress } = {}) {
     try {
       ensureServices();
       const started = await ragasService.explainFailures(repoId, suiteKey, runKey ? { run_key: runKey } : {});
@@ -1841,7 +1841,13 @@ const actions = {
         }
         await new Promise((resolve) => setTimeout(resolve, POLL_MS));
         const doc = await ragasService.getExplain(repoId, suiteKey, started.run_key);
-        if (!doc || doc.status === 'running') continue;
+        if (!doc || doc.status === 'running') {
+          // Phase + elapsed from the server's explain-progress map — the
+          // advisor is ONE reasoning-judge call that can legitimately think
+          // for minutes; a dead button reads as broken (2026-10-21).
+          if (doc && doc.progress && typeof onProgress === 'function') onProgress(doc.progress);
+          continue;
+        }
         if (doc.status === 'failed') {
           return {
             ok: false,

@@ -3321,6 +3321,9 @@ export default {
       },
       explain: {
         button: 'Expliquer les échecs',
+        working: 'Analyse des échecs…',
+        advising: 'Le conseur réfléchit — {n} lignes en échec',
+        guarding: 'Vérification des suggestions de balises…',
         title: 'Attribution des échecs et conseils',
         none: 'Aucune ligne en échec à attribuer.',
         stage: 'Étape',

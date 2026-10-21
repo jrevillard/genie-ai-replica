@@ -3310,6 +3310,9 @@ export default {
       },
       explain: {
         button: 'Hlalosa tse fosahetseng',
+        working: 'Ho hlalosa diphoso…',
+        advising: 'Molekane o nahana — {n} methalo e hlôlehileng',
+        guarding: 'Ho hlahloba ditšehetso tsa dithegi…',
         title: 'Mabaka a ho hloleha le tataiso',
         none: 'Ha ho mela e fosahetseng ea ho e hlalosa.',
         stage: 'Setha',

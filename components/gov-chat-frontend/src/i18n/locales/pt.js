@@ -3312,6 +3312,9 @@ export default {
       },
       explain: {
         button: 'Explicar as falhas',
+        working: 'Explicando falhas…',
+        advising: 'O conselheiro está pensando — {n} linhas com falha',
+        guarding: 'Verificando sugestões de tags…',
         title: 'Atribuição de falhas e orientações',
         none: 'Não há linhas com falha a atribuir.',
         stage: 'Etapa',

@@ -46,6 +46,20 @@
                   <span>{{ translate('admin.documentManagement', 'Document Management') }}</span>
                 </a>
               </li>
+              <!-- Sidebar mirrors the tab rack 1:1 (David 2026-10-21: the
+                   Studio tab had no sidebar entry — clicking it left the
+                   menu with no active item). Rack position: after Document
+                   Management, before Database. -->
+              <li class="nav-item">
+                <a
+                  href="#"
+                  :class="['nav-link', { active: activeTab === 'studio' }]"
+                  @click.prevent="setActiveTab('studio')"
+                >
+                  <i>🧪</i>
+                  <span>{{ translate('admin.tabs.studio', 'OKF Studio') }}</span>
+                </a>
+              </li>
             </ul>
           </div>
 
@@ -95,21 +109,21 @@
               <li class="nav-item">
                 <a
                   href="#"
-                  :class="['nav-link', { active: activeTab === 'users' }]"
-                  @click.prevent="setActiveTab('users')"
-                >
-                  <i>👥</i>
-                  <span>{{ translate('admin.userManagement', 'User Management') }}</span>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a
-                  href="#"
                   :class="['nav-link', { active: activeTab === 'security' }]"
                   @click.prevent="setActiveTab('security')"
                 >
                   <i>🔒</i>
                   <span>{{ translate('admin.tabs.security', 'Security') }}</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a
+                  href="#"
+                  :class="['nav-link', { active: activeTab === 'users' }]"
+                  @click.prevent="setActiveTab('users')"
+                >
+                  <i>👥</i>
+                  <span>{{ translate('admin.userManagement', 'User Management') }}</span>
                 </a>
               </li>
               <!-- Story 8-7 (David 2026-10-20): model configurations are a

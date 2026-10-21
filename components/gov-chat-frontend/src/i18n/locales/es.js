@@ -3319,6 +3319,9 @@ export default {
       },
       explain: {
         button: 'Explicar los fallos',
+        working: 'Explicando fallos…',
+        advising: 'El asesor está pensando — {n} filas fallidas',
+        guarding: 'Verificando sugerencias de etiquetas…',
         title: 'Atribución de fallos y consejos',
         none: 'No hay filas fallidas que atribuir.',
         stage: 'Etapa',

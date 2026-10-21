@@ -3268,6 +3268,9 @@ export default {
       },
       explain: {
         button: 'Explain failures',
+        working: 'በማስታወስ ላይ…',
+        advising: 'አማካሪ እያሰበ — {n} የወደቁ ረድፎች',
+        guarding: 'የታግ ጥቆማዎች በመመርመር ላይ…',
         title: 'Failure attribution and advice',
         none: 'No failing rows to attribute.',
         stage: 'Stage',

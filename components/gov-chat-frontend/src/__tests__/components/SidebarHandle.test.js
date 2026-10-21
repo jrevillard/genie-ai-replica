@@ -164,6 +164,48 @@ describe('SidebarHandle', () => {
       expect(wrapper.emitted('input')).toBeUndefined();
     });
 
+    // The chevron is 24 px wide in a 24 px strip, so a press anywhere
+    // on the only visible control targets the button. Refusing those
+    // presses made the feature unreachable for anyone who aimed at it:
+    // the strip above the chevron resized, the chevron did nothing.
+    // Drag and click are separated by movement instead.
+    it('drags from a press that starts on the chevron', async () => {
+      const wrapper = mountHandle({ side: 'left' });
+      stubStripGeometry(wrapper);
+      await wrapper.find('.sidebar-handle').trigger('pointerdown', { pointerId: 1, button: 0, clientX: 450 });
+      await wrapper.find('.sidebar-handle').trigger('pointermove', { pointerId: 1, clientX: 500 });
+      expect(wrapper.emitted('input')[0]).toEqual([500]);
+      expect(wrapper.emitted('drag-start')).toHaveLength(1);
+    });
+
+    // A press that never travels is a click, and the DOM delivers it
+    // to the button on its own — the strip must not resize it.
+    it('does not resize a press that stays inside the movement threshold', async () => {
+      const wrapper = mountHandle({ side: 'left' });
+      stubStripGeometry(wrapper);
+      await wrapper.find('.sidebar-handle').trigger('pointerdown', { pointerId: 1, button: 0, clientX: 450 });
+      await wrapper.find('.sidebar-handle').trigger('pointermove', { pointerId: 1, clientX: 452 });
+      await wrapper.find('.sidebar-handle').trigger('pointerup', { pointerId: 1 });
+      expect(wrapper.emitted('input')).toBeUndefined();
+      expect(wrapper.emitted('drag-start')).toBeUndefined();
+      expect(wrapper.emitted('drag-end')).toBeUndefined();
+    });
+
+    // A drag that began on the chevron ends with the browser firing a
+    // click on it, which would collapse the panel just resized.
+    it('suppresses the click that follows a drag', async () => {
+      const wrapper = mountHandle({ side: 'left' });
+      stubStripGeometry(wrapper);
+      await wrapper.find('.sidebar-handle').trigger('pointerdown', { pointerId: 1, button: 0, clientX: 450 });
+      await wrapper.find('.sidebar-handle').trigger('pointermove', { pointerId: 1, clientX: 500 });
+      await wrapper.find('.sidebar-handle').trigger('pointerup', { pointerId: 1 });
+      await wrapper.find('.sidebar-handle').trigger('click');
+      expect(wrapper.emitted('collapse')).toBeUndefined();
+      // …and only that one: the next press-and-release is a click again.
+      await wrapper.find('.sidebar-handle__button').trigger('click');
+      expect(wrapper.emitted('collapse')).toHaveLength(1);
+    });
+
     it('stops emitting once the pointer is released', async () => {
       const wrapper = mountHandle({ side: 'left' });
       stubStripGeometry(wrapper);
@@ -174,11 +216,18 @@ describe('SidebarHandle', () => {
       expect(wrapper.emitted('input')).toHaveLength(1);
     });
 
-    it('announces the start and end of a drag', async () => {
+    // The announcement follows the movement, not the press: a press
+    // arms the gesture, and only crossing the threshold is a drag.
+    it('announces the start when the movement crosses the threshold and the end on release', async () => {
       const wrapper = mountHandle({ side: 'left' });
       stubStripGeometry(wrapper);
       await wrapper.find('.sidebar-handle').trigger('pointerdown', { pointerId: 1, button: 0, clientX: 450 });
+      // The press alone is not yet a drag.
+      expect(wrapper.emitted('drag-start')).toBeUndefined();
+
+      await wrapper.find('.sidebar-handle').trigger('pointermove', { pointerId: 1, clientX: 460 });
       expect(wrapper.emitted('drag-start')).toHaveLength(1);
+
       await wrapper.find('.sidebar-handle').trigger('pointerup', { pointerId: 1 });
       expect(wrapper.emitted('drag-end')).toHaveLength(1);
     });

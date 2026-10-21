@@ -107,16 +107,19 @@ async function measure(page) {
 // synthetic dispatchEvent would not exercise the same path a user's
 // finger takes.
 //
-// The grab point is a quarter of the way down the strip, NOT its
-// centre: the centre is where the chevron button sits, and the handle
-// deliberately refuses a drag that starts on the button (a click there
-// must collapse, not resize). Aiming at the centre would test the
-// click-through guard, not the drag.
+// The grab point is the strip's centre — where the chevron sits, and
+// therefore where a user aims. An earlier revision of this helper
+// deliberately aimed ABOVE the chevron, because the handle then
+// refused presses that landed on it: the helper was faithfully
+// testing a gesture no user would perform, while the one they do
+// perform did nothing. Both are now the same gesture, and the press
+// still starts on the button — so this helper also covers the case
+// that broke.
 async function dragHandle(page, selector, dx) {
   const box = await page.locator(selector).boundingBox();
   expect(box, `${selector} should have a bounding box`).not.toBeNull();
   const startX = box.x + box.width / 2;
-  const startY = box.y + box.height / 4;
+  const startY = box.y + box.height / 2;
   await page.mouse.move(startX, startY);
   await page.mouse.down();
   // Several intermediate moves: a single jump exercises the endpoint
@@ -206,45 +209,53 @@ test.describe('Resizable sidebars behind one handle', () => {
     }
 
     // And it is actually hittable — an occluded control passes every
-    // assertion above and is still unusable.
+    // assertion above and is still unusable. Sampled at the strip's
+    // CENTRE, which is where the chevron sits and therefore where a
+    // user aims.
     for (const sel of [LEFT_HANDLE, RIGHT_HANDLE]) {
       const hit = await page.evaluate((s) => {
         const strip = document.querySelector(s);
         const r = strip.getBoundingClientRect();
-        const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 4);
+        const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
         if (!el) return 'nothing';
-        // `className` on an SVG element is an SVGAnimatedString, not a
-        // string — read the attribute so the read is uniform for both
-        // HTML and SVG nodes.
-        return `${el.tagName} ${el.getAttribute('class') || ''}`;
+        // Whatever is on top must be the handle or inside it. At the
+        // strip's centre that is the chevron's icon, so the test asks
+        // "is the handle in the hit chain" rather than "is the strip
+        // the top node" — the point is that nothing from the CENTRE is
+        // in the chain, which is what the occlusion defect put there.
+        for (let n = el; n; n = n.parentElement) {
+          if (n === strip) return `${n.tagName} ${n.getAttribute('class') || ''} — via ${el.tagName}`;
+        }
+        return `outside: ${el.tagName} ${el.getAttribute('class') || ''}`;
       }, sel);
-      expect(
-        hit,
-        `${sel} must be the topmost element on its own drag surface — something is painted over it`
-      ).toContain('sidebar-handle');
+      expect(hit, `${sel} must be the topmost element on its own surface — something is painted over it`).toContain(
+        'sidebar-handle'
+      );
     }
 
-    // How much of the strip is actually grabbable. The chevron occupies
-    // its centre and refuses a drag, so the usable surface is the strip
-    // minus that square. A probe that grabbed the centre and saw
-    // nothing happen was measuring the button, not a broken drag — but
-    // the area still has to be large enough that finding it is not a
-    // hunt, so the number is pinned rather than assumed.
+    // The whole strip is one drag surface, chevron included — there is
+    // no region of it that refuses a drag, which is the defect a probe
+    // hitting the centre used to find. And both the strip and the
+    // chevron say so with the cursor: `pointer` on the chevron would
+    // promise a click and deny the drag, on the one element the user
+    // can actually see.
     for (const sel of [LEFT_HANDLE, RIGHT_HANDLE]) {
-      const m2 = await page.evaluate((s) => {
+      const cursors = await page.evaluate((s) => {
         const strip = document.querySelector(s);
-        const r = strip.getBoundingClientRect();
-        const button = strip.querySelector('.sidebar-handle__button').getBoundingClientRect();
-        // Fraction of the strip's height that is neither the button nor
-        // a re-click of it.
-        const draggable = r.height - button.height;
-        return { stripH: r.height, buttonH: button.height, draggable, fraction: draggable / r.height };
+        const button = strip.querySelector('.sidebar-handle__button');
+        return {
+          strip: getComputedStyle(strip).cursor,
+          button: getComputedStyle(button).cursor,
+          stripTouch: getComputedStyle(strip).touchAction,
+          buttonTouch: getComputedStyle(button).touchAction
+        };
       }, sel);
-      expect(
-        m2.fraction,
-        `${sel}: only ${Math.round(m2.fraction * 100)} % of the ${m2.stripH} px strip is grabbable — ` +
-          `the ${m2.buttonH} px chevron at its centre takes the rest`
-      ).toBeGreaterThan(0.9);
+      expect(cursors.strip, `${sel}: the strip must advertise the drag`).toBe('col-resize');
+      expect(cursors.button, `${sel}: the chevron must advertise the drag too, not a click`).toBe('col-resize');
+      // Without `touch-action: none` the browser claims a touch drag
+      // as a scroll and `pointermove` never arrives.
+      expect(cursors.stripTouch).toBe('none');
+      expect(cursors.buttonTouch).toBe('none');
     }
   });
 
@@ -319,6 +330,90 @@ test.describe('Resizable sidebars behind one handle', () => {
     expect(Math.abs(rightDelta + centreDelta)).toBeLessThanOrEqual(2);
     expect(after.left.width).toBe(before.left.width);
     expect(after.scrollWidth).toBeLessThanOrEqual(after.viewport);
+  });
+
+  test('a drag that starts on the chevron resizes the panel', async ({ page }) => {
+    // The gesture the user actually performs. The chevron is 24 px
+    // wide in a 24 px strip, so a press on the only visible control
+    // targets the button — and an earlier revision of the handle
+    // refused exactly that press, which made the feature unreachable
+    // for anyone aiming at it. The suite stayed green throughout
+    // because its helper grabbed the strip above the chevron and
+    // never exercised this path.
+    for (const [handleSel, panelKey, dx] of [
+      [LEFT_HANDLE, 'left', 120],
+      [RIGHT_HANDLE, 'right', -120]
+    ]) {
+      const before = (await measure(page))[panelKey].width;
+      const btn = await page.locator(`${handleSel} .sidebar-handle__button`).boundingBox();
+      const startX = btn.x + btn.width / 2;
+      const startY = btn.y + btn.height / 2;
+
+      await page.mouse.move(startX, startY);
+      await page.mouse.down();
+      for (let i = 1; i <= 5; i++) {
+        await page.mouse.move(startX + (dx * i) / 5, startY);
+      }
+      await page.mouse.up();
+      await page.waitForTimeout(500);
+
+      const after = (await measure(page))[panelKey].width;
+      expect(after, `${panelKey}: a drag begun on the chevron must resize (was ${before})`).toBeGreaterThan(
+        before + 100
+      );
+      // …and must not also have collapsed it.
+      expect(after, `${panelKey}: the drag must not have collapsed the panel`).toBeGreaterThan(100);
+    }
+  });
+
+  test('a press on the chevron that never travels collapses instead of resizing', async ({ page }) => {
+    for (const [handleSel, panelKey] of [
+      [LEFT_HANDLE, 'left'],
+      [RIGHT_HANDLE, 'right']
+    ]) {
+      const before = (await measure(page))[panelKey].width;
+      const btn = await page.locator(`${handleSel} .sidebar-handle__button`).boundingBox();
+      const x = btn.x + btn.width / 2;
+      const y = btn.y + btn.height / 2;
+
+      // A click with a sub-threshold wobble, which is what a real hand
+      // does. It must read as a click, not as a 2 px drag.
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.mouse.move(x + 2, y);
+      await page.mouse.move(x + 1, y);
+      await page.mouse.up();
+      await page.waitForTimeout(600);
+
+      expect(
+        (await measure(page))[panelKey].width,
+        `${panelKey}: the click should have collapsed the panel`
+      ).toBeLessThan(before);
+
+      // Reopen, and confirm the panel returns to the width it had — a
+      // wobble that leaked a resize would have moved it.
+      await page.locator(`${handleSel} .sidebar-handle__button`).click();
+      await page.waitForTimeout(600);
+      expect((await measure(page))[panelKey].width, `${panelKey}: the wobble must not have resized the panel`).toBe(
+        before
+      );
+    }
+  });
+
+  test('a drag that ends over the chevron does not also collapse', async ({ page }) => {
+    // The browser fires a `click` on the chevron after a drag that
+    // began there, so without suppression the panel would be resized
+    // and collapsed in one gesture.
+    for (const [handleSel, panelKey, dx] of [
+      [LEFT_HANDLE, 'left', 120],
+      [RIGHT_HANDLE, 'right', -120]
+    ]) {
+      const before = (await measure(page))[panelKey].width;
+      await dragHandle(page, handleSel, dx);
+      await page.waitForTimeout(700);
+      const after = (await measure(page))[panelKey].width;
+      expect(after, `${panelKey}: a drag ending on the chevron must not collapse it`).toBeGreaterThan(before + 100);
+    }
   });
 
   test('the handle is keyboard-operable from both sides', async ({ page }) => {

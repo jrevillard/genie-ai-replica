@@ -16,6 +16,7 @@
     @pointerdown="onPointerDown"
     @keydown="onKeyDown"
     @dblclick="onDoubleClick"
+    @click.capture="onSuppressClick"
   >
     <button
       type="button"
@@ -39,6 +40,22 @@ import { ChevronLeft, ChevronRight } from '@lucide/vue';
 // the spec needs to assert against.
 const KEY_STEP_PX = 8;
 const KEY_STEP_FAST_PX = 40;
+
+// How far the pointer must travel before a press counts as a drag
+// rather than a click.
+//
+// A click is, by definition, zero displacement: the press and the
+// release happen at the same pixel. What separates a click from a
+// drag is not intent but the hand — measured sub-pixel on a desk
+// mouse and around 1-2 px of tremor on a trackpad, so 4 px is an
+// order of magnitude clear of every accidental movement.
+//
+// It cannot swallow a slow deliberate drag, because the step it must
+// beat is the one a user already controls from the keyboard: the
+// arrow keys move 8 px. Anything past 4 px has therefore already
+// resized the panel by the time the pointer lifts, and a drag the
+// user abandons after 3 px has by definition not resized anything.
+const DRAG_THRESHOLD_PX = 4;
 
 export default {
   name: 'SidebarHandle',
@@ -97,6 +114,10 @@ export default {
   data() {
     return {
       isDragging: false,
+      // True once this press has travelled far enough to count as a
+      // drag. Carried past pointerup so the click the browser fires
+      // afterwards can be recognised as the tail of a drag.
+      dragMoved: false,
       dragOrigin: null,
       dragStartWidth: 0,
       dragPointerId: null
@@ -131,42 +152,86 @@ export default {
   },
   methods: {
     onPointerDown(e) {
-      // The inner button gets the click event; ignore the pointerdown
-      // when the user is targeting the button so the two gestures
-      // don't fight each other (a click on the button would otherwise
-      // also open a drag and the chevron would never toggle).
-      if (e.target !== this.$refs.stripEl) return;
+      // A press ANYWHERE on the handle arms a drag — the strip or the
+      // chevron. The earlier revision refused any press whose target was
+      // the button, on the reasoning that a click there would otherwise
+      // also open a drag. But the button is 24 px wide in a 24 px
+      // strip: that guard made a press anywhere on the only visible
+      // control a non-event, and the feature was unreachable for anyone
+      // who aimed at the chevron. Measured on the running build:
+      // dragging the strip above the button took the sidebar 450 -> 300,
+      // dragging the button did nothing at all, and clicking the button
+      // collapsed it. The thing you can see was the thing you could not
+      // pull.
+      //
+      // Drag and click are separated by MOVEMENT, not by target: a
+      // press arms the drag, a pointer that travels past
+      // DRAG_THRESHOLD_PX makes it a drag and suppresses the click,
+      // and a press released without that travel is a click the DOM
+      // delivers to the button on its own.
+      //
       // Right-button on mouse, secondary button, etc. — leave those for
       // the browser's own context menu and never start a drag.
       if (e.button !== 0) return;
-      this.isDragging = true;
+      this.isDragging = false;
+      this.dragMoved = false;
       this.dragOrigin = e.clientX;
       this.dragStartWidth = this.value;
       this.dragPointerId = e.pointerId;
-      // Pointer capture keeps the move events flowing even when the
-      // pointer strays off the strip — without it the drag breaks the
-      // first time the user crosses into the side panel and the page
-      // hits a hover state on a child element.
-      try {
-        this.$refs.stripEl.setPointerCapture(e.pointerId);
-      } catch {
-        // Older browsers without pointer capture — fall back to the
-        // window-level move handler below.
-      }
+      // Deliberately NOT capturing the pointer here. Capture retargets
+      // every subsequent pointer event — including the `pointerup` —
+      // to the capture target, and the browser then fires the `click`
+      // on the nearest common ancestor of the down and up targets,
+      // which is the strip rather than the button. The chevron
+      // stopped collapsing entirely: it resized correctly on a drag,
+      // because that path emits from `pointermove`, and did nothing
+      // on a click, because the click never reached it.
+      //
+      // Capture is taken in `onPointerMove` the moment a drag is
+      // confirmed, which is where it is actually needed — to keep a
+      // live drag alive when the pointer crosses into the panel.
       window.addEventListener('pointermove', this.onPointerMove);
       window.addEventListener('pointerup', this.onPointerUp);
       window.addEventListener('pointercancel', this.onPointerUp);
-      this.$emit('drag-start');
-      e.preventDefault();
     },
     onPointerMove(e) {
-      if (!this.isDragging) return;
-      const next = this.dragStartWidth + this.widthSign * (e.clientX - this.dragOrigin);
+      if (this.dragPointerId == null) return;
+      const delta = e.clientX - this.dragOrigin;
+      if (!this.isDragging) {
+        // Below the threshold this is still a click in progress, so no
+        // resize and no drag state yet — otherwise a hand tremor
+        // during a click would nudge the panel.
+        if (Math.abs(delta) < DRAG_THRESHOLD_PX) return;
+        this.isDragging = true;
+        this.dragMoved = true;
+        this.$emit('drag-start');
+        // Past this point the gesture is a drag, so retargeting the
+        // pointer no longer costs anything and keeps the drag alive
+        // when it leaves the strip.
+        try {
+          this.$refs.stripEl.setPointerCapture(e.pointerId);
+        } catch {
+          // Older browsers without pointer capture — the window-level
+          // move listener below already covers the common case.
+        }
+      }
+      const next = this.dragStartWidth + this.widthSign * delta;
       const clamped = Math.max(this.min, Math.min(this.max, next));
       if (clamped !== this.value) this.$emit('input', clamped);
     },
+    onSuppressClick(e) {
+      // A drag that began on the chevron ends with the browser firing
+      // a click on it, which would collapse the panel the user just
+      // resized. Swallow that one click and clear the flag so the next
+      // press behaves normally.
+      if (!this.dragMoved) return;
+      this.dragMoved = false;
+      e.preventDefault();
+      e.stopPropagation();
+    },
     onPointerUp() {
-      if (!this.isDragging) return;
+      if (this.dragPointerId == null) return;
+      const wasDragging = this.isDragging;
       this.isDragging = false;
       this.dragOrigin = null;
       if (this.dragPointerId != null && this.$refs.stripEl) {
@@ -180,7 +245,7 @@ export default {
       window.removeEventListener('pointermove', this.onPointerMove);
       window.removeEventListener('pointerup', this.onPointerUp);
       window.removeEventListener('pointercancel', this.onPointerUp);
-      this.$emit('drag-end');
+      if (wasDragging) this.$emit('drag-end');
     },
     onKeyDown(e) {
       // Keyboard moves the strip, exactly as the pointer does: the
@@ -285,10 +350,67 @@ export default {
   background: color-mix(in oklch, var(--accent) 22%, var(--surface));
 }
 
+/*
+ * The grip.
+ *
+ * A 24 px column whose only visible mark is a small chevron reads as
+ * a collapse button, and the surface tint alone is not enough to say
+ * "this drags" — which is the reading the user gave after the strip
+ * was placed flush inside the panel. The grip is two short rules
+ * above and below the chevron, the way a splitter is drawn: they say
+ * "edge" rather than "button" at rest, and take the accent on hover,
+ * focus or drag. Two of them rather than a solid bar, so the chevron
+ * stays the thing you grab and the rules stay the thing that says
+ * what grabbing does.
+ *
+ * A pseudo-element pair rather than two real nodes: nothing in the
+ * accessibility tree, nothing for a test to trip over, and it costs
+ * no markup in a component rendered twice on every page.
+ */
+.sidebar-handle::before,
+.sidebar-handle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  width: 2px;
+  height: 28px;
+  margin-left: -1px;
+  border-radius: var(--radius-sm);
+  background: var(--border);
+  transition: background-color 0.15s ease;
+  pointer-events: none;
+}
+
+/* Centred on the strip's own height, flanking the chevron's 24 px. */
+.sidebar-handle::before {
+  bottom: calc(50% + 20px);
+}
+
+.sidebar-handle::after {
+  top: calc(50% + 20px);
+}
+
+.sidebar-handle:hover::before,
+.sidebar-handle:hover::after,
+.sidebar-handle:focus-visible::before,
+.sidebar-handle:focus-visible::after,
+.sidebar-handle--dragging::before,
+.sidebar-handle--dragging::after {
+  background: var(--accent);
+}
+
 /* The chevron. 24 x 24 is the WCAG 2.5.8 minimum target size, and it
    fills the strip's width exactly, so the control a user aims at and
    the surface they aim at are the same object. Everything else in the
    strip's height is drag surface. */
+/* The chevron carries BOTH gestures — press-and-move resizes,
+   press-and-release collapses — so its cursor says the surface
+   resizes, not that it is a button. `cursor: pointer` here was a
+   promise the control could not keep: it advertised a click and
+   denied the drag, on the one element the user could actually see.
+   `touch-action: none` likewise, so a touch drag reaches
+   `pointermove` instead of being claimed by the browser as a
+   scroll. */
 .sidebar-handle__button {
   width: 24px;
   height: 24px;
@@ -301,7 +423,8 @@ export default {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-sm);
-  cursor: pointer;
+  cursor: col-resize;
+  touch-action: none;
   transition:
     color 0.15s ease,
     border-color 0.15s ease,
@@ -325,6 +448,8 @@ export default {
 
 @media (prefers-reduced-motion: reduce) {
   .sidebar-handle,
+  .sidebar-handle::before,
+  .sidebar-handle::after,
   .sidebar-handle__button {
     transition: none;
   }

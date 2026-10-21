@@ -685,9 +685,8 @@ describe('QueryService', () => {
         .mockResolvedValue({ responseTime: 12, response: 'answer', metadata: null });
 
       try {
-        await withEnv(
-          { OPEA_HOST: 'chatqna.internal', OPEA_PORT: '8899', CONTEXT_OPTION: undefined },
-          () => queryService.createQuery(createAttackerShapedQueryData())
+        await withEnv({ OPEA_HOST: 'chatqna.internal', OPEA_PORT: '8899', CONTEXT_OPTION: undefined }, () =>
+          queryService.createQuery(createAttackerShapedQueryData())
         );
 
         expect(workerSpy).toHaveBeenCalledTimes(1);
@@ -791,9 +790,8 @@ describe('QueryService', () => {
 
       const data = createAttackerShapedQueryData();
 
-      const result = await withEnv(
-        { OPEA_HOST: 'chatqna.internal', OPEA_PORT: '8899' },
-        () => queryService.initStreamQuery(data, {})
+      const result = await withEnv({ OPEA_HOST: 'chatqna.internal', OPEA_PORT: '8899' }, () =>
+        queryService.initStreamQuery(data, {})
       );
 
       expect(result.opeaUrl).toBe('http://chatqna.internal:8899/v1/chatqna');

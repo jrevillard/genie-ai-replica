@@ -26,13 +26,15 @@
 //      delivers the whole contribution in a row or two; the composed fade
 //      spreads it over the whole ramp.
 //
-//   4. the scrim does not fully occlude the artwork. Measured where it
-//      bites: the scrim's ramp drives the artwork's ink toward the panel
-//      surface, and an OPAQUE scrim drives it all the way — the icon
-//      tiles stop dead along a straight line. This reads the darkest
-//      pixel of each row inside the scrim's plateau as shipped, and again
-//      under an opaque scrim, and requires the two to differ. A scrim that
-//      annihilates the ink renders identically either way and fails.
+//   4. the veil paints only where the title is, and it blends with the
+//      artwork under it rather than replacing it. Three captures of the
+//      banner's box — as shipped, with the veil removed, and with an
+//      opaque veil — are compared pixel by pixel. Every pixel the veil
+//      changes has to lie inside its own box (and the box has to be the
+//      title's measure); inside the plateau, where the mask is fully
+//      opaque, the artwork has to arrive a measured fraction of the way an
+//      opaque veil would carry it, and no further. A full-width band
+//      fails the first; an opaque or absent veil fails the second.
 //
 //   5. the banner's box holds the artwork's ink band, and the banner stays
 //      full-bleed with nothing overflowing the panel.
@@ -79,6 +81,41 @@ const WORDMARK_CONTRAST_FLOOR = 3.0;
 // delivers the whole contribution in one or two; the shipped ramp delivers
 // it over ~46 px.
 const MIN_RAMP_ROWS = 8;
+
+/*
+ * The veil's alpha, per theme — the value the layer SHIPS, which is the
+ * value the blend floors below are derived from.
+ *
+ * It is deliberately not read off the page. The blend ratios are a
+ * measurement of the compositing against the veil's own declared alpha,
+ * so a live read would let a veil that turned opaque move its own floor
+ * down to 0 and pass. The rendered token is asserted against this constant
+ * separately, in the same test.
+ */
+const SHIPPED_SCRIM_ALPHA = { light: 0.88, dark: 0.8 };
+
+/*
+ * How far the blend has to have travelled, as a fraction of what an opaque
+ * veil would have done — 0.8 in each direction.
+ *
+ * Measured on the running build, across the four widths in both themes:
+ *
+ *   r1 / a        = 0.994 ... 1.005
+ *   r2 / (1 - a)  = 0.982 ... 1.042
+ *
+ * so the floors sit a comfortable 1.2x below the render in both directions,
+ * and each of the two defects they guard collapses one of them to nothing:
+ *
+ *   an opaque veil                  r2 = 0
+ *   no veil at all                  r1 = 0
+ *   a replacement rather than blend  r1 = 1, r2 = 0, and 4a's inside count is 0
+ */
+const BLEND_FRACTION = 0.8;
+
+// A pixel one step outside the veil's box may still differ — its own edge
+// is antialiased. Measured outside-count at this tolerance: 0 at every width
+// in both themes.
+const FOOTPRINT_EDGE_TOLERANCE = 1;
 
 const VIEWPORTS = [
   { label: '1920', width: 1920 },
@@ -381,55 +418,114 @@ async function scrimTopEdge(page) {
   );
 }
 
-// Assertion 4: the scrim does not fully occlude the artwork.
+// Assertion 4: the veil's footprint is the title's box, and it blends.
 //
-// The scrim's ramp drives the artwork's ink toward the panel surface. An
-// OPAQUE scrim drives it all the way, and the icon tiles — whose ink is at
-// its strongest exactly where the scrim begins — stop dead along a straight
-// line: measured, the darkest pixel of the band jumps from 0.07 to a pure
-// 1.00 across the scrim's top edge, which is a slice, not a fade.
+// The veil wraps the title rather than spanning the banner, so the two
+// things worth proving are WHERE it paints and WHAT it does to what is
+// under it. Both come out of three captures of the same banner box: as it
+// ships, with the veil removed, and with an opaque veil.
 //
-// This reads the darkest pixel of every row inside the scrim's plateau twice
-// — once as shipped, once with the scrim forced opaque — and requires them to
-// differ. A scrim that annihilates the ink renders identically under both and
-// fails. A scrim that leaves the artwork readable is the whole point of the
-// layer, so the check is that the artwork survives.
-async function scrimDoesNotOcclude(page) {
-  const box = await page.evaluate(() => {
-    const el = document.querySelector('.quick-help-banner');
-    if (!el) return null;
-    const r = el.getBoundingClientRect();
-    return { x: r.left, y: r.top, width: r.width, height: r.height };
+// (4a) The footprint. Shipped is compared with bare pixel by pixel: every
+// pixel that differs has to lie inside the veil's own border box, allowing
+// 1 px for the antialiased edge, and some of them have to — an empty
+// footprint is a missing veil, not a contained one.
+//
+// What that check cannot see is its own reference frame. The box is read
+// off the page, so a veil grown back into the old full-width band still
+// paints inside its own box and would still report zero pixels outside it.
+// A footprint is the title's only if the box is the title's measure, so
+// that is asserted alongside it: the veil's width has to be the title's own
+// measure plus the padding it carries on both sides. The title's measure is
+// read as the union of its line boxes, not as the heading's box — the
+// heading is a block child that fills the veil and grows with it, so read
+// off the same render its width says nothing about where the title ends.
+//
+// (4b) The blend. Inside the plateau — the lower half of the box, and in
+// from the horizontal padding, where the mask has reached full opacity and
+// the compositing is a plain blend — the pixel with the largest
+// |bare - opaque| is picked, in whichever single channel it is largest in,
+// and that channel is read. The banner's own bottom fade multiplies the
+// whole banner's alpha and cancels in both ratios.
+//
+//   r1 = |shipped - bare|   / |bare - opaque|
+//   r2 = |shipped - opaque| / |bare - opaque|
+//
+// An opaque veil sends r2 to 0 and an absent veil sends r1 to 0; a veil
+// that replaced the artwork instead of blending with it sends both to the
+// ends of their range at once (r1 = 1, r2 = 0) and leaves 4a's inside
+// count at 0.
+//
+// Every capture neutralises the banner's own drop-shadow. That shadow is
+// computed from the banner's alpha, and the veil raises that alpha wherever
+// it paints — so the veil lays a faint halo up to ~30 px OUTSIDE its box,
+// decaying with the distance to it (measured up to 211/255 in a channel,
+// over ~23 px). That halo is the banner's decoration rather than the veil's
+// paint, and left in place no footprint check can pass.
+async function veilFootprintAndBlend(page) {
+  const geo = await page.evaluate(() => {
+    const banner = document.querySelector('.quick-help-banner');
+    const veil = document.querySelector('.quick-help-content');
+    const heading = document.querySelector('.quick-help-heading');
+    if (!banner || !veil || !heading) return null;
+    const b = banner.getBoundingClientRect();
+    const v = veil.getBoundingClientRect();
+    const cs = getComputedStyle(veil);
+    // The title's own measure, not the heading's box. The heading is a block
+    // child, so its box simply fills whatever the veil is wide and grows with
+    // it — read off the same render it says nothing about where the text
+    // ends. A Range over the heading's contents reports the union of the
+    // line boxes, which is the title itself and does not move when the veil
+    // is stretched.
+    const title = document.createRange();
+    title.selectNodeContents(heading);
+    // The clip is the banner's box intersected with the viewport. The banner
+    // breaks out past the panel, so at the narrow widths its box starts at
+    // x = -24 and a clip taken at b.x is silently shifted to 0 — which puts
+    // every coordinate read against the image 24 px out, and reads the
+    // veil's own left ramp as a halo outside it.
+    const x = Math.max(0, b.left);
+    const y = Math.max(0, b.top);
+    const alpha = parseFloat(cs.getPropertyValue('--qh-banner-scrim-alpha'));
+    return {
+      clip: {
+        x,
+        y,
+        width: Math.min(b.right, window.innerWidth) - x,
+        height: Math.min(b.bottom, window.innerHeight) - y
+      },
+      veil: { x: v.left - x, y: v.top - y, width: v.width, height: v.height },
+      titleWidth: title.getBoundingClientRect().width,
+      padLeft: parseFloat(cs.paddingLeft),
+      padRight: parseFloat(cs.paddingRight),
+      alpha: Number.isFinite(alpha) ? alpha : null
+    };
   });
-  if (!box) return { ok: false, why: 'no banner box' };
+  if (!geo) return { ok: false, why: 'no banner box' };
 
-  const HIDE_TEXT = '.quick-help-heading,.quick-help-subtitle{visibility:hidden !important;}';
+  const BASE_CSS =
+    // The glyphs would otherwise pollute the pixel comparison.
+    '.quick-help-heading,.quick-help-subtitle{visibility:hidden !important;}' +
+    // The banner's drop-shadow is computed from its own alpha, which the
+    // veil raises wherever it paints; without this it haloed ~23 px outside
+    // the veil's box in every capture.
+    '.quick-help-banner{filter:none !important;}';
+  const VEIL_OFF =
+    '.quick-help-content{background:transparent !important;mask-image:none !important;-webkit-mask-image:none !important;}';
+  const VEIL_OPAQUE =
+    '.quick-help-content{background:var(--surface) !important;mask-image:none !important;-webkit-mask-image:none !important;}';
+
   const shot = async (css) => {
-    const tag = await page.addStyleTag({ content: HIDE_TEXT + css });
-    const buf = await page.screenshot({ clip: box, type: 'png' });
+    const tag = await page.addStyleTag({ content: BASE_CSS + css });
+    const buf = await page.screenshot({ clip: geo.clip, type: 'png' });
     await tag.evaluate((n) => n.remove());
     return buf.toString('base64');
   };
-  // The scrim's plateau is the lower part of its own box, past the ramp.
-  const geo = await page.evaluate(() => {
-    const c = document.querySelector('.quick-help-content').getBoundingClientRect();
-    const surface = getComputedStyle(document.documentElement).getPropertyValue('--surface').trim();
-    // Resolve the surface to an sRGB triplet the same way a paint would:
-    // fill a 1x1 canvas with it and read the byte back.
-    const cv = document.createElement('canvas');
-    cv.width = 1;
-    cv.height = 1;
-    const g2 = cv.getContext('2d');
-    g2.fillStyle = surface;
-    g2.fillRect(0, 0, 1, 1);
-    const p = g2.getImageData(0, 0, 1, 1).data;
-    return { plateauFrom: +(c.y + c.height * 0.5).toFixed(1), panel: [p[0], p[1], p[2]] };
-  });
   const shipped = await shot('');
-  const opaque = await shot('.quick-help-content{background:var(--surface) !important;}');
+  const bare = await shot(VEIL_OFF);
+  const opaque = await shot(VEIL_OPAQUE);
 
   return await page.evaluate(
-    async ({ shipped, opaque, geo }) => {
+    async ({ shipped, bare, opaque, geo, tol }) => {
       const load = (b64) =>
         new Promise((resolve, reject) => {
           const img = new Image();
@@ -437,65 +533,75 @@ async function scrimDoesNotOcclude(page) {
           img.onerror = reject;
           img.src = `data:image/png;base64,${b64}`;
         });
-      const [imS, imO] = await Promise.all([load(shipped), load(opaque)]);
-      const lum = (r, g, b) => {
-        const toLin = (v) => {
-          v /= 255;
-          return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
-        };
-        return 0.2126 * toLin(r) + 0.7152 * toLin(g) + 0.0722 * toLin(b);
-      };
-      // How far the artwork departs from the panel, per row. Which
-      // direction it departs depends on the theme — the ink is darker than
-      // a light panel and lighter than a dark one — so the statistic is
-      // the pixel FURTHEST from the panel's own luminance, which reads the
-      // artwork in both.
-      const panelLum = lum(geo.panel[0], geo.panel[1], geo.panel[2]);
-      const departure = (img) => {
+      const [imS, imB, imO] = await Promise.all([load(shipped), load(bare), load(opaque)]);
+      const pixels = (img) => {
         const c = document.createElement('canvas');
         c.width = img.width;
         c.height = img.height;
         const ctx = c.getContext('2d');
         ctx.drawImage(img, 0, 0);
-        const D = ctx.getImageData(0, 0, c.width, c.height).data;
-        const W = img.width;
-        const H = img.height;
-        const out = [];
-        for (let y = 0; y < H; y++) {
-          let best = 0;
-          for (let x = 0; x < W; x++) {
-            const i = (y * W + x) * 4;
-            const l = lum(D[i], D[i + 1], D[i + 2]);
-            const d = Math.abs(l - panelLum);
-            if (d > best) best = d;
-          }
-          out.push(best);
-        }
-        return out;
+        return ctx.getImageData(0, 0, c.width, c.height).data;
       };
-      const S = departure(imS);
-      const O = departure(imO);
-      const from = Math.max(0, Math.floor(geo.plateauFrom));
-      let maxGap = 0;
-      let at = -1;
-      for (let y = from; y < S.length; y++) {
-        const gap = Math.abs(S[y] - O[y]);
-        if (gap > maxGap) {
-          maxGap = gap;
-          at = y;
+      const S = pixels(imS);
+      const B = pixels(imB);
+      const O = pixels(imO);
+      const W = imS.width;
+      const H = imS.height;
+
+      // (4a) The footprint.
+      let inside = 0;
+      let outside = 0;
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const i = (y * W + x) * 4;
+          const d = Math.abs(S[i] - B[i]) + Math.abs(S[i + 1] - B[i + 1]) + Math.abs(S[i + 2] - B[i + 2]);
+          if (d === 0) continue;
+          const dx = x + 0.5 - geo.veil.x;
+          const dy = y + 0.5 - geo.veil.y;
+          const inBox = dx >= -tol && dx <= geo.veil.width + tol && dy >= -tol && dy <= geo.veil.height + tol;
+          if (inBox) inside++;
+          else outside++;
         }
       }
+
+      // (4b) The blend, over the part of the box where the mask is fully
+      // opaque: past the vertical ramp at the bottom, and in from the
+      // horizontal ramp on both sides.
+      const x0 = Math.ceil(geo.veil.x + geo.padLeft);
+      const x1 = Math.floor(geo.veil.x + geo.veil.width - geo.padRight);
+      const y0 = Math.ceil(geo.veil.y + geo.veil.height * 0.5);
+      const y1 = Math.floor(geo.veil.y + geo.veil.height);
+      if (x1 < x0 || y1 < y0) return { ok: false, why: 'the veil has no plateau to sample' };
+
+      let pick = null;
+      for (let y = y0; y <= y1; y++) {
+        for (let x = x0; x <= x1; x++) {
+          const i = (y * W + x) * 4;
+          for (let ch = 0; ch < 3; ch++) {
+            const span = Math.abs(B[i + ch] - O[i + ch]);
+            if (!pick || span > pick.span) pick = { x, y, ch, span };
+          }
+        }
+      }
+      if (!pick || pick.span === 0) return { ok: false, why: 'the plateau carries no artwork' };
+
+      const i = (pick.y * W + pick.x) * 4;
+      const ch = pick.ch;
       return {
         ok: true,
-        rows: S.length - from,
-        maxGap: Number(maxGap.toFixed(4)),
-        atRow: at,
-        shippedDeparture: at >= 0 ? Number(S[at].toFixed(4)) : null,
-        opaqueDeparture: at >= 0 ? Number(O[at].toFixed(4)) : null,
-        panelLum: Number(panelLum.toFixed(4))
+        inside,
+        outside,
+        span: pick.span,
+        r1: Math.abs(S[i + ch] - B[i + ch]) / pick.span,
+        r2: Math.abs(S[i + ch] - O[i + ch]) / pick.span,
+        veil: geo.veil,
+        titleWidth: geo.titleWidth + geo.padLeft + geo.padRight,
+        paddingInline: geo.padLeft + geo.padRight,
+        alpha: geo.alpha,
+        sample: { x: pick.x, y: pick.y, ch, shipped: S[i + ch], bare: B[i + ch], opaque: O[i + ch] }
       };
     },
-    { shipped, opaque, geo }
+    { shipped, bare, opaque, geo, tol: FOOTPRINT_EDGE_TOLERANCE }
   );
 }
 
@@ -600,18 +706,75 @@ test.describe('Welcome banner invariants', () => {
     }
   });
 
-  test('4. the scrim leaves the artwork readable instead of occluding it', async ({ browser }) => {
+  test('4. the veil wraps the title box and blends with the artwork instead of replacing it', async ({ browser }) => {
     for (const vp of VIEWPORTS) {
       for (const theme of ['light', 'dark']) {
         const { ctx, page } = await freshSignedIn(browser, vp, theme);
-        const o = await scrimDoesNotOcclude(page);
-        expect(o.ok, `${vp.label}/${theme} occlusion measured (${o.why || 'ok'})`).toBe(true);
+        const a = SHIPPED_SCRIM_ALPHA[theme];
+        const m = await veilFootprintAndBlend(page);
+        expect(m.ok, `${vp.label}/${theme} veil measured (${m.why || 'ok'})`).toBe(true);
+        const box =
+          `${m.veil.width.toFixed(1)}x${m.veil.height.toFixed(1)} at ` +
+          `${m.veil.x.toFixed(1)},${m.veil.y.toFixed(1)}`;
+        const sample =
+          `channel ${m.sample.ch} at (${m.sample.x}, ${m.sample.y}): ` +
+          `shipped=${m.sample.shipped} bare=${m.sample.bare} opaque=${m.sample.opaque} ` +
+          `over a span of ${m.span}`;
+
+        // (4a) The footprint.
         expect(
-          o.maxGap,
-          `${vp.label}/${theme} the scrim renders the icon tiles identically to an opaque ` +
-            `scrim (artwork departure from the panel ${o.shippedDeparture} either way) across ` +
-            `${o.rows} rows — the artwork is being annihilated at the scrim's edge, not faded`
+          m.outside,
+          `${vp.label}/${theme} ${m.outside} of the ${m.inside + m.outside} pixels the veil ` +
+            `changes paint outside its box (${box}), within a ${FOOTPRINT_EDGE_TOLERANCE}px ` +
+            `edge tolerance — the veil is a band across the banner again, or something beside ` +
+            `it is painting`
+        ).toBe(0);
+        expect(
+          m.inside,
+          `${vp.label}/${theme} not one of the pixels inside the veil's box (${box}) differs ` +
+            `from the bare render — the veil paints nothing`
         ).toBeGreaterThan(0);
+        // The footprint only means "the title's box" if the box is the
+        // title's measure. The check above reads the box off the page, so a
+        // veil grown back into the full-width band would still satisfy it on
+        // its own — and so would a reading of the heading's box, which is a
+        // block that fills the veil and grows with it. The title's width here
+        // is the union of its own line boxes.
+        expect(
+          Math.abs(m.veil.width - m.titleWidth),
+          `${vp.label}/${theme} the veil's box is ${m.veil.width.toFixed(1)}px wide but the ` +
+            `title's measure plus its ${m.paddingInline.toFixed(0)}px of padding is ` +
+            `${m.titleWidth.toFixed(1)}px — the veil is wrapped around the banner, not the title`
+        ).toBeLessThanOrEqual(1);
+
+        // (4b) The blend.
+        expect(
+          m.r1,
+          `${vp.label}/${theme} the veil carried the artwork only ${(m.r1 * 100).toFixed(1)}% of ` +
+            `the way an opaque veil would, against a floor of ` +
+            `${(BLEND_FRACTION * a * 100).toFixed(1)}% (0.8 x ${a}) — r1=${m.r1.toFixed(3)} ` +
+            `r2=${m.r2.toFixed(3)}, ${sample}. The veil is not blending with the artwork: it is ` +
+            `either absent (r1=0) or replacing it (r1=1)`
+        ).toBeGreaterThanOrEqual(BLEND_FRACTION * a);
+        expect(
+          m.r2,
+          `${vp.label}/${theme} the veil carried the artwork only ${(m.r2 * 100).toFixed(1)}% of ` +
+            `the way to an opaque veil, against a floor of ` +
+            `${(BLEND_FRACTION * (1 - a) * 100).toFixed(1)}% (0.8 x ${1 - a}) — ` +
+            `r2=${m.r2.toFixed(3)} r1=${m.r1.toFixed(3)}, ${sample}. The veil paints opaque: ` +
+            `the artwork under it does not survive`
+        ).toBeGreaterThanOrEqual(BLEND_FRACTION * (1 - a));
+
+        // The floors above are derived from the alpha the layer ships, so
+        // the rendered alpha has to still be that alpha.
+        expect(
+          m.alpha,
+          `${vp.label}/${theme} the veil paints at alpha ${m.alpha} but the blend floors were ` + `derived from ${a}`
+        ).not.toBeNull();
+        expect(
+          Math.abs(m.alpha - a),
+          `${vp.label}/${theme} the veil paints at alpha ${m.alpha} but ships at ${a}`
+        ).toBeLessThan(0.01);
         await ctx.close();
       }
     }

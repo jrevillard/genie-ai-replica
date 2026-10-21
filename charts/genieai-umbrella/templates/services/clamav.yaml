@@ -53,7 +53,7 @@ spec:
             - name: avscanner
               containerPort: {{ $svc.port | default 3310 }}
           env:
-            {{- toYaml ($svc.env | default list) | nindent 12 }}
+            {{- toYaml (include "genieai-umbrella.envMapRows" ($svc.env | default dict) | fromJsonArray) | nindent 12 }}
           resources:
             {{- toYaml $svc.resources | nindent 12 }}
           securityContext:

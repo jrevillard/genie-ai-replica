@@ -452,9 +452,34 @@ services:
       # Budget for the startup probe of the configured translation API.
       # Failing it stops the backend — the API is mandatory once named —
       # so it has to cover a cold TLS handshake to a remote GPU node
-      # that is busy serving another workload. Empty = the application's
-      # own default (30 s).
-      probeTimeoutSeconds: ""
+      # that is busy serving another workload.
+      probeTimeoutSeconds: 30
+    # Environment rows the chart adds to the backend, beyond the ones its
+    # templates derive. Docker Compose sets the same variables on the
+    # `backend` service, and the two must stay in step: the parity gate
+    # (scripts/config-parity-check.py) fails the build when Compose names
+    # a variable the chart does not, or when the two disagree on a value
+    # that is not a Kubernetes address. Keep the values here identical to
+    # the Compose defaults.
+    #
+    # A MAP, not a list: Helm merges maps key by key, so an overlay that
+    # sets one variable keeps every default declared here beside it. A
+    # list would be replaced wholesale and one overlay value would
+    # silently drop the rest.
+    env:
+      LOG_LEVEL: info
+      OTEL_SERVICE_NAME: backend
+      # Which retrieval context the chat assembles.
+      CONTEXT_OPTION: conversation-with-context-labels
+      # The service account the admin API proxy authenticates as.
+      KEYCLOAK_PROXY_CLIENT_ID: genie-proxy-client
+      # TLS verification towards the model endpoints. 1 = verify (the
+      # default here and in Compose); a deployment whose GPU node serves
+      # a self-signed certificate sets 0, exactly as Compose does.
+      NODE_TLS_REJECT_UNAUTHORIZED: "1"
+      # VictoriaLogs tenancy and query budget for the admin log views.
+      VICTORIALOGS_TENANT_ID: "0:0"
+      VL_QUERY_TIMEOUT_MS: "30000"
     # OPEA chat pipeline host (chatqna service). Empty = the code's
     # image default — set it to the chatqna Service when the OPEA
     # chart (in-cluster Service name).
@@ -478,7 +503,32 @@ services:
     # crash-looping backend. The compose path imposes no limit at all,
     # so this one is a chart-only constraint.
     resources: { requests: { cpu: 100m, memory: 1Gi }, limits: { cpu: 1, memory: 12Gi } }
-    env: []
+    # Environment rows the chart adds to the backend, beyond the ones its
+    # templates derive. Docker Compose sets the same variables on the
+    # `backend` service, and the two must stay in step: the parity gate
+    # (scripts/config-parity-check.py) fails the build when Compose names
+    # a variable the chart does not, or when the two disagree on a value
+    # that is not a Kubernetes address. Keep the values here identical to
+    # the Compose defaults.
+    #
+    # A MAP, not a list: Helm merges maps key by key, so an overlay that
+    # sets one variable keeps every default declared here beside it. A
+    # list would be replaced wholesale and one overlay value would
+    # silently drop the rest.
+    env:
+      LOG_LEVEL: info
+      OTEL_SERVICE_NAME: backend
+      # Which retrieval context the chat assembles.
+      CONTEXT_OPTION: conversation-with-context-labels
+      # The service account the admin API proxy authenticates as.
+      KEYCLOAK_PROXY_CLIENT_ID: genie-proxy-client
+      # TLS verification towards the model endpoints. 1 = verify (the
+      # default here and in Compose); a deployment whose GPU node serves
+      # a self-signed certificate sets 0, exactly as Compose does.
+      NODE_TLS_REJECT_UNAUTHORIZED: "1"
+      # VictoriaLogs tenancy and query budget for the admin log views.
+      VICTORIALOGS_TENANT_ID: "0:0"
+      VL_QUERY_TIMEOUT_MS: "30000"
     secrets:
       # KEYCLOAK_PROXY_CLIENT_SECRET for the genie-proxy-client service
       # account (the realm's admin-API proxy). The value reaches the
@@ -541,7 +591,7 @@ services:
       - name: nginx-run
         mountPath: /var/run
     resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
-    env: []
+    env: {}
     secrets: []
     pvc: null
     probes:
@@ -590,7 +640,24 @@ services:
     # compose-equivalent open egress on the HTTP(S) ports.
     crawlAllowedCIDRs: []
     resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 1, memory: 1Gi } }
-    env: []
+    # Environment rows the chart adds to the document-repository, beyond
+    # the ones its template derives. Docker Compose sets the same
+    # variables on the `document-repository` service; the parity gate
+    # (scripts/config-parity-check.py) keeps the two in step. A MAP, not a
+    # list: Helm merges maps key by key, so an overlay that sets one
+    # variable keeps every default declared here beside it.
+    env:
+      # The client the service validates the browser's token against.
+      KC_CLIENT_ID: genie-app
+      LOG_LEVEL: info
+      OTEL_SERVICE_NAME: document-repository
+      # TLS verification towards the model endpoints. 1 = verify (the
+      # default here and in Compose); a deployment whose GPU node serves
+      # a self-signed certificate sets 0, exactly as Compose does.
+      NODE_TLS_REJECT_UNAUTHORIZED: "1"
+      # VictoriaLogs tenancy and query budget for the admin log views.
+      VICTORIALOGS_TENANT_ID: "0:0"
+      VL_QUERY_TIMEOUT_MS: "30000"
     secrets: []
     pvc:
       enabled: true                     # rendered as PVC by the doc-repo template
@@ -686,9 +753,58 @@ opea:
       reranker: /rerank
       translation: /translation
       docling: /docling
-  chatqna: {}      # CHATQNA_*, RERANKING_*, MULTI_TURN_*, prompts — defaults in templates
-  retriever: {}    # RETRIEVER_* tuning — defaults in templates
-  dataprep: {}     # chunking / labeling / contextual retrieval — defaults in templates
+  chatqna:
+    # CHATQNA_*, RERANKING_*, MULTI_TURN_*, prompts — defaults in templates
+    #
+    # `env` carries the variables the chart must configure the way Compose
+    # configures them. The parity gate (scripts/config-parity-check.py)
+    # keeps the two in step. A MAP, not a list: Helm merges maps key by
+    # key, so an overlay that sets one variable keeps every default
+    # declared here beside it.
+    env:
+      # Path the embedding endpoint is called on.
+      EMBEDDING_SERVER_ENDPOINT: /v1/embeddings
+      # Model-endpoint HTTP budgets, resolved by the shared policy module
+      # (genie-ai-overlay/core/model_http_policy.py).
+      MODEL_CONNECT_TIMEOUT_SECONDS: "30"
+      MODEL_CONTROL_PLANE_TIMEOUT_SECONDS: "30"
+      MODEL_PROBE_TIMEOUT_SECONDS: "10"
+      # Multi-turn rewrite: `blend` mixes the history into the query,
+      # `condense` rewrites the history into a standalone query.
+      MULTI_TURN_MODE: blend
+      MULTI_TURN_CONDENSE_HISTORY_TURNS: "8"
+      MULTI_TURN_CONDENSE_MAX_TOKENS: "256"
+      MULTI_TURN_CONDENSE_TIMEOUT_SECONDS: "5.0"
+  retriever:
+    # RETRIEVER_* tuning — defaults in templates
+    #
+    # `env` carries the variables the chart must configure the way Compose
+    # configures them (see the parity gate).
+    env:
+      MODEL_EMBEDDING_TIMEOUT_SECONDS: "600"
+      MODEL_LLM_MAX_RETRIES: "2"
+      MODEL_LLM_TIMEOUT_SECONDS: "180"
+      MODEL_PROBE_TIMEOUT_SECONDS: "10"
+      MODEL_SUMMARIZER_TIMEOUT_SECONDS: "600"
+  dataprep:
+    # chunking / labeling / contextual retrieval — defaults in templates
+    #
+    # `env` carries the variables the chart must configure the way Compose
+    # configures them (see the parity gate).
+    env:
+      # Ceiling for the LLM phase. The label batches and the contextual
+      # retrieval calls run inside it, so raising the per-call budgets
+      # without raising this one makes dataprep warn at startup.
+      DATAPREP_LLM_PHASE_TIMEOUT_SECONDS: "900"
+      # How often the phase reports its progress.
+      DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS: "60"
+      # Model-endpoint HTTP budgets, resolved by the shared policy module.
+      MODEL_AUTH_TIMEOUT_SECONDS: "300"
+      MODEL_CONNECT_TIMEOUT_SECONDS: "30"
+      MODEL_CONTROL_PLANE_TIMEOUT_SECONDS: "30"
+      MODEL_LLM_MAX_RETRIES: "2"
+      MODEL_LLM_TIMEOUT_SECONDS: "180"
+      MODEL_PROBE_TIMEOUT_SECONDS: "10"
   reranker:
     # Adaptive-utility tuning knobs read at reranker startup; only used
     # when RERANKING_STRATEGY=adaptive.
@@ -698,6 +814,13 @@ opea:
     contextDecayFactor: "0.0025"
     minValueThreshold: "-1.0"
     logLevel: info
+    # `env` carries the variables the chart must configure the way Compose
+    # configures them (see the parity gate).
+    env:
+      MODEL_CONNECT_TIMEOUT_SECONDS: "30"
+      MODEL_RERANK_TIMEOUT_SECONDS: "300"
+      # The component name the reranker reports in its spans.
+      RERANK_COMPONENT_NAME: GENIE_TEI_RERANKING
   embedding:
     modelId: BAAI/bge-large-en-v1.5
   translation:

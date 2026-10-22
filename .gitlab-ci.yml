@@ -39,7 +39,7 @@ variables:
   #   Provenance: vendored third-party code, with one GENIE.AI patch on top — the
   #   allowInsecureConnections gate in FlutterAppauthPlugin.java, which is the
   #   control the exclusion relies on.
-  #   Known gap, tracked separately: getConfig() reads the FLAVOR dart-define and
+  #   Known gap, tracked in #1099: getConfig() reads the FLAVOR dart-define and
   #   falls back to "dev", and the documented build commands do not set it, so a
   #   release build resolves devConfig — which points at localhost and does not
   #   authenticate against a real deployment.

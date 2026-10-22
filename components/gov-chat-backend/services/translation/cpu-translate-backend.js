@@ -4,7 +4,7 @@ const path = require('path');
 const { languageForLog } = require('./language-log');
 const {
   ownLanguageCode,
-  isLanguageSupported: mapSupportsLanguage,
+  hasOwnLanguage,
   isModelLanguageCode: mapProducesCode,
   supportedLanguages
 } = require('./language-map-lookup');
@@ -233,19 +233,19 @@ class CpuTranslateBackend {
 
     const code = ownLanguageCode(this.languageMap, isoCode);
     if (!code) {
+      if (hasOwnLanguage(this.languageMap, isoCode)) {
+        // The map carries the language and maps it to an empty code: the
+        // shipped map is broken. That is our defect, not the caller's
+        // request, and the caller must not be answered as if their language
+        // were unknown.
+        throw new Error(
+          `[CPU-BACKEND] The shipped language map maps "${isoCode}" to an empty code (server-side defect, not a bad request)`
+        );
+      }
       logger.warn(`[CPU-BACKEND] No language code mapping for: ${languageForLog(isoCode)}`);
       return null;
     }
     return code;
-  }
-
-  /**
-   * Check if language is supported
-   * @param {string} isoCode - ISO 639-1 language code
-   * @returns {boolean} True if supported
-   */
-  isLanguageSupported(isoCode) {
-    return mapSupportsLanguage(this.languageMap, isoCode);
   }
 
   /**

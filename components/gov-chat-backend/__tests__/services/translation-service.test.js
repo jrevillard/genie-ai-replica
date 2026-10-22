@@ -43,7 +43,6 @@ jest.mock('../../services/translation/cpu-translate-backend', () =>
     translate: mockCpuTranslate,
     getSupportedLanguages: jest.fn().mockReturnValue({ en: 'English', fr: 'French', es: 'Spanish' }),
     getLanguageCode: jest.fn().mockImplementation((lang) => lang),
-    isLanguageSupported: jest.fn().mockReturnValue(true),
     init: jest.fn().mockResolvedValue(undefined)
   }))
 );
@@ -57,7 +56,6 @@ jest.mock('../../services/translation/gpu-translate-backend', () =>
     translate: mockGpuTranslate,
     getSupportedLanguages: jest.fn().mockReturnValue({ en: 'English', fr: 'French', es: 'Spanish' }),
     getLanguageCode: jest.fn().mockImplementation((lang) => lang),
-    isLanguageSupported: jest.fn().mockReturnValue(true),
     init: jest.fn().mockResolvedValue(undefined)
   }))
 );
@@ -418,7 +416,6 @@ describe('TranslationService', () => {
     // NLLB map does that for "man" and "mnk" (both "dyu_Latn").
     const stubBackendWithModelCodes = (codes) => ({
       getLanguageCode: jest.fn((code) => (Object.prototype.hasOwnProperty.call(codes, code) ? codes[code] : null)),
-      isLanguageSupported: jest.fn(() => true),
       translate: jest.fn().mockResolvedValue(['translated']),
       getBackendInfo: jest.fn(() => ({ model: 'stub-model' }))
     });
@@ -462,7 +459,6 @@ describe('TranslationService', () => {
       translationService.backendType = 'gpu';
       translationService.backend = {
         getLanguageCode: (l) => (l === 'en' ? 'English' : l === 'es' ? 'Spanish' : null),
-        isLanguageSupported: (l) => ['es', 'fr'].includes(l),
         translateStream: jest.fn(async (unit, src, tgt, ctx, onToken) => {
           if (onToken) onToken('tok');
           return 'translated';
@@ -508,7 +504,6 @@ describe('TranslationService', () => {
       translationService.backendType = 'gpu';
       translationService.backend = {
         getLanguageCode: (l) => l,
-        isLanguageSupported: () => true,
         translateStream: jest.fn().mockRejectedValue(new Error('GPU down'))
       };
       // A fallback here would emit into a caller that has already rendered the
@@ -520,7 +515,6 @@ describe('TranslationService', () => {
     it('throws when target is unsupported', async () => {
       translationService.backend = {
         getLanguageCode: (l) => (l === 'en' ? 'English' : null),
-        isLanguageSupported: () => false,
         translateStream: jest.fn()
       };
       await expect(translationService.translateStream('hi', 'en', 'xx')).rejects.toThrow(/Unsupported target language/);

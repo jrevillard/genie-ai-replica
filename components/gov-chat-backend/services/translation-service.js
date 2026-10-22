@@ -238,68 +238,67 @@ class TranslationService {
   }
 
   /**
-   * @method _resolveTarget
-   * @description Resolves a target language and the code the model expects for
-   * it, in one pass. The canonical code and the model-specific code are
-   * produced together: resolving them separately meant the map was consulted
-   * twice for the same language, and the second lookup could only fail in a
-   * way the caller could not act on.
+   * @method _resolveLanguage
+   * @description Resolves one language of a request and the code the model
+   * expects for it, in one pass. The canonical code and the model-specific
+   * code are produced together: resolving them separately meant the map was
+   * consulted twice for the same language, and the second lookup could only
+   * fail in a way the caller could not act on.
    *
    * A language the map does not map is refused. There is no chain of
    * fallbacks: a request for one language answered in another is a wrong
-   * answer, and the caller has no way to see it.
+   * answer, and the caller has no way to see it. The source is checked
+   * against the same map as the target — degrading the language a text is
+   * written in would translate the wrong text.
+   * @param {string} language - The language as it arrived from the caller.
+   * @param {'source'|'target'} side - Which side of the pair is being
+   *   resolved. It names the language in the log line and in the refusal.
+   * @returns {{language: string, languageCode: string}} The canonical language
+   *   and the code the model expects.
+   * @throws {UnsupportedLanguageError} When the language is unknown.
+   */
+  _resolveLanguage(language, side) {
+    this.ensureReady();
+    const requested = normalizeRequestedLanguage(language);
+    if (!requested) {
+      logger.warn(`[TRANSLATION-SERVICE] Unsupported ${side} language: empty value`);
+      throw new UnsupportedLanguageError(side);
+    }
+
+    // One lookup answers both questions: the code the model is asked for,
+    // and whether the map knows the language at all.
+    const languageCode = this.modelLanguageCode(requested);
+    if (!languageCode) {
+      logger.warn(`[TRANSLATION-SERVICE] Unsupported ${side} language: ${languageForLog(requested)}`);
+      throw new UnsupportedLanguageError(side);
+    }
+    return { language: requested, languageCode };
+  }
+
+  /**
+   * @method _resolveTarget
+   * @description Resolves the target language of a request.
    * @param {string} targetLang - The target language as it arrived from the caller.
    * @returns {{targetLang: string, targetLangCode: string}} The canonical
    *   language and the code the model expects.
    * @throws {UnsupportedLanguageError} When the language is unknown.
    */
   _resolveTarget(targetLang) {
-    this.ensureReady();
-    const requested = normalizeRequestedLanguage(targetLang);
-    if (!requested) {
-      logger.warn('[TRANSLATION-SERVICE] Unsupported target language: empty value');
-      throw new UnsupportedLanguageError('target');
-    }
-
-    // One lookup answers both questions: the code the model is asked for,
-    // and whether the map knows the language at all. A language the map
-    // does not know is refused — there is no chain of fallbacks: a request
-    // for one language answered in another is a wrong answer the caller
-    // cannot see.
-    const targetLangCode = this.modelLanguageCode(requested);
-    if (!targetLangCode) {
-      logger.warn(`[TRANSLATION-SERVICE] Unsupported target language: ${languageForLog(requested)}`);
-      throw new UnsupportedLanguageError('target');
-    }
-    return { targetLang: requested, targetLangCode };
+    const { language, languageCode } = this._resolveLanguage(targetLang, 'target');
+    return { targetLang: language, targetLangCode: languageCode };
   }
 
   /**
    * @method _resolveSource
-   * @description Resolves a source language and the code the model expects for
-   * it, in one pass — the counterpart of `_resolveTarget`.
+   * @description Resolves the source language of a request.
    * @param {string} sourceLang - The source language as it arrived from the caller.
    * @returns {{sourceLang: string, sourceLangCode: string}} The canonical
    *   language and the code the model expects.
    * @throws {UnsupportedLanguageError} When the language is unknown.
    */
   _resolveSource(sourceLang) {
-    this.ensureReady();
-    const requested = normalizeRequestedLanguage(sourceLang);
-    if (!requested) {
-      logger.warn('[TRANSLATION-SERVICE] Unsupported source language: empty value');
-      throw new UnsupportedLanguageError('source');
-    }
-    // The source is checked against the same map the target is: a language the
-    // map does not know is refused, and an inherited property is not a
-    // language. The source has no fallback chain — degrading the language a
-    // text is written in would translate the wrong text.
-    const sourceLangCode = this.modelLanguageCode(requested);
-    if (!sourceLangCode) {
-      logger.warn(`[TRANSLATION-SERVICE] Unsupported source language: ${languageForLog(requested)}`);
-      throw new UnsupportedLanguageError('source');
-    }
-    return { sourceLang: requested, sourceLangCode };
+    const { language, languageCode } = this._resolveLanguage(sourceLang, 'source');
+    return { sourceLang: language, sourceLangCode: languageCode };
   }
 
   /**

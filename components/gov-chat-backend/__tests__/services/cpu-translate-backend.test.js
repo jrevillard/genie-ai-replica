@@ -244,12 +244,18 @@ describe('CpuTranslateBackend', () => {
       const result = backend.getLanguageCode('xyz');
       expect(result).toBeNull();
     });
-  });
 
-  describe('isLanguageSupported', () => {
-    it('should return false when language map not loaded', () => {
-      backend.languageMap = null;
-      expect(backend.isLanguageSupported('en')).toBeFalsy();
+    it('reports a language mapped to an empty code as a defect in the map', () => {
+      // The map carries the language and maps it to nothing: the shipped map
+      // is broken, and the caller must not be answered as if their language
+      // were unknown.
+      const saved = backend.languageMap.languageMap.fr;
+      backend.languageMap.languageMap.fr = '';
+      try {
+        expect(() => backend.getLanguageCode('fr')).toThrow(/server-side defect/i);
+      } finally {
+        backend.languageMap.languageMap.fr = saved;
+      }
     });
   });
 

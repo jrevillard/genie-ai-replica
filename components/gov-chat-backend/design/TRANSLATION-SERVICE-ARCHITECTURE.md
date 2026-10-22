@@ -444,6 +444,11 @@ maps name no fallback and a test fails the build if one of them does.
 2. Backend fallback (GPU → CPU)
 3. Error thrown
 
+A map that carries a language and maps it to an empty code is a defect in the
+shipped map, not an unsupported language: it is reported as a server-side
+defect, because answering the caller as if their language were unknown would
+hide our own bug.
+
 ## 5. Adding New LLMs
 
 ### 5.1 Step-by-Step Process

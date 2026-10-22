@@ -33,18 +33,21 @@ function ownLanguageCode(languageMap, isoCode) {
 }
 
 /**
- * Whether the backend can be asked for a language at all.
+ * Whether the map carries the language at all.
  *
- * The answer is the code lookup: a language the map does not map, and a
- * language it maps to an empty code, are both languages the model cannot be
- * asked for — one lookup, one answer.
+ * The answer separates the two ways a language can be missing from the map:
+ * a language the map does not carry is a language the caller asked for that
+ * the model cannot be asked for, while a language the map carries but maps to
+ * an empty code is a defect in the shipped map. They are not the same
+ * failure, and they are not the same fault.
  *
  * @param {object|null} languageMap - The shipped language map.
  * @param {string} isoCode - The canonical language code.
- * @returns {boolean} True when the map maps the language to a usable code.
+ * @returns {boolean} True when the map carries the language.
  */
-function isLanguageSupported(languageMap, isoCode) {
-  return ownLanguageCode(languageMap, isoCode) !== null;
+function hasOwnLanguage(languageMap, isoCode) {
+  const codes = languageMap ? languageMap.languageMap : null;
+  return Boolean(codes) && Object.prototype.hasOwnProperty.call(codes, isoCode);
 }
 
 /**
@@ -82,7 +85,7 @@ function supportedLanguages(languageMap) {
 
 module.exports = {
   ownLanguageCode,
-  isLanguageSupported,
+  hasOwnLanguage,
   isModelLanguageCode,
   supportedLanguages
 };

@@ -328,11 +328,6 @@ describe('GpuTranslateBackend streaming', () => {
       expect(backend.getLanguageCode('xyz')).toBeFalsy();
     });
 
-    it('isLanguageSupported reflects the language map', () => {
-      expect(backend.isLanguageSupported('en')).toBe(true);
-      expect(backend.isLanguageSupported('es')).toBe(true);
-    });
-
     it('formatRequest builds a gemma-3 chat-completions request with translation instructions', () => {
       // The request carries the model-specific codes; the prompt names the
       // languages from the map.

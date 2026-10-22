@@ -200,27 +200,40 @@ describe('backend language map lookups', () => {
     expect(backend.getLanguageCode('toString')).toBeNull();
   });
 
-  it('does not hand out an empty mapping as a language code', () => {
+  it('reports an empty mapping as a defect in the map, not as a bad request', () => {
     // A language mapped to an empty value is not a language: the empty code
-    // would reach the model in the prompt. The two answers have to agree —
-    // getLanguageCode refuses a language mapped to an empty code, so
-    // isLanguageSupported cannot say the backend supports it. The two answers
-    // have to agree, or a language the backend cannot ask the model for
-    // reaches the model as an empty code.
+    // would reach the model in the prompt. The map carries the language and
+    // maps it to nothing, so the shipped map is broken — that is our defect,
+    // and the caller must not be answered as if their language were unknown.
     const saved = backend.languageMap.languageMap.fr;
     backend.languageMap.languageMap.fr = '';
     try {
-      expect(backend.getLanguageCode('fr')).toBeNull();
-      expect(backend.isLanguageSupported('fr')).toBe(false);
+      expect(() => backend.getLanguageCode('fr')).toThrow(/server-side defect/i);
     } finally {
       backend.languageMap.languageMap.fr = saved;
     }
   });
 
-  it('answers with a boolean, not the map itself', () => {
-    expect(typeof backend.isLanguageSupported('fr')).toBe('boolean');
-    expect(backend.isLanguageSupported('fr')).toBe(true);
-    expect(backend.isLanguageSupported('constructor')).toBe(false);
+  it('does not blame the caller for a language the map maps to nothing', async () => {
+    // The caller asked for a language the deployment supports; the map simply
+    // maps it to an empty code. Blaming the request for it (an
+    // UnsupportedLanguageError is a 400) would hide our own defect.
+    const { UnsupportedLanguageError } = require('../../../services/translation/unsupported-language');
+    const saved = backend.languageMap.languageMap.fr;
+    backend.languageMap.languageMap.fr = '';
+    try {
+      let error;
+      try {
+        await service.translate(['hello'], 'en', 'fr');
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toBeDefined();
+      expect(error).not.toBeInstanceOf(UnsupportedLanguageError);
+      expect(error.message).toMatch(/server-side defect/i);
+    } finally {
+      backend.languageMap.languageMap.fr = saved;
+    }
   });
 
   it('answers whether a code is one the model knows', () => {

@@ -643,7 +643,7 @@ The translation service uses a modular language map system to support multiple t
    }
    ```
 
-4. **Create New Language Map** (for new model):
+3. **Create New Language Map** (for new model):
    ```javascript
    // translation/language-maps/new-model-map.js
    module.exports = {
@@ -658,7 +658,7 @@ The translation service uses a modular language map system to support multiple t
    };
    ```
 
-5. **Register Language Map** (in backend):
+4. **Register Language Map** (in backend):
    ```javascript
    // cpu-translate-backend.js or gpu-translate-backend.js
    loadLanguageMap(modelId) {
@@ -1244,10 +1244,6 @@ To add a new translation backend:
        // Return model-specific code
      }
 
-     isLanguageSupported(isoCode) {
-       // Check language support
-     }
-
      getBackendInfo() {
        return {
          type: 'new',
@@ -1433,6 +1429,7 @@ TRANSLATION_BATCHES=3
 - A language the map does not know is refused (HTTP 400 on the translate routes, an English answer on the chat path)
 - There is no fallback language: answering a request in another language is a wrong answer the caller cannot see
 - The maps name no fallback, so the refusal cannot be turned into a silent substitution
+- A map that carries a language and maps it to an empty code is a defect in the shipped map: it is reported as such, not as an unsupported language the caller asked for
 
 ### Monitoring and Logging
 

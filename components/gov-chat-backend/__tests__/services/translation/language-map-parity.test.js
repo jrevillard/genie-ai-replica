@@ -3,11 +3,22 @@
 const fs = require('fs');
 const path = require('path');
 
-const MAPS = {
-  'gemma-3': require('../../../services/translation/language-maps/gemma-3-map'),
-  'nllb-200': require('../../../services/translation/language-maps/nllb-200-map'),
-  translategemma: require('../../../services/translation/language-maps/translategemma-map')
-};
+const MAPS_DIR = path.resolve(__dirname, '../../../services/translation/language-maps');
+
+/**
+ * Every shipped language map, read from the directory rather than from a
+ * hand-written list. A list kept by hand is a list that goes out of date:
+ * a map added to the directory would ship without being checked here, and
+ * the checks below are the ones that catch a map that drifted from the
+ * chatqna language list or that named a fallback.
+ */
+const MAPS = fs
+  .readdirSync(MAPS_DIR)
+  .filter((file) => file.endsWith('-map.js'))
+  .reduce((maps, file) => {
+    maps[file.replace(/-map\.js$/, '')] = require(path.join(MAPS_DIR, file));
+    return maps;
+  }, {});
 
 /**
  * The chatqna service keeps its own copy of the language list: it names the

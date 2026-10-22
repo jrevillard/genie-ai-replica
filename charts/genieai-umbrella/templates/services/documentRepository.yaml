@@ -36,9 +36,19 @@ volume". */ -}}
 {{- $keptVolumes = append $keptVolumes $v -}}
 {{- end -}}
 {{- end -}}
+{{- /* Mounts follow their volumes: a mount row survives iff a KEPT
+volume carries its name. Filtering mounts by a hardcoded name instead
+kept the chart's mount name alive against an operator's own `uploads`
+volume (their volume survived the claim filter, their mount was
+dropped) and would drop the chart's mount against a kept volume of the
+same name. The join by name is the only predicate both sides share. */ -}}
+{{- $keptNames := dict -}}
+{{- range $v := $keptVolumes -}}
+{{- $_ := set $keptNames (get $v "name") true -}}
+{{- end -}}
 {{- $keptMounts := list -}}
 {{- range $m := ($vals.services.documentRepository.volumeMounts | default list) -}}
-{{- if ne $m.name "uploads" -}}
+{{- if get $keptNames (get $m "name") -}}
 {{- $keptMounts = append $keptMounts $m -}}
 {{- end -}}
 {{- end -}}
@@ -259,4 +269,19 @@ spec:
       ports:
         - protocol: TCP
           port: {{ .Values.observability.collectorPort | default 4318 }}
+    {{- if .Values.observability.logs.enabled }}
+    # VictoriaLogs read path. The chart renders VICTORIALOGS_URL for this
+    # pod whenever the logs tier is on; an env var pointing at a
+    # destination the pod's own policy forbids fails as a connection
+    # error the day a consumer lands, instead of as a config error now.
+    # Same peer the backend's policy selects (vmoperator-stamped labels).
+    - to:
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: victorialogs
+      ports:
+        - protocol: TCP
+          port: 9428
+    {{- end }}
 {{- end -}}

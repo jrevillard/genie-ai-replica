@@ -149,3 +149,34 @@ spec:
           port: 80
     {{- end }}
 {{- end -}}
+{{- /* HTTP → HTTPS redirect on the http listener. With TLS on, the
+Gateway renders BOTH listeners but the main route binds only https —
+without this route the http listener answers Envoy's 404 for every
+plain-http request, and a cert-manager ACME http-01 issuer can never
+complete its /.well-known/acme-challenge/ order (the challenge arrives
+on port 80). The rule carries no path match, so it redirects everything;
+cert-manager's per-Order solver route matches the challenge path EXACTLY,
+and Gateway API precedence (exact beats prefix) gives it the request
+before the redirect sees it. */ -}}
+{{- if .Values.ingress.tls.enabled }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: genieai-redirect
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "ingress") | nindent 4 }}
+spec:
+  parentRefs:
+    - name: genieai
+      sectionName: http
+  hostnames:
+    - {{ include "genieai-umbrella.ingressHostname" . | quote }}
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301
+{{- end }}

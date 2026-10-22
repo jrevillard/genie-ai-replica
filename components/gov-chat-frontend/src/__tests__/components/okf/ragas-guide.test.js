@@ -106,7 +106,6 @@ describe('RagasGuideDialog', () => {
   // The gap localeConsistency cannot see: a key that EXISTS but holds an
   // empty string renders as a blank bullet and fails silently.
   it.each(LOCALES)('%s resolves every guide key to a non-empty string', (locale) => {
-     
     const data = require(`@/i18n/locales/${locale}.js`).default;
     const get = (path) => path.split('.').reduce((o, k) => (o && typeof o === 'object' ? o[k] : undefined), data);
     const empty = [];

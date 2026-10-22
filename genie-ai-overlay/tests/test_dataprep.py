@@ -2052,9 +2052,10 @@ class TestDocRepoIngestPayload:
         payload = DocRepoIngestPayload(**self._payload(chunkOverlap=150))
         assert payload.chunkOverlap == 150
 
-    def test_chunk_overlap_rejects_negative(self):
-        """Negative chunkOverlap would collapse the splitter into a single mega-chunk; reject at runtime."""
-        from unittest.mock import patch
+    @pytest.mark.asyncio
+    async def test_chunk_overlap_rejects_negative(self):
+        """Negative chunkOverlap would collapse the splitter into a single mega-chunk; rejected with 400 pre-lock."""
+        from unittest.mock import AsyncMock, patch
 
         from fastapi import HTTPException
 
@@ -2063,20 +2064,45 @@ class TestDocRepoIngestPayload:
         payload = ms.DocRepoIngestPayload(**self._payload(chunkOverlap=-50))
         with (
             patch.object(ms, "get_chunk_size_for_file", return_value=500),
-            patch.dict("os.environ", {}, clear=False),
-            patch.object(ms, "os") as os_mock,
+            patch.object(ms, "loader") as mock_loader,
+            patch.object(ms, "tracer"),
+            patch.object(ms, "active_ingestion_tasks", {}),
+            patch.object(ms, "upload_folder", "/tmp/test-ingest"),
+            patch("builtins.open", MagicMock()),
+            patch("fcntl.flock"),
         ):
-            os_mock.getenv.return_value = None  # env override absent
+            mock_loader.ingest_file_with_guardrail = AsyncMock()
             with pytest.raises(HTTPException) as exc_info:
-                # The handler validates CHUNK_OVERLAP before launching the background task.
-                # Simulate the first half of ingest_file_from_repo inline.
-                chunk_overlap = payload.chunkOverlap
-                if chunk_overlap is None:
-                    chunk_overlap = int(ms.os.getenv("DATAPREP_CHUNK_OVERLAP", 50))
-                if chunk_overlap < 0:
-                    raise HTTPException(status_code=400, detail=f"chunkOverlap must be >= 0, got {chunk_overlap}")
-                assert exc_info.value.status_code == 400
-                assert "chunkOverlap must be >= 0" in exc_info.value.detail
+                await ms.ingest_file_from_repo(payload)
+        assert exc_info.value.status_code == 400
+        assert "chunkOverlap must be >= 0" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "bad_name",
+        ["../escape.md", "/absolute/path.md", "a\x00b.md", "..", ""],
+    )
+    async def test_file_name_must_be_bare(self, bad_name):
+        """A non-bare fileName is a traversal write/delete primitive; rejected with 400 pre-lock."""
+        from unittest.mock import AsyncMock, patch
+
+        from fastapi import HTTPException
+
+        from dataprep import genieai_dataprep_microservice as ms
+
+        payload = ms.DocRepoIngestPayload(**self._payload(fileName=bad_name))
+        with (
+            patch.object(ms, "loader") as mock_loader,
+            patch.object(ms, "tracer"),
+            patch.object(ms, "active_ingestion_tasks", {}),
+            patch("builtins.open", MagicMock()),
+            patch("fcntl.flock"),
+        ):
+            mock_loader.ingest_file_with_guardrail = AsyncMock()
+            with pytest.raises(HTTPException) as exc_info:
+                await ms.ingest_file_from_repo(payload)
+        assert exc_info.value.status_code == 400
+        assert "bare file name" in exc_info.value.detail
 
 
 # ---------------------------------------------------------------------------

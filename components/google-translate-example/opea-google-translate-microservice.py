@@ -1,3 +1,6 @@
+# Copyright (C) 2026 International Telecommunication Union (ITU)
+# SPDX-License-Identifier: Apache-2.0
+
 
 from fastapi import FastAPI, HTTPException
 from google_translator import GoogleTranslator

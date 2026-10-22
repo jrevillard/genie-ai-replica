@@ -157,7 +157,11 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
 
         # --- Request validation, before the lock: a rejection here must not
         # have to release anything.
-        if os.path.basename(payload.fileName) != payload.fileName or payload.fileName in ("", ".", ".."):
+        if (
+            os.path.basename(payload.fileName) != payload.fileName
+            or payload.fileName in ("", ".", "..")
+            or "\x00" in payload.fileName
+        ):
             raise HTTPException(
                 status_code=400,
                 detail=f"fileName must be a bare file name, got {payload.fileName!r}",
@@ -268,15 +272,18 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
             span.record_exception(e)
             span.set_status(Status(StatusCode.ERROR, str(e)))
             logger.error(f"Error initiating dataprep ingest: {e}")
-            # Release the lock only when the background task has not picked
-            # it up: once created, the task owns it and unlocks on completion.
+            raise
+        finally:
+            # Release the lock and the decoded file only when the background
+            # task has not picked them up: once created, the task owns both
+            # and unlocks on completion. The finally (not the except) does
+            # this, so a cancellation or interpreter exit in the window
+            # cannot leave the flock held by this process.
             if task is None:
                 fcntl.flock(lock_file, fcntl.LOCK_UN)
                 lock_file.close()
-
-            if task is None and save_path and os.path.exists(save_path):
-                os.remove(save_path)
-            raise
+                if save_path and os.path.exists(save_path):
+                    os.remove(save_path)
 
 
 # ------------------------------------------------------------------------------

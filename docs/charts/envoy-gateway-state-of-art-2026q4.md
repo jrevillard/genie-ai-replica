@@ -117,9 +117,8 @@
 
 ## Files to update
 
-- `docs/superpowers/specs/2026-10-08-genie-ai-helm-charts-design.md` (§9 K8s target, Kong references)
-- `docs/superpowers/plans/2026-10-08-genie-ai-helm-charts-data-layer.md` (Plan 2 Task 10 — Kong opt-in)
-- `docs/superpowers/plans/2026-10-08-genie-ai-helm-charts-service-tier-group5.md` (Plan 3 Task 5 step 2 — nginx upstream swap)
+- `docs/charts/helm-charts-design.md` (§9 K8s target, Kong references)
+- the data-layer and service-tier sections of the design of record (`docs/charts/helm-charts-design.md` — Kong opt-in, nginx upstream swap) and the shipped state in [`migration-status.md`](migration-status.md)
 - the kind node image in the ct cluster creation step (no ct.yaml key, no ct CLI flag)
 
 ## Status

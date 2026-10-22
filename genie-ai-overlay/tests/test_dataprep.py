@@ -2069,13 +2069,15 @@ class TestDocRepoIngestPayload:
             patch.object(ms, "active_ingestion_tasks", {}),
             patch.object(ms, "upload_folder", "/tmp/test-ingest"),
             patch("builtins.open", MagicMock()),
-            patch("fcntl.flock"),
+            patch("fcntl.flock") as flock_mock,
         ):
             mock_loader.ingest_file_with_guardrail = AsyncMock()
             with pytest.raises(HTTPException) as exc_info:
                 await ms.ingest_file_from_repo(payload)
         assert exc_info.value.status_code == 400
         assert "chunkOverlap must be >= 0" in exc_info.value.detail
+        # "Pre-lock" is a promise: the rejection must not even acquire it.
+        flock_mock.assert_not_called()
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -2096,13 +2098,41 @@ class TestDocRepoIngestPayload:
             patch.object(ms, "tracer"),
             patch.object(ms, "active_ingestion_tasks", {}),
             patch("builtins.open", MagicMock()),
-            patch("fcntl.flock"),
+            patch("fcntl.flock") as flock_mock,
         ):
             mock_loader.ingest_file_with_guardrail = AsyncMock()
             with pytest.raises(HTTPException) as exc_info:
                 await ms.ingest_file_from_repo(payload)
         assert exc_info.value.status_code == 400
         assert "bare file name" in exc_info.value.detail
+        flock_mock.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_failed_start_releases_the_lock(self):
+        """A failure between lock acquisition and task creation must unlock:
+        the finally, not the except, owns the release — otherwise the first
+        error wedges ingestion until process restart."""
+        import fcntl as fcntl_mod
+
+        from dataprep import genieai_dataprep_microservice as ms
+
+        payload = ms.DocRepoIngestPayload(**self._payload(fileBase64="!!!not-base64!!!"))
+        lock_mock = MagicMock()
+        with (
+            patch.object(ms, "loader"),
+            patch.object(ms, "tracer"),
+            patch.object(ms, "active_ingestion_tasks", {}),
+            patch.object(ms, "upload_folder", "/tmp/test-ingest"),
+            patch.object(ms.os, "open", return_value=7),
+            patch.object(ms.os, "fdopen", return_value=lock_mock),
+            patch.object(fcntl_mod, "flock") as flock_mock,
+            pytest.raises(Exception, match="Invalid base64") as exc_info,
+        ):
+            await ms.ingest_file_from_repo(payload)
+        assert "Invalid base64" in str(exc_info.value)
+        # The finally released the lock the handler acquired.
+        flock_mock.assert_any_call(lock_mock, fcntl_mod.LOCK_UN)
+        lock_mock.close.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

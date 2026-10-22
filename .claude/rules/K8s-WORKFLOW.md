@@ -75,6 +75,25 @@ flux reconcile helmrelease genieai -n flux-system
 kubectl -n genieai rollout status deploy/genieai-genieai-umbrella-<service> --timeout=300s
 ```
 
+## The chart carries copies — re-sync them
+
+Two artifacts in the chart are copies of a file the repo owns elsewhere,
+and CI fails the pipeline when the copy drifts from the source:
+
+| Copy | Source | Re-sync |
+|---|---|---|
+| `charts/genieai-umbrella/files/genie-realm.yaml` | `configs/keycloak/genie-realm.yaml` | copy it over |
+| `charts/genieai-umbrella/files/observability/dashboards/**` + `alerting/alert-rules.yml` | `configs/grafana/provisioning/` | `make chart-dashboards` |
+| `charts/genieai-umbrella/files/keycloak-themes.tgz` | `configs/keycloak/themes` | `make keycloak-theme` |
+
+A copy without a guard drifts silently: the compose deployment serves the
+source and the Kubernetes deployment serves the copy, and the two answer
+the same question differently. The dashboards check also compares the
+chart's dashboard list in `templates/observability/grafana-dashboards.yaml`
+against the files on disk — a copied file the list does not mention is
+never rendered, and a listed file that is missing inlines as an empty
+dashboard.
+
 ## Render gates
 
 Two gates before any chart push. Skip either, expect silent breakage.

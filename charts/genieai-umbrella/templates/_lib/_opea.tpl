@@ -84,31 +84,6 @@ Empty nodeHost → empty string (auto-detection stays off).
 {{- end -}}
 
 {{/*
-genieai-umbrella.opeaGpuNetwork — the ipBlock CIDRs and ports the
-orchestrators may reach the external GPU node on, as JSON:
-`{"cidrs": [...], "ports": [...]}`.
-
-The destination is NAMED (opea.gpu.nodeHost), so the egress rule does not
-have to be 0.0.0.0/0 the way it was when the chart ignored the URL:
-
-  - an IPv4 literal in nodeHost becomes a /32 — exact, and no operator
-    action (a laptop overlay pointing at 10.0.0.110:444 gets exactly
-    that);
-  - a DNS name cannot become a CIDR, so opea.gpu.allowedCIDRs applies
-    (the knob the crawler tier already uses), and an empty list falls
-    back to 0.0.0.0/0 — the same approximation Compose makes, since a
-    NetworkPolicy has no way to express a hostname;
-  - the port comes from the URL (`:444`, `:8443`, …), defaulting to 443.
-    The old rule hardcoded 443 + 444 on both ports at once.
-
-Signature: {{ include "genieai-umbrella.opeaGpuNetwork" . }}
-*/}}
-{{- define "genieai-umbrella.opeaGpuNetwork" -}}
-{{- $nodeHost := .Values.opea.gpu.nodeHost | default "" -}}
-{{- include "genieai-umbrella.opeaNetworkFromUrl" (dict "root" . "url" $nodeHost) -}}
-{{- end -}}
-
-{{/*
 genieai-umbrella.opeaNetworkFromUrl — the ipBlock CIDRs and ports for ANY
 named external destination, as JSON: `{"cidrs": [...], "ports": [...]}`.
 Takes `{"root": <root ctx>, "url": <url>}`.
@@ -150,14 +125,14 @@ have to be 0.0.0.0/0 the way it was when the chart ignored the URL:
 
 {{/*
 genieai-umbrella.opeaGpuEgressRule — the NetworkPolicy egress rule for the
-external GPU node, rendered from genieai-umbrella.opeaGpuNetwork. One
-definition for the six orchestrators that all dial it; they differ only
-in which other peers they reach.
+external GPU node (opea.gpu.nodeHost). One definition for the six
+orchestrators that all dial it; they differ only in which other peers
+they reach.
 
 Relative indentation: callers apply `| nindent 4`.
 */}}
 {{- define "genieai-umbrella.opeaGpuEgressRule" -}}
-{{- include "genieai-umbrella.opeaEgressRuleFromNetwork" (dict "net" (include "genieai-umbrella.opeaGpuNetwork" . | fromJson)) -}}
+{{- include "genieai-umbrella.opeaEgressRuleFromUrl" (dict "root" . "url" (.Values.opea.gpu.nodeHost | default "")) -}}
 {{- end -}}
 
 {{/*

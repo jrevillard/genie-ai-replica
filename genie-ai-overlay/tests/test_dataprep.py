@@ -2056,6 +2056,8 @@ class TestDocRepoIngestPayload:
         """Negative chunkOverlap would collapse the splitter into a single mega-chunk; reject at runtime."""
         from unittest.mock import patch
 
+        from fastapi import HTTPException
+
         from dataprep import genieai_dataprep_microservice as ms
 
         payload = ms.DocRepoIngestPayload(**self._payload(chunkOverlap=-50))
@@ -2065,14 +2067,18 @@ class TestDocRepoIngestPayload:
             patch.object(ms, "os") as os_mock,
         ):
             os_mock.getenv.return_value = None  # env override absent
-            with pytest.raises(ValueError, match="chunkOverlap must be >= 0"):
+            with pytest.raises(HTTPException) as exc_info:
                 # The handler validates CHUNK_OVERLAP before launching the background task.
                 # Simulate the first half of ingest_file_from_repo inline.
                 chunk_overlap = payload.chunkOverlap
                 if chunk_overlap is None:
                     chunk_overlap = int(ms.os.getenv("DATAPREP_CHUNK_OVERLAP", 50))
                 if chunk_overlap < 0:
-                    raise ValueError(f"chunkOverlap must be >= 0, got {chunk_overlap}")
+                    raise HTTPException(
+                        status_code=400, detail=f"chunkOverlap must be >= 0, got {chunk_overlap}"
+                    )
+                assert exc_info.value.status_code == 400
+                assert "chunkOverlap must be >= 0" in exc_info.value.detail
 
 
 # ---------------------------------------------------------------------------

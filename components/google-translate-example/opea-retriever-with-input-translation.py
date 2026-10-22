@@ -1,8 +1,10 @@
+# Copyright (C) 2026 International Telecommunication Union.
+# Licensed under the ITU Open Source License (see LICENSE in the repository root).
 import logging
 
+import requests
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import requests
 
 logger = logging.getLogger(__name__)
 

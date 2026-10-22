@@ -157,6 +157,11 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
 
         # --- Request validation, before the lock: a rejection here must not
         # have to release anything.
+        if os.path.basename(payload.fileName) != payload.fileName or payload.fileName in ("", ".", ".."):
+            raise HTTPException(
+                status_code=400,
+                detail=f"fileName must be a bare file name, got {payload.fileName!r}",
+            )
         CHUNK_SIZE = get_chunk_size_for_file(payload.fileName)
         # Per-request chunkOverlap wins over env; env wins over hardcoded default.
         CHUNK_OVERLAP = payload.chunkOverlap
@@ -166,7 +171,23 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
         # (no splitting happens). Caller-side Joi already constrains the batch path;
         # this is a defense-in-depth guard for the single-ingest endpoint.
         if CHUNK_OVERLAP < 0:
-            raise ValueError(f"chunkOverlap must be >= 0, got {CHUNK_OVERLAP}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"chunkOverlap must be >= 0, got {CHUNK_OVERLAP}",
+            )
+
+        # --- Environment-specific Arango config, still pre-lock: a malformed
+        # env value (int() on ARANGO_BATCH_SIZE, for one) must fail before
+        # there is a lock to release.
+        ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
+        ARANGO_INSERT_ASYNC = os.getenv("ARANGO_INSERT_ASYNC", "false").lower() == "true"
+        ARANGO_BATCH_SIZE = int(os.getenv("ARANGO_BATCH_SIZE", 1000))
+        ALLOWED_NODE_TYPES = os.getenv("ALLOWED_NODE_TYPES", "").split(",") if os.getenv("ALLOWED_NODE_TYPES") else []
+        ALLOWED_EDGE_TYPES = os.getenv("ALLOWED_EDGE_TYPES", "").split(",") if os.getenv("ALLOWED_EDGE_TYPES") else []
+        NODE_PROPERTIES = os.getenv("NODE_PROPERTIES", "description").split(",")
+        EDGE_PROPERTIES = os.getenv("EDGE_PROPERTIES", "description").split(",")
+        TEXT_CAPITALIZATION_STRATEGY = os.getenv("TEXT_CAPITALIZATION_STRATEGY", "upper")
+        INCLUDE_CHUNKS = os.getenv("INCLUDE_CHUNKS", "true").lower() == "true"
 
         # --- SYNCHRONOUS LOCK CHECK ---
         # We acquire the lock HERE to ensure we can return 429 immediately if busy.
@@ -184,17 +205,6 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
                 status_code=429,
                 detail="System is currently processing another document. Only one ingestion can run at a time.",
             ) from None
-
-        # --- Environment-specific Arango config ---
-        ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
-        ARANGO_INSERT_ASYNC = os.getenv("ARANGO_INSERT_ASYNC", "false").lower() == "true"
-        ARANGO_BATCH_SIZE = int(os.getenv("ARANGO_BATCH_SIZE", 1000))
-        ALLOWED_NODE_TYPES = os.getenv("ALLOWED_NODE_TYPES", "").split(",") if os.getenv("ALLOWED_NODE_TYPES") else []
-        ALLOWED_EDGE_TYPES = os.getenv("ALLOWED_EDGE_TYPES", "").split(",") if os.getenv("ALLOWED_EDGE_TYPES") else []
-        NODE_PROPERTIES = os.getenv("NODE_PROPERTIES", "description").split(",")
-        EDGE_PROPERTIES = os.getenv("EDGE_PROPERTIES", "description").split(",")
-        TEXT_CAPITALIZATION_STRATEGY = os.getenv("TEXT_CAPITALIZATION_STRATEGY", "upper")
-        INCLUDE_CHUNKS = os.getenv("INCLUDE_CHUNKS", "true").lower() == "true"
 
         save_path = None
         task = None
@@ -264,7 +274,7 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
                 fcntl.flock(lock_file, fcntl.LOCK_UN)
                 lock_file.close()
 
-            if save_path and os.path.exists(save_path):
+            if task is None and save_path and os.path.exists(save_path):
                 os.remove(save_path)
             raise
 

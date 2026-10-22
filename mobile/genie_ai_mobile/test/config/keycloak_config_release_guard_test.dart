@@ -29,7 +29,7 @@ void main() {
   test(
     'a release build without the FLAVOR define fails at startup',
     () {
-      expect(() => getConfig(), throwsStateError);
+      expect(() => getConfig(), throwsA(isA<FlavorConfigError>()));
     },
     skip: !releaseLike
         ? 'debug keeps the dev default; run this file with '

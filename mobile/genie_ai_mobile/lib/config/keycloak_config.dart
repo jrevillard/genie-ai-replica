@@ -80,11 +80,27 @@ class KeycloakConfig {
   );
 }
 
-/// The flavors [getConfig] knows, as they appear in every error message.
+/// The startup failure when the deployment configuration cannot be resolved.
 ///
-/// When adding a deployment flavor, add the case in [getConfig]'s switch, its
-/// import, and this list — the two startup errors below read from it.
-const _knownFlavors = 'dev, staging, e2e, or itu';
+/// [main] renders [message] on a diagnostic screen; there is nothing else to
+/// do with a build whose flavor is missing or unknown.
+class FlavorConfigError implements Exception {
+  const FlavorConfigError(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+final _flavorTable = <String, KeycloakConfig>{
+  'dev': devConfig,
+  'staging': stagingConfig,
+  'e2e': e2eConfig,
+  'itu': flavors.config,
+};
+
+String get _knownFlavors => _flavorTable.keys.join(', ');
 
 KeycloakConfig getConfig() {
   const flavor = String.fromEnvironment('FLAVOR');
@@ -94,25 +110,18 @@ KeycloakConfig getConfig() {
     // resolve devConfig, pointing every endpoint at localhost and arming the
     // trust-all TLS client in a release artifact. Fail at startup instead.
     if (kReleaseMode || kProfileMode) {
-      throw StateError(
+      throw FlavorConfigError(
         'No FLAVOR dart-define: build with '
         '--flavor <name> --dart-define=FLAVOR=<name> ($_knownFlavors).',
       );
     }
     return devConfig;
   }
-  switch (flavor) {
-    case 'itu':
-      return flavors.config;
-    case 'staging':
-      return stagingConfig;
-    case 'e2e':
-      return e2eConfig;
-    case 'dev':
-      return devConfig;
-    default:
-      throw ArgumentError(
-        'Unknown FLAVOR: "$flavor". Expected: $_knownFlavors.',
-      );
+  final config = _flavorTable[flavor];
+  if (config == null) {
+    throw FlavorConfigError(
+      'Unknown FLAVOR: "$flavor". Expected: $_knownFlavors.',
+    );
   }
+  return config;
 }

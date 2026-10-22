@@ -62,37 +62,30 @@ void main() async {
     HttpOverrides.global = _DebugHttpOverrides();
   }
 
-  // Initialize Connectivity (Online/Offline)
-  await ConnectivityService().init();
-
-  // Resolve the deployment configuration before anything renders. A release
-  // or profile build made without the FLAVOR dart-define fails here, on a
-  // screen that names the fix, instead of as a grey error widget on the
-  // first frame — getConfig() throws in those modes and the providers that
-  // read it would otherwise surface the error only through the framework's
-  // release ErrorWidget, which shows no text.
+  // Resolve the deployment configuration before anything else runs or
+  // renders. A release or profile build made without the FLAVOR dart-define
+  // fails here, on a screen that names the fix, instead of as a grey error
+  // widget on the first frame — getConfig() throws in those modes and the
+  // providers that read it would otherwise surface the error only through
+  // the framework's release ErrorWidget, which shows no text. It also comes
+  // before the connectivity init so a doomed build starts no background
+  // timers or subscriptions behind the diagnostic screen.
   try {
     getConfig();
-  } on Object catch (error) {
-    // StateError and ArgumentError wrap the diagnostic in "Bad state: " /
-    // "Invalid argument(s): " through toString(); the screen exists to name
-    // the fix, so it carries the message alone.
-    final detail = switch (error) {
-      StateError(:final message) => message,
-      ArgumentError(:final message) =>
-        message?.toString() ?? '${error.runtimeType}',
-      _ => error.toString(),
-    };
-    runApp(_StartupConfigError(message: detail));
+  } on FlavorConfigError catch (error) {
+    runApp(_StartupConfigError(message: error.message));
     return;
   }
+
+  // Initialize Connectivity (Online/Offline)
+  await ConnectivityService().init();
 
   runApp(const ProviderScope(child: MyApp()));
 }
 
 /// Full-screen diagnostic for a build whose flavor configuration could not be
-/// resolved. Diagnostic text only: i18n is unusable here because the broken
-/// thing is the configuration the translations are selected from.
+/// resolved. Diagnostic text only: i18n and the themed type scale are unusable
+/// here because the broken thing is the configuration they are selected from.
 class _StartupConfigError extends StatelessWidget {
   const _StartupConfigError({required this.message});
 

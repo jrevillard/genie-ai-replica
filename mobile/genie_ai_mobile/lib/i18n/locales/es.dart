@@ -301,6 +301,8 @@ const Map<String, dynamic> esLocale = {
     "relatedDocs": "Documentos relacionados",
     "noDocuments": "Sin documentos relacionados",
     "faq": "Preguntas frecuentes",
+    "faqTranslationUnavailable":
+        "Traducción no disponible: se muestra el original en inglés.",
     "tab": {
       "all": "Todos los chats",
       "folders": "Carpetas",
@@ -1014,10 +1016,13 @@ const Map<String, dynamic> esLocale = {
     "placeholder": "Escribe tu consulta aquí...",
     "aiGeneratedNoDocs":
         "Generado por IA — no basado en los documentos de la biblioteca",
+    "translationUnavailable":
+        "Traducción no disponible: esta respuesta puede contener texto sin traducir.",
     "sendButton": "Enviar",
     "fileReceived": "Archivo recibido con éxito.",
     "fileUploadError": "Error al subir archivo.",
     "processingError": "Error al procesar tu solicitud.",
+    "noResponse": "No se recibió ninguna respuesta.",
     "attachFile": "Adjuntar archivo",
     "fileTooLarge":
         "El archivo es demasiado grande. El tamaño máximo es {maxSize}.",

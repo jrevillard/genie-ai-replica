@@ -300,6 +300,8 @@ const Map<String, dynamic> frLocale = {
     "relatedDocs": "Documents liés",
     "noDocuments": "Aucun document lié",
     "faq": "Foire aux questions",
+    "faqTranslationUnavailable":
+        "Traduction indisponible — la version originale en anglais est affichée.",
     "tab": {
       "all": "Tous les chats",
       "folders": "Dossiers",
@@ -1021,11 +1023,14 @@ const Map<String, dynamic> frLocale = {
   "chatbot": {
     "aiGeneratedNoDocs":
         "Généré par IA — non basé sur les documents de la bibliothèque",
+    "translationUnavailable":
+        "Traduction indisponible — cette réponse peut contenir du texte non traduit.",
     "placeholder": "Tapez votre demande ici...",
     "sendButton": "Envoyer",
     "fileReceived": "Fichier reçu avec succès.",
     "fileUploadError": "Erreur lors du téléchargement du fichier.",
     "processingError": "Erreur lors du traitement de votre demande.",
+    "noResponse": "Aucune réponse reçue.",
     "attachFile": "Joindre un fichier",
     "fileTooLarge":
         "Le fichier est trop volumineux. La taille maximale est {maxSize}.",

@@ -299,6 +299,7 @@ const Map<String, dynamic> bnLocale = {
     "relatedDocs": "সম্পর্কিত নথিগুলো",
     "noDocuments": "কোনো সম্পর্কিত নথি নেই",
     "faq": "সচরাচর জিজ্ঞাসিত প্রশ্নাবলী (FAQ)",
+    "faqTranslationUnavailable": "অনুবাদ অনুপলব্ধ — মূল ইংরেজি দেখানো হচ্ছে।",
     "tab": {
       "all": "সব চ্যাট",
       "folders": "ফোল্ডারগুলো",
@@ -1016,11 +1017,14 @@ const Map<String, dynamic> bnLocale = {
   "chatbot": {
     "aiGeneratedNoDocs":
         "এআই-উৎপাদিত — লাইব্রেরির নথিপত্রের উপর ভিত্তি করে নয়",
+    "translationUnavailable":
+        "অনুবাদ অনুপলব্ধ — এই উত্তরে অ অনুবাদিত লেখা থাকতে পারে।",
     "placeholder": "আপনার প্রশ্ন এখানে লিখুন...",
     "sendButton": "পাঠান",
     "fileReceived": "ফাইলটি সফলভাবে গৃহীত হয়েছে।",
     "fileUploadError": "ফাইল আপলোডে ত্রুটি।",
     "processingError": "আপনার অনুরোধ প্রক্রিয়া করতে ত্রুটি।",
+    "noResponse": "কোনো উত্তর পাওয়া যায়নি।",
     "attachFile": "ফাইল যুক্ত করুন",
     "fileTooLarge": "ফাইলটি খুব বড়। সর্বোচ্চ আকার হলো {maxSize}।",
     "saveChat": "চ্যাট সংরক্ষণ করুন",

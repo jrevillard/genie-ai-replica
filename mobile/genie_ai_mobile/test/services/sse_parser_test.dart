@@ -48,6 +48,21 @@ void main() {
       expect((events[0] as SseDoneEvent).queryId, 'abc123');
     });
 
+    test('carries the translation failure flag on the done event', () {
+      final events = parser.parseChunk(
+        'data: {"type":"done","queryId":"abc123","translationFailed":true}\n\n',
+      );
+      expect(events, hasLength(1));
+      expect((events[0] as SseDoneEvent).translationFailed, isTrue);
+    });
+
+    test('reports no translation failure when the done event omits it', () {
+      final events = parser.parseChunk(
+        'data: {"type":"done","queryId":"abc123"}\n\n',
+      );
+      expect((events[0] as SseDoneEvent).translationFailed, isFalse);
+    });
+
     test('parses [DONE] sentinel', () {
       final events = parser.parseChunk('data: [DONE]\n\n');
       expect(events, hasLength(1));

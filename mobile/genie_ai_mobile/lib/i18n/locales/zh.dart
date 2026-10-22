@@ -295,6 +295,7 @@ const Map<String, dynamic> zhLocale = {
     "relatedDocs": "相关文档",
     "noDocuments": "没有相关文档",
     "faq": "常见问题",
+    "faqTranslationUnavailable": "翻译不可用 — 显示英文原文。",
     "tab": {
       "all": "所有聊天",
       "folders": "文件夹",
@@ -909,11 +910,13 @@ const Map<String, dynamic> zhLocale = {
   },
   "chatbot": {
     "aiGeneratedNoDocs": "AI 生成 — 不基于文库文档",
+    "translationUnavailable": "翻译不可用 — 此回复可能包含未翻译的文本。",
     "placeholder": "在此处输入您的问题...",
     "sendButton": "发送",
     "fileReceived": "文件接收成功。",
     "fileUploadError": "文件上传错误。",
     "processingError": "处理您的请求时出错。",
+    "noResponse": "未收到回复。",
     "attachFile": "附加文件",
     "fileTooLarge": "文件过大。最大大小为 {maxSize}。",
     "saveChat": "保存聊天",

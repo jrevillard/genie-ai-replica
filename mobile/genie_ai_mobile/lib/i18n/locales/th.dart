@@ -296,6 +296,7 @@ const Map<String, dynamic> thLocale = {
     "relatedDocs": "เอกสารที่เกี่ยวข้อง",
     "noDocuments": "ไม่มีเอกสารที่เกี่ยวข้อง",
     "faq": "คำถามที่พบบ่อย",
+    "faqTranslationUnavailable": "ไม่สามารถแปลได้ — กำลังแสดงต้นฉบับภาษาอังกฤษ",
     "tab": {
       "all": "แชททั้งหมด",
       "folders": "โฟลเดอร์",
@@ -1001,11 +1002,14 @@ const Map<String, dynamic> thLocale = {
   },
   "chatbot": {
     "aiGeneratedNoDocs": "สร้างโดย AI — ไม่อิงจากเอกสารในคลังเอกสาร",
+    "translationUnavailable":
+        "ไม่สามารถแปลได้ — คำตอบนี้อาจมีข้อความที่ยังไม่ได้แปล",
     "placeholder": "พิมพ์คำถามของคุณที่นี่...",
     "sendButton": "ส่ง",
     "fileReceived": "ได้รับไฟล์เรียบร้อยแล้ว",
     "fileUploadError": "เกิดข้อผิดพลาดในการอัปโหลดไฟล์",
     "processingError": "เกิดข้อผิดพลาดในการประมวลผลคำขอของคุณ",
+    "noResponse": "ไม่ได้รับคำตอบ",
     "attachFile": "แนบไฟล์",
     "fileTooLarge": "ไฟล์มีขนาดใหญ่เกินไป ขนาดสูงสุดคือ {maxSize}",
     "saveChat": "บันทึกแชท",

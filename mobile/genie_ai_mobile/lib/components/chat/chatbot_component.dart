@@ -474,9 +474,17 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     List<dynamic>? sources;
     double? confidence;
     bool? isGrounded;
+    // Whether the backend could not translate the answer into the requested
+    // language. The answer that arrives is then the English original, and the
+    // user has to be told — an English answer presented as a translated one
+    // is the failure this flag exists to prevent.
+    bool answerTranslationFailed = false;
 
     final String streamingId =
         'stream_${DateTime.now().millisecondsSinceEpoch}';
+    // Each answer carries its own outcome: a failure reported for the
+    // previous answer must not follow this one.
+    answerTranslationFailed = false;
     setState(() {
       _isStreaming = true;
       _messages.add({
@@ -540,8 +548,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                       msg['content'] = content;
                     });
                     _scrollToBottom();
-                  case SseDoneEvent(:final queryId):
+                  case SseDoneEvent(:final queryId, :final translationFailed):
                     streamQueryId = queryId;
+                    answerTranslationFailed = translationFailed;
                   case SseErrorEvent(:final message):
                     debugPrint('[SSE] Error event: $message');
                 }
@@ -553,8 +562,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                 switch (event) {
                   case SseChunkEvent(:final content):
                     accumulatedContent += content;
-                  case SseDoneEvent(:final queryId):
+                  case SseDoneEvent(:final queryId, :final translationFailed):
                     streamQueryId = queryId;
+                    answerTranslationFailed = translationFailed;
                   case SseMetadataEvent(
                     :final sourceDocuments,
                     :final confidenceScore,
@@ -575,11 +585,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                 setState(() {
                   msg['content'] = accumulatedContent.isNotEmpty
                       ? accumulatedContent
-                      : 'No response received';
+                      : tr('chatbot.noResponse');
                   msg['queryId'] = streamQueryId;
                   msg['sources'] = sources ?? [];
                   msg['confidence'] = confidence;
                   msg['isGrounded'] = isGrounded;
+                  msg['translationFailed'] = answerTranslationFailed;
                   msg['metadata'] = {
                     'sources': sources,
                     'confidence_score': confidence,
@@ -616,7 +627,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                 setState(() {
                   msg['content'] = accumulatedContent.isNotEmpty
                       ? accumulatedContent
-                      : 'Streaming error';
+                      : tr('chatbot.processingError');
                 });
               }
               setState(() {
@@ -634,7 +645,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         setState(() {
           msg['content'] = accumulatedContent.isNotEmpty
               ? accumulatedContent
-              : 'Connection error';
+              : tr('chatbot.processingError');
         });
       }
       setState(() {
@@ -664,6 +675,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
               ),
             )
             .toList(),
+        // The language the user reads. Without it the backend answers in
+        // English, whatever the interface language is.
+        context: ApiQueriesPostRequestContext(
+          language: I18nService().currentLocale.languageCode.toUpperCase(),
+        ),
         categoryId: _selectedCategoryId,
         timestamp: DateTime.now().toUtc(),
       );
@@ -681,7 +697,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         'id': response['queryId'],
         'queryId': response['queryId'],
         'role': 'assistant',
-        'content': response['response'] ?? 'No response received',
+        'content': response['response'] ?? tr('chatbot.noResponse'),
         'timestamp': DateTime.now().toIso8601String(),
         'sources': metadata?['sources'] ?? [],
         'confidence': metadata?['confidence_score'],
@@ -1363,6 +1379,38 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                 }
                               },
                             ),
+
+                            // The backend could not translate the answer into
+                            // the requested language: the text above is the
+                            // original answer, not a translation of it. Saying
+                            // so is what keeps an English answer from being
+                            // read as a translated one.
+                            if (!isUser && msg['translationFailed'] == true)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  top: DsSpacing.sm,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.translate,
+                                      size: 14,
+                                      color: tokens.warning,
+                                    ),
+                                    const SizedBox(width: DsSpacing.xs),
+                                    Expanded(
+                                      child: Text(
+                                        tr('chatbot.translationUnavailable'),
+                                        style: TextStyle(
+                                          fontSize: tokens.textXs,
+                                          color: tokens.warning,
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
 
                             // Footer: Confidence & Feedback
                             if (!isUser)

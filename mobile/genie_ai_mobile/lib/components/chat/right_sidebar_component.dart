@@ -39,6 +39,10 @@ class RightSidebarComponent extends ConsumerStatefulWidget {
 class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
   List<Map<String, String>> _faqItems = [];
   bool _isLoadingFaq = false;
+  // Whether the FAQ could not be translated into the interface language. The
+  // FAQ then shows the English original, and the user is told: an English FAQ
+  // presented as a translated one is the failure this flag exists to prevent.
+  bool _faqTranslationFailed = false;
   String _currentLangCode = 'en';
 
   @override
@@ -70,6 +74,7 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
     setState(() => _isLoadingFaq = true);
 
     String markdownContent = "";
+    bool translationFailed = false;
 
     try {
       final String baseMarkdown = await rootBundle.loadString('assets/FAQ.md');
@@ -97,12 +102,15 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
               markdownContent = translated;
             } else {
               markdownContent = baseMarkdown;
+              translationFailed = true;
             }
           } else {
             markdownContent = baseMarkdown;
+            translationFailed = true;
           }
         } catch (e) {
           markdownContent = baseMarkdown;
+          translationFailed = true;
         }
       }
 
@@ -111,15 +119,16 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
       if (mounted) {
         setState(() {
           _faqItems = parsedFaqs;
+          _faqTranslationFailed = translationFailed;
           _isLoadingFaq = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _faqItems = [
-            {'question': 'Error', 'answer': tr('sidebar.weatherErrorDefault')},
-          ];
+          // No FAQ at all: the empty state says so, in the interface language.
+          _faqItems = [];
+          _faqTranslationFailed = false;
           _isLoadingFaq = false;
         });
       }
@@ -438,10 +447,15 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
                       )
                     else if (_faqItems.isEmpty)
                       _buildEmptyState(tr('sidebar.faqError'), tokens)
-                    else
+                    else ...[
+                      if (_faqTranslationFailed) ...[
+                        _buildTranslationNotice(tokens),
+                        const SizedBox(height: DsSpacing.sm),
+                      ],
                       ..._faqItems.map(
                         (item) => _buildFaqItem(item, tokens, isDark),
                       ),
+                    ],
                   ],
                 ),
               ),
@@ -554,6 +568,34 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
           fontStyle: FontStyle.italic,
         ),
         textAlign: TextAlign.center,
+      ),
+    );
+  }
+
+  Widget _buildTranslationNotice(AppTokens tokens) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(DsSpacing.sm),
+      decoration: BoxDecoration(
+        color: tokens.surface,
+        borderRadius: BorderRadius.circular(DsRadii.md),
+        border: Border.all(color: tokens.warning),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.translate, size: 16, color: tokens.warning),
+          const SizedBox(width: DsSpacing.sm),
+          Expanded(
+            child: Text(
+              tr('sidebar.faqTranslationUnavailable'),
+              style: TextStyle(
+                color: tokens.warning,
+                fontSize: tokens.textXs,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

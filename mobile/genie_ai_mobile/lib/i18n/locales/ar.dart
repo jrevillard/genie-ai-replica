@@ -296,6 +296,8 @@ const Map<String, dynamic> arLocale = {
     "relatedDocs": "المستندات ذات الصلة",
     "noDocuments": "لا توجد مستندات ذات صلة",
     "faq": "الأسئلة الشائعة",
+    "faqTranslationUnavailable":
+        "الترجمة غير متاحة — يتم عرض النص الأصلي بالإنجليزية.",
     "tab": {
       "all": "كل المحادثات",
       "folders": "المجلدات",
@@ -1002,11 +1004,14 @@ const Map<String, dynamic> arLocale = {
   "chatbot": {
     "aiGeneratedNoDocs":
         "مُولّد بواسطة الذكاء الاصطناعي — لا يعتمد على وثائق المكتبة",
+    "translationUnavailable":
+        "الترجمة غير متاحة — قد يحتوي هذا الرد على نص غير مترجم.",
     "placeholder": "اكتب استفسارك هنا...",
     "sendButton": "إرسال",
     "fileReceived": "تم استلام الملف بنجاح.",
     "fileUploadError": "خطأ في رفع الملف.",
     "processingError": "خطأ في معالجة طلبك.",
+    "noResponse": "لم يتم تلقي أي رد.",
     "attachFile": "إرفاق ملف",
     "fileTooLarge": "الملف كبير جداً. الحجم الأقصى هو {maxSize}.",
     "saveChat": "حفظ المحادثة",

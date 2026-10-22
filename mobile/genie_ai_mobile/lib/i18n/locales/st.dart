@@ -301,6 +301,8 @@ const Map<String, dynamic> stLocale = {
     "relatedDocs": "Ditokomane tse Amanang",
     "noDocuments": "Ha ho ditokomane tse amanang",
     "faq": "Dipotso tse Botsoang Hangata",
+    "faqTranslationUnavailable":
+        "Translation unavailable — showing the original English.",
     "tab": {
       "all": "Dipuisano Tsohle",
       "folders": "Diphuthedi",
@@ -1016,11 +1018,14 @@ const Map<String, dynamic> stLocale = {
   },
   "chatbot": {
     "aiGeneratedNoDocs": "AI-generated — not based on library documents",
+    "translationUnavailable":
+        "Translation unavailable — this answer may contain untranslated text.",
     "placeholder": "Ngola potso ea hao mona...",
     "sendButton": "Romela",
     "fileReceived": "Faele e amohetsoe ka katleho.",
     "fileUploadError": "Phoso ho kenya faele.",
     "processingError": "Phoso ho sebetsana le kopo ea hao.",
+    "noResponse": "No response received.",
     "attachFile": "Hlomathisa Faele",
     "fileTooLarge": "Faele e kholo haholo. Boholo ke {maxSize}.",
     "saveChat": "Boloka Puisano",

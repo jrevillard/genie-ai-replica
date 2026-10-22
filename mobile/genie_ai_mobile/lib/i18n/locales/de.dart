@@ -303,6 +303,8 @@ const Map<String, dynamic> deLocale = {
     "relatedDocs": "Verwandte Dokumente",
     "noDocuments": "Keine verwandten Dokumente",
     "faq": "Häufig gestellte Fragen",
+    "faqTranslationUnavailable":
+        "Übersetzung nicht verfügbar – das englische Original wird angezeigt.",
     "tab": {
       "all": "Alle Chats",
       "folders": "Ordner",
@@ -1023,11 +1025,14 @@ const Map<String, dynamic> deLocale = {
   "chatbot": {
     "aiGeneratedNoDocs":
         "KI-generiert — nicht auf Bibliotheksdokumenten basierend",
+    "translationUnavailable":
+        "Übersetzung nicht verfügbar — diese Antwort kann unübersetzten Text enthalten.",
     "placeholder": "Gib deine Anfrage hier ein...",
     "sendButton": "Senden",
     "fileReceived": "Datei erfolgreich empfangen.",
     "fileUploadError": "Fehler beim Hochladen der Datei.",
     "processingError": "Fehler bei der Verarbeitung deiner Anfrage.",
+    "noResponse": "Keine Antwort erhalten.",
     "attachFile": "Datei anhängen",
     "fileTooLarge": "Datei ist zu groß. Maximale Größe ist {maxSize}.",
     "saveChat": "Chat speichern",

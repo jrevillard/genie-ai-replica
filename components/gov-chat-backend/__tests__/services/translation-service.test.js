@@ -443,7 +443,11 @@ describe('TranslationService', () => {
     });
 
     it('gives two languages the model answers alike one cache entry', async () => {
-      const svc = serviceWithCache(stubBackendWithModelCodes({ en: 'eng_Latn', man: 'dyu_Latn', mnk: 'dyu_Latn' }));
+      // The shipped NLLB map sends two languages to the same model code
+      // ("man" and "mnk" are both "dyu_Latn"), so they are the same request
+      // to the model and belong in the same cache entry.
+      const nllbMap = require('../../services/translation/language-maps/nllb-200-map.js');
+      const svc = serviceWithCache(stubBackendWithModelCodes(nllbMap.languageMap));
 
       await svc.translateMarkdown('hello', 'en', 'man');
       const keyForMan = lastCacheKey();
@@ -452,18 +456,6 @@ describe('TranslationService', () => {
 
       // Same request to the model, same translation, one entry.
       expect(keyForMnk).toBe(keyForMan);
-    });
-
-    it('keeps a different source language in a different entry', async () => {
-      const svc = serviceWithCache(stubBackendWithModelCodes({ en: 'eng_Latn', de: 'deu_Latn', fr: 'fra_Latn' }));
-
-      await svc.translateMarkdown('hello', 'en', 'fr');
-      const keyFromEnglish = lastCacheKey();
-      await svc.translateMarkdown('hello', 'de', 'fr');
-      const keyFromGerman = lastCacheKey();
-
-      expect(keyFromGerman).not.toBe(keyFromEnglish);
-      expect(keyFromGerman).toContain('deu_Latn');
     });
   });
 

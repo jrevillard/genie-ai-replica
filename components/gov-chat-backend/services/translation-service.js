@@ -244,6 +244,11 @@ class TranslationService {
    * produced together: resolving them separately meant the map was consulted
    * twice for the same language, and the second lookup could only fail in a
    * way the caller could not act on.
+   *
+   * A language the map does not map is followed through the map's fallback
+   * chain, as long as the chain leads to a language the map knows. The
+   * visited set stops a map that points a language at itself (or in a circle)
+   * from spinning here.
    * @param {string} targetLang - The target language as it arrived from the caller.
    * @returns {{targetLang: string, targetLangCode: string}} The canonical
    *   language and the code the model expects.
@@ -257,51 +262,28 @@ class TranslationService {
       throw new UnsupportedLanguageError('target');
     }
 
-    const candidate = this._resolveTargetCode(requested);
-    if (candidate) {
-      if (candidate !== requested) {
-        logger.warn(
-          `[TRANSLATION-SERVICE] Target language ${languageForLog(requested)} is not directly supported, using fallback ${languageForLog(candidate)}`
-        );
-      }
-      const targetLangCode = this.modelLanguageCode(candidate);
-      if (targetLangCode) {
-        return { targetLang: candidate, targetLangCode };
-      }
-    }
-
-    logger.warn(`[TRANSLATION-SERVICE] Unsupported target language: ${languageForLog(requested)}`);
-    throw new UnsupportedLanguageError('target');
-  }
-
-  /**
-   * @method _resolveTargetCode
-   * @description Follows the fallback chain of the loaded backend's map until it
-   * lands on a language the map knows.
-   *
-   * The chain exists for a map that lists a language as a fallback without
-   * supporting it directly. The shipped maps do not: every language they list
-   * a fallback for is one they support, so the chain never walks and the
-   * language the caller asked for is the language the model is asked for. The
-   * visited set stops a map that points a language at itself (or in a circle)
-   * from spinning here.
-   * @param {string} requested - A canonical (lower-case) language code.
-   * @returns {string|null} The language to translate into, or null when the
-   *   chain leads nowhere.
-   */
-  _resolveTargetCode(requested) {
     const visited = new Set();
     let candidate = requested;
     while (!visited.has(candidate)) {
       visited.add(candidate);
-      if (this.backend.isLanguageSupported(candidate)) {
-        return candidate;
+      // One lookup answers both questions: the code the model is asked for,
+      // and whether the map knows the language at all.
+      const targetLangCode = this.modelLanguageCode(candidate);
+      if (targetLangCode) {
+        if (candidate !== requested) {
+          logger.warn(
+            `[TRANSLATION-SERVICE] Target language ${languageForLog(requested)} is not directly supported, using fallback ${languageForLog(candidate)}`
+          );
+        }
+        return { targetLang: candidate, targetLangCode };
       }
       const fallback = this.backend.getFallbackLanguage(candidate);
       if (!fallback) break;
       candidate = String(fallback).trim().toLowerCase();
     }
-    return null;
+
+    logger.warn(`[TRANSLATION-SERVICE] Unsupported target language: ${languageForLog(requested)}`);
+    throw new UnsupportedLanguageError('target');
   }
 
   /**

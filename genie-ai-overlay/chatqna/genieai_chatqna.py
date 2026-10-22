@@ -703,6 +703,24 @@ def _canonical_language_code(raw_language, language_codes: dict) -> str | None:
     return candidate
 
 
+def _canonical_target_language(iso_code, language_codes: dict) -> tuple[str | None, str | None]:
+    """The canonical code and the language name a target code resolves to.
+
+    A code the map does not know is refused: the answer is left untranslated
+    rather than steered by a value the caller wrote. The refusal is decided
+    here, so the path that translates a single chunk and the path that
+    translates a document in chunks refuse in the same words.
+    """
+    canonical_code = _canonical_language_code(iso_code, language_codes)
+    if canonical_code is None:
+        logger.warning(
+            f"Language code '{_language_display(iso_code)}' is not a known language code — "
+            "refusing to translate and returning the source text."
+        )
+        return None, None
+    return canonical_code, language_codes[canonical_code]
+
+
 def _resolve_language_code(raw_language, language_codes: dict) -> str | None:
     """Canonical code for a caller-supplied language, or None when it is not one.
 
@@ -755,10 +773,11 @@ def _read_language_table(filepath: str, label: str) -> dict:
     else is not a table: a list of two-letter strings reads as {"e": "n", ...},
     and a map of objects answers every lookup with a dictionary. Both would
     be accepted as languages nobody configured, so a file that is not a map
-    of strings is treated as unreadable.
+    of strings is treated as unreadable. An empty table is unreadable too:
+    it refuses every language without saying why.
     """
     try:
-        with open(filepath) as file:
+        with open(filepath, encoding="utf-8") as file:
             loaded = json.load(file)
     except Exception as e:
         logger.error(f"Error loading {label} from {filepath}: {e}")
@@ -767,6 +786,9 @@ def _read_language_table(filepath: str, label: str) -> dict:
         isinstance(code, str) and isinstance(value, str) for code, value in loaded.items()
     ):
         logger.error(f"The {label} file {filepath} is not a map of strings — ignoring it.")
+        return {}
+    if not loaded:
+        logger.error(f"The {label} file {filepath} is empty — ignoring it.")
         return {}
     return loaded
 
@@ -3482,14 +3504,9 @@ class ChatQnAService:
         # can reach the translation model. An unknown code is refused and the
         # source text is returned untranslated.
         language_codes = language_codes_map()
-        canonical_code = _canonical_language_code(iso_code, language_codes)
+        canonical_code, target_lang = _canonical_target_language(iso_code, language_codes)
         if canonical_code is None:
-            logger.warning(
-                f"Language code '{_language_display(iso_code)}' is not a known language code — "
-                "refusing to translate and returning the source text."
-            )
             return text
-        target_lang = language_codes[canonical_code]
         iso_code = canonical_code
 
         if _is_translategemma():
@@ -3562,14 +3579,9 @@ class ChatQnAService:
         answer is never a mix of translated and untranslated chunks.
         """
         language_codes = language_codes_map()
-        canonical_code = _canonical_language_code(iso_code, language_codes)
+        canonical_code, target_lang = _canonical_target_language(iso_code, language_codes)
         if canonical_code is None:
-            logger.warning(
-                f"Language code '{_language_display(iso_code)}' is not a known language code — "
-                "refusing to translate and returning the source text."
-            )
             return text
-        target_lang = language_codes[canonical_code]
 
         chunks = self._split_text_into_chunks(text, max_chars=2000)
 
@@ -3758,6 +3770,8 @@ class ChatQnAService:
         # detected code is used even when the translation models do not cover
         # it — the target is English, so the history is still normalized, and
         # a source the map does not know is not named in the prompt at all.
+        # When the detection produced nothing there is no source to translate
+        # from, and the history is embedded as it is.
         history_language = detected_language if language_refused else original_language
 
         translated_history_string = ""
@@ -3770,7 +3784,8 @@ class ChatQnAService:
                 full_chat_history, source_lang_code=history_language.lower()
             )
         else:
-            # If already English, flatten without translation
+            # Already English, or no source language to translate from:
+            # flatten without translation.
             if isinstance(full_chat_history, str):
                 translated_history_string = full_chat_history
             else:

@@ -346,8 +346,10 @@ describe('GpuTranslateBackend streaming', () => {
       expect(req.messages).toBeDefined();
       const prompt = JSON.stringify(req.messages);
       expect(prompt).toContain('Hello world');
-      expect(prompt).toMatch(/English|source/i);
-      expect(prompt).toMatch(/Spanish|target/i);
+      // The prompt names the languages, not the codes: the names come from
+      // the map, so a language the model is asked for is one the map knows.
+      expect(prompt).toContain('English');
+      expect(prompt).toContain('Spanish');
     });
 
     it('callVllmService sends a request and returns the translated text (non-streaming)', async () => {

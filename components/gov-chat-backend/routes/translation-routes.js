@@ -5,6 +5,23 @@ const { logger } = require('../shared-lib');
 const { isUnsupportedLanguage } = require('../services/translation/unsupported-language');
 
 /**
+ * Answers a refused language with the 400 it is.
+ *
+ * The language travels in the request body, so an unsupported one is a bad
+ * request, not a server error. The status code comes from the error itself
+ * (the refusal is a validation error), and the response names the refused
+ * side only — the caller's value is never echoed back.
+ *
+ * @param {Error} error - The refusal the translation service raised.
+ * @param {object} res - The Express response.
+ * @returns {object} The response the route returns.
+ */
+function respondWithUnsupportedLanguage(error, res) {
+  logger.warn(`[TRANSLATION-ROUTES] Rejected request: ${error.message}`);
+  return res.status(error.statusCode).json({ message: error.message });
+}
+
+/**
  * @swagger
  * tags:
  * - name: Translation
@@ -94,8 +111,7 @@ module.exports = (translationService) => {
       // ones its language map does not know. The response names the refused
       // side only — the caller's value is never echoed back.
       if (isUnsupportedLanguage(error)) {
-        logger.warn(`[TRANSLATION-ROUTES] Rejected request: ${error.message}`);
-        return res.status(400).json({ message: error.message });
+        return respondWithUnsupportedLanguage(error, res);
       }
       logger.error(`[TRANSLATION-ROUTES] Error translating content: ${error.message}`, { stack: error.stack });
       next(error); // Pass to the global error handler
@@ -168,8 +184,7 @@ module.exports = (translationService) => {
     } catch (error) {
       // An unsupported language is a bad request, not a server error.
       if (isUnsupportedLanguage(error)) {
-        logger.warn(`[TRANSLATION-ROUTES] Rejected request: ${error.message}`);
-        return res.status(400).json({ message: error.message });
+        return respondWithUnsupportedLanguage(error, res);
       }
       logger.error(`[TRANSLATION-ROUTES] Error translating markdown: ${error.message}`, { stack: error.stack });
       next(error); // Pass to the global error handler

@@ -73,8 +73,10 @@ def build_translategemma_prompt(text: str, source_lang_code: str, target_lang_co
                                  source_lang_name: str = "English", target_lang_name: str = "English") -> str:
     """Build a prompt for TranslateGemma using the completions API.
 
-    Duplicated in genie-ai-overlay/chatqna/genieai_chatqna.py — keep in sync.
-    Keep in sync when updating the prompt.
+    Standalone copy for the document-translation sample. The chatqna service
+    builds the same prompt from the shipped language tables, naming the
+    script of the target language instead of a hardcoded alphabet; the two
+    are independent, this script is not part of the deployed stack.
     """
     return (
         f"<bos><start_of_turn>user\n"

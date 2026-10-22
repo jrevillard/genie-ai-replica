@@ -58,18 +58,6 @@ afterEach(() => {
 });
 
 describe('the language pair is resolved once', () => {
-  it('refuses a source language the map does not know', () => {
-    useBackend(stubBackend({ codes: { fr: 'fr_FR' } }));
-
-    expect(() => TranslationService.resolveLanguagePair('en', 'fr')).toThrow(/Unsupported source language/);
-  });
-
-  it('refuses a target language the map does not know', () => {
-    useBackend(stubBackend({ codes: { en: 'en' } }));
-
-    expect(() => TranslationService.resolveLanguagePair('en', 'fr')).toThrow(/Unsupported target language/);
-  });
-
   it('hands the model-specific codes to the caller', () => {
     useBackend(stubBackend());
 

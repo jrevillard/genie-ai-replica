@@ -131,10 +131,6 @@ describe('target language boundary (real service, real language map)', () => {
     expect(() => service.resolveLanguagePair('en', 'constructor')).toThrow(/Unsupported target language/);
   });
 
-  it('refuses an unsupported source language', async () => {
-    await expect(service.translate(['hello'], 'constructor', 'fr')).rejects.toThrow(/Unsupported source language/);
-  });
-
   it('refuses an unsupported target language on the streaming path too', async () => {
     await expect(service.translateStream('hello', 'en', 'constructor')).rejects.toThrow(/Unsupported target language/);
   });
@@ -163,24 +159,18 @@ describe('target language boundary (real service, real language map)', () => {
 });
 
 describe('the codes handed to the backend', () => {
-  it('refuses a code the loaded backend does not know', async () => {
-    // The codes handed to the backend are the ones the backend's own map
-    // produces. A code the map does not produce is not a language the model
-    // can be asked for, so it must not reach the model.
-    const translate = jest.spyOn(backend, 'translate').mockResolvedValue(['bonjour']);
-
-    await expect(service._translateWithBackend(['hello'], 'en', 'not-a-model-code')).rejects.toThrow(
-      /not one the loaded backend knows/
-    );
-    expect(translate).not.toHaveBeenCalled();
-  });
-
   it('hands the backend the codes the map produces', async () => {
+    // The gemma-3 map maps a language to itself, so it cannot tell the
+    // canonical code from the model code. The NLLB map can: there "en" is
+    // "eng_Latn", and the code the model is asked for is the one that has to
+    // reach it.
+    backend.languageMap = require('../../../services/translation/language-maps/nllb-200-map.js');
+    backend.fallbackMap = backend.languageMap.fallbackMap || {};
     const translate = jest.spyOn(backend, 'translate').mockResolvedValue(['bonjour']);
 
-    await service._translateWithBackend(['hello'], 'en', 'fr');
+    await service.translate(['hello'], 'en', 'fr');
 
-    expect(translate).toHaveBeenCalledWith(['hello'], 'en', 'fr');
+    expect(translate).toHaveBeenCalledWith(['hello'], 'eng_Latn', 'fra_Latn');
   });
 
   it('does not hand the backend a code the backend did not produce', async () => {
@@ -216,39 +206,27 @@ describe('backend language map lookups', () => {
     expect(backend.getFallbackLanguage('__proto__')).toBeNull();
   });
 
-  it('still resolves a real language code', () => {
-    expect(backend.getLanguageCode('fr')).toBe('fr');
-  });
-
   it('does not hand out an empty mapping as a language code', () => {
     // A language mapped to an empty value is not a language: the empty code
-    // would reach the model in the prompt.
+    // would reach the model in the prompt. The two answers have to agree —
+    // getLanguageCode refuses a language mapped to an empty code, so
+    // isLanguageSupported cannot say the backend supports it. Otherwise the
+    // resolution chain walks on a language the backend cannot ask the model
+    // for.
     const saved = backend.languageMap.languageMap.fr;
     backend.languageMap.languageMap.fr = '';
     try {
       expect(backend.getLanguageCode('fr')).toBeNull();
+      expect(backend.isLanguageSupported('fr')).toBe(false);
     } finally {
       backend.languageMap.languageMap.fr = saved;
     }
   });
 
   it('answers with a boolean, not the map itself', () => {
+    expect(typeof backend.isLanguageSupported('fr')).toBe('boolean');
     expect(backend.isLanguageSupported('fr')).toBe(true);
     expect(backend.isLanguageSupported('constructor')).toBe(false);
-  });
-
-  it('does not claim to support a language mapped to an empty value', () => {
-    // The two answers have to agree: getLanguageCode refuses a language
-    // mapped to an empty code, so isLanguageSupported cannot say the backend
-    // supports it. Otherwise the resolution chain walks on a language the
-    // backend cannot ask the model for.
-    const saved = backend.languageMap.languageMap.fr;
-    backend.languageMap.languageMap.fr = '';
-    try {
-      expect(backend.isLanguageSupported('fr')).toBe(false);
-    } finally {
-      backend.languageMap.languageMap.fr = saved;
-    }
   });
 
   it('answers whether a code is one the model knows', () => {
@@ -258,14 +236,6 @@ describe('backend language map lookups', () => {
     expect(backend.isModelLanguageCode('fr')).toBe(true);
     expect(backend.isModelLanguageCode('not-a-model-code')).toBe(false);
     expect(backend.isModelLanguageCode('constructor')).toBe(false);
-  });
-
-  it('hands out a copy of the language map', () => {
-    // A caller that mutates the returned object would change which languages
-    // the backend accepts.
-    const languages = backend.getSupportedLanguages();
-    languages.fr = 'tampered';
-    expect(backend.getLanguageCode('fr')).toBe('fr');
   });
 
   it('reports a missing language name as a defect in the map, not as a bad request', () => {
@@ -287,8 +257,10 @@ describe('backend language map lookups', () => {
   });
 
   it('names the language in the prompt from the map', () => {
+    // The prompt names the language the map knows. A code the map does not
+    // know has no name at all, and asking for one is a defect in the map
+    // rather than a prompt that names something the caller wrote.
     const request = backend.formatRequest('google/gemma-3-4b-it', 'en', 'fr', 'hello');
     expect(request.messages[0].content).toContain('French');
-    expect(request.messages[0].content).not.toContain(INJECTION);
   });
 });

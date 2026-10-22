@@ -26,18 +26,10 @@ const MAPS = {
  */
 
 /**
- * Locate a file in the repository, or null when it is not reachable (a
- * checkout of this component alone has no overlay tree).
+ * The root of the repository, five levels up from this file: the overlay tree
+ * the chatqna language tables live in is a sibling of the components.
  */
-function findRepoFile(relativePath) {
-  let dir = __dirname;
-  for (let depth = 0; depth < 8; depth += 1) {
-    const candidate = path.join(dir, relativePath);
-    if (fs.existsSync(candidate)) return candidate;
-    dir = path.dirname(dir);
-  }
-  return null;
-}
+const REPO_ROOT = path.resolve(__dirname, '../../../../..');
 
 /**
  * Read a JSON file from the repository.
@@ -47,11 +39,9 @@ function findRepoFile(relativePath) {
  * which file is missing — not abort the whole suite before a single test ran.
  */
 function readRepoJson(relativePath) {
-  const file = findRepoFile(relativePath);
-  if (!file) {
-    throw new Error(
-      `Could not locate ${relativePath} from ${__dirname}. The parity tests need the whole repository checked out.`
-    );
+  const file = path.join(REPO_ROOT, relativePath);
+  if (!fs.existsSync(file)) {
+    throw new Error(`Could not locate ${file}. The parity tests need the whole repository checked out.`);
   }
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }

@@ -1,5 +1,7 @@
 'use strict';
 
+const { ValidationError } = require('../../middleware/errors');
+
 /**
  * A language the loaded backend does not know.
  *
@@ -8,13 +10,15 @@
  * message names the side that was refused ("target" / "source") and never the
  * caller's value, so nothing a caller wrote is echoed back into the response
  * or into the logs.
+ *
+ * It is a `ValidationError` so the status code lives with the error: a route
+ * that hands it to the error middleware answers 400 without knowing the
+ * number, and a route that answers it itself cannot answer it with another.
  */
-class UnsupportedLanguageError extends Error {
+class UnsupportedLanguageError extends ValidationError {
   constructor(side) {
     super(`Unsupported ${side} language`);
-    this.name = 'UnsupportedLanguageError';
     this.code = 'UNSUPPORTED_LANGUAGE';
-    this.side = side;
   }
 }
 

@@ -50,19 +50,16 @@ function ownFallbackLanguage(fallbackMap, isoCode) {
 /**
  * Whether the backend can be asked for a language at all.
  *
+ * The answer is the code lookup: a language the map does not map, and a
+ * language it maps to an empty code, are both languages the model cannot be
+ * asked for — one lookup, one answer.
+ *
  * @param {object|null} languageMap - The shipped language map.
  * @param {string} isoCode - The canonical language code.
  * @returns {boolean} True when the map maps the language to a usable code.
  */
 function isLanguageSupported(languageMap, isoCode) {
-  const codes = languageMap ? languageMap.languageMap : null;
-  if (!codes || !Object.prototype.hasOwnProperty.call(codes, isoCode)) {
-    return false;
-  }
-  // The two answers have to agree: ownLanguageCode refuses a language mapped
-  // to an empty code, so this one refuses it too. Otherwise the resolution
-  // chain walks on a language the backend cannot ask the model for.
-  return Boolean(codes[isoCode]);
+  return ownLanguageCode(languageMap, isoCode) !== null;
 }
 
 /**

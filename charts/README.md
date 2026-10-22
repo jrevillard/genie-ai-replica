@@ -11,7 +11,9 @@ Kubernetes-deployment Helm charts for GENIE.AI.
 
 ## Status
 
-`genieai-umbrella` 0.2.59: foundation, service tier, data layer, OPEA tier, observability, and the Gateway API edge (Envoy Gateway as an optional chart dependency, nginx removed from the data path) — all live-validated on a minikube laptop cluster via Flux. Keycloak custom theme ships at runtime (ConfigMap tarball + initContainer — `make keycloak-theme` to regenerate; CI guards drift).
+`genieai-umbrella` 0.2.66: foundation, service tier, data layer, OPEA tier, observability, and the Gateway API edge (Envoy Gateway as an optional chart dependency, nginx removed from the data path) — all live-validated on a minikube laptop cluster via Flux. Keycloak custom theme ships at runtime (ConfigMap tarball + initContainer — `make keycloak-theme` to regenerate; CI guards drift).
+
+The live map of what shipped, what was superseded and what remains is [`docs/charts/migration-status.md`](../docs/charts/migration-status.md); the design of record is [`docs/charts/helm-charts-design.md`](../docs/charts/helm-charts-design.md).
 
 ## Cluster prerequisites
 
@@ -21,31 +23,52 @@ A policy-enforcing CNI must also let **node-to-pod traffic through on the health
 
 A laptop cluster additionally needs a **policy-enforcing CNI**: minikube's default (kubenet) stores the chart's NetworkPolicies and never applies them, so a broken egress graph stays invisible. `scripts/laptop-cluster-bootstrap.sh` builds the whole cluster (`--cni=calico`) and restores the state that lives only inside a cluster — the sealed-secrets key, the Flux PAT, the selfsigned issuer. The procedure, the installation order and the SealedSecret/SOPS split are documented in [`docs/charts/laptop-cluster-bootstrap.md`](../docs/charts/laptop-cluster-bootstrap.md).
 
-## Render gates
+## CI gates
 
-The umbrella is validated by two stages. Both must pass before a release lands on `main`.
+Four merge-blocking jobs run on every MR that touches the chart. The
+`chart:install` job is **manual** (a full install pulls ~20 GB and takes
+~30 min on the shared runner pool — not tenable per push; it stays
+available on demand, on any branch).
+
+| Job | What it proves |
+|---|---|
+| `chart:lint` | `helm lint --strict`, a strict YAML parse of `values.yaml` and of four renders (default, full, prod, in-cluster GPU) that rejects duplicate mapping keys, `kubeconform` on each, the NetworkPolicy ingress/egress cross-check, and the boolean-leaf schema check. |
+| `chart:contract` | Renders with overlay-shaped values and asserts the operator-facing contract: the OTel collector's service names, the PII redactor smoke test, the keycloak-config-cli image. |
+| `chart:crd-validate` | A kind cluster with the operator CRDs installed; every rendered object goes through `kubectl create --dry-run=server`, so a custom resource is checked against the CRD that will own it. Renders the laptop shape AND the prod shape with TLS — the prod profile is the only one that emits a PodDisruptionBudget, and `ingress.tls.enabled` the only one that emits a Certificate. |
+| `chart:parity` | Compares the rendered chart against `docker-compose.yaml` variable by variable, with a floor on how many variables were actually compared and a source-level check of every `notRead` claim. |
+
+Local equivalents:
 
 ```bash
-# 1. helm lint + ct lint — schema, template conventions, cross-reference checks
 helm lint charts/genieai-umbrella --strict
 make -C charts lint
+make -C charts template          # writes /tmp/genieai-rendered.yaml
+```
 
-# 2. helm template byte-diff — operator-facing surface stays stable
-make -C charts template              # writes /tmp/genieai-rendered.yaml
-# capture the baseline on purpose, not every day:
+A byte-diff of the render against a captured baseline is a good habit for
+refactors (the render is the operator-facing surface, and it is what
+`helm upgrade` will apply):
+
+```bash
 make -C charts template && cp /tmp/genieai-rendered.yaml /tmp/baseline.yaml
-# then, after an intentional change, compare against it:
+# after an intentional change:
 make -C charts template && diff -u /tmp/baseline.yaml /tmp/genieai-rendered.yaml
 ```
 
-`ct install` against a kind cluster + `helm test` runs the smoke jobs (namespace existence, data-tier dependency reachability). Trigger via `make -C charts test`.
+`ct lint` / `ct install` are **not** wired: a full `ct install` suite and a
+kind+Calico install gate (the CNI that enforces the NetworkPolicies) are
+still to come. `helm test` smoke jobs run inside the manual `chart:install`
+job.
 
 ## Conventions
 
 - Helm API v2, Helm 3.16.x (CI pins dtzar/helm-kubectl:3.16.0).
 - No secrets in `values.yaml` or `values-override.yaml`. Secrets are operator-materialized (SealedSecret, External Secrets Operator, SOPS, manual, etc.).
 - Tests live in each chart's `templates/tests/` (Helm convention).
-- Install with `-n <ns> --create-namespace` — the Namespace is a regular resource; hooks and the release Secret need it first.
+- The application namespace is **not** a chart resource. The chart renders only the observability
+  namespace (`genieai-obs`); the application namespace belongs to the deploy repo's Kustomization, so a
+  failed install does not delete it and take the SealedSecrets with it. A `helm install` outside Flux must
+  create it first (`-n <ns> --create-namespace`).
 - Vendored dep tarballs are generated, not tracked — run `make -C charts deps` after cloning or dep changes. `Chart.lock` IS tracked.
 - Hook Jobs live in `templates/hooks/*.yaml` with explicit `helm.sh/hook` annotations (phase + weight). The subdirectory is organizational; Helm scans `templates/` recursively.
 - Hook + test-pod init containers download `kubectl` and `jq` from public release URLs. Set `global.kubeletToolsMirror` for air-gapped clusters.

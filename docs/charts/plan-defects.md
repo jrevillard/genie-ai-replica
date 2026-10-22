@@ -285,9 +285,9 @@ discovery.
 
 # Plan Defect Ledger — Helm Migration Docs
 
-Tracks every finding from the adversarial review rounds against the spec +
-Plans 1-4 (`docs/superpowers/specs/` + `docs/superpowers/plans/`), its
-disposition, and the items deliberately left OPEN for later plans. Nothing
+Tracks every finding from the adversarial review rounds against the design
+of record (`docs/charts/helm-charts-design.md`), its disposition, and the
+items deliberately left OPEN for later plans. Nothing
 here is speculative: each row cites where the fix landed or where the work
 is assigned.
 

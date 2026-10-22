@@ -1,7 +1,7 @@
 # OTel Migration — Docker Swarm → Kubernetes
 
 **Date:** 2026-10-08 · **Scope:** observability pipeline port for the Helm chart migration
-**Related:** spec §10 (`docs/superpowers/specs/2026-10-08-genie-ai-helm-charts-design.md`), Plan 4 (`docs/superpowers/plans/2026-10-08-genie-ai-helm-charts-observability.md`)
+**Related:** spec §10 (`docs/charts/helm-charts-design.md`) and the shipped state in [`migration-status.md`](migration-status.md)
 
 ---
 

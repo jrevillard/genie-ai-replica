@@ -2,7 +2,13 @@
 
 **Author:** Superpower brainstorming + bmad-party-mode panel
 **Date:** 2026-10-08
-**Status:** Draft v1 — awaiting user review
+**Status:** Historical design of record — the draft the chart was built from
+
+> **Read [`migration-status.md`](migration-status.md) first.** It is the
+> live map of what shipped, what was superseded and what remains; this
+> document is the design as it was written before the build, so parts of it
+> never happened and parts of it changed. Where the two disagree, the
+> status map is right.
 
 ---
 
@@ -768,7 +774,7 @@ These are deliberate unknowns NOT blocking v1, but documented for follow-up:
 - `site/content/en/docs/deployment/kubernetes-helm.md`
 - `site/content/en/docs/deployment/per-env-branches.md`
 - `.gitlab-ci.yml` integration (`charts:lint`, `charts:integration`, `charts:scan`)
-- `docs/superpowers/specs/2026-10-08-genie-ai-helm-charts-design.md` (this doc)
+- `docs/charts/helm-charts-design.md` (this doc)
 - `docs/charts/operator-selection.md`
 - `docs/charts/migration-playbook.md`
 - `docs/charts/per-env-config.md`

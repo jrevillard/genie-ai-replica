@@ -2,7 +2,7 @@
 
 Single-page map of the migration effort: which plans shipped, which were
 superseded, what remains. Companion to `plan-defects.md` (review ledger) and
-the design spec (`docs/superpowers/specs/2026-10-08-genie-ai-helm-charts-design.md`).
+the design of record ([`helm-charts-design.md`](helm-charts-design.md)).
 Plan checkboxes are not a status source — evidence is the chart, the deploy
 repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 

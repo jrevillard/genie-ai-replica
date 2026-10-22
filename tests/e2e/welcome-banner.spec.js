@@ -172,8 +172,35 @@ const BLEND_FRACTION = 0.8;
 // in both themes.
 const FOOTPRINT_EDGE_TOLERANCE = 1;
 
+/*
+ * The panel is not the viewport. Below the sidebars' in-flow breakpoint the
+ * two fixed sidebars are off-canvas and the centre panel is the whole
+ * viewport; from 1400 up they take 770px, so the panel is at its NARROWEST at
+ * the breakpoint itself and widens from there. The artwork's crop over a narrow
+ * panel puts the most adverse backdrop behind the text, so 1400 is where every
+ * local measurement on this banner is at its worst — and it was missing from
+ * this list, which sampled 1920 (the widest panel) and 1280 and below (the
+ * sidebars off-canvas, so the panel is the viewport). Every width in the
+ * narrow-panel window between those two was untested.
+ *
+ * Measured on the running build, the subtitle in dark, against the panel width:
+ *
+ *   viewport   panel   subtitle    (1360 is below the breakpoint, so the
+ *   1360        1360    10.543:1   sidebars are off-canvas and the panel IS
+ *   1400         630     6.333:1   the viewport — which is why the measurement
+ *   1440         670     6.714:1   climbs steeply the moment they stop being so)
+ *   1500         730     7.047:1
+ *   1600         830     7.498:1
+ *   1700         930     8.039:1
+ *   1920        1150     8.910:1
+ *
+ * 1400 and 1440 are in the list for that reason: 1400 is where the case bites,
+ * and 1440 is the common laptop width and the width a 1440p screen renders at.
+ */
 const VIEWPORTS = [
   { label: '1920', width: 1920 },
+  { label: '1440', width: 1440 },
+  { label: '1400', width: 1400 },
   { label: '1280', width: 1280 },
   { label: '1024', width: 1024 },
   { label: '769', width: 769 }
@@ -877,6 +904,15 @@ async function subtitleContrast(page) {
 }
 
 test.describe('Welcome banner invariants', () => {
+  // The budget below is the default 60s per test, and one test is 12 sessions
+  // (6 viewports x 2 themes), each a browser login plus the 3s the banner's
+  // mask layer needs to settle before a pixel is sampled. At four viewports
+  // that was eight sessions and fitted; at six it does not, and three of the
+  // six tests were killed mid-loop by the harness with the viewport list's
+  // last cell unmeasured. This raises the budget only — every floor,
+  // threshold and expectation below is unchanged.
+  test.describe.configure({ timeout: 180000 });
+
   test('1. the scrim alpha is at or above its theme floor and is the alpha it paints with', async ({ browser }) => {
     for (const vp of VIEWPORTS) {
       for (const theme of ['light', 'dark']) {

@@ -81,15 +81,15 @@ Move all theme assets (frontend palette + brand JSON + Keycloak theme) to runtim
 ### Source-of-truth strategy
 
 - **Repo** (`components/gov-chat-frontend/public/config/`, `configs/keycloak/themes/genie/`) is the canonical source for default theme assets.
-- **Ansible** (`config_bootstrap` role) rsyncs repo defaults into `{{ config_dir }}` on every node at deploy time. **Update 2026-10-28**: the role now mirrors the branch — `rsync --archive --checksum --delete` over the files the branch changed and removes the ones it no longer ships; the earlier `synchronize` with `delete: false` and `rsync_opts: [--ignore-existing]` is gone. The branch is the single source of truth for the runtime config, and operator changes belong in the repository, in the flavour's config file. This:
-  - Overwrites the files the branch changed, content-compared (`--checksum`)
-  - Removes the files the branch no longer ships, and refuses to sync a branch that does not ship the deployment's Keycloak theme
-  - Idempotent: second invocation is a no-op (the host already matches the branch)
+- **Ansible** (`config_bootstrap` role) rsyncs repo defaults into `{{ config_dir }}` on every node at deploy time using `synchronize` with `delete: false` and `rsync_opts: [--ignore-existing]`. This:
+  - Skips files that already exist on the node (preserves manual operator edits made between deploys)
+  - Never deletes files that exist only on the node (no data loss)
+  - Idempotent: second invocation is a no-op (all files already present)
 - **`config_dir`** is defined in `group_vars/all.yml` as `"{{ deploy_dir }}/config"` (i.e. `/opt/genieai/config`). It is promoted to `group_vars` rather than kept as a role default because the bind mounts are rendered by the separate `deploy` play via `env.j2`, which does not include this role — a role default would render as an empty string there. It is derived from `deploy_dir` rather than an inventory group name so the path does not move when a host's groups are reordered, and so operators find the editable theme files inside the deploy directory they already know.
 - **rsync source paths** are not taken from the local checkout. The role downloads a branch-pinned archive from GitLab (`?path=<repo-relative dir>`) and rsyncs out of the extraction root:
   - `frontend`: `components/gov-chat-frontend/public/config`
-  - `keycloak`: `configs/keycloak/themes` (the whole tree — additional themes such as `genie-el-salvador`, whose parent is `genie`, must sit next to it under the mounted directory or their parent reference cannot resolve)
-  - The playbook never clones the repo onto the node, and the documented workflow runs it from a local checkout that may sit on a different branch than the one being deployed — seeding from `playbook_dir` would write the wrong theme assets, and the mirror would then push that mistake to every host. The role refuses to sync a branch that does not ship the deployment's Keycloak theme.
+  - `keycloak`: `configs/keycloak/themes/genie`
+  - The playbook never clones the repo onto the node, and the documented workflow runs it from a local checkout that may sit on a different branch than the one being deployed — seeding from `playbook_dir` would write the wrong theme assets, and `--ignore-existing` would then lock that mistake in.
 - **No shared filesystem** (NFS/CephFS) — Ansible is the single source-of-truth distributor, matching the existing deploy contract.
 
 ### Mount strategy
@@ -153,14 +153,11 @@ services:
 ### Ansible (`deploy/ansible/`)
 
 - **New role** `roles/config_bootstrap/`:
-  - `tasks/main.yml` (**update 2026-10-28** — the role ships a mirror, not a preserving sync):
-    - `file: path={{ config_dir }}/{{ item.dest_subdir }} state=directory` for `frontend/` and `keycloak/themes/` — part of the seeding, so it is skipped when `config_bootstrap_sync_enabled` is false. No mode is pinned: the mirror restores the directory's mode from the branch, and pinning one made the role set it and the mirror set it back on every run, a change the role then reported as "not changed"
-    - a private scratch directory per run (`ansible.builtin.tempfile`), the branch-pinned archive downloaded into it and extracted there; the scratch tree is removed in an `always` section, so a guard failure does not leak it
-    - the expected assets of each pair are stat'ed before anything is synced; the deployment's Keycloak theme is checked against the branch BEFORE the sync, because the mirror deletes what the branch does not ship. The theme comes from the `keycloak_theme` variable — what the deployment renders into `KEYCLOAK_THEME` — and not from the rendered `.env`, which is written later in the same playbook and therefore describes the PREVIOUS deployment. The variable has a single deployment-wide default in `group_vars/all.yml` (`genie` — not in the role: a role default would be invisible to the `.env`-rendering play) and is overridden per environment, so it is a property of the deployment and not of a node: a per-host fallback made a node outside the environment's group check a theme the deployment does not use. A deployment that spans several inventory groups must carry the same `keycloak_theme` in each of them. An empty value fails the deploy rather than silently turning the guard into a no-op; the brand the branch carries is compared with the brand the host serves, and a re-brand fails the deploy
-    - `rsync --archive --checksum --delete` from the extraction tree into `{{ config_dir }}/{{ item.dest_subdir }}/` — the host copy mirrors the branch
-    - the same rsync run as a dry run afterwards: an empty report means the host matches the branch, a non-empty one names the files that differ and fails the deploy; the verification's own exit code is asserted too, so a dry run that failed is never mistaken for a match
-    - `--check` skips the whole seeding, directories included: `ansible.builtin.tempfile` does not support check mode, so the role does nothing and a check-mode plan agrees with a check-mode run
-  - `defaults/main.yml`: `config_bootstrap_pairs` (src / dest_subdir / expect / brand_file) — `config_dir` lives in `group_vars/all.yml`, not here
+  - `tasks/main.yml`:
+    - `file: path={{ config_dir }}/{{ item }} state=directory mode=0755` for `frontend/` and `keycloak/themes/genie/`
+    - `synchronize: src={{ playbook_dir }}/../../components/gov-chat-frontend/public/config/ dest={{ config_dir }}/frontend/ delete=false rsync_opts=["--ignore-existing"]`
+    - `synchronize: src={{ playbook_dir }}/../../configs/keycloak/themes/genie/ dest={{ config_dir }}/keycloak/themes/genie/ delete=false rsync_opts=["--ignore-existing"]`
+  - `defaults/main.yml`: `config_dir: "/opt/genieai-{{ env_name | default(group_names[0] | default('default')) }}/config"`
   - `meta/main.yml`: `galaxy_info` with author + dependencies
 
 - **`deploy.yml`**: new play with `tags: [config]` that applies the role to `[all]`. Update header comment to document the new tag.
@@ -211,9 +208,7 @@ services:
 
 - Keycloak falls back to the unbranded built-in theme. Ugly but functional — the login flow still works.
 - `delete: false` does **not** keep the image-baked theme available. `delete` only governs how rsync treats files that are *already on the host*: it prevents the sync from removing them. It says nothing about the image's own contents, which a bind mount hides entirely. The only thing that keeps the theme available is the role having actually populated the host directory.
-- The role's guards run on the *extracted archive* (`ansible.builtin.assert` over `config_bootstrap_extract_check`), which catches a wrong `repo_branch`, a truncated download, or a changed archive layout — they fire before anything is synced. A post-sync check now closes the loop: the same mirror is re-run as a dry run and the deploy fails if it would still change anything, naming the files that differ.
-- An operator who sets `config_bootstrap_sync_enabled: false` gets no signal from Ansible, by design: the role then owns nothing on the host — it creates no directory, mirrors nothing and verifies nothing. The tree is the operator's, and the deployment serves whatever it holds.
-- A failure DURING the mirror (a later pair's rsync erroring after earlier pairs succeeded) leaves the host half-converged: the guards cannot catch it, because it happens after they ran. The deploy fails loudly, and re-running the deployment converges the rest — the mirror is content-compared (`--checksum`), so a re-run never rewrites what is already correct.
+- The role does not warn when the destination is empty. Its guard runs on the *extracted archive* (`ansible.builtin.assert` over `config_bootstrap_extract_check`), which catches a wrong `repo_branch`, a truncated download, or a changed archive layout — it fires before anything is synced — but there is no post-sync check of the destination tree. An operator who sets `config_bootstrap_sync_enabled: false`, or who empties the directory by hand, gets no signal from Ansible.
 
 ### Bind mount source empty or missing
 

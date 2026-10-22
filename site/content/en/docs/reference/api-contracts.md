@@ -341,7 +341,7 @@ turn.
 travels in the request body (`context.language`), so it is caller-controlled.
 It is resolved against the language map the loaded translation backend
 ships. A language the map does not know is **refused** — `400` with
-`{ "message": "Unsupported target language", "code": "UNSUPPORTED_LANGUAGE" }`
+`{ "error": "UNSUPPORTED_LANGUAGE", "message": "Unsupported target language" }`
 — before anything is generated, so an answer is never produced in a
 language the caller did not ask for. The message names the refused side
 only: the caller's value is never echoed back into the response or into
@@ -349,6 +349,25 @@ the logs. A translation that fails for another reason (the translator is
 down, the call times out) is not a refusal: the request goes through, the
 answer is delivered in English, and the stream reports the failure on the
 `done` frame — see [SSE Streaming Protocol](#sse-streaming-protocol).
+
+The value is normalized before it is resolved — trimmed, bounded, and
+lower-cased — so `"FR"` and `"fr"` name the same language, and a value padded
+with spaces is not a value the map cannot find.
+
+`"auto"` is not a language: it asks the service to detect the language the
+conversation is written in, which the chatqna service does on its own. It is
+accepted, never refused, and it asks for no translation — the answer is
+delivered in English, exactly as when the request named no language at all.
+English (`"en"`) is the language the answer is written in, so it is accepted
+too, and asks for no translation.
+
+On the **non-streaming** path (`POST /api/queries`) the answer's metadata
+carries the same outcome under `translation_status`: `ok` when the answer was
+translated, `refused` when the requested language was refused, `failed` when
+the translation broke. The key is **absent** when no translation was asked
+for (the request named English, or named no language). `refused` and `failed`
+both leave the English answer in place, so a client has to be able to tell an
+untranslated answer from a translated one — the status is that signal.
 
 **`GET /api/queries`** is paginated, scoped to the JWT user. Query params:
 
@@ -640,7 +659,7 @@ to the model, and never guessed.
 **`400` response** (same for both routes):
 
 ```json
-{ "message": "Unsupported target language", "code": "UNSUPPORTED_LANGUAGE" }
+{ "error": "UNSUPPORTED_LANGUAGE", "message": "Unsupported target language" }
 ```
 
 `"Unsupported source language"` when the source is the one refused. The

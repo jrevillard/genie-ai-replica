@@ -198,7 +198,7 @@ consulted again for every unit.
 
 A language the translation models do not cover is **refused before the
 stream opens**: the request is answered `400` with
-`{ "message": "Unsupported target language", "code": "UNSUPPORTED_LANGUAGE" }`
+`{ "error": "UNSUPPORTED_LANGUAGE", "message": "Unsupported target language" }`
 and nothing is generated. The answer is never produced in a language the
 caller did not ask for — that is the whole point of the boundary.
 

@@ -1,11 +1,14 @@
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/config/keycloak_config.dart';
 import 'package:genie_ai_mobile/config/dev_config.dart';
 import 'package:genie_ai_mobile/config/staging_config.dart';
 import 'package:genie_ai_mobile/config/e2e_config.dart';
 import 'package:genie_ai_mobile/config/flavors/itu.dart' as flavors;
+
+import 'support/guard_scan.dart';
+
+/// A construction of the app's own trust-all HTTP client.
+final _insecureClientUse = RegExp(r'InsecureHttpClient\s*\(');
 
 void main() {
   group('KeycloakConfig', () {
@@ -181,16 +184,30 @@ void main() {
       expect(stagingConfig.allowInsecureConnections, isFalse);
     });
 
-    test('the per-institution template keeps them off', () {
-      // Integrators copy the template to create their own flavor, and the copy
-      // inherits the safe default. The template cannot be imported to assert
-      // that directly: its placeholder redirect scheme is not a valid
-      // reverse-domain string, so constructing it trips the KeycloakConfig
-      // assertion. The file is therefore read as source.
-      final template = File(
-        'lib/config/flavors/template.dart',
-      ).readAsStringSync();
-      expect(template, isNot(contains('allowInsecureConnections: true')));
+    test('no config but the dev and e2e ones turns them on', () {
+      // The exemption is exactly dev and e2e, and the claim is checked
+      // against every config file in the tree rather than against the two
+      // known ones: a new per-institution flavor is copied from the template
+      // and lands in lib/config/flavors/, so it has to be covered by the same
+      // rule or it is not covered at all.
+      //
+      // The files are read as source, not imported: a per-institution config
+      // has a placeholder redirect scheme, which is not a valid reverse-domain
+      // string, so importing it trips the KeycloakConfig assertion.
+      final turningItOn = <String>[];
+      for (final file in sourceFilesUnder('lib/config', {'.dart'})) {
+        final content = file.readAsStringSync();
+        if (RegExp(r'allowInsecureConnections\s*:\s*true').hasMatch(content)) {
+          turningItOn.add(relativePath(file));
+        }
+      }
+      expect(
+        turningItOn,
+        unorderedEquals(<String>[
+          'lib/config/dev_config.dart',
+          'lib/config/e2e_config.dart',
+        ]),
+      );
     });
 
     test('the exemption is exactly the dev and e2e configs', () {
@@ -198,6 +215,40 @@ void main() {
       // a deliberate act, and the two flavors that may do it stay the only ones.
       expect(devConfig.allowInsecureConnections, isTrue);
       expect(e2eConfig.allowInsecureConnections, isTrue);
+    });
+
+    test('the trust-all HTTP client is selected only behind the flag', () {
+      // The app owns a second trust-all client — a Dart one, next to the one
+      // in the vendored fork. It accepts any certificate, so it must be
+      // unreachable unless the flag is on. The selection sites are checked
+      // structurally, so a reformatting of the provider does not break the
+      // test and an inverted condition does.
+      final implementation = 'lib/services/auth/insecure_http_client.dart';
+      final unguarded = <String>[];
+      var selections = 0;
+      for (final file in sourceFilesUnder('lib', {'.dart'})) {
+        if (relativePath(file) == implementation) {
+          // The class declares its own constructor; only the call sites
+          // elsewhere decide whether it is ever built.
+          continue;
+        }
+        final scanner = GuardScanner(file.readAsStringSync());
+        selections += scanner.count(_insecureClientUse);
+        for (final use in scanner.unguarded(
+          _insecureClientUse,
+          'allowInsecureConnections',
+        )) {
+          unguarded.add('${relativePath(file)} $use');
+        }
+      }
+      expect(
+        unguarded,
+        isEmpty,
+        reason:
+            'the trust-all HTTP client is built without '
+            'allowInsecureConnections',
+      );
+      expect(selections, greaterThan(0));
     });
 
     test('the effective config follows the FLAVOR define', () {

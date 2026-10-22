@@ -519,8 +519,9 @@ flutter build apk --flavor itu --release --no-tree-shake-icons --dart-define=FLA
 flutter build appbundle --flavor itu --release --no-tree-shake-icons --dart-define=FLAVOR=itu
 ```
 
-Replace `itu` with the flavor you deploy — `dev`, `staging`, `e2e`, or your own
-institution flavor.
+Replace `itu` with the flavor you deploy — `staging`, or your own institution
+flavor. Never build a release from `dev` or `e2e`: both arm the trust-all TLS
+client, and `build-release.ps1` refuses them.
 
 **Output locations:**
 - APK: `build/app/outputs/flutter-apk/app-itu-release.apk`

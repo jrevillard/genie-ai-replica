@@ -36,6 +36,14 @@ decision — a scanner or a single web page is not proof.
 | **`false_positive`** | Scanner misattribution / test-only data | `FALSE_POSITIVE` | Dismiss |
 | **`fixable`** | A fix exists in the distro repo or an upstream release we can pull | — | **Fix, do not dismiss** (base-image bump, `apt-get upgrade` layer, dependency bump) |
 
+The buckets above are the container-scanning reading. For a **SAST** finding whose
+code ships but whose dangerous path is gated (a vendored dependency compiled into a
+binary, behind a config flag the deployment flavors keep off), `NOT_APPLICABLE`
+would claim the code is unreachable — it is reachable in the dev flavors and in
+any build made without the flag. Use `MITIGATING_CONTROL` there, and say in the
+comment where the code ships, where it is reachable, and which control keeps it
+out of the deployment.
+
 ## Dismissal comment semantics
 
 > *"awaiting upstream"* is not an honest label — we are affected.

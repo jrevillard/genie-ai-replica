@@ -119,12 +119,16 @@ variables:
   # Secret Detection is intentionally NOT excluded (see SAST comment above).
   # NOTE: separator is comma, NOT semicolon — semicolon-separated values are
   # silently ignored by gemnasium v6 (verified on job 93734).
-  # .agents/** mirrors the SAST exclusion above. The analyzer's default search
-  # depth does not reach the only dependency file in that tree
-  # (.agents/skills/bmad/scripts/setup.py, two levels below .agents/skills/), so
-  # gemnasium-python cannot pick it up today; the exclusion is insurance
-  # against a future skill dropping a manifest where gemnasium would pick it up
-  # as a dep-dir and block the whole dependency-scanning job.
+  # .agents/** mirrors the SAST exclusion above. Measured on pipeline 14093
+  # (main, before this exclusion): the python analyzer reported exactly one
+  # dependency root ("Detected supported dependency files in
+  # 'genie-ai-overlay'"), never listed .agents among the directories it
+  # skipped, and produced a single SBOM (genie-ai-overlay/gl-sbom-pypi-uv.cdx.json)
+  # — the tree's only manifest (.agents/skills/bmad/scripts/setup.py) was not
+  # scanned. The exclusion is therefore insurance against a future skill
+  # dropping a manifest where the analyzer would pick it up as a dependency
+  # root and block the whole dependency-scanning job; it is not a fix for an
+  # observed failure.
   DS_EXCLUDED_PATHS: "_bmad/**,_bmad-output/**,.claude/**,.agents/**"
 
 # Prevent duplicate branch+MR pipelines — first match wins
@@ -504,7 +508,9 @@ semgrep-sast:
   #   mobile/genie_ai_mobile/flutter_appauth/** — vendored flutter_appauth
   #     checkout (trust-all TLS builder, gated by a config flag)
   #   genie-ai-overlay/contracts/** — real-comps contract tests, not shipped
+  #   **/seed-*.js — seed scripts (data fixtures for a fresh database)
   #   **/scripts/{seed-*.js,migrations/**,new-schema-scripts/**} — dev scripts
+  #   update_quickhelp.js — generated help text
   #   **/__tests__/**, **/__mocks__/**, **/tests/**, **/coverage/** — test code
   #   .claude/**, .agents/**, _bmad/**, _bmad-output/** — agent tooling and
   #     generated BMAD artifacts, never shipped
@@ -2566,6 +2572,13 @@ test:flutter:
     # prose.
     - flutter test --machine --dart-define=FLAVOR=itu test/config/keycloak_config_test.dart > reports/flutter-flavor-machine.json 2>&1
     - cat reports/flutter-flavor-machine.json | tojunit --output reports/flutter-flavor-report.xml
+    # The flavor run re-runs test/config/keycloak_config_test.dart, so it
+    # produces the same suite name and the same testcase names as the full
+    # run above. tojunit (junitreport_maintained) has no --suite-name, so the
+    # suite and class names are marked here: without this the two reports
+    # collide in the merged JUnit view and it is impossible to tell which run
+    # a failure came from.
+    - perl -pi -e 's{(<testsuite\b[^>]*?\bname=")([^"]*)(")}{${1}[flavor=itu] ${2}${3}}; s{(<testcase\b[^>]*?\bclassname=")([^"]*)(")}{${1}[flavor=itu] ${2}${3}}' reports/flutter-flavor-report.xml
     - perl -pi -e 's/&#x1[bB];\[[0-9;]*m//g; s/&#27;\[[0-9;]*m//g; s/\x1b\[[0-9;]*m//g; s/&#x1[bB];//g; s/&#27;//g; s/[\x00-\x08\x0b\x0c\x0e-\x1f]//g' reports/flutter-report.xml reports/flutter-flavor-report.xml
     - 'sed -i ''/lib\/i18n\//d'' coverage/lcov.info'
     - 'COV=$(awk ''/^LF:/{lf+=$2} /^LH:/{lh+=$2} END{if(lf>0) printf "%.1f",lh/lf*100}'' FS=: coverage/lcov.info) && echo "Lines: ${COV}%" || echo "No coverage data"'

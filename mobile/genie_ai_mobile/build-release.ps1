@@ -6,6 +6,14 @@ param(
   [string]$Flavor
 )
 
+# The dev and e2e flavors enable the trust-all TLS client, so a release built
+# from them would ship an app that accepts any certificate. Per-institution
+# flavors are allowed: each deployment adds its own flavor file.
+if ($Flavor -in @('dev', 'e2e')) {
+  Write-Error "Refusing to build a release from the '$Flavor' flavor: it arms the trust-all TLS client. Use the institution's own flavor instead."
+  exit 1
+}
+
 Write-Host "--- KILLING ZOMBIE PROCESSES ---" -ForegroundColor Red
 taskkill /F /IM java.exe 2>$null
 taskkill /F /IM dart.exe 2>$null

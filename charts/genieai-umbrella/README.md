@@ -173,9 +173,21 @@ a chart that quietly disables a feature every deployment is supposed to
 have. `smtp: null` in `values.yaml` is a placeholder for a value every
 real deployment fills in, not a statement that mail is optional.
 
-An environment with no real relay can point `smtp.host` at a sink that
-catches the message (the laptop overlay runs mailpit for this), which
-keeps the feature enabled and makes it testable.
+Which relay an environment uses is that environment's business, and the
+two cases look different on purpose:
+
+- a deployment that owns a mailbox names its relay — the compose and
+  ansible path reads `EMAIL_*` from `.env` (`smtp.gmail.com`, port 587,
+  starttls, auth) and a pays overlay names the same thing under
+  `data.keycloak.smtp`. Nothing changes in the realm;
+- a validation cluster that must not send real mail to real addresses
+  points `smtp.host` at a sink that catches the message (the laptop
+  overlay runs mailpit for this, and the message stays readable on
+  :8025). The feature stays enabled and becomes testable.
+
+Neither case turns the flags off: `smtp: null` in `values.yaml` is a
+placeholder for a value every deployment fills in, not a statement that
+mail is optional.
 
 Setting `data.keycloak.convergence.enabled: false` (default in the
 dev-repo overlays) renders neither the Job nor the realm Secret. The

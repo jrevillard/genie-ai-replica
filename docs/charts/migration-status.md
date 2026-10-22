@@ -107,6 +107,21 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
   Skipped with reasons: the `DS_PROMETHEUS` mapping (resolves to the
   same datasource either way — a no-op rename), and the NetworkPolicy
   table-ization / serial install-prereqs parks carried from round 9.
+- **The CRD gate had never validated anything (0.2.69 follow-up,
+  `3c9f9ca`)**: `chart:crd-validate`'s cluster never had the Gateway
+  API CRDs — gateway-helm ships them as a NESTED subchart, so
+  `helm template` does not render them and only a real install applies
+  them — and kubectl 1.33's `resource mapping not found` message
+  carries no `error:` prefix, so the pattern-only filter scored the
+  dead dry run as clean. Every prior green run of the job validated
+  zero objects. The round-10 exit-code check surfaced it (pipeline
+  14211 red); `install-prereqs.sh` now applies the bundle from the
+  vendored gateway-helm tgz (the exact version the release installs)
+  via server-side apply — client-side apply exceeds the 256 KiB
+  last-applied annotation on these CRDs — with a skip-guard on all
+  three kinds. Proven on a scratch kind cluster from zero CRDs;
+  pipeline 14216 `chart:crd-validate` green with 256 objects
+  genuinely validated.
 - **Review round 9 closed (0.2.67)** — three parallel adversarial passes
   over the whole final diff (core/data/services, edge/observability/OPEA,
   CI/scripts), every finding verified against a render or a live cluster

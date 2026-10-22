@@ -216,9 +216,7 @@
         "KC_MOBILE_CLIENT_ID": "the chart carries a working default (genie-mobile) that the realm file needs; Compose leaves it to the operator",
         "KC_MOBILE_REDIRECT_SCHEME": "the chart carries a working default (genieai) that the realm file needs; Compose leaves it to the operator",
         "KC_PUBLIC_ORIGIN": "the public origin, spelled from ingress.scheme + ingress.host on the chart side and from NGINX_PUBLIC_DOMAIN on the Compose side",
-        "KEYCLOAK_RESET_PASSWORD": "the chart's default realm leaves it off — it is an operator choice (data.keycloak.resetPasswordAllowed); Compose's realm import turns it on",
-        "KEYCLOAK_URL": "the Job reaches Keycloak in-cluster; Compose reaches it through its own service name",
-        "KEYCLOAK_VERIFY_EMAIL": "the chart's default realm leaves it off because a deployment without SMTP cannot verify an address (data.keycloak.verifyEmail); Compose's realm import turns it on"
+        "KEYCLOAK_URL": "the Job reaches Keycloak in-cluster; Compose reaches it through its own service name"
       },
       "secretProvided": {
         "EMAIL_PASSWORD": "carried by the email-password Secret through the convergence Job's envSecrets rows; the operator provides it, so there is no value to compare",

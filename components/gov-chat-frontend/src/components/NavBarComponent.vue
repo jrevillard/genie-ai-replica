@@ -437,11 +437,10 @@ export default {
 }
 
 .logo-container--no-hamburger {
-  /* Reclaims the 40 px the hamburger used to occupy, plus a
-     comfortable gap before the brand. Keeps the logo where it
-     was on a desktop so the branding does not slide after the
-     hamburger was removed. */
-  margin-left: calc(40px + var(--space-md));
+  /* Sits flush on the nav's own padding — the same 16 px the logout
+     control keeps from the right edge — so the branding and the
+     controls mirror each other across the bar. */
+  margin-left: 0;
 }
 
 .govt-logo {

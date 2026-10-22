@@ -9,7 +9,7 @@
   the convergence flow). GPU endpoints (`VLLM_ENDPOINT`,
   `TEI_EMBEDDING_ENDPOINT`, `DOCLING_ENDPOINT`) via the opea helpers;
   HF_TOKEN + VLLM_API_KEY from the vllm-api-key Secret. Container/listen
-  port 5000; healthcheck hits `/health` on that port.
+  port 5000; probes are tcpSocket dials on that port (an L4 accept, not an L7 /health).
 
   LABEL_SELECTOR_SYSTEM_PROMPT and CONTEXTUAL_RETRIEVAL_PROMPT default
   to the empty string by convention; the

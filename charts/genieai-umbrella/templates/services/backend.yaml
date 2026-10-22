@@ -313,24 +313,18 @@ spec:
         - protocol: TCP
           port: 9031
     {{- end }}
-    {{- /* Gated on the endpoint being EXTERNAL, not on the OPEA tier:
-           services.backend.translation.endpoint is an independent knob —
-           it can point at a GPU node with opea.enabled=false (translation
-           only), or alongside the in-cluster GPU mode. Gating on the OPEA
-           tier left the env var set with no matching egress rule, and the
-           BFF silently fell back to the in-process CPU model. */ -}}
-    {{- if and .Values.services.backend.translation.endpoint (not (and .Values.opea.enabled (eq .Values.opea.gpu.mode "in-cluster"))) }}
-    # External translation endpoint. Port family (443 + 444) is
-    # intentionally broad because
-    # services.backend.translation.endpoint is a free string; a future
-    # tightening can derive the port from the URL.
-    - to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
-      ports:
-        - protocol: TCP
-          port: 443
-        - protocol: TCP
-          port: 444
+    {{- /* Gated on the endpoint the backend ACTUALLY DIALS being external —
+           the derived one ($translationEndpoint above), not the raw
+           values knob. Gating on the raw value left the derived-endpoint
+           shape (opea external mode, no explicit endpoint) with a
+           mandatory GPU probe and no egress to answer it: the backend
+           refused to start on its own default-deny. In-cluster mode is
+           excluded — the endpoint is then a Service name, covered by the
+           vllm-translation rule above. */ -}}
+    {{- if and $translationEndpoint (not (and .Values.opea.enabled (eq .Values.opea.gpu.mode "in-cluster"))) }}
+    # External translation endpoint: the CIDR and the port derive from
+    # the endpoint URL, exactly as the six orchestrators derive theirs
+    # from opea.gpu.nodeHost. Not 0.0.0.0/0 on 443 + 444.
+    {{- include "genieai-umbrella.opeaEgressRuleFromUrl" (dict "root" $ "url" $translationEndpoint) | nindent 4 }}
     {{- end }}
 {{- end -}}

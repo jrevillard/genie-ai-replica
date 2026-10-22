@@ -26,7 +26,17 @@ Context keys (all from a dict built by the caller with "root" set):
 */}}
 {{- define "genieai-umbrella.modelDeployment" -}}
 {{- $root := .root -}}
-{{- $res := $root.Values.opea.models.resources | default (dict "requests" (dict "nvidia.com/gpu" 1) "limits" (dict "nvidia.com/gpu" 1)) -}}
+{{- /* No GPU resource by default. `nvidia.com/gpu: 1` per pod is an
+EXCLUSIVE device grant: four model pods would need four GPUs, and the
+documented shape (one gpu=true node, vllm at 0.55 + vllm-translation at
+0.30 utilization, one RWO cache PVC) shares ONE device through the
+utilization args instead. An exclusive request on that node leaves three
+of the four pods Pending forever ("Insufficient nvidia.com/gpu") with
+the tier never Ready. NVIDIA_VISIBLE_DEVICES=all + the nodeSelector put
+every model pod on the GPU node and let the args divide the device —
+the same sharing model Compose runs. A multi-GPU operator who wants
+scheduler-enforced exclusivity sets opea.models.resources per model. */ -}}
+{{- $res := $root.Values.opea.models.resources | default dict -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

@@ -70,6 +70,12 @@ observability:
     storageSize: 20Gi
   grafana:
     enabled: false
+    # The Grafana admin USERNAME. The operator writes it into
+    # genieai-grafana-admin-credentials on every reconcile and it wins
+    # over any user an operator-provided Secret carried; the PASSWORD is
+    # always the operator's (generated once, kept across reconciles).
+    # Leave "admin" unless the site pins a different console user.
+    adminUser: admin
   # OTel operator collector CR name; the in-cluster Service is named
   # <cr>-collector (see templates/_lib/_observability.tpl).
   collectorCRName: genieai-collector
@@ -202,7 +208,7 @@ data:
     enabled: true
     # CNPG Cluster resources for the keycloak-db (the only Postgres; the edge
     # tier is Envoy Gateway, not Kong).
-    instances: 1                       # 3 on prod via clusterProfile (staging keeps 1; the Arango tier promotes to cluster on both prod and staging — Postgres HA is prod-only)
+    instances: 1                       # 3 on prod via clusterProfile (staging keeps 1). ArangoDB does NOT follow: data.arangodb.mode is the only source of truth for its topology, on every profile
     storageSize: 10Gi
   arangodb:
     enabled: true
@@ -467,11 +473,15 @@ services:
     # creates the ArangoDB collections; same registry/tag conventions
     # as the service images.
     migrationsImage: { repository: genie-ai-db-migrations, tag: "main" }
-    # Remote translation API (OpenAI-compatible vLLM). endpoint empty:
-    # the in-process CPU model translates the answer. Set it to target a
-    # GPU node's translation API directly (requires a vllm-api-key Secret
-    # alongside); a named API is then mandatory and the backend waits for
-    # it to answer at startup.
+    # Remote translation API (OpenAI-compatible vLLM). endpoint empty is
+    # NOT automatically the CPU model: with the OPEA tier on, the
+    # endpoint derives from opea.gpu (the nodeHost in external mode, the
+    # in-cluster model Service in in-cluster mode) exactly the way the
+    # orchestrators' endpoints do — and a named API, derived or explicit,
+    # is mandatory: the backend waits for it at startup and refuses to
+    # come up without it. The CPU model translates only when NO endpoint
+    # exists at all — opea disabled AND this empty. Set it to target a
+    # GPU node's translation API directly, independent of the OPEA tier.
     translation:
       endpoint: ""
       modelId: ""

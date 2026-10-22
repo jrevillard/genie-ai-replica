@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Idempotent installer for the 7 cluster operators that the genie-ai
-# chart requires as cluster-wide bootstrap (NOT chart dependencies).
+# chart requires as cluster-wide bootstrap (NOT chart dependencies),
+# plus the Gateway API CRDs the chart's edge tier renders.
 #
 # Usage: KUBECONFIG=/path/to/kubeconfig ./scripts/install-prereqs.sh [--with-grafana]
 #        (no KUBECONFIG = kubectl's current context)
@@ -18,6 +19,10 @@
 #   - opentelemetry-operator 0.126.0  (namespace opentelemetry-operator-system; reconciles the
 #     chart's OpenTelemetryCollector CRs — collector gateway + filelog agent)
 #
+# CRDs installed (no operator, no namespace):
+#   - the Gateway API + Envoy Gateway bundle the vendored gateway-helm
+#     dependency ships — see install_gateway_api_crds below
+#
 # Re-running is safe: each install is gated on a `kubectl get namespace`
 # + `helm list -n <ns>` check that short-circuits when the helm release
 # is already present.
@@ -26,6 +31,8 @@
 # the host tools.
 
 set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 KC_OPERATOR_VERSION="${KC_OPERATOR_VERSION:-26.8.0}"
 # CHART version, not the operator version: cloudnative-pg chart 0.22.0
@@ -291,6 +298,58 @@ install_otel_operator() {
   wait_deploy_ready "${ns}" "opentelemetry-operator"
 }
 
+install_gateway_api_crds() {
+  # The edge tier renders GatewayClass / Gateway / HTTPRoute
+  # (gateway.networking.k8s.io). The EnvoyGateway config is a string
+  # inside a ConfigMap, not a Custom Resource — no gateway.envoyproxy.io
+  # CRD is needed. A `helm install` of the chart applies these CRDs
+  # itself — gateway-helm ships them as a NESTED subchart
+  # (`charts/crds`), which is why `helm template` does not render them
+  # and why nothing else in this script (or in the cluster bootstrap of
+  # a fresh install) provides them: chart:crd-validate's server-side dry
+  # run failed on exactly that hole with `no matches for kind
+  # "GatewayClass"`. The versioned source is the vendored dependency tgz
+  # itself, so the CRDs installed here are BY CONSTRUCTION the bundle
+  # the real release installs — no second version pin to drift.
+  local tgz work crd missing=""
+  tgz="$(ls "${REPO_ROOT}/charts/genieai-umbrella/charts/"gateway-helm-*.tgz 2>/dev/null | head -1)"
+  if [ -z "${tgz}" ]; then
+    log "gateway-helm tgz missing: helm dependency update"
+    helm dependency update "${REPO_ROOT}/charts/genieai-umbrella" >/dev/null
+    tgz="$(ls "${REPO_ROOT}/charts/genieai-umbrella/charts/"gateway-helm-*.tgz | head -1)"
+  fi
+  # Skip only when ALL THREE kinds the chart renders are present — the
+  # first CRD of the bundle alone proves nothing (a failed apply
+  # mid-bundle leaves exactly that partial state behind, and the skip
+  # would turn it permanent).
+  for crd in \
+    gatewayclasses.gateway.networking.k8s.io \
+    gateways.gateway.networking.k8s.io \
+    httproutes.gateway.networking.k8s.io; do
+    kubectl get crd "${crd}" >/dev/null 2>&1 || missing="${missing} ${crd}"
+  done
+  if [ -z "${missing}" ]; then
+    log "gateway-api CRDs: already installed, skip"
+    return 0
+  fi
+  log "gateway-api CRDs: installing (missing:${missing})"
+  work="$(mktemp -d)"
+  tar -xzf "${tgz}" -C "${work}" gateway-helm/charts/crds/crds/gatewayapi-crds.yaml
+  # Server-side apply, not plain apply: client-side apply stores the
+  # whole previous object in the last-applied-configuration annotation,
+  # and the Gateway API CRDs blow past its 256 KiB cap ("metadata.annotations:
+  # Too long") — the documented install path for this bundle is SSA.
+  kubectl apply --server-side --force-conflicts \
+    -f "${work}/gateway-helm/charts/crds/crds/gatewayapi-crds.yaml" >/dev/null
+  kubectl wait --for=condition=Established \
+    crd/gatewayclasses.gateway.networking.k8s.io \
+    crd/gateways.gateway.networking.k8s.io \
+    crd/httproutes.gateway.networking.k8s.io \
+    --timeout=120s >/dev/null
+  rm -rf "${work}"
+  log "gateway-api CRDs applied (from the vendored gateway-helm bundle)"
+}
+
 install_grafana_operator() {
   # Reconciles the chart's Grafana / GrafanaDataSource / GrafanaDashboard /
   # GrafanaAlertRuleGroup CRs (grafana.integreatly.org group). Only
@@ -320,6 +379,7 @@ main() {
   install_cert_manager
   install_vmoperator
   install_otel_operator
+  install_gateway_api_crds
   # grafana-operator is NOT installed by default: the chart's Grafana
   # CRs are opt-in (observability.grafana.enabled, default false). A
   # cluster enabling them opts in with --with-grafana.

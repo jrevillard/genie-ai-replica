@@ -224,7 +224,8 @@ and the rows below name each plan and its outcome.
    - ✅ The agent working documents under `docs/superpowers/` are gone; the
      design of record moved to `docs/charts/helm-charts-design.md` and
      every citation was repointed.
-   - genie-ai-deploy README — overlay/SealedSecret model if missing.
+   - ✅ The genie-ai-deploy README carries the overlay/SealedSecret model,
+     the two laptop overlays and the mail sink.
 4. **CI gap (plan 7 residual)** — ✅ `chart:contract` shipped (renders with
    overlay-shaped values, runs `PII_SMOKE_CONFIG=<rendered>
    tests/otel-collector/run-pii-smoke.sh`, asserts operator Service names);

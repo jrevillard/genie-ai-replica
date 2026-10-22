@@ -310,9 +310,13 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-content {
   /* The horizontal fade's run, in pixels rather than a percentage: the
      ramp has to land inside the content's own padding, and that padding
      is a width, so the ramp has to be one too. Its partner is the app's
-     --qh-veil-pad on .quick-help-overlay; the relationship between the
-     two is stated where both are declared. */
-  --qh-veil-ramp: 24px;
+     --qh-veil-pad, declared on .quick-help-overlay and stepped down by
+     the app's own container query when the panel is narrow; the
+     relationship between the two is stated where both are declared.
+     min(), not a copy of the padding: the ramp is also its own design
+     value, and clamping it to the padding would widen the fade by 8 px
+     at every width the app does not step. */
+  --qh-veil-ramp: min(24px, var(--qh-veil-pad, 24px));
   background: color-mix(in srgb, var(--surface) calc(var(--qh-banner-scrim-alpha) * 100%), transparent);
   /*
    * mask-mode: alpha is load-bearing. Without it, Blink resolves the
@@ -326,15 +330,15 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-content {
      heading and its subtitle, so its left and right edges are cuts in
      the artwork and have to be ramps too. The two gradients are
      intersected — the veil is only where both of them are opaque.
-     The horizontal ramp runs over --qh-veil-ramp, 24 px, and is spent
-     inside the content's own padding, --qh-veil-pad, 32 px. The
-     invariant between them holds in one direction only: the padding
-     must be AT LEAST as wide as the ramp, so the fade is exhausted in
-     the padding and never reaches a glyph, whatever the title's
-     length. The padding is held to 32 px because the banner is not
-     wide enough to give the title both its natural width and a
-     generous margin — at 1440 px the title measures 578 px of the
-     670 px the centre column has.
+     The horizontal ramp runs over --qh-veil-ramp, which is the app's
+     --qh-veil-pad clamped to 24 px, and is spent inside the content's
+     own padding. The invariant between them holds by construction: the
+     ramp is min(24, padding), so it can never be wider than the padding
+     it has to be exhausted in, whatever the app declares and at every
+     width. (With the padding at its wide-panel 32 px the ramp stays at
+     24; where the app steps the padding down for a narrow panel the
+     ramp follows it, and a padding smaller than a fixed 24 px ramp
+     would have the fade still running where the first glyph starts.)
      The -webkit- spelling of mask-composite is the legacy name of the
      same operator (source-in ≡ intersect); Chromium normalises it to
      the standard value, and Safari still needs it. */

@@ -2462,11 +2462,16 @@ export default {
      the card width measured off the reference mockup.
 
      --qh-veil-pad is the landing ground for the veil's horizontal
-     ramp. The Living Intelligence layer fades that ramp over 24 px of
-     its own naming (--qh-veil-ramp); the rule between the two is that
-     this padding stays AT LEAST as wide as the ramp, so the fade is
-     spent here and never eats a glyph. --space-xl holds it at 32 px,
-     8 px wider than the ramp on each side.
+     ramp. The Living Intelligence layer fades that ramp over
+     min(24px, this padding) of its own naming (--qh-veil-ramp), so the
+     ramp is exhausted here and never eats a glyph. --space-xl holds
+     it at 32 px, 8 px wider than the ramp on each side; the
+     container query below .quick-help-content steps it down to 8 px
+     for a narrow panel, and the ramp follows it there.
+
+     --qh-heading-scale multiplies the heading's type size. It is 1 at
+     every width the reference covers, and the narrow-panel query
+     below steps it down.
 
      --qh-composer-ratio insets the bar from the row it sits above; see
      .quick-help-composer below.
@@ -2480,6 +2485,7 @@ export default {
   --qh-card-min: 217px;
   --qh-measure: calc(4 * var(--qh-card-min) + 3 * var(--space-xl));
   --qh-veil-pad: var(--space-xl);
+  --qh-heading-scale: 1;
   --qh-composer-ratio: 81%;
   position: absolute;
   top: 0;
@@ -2533,22 +2539,64 @@ export default {
      banner: the reference carries the text directly on the artwork, and
      a band across the whole width washes the icon tiles as well. The
      padding is the landing ground for the veil's horizontal ramp, which
-     the Living Intelligence layer fades over 24 px, so the ramp is spent
-     before it reaches a glyph whatever the title's length. The box's
-     height is unchanged — the layer's padding is what sets it — so the
-     title stays where it is relative to the artwork's fade. */
+     the Living Intelligence layer fades over min(24px, this padding), so
+     the ramp is spent before it reaches a glyph whatever the title's
+     length. The box's height is unchanged — the layer's padding is what
+     sets it — so the title stays where it is relative to the artwork's
+     fade. */
   width: fit-content;
   /* The padding sits outside the text's own box: with the global
      border-box it would eat the title's line and wrap it. The max-width
      is the banner's width less the two paddings, so the veil never
-     overflows the artwork it covers. Both read --qh-veil-pad from
-     .quick-help-overlay, so one declaration moves the padding and its
-     cap together and the cap can never admit a veil the banner cannot
-     hold. */
+     overflows the artwork it covers. Both read --qh-veil-pad, so one
+     declaration moves the padding and its cap together and the cap can
+     never admit a veil the banner cannot hold. */
   box-sizing: content-box;
   max-width: calc(100% - 2 * var(--qh-veil-pad));
   margin-inline: auto;
   padding-inline: var(--qh-veil-pad);
+}
+
+/* The narrow panel. With both sidebars in flow the centre column is at
+   its narrowest at the breakpoint itself — 630 px of panel at a 1400 px
+   viewport — and widens from there, while below 1400 px the sidebars go
+   off-canvas and the panel IS the viewport. So a panel narrower than
+   about 675 px of content is the whole narrow-panel window: no wrap in
+   the shipped locales, and nothing for the veil's 32 px of padding to
+   spend on either.
+
+   Two things give, both read from the same container — the overlay is
+   the Living Intelligence layer's `container-type: inline-size` element,
+   so the query keys on the panel and not on the viewport, and it fires
+   identically whether the panel is narrow because the viewport is or
+   because a sidebar is collapsed. Above the threshold nothing here
+   applies and the render is the reference's.
+
+     --qh-veil-pad 32 -> 8 px. The veil has to be as wide as its widest
+       child plus twice this, and 32 px of it is 64 px the title cannot
+       have: 630 - 64 = 566 px of content, which the French title
+       (578.3 px) overruns by 12 and Manx (659.1 px) by 93. At 8 px
+       the content is 614 px, which clears Manx outright.
+
+     --qh-heading-scale 1 -> 0.92. The padding alone leaves Manx 45 px
+       over the 614 px it has, and no padding can close that without
+       taking the veil's margin to nothing; 45 px is 6.8 % of the
+       longest shipped title, so an 8 % step clears it — measured, the
+       title lands at 606.3 px and 7.7 px to spare. This is the long
+       tail Option B buys — it is locale-blind, so it steps the English
+       title too, in the narrow panel only, where the panel is at its
+       narrowest and a display size is the one thing with room to give.
+
+   Both tokens are declared on .quick-help-content, the element that
+   reads the padding and the common ancestor of the heading that reads
+   the scale; the base values live on .quick-help-overlay, so both
+   resolve for every descendant of the overlay whether or not the veil
+   is rendered. */
+@container (max-width: 675px) {
+  .quick-help-content {
+    --qh-veil-pad: 8px;
+    --qh-heading-scale: 0.92;
+  }
 }
 
 /* The heading and the subtitle under it share one gap: the heading
@@ -2556,7 +2604,7 @@ export default {
    the card row, so the pair needs no negative margin to sit tight. */
 .quick-help-heading {
   text-align: center;
-  font-size: var(--text-xl);
+  font-size: calc(var(--text-xl) * var(--qh-heading-scale));
   font-weight: 600;
   margin-bottom: var(--space-sm);
   color: var(--fg);

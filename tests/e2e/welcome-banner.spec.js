@@ -31,10 +31,11 @@
 //      banner's box — as shipped, with the veil removed, and with an
 //      opaque veil — are compared pixel by pixel. Every pixel the veil
 //      changes has to lie inside its own box (and the box has to be the
-//      title's measure); inside the plateau, where the mask is fully
-//      opaque, the artwork has to arrive a measured fraction of the way an
-//      opaque veil would carry it, and no further. A full-width band
-//      fails the first; an opaque or absent veil fails the second.
+//      measure of the widest text inside it); inside the plateau, where the
+//      mask is fully opaque, the artwork has to arrive a measured fraction
+//      of the way an opaque veil would carry it, and no further. A
+//      full-width band fails the first; an opaque or absent veil fails the
+//      second.
 //
 //   5. the banner's box holds the artwork's ink band, and the banner stays
 //      full-bleed with nothing overflowing the panel.
@@ -45,7 +46,13 @@
 //      element sitting lowest on the artwork — which is where the neutral grey
 //      it used to carry measured 3.05:1 in the dark theme.
 //
-// All six run at 1920 / 1280 / 1024 / 769 in light + dark.
+//   7. the title holds ONE line, and the veil is the measure of the widest
+//      text inside it. Both are properties of the locale rather than of the
+//      theme, and the loop above runs in English — the one locale whose
+//      title never wraps and whose subtitle is narrower than its title — so
+//      this runs in its own sweep over the extremes: `fr`, `man`, `st`.
+//
+// All seven run at 1920 / 1440 / 1400 / 1280 / 1024 / 769 in light + dark.
 //
 // Pixel sampling uses page.screenshot()'s clip parameter, hands the bytes
 // back into the page as a data URL, draws them to a <canvas> and reads
@@ -215,6 +222,24 @@ const VIEWPORTS = [
   { label: '1024', width: 1024 },
   { label: '769', width: 769 }
 ];
+
+/*
+ * The locales the veil's GEOMETRY is asserted in, chosen as the extremes
+ * in each direction rather than as a sample. Every assertion above runs
+ * in English, and English is the one locale that cannot fail either of
+ * the two this file has to get right:
+ *
+ *   fr    the title that wraps first — 578.3 px, the third longest of the
+ *         fourteen, and the one that wraps at the smallest panel
+ *   man   the longest title shipped, 659.1 px, 268 px more than English
+ *   st    the locale whose SUBTITLE is wider than its title (515.0 px
+ *         against 390.4), so the veil is as wide as something other than
+ *         the title
+ *
+ * `pt` carries the same property as `st` with a 18.9 px margin where
+ * `st` has 124.6 px, so `st` carries it.
+ */
+const GEOMETRY_LOCALES = ['fr', 'man', 'st'];
 
 // Assertion 1: the scrim's alpha, read off the resolved custom property and
 // cross-checked against the colour the element actually paints with.
@@ -443,7 +468,7 @@ async function scrimTopEdge(page) {
   );
 }
 
-// Assertion 4: the veil's footprint is the title's box, and it blends.
+// Assertion 4: the veil's footprint is the text's box, and it blends.
 //
 // The veil wraps the title rather than spanning the banner, so the two
 // things worth proving are WHERE it paints and WHAT it does to what is
@@ -458,20 +483,25 @@ async function scrimTopEdge(page) {
 // What that check cannot see is its own reference frame. The box is read
 // off the page, so a veil grown back into the old full-width band still
 // paints inside its own box and would still report zero pixels outside it.
-// A footprint is the title's only if the box is the title's measure, so
-// that is asserted alongside it: the veil's width has to be the title's own
-// measure plus the padding it carries on both sides. The title's measure is
-// read as the union of its line boxes, not as the heading's box — the
-// heading is a block child that fills the veil and grows with it, so read
-// off the same render its width says nothing about where the title ends.
+// A footprint is the text's only if the box is the text's measure, so
+// that is asserted alongside it: the veil's width has to be the measure of
+// the widest text inside it plus the padding it carries on both sides.
+// The veil is fit-content, so the widest of the two decides — in Sesotho
+// and Portuguese that is the subtitle, not the title. Each text's measure
+// is read as the union of its own line boxes, not as its element box —
+// the heading is a block child that fills the veil and grows with it, so
+// read off the same render its width says nothing about where the title
+// ends.
 //
 // (4c) The ramp against the padding. The veil's horizontal mask runs from
 // transparent to opaque over `--qh-veil-ramp` — a length, because it has
-// to land inside a padding, which is also a length. If the ramp were wider
-// than the padding it would still be fading where the first glyph starts,
-// and the title would sit on a part-transparent veil whatever the title's
-// length. So the ramp, read out of the mask the element actually computes,
-// has to fit inside the element's own padding-left.
+// to land inside a padding, which is also a length. The layer computes it
+// as min(24px, the app's padding), so the ramp cannot be wider than the
+// padding it has to be spent in; this reading is what keeps that true of
+// the mask the element actually computed rather than of a token. If the
+// ramp were wider than the padding it would still be fading where the
+// first glyph starts, and the title would sit on a part-transparent veil
+// whatever the title's length.
 //
 // (4b) The blend. Inside the plateau — the lower half of the box, and in
 // from the horizontal ramp on both sides, where the mask has reached full
@@ -511,6 +541,13 @@ async function veilFootprintAndBlend(page) {
     // is stretched.
     const title = document.createRange();
     title.selectNodeContents(heading);
+    // The subtitle's measure, for the same reason: the veil is fit-content,
+    // so it is as wide as its WIDEST child, and in two shipped locales that
+    // is the subtitle and not the title (Sesotho 515.0 against 390.4,
+    // Portuguese 438.6 against 419.7).
+    const subtitleEl = document.querySelector('.quick-help-subtitle');
+    const subtitle = subtitleEl ? document.createRange() : null;
+    if (subtitle) subtitle.selectNodeContents(subtitleEl);
     // The clip is the banner's box intersected with the viewport. The banner
     // breaks out past the panel, so at the narrow widths its box starts at
     // x = -24 and a clip taken at b.x is silently shifted to 0 — which puts
@@ -556,6 +593,7 @@ async function veilFootprintAndBlend(page) {
       },
       veil: { x: v.left - x, y: v.top - y, width: v.width, height: v.height },
       titleWidth: title.getBoundingClientRect().width,
+      subtitleWidth: subtitle ? subtitle.getBoundingClientRect().width : 0,
       padLeft: parseFloat(cs.paddingLeft),
       padRight: parseFloat(cs.paddingRight),
       alpha: Number.isFinite(alpha) ? alpha : null,
@@ -654,7 +692,8 @@ async function veilFootprintAndBlend(page) {
         r1: Math.abs(S[i + ch] - B[i + ch]) / pick.span,
         r2: Math.abs(S[i + ch] - O[i + ch]) / pick.span,
         veil: geo.veil,
-        titleWidth: geo.titleWidth + geo.padLeft + geo.padRight,
+        titleWidth: geo.titleWidth,
+        subtitleWidth: geo.subtitleWidth,
         paddingInline: geo.padLeft + geo.padRight,
         padLeft: geo.padLeft,
         ramp: geo.ramp,
@@ -665,6 +704,91 @@ async function veilFootprintAndBlend(page) {
     },
     { shipped, bare, opaque, geo, tol: FOOTPRINT_EDGE_TOLERANCE }
   );
+}
+
+// Assertion 7: the veil's geometry, read off layout boxes alone.
+//
+// No capture: every number here is a box, a computed style or a text
+// measure, so this costs one evaluate over a session the pixel
+// assertions would have paid for anyway.
+//
+// The title's measure is read TWICE, and the second reading is the one
+// the fix is computed from. Once as rendered, where a title that has
+// wrapped measures its LONGEST LINE — which is exactly the number that
+// reports the wrap as fitting — and once with `white-space: nowrap` for
+// a few milliseconds, which is what the title would measure on one line
+// if the box allowed it. The inline style is restored before the value
+// is returned, so nothing downstream reads a page wearing the probe.
+//
+// `lineTops` is the number of LINE boxes the title's contents occupy,
+// which is the direct reading of "one line"; the box height against the
+// computed line-height is the same claim from the other side, and the
+// two are asserted together because they fail for different reasons —
+// a fractional font-size moves the second without the first.
+//
+// Distinct line boxes, not the length of getClientRects(): that reports
+// one rect per INLINE fragment, so a one-line title whose text runs into
+// the wordmark span inside it counts three or four (measured: the French
+// title at 1920 reports 4 rects on one 38.4 px line), and a span with its
+// own size sits a few px off the line's own top. Rects are clustered by
+// their midpoint at half a line box, which is the distance between two
+// lines and well above any difference within one.
+async function veilGeometry(page) {
+  return await page.evaluate(() => {
+    const veil = document.querySelector('.quick-help-content');
+    const banner = document.querySelector('.quick-help-banner');
+    const heading = document.querySelector('.quick-help-heading');
+    const subtitleEl = document.querySelector('.quick-help-subtitle');
+    if (!veil || !banner || !heading) return null;
+    const cs = getComputedStyle(veil);
+    const hs = getComputedStyle(heading);
+    const measure = (el) => {
+      if (!el) return 0;
+      const r = document.createRange();
+      r.selectNodeContents(el);
+      return r.getBoundingClientRect().width;
+    };
+    const title = document.createRange();
+    title.selectNodeContents(heading);
+
+    const prevSpace = heading.style.whiteSpace;
+    heading.style.whiteSpace = 'nowrap';
+    const titleUnwrapped = title.getBoundingClientRect().width;
+    heading.style.whiteSpace = prevSpace;
+
+    const v = veil.getBoundingClientRect();
+    const lineHeight = parseFloat(hs.lineHeight);
+    // The line boxes the title's contents occupy: every client rect's
+    // midpoint, clustered at half a line.
+    const midpoints = Array.from(title.getClientRects())
+      .map((r) => r.top + r.height / 2)
+      .sort((a, b) => a - b);
+    let lineTops = 0;
+    let last = -Infinity;
+    for (const m of midpoints) {
+      if (m - last > lineHeight / 2) {
+        lineTops++;
+        last = m;
+      }
+    }
+    return {
+      veilWidth: v.width,
+      // The space the veil has for text: the banner's own content box less
+      // the padding the veil carries inside it. The banner is the veil's
+      // containing block, and its clientWidth is a layout number — the
+      // entrance animation's scale would move a bounding rect, not this.
+      available: banner.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight),
+      headingHeight: heading.getBoundingClientRect().height,
+      lineHeight,
+      fontSize: parseFloat(hs.fontSize),
+      lineTops,
+      titleWidth: title.getBoundingClientRect().width,
+      titleUnwrapped,
+      subtitleWidth: measure(subtitleEl),
+      padLeft: parseFloat(cs.paddingLeft),
+      padRight: parseFloat(cs.paddingRight)
+    };
+  });
 }
 
 // Assertion 5: the banner's box, the ink band it has to hold, and the
@@ -978,17 +1102,24 @@ test.describe('Welcome banner invariants', () => {
           `${where} not one of the pixels inside the veil's box (${box}) differs ` +
             `from the bare render — the veil paints nothing`
         ).toBeGreaterThan(0);
-        // The footprint only means "the title's box" if the box is the
-        // title's measure. The check above reads the box off the page, so a
-        // veil grown back into the full-width band would still satisfy it on
-        // its own — and so would a reading of the heading's box, which is a
-        // block that fills the veil and grows with it. The title's width here
-        // is the union of its own line boxes.
+        // The footprint only means "the text's box" if the box is the text's
+        // measure. The check above reads the box off the page, so a veil grown
+        // back into the full-width band would still satisfy it on its own —
+        // and so would a reading of the heading's box, which is a block that
+        // fills the veil and grows with it. Both widths here are the unions of
+        // their own line boxes, and the veil is fit-content, so it is the
+        // WIDEST of the two that sets its measure. Written against the title
+        // alone the check fails by 124.6px in Sesotho and 18.9px in
+        // Portuguese, where the subtitle is the wider child, while passing in
+        // the English this loop runs — which is how it shipped.
+        const textWidth = Math.max(m.titleWidth, m.subtitleWidth);
         expect(
-          Math.abs(m.veil.width - m.titleWidth),
-          `${where} the veil's box is ${m.veil.width.toFixed(1)}px wide but the ` +
-            `title's measure plus its ${m.paddingInline.toFixed(0)}px of padding is ` +
-            `${m.titleWidth.toFixed(1)}px — the veil is wrapped around the banner, not the title`
+          Math.abs(m.veil.width - (textWidth + m.paddingInline)),
+          `${where} the veil's box is ${m.veil.width.toFixed(1)}px wide but its widest text ` +
+            `(title ${m.titleWidth.toFixed(1)}px, subtitle ${m.subtitleWidth.toFixed(1)}px) plus ` +
+            `its ${m.paddingInline.toFixed(0)}px of padding is ` +
+            `${(textWidth + m.paddingInline).toFixed(1)}px — the veil is wrapped around the ` +
+            `banner, not around the text`
         ).toBeLessThanOrEqual(1);
 
         // (4c) The horizontal ramp has to be spent inside the padding. The
@@ -1104,6 +1235,97 @@ test.describe('Welcome banner invariants', () => {
           `${vp.label}/${theme} the panel overflows the viewport by ${m.overflow}px`
         ).toBeLessThanOrEqual(0);
         await ctx.close();
+      }
+    }
+  });
+
+  // The one invariant the six above cannot see, because every one of them
+  // runs in English: the title's own length is a property of the locale,
+  // not of the theme or the width, and the veil's box is
+  // max(title, subtitle) + padding, which makes it a property of the
+  // subtitle as much as the title. In the narrow-panel window — where
+  // both sidebars are in flow and the panel is at its narrowest, 630 px
+  // of it at a 1400 px viewport — the longest shipped title does not fit
+  // inside 32 px of padding a side, and the veil stops hugging the title:
+  // it becomes a band across the whole panel with the title wrapped
+  // inside it. Measured before this file's fix, `man` wrapped at 1440 and
+  // `fr`, `id` and `man` wrapped at 1400; `man` measures 659.1 px against
+  // the 566 px a 630 px panel has to give.
+  //
+  // Its own test, and its own locale sweep, for three reasons: it is
+  // layout rather than paint, so each of its 36 sessions is a login and
+  // one evaluate where the pixel test pays seven captures; a failure in
+  // it leaves the pixel assertions reporting instead of all six going
+  // quiet behind the first red; and the sweep is the point — the same
+  // measurement in English is a check on a locale whose title never
+  // wraps.
+  test('7. the title holds one line in the narrow panel, and the veil is its measure', async ({
+    browser
+  }) => {
+    // 36 sessions, each a login plus a reload, against the describe's
+    // 180s budget. This raises the ceiling for this test only.
+    test.setTimeout(900000);
+    for (const vp of VIEWPORTS) {
+      for (const theme of ['light', 'dark']) {
+        for (const locale of GEOMETRY_LOCALES) {
+          const { ctx, page } = await openWelcomeScreen(browser, {
+            viewport: { width: vp.width, height: 800 },
+            theme,
+            locale,
+            // The default pause is set for the mask layer's compositing
+            // settle, which a box read does not wait on. What a box read
+            // DOES have to outlast is the banner's 650 ms entrance, which
+            // scales the box by 0.985 while it runs — so this is a
+            // whole second over the animation and nothing else.
+            settle: 1000
+          });
+          const where = `${vp.label}/${theme}/${locale}`;
+          const m = await veilGeometry(page);
+          expect(m, `${where} the veil's geometry read`).not.toBeNull();
+
+          // (7a) One line. The title's contents occupy one line box, and
+          // the heading's box is that line and no more.
+          expect(
+            m.lineTops,
+            `${where} the title occupies ${m.lineTops} line boxes — it measures ` +
+              `${m.titleUnwrapped.toFixed(1)}px unwrapped and the veil has ` +
+              `${m.available.toFixed(1)}px (a ${m.veilWidth.toFixed(1)}px box less ` +
+              `${m.padLeft.toFixed(0)}px of padding a side). It has wrapped, and the veil ` +
+              `around it has become a band across the panel`
+          ).toBe(1);
+          expect(
+            Math.abs(m.headingHeight - m.lineHeight),
+            `${where} the heading's box is ${m.headingHeight.toFixed(1)}px tall against a ` +
+              `${m.lineHeight.toFixed(2)}px line box (${m.fontSize.toFixed(2)}px type) — the ` +
+              `title is not on one line`
+          ).toBeLessThanOrEqual(1);
+
+          // (7b) The title fits the space, measured unwrapped. Read as
+          // rendered this cannot fail: a wrapped title measures its
+          // longest line, which by construction fits the box it wrapped
+          // into.
+          expect(
+            m.titleUnwrapped - m.available,
+            `${where} the title measures ${m.titleUnwrapped.toFixed(1)}px unwrapped and the ` +
+              `veil's content box is ${m.available.toFixed(1)}px — ` +
+              `${(m.titleUnwrapped - m.available).toFixed(1)}px wider than it has`
+          ).toBeLessThanOrEqual(1);
+
+          // (7c) The veil is the widest text inside it plus the padding it
+          // carries on both sides. The same claim assertion 4 makes, run
+          // here in the locales where the title is not the widest child.
+          const textWidth = Math.max(m.titleWidth, m.subtitleWidth);
+          expect(
+            Math.abs(m.veilWidth - (textWidth + m.padLeft + m.padRight)),
+            `${where} the veil's box is ${m.veilWidth.toFixed(1)}px wide but its widest text ` +
+              `(title ${m.titleWidth.toFixed(1)}px, subtitle ${m.subtitleWidth.toFixed(1)}px) ` +
+              `plus its ${(m.padLeft + m.padRight).toFixed(0)}px of padding is ` +
+              `${(textWidth + m.padLeft + m.padRight).toFixed(1)}px — the veil is wrapped ` +
+              `around the banner, not around the text`
+          ).toBeLessThanOrEqual(1);
+
+          await ctx.close();
+        }
       }
     }
   });

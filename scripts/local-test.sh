@@ -50,7 +50,10 @@ echo "=== STEP 1: helm lint ==="
 # genieai-common, gateway-helm" and then "no template
 # 'genieai-common.fullname'", which reads like a chart defect. The
 # Makefile's lint-umbrella target does the same via its `deps` prereq.
-( cd "$(dirname "$CHART")/.." && helm dependency update genieai-umbrella >/dev/null )
+# NOTE: from charts/ (the chart's parent), NOT from the repo root —
+# `helm dependency update genieai-umbrella` resolves the path RELATIVE to
+# the working directory.
+( cd "$(dirname "$CHART")" && helm dependency update genieai-umbrella >/dev/null )
 helm lint "$CHART" --strict
 
 echo

@@ -5,6 +5,11 @@ import 'package:genie_ai_mobile/config/staging_config.dart';
 import 'package:genie_ai_mobile/config/e2e_config.dart';
 import 'package:genie_ai_mobile/config/flavors/itu.dart' as flavors;
 
+import 'support/guard_scan.dart';
+
+/// A construction of the app's own trust-all HTTP client.
+final _insecureClientUse = RegExp(r'InsecureHttpClient\s*\(');
+
 void main() {
   group('KeycloakConfig', () {
     test('holds all 6 fields correctly', () {
@@ -166,6 +171,120 @@ void main() {
       expect(flavors.config.clientId, equals('genie-mobile-itu'));
       expect(flavors.config.redirectScheme, equals('com.itu.genieai'));
       expect(flavors.config.backendUrl, equals('https://api.itu.int'));
+    });
+  });
+
+  group('insecure connections', () {
+    test('deployment flavor configs keep them off', () {
+      // The vendored flutter_appauth fork disables TLS verification when this
+      // flag is on. That is acceptable for the dev and e2e flavors, which talk
+      // to a self-signed Keycloak, and unacceptable for any flavor that reaches
+      // a real deployment, so the deployment configs must keep it off.
+      expect(flavors.config.allowInsecureConnections, isFalse);
+      expect(stagingConfig.allowInsecureConnections, isFalse);
+    });
+
+    test('no config but the dev and e2e ones turns them on', () {
+      // The exemption is exactly dev and e2e, and the claim is checked
+      // against every config file in the tree rather than against the two
+      // known ones: a new per-institution flavor is copied from the template
+      // and lands in lib/config/flavors/, so it has to be covered by the same
+      // rule or it is not covered at all.
+      //
+      // The files are read as source, not imported: a per-institution config
+      // has a placeholder redirect scheme, which is not a valid reverse-domain
+      // string, so importing it trips the KeycloakConfig assertion.
+      final turningItOn = <String>[];
+      for (final file in sourceFilesUnder('lib/config', {'.dart'})) {
+        final content = file.readAsStringSync();
+        if (RegExp(r'allowInsecureConnections\s*:\s*true').hasMatch(content)) {
+          turningItOn.add(relativePath(file));
+        }
+      }
+      expect(
+        turningItOn,
+        unorderedEquals(<String>[
+          'lib/config/dev_config.dart',
+          'lib/config/e2e_config.dart',
+        ]),
+      );
+    });
+
+    test('the exemption is exactly the dev and e2e configs', () {
+      // Asserted in both directions: a future flavor that turns the flag on is
+      // a deliberate act, and the two flavors that may do it stay the only ones.
+      expect(devConfig.allowInsecureConnections, isTrue);
+      expect(e2eConfig.allowInsecureConnections, isTrue);
+    });
+
+    test('the trust-all HTTP client is selected only behind the flag', () {
+      // The app owns a second trust-all client — a Dart one, next to the one
+      // in the vendored fork. It accepts any certificate, so it must be
+      // unreachable unless the flag is on. The selection sites are checked
+      // structurally, so a reformatting of the provider does not break the
+      // test and an inverted condition does.
+      final implementation = 'lib/services/auth/insecure_http_client.dart';
+      final unguarded = <String>[];
+      var selections = 0;
+      for (final file in sourceFilesUnder('lib', {'.dart'})) {
+        if (relativePath(file) == implementation) {
+          // The class declares its own constructor; only the call sites
+          // elsewhere decide whether it is ever built.
+          continue;
+        }
+        final scanner = GuardScanner(file.readAsStringSync());
+        selections += scanner.count(_insecureClientUse);
+        for (final use in scanner.unguarded(
+          _insecureClientUse,
+          'allowInsecureConnections',
+        )) {
+          unguarded.add('${relativePath(file)} $use');
+        }
+      }
+      expect(
+        unguarded,
+        isEmpty,
+        reason:
+            'the trust-all HTTP client is built without '
+            'allowInsecureConnections',
+      );
+      expect(selections, greaterThan(0));
+    });
+
+    test('the effective config follows the FLAVOR define', () {
+      // getConfig() resolves the flavor from the FLAVOR dart-define. With the
+      // define set — the release recipe, exercised in CI by a second test run
+      // with --dart-define=FLAVOR=itu — the named flavor wins, and the
+      // deployment flavors keep the trust-all client off.
+      const flavor = String.fromEnvironment('FLAVOR');
+      if (flavor.isEmpty) {
+        // Without the define, getConfig() falls back to the dev flavor. That
+        // is the gap of #1099, and the assertion below is deliberately about
+        // reachability only: the fallback may only ever point at the dev
+        // server, never at a deployment. Which flavor it resolves to is a
+        // routing detail that #1099 is free to change.
+        final effective = getConfig();
+        const devServer = String.fromEnvironment(
+          'DEV_SERVER',
+          defaultValue: 'localhost',
+        );
+        expect(effective.keycloakUrl, contains(devServer));
+        expect(effective.backendUrl, contains(devServer));
+        return;
+      }
+      if (flavor == 'itu') {
+        expect(getConfig(), equals(flavors.config));
+        expect(getConfig().allowInsecureConnections, isFalse);
+      } else if (flavor == 'staging') {
+        expect(getConfig(), equals(stagingConfig));
+        expect(getConfig().allowInsecureConnections, isFalse);
+      } else if (flavor == 'e2e') {
+        expect(getConfig(), equals(e2eConfig));
+      } else if (flavor == 'dev') {
+        expect(getConfig(), equals(devConfig));
+      } else {
+        fail('unknown FLAVOR "$flavor"');
+      }
     });
   });
 

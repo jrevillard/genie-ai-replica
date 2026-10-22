@@ -303,6 +303,59 @@ def _reset_synth_failures() -> None:
         _SYNTH_FAILURES.clear()
 
 
+# A node's judge call can fail for a reason that WILL pass on a retry. Live
+# 2026-10-22: the El Salvador re-run died at 74 minutes — one node of the
+# last transform — because z.ai's nginx closed a keep-alive connection
+# mid-request ("Server disconnected without sending a response"). The
+# openai SDK's own two retries were not enough, and a single flaky socket
+# destroyed an hour of judge calls.
+_TRANSIENT_MARKERS = (
+    "connectionerror",  # openai.APIConnectionError, langchain's wrapper
+    "remoteprotocolerror",
+    "connecterror",
+    "readerror",
+    "writeerror",
+    "connecttimeout",
+    "readtimeout",
+    "pooltimeout",
+    "apierror",
+)
+
+
+def _is_transient(err: BaseException) -> bool:
+    """True when the failure is worth retrying: a 429, or a transport
+    error (the server dropped the connection). Anything else is a real
+    failure — retrying it just burns the judge."""
+    if _is_rate_limited(err):
+        return True
+    for candidate in (err, getattr(err, "__cause__", None), getattr(err, "original_exception", None)):
+        if candidate is None:
+            continue
+        name = type(candidate).__name__.lower()
+        if any(marker in name for marker in _TRANSIENT_MARKERS):
+            return True
+    return False
+
+
+_KG_FAILURES: dict = {}
+_KG_FAILURES_LOCK = threading.Lock()
+
+
+def _record_kg_failure(reason: str) -> None:
+    with _KG_FAILURES_LOCK:
+        _KG_FAILURES[reason] = _KG_FAILURES.get(reason, 0) + 1
+
+
+def _kg_failures() -> dict:
+    with _KG_FAILURES_LOCK:
+        return dict(_KG_FAILURES)
+
+
+def _reset_kg_failures() -> None:
+    with _KG_FAILURES_LOCK:
+        _KG_FAILURES.clear()
+
+
 def _llm_max_concurrency() -> int:
     try:
         return max(1, int(os.getenv("RAGAS_LLM_MAX_CONCURRENCY") or "8"))
@@ -379,40 +432,52 @@ def _backoff_seconds(err: BaseException, attempt: int) -> float:
 
 
 def _sync_call_with_retry(call):
-    """Call through the concurrency cap, retrying a 429 with jitter."""
+    """Call through the concurrency cap, retrying a transient failure with
+    jitter (a 429, or a server that dropped the connection)."""
     semaphore = _sync_semaphore()
     with semaphore:
         attempts = _llm_max_retries()
         for attempt in range(attempts + 1):
             try:
                 return call()
-            except Exception as err:  # noqa: BLE001 — only a 429 is retried
-                if attempt >= attempts or not _is_rate_limited(err):
+            except Exception as err:  # noqa: BLE001 — only transient failures are retried
+                if attempt >= attempts or not _is_transient(err):
                     raise
                 wait = _backoff_seconds(err, attempt)
                 logger.warning(
-                    "judge rate-limited (429) — retrying in %.1fs (attempt %d/%d)", wait, attempt + 1, attempts + 1
+                    "judge call failed (%s) — retrying in %.1fs (attempt %d/%d)",
+                    type(err).__name__,
+                    wait,
+                    attempt + 1,
+                    attempts + 1,
                 )
                 time.sleep(wait)
 
 
 async def _async_call_with_retry(call):
-    """Call through the concurrency cap, retrying a 429 with jitter."""
+    """Call through the concurrency cap, retrying a transient failure with
+    jitter (a 429, or a server that dropped the connection)."""
     attempts = _llm_max_retries()
     for attempt in range(attempts + 1):
         try:
             return await call()
-        except Exception as err:  # noqa: BLE001 — only a 429 is retried
-            if attempt >= attempts or not _is_rate_limited(err):
+        except Exception as err:  # noqa: BLE001 — only transient failures are retried
+            if attempt >= attempts or not _is_transient(err):
                 raise
             wait = _backoff_seconds(err, attempt)
             logger.warning(
-                "judge rate-limited (429) — retrying in %.1fs (attempt %d/%d)", wait, attempt + 1, attempts + 1
+                "judge call failed (%s) — retrying in %.1fs (attempt %d/%d)",
+                type(err).__name__,
+                wait,
+                attempt + 1,
+                attempts + 1,
             )
             await asyncio.sleep(wait)
 
 
-def _make_caching_wrapper(LangchainLLMWrapper, model_tag=None, cancel_event=None):  # noqa: N802 — factory, like _make_fanout_class
+def _make_caching_wrapper(  # noqa: N802 — factory, like _make_fanout_class
+    LangchainLLMWrapper, model_tag=None, cancel_event=None, tolerate_failures=False
+):
     """Disk-backed response cache around the judge client (2026-10-18).
 
     Live cost anatomy of a 5-question generation over two SMALL repos (21
@@ -474,6 +539,14 @@ def _make_caching_wrapper(LangchainLLMWrapper, model_tag=None, cancel_event=None
             # verdict). Every LLM call now checks the event, so a cancel
             # drains the phase within ONE in-flight call.
             self._cancel = cancel_event
+            # The KG phase tolerates a dead node (2026-10-22): one server-
+            # dropped connection killed a 74-minute generation at its last
+            # node. With tolerance, the node's extraction yields an empty
+            # result, the failure is COUNTED and reported with the suite,
+            # and the other 1,074 nodes keep their work. The evaluation
+            # phase does NOT tolerate — there a judge failure must fail the
+            # run, not be quietly averaged away.
+            self._tolerate = tolerate_failures
 
         def _check_cancel(self) -> None:
             if self._cancel is not None and self._cancel.is_set():
@@ -571,6 +644,16 @@ def _make_caching_wrapper(LangchainLLMWrapper, model_tag=None, cancel_event=None
                 return None
             return texts, llm_output
 
+        def _degrade(self, err: BaseException):
+            """The KG phase's answer to a node whose judge call is dead:
+            an empty result for THAT node, a counted failure, and the run
+            continues. 1,074 nodes keep their work; the suite reports how
+            many were degraded."""
+            reason = _classify_failure(err)
+            _record_kg_failure(reason)
+            logger.warning("knowledge-graph node degraded (%s) — the run continues", reason)
+            return self._rebuild([""], {})
+
         def generate_text(self, prompt, n=1, temperature=0.01, stop=None, callbacks=None):
             self._check_cancel()
             _count_llm_call()
@@ -578,11 +661,16 @@ def _make_caching_wrapper(LangchainLLMWrapper, model_tag=None, cancel_event=None
             hit = self._read(key, prompt, n, temperature, stop)
             if hit is not None:
                 return self._rebuild(*hit)
-            result = _sync_call_with_retry(
-                lambda: super(_CachingLlmWrapper, self).generate_text(
-                    prompt, n=n, temperature=temperature, stop=stop, callbacks=callbacks
+            try:
+                result = _sync_call_with_retry(
+                    lambda: super(_CachingLlmWrapper, self).generate_text(
+                        prompt, n=n, temperature=temperature, stop=stop, callbacks=callbacks
+                    )
                 )
-            )
+            except Exception as err:  # noqa: BLE001 — the KG phase degrades a node
+                if not self._tolerate:
+                    raise
+                return self._degrade(err)
             extracted = self._extract(result)
             if extracted is not None:
                 self._save(key, *extracted)
@@ -596,19 +684,24 @@ def _make_caching_wrapper(LangchainLLMWrapper, model_tag=None, cancel_event=None
             if hit is not None:
                 return self._rebuild(*hit)
             sem = _async_semaphore()
-            if sem is None:
-                result = await _async_call_with_retry(
-                    lambda: super(_CachingLlmWrapper, self).agenerate_text(
-                        prompt, n=n, temperature=temperature, stop=stop, callbacks=callbacks
-                    )
-                )
-            else:
-                async with sem:
+            try:
+                if sem is None:
                     result = await _async_call_with_retry(
                         lambda: super(_CachingLlmWrapper, self).agenerate_text(
                             prompt, n=n, temperature=temperature, stop=stop, callbacks=callbacks
                         )
                     )
+                else:
+                    async with sem:
+                        result = await _async_call_with_retry(
+                            lambda: super(_CachingLlmWrapper, self).agenerate_text(
+                                prompt, n=n, temperature=temperature, stop=stop, callbacks=callbacks
+                            )
+                        )
+            except Exception as err:  # noqa: BLE001 — the KG phase degrades a node
+                if not self._tolerate:
+                    raise
+                return self._degrade(err)
             extracted = self._extract(result)
             if extracted is not None:
                 self._save(key, *extracted)
@@ -617,7 +710,12 @@ def _make_caching_wrapper(LangchainLLMWrapper, model_tag=None, cancel_event=None
     return _CachingLlmWrapper
 
 
-def build_llm(temperature: float = 0.0, judge: dict | None = None, cancel_event: threading.Event | None = None):
+def build_llm(
+    temperature: float = 0.0,
+    judge: dict | None = None,
+    cancel_event: threading.Event | None = None,
+    tolerate_failures: bool = False,
+):
     """Wrap the judge endpoint as a ragas LLM. Deferred-imported so /health
     never pays the langchain import cost and tests can stub this module.
 
@@ -702,7 +800,7 @@ def build_llm(temperature: float = 0.0, judge: dict | None = None, cancel_event:
         timeout=300,
         **kwargs,
     )
-    return _make_caching_wrapper(LangchainLLMWrapper, model_tag, cancel_event)(inner)
+    return _make_caching_wrapper(LangchainLLMWrapper, model_tag, cancel_event, tolerate_failures)(inner)
 
 
 class _TeiEmbeddings:
@@ -1271,6 +1369,7 @@ async def generate_testset(
     """
     _patch_persona_lookup()
     _reset_synth_failures()  # the reasons describe THIS generation
+    _reset_kg_failures()  # and so do the degraded knowledge-graph nodes
 
     from langchain_core.documents import Document as LCDocument
     from ragas.run_config import RunConfig
@@ -1278,7 +1377,13 @@ async def generate_testset(
     from ragas.testset.graph import KnowledgeGraph, Node, NodeType
     from ragas.testset.transforms import apply_transforms
 
-    llm = build_llm(temperature=0.3, judge=judge, cancel_event=cancel_event)  # generation benefits from mild creativity
+    # The KG phase TOLERATES a dead node (2026-10-22): one server-dropped
+    # connection killed a 74-minute generation at its last node. A degraded
+    # node yields an empty extraction, the failure is counted and reported
+    # with the suite, and the other nodes keep their work.
+    llm = build_llm(
+        temperature=0.3, judge=judge, cancel_event=cancel_event, tolerate_failures=True
+    )  # generation benefits from mild creativity
     embeddings = build_embeddings(embed=embed)
     if embeddings is None:
         raise RuntimeError("RAGAS_EMBED_MODEL is required for testset generation (KG transforms embed)")
@@ -1466,6 +1571,11 @@ async def generate_testset(
         # to upstream 429s and nobody could tell). 'rate_limited' is the
         # actionable one.
         "dropped_reasons": _synth_failures(),
+        # Knowledge-graph nodes whose judge call died after the retries
+        # (2026-10-22: a server-dropped connection at node 1074/1075 ended a
+        # 74-minute run). The run CONTINUES on a degraded node; the count
+        # travels with the suite so the degradation is never silent.
+        "kg_failures": _kg_failures(),
         "generator": {"model": generator_model, "embed_model": generator_embed},
     }
 

@@ -973,6 +973,11 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
         // the suite is actually grounded in. Equal when under the budget;
         // used < total means the corpus was capped — show it, never hide it.
         corpus_coverage: coverage,
+        // Knowledge-graph nodes whose judge call died after the retries
+        // (2026-10-22: a server-dropped connection at node 1074/1075 ended
+        // a 74-minute run). The run CONTINUES on a degraded node — the
+        // count travels with the suite so the degradation is never silent.
+        kg_failures: gen.kg_failures || {},
         metrics_config: [...DEFAULT_METRICS],
         entries
       }

@@ -127,6 +127,22 @@ def _snapshot(job: dict) -> dict:
         # 2026-10-21: "the question synthesizing stage also blocks").
         if job.get("status") == "running" and job.get("started_at"):
             prog["elapsed_s"] = round(time.time() - job["started_at"], 1)
+        # The call counter is refreshed on EVERY read, for the same reason as
+        # the clock: the engine counts calls as they are ISSUED, but the
+        # progress envelope is only republished when a phase reports
+        # something. In the synthesis phase that is every RESOLVED SAMPLE —
+        # a gap of minutes during scenario generation, in which the panel
+        # showed a frozen "4207 LLM calls" while the judge was being called
+        # continuously (live 2026-10-22). A stale number is worse than none:
+        # it reads as a stopped job. The `max` guard keeps the count
+        # monotonic per job when a second job resets the shared counter.
+        if job.get("status") == "running":
+            try:
+                live_calls = ragas_engine.llm_calls()
+            except Exception:  # noqa: BLE001 — a counter read can never fail a poll
+                live_calls = None
+            if isinstance(live_calls, int) and live_calls >= (prog.get("calls") or 0):
+                prog["calls"] = live_calls
         out["progress"] = prog
     if job.get("status") == "done":
         out["result"] = job.get("result")

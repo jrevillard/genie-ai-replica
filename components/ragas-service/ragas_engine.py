@@ -1173,6 +1173,20 @@ def _llm_calls() -> int:
         return _LLM_CALLS
 
 
+def llm_calls() -> int:
+    """The live count of judge calls ISSUED by the running job.
+
+    Public so the HTTP layer can refresh the number it publishes on every
+    poll. The counter itself is correct — it is incremented as each call
+    leaves — but the progress envelope is only republished when a phase
+    reports something, and in the synthesis phase that is every RESOLVED
+    SAMPLE. The gap between the two is minutes of real work with a frozen
+    number on screen (live 2026-10-22: "4207 LLM calls" held steady for
+    40 minutes while z.ai traffic ran continuously).
+    """
+    return _llm_calls()
+
+
 def _count_llm_call(n: int = 1) -> None:
     global _LLM_CALLS
     with _LLM_CALLS_LOCK:

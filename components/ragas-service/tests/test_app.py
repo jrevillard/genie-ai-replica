@@ -329,6 +329,53 @@ def test_snapshot_refreshes_the_elapsed_clock_without_a_progress_call():
         app_module.JOBS.pop("t-clock", None)
 
 
+def test_snapshot_refreshes_the_call_counter_without_a_progress_call(monkeypatch):
+    """2026-10-22 (live): the call counter froze for 40 minutes.
+
+    The engine counts judge calls as they are ISSUED, but the progress
+    envelope was only republished when a phase reported something — and in
+    the synthesis phase that is every RESOLVED SAMPLE. During scenario
+    generation the panel therefore showed a static "4207 LLM calls" while
+    the judge was being called continuously. The number the operator reads
+    must be a READ-time derivation, like the clock."""
+    monkeypatch.setattr(app_module.ragas_engine, "llm_calls", lambda: 5123)
+    app_module.JOBS["t-calls"] = {
+        "job_id": "t-calls",
+        "kind": "generate",
+        "status": "running",
+        "phase": "synthesizing-questions",
+        "started_at": time.time() - 30,
+        "progress": {"phase": "synthesizing-questions", "done": 0, "calls": 4207},
+    }
+    try:
+        snap = app_module._snapshot(app_module.JOBS["t-calls"])
+        assert snap["progress"]["calls"] == 5123
+        # the stored payload is not mutated — the next report overwrites it
+        assert app_module.JOBS["t-calls"]["progress"]["calls"] == 4207
+    finally:
+        app_module.JOBS.pop("t-calls", None)
+
+
+def test_snapshot_never_lowers_the_published_call_count(monkeypatch):
+    """A second job resets the shared counter to zero. The first job's
+    number must not jump backwards — a counter that goes down reads as a
+    job that lost its work."""
+    monkeypatch.setattr(app_module.ragas_engine, "llm_calls", lambda: 0)
+    app_module.JOBS["t-calls2"] = {
+        "job_id": "t-calls2",
+        "kind": "generate",
+        "status": "running",
+        "phase": "synthesizing-questions",
+        "started_at": time.time() - 30,
+        "progress": {"phase": "synthesizing-questions", "done": 0, "calls": 4207},
+    }
+    try:
+        snap = app_module._snapshot(app_module.JOBS["t-calls2"])
+        assert snap["progress"]["calls"] == 4207
+    finally:
+        app_module.JOBS.pop("t-calls2", None)
+
+
 def test_phase_tracker_keeps_working_for_plain_phase_calls():
     """The old call shape (phase only, or phase+counts) must still produce a
     valid progress payload — synthesis bumps positions, not kwargs."""

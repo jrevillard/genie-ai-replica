@@ -41,19 +41,61 @@
 // observes the change.
 
 const { test, expect } = require('@playwright/test');
-const { loginViaUI } = require('./helpers/chatbot');
+const fs = require('fs');
+const path = require('path');
+const { openWelcomeScreen } = require('./helpers/welcome');
 
 const BASE_URL = process.env.BASE_URL || 'https://localhost';
 
+/*
+ * The app's locale files, read from disk rather than listed here.
+ *
+ * The list of codes is the app's, not this spec's: a 15th locale
+ * shipped into the directory and missed by a hardcoded list would
+ * escape the placeholder gate silently, which is the one thing the
+ * gate is for.
+ */
+const LOCALES_DIR = path.join(__dirname, '..', '..', 'components', 'gov-chat-frontend', 'src', 'i18n', 'locales');
+const SHIPPED_LOCALES = 14;
+
+function localeCodes() {
+  return fs
+    .readdirSync(LOCALES_DIR)
+    .filter((f) => f.endsWith('.js'))
+    .map((f) => path.basename(f, '.js'))
+    .sort();
+}
+
+const MESSAGES = new Map();
+
+/**
+ * The composer placeholder this locale ships, straight from its own
+ * message file.
+ *
+ * Each locale file is one statement — `export default { … }` — so the
+ * message object is recovered by swapping the export for a return. A
+ * key a locale does not carry falls back to English at runtime, and
+ * falls back here too, so the string the spec compares against is the
+ * string the app actually rendered.
+ */
+function composerPlaceholder(locale) {
+  if (!MESSAGES.has(locale)) {
+    const src = fs.readFileSync(path.join(LOCALES_DIR, `${locale}.js`), 'utf8');
+    MESSAGES.set(locale, new Function(src.replace(/^export default/m, 'return'))());
+  }
+  const own = MESSAGES.get(locale).chatbot?.composerPlaceholder;
+  return own === undefined ? composerPlaceholder('en') : own;
+}
+
+/**
+ * Sign in and land on the dashboard — the same session the welcome
+ * screen's measurements open, without the settle: nothing here reads
+ * the banner's mask layer, and every test below waits for the state it
+ * needs on its own.
+ */
 async function freshSignedIn(browser, viewport = { width: 1440, height: 900 }, theme = 'light') {
-  const ctx = await browser.newContext({
-    viewport,
-    colorScheme: theme,
-    ignoreHTTPSErrors: true
-  });
-  const page = await ctx.newPage();
-  await loginViaUI(page);
-  await page.evaluate(() => localStorage.setItem('sidebarOpen', 'true'));
+  const { ctx, page } = await openWelcomeScreen(browser, { viewport, theme, settle: 0 });
+  await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
   return { ctx, page };
 }
 
@@ -541,12 +583,12 @@ const ONE_LINE_FIELD_MAX = 32;
 // Two lines (the narrowest panel, where the wrap is inherent): the
 // field's resting height is 27 px per line, two lines plus the line
 // gap push this to 46 px at the running baseline. Allow a 10-px
-// margin for font-fallback drift across platforms.
-const TWO_LINE_FIELD_MAX = 56;
-// The bar's reference is 50 px (one line); it grows to 56 px when
-// the field wraps to two lines and never past that. Set the bar cap
-// the same way.
-const TWO_LINE_BAR_MAX = 56;
+// margin for font-fallback drift across platforms. The BAR is held to
+// the same number — it rests at 50 px on one line and must not grow
+// past the two-line cap — so the field's cap is the bar's cap, and
+// one constant is both. They were 56 under two names, with a comment
+// on each explaining why they happened to match.
+const TWO_LINE_MAX = 56;
 // The DS primitive's textarea floor — the defect (E) guards.
 const PRIMITIVE_FIELD_FLOOR = 80;
 
@@ -559,31 +601,39 @@ const MEASURE_CASES = [
 
 const label = (c) => `${c.viewport.width}x${c.viewport.height} ${c.theme}`;
 
+/*
+ * Which of the four page states also carries the resting-height and the
+ * growth assertions.
+ *
+ * The bar rests at its reference height only where the field is wide
+ * enough (606 px) for every locale's placeholder to be one line — 1920.
+ * At 1440 the field is 330 px and a long placeholder wraps: measured,
+ * reported, out of scope.
+ *
+ * How many typed lines it takes to outgrow the resting field depends on
+ * how many lines the PLACEHOLDER already occupies: at 1920 the field is
+ * 606 px wide and the placeholder is one line, so a second line is
+ * already growth; at 1440 the field is 330 px and the placeholder wraps
+ * to two, so the third line is the first one that grows. Both cases are
+ * light — the dark renders carry the same geometry, and typing into two
+ * of them measures the same thing twice.
+ */
+const RESTING_HEIGHT_WIDTH = 1920;
+const GROWTH_LINES = { '1920x1080 light': 2, '1440x900 light': 3 };
+
 /**
- * Sign in, land on the welcome screen and read the geometry. The locale
- * is set through `localStorage.userLocale`, which is the app's own boot
- * path (main.js reads it before mount) — not a private channel.
+ * Sign in, land on the welcome screen and read the geometry. A thin
+ * wrapper over the suite's one welcome session — the context, the login,
+ * the sidebar hint and the splash-clearing reload are all `openWelcomeScreen`
+ * — plus the composer itself, which is the element under test here.
+ *
+ * The settle is this file's own: the composer's geometry does not sit
+ * behind the banner's mask layer, so it does not need the suite's
+ * longer, mask-settle default.
  */
 async function openWelcome(browser, { viewport, theme, locale } = {}) {
-  const ctx = await browser.newContext({
-    viewport: viewport || { width: 1440, height: 900 },
-    colorScheme: theme || 'light',
-    ignoreHTTPSErrors: true
-  });
-  const page = await ctx.newPage();
-  await loginViaUI(page);
-  if (locale) {
-    await page.evaluate((l) => localStorage.setItem('userLocale', l), locale);
-  }
-  await page.evaluate(() => localStorage.setItem('sidebarOpen', 'true'));
-  await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-  await page.waitForSelector('.quick-help-banner', { timeout: 15000 });
-  await page.waitForTimeout(600);
-  // The splash only shows on the first authenticated load of a session,
-  // so the reload is what leaves the welcome screen standing.
-  await page.reload({ waitUntil: 'networkidle', timeout: 30000 });
+  const { ctx, page } = await openWelcomeScreen(browser, { viewport, theme, locale, settle: 1100 });
   await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
-  await page.waitForTimeout(500);
   return { ctx, page };
 }
 
@@ -618,22 +668,22 @@ async function measureWelcomeBar(page) {
       // wrapper can no longer inherit.
       cardMin: ostyle ? ostyle.getPropertyValue('--qh-card-min').trim() : '',
       spaceXl: ostyle ? ostyle.getPropertyValue('--space-xl').trim() : '',
-      placeholder: field ? field.placeholder : null,
-      lang: document.documentElement.lang,
       value: field ? field.value : null,
-      ratio: b && g && g.w ? b.w / g.w : null,
-      wrapperRatio: b && wrapper && rect(wrapper).w ? b.w / rect(wrapper).w : null
+      ratio: b && g && g.w ? b.w / g.w : null
     };
   });
 }
 
+// One test per page state: the ratio, the primitive's floor, the resting
+// height and the growth on typing all read the same four renders, and
+// each used to boot its own. Four boots instead of twelve.
 test.describe('welcome bar measure', () => {
   for (const c of MEASURE_CASES) {
-    test(`bar width is the reference's share of the card row (${label(c)})`, async ({ browser }) => {
+    test(`bar measure, and the field grows with what is typed into it (${label(c)})`, async ({ browser }) => {
       const { ctx, page } = await openWelcome(browser, c);
-      const m = await measureWelcomeBar(page);
-      expect(m.grid, 'the welcome screen has a card row').not.toBeNull();
-      expect(m.bar, 'the welcome screen has a bar').not.toBeNull();
+      const before = await measureWelcomeBar(page);
+      expect(before.grid, 'the welcome screen has a card row').not.toBeNull();
+      expect(before.bar, 'the welcome screen has a bar').not.toBeNull();
 
       // The row's measure is DERIVED, not a table: the card minimum and
       // the gap token, read from the element that declares them, decide
@@ -646,18 +696,18 @@ test.describe('welcome bar measure', () => {
       // is the shape of the original defect — an unresolved var() is
       // invalid at computed-value time and errors nowhere — so the caps
       // are checked against the derivation on their own.
-      const cardMin = parseFloat(m.cardMin);
-      const gap = parseFloat(m.spaceXl);
+      const cardMin = parseFloat(before.cardMin);
+      const gap = parseFloat(before.spaceXl);
       expect(
         Number.isFinite(cardMin) && Number.isFinite(gap),
         `the overlay must carry the card measure for both the row and the composer to inherit it ` +
-          `(got --qh-card-min: "${m.cardMin}", --space-xl: "${m.spaceXl}"); an empty value means ` +
+          `(got --qh-card-min: "${before.cardMin}", --space-xl: "${before.spaceXl}"); an empty value means ` +
           `the declaration moved somewhere the composer's wrapper is a sibling of, not a descendant of`
       ).toBe(true);
       const derived = 4 * cardMin + 3 * gap;
       for (const [name, value] of [
-        ['card row', m.gridMaxW],
-        ['composer wrapper', m.wrapperMaxW]
+        ['card row', before.gridMaxW],
+        ['composer wrapper', before.wrapperMaxW]
       ]) {
         expect(
           parseFloat(value),
@@ -667,110 +717,83 @@ test.describe('welcome bar measure', () => {
         ).toBeCloseTo(derived, 1);
       }
       expect(
-        m.wrapper.w,
-        `wrapper ${m.wrapper.w} vs card row ${m.grid.w} at ${label(c)} — they share one cap, so ` +
+        before.wrapper.w,
+        `wrapper ${before.wrapper.w} vs card row ${before.grid.w} at ${label(c)} — they share one cap, so ` +
           `they are the same width`
-      ).toBeCloseTo(m.grid.w, 0);
+      ).toBeCloseTo(before.grid.w, 0);
 
       expect(
-        Math.abs(m.ratio - REFERENCE_RATIO) <= RATIO_TOLERANCE,
-        `bar/card-row ratio at ${label(c)}: ${m.bar.w} / ${m.grid.w} = ${m.ratio.toFixed(4)} — ` +
+        Math.abs(before.ratio - REFERENCE_RATIO) <= RATIO_TOLERANCE,
+        `bar/card-row ratio at ${label(c)}: ${before.bar.w} / ${before.grid.w} = ${before.ratio.toFixed(4)} — ` +
           `the mockup measures 805/989 = 0.814, expected ${REFERENCE_RATIO} ± ${RATIO_TOLERANCE}`
       ).toBe(true);
-      await ctx.close();
-    });
 
-    test(`the DS primitive's ${PRIMITIVE_FIELD_FLOOR} px floor never reaches the composer (${label(c)})`, async ({
-      browser
-    }) => {
-      const { ctx, page } = await openWelcome(browser, c);
-      const m = await measureWelcomeBar(page);
-      expect(m.field, 'the welcome composer has a field').not.toBeNull();
-
+      expect(before.field, 'the welcome composer has a field').not.toBeNull();
       expect(
-        m.field.h,
-        `field height at ${label(c)} is ${m.field.h} px — the primitive's ` +
+        before.field.h,
+        `field height at ${label(c)} is ${before.field.h} px — the primitive's ` +
           `${PRIMITIVE_FIELD_FLOOR} px textarea min-height reached the composer ` +
-          `(declared min-height: ${m.fieldMinH}, bar min-height: ${m.barMinH})`
+          `(declared min-height: ${before.fieldMinH}, bar min-height: ${before.barMinH})`
       ).toBeLessThan(PRIMITIVE_FIELD_FLOOR);
       expect(
-        m.bar.h,
-        `bar height at ${label(c)} is ${m.bar.h} px — the ${PRIMITIVE_FIELD_FLOOR} px field floor ` +
+        before.bar.h,
+        `bar height at ${label(c)} is ${before.bar.h} px — the ${PRIMITIVE_FIELD_FLOOR} px field floor ` +
           `plus the bar's padding puts it at ${PRIMITIVE_FIELD_FLOOR + 10}`
       ).toBeLessThan(PRIMITIVE_FIELD_FLOOR);
+
+      // The resting height, where the field is wide enough for every
+      // locale's placeholder to be one line.
+      if (c.viewport.width === RESTING_HEIGHT_WIDTH) {
+        expect(
+          before.bar.h,
+          `bar height at 1920 ${c.theme} is ${before.bar.h} px — the reference's 52 px bar at a 989 px row ` +
+            `scales to 52 × 964/989 = 50.7 px at our 964 px row`
+        ).toBe(REFERENCE_BAR_HEIGHT);
+        expect(
+          before.field.h,
+          `field height at 1920 ${c.theme} is ${before.field.h} px — one line of 14 px text plus 2 × 4 px padding`
+        ).toBeLessThanOrEqual(ONE_LINE_FIELD_MAX);
+      }
+
+      // The growth, on the two light renders that carry it.
+      const lines = GROWTH_LINES[label(c)];
+      if (lines) {
+        const where = label(c);
+        // Real typing: the composer's own keydown owns Enter (it sends)
+        // and lets Shift+Enter through as a newline. Filling the value
+        // would skip the input path entirely.
+        const field = page.locator('[data-testid="welcome-composer"] textarea');
+        await field.click();
+        const typed = [];
+        for (let i = 1; i <= lines; i += 1) {
+          const text = `line ${i} of the question`;
+          typed.push(text);
+          if (i > 1) await page.keyboard.press('Shift+Enter');
+          await page.keyboard.type(text, { delay: 5 });
+        }
+        await page.waitForTimeout(250);
+
+        const after = await measureWelcomeBar(page);
+        expect(after.value, `the field holds every line typed at ${where} (got ${JSON.stringify(after.value)})`).toBe(
+          typed.join('\n')
+        );
+        expect(
+          after.bar.h,
+          `bar height at ${where} stayed at ${after.bar.h} px after ${lines} lines were typed ` +
+            `(was ${before.bar.h} px) — the field did not grow with its content`
+        ).toBeGreaterThan(before.bar.h);
+        // Every line is on show: the field is as tall as its content, so
+        // nothing is scrolled out of the last line.
+        expect(
+          after.fieldScrollH,
+          `field content is ${after.fieldScrollH} px in a ${after.fieldClientH} px box at ${where} — ` +
+            `the last line is scrolled out of view`
+        ).toBeLessThanOrEqual(after.fieldClientH + 1);
+      }
+
       await ctx.close();
     });
   }
-
-  test('the bar rests at the reference height on a single line, in both themes', async ({ browser }) => {
-    // 1920 is where the field is wide enough (606 px) for every locale's
-    // placeholder to be one line, so the resting height there is the
-    // composer's own floor and nothing else. At 1440 the field is 330 px
-    // and a long placeholder wraps — measured, reported, out of scope.
-    for (const theme of ['light', 'dark']) {
-      const { ctx, page } = await openWelcome(browser, { viewport: { width: 1920, height: 1080 }, theme });
-      const m = await measureWelcomeBar(page);
-      expect(
-        m.bar.h,
-        `bar height at 1920 ${theme} is ${m.bar.h} px — the reference's 52 px bar at a 989 px row ` +
-          `scales to 52 × 964/989 = 50.7 px at our 964 px row`
-      ).toBe(REFERENCE_BAR_HEIGHT);
-      expect(
-        m.field.h,
-        `field height at 1920 ${theme} is ${m.field.h} px — one line of 14 px text plus 2 × 4 px padding`
-      ).toBeLessThanOrEqual(ONE_LINE_FIELD_MAX);
-      await ctx.close();
-    }
-  });
-
-  test('the field grows with the text typed into it', async ({ browser }) => {
-    // How many lines it takes to outgrow the resting field depends on how
-    // many lines the PLACEHOLDER already occupies: at 1920 the field is
-    // 606 px wide and the placeholder is one line, so a second line is
-    // already growth; at 1440 the field is 330 px and the placeholder
-    // wraps to two, so the third line is the first one that grows.
-    const cases = [
-      { viewport: { width: 1920, height: 1080 }, lines: 2 },
-      { viewport: { width: 1440, height: 900 }, lines: 3 }
-    ];
-    for (const { viewport, lines } of cases) {
-      const { ctx, page } = await openWelcome(browser, { viewport });
-      const before = await measureWelcomeBar(page);
-      const where = `${viewport.width}x${viewport.height}`;
-
-      // Real typing: the composer's own keydown owns Enter (it sends) and
-      // lets Shift+Enter through as a newline. Filling the value would
-      // skip the input path entirely.
-      const field = page.locator('[data-testid="welcome-composer"] textarea');
-      await field.click();
-      const typed = [];
-      for (let i = 1; i <= lines; i += 1) {
-        const text = `line ${i} of the question`;
-        typed.push(text);
-        if (i > 1) await page.keyboard.press('Shift+Enter');
-        await page.keyboard.type(text, { delay: 5 });
-      }
-      await page.waitForTimeout(250);
-
-      const after = await measureWelcomeBar(page);
-      expect(after.value, `the field holds every line typed at ${where} (got ${JSON.stringify(after.value)})`).toBe(
-        typed.join('\n')
-      );
-      expect(
-        after.bar.h,
-        `bar height at ${where} stayed at ${after.bar.h} px after ${lines} lines were typed ` +
-          `(was ${before.bar.h} px) — the field did not grow with its content`
-      ).toBeGreaterThan(before.bar.h);
-      // Every line is on show: the field is as tall as its content, so
-      // nothing is scrolled out of the last line.
-      expect(
-        after.fieldScrollH,
-        `field content is ${after.fieldScrollH} px in a ${after.fieldClientH} px box at ${where} — ` +
-          `the last line is scrolled out of view`
-      ).toBeLessThanOrEqual(after.fieldClientH + 1);
-      await ctx.close();
-    }
-  });
 
   test("every locale's placeholder fits the welcome composer at 1440 (one line) and at 1400 (at most two lines)", async ({
     browser
@@ -804,26 +827,22 @@ test.describe('welcome bar measure', () => {
     // The rendered-vs-content-box comparison is the layout's own gate —
     // a table of expected widths written before the locales existed
     // would steer the layout instead of describing it.
-    const LOCALES = ['ar', 'bn', 'de', 'en', 'es', 'fr', 'id', 'man', 'pt', 'ru', 'st', 'sw', 'th', 'zh'];
+    const LOCALES = localeCodes();
+    expect(
+      LOCALES.length,
+      `the locale directory ${LOCALES_DIR} must hold the ${SHIPPED_LOCALES} locales the app ` +
+        `ships (read ${LOCALES.length}: ${JSON.stringify(LOCALES)}) — a directory that fails to ` +
+        `resolve measures nothing and passes`
+    ).toBe(SHIPPED_LOCALES);
 
-    const ctx = await browser.newContext({
-      viewport: { width: 1440, height: 900 },
-      colorScheme: 'light',
-      ignoreHTTPSErrors: true
-    });
-    const page = await ctx.newPage();
-    await loginViaUI(page);
-    // First authenticated load triggers the splash → welcome handoff
-    // (see openWelcome's comment). After that, re-reading userLocale +
-    // reloading is enough to put the new locale on the welcome screen.
-    await page.evaluate(() => localStorage.setItem('sidebarOpen', 'true'));
-    await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForSelector('.quick-help-banner', { timeout: 15000 });
-    await page.waitForTimeout(600);
-
-    // Two viewports, measured in order: the strict one-line case at 1440
-    // FIRST (so a regression there fails fast), then the relaxed
-    // ≤-two-lines case at 1400.
+    // One session per viewport: the locale is switched in the page, not
+    // booted. The app registers `$setLocale` as a global method
+    // (main.js) and the placeholder is bound through `this.$t(...)`, so
+    // the switch is reactive and the page does not reload — 2 boots
+    // instead of 28. Each switch is confirmed against the locale's OWN
+    // message string before anything is measured, so a switch that
+    // silently failed cannot leave the previous locale's measurements
+    // standing in as this one's.
     const VIEWPORTS = [
       { name: '1440', width: 1440, height: 900 },
       { name: '1400', width: 1400, height: 900 }
@@ -832,17 +851,24 @@ test.describe('welcome bar measure', () => {
     const measurements = {}; // measurements[locale][viewport] = { rendered, contentW, fieldH, barH }
 
     for (const vp of VIEWPORTS) {
-      await page.setViewportSize({ width: vp.width, height: vp.height });
+      const { ctx, page } = await openWelcome(browser, {
+        viewport: { width: vp.width, height: vp.height }
+      });
       await page.waitForTimeout(300);
 
       for (const locale of LOCALES) {
-        // The locale is read by main.js before the app mounts, so the
-        // reload must come AFTER the localStorage write — that is the
-        // app's own boot path, not a private channel.
-        await page.evaluate((l) => localStorage.setItem('userLocale', l), locale);
-        await page.reload({ waitUntil: 'networkidle', timeout: 30000 });
-        await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
-        await page.waitForTimeout(500);
+        const expected = composerPlaceholder(locale);
+        await page.evaluate((l) => {
+          document.querySelector('#app').__vue_app__.config.globalProperties.$setLocale(l);
+        }, locale);
+        await page.waitForFunction(
+          ({ want, wantLang }) => {
+            const ta = document.querySelector('[data-testid="welcome-composer"] textarea');
+            return !!ta && ta.placeholder === want && document.documentElement.lang === wantLang;
+          },
+          { want: expected, wantLang: locale },
+          { timeout: 10000 }
+        );
 
         const m = await page.evaluate(() => {
           const ta = document.querySelector('[data-testid="welcome-composer"] textarea');
@@ -882,6 +908,7 @@ test.describe('welcome bar measure', () => {
         if (!measurements[locale]) measurements[locale] = {};
         measurements[locale][vp.name] = m;
       }
+      await ctx.close();
     }
 
     // Surface every locale's numbers in one summary so a failure can be
@@ -899,8 +926,14 @@ test.describe('welcome bar measure', () => {
       // 1440 — must be ONE line.
       const m1440 = measurements[locale]['1440'];
       expect(
+        m1440.placeholder,
+        `the app rendered ${JSON.stringify(m1440.placeholder)} at 1440, but ${locale}.js ships ` +
+          `${JSON.stringify(composerPlaceholder(locale))} — the runtime locale switch did not take ` +
+          `effect, so this locale's width is the previous locale's`
+      ).toBe(composerPlaceholder(locale));
+      expect(
         m1440.lang,
-        `the app booted in ${locale} (got ${m1440.lang}) at 1440`
+        `the app is in ${locale} (got ${m1440.lang}) at 1440`
       ).toBe(locale);
       expect(
         m1440.renderedW <= m1440.contentW,
@@ -926,8 +959,14 @@ test.describe('welcome bar measure', () => {
       // three lines would never be acceptable).
       const m1400 = measurements[locale]['1400'];
       expect(
+        m1400.placeholder,
+        `the app rendered ${JSON.stringify(m1400.placeholder)} at 1400, but ${locale}.js ships ` +
+          `${JSON.stringify(composerPlaceholder(locale))} — the runtime locale switch did not take ` +
+          `effect, so this locale's width is the previous locale's`
+      ).toBe(composerPlaceholder(locale));
+      expect(
         m1400.lang,
-        `the app booted in ${locale} (got ${m1400.lang}) at 1400`
+        `the app is in ${locale} (got ${m1400.lang}) at 1400`
       ).toBe(locale);
       expect(
         m1400.renderedW <= m1400.contentW * 2,
@@ -938,16 +977,14 @@ test.describe('welcome bar measure', () => {
       ).toBe(true);
       expect(
         m1400.fieldH,
-        `${locale} @ 1400: the field is ${m1400.fieldH} px high (two-line cap ≤ ${TWO_LINE_FIELD_MAX} px) — ` +
+        `${locale} @ 1400: the field is ${m1400.fieldH} px high (two-line cap ≤ ${TWO_LINE_MAX} px) — ` +
           `"${m1400.placeholder}" wraps the field to three lines at 1400.`
-      ).toBeLessThanOrEqual(TWO_LINE_FIELD_MAX);
+      ).toBeLessThanOrEqual(TWO_LINE_MAX);
       expect(
         m1400.barH,
-        `${locale} @ 1400: the bar is ${m1400.barH} px (two-line bar cap = ${TWO_LINE_BAR_MAX} px) — ` +
+        `${locale} @ 1400: the bar is ${m1400.barH} px (two-line cap = ${TWO_LINE_MAX} px) — ` +
           `the three-line field pushed the bar past the two-line cap.`
-      ).toBeLessThanOrEqual(TWO_LINE_BAR_MAX);
+      ).toBeLessThanOrEqual(TWO_LINE_MAX);
     }
-
-    await ctx.close();
   });
 });

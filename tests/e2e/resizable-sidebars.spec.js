@@ -27,6 +27,7 @@
 
 const { test, expect } = require('@playwright/test');
 const { loginViaUI } = require('./helpers/chatbot');
+const { readVisualLayerState } = require('./helpers/welcome');
 
 // The centre's usable minimum, from the quick-help grid's own
 // arithmetic: two cards of 217 px plus one 32 px gap = 466 px, so 480
@@ -574,25 +575,15 @@ test.describe('Resizable sidebars behind one handle', () => {
   //      is drawn. The clipper is read on the WELCOME OVERLAY itself,
   //      not on `.chatbot-container` (a different element — the
   //      overlay is the scroller that bounds the welcome panel).
-  test('the waves span the panel and the panel clips what bleeds', async ({ page, browser }) => {
+  test('the waves span the panel and the panel clips what bleeds', async ({ page }) => {
     // The Living Intelligence visual layer has to be on for the
     // ::after to render at all (otherwise `getComputedStyle(...,
     // '::after').width` is "auto" and parseFloat returns 0 — every
     // assertion here would fail for an unrelated reason). Skip the
-    // block explicitly on routes that don't load the layer; the two
-    // companion blocks in `tests/e2e/responsive-layout.spec.js`
-    // guard the same precondition.
-    const visualOn = await page.evaluate(() => {
-      const overlay = document.querySelector('.quick-help-overlay');
-      if (!overlay) return { hasOverlay: false };
-      const html = document.documentElement;
-      const gliOn = overlay.closest('.genie-living-intelligence') !== null;
-      return {
-        hasOverlay: true,
-        visualOn: html.getAttribute('data-visual') === 'on',
-        gliOn
-      };
-    });
+    // block explicitly on routes that don't load the layer; the
+    // companion block in `tests/e2e/responsive-layout.spec.js`
+    // guards the same precondition, from the shared read.
+    const visualOn = await readVisualLayerState(page);
     if (!visualOn.hasOverlay || !visualOn.visualOn || !visualOn.gliOn) {
       // Either the welcome panel isn't on screen, or the Living
       // Intelligence layer is off (no `::after`, no banner artwork,
@@ -608,14 +599,12 @@ test.describe('Resizable sidebars behind one handle', () => {
       const overlay = document.querySelector('.quick-help-overlay');
       if (!overlay) return { none: true };
       const after = getComputedStyle(overlay, '::after');
-      const rect = overlay.getBoundingClientRect();
       return {
         none: false,
         afterMarginLeft: parseFloat(after.marginLeft) || 0,
         afterMarginRight: parseFloat(after.marginRight) || 0,
         afterWidth: parseFloat(after.width) || 0,
         panelClientWidth: overlay.clientWidth,
-        panelBboxWidth: Math.round(rect.width),
         overlayOverflowX: getComputedStyle(overlay).overflowX
       };
     });

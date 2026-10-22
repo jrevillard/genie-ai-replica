@@ -3,7 +3,7 @@
 // Welcome banner invariants for the translucent scrim.
 //
 // The heading, its subtitle and the brand wordmark sit inside the banner, on
-// the artwork, on a scrim that is translucent rather than opaque. Four
+// the artwork, on a scrim that is translucent rather than opaque. Six
 // assertions guard that:
 //
 //   1. the scrim's alpha is at or above the floor measured for its theme.
@@ -50,10 +50,18 @@
 // Pixel sampling uses page.screenshot()'s clip parameter, hands the bytes
 // back into the page as a data URL, draws them to a <canvas> and reads
 // getImageData — every step runs in the browser, no npm dependency, no
-// Node-side decoder.
+// Node-side decoder. The capture, the decode and the WCAG formulas live in
+// `helpers/welcome.js`; what is left here is what each measurement reads and
+// the name it gives its assertion.
+//
+// 3, 4 and 6 all measure the same render, so they share one boot per
+// (viewport, theme) and keep their assertions separate and separately named.
+// 1, 2 and 5 each carry their own session: a failure in one of them then
+// still leaves the other two reporting, instead of all three going quiet
+// behind the first red assertion.
 
 const { test, expect } = require('@playwright/test');
-const { loginViaUI } = require('./helpers/chatbot');
+const { openWelcomeScreen, capturePixels, lum, WCAG_BIND } = require('./helpers/welcome');
 
 /*
  * The measured floors.
@@ -77,8 +85,22 @@ const { loginViaUI } = require('./helpers/chatbot');
  * from about 20 % to 80 % of the band, so sliding the text down to the
  * band's lower third or up to its pale top edge measured no better than the
  * position it already holds.
+ *
+ * ONE table, two jobs — and the reason they cannot drift apart:
+ *
+ *   assertion 1 is the FLOOR. `token >= SCRIM_ALPHA[theme]`: the scrim may
+ *   be raised above the value measured here and still pass.
+ *   assertion 4 is the EXACT value. `|alpha - SCRIM_ALPHA[theme]| < 0.01`:
+ *   the blend floors are a measurement of the compositing against this
+ *   alpha, so a veil that turned opaque would otherwise be allowed to move
+ *   its own floor down to 0 and pass. The rendered token is therefore held
+ *   to the number, not to a bound on it.
+ *
+ * They carried the same two numbers under two names until a designer
+ * raising the scrim could leave the exact-value assertion asserting a value
+ * the layer no longer ships.
  */
-const SCRIM_ALPHA_FLOOR = { light: 0.88, dark: 0.8 };
+const SCRIM_ALPHA = { light: 0.88, dark: 0.8 };
 
 // The wordmark is large text, so 3:1 is the floor it must clear.
 const WORDMARK_CONTRAST_FLOOR = 3.0;
@@ -138,18 +160,6 @@ const MIN_INK_SPAN = 4;
 const MIN_RAMP_ROWS = 8;
 
 /*
- * The veil's alpha, per theme — the value the layer SHIPS, which is the
- * value the blend floors below are derived from.
- *
- * It is deliberately not read off the page. The blend ratios are a
- * measurement of the compositing against the veil's own declared alpha,
- * so a live read would let a veil that turned opaque move its own floor
- * down to 0 and pass. The rendered token is asserted against this constant
- * separately, in the same test.
- */
-const SHIPPED_SCRIM_ALPHA = { light: 0.88, dark: 0.8 };
-
-/*
  * How far the blend has to have travelled, as a fraction of what an opaque
  * veil would have done — 0.8 in each direction.
  *
@@ -205,47 +215,6 @@ const VIEWPORTS = [
   { label: '1024', width: 1024 },
   { label: '769', width: 769 }
 ];
-
-async function freshSignedIn(browser, vp, theme) {
-  const ctx = await browser.newContext({
-    viewport: { width: vp.width, height: 800 },
-    colorScheme: theme,
-    ignoreHTTPSErrors: true
-  });
-  const page = await ctx.newPage();
-  await loginViaUI(page);
-  await page.evaluate(() => localStorage.setItem('sidebarOpen', 'true'));
-  // The splash is a full-screen overlay (z-index 30000, opaque
-  // background) and it shows on the first authenticated load of a
-  // session — the login above already triggered it. It has to be gone
-  // before a single pixel is sampled, or the sampler reads the splash
-  // image instead of the scrim. A reload skips it (the session flag is
-  // set) and leaves the page ready to sample. Without the reload, every
-  // one of the eight sessions in a test would sit through the splash's
-  // 5 s + 1 s fade, and the test would run past its own timeout.
-  await page.waitForSelector('.quick-help-banner', { timeout: 15000 });
-  await page.reload({ waitUntil: 'networkidle', timeout: 30000 });
-  await page.waitForSelector('.quick-help-banner', { timeout: 15000 });
-  // The banner's entrance animation finishes at 650 ms, but Chromium's
-  // mask compositing layer takes a few extra seconds to settle after
-  // the animation completes — a screenshot taken earlier reports the
-  // scrim mid-gray rather than at its resolved alpha. 3000 ms is past
-  // that settle window and gives a stable read.
-  await page.waitForTimeout(3000);
-  return { ctx, page };
-}
-
-// Which theme is actually rendering. ThemeManager writes data-theme on the
-// root element and mirrors it as a dark-mode class, which is the same pair
-// the layer's own selectors key on.
-async function activeTheme(page) {
-  return await page.evaluate(() => {
-    const root = document.documentElement;
-    const attr = root.getAttribute('data-theme');
-    if (attr === 'dark' || root.classList.contains('dark-mode')) return 'dark';
-    return 'light';
-  });
-}
 
 // Assertion 1: the scrim's alpha, read off the resolved custom property and
 // cross-checked against the colour the element actually paints with.
@@ -308,24 +277,22 @@ async function wordmarkContrast(page) {
   });
   if (!box) return { ok: false, why: 'no wordmark box' };
 
-  const shot = async (css) => {
-    const tag = css ? await page.addStyleTag({ content: css }) : null;
-    const buf = await page.screenshot({ clip: box, type: 'png' });
-    if (tag) await tag.evaluate((n) => n.remove());
-    return buf.toString('base64');
-  };
-
-  const aB64 = await shot(null);
-  const bB64 = await shot('.brand-wordmark{visibility:hidden !important;}');
-  const hkB64 = await shot(
+  const a = await capturePixels(page, box, null);
+  const b = await capturePixels(page, box, '.brand-wordmark{visibility:hidden !important;}');
+  const hk = await capturePixels(
+    page,
+    box,
     '.brand-wordmark{-webkit-text-fill-color:#000 !important;background-image:none !important;color:#000 !important;}'
   );
-  const hwB64 = await shot(
+  const hw = await capturePixels(
+    page,
+    box,
     '.brand-wordmark{-webkit-text-fill-color:#fff !important;background-image:none !important;color:#fff !important;}'
   );
 
   return await page.evaluate(
-    async ({ aB64, bB64, hkB64, hwB64 }) => {
+    async ({ a, b, hk, hw, wcag }) => {
+      const { lum, contrastRatio } = new Function(wcag)();
       const load = (b64) =>
         new Promise((resolve, reject) => {
           const img = new Image();
@@ -333,33 +300,21 @@ async function wordmarkContrast(page) {
           img.onerror = reject;
           img.src = `data:image/png;base64,${b64}`;
         });
-      const [imA, imB, imK, imW] = await Promise.all([load(aB64), load(bB64), load(hkB64), load(hwB64)]);
+      const [imA, imB, imK, imW] = await Promise.all([load(a.data), load(b.data), load(hk.data), load(hw.data)]);
+      // One canvas for the four renders: resized per image, because
+      // getImageData already hands back a fresh array every call.
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
       const pixels = (img) => {
-        const c = document.createElement('canvas');
-        c.width = img.width;
-        c.height = img.height;
-        const ctx = c.getContext('2d');
+        canvas.width = img.width;
+        canvas.height = img.height;
         ctx.drawImage(img, 0, 0);
-        return ctx.getImageData(0, 0, c.width, c.height).data;
+        return ctx.getImageData(0, 0, canvas.width, canvas.height).data;
       };
       const A = pixels(imA);
       const B = pixels(imB);
       const K = pixels(imK);
       const W = pixels(imW);
-
-      const lum = (r, g, b) => {
-        const toLin = (v) => {
-          v /= 255;
-          return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
-        };
-        return 0.2126 * toLin(r) + 0.7152 * toLin(g) + 0.0722 * toLin(b);
-      };
-      const ratio = (p, q) => {
-        const la = lum(p[0], p[1], p[2]);
-        const lb = lum(q[0], q[1], q[2]);
-        const [hi, lo] = la >= lb ? [la, lb] : [lb, la];
-        return (hi + 0.05) / (lo + 0.05);
-      };
 
       let core = 0;
       let worst = Infinity;
@@ -390,7 +345,7 @@ async function wordmarkContrast(page) {
           Math.min(255, Math.max(0, (A[i + 1] - (1 - coverage) * bg[1]) / coverage)),
           Math.min(255, Math.max(0, (A[i + 2] - (1 - coverage) * bg[2]) / coverage))
         ];
-        const r = ratio(ink, bg);
+        const r = contrastRatio(ink, bg);
         if (r < worst) {
           worst = r;
           worstInk = ink.map((v) => Math.round(v));
@@ -405,7 +360,7 @@ async function wordmarkContrast(page) {
         core
       };
     },
-    { aB64, bB64, hkB64, hwB64 }
+    { a, b, hk, hw, wcag: WCAG_BIND }
   );
 }
 
@@ -426,18 +381,13 @@ async function scrimTopEdge(page) {
   });
   if (!box) return { ok: false, why: 'no banner box' };
 
-  const shot = async (css) => {
-    const tag = await page.addStyleTag({ content: css });
-    const buf = await page.screenshot({ clip: box, type: 'png' });
-    await tag.evaluate((n) => n.remove());
-    return buf.toString('base64');
-  };
   const HIDE_TEXT = '.quick-help-heading,.quick-help-subtitle{visibility:hidden !important;}';
-  const withScrim = await shot(HIDE_TEXT);
-  const withoutScrim = await shot(`${HIDE_TEXT}.quick-help-content{visibility:hidden !important;}`);
+  const withScrim = await capturePixels(page, box, HIDE_TEXT);
+  const withoutScrim = await capturePixels(page, box, `${HIDE_TEXT}.quick-help-content{visibility:hidden !important;}`);
 
   return await page.evaluate(
-    async ({ withScrim, withoutScrim }) => {
+    async ({ withScrim, withoutScrim, wcag }) => {
+      const { lum } = new Function(wcag)();
       const load = (b64) =>
         new Promise((resolve, reject) => {
           const img = new Image();
@@ -445,26 +395,19 @@ async function scrimTopEdge(page) {
           img.onerror = reject;
           img.src = `data:image/png;base64,${b64}`;
         });
-      const [imS, imN] = await Promise.all([load(withScrim), load(withoutScrim)]);
+      const [imS, imN] = await Promise.all([load(withScrim.data), load(withoutScrim.data)]);
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
       const pixels = (img) => {
-        const c = document.createElement('canvas');
-        c.width = img.width;
-        c.height = img.height;
-        const ctx = c.getContext('2d');
+        canvas.width = img.width;
+        canvas.height = img.height;
         ctx.drawImage(img, 0, 0);
-        return ctx.getImageData(0, 0, c.width, c.height).data;
+        return ctx.getImageData(0, 0, canvas.width, canvas.height).data;
       };
       const S = pixels(imS);
       const N = pixels(imN);
       const W = imS.width;
       const H = imS.height;
-      const lum = (r, g, b) => {
-        const toLin = (v) => {
-          v /= 255;
-          return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
-        };
-        return 0.2126 * toLin(r) + 0.7152 * toLin(g) + 0.0722 * toLin(b);
-      };
       // The full band width: the cut this guards against happens at the icon
       // tiles, which sit well outside the middle.
       const x0 = 0;
@@ -496,7 +439,7 @@ async function scrimTopEdge(page) {
         rows: rows.length
       };
     },
-    { withScrim, withoutScrim }
+    { withScrim, withoutScrim, wcag: WCAG_BIND }
   );
 }
 
@@ -522,9 +465,17 @@ async function scrimTopEdge(page) {
 // heading is a block child that fills the veil and grows with it, so read
 // off the same render its width says nothing about where the title ends.
 //
+// (4c) The ramp against the padding. The veil's horizontal mask runs from
+// transparent to opaque over `--qh-veil-ramp` — a length, because it has
+// to land inside a padding, which is also a length. If the ramp were wider
+// than the padding it would still be fading where the first glyph starts,
+// and the title would sit on a part-transparent veil whatever the title's
+// length. So the ramp, read out of the mask the element actually computes,
+// has to fit inside the element's own padding-left.
+//
 // (4b) The blend. Inside the plateau — the lower half of the box, and in
-// from the horizontal padding, where the mask has reached full opacity and
-// the compositing is a plain blend — the pixel with the largest
+// from the horizontal ramp on both sides, where the mask has reached full
+// opacity and the compositing is a plain blend — the pixel with the largest
 // |bare - opaque| is picked, in whichever single channel it is largest in,
 // and that channel is read. The banner's own bottom fade multiplies the
 // whole banner's alpha and cancels in both ratios.
@@ -568,6 +519,34 @@ async function veilFootprintAndBlend(page) {
     const x = Math.max(0, b.left);
     const y = Math.max(0, b.top);
     const alpha = parseFloat(cs.getPropertyValue('--qh-banner-scrim-alpha'));
+
+    // The horizontal ramp, read out of the mask the browser resolved rather
+    // than off the token. The mask serialises as a comma-separated list of
+    // gradients — vertical, then horizontal — and only the horizontal one
+    // declares a direction:
+    //   linear-gradient(to right, rgba(0,0,0,0) 0px, rgb(0,0,0) 24px, …)
+    // The ramp is the length on the first OPAQUE stop: the gradient opens at
+    // zero, transparent, and reaches full opacity some run later.
+    const mask = cs.maskImage || cs.webkitMaskImage || '';
+    const gradients = mask.match(/linear-gradient\([^()]*(?:\([^()]*\)[^()]*)*\)/g) || [];
+    const horizontal = gradients.find((g) => /\bto\s+(?:right|left)\b/.test(g));
+    let ramp = null;
+    if (horizontal) {
+      const stops = horizontal
+        .slice(horizontal.indexOf('(') + 1, horizontal.lastIndexOf(')'))
+        .split(/,(?![^(]*\))/)
+        .map((s) => s.trim())
+        .filter((s) => !/^to\s/.test(s));
+      const opaque = stops.find((s) => {
+        const colour = /^rgba?\(([^)]*)\)/.exec(s);
+        if (!colour) return false;
+        const parts = colour[1].split(',').map((p) => parseFloat(p));
+        return parts.length < 4 || parts[3] > 0;
+      });
+      const px = opaque && opaque.match(/(-?[\d.]+)px\s*$/);
+      if (px) ramp = parseFloat(px[1]);
+    }
+
     return {
       clip: {
         x,
@@ -579,7 +558,9 @@ async function veilFootprintAndBlend(page) {
       titleWidth: title.getBoundingClientRect().width,
       padLeft: parseFloat(cs.paddingLeft),
       padRight: parseFloat(cs.paddingRight),
-      alpha: Number.isFinite(alpha) ? alpha : null
+      alpha: Number.isFinite(alpha) ? alpha : null,
+      ramp,
+      mask
     };
   });
   if (!geo) return { ok: false, why: 'no banner box' };
@@ -596,15 +577,9 @@ async function veilFootprintAndBlend(page) {
   const VEIL_OPAQUE =
     '.quick-help-content{background:var(--surface) !important;mask-image:none !important;-webkit-mask-image:none !important;}';
 
-  const shot = async (css) => {
-    const tag = await page.addStyleTag({ content: BASE_CSS + css });
-    const buf = await page.screenshot({ clip: geo.clip, type: 'png' });
-    await tag.evaluate((n) => n.remove());
-    return buf.toString('base64');
-  };
-  const shipped = await shot('');
-  const bare = await shot(VEIL_OFF);
-  const opaque = await shot(VEIL_OPAQUE);
+  const shipped = await capturePixels(page, geo.clip, BASE_CSS);
+  const bare = await capturePixels(page, geo.clip, BASE_CSS + VEIL_OFF);
+  const opaque = await capturePixels(page, geo.clip, BASE_CSS + VEIL_OPAQUE);
 
   return await page.evaluate(
     async ({ shipped, bare, opaque, geo, tol }) => {
@@ -615,14 +590,14 @@ async function veilFootprintAndBlend(page) {
           img.onerror = reject;
           img.src = `data:image/png;base64,${b64}`;
         });
-      const [imS, imB, imO] = await Promise.all([load(shipped), load(bare), load(opaque)]);
+      const [imS, imB, imO] = await Promise.all([load(shipped.data), load(bare.data), load(opaque.data)]);
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
       const pixels = (img) => {
-        const c = document.createElement('canvas');
-        c.width = img.width;
-        c.height = img.height;
-        const ctx = c.getContext('2d');
+        canvas.width = img.width;
+        canvas.height = img.height;
         ctx.drawImage(img, 0, 0);
-        return ctx.getImageData(0, 0, c.width, c.height).data;
+        return ctx.getImageData(0, 0, canvas.width, canvas.height).data;
       };
       const S = pixels(imS);
       const B = pixels(imB);
@@ -630,41 +605,43 @@ async function veilFootprintAndBlend(page) {
       const W = imS.width;
       const H = imS.height;
 
-      // (4a) The footprint.
+      // (4a) The footprint, over the clip's whole grid.
       let inside = 0;
       let outside = 0;
-      for (let y = 0; y < H; y++) {
-        for (let x = 0; x < W; x++) {
-          const i = (y * W + x) * 4;
-          const d = Math.abs(S[i] - B[i]) + Math.abs(S[i + 1] - B[i + 1]) + Math.abs(S[i + 2] - B[i + 2]);
-          if (d === 0) continue;
-          const dx = x + 0.5 - geo.veil.x;
-          const dy = y + 0.5 - geo.veil.y;
-          const inBox = dx >= -tol && dx <= geo.veil.width + tol && dy >= -tol && dy <= geo.veil.height + tol;
-          if (inBox) inside++;
-          else outside++;
-        }
-      }
-
       // (4b) The blend, over the part of the box where the mask is fully
       // opaque: past the vertical ramp at the bottom, and in from the
-      // horizontal ramp on both sides.
+      // horizontal ramp on both sides. The plateau is a sub-rectangle of the
+      // loop above, so both are settled in the SAME pass — the blend's
+      // candidate is simply the plateau pixel carrying the largest
+      // |bare - opaque| span, in whichever single channel it is largest in.
       const x0 = Math.ceil(geo.veil.x + geo.padLeft);
       const x1 = Math.floor(geo.veil.x + geo.veil.width - geo.padRight);
       const y0 = Math.ceil(geo.veil.y + geo.veil.height * 0.5);
       const y1 = Math.floor(geo.veil.y + geo.veil.height);
-      if (x1 < x0 || y1 < y0) return { ok: false, why: 'the veil has no plateau to sample' };
+      const plateau = !(x1 < x0 || y1 < y0);
 
       let pick = null;
-      for (let y = y0; y <= y1; y++) {
-        for (let x = x0; x <= x1; x++) {
+      for (let y = 0; y < H; y++) {
+        const inPlateau = plateau && y >= y0 && y <= y1;
+        for (let x = 0; x < W; x++) {
           const i = (y * W + x) * 4;
+          const d = Math.abs(S[i] - B[i]) + Math.abs(S[i + 1] - B[i + 1]) + Math.abs(S[i + 2] - B[i + 2]);
+          if (d !== 0) {
+            const dx = x + 0.5 - geo.veil.x;
+            const dy = y + 0.5 - geo.veil.y;
+            const inBox = dx >= -tol && dx <= geo.veil.width + tol && dy >= -tol && dy <= geo.veil.height + tol;
+            if (inBox) inside++;
+            else outside++;
+          }
+          if (!inPlateau || x < x0 || x > x1) continue;
           for (let ch = 0; ch < 3; ch++) {
             const span = Math.abs(B[i + ch] - O[i + ch]);
             if (!pick || span > pick.span) pick = { x, y, ch, span };
           }
         }
       }
+
+      if (!plateau) return { ok: false, why: 'the veil has no plateau to sample' };
       if (!pick || pick.span === 0) return { ok: false, why: 'the plateau carries no artwork' };
 
       const i = (pick.y * W + pick.x) * 4;
@@ -679,6 +656,9 @@ async function veilFootprintAndBlend(page) {
         veil: geo.veil,
         titleWidth: geo.titleWidth + geo.padLeft + geo.padRight,
         paddingInline: geo.padLeft + geo.padRight,
+        padLeft: geo.padLeft,
+        ramp: geo.ramp,
+        mask: geo.mask,
         alpha: geo.alpha,
         sample: { x: pick.x, y: pick.y, ch, shipped: S[i + ch], bare: B[i + ch], opaque: O[i + ch] }
       };
@@ -783,18 +763,12 @@ async function subtitleContrast(page) {
   });
   if (!geo) return { ok: false, why: 'no subtitle box' };
 
-  const shot = async (css) => {
-    const tag = css ? await page.addStyleTag({ content: css }) : null;
-    const buf = await page.screenshot({ clip: geo.clip, type: 'png' });
-    if (tag) await tag.evaluate((n) => n.remove());
-    return buf.toString('base64');
-  };
-
-  const aB64 = await shot(null);
-  const bB64 = await shot('.quick-help-subtitle{visibility:hidden !important;}');
+  const a = await capturePixels(page, geo.clip, null);
+  const b = await capturePixels(page, geo.clip, '.quick-help-subtitle{visibility:hidden !important;}');
 
   return await page.evaluate(
-    async ({ aB64, bB64, geo, coverageFloor, minSpan }) => {
+    async ({ a, b, geo, coverageFloor, minSpan, wcag }) => {
+      const { lum, contrastRatio } = new Function(wcag)();
       const load = (b64) =>
         new Promise((resolve, reject) => {
           const img = new Image();
@@ -802,14 +776,14 @@ async function subtitleContrast(page) {
           img.onerror = reject;
           img.src = `data:image/png;base64,${b64}`;
         });
-      const [imA, imB] = await Promise.all([load(aB64), load(bB64)]);
+      const [imA, imB] = await Promise.all([load(a.data), load(b.data)]);
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
       const pixels = (img) => {
-        const c = document.createElement('canvas');
-        c.width = img.width;
-        c.height = img.height;
-        const ctx = c.getContext('2d');
+        canvas.width = img.width;
+        canvas.height = img.height;
         ctx.drawImage(img, 0, 0);
-        return ctx.getImageData(0, 0, c.width, c.height).data;
+        return ctx.getImageData(0, 0, canvas.width, canvas.height).data;
       };
       const A = pixels(imA);
       const B = pixels(imB);
@@ -824,30 +798,16 @@ async function subtitleContrast(page) {
         const c = document.createElement('canvas');
         c.width = 1;
         c.height = 1;
-        const ctx = c.getContext('2d');
-        ctx.fillStyle = '#ff00ff';
-        ctx.fillRect(0, 0, 1, 1);
-        ctx.fillStyle = css;
-        ctx.fillRect(0, 0, 1, 1);
-        const d = ctx.getImageData(0, 0, 1, 1).data;
+        const cctx = c.getContext('2d');
+        cctx.fillStyle = '#ff00ff';
+        cctx.fillRect(0, 0, 1, 1);
+        cctx.fillStyle = css;
+        cctx.fillRect(0, 0, 1, 1);
+        const d = cctx.getImageData(0, 0, 1, 1).data;
         return {
           rgb: [d[0], d[1], d[2]],
           parsed: !(d[0] === 255 && d[1] === 0 && d[2] === 255)
         };
-      };
-
-      const lum = (r, g, b) => {
-        const toLin = (v) => {
-          v /= 255;
-          return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
-        };
-        return 0.2126 * toLin(r) + 0.7152 * toLin(g) + 0.0722 * toLin(b);
-      };
-      const ratio = (p, q) => {
-        const la = lum(p[0], p[1], p[2]);
-        const lb = lum(q[0], q[1], q[2]);
-        const [hi, lo] = la >= lb ? [la, lb] : [lb, la];
-        return (hi + 0.05) / (lo + 0.05);
       };
 
       const ink = resolve(geo.color);
@@ -875,15 +835,13 @@ async function subtitleContrast(page) {
         if (span < minSpan) continue;
         if (!((A[i + ch] - bg[ch]) / (T[ch] - bg[ch]) > coverageFloor)) continue;
         count++;
-        const r = ratio(T, bg);
+        const r = contrastRatio(T, bg);
         if (r < worst) {
           worst = r;
           worstBg = bg;
         }
       }
 
-      const lInk = lum(T[0], T[1], T[2]);
-      const lHead = lum(head.rgb[0], head.rgb[1], head.rgb[2]);
       return {
         ok: true,
         declared: geo.color,
@@ -892,14 +850,11 @@ async function subtitleContrast(page) {
         worst: Number.isFinite(worst) ? Number(worst.toFixed(3)) : null,
         bg: worstBg,
         core: count,
-        lumInk: Number(lInk.toFixed(4)),
-        lumHeading: Number(lHead.toFixed(4)),
-        step: Number((Math.abs(lInk - lHead) / Math.max(lInk, lHead)).toFixed(4)),
         fontSize: geo.fontSize,
         fontWeight: geo.fontWeight
       };
     },
-    { aB64, bB64, geo, coverageFloor: INK_COVERAGE_FLOOR, minSpan: MIN_INK_SPAN }
+    { a, b, geo, coverageFloor: INK_COVERAGE_FLOOR, minSpan: MIN_INK_SPAN, wcag: WCAG_BIND }
   );
 }
 
@@ -916,8 +871,11 @@ test.describe('Welcome banner invariants', () => {
   test('1. the scrim alpha is at or above its theme floor and is the alpha it paints with', async ({ browser }) => {
     for (const vp of VIEWPORTS) {
       for (const theme of ['light', 'dark']) {
-        const { ctx, page } = await freshSignedIn(browser, vp, theme);
-        const floor = SCRIM_ALPHA_FLOOR[theme];
+        const { ctx, page } = await openWelcomeScreen(browser, {
+          viewport: { width: vp.width, height: 800 },
+          theme
+        });
+        const floor = SCRIM_ALPHA[theme];
         const a = await scrimAlpha(page);
         expect(a.ok, `${vp.label}/${theme} scrim alpha readable`).toBe(true);
         expect(
@@ -947,7 +905,10 @@ test.describe('Welcome banner invariants', () => {
   test("2. the wordmark's worst RENDERED local contrast clears 3:1", async ({ browser }) => {
     for (const vp of VIEWPORTS) {
       for (const theme of ['light', 'dark']) {
-        const { ctx, page } = await freshSignedIn(browser, vp, theme);
+        const { ctx, page } = await openWelcomeScreen(browser, {
+          viewport: { width: vp.width, height: 800 },
+          theme
+        });
         const c = await wordmarkContrast(page);
         expect(c.ok, `${vp.label}/${theme} wordmark measured (${c.why || 'ok'})`).toBe(true);
         expect(
@@ -967,30 +928,35 @@ test.describe('Welcome banner invariants', () => {
     }
   });
 
-  test('3. the scrims top edge is a ramp, not a hard cut', async ({ browser }) => {
+  // 3, 4 and 6 read the same render, so they share one session per
+  // (viewport, theme). The assertions stay in their original order and keep
+  // their own messages — a merged test is one boot, not one assertion.
+  test('3-4-6. the scrim ramps, the veil wraps the title and blends, the subtitle clears the AA floor', async ({
+    browser
+  }) => {
     for (const vp of VIEWPORTS) {
       for (const theme of ['light', 'dark']) {
-        const { ctx, page } = await freshSignedIn(browser, vp, theme);
+        const { ctx, page } = await openWelcomeScreen(browser, {
+          viewport: { width: vp.width, height: 800 },
+          theme
+        });
+        const where = `${vp.label}/${theme}`;
+        const a = SCRIM_ALPHA[theme];
+
+        // ---- 3. the scrim's top edge is a ramp, not a hard cut.
         const e = await scrimTopEdge(page);
-        expect(e.ok, `${vp.label}/${theme} scrim edge measured (${e.why || 'ok'})`).toBe(true);
+        expect(e.ok, `${where} scrim edge measured (${e.why || 'ok'})`).toBe(true);
         expect(
           e.rampRows,
-          `${vp.label}/${theme} the scrim goes from ${(e.plateau * 0.1).toFixed(4)} to ` +
+          `${where} the scrim goes from ${(e.plateau * 0.1).toFixed(4)} to ` +
             `${(e.plateau * 0.9).toFixed(4)} of its own contribution in ${e.rampRows} row(s) of ` +
             `${e.rows} — a hard top edge cuts a line through the artwork`
         ).toBeGreaterThanOrEqual(MIN_RAMP_ROWS);
-        await ctx.close();
-      }
-    }
-  });
 
-  test('4. the veil wraps the title box and blends with the artwork instead of replacing it', async ({ browser }) => {
-    for (const vp of VIEWPORTS) {
-      for (const theme of ['light', 'dark']) {
-        const { ctx, page } = await freshSignedIn(browser, vp, theme);
-        const a = SHIPPED_SCRIM_ALPHA[theme];
+        // ---- 4. the veil wraps the title's box, blends, and its ramp fits
+        // inside the padding it is spent in.
         const m = await veilFootprintAndBlend(page);
-        expect(m.ok, `${vp.label}/${theme} veil measured (${m.why || 'ok'})`).toBe(true);
+        expect(m.ok, `${where} veil measured (${m.why || 'ok'})`).toBe(true);
         const box =
           `${m.veil.width.toFixed(1)}x${m.veil.height.toFixed(1)} at ` +
           `${m.veil.x.toFixed(1)},${m.veil.y.toFixed(1)}`;
@@ -1002,14 +968,14 @@ test.describe('Welcome banner invariants', () => {
         // (4a) The footprint.
         expect(
           m.outside,
-          `${vp.label}/${theme} ${m.outside} of the ${m.inside + m.outside} pixels the veil ` +
+          `${where} ${m.outside} of the ${m.inside + m.outside} pixels the veil ` +
             `changes paint outside its box (${box}), within a ${FOOTPRINT_EDGE_TOLERANCE}px ` +
             `edge tolerance — the veil is a band across the banner again, or something beside ` +
             `it is painting`
         ).toBe(0);
         expect(
           m.inside,
-          `${vp.label}/${theme} not one of the pixels inside the veil's box (${box}) differs ` +
+          `${where} not one of the pixels inside the veil's box (${box}) differs ` +
             `from the bare render — the veil paints nothing`
         ).toBeGreaterThan(0);
         // The footprint only means "the title's box" if the box is the
@@ -1020,15 +986,27 @@ test.describe('Welcome banner invariants', () => {
         // is the union of its own line boxes.
         expect(
           Math.abs(m.veil.width - m.titleWidth),
-          `${vp.label}/${theme} the veil's box is ${m.veil.width.toFixed(1)}px wide but the ` +
+          `${where} the veil's box is ${m.veil.width.toFixed(1)}px wide but the ` +
             `title's measure plus its ${m.paddingInline.toFixed(0)}px of padding is ` +
             `${m.titleWidth.toFixed(1)}px — the veil is wrapped around the banner, not the title`
         ).toBeLessThanOrEqual(1);
 
+        // (4c) The horizontal ramp has to be spent inside the padding. The
+        // mask is read off the element, so this cannot pass on a token the
+        // mask-image ignores — and the padding is the app's own, so a change
+        // to the banner's inner margin moves the number the ramp is measured
+        // against.
+        expect(
+          m.ramp,
+          `${where} the veil's horizontal mask ramp is ${m.ramp}px but the content's own ` +
+            `padding-left is ${m.padLeft}px (mask: ${m.mask}) — the ramp has to be exhausted ` +
+            `inside the padding, or it eats the title's glyphs whatever the title's length`
+        ).toBeLessThanOrEqual(m.padLeft);
+
         // (4b) The blend.
         expect(
           m.r1,
-          `${vp.label}/${theme} the veil carried the artwork only ${(m.r1 * 100).toFixed(1)}% of ` +
+          `${where} the veil carried the artwork only ${(m.r1 * 100).toFixed(1)}% of ` +
             `the way an opaque veil would, against a floor of ` +
             `${(BLEND_FRACTION * a * 100).toFixed(1)}% (0.8 x ${a}) — r1=${m.r1.toFixed(3)} ` +
             `r2=${m.r2.toFixed(3)}, ${sample}. The veil is not blending with the artwork: it is ` +
@@ -1036,7 +1014,7 @@ test.describe('Welcome banner invariants', () => {
         ).toBeGreaterThanOrEqual(BLEND_FRACTION * a);
         expect(
           m.r2,
-          `${vp.label}/${theme} the veil carried the artwork only ${(m.r2 * 100).toFixed(1)}% of ` +
+          `${where} the veil carried the artwork only ${(m.r2 * 100).toFixed(1)}% of ` +
             `the way to an opaque veil, against a floor of ` +
             `${(BLEND_FRACTION * (1 - a) * 100).toFixed(1)}% (0.8 x ${1 - a}) — ` +
             `r2=${m.r2.toFixed(3)} r1=${m.r1.toFixed(3)}, ${sample}. The veil paints opaque: ` +
@@ -1047,12 +1025,56 @@ test.describe('Welcome banner invariants', () => {
         // the rendered alpha has to still be that alpha.
         expect(
           m.alpha,
-          `${vp.label}/${theme} the veil paints at alpha ${m.alpha} but the blend floors were ` + `derived from ${a}`
+          `${where} the veil paints at alpha ${m.alpha} but the blend floors were ` + `derived from ${a}`
         ).not.toBeNull();
         expect(
           Math.abs(m.alpha - a),
-          `${vp.label}/${theme} the veil paints at alpha ${m.alpha} but ships at ${a}`
+          `${where} the veil paints at alpha ${m.alpha} but ships at ${a}`
         ).toBeLessThan(0.01);
+
+        // ---- 6. the subtitle's ink.
+        const s = await subtitleContrast(page);
+        expect(s.ok, `${where} subtitle measured (${s.why || 'ok'})`).toBe(true);
+
+        // The floor follows the rendered type rather than a constant: WCAG AA
+        // asks 3:1 of large text and 4.5:1 of normal text, and the size token
+        // is a scale a deployment can move across that line.
+        const large = s.fontSize >= 24 || (s.fontSize >= 18.66 && s.fontWeight >= 700);
+        const floor = large ? WCAG_AA.large : WCAG_AA.normal;
+        const type = `${s.fontSize}px/${s.fontWeight}`;
+
+        expect(
+          s.core,
+          `${where} not one pixel in the subtitle's box passed ` +
+            `${INK_COVERAGE_FLOOR} ink coverage against ink=rgb(${s.ink}) — the subtitle is ` +
+            `drawing nothing over its own backdrop`
+        ).toBeGreaterThan(0);
+        expect(
+          s.worst,
+          `${where} the subtitle's worst local contrast is ${s.worst}:1, against the ` +
+            `WCAG AA floor of ${floor}:1 for ${type} (${large ? 'large' : 'normal'} text) — ` +
+            `ink=rgb(${s.ink}) [${s.declared}] on its worst backdrop rgb(${s.bg}), over ${s.core} ` +
+            `glyph pixels. The text is ${theme === 'dark' ? 'a dim ink on a dark scrim' : 'a neutral grey, not the brand tint the subtitle should be'}`
+        ).toBeGreaterThanOrEqual(floor);
+
+        // The hierarchy. A mix that leans far enough towards --fg to be safe
+        // in one theme stops being a subtitle and becomes a second heading,
+        // and that is the direction this check fails in: the heading is the
+        // brighter of the two in dark, so a subtitle that drifted up to it
+        // shows as a small step rather than no step. Both inks are flat
+        // colours the page already resolved, so the step is computed here
+        // rather than inside the pixel walk.
+        const lumInk = lum(s.ink[0], s.ink[1], s.ink[2]);
+        const lumHeading = lum(s.heading[0], s.heading[1], s.heading[2]);
+        const step = Math.abs(lumInk - lumHeading) / Math.max(lumInk, lumHeading);
+        expect(
+          step,
+          `${where} the subtitle's ink rgb(${s.ink}) sits at relative luminance ` +
+            `${lumInk.toFixed(4)} against the heading's rgb(${s.heading}) at ${lumHeading.toFixed(4)} — a ${(step * 100).toFixed(1)}% ` +
+            `step, inside the ${HIERARCHY_LUMINANCE_STEP * 100}% band the two have to stay apart by. ` +
+            `The subtitle reads as a second heading rather than as text under one`
+        ).toBeGreaterThanOrEqual(HIERARCHY_LUMINANCE_STEP);
+
         await ctx.close();
       }
     }
@@ -1061,7 +1083,10 @@ test.describe('Welcome banner invariants', () => {
   test('5. the banner box holds the ink band and stays full-bleed', async ({ browser }) => {
     for (const vp of VIEWPORTS) {
       for (const theme of ['light', 'dark']) {
-        const { ctx, page } = await freshSignedIn(browser, vp, theme);
+        const { ctx, page } = await openWelcomeScreen(browser, {
+          viewport: { width: vp.width, height: 800 },
+          theme
+        });
         const m = await boxGeometry(page);
         expect(m, `${vp.label}/${theme} banner measurement`).not.toBeNull();
         expect(
@@ -1078,51 +1103,6 @@ test.describe('Welcome banner invariants', () => {
           m.overflow,
           `${vp.label}/${theme} the panel overflows the viewport by ${m.overflow}px`
         ).toBeLessThanOrEqual(0);
-        await ctx.close();
-      }
-    }
-  });
-
-  test('6. the subtitle clears the AA floor for its own type and stays below the heading', async ({ browser }) => {
-    for (const vp of VIEWPORTS) {
-      for (const theme of ['light', 'dark']) {
-        const { ctx, page } = await freshSignedIn(browser, vp, theme);
-        const s = await subtitleContrast(page);
-        expect(s.ok, `${vp.label}/${theme} subtitle measured (${s.why || 'ok'})`).toBe(true);
-
-        // The floor follows the rendered type rather than a constant: WCAG AA
-        // asks 3:1 of large text and 4.5:1 of normal text, and the size token
-        // is a scale a deployment can move across that line.
-        const large = s.fontSize >= 24 || (s.fontSize >= 18.66 && s.fontWeight >= 700);
-        const floor = large ? WCAG_AA.large : WCAG_AA.normal;
-        const type = `${s.fontSize}px/${s.fontWeight}`;
-
-        expect(
-          s.core,
-          `${vp.label}/${theme} not one pixel in the subtitle's box passed ` +
-            `${INK_COVERAGE_FLOOR} ink coverage against ink=rgb(${s.ink}) — the subtitle is ` +
-            `drawing nothing over its own backdrop`
-        ).toBeGreaterThan(0);
-        expect(
-          s.worst,
-          `${vp.label}/${theme} the subtitle's worst local contrast is ${s.worst}:1, against the ` +
-            `WCAG AA floor of ${floor}:1 for ${type} (${large ? 'large' : 'normal'} text) — ` +
-            `ink=rgb(${s.ink}) [${s.declared}] on its worst backdrop rgb(${s.bg}), over ${s.core} ` +
-            `glyph pixels. The text is ${theme === 'dark' ? 'a dim ink on a dark scrim' : 'a neutral grey, not the brand tint the subtitle should be'}`
-        ).toBeGreaterThanOrEqual(floor);
-
-        // The hierarchy. A mix that leans far enough towards --fg to be safe
-        // in one theme stops being a subtitle and becomes a second heading,
-        // and that is the direction this check fails in: the heading is the
-        // brighter of the two in dark, so a subtitle that drifted up to it
-        // shows as a small step rather than no step.
-        expect(
-          s.step,
-          `${vp.label}/${theme} the subtitle's ink rgb(${s.ink}) sits at relative luminance ` +
-            `${s.lumInk} against the heading's rgb(${s.heading}) at ${s.lumHeading} — a ${(s.step * 100).toFixed(1)}% ` +
-            `step, inside the ${HIERARCHY_LUMINANCE_STEP * 100}% band the two have to stay apart by. ` +
-            `The subtitle reads as a second heading rather than as text under one`
-        ).toBeGreaterThanOrEqual(HIERARCHY_LUMINANCE_STEP);
         await ctx.close();
       }
     }

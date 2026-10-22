@@ -1,3 +1,9 @@
+> **Scope.** This ledger covers the review rounds against the **design
+> of record and the plan/spec documents** (waves 1-18 below). The rounds
+> against the **shipped chart code** (rounds 6-8, 2026-10-19 to
+> 2026-10-22) are recorded in `migration-status.md` § Current state,
+> where each finding carries its live-cluster evidence.
+
 ## Code-review consolidation — applied
 
 `/code-review` xhigh pass across spec + 5 plans. 15 ranked findings, all applied:

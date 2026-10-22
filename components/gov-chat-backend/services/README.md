@@ -283,7 +283,6 @@ The translation service supports 34+ languages through modular language maps:
 
 Each language map includes:
 - Language code mappings (ISO to model-specific)
-- Fallback chains for graceful degradation
 - Model-specific prompt templates
 - Language names for prompt generation
 

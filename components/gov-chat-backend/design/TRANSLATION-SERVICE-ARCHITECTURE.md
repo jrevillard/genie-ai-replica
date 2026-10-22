@@ -10,7 +10,7 @@ This specification defines a flexible, configurable translation service architec
 2. **No Infrastructure Changes**: Existing vLLM translation guardrail service remains untouched
 3. **Proxy Pattern**: `translation-service.js` acts as a smart proxy/proxy service
 4. **Modular Backends**: Separate CPU and GPU backend modules with pluggable language maps
-5. **Graceful Degradation**: Backend and language fallback chains for reliability
+5. **Graceful Degradation**: Backend fallback chains for reliability; an unsupported language is refused, never substituted
 6. **Extensibility**: Adding new LLMs requires only adding a new language map configuration
 
 ### 1.2 Architecture Diagram
@@ -432,44 +432,17 @@ class CpuTranslateBackend {
 | ja | Japanese | jpn_Jpan | ja |
 | ko | Korean | kor_Hang | ko |
 
-### 4.2 Language Fallback Chains
+### 4.2 Unsupported Languages
 
-Language fallback is applied **before** backend fallback. Each language can specify a fallback language if translation is not supported.
+A language the loaded map does not know is refused, before the backend is
+ever asked. There is no fallback language: answering a request for one
+language in another is a wrong answer the caller cannot see, so the shipped
+maps name no fallback and a test fails the build if one of them does.
 
-**Fallback Map**:
-```javascript
-const fallbackLangMap = {
-  // West African → Kiswahili (regional lingua franca)
-  ff: 'sw', ha: 'sw', yo: 'sw',
-
-  // South Asian → Urdu or English
-  skr: 'ur', sd: 'ur', pa: 'ur',
-
-  // Central Asian → Turkish
-  kk: 'tr', uz: 'tr', ug: 'tr',
-
-  // Southeast Asian → Indonesian
-  ms: 'id', su: 'id', jv: 'id',
-
-  // Middle Eastern → Persian or Arabic
-  ps: 'fa', ku: 'fa', ckb: 'ar',
-
-  // Horn of Africa → Kiswahili or English
-  om: 'sw', so: 'en',
-
-  // South Asian → English
-  am: 'en', bn: 'en', ml: 'en',
-
-  // Central Asian → Turkish
-  az: 'tr',
-};
-```
-
-**Fallback Priority**:
-1. Direct language support (check language map)
-2. Language fallback (check fallback map)
-3. Backend fallback (GPU → CPU)
-4. Error thrown
+**Resolution Priority**:
+1. Direct language support (check language map) — refused when absent
+2. Backend fallback (GPU → CPU)
+3. Error thrown
 
 ## 5. Adding New LLMs
 
@@ -585,27 +558,19 @@ User Request
 ┌─────────────────────────────────────────┐
 │  1. Language Support Check              │
 │     - Check if language in languageMap  │
-│     - If not found → Language Fallback  │
+│     - If not found → refuse the request │
 └────────────────┬────────────────────────┘
                  │
                  ▼
 ┌─────────────────────────────────────────┐
-│  2. Language Fallback                   │
-│     - Check fallbackLangMap             │
-│     - If fallback exists → retry        │
-│     - If no fallback → Continue         │
-└────────────────┬────────────────────────┘
-                 │
-                 ▼
-┌─────────────────────────────────────────┐
-│  3. Backend Selection                   │
+│  2. Backend Selection                   │
 │     - Check TRANSLATION_BACKEND         │
 │     - If 'auto' → try GPU first         │
 └────────────────┬────────────────────────┘
                  │
                  ▼
 ┌─────────────────────────────────────────┐
-│  4. GPU Backend Execution               │
+│  3. GPU Backend Execution               │
 │     - Call vLLM service                 │
 │     - If success → Return result        │
 │     - If failure → Backend Fallback     │
@@ -751,9 +716,9 @@ VLLM_TRANSLATION_MAX_MODEL_LEN=8192
 
 **Proxy Service Tests**:
 - Backend selection
-- Fallback chain
+- Backend fallback chain
 - Redis caching
-- Language fallback
+- Refusal of an unsupported language
 
 ### 9.2 Integration Tests
 
@@ -776,11 +741,11 @@ describe('Translation Service Integration', () => {
     expect(result).toBe('Hola');
   });
 
-  test('Language fallback works correctly', async () => {
+  test('An unsupported language is refused, not substituted', async () => {
     const service = new TranslationService();
-    // Test Saraiki → Urdu fallback
-    const result = await service.translate('Hello', 'en', 'skr');
-    // Should use Urdu as target
+    // There is no fallback language: a request for a language the map does
+    // not know is refused rather than answered in another language.
+    await expect(service.translate('Hello', 'en', 'xx')).rejects.toThrow(/Unsupported target language/);
   });
 
   test('All 41 languages are supported', async () => {
@@ -921,7 +886,7 @@ TRANSLATION_GPU_ENABLED=false  # Emergency disable
 
 - Custom language maps per domain (legal, medical, etc.)
 - Custom prompt templates per LLM
-- Custom fallback strategies per language pair
+- Custom language maps per domain (the map decides which languages exist)
 - Custom cache keys per use case
 
 ---

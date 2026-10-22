@@ -9,7 +9,7 @@ The Document Translation Service is a flexible, multi-backend translation system
 - **41 Language Support** - Including English, Arabic, Chinese, Spanish, and 38 others
 - **Multiple Backends** - CPU (NLLB-200), GPU (TranslateGemma, Gemma-3), or Auto mode
 - **Smart Caching** - Redis-based permanent caching per document/language pair
-- **Graceful Degradation** - Language and backend fallback chains for reliability
+- **Graceful Degradation** - Backend fallback chains for reliability; an unsupported language is refused, never substituted
 - **Zero Configuration Changes Required** - Defaults to existing CPU behavior
 - **Configuration-Driven** - All backend selection via `.env` files only
 
@@ -22,7 +22,7 @@ The Document Translation Service is a flexible, multi-backend translation system
 │                  translation-service.js                      │
 │                       (Proxy Service)                        │
 │  - Selects backend based on TRANSLATION_BACKEND env var     │
-│  - Handles language fallback chains                         │
+│  - Refuses a language the map does not know                 │
 │  - Manages Redis caching (backend-agnostic)                 │
 │  - Preserves markdown structure during translation          │
 └────────────────────┬────────────────────────────────────────┘
@@ -179,38 +179,38 @@ TRANSLATION_CACHE_PASSWORD=!@#$5678
 | sw | Kiswahili |
 
 ### Extended Languages (30 Additional)
-| Code | Language | Fallback |
-|------|----------|----------|
-| am | Amharic | English |
-| az | Azerbaijani | Turkish |
-| bn | Bengali | English |
-| ckb | Sorani Kurdish | Arabic |
-| fa | Persian (Farsi) | - |
-| ff | Fulah | Kiswahili |
-| ha | Hausa | Kiswahili |
-| jv | Javanese | Indonesian |
-| kk | Kazakh | Turkish |
-| ku | Kurdish (Kurmanji) | Persian |
-| ml | Malayalam | English |
-| ms | Malay | Indonesian |
-| om | Oromo | Kiswahili |
-| pa | Punjabi | Urdu |
-| ps | Pashto | Persian |
-| sd | Sindhi | Urdu |
-| skr | Saraiki | Urdu |
-| so | Somali | Kiswahili |
-| su | Sundanese | Indonesian |
-| tr | Turkish | - |
-| ug | Uyghur | Turkish |
-| ur | Urdu | - |
-| uz | Uzbek | Turkish |
-| yo | Yoruba | Kiswahili |
-| man | Mandinka | English |
-| mnk | Mandinka | English |
-| st | Sesotho | English |
-| hi | Hindi | - |
-| ja | Japanese | - |
-| ko | Korean | - |
+| Code | Language |
+|------|----------|
+| am | Amharic |
+| az | Azerbaijani |
+| bn | Bengali |
+| ckb | Sorani Kurdish |
+| fa | Persian (Farsi) |
+| ff | Fulah |
+| ha | Hausa |
+| jv | Javanese |
+| kk | Kazakh |
+| ku | Kurdish (Kurmanji) |
+| ml | Malayalam |
+| ms | Malay |
+| om | Oromo |
+| pa | Punjabi |
+| ps | Pashto |
+| sd | Sindhi |
+| skr | Saraiki |
+| so | Somali |
+| su | Sundanese |
+| tr | Turkish |
+| ug | Uyghur |
+| ur | Urdu |
+| uz | Uzbek |
+| yo | Yoruba |
+| man | Mandinka |
+| mnk | Mandinka |
+| st | Sesotho |
+| hi | Hindi |
+| ja | Japanese |
+| ko | Korean |
 
 ---
 
@@ -254,9 +254,11 @@ Markdown Document
 └─────────────────────────────────┘
 ```
 
-### 2. Language Fallback
+### 2. Unsupported Languages
 
-If a target language is not directly supported, the service uses fallback chains:
+A language the loaded map does not know is **refused**. There is no fallback
+language: answering a request for one language in another is a wrong answer,
+and the caller has no way to see it.
 
 ```
 User requests: English → Saraiki (skr)
@@ -266,11 +268,7 @@ Check: Is skr supported?
          │
          │ No
          ▼
-Check: Is there a fallback for skr?
-         │
-         │ Yes → Urdu (ur)
-         ▼
-Translate: English → Urdu (instead of Saraiki)
+Refuse: "Unsupported target language" (HTTP 400)
 ```
 
 ### 3. Backend Fallback (Auto Mode Only)
@@ -533,13 +531,11 @@ If GPU costs $1/hour and saves 35 minutes per large document:
    chatqna service accepts
 2. Verify the code is the one the map is keyed by — ISO 639-1 ('es', not 'spa').
    The code is trimmed and case-insensitive
-3. Check whether the log line names the source or the target language: the
-   source has no fallback chain, so an unknown source is refused too
-   (`Unsupported source language`)
-4. The fallback chain applies only to a language the map lists as a fallback
-   without supporting it directly. Every fallback key in the shipped maps is
-   also a supported language, so an unknown language is refused rather than
-   silently downgraded to another one
+3. Check whether the log line names the source or the target language: an
+   unknown source is refused the same way (`Unsupported source language`)
+4. There is no fallback language: a language the map does not know is
+   refused, never answered in another language. The shipped maps name no
+   fallback, and a test fails the build if one of them does
 5. On the chat streaming path, an uncovered language is not a failure: the
    answer stays in English, the units after the refusal are not sent to the
    translator again, and the `done` frame carries `translationFailed: false`.

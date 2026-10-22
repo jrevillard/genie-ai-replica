@@ -92,7 +92,19 @@ overlays + SealedSecrets live in the deploy repo.
 ```bash
 # Chart dev cycle (worktree: feat/k8s-migration)
 helm lint --strict charts/genieai-umbrella                       # local lint
-rtk proxy helm template test charts/genieai-umbrella -n genieai  # NEVER bare `helm template` — rtk hook garbles it
+# NEVER bare `helm template` — the rtk hook garbles it. The render
+# needs the deployment data (it has no chart defaults for them) and a
+# mail server: verifyEmail/resetPasswordAllowed default to the Compose
+# values, and the render refuses them without an smtp. The smtp.* values
+# below are render-only placeholders — a name that answers nothing.
+rtk proxy helm template test charts/genieai-umbrella -n genieai \
+  --set data.keycloak.failOnPlaceholderSecrets=false \
+  --set data.keycloak.adminEmail=ci-render@example.org \
+  --set data.keycloak.smtp.from=no-reply@ci.invalid \
+  --set data.keycloak.smtp.host=smtp.invalid \
+  --set data.keycloak.smtp.port=587 \
+  --set data.keycloak.smtp.starttls=true \
+  --set ingress.host=ci-render.local
 git commit/push                                                  # triggers CI: chart:lint + chart:install (see .gitlab-ci.yml)
 # In genie-ai-deploy: bump `version:` in overlays/<env>/dev/helmrelease.yaml
 flux reconcile helmrelease genieai -n flux-system                # roll the cluster

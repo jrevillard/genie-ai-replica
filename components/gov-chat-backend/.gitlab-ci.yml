@@ -586,9 +586,14 @@ semgrep-sast:
 nodejs-scan-sast:
   rules:
     - when: never
-# spotbugs-sast is the Java analyzer — GENIE.AI has no Java, so it tries to
-# build a non-existent Gradle project and fails (advisory noise). semgrep-sast
-# covers our stack. Disable it.
+# spotbugs-sast is the Java analyzer. This component has no Java of its own, so
+# the analyzer tries to build a non-existent Gradle project and fails (advisory
+# noise). semgrep-sast covers this stack. Disable it.
+#
+# The repository as a whole does contain Java — the vendored flutter_appauth
+# fork under mobile/genie_ai_mobile/flutter_appauth/, compiled into every APK
+# — and that tree is excluded from the scan (see the root .gitlab-ci.yml).
+# Re-enabling the analyzer for it is tracked in #1103.
 spotbugs-sast:
   rules:
     - when: never

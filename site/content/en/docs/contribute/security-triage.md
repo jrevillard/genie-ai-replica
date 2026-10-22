@@ -121,6 +121,13 @@ Never conflate the two.
   dismissed while the analyzer keeps emitting that exact id — the
   durable state is "the analyzer no longer produces this finding at
   all": fix the code, or exclude the path from scanning.
+- `SAST_EXCLUDED_PATHS` **overrides** GitLab's default excluded paths
+  (`spec`, `test`, `tests`, `tmp`). Each comma-separated element is a
+  gitignore-style pattern for the analyzer's own pre-filter and a
+  doublestar pattern for GitLab's post-filter. Ruby `File.fnmatch` —
+  under which a trailing `/**` does not match a file inside the
+  directory — is the *Secret Detection* dialect, so a SAST pattern must
+  not be copied into `SECRET_DETECTION_EXCLUDED_PATHS` as-is.
 
 ## Related
 

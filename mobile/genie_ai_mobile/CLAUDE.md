@@ -185,18 +185,18 @@ cd mobile/genie_ai_mobile
 ANDROID_HOME=/opt/android-sdk flutter pub get
 
 # Android
-ANDROID_HOME=/opt/android-sdk flutter build apk --flavor dev --debug
-ANDROID_HOME=/opt/android-sdk flutter build apk --flavor itu --release
-ANDROID_HOME=/opt/android-sdk flutter build appbundle --flavor itu --release
+ANDROID_HOME=/opt/android-sdk flutter build apk --flavor dev --debug --dart-define=FLAVOR=dev
+ANDROID_HOME=/opt/android-sdk flutter build apk --flavor itu --release --dart-define=FLAVOR=itu
+ANDROID_HOME=/opt/android-sdk flutter build appbundle --flavor itu --release --dart-define=FLAVOR=itu
 adb install -r build/app/outputs/flutter-apk/app-dev-debug.apk
 
 # iOS (requires Mac with Xcode)
-flutter build ipa --flavor dev
-flutter build ipa --flavor itu
+flutter build ipa --flavor dev --dart-define=FLAVOR=dev
+flutter build ipa --flavor itu --dart-define=FLAVOR=itu
 
 # Run on device/emulator
-flutter run --flavor dev
-flutter run --flavor itu
+flutter run --flavor dev --dart-define=FLAVOR=dev
+flutter run --flavor itu --dart-define=FLAVOR=itu
 ```
 
 ### Android Emulator Setup
@@ -367,7 +367,7 @@ Build the APK, then inspect the merged manifest to confirm the intent filter has
 ```bash
 # Build a flavor (e.g., itu)
 ${ANDROID_HOME:+ANDROID_HOME=$ANDROID_HOME }flutter build apk --flavor itu --debug \
-  -t lib/config/flavors/itu.dart --dart-define=FLAVOR=itu
+  --dart-define=FLAVOR=itu
 
 # Inspect merged manifest
 find build/app/intermediates/merged_manifests/ -path "*ituDebug*" -name "AndroidManifest.xml" | \
@@ -426,7 +426,7 @@ grep APP_AUTH_REDIRECT_SCHEME ios/Flutter/*-*.xcconfig
 If macOS is available, build the IPA and inspect the compiled `Info.plist`:
 
 ```bash
-flutter build ipa --flavor itu -t lib/config/flavors/itu.dart --dart-define=FLAVOR=itu
+flutter build ipa --flavor itu --dart-define=FLAVOR=itu
 
 # Inspect the compiled Info.plist in the IPA bundle
 unzip -p build/ios/ipa/*.ipa Payload/Runner.app/Info.plist | plutil -p -

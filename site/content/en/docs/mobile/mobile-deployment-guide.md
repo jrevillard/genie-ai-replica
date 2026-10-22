@@ -316,22 +316,31 @@ keytool -genkeypair -v \
 
 ## Step 6: Build
 
-Build commands use `--flavor <name>` to select the Flutter flavor. `--dart-define` is reserved for `DEV_SERVER`/`DEV_PORT` overrides on the dev flavor only (see `mobile/genie_ai_mobile/CLAUDE.md`); do **not** use it for general flavor builds.
+Build commands take **two** flavor selectors, and both are required:
+
+- `--flavor <name>` selects the build variant — application id, URL scheme, signing configuration.
+- `--dart-define=FLAVOR=<name>` selects the deployment configuration the app reads at runtime. The app resolves its Keycloak endpoints, its backend URL and its active locale set from `KeycloakConfig`, and `getConfig()` picks that configuration from the `FLAVOR` dart-define — falling back to `dev` when the define is absent.
+
+Without the dart-define, a release build resolves the **dev** configuration: every endpoint points at `localhost`, so the app cannot authenticate against a real deployment, and the trust-everything HTTP client (which the dev flavor needs to reach a self-signed Keycloak) is enabled. The two selectors are wired independently today; that gap is tracked as issue #1099.
+
+Per-institution flavors must also be added as a case in `getConfig()` (`lib/config/keycloak_config.dart`) — the flavor template says so — otherwise the app throws on startup with `Unknown FLAVOR`.
+
+`--dart-define=DEV_SERVER=…` and `--dart-define=DEV_PORT=…` remain dev-only overrides (see `mobile/genie_ai_mobile/CLAUDE.md`).
 
 ```bash
 cd mobile/genie_ai_mobile
 
 # Android APK (debug)
-flutter build apk --flavor <institution> --debug
+flutter build apk --flavor <institution> --debug --dart-define=FLAVOR=<institution>
 
 # Android APK (release)
-flutter build apk --flavor <institution> --release
+flutter build apk --flavor <institution> --release --dart-define=FLAVOR=<institution>
 
 # Android App Bundle (for Google Play)
-flutter build appbundle --flavor <institution> --release
+flutter build appbundle --flavor <institution> --release --dart-define=FLAVOR=<institution>
 
 # iOS IPA (macOS only)
-flutter build ipa --flavor <institution>
+flutter build ipa --flavor <institution> --dart-define=FLAVOR=<institution>
 ```
 
 For detailed build and run instructions, see `mobile/genie_ai_mobile/CLAUDE.md`.
@@ -733,7 +742,7 @@ For institutional deployments, enforce OS version policies via MDM:
 
 ### Google Play
 
-1. Build the Android App Bundle: `flutter build appbundle --flavor <institution> --release`.
+1. Build the Android App Bundle: `flutter build appbundle --flavor <institution> --release --dart-define=FLAVOR=<institution>`.
 2. **Signing:** Use the keystore created in [Step 5](#step-5-android-signing).
 3. **Content rating:** Complete the Google Play content rating questionnaire.
 4. **Privacy policy:** Provide a URL to the institution's privacy policy.
@@ -741,7 +750,7 @@ For institutional deployments, enforce OS version policies via MDM:
 
 ### Apple App Store
 
-1. Build the IPA: `flutter build ipa --flavor <institution>`.
+1. Build the IPA: `flutter build ipa --flavor <institution> --dart-define=FLAVOR=<institution>`.
 2. **Apple Developer account:** Each deployment needs a unique bundle ID registered in App Store Connect.
 3. **Provisioning profiles:** Create distribution provisioning profiles per deployment bundle ID.
 4. **App Review:** Prepare screenshots, description, and review notes.
@@ -815,6 +824,7 @@ Each institutional deployment publishes to its own app store listing (distinct `
 4. **For CI/CD**, automate the bump — derive `+N` from the CI build number or a counter stored outside the repo, then inject at build time via `--build-name` and `--build-number`:
    ```bash
    flutter build appbundle --flavor <institution> --release \
+     --dart-define=FLAVOR=<institution> \
      --build-name 1.0.0 --build-number 42
    ```
    This overrides `pubspec.yaml` for that single build without modifying the file.

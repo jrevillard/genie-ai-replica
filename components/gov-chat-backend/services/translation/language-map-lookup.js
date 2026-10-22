@@ -9,11 +9,14 @@
  *
  * - an inherited key ('constructor', 'toString') is not a language: it is
  *   looked up as an own property only;
- * - a language mapped to an empty code is not a language either: the empty
- *   code would reach the model as an empty string.
+ * - a language mapped to an empty code is not a code the model can be asked
+ *   for: the empty code would reach the model as an empty string. The map
+ *   carries the language, so this one is a defect in the shipped map rather
+ *   than a language the caller may not ask for.
  *
  * The lookups answer with null or false rather than throwing, so each
- * backend keeps its own wording in the log line it writes.
+ * backend keeps its own wording in the log line it writes — and so each
+ * backend decides what an empty mapping means.
  */
 
 /**

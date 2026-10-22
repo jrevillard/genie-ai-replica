@@ -9,7 +9,8 @@
 #
 # Teardown: `./scripts/local-teardown.sh` removes the chart release and
 # `genieai` namespace only; pass `--with-operators` to also uninstall the
-# 4 cluster operators.
+# cluster operators installed by install-prereqs.sh (sealed-secrets
+# excepted — its key decrypts the committed SealedSecrets).
 
 set -euo pipefail
 CHART=charts/genieai-umbrella

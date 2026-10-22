@@ -159,9 +159,7 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
         # We acquire the lock HERE to ensure we can return 429 immediately if busy.
         # O_NOFOLLOW + 0600: the lock file lives in the shared /tmp, so open
         # it without following a pre-planted symlink and keep it private.
-        lock_fd = os.open(
-            LOCK_FILE_PATH, os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW, 0o600
-        )
+        lock_fd = os.open(LOCK_FILE_PATH, os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW, 0o600)
         lock_file = os.fdopen(lock_fd, "w")
         try:
             # LOCK_EX: Exclusive, LOCK_NB: Non-blocking (throws error immediately if busy)

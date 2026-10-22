@@ -5,11 +5,13 @@
 # operators intact so the next install-prereqs.sh run is a no-op).
 #
 # Flags:
-#   --with-operators   Also uninstall the 7 operators installed by
+#   --with-operators   Also uninstall the operators installed by
 #                      scripts/install-prereqs.sh and delete their
 #                      namespaces (keycloak-system, cnpg-system,
 #                      arango-system, cert-manager, vmoperator-system,
-#                      opentelemetry-operator-system).
+#                      opentelemetry-operator-system, plus
+#                      grafana-operator-system when that script ran with
+#                      --with-grafana).
 #
 #                      The sealed-secrets namespace is NOT in that list
 #                      and never will be: the controller key it holds is
@@ -151,14 +153,21 @@ delete_leaked_hook_rbac() {
 
 uninstall_operators() {
   local ns release
-  # helm-managed (release names as pinned in scripts/install-prereqs.sh)
-  for ns in cnpg-system arango-system cert-manager vmoperator-system opentelemetry-operator-system; do
+  # helm-managed (release names as pinned in scripts/install-prereqs.sh).
+  # grafana-operator included: install-prereqs.sh --with-grafana installs
+  # it, so an operator who opted in gets it torn down with the rest. The
+  # release-existence check below skips it when it was never installed —
+  # or when flux owns it (laptop topology: the HelmRelease recreates any
+  # helm uninstall anyway, so the correct teardown there is in the deploy
+  # repo).
+  for ns in cnpg-system arango-system cert-manager vmoperator-system opentelemetry-operator-system grafana-operator-system; do
     case "$ns" in
       cnpg-system)             release="cnpg" ;;
       arango-system)           release="kube-arangodb" ;;
       cert-manager)            release="cert-manager" ;;
       vmoperator-system)       release="victoria-metrics-operator" ;;
       opentelemetry-operator-system) release="opentelemetry-operator" ;;
+      grafana-operator-system) release="grafana-operator" ;;
     esac
     if helm list -n "${ns}" -q 2>/dev/null | grep -qx "${release}"; then
       log "helm uninstall ${release} -n ${ns}"

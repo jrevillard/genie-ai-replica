@@ -3294,8 +3294,9 @@ chart:contract:
   # No dind sidecar: the [docker] runner exposes its daemon via the socket
   # (the pattern the promote:* jobs use — and the docker:28 client is the
   # one proven to reach it; an alpine docker-cli in another image did not).
-  # Serialized with chart:install — both jobs run containers on the shared
-  # daemon.
+  # Shares the chart-dind resource group with chart:crd-validate — runner
+  # capacity, not daemon mutual exclusion: crd-validate drives its own
+  # in-container daemon while this job drives the runner's shared one.
   resource_group: chart-dind
   retry:
     max: 1
@@ -3650,8 +3651,9 @@ chart:install:
     # 127.0.0.1 is unreachable from the job container when the daemon is
     # remote — the runner socket-proxy setup). Using the real address (not
     # 0.0.0.0) also puts it in the API cert's SANs, so kubectl needs no
-    # rewrite. Fixed port is safe — the chart-dind resource group
-    # serializes this job. unix:// sockets are rejected outright: the
+    # rewrite. Fixed port is safe — the chart-install-dind resource group
+    # serializes successive runs of this job (its only member). unix://
+    # sockets are rejected outright: the
     # derivation would yield apiServerAddress "unix" and kind create would
     # fail far from the cause.
     - |
@@ -3676,6 +3678,13 @@ chart:install:
     # note in chart:crd-validate).
     - kind delete cluster --name genieai-install 2>/dev/null || true
     - kind create cluster --name genieai-install --config /tmp/kind-config.yaml --image kindest/node:v1.33.0 --wait 5m
+    # KUBECONFIG first, THEN anything that speaks to the cluster: the
+    # variable points at a file nothing creates until this step, and
+    # kubectl with a KUBECONFIG naming a missing file falls back to
+    # http://localhost:8080 — "connection refused" as the job's only
+    # symptom.
+    - kind get kubeconfig --name genieai-install > "$KUBECONFIG"
+    - export KUBECONFIG
     # kind ships no default StorageClass: every PVC stays Pending and
     # `helm install --wait` blocks on it until the job timeout — a
     # storage gap indistinguishable from a chart defect. local-path gives
@@ -3684,8 +3693,6 @@ chart:install:
       https://raw.githubusercontent.com/rancher/local-path-provisioner/v0.0.26/deploy/local-path-storage.yaml
     - kubectl wait --for=condition=Ready pod -l app=local-path-provisioner
       -n local-path-storage --timeout=120s
-    - kind get kubeconfig --name genieai-install > "$KUBECONFIG"
-    - export KUBECONFIG
     - ./scripts/install-prereqs.sh
     # KNOWN INCOMPLETE (manual job): the operator-provided Secrets
     # (arango-root-secret, arango-jwt-secret, translation-cache-password,

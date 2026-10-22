@@ -117,15 +117,63 @@ render fails loudly on `change-me-*` placeholders.
 ### Gate C — byte-compare for pure refactors
 
 For chart edits that touch only structure (no value, no `opea.gpu.mode` flip,
-no per-service image tag):
+no per-service image tag).
+
+**What is compared is the DRIFT, not the two modes.** The two GPU modes
+render differently by design (in-cluster adds model Deployments and PVCs,
+external points at a remote endpoint), so "external vs in-cluster" is never
+empty. The invariant is that a refactor introduces the SAME change in both
+modes: diff(before→after) must be identical for external and in-cluster.
+
+Two things silently empty that comparison, and both were shipped here once:
+
+- **The OPEA tier must be ON.** `opea.enabled` defaults to `false`, and
+  with the tier off `opea.gpu.mode` changes nothing — the two renders are
+  byte-identical whatever the mode says, so the gate passes on every
+  change.
+- **Both renders need the same required values.** The chart has no default
+  for `ingress.host`, `data.keycloak.adminEmail` or the mail server, and a
+  render that fails prints its error INSTEAD of the manifests. Two failing
+  renders diff to nothing — the gate compares two error messages.
 
 ```bash
-# Render both, diff by line; expected: zero non-whitespace diffs
-diff <(rtk proxy helm template genieai charts/genieai-umbrella/ -n genieai \
-       --set opea.gpu.mode=external) \
-     <(rtk proxy helm template genieai charts/genieai-umbrella/ -n genieai \
-       --set opea.gpu.mode=in-cluster)
+# BEFORE the change: check out the pre-change chart into a temp copy
+# (git archive <sha> charts/genieai-umbrella) and render from it.
+# The commands are written out rather than sharing a $VALUES variable:
+# zsh does not word-split an unquoted expansion, so a shared variable
+# silently becomes ONE argument there.
+rtk proxy helm template genieai charts/genieai-umbrella/ -n genieai \
+  --set data.keycloak.failOnPlaceholderSecrets=false \
+  --set data.keycloak.adminEmail=ci-render@example.org \
+  --set data.keycloak.smtp.from=no-reply@ci.invalid \
+  --set data.keycloak.smtp.host=smtp.invalid \
+  --set data.keycloak.smtp.port=587 \
+  --set data.keycloak.smtp.starttls=true \
+  --set ingress.host=ci-render.local \
+  --set opea.enabled=true \
+  --set opea.gpu.nodeHost=https://gpu.ci-render.local:444 \
+  --set opea.gpu.mode=external > /tmp/after-external.yaml
+
+rtk proxy helm template genieai charts/genieai-umbrella/ -n genieai \
+  --set data.keycloak.failOnPlaceholderSecrets=false \
+  --set data.keycloak.adminEmail=ci-render@example.org \
+  --set data.keycloak.smtp.from=no-reply@ci.invalid \
+  --set data.keycloak.smtp.host=smtp.invalid \
+  --set data.keycloak.smtp.port=587 \
+  --set data.keycloak.smtp.starttls=true \
+  --set ingress.host=ci-render.local \
+  --set opea.enabled=true \
+  --set opea.gpu.nodeHost=https://gpu.ci-render.local:444 \
+  --set opea.gpu.mode=in-cluster > /tmp/after-incluster.yaml
+
+# The gate: the drift must be the same in both modes.
+diff <(diff /tmp/before-external.yaml   /tmp/after-external.yaml) \
+     <(diff /tmp/before-incluster.yaml /tmp/after-incluster.yaml)
 ```
+
+An empty result means the refactor is mode-agnostic. A non-empty result
+means the change touched one mode only — read the diff and decide whether
+that is intended.
 
 For intentional changes, classify every line of the diff BEFORE pushing —
 walk it like a PR review. Refactor diffs must round-trip identically across

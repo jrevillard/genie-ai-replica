@@ -279,19 +279,26 @@ The following services must be running (depending on deployment mode):
 
 The service uses `language_codes.json` for supported languages. To add new languages:
 
-1. Edit `language_codes.json`:
+1. Edit `language_codes.json` (a flat map of language code to language name):
    ```json
    {
-     "supported_languages": {
-       "en": "English",
-       "fr": "French",
-       "sw": "Swahili",
-       "es": "Spanish"
-     }
+     "en": "English",
+     "fr": "French",
+     "sw": "Swahili",
+     "es": "Spanish"
    }
    ```
 
 2. Restart the service to apply changes.
+
+   The restart is required, not a convenience: the map is read once and cached
+   in the process (`language_codes_map()`), and every request consults that
+   cache. A running service keeps serving the map it read at startup — a
+   language added to the file is refused until the service restarts, and a
+   language removed from it is still accepted until then. (A map that could
+   not be read is the exception: the failure is remembered only for
+   `LANGUAGE_MAP_RETRY_SECONDS`, so a transient read error does not disable
+   translation for the lifetime of the process.)
 
 ---
 

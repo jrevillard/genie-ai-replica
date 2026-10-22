@@ -371,7 +371,13 @@ module.exports = (queryService) => {
         doneState.handled = true;
         if (useStreamingTranslation) {
           if (streamingTranslationFailed || translationUnsupported) {
-            // Degraded: flush remaining EN directly (bypass translation)
+            // Degraded: the units already queued are emitted first, in the
+            // order they were committed, then the remaining English directly
+            // (bypass translation). The chain is awaited before the flush: a
+            // queued unit that has not run yet would otherwise write its
+            // content after the remainder — and after the response ended, which
+            // drops it.
+            await translationChain;
             if (pendingEn && !res.writableEnded) {
               res.write(`data: ${JSON.stringify({ type: 'chunk', content: pendingEn })}\n\n`);
               pendingEn = '';
@@ -417,6 +423,10 @@ module.exports = (queryService) => {
             fullResponseText += parsed.content;
             if (useStreamingTranslation && !streamingTranslationFailed) {
               // Buffer EN; commit complete units to the translator at boundaries.
+              // A language the models do not cover does NOT change this: the
+              // units keep being committed and written in order (the chain
+              // writes them in English), so the buffered tail stays in place
+              // and cannot overtake the units that precede it.
               if (!loggedStreamTranslateActive) {
                 loggedStreamTranslateActive = true;
                 // Debug: confirms the streaming-translation path is active for
@@ -557,7 +567,9 @@ module.exports = (queryService) => {
           // is not told the translation failed. The stream still ends the way
           // it would have: the answer is complete, only its language is not
           // the one that was asked for.
-          logger.warn('QueryService.stream_translation_unsupported_language', { queryId });
+          logger.warn(`QueryService.stream_translation_unsupported_language: (lang=${languageForLog(userLanguage)})`, {
+            queryId
+          });
         } else {
           // Not an `error` frame. The client treats that as terminal and stops
           // reading, and reports the whole system as down — neither is true when

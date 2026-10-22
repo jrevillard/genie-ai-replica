@@ -673,10 +673,12 @@ def _language_display(raw_language) -> str:
     reduced to the characters a language name is made of: a log line must not
     become a channel for arbitrary text, nor for forged log lines through an
     embedded newline. The backend applies the same rule to the value it logs
-    (services/translation/language-log.js).
+    (services/translation/language-log.js) — including the sentinel it uses
+    for a value that is not a string at all, so a log query written against
+    one service finds the lines of the other.
     """
     if not isinstance(raw_language, str):
-        return f"<{type(raw_language).__name__}>"
+        return "<non-string>"
     printable = "".join(char for char in raw_language if char.isalnum() or char in "_-")
     return printable[:32] if printable else "<empty>"
 
@@ -1647,9 +1649,19 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         # for parity with the upstream handler. The language it names comes
         # from the caller, so it is resolved against the language map: the
         # prompt carries the name the map knows, never the string the request
-        # carried.
-        requested_language = str(original_language).strip().lower()
-        target_language = language_codes_map().get(requested_language, "English")
+        # carried. An unknown language is REFUSED and the text goes through
+        # untranslated — exactly as on the chat path. Falling back to English
+        # would answer a different question than the one that was asked, with
+        # no refusal and no log.
+        language_codes = language_codes_map()
+        requested_language = _resolve_language_code(original_language, language_codes)
+        if requested_language is None:
+            logger.warning(
+                f"Translator language '{_language_display(original_language)}' is not a known language code — "
+                "refusing to translate."
+            )
+            return inputs
+        target_language = language_codes[requested_language.lower()]
 
         prompt = (
             f"Translate the following text to {target_language}. Only provide "
@@ -3017,54 +3029,71 @@ class ChatQnAService:
             history: Chat history as list of dicts or plain string (single-message mode).
             target_language: Target language CODE (e.g. "en"). The name the
                 prompt carries comes from the language map, so a caller cannot
-                put free text in the prompt.
+                put free text in the prompt. A code the map does not know is
+                refused: the history is used as it is.
             source_lang_code: Source ISO language code (e.g. "st") for TranslateGemma.
         """
-        # The target language name comes from the language map: an unknown
-        # target falls back to English rather than reaching the prompt.
-        target_name = language_codes_map().get(str(target_language).strip().lower(), "English")
+        # Single-message mode sends history as a plain string
+        if isinstance(history, str):
+            flattened_history_string = history
+        else:
+            max_translation_chars = _get_max_translation_chars()
+            current_chars = 0
+            messages_to_process = []
+            if logflag:
+                logger.debug(f"Processing translation for history with {len(history)} messages.")
+
+            for message in reversed(history):
+                if logflag:
+                    logger.debug(f"Examining message: {message}")
+                message_chars = len(message["content"])
+                if current_chars + message_chars + TRANSLATION_MSG_OVERHEAD_CHARS > max_translation_chars:
+                    break
+                messages_to_process.append(message)
+                current_chars += message_chars + TRANSLATION_MSG_OVERHEAD_CHARS
+            messages_to_process.reverse()
+            dropped_messages = len(history) - len(messages_to_process)
+            if dropped_messages:
+                history_truncation_total.add(1, {"path": "translation"})
+                logger.warning(
+                    "Chat history truncated for translation: budget_chars=%s kept_messages=%s dropped_messages=%s",
+                    max_translation_chars,
+                    len(messages_to_process),
+                    dropped_messages,
+                )
+            if not messages_to_process:
+                # Even the newest message exceeds the whole budget: nothing to
+                # translate — sending an empty prompt would only harvest the
+                # model's junk reply as chat history.
+                return ""
+
+            flattened_history_parts = []
+            for message in messages_to_process:
+                role = message.get("role", "unknown").upper()
+                content = message.get("content", "")
+                flattened_history_parts.append(f"{role}: {content}")
+
+            flattened_history_string = " |<-MSG->| ".join(flattened_history_parts)
+
+        # The target steers the prompt, so it is resolved against the language
+        # map — ONCE, for both shapes of the history. The two branches used to
+        # resolve it differently (the string branch ignored it and translated
+        # into English whatever the target was), so one history could be
+        # translated into two different languages. An unknown target is
+        # refused and the history is used as it is.
+        language_codes = language_codes_map()
+        canonical_target = target_language.strip().lower() if isinstance(target_language, str) else ""
+        target_name = language_codes.get(canonical_target)
+        if target_name is None:
+            logger.warning(
+                f"History translation target '{_language_display(target_language)}' is not a known language code — "
+                "refusing to translate the history."
+            )
+            return flattened_history_string
 
         # Single-message mode sends history as a plain string — translate it
         if isinstance(history, str):
-            return await self._translate_text_chunk(history, "en", source_lang_code=source_lang_code)
-
-        max_translation_chars = _get_max_translation_chars()
-        current_chars = 0
-        messages_to_process = []
-        if logflag:
-            logger.debug(f"Processing translation for history with {len(history)} messages.")
-
-        for message in reversed(history):
-            if logflag:
-                logger.debug(f"Examining message: {message}")
-            message_chars = len(message["content"])
-            if current_chars + message_chars + TRANSLATION_MSG_OVERHEAD_CHARS > max_translation_chars:
-                break
-            messages_to_process.append(message)
-            current_chars += message_chars + TRANSLATION_MSG_OVERHEAD_CHARS
-        messages_to_process.reverse()
-        dropped_messages = len(history) - len(messages_to_process)
-        if dropped_messages:
-            history_truncation_total.add(1, {"path": "translation"})
-            logger.warning(
-                "Chat history truncated for translation: budget_chars=%s kept_messages=%s dropped_messages=%s",
-                max_translation_chars,
-                len(messages_to_process),
-                dropped_messages,
-            )
-        if not messages_to_process:
-            # Even the newest message exceeds the whole budget: nothing to
-            # translate — sending an empty prompt would only harvest the
-            # model's junk reply as chat history.
-            return ""
-
-        flattened_history_parts = []
-        for message in messages_to_process:
-            role = message.get("role", "unknown").upper()
-            content = message.get("content", "")
-            flattened_history_parts.append(f"{role}: {content}")
-
-        flattened_history_string = " |<-MSG->| ".join(flattened_history_parts)
+            return await self._translate_text_chunk(history, canonical_target, source_lang_code=source_lang_code)
 
         # Build payload based on model type
         if _is_translategemma():
@@ -3073,9 +3102,9 @@ class ChatQnAService:
             prompt = self._build_translategemma_prompt(
                 text=flattened_history_string,
                 source_lang_code=source_lang_code,
-                target_lang_code="en",
+                target_lang_code=canonical_target,
                 source_lang_name=source_lang_code.upper(),
-                target_lang_name="English",
+                target_lang_name=target_name,
             )
             output_cap = self._translation_output_cap(flattened_history_string)
             if output_cap is None:

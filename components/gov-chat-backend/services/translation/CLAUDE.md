@@ -45,6 +45,20 @@ pre-fix output), making it look like the fix was intermittently broken.
 every key change, forcing fresh translations on the next request — no manual
 flush needed.
 
+## A bump orphans the previous entries (they are not deleted)
+
+The cache has **no TTL**: an entry written under one version stays in Redis
+until it is flushed. Bumping the version changes every key, so the entries
+of the previous generation are never read again — but they are not removed
+either. They keep occupying Redis memory, one entry per (document,
+language pair, model), until a manual flush deletes them (command below).
+
+Versions 3 and 4 (both in issue #1097's branch) therefore left the version-2
+entries behind. This is the intended trade-off: an orphaned entry costs
+memory, a stale entry costs a wrong translation. When a deployment has been
+running several versions, flush the `translation:*` keys once to reclaim the
+space.
+
 ## Manual cache flush (emergency / one-off)
 
 If stale entries are already cached and you cannot bump the version (or want a

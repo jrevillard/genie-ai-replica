@@ -11,6 +11,7 @@ an unknown or malformed language is refused, a known one still translates.
 
 import json
 import os
+from enum import Enum
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -301,3 +302,193 @@ class TestTranslateChunkingBoundary:
 
         assert client.post.await_count == 0
         assert result == "hello"
+
+
+class TestLanguageDisplay:
+    """The bounded form of a caller-supplied language.
+
+    The value is attacker-controlled: the log line must carry neither the raw
+    payload nor a newline that could forge a log line. The sentinel for a
+    value that is not a string at all is shared with the backend, so a log
+    query written against one service finds the lines of the other.
+    """
+
+    def test_a_non_string_uses_the_shared_sentinel(self):
+        assert chatqna_module._language_display(None) == "<non-string>"
+        assert chatqna_module._language_display(42) == "<non-string>"
+        assert chatqna_module._language_display({"fr": "French"}) == "<non-string>"
+
+    def test_the_sentinel_matches_the_backend(self):
+        """The backend writes the same sentinel
+        (components/gov-chat-backend/services/translation/language-log.js):
+        the two must not drift apart, or a query over one service misses the
+        lines of the other."""
+        backend = os.path.join(
+            os.path.dirname(chatqna_module.__file__),
+            "..",
+            "..",
+            "components",
+            "gov-chat-backend",
+            "services",
+            "translation",
+            "language-log.js",
+        )
+        if not os.path.exists(backend):
+            pytest.skip("the backend source tree is not reachable from here")
+        with open(backend) as handle:
+            source = handle.read()
+        assert "'<non-string>'" in source
+
+    def test_a_payload_is_reduced_to_language_characters(self):
+        payload = "fr\nFAKE LOG LINE " + ("x" * 500)
+        displayed = chatqna_module._language_display(payload)
+        assert "\n" not in displayed
+        assert len(displayed) <= 32
+
+    def test_an_empty_value_has_its_own_sentinel(self):
+        assert chatqna_module._language_display("   ") == "<empty>"
+
+
+class TestHistoryTranslationTarget:
+    """The target language of the chat history.
+
+    The target steers the translation prompt, so it is resolved against the
+    language map — once, for both shapes of the history. The string branch
+    used to ignore it and translate into English whatever the target was, so
+    one history could be translated into two different languages.
+    """
+
+    @pytest.mark.asyncio
+    async def test_the_string_branch_translates_into_the_requested_target(self):
+        svc = create_service()
+        svc._translate_text_chunk = AsyncMock(return_value="bonjour")
+        result = await svc._get_translated_history_string("hello", "fr")
+        assert result == "bonjour"
+        assert svc._translate_text_chunk.await_args.args[1] == "fr"
+
+    @pytest.mark.asyncio
+    async def test_the_message_branch_translates_into_the_requested_target(self, monkeypatch):
+        monkeypatch.setattr(chatqna_module, "_is_translategemma", lambda: False)
+        svc = create_service()
+        client, context = fake_translation_client()
+        with patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=context):
+            await svc._get_translated_history_string([{"role": "user", "content": "hello"}], "fr")
+        prompt = client.post.await_args.kwargs["json"]["messages"][0]["content"]
+        assert "French" in prompt
+
+    @pytest.mark.asyncio
+    async def test_the_translategemma_prompt_names_the_requested_target(self, monkeypatch):
+        """The TranslateGemma prompt used to name English as the target
+        whatever the target was."""
+        monkeypatch.setattr(chatqna_module, "_is_translategemma", lambda: True)
+        svc = create_service()
+        response = MagicMock()
+        response.raise_for_status = MagicMock()
+        response.json = MagicMock(return_value={"choices": [{"text": "bonjour"}]})
+        client = MagicMock()
+        client.post = AsyncMock(return_value=response)
+        context = MagicMock()
+        context.__aenter__ = AsyncMock(return_value=client)
+        context.__aexit__ = AsyncMock(return_value=False)
+        with patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=context):
+            result = await svc._get_translated_history_string([{"role": "user", "content": "hello"}], "fr")
+        prompt = client.post.await_args.kwargs["json"]["prompt"]
+        assert result == "bonjour"
+        assert "French (fr)" in prompt
+        assert "French" in prompt
+
+    @pytest.mark.asyncio
+    async def test_an_unknown_target_is_refused(self):
+        """An unknown target must not reach a translation prompt: the
+        history is used as it is, and the refusal is logged."""
+        svc = create_service()
+        svc._translate_text_chunk = AsyncMock(return_value="translated")
+        with patch.object(chatqna_module, "logger") as mock_logger:
+            result = await svc._get_translated_history_string("hello", "zz")
+        assert result == "hello"
+        assert svc._translate_text_chunk.await_count == 0
+        assert mock_logger.warning.called
+
+    @pytest.mark.asyncio
+    async def test_an_injection_target_is_refused(self):
+        svc = create_service()
+        svc._translate_text_chunk = AsyncMock(return_value="translated")
+        with patch.object(chatqna_module, "logger") as mock_logger:
+            result = await svc._get_translated_history_string("hello", INJECTION)
+        assert result == "hello"
+        assert svc._translate_text_chunk.await_count == 0
+        assert mock_logger.warning.called
+
+    @pytest.mark.asyncio
+    async def test_an_unknown_target_leaves_the_message_history_untouched(self):
+        svc = create_service()
+        with patch.object(chatqna_module, "logger"):
+            result = await svc._get_translated_history_string([{"role": "user", "content": "hello"}], "zz")
+        assert result == "USER: hello"
+
+
+class FakeTranslatorServiceType(Enum):
+    """Mirror of the ServiceType members align_inputs compares against."""
+
+    TRANSLATOR = "translator"
+    EMBEDDING = "embedding"
+
+
+class TestTranslatorBranchLanguageBoundary:
+    """The translator node of the graph.
+
+    The language it names comes from the caller: it is resolved against the
+    language map, so the prompt carries the name the map knows. An unknown
+    language is REFUSED and the text goes through untranslated — falling back
+    to English would answer a different question than the one that was asked,
+    with no refusal and no log.
+    """
+
+    def _align(self, language):
+        service = MagicMock()
+        service.services = {"translator_node": MagicMock()}
+        service.services["translator_node"].service_type = FakeTranslatorServiceType.TRANSLATOR
+        inputs = {"text": "bonjour"}
+        with patch("chatqna.genieai_chatqna.ServiceType", FakeTranslatorServiceType):
+            result = chatqna_module.align_inputs(
+                service,
+                inputs,
+                "translator_node",
+                MagicMock(),
+                {"max_tokens": 128},
+                original_language=language,
+            )
+        return inputs, result
+
+    def test_a_known_language_is_named_from_the_map(self):
+        _inputs, result = self._align("fr")
+        prompt = result["messages"][0]["content"]
+        assert "French" in prompt
+        assert "bonjour" in prompt
+
+    def test_an_unknown_language_is_refused(self):
+        inputs, result = self._align("zz")
+        assert result is inputs
+        assert "messages" not in result
+
+    def test_an_injection_language_is_refused(self):
+        inputs, result = self._align(INJECTION)
+        assert result is inputs
+        assert "messages" not in result
+
+    def test_a_non_string_language_is_refused(self):
+        inputs, result = self._align(42)
+        assert result is inputs
+        assert "messages" not in result
+
+    def test_the_refusal_is_logged(self):
+        with patch.object(chatqna_module, "logger") as mock_logger:
+            self._align("zz")
+        assert mock_logger.warning.called
+
+    def test_the_refused_language_is_bounded_in_the_log(self):
+        with patch.object(chatqna_module, "logger") as mock_logger:
+            self._align("fr\nFAKE LOG LINE " + ("x" * 500))
+        message = mock_logger.warning.call_args[0][0]
+        assert "\n" not in message
+        assert len(message) < 300

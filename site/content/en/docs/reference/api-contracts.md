@@ -760,7 +760,7 @@ stable; renaming a field is a breaking change.
 |------|--------|-------|
 | `chunk` | `content: string` | One streaming chunk (an English text unit by default) |
 | `metadata` | `queryId: string`, `responseTime: number`, `source_documents?: array`, `confidence_score?: number`, `is_grounded?: boolean`, `retrieval_confidence_score?: number \| null`, `self_confidence?: number \| null`, `abstained?: boolean`, `abstention_reason?: string \| null` | Captured from chatqna's in-stream metadata, forwarded to client (no separate backend retrieval) |
-| `translation` | `content: string` | Emitted by `/api/translate/*` only when `STREAMING_TRANSLATION_ENABLED=0` (the English-then-flip path) |
+| `translation` | `content: string` | Emitted by `/api/queries/stream` on the post-stream translation path (`STREAMING_TRANSLATION_ENABLED=0`, the English-then-flip path). The standalone `/api/translate` endpoints answer with JSON, not with stream events |
 | `chunk` | `content: string` (translated) | Emitted by streaming-translation path — see below |
 | `error` | `message: string`, `code: string` | Closes the stream after emission |
 | `done` | `queryId: string`, `translationFailed: boolean` | Always last; closes the stream. `translationFailed` is `true` when a translation was attempted and failed, and the client is showing the English original. A language the translation models do not cover is not a failure: the answer stays in English and `translationFailed` stays `false` |

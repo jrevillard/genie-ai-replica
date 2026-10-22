@@ -6,7 +6,7 @@ The Document Translation Service is a flexible, multi-backend translation system
 
 ### Key Features
 
-- **34 Language Support** - Including English, Arabic, Chinese, Spanish, and 31 others
+- **41 Language Support** - Including English, Arabic, Chinese, Spanish, and 38 others
 - **Multiple Backends** - CPU (NLLB-200), GPU (TranslateGemma, Gemma-3), or Auto mode
 - **Smart Caching** - Redis-based permanent caching per document/language pair
 - **Graceful Degradation** - Language and backend fallback chains for reliability
@@ -161,7 +161,7 @@ TRANSLATION_CACHE_PASSWORD=!@#$5678
 
 ---
 
-## Supported Languages (34 Total)
+## Supported Languages (41 Total)
 
 ### Original 11 Languages
 | Code | Language |
@@ -178,7 +178,7 @@ TRANSLATION_CACHE_PASSWORD=!@#$5678
 | pt | Portuguese |
 | sw | Kiswahili |
 
-### Extended Languages (23 Additional)
+### Extended Languages (30 Additional)
 | Code | Language | Fallback |
 |------|----------|----------|
 | am | Amharic | English |
@@ -205,6 +205,12 @@ TRANSLATION_CACHE_PASSWORD=!@#$5678
 | ur | Urdu | - |
 | uz | Uzbek | Turkish |
 | yo | Yoruba | Kiswahili |
+| man | Mandinka | English |
+| mnk | Mandinka | English |
+| st | Sesotho | English |
+| hi | Hindi | - |
+| ja | Japanese | - |
+| ko | Korean | - |
 
 ---
 
@@ -688,7 +694,7 @@ A: Clear the specific cache key in Redis or upload a new document (different has
 A: Use `google/translategemma-4b-it` for best translation quality. Use `google/gemma-3-1b-it` for lower memory GPUs.
 
 **Q: Can I add support for more languages?**
-A: Yes. Add new language mappings to the language map files. See architecture specification.
+A: Yes. Add new language mappings to the language map files (see architecture specification) **and restart the backend and the chatqna service**. Both read their language map once, at startup: the backend loads it when it selects its backend, and chatqna caches it in the process. A running service keeps the map it read at startup, so a language added to the files is refused until the services restart, and a language removed from them is still accepted until then.
 
 **Q: Why does translation take longer than expected?**
 A: Check logs for actual backend in use. Large documents are processed node-by-node (not as single request).

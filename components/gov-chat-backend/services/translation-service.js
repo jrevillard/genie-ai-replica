@@ -247,6 +247,22 @@ class TranslationService {
    * @throws {UnsupportedLanguageError} When the language is unknown and has no usable fallback.
    */
   resolveTargetLanguage(targetLang) {
+    return this._resolveTarget(targetLang).targetLang;
+  }
+
+  /**
+   * @method _resolveTarget
+   * @description Resolves a target language and the code the model expects for
+   * it, in one pass. The canonical code and the model-specific code are
+   * produced together: resolving them separately meant the map was consulted
+   * twice for the same language, and the second lookup could only fail in a
+   * way the caller could not act on.
+   * @param {string} targetLang - The target language as it arrived from the caller.
+   * @returns {{targetLang: string, targetLangCode: string}} The canonical
+   *   language and the code the model expects.
+   * @throws {UnsupportedLanguageError} When the language is unknown and has no usable fallback.
+   */
+  _resolveTarget(targetLang) {
     this.ensureReady();
     const requested = typeof targetLang === 'string' ? targetLang.trim().toLowerCase() : '';
     if (!requested) {
@@ -261,7 +277,10 @@ class TranslationService {
           `[TRANSLATION-SERVICE] Target language ${languageForLog(requested)} is not directly supported, using fallback ${languageForLog(candidate)}`
         );
       }
-      return candidate;
+      const targetLangCode = this.modelLanguageCode(candidate);
+      if (targetLangCode) {
+        return { targetLang: candidate, targetLangCode };
+      }
     }
 
     logger.warn(`[TRANSLATION-SERVICE] Unsupported target language: ${languageForLog(requested)}`);
@@ -306,6 +325,19 @@ class TranslationService {
    * @throws {UnsupportedLanguageError} When the language is unknown.
    */
   resolveSourceLanguage(sourceLang) {
+    return this._resolveSource(sourceLang).sourceLang;
+  }
+
+  /**
+   * @method _resolveSource
+   * @description Resolves a source language and the code the model expects for
+   * it, in one pass — the counterpart of `_resolveTarget`.
+   * @param {string} sourceLang - The source language as it arrived from the caller.
+   * @returns {{sourceLang: string, sourceLangCode: string}} The canonical
+   *   language and the code the model expects.
+   * @throws {UnsupportedLanguageError} When the language is unknown.
+   */
+  _resolveSource(sourceLang) {
     this.ensureReady();
     const requested = typeof sourceLang === 'string' ? sourceLang.trim().toLowerCase() : '';
     if (!requested) {
@@ -316,11 +348,12 @@ class TranslationService {
     // map does not know is refused, and an inherited property is not a
     // language. The source has no fallback chain — degrading the language a
     // text is written in would translate the wrong text.
-    if (!this.modelLanguageCode(requested)) {
+    const sourceLangCode = this.modelLanguageCode(requested);
+    if (!sourceLangCode) {
       logger.warn(`[TRANSLATION-SERVICE] Unsupported source language: ${languageForLog(requested)}`);
       throw new UnsupportedLanguageError('source');
     }
-    return requested;
+    return { sourceLang: requested, sourceLangCode };
   }
 
   /**
@@ -347,19 +380,8 @@ class TranslationService {
    * @throws {UnsupportedLanguageError} When either language is unknown.
    */
   resolveLanguagePair(sourceLang, targetLang) {
-    this.ensureReady();
-    const resolvedSourceLang = this.resolveSourceLanguage(sourceLang);
-    const resolvedTargetLang = this.resolveTargetLanguage(targetLang);
-    const sourceLangCode = this.modelLanguageCode(resolvedSourceLang);
-    const targetLangCode = this.modelLanguageCode(resolvedTargetLang);
-    if (!sourceLangCode) {
-      logger.warn(`[TRANSLATION-SERVICE] Unsupported source language: ${languageForLog(resolvedSourceLang)}`);
-      throw new UnsupportedLanguageError('source');
-    }
-    if (!targetLangCode) {
-      logger.warn(`[TRANSLATION-SERVICE] Unsupported target language: ${languageForLog(resolvedTargetLang)}`);
-      throw new UnsupportedLanguageError('target');
-    }
+    const { sourceLang: resolvedSourceLang, sourceLangCode } = this._resolveSource(sourceLang);
+    const { targetLang: resolvedTargetLang, targetLangCode } = this._resolveTarget(targetLang);
     return {
       sourceLang: resolvedSourceLang,
       targetLang: resolvedTargetLang,
@@ -383,18 +405,26 @@ class TranslationService {
     // language the map does not know never reaches the model. The check comes
     // before the empty-texts shortcut, so a request for an unknown language
     // is refused whether or not it had anything to translate.
-    const { sourceLangCode, targetLangCode } = this.resolveLanguagePair(sourceLang, targetLang);
+    const {
+      sourceLang: resolvedSourceLang,
+      targetLang: resolvedTargetLang,
+      sourceLangCode,
+      targetLangCode
+    } = this.resolveLanguagePair(sourceLang, targetLang);
 
     if (!texts || texts.length === 0) {
       logger.warn('[TRANSLATION-SERVICE] translate method called with empty array.');
       return [];
     }
 
+    // The log names the resolved languages, not the ones the request carried:
+    // "FR" and "fr" are the same language, and a log query written against
+    // the resolved form finds this line.
     logger.info(
-      `[TRANSLATION-SERVICE] Translating ${texts.length} texts from ${languageForLog(sourceLang)} to ${languageForLog(targetLang)}`
+      `[TRANSLATION-SERVICE] Translating ${texts.length} texts from ${languageForLog(resolvedSourceLang)} to ${languageForLog(resolvedTargetLang)}`
     );
 
-    return this.translateWithBackend(texts, sourceLangCode, targetLangCode);
+    return this.translateWithBackend(texts, sourceLangCode, targetLangCode, resolvedSourceLang, resolvedTargetLang);
   }
 
   /**
@@ -406,9 +436,19 @@ class TranslationService {
    * @param {string[]} texts - The texts to translate.
    * @param {string} sourceLangCode - The model-specific source language code.
    * @param {string} targetLangCode - The model-specific target language code.
+   * @param {string} [sourceLang] - The canonical source language, as the log
+   *   lines name it. Defaults to the model-specific code.
+   * @param {string} [targetLang] - The canonical target language, as the log
+   *   lines name it. Defaults to the model-specific code.
    * @returns {Promise<string[]>} The translated texts.
    */
-  async translateWithBackend(texts, sourceLangCode, targetLangCode) {
+  async translateWithBackend(
+    texts,
+    sourceLangCode,
+    targetLangCode,
+    sourceLang = sourceLangCode,
+    targetLang = targetLangCode
+  ) {
     try {
       // Delegate to backend
       const translatedTexts = await this.backend.translate(texts, sourceLangCode, targetLangCode);
@@ -419,10 +459,14 @@ class TranslationService {
       // is a failure, not a reason to switch models mid-answer — that would
       // serve a different, lower-quality translation of the same content with
       // nothing in the output to say so.
+      //
+      // The languages are named the way the other log lines name them — the
+      // canonical codes — so a query over the canonical form finds the
+      // failure too.
       logger.error(`[TRANSLATION-SERVICE] Translation failed: ${error.message}`, {
         stack: error.stack,
-        sourceLang: sourceLangCode,
-        targetLang: targetLangCode,
+        sourceLang: languageForLog(sourceLang),
+        targetLang: languageForLog(targetLang),
         backend: this.backendType
       });
       throw error;
@@ -585,7 +629,15 @@ class TranslationService {
           logger.debug(`[TRANSLATION-SERVICE] Starting parallel batch ${index + 1}/${batches.length}`);
           // The languages were resolved once, before the cache lookup: the
           // batches go straight to the backend with the codes already checked.
-          return this.translateWithBackend(batch, sourceLangCode, targetLangCode);
+          // The canonical codes travel along so a failure names the same
+          // languages as the rest of the log lines.
+          return this.translateWithBackend(
+            batch,
+            sourceLangCode,
+            targetLangCode,
+            resolvedSourceLang,
+            resolvedTargetLang
+          );
         });
 
         // Run all batches concurrently

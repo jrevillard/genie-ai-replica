@@ -409,11 +409,38 @@ class TestAlignInputs:
             llm_params = {"max_tokens": 512}
             inputs = {"text": "Hello world"}
             with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
-                result = align_inputs(self_mock, inputs, "translator_node", MagicMock(), llm_params)
+                result = align_inputs(
+                    self_mock,
+                    inputs,
+                    "translator_node",
+                    MagicMock(),
+                    llm_params,
+                    original_language="fr",
+                )
             assert "messages" in result
             assert "Translate" in result["messages"][0]["content"]
             assert result["temperature"] == 0
             assert result["stream"] is False
+
+        def test_an_unknown_language_is_refused(self):
+            """The language the translator node names comes from the caller: an
+            unknown one is refused, and the text goes through untranslated
+            instead of being translated into English."""
+            self_mock = MagicMock()
+            self_mock.services = {"translator_node": create_mock_service_node(FakeServiceType.TRANSLATOR)}
+            llm_params = {"max_tokens": 512}
+            inputs = {"text": "Hello world"}
+            with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+                result = align_inputs(
+                    self_mock,
+                    inputs,
+                    "translator_node",
+                    MagicMock(),
+                    llm_params,
+                    original_language="zz",
+                )
+            assert result is inputs
+            assert "messages" not in result
 
         def test_original_language_en_sets_target_english(self):
             self_mock = MagicMock()
@@ -1837,7 +1864,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
             patch("chatqna.genieai_chatqna.TRANSLATION_MODEL_ID", "test-model"),
         ):
-            result = await svc._get_translated_history_string("Hello world", "French")
+            result = await svc._get_translated_history_string("Hello world", "fr")
         assert "Translated" in result
 
     @pytest.mark.asyncio
@@ -1859,7 +1886,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
             patch("chatqna.genieai_chatqna.TRANSLATION_MODEL_ID", "test-model"),
         ):
-            result = await svc._get_translated_history_string(history, "English")
+            result = await svc._get_translated_history_string(history, "en")
         assert "Translated history" in result
 
     @pytest.mark.asyncio
@@ -1889,7 +1916,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna._TRANSLATION_DISCOVERY_ENDPOINT", "https://gpu-host/translation"),
             patch("httpx.get", return_value=models_resp),
         ):
-            await svc._get_translated_history_string(history, "English")
+            await svc._get_translated_history_string(history, "en")
 
         sent_prompt = mock_client.post.call_args.kwargs["json"]["messages"][0]["content"]
         assert "AAAA" in sent_prompt  # oldest message forwarded
@@ -1919,7 +1946,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.MAX_TRANSLATION_CHARS", 70),
             patch("chatqna.genieai_chatqna.history_truncation_total") as mock_counter,
         ):
-            await svc._get_translated_history_string(history, "English")
+            await svc._get_translated_history_string(history, "en")
 
         sent_prompt = mock_client.post.call_args.kwargs["json"]["messages"][0]["content"]
         assert "DROPME" in sent_prompt  # newest kept
@@ -1956,7 +1983,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna._TRANSLATION_DISCOVERY_ENDPOINT", "https://gpu-host/translation"),
             patch("httpx.get", return_value=models_resp),
         ):
-            await svc._get_translated_history_string(history, "English")
+            await svc._get_translated_history_string(history, "en")
 
         payload = mock_client.post.call_args.kwargs["json"]
         # Both messages survive the char-budget filter (8028 ≤ 8448). Flattened
@@ -1994,7 +2021,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna._TRANSLATION_DISCOVERY_ENDPOINT", "https://gpu-host/translation"),
             patch("httpx.get", return_value=models_resp),
         ):
-            result = await svc._get_translated_history_string(history, "English")
+            result = await svc._get_translated_history_string(history, "en")
 
         assert result == "Translated"
         payload = mock_client.post.call_args.kwargs["json"]
@@ -2021,7 +2048,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna._TRANSLATION_DISCOVERY_ENDPOINT", "https://gpu-host/translation"),
             patch("httpx.get", return_value=MagicMock(json=lambda: {"data": [{"id": "m", "max_model_len": 768}]})),
         ):
-            result = await svc._get_translated_history_string(history, "English")
+            result = await svc._get_translated_history_string(history, "en")
 
         assert result == ""  # nothing survived the budget: empty history, no junk
         mock_client.post.assert_not_called()

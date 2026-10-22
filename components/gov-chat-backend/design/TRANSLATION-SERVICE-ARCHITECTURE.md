@@ -96,7 +96,7 @@ module.exports = {
   // Language code format used by this model
   codeFormat: 'FLORES-200',  // 'FLORES-200' | 'ISO-639-1' | 'custom'
 
-  // Supported languages (34 total)
+  // Supported languages (41 total)
   languageMap: {
     en: 'eng_Latn',
     ar: 'arb_Arab',
@@ -132,7 +132,13 @@ module.exports = {
     ur: 'urd_Arab',
     uz: 'uzn_Latn',
     yo: 'yor_Latn',
-    ckb: 'ckb_Arab',  # Sorani Kurdish (34th language)
+    ckb: 'ckb_Arab',  # Sorani Kurdish
+    man: 'dyu_Latn',  # Mandinka
+    mnk: 'dyu_Latn',  # Mandinka
+    st: 'sot_Latn',  # Sesotho
+    hi: 'hin_Deva',  # Hindi
+    ja: 'jpn_Jpan',  # Japanese
+    ko: 'kor_Hang',  # Korean
   },
 
   // Optional: Language-specific prompt templates (for LLM-based models)
@@ -380,7 +386,7 @@ class CpuTranslateBackend {
 
 ## 4. Language Mappings
 
-### 4.1 Supported Languages (34 Total)
+### 4.1 Supported Languages (41 Total)
 
 | ISO 639-1 | Language Name | NLLB-200 Code | TranslateGemma Code |
 |-----------|---------------|---------------|---------------------|
@@ -419,6 +425,12 @@ class CpuTranslateBackend {
 | uz | Uzbek | uzn_Latn | uz |
 | yo | Yoruba | yor_Latn | yo |
 | ckb | Sorani Kurdish | ckb_Arab | ckb |
+| man | Mandinka | dyu_Latn | man |
+| mnk | Mandinka | dyu_Latn | mnk |
+| st | Sesotho | sot_Latn | st |
+| hi | Hindi | hin_Deva | hi |
+| ja | Japanese | jpn_Jpan | ja |
+| ko | Korean | kor_Hang | ko |
 
 ### 4.2 Language Fallback Chains
 
@@ -482,7 +494,7 @@ module.exports = {
   languageMap: {
     en: 'model_specific_code_for_en',
     ar: 'model_specific_code_for_ar',
-    // ... all 34 languages
+    // ... all 41 languages
   },
 
   // Optional: Custom prompt template
@@ -719,7 +731,7 @@ VLLM_TRANSLATION_MAX_MODEL_LEN=8192
 1. Unit tests for each backend
 2. Integration tests for fallback chain
 3. Load testing for concurrent translations
-4. Language coverage tests (34 languages)
+4. Language coverage tests (41 languages)
 
 ## 9. Testing Strategy
 
@@ -771,10 +783,10 @@ describe('Translation Service Integration', () => {
     // Should use Urdu as target
   });
 
-  test('All 34 languages are supported', async () => {
+  test('All 41 languages are supported', async () => {
     const service = new TranslationService();
     const languages = service.getSupportedLanguages();
-    expect(Object.keys(languages).length).toBe(34);
+    expect(Object.keys(languages).length).toBe(41);
   });
 });
 ```

@@ -641,6 +641,72 @@ describe('POST /stream', () => {
     delete process.env.STREAMING_TRANSLATION_ENABLED;
   });
 
+  it('keeps the answer complete and in order when the language is refused before the last unit', async () => {
+    // The refusal arrives while the stream is still running. The units that
+    // follow it are not translated, but they must still reach the client in
+    // the order the answer was written: a unit queued but not yet written
+    // would otherwise land after the remainder that follows it, or after the
+    // response has ended (which drops it).
+    process.env.STREAMING_TRANSLATION_ENABLED = '1';
+    queryService.initStreamQuery.mockResolvedValue({
+      queryId: 'q1',
+      opeaUrl: 'http://chatqna:8888/v1/chatqna',
+      opeaPayload: { messages: [] }
+    });
+    queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
+    queryService.finalizeStreamQuery.mockResolvedValue(undefined);
+    translationService.init.mockResolvedValue(undefined);
+    const { UnsupportedLanguageError } = require('../../services/translation/unsupported-language');
+    // The translator signals that it was called, so the test waits for the
+    // route to have processed the first chunk instead of guessing with a
+    // timeout: the refusal must be known BEFORE the last chunk arrives, and
+    // the last chunk and the end of the stream must arrive in the SAME read
+    // (that is what leaves a queued unit in flight when the response ends).
+    let translatorCalled;
+    const translatorCalledPromise = new Promise((resolve) => {
+      translatorCalled = resolve;
+    });
+    translationService.translateMarkdown.mockImplementation(async () => {
+      translatorCalled();
+      throw new UnsupportedLanguageError('target');
+    });
+
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ data: mockStream });
+
+    // .end() starts the request right away: awaiting the Test object would
+    // only send it at the end of the test, long after the stream was pushed.
+    const responsePromise = new Promise((resolve, reject) => {
+      authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hola' }],
+        context: { language: 'zz' }
+      }).end((err, res) => (err ? reject(err) : resolve(res)));
+    });
+    mockStream.push('data: {"type":"chunk","content":"First sentence. "}\n\n');
+    // The first unit is refused, and the refusal is known before the next
+    // chunk arrives.
+    await translatorCalledPromise;
+    await new Promise((resolve) => setImmediate(resolve));
+    // The last unit and the end of the stream arrive in the same read.
+    mockStream.push(
+      'data: {"type":"chunk","content":"Second sentence. Tail"}\n\ndata: {"type":"done","queryId":"q1"}\n\n'
+    );
+    mockStream.push(null);
+
+    const response = await responsePromise;
+    expect(response.status).toBe(200);
+    const body = response.text || '';
+    expect(body).toContain('First sentence');
+    // The unit queued when the refusal was already known must not be dropped
+    // when the response ends.
+    expect(body).toContain('Second sentence');
+    expect(body).toContain('Tail');
+    // The remainder must not overtake the unit it follows.
+    expect(body.indexOf('Second sentence')).toBeLessThan(body.indexOf('Tail'));
+    delete process.env.STREAMING_TRANSLATION_ENABLED;
+  });
+
   it('does not report a failure on done when the post-stream language is not covered', async () => {
     // The post-stream path (streaming translation off) has its own refusal
     // branch: the answer is complete in English and the stream ends normally.

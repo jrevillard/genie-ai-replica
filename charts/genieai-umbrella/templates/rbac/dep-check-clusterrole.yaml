@@ -1,19 +1,17 @@
-{{- /* Cluster-scoped RBAC for the dep-check SA. REGULAR resource — no
-       helm.sh/hook:* annotations.
+{{- /* Cluster-scoped RBAC for the dep-check SA. HOOK-OWNED
+       (pre-install,pre-upgrade, weight -30, before-hook-creation) — the
+       pre-install dependency-check job runs BEFORE regular resources
+       land, so a regular ClusterRole would not exist yet and the job's
+       `kubectl get ns` would 403.
 
-       Why not hook-owned with hook-succeeded: the chart's helm-test pod
-       (templates/tests/test-namespace.yaml) runs AFTER install completes
-       and reuses the same SA via `kubectl get ns`; a hook-succeeded policy
-       deletes the cluster-scoped grant at the end of install, and the test
-       pod's API call then 403s — the assertion fails on its own RBAC
-       rather than on the missing label it actually checks.
-
-       Uninstall-leak concern: on uninstall, helm deletes this file's
-       resources (they are not hook-owned, so the default teardown path
-       applies). The CRB references the hook-owned SA in dep-check-bindings
-       / dep-check-serviceaccount — when the namespace is deleted, the SA
-       and the regular CRB are both GC'd, so no orphan binding survives
-       pointing at a non-existent subject. */ -}}
+       Teardown, stated honestly: `before-hook-creation` is the only
+       delete policy, so uninstall removes nothing here; and both objects
+       are cluster-scoped, so deleting the release namespace does not GC
+       them either. A removed release leaves a dangling ClusterRole +
+       ClusterRoleBinding whose subject SA died with the namespace.
+       scripts/local-teardown.sh deletes both (by the Helm ownership
+       labels); on any other cluster, remove them by hand — the names
+       carry the release name, see the metadata below. */ -}}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:

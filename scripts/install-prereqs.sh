@@ -28,6 +28,10 @@
 set -euo pipefail
 
 KC_OPERATOR_VERSION="${KC_OPERATOR_VERSION:-26.8.0}"
+# CHART version, not the operator version: cloudnative-pg chart 0.22.0
+# ships operator 1.24.0 (the two numberings diverged at 1.0). The chart
+# only needs a CRD that serves `postgresql.cnpg.io/v1`, which 1.24.0 does
+# — it is the combination the laptop cluster runs.
 CNPG_VERSION="${CNPG_VERSION:-0.22.0}"
 ARANGO_OPERATOR_VERSION="${ARANGO_OPERATOR_VERSION:-1.4.5}"
 SEALED_SECRETS_VERSION="${SEALED_SECRETS_VERSION:-0.40.0}"

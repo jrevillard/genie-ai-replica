@@ -45,7 +45,7 @@ reconcilers and failed releases.
 | Operator | Min version | Purpose |
 |---|---|---|
 | `kube-arangodb` | 1.4.x | ArangoDB `ArangoDeployment` / `ArangoMember` |
-| CloudNativePG (`cnpg`) | ≥ 1.30 | The Keycloak Postgres cluster (`keycloak-db`) |
+| CloudNativePG (`cnpg`) | a CRD serving `postgresql.cnpg.io/v1` | The Keycloak Postgres cluster (`keycloak-db`) |
 | `keycloak-operator` | 26.8.0 | `Keycloak` CR + realm import infrastructure |
 | `cert-manager` | latest | Per-env TLS — required when issuer pinning is enabled |
 | `sealed-secrets` (or alternative) | ≥ 0.40 | Encrypts Secrets into the deploy repo |
@@ -149,7 +149,7 @@ the release completes.
 | `keycloak-proxy-client-secret` | `KEYCLOAK_PROXY_CLIENT_SECRET` | Backend env (`genie-proxy-client` service account) |
 | `kc-dataprep-client-secret` | `KC_DATAPREP_CLIENT_SECRET` | Dataprep client-credentials grant |
 | `kc-grafana-client-secret` | `KC_GRAFANA_CLIENT_SECRET` | Grafana OIDC client |
-| `email-password` | `password` | SMTP — required only when `data.keycloak.verifyEmail=true` |
+| `email-password` | `password` | SMTP password for the Keycloak realm — the realm's `smtpServer` block always renders, so this is the secret the convergence Job reads when `data.keycloak.smtp.auth=true` |
 | `translation-cache-password` | `password` | Backend translation cache |
 
 Additional Secrets used in the SealedSecret pattern: `keycloak-db-credentials`,
@@ -184,6 +184,16 @@ translation) and pick the model-source world:
 | `in-cluster` | Pods on `gpu=true` nodes; weights on a ReadWriteOnce PVC | `models.{llm,reranker}.modelId` + `models.cache` PVC; orchestrators reach models by in-cluster Service name |
 
 Both modes rely on the `vllm-api-key` Secret.
+
+**`data.keycloak.smtp` and the realm's mail flags** — the chart mirrors the
+Compose deployment: `verifyEmail` and `resetPasswordAllowed` default to
+`true`, and the render **fails** when either is on without a mail server.
+A deployment that owns a mailbox names its relay here
+(`from`, `host`, `port`, `ssl`, `starttls`, `auth`, and `user` when
+`auth` is on) and keeps the defaults. A deployment that genuinely sends
+no mail turns the two flags off in its overlay, where the choice is
+visible — the chart never infers it from the absence of an `smtp` block,
+because the realm's `smtpServer` block always renders.
 
 **`services.backend.translation.streamingEnabled`** — stream the
 target-language chat translation during generation (issue #829). Default

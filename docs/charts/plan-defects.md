@@ -3,6 +3,10 @@
 > against the **shipped chart code** (rounds 6-8, 2026-10-19 to
 > 2026-10-22) are recorded in `migration-status.md` § Current state,
 > where each finding carries its live-cluster evidence.
+>
+> The `Plan N Task M` pointers name the campaign's working plan set,
+> which is not committed — the right-hand column states where the fix
+> landed, and that is the durable reference.
 
 ## Code-review consolidation — applied
 

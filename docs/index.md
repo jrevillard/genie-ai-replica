@@ -20,6 +20,7 @@ These docs stay in the repo (not published on the site) — referenced by code a
 - [roadmap-sprint-20-to-25.md](./roadmap-sprint-20-to-25.md) — sprint roadmap
 - [adr/](./adr/) — architecture decision records
 - [e2e-tests/](./e2e-tests/) — end-to-end test procedures
+- [charts/](./charts/) — the Kubernetes migration: design of record, live status map, review ledger, research notes
 - [superpowers/](./superpowers/) — workflow / design specs
 
 ## Rule

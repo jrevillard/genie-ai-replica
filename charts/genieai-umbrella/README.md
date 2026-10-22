@@ -89,7 +89,7 @@ only the custom resources they manage.
 
 | Operator | Version | Install (generic) |
 |---|---|---|
-| CloudNativePG | ≥1.30 | `helm install cnpg cloudnative-pg --repo https://cloudnative-pg.github.io/charts` |
+| CloudNativePG | a CRD serving `postgresql.cnpg.io/v1` (the pinned chart 0.22.0 ships operator 1.24.0) | `helm install cnpg cloudnative-pg --repo https://cloudnative-pg.github.io/charts` |
 | kube-arangodb | 1.4.x | `helm install arango kube-arangodb --repo https://arangodb.github.io/kube-arangodb` |
 | sealed-secrets | ≥0.40 | `helm install sealed-secrets sealed-secrets --repo https://bitnami.github.io/sealed-secrets` |
 | keycloak-operator | 26.8.0 | From the repo root: `./scripts/install-prereqs.sh` (Kustomize overlay that overrides the upstream `keycloak` namespace to `keycloak-system`; Quarkus-based modern operator, 4 CRDs in `k8s.keycloak.org`). Alternatives: OLM (`installPlanApproval: Manual` recommended — auto-upgrade causes unintended Keycloak version bumps), or `oci://quay.io/keycloak/keycloak-operator-helm` (experimental, cluster-wide). |
@@ -178,16 +178,14 @@ two cases look different on purpose:
 
 - a deployment that owns a mailbox names its relay — the compose and
   ansible path reads `EMAIL_*` from `.env` (`smtp.gmail.com`, port 587,
-  starttls, auth) and a pays overlay names the same thing under
+  starttls, auth) and a production overlay names the same thing under
   `data.keycloak.smtp`. Nothing changes in the realm;
 - a validation cluster that must not send real mail to real addresses
   points `smtp.host` at a sink that catches the message (the laptop
   overlay runs mailpit for this, and the message stays readable on
   :8025). The feature stays enabled and becomes testable.
 
-Neither case turns the flags off: `smtp: null` in `values.yaml` is a
-placeholder for a value every deployment fills in, not a statement that
-mail is optional.
+Neither case turns the flags off.
 
 Setting `data.keycloak.convergence.enabled: false` (default in the
 dev-repo overlays) renders neither the Job nor the realm Secret. The

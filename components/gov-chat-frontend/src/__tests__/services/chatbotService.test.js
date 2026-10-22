@@ -421,6 +421,51 @@ describe('chatbotService', () => {
       expect(onError).toHaveBeenCalledWith(expect.any(Error));
     });
 
+    it('surfaces the backend message when the response is not ok', async () => {
+      const mockFetch = jest.fn();
+      global.fetch = mockFetch;
+
+      const mockResponse = {
+        ok: false,
+        status: 400,
+        json: async () => ({ message: 'Unsupported target language', code: 'UNSUPPORTED_LANGUAGE' })
+      };
+
+      mockFetch.mockResolvedValue(mockResponse);
+
+      const onError = jest.fn();
+
+      chatbotService.submitQueryStream({ query: 'test' }, { onError });
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // The backend says why it refused; the user has to be able to read it.
+      expect(onError).toHaveBeenCalledWith(new Error('Unsupported target language'));
+    });
+
+    it('falls back to the status when the error body carries no message', async () => {
+      const mockFetch = jest.fn();
+      global.fetch = mockFetch;
+
+      const mockResponse = {
+        ok: false,
+        status: 502,
+        json: async () => {
+          throw new Error('not json');
+        }
+      };
+
+      mockFetch.mockResolvedValue(mockResponse);
+
+      const onError = jest.fn();
+
+      chatbotService.submitQueryStream({ query: 'test' }, { onError });
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(onError).toHaveBeenCalledWith(new Error('HTTP 502'));
+    });
+
     it('handles abort signal and does not call onError', async () => {
       const mockFetch = jest.fn();
       global.fetch = mockFetch;

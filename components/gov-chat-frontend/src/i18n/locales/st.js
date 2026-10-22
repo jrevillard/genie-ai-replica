@@ -717,6 +717,8 @@ export default {
     relatedDocs: 'Ditokomane tse Amanang',
     noDocuments: 'Ha ho ditokomane tse amanang',
     faq: 'Dipotso tse Botswang Kgafetsa (FAQ)',
+    faqError: 'The FAQ could not be loaded.',
+    faqTranslationUnavailable: 'Translation unavailable — showing the original English.',
     tab: {
       all: 'Meqoqo Yotlhe',
       folders: 'Diphuthedi',

@@ -724,6 +724,8 @@ export default {
     relatedDocs: 'الوثائق ذات الصلة',
     noDocuments: 'لا توجد وثائق ذات صلة',
     faq: 'الأسئلة الشائعة',
+    faqError: 'تعذّر تحميل الأسئلة الشائعة.',
+    faqTranslationUnavailable: 'الترجمة غير متاحة — يتم عرض النص الأصلي بالإنجليزية.',
     tab: {
       all: 'جميع المحادثات',
       folders: 'المجلدات',

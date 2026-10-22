@@ -715,6 +715,8 @@ export default {
     relatedDocs: 'সম্পর্কিত ডকুমেন্ট',
     noDocuments: 'কোনো সম্পর্কিত ডকুমেন্ট নেই',
     faq: 'সচরাচর জিজ্ঞাস্য প্রশ্ন',
+    faqError: 'সাধারণ প্রশ্ন লোড করা যায়নি।',
+    faqTranslationUnavailable: 'অনুবাদ অনুপলব্ধ — মূল ইংরেজি দেখানো হচ্ছে।',
     tab: {
       all: 'সমস্ত চ্যাট',
       folders: 'ফোল্ডার',

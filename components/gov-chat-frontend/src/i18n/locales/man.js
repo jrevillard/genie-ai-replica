@@ -713,6 +713,8 @@ export default {
     relatedDocs: 'Dokuuma kafo',
     noDocuments: 'Dokuuma kafo mang je',
     faq: 'Ñiningo Ka Ke-yaa',
+    faqError: 'The FAQ could not be loaded.',
+    faqTranslationUnavailable: 'Translation unavailable — showing the original English.',
     tab: {
       all: 'Kumal bee',
       folders: 'Foldalu',

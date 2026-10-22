@@ -725,6 +725,8 @@ export default {
     relatedDocs: 'Documentos Relacionados',
     noDocuments: 'Nenhum documento relacionado',
     faq: 'Perguntas Frequentes',
+    faqError: 'Não foi possível carregar as perguntas frequentes.',
+    faqTranslationUnavailable: 'Tradução indisponível — a versão original em inglês é exibida.',
     tab: {
       all: 'Todos os Chats',
       folders: 'Pastas',

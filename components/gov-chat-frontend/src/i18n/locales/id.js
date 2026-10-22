@@ -722,6 +722,8 @@ export default {
     relatedDocs: 'Dokumen Terkait',
     noDocuments: 'Tidak ada dokumen terkait',
     faq: 'Pertanyaan yang Sering Diajukan',
+    faqError: 'FAQ tidak dapat dimuat.',
+    faqTranslationUnavailable: 'Terjemahan tidak tersedia — versi aslinya dalam bahasa Inggris ditampilkan.',
     tab: {
       all: 'Semua Obrolan',
       folders: 'Folder',

@@ -721,6 +721,8 @@ export default {
     relatedDocs: 'Related Documents',
     noDocuments: 'No related documents',
     faq: 'Frequently Asked Questions',
+    faqError: 'The FAQ could not be loaded.',
+    faqTranslationUnavailable: 'Translation unavailable — showing the original English.',
     tab: {
       all: 'All Chats',
       folders: 'Folders',

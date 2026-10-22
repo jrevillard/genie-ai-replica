@@ -727,6 +727,8 @@ export default {
     relatedDocs: 'Documents connexes',
     noDocuments: 'Aucun document connexe',
     faq: 'Foire aux questions',
+    faqError: 'Impossible de charger la FAQ.',
+    faqTranslationUnavailable: 'Traduction indisponible — la version originale en anglais est affichée.',
     tab: {
       all: 'Toutes les discussions',
       folders: 'Dossiers',

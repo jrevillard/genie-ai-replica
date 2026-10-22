@@ -728,6 +728,8 @@ export default {
     relatedDocs: 'Zugehörige Dokumente',
     noDocuments: 'Keine zugehörigen Dokumente',
     faq: 'Häufig gestellte Fragen',
+    faqError: 'Die FAQ konnte nicht geladen werden.',
+    faqTranslationUnavailable: 'Übersetzung nicht verfügbar – das englische Original wird angezeigt.',
     tab: {
       all: 'Alle Chats',
       folders: 'Ordner',

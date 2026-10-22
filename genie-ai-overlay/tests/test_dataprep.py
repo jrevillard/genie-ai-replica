@@ -2074,9 +2074,7 @@ class TestDocRepoIngestPayload:
                 if chunk_overlap is None:
                     chunk_overlap = int(ms.os.getenv("DATAPREP_CHUNK_OVERLAP", 50))
                 if chunk_overlap < 0:
-                    raise HTTPException(
-                        status_code=400, detail=f"chunkOverlap must be >= 0, got {chunk_overlap}"
-                    )
+                    raise HTTPException(status_code=400, detail=f"chunkOverlap must be >= 0, got {chunk_overlap}")
                 assert exc_info.value.status_code == 400
                 assert "chunkOverlap must be >= 0" in exc_info.value.detail
 

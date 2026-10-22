@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-22)
 
-- **Chart `genieai-umbrella` at 0.2.67**, branch `feat/k8s-migration` rebased
+- **Chart `genieai-umbrella` at 0.2.69**, branch `feat/k8s-migration` rebased
   onto `main` at `179a8a8f1` (0 commits behind).
 - **No application code in the branch**: the diff touches `charts/`,
   `scripts/`, `docs/`, `deploy/`, `tests/`, `site/`, `.gitlab-ci.yml`,
@@ -57,6 +57,56 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
   (the sites use `not (kindIs "invalid")`, and `httpEnabled` is typed
   in the schema), and the Keycloak theme `strip-components` mismatch
   (it counts path components, so any theme name works).
+- **Review round 10 closed (0.2.69)** — three parallel adversarial passes
+  over the whole post-simplify diff (round 9 already shipped inside it),
+  every finding verified against a render or the live cluster before
+  acting. The ones that mattered:
+  - *`ct install` silently rewrote the operator's kubeconfig.* Chart
+    testing creates AND deletes its own kind cluster, and kind rewrites
+    the file named by `KUBECONFIG` — run bare from `make test`, the
+    minikube context vanished from `~/.kube/config` and the live cluster
+    (Flux release, SealedSecrets) looked gone. Restored with
+    `minikube start` (state intact, sealed-secrets key verified); the
+    target now runs ct against a throwaway kubeconfig file, deleted on
+    every exit path.
+  - *`validate-crds.sh` validated green against a dead API server.* The
+    `|| true` + pattern-matching filtered "connection refused" into
+    silence — no matched error pattern, exit 0, "every rendered object
+    validated" while the cluster validated nothing. The kubectl exit
+    code is now checked alongside the output text; mutation-proven both
+    ways (old code green on a simulated API death, new code red, the
+    AlreadyExists-on-live-cluster path still green).
+  - *The logs dashboards named the datasource by its CR name, not its
+    UID.* grafana-operator's substitution is a blind case-sensitive
+    `ReplaceAll`; every `DS_VICTORIALOGS` row pointed at `victorialogs`
+    while the provisioned datasource's uid is `victoriametrics-logs` —
+    11 mappings silently unresolved.
+  - *The backend's translation egress dropped the explicit-endpoint
+    shape.* Round 9's derived-endpoint gate still fired an external
+    ipBlock rule for a `.svc.cluster.local` endpoint named explicitly in
+    in-cluster mode; the gate now keys on the dialed endpoint not being
+    cluster-local, whatever produced it (four shapes render-verified).
+  - *The HTTP→HTTPS redirect lost the source port.* Envoy strips the
+    `:80` on redirect for non-well-known origins, so the port-bearing
+    origin the chart explicitly supports landed on 443 — connection
+    refused. The redirect now carries the public port (4443 verified
+    rendered; 443 for bare hosts).
+  - Plus: the helm-test data-deps check reads `data.keycloak.db.secretName`
+    (an operator who renamed the CNPG/Keycloak SharedSecret was tested
+    against a name nothing consumes); redis and clamav honor
+    `global.imagePullSecrets` and the tag-driven pull policy; the
+    dep-check SA hook-weight moved to -11 with the file-path tie-break
+    documented; six undeclared OPEA booleans typed in values + schema;
+    the CI kubeconfig export moved before the local-path-provisioner
+    wait (a cold runner's `kubectl apply` raced an unset KUBECONFIG);
+    ct's install/lint flag split corrected (`release-label`,
+    lintconf colon spacing, `CT_INSTALL_FLAGS`); two `resource_group`
+    comments rewritten to describe the groups they actually name; the
+    teardown uninstalls grafana-operator (the `--with-grafana` opt-in)
+    and its operator counts stopped contradicting its loops.
+  Skipped with reasons: the `DS_PROMETHEUS` mapping (resolves to the
+  same datasource either way — a no-op rename), and the NetworkPolicy
+  table-ization / serial install-prereqs parks carried from round 9.
 - **Review round 9 closed (0.2.67)** — three parallel adversarial passes
   over the whole final diff (core/data/services, edge/observability/OPEA,
   CI/scripts), every finding verified against a render or a live cluster

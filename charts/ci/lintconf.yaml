@@ -12,7 +12,11 @@ rules:
     max-spaces-inside-empty: -1
   colons:
     max-spaces-before: 0
-    max-spaces-after: 1
+    # 3, not 1: values.yaml column-aligns its inline maps — the
+    # readiness/liveness/startup probe triple puts all three braces on
+    # the same column (`startup:` is the shortest key and carries the
+    # extra spaces). The chart's own file is what this conf must accept.
+    max-spaces-after: 3
   commas:
     min-spaces-after: 0
     max-spaces-after: 1

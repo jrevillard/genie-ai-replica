@@ -30,15 +30,19 @@ function requestedTargetLanguage(queryData) {
 }
 
 /**
- * The refusal a request that asks for a language the deployment cannot serve
- * gets.
+ * Resolves the language a request asked for — once.
  *
  * The language travels in the request body, so it is caller-controlled. The
  * language map is the contract: a language the map does not carry cannot be
- * answered in, and answering in another language — one the caller cannot see
- * — is what this boundary exists to prevent. The request is therefore refused
+ * answered in, and answering in another language — one the caller cannot see —
+ * is what this boundary exists to prevent. The request is therefore refused
  * before anything is generated and before a stream is opened, with the same
  * 400 the translate routes answer.
+ *
+ * The same resolution serves the translation itself. A streamed answer is
+ * translated unit by unit, and the languages cannot change between two units
+ * of one request: one resolution therefore answers both questions — may this
+ * request proceed, and in which language is it answered.
  *
  * The refusal is about the language, not about the translator. When the
  * translation service is not ready the check cannot run at all: the request
@@ -46,23 +50,24 @@ function requestedTargetLanguage(queryData) {
  * reported on `done` — a broken translator is not the caller's mistake.
  *
  * @param {string} targetLanguage - The normalized language the caller asked for.
- * @returns {Promise<object|null>} The refusal to answer with, or null when the
- *   request may proceed.
+ * @returns {Promise<{refusal: object|null, translator: object|null}>} The
+ *   refusal to answer with (null when the request may proceed) and, when the
+ *   language was accepted, a translator bound to the resolved pair (null when
+ *   there is nothing to translate, or when no translator could be prepared).
  */
-async function refusalForUnsupportedLanguage(targetLanguage) {
+async function resolveRequestLanguage(targetLanguage) {
   if (!targetLanguage || targetLanguage === 'en') {
     // English is the language the answer is written in: there is no
     // translation to make, and nothing to refuse.
-    return null;
+    return { refusal: null, translator: null };
   }
   try {
     await translationService.init();
-    translationService.resolveLanguagePair('en', targetLanguage);
-    return null;
+    return { refusal: null, translator: translationService.createMarkdownTranslator('en', targetLanguage) };
   } catch (error) {
     if (!isUnsupportedLanguage(error)) {
       logger.warn(`QueryService.language_check_failed: ${error.message}`);
-      return null;
+      return { refusal: null, translator: null };
     }
     logger.warn(`QueryService.unsupported_language: (lang=${languageForLog(targetLanguage)})`);
     // The response names the refused side, never the value the caller sent:
@@ -70,7 +75,7 @@ async function refusalForUnsupportedLanguage(targetLanguage) {
     // code tells the client that the request was refused — not that the
     // request failed — so it can tell the two apart without reading the
     // message.
-    return { message: error.message, code: error.code };
+    return { refusal: { message: error.message, code: error.code }, translator: null };
   }
 }
 
@@ -255,10 +260,10 @@ module.exports = (queryService) => {
     let opeaController = null;
     let keepalive = null;
 
-    // The language the client asked for, checked before anything is
-    // generated: a language the deployment cannot serve is refused, not
-    // answered in another language.
-    const refusal = await refusalForUnsupportedLanguage(requestedTargetLanguage(queryData));
+    // The language the client asked for, resolved once: the same resolution
+    // decides whether the request is refused and translates the answer.
+    const targetLanguage = requestedTargetLanguage(queryData);
+    const { refusal, translator } = await resolveRequestLanguage(targetLanguage);
     if (refusal) {
       return res.status(400).json(refusal);
     }
@@ -348,26 +353,28 @@ module.exports = (queryService) => {
       const streamingTranslationEnabled = ['1', 'true'].includes(
         (process.env.STREAMING_TRANSLATION_ENABLED || '').toLowerCase()
       );
-      // The language comes from the request body. It is normalized once, here,
-      // and the translator validates it against the language map before it is
-      // used for anything.
-      const targetLanguage = requestedTargetLanguage(queryData);
+      // The language was resolved above, before the stream opened: the
+      // translator behind it works in the language the caller asked for.
       const useStreamingTranslation = streamingTranslationEnabled && targetLanguage && targetLanguage !== 'en';
 
       let pendingEn = '';
       let translationChain = Promise.resolve();
-      let streamingTranslationFailed = false;
+      // A language that was accepted but has no translator behind it — the
+      // translation service was not ready when the request arrived — cannot be
+      // translated at all: the answer stays in English for its whole length,
+      // and the failure is reported on `done` like any other one.
+      let streamingTranslationFailed = useStreamingTranslation && !translator;
       let loggedStreamTranslateActive = false;
 
       // Translate one COMPLETE unit (see services/translation/stream-boundary.js)
-      // using the AST-based translateMarkdown. translateMarkdown parses the unit
-      // as markdown, translates ONLY the text leaf nodes, and reassembles the
-      // AST — so structure WITHIN the unit (bold, lists, inner paragraphs) is
-      // preserved by the skeleton, never left to the model. `separator` is the
-      // exact trailing whitespace that followed the unit in the source; we pass
-      // it through verbatim, so structure BETWEEN units (the "\n\n" paragraph
-      // breaks, line breaks) survives too. This is what keeps formatting intact
-      // during streaming translation (issue #829).
+      // using the AST-based markdown translator the request resolved. The
+      // translator parses the unit as markdown, translates ONLY the text leaf
+      // nodes, and reassembles the AST — so structure WITHIN the unit (bold,
+      // lists, inner paragraphs) is preserved by the skeleton, never left to the
+      // model. `separator` is the exact trailing whitespace that followed the
+      // unit in the source; we pass it through verbatim, so structure BETWEEN
+      // units (the "\n\n" paragraph breaks, line breaks) survives too. This is
+      // what keeps formatting intact during streaming translation (issue #829).
       const scheduleUnitTranslation = (content, separator) => {
         translationChain = translationChain.then(async () => {
           if (res.writableEnded) return;
@@ -382,8 +389,7 @@ module.exports = (queryService) => {
             return;
           }
           try {
-            await translationService.init();
-            const translated = await translationService.translateMarkdown(content, 'en', targetLanguage);
+            const translated = await translator.translate(content);
             const body =
               translated && translated.trim() ? `${translated.trim()}${separator}` : `${content}${separator}`;
             // Debug instrumentation for the streaming-translation path: the unit
@@ -445,19 +451,17 @@ module.exports = (queryService) => {
             // so the chain never rejects; awaiting it just orders completion before 'done'.
             await translationChain;
           }
-          await handleStreamDone(
-            queryId,
-            fullResponseText,
-            startTime,
-            queryData,
-            req,
-            res,
-            capturedMetadata,
-            true,
-            streamingTranslationFailed
-          );
+          await handleStreamDone(queryId, fullResponseText, startTime, res, capturedMetadata, {
+            targetLanguage,
+            translator,
+            skipPostStreamTranslation: true,
+            alreadyFailedTranslation: streamingTranslationFailed
+          });
         } else {
-          handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res, capturedMetadata, false);
+          handleStreamDone(queryId, fullResponseText, startTime, res, capturedMetadata, {
+            targetLanguage,
+            translator
+          });
         }
       };
 
@@ -596,12 +600,9 @@ module.exports = (queryService) => {
     queryId,
     fullResponseText,
     startTime,
-    queryData,
-    req,
     res,
     capturedMetadata,
-    skipPostStreamTranslation = false,
-    alreadyFailedTranslation = false
+    { targetLanguage = '', translator = null, skipPostStreamTranslation = false, alreadyFailedTranslation = false } = {}
   ) {
     if (res.writableEnded) return;
 
@@ -617,11 +618,17 @@ module.exports = (queryService) => {
 
     res.write(`data: ${JSON.stringify({ type: 'metadata', ...metadata, responseTime })}\n\n`);
 
-    const userLanguage = requestedTargetLanguage(queryData);
-    if (!skipPostStreamTranslation && userLanguage && userLanguage !== 'en' && fullResponseText) {
+    // A translation was asked for and the answer was not already delivered in
+    // the target language: the whole answer is translated here. The translator
+    // is the one the request resolved — the languages cannot change between
+    // the start of a request and the end of its answer.
+    const translationExpected = Boolean(targetLanguage) && targetLanguage !== 'en';
+    if (!skipPostStreamTranslation && translationExpected && fullResponseText) {
       try {
-        await translationService.init();
-        const translated = await translationService.translateMarkdown(fullResponseText, 'en', userLanguage);
+        if (!translator) {
+          throw new Error('no translator was prepared for the requested language');
+        }
+        const translated = await translator.translate(fullResponseText);
         res.write(`data: ${JSON.stringify({ type: 'translation', content: translated })}\n\n`);
       } catch (error) {
         // Not an `error` frame. The client treats that as terminal and stops
@@ -768,7 +775,7 @@ module.exports = (queryService) => {
       // The language the client asked for, checked before the query is
       // created: a language the deployment cannot serve is refused, not
       // answered in another language.
-      const refusal = await refusalForUnsupportedLanguage(requestedTargetLanguage(queryData));
+      const { refusal } = await resolveRequestLanguage(requestedTargetLanguage(queryData));
       if (refusal) {
         return res.status(400).json(refusal);
       }

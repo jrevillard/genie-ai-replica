@@ -158,6 +158,30 @@ describe('target language boundary (real service, real language map)', () => {
   });
 });
 
+describe('a translator bound to a resolved language pair', () => {
+  it('resolves the language pair once, however many units it translates', async () => {
+    // A streamed answer is translated unit by unit. The languages cannot
+    // change between two units of one request, so the map is consulted once —
+    // not once per unit.
+    const lookup = jest.spyOn(backend, 'getLanguageCode');
+    const translator = service.createMarkdownTranslator('en', 'fr');
+
+    // The markdown pipeline is loaded through a dynamic ESM import that Jest
+    // cannot intercept, so the translation itself fails further down. What
+    // matters here is the resolution that happened before it.
+    await translator.translate('# Hello').catch(() => {});
+    await translator.translate('# Bonjour').catch(() => {});
+
+    // Once for the source, once for the target — and no more, whatever the
+    // number of units.
+    expect(lookup).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses a language it does not know before it translates anything', () => {
+    expect(() => service.createMarkdownTranslator('en', INJECTION)).toThrow(/Unsupported target language/);
+  });
+});
+
 describe('the codes handed to the backend', () => {
   it('hands the backend the codes the map produces', async () => {
     // The gemma-3 map maps a language to itself, so it cannot tell the

@@ -188,6 +188,12 @@ The requested language is normalized in one place
 the language map the translation backend ships. A language the map does
 not know is **not** translated: it is refused, not guessed.
 
+The check happens **once per request**. The resolution hands back both
+the decision (refuse the request, or proceed) and a translator bound to
+the accepted pair, so the units of a streamed answer are translated in
+the very language that was checked — and the language map is not
+consulted again for every unit.
+
 ## Failure handling
 
 A language the translation models do not cover is **refused before the

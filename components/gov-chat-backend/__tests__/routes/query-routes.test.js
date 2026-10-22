@@ -71,7 +71,8 @@ jest.mock('../../services/translation-service', () => ({
   translateMarkdown: jest.fn(),
   translateStream: jest.fn(),
   init: jest.fn(),
-  resolveLanguagePair: jest.fn()
+  resolveLanguagePair: jest.fn(),
+  createMarkdownTranslator: jest.fn()
 }));
 jest.mock('../../services/session-service', () => ({
   getUserSessions: jest.fn(),
@@ -156,6 +157,12 @@ beforeEach(() => {
     targetLang,
     sourceLangCode: sourceLang,
     targetLangCode: targetLang
+  }));
+  // The translator a resolved pair hands back. It delegates to the mocked
+  // translateMarkdown, so a test that stubs the translation keeps working
+  // whichever way the route reaches it.
+  translationService.createMarkdownTranslator.mockImplementation((sourceLang, targetLang) => ({
+    translate: jest.fn((content) => translationService.translateMarkdown(content, sourceLang, targetLang))
   }));
   process.env.OPEA_STREAMING = 'true';
 });
@@ -430,6 +437,45 @@ describe('POST /stream', () => {
     expect(body).toContain('[ES]Hello world. ');
     // The streaming path must NOT emit a post-stream 'translation' event.
     expect(body).not.toMatch(/"type":"translation"/);
+    delete process.env.STREAMING_TRANSLATION_ENABLED;
+  });
+
+  it('resolves the language once per request and translates every unit through it (#1104)', async () => {
+    process.env.STREAMING_TRANSLATION_ENABLED = '1';
+    queryService.initStreamQuery.mockResolvedValue({
+      queryId: 'q1',
+      opeaUrl: 'http://chatqna:8888/v1/chatqna',
+      opeaPayload: { messages: [] }
+    });
+    queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
+    queryService.finalizeStreamQuery.mockResolvedValue(undefined);
+    translationService.init.mockResolvedValue(undefined);
+    translationService.translateMarkdown.mockImplementation(async (content) => `[ES]${content}`);
+
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ data: mockStream });
+
+    const responsePromise = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hola' }],
+      context: { language: 'es' }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    mockStream.push('data: {"type":"chunk","content":"First para. "}\n\n');
+    mockStream.push('data: {"type":"chunk","content":"Second para. "}\n\n');
+    mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+    mockStream.push(null);
+
+    const response = await responsePromise;
+    expect(response.status).toBe(200);
+
+    // The languages cannot change between two units of one request, so the
+    // pair is resolved once and the translator it produced does the rest.
+    expect(translationService.createMarkdownTranslator).toHaveBeenCalledTimes(1);
+    expect(translationService.createMarkdownTranslator).toHaveBeenCalledWith('en', 'es');
+    const translator = translationService.createMarkdownTranslator.mock.results[0].value;
+    expect(translator.translate).toHaveBeenCalledTimes(2);
     delete process.env.STREAMING_TRANSLATION_ENABLED;
   });
 
@@ -913,7 +959,7 @@ describe('the language the client asked for', () => {
   const { UnsupportedLanguageError } = require('../../services/translation/unsupported-language');
 
   const refusesTheLanguage = () => {
-    translationService.resolveLanguagePair.mockImplementation(() => {
+    translationService.createMarkdownTranslator.mockImplementation(() => {
       throw new UnsupportedLanguageError('target');
     });
   };
@@ -997,7 +1043,7 @@ describe('the language the client asked for', () => {
 
     const response = await responsePromise;
     expect(response.status).toBe(200);
-    expect(translationService.resolveLanguagePair).toHaveBeenCalledWith('en', 'fr');
+    expect(translationService.createMarkdownTranslator).toHaveBeenCalledWith('en', 'fr');
   });
 
   it('does not refuse the request when the translator is not ready', async () => {

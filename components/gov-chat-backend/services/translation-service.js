@@ -336,6 +336,34 @@ class TranslationService {
   }
 
   /**
+   * @method createMarkdownTranslator
+   * @description Resolves a language pair once and returns a translator bound
+   * to it.
+   *
+   * A request can translate more than once — a streamed answer is translated
+   * unit by unit — and the languages cannot change between two units of the
+   * same request. Resolving them per unit made the hot path consult the
+   * language map again for every unit, and made the refusal of a request and
+   * its translation two separate decisions about the same pair.
+   *
+   * The resolved pair never leaves the service: the caller holds a translator,
+   * not the codes the model expects. Those codes exist only here, and only
+   * the resolution may produce them.
+   *
+   * @param {string} sourceLang - The source language as it arrived from the caller.
+   * @param {string} targetLang - The target language as it arrived from the caller.
+   * @returns {{translate: (markdownContent: string) => Promise<string>}} A
+   *   translator bound to the resolved pair.
+   * @throws {UnsupportedLanguageError} When either language is unknown.
+   */
+  createMarkdownTranslator(sourceLang, targetLang) {
+    const pair = this.resolveLanguagePair(sourceLang, targetLang);
+    return {
+      translate: (markdownContent) => this._translateMarkdownWithPair(markdownContent, pair)
+    };
+  }
+
+  /**
    * @method translate
    * @description Translates a batch of texts from a source language to a target language.
    * @param {string[]} texts - An array of text strings to translate.
@@ -530,12 +558,23 @@ class TranslationService {
     // Both languages are refused before anything is built from them: the
     // cache key and the in-flight key carry them, so an unchecked value would
     // end up in a Redis key as well as in the translation request.
-    const {
-      sourceLang: resolvedSourceLang,
-      targetLang: resolvedTargetLang,
-      sourceLangCode,
-      targetLangCode
-    } = this.resolveLanguagePair(sourceLang, targetLang);
+    const pair = this.resolveLanguagePair(sourceLang, targetLang);
+    return this._translateMarkdownWithPair(markdownContent, pair);
+  }
+
+  /**
+   * @method _translateMarkdownWithPair
+   * @description Translates markdown content in a pair of languages that has
+   * already been resolved. The pair travels in, resolved: the languages are
+   * not looked up again, and the codes the model is asked for are the ones
+   * the resolution produced.
+   * @param {string} markdownContent - The markdown content as a string.
+   * @param {{sourceLang: string, targetLang: string, sourceLangCode: string, targetLangCode: string}} pair
+   *   The resolved language pair.
+   * @returns {Promise<string>} The translated markdown content as a string.
+   */
+  async _translateMarkdownWithPair(markdownContent, pair) {
+    const { sourceLang: resolvedSourceLang, targetLang: resolvedTargetLang, sourceLangCode, targetLangCode } = pair;
 
     // --- REDIS CACHE LOGIC (GET) ---
     // Generate a unique <name> by hashing the markdown content.

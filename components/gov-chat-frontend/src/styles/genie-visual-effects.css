@@ -88,9 +88,9 @@ html[data-visual='on'] .dark-mode .genie-living-intelligence .quick-help-item {
      hue at panel depth. */
   --ds-card-bg: oklch(from var(--qh-outline, var(--accent)) 0.22 c h);
   /* Parity with light: full --qh-outline at rest, 47 %-mix on hover.
-     The --gli-frost-border fallback the previous round let through is
-     dropped here — only the un-configured path used it, and the two
-     themes should follow the same rule rather than diverge. */
+     Only the un-configured path falls back, and both themes fall back
+     the same way, so neither theme's card diverges from the other's
+     when a button declares no tint. */
   --ds-card-border-color: var(--qh-outline, var(--accent));
 }
 
@@ -307,6 +307,12 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-content {
   z-index: 1;
   min-width: 0;
   --qh-banner-scrim-alpha: 0.88;
+  /* The horizontal fade's run, in pixels rather than a percentage: the
+     ramp has to land inside the content's own padding, and that padding
+     is a width, so the ramp has to be one too. Its partner is the app's
+     --qh-veil-pad on .quick-help-overlay; the relationship between the
+     two is stated where both are declared. */
+  --qh-veil-ramp: 24px;
   background: color-mix(in srgb, var(--surface) calc(var(--qh-banner-scrim-alpha) * 100%), transparent);
   /*
    * mask-mode: alpha is load-bearing. Without it, Blink resolves the
@@ -320,22 +326,36 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-content {
      heading and its subtitle, so its left and right edges are cuts in
      the artwork and have to be ramps too. The two gradients are
      intersected — the veil is only where both of them are opaque.
-     The horizontal ramp is measured in pixels, not in percentages, and
-     the content box carries a padding of the same size: the ramp then
-     always lands in the padding, whatever the length of the title, and
-     never eats the glyphs. The padding is kept small (32px) because the
-     banner is not wide enough to give the title both its natural width
-     and a generous margin — at 1440px the title needs 594px of the
-     670px the centre column has.
+     The horizontal ramp runs over --qh-veil-ramp, 24 px, and is spent
+     inside the content's own padding, --qh-veil-pad, 32 px. The
+     invariant between them holds in one direction only: the padding
+     must be AT LEAST as wide as the ramp, so the fade is exhausted in
+     the padding and never reaches a glyph, whatever the title's
+     length. The padding is held to 32 px because the banner is not
+     wide enough to give the title both its natural width and a
+     generous margin — at 1440 px the title measures 578 px of the
+     670 px the centre column has.
      The -webkit- spelling of mask-composite is the legacy name of the
      same operator (source-in ≡ intersect); Chromium normalises it to
      the standard value, and Safari still needs it. */
   -webkit-mask-image:
     linear-gradient(to bottom, transparent 0%, rgb(0 0 0 / 1) 30%),
-    linear-gradient(to right, transparent 0, rgb(0 0 0 / 1) 24px, rgb(0 0 0 / 1) calc(100% - 24px), transparent 100%);
+    linear-gradient(
+      to right,
+      transparent 0,
+      rgb(0 0 0 / 1) var(--qh-veil-ramp),
+      rgb(0 0 0 / 1) calc(100% - var(--qh-veil-ramp)),
+      transparent 100%
+    );
   mask-image:
     linear-gradient(to bottom, transparent 0%, rgb(0 0 0 / 1) 30%),
-    linear-gradient(to right, transparent 0, rgb(0 0 0 / 1) 24px, rgb(0 0 0 / 1) calc(100% - 24px), transparent 100%);
+    linear-gradient(
+      to right,
+      transparent 0,
+      rgb(0 0 0 / 1) var(--qh-veil-ramp),
+      rgb(0 0 0 / 1) calc(100% - var(--qh-veil-ramp)),
+      transparent 100%
+    );
   -webkit-mask-mode: alpha;
   mask-mode: alpha;
   -webkit-mask-composite: source-in;

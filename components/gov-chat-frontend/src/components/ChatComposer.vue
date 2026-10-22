@@ -249,7 +249,12 @@ export default {
      shorter than this, so the floor — not the content — is what sets
      the resting height, and the bar stops growing at one line. */
   min-height: 50px;
-  width: 100%;
+  /* --composer-width is the composer's escape hatch, the same shape as
+     the DS primitives' --ds-card-border-color: a consumer that wants a
+     width other than its container's sets a value here and leaves the
+     property itself to the component that owns it. Unset, the bar is
+     the full width of whatever holds it. */
+  width: var(--composer-width, 100%);
   box-sizing: border-box;
 }
 
@@ -291,11 +296,12 @@ export default {
   resize: none;
   /* The DS primitive puts an 80 px floor on every textarea — right for
      a standalone field, wrong for a field inside a one-line pill, where
-     it made the bar 90 px tall. The floor is reset here, in the
-     composer's own scope, so the primitive keeps it everywhere else,
-     and `field-sizing: content` hands the height back to the text: the
-     field is exactly one line while it holds one line and grows with
-     the text from there. The bar's own min-height is the floor. */
+     it would set the bar's height instead of the field's. The floor is
+     reset here, in the composer's own scope, so the primitive keeps it
+     everywhere else, and `field-sizing: content` hands the height back
+     to the text: the field is exactly one line while it holds one line
+     and grows with the text from there. The bar's own min-height is the
+     floor. */
   min-height: 0;
   field-sizing: content;
 }

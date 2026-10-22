@@ -2445,29 +2445,42 @@ export default {
 
 /* Quick Help Overlay */
 .quick-help-overlay {
-  /* The card measure lives here, on the element that contains BOTH the
-     composer wrapper and the card row, so the two caps below resolve
-     against one declared value. Declared on the grid alone it is an
-     unresolved var() in the wrapper's max-width: the whole declaration
-     is invalid at computed-value time, the wrapper silently falls back
-     to `none`, and the bar takes the overlay's full content width —
-     wider than the row it is meant to sit above, with no error
-     anywhere.
+  /* Every welcome constant is declared here, on the one element that
+     contains all three of its consumers — the veil's content box, the
+     composer wrapper and the card row — so each of them resolves
+     against a single declaration instead of a literal of its own.
 
      --qh-measure is the resulting four-column cap (4 cards + 3 gaps),
      964 px at the default tokens. The grid's auto-fit bound and both
-     max-widths reference these two, so a deployment that overrides
+     max-widths read these two, so a deployment that overrides
      --space-xl or the card minimum moves the row, the wrapper and the
      bar's inset in step.
 
      --qh-card-min is a component-local extension point (the same shape
      as the Living Intelligence layer's per-button --qh-bg / --qh-hover
      tokens) rather than a new token in theme-variables.css: 217 px is
-     the card width measured off the reference mockup. It is declared
-     HERE and not on the grid because the composer wrapper is its
-     sibling and needs it too. */
+     the card width measured off the reference mockup.
+
+     --qh-veil-pad is the landing ground for the veil's horizontal
+     ramp. The Living Intelligence layer fades that ramp over 24 px of
+     its own naming (--qh-veil-ramp); the rule between the two is that
+     this padding stays AT LEAST as wide as the ramp, so the fade is
+     spent here and never eats a glyph. --space-xl holds it at 32 px,
+     8 px wider than the ramp on each side.
+
+     --qh-composer-ratio insets the bar from the row it sits above; see
+     .quick-help-composer below.
+
+     These values are mirrored rather than shared on the JavaScript
+     side: composables/sidebarLayout.js derives CENTRE_MIN_WIDTH
+     (480 px) from the same 217 px + 32 px arithmetic in prose, because
+     a module-scope constant cannot read a custom property off an
+     element that does not exist yet. Change one and the other has to be
+     changed with it. */
   --qh-card-min: 217px;
   --qh-measure: calc(4 * var(--qh-card-min) + 3 * var(--space-xl));
+  --qh-veil-pad: var(--space-xl);
+  --qh-composer-ratio: 81%;
   position: absolute;
   top: 0;
   left: 0;
@@ -2481,14 +2494,16 @@ export default {
   justify-content: center;
   padding: var(--space-lg);
   /* The banner's full-bleed reaches past the overlay's content box
-     on purpose (the artwork has to touch the panel's edges, not sit
-     centred inside them). The wave ::after no longer reaches past
-     anything — it spans the panel's padding box exactly — so the
-     only overshoot that overflow-x: hidden has to clip is the
-     banner's, and that only when the overlay's padding is stripped
-     by `@media (max-width: 1299px)`. The clip is what keeps that
-     overshoot from becoming a horizontal scrollbar — the property
-     that decides whether one is drawn. */
+     on purpose: the artwork has to touch the panel's edges, not sit
+     centred inside them. It bleeds by a fixed --space-lg (24 px) a side
+     at every viewport. Above 1300 px the overlay's padding is that same
+     24 px, so the bleed is absorbed by it and the banner's edges land on
+     the panel's. Below 1300 px the padding is stripped, there is nothing
+     to bleed into, and the banner overshoots by 24 px a side — which is
+     what this clip absorbs. The wave ::after spans the padding box
+     exactly and never overshoots. The clip is what keeps the banner's
+     overshoot from becoming a horizontal scrollbar, which is the
+     property that decides whether one is drawn. */
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -2517,20 +2532,23 @@ export default {
   /* The veil wraps the title and its subtitle instead of spanning the
      banner: the reference carries the text directly on the artwork, and
      a band across the whole width washes the icon tiles as well. The
-     padding is the landing ground for the veil's horizontal ramp (the
-     layer's mask fades over 24 px), so the ramp never reaches the
-     glyphs whatever the title's length. The box's height is unchanged —
-     the layer's padding is what sets it — so the title stays where it
-     is relative to the artwork's fade. */
+     padding is the landing ground for the veil's horizontal ramp, which
+     the Living Intelligence layer fades over 24 px, so the ramp is spent
+     before it reaches a glyph whatever the title's length. The box's
+     height is unchanged — the layer's padding is what sets it — so the
+     title stays where it is relative to the artwork's fade. */
   width: fit-content;
   /* The padding sits outside the text's own box: with the global
      border-box it would eat the title's line and wrap it. The max-width
      is the banner's width less the two paddings, so the veil never
-     overflows the artwork it covers. */
+     overflows the artwork it covers. Both read --qh-veil-pad from
+     .quick-help-overlay, so one declaration moves the padding and its
+     cap together and the cap can never admit a veil the banner cannot
+     hold. */
   box-sizing: content-box;
-  max-width: calc(100% - 64px);
+  max-width: calc(100% - 2 * var(--qh-veil-pad));
   margin-inline: auto;
-  padding-inline: 32px;
+  padding-inline: var(--qh-veil-pad);
 }
 
 /* The heading and the subtitle under it share one gap: the heading
@@ -2558,19 +2576,19 @@ export default {
      subtitle's natural margin is what positions the rest. */
   margin: 0 0 var(--space-lg);
   /* A brand tint, not the neutral grey --muted carries: 60% of the
-     heading's --fg mixed into the theme's --accent. Two problems with
-     --muted here, and only the second is visible. It reads grey where
-     the subtitle is meant to read as brand-coloured (a navy in light, a
-     light blue in dark), and in the dark theme it reads DIM — dark
-     --muted is derived from --brand at L 0.58, whose luminance (0.196)
-     sits barely above the scrim's (0.031), which puts the subtitle at
-     3.05:1 against the artwork behind it, under the 4.5:1 floor WCAG AA
-     sets for 16px/400 text. Lightening the scrim does not help: at
-     alpha 0.50 the same ink measures 2.32:1 in dark and 3.98:1 in
-     light, because the veil's own contribution is what darkens the
-     backdrop the dim ink sits on. The mix measures 9.95:1 light / 8.91:1
-     dark — and the 40% of --accent in it is what keeps the subtitle a
-     visible step below the heading instead of a second heading. */
+     heading's --fg mixed into the theme's --accent. It reads as the
+     brand colour the subtitle is meant to carry (a navy in light, a
+     light blue in dark) where --muted reads grey, and in the dark theme
+     it does not read dim: dark --muted is derived from --brand at
+     L 0.58, whose luminance (0.196) sits barely above the scrim's
+     (0.031), which puts that ink at 3.05:1 against the artwork behind
+     it, under the 4.5:1 floor WCAG AA sets for 16px/400 text.
+     Lightening the scrim does not rescue it: at alpha 0.50 the same ink
+     measures 2.32:1 in dark and 3.98:1 in light, because the veil's own
+     contribution is what darkens the backdrop the dim ink sits on. This
+     mix measures 9.95:1 light / 8.91:1 dark — and the 40% of --accent
+     in it is what keeps the subtitle a visible step below the heading
+     instead of a second heading. */
   color: color-mix(in oklch, var(--fg) 60%, var(--accent));
 }
 
@@ -2581,10 +2599,10 @@ export default {
    `align-items: center` would collapse the bar to its intrinsic width
    and contradict the panel-rhythm the composer is meant to belong to.
 
-   The `margin: var(--space-lg) 0` is the spacing the overlay used to
-   carry via its flex `gap`, which was removed when the subtitle's
-   bottom margin was restored — the composer is now the only flex
-   child that needs the explicit spacing to its siblings. */
+   The `margin: var(--space-lg) 0` is the composer's own spacing to its
+   siblings: the overlay's flex `gap` is zero and the subtitle above
+   carries its own bottom margin, so the composer is the one child here
+   that has to state its spacing. */
 .quick-help-composer {
   width: 100%;
   max-width: var(--qh-measure);
@@ -2601,11 +2619,12 @@ export default {
    where it does not the wrapper is simply the overlay's content width
    on both sides.
 
-   Measured before this rule the bar was the wrapper's full 1102 px at a
-   1920 viewport — 114 % of the 964 px row, i.e. wider than the row it
-   belongs to. */
+   The ratio travels as --composer-width, the shared composer's own
+   escape hatch, rather than as a `width` on this selector. The
+   composer keeps ownership of the property and a consumer supplies a
+   value; neither side has to out-specify the other to get a number. */
 .quick-help-composer .chat-composer {
-  width: 81%;
+  --composer-width: var(--qh-composer-ratio);
   margin-inline: auto;
 }
 

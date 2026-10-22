@@ -169,10 +169,12 @@ spec:
           check_secret arango-root-secret || failed=1
           {{- end }}
           {{- if or .Values.data.keycloak.enabled .Values.data.postgres.enabled }}
-          # keycloak-db-credentials is the SharedSecret between the CNPG
-          # Cluster (postgres tier) and the Keycloak CR; either tier enabled
-          # means the operator must provide it.
-          check_secret keycloak-db-credentials || failed=1
+          # The CNPG/Keycloak SharedSecret, named by
+          # data.keycloak.db.secretName — the same knob the CNPG Cluster
+          # bootstrap and the Keycloak CR read, so an operator who
+          # renamed it is tested against the Secret the deployment
+          # actually consumes, not the default name.
+          check_secret {{ .Values.data.keycloak.db.secretName }} || failed=1
           {{- end }}
           {{- if .Values.services.redisCache.enabled }}
           # redis runs with --requirepass from a NON-optional secretKeyRef,

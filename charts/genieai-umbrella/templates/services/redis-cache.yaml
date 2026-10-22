@@ -24,9 +24,18 @@ spec:
         fsGroup: 999                       # /data writable for AOF
         seccompProfile:
           type: RuntimeDefault
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: redis-cache
+          # Same tag-driven pull policy as the factory's images: the
+          # laptop-build workflow overrides pullPolicy per service, and
+          # a hand-written Deployment that drops the key silently
+          # ignores it.
           image: "{{ $svc.image.repository | default "redis" }}:{{ $svc.image.tag | default "7-alpine" }}"
+          imagePullPolicy: {{ include "genieai-umbrella.imagePullPolicy" (dict "tag" ($svc.image.tag | default "7-alpine") "pullPolicy" ($svc.image.pullPolicy | default .Values.global.imagePullPolicy)) }}
           # $(VAR) in args expands against the container env below
           # (Kubernetes native expansion).
           args:

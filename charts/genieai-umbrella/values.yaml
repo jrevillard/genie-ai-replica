@@ -11,13 +11,11 @@
 namespace: genieai
 
 global:
-  # Default registry that prefixes every service image.repository
-  # (e.g. `genie-ai-backend` → `registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-backend:main`).
-  # Set to your container registry when adopting the chart on a
-  # different setup; empty = kubelet resolves the bare name against
-  # Docker Hub, which the genie-ai-* service images are NOT published
-  # to, so an empty default leaves `helm install` with 404s (see
-  # top-level imageRegistry).
+  # imagePullSecrets — a list of {name: <Secret>} refs wired into every
+  # service pod's spec.imagePullSecrets, for a registry that requires
+  # authentication. The registry the images are pulled FROM is the
+  # top-level imageRegistry (which prefixes every image.repository) —
+  # this knob is only about the PULL CREDENTIALS.
   imagePullSecrets: []
   # Architecture for the tooling images the hooks/test pods download
   # (kubectl, jq). Clusters running arm64 nodes set arm64.
@@ -816,6 +814,11 @@ opea:
   chatqna:
     # CHATQNA_*, RERANKING_*, MULTI_TURN_*, prompts — defaults in templates
     #
+    # Boolean realm-adjacent knobs the template exports as env strings.
+    # Declared (not left implicit) so the values-schema bools gate types
+    # them like every other boolean leaf.
+    chatqnaEnforceAbstention: true
+    retrieverArangoTraversalEnabled: true
     # `env` carries the variables the chart must configure the way Compose
     # configures them. The parity gate (scripts/config-parity-check.py)
     # keeps the two in step. A MAP, not a list: Helm merges maps key by
@@ -838,6 +841,10 @@ opea:
   retriever:
     # RETRIEVER_* tuning — defaults in templates
     #
+    # Boolean knobs the template exports as env strings (typed by the
+    # bools gate — see the chatqna note).
+    retrieverArangoTraversalEnabled: true
+    retrieverHybridRetrievalEnabled: true
     # `env` carries the variables the chart must configure the way Compose
     # configures them (see the parity gate).
     env:
@@ -849,6 +856,10 @@ opea:
   dataprep:
     # chunking / labeling / contextual retrieval — defaults in templates
     #
+    # Boolean knobs the template exports as env strings (typed by the
+    # bools gate — see the chatqna note).
+    contextualRetrievalEnabled: true
+    contextualLabelRaw: true
     # `env` carries the variables the chart must configure the way Compose
     # configures them (see the parity gate).
     env:
@@ -903,6 +914,10 @@ opea:
       enabled: true
       storageClassName: ""
       size: 100Gi
+    # resources for ALL FOUR model Deployments (llm, reranker, embedding,
+    # translation) — one shared dict, NOT per-model. Empty = no explicit
+    # requests/limits (the pods share one GPU via utilization args; see
+    # the model-deployment template note).
     resources: {}
 
 # clusterProfile-driven replica overrides. prod runs multiple replicas per

@@ -51,6 +51,28 @@ class GuardScanner {
   /// How many times [token] occurs in the source.
   int count(Pattern token) => token.allMatches(source).length;
 
+  /// The first `{...}` block that follows a match of [signature], with
+  /// comments removed — the body of a method or function declared by
+  /// [signature]. Returns `null` when the signature does not appear.
+  ///
+  /// Offsets are resolved on the raw source so they line up with the brace
+  /// pairs; only the returned text is stripped.
+  String? blockAfter(Pattern signature) {
+    Match? match;
+    for (final m in signature.allMatches(source)) {
+      match = m;
+      break;
+    }
+    if (match == null) {
+      return null;
+    }
+    final open = source.indexOf('{', match.end);
+    if (open < 0 || !_bracePairs.containsKey(open)) {
+      return null;
+    }
+    return _stripComments(source.substring(open + 1, _bracePairs[open]!));
+  }
+
   bool _isGuarded(int offset, String guard) {
     // Inside a block whose opening condition names the guard.
     for (final open in _openBraces) {

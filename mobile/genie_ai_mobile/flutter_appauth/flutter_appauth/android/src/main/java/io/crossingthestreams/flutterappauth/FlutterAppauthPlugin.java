@@ -226,7 +226,7 @@ public class FlutterAppauthPlugin
         (Map<String, String>) arguments.get("serviceConfiguration");
     Map<String, String> additionalParameters =
         (Map<String, String>) arguments.get("additionalParameters");
-    allowInsecureConnections = (boolean) arguments.get("allowInsecureConnections");
+    allowInsecureConnections = Boolean.TRUE.equals(arguments.get("allowInsecureConnections"));
     final String responseMode = (String) arguments.get("responseMode");
 
     return new AuthorizationTokenRequestParameters(
@@ -272,7 +272,7 @@ public class FlutterAppauthPlugin
         (Map<String, String>) arguments.get("serviceConfiguration");
     final Map<String, String> additionalParameters =
         (Map<String, String>) arguments.get("additionalParameters");
-    allowInsecureConnections = (boolean) arguments.get("allowInsecureConnections");
+    allowInsecureConnections = Boolean.TRUE.equals(arguments.get("allowInsecureConnections"));
     return new TokenRequestParameters(
         clientId,
         issuer,
@@ -294,7 +294,12 @@ public class FlutterAppauthPlugin
     final String idTokenHint = (String) arguments.get("idTokenHint");
     final String postLogoutRedirectUrl = (String) arguments.get("postLogoutRedirectUrl");
     final String state = (String) arguments.get("state");
-    final boolean allowInsecureConnections = (boolean) arguments.get("allowInsecureConnections");
+    // Read into the field, not a local: getConnectionBuilder() and
+    // getAuthorizationService() both read the field, so a local here would
+    // leave the end-session request on whatever the previous authorize or
+    // token call set. TRUE.equals() defaults a missing key to false instead
+    // of throwing.
+    allowInsecureConnections = Boolean.TRUE.equals(arguments.get("allowInsecureConnections"));
     final String issuer = (String) arguments.get("issuer");
     final String discoveryUrl = (String) arguments.get("discoveryUrl");
     final Map<String, String> serviceConfigurationParameters =

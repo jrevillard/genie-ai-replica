@@ -107,6 +107,35 @@ void main() {
       );
       expect(references, greaterThan(0));
     });
+
+    test('end-session reads the flag into the field, not a local', () {
+      // getConnectionBuilder() and getAuthorizationService() both read the
+      // `allowInsecureConnections` field. If the end-session processor kept
+      // the flag in a local — as it once did — the end-session request would
+      // use whatever the previous authorize or token call had set, so an
+      // exchange that asked for TLS verification could still be intercepted.
+      final scanner = GuardScanner(File(_javaPluginPath).readAsStringSync());
+      final body = scanner.blockAfter(
+        RegExp(
+          r'EndSessionRequestParameters\s+processEndSessionRequestArguments',
+        ),
+      );
+      expect(body, isNotNull, reason: 'the end-session processor moved');
+      expect(
+        body,
+        isNot(
+          contains(RegExp(r'\bfinal\s+boolean\s+allowInsecureConnections\b')),
+        ),
+        reason:
+            'a local shadows the field: end-session would ignore its '
+            'own flag and reuse the previous call\'s',
+      );
+      expect(
+        body,
+        contains(RegExp(r'\ballowInsecureConnections\s*=(?!=)')),
+        reason: 'the flag is never read from the arguments',
+      );
+    });
   });
 
   group('Apple trust-all protocol', () {

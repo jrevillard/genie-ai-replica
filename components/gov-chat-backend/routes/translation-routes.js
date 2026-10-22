@@ -18,7 +18,10 @@ const { isUnsupportedLanguage } = require('../services/translation/unsupported-l
  */
 function respondWithUnsupportedLanguage(error, res) {
   logger.warn(`[TRANSLATION-ROUTES] Rejected request: ${error.message}`);
-  return res.status(error.statusCode).json({ message: error.message });
+  // The status code comes from the error (the refusal is a validation
+  // error); a refusal that crossed a module boundary without one is still a
+  // bad request.
+  return res.status(error.statusCode || 400).json({ message: error.message });
 }
 
 /**

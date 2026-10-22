@@ -107,7 +107,34 @@ void main() {
       );
       expect(references, greaterThan(0));
     });
+  });
 
+  group('GuardScanner.blockAfter', () {
+    // Synthetic sources: the comment- and string-skipping between a
+    // signature and its body brace is dead code on the current fork layout,
+    // so it is exercised against sources built for it.
+    test('skips comments and strings when locating the body', () {
+      const source = r"""
+          String sig(Map<String, Object> a) /* {"decoy": 1} */ {
+            return "no brace { inside";
+          }
+
+          String other() { return "x"; }
+        """;
+      final scanner = GuardScanner(source);
+      final body = scanner.blockAfter(RegExp(r'sig\('));
+      expect(body, isNotNull);
+      expect(body, contains('no brace'));
+      expect(body, isNot(contains('decoy')));
+      expect(body, isNot(contains('other')));
+    });
+
+    test('returns null when the signature is absent', () {
+      expect(GuardScanner('int x = 3;').blockAfter('nope'), isNull);
+    });
+  });
+
+  group('Android flag plumbing', () {
     test('end-session reads the flag into the field, not a local', () {
       // getConnectionBuilder() and getAuthorizationService() both read the
       // `allowInsecureConnections` field. A local of that name in the
@@ -115,12 +142,15 @@ void main() {
       // request would use whatever the previous authorize or token call had
       // set — an exchange that asked for TLS verification could still be
       // intercepted.
-      final scanner = GuardScanner(File(_javaPluginPath).readAsStringSync());
-      final body = scanner.blockAfter(
-        RegExp(
-          r'EndSessionRequestParameters\s+processEndSessionRequestArguments',
-        ),
+      final signature = RegExp(
+        r'EndSessionRequestParameters\s+processEndSessionRequestArguments',
       );
+      final scanner = GuardScanner(File(_javaPluginPath).readAsStringSync());
+      // A javadoc that mentions the signature would make it ambiguous which
+      // occurrence blockAfter resolves; the test would then police the wrong
+      // method without saying so.
+      expect(scanner.count(signature), 1, reason: 'the signature is ambiguous');
+      final body = scanner.blockAfter(signature);
       expect(body, isNotNull, reason: 'the end-session processor moved');
       // The body must process the arguments map — a canary for the block
       // extraction: if the scanner ever resolves the wrong block, this is
@@ -148,37 +178,12 @@ void main() {
         body,
         contains(
           RegExp(
-            r'allowInsecureConnections\s*=\s*Boolean\.TRUE\.equals\('
-            r'arguments\.get\("allowInsecureConnections"\)\)',
+            r'allowInsecureConnections\s*=\s*Boolean\.TRUE\.equals\(\s*'
+            r'arguments\.get\(\s*"allowInsecureConnections"\s*\)\s*\)',
           ),
         ),
         reason: 'the flag is not read from the end-session arguments',
       );
-    });
-  });
-
-  group('GuardScanner.blockAfter', () {
-    // Synthetic sources: the comment- and string-skipping between a
-    // signature and its body brace is dead code on the current fork layout,
-    // so it is exercised against sources built for it.
-    test('skips comments and strings when locating the body', () {
-      const source = r"""
-          String sig(Map<String, Object> a) /* {"decoy": 1} */ {
-            return "no brace { inside";
-          }
-
-          String other() { return "x"; }
-        """;
-      final scanner = GuardScanner(source);
-      final body = scanner.blockAfter(RegExp(r'sig\('));
-      expect(body, isNotNull);
-      expect(body, contains('no brace'));
-      expect(body, isNot(contains('decoy')));
-      expect(body, isNot(contains('other')));
-    });
-
-    test('returns null when the signature is absent', () {
-      expect(GuardScanner('int x = 3;').blockAfter('nope'), isNull);
     });
   });
 

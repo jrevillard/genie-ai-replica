@@ -78,36 +78,13 @@ class GuardScanner {
   int _firstStructuralBrace(int from) {
     var i = from;
     while (i < source.length) {
-      final c = source[i];
-      if (c == '{') {
+      final trivia = _triviaEnd(i);
+      if (trivia != null) {
+        i = trivia;
+        continue;
+      }
+      if (source[i] == '{') {
         return i;
-      }
-      if (c == '/' && i + 1 < source.length) {
-        if (source[i + 1] == '/') {
-          final nl = source.indexOf('\n', i);
-          if (nl < 0) {
-            return -1;
-          }
-          i = nl + 1;
-          continue;
-        }
-        if (source[i + 1] == '*') {
-          final end = source.indexOf('*/', i + 2);
-          if (end < 0) {
-            return -1;
-          }
-          i = end + 2;
-          continue;
-        }
-      }
-      if (c == '"' || c == "'") {
-        i++;
-        while (i < source.length && source[i] != c) {
-          if (source[i] == r'\') {
-            i++;
-          }
-          i++;
-        }
       }
       i++;
     }
@@ -174,11 +151,87 @@ class GuardScanner {
     return _stripComments(source.substring(start, end));
   }
 
-  /// Removes `/* ... */` and `// ...` comments from [text].
-  static String _stripComments(String text) {
-    return text
-        .replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), ' ')
-        .replaceAll(RegExp(r'//[^\n]*'), ' ');
+  /// Removes `/* ... */` and `// ...` comments from [text], leaving string
+  /// literals untouched: a `//` inside a Java string is data, not a comment,
+  /// and stripping it would truncate the code the guard inspects.
+  String _stripComments(String text) {
+    final out = StringBuffer();
+    var i = 0;
+    while (i < text.length) {
+      final c = text[i];
+      if (c == '/' && i + 1 < text.length) {
+        if (text[i + 1] == '/') {
+          final nl = text.indexOf('\n', i);
+          if (nl < 0) {
+            break;
+          }
+          i = nl;
+          continue;
+        }
+        if (text[i + 1] == '*') {
+          final end = text.indexOf('*/', i + 2);
+          if (end < 0) {
+            break;
+          }
+          out.write(' ');
+          i = end + 2;
+          continue;
+        }
+      }
+      if (c == '"' || c == "'") {
+        // Copy the string literal verbatim.
+        out.write(c);
+        i++;
+        while (i < text.length && text[i] != c) {
+          if (text[i] == r'\' && i + 1 < text.length) {
+            out.write(text[i]);
+            out.write(text[i + 1]);
+            i += 2;
+            continue;
+          }
+          out.write(text[i]);
+          i++;
+        }
+        if (i < text.length) {
+          out.write(c);
+          i++;
+        }
+        continue;
+      }
+      out.write(c);
+      i++;
+    }
+    return out.toString();
+  }
+
+  /// If [i] starts a comment or string literal, the index just past it;
+  /// otherwise -1. The single trivia-skipping rule shared by the brace
+  /// pairing, the body scan and the comment stripper.
+  int? _triviaEnd(int i, [String? text]) {
+    final src = text ?? source;
+    if (src[i] == '/' && i + 1 < src.length) {
+      if (src[i + 1] == '/') {
+        final nl = src.indexOf('\n', i);
+        return nl < 0 ? src.length : nl + 1;
+      }
+      if (src[i + 1] == '*') {
+        final end = src.indexOf('*/', i + 2);
+        return end < 0 ? src.length : end + 2;
+      }
+      return null;
+    }
+    if (src[i] == '"' || src[i] == "'") {
+      final quote = src[i];
+      var j = i + 1;
+      while (j < src.length && src[j] != quote) {
+        if (src[j] == r'\') {
+          j++;
+        }
+        j++;
+      }
+      return j < src.length ? j + 1 : src.length;
+    }
+    return null;
   }
 
   Map<int, int> _computeBracePairs() {
@@ -189,44 +242,17 @@ class GuardScanner {
     final stack = <int>[];
     var i = 0;
     while (i < source.length) {
+      final trivia = _triviaEnd(i);
+      if (trivia != null) {
+        i = trivia;
+        continue;
+      }
       final c = source[i];
       if (c == '{') {
         stack.add(i);
-        i++;
-        continue;
-      }
-      if (c == '}') {
+      } else if (c == '}') {
         if (stack.isNotEmpty) {
           pairs[stack.removeLast()] = i;
-        }
-        i++;
-        continue;
-      }
-      if (c == '/' && i + 1 < source.length) {
-        if (source[i + 1] == '/') {
-          final nl = source.indexOf('\n', i);
-          if (nl < 0) {
-            break;
-          }
-          i = nl + 1;
-          continue;
-        }
-        if (source[i + 1] == '*') {
-          final end = source.indexOf('*/', i + 2);
-          if (end < 0) {
-            break;
-          }
-          i = end + 2;
-          continue;
-        }
-      }
-      if (c == '"' || c == "'") {
-        i++;
-        while (i < source.length && source[i] != c) {
-          if (source[i] == r'\') {
-            i++;
-          }
-          i++;
         }
       }
       i++;

@@ -9,7 +9,6 @@ the backend starts unconditionally but fails its first authenticated
 request without the collections, which is what this Job prevents.
 */ -}}
 {{- $ns := .Values.namespace -}}
-{{- $arangoHost := include "genieai-umbrella.arangoHost" . -}}
 {{- $registry := .Values.imageRegistry -}}
 {{- $img := .Values.services.backend.migrationsImage | default dict -}}
 apiVersion: batch/v1
@@ -53,7 +52,7 @@ spec:
       containers:
         - name: db-migrations
           image: {{ if $registry }}{{ $registry }}/{{ end }}{{ $img.repository | default "genie-ai-db-migrations" }}:{{ $img.tag | default "main" }}
-          imagePullPolicy: {{ .Values.global.imagePullPolicy | default "IfNotPresent" }}
+          imagePullPolicy: {{ include "genieai-umbrella.imagePullPolicy" (dict "tag" ($img.tag | default "main") "pullPolicy" .Values.global.imagePullPolicy) }}
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

@@ -54,7 +54,7 @@ spec:
               kubernetes.io/metadata.name: {{ .Values.namespace }}-obs
       ports:
         - protocol: TCP
-          port: {{ .Values.observability.collectorPort | default 4318 }}
+          port: {{ include "genieai-umbrella.otlpPort" . }}
         - protocol: TCP
           port: 4317
   egress:
@@ -186,5 +186,5 @@ spec:
               app.kubernetes.io/managed-by: opentelemetry-operator
       ports:
         - protocol: TCP
-          port: {{ .Values.observability.collectorPort | default 4318 }}
+          port: {{ include "genieai-umbrella.otlpPort" . }}
 {{- end }}

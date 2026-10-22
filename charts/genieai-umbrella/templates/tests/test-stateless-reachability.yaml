@@ -81,10 +81,8 @@ spec:
           {{- if .Values.services.documentRepository.enabled }}
           check document-repository 80 /health 200
           {{- end }}
-          {{- if .Values.services.clamav.enabled }}
-          # Probed by the dedicated busybox/nc sibling pod below (this
-          # curlimages/curl image carries no nc).
-          {{- end }}
+          # (clamav is probed by the dedicated busybox/nc sibling pod
+          # below — this curlimages/curl image carries no nc.)
           {{- if .Values.services.redisCache.enabled }}
           check_tcp redis-cache 6379
           {{- end }}

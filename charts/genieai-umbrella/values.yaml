@@ -35,6 +35,11 @@ global:
   # and /jq/releases/download/jq-1.7.1/jq-linux-amd64 are appended
   # automatically. Default = empty (use the public URLs).
   kubeletToolsMirror: ""
+  # Global pull-policy override for the service images. Leave empty: the
+  # default follows the tag (mutable tags — main, latest, stable* — pull
+  # Always; a pinned tag pulls IfNotPresent), and a per-service
+  # services.<svc>.image.pullPolicy beats both.
+  imagePullPolicy: ""
 
 # Drives chart-derived defaults (replica counts, data-tier topology,
 # observability). dev | staging | prod (sovereign is reserved (rejected by values.schema.json's clusterProfile enum until the sovereign profile lands — its branches
@@ -271,6 +276,13 @@ data:
     # data.keycloak.smtp — a sentinelled smtpServer would swallow the mail
     # and leave the user staring at a reset form that never answers.
     resetPasswordAllowed: true
+    # Four realm knobs the convergence Job always exports. Defaults are
+    # the Swarm export's effective values: brute force protection, login
+    # by email and i18n on, duplicate emails off.
+    bruteForceProtected: true
+    loginWithEmailAllowed: true
+    internationalizationEnabled: true
+    duplicateEmailsAllowed: false
     # Email verification on new accounts. Same SMTP dependency as
     # resetPasswordAllowed, same default as compose
     # (KEYCLOAK_VERIFY_EMAIL:-true). `smtp` being null in the values is a

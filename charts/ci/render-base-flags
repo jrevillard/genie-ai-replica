@@ -1,0 +1,7 @@
+--set data.keycloak.failOnPlaceholderSecrets=false
+--set data.keycloak.adminEmail=ci-render@example.org
+--set data.keycloak.smtp.from=no-reply@ci.invalid
+--set data.keycloak.smtp.host=smtp.invalid
+--set data.keycloak.smtp.port=587
+--set data.keycloak.smtp.starttls=true
+--set ingress.host=ci-render.local

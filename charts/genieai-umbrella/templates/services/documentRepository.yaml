@@ -11,7 +11,6 @@
 */ -}}
 {{- if .Values.services.documentRepository.enabled -}}
 {{- $ns := .Values.namespace -}}
-{{- $arangoHost := include "genieai-umbrella.arangoHost" . -}}
 {{- $vals := deepCopy .Values -}}
 {{- /* VIRUS_SCANNING is the app-side switch, not the operator's: a scan
 step with no scanner behind it fails every upload, so the ClamAV tier
@@ -76,7 +75,7 @@ both rows must be set explicitly. */ -}}
     (dict "name" "CLAMSCAN_PORT" "value" (.Values.services.documentRepository.clamavPort | toString))
     (dict "name" "VIRUS_SCANNING" "value" ($virusScanning | toString))
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
-    (dict "name" "ENABLE_OBSERVABILITY" "value" (ternary "1" "0" (or .Values.observability.logs.enabled .Values.observability.metrics.enabled .Values.observability.traces.enabled)))
+    (dict "name" "ENABLE_OBSERVABILITY" "value" (include "genieai-umbrella.observabilityEnabledFlag" .))
 -}}
 {{- /* Admin logs UI data source — the vmoperator-managed VLSingle
 Service, same address the backend is given. */ -}}
@@ -268,7 +267,7 @@ spec:
             cidr: 0.0.0.0/0
       ports:
         - protocol: TCP
-          port: {{ .Values.observability.collectorPort | default 4318 }}
+          port: {{ include "genieai-umbrella.otlpPort" . }}
     {{- if .Values.observability.logs.enabled }}
     # VictoriaLogs read path. The chart renders VICTORIALOGS_URL for this
     # pod whenever the logs tier is on; an env var pointing at a

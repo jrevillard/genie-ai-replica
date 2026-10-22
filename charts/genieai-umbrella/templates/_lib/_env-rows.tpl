@@ -49,3 +49,16 @@ rejects.
 {{- end -}}
 {{- toJson $rows -}}
 {{- end -}}
+
+{{/*
+genieai-umbrella.boolEnvValue — a boolean values knob as an env STRING,
+with an explicit default for the unset case. The realm's env rows carry
+this in two dialects (a `ternary` over `kindIs "invalid"` and an `eq`
+over `default false`); both reduce to this, and the default is an
+argument so the two families keep their distinct values.
+*/}}
+{{- define "genieai-umbrella.boolEnvValue" -}}
+{{- $v := .value -}}
+{{- if kindIs "invalid" $v -}}{{- $v = .default -}}{{- end -}}
+{{- ternary "true" "false" (eq ($v | toString) "true") -}}
+{{- end -}}

@@ -42,27 +42,6 @@ internals — the two availability-check settings and the four IMPORT_*
 variables — are deliberately absent, because no realm placeholder may
 name them.
 */ -}}
-{{- $known := list "KEYCLOAK_URL" "KEYCLOAK_USER" "KEYCLOAK_PASSWORD" -}}
-{{- $known = append $known "KC_REALM" -}}
-{{- $known = append $known "KC_CLIENT_ID" -}}
-{{- $known = append $known "KC_PUBLIC_ORIGIN" -}}
-{{- $known = append $known "KC_MOBILE_CLIENT_ID" -}}
-{{- $known = append $known "KC_MOBILE_REDIRECT_SCHEME" -}}
-{{- $known = append $known "KC_GRAFANA_CLIENT_ID" -}}
-{{- $known = append $known "GENIE_ADMIN_USERNAME" -}}
-{{- $known = append $known "GENIE_ADMIN_EMAIL" -}}
-{{- $known = append $known "KEYCLOAK_REGISTRATION_ENABLED" -}}
-{{- $known = append $known "KEYCLOAK_VERIFY_EMAIL" -}}
-{{- $known = append $known "KEYCLOAK_RESET_PASSWORD" -}}
-{{- $known = append $known "KEYCLOAK_LOGIN_WITH_EMAIL" -}}
-{{- $known = append $known "KEYCLOAK_DUPLICATE_EMAILS" -}}
-{{- $known = append $known "KEYCLOAK_BRUTE_FORCE" -}}
-{{- $known = append $known "KEYCLOAK_PASSWORD_POLICY" -}}
-{{- $known = append $known "KEYCLOAK_THEME" -}}
-{{- $known = append $known "KEYCLOAK_I18N_ENABLED" -}}
-{{- $known = append $known "KEYCLOAK_LOCALE" -}}
-{{- $known = append $known "KEYCLOAK_SUPPORTED_LOCALES" -}}
-{{- $known = append $known "KEYCLOAK_ACCESS_TOKEN_LIFESPAN" -}}
 {{- /*
 SMTP placeholders are listed unconditionally: the realm file's
 smtpServer block is unconditional too (genie-realm.yaml:18-26), so a
@@ -70,13 +49,17 @@ default install with smtp:null must still resolve them — to empty
 strings. Gating them on smtp
 being set would fail this assertion on every default render.
 */ -}}
-{{- $known = append $known "EMAIL_FROM" -}}
-{{- $known = append $known "EMAIL_HOST" -}}
-{{- $known = append $known "EMAIL_PORT" -}}
-{{- $known = append $known "EMAIL_SECURE" -}}
-{{- $known = append $known "EMAIL_SMTP_STARTTLS" -}}
-{{- $known = append $known "EMAIL_SMTP_AUTH" -}}
-{{- $known = append $known "EMAIL_USER" -}}
+{{- $known := list
+      "KEYCLOAK_URL" "KEYCLOAK_USER" "KEYCLOAK_PASSWORD"
+      "KC_REALM" "KC_CLIENT_ID" "KC_PUBLIC_ORIGIN"
+      "KC_MOBILE_CLIENT_ID" "KC_MOBILE_REDIRECT_SCHEME" "KC_GRAFANA_CLIENT_ID"
+      "GENIE_ADMIN_USERNAME" "GENIE_ADMIN_EMAIL"
+      "KEYCLOAK_REGISTRATION_ENABLED" "KEYCLOAK_VERIFY_EMAIL" "KEYCLOAK_RESET_PASSWORD"
+      "KEYCLOAK_LOGIN_WITH_EMAIL" "KEYCLOAK_DUPLICATE_EMAILS" "KEYCLOAK_BRUTE_FORCE"
+      "KEYCLOAK_PASSWORD_POLICY" "KEYCLOAK_THEME" "KEYCLOAK_I18N_ENABLED"
+      "KEYCLOAK_LOCALE" "KEYCLOAK_SUPPORTED_LOCALES" "KEYCLOAK_ACCESS_TOKEN_LIFESPAN"
+      "EMAIL_FROM" "EMAIL_HOST" "EMAIL_PORT"
+      "EMAIL_SECURE" "EMAIL_SMTP_STARTTLS" "EMAIL_SMTP_AUTH" "EMAIL_USER" -}}
 {{- range $e := (.Values.data.keycloak.convergence.envSecrets | default list) -}}
 {{- $known = append $known $e.envVar -}}
 {{- end -}}
@@ -242,17 +225,17 @@ spec:
             - name: EMAIL_USER
               value: {{ if and $smtp ($smtp.auth) }}{{ $smtp.user | required "data.keycloak.smtp.user is required when smtp.auth is true" | quote }}{{ else }}unused{{ end }}
             - name: KEYCLOAK_REGISTRATION_ENABLED
-              value: {{ eq ((.Values.data.keycloak.registrationAllowed | default false) | toString) "true" | quote }}
+              value: {{ include "genieai-umbrella.boolEnvValue" (dict "value" .Values.data.keycloak.registrationAllowed "default" false) | quote }}
             - name: KEYCLOAK_VERIFY_EMAIL
-              value: {{ eq ((.Values.data.keycloak.verifyEmail | default false) | toString) "true" | quote }}
+              value: {{ include "genieai-umbrella.boolEnvValue" (dict "value" .Values.data.keycloak.verifyEmail "default" false) | quote }}
             - name: KEYCLOAK_RESET_PASSWORD
-              value: {{ eq ((.Values.data.keycloak.resetPasswordAllowed | default false) | toString) "true" | quote }}
+              value: {{ include "genieai-umbrella.boolEnvValue" (dict "value" .Values.data.keycloak.resetPasswordAllowed "default" false) | quote }}
             - name: KEYCLOAK_LOGIN_WITH_EMAIL
-              value: {{ eq (ternary (.Values.data.keycloak.loginWithEmailAllowed | toString) "true" (not (kindIs "invalid" .Values.data.keycloak.loginWithEmailAllowed))) "true" | quote }}
+              value: {{ eq (include "genieai-umbrella.boolEnvValue" (dict "value" .Values.data.keycloak.loginWithEmailAllowed "default" true)) "true" | quote }}
             - name: KEYCLOAK_DUPLICATE_EMAILS
-              value: {{ eq ((.Values.data.keycloak.duplicateEmailsAllowed | default false) | toString) "true" | quote }}
+              value: {{ include "genieai-umbrella.boolEnvValue" (dict "value" .Values.data.keycloak.duplicateEmailsAllowed "default" false) | quote }}
             - name: KEYCLOAK_BRUTE_FORCE
-              value: {{ eq (ternary (.Values.data.keycloak.bruteForceProtected | toString) "true" (not (kindIs "invalid" .Values.data.keycloak.bruteForceProtected))) "true" | quote }}
+              value: {{ eq (include "genieai-umbrella.boolEnvValue" (dict "value" .Values.data.keycloak.bruteForceProtected "default" true)) "true" | quote }}
             - name: KEYCLOAK_PASSWORD_POLICY
               value: {{ .Values.data.keycloak.passwordPolicy | default "length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)" | quote }}
             - name: KEYCLOAK_THEME
@@ -262,7 +245,7 @@ spec:
               # nowhere — an unthemed login page with no error anywhere.
               value: {{ .Values.data.keycloak.theme | default "genie" | quote }}
             - name: KEYCLOAK_I18N_ENABLED
-              value: {{ eq (ternary (.Values.data.keycloak.internationalizationEnabled | toString) "true" (not (kindIs "invalid" .Values.data.keycloak.internationalizationEnabled))) "true" | quote }}
+              value: {{ eq (include "genieai-umbrella.boolEnvValue" (dict "value" .Values.data.keycloak.internationalizationEnabled "default" true)) "true" | quote }}
             - name: KEYCLOAK_LOCALE
               value: {{ .Values.data.keycloak.defaultLocale | quote }}
             # JSON array literal, not a comma-joined string: the realm

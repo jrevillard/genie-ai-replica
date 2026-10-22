@@ -4,14 +4,14 @@
 # compose/Ansible path since #998).
 #
 # The tarball is REPRODUCIBLE: name-sorted entries, mtime/owner pinned to
-# zero, gzip without timestamp. Two checkouts of the same tree produce
-# byte-identical output, so CI can guard drift with a plain `cmp` — same
-# contract as the genie-realm.yaml copy in chart:lint.
+# zero, gzip without timestamp — two checkouts of the same tree produce
+# the same member listing and the same member contents.
 #
 # Called by `make keycloak-theme` and by the CI chart:lint drift guard.
-# Optional $1 overrides the output path (CI regenerates to a temp file and
-# compares CONTENT hashes — gzip output legitimately differs a few bytes
-# between gzip versions, so a byte compare would be flaky).
+# Optional $1 overrides the output path (CI regenerates to a temp file
+# and compares the member listing + concatenated contents by HASH, not
+# by `cmp` on the .tgz — gzip output legitimately differs a few bytes
+# between gzip versions).
 # Requires GNU tar (alpine: `apk add tar`; busybox tar lacks --sort/--mtime).
 set -eu
 

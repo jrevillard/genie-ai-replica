@@ -32,8 +32,9 @@ void main() {
       expect(() => getConfig(), throwsStateError);
     },
     skip: !releaseLike
-        ? 'debug keeps the dev default; run with '
-              '--dart-define=dart.vm.product=true to exercise the guard'
+        ? 'debug keeps the dev default; run this file with '
+              '--dart-define=dart.vm.product=true (or dart.vm.profile=true) '
+              'to exercise the guard'
         : flavor.isNotEmpty
         ? 'the FLAVOR define is set; the guard covers the missing-define case'
         : null,

@@ -80,8 +80,13 @@ class KeycloakConfig {
   );
 }
 
+/// The flavors [getConfig] knows, as they appear in every error message.
+///
+/// When adding a deployment flavor, add the case in [getConfig]'s switch, its
+/// import, and this list — the two startup errors below read from it.
+const _knownFlavors = 'dev, staging, e2e, or itu';
+
 KeycloakConfig getConfig() {
-  // When adding a new deployment flavor, add a case below and import its config.
   const flavor = String.fromEnvironment('FLAVOR');
   if (flavor.isEmpty) {
     // No FLAVOR dart-define. A debug `flutter run` keeps the dev default for
@@ -91,8 +96,7 @@ KeycloakConfig getConfig() {
     if (kReleaseMode || kProfileMode) {
       throw StateError(
         'No FLAVOR dart-define: build with '
-        "--flavor <name> --dart-define=FLAVOR=<name> "
-        '(dev, staging, e2e, or itu).',
+        '--flavor <name> --dart-define=FLAVOR=<name> ($_knownFlavors).',
       );
     }
     return devConfig;
@@ -108,7 +112,7 @@ KeycloakConfig getConfig() {
       return devConfig;
     default:
       throw ArgumentError(
-        'Unknown FLAVOR: "$flavor". Expected: dev, staging, e2e, or itu.',
+        'Unknown FLAVOR: "$flavor". Expected: $_knownFlavors.',
       );
   }
 }

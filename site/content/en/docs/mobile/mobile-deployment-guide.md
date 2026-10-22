@@ -319,7 +319,7 @@ keytool -genkeypair -v \
 Build commands take **two** flavor selectors, and both are required:
 
 - `--flavor <name>` selects the build variant — application id, URL scheme, signing configuration.
-- `--dart-define=FLAVOR=<name>` selects the deployment configuration the app reads at runtime. The app resolves its Keycloak endpoints, its backend URL and its active locale set from `KeycloakConfig`, and `getConfig()` picks that configuration from the `FLAVOR` dart-define — falling back to `dev` when the define is absent.
+- `--dart-define=FLAVOR=<name>` selects the deployment configuration the app reads at runtime. The app resolves its Keycloak endpoints, its backend URL and its active locale set from `KeycloakConfig`, and `getConfig()` picks that configuration from the `FLAVOR` dart-define — falling back to `dev` in a debug run when the define is absent.
 
 Without the dart-define, a debug `flutter run` keeps resolving the **dev** configuration for convenience, but a release or profile build **fails at startup** instead of silently pointing every endpoint at `localhost` with the trust-everything HTTP client armed. The two selectors are still wired independently (the dart-define is not derived from `--flavor`); what remains of that gap is tracked as issue #1099.
 

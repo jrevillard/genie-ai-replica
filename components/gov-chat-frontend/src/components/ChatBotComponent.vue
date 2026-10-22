@@ -2557,7 +2557,21 @@ export default {
      carries on its own — the overlay stays gap-less so the
      subtitle's natural margin is what positions the rest. */
   margin: 0 0 var(--space-lg);
-  color: var(--muted);
+  /* A brand tint, not the neutral grey --muted carries: 60% of the
+     heading's --fg mixed into the theme's --accent. Two problems with
+     --muted here, and only the second is visible. It reads grey where
+     the subtitle is meant to read as brand-coloured (a navy in light, a
+     light blue in dark), and in the dark theme it reads DIM — dark
+     --muted is derived from --brand at L 0.58, whose luminance (0.196)
+     sits barely above the scrim's (0.031), which puts the subtitle at
+     3.05:1 against the artwork behind it, under the 4.5:1 floor WCAG AA
+     sets for 16px/400 text. Lightening the scrim does not help: at
+     alpha 0.50 the same ink measures 2.32:1 in dark and 3.98:1 in
+     light, because the veil's own contribution is what darkens the
+     backdrop the dim ink sits on. The mix measures 9.95:1 light / 8.91:1
+     dark — and the 40% of --accent in it is what keeps the subtitle a
+     visible step below the heading instead of a second heading. */
+  color: color-mix(in oklch, var(--fg) 60%, var(--accent));
 }
 
 /* The welcome composer shares the grid's measured width — same cap,

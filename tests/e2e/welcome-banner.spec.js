@@ -39,7 +39,13 @@
 //   5. the banner's box holds the artwork's ink band, and the banner stays
 //      full-bleed with nothing overflowing the panel.
 //
-// All five run at 1920 / 1280 / 1024 / 769 in light + dark.
+//   6. the subtitle's ink is legible against the artwork under it and still a
+//      step below the heading. It is the only text on the banner that is
+//      normal-sized, so it is held to the 4.5:1 of normal text, and it is the
+//      element sitting lowest on the artwork — which is where the neutral grey
+//      it used to carry measured 3.05:1 in the dark theme.
+//
+// All six run at 1920 / 1280 / 1024 / 769 in light + dark.
 //
 // Pixel sampling uses page.screenshot()'s clip parameter, hands the bytes
 // back into the page as a data URL, draws them to a <canvas> and reads
@@ -76,6 +82,55 @@ const SCRIM_ALPHA_FLOOR = { light: 0.88, dark: 0.8 };
 
 // The wordmark is large text, so 3:1 is the floor it must clear.
 const WORDMARK_CONTRAST_FLOOR = 3.0;
+
+/*
+ * The subtitle's floor is derived from its own rendered type, not asserted
+ * against a constant: WCAG AA asks 4.5:1 of NORMAL text and 3:1 of large text
+ * (>= 24px, or >= 18.66px at weight >= 700). --text-md resolves to 1rem x
+ * --font-scale, so a deployment that overrides the scale moves the subtitle
+ * across that line, and a hardcoded 4.5 would then assert the wrong rule
+ * without saying so. The subtitle inherits weight 400, so at the shipped scale
+ * it is 16px/400 — normal text, 4.5:1.
+ */
+const WCAG_AA = { normal: 4.5, large: 3.0 };
+
+/*
+ * How far the subtitle's ink has to sit from the heading's, as a fraction of
+ * the brighter of the two relative luminances. The two requirements pull
+ * against each other — legible against the scrim, and still a step below the
+ * heading rather than a second heading — and the mix between --fg and --accent
+ * is what trades them off. Measured luminances (WCAG relative, from the
+ * resolved inks):
+ *
+ *                 heading   88% fg   75% fg   60% fg (shipped)   plain --fg
+ *   light           0.0108   0.0178   0.0284          0.0451           0.0108
+ *   dark            0.8598   0.7977   0.7383          0.6690           0.8598
+ *   step, light       -      39.4%    61.9%           76.0%              0%
+ *   step, dark        -       7.2%    14.1%           22.2%              0%
+ *
+ * The 88% mix is the one this rejects: in dark it lands 7.2% from the
+ * heading's own luminance, inside the 10% band, which is the hierarchy
+ * collapsing into a second heading. Plain --fg is 0% in both. The shipped
+ * 60% mix is 76.0% clear in light and 22.2% clear in dark, so 10% sits between
+ * the 88% mix and the shipped one with room on the governing side — dark, where
+ * the heading is the brighter of the two and a drifting subtitle shows as a
+ * shrinking step rather than a missing one.
+ *
+ * The denominator is the brighter luminance rather than the heading's own, so
+ * a near-black ink in the light theme (0.011) cannot make a tiny absolute
+ * difference read as a large relative one.
+ */
+const HIERARCHY_LUMINANCE_STEP = 0.1;
+
+// The ink-coverage floor for calling a pixel "a glyph pixel". It only selects
+// which backdrop pixels sit under the text — the ratio itself is computed
+// between the resolved ink and that backdrop, so a low floor costs nothing but
+// a slightly larger pixel count.
+const INK_COVERAGE_FLOOR = 0.25;
+
+// Below this the ink and its backdrop are one 8-bit step apart or less, and the
+// per-channel coverage is quantisation rather than paint.
+const MIN_INK_SPAN = 4;
 
 // The scrim's rise must span at least this many rows. A hard top edge
 // delivers the whole contribution in one or two; the shipped ramp delivers
@@ -634,6 +689,193 @@ async function boxGeometry(page) {
   });
 }
 
+// Assertion 6: the subtitle's ink — its contrast against its own backdrop,
+// and its distance from the heading's.
+//
+// The subtitle is the one text on the banner that is neither large enough nor
+// bold enough for the relaxed 3:1 floor, so it is held to the 4.5:1 of normal
+// text, and it is the element that sits lowest on the artwork — the band
+// where the globe's ink is darkest and the scrim's contribution is smallest.
+// Those two facts are the whole defect: measured on the running build, the
+// neutral --muted the subtitle used to carry reads 5.38:1 in light (fine) and
+// 3.05:1 in dark (not fine). Brightening the backdrop is not the way out and
+// the numbers say so: dropping the veil's alpha to 0.50 takes dark to 2.32:1
+// and light to 3.98:1, because the veil's own darkening is what the dim ink
+// was already sitting on.
+//
+// The measure is the local one, for the reason assertion 2 gives: the backdrop
+// under a glyph is not the backdrop of the box's corner. Two captures of the
+// subtitle's own box — as rendered, and with the subtitle hidden — give the
+// ink and the backdrop it is painted on.
+//
+// The ink is not recovered from the pixels. It is a flat colour the element
+// declares, so the page resolves it once (a 1x1 canvas filled with it and read
+// back — the computed value here is an oklch(), and parsing its numbers out
+// would be reading the wrong colour space) and then only the BACKDROP varies
+// per pixel. Coverage decides which pixels are glyph pixels; the ratio is the
+// WCAG one, between the resolved ink and the backdrop under it, so an
+// antialiased edge contributes a backdrop sample rather than a washed-out ink.
+//
+// What each ink measures at 1920, where the banner is widest, and the floor it
+// is held to (4.5:1 — 16px/400 is normal text):
+//
+// *                    ink               worst backdrop   ratio    floor
+//   --muted   light    (90, 101, 109)    (239, 243, 254)   5.38:1     pass
+//   --muted   dark     (115, 123, 136)   ( 44,  49,  61)   3.05:1     FAIL
+//   mix 60%   light    (26,  62,  96)    (239, 243, 254)   9.95:1     pass
+//   mix 60%   dark     (190, 216, 249)   ( 44,  49,  61)   8.91:1     pass
+//
+// The governing width is not 1920: 769 is worse in both themes (9.28:1 light,
+// 7.24:1 dark) because the subtitle sits closest to the artwork there. Both
+// clear the floor by a wide margin, so the floor is set at the AA value rather
+// than at the worst width measured.
+async function subtitleContrast(page) {
+  const geo = await page.evaluate(() => {
+    const el = document.querySelector('.quick-help-subtitle');
+    const head = document.querySelector('.quick-help-heading');
+    if (!el || !head) return null;
+    const r = el.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return null;
+    const cs = getComputedStyle(el);
+    const hcs = getComputedStyle(head);
+    // The clip is the subtitle's box intersected with the viewport: a clip
+    // taken at a negative left is silently shifted to 0, which would put every
+    // coordinate read against the image out by that much.
+    const x = Math.max(0, r.left);
+    const y = Math.max(0, r.top);
+    const right = Math.min(r.right, window.innerWidth);
+    const bottom = Math.min(r.bottom, window.innerHeight);
+    if (right - x < 2 || bottom - y < 2) return null;
+    return {
+      clip: { x, y, width: right - x, height: bottom - y },
+      color: cs.color,
+      headingColor: hcs.color,
+      fontSize: parseFloat(cs.fontSize),
+      fontWeight: parseInt(cs.fontWeight, 10) || 400
+    };
+  });
+  if (!geo) return { ok: false, why: 'no subtitle box' };
+
+  const shot = async (css) => {
+    const tag = css ? await page.addStyleTag({ content: css }) : null;
+    const buf = await page.screenshot({ clip: geo.clip, type: 'png' });
+    if (tag) await tag.evaluate((n) => n.remove());
+    return buf.toString('base64');
+  };
+
+  const aB64 = await shot(null);
+  const bB64 = await shot('.quick-help-subtitle{visibility:hidden !important;}');
+
+  return await page.evaluate(
+    async ({ aB64, bB64, geo, coverageFloor, minSpan }) => {
+      const load = (b64) =>
+        new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = reject;
+          img.src = `data:image/png;base64,${b64}`;
+        });
+      const [imA, imB] = await Promise.all([load(aB64), load(bB64)]);
+      const pixels = (img) => {
+        const c = document.createElement('canvas');
+        c.width = img.width;
+        c.height = img.height;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        return ctx.getImageData(0, 0, c.width, c.height).data;
+      };
+      const A = pixels(imA);
+      const B = pixels(imB);
+
+      // A computed colour in this codebase is an oklch(), sometimes a
+      // color-mix() of two of them, so the bytes are read the way a paint
+      // arrives at them rather than by parsing the text. The magenta base is
+      // both the opaque backdrop the colour is laid over and the parse check:
+      // a colour the canvas cannot take leaves fillStyle on the base, and the
+      // result is reported rather than passed off as the theme's ink.
+      const resolve = (css) => {
+        const c = document.createElement('canvas');
+        c.width = 1;
+        c.height = 1;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#ff00ff';
+        ctx.fillRect(0, 0, 1, 1);
+        ctx.fillStyle = css;
+        ctx.fillRect(0, 0, 1, 1);
+        const d = ctx.getImageData(0, 0, 1, 1).data;
+        return {
+          rgb: [d[0], d[1], d[2]],
+          parsed: !(d[0] === 255 && d[1] === 0 && d[2] === 255)
+        };
+      };
+
+      const lum = (r, g, b) => {
+        const toLin = (v) => {
+          v /= 255;
+          return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+        };
+        return 0.2126 * toLin(r) + 0.7152 * toLin(g) + 0.0722 * toLin(b);
+      };
+      const ratio = (p, q) => {
+        const la = lum(p[0], p[1], p[2]);
+        const lb = lum(q[0], q[1], q[2]);
+        const [hi, lo] = la >= lb ? [la, lb] : [lb, la];
+        return (hi + 0.05) / (lo + 0.05);
+      };
+
+      const ink = resolve(geo.color);
+      const head = resolve(geo.headingColor);
+      if (!ink.parsed) return { ok: false, why: `the subtitle's colour (${geo.color}) would not parse` };
+      if (!head.parsed) return { ok: false, why: `the heading's colour (${geo.headingColor}) would not parse` };
+      const T = ink.rgb;
+
+      let count = 0;
+      let worst = Infinity;
+      let worstBg = null;
+      for (let i = 0; i < A.length; i += 4) {
+        const bg = [B[i], B[i + 1], B[i + 2]];
+        // The channel the ink and the backdrop are furthest apart in carries
+        // the most 8-bit steps, so its coverage is the least quantisation.
+        let ch = 0;
+        let span = 0;
+        for (let k = 0; k < 3; k++) {
+          const d = Math.abs(T[k] - bg[k]);
+          if (d > span) {
+            span = d;
+            ch = k;
+          }
+        }
+        if (span < minSpan) continue;
+        if (!((A[i + ch] - bg[ch]) / (T[ch] - bg[ch]) > coverageFloor)) continue;
+        count++;
+        const r = ratio(T, bg);
+        if (r < worst) {
+          worst = r;
+          worstBg = bg;
+        }
+      }
+
+      const lInk = lum(T[0], T[1], T[2]);
+      const lHead = lum(head.rgb[0], head.rgb[1], head.rgb[2]);
+      return {
+        ok: true,
+        declared: geo.color,
+        ink: T,
+        heading: head.rgb,
+        worst: Number.isFinite(worst) ? Number(worst.toFixed(3)) : null,
+        bg: worstBg,
+        core: count,
+        lumInk: Number(lInk.toFixed(4)),
+        lumHeading: Number(lHead.toFixed(4)),
+        step: Number((Math.abs(lInk - lHead) / Math.max(lInk, lHead)).toFixed(4)),
+        fontSize: geo.fontSize,
+        fontWeight: geo.fontWeight
+      };
+    },
+    { aB64, bB64, geo, coverageFloor: INK_COVERAGE_FLOOR, minSpan: MIN_INK_SPAN }
+  );
+}
+
 test.describe('Welcome banner invariants', () => {
   test('1. the scrim alpha is at or above its theme floor and is the alpha it paints with', async ({ browser }) => {
     for (const vp of VIEWPORTS) {
@@ -800,6 +1042,51 @@ test.describe('Welcome banner invariants', () => {
           m.overflow,
           `${vp.label}/${theme} the panel overflows the viewport by ${m.overflow}px`
         ).toBeLessThanOrEqual(0);
+        await ctx.close();
+      }
+    }
+  });
+
+  test('6. the subtitle clears the AA floor for its own type and stays below the heading', async ({ browser }) => {
+    for (const vp of VIEWPORTS) {
+      for (const theme of ['light', 'dark']) {
+        const { ctx, page } = await freshSignedIn(browser, vp, theme);
+        const s = await subtitleContrast(page);
+        expect(s.ok, `${vp.label}/${theme} subtitle measured (${s.why || 'ok'})`).toBe(true);
+
+        // The floor follows the rendered type rather than a constant: WCAG AA
+        // asks 3:1 of large text and 4.5:1 of normal text, and the size token
+        // is a scale a deployment can move across that line.
+        const large = s.fontSize >= 24 || (s.fontSize >= 18.66 && s.fontWeight >= 700);
+        const floor = large ? WCAG_AA.large : WCAG_AA.normal;
+        const type = `${s.fontSize}px/${s.fontWeight}`;
+
+        expect(
+          s.core,
+          `${vp.label}/${theme} not one pixel in the subtitle's box passed ` +
+            `${INK_COVERAGE_FLOOR} ink coverage against ink=rgb(${s.ink}) — the subtitle is ` +
+            `drawing nothing over its own backdrop`
+        ).toBeGreaterThan(0);
+        expect(
+          s.worst,
+          `${vp.label}/${theme} the subtitle's worst local contrast is ${s.worst}:1, against the ` +
+            `WCAG AA floor of ${floor}:1 for ${type} (${large ? 'large' : 'normal'} text) — ` +
+            `ink=rgb(${s.ink}) [${s.declared}] on its worst backdrop rgb(${s.bg}), over ${s.core} ` +
+            `glyph pixels. The text is ${theme === 'dark' ? 'a dim ink on a dark scrim' : 'a neutral grey, not the brand tint the subtitle should be'}`
+        ).toBeGreaterThanOrEqual(floor);
+
+        // The hierarchy. A mix that leans far enough towards --fg to be safe
+        // in one theme stops being a subtitle and becomes a second heading,
+        // and that is the direction this check fails in: the heading is the
+        // brighter of the two in dark, so a subtitle that drifted up to it
+        // shows as a small step rather than no step.
+        expect(
+          s.step,
+          `${vp.label}/${theme} the subtitle's ink rgb(${s.ink}) sits at relative luminance ` +
+            `${s.lumInk} against the heading's rgb(${s.heading}) at ${s.lumHeading} — a ${(s.step * 100).toFixed(1)}% ` +
+            `step, inside the ${HIERARCHY_LUMINANCE_STEP * 100}% band the two have to stay apart by. ` +
+            `The subtitle reads as a second heading rather than as text under one`
+        ).toBeGreaterThanOrEqual(HIERARCHY_LUMINANCE_STEP);
         await ctx.close();
       }
     }

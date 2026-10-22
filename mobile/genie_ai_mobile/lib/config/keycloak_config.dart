@@ -82,7 +82,21 @@ class KeycloakConfig {
 
 KeycloakConfig getConfig() {
   // When adding a new deployment flavor, add a case below and import its config.
-  const flavor = String.fromEnvironment('FLAVOR', defaultValue: 'dev');
+  const flavor = String.fromEnvironment('FLAVOR');
+  if (flavor.isEmpty) {
+    // No FLAVOR dart-define. A debug `flutter run` keeps the dev default for
+    // convenience; a release or profile build must not — it would silently
+    // resolve devConfig, pointing every endpoint at localhost and arming the
+    // trust-all TLS client in a release artifact. Fail at startup instead.
+    if (kReleaseMode || kProfileMode) {
+      throw StateError(
+        'No FLAVOR dart-define: build with '
+        "--flavor <name> --dart-define=FLAVOR=<name> "
+        '(dev, staging, e2e, or itu).',
+      );
+    }
+    return devConfig;
+  }
   switch (flavor) {
     case 'itu':
       return flavors.config;

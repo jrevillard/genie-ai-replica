@@ -97,7 +97,7 @@ genie-ai/
 | Prerequisite | Install path | Version | Notes |
 |---|---|---|---|
 | keycloak-operator | OLM / static YAML per keycloak.org | operator 26.x | chart renders Keycloak + KeycloakRealmImport CRs |
-| cloudnative-pg (CNPG) | helm/OLM per cloudnative-pg docs | operator 1.30.x (chart line 0.29.x equivalent) | chart renders the Cluster CR |
+| cloudnative-pg (CNPG) | helm/OLM per cloudnative-pg docs | operator 1.30.x (chart line 0.29.x equivalent); any operator whose CRD serves `postgresql.cnpg.io/v1` works — the bootstrap pins chart 0.22.0 (operator 1.24.0) | chart renders the Cluster CR |
 | kube-arangodb | helm/static manifests per arangodb docs | 1.4.x | chart renders the ArangoDeployment CR |
 | sealed-secrets | helm (bitnami repo) / static YAML | controller ≥ 0.40.0 (chart line 2.20.x equivalent) | cluster-wide keypair; ONE controller per cluster, always |
 | gpu-operator | OLM / NVIDIA static YAML | v25.x | chart only schedules onto GPU nodes (`ai.gpu.*`) |

@@ -163,21 +163,28 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Plan map
 
-| Plan | Artifact | Status |
-|---|---|---|
-| 1 — foundation | `2026-10-08-genie-ai-helm-charts-foundation.md` | ✅ shipped |
-| 2 — data layer | `…-data-layer.md` | ✅ shipped (Arango, CNPG, Keycloak CRs live) |
-| 3 — service tier (group 5) | `…-service-tier-group5.md` | ✅ shipped |
-| keycloak v2beta1 rework | `2026-10-12-keycloak-v2beta1-chart-rework.md` | ↩️ superseded by the convergence plan |
-| keycloak config convergence | `2026-10-13-keycloak-config-convergence.md` | ✅ shipped (realm converged via kcc job) |
-| installable Phase 1 (app contract) | `2026-10-13-chart-installable-phase1.md` | ✅ shipped (chart 0.1.30 Ready; secrets surface, per-image securityContext, nginx `/auth/`, issuer pin, migrations job, dev-secrets) |
-| 5 — AI/ML tier | `…-ai-ml.md` | ↩️ superseded by the OPEA-tier plan |
-| OPEA tier (Phase 3) | `2026-10-15-opea-tier.md` | ✅ shipped (six orchestrators, four in-cluster model templates, NetworkPolicies, endpoint helpers; final review pass integrated at 0.1.61) |
-| deploy repo | `…-deploy-repo.md` | ✅ shipped (`genie-ai-deploy`, Flux, per-laptop overlay) |
-| 7 — CI | `…-ci.md` | 🟡 mostly (`chart:lint` + `chart:contract` green on every push — contract runs the PII smoke on the chart-rendered collector config; `chart:install` exists but is **manual-only** — a full install with prereqs takes ~30 min on the runner's kind, same posture as the compose E2E suite; residual: `ct` full suite, kind+Calico NetworkPolicy gate) |
-| 8 — docs | `…-docs.md` | 🟡 partial (`charts/README.md`; per-env overlay docs not written) |
-| 4 — observability | `2026-10-15-observability-tier.md` | ✅ shipped (charts 0.2.0–0.2.20: VLSingle baseline + collector gateway + filelog agent + Grafana CRs + VMServiceScrapes; live-validated on the laptop — admin logs 200, PII smoke green on the chart-rendered config; 0.2.20 scopes the filelog agent to the stack namespaces after foreign-ns zap-JSON rows broke the admin TYPE column; metrics/traces/grafana opt-in flags are render-validated only) |
-| 6 — per-env ingress | `…-per-env-ingress.md` | ✅ Phase 2 shipped as charts 0.2.21–0.2.26 (Envoy Gateway dependency, Gateway API templates, nginx removed from the data path, port-bearing host, TLS); per-env overlay knobs are the `ingress.*` values consumed by the laptop overlay |
+The campaign ran as eight written plans plus three design specs. Those were
+**working documents** — they described the shape of the work before the work
+existed. The durable record is the chart itself, this status map, the design
+of record ([`helm-charts-design.md`](helm-charts-design.md)) and the review
+ledger ([`plan-defects.md`](plan-defects.md)); the plan set is not committed,
+and the rows below name each plan and its outcome.
+
+| Plan | Status |
+|---|---|
+| 1 — foundation | ✅ shipped |
+| 2 — data layer | ✅ shipped (Arango, CNPG, Keycloak CRs live) |
+| 3 — service tier (group 5) | ✅ shipped |
+| keycloak v2beta1 rework | ↩️ superseded by the convergence plan |
+| keycloak config convergence | ✅ shipped (realm converged via kcc job) |
+| installable Phase 1 (app contract) | ✅ shipped (chart 0.1.30 Ready; secrets surface, per-image securityContext, nginx `/auth/`, issuer pin, migrations job, dev-secrets) |
+| 5 — AI/ML tier | ↩️ superseded by the OPEA-tier plan |
+| OPEA tier (Phase 3) | ✅ shipped (six orchestrators, four in-cluster model templates, NetworkPolicies, endpoint helpers; final review pass integrated at 0.1.61) |
+| deploy repo | ✅ shipped (`genie-ai-deploy`, Flux, per-laptop overlay) |
+| 7 — CI | 🟡 mostly (`chart:lint` + `chart:contract` green on every push — contract runs the PII smoke on the chart-rendered collector config; `chart:install` exists but is **manual-only** — a full install with prereqs takes ~30 min on the runner's kind, same posture as the compose E2E suite; residual: `ct` full suite, kind+Calico NetworkPolicy gate) |
+| 8 — docs | 🟡 partial (`charts/README.md`; per-env overlay docs not written) |
+| 4 — observability | ✅ shipped (charts 0.2.0–0.2.20: VLSingle baseline + collector gateway + filelog agent + Grafana CRs + VMServiceScrapes; live-validated on the laptop — admin logs 200, PII smoke green on the chart-rendered config; 0.2.20 scopes the filelog agent to the stack namespaces after foreign-ns zap-JSON rows broke the admin TYPE column; metrics/traces/grafana opt-in flags are render-validated only) |
+| 6 — per-env ingress | ✅ Phase 2 shipped as charts 0.2.21–0.2.26 (Envoy Gateway dependency, Gateway API templates, nginx removed from the data path, port-bearing host, TLS); per-env overlay knobs are the `ingress.*` values consumed by the laptop overlay |
 
 ## Supersessions (why two plans were replaced)
 

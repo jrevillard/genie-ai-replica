@@ -3153,6 +3153,14 @@ chart:lint:
       helm template test charts/genieai-umbrella -n genieai
       --set data.keycloak.failOnPlaceholderSecrets=false
       --set data.keycloak.adminEmail=ci-render@example.org
+      # verifyEmail / resetPasswordAllowed default to true (the compose
+      # default), and the render refuses them without a mail server. CI
+      # supplies a placeholder one: these renders check SHAPE, and a real
+      # deployment names its own mail server in its overlay.
+      --set data.keycloak.smtp.from=no-reply@ci.invalid
+      --set data.keycloak.smtp.host=smtp.invalid
+      --set data.keycloak.smtp.port=587
+      --set data.keycloak.smtp.starttls=true
       --set ingress.host=ci-render.local
       --set ingress.enabled=true
       --set ingress.createGatewayClass=true
@@ -3169,6 +3177,14 @@ chart:lint:
       helm template test charts/genieai-umbrella -n genieai
       --set data.keycloak.failOnPlaceholderSecrets=false
       --set data.keycloak.adminEmail=ci-render@example.org
+      # verifyEmail / resetPasswordAllowed default to true (the compose
+      # default), and the render refuses them without a mail server. CI
+      # supplies a placeholder one: these renders check SHAPE, and a real
+      # deployment names its own mail server in its overlay.
+      --set data.keycloak.smtp.from=no-reply@ci.invalid
+      --set data.keycloak.smtp.host=smtp.invalid
+      --set data.keycloak.smtp.port=587
+      --set data.keycloak.smtp.starttls=true
       --set ingress.host=ci-render.local
       --set ingress.enabled=true
       --set ingress.createGatewayClass=true
@@ -3193,6 +3209,14 @@ chart:lint:
       helm template test charts/genieai-umbrella -n genieai
       --set data.keycloak.failOnPlaceholderSecrets=false
       --set data.keycloak.adminEmail=ci-render@example.org
+      # verifyEmail / resetPasswordAllowed default to true (the compose
+      # default), and the render refuses them without a mail server. CI
+      # supplies a placeholder one: these renders check SHAPE, and a real
+      # deployment names its own mail server in its overlay.
+      --set data.keycloak.smtp.from=no-reply@ci.invalid
+      --set data.keycloak.smtp.host=smtp.invalid
+      --set data.keycloak.smtp.port=587
+      --set data.keycloak.smtp.starttls=true
       --set ingress.host=ci-render.local
       --set ingress.enabled=true
       --set ingress.createGatewayClass=true
@@ -3212,6 +3236,14 @@ chart:lint:
       helm template test charts/genieai-umbrella -n genieai
       --set data.keycloak.failOnPlaceholderSecrets=false
       --set data.keycloak.adminEmail=ci-render@example.org
+      # verifyEmail / resetPasswordAllowed default to true (the compose
+      # default), and the render refuses them without a mail server. CI
+      # supplies a placeholder one: these renders check SHAPE, and a real
+      # deployment names its own mail server in its overlay.
+      --set data.keycloak.smtp.from=no-reply@ci.invalid
+      --set data.keycloak.smtp.host=smtp.invalid
+      --set data.keycloak.smtp.port=587
+      --set data.keycloak.smtp.starttls=true
       --set ingress.host=ci-render.local
       --set ingress.enabled=true
       --set ingress.createGatewayClass=true
@@ -3304,6 +3336,14 @@ chart:contract:
       helm template test charts/genieai-umbrella -n genieai
       --set data.keycloak.failOnPlaceholderSecrets=false
       --set data.keycloak.adminEmail=ci-render@example.org
+      # verifyEmail / resetPasswordAllowed default to true (the compose
+      # default), and the render refuses them without a mail server. CI
+      # supplies a placeholder one: these renders check SHAPE, and a real
+      # deployment names its own mail server in its overlay.
+      --set data.keycloak.smtp.from=no-reply@ci.invalid
+      --set data.keycloak.smtp.host=smtp.invalid
+      --set data.keycloak.smtp.port=587
+      --set data.keycloak.smtp.starttls=true
       --set ingress.host=ci-render.local
       > /tmp/rendered.yaml
     # Extract the gateway OpenTelemetryCollector's inline config map and
@@ -3440,6 +3480,14 @@ chart:parity:
       helm template test charts/genieai-umbrella -n genieai
       --set data.keycloak.failOnPlaceholderSecrets=false
       --set data.keycloak.adminEmail=ci-render@example.org
+      # verifyEmail / resetPasswordAllowed default to true (the compose
+      # default), and the render refuses them without a mail server. CI
+      # supplies a placeholder one: these renders check SHAPE, and a real
+      # deployment names its own mail server in its overlay.
+      --set data.keycloak.smtp.from=no-reply@ci.invalid
+      --set data.keycloak.smtp.host=smtp.invalid
+      --set data.keycloak.smtp.port=587
+      --set data.keycloak.smtp.starttls=true
       --set ingress.host=ci-render.local
       --set opea.enabled=true
       --set opea.gpu.nodeHost=https://gpu-node:444
@@ -3532,6 +3580,10 @@ chart:crd-validate:
       helm template test charts/genieai-umbrella -n genieai \
         --set data.keycloak.failOnPlaceholderSecrets=false \
         --set data.keycloak.adminEmail=ci-render@example.org \
+        --set data.keycloak.smtp.from=no-reply@ci.invalid \
+        --set data.keycloak.smtp.host=smtp.invalid \
+        --set data.keycloak.smtp.port=587 \
+        --set data.keycloak.smtp.starttls=true \
         --set ingress.host=ci-render.local \
         --set ingress.enabled=true \
         --set ingress.createGatewayClass=true \
@@ -3559,6 +3611,10 @@ chart:crd-validate:
       helm template test charts/genieai-umbrella -n genieai \
         --set data.keycloak.failOnPlaceholderSecrets=false \
         --set data.keycloak.adminEmail=ci-render@example.org \
+        --set data.keycloak.smtp.from=no-reply@ci.invalid \
+        --set data.keycloak.smtp.host=smtp.invalid \
+        --set data.keycloak.smtp.port=587 \
+        --set data.keycloak.smtp.starttls=true \
         --set ingress.host=ci-render.local \
         --set ingress.enabled=true \
         --set ingress.createGatewayClass=true \
@@ -3696,6 +3752,14 @@ chart:install:
       helm install test charts/genieai-umbrella -n genieai --create-namespace
       --set data.keycloak.failOnPlaceholderSecrets=false
       --set data.keycloak.adminEmail=ci-render@example.org
+      # verifyEmail / resetPasswordAllowed default to true (the compose
+      # default), and the render refuses them without a mail server. CI
+      # supplies a placeholder one: these renders check SHAPE, and a real
+      # deployment names its own mail server in its overlay.
+      --set data.keycloak.smtp.from=no-reply@ci.invalid
+      --set data.keycloak.smtp.host=smtp.invalid
+      --set data.keycloak.smtp.port=587
+      --set data.keycloak.smtp.starttls=true
       --set ingress.host=ci-render.local
       --set "data.keycloak.clientSecrets.proxyClient=${CI_JOB_ID}-proxy"
       --set "data.keycloak.clientSecrets.dataprep=${CI_JOB_ID}-dataprep"

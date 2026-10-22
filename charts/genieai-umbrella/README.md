@@ -161,6 +161,22 @@ overrides set it to `false`. kcc itself is guarded a second time at
 runtime: a `$(env:VAR)` in the realm that the Job does not export fails
 the Job pod with an opaque parse error.
 
+### Mail is not optional
+
+`data.keycloak.verifyEmail` and `data.keycloak.resetPasswordAllowed`
+default to **true**, the same as the Compose realm
+(`KEYCLOAK_VERIFY_EMAIL`, `KEYCLOAK_RESET_PASSWORD`). Both send mail, so
+both **fail the render** when `data.keycloak.smtp` is unset — an operator
+who runs no mail server says so by setting them `false` in the
+environment overlay, where the choice is visible, rather than inheriting
+a chart that quietly disables a feature every deployment is supposed to
+have. `smtp: null` in `values.yaml` is a placeholder for a value every
+real deployment fills in, not a statement that mail is optional.
+
+An environment with no real relay can point `smtp.host` at a sink that
+catches the message (the laptop overlay runs mailpit for this), which
+keeps the feature enabled and makes it testable.
+
 Setting `data.keycloak.convergence.enabled: false` (default in the
 dev-repo overlays) renders neither the Job nor the realm Secret. The
 `Keycloak` CR still renders, so the chart installs an identity tier with

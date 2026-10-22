@@ -110,10 +110,11 @@ void main() {
 
     test('end-session reads the flag into the field, not a local', () {
       // getConnectionBuilder() and getAuthorizationService() both read the
-      // `allowInsecureConnections` field. If the end-session processor kept
-      // the flag in a local — as it once did — the end-session request would
-      // use whatever the previous authorize or token call had set, so an
-      // exchange that asked for TLS verification could still be intercepted.
+      // `allowInsecureConnections` field. A local of that name in the
+      // end-session processor would shadow the field, and the end-session
+      // request would use whatever the previous authorize or token call had
+      // set — an exchange that asked for TLS verification could still be
+      // intercepted.
       final scanner = GuardScanner(File(_javaPluginPath).readAsStringSync());
       final body = scanner.blockAfter(
         RegExp(
@@ -121,18 +122,63 @@ void main() {
         ),
       );
       expect(body, isNotNull, reason: 'the end-session processor moved');
+      // The body must process the arguments map — a canary for the block
+      // extraction: if the scanner ever resolves the wrong block, this is
+      // what fails, not one of the flag assertions below.
+      expect(body, contains('arguments.get('));
+      // Any local declaration shadows the field, whichever way it is
+      // spelled: boolean, boxed Boolean, or var, final or not.
       expect(
         body,
-        isNot(contains(RegExp(r'\bboolean\s+allowInsecureConnections\b'))),
+        isNot(
+          contains(
+            RegExp(
+              r'\b(?:final\s+)?(?:Boolean|boolean|var)\s+'
+              r'allowInsecureConnections\b',
+            ),
+          ),
+        ),
         reason:
             'a local shadows the field: end-session would ignore its '
             'own flag and reuse the previous call\'s',
       );
+      // The field write must read the flag from the arguments map — a
+      // hard-coded right-hand side would silently drop the insecure option.
       expect(
         body,
-        contains(RegExp(r'\ballowInsecureConnections\s*=(?!=)')),
-        reason: 'the flag is never read from the arguments',
+        contains(
+          RegExp(
+            r'allowInsecureConnections\s*=\s*Boolean\.TRUE\.equals\('
+            r'arguments\.get\("allowInsecureConnections"\)\)',
+          ),
+        ),
+        reason: 'the flag is not read from the end-session arguments',
       );
+    });
+  });
+
+  group('GuardScanner.blockAfter', () {
+    // Synthetic sources: the comment- and string-skipping between a
+    // signature and its body brace is dead code on the current fork layout,
+    // so it is exercised against sources built for it.
+    test('skips comments and strings when locating the body', () {
+      const source = r"""
+          String sig(Map<String, Object> a) /* {"decoy": 1} */ {
+            return "no brace { inside";
+          }
+
+          String other() { return "x"; }
+        """;
+      final scanner = GuardScanner(source);
+      final body = scanner.blockAfter(RegExp(r'sig\('));
+      expect(body, isNotNull);
+      expect(body, contains('no brace'));
+      expect(body, isNot(contains('decoy')));
+      expect(body, isNot(contains('other')));
+    });
+
+    test('returns null when the signature is absent', () {
+      expect(GuardScanner('int x = 3;').blockAfter('nope'), isNull);
     });
   });
 

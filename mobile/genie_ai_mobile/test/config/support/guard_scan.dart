@@ -56,11 +56,11 @@ class GuardScanner {
   /// [signature]. Returns `null` when the signature does not appear or no
   /// opening brace follows it.
   ///
-  /// The scan from the signature to the body's opening brace skips comments
-  /// and string literals, so a trailing `/* ... */` note between the
-  /// parameter list and the body is not mistaken for it. The brace pairing
-  /// itself is naive — it counts braces inside comments and strings — so
-  /// sources where those braces are unpaired can resolve to the wrong block.
+  /// The scan from the signature to the body's opening brace — and the brace
+  /// pairing underneath — skips comments and string literals, so a trailing
+  /// `/* ... */` note between the parameter list and the body is not
+  /// mistaken for the body, and a brace inside a string cannot desynchronize
+  /// the pairing.
   String? blockAfter(Pattern signature) {
     final matches = signature.allMatches(source);
     if (matches.isEmpty) {
@@ -182,15 +182,54 @@ class GuardScanner {
   }
 
   Map<int, int> _computeBracePairs() {
+    // Brace pairing that skips comments and string literals: a `{` inside
+    // either is not structural, and an unpaired one would desynchronize
+    // every pair after it (a Java string like "no brace { inside" is enough).
     final pairs = <int, int>{};
     final stack = <int>[];
-    for (var i = 0; i < source.length; i++) {
+    var i = 0;
+    while (i < source.length) {
       final c = source[i];
       if (c == '{') {
         stack.add(i);
-      } else if (c == '}' && stack.isNotEmpty) {
-        pairs[stack.removeLast()] = i;
+        i++;
+        continue;
       }
+      if (c == '}') {
+        if (stack.isNotEmpty) {
+          pairs[stack.removeLast()] = i;
+        }
+        i++;
+        continue;
+      }
+      if (c == '/' && i + 1 < source.length) {
+        if (source[i + 1] == '/') {
+          final nl = source.indexOf('\n', i);
+          if (nl < 0) {
+            break;
+          }
+          i = nl + 1;
+          continue;
+        }
+        if (source[i + 1] == '*') {
+          final end = source.indexOf('*/', i + 2);
+          if (end < 0) {
+            break;
+          }
+          i = end + 2;
+          continue;
+        }
+      }
+      if (c == '"' || c == "'") {
+        i++;
+        while (i < source.length && source[i] != c) {
+          if (source[i] == r'\') {
+            i++;
+          }
+          i++;
+        }
+      }
+      i++;
     }
     return pairs;
   }

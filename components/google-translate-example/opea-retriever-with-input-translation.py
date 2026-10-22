@@ -22,7 +22,7 @@ class QueryRequest(BaseModel):
 def translate_text(text: str, source_language: str, target_language: str) -> str:
     """Calls the OPEA Google Translate Microservice to translate text."""
     payload = {"text": text, "source_language": source_language, "target_language": target_language}
-    response = requests.post(TRANSLATION_SERVICE_URL, json=payload)
+    response = requests.post(TRANSLATION_SERVICE_URL, json=payload, timeout=30)
     
     if response.status_code != 200:
         raise HTTPException(status_code=500, detail="Translation service failed.")
@@ -41,7 +41,7 @@ async def retrieve_data(request: QueryRequest):
 
         # Step 2: Send translated query to OPEA's retrieval system
         opea_payload = {"query": translated_query}
-        response = requests.post(OPEA_RETRIEVER_URL, json=opea_payload)
+        response = requests.post(OPEA_RETRIEVER_URL, json=opea_payload, timeout=120)
 
         if response.status_code != 200:
             raise HTTPException(status_code=500, detail="Failed to retrieve data from OPEA.")

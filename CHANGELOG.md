@@ -52,6 +52,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Static-analysis follow-ups on the application code (SAST wave-7).**
+  The translation example's two `requests.post` calls ran without a timeout
+  and could hang on a stalled upstream — the translate call now times out
+  after 30 s and the retriever call after 120 s. The chatqna
+  `align_outputs` integrity checks used `assert`, which `python -O` strips —
+  they now raise `ValueError` unconditionally. The dataprep ingestion lock
+  file in the shared `/tmp` is opened with `O_NOFOLLOW` and mode `0600`, so a
+  pre-planted symlink cannot redirect it. The remaining 52 semgrep findings
+  on application code were re-verified against the current scan and are
+  non-issues (paths built from server-side constants or `__dirname`,
+  regular expressions compiled from literal sources, `Math.random` in the
+  test-mode mock generator); the 11 unowned entities are dismissed with
+  per-finding comments. See `docs/security/cve-triage-2026q3.md` (wave-7).
+  (#1101)
+
 - **A mobile release build made without the `FLAVOR` dart-define now fails at
   startup instead of silently running the dev configuration.** `getConfig()`
   resolved the flavor from the `FLAVOR` compile-time define and fell back to

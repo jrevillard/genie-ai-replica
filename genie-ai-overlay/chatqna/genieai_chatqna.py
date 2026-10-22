@@ -2182,10 +2182,11 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
                 related_info_count = sum(
                     1 for doc in retrieved_docs if "\n------\nRELATED INFORMATION:\n------\n" in doc["text"]
                 )
-                assert len(file_id_list) == related_info_count, (
-                    f"Length of file_id_list {len(file_id_list)} is not equal "
-                    f"to related_info_count {related_info_count}"
-                )
+                if len(file_id_list) != related_info_count:
+                    raise ValueError(
+                        f"Length of file_id_list {len(file_id_list)} is not equal "
+                        f"to related_info_count {related_info_count}"
+                    )
                 for retrieved_doc in retrieved_docs:
                     doc_id = retrieved_doc["id"]
                     doc_text = retrieved_doc["text"]
@@ -2194,10 +2195,11 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
                     else:
                         file_id_pairs[doc_id] = ""
             elif RETRIEVER_SEARCH_START == "chunk":
-                assert len(file_id_list) == len(retrieved_docs), (
-                    f"Length of file_id_list {len(file_id_list)} is not equal "
-                    f"to length of retrieved_docs {len(retrieved_docs)}"
-                )
+                if len(file_id_list) != len(retrieved_docs):
+                    raise ValueError(
+                        f"Length of file_id_list {len(file_id_list)} is not equal "
+                        f"to length of retrieved_docs {len(retrieved_docs)}"
+                    )
                 for retrieved_doc in retrieved_docs:
                     doc_id = retrieved_doc["id"]
                     file_id_pairs[doc_id] = file_id_list.pop(0) if len(file_id_list) > 0 else ""

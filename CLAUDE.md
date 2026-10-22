@@ -108,7 +108,7 @@ kubectl -n genieai port-forward svc/envoy-genieai-genieai-<hash> 4443:443   # br
 
 **Key notes:**
 - Chart at `charts/genieai-umbrella/`, library at `charts/genieai-common/`; see `charts/README.md`
-- Cluster prerequisites: CNPG ≥1.30, kube-arangodb 1.4.x, keycloak-operator 26.x, sealed-secrets ≥0.40 — installed once per cluster, before any release
+- Cluster prerequisites: CNPG (a CRD serving `postgresql.cnpg.io/v1`), kube-arangodb 1.4.x, keycloak-operator 26.x, sealed-secrets ≥0.40 — installed once per cluster, before any release
 - GPU tier is binary (`opea.gpu.mode=external|in-cluster`); ArangoDB mode switch needs `helm uninstall` + `helm install` (no auto-promote)
 - Live state + plan status: `docs/charts/migration-status.md`
 

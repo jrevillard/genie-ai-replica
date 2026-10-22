@@ -73,10 +73,10 @@ spec:
       containers:
         - name: {{ $objectName }}
           image: {{- if $ctx.Values.imageRegistry }} {{ $ctx.Values.imageRegistry }}/{{ $svc.image.repository }}{{ else }} {{ $svc.image.repository }}{{ end }}:{{ $svc.image.tag | default "latest" }}
-          # Per-service pullPolicy wins (mutable branch tags need Always —
-          # IfNotPresent keeps serving the digest cached at first deploy);
-          # global pullPolicy follows; IfNotPresent otherwise.
-          imagePullPolicy: {{ $svc.image.pullPolicy | default $ctx.Values.global.imagePullPolicy | default "IfNotPresent" }}
+          # Per-service pullPolicy wins; global pullPolicy follows; the
+          # tag decides otherwise (mutable tags pull Always — see the
+          # helper).
+          imagePullPolicy: {{ include "genieai-umbrella.imagePullPolicy" (dict "tag" $svc.image.tag "pullPolicy" ($svc.image.pullPolicy | default $ctx.Values.global.imagePullPolicy)) }}
           {{- with $svc.workingDir }}
           workingDir: {{ . }}
           {{- end }}
@@ -147,4 +147,21 @@ spec:
           startupProbe:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+{{- end -}}
+
+{{/*
+genieai-umbrella.imagePullPolicy — the pull policy for a service image.
+Takes `{"tag": <tag>, "pullPolicy": <override or nil>}`.
+
+A mutable branch tag moves under its own name, and IfNotPresent keeps
+serving whatever digest the first deploy cached — a green reconcile over
+stale code. So the default follows the tag: `main`, `latest` and
+`stable*` are Always; a pinned tag (a version, a SHA) is IfNotPresent.
+An explicit per-service `image.pullPolicy` (or the global one) wins over
+both.
+*/}}
+{{- define "genieai-umbrella.imagePullPolicy" -}}
+{{- $tag := .tag | default "latest" -}}
+{{- $mutable := or (eq $tag "main") (eq $tag "latest") (hasPrefix "stable" $tag) -}}
+{{- .pullPolicy | default (ternary "Always" "IfNotPresent" $mutable) -}}
 {{- end -}}

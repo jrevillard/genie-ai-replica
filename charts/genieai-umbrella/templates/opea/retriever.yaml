@@ -9,7 +9,7 @@
   under `.Values.opea.retriever.<camelCase>`. GPU endpoints
   (`VLLM_ENDPOINT`, `TEI_EMBEDDING_ENDPOINT`) via the opea helpers;
   HF_TOKEN + VLLM_API_KEY from the vllm-api-key Secret. Container/listen
-  port 7000; healthcheck hits `/health` on that port.
+  port 7000; probes are tcpSocket dials on that port (an L4 accept, not an L7 /health).
 */}}
 {{- if .Values.opea.enabled -}}
 {{- $vals  := deepCopy .Values -}}

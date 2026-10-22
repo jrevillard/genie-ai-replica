@@ -28,8 +28,22 @@
 
 set -euo pipefail
 
-RELEASE="${RELEASE:-test}"
+RELEASE="${RELEASE:-}"
 NS="${NS:-genieai}"
+# No RELEASE given: use the single release in the namespace when there is
+# exactly one. The two names this repo installs are `test` (local-test.sh)
+# and `genieai` (the Flux HelmRelease) — defaulting to one of them made
+# the other silently skip the uninstall and take the release record with
+# the namespace.
+if [ -z "${RELEASE}" ]; then
+  releases="$(helm list -n "${NS}" -q 2>/dev/null || true)"
+  count="$(echo "${releases}" | grep -c . || true)"
+  if [ "${count}" = "1" ]; then
+    RELEASE="$(echo "${releases}" | head -1)"
+  else
+    RELEASE="test"
+  fi
+fi
 WITH_OPERATORS="false"
 PURGE_SEALED_SECRETS="false"
 

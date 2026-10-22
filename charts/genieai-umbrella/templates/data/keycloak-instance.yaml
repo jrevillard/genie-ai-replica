@@ -112,7 +112,7 @@ spec:
           - name: keycloak
             volumeMounts:
               - name: keycloak-theme
-                mountPath: {{ printf "/opt/keycloak/themes/%s" .Values.data.keycloak.theme }}
+                mountPath: {{ printf "/opt/keycloak/themes/%s" (.Values.data.keycloak.theme | default "genie") }}
                 readOnly: true
   # Trust X-Forwarded-* from Envoy. KC_PROXY=edge was removed in KC 24+;
   # spec.proxy.headers is the only path. Misconfiguration manifests as

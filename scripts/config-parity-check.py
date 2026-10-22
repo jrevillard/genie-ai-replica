@@ -314,14 +314,17 @@ def main(argv):
             continue
         rendered_rows = rendered.get(chart_name, {})
         declared_rows = declared.get(chart_name, {})
-        if not rendered_rows:
-            # The chart rendered no row for this component — a tier that is
-            # off for this render (the OPEA services with `opea.enabled:
-            # false`). Reporting each of its variables as "absent from the
-            # chart" would bury a real gap under noise and teach the reader
-            # to ignore the output. Say the pair was not judged instead; CI
-            # renders with the full tier on, which is the render the claim
-            # is about.
+        if chart_name not in rendered:
+            # The chart rendered no POD for this component — a tier that
+            # is off for this render (the OPEA services with
+            # `opea.enabled: false`). Reporting each of its variables as
+            # "absent from the chart" would bury a real gap under noise
+            # and teach the reader to ignore the output. Say the pair was
+            # not judged instead; CI renders with the full tier on, which
+            # is the render the claim is about. A rendered pod with ZERO
+            # env rows is a different case and stays judged: Compose
+            # configuring a service the chart runs bare is exactly the
+            # divergence this gate exists for.
             unjudged.append(
                 f"{component}: not rendered in this chart render — nothing compared "
                 "(render with the tier enabled to judge it)"
@@ -346,12 +349,12 @@ def main(argv):
                 # The chart asks the operator for the value through a
                 # Secret; there is no literal to compare.
                 continue
-            checked += 1
             if name in rendered_rows:
                 chart_value = rendered_rows[name]
             elif name in declared_rows:
                 chart_value = declared_rows[name]
             else:
+                checked += 1
                 reason = (
                     "required in Compose, so the chart must carry it in a Secret"
                     if required
@@ -361,7 +364,12 @@ def main(argv):
                 continue
             if name in may_differ:
                 # The chart must set it; the value is the Kubernetes one.
+                # Not counted toward the floor: the floor exists so a
+                # growing allowlist cannot quietly green the gate, and
+                # this category is exactly the comparison the floor is
+                # meant to notice losing.
                 continue
+            checked += 1
             if required:
                 # Compose has no default for it: the operator MUST set it
                 # on that surface. The chart has the variable, so both

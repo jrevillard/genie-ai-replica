@@ -221,10 +221,21 @@ kubectl apply -f "$DEPLOY_REPO/clusters/$PAYS/flux-kustomization.yaml"
 kubectl apply -k "$DEPLOY_REPO/clusters/$PAYS/flux-system/"
 
 log "waiting for the Flux sources"
-kubectl -n flux-system wait --for=condition=ready gitrepository --all --timeout=180s || true
+# Not advisory: a source that never went Ready means the PAT is wrong or
+# the deploy repo unreachable — and a bootstrap that prints "done" over
+# that sends the operator to `kubectl get pods` in an empty namespace,
+# reading "the chart is broken" for what is "the source never synced".
+if ! kubectl -n flux-system wait --for=condition=ready gitrepository --all --timeout=180s; then
+  echo "ERROR: the Flux GitRepositories never became Ready — check the flux-git-auth Secret (PAT) and the deploy repo's reachability:" >&2
+  echo "  kubectl -n flux-system get gitrepositories -o wide" >&2
+  exit 1
+fi
 
 log "reconciling the GENIE HelmRelease"
-flux reconcile helmrelease genieai -n flux-system 2>/dev/null || true
+if ! flux reconcile helmrelease genieai -n flux-system; then
+  echo "ERROR: the HelmRelease reconcile failed — see 'flux get helmreleases -A' and the HelmRelease's conditions" >&2
+  exit 1
+fi
 
 log "done — watch the rollout with:"
 echo "  kubectl -n genieai get pods,svc,helmrelease"

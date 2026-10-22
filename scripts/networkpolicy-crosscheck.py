@@ -108,9 +108,18 @@ def covers(covered, port):
 
 
 def component_of(selector):
-    """The component label a `podSelector` targets, if it names one."""
+    """The component label a `podSelector` targets, if it names one.
+
+    Two label shapes name chart-owned components in this chart's renders:
+    `genieai.io/component` (services, orchestrators, hooks) and the bare
+    `app` (the four in-cluster model Deployments and their policies). The
+    operator-stamped peers (`app.kubernetes.io/instance: vmetrics`,
+    `app.kubernetes.io/managed-by: keycloak-operator`, the Envoy data
+    plane's `app.kubernetes.io/component: proxy`) match NEITHER key and
+    stay out of scope — they have no policy on both ends by design.
+    """
     labels = (selector or {}).get("matchLabels") or {}
-    return labels.get("genieai.io/component")
+    return labels.get("genieai.io/component") or labels.get("app")
 
 
 def index_services(docs):
@@ -213,13 +222,21 @@ def index_policies(docs):
 
 def policy_allows(policies, component, direction, peer_component, port, services, skipped=None):
     key = "to" if direction == "egress" else "from"
+    # Whose Service space is this rule's port list written in? An egress
+    # rule names the DESTINATION (its Service ports or its pod ports); an
+    # ingress rule names the policy's OWN component. Translating an
+    # ingress rule through the SOURCE's mapping — the shape that happens
+    # when both sides use the same context — reads a 9031 on a peer whose
+    # Service maps 9031->8888 as 8888 and reports a broken flow that does
+    # not exist (or, worse, admits one that does).
+    port_space = peer_component if direction == "egress" else component
     for policy in policies.get(component, []):
         name = policy.get("metadata", {}).get("name", "?")
         for rule in (policy.get("spec") or {}).get(direction) or []:
-            # Both sides are written against the destination's container
+            # Both sides are compared against the destination's container
             # port once DNAT has run, so translate this rule's ports out of
             # whatever Service space the author used.
-            covered = to_pod_ports(rule_ports(rule), services, peer_component)
+            covered = to_pod_ports(rule_ports(rule), services, port_space)
             if not covers(covered, port):
                 continue
             if is_unscoped_rule(rule, key) and skipped is not None:

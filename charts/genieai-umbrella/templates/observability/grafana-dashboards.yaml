@@ -23,7 +23,13 @@
 {{- $t := .tier -}}
 {{- $subs := list }}
 {{- if $t.metrics -}}
-{{- $subs = concat $subs (list (dict "inputName" "DS_VICTORIAMETRICS" "datasourceName" "victoriametrics") (dict "inputName" "DS_PROMETHEUS" "datasourceName" "victoriametrics")) -}}
+{{- /* "ds" is the lowercase placeholder the two single-node stack
+     dashboards use as their templating variable's uid — same import-
+     placeholder syntax as ${DS_*}, and the operator's substitution is a
+     blind, case-sensitive ReplaceAll: unmapped, 28 panel references
+     reach Grafana as a literal "${ds}" datasource that exists nowhere
+     and the panels render "Datasource not found" forever. */}}
+{{- $subs = concat $subs (list (dict "inputName" "DS_VICTORIAMETRICS" "datasourceName" "victoriametrics") (dict "inputName" "DS_PROMETHEUS" "datasourceName" "victoriametrics") (dict "inputName" "ds" "datasourceName" "victoriametrics")) -}}
 {{- end -}}
 {{- if $t.traces -}}
 {{- $subs = concat $subs (list (dict "inputName" "DS_VICTORIATRACES" "datasourceName" "victoriatraces")) -}}
@@ -72,17 +78,24 @@
        fire — the worst kind of green. Each entry names the storage tiers
        it needs. */ -}}
 {{- $tierOn := dict "metrics" .Values.observability.metrics.enabled "traces" .Values.observability.traces.enabled "logs" .Values.observability.logs.enabled -}}
+{{- /* The tier columns are what the dashboard's PANELS query (walked
+from the JSON "datasource" fields), not what the dashboard is ABOUT:
+service-logs is LogsQL only, the trace waterfall and the single-node
+stack dashboards are PromQL over VictoriaMetrics even though their
+subject is traces/logs. A column set wider than the queries suppresses
+a dashboard whose datasource IS provisioned — a logs-only Grafana
+showed two empty folders. */ -}}
 {{- $dashboardsGeneral := list
   (dict "file" "application-metrics.json"         "metrics" true "traces" false "logs" false)
-  (dict "file" "rag-pipeline-trace-waterfall.json" "metrics" true "traces" true "logs" false)
+  (dict "file" "rag-pipeline-trace-waterfall.json" "metrics" true "traces" false "logs" false)
   (dict "file" "service-health.json"               "metrics" true "traces" false "logs" false)
-  (dict "file" "service-logs.json"                 "metrics" true "traces" false "logs" true)
+  (dict "file" "service-logs.json"                 "metrics" false "traces" false "logs" true)
   (dict "file" "trace-explorer.json"               "metrics" true "traces" true "logs" false) -}}
 {{- $dashboardsObservability := list
   (dict "file" "observability-stack-health.json"   "metrics" true "traces" false "logs" false)
-  (dict "file" "victorialogs-single-node.json"     "metrics" true "traces" false "logs" true)
+  (dict "file" "victorialogs-single-node.json"     "metrics" true "traces" false "logs" false)
   (dict "file" "victoriametrics-single-node.json"  "metrics" true "traces" false "logs" false)
-  (dict "file" "victoriatraces-single-node.json"   "metrics" true "traces" true "logs" false) -}}
+  (dict "file" "victoriatraces-single-node.json"   "metrics" true "traces" false "logs" false) -}}
 ---
 # Folders. General holds the application-facing dashboards.
 apiVersion: grafana.integreatly.org/v1beta1
@@ -178,17 +191,15 @@ spec:
 {{- /* Every group's queries are PromQL over the COLLECTOR's own metrics
        (otelcol_receiver_accepted_log_points, vt_http_errors_total,
        vm_free_disk_space_bytes, ...) — they live in VictoriaMetrics, not
-       in the log/trace store the rule is ABOUT. A group that queries
-       "victoriametrics" therefore needs the METRICS tier whatever its
-       subject is: without it the datasource is not provisioned and the
-       rule can never evaluate, while the pipeline stays green. */}}
-{{- $needsMetrics := true }}
-{{- $needsLogs := or (eq $group.name "observability.vlog_ingestion") (eq $group.name "observability.otel_log_stamping") (eq $group.name "observability.pipeline_health") }}
-{{- $needsTraces := or (eq $group.name "observability.vtrace_ingestion") (eq $group.name "observability.pipeline_health") }}
-{{- $onMetrics := or (not $needsMetrics) $.Values.observability.metrics.enabled }}
-{{- $onLogs := or (not $needsLogs) $.Values.observability.logs.enabled }}
-{{- $onTraces := or (not $needsTraces) $.Values.observability.traces.enabled }}
-{{- if and $any $onMetrics $onLogs $onTraces }}
+       in the log/trace store the rule is ABOUT. Every datasourceUid in
+       the rules file is "victoriametrics" (or the "__expr__" server-side
+       expression fed from it), so every group needs the METRICS tier
+       whatever its subject is, and none needs logs or traces: gating a
+       group on the tier it is ABOUT suppresses the collector-down alert
+       in exactly the metrics-only deployment that still runs a
+       collector. */}}
+{{- $onMetrics := $.Values.observability.metrics.enabled }}
+{{- if and $any $onMetrics }}
 ---
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaAlertRuleGroup

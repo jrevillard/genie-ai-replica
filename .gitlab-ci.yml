@@ -3508,11 +3508,11 @@ chart:parity:
       --set opea.enabled=true
       --set opea.gpu.nodeHost=https://gpu-node:444
       > /tmp/rendered.yaml
-    # --min-compared is the floor on variables actually compared (259 at
-    # the time of writing). Every allowlist category removes variables from
-    # that set, so a growing allowlist is otherwise a quiet way to make
-    # this gate green without touching either deployment surface.
-    - python3 scripts/config-parity-check.py /tmp/rendered.yaml --min-compared=250
+    # --min-compared is the floor on variables actually compared (171 at
+    # the time of writing; secretProvided and mayDiffer rows are excluded
+    # from the count, so growing EITHER category now drops the number and
+    # trips the floor instead of quietly greening the gate).
+    - python3 scripts/config-parity-check.py /tmp/rendered.yaml --min-compared=171
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
@@ -3649,16 +3649,21 @@ chart:crd-validate:
         > /tmp/crd-validate-prod.yaml
       ./scripts/validate-crds.sh /tmp/crd-validate.yaml /tmp/crd-validate-prod.yaml
   rules:
+    # scripts/validate-crds.sh is the job's last step and its whole
+    # assertion: a change to the script must re-run the job, or a relaxed
+    # grep ships with no pipeline ever having exercised it.
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - charts/**/*
         - scripts/install-prereqs.sh
+        - scripts/validate-crds.sh
         - .gitlab-ci.yml
       when: on_success
     - if: '$CI_COMMIT_BRANCH'
       changes:
         - charts/**/*
         - scripts/install-prereqs.sh
+        - scripts/validate-crds.sh
         - .gitlab-ci.yml
       when: on_success
 

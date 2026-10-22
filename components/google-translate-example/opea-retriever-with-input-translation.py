@@ -1,5 +1,6 @@
-# Copyright (C) 2026 International Telecommunication Union.
-# Licensed under the ITU Open Source License (see LICENSE in the repository root).
+# Copyright (C) 2026 International Telecommunication Union (ITU)
+# SPDX-License-Identifier: Apache-2.0
+
 import logging
 
 import requests

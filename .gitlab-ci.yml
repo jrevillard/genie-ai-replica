@@ -3418,17 +3418,19 @@ chart:contract:
 # else — timeouts, retries, feature flags, log level, identity — must
 # carry the same value.
 chart:parity:
-  image: docker:28
+  # No [docker] tag and no chart-dind group: this job never touches the
+  # Docker daemon (helm + python only). In the group it parked a 17 s
+  # render-and-compare behind the two kind boots and delayed the
+  # merge-gating crd-validate with it.
+  image: dtzar/helm-kubectl:3.16.0
   stage: test
-  tags: [docker]
-  resource_group: chart-dind
   retry:
     max: 1
     when: [runner_system_failure, stuck_or_timeout_failure, script_failure]
   interruptible: true
   before_script:
-    # The dtzar/helm-kubectl image carries helm, kubectl, curl and bash;
-    # only python3 + pyyaml need installing.
+    # The image carries helm, kubectl, curl and bash; only python3 +
+    # pyyaml need installing.
     - apk add --no-cache python3 py3-yaml
     - helm dependency update charts/genieai-umbrella
   script:

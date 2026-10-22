@@ -8,9 +8,8 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-22)
 
-- **Chart `genieai-umbrella` at 0.2.66**, branch `feat/k8s-migration` rebased
-  onto `main` at `179a8a8f1` (0 commits behind), 50 commits ahead, 134 files
-  changed (+42 897 / −35).
+- **Chart `genieai-umbrella` at 0.2.67**, branch `feat/k8s-migration` rebased
+  onto `main` at `179a8a8f1` (0 commits behind).
 - **No application code in the branch**: the diff touches `charts/`,
   `scripts/`, `docs/`, `deploy/`, `tests/`, `site/`, `.gitlab-ci.yml`,
   `docker-compose.yaml`, `env`, `Makefile`, `CLAUDE.md`, `CHANGELOG.md` —
@@ -58,6 +57,49 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
   (the sites use `not (kindIs "invalid")`, and `httpEnabled` is typed
   in the schema), and the Keycloak theme `strip-components` mismatch
   (it counts path components, so any theme name works).
+- **Review round 9 closed (0.2.67)** — three parallel adversarial passes
+  over the whole final diff (core/data/services, edge/observability/OPEA,
+  CI/scripts), every finding verified against a render or a live cluster
+  before acting, every fix mutation-tested where the fix is an
+  assertion. The ones that mattered:
+  - *The backend's translation egress gated on the wrong value.* The
+    rule watched the raw `services.backend.translation.endpoint` while
+    the backend dials the DERIVED endpoint (opea external mode, no
+    explicit value) — the mandatory GPU startup probe had no egress to
+    answer it and the backend refused to start. CI renders green
+    because the crosscheck skips ipBlock rules; nothing installs. The
+    rule now gates on the derived endpoint and takes its CIDR and port
+    from the URL, through the orchestrators' own helpers — the laptop's
+    rule tightened from `0.0.0.0/0` on 443+444 to `/32` on 444,
+    re-validated live (GPU health answers through it).
+  - *The in-cluster model tier requested one exclusive GPU per pod* —
+    four pods on the documented single-GPU node, three of them Pending
+    forever. The utilization args (0.55 + 0.30) ARE the sharing
+    mechanism; the default now carries no GPU resource.
+  - *The NetworkPolicy crosscheck was blind to the model tier* — it
+    resolved only `genieai.io/component` peers, and the four model
+    policies select by bare `app:`. Fixing THAT exposed a port-space
+    bug in the checker itself: ingress rules were translated through
+    the SOURCE's Service mapping. Both label classes now
+    mutation-proven.
+  - *The parity gate could not notice its own allowlist growing*:
+    mayDiffer rows counted toward the floor, and a rendered-but-envless
+    service was reported "not rendered". Floor re-based to the honest
+    count (171), both mutations proven.
+  - *The dashboard tier columns named what a dashboard is ABOUT, not
+    what its panels query* — a logs-only Grafana rendered two empty
+    folders; 28 panel references reached Grafana as a literal `${ds}`
+    datasource. Plus the grafana admin user (`__admin__`, no knob),
+    the unbound http listener (no redirect, no ACME http-01), the
+    doc-repo's bring-your-own-volume mount drop, the mutable-tag pull
+    policy, the local-test dependency-update `cd`, the teardown's
+    release-name default, and the bootstrap discarding both post-Flux
+    signals.
+  Refuted with reasoning: the `keycloak-proxy-client-secret` helm-test
+  gating (the kcc Job's non-optional secretKeyRef fails the install
+  loudly when the Secret is missing; the check covers exactly the
+  convergence-off case), and the placeholder-guard single-flag design
+  (inherent to CI's no-rows renders; the message says what it accepts).
 - **Review round 8 closed (0.2.61–0.2.66)** — the adversarial pass over the
   whole diff, then the re-review of its fixes. What it changed:
   - *The GPU egress named its destination.* The six OPEA NetworkPolicies
@@ -205,9 +247,10 @@ and the rows below name each plan and its outcome.
    first week). The application fixes the validation work surfaced are
    already on `main` (!586, !587, !588), so nothing has to be un-pinned
    from the laptop overlay at merge time.
-2. **Final whole-MR review** — the round-8 pass covered the diff up to
-   0.2.66 and its fixes were re-reviewed; a last pass over the final diff
-   (docs included) still stands between the branch and a merge.
+2. **Final whole-MR review** — ✅ round 9 (above): three parallel
+   adversarial passes over the whole final diff, findings verified and
+   fixed, refutations reasoned. Post-merge, the standing backlog is the
+   residual list below, not the diff.
 3. **Documentation pass** (in progress 2026-10-22):
    - ✅ `site/content/en/docs/deploy/kubernetes.md` exists; its Access and
      Configuration sections describe the edge (Envoy) path, and the

@@ -2609,11 +2609,24 @@ export default {
 
 /* The heading and the subtitle under it share one gap: the heading
    gives up all but --space-sm and the subtitle carries the rest down to
-   the card row, so the pair needs no negative margin to sit tight. */
+   the card row, so the pair needs no negative margin to sit tight.
+
+   The typography is declared here as well as in the Living Intelligence
+   layer (genie-visual-effects.css, on its own selector at a higher
+   specificity, with the same two values). The app owns the pair because
+   the narrow-panel scale above is calibrated against this heading's
+   measured width: a title 5 % wider — because the layer was off, or
+   because a deployment set the theme's --font-display differently — is
+   a title the scale was not measured against, and it wraps where the
+   scale says it fits. The layer's rule stays as the redundant-but-equal
+   declaration, the shape this component already uses for the veil's
+   padding. */
 .quick-help-heading {
   text-align: center;
+  font-family: var(--font-display);
   font-size: calc(var(--text-xl) * var(--qh-heading-scale));
   font-weight: 600;
+  letter-spacing: -0.025em;
   margin-bottom: var(--space-sm);
   color: var(--fg);
 }

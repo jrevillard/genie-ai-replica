@@ -265,21 +265,36 @@ const GEOMETRY_LOCALES = ['fr', 'man', 'st'];
 const LAYER_OFF_VIEWPORTS = VIEWPORTS.filter((vp) => vp.label === '1440' || vp.label === '1400');
 
 /*
- * `fr` and `man` are the title that wraps first and the longest shipped, so
- * the pair is the whole range the adaptation exists for, and both are swept
- * for the mechanism (the container, the two tokens it steps, and the
- * geometry those tokens drive) — which is the app's own in either state.
+ * `fr`, `id` and `man` are the extremes of the shipped title range — the one
+ * that wraps first, the one the narrow panel is next-tightest on, and the
+ * longest of the fourteen — so the three are the whole range the adaptation
+ * exists for, and all three are swept for the mechanism (the container, the
+ * two tokens it steps, and the geometry those tokens drive), which is the
+ * app's own in either state.
+ *
+ * `fr` and `id` are also swept for the one-line consequence. The heading's
+ * typography is declared by the app, so both titles measure the same in
+ * either state — 578.3 px (`fr`) and 605.6 px (`id`) at 24 px, 532.0 px and
+ * 557.1 px once the narrow-panel scale has stepped the type to 22.08 px —
+ * and with the layer off the panel's own box is 48 px narrower than with it
+ * on (the banner's full bleed is the layer's), so the veil caps at 566 px at
+ * 1400 and 606 px at 1440. `id` is the case the typography ownership buys:
+ * it measures 583.6 px without it, 17.6 px over that cap at 1400, and
+ * wraps there.
  *
  * `man` is NOT swept for the one-line consequence, and the reason is
- * measured rather than chosen. With the layer off, the panel's own box is
- * 48 px narrower than with it on (the banner's full bleed is declared by the
- * layer) and the title renders 5 % wider (the heading's `font-family` and
- * `-0.025em` tracking are declared by the layer too), so `man` measures
- * 692.7 px there and has 566 px to sit in. Closing that is a change to what
- * the layer owns, not to the container this test guards.
+ * measured rather than chosen. Its title is 659.1 px at 24 px — 606.3 px
+ * once the scale has stepped the type — the longest of the fourteen
+ * shipped, and the veil's cap is 566 px for it with the layer off. No scale
+ * closes that: the scale exists to clear the veil's 32 px of padding, and
+ * with the padding at 8 px the title is still 93 px over the cap. With the
+ * layer on it does fit — the full bleed gives 48 px back, so the narrow
+ * panel has 614 px at 1400 and 654 px at 1440 against its 606.3 px, the
+ * tightest case in the shipped theme, and it holds — and that geometry is
+ * the base theme's own, not the Living Intelligence layer's.
  */
-const LAYER_OFF_LOCALES = ['fr', 'man'];
-const ONE_LINE_WITH_LAYER_OFF = ['fr'];
+const LAYER_OFF_LOCALES = ['fr', 'id', 'man'];
+const ONE_LINE_WITH_LAYER_OFF = ['fr', 'id'];
 
 // Assertion 1: the scrim's alpha, read off the resolved custom property and
 // cross-checked against the colour the element actually paints with.
@@ -860,6 +875,8 @@ async function panelOwnership(page) {
       paddingLeft: parseFloat(vs.paddingLeft),
       paddingRight: parseFloat(vs.paddingRight),
       fontSize: parseFloat(hs.fontSize),
+      fontFamily: hs.fontFamily,
+      letterSpacing: hs.letterSpacing,
       fixedInOverlay: Array.from(overlay.querySelectorAll('*')).filter(
         (el) => getComputedStyle(el).position === 'fixed'
       ).length
@@ -1416,15 +1433,16 @@ test.describe('Welcome banner invariants', () => {
   // then the layer switched off — rather than a table of expected numbers, so
   // it cannot drift from whatever the app declares, and a deployment that
   // overrides --space-xl or the scale is checked too. What the layer owns may
-  // move between the two: its artwork, its entrance animation, the heading's
-  // font-family and tracking, and the banner's full bleed. None of those is
-  // asserted here.
+  // move between the two: its artwork, its entrance animation, and the
+  // banner's full bleed. The heading's typography does NOT — it is the app's
+  // own declaration, and 8e holds it to that.
   test("8. the narrow-panel adaptation is the app's own — with the Living Intelligence layer OFF the panel is still a query container and the tokens it steps are unchanged", async ({
     browser
   }) => {
-    // 8 sessions a pass (2 viewports x 2 themes x 2 locales), each a login
-    // plus a reload. The same shape as test 7's budget.
-    test.setTimeout(300000);
+    // 12 sessions a pass (2 viewports x 2 themes x 3 locales), each a login
+    // plus a reload. The same shape as test 7's budget, scaled to the third
+    // locale: test 7 spends 900s on 36.
+    test.setTimeout(420000);
     for (const vp of LAYER_OFF_VIEWPORTS) {
       for (const theme of ['light', 'dark']) {
         for (const locale of LAYER_OFF_LOCALES) {
@@ -1533,7 +1551,30 @@ test.describe('Welcome banner invariants', () => {
             ).toBeLessThanOrEqual(1);
           }
 
-          // (8e) The price of declaring the container: a layout container is
+          // (8e) The heading's own typography, which the app declares rather
+          // than inherits from the layer. Read after the consequence above so
+          // a regression is reported as the title that changed width rather
+          // than as the property that changed with it: the narrow-panel scale
+          // is calibrated against this heading's measured width, so a title
+          // that moves when the layer goes off is a title the scale was never
+          // measured against, and the fit 8d checks is then a property of the
+          // layer rather than of the app.
+          expect(
+            offOwn.fontFamily,
+            `${where} the heading's font-family with the layer off is ${offOwn.fontFamily}, against ` +
+              `${onOwn.fontFamily} with it on — the title measures ${on.titleUnwrapped.toFixed(1)}px ` +
+              `with the layer on and ${off.titleUnwrapped.toFixed(1)}px with it off`
+          ).toBe(onOwn.fontFamily);
+          expect(
+            offOwn.letterSpacing,
+            `${where} the heading's tracking with the layer off is ${offOwn.letterSpacing}, against ` +
+              `${onOwn.letterSpacing} with it on — 0.025em of it is 29.4 px off the French title and ` +
+              `26.5 px off the Indonesian one at the narrow panel's 22.08 px type, and this title ` +
+              `measures ${on.titleUnwrapped.toFixed(1)}px with the layer on against ` +
+              `${off.titleUnwrapped.toFixed(1)}px with it off`
+          ).toBe(onOwn.letterSpacing);
+
+          // (8f) The price of declaring the container: a layout container is
           // the containing block for fixed-position descendants, so anything
           // fixed inside the panel would be captured by the containment.
           expect(

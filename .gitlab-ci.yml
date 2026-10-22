@@ -3154,6 +3154,13 @@ chart:lint:
       [ "$(tar -tzf /tmp/themes-check.tgz | sha256sum)" = "$(tar -tzf charts/genieai-umbrella/files/keycloak-themes.tgz | sha256sum)" ] \
       && [ "$(tar -xzOf /tmp/themes-check.tgz | sha256sum)" = "$(tar -xzOf charts/genieai-umbrella/files/keycloak-themes.tgz | sha256sum)" ] \
       || { echo "keycloak theme tarball content drift - run 'make keycloak-theme' and commit the result"; exit 1; }
+    # Same contract for the Grafana dashboards and the alert rules: the
+    # chart inlines them into GrafanaDashboard / GrafanaAlertRule CRs, so
+    # it carries a copy of configs/grafana/provisioning. The check also
+    # compares the template's dashboard list against the files on disk —
+    # a copied file the template does not list is never rendered, and a
+    # listed file that is missing inlines as an empty dashboard.
+    - ./scripts/sync-chart-dashboards.sh --check || { echo "grafana dashboard drift - run 'make chart-dashboards' and commit the result"; exit 1; }
     - helm lint charts/genieai-umbrella --strict
     # Base tier render.
     # The smtp.* flags below are a placeholder: verifyEmail and
@@ -3296,17 +3303,23 @@ chart:lint:
   rules:
     # First-match semantics: a bare second merge_request_event rule would
     # make this job run on every MR and render the changes filter dead.
+    # configs/grafana is in the filter because the chart vendors a copy of
+    # the dashboards and the alert rules: a change to the source must
+    # trigger the gate that checks the copy, or the drift it is meant to
+    # catch reaches the cluster unnoticed.
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - charts/**/*
         - scripts/**/*
         - configs/keycloak/**/*
+        - configs/grafana/**/*
         - .gitlab-ci.yml
     - if: '$CI_COMMIT_BRANCH'
       changes:
         - charts/**/*
         - scripts/**/*
         - configs/keycloak/**/*
+        - configs/grafana/**/*
         - .gitlab-ci.yml
 
 # Chart contract gate — proves the CHART-RENDERED observability config,

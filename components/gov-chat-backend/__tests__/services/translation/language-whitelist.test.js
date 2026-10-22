@@ -180,6 +180,20 @@ describe('backend language map lookups', () => {
     expect(backend.isLanguageSupported('constructor')).toBe(false);
   });
 
+  it('does not claim to support a language mapped to an empty value', () => {
+    // The two answers have to agree: getLanguageCode refuses a language
+    // mapped to an empty code, so isLanguageSupported cannot say the backend
+    // supports it. Otherwise the resolution chain walks on a language the
+    // backend cannot ask the model for.
+    const saved = backend.languageMap.languageMap.fr;
+    backend.languageMap.languageMap.fr = '';
+    try {
+      expect(backend.isLanguageSupported('fr')).toBe(false);
+    } finally {
+      backend.languageMap.languageMap.fr = saved;
+    }
+  });
+
   it('hands out a copy of the language map', () => {
     // A caller that mutates the returned object would change which languages
     // the backend accepts.

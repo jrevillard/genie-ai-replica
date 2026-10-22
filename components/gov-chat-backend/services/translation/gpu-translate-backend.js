@@ -300,7 +300,14 @@ class GpuTranslateBackend {
    * @returns {boolean} True if supported
    */
   isLanguageSupported(isoCode) {
-    return Boolean(this.languageMap && Object.prototype.hasOwnProperty.call(this.languageMap.languageMap, isoCode));
+    if (!this.languageMap || !Object.prototype.hasOwnProperty.call(this.languageMap.languageMap, isoCode)) {
+      return false;
+    }
+    // A language mapped to an empty code is not one the backend can ask the
+    // model for: getLanguageCode refuses it, so this answer has to refuse it
+    // too. The two answers disagreeing would walk the resolution chain on a
+    // language that has no code.
+    return Boolean(this.languageMap.languageMap[isoCode]);
   }
 
   /**

@@ -33,6 +33,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:genie_ai_mobile/components/shared/nav_bar_component.dart';
+import 'package:genie_ai_mobile/config/keycloak_config.dart';
 import 'package:genie_ai_mobile/components/sidebar/sidebar_component.dart';
 import 'package:genie_ai_mobile/components/chat/chatbot_component.dart';
 import 'package:genie_ai_mobile/components/chat/right_sidebar_component.dart';
@@ -63,7 +64,55 @@ void main() async {
   // Initialize Connectivity (Online/Offline)
   await ConnectivityService().init();
 
+  // Resolve the deployment configuration before anything renders. A release
+  // or profile build made without the FLAVOR dart-define fails here, on a
+  // screen that names the fix, instead of as a grey error widget on the
+  // first frame — getConfig() throws in those modes and the providers that
+  // read it would otherwise surface the error only through the framework's
+  // release ErrorWidget, which shows no text.
+  try {
+    getConfig();
+  } on Object catch (error) {
+    runApp(_StartupConfigError(message: error.toString()));
+    return;
+  }
+
   runApp(const ProviderScope(child: MyApp()));
+}
+
+/// Full-screen diagnostic for a build whose flavor configuration could not be
+/// resolved. Diagnostic text only: i18n is unusable here because the broken
+/// thing is the configuration the translations are selected from.
+class _StartupConfigError extends StatelessWidget {
+  const _StartupConfigError({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'This build cannot start',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                Text(message),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class MyApp extends ConsumerStatefulWidget {

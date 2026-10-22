@@ -224,8 +224,12 @@ describe('POST /api/translate', () => {
 
     expect(response.status).toBe(400);
     // The body names the refused side only: the value the caller sent is
-    // never echoed back.
-    expect(response.body).toEqual({ message: 'Unsupported target language' });
+    // never echoed back. The code tells the client the request was refused
+    // rather than failed.
+    expect(response.body).toEqual({
+      message: 'Unsupported target language',
+      code: 'UNSUPPORTED_LANGUAGE'
+    });
   });
 });
 

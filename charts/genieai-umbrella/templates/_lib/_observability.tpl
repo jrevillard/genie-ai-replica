@@ -129,3 +129,22 @@ transform/strip_python_log_prefix:
       statements:
         - 'set(body, ExtractPatterns(body, "^(CRITICAL|ERROR|WARNING|INFO|DEBUG|TRACE)[: ]+(?P<m>.*)$")["m"]) where IsString(body) and IsMatch(body, "^(CRITICAL|ERROR|WARNING|INFO|DEBUG|TRACE)[: ]+")'
 {{- end -}}
+
+{{/*
+genieai-umbrella.otlpPort — the Collector's OTLP/HTTP listener port, the
+port half of otlpEndpoint. Every NetworkPolicy egress rule that admits
+telemetry reads the port from here, so a non-default collectorPort is
+one edit, not one per policy.
+*/}}
+{{- define "genieai-umbrella.otlpPort" -}}
+{{- .Values.observability.collectorPort | default 4318 -}}
+{{- end -}}
+
+{{/*
+genieai-umbrella.observabilityEnabledFlag — the value of the
+ENABLE_OBSERVABILITY env row: "1" when any signal tier is on. One
+definition for every service that carries the row.
+*/}}
+{{- define "genieai-umbrella.observabilityEnabledFlag" -}}
+{{- ternary "1" "0" (or .Values.observability.logs.enabled .Values.observability.metrics.enabled .Values.observability.traces.enabled) -}}
+{{- end -}}

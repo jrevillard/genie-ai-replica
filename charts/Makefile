@@ -18,23 +18,23 @@ lint-umbrella: lint-common deps
 template: template-umbrella
 
 # ingress.host and data.keycloak.adminEmail are `required`, so this
-# target is unusable without them — it rendered nothing but the error
-# "ingress.host is required" while charts/README.md presented it as THE
-# render gate. The same class of break came back with the mail flags:
-# verifyEmail and resetPasswordAllowed default to the Compose values
-# (true), and the render refuses them without a mail server. The values
-# below are render-only (the placeholder guard is off for the same
-# reason, and the smtp host is a name that answers nothing); nothing here
-# reaches a cluster.
+# target is unusable without them — it once rendered nothing but the
+# error "ingress.host is required" while charts/README.md presented it
+# as THE render gate; the mail flags broke the same way later.
+# Same fixture CI's chart:* jobs expand (charts/ci/render-base-flags —
+# restated here because a make recipe cannot portably $(cat) it):
+# required deployment data, the placeholder guard off, an smtp that
+# answers nothing. Render-only values; nothing here reaches a cluster.
+RENDER_FLAGS = --set data.keycloak.failOnPlaceholderSecrets=false \
+	--set data.keycloak.adminEmail=ci-render@example.org \
+	--set data.keycloak.smtp.from=no-reply@ci.invalid \
+	--set data.keycloak.smtp.host=smtp.invalid \
+	--set data.keycloak.smtp.port=587 \
+	--set data.keycloak.smtp.starttls=true \
+	--set ingress.host=ci-render.local
+
 template-umbrella: deps
-	helm template test genieai-umbrella -n genieai \
-		--set data.keycloak.failOnPlaceholderSecrets=false \
-		--set data.keycloak.adminEmail=ci-render@example.org \
-		--set data.keycloak.smtp.from=no-reply@ci.invalid \
-		--set data.keycloak.smtp.host=smtp.invalid \
-		--set data.keycloak.smtp.port=587 \
-		--set data.keycloak.smtp.starttls=true \
-		--set ingress.host=ci-render.local > /tmp/genieai-rendered.yaml
+	helm template test genieai-umbrella -n genieai $(RENDER_FLAGS) > /tmp/genieai-rendered.yaml
 
 test: test-umbrella
 
@@ -43,14 +43,7 @@ test-umbrella: deps
 	# created by CI or by hand BEFORE this target runs. ct has NO
 	# --kube-version flag and NO kubeVersion config key (verified against
 	# chart-testing v3.15.0 source — both were fabrications).
-	ct install $(CT_FLAGS) --charts genieai-umbrella \
-		--set data.keycloak.failOnPlaceholderSecrets=false \
-		--set data.keycloak.adminEmail=ci-render@example.org \
-		--set data.keycloak.smtp.from=no-reply@ci.invalid \
-		--set data.keycloak.smtp.host=smtp.invalid \
-		--set data.keycloak.smtp.port=587 \
-		--set data.keycloak.smtp.starttls=true \
-		--set ingress.host=ci-render.local
+	ct install $(CT_FLAGS) --charts genieai-umbrella $(RENDER_FLAGS)
 
 # Advisory only: the chart READMEs are hand-written (curated usage docs,
 # not helm-docs output). Running plain `helm-docs` would OVERWRITE them

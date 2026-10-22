@@ -2,6 +2,13 @@ const { logger } = require('../../shared-lib');
 const { Worker } = require('worker_threads');
 const path = require('path');
 const { languageForLog } = require('./language-log');
+const {
+  ownLanguageCode,
+  ownFallbackLanguage,
+  isLanguageSupported: mapSupportsLanguage,
+  isModelLanguageCode: mapProducesCode,
+  supportedLanguages
+} = require('./language-map-lookup');
 
 /**
  * CPU Translation Backend
@@ -228,17 +235,12 @@ class CpuTranslateBackend {
       throw new Error('[CPU-BACKEND] Language map not loaded');
     }
 
-    // Own properties only: an inherited key ('constructor', 'toString') is not
-    // a language, and handing it out would put it in a translation prompt.
-    if (!Object.prototype.hasOwnProperty.call(this.languageMap.languageMap, isoCode)) {
+    const code = ownLanguageCode(this.languageMap, isoCode);
+    if (!code) {
       logger.warn(`[CPU-BACKEND] No language code mapping for: ${languageForLog(isoCode)}`);
       return null;
     }
-
-    // A language mapped to an empty value is not a language: the code would
-    // reach the model as an empty string.
-    const code = this.languageMap.languageMap[isoCode];
-    return code || null;
+    return code;
   }
 
   /**
@@ -247,15 +249,7 @@ class CpuTranslateBackend {
    * @returns {string|null} Fallback language code or null
    */
   getFallbackLanguage(isoCode) {
-    if (!this.fallbackMap) {
-      return null;
-    }
-
-    if (!Object.prototype.hasOwnProperty.call(this.fallbackMap, isoCode)) {
-      return null;
-    }
-
-    return this.fallbackMap[isoCode] || null;
+    return ownFallbackLanguage(this.fallbackMap, isoCode);
   }
 
   /**
@@ -264,14 +258,7 @@ class CpuTranslateBackend {
    * @returns {boolean} True if supported
    */
   isLanguageSupported(isoCode) {
-    if (!this.languageMap || !Object.prototype.hasOwnProperty.call(this.languageMap.languageMap, isoCode)) {
-      return false;
-    }
-    // A language mapped to an empty code is not one the backend can ask the
-    // model for: getLanguageCode refuses it, so this answer has to refuse it
-    // too. The two answers disagreeing would walk the resolution chain on a
-    // language that has no code.
-    return Boolean(this.languageMap.languageMap[isoCode]);
+    return mapSupportsLanguage(this.languageMap, isoCode);
   }
 
   /**
@@ -286,10 +273,7 @@ class CpuTranslateBackend {
    * @returns {boolean} True when the map produces that code.
    */
   isModelLanguageCode(code) {
-    if (!this.languageMap || typeof code !== 'string' || code === '') {
-      return false;
-    }
-    return Object.values(this.languageMap.languageMap).includes(code);
+    return mapProducesCode(this.languageMap, code);
   }
 
   /**
@@ -297,9 +281,7 @@ class CpuTranslateBackend {
    * @returns {Object} A copy of the language map
    */
   getSupportedLanguages() {
-    // A copy: the map is the backend's own table, and a caller that mutates
-    // the returned object would change which languages the backend accepts.
-    return this.languageMap ? { ...this.languageMap.languageMap } : {};
+    return supportedLanguages(this.languageMap);
   }
 
   /**

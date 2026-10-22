@@ -763,7 +763,7 @@ stable; renaming a field is a breaking change.
 | `translation` | `content: string` | Emitted by `/api/translate/*` only when `STREAMING_TRANSLATION_ENABLED=0` (the English-then-flip path) |
 | `chunk` | `content: string` (translated) | Emitted by streaming-translation path — see below |
 | `error` | `message: string`, `code: string` | Closes the stream after emission |
-| `done` | `queryId: string`, `translationFailed: boolean` | Always last; closes the stream. `translationFailed` is `true` when the answer was not translated and the client is showing the English original |
+| `done` | `queryId: string`, `translationFailed: boolean` | Always last; closes the stream. `translationFailed` is `true` when a translation was attempted and failed, and the client is showing the English original. A language the translation models do not cover is not a failure: the answer stays in English and `translationFailed` stays `false` |
 
 Example stream (English-then-flip path):
 
@@ -845,6 +845,7 @@ The 501 response body:
 | Stream starts then stops with `CHATQNA_STREAM_ERROR` | Upstream OPEA ChatQnA failure (timeouts, refused) |
 | Stream starts then stops with `STREAM_ERROR` | Generic upstream stream error |
 | Answer arrives in English, `done` carries `translationFailed: true` | The translation backend did not answer. Not a stream failure — the answer is complete, only its language is not |
+| Answer arrives in English, `done` carries `translationFailed: false` | Either no translation was asked for, or the requested language is not one the translation models cover. Nothing failed: there is no translation to make |
 | Stream silently hangs and times out | Upstream ChatQnA unresponsive; check `CHATQNA_STREAM_TIMEOUT` (default 3600000 ms = 60 min) |
 
 ## Static & operational endpoints

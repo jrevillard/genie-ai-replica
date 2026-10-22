@@ -534,6 +534,11 @@ If GPU costs $1/hour and saves 35 minutes per large document:
    without supporting it directly. Every fallback key in the shipped maps is
    also a supported language, so an unknown language is refused rather than
    silently downgraded to another one
+5. On the chat streaming path, an uncovered language is not a failure: the
+   answer stays in English, the units after the refusal are not sent to the
+   translator again, and the `done` frame carries `translationFailed: false`.
+   The refusal is logged once as
+   `QueryService.stream_translation_unsupported_language`
 
 The language in the log line is sanitised (letters, digits, `_` and `-` only,
 32 characters max), so a value that looks truncated or empty is a language

@@ -114,6 +114,13 @@ Never conflate the two.
 - No auto-resolve: since GitLab 17.0, findings no longer seen by the
   latest default-branch scan stay `detected` forever until manually
   transitioned.
+- SAST finding ids are not stable. An id is built from the rule id (with
+  its revision suffix), the analyzer's tracking signature and the
+  location; an analyzer version bump changes the tracking signature and
+  re-mints the id. A dismissed SAST finding therefore only stays
+  dismissed while the analyzer keeps emitting that exact id — the
+  durable state is "the analyzer no longer produces this finding at
+  all": fix the code, or exclude the path from scanning.
 
 ## Related
 

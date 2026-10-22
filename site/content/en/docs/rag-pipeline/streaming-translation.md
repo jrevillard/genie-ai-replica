@@ -190,21 +190,15 @@ not know is **not** translated: it is refused, not guessed.
 
 ## Failure handling
 
-Two different failures end the streaming translation, and they are not
-reported the same way.
+A language the translation models do not cover is **refused before the
+stream opens**: the request is answered `400` with
+`{ "message": "Unsupported target language", "code": "UNSUPPORTED_LANGUAGE" }`
+and nothing is generated. The answer is never produced in a language the
+caller did not ask for — that is the whole point of the boundary.
 
-**A language the translation models do not cover** is not a failure at
-all: there is no translation to make. The backend:
-
-1. Emits the unit as-is (English) with the original separator.
-2. Stops trying to translate — the units that follow go out in English
-   too, without another attempt.
-3. Leaves the post-stream translation alone: it refuses the same
-   language, so the answer stays in English.
-4. Does **not** tell the client the translation broke. The answer is
-   complete, in a language the models do not have.
-
-**Any other failure** (GPU node down, model not loaded, OOM):
+Any other failure (GPU node down, model not loaded, OOM) is not a
+refusal: the request goes through and the answer is delivered in
+English. The backend:
 
 1. Emits the unit as-is (English) with the original separator.
 2. Sets `streamingTranslationFailed = true`.
@@ -278,7 +272,7 @@ skipped once the streaming translation failed.
 |---------|-------|-----|
 | Spanish stream is **all-English** then flips at the end | `STREAMING_TRANSLATION_ENABLED=0`, or the request did not carry `context.language` | Confirm the env var. Confirm the frontend sets `context.language` from `currentLocale` (see [Frontend → Chat UX](/docs/frontend/chat-ux/)). |
 | Spanish stream is **half English, half Spanish** | Translator threw on one unit, fallback fired for the rest | Check `docker service logs genieai_backend --since 5m 2>&1 \| grep stream_translation_unit_failed`. Common causes: GPU node down, model not loaded, OOM in the GPU. |
-| The whole answer is in English, and the log says the language is not covered | The requested language is not one the translation models have | Nothing to fix on the backend: the answer stays in English by design, and the client is not told the translation broke. The covered languages are the keys of the shipped map (`components/gov-chat-backend/services/translation/language-maps/<model>-map.js`). |
+| The request is refused with `400 UNSUPPORTED_LANGUAGE` | The requested language is not one the translation models have | Nothing to fix on the backend: the answer would have been in a language the caller did not ask for. The covered languages are the keys of the shipped map (`components/gov-chat-backend/services/translation/language-maps/<model>-map.js`). |
 | Spanish stream has collapsed spacing (`"Frase uno.Frase dos."`) | Boundary detector missing the whitespace separator | This is the bug the boundary detector was designed to prevent — open an MR with a repro and the debug logs (`grep STREAM-TRANSLATE`). |
 | Translation latency is higher than the English stream rate | Translator is CPU-bound and falling behind | Switch `TRANSLATION_BACKEND` to `gpu` (much faster for the model). See [Deploy → Remote GPU node](/docs/deploy/gpu/). |
 | Every unit emits a debug line in production | `LOG_LEVEL=debug` was set and not reverted | The default `LOG_LEVEL=info` suppresses the `[STREAM-TRANSLATE]` lines. Confirm via `docker exec genieai_backend sh -c 'echo $LOG_LEVEL'`. |

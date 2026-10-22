@@ -232,10 +232,6 @@ describe('CpuTranslateBackend', () => {
       expect(testBackend.languageMap).toBeDefined();
       delete process.env.TRANSLATION_CPU_MODEL_ID;
     });
-
-    it('should set fallback map from language map', () => {
-      expect(backend.fallbackMap).toBeDefined();
-    });
   });
 
   describe('getLanguageCode', () => {
@@ -246,18 +242,6 @@ describe('CpuTranslateBackend', () => {
 
     it('should return null for unsupported language code', () => {
       const result = backend.getLanguageCode('xyz');
-      expect(result).toBeNull();
-    });
-  });
-
-  describe('getFallbackLanguage', () => {
-    it('should return null when fallback map not loaded', () => {
-      backend.fallbackMap = null;
-      expect(backend.getFallbackLanguage('en')).toBeNull();
-    });
-
-    it('should return null for language without fallback', () => {
-      const result = backend.getFallbackLanguage('xyz');
       expect(result).toBeNull();
     });
   });

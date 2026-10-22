@@ -4,7 +4,6 @@ const https = require('https');
 const { languageForLog } = require('./language-log');
 const {
   ownLanguageCode,
-  ownFallbackLanguage,
   isLanguageSupported: mapSupportsLanguage,
   isModelLanguageCode: mapProducesCode,
   supportedLanguages
@@ -67,7 +66,6 @@ class GpuTranslateBackend {
     // Runtime state
     this.initialized = false;
     this.languageMap = null;
-    this.fallbackMap = null;
     this.healthCheckPassed = false;
     this.maxModelLen = 4096; // Will be updated from /v1/models during init
 
@@ -99,7 +97,6 @@ class GpuTranslateBackend {
       }
 
       this.languageMap = require(mapPath);
-      this.fallbackMap = this.languageMap.fallbackMap || {};
 
       logger.info(`[GPU-BACKEND] Loaded language map: ${this.languageMap.modelName}`);
       logger.info(`[GPU-BACKEND] Code format: ${this.languageMap.codeFormat}`);
@@ -277,15 +274,6 @@ class GpuTranslateBackend {
       return null;
     }
     return code;
-  }
-
-  /**
-   * Get fallback language code
-   * @param {string} isoCode - ISO 639-1 language code
-   * @returns {string|null} Fallback language code or null
-   */
-  getFallbackLanguage(isoCode) {
-    return ownFallbackLanguage(this.fallbackMap, isoCode);
   }
 
   /**

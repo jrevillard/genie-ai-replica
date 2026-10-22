@@ -44,7 +44,6 @@ jest.mock('../../services/translation/cpu-translate-backend', () =>
     getSupportedLanguages: jest.fn().mockReturnValue({ en: 'English', fr: 'French', es: 'Spanish' }),
     getLanguageCode: jest.fn().mockImplementation((lang) => lang),
     isLanguageSupported: jest.fn().mockReturnValue(true),
-    getFallbackLanguage: jest.fn().mockReturnValue(null),
     init: jest.fn().mockResolvedValue(undefined)
   }))
 );
@@ -59,7 +58,6 @@ jest.mock('../../services/translation/gpu-translate-backend', () =>
     getSupportedLanguages: jest.fn().mockReturnValue({ en: 'English', fr: 'French', es: 'Spanish' }),
     getLanguageCode: jest.fn().mockImplementation((lang) => lang),
     isLanguageSupported: jest.fn().mockReturnValue(true),
-    getFallbackLanguage: jest.fn().mockReturnValue(null),
     init: jest.fn().mockResolvedValue(undefined)
   }))
 );
@@ -421,7 +419,6 @@ describe('TranslationService', () => {
     const stubBackendWithModelCodes = (codes) => ({
       getLanguageCode: jest.fn((code) => (Object.prototype.hasOwnProperty.call(codes, code) ? codes[code] : null)),
       isLanguageSupported: jest.fn(() => true),
-      getFallbackLanguage: jest.fn(() => null),
       translate: jest.fn().mockResolvedValue(['translated']),
       getBackendInfo: jest.fn(() => ({ model: 'stub-model' }))
     });
@@ -466,7 +463,6 @@ describe('TranslationService', () => {
       translationService.backend = {
         getLanguageCode: (l) => (l === 'en' ? 'English' : l === 'es' ? 'Spanish' : null),
         isLanguageSupported: (l) => ['es', 'fr'].includes(l),
-        getFallbackLanguage: () => null,
         translateStream: jest.fn(async (unit, src, tgt, ctx, onToken) => {
           if (onToken) onToken('tok');
           return 'translated';
@@ -521,29 +517,10 @@ describe('TranslationService', () => {
       expect(mockCpuTranslate).not.toHaveBeenCalled();
     });
 
-    it('uses fallback language when target is not directly supported', async () => {
-      translationService.backend = {
-        getLanguageCode: (l) => (l === 'en' ? 'English' : l === 'es' ? 'Spanish' : null),
-        isLanguageSupported: (l) => l === 'es',
-        getFallbackLanguage: (l) => (l === 'fr' ? 'es' : null),
-        translateStream: jest.fn(async () => 'fallback-translated')
-      };
-      const result = await translationService.translateStream('hi', 'en', 'fr');
-      expect(result).toBe('fallback-translated');
-      expect(translationService.backend.translateStream).toHaveBeenCalledWith(
-        'hi',
-        'English',
-        'Spanish',
-        undefined,
-        undefined
-      );
-    });
-
-    it('throws when target is unsupported with no fallback', async () => {
+    it('throws when target is unsupported', async () => {
       translationService.backend = {
         getLanguageCode: (l) => (l === 'en' ? 'English' : null),
         isLanguageSupported: () => false,
-        getFallbackLanguage: () => null,
         translateStream: jest.fn()
       };
       await expect(translationService.translateStream('hi', 'en', 'xx')).rejects.toThrow(/Unsupported target language/);

@@ -165,7 +165,6 @@ describe('the codes handed to the backend', () => {
     // "eng_Latn", and the code the model is asked for is the one that has to
     // reach it.
     backend.languageMap = require('../../../services/translation/language-maps/nllb-200-map.js');
-    backend.fallbackMap = backend.languageMap.fallbackMap || {};
     const translate = jest.spyOn(backend, 'translate').mockResolvedValue(['bonjour']);
 
     await service.translate(['hello'], 'en', 'fr');
@@ -201,18 +200,13 @@ describe('backend language map lookups', () => {
     expect(backend.getLanguageCode('toString')).toBeNull();
   });
 
-  it('does not hand out an inherited property as a fallback language', () => {
-    expect(backend.getFallbackLanguage('constructor')).toBeNull();
-    expect(backend.getFallbackLanguage('__proto__')).toBeNull();
-  });
-
   it('does not hand out an empty mapping as a language code', () => {
     // A language mapped to an empty value is not a language: the empty code
     // would reach the model in the prompt. The two answers have to agree —
     // getLanguageCode refuses a language mapped to an empty code, so
-    // isLanguageSupported cannot say the backend supports it. Otherwise the
-    // resolution chain walks on a language the backend cannot ask the model
-    // for.
+    // isLanguageSupported cannot say the backend supports it. The two answers
+    // have to agree, or a language the backend cannot ask the model for
+    // reaches the model as an empty code.
     const saved = backend.languageMap.languageMap.fr;
     backend.languageMap.languageMap.fr = '';
     try {

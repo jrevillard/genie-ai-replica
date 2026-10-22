@@ -76,49 +76,6 @@ module.exports = {
     ko: 'ko' // Korean
   },
 
-  // Language fallback chains for graceful degradation.
-  //
-  // A fallback names the language to use when the model does not support the
-  // requested one. Every language listed here is one the map above supports
-  // too, so the chain never walks today — the language the caller asked for
-  // is the language the model is asked for. A language removed from the map
-  // above has to be removed from here as well: left in place, it would
-  // silently translate into another language.
-  fallbackMap: {
-    // West African languages fallback to Swahili (regional lingua franca)
-    ff: 'sw',
-    ha: 'sw',
-    yo: 'sw',
-    // South Asian fallbacks
-    skr: 'ur',
-    sd: 'ur',
-    pa: 'ur',
-    // Central Asian fallbacks
-    kk: 'tr',
-    uz: 'tr',
-    ug: 'tr',
-    // Southeast Asian fallbacks
-    ms: 'id',
-    su: 'id',
-    jv: 'id',
-    // Middle Eastern fallbacks
-    ps: 'fa',
-    ku: 'fa',
-    ckb: 'ar', // Sorani → Arabic
-    // Horn of Africa fallbacks
-    om: 'sw',
-    so: 'sw',
-    // Other fallbacks
-    am: 'en', // Amharic to English
-    az: 'tr', // Azerbaijani to Turkish
-    bn: 'en', // Bengali to English
-    ml: 'en', // Malayalam to English
-    // Newly added fallbacks
-    man: 'en', // Mandinka to English
-    mnk: 'en', // Mandinka (alternative code) to English
-    st: 'en' // Sesotho to English
-  },
-
   // TranslateGemma uses structured chat format, not prompt templates
   promptTemplate: null
 };

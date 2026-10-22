@@ -4,7 +4,6 @@ const path = require('path');
 const { languageForLog } = require('./language-log');
 const {
   ownLanguageCode,
-  ownFallbackLanguage,
   isLanguageSupported: mapSupportsLanguage,
   isModelLanguageCode: mapProducesCode,
   supportedLanguages
@@ -34,7 +33,6 @@ class CpuTranslateBackend {
     this.initialized = false;
     this.workerError = null;
     this.languageMap = null;
-    this.fallbackMap = null;
 
     logger.info(`[CPU-BACKEND] Initializing with model: ${this.modelId}`);
     logger.info(`[CPU-BACKEND] Threads: ${this.threads}, Batches: ${this.batches}`);
@@ -174,8 +172,6 @@ class CpuTranslateBackend {
         this.languageMap = require(mapPath);
         logger.info(`[CPU-BACKEND] Loaded language map: ${this.languageMap.modelName}`);
       }
-
-      this.fallbackMap = this.languageMap.fallbackMap || {};
     } catch (error) {
       logger.error(`[CPU-BACKEND] Failed to load language map: ${error.message}`);
       throw new Error(`Failed to load language map for model ${modelId}`, { cause: error });
@@ -241,15 +237,6 @@ class CpuTranslateBackend {
       return null;
     }
     return code;
-  }
-
-  /**
-   * Get fallback language code
-   * @param {string} isoCode - ISO 639-1 language code
-   * @returns {string|null} Fallback language code or null
-   */
-  getFallbackLanguage(isoCode) {
-    return ownFallbackLanguage(this.fallbackMap, isoCode);
   }
 
   /**

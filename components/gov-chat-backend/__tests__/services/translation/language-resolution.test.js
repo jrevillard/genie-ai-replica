@@ -34,7 +34,6 @@ function stubBackend({ codes = { en: 'en', fr: 'fr_FR' }, translate } = {}) {
   return {
     getLanguageCode: jest.fn((code) => (Object.prototype.hasOwnProperty.call(codes, code) ? codes[code] : null)),
     isLanguageSupported: jest.fn((code) => Object.prototype.hasOwnProperty.call(codes, code)),
-    getFallbackLanguage: jest.fn(() => null),
     translate: translate || jest.fn().mockResolvedValue(['translated']),
     getBackendInfo: jest.fn(() => ({ model: 'stub-model', type: 'stub' }))
   };

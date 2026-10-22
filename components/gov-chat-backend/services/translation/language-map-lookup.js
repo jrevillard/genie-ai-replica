@@ -1,8 +1,8 @@
 /**
  * The lookups a language map answers.
  *
- * Both backends ship a map of the same shape — the languages, the code the
- * model is asked for, the fallbacks — and they answer the same questions
+ * Both backends ship a map of the same shape — the languages and the code
+ * the model is asked for — and they answer the same questions
  * about it. The rules that keep a caller-supplied value from being handed
  * out as a language live here, so the two backends cannot answer them
  * differently:
@@ -30,21 +30,6 @@ function ownLanguageCode(languageMap, isoCode) {
     return null;
   }
   return codes[isoCode] || null;
-}
-
-/**
- * The language a fallback names.
- *
- * @param {object|null} fallbackMap - The shipped fallback map.
- * @param {string} isoCode - The canonical language code.
- * @returns {string|null} The fallback language, or null when the map names
- *   none for it.
- */
-function ownFallbackLanguage(fallbackMap, isoCode) {
-  if (!fallbackMap || !Object.prototype.hasOwnProperty.call(fallbackMap, isoCode)) {
-    return null;
-  }
-  return fallbackMap[isoCode] || null;
 }
 
 /**
@@ -97,7 +82,6 @@ function supportedLanguages(languageMap) {
 
 module.exports = {
   ownLanguageCode,
-  ownFallbackLanguage,
   isLanguageSupported,
   isModelLanguageCode,
   supportedLanguages

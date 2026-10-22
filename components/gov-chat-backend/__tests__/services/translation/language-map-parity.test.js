@@ -104,37 +104,14 @@ describe('the backend language maps and the chatqna language map agree', () => {
     }
   });
 
-  it('every language the shipped maps list a fallback for is one they support', () => {
-    // A fallback is for a model that does not support a language. The shipped
-    // maps support every language they list a fallback for, so the fallback
-    // chain never walks. A map that drops a language from its language map
-    // and forgets its fallback would make that language translate into
-    // another one, silently.
+  it('names no fallback language', () => {
+    // A fallback is a language to answer with when the model does not support
+    // the requested one. There is no such mechanism: a language the map does
+    // not know is refused, because answering in another language is a wrong
+    // answer the caller cannot see. A map that named a fallback would put
+    // that mechanism back within reach of the next edit.
     for (const [name, map] of Object.entries(MAPS)) {
-      const supported = Object.keys(map.languageMap);
-      for (const code of Object.keys(map.fallbackMap || {})) {
-        expect({ map: name, code, supported: supported.includes(code) }).toEqual({
-          map: name,
-          code,
-          supported: true
-        });
-      }
-    }
-  });
-
-  it('every fallback in the shipped maps points at a language they support', () => {
-    // The other end of the chain: a fallback to a language the map does not
-    // know would leave the chain pointing nowhere.
-    for (const [name, map] of Object.entries(MAPS)) {
-      const supported = Object.keys(map.languageMap);
-      for (const [code, fallback] of Object.entries(map.fallbackMap || {})) {
-        expect({ map: name, code, fallback, supported: supported.includes(fallback) }).toEqual({
-          map: name,
-          code,
-          fallback,
-          supported: true
-        });
-      }
+      expect({ map: name, fallback: map.fallbackMap }).toEqual({ map: name, fallback: undefined });
     }
   });
 });

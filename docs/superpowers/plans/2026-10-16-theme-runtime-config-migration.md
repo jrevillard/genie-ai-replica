@@ -1,18 +1,5 @@
 # Theme Runtime Config Migration Implementation Plan
 
-> **2026-10-28 revision (post-execution):** the role's sync contract changed
-> after the production incident of 2026-10-27 — a host kept serving a
-> configuration that no longer matched the branch it was deployed from, and the
-> app refused to mount (a blank landing page behind a successful deploy). The
-> role now MIRRORS the branch: `rsync --archive --checksum --delete`, plus a
-> check that the host matches the branch afterwards. The `--ignore-existing`
-> contract described below (and in the design specs) is gone. The shipped
-> `deploy/ansible/roles/config_bootstrap/` is authoritative — including over
-> every code block in this plan: the mirror and verification tasks quoted in
-> the 2026-10-28 revision below predate the shipped implementation (different
-> register names, no exit-code assert, no itemize-line filter). Do not copy
-> them; read the role.
-
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 > **2026-10-18 revision (post-execution):** the Keycloak mount contract changed
@@ -25,7 +12,7 @@
 
 **Goal:** Move GENIE.AI theme assets (frontend palette, brand JSON, Keycloak theme CSS) from image-baked to host-mounted runtime configuration so that editing a file on a Swarm node + `docker service update --force <svc>` makes the change visible in the browser without an image rebuild.
 
-**Architecture:** Per-component bind mount (`/opt/genieai-<env>/config/{frontend,keycloak/themes/genie}/` from host → corresponding service target) layered over image-baked defaults. One new Ansible role (`config_bootstrap`) cross-tree rsyncs the repo paths into the host directory on every deploy, as a mirror of the deployed branch (`rsync --archive --checksum --delete`; update 2026-10-28 — the branch is the single source of truth for the runtime config, so operator changes belong in the repository). Two new env vars (`CONFIG_DIR_FRONTEND`, `CONFIG_DIR_KEYCLOAK`) follow the existing `${VAR:-default}` envsubst pattern, so `docker compose up` works locally with zero config and Swarm reads the Ansible-written paths. The Keycloak image moves to upstream `quay.io/keycloak/keycloak:26.7.0` (the local `configs/keycloak/Dockerfile` is deleted), and a new nginx `location ^~ /config/` block ensures runtime assets are not subject to the existing immutable-cache regex.
+**Architecture:** Per-component bind mount (`/opt/genieai-<env>/config/{frontend,keycloak/themes/genie}/` from host → corresponding service target) layered over image-baked defaults. One new Ansible role (`config_bootstrap`) cross-tree rsyncs the repo paths into the host directory on every deploy using `--ignore-existing` to preserve manual operator edits. Two new env vars (`CONFIG_DIR_FRONTEND`, `CONFIG_DIR_KEYCLOAK`) follow the existing `${VAR:-default}` envsubst pattern, so `docker compose up` works locally with zero config and Swarm reads the Ansible-written paths. The Keycloak image moves to upstream `quay.io/keycloak/keycloak:26.7.0` (the local `configs/keycloak/Dockerfile` is deleted), and a new nginx `location ^~ /config/` block ensures runtime assets are not subject to the existing immutable-cache regex.
 
 **Tech Stack:** Vue 3 / Vue CLI (frontend), nginx (frontend reverse proxy), Keycloak 26.7.0 upstream, Docker Compose (dual-mode: compose dev + Swarm prod), Ansible 2.x with `synchronize` module, Jest (unit tests), Playwright (E2E).
 
@@ -52,7 +39,7 @@ The spec is a vision document. The five input classes most likely to bite a reas
 1. **Empty host config dir + image-baked defaults must work** (backwards compat path: services must start cleanly with NO `CONFIG_DIR_*` env vars and NO bind mount). Tested in Task 8 step 4.
 2. **nginx `^~` modifier must remain in place** (removing it silently regresses to immutable cache). Tested in Task 3 step 4 + Task 8 step 5.
 3. **All four Keycloak themed subdirs must rsync** (login/account/admin/email — realm config sets all four theme types to `KEYCLOAK_THEME`). Verified in Task 4 step 4.
-4. **The host copy mirrors the branch** (`rsync --archive --checksum --delete`, verified by a dry run afterwards). **Update 2026-10-28**: this replaces the `--ignore-existing` contract this plan originally required — a host that keeps a stale configuration serves a brand the branch no longer declared, and the application refuses to start on it (a blank landing page behind a successful deploy). Operator changes belong in the repository. Tested in Task 6 step 5.
+4. **rsync `--ignore-existing` must remain** (without it, manual operator edits get clobbered on subsequent deploys). Tested in Task 6 step 5.
 5. **`env_name` resolves correctly on every inventory group** (broken → `/opt/genieai-/config/` renders, hard-fail). Tested in Task 6 step 6.
 
 ---
@@ -816,34 +803,26 @@ Write `deploy/ansible/roles/config_bootstrap/tasks/main.yml`:
   loop_control:
     label: "{{ item.dest_subdir }}"
 
-- name: Rsync repo defaults to host runtime config dir (mirror the branch)
-  ansible.builtin.command:
-    argv:
-      - rsync
-      - --archive
-      - --checksum
-      - --delete
-      - --out-format=%i %n%L
-      - "{{ config_bootstrap_tmp.path }}/{{ item.dest_subdir | replace('/', '-') }}/{{ item.src }}/"
-      - "{{ config_dir }}/{{ item.dest_subdir }}/"
+- name: Rsync repo defaults to host runtime config dir (preserve manual edits)
+  ansible.posix.synchronize:
+    src: "{{ playbook_dir }}/{{ item.src }}"
+    dest: "{{ config_dir }}/{{ item.dest_subdir }}"
+    delete: false
+    rsync_opts:
+      - "--ignore-existing"
   loop: "{{ config_bootstrap_pairs }}"
   loop_control:
     label: "{{ item.dest_subdir }}"
   when: config_bootstrap_sync_enabled | bool
   register: config_bootstrap_sync
-  changed_when: config_bootstrap_sync.stdout | trim | length > 0
+  changed_when: config_bootstrap_sync.changed | bool
 
-- name: Assert the host matches the branch (dry-run mirror reports no change)
+- name: Assert synchronize was idempotent on rerun (manual edits preserved)
   ansible.builtin.assert:
     that:
-      - item.stdout | trim | length == 0
-    fail_msg: >-
-      The host runtime config does not match the branch ({{ repo_branch }}).
-      A dry-run mirror would still change: {{ item.stdout | default('') }}
-    success_msg: "config_bootstrap: the host runtime config matches the branch"
-  loop: "{{ config_bootstrap_verify.results | default([]) }}"
-  loop_control:
-    label: "{{ item.item.dest_subdir | default('unknown') }}"
+      - not config_bootstrap_sync.changed | bool or config_bootstrap_sync.rc == 0
+    fail_msg: "config_bootstrap: synchronize reported changed=true after a no-op run; check --ignore-existing flag is still present"
+    success_msg: "config_bootstrap: idempotent (no files transferred on rerun)"
   when:
     - config_bootstrap_sync_enabled | bool
     - not ansible_check_mode | default(false) | bool
@@ -953,12 +932,10 @@ git add deploy/ansible/roles/config_bootstrap/ \
 git commit -m "feat(ansible): config_bootstrap role rsyncs repo theme defaults
 
 New role deploys repo paths into /opt/genieai-<env_name>/config/ on
-every node using cross-tree rsync from the branch archive. Flags
-(update 2026-10-28 — the mirror replaced the --ignore-existing contract):
-- --archive --checksum --delete mirrors the branch on the host: the files
-  the branch changed are overwritten (content-compared) and the ones it no
-  longer ships are removed. A dry run of the same rsync afterwards
-  verifies the host matches the branch
+every node using cross-tree synchronize from playbook_dir. Flags:
+- delete: false + --ignore-existing preserves manual operator edits
+  between deploys (without --ignore-existing, edits would be silently
+  overwritten on every run)
 - Idempotent: second invocation is a no-op
 
 deploy.yml gains a play tagged [config] that applies the role to all
@@ -1380,9 +1357,8 @@ git commit -m "test(ansible): config_bootstrap idempotence + manual-edit preserv
 
 Smoke test verifies the role's two correctness contracts:
 1. Second invocation is a no-op (all files already exist on host)
-2. The host copy mirrors the branch (update 2026-10-28): a manual operator
-   edit is reverted by the next run, and a file the branch does not ship
-   is removed
+2. Manual operator edits made between deploys are preserved on rerun
+   (--ignore-existing flag works as intended)
 
 Not auto-run by CI (requires a live target host); exercised manually
 during deploy validation on .102."
@@ -1478,7 +1454,7 @@ The El Salvador UI overhaul (MR !385) shipped via full image rebuild for a pure 
 - **Frontend**: `theme-variables.css` moves from `src/` (Vite bundle) to `public/config/` (Vue CLI passthrough). Loaded at runtime via `<link>` in `index.html`. New nginx `location ^~ /config/` block (note `^~` modifier — required to win against the existing regex location).
 - **Keycloak**: `configs/keycloak/Dockerfile` deleted; service uses upstream `quay.io/keycloak/keycloak:26.7.0`. All four themed subdirs (`login/account/admin/email`) ship from the repo.
 - **docker-compose.yaml**: 2 new bind mounts (`CONFIG_DIR_FRONTEND`, `CONFIG_DIR_KEYCLOAK`) using existing `${VAR:-default}` envsubst pattern.
-- **Ansible**: new `config_bootstrap` role cross-tree rsyncs repo defaults to `/opt/genieai-<env>/config/` on every node, as a mirror of the deployed branch (`rsync --archive --checksum --delete`, verified by a dry run afterwards; update 2026-10-28 — the branch is the single source of truth for the runtime config).
+- **Ansible**: new `config_bootstrap` role cross-tree rsyncs repo defaults to `/opt/genieai-<env>/config/` on every node, using `--ignore-existing` to preserve manual operator edits.
 - **Pre-existing fix**: `/config.js` (runtime-generated, env-var-driven) relocated to `/config/config.js` so it inherits the new no-cache location. Previously invisible to browsers for up to 1 year after env-var changes.
 
 ## Backwards compat

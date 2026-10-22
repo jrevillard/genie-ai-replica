@@ -25,6 +25,15 @@ MINIKUBE_PROFILE=${MINIKUBE_PROFILE:-minikube}
 INGRESS_HOST="${INGRESS_HOST:-local.genieai.test}"
 ADMIN_EMAIL="${ADMIN_EMAIL:-admin@local.genieai.test}"
 
+# This script installs a throwaway release on a laptop: it names no mail
+# server, and a realm that verifies addresses without one never completes
+# a registration. The chart defaults both mail flags to the Compose
+# values (true) and refuses to render them without an smtp — so the
+# script says it has no mail by turning them off, which is the case the
+# chart documents for exactly this. A deployment that owns a mailbox
+# names its relay in `data.keycloak.smtp` and keeps the flags on.
+MAIL_FLAGS=(--set data.keycloak.verifyEmail=false --set data.keycloak.resetPasswordAllowed=false)
+
 CLIENT_PROXY="dummy-proxy-$(date +%s)"
 CLIENT_DATAPREP="dummy-dataprep-$(date +%s)"
 CLIENT_GRAFANA="dummy-grafana-$(date +%s)"
@@ -53,6 +62,7 @@ helm template "$RELEASE" "$CHART" -n "$NS" \
   --set "data.keycloak.clientSecrets.grafana=$CLIENT_GRAFANA" \
   --set "ingress.host=$INGRESS_HOST" \
   --set "data.keycloak.adminEmail=$ADMIN_EMAIL" \
+  "${MAIL_FLAGS[@]}" \
   > /tmp/genieai-rendered.yaml
 echo "  rendered to /tmp/genieai-rendered.yaml ($(wc -l < /tmp/genieai-rendered.yaml) lines)"
 
@@ -65,6 +75,7 @@ helm install "$RELEASE" "$CHART" -n "$NS" --create-namespace \
   --set "data.keycloak.clientSecrets.grafana=$CLIENT_GRAFANA" \
   --set "ingress.host=$INGRESS_HOST" \
   --set "data.keycloak.adminEmail=$ADMIN_EMAIL" \
+  "${MAIL_FLAGS[@]}" \
   --wait --timeout 10m
 
 echo

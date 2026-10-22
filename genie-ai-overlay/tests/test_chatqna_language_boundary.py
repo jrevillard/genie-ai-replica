@@ -594,14 +594,10 @@ class TestTranslationPromptBoundary:
         """langdetect answers with codes the language map does not key
         ('zh-cn', 'jw', 'tl'): the history is still normalized to English, but
         the prompt must not name the source with a code the map does not
-        know."""
+        know — and without a name it must not claim to know the source at
+        all."""
         prompt = self._prompt("zh-cn", "en")
         assert "zh-cn" not in prompt.lower()
-
-    def test_an_unmapped_source_code_does_not_name_a_source_at_all(self):
-        """Without a name the prompt asks for a translation into the target
-        without claiming to know what the source is."""
-        prompt = self._prompt("zh-cn", "en")
         assert "to English (en) translator" not in prompt
         assert "English (en)" in prompt
 

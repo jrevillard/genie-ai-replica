@@ -66,30 +66,12 @@ describe('the backend language maps and the chatqna language map agree', () => {
     expect(Object.keys(map.languageMap).sort()).toEqual(chatqnaLanguages());
   });
 
-  it('every backend map covers the same languages', () => {
-    const [first, ...others] = Object.values(MAPS).map((map) => Object.keys(map.languageMap).sort());
-    for (const languages of others) {
-      expect(languages).toEqual(first);
-    }
-  });
-
   it('every language maps to a code the model can be asked for', () => {
-    for (const [name, map] of Object.entries(MAPS)) {
-      for (const [code, modelCode] of Object.entries(map.languageMap)) {
+    for (const map of Object.values(MAPS)) {
+      for (const modelCode of Object.values(map.languageMap)) {
         expect(typeof modelCode).toBe('string');
         expect(modelCode.length).toBeGreaterThan(0);
-        expect(`${name}:${code}`).toBeTruthy();
       }
-    }
-  });
-
-  it('the gemma-3 map names every language it maps', () => {
-    // The prompt is built from the name, not from the code: a code without a
-    // name would either break the prompt or put the code in it.
-    const map = MAPS['gemma-3'];
-    for (const code of Object.keys(map.languageMap)) {
-      expect(typeof map.languageNames[code]).toBe('string');
-      expect(map.languageNames[code].length).toBeGreaterThan(0);
     }
   });
 

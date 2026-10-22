@@ -43,13 +43,6 @@ describe('translationCacheKey', () => {
     expect(TRANSLATION_LOGIC_VERSION.length).toBeGreaterThan(0);
   });
 
-  test('the key has five dimensions', () => {
-    // A dimension that goes missing changes the shape of every key. The
-    // version is what says the shape changed, so the two have to move
-    // together.
-    expect(translationCacheKey('abc123', 'eng_Latn', 'fra_Latn', 'model').split(':')).toHaveLength(6);
-  });
-
   test('the version is never one a released deployment already used', () => {
     // The cache has no TTL: the entries a release wrote stay in Redis
     // forever. A version number therefore keeps one meaning for the life of

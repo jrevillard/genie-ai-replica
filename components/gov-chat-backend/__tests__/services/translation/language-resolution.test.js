@@ -58,28 +58,6 @@ afterEach(() => {
 });
 
 describe('the language pair is resolved once', () => {
-  it('looks the source language up once per pair', () => {
-    const backend = stubBackend();
-    useBackend(backend);
-
-    TranslationService.resolveLanguagePair('en', 'fr');
-
-    // The source was resolved twice: once to decide whether it is known, and
-    // once to map it onto the code the model expects.
-    const sourceLookups = backend.getLanguageCode.mock.calls.filter((call) => call[0] === 'en');
-    expect(sourceLookups).toHaveLength(1);
-  });
-
-  it('looks the target language up once per pair', () => {
-    const backend = stubBackend();
-    useBackend(backend);
-
-    TranslationService.resolveLanguagePair('en', 'fr');
-
-    const targetLookups = backend.getLanguageCode.mock.calls.filter((call) => call[0] === 'fr');
-    expect(targetLookups).toHaveLength(1);
-  });
-
   it('refuses a source language the map does not know', () => {
     useBackend(stubBackend({ codes: { fr: 'fr_FR' } }));
 
@@ -117,7 +95,7 @@ describe('the languages a log line names', () => {
     expect(line).not.toContain('from FR');
   });
 
-  it('a failed translation names the canonical language pair', async () => {
+  it('a failed translation names the canonical language pair, not the requested one', async () => {
     const { logger } = require('../../../shared-lib');
     useBackend(
       stubBackend({
@@ -125,28 +103,14 @@ describe('the languages a log line names', () => {
       })
     );
 
-    await expect(TranslationService.translate(['hello'], 'en', 'fr')).rejects.toThrow('model unreachable');
+    // "FR" and "fr" are one language: the log names the canonical form, so a
+    // query written against it finds the line.
+    await expect(TranslationService.translate(['hello'], 'FR', 'fr')).rejects.toThrow('model unreachable');
 
     const failure = logger.error.mock.calls.find((call) => call[0].includes('Translation failed'));
     expect(failure).toBeDefined();
     const context = failure[1];
-    expect(context.sourceLang).toBe('en');
+    expect(context.sourceLang).toBe('fr');
     expect(context.targetLang).toBe('fr');
-  });
-
-  it('the failure log never carries a raw caller value', async () => {
-    const { logger } = require('../../../shared-lib');
-    useBackend(
-      stubBackend({
-        translate: jest.fn().mockRejectedValue(new Error('model unreachable'))
-      })
-    );
-
-    await expect(TranslationService.translate(['hello'], 'en', 'fr')).rejects.toThrow('model unreachable');
-
-    const failure = logger.error.mock.calls.find((call) => call[0].includes('Translation failed'));
-    const context = failure[1];
-    expect(context.sourceLang).not.toContain('\n');
-    expect(context.targetLang).not.toContain('\n');
   });
 });

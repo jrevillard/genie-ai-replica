@@ -3,10 +3,11 @@
 const { languageForLog } = require('../../../services/translation/language-log');
 
 describe('the bounded form of a caller-supplied language', () => {
-  it('uses the sentinel the chatqna service uses for a value that is not a string', () => {
-    // genie-ai-overlay/chatqna/genieai_chatqna.py, _language_display: the two
+  it('uses the shared sentinel for a value that is not a string', () => {
+    // The chatqna service uses the same sentinel
+    // (genie-ai-overlay/chatqna/genieai_chatqna.py, _language_display): the two
     // must not drift apart, or a log query written against one service misses
-    // the lines of the other.
+    // the lines of the other. The parity itself is checked from that side.
     expect(languageForLog(undefined)).toBe('<non-string>');
     expect(languageForLog(null)).toBe('<non-string>');
     expect(languageForLog(42)).toBe('<non-string>');

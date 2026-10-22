@@ -237,20 +237,6 @@ class TranslationService {
   }
 
   /**
-   * @method resolveTargetLanguage
-   * @description Resolves a target language against the language map the loaded
-   * backend ships. The language arrives from the request body, so it is
-   * caller-controlled: only a code the map knows may reach the translation
-   * model, and a code the map does not know is refused rather than passed on.
-   * @param {string} targetLang - The target language as it arrived from the caller.
-   * @returns {string} The canonical (lower-case) language code to translate into.
-   * @throws {UnsupportedLanguageError} When the language is unknown and has no usable fallback.
-   */
-  resolveTargetLanguage(targetLang) {
-    return this._resolveTarget(targetLang).targetLang;
-  }
-
-  /**
    * @method _resolveTarget
    * @description Resolves a target language and the code the model expects for
    * it, in one pass. The canonical code and the model-specific code are
@@ -315,19 +301,6 @@ class TranslationService {
       candidate = String(fallback).trim().toLowerCase();
     }
     return null;
-  }
-
-  /**
-   * @method resolveSourceLanguage
-   * @description Resolves a source language against the language map the loaded
-   * backend ships, the same way the target is resolved: the source travels in
-   * the request body too, so it is caller-controlled as well.
-   * @param {string} sourceLang - The source language as it arrived from the caller.
-   * @returns {string} The canonical (lower-case) language code to translate from.
-   * @throws {UnsupportedLanguageError} When the language is unknown.
-   */
-  resolveSourceLanguage(sourceLang) {
-    return this._resolveSource(sourceLang).sourceLang;
   }
 
   /**

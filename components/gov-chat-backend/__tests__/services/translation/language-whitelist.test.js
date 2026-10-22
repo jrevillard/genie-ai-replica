@@ -108,13 +108,13 @@ describe('target language boundary (real service, real language map)', () => {
   });
 
   it('resolves a supported language to its canonical code', () => {
-    expect(service.resolveTargetLanguage('FR')).toBe('fr');
-    expect(service.resolveTargetLanguage('  fr  ')).toBe('fr');
+    expect(service.resolveLanguagePair('en', 'FR').targetLang).toBe('fr');
+    expect(service.resolveLanguagePair('en', '  fr  ').targetLang).toBe('fr');
   });
 
   it('refuses to resolve a language it does not know', () => {
-    expect(() => service.resolveTargetLanguage(INJECTION)).toThrow(/Unsupported target language/);
-    expect(() => service.resolveTargetLanguage('constructor')).toThrow(/Unsupported target language/);
+    expect(() => service.resolveLanguagePair('en', INJECTION)).toThrow(/Unsupported target language/);
+    expect(() => service.resolveLanguagePair('en', 'constructor')).toThrow(/Unsupported target language/);
   });
 
   it('refuses an unsupported source language', async () => {
@@ -254,10 +254,22 @@ describe('backend language map lookups', () => {
     expect(backend.getLanguageCode('fr')).toBe('fr');
   });
 
-  it('refuses to build a prompt for a code it has no language name for', () => {
-    expect(() => backend.formatRequest('google/gemma-3-4b-it', 'en', 'not-a-language', 'hello')).toThrow(
-      /not-a-language/
-    );
+  it('reports a missing language name as a defect in the map, not as a bad request', () => {
+    // The caller asked for a language the deployment supports; the map simply
+    // does not name the code. Blaming the request for it (an
+    // UnsupportedLanguageError is a 400) would hide our own defect.
+    const { UnsupportedLanguageError } = require('../../../services/translation/unsupported-language');
+
+    let error;
+    try {
+      backend.formatRequest('google/gemma-3-4b-it', 'en', 'not-a-language', 'hello');
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeDefined();
+    expect(error.message).toMatch(/language map/i);
+    expect(error).not.toBeInstanceOf(UnsupportedLanguageError);
   });
 
   it('names the language in the prompt from the map', () => {

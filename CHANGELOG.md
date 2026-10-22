@@ -91,6 +91,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **RAGAS benchmarks scored a different answerer than the chat (8-6):** the run's answer leg used a condensed system prompt plus a bare-JSON "answer the question" instruction, producing terse extractive answers ("101,746") where the deployed chat answers in full grounded sentences. RAGAS `answer_relevancy` reverse-generates questions *from the answer text*, so a bare number — factually perfect, faithfulness/context metrics at 1.0 — measured ~0.42 and was marked failing while the real chat answered the same question well (live-measured on the same question, contexts and judge: terse 0.415 vs chat-shaped 1.00). The answer leg now serves with the **verbatim chatqna contract** (or the deployment's pinned `CHATQNA_SYSTEM_PROMPT`, which docker-compose now forwards to okf-server so a pin shapes the chat and the benchmark identically), and the user message mirrors how chatqna presents relevant content. Existing run results were scored by the old answerer — re-run suites to get chat-representative scores.
 - **RAGAS generation orphaned from the UI on refresh (8-6):** an in-flight suite generation has no document in the database until it completes, so after a page refresh the suite list could not contain it — the panel reloaded the previous suite, showed no progress, and a second Generate attempt dead-ended on "a benchmark-suite generation is already running" while the first generation kept executing server-side. The suite listing now surfaces the live generation as a synthetic newest row carrying its live phase and counts, the panel re-attaches on refresh/reopen, and a Generate attempt that lands on the in-flight rejection attaches to the running generation (progress bar + Cancel) instead of erroring.
 - **RAGAS Benchmarks progress UI (8-6):** the suite-generation progress bar sat dead at zero during count-less phases — the knowledge-graph rebuild, ~10–15 min on a fresh judge cache — instead of animating as work-in-progress, and generation phases showed raw machine keys (`building-knowledge-graph`) instead of translated labels. The benchmark/generation tracking loops also abandoned the UI's connection to a job on a **single transient gateway failure**: one 502 from a proxy restart mid-poll made the panel report an error while the generation or run kept executing server-side. The four poll loops (generate, run, and both refresh-adoption paths) now ride out transient failures and give up only after ~2 minutes of consecutive misses, with per-phase progress bars showing counts where the engine reports them and an indeterminate working bar where it cannot.
+- **Virus scanning could not reach a ClamAV service running beside the
+  document repository.** `CLAMSCAN_HOST` was read into the configuration and
+  then dropped before it reached the scanner, so the scanner always dialled
+  `localhost`. Any deployment that runs ClamAV as its own service — the
+  Docker Compose topology — never had a working scan: the connection probe at
+  initialization failed and every scan errored out. The configured host is now
+  passed through.
+- **The document repository could not validate tokens issued behind an edge
+  proxy.** The expected issuer was derived from `KEYCLOAK_URL`, which is the
+  address the service itself reaches. When TLS terminates upstream and the
+  tokens carry the public issuer, every request was rejected as an invalid
+  token. `KEYCLOAK_EXPECTED_ISSUER` now pins the issuer; leaving it unset
+  keeps the derived value.
+- **The backend's fallback AI/ML address pointed at a hostname from a test
+  run.** With `OPEA_HOST` unset, queries were sent to `e2e-109-198:8888`, a
+  host that only ever resolved on one machine. Both deployments that ship this
+  service set the variable, so the fallback was dead weight carrying a wrong
+  value; it is now the ChatQnA service name the compose file already uses, and
+  the two places that built the URL share one helper.
 - **Model-endpoint calls no longer carry per-site, drifting budgets — and one of them was silently emptying retrievals.** Each in-repo client to an LLM, embedding, rerank or control-plane endpoint had its own timeout: some inherited a library default, some had a literal nobody could find. A new shared module, `genie-ai-overlay/core/model_http_policy.py`, resolves them all from one place, and every call site now reads its budget from it. Three of those sites were actively harmful rather than merely undeclared:
   - **The retriever's embedding client and its document summarizer were unbounded, and both fail in ways an operator cannot see.** Neither was given a timeout at all: `langchain-openai` forwards `request_timeout` (default `None`) into the openai client, and an explicit `None` overrides the SDK's own 600 s default — a detail worth knowing because the openai default is the first thing anyone assumes is in force. A hung call on the embedding client returns `[]` from its `except` clause, and that short-circuits *ahead of* the hybrid/BM25 leg, so a contended GPU produced no documents at all and the chat answered from nothing without saying so. A hung summarizer re-raises, and the microservice maps it to a 500. Both now carry a budget (600 s each) — a new ceiling, not a restatement, so there is no pre-existing floor to reason from. **Lower the embedding one only knowing this**: the empty result is its failure mode, not an error.
   - **Bounding an `aiohttp` call can remove a ceiling it already had.** aiohttp's default session carries `sock_connect=30`, but constructing `ClientTimeout(total=X)` explicitly leaves `sock_connect=None`, which is no limit rather than "inherit". Two calls that were bounded by giving them a budget would therefore have traded a 30 s give-up on an unreachable endpoint for an unbounded wait — the exact failure this change exists to stop, introduced by the act of stopping it. Those two sites now set the connect ceiling explicitly.
@@ -216,11 +235,37 @@ Shortening any of these converts a slow-but-successful call into a visible failu
   endpoint once — a remote API or the in-network service, whichever
   `VLLM_TRANSLATION_ENDPOINT` points at — and stays with whatever answered,
   the way the dataprep device is resolved at load time. The CPU model is
-  selected only when that startup probe itself fails. **A deployment that
-  relied on the fallback will now see the affected text served in English:**
-  the unit that failed is left untranslated and the rest of the answer
-  follows. To keep the old behaviour, set `TRANSLATION_BACKEND` explicitly to
-  the backend you want and treat its failure as a real failure.
+  selected only when that startup probe itself fails **and no GPU API is
+  configured** (see below). **A deployment that relied on the fallback will
+  now see the affected text served in English:** the unit that failed is left
+  untranslated and the rest of the answer follows.
+- **A configured GPU API is mandatory: the backend now refuses to start rather
+  than falling back to the CPU model.** A deployment that names a GPU API —
+  `GPU_NODE_HOST` set, or a `VLLM_TRANSLATION_ENDPOINT` other than the
+  in-cluster worker — always uses it, and `TRANSLATION_BACKEND` is not
+  consulted: `cpu`, `gpu`, `auto` and unset all resolve to the GPU. If the API
+  does not answer, the backend does not start. **Deployer impact:** a GPU node
+  that is unreachable at boot now crash-loops the backend instead of silently
+  serving English answers from a local model — content you routed to a remote
+  GPU API will no longer quietly move onto one running inside the backend
+  container. `TRANSLATION_BACKEND` keeps its meaning when no GPU API is
+  configured. The startup probe budget is now `TRANSLATION_PROBE_TIMEOUT_SECONDS`
+  (default 30, previously a hardcoded 5 s); it has to cover a cold TLS
+  handshake to a remote node, and the endpoint's `/health` answers in tens of
+  milliseconds once connected, so the previous 5 s was a false-negative waiting
+  to happen rather than a bound on anything.
+- **A streaming answer now says when its translation failed.** When the
+  translation backend could not answer, the untranslated text was emitted and
+  the stream carried on with no signal — the client received a fully English
+  answer and no indication anything had gone wrong. The `done` event now
+  carries `translationFailed`, and the answer it belongs to shows a short
+  "translation unavailable" notice. It is deliberately **not** an `error`
+  event: the web client treats that as terminal, stops reading the stream, and
+  reports the whole system as down, none of which is true when only the
+  translator failed and the answer is complete. This also fixes the same
+  misreporting on the existing post-stream path, which has been emitting an
+  `error` event ahead of `done` — so a translation failure at the end of an
+  answer used to mark the deployment offline.
 - **Legacy benchmark suite removed** (`tests/rag-benchmarks/{benchmark_*.py, run_benchmarks.sh}`, 2549 lines): the scripts were run-once-and-never-rerun, had no live test, and produced numbers that drifted from the rest of the eval surface. Latency and load-testing now live on the OTel trace waterfall (Grafana RAG Pipeline Trace Waterfall dashboard) — the OTel collector already captures every request with `latency` and `http.status_code` attributes, so the dashboards cover the same question without a separate harness. The site docs (`source-tree-analysis.md`) no longer mention the deleted files.
 - **Wrapper ROPC `EVAL_DEPLOY_ENV` is no longer defaulted:** the wrapper used to silently fall back to `/opt/genieai-el-salvador/.env` when the env var was unset — a stack-specific hardcode inside a script that should be generic. The wrapper now fails LOUD with `:?` and a message naming the expected `/opt/<stack>/.env` pattern (per `deploy/ansible/templates/env.j2` layout) when neither the env var nor `GENIE_ADMIN_PASSWORD` is set. The MR replaces the runbook / docs and the wrapper's "wrapper / argparse defaults" table to make the override path explicit.
 - **Per-context manual slicing heredocs removed from the root `CLAUDE.md` golden-dataset recipe:** the manual `for i in range(N): chunk = dict(gold); chunk['entries'] = gold['entries'][i::N]; open(f'/tmp/batches/gold_{i:02d}.json', 'w').write(json.dumps(chunk))` loop is gone — `run_eval.py` now slices the gold internally when `EVAL_CHUNK_SIZE` is set, and the sidecar already records per-chunk progress so a manual round-robin shell loop is no longer needed.

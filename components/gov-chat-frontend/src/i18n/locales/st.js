@@ -1250,6 +1250,7 @@ export default {
   chatbot: {
     streamingError: 'Karabo e emisetsoe. Re leke hape.',
     aiGeneratedNoDocs: "E hlahisitsoe ke AI — ha e ea thehoa holim'a litokomane tsa laeborari",
+    translationUnavailable: 'Translation unavailable — this answer may contain untranslated text.',
     welcomeMessage: 'Rea u amohela! Nka u thusa joang kajeno?',
     configMismatchWarning:
       'Ho se lumellane ha tlhophiso: {warnings}. Ka kopo hlahloba Thuso e Potlakileng le tlhophiso ea thulaganyo ea tsebo.',

@@ -1249,6 +1249,7 @@ export default {
   chatbot: {
     streamingError: 'A resposta foi interrompida. Tente novamente.',
     aiGeneratedNoDocs: 'Gerado por IA — não baseado em documentos da biblioteca',
+    translationUnavailable: 'Tradução indisponível — esta resposta pode conter texto não traduzido.',
     welcomeMessage: 'Boas-vindas! Como posso ajudar você hoje?',
     configMismatchWarning:
       'Incompatibilidade de configuração: {warnings}. Verifique a Ajuda Rápida e a configuração da hierarquia de conhecimento.',

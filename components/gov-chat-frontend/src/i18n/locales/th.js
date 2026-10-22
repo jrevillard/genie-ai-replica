@@ -1236,6 +1236,7 @@ export default {
   chatbot: {
     streamingError: 'การตอบกลับถูกขัดจังหวะ โปรดลองอีกครั้ง',
     aiGeneratedNoDocs: 'สร้างโดย AI — ไม่ได้อิงจากเอกสารในคลัง',
+    translationUnavailable: 'ไม่สามารถแปลได้ — คำตอบนี้อาจมีข้อความที่ยังไม่ได้แปล',
     welcomeMessage: 'ยินดีต้อนรับ! วันนี้มีอะไรให้ฉันช่วยเหลือไหม?',
     configMismatchWarning: 'การกำหนดค่าไม่ตรงกัน: {warnings} โปรดตรวจสอบวิธีใช้ด่วนและการกำหนดค่าลำดับชั้นความรู้',
     categoryNotFound: 'ไม่พบหมวดหมู่ "{label}" ในลำดับชั้นความรู้',

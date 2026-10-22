@@ -1232,6 +1232,7 @@ export default {
   chatbot: {
     streamingError: 'Jɛɛmɔgɔya labɛnnen na. A ñaa ma ñɔɔrɔ.',
     aiGeneratedNoDocs: 'AI-e kõm̦m̦ane — ejjab pedped ioon peba ko ilo laibri',
+    translationUnavailable: 'Translation unavailable — this answer may contain untranslated text.',
     welcomeMessage: 'Iakwe! Ewi wāween aõ maron̦ jipañ eok rainin?',
     configMismatchWarning:
       'Kajuuj eo ejjab errā: {warnings}. Jouj im etale Jipañ M̦ōkaj eo im kajuuj eo an laajrak in jel̦āl̦o̦kjen̦.',

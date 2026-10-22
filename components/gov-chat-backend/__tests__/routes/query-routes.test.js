@@ -338,6 +338,50 @@ describe('POST /stream', () => {
     expect(response.headers['content-type']).toBe('text/event-stream');
   });
 
+  it('posts to the upstream the service resolved, never to one from the request body', async () => {
+    // The `nosemgrep` annotations on these axios.post sinks rest on this: the
+    // route takes the upstream from initStreamQuery — env-derived, pinned in
+    // query-service.test.js — and never from req.body. The body fields below
+    // would win if the route consulted them, so they are sent on purpose.
+    queryService.initStreamQuery.mockResolvedValue({
+      queryId: 'q1',
+      opeaUrl: 'http://chatqna.internal:8899/v1/chatqna',
+      opeaPayload: { messages: [] }
+    });
+
+    queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
+    queryService.finalizeStreamQuery.mockResolvedValue(undefined);
+
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ data: mockStream });
+
+    const responsePromise = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hello' }],
+      context: { language: 'EN' },
+      opeaUrl: 'http://169.254.169.254/latest/meta-data/',
+      baseURL: 'http://169.254.169.254',
+      host: '169.254.169.254',
+      url: 'http://169.254.169.254'
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    mockStream.push('data: {"type":"chunk","content":"Hello"}\n\n');
+    mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+    mockStream.push(null);
+    await responsePromise;
+
+    expect(axios.post).toHaveBeenCalledTimes(1);
+    expect(axios.post).toHaveBeenCalledWith(
+      'http://chatqna.internal:8899/v1/chatqna',
+      // The payload the service built, not the one in the request body: the
+      // body carries a non-empty `messages`, so a merge or substitution here
+      // would change it.
+      expect.objectContaining({ messages: [] }),
+      expect.any(Object)
+    );
+  });
+
   it('should stream the target-language translation when STREAMING_TRANSLATION_ENABLED (#829)', async () => {
     process.env.STREAMING_TRANSLATION_ENABLED = '1';
     queryService.initStreamQuery.mockResolvedValue({
@@ -379,7 +423,55 @@ describe('POST /stream', () => {
     delete process.env.STREAMING_TRANSLATION_ENABLED;
   });
 
-  it('should fall back to the EN unit when stream translation fails (#829)', async () => {
+  it('keeps a translation payload inside one SSE frame — no forged event can escape it (#1096)', async () => {
+    // The `nosemgrep` on this sink rests on `JSON.stringify` escaping newlines, so
+    // a value cannot terminate the `data:` frame or open a second one. This
+    // asserts the property instead of asserting the comment: the payload below
+    // tries to end the frame and forge an event of its own.
+    process.env.STREAMING_TRANSLATION_ENABLED = '1';
+    queryService.initStreamQuery.mockResolvedValue({
+      queryId: 'q1',
+      opeaUrl: 'http://chatqna:8888/v1/chatqna',
+      opeaPayload: { messages: [] }
+    });
+    queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
+    queryService.finalizeStreamQuery.mockResolvedValue(undefined);
+    translationService.init.mockResolvedValue(undefined);
+    const forged = 'Hola.\n\ndata: {"type":"chunk","content":"forged"}\n\n';
+    translationService.translateMarkdown.mockImplementation(async () => forged);
+
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ data: mockStream });
+
+    const responsePromise = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hola' }],
+      context: { language: 'es' }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    mockStream.push('data: {"type":"chunk","content":"Hello world. "}\n\n');
+    mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+    mockStream.push(null);
+
+    const response = await responsePromise;
+    const body = response.text || '';
+    const frames = body
+      .split('\n\n')
+      .filter((frame) => frame.startsWith('data: '))
+      .map((frame) => JSON.parse(frame.slice('data: '.length)));
+
+    const chunkContents = frames.filter((event) => event.type === 'chunk').map((event) => event.content);
+
+    // The forged text arrived as string content of one frame...
+    expect(chunkContents.join('\n\n')).toContain('data: {"type":"chunk","content":"forged"}');
+    // ...and never became a frame of its own: had the newline not been escaped,
+    // the inner object would have been split out and parsed as its own event.
+    expect(chunkContents).not.toContain('forged');
+    delete process.env.STREAMING_TRANSLATION_ENABLED;
+  });
+
+  it('should fall back to the EN unit and report the failure on done', async () => {
     process.env.STREAMING_TRANSLATION_ENABLED = '1';
     queryService.initStreamQuery.mockResolvedValue({
       queryId: 'q1',
@@ -410,6 +502,14 @@ describe('POST /stream', () => {
     const body = response.text || '';
     expect(body).toContain('Hello world');
     expect(body).not.toMatch(/"type":"translation"/);
+    // The EN unit is already on the wire and cannot be recalled, so the
+    // failure has to reach the client somehow. It travels on `done` because an
+    // `error` frame is terminal for the client: it stops reading the stream
+    // and reports the whole system as down.
+    expect(body).toMatch(/"type":"done","queryId":"q1","translationFailed":true/);
+    // Not an `error` frame — that would truncate the answer and raise a
+    // system-down notification for a translation-only failure.
+    expect(body).not.toMatch(/"type":"error"/);
     delete process.env.STREAMING_TRANSLATION_ENABLED;
   });
 
@@ -1015,7 +1115,7 @@ describe('GET /:queryId', () => {
       expect(response.text).toContain('"type":"translation","content":"Bonjour monde"');
     });
 
-    it('should emit TRANSLATION_FAILED error event when translation fails', async () => {
+    it('should report a post-stream translation failure on done, not as an error', async () => {
       const mockStream = setupSSEStream();
       translationService.init.mockResolvedValue(undefined);
       translationService.translateMarkdown.mockRejectedValue(new Error('Translation service down'));
@@ -1033,8 +1133,29 @@ describe('GET /:queryId', () => {
 
       const response = await responsePromise;
       expect(response.status).toBe(200);
-      expect(response.text).toContain('TRANSLATION_FAILED');
-      expect(response.text).toContain('"type":"done","queryId":"q1"');
+      expect(response.text).toContain('"type":"done","queryId":"q1","translationFailed":true');
+      expect(response.text).not.toContain('"type":"error"');
+    });
+
+    it('should report translationFailed=false when translation succeeds', async () => {
+      const mockStream = setupSSEStream();
+      translationService.init.mockResolvedValue(undefined);
+      translationService.translateMarkdown.mockResolvedValue('Hallo');
+
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }],
+        context: { language: 'DE' }
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      mockStream.push('data: {"type":"chunk","content":"Hello"}\n\n');
+      mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+      mockStream.push(null);
+
+      const response = await responsePromise;
+      expect(response.status).toBe(200);
+      expect(response.text).toContain('"type":"done","queryId":"q1","translationFailed":false');
     });
   });
 

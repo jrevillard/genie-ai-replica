@@ -1257,6 +1257,7 @@ export default {
       "Discordance de configuration : {warnings}. Veuillez vérifier l'Aide rapide et la configuration de la hiérarchie des connaissances.",
     streamingError: 'La réponse a été interrompue. Veuillez réessayer.',
     aiGeneratedNoDocs: 'Généré par IA — non basé sur les documents de la bibliothèque',
+    translationUnavailable: 'Traduction indisponible — cette réponse peut contenir du texte non traduit.',
     placeholder: 'Tapez votre requête ici...',
     sendButton: 'Envoyer',
     fileReceived: 'Fichier reçu avec succès.',

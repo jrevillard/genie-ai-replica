@@ -47,6 +47,17 @@ function pickUserText(messages, explicit) {
   return '';
 }
 
+// The OPEA upstream is deployment configuration. Compose and the Helm chart
+// both set OPEA_HOST; the fallback is the Compose service name so an unset
+// variable points at the documented topology rather than a hostname that
+// only ever resolved on one developer's machine.
+const DEFAULT_OPEA_HOST = 'chatqna-xeon-backend-server';
+const DEFAULT_OPEA_PORT = '8888';
+
+function opeaChatQnaUrl() {
+  return `http://${process.env.OPEA_HOST || DEFAULT_OPEA_HOST}:${process.env.OPEA_PORT || DEFAULT_OPEA_PORT}/v1/chatqna`;
+}
+
 class QueryService {
   constructor() {
     this.dbService = dbService; // Store the service reference instead of the promise
@@ -430,9 +441,7 @@ class QueryService {
     logger.info('QueryService.stream_query_created', { queryId });
 
     // Build OPEA payload with stream: true
-    const opeaHost = process.env.OPEA_HOST || 'e2e-109-198';
-    const opeaPort = process.env.OPEA_PORT || '8888';
-    const opeaUrl = `http://${opeaHost}:${opeaPort}/v1/chatqna`;
+    const opeaUrl = opeaChatQnaUrl();
 
     let opeaPayload;
     if (backendMode === 'single-message') {
@@ -856,9 +865,7 @@ class QueryService {
         await this.queries.update(queryId, updateData);
       } else {
         // *** EXISTING OPEA CALL LOGIC (NOW USING WORKER THREAD) ***
-        const opeaHost = process.env.OPEA_HOST || 'e2e-109-198';
-        const opeaPort = process.env.OPEA_PORT || '8888';
-        const opeaUrl = `http://${opeaHost}:${opeaPort}/v1/chatqna`;
+        const opeaUrl = opeaChatQnaUrl();
 
         let opeaPayload;
         if (backendMode === 'single-message') {

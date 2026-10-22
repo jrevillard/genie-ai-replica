@@ -230,11 +230,18 @@ module.exports = (queryService) => {
       // Carry the query id into the trace so a trace joins to the stored query
       // document. When queryId is absent the request simply carries no baggage
       // and every service leaves the attribute unset — never a placeholder.
+      //
+      // The OPEA upstream is deployment configuration (OPEA_HOST/OPEA_PORT), never
+      // request data. The SSRF rule cannot see that: the taint reaches opeaUrl
+      // through initStreamQuery's return object, whose sibling field opeaPayload
+      // IS request-derived, and a tainted call result is tracked whole. The
+      // invariant is pinned by a test in __tests__/services/query-service.test.js.
       const opeaResponse = queryId
         ? await tracingBaggage.withBaggage(spanAttrs.QUERY_ID_KEY, queryId, () =>
+            // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
             axios.post(opeaUrl, opeaPayload, opeaRequestOptions)
           )
-        : await axios.post(opeaUrl, opeaPayload, opeaRequestOptions);
+        : await axios.post(opeaUrl, opeaPayload, opeaRequestOptions); // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
 
       const stream = opeaResponse.data;
       let fullResponseText = '';
@@ -296,6 +303,11 @@ module.exports = (queryService) => {
               { queryId }
             );
             if (!res.writableEnded) {
+              // An SSE frame, never an HTML document: JSON.stringify escapes
+              // quotes and newlines, so a value cannot terminate the `data:`
+              // frame or inject a second event. The client renders message
+              // content through DOMPurify (ChatBotComponent.vue).
+              // nosemgrep: nodejs_scan.javascript-xss-rule-express_xss
               res.write(`data: ${JSON.stringify({ type: 'chunk', content: body })}\n\n`);
             }
           } catch (error) {
@@ -338,7 +350,8 @@ module.exports = (queryService) => {
             req,
             res,
             capturedMetadata,
-            true
+            true,
+            streamingTranslationFailed
           );
         } else {
           handleStreamDone(queryId, fullResponseText, streamStartTime, queryData, req, res, capturedMetadata, false);
@@ -476,9 +489,15 @@ module.exports = (queryService) => {
     req,
     res,
     capturedMetadata,
-    skipPostStreamTranslation = false
+    skipPostStreamTranslation = false,
+    alreadyFailedTranslation = false
   ) {
     if (res.writableEnded) return;
+
+    // Set by whichever translation path ran: a per-unit failure upstream, or the
+    // post-stream attempt below. Either way the answer the client receives is
+    // the English original and it is told so on `done`.
+    let translationFailed = alreadyFailedTranslation;
 
     const responseTime = Date.now() - startTime;
     // Source documents + grounding come from chatqna's in-stream metadata event
@@ -498,10 +517,13 @@ module.exports = (queryService) => {
         );
         res.write(`data: ${JSON.stringify({ type: 'translation', content: translated })}\n\n`);
       } catch (error) {
+        // Not an `error` frame. The client treats that as terminal and stops
+        // reading, and reports the whole system as down — neither is true when
+        // only the translator failed and the answer is complete in English.
+        // The outcome travels on `done` instead, where the client already
+        // expects the stream to end.
         logger.warn('QueryService.stream_translation_failed', { queryId, error: error.message });
-        res.write(
-          `data: ${JSON.stringify({ type: 'error', message: 'Translation failed', code: 'TRANSLATION_FAILED' })}\n\n`
-        );
+        translationFailed = true;
       }
     }
 
@@ -511,7 +533,7 @@ module.exports = (queryService) => {
       logger.error('QueryService.stream_finalize_failed', { queryId, error: error.message });
     }
 
-    res.write(`data: ${JSON.stringify({ type: 'done', queryId })}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: 'done', queryId, translationFailed })}\n\n`);
     res.end();
     logger.info('QueryService.stream_complete', { queryId, responseTime });
   }

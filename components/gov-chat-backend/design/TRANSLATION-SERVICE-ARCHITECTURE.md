@@ -55,12 +55,18 @@ This specification defines a flexible, configurable translation service architec
 
 ```bash
 # .env configuration
-TRANSLATION_BACKEND=gpu  # Options: gpu | cpu | auto
+TRANSLATION_BACKEND=auto  # Options: gpu | cpu | auto
 ```
 
-- **`gpu`**: Force GPU backend (vLLM guardrail service)
-- **`cpu`**: Force CPU backend (transformers.js)
-- **`auto`**: Automatic fallback - try GPU first, fallback to CPU on failure
+A configured GPU API takes precedence over all of them. When `GPU_NODE_HOST`
+is set, or `VLLM_TRANSLATION_ENDPOINT` names something other than the
+in-cluster worker, the GPU backend is mandatory and a failure to reach it
+stops the service from starting. The knob below is consulted only when no GPU
+API is configured.
+
+- **`gpu`**: Require GPU backend (vLLM guardrail service)
+- **`cpu`**: Require CPU backend (transformers.js)
+- **`auto`**: Probe once at startup — GPU if it answers, otherwise CPU
 
 ### 2.3 Language Map Configuration
 

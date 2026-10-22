@@ -1225,6 +1225,7 @@ export default {
   chatbot: {
     streamingError: '回复已中断。请重试。',
     aiGeneratedNoDocs: 'AI 生成 — 非基于知识库文档',
+    translationUnavailable: '翻译不可用 — 此回复可能包含未翻译的文本。',
     welcomeMessage: '欢迎！今天有什么我可以协助您的吗？',
     configMismatchWarning: '配置不匹配：{warnings}。请检查“快速帮助”与知识层级配置。',
     categoryNotFound: '在知识层级中未找到分类“{label}”',

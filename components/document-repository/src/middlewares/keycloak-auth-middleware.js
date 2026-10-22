@@ -33,13 +33,19 @@ async function getJWKS() {
     const jwksUri = jwksHostOverride
       ? jwksHostOverride
       : `${keycloakUrl}/realms/${realm}/protocol/openid-connect/certs`;
-    expectedIssuer = `${keycloakUrl}/realms/${realm}`;
+    // Merge 2026-10-22: main added KEYCLOAK_EXPECTED_ISSUER (appConfig
+    // `security.keycloakExpectedIssuer`) to pin the validated `iss`. It says
+    // the same thing as our two aliases below via a different variable, so the
+    // explicit pin becomes the base value and the aliases layer on top only
+    // when it is unset — a pin is never silently overridden by an alias.
+    const pinnedIssuer = appConfig.security.keycloakExpectedIssuer;
+    expectedIssuer = pinnedIssuer || `${keycloakUrl}/realms/${realm}`;
     // Split internal/public OIDC URLs (same pattern as shared/lib
     // keycloak-auth-service): JWKS is fetched via the internal KEYCLOAK_URL
     // (reachable on the container network) while tokens minted through the
     // public endpoint carry the public issuer. KEYCLOAK_PUBLIC_URL overrides
     // the expected issuer only — no-op when unset (single-URL deployments).
-    const publicUrl = process.env.KEYCLOAK_PUBLIC_URL;
+    const publicUrl = pinnedIssuer ? null : process.env.KEYCLOAK_PUBLIC_URL;
     if (publicUrl) {
       const publicIssuer = `${publicUrl.replace(/\/$/, '')}/realms/${realm}`;
       if (publicIssuer !== expectedIssuer) {
@@ -54,7 +60,7 @@ async function getJWKS() {
     // mismatched path drops the token with JWTClaimValidationFailed. Honor
     // KEYCLOAK_BROWSER_ISSUER as a third expected issuer alongside the
     // already-aliased ones — no-op when unset (single-URL deployments).
-    const browserIssuer = process.env.KEYCLOAK_BROWSER_ISSUER;
+    const browserIssuer = pinnedIssuer ? null : process.env.KEYCLOAK_BROWSER_ISSUER;
     if (browserIssuer && browserIssuer !== expectedIssuer) {
       logger.info(`[KEYCLOAK-AUTH] Browser issuer alias: validating ${browserIssuer}`);
       expectedIssuer = browserIssuer;

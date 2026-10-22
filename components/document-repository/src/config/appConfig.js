@@ -71,7 +71,13 @@ const config = {
   // Security configuration
   security: {
     keycloakUrl: process.env.KEYCLOAK_URL,
-    keycloakRealm: process.env.KC_REALM
+    keycloakRealm: process.env.KC_REALM,
+    // Overrides the issuer claim validated on incoming tokens. Set when
+    // tokens are issued for a public origin that differs from the
+    // in-cluster KEYCLOAK_URL (edge proxy or port-forward in front):
+    // JWKS keeps resolving in-cluster while `iss` must match the public
+    // issuer. Defaults to `${KEYCLOAK_URL}/realms/${KC_REALM}`.
+    keycloakExpectedIssuer: process.env.KEYCLOAK_EXPECTED_ISSUER || null
   },
 
   //Controls whether or not the clamav service is used for uploaded documents
@@ -98,9 +104,13 @@ const config = {
     // FIX: Convert timeout string to a number
     timeout: parseInt(process.env.CLAMSCAN_TIMEOUT, 10) || 60000,
 
-    localFallback: process.env.CLAMSCAN_LOCAL_FALLBACK === 'true' || true,
+    // Default-on, opt-out: falling back to the local binary is what this
+    // deployment has always done, so `false` disables it rather than `true`
+    // enabling it. Read the variable — `=== 'true' || true` is always true
+    // and makes CLAMSCAN_LOCAL_FALLBACK inert.
+    localFallback: process.env.CLAMSCAN_LOCAL_FALLBACK !== 'false',
     path: process.env.CLAMSCAN_PATH || '/usr/bin/clamdscan',
-    active: process.env.CLAMSCAN_ACTIVE === 'true' || true
+    active: process.env.CLAMSCAN_ACTIVE !== 'false'
   },
 
   // Logging configuration

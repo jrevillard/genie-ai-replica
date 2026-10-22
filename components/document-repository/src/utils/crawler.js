@@ -308,8 +308,8 @@ class Crawler {
         this._validateUrl(url);
         await this._assertResolvableSafe(url);
 
+        // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
         const response = await axios.get(url, {
-          // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
           headers,
           responseType: 'text',
           validateStatus: null,
@@ -597,8 +597,8 @@ class Crawler {
       await this._assertResolvableSafe(url);
       let hops = 5;
       for (;;) {
+        // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
         const response = await axios.get(url, {
-          // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
           headers: this.headers,
           responseType: 'stream',
           timeout: this.timeoutMs,

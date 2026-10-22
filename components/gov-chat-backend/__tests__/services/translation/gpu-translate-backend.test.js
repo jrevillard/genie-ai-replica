@@ -5,12 +5,16 @@ jest.mock('https', () => ({ request: jest.fn() }));
 jest.mock(
   '../../../shared-lib',
   () => ({
+    // The real helpers, not copies: a test that asserts the timeout parser
+    // rejects a negative budget is worthless against a reimplementation of it.
+    ...jest.requireActual('../../../../shared/lib/validation-utils'),
     logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }
   }),
   { virtual: true }
 );
 
 const http = require('http');
+const https = require('https');
 const GpuTranslateBackend = require('../../../services/translation/gpu-translate-backend');
 
 describe('GpuTranslateBackend streaming', () => {
@@ -413,6 +417,279 @@ describe('GpuTranslateBackend streaming', () => {
     it('translate catch propagates error on callVllmService failure', async () => {
       jest.spyOn(backend, 'callVllmService').mockRejectedValue(new Error('vLLM 500'));
       await expect(backend.translate(['Hello'], 'en', 'es')).rejects.toThrow(/Failed to perform translation/);
+    });
+  });
+});
+
+describe('GpuTranslateBackend startup probe', () => {
+  // The health check is a boot gate, not a selector: with a configured GPU
+  // API, failing it stops the service rather than sliding to another model.
+  // A gate that produces false negatives kills the container, so both the
+  // outcome and the budget are asserted here.
+  let savedEnv;
+
+  const requestThatTimesOut = (captured) => {
+    http.request.mockImplementation((opts) => {
+      captured.opts = opts;
+      const req = new EventEmitter();
+      req.write = () => {};
+      req.setTimeout = () => {};
+      req.destroy = jest.fn();
+      req.end = () => process.nextTick(() => req.emit('timeout'));
+      return req;
+    });
+  };
+
+  beforeEach(() => {
+    savedEnv = {
+      endpoint: process.env.VLLM_TRANSLATION_ENDPOINT,
+      probe: process.env.TRANSLATION_PROBE_TIMEOUT_SECONDS
+    };
+    delete process.env.VLLM_TRANSLATION_ENDPOINT;
+    delete process.env.TRANSLATION_PROBE_TIMEOUT_SECONDS;
+  });
+
+  afterEach(() => {
+    for (const [key, value] of Object.entries(savedEnv)) {
+      const envKey = key === 'endpoint' ? 'VLLM_TRANSLATION_ENDPOINT' : 'TRANSLATION_PROBE_TIMEOUT_SECONDS';
+      if (value === undefined) delete process.env[envKey];
+      else process.env[envKey] = value;
+    }
+    jest.clearAllMocks();
+  });
+
+  const backendWithEnv = (env) => {
+    Object.entries(env).forEach(([k, v]) => {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    });
+    let instance;
+    jest.isolateModules(() => {
+      instance = new (require('../../../services/translation/gpu-translate-backend'))();
+    });
+    return instance;
+  };
+
+  it('rejects when the health check times out', async () => {
+    requestThatTimesOut({});
+    await expect(new GpuTranslateBackend().healthCheck()).rejects.toThrow(/health check timeout/);
+  });
+
+  it('spends the configured probe budget on the health check', async () => {
+    const captured = {};
+    requestThatTimesOut(captured);
+
+    await expect(backendWithEnv({ TRANSLATION_PROBE_TIMEOUT_SECONDS: '7' }).healthCheck()).rejects.toThrow();
+
+    expect(captured.opts.timeout).toBe(7000);
+  });
+
+  it.each(['-1', '0', 'abc', ''])('refuses a budget of "%s" and keeps the default', async (value) => {
+    const captured = {};
+    requestThatTimesOut(captured);
+    const backend = backendWithEnv({ TRANSLATION_PROBE_TIMEOUT_SECONDS: value });
+
+    await expect(backend.healthCheck()).rejects.toThrow();
+
+    // `-1` is the case that matters: `parseInt('-1') * 1000` is -1000, which is
+    // truthy and therefore survives an `|| DEFAULT` fallback. Node's HTTP layer
+    // does not honour a negative timeout, so the gate would stop expiring and
+    // fall back to OS defaults instead.
+    expect(captured.opts.timeout).toBe(30000);
+  });
+
+  it('keeps a default budget generous enough for a cold TLS handshake', async () => {
+    const captured = {};
+    requestThatTimesOut(captured);
+
+    await expect(new GpuTranslateBackend().healthCheck()).rejects.toThrow();
+
+    // The endpoint answered /health in 32 ms in production, so any budget that
+    // can expire on a healthy remote node is a false-negative gate.
+    expect(captured.opts.timeout).toBeGreaterThanOrEqual(30000);
+  });
+
+  it('does not let the model-info read fail the service', async () => {
+    requestThatTimesOut({});
+
+    await expect(new GpuTranslateBackend().fetchModelInfo()).resolves.toBeUndefined();
+  });
+
+  it('does not treat the in-cluster worker as a configured GPU API', () => {
+    expect(new GpuTranslateBackend().endpointExplicit).toBe(false);
+  });
+
+  it('treats any other endpoint as a configured GPU API', () => {
+    expect(backendWithEnv({ VLLM_TRANSLATION_ENDPOINT: 'https://gpu-node:444/translation' }).endpointExplicit).toBe(
+      true
+    );
+  });
+});
+
+describe('GpuTranslateBackend endpoint addressing', () => {
+  // Where the request goes and what it carries: the bearer token, and the
+  // endpoint path prefix that a remote GPU API is addressed through.
+  let savedEnv;
+
+  // A response that ends on its own: `healthCheck` reads only `statusCode`,
+  // the other two read data and wait for 'end'.
+  const responding = (statusCode, chunks = []) => {
+    const res = new EventEmitter();
+    res.statusCode = statusCode;
+    res.setEncoding = () => {};
+    res.end = () =>
+      process.nextTick(() => {
+        chunks.forEach((c) => res.emit('data', c));
+        res.emit('end');
+      });
+    return res;
+  };
+
+  const captures = (sink) => (opts, cb) => {
+    sink.opts = opts;
+    const req = new EventEmitter();
+    req.write = () => {};
+    req.setTimeout = () => {};
+    req.destroy = jest.fn();
+    req.end = () => {
+      const res = sink.res();
+      cb(res);
+      // `healthCheck` reads only `statusCode` and returns; the other two read
+      // 'data' and wait for 'end', so the response has to finish itself.
+      if (typeof res.end === 'function') res.end();
+    };
+    return req;
+  };
+
+  // `VLLM_API_KEY` is read once at module load, so a backend with a key needs
+  // a fresh module rather than a mutated instance.
+  const backendWithKey = () => {
+    let instance;
+    jest.isolateModules(() => {
+      process.env.VLLM_API_KEY = 'test-key-123';
+      instance = new (require('../../../services/translation/gpu-translate-backend'))();
+    });
+    return instance;
+  };
+
+  beforeEach(() => {
+    savedEnv = {
+      key: process.env.VLLM_API_KEY,
+      endpoint: process.env.VLLM_TRANSLATION_ENDPOINT
+    };
+    delete process.env.VLLM_API_KEY;
+    process.env.VLLM_TRANSLATION_ENDPOINT = 'http://vllm:9031';
+  });
+
+  afterEach(() => {
+    for (const [name, value] of Object.entries(savedEnv)) {
+      const key = name === 'key' ? 'VLLM_API_KEY' : 'VLLM_TRANSLATION_ENDPOINT';
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    jest.clearAllMocks();
+  });
+
+  describe('_buildHeaders', () => {
+    it('sends the configured API key as a bearer token and nothing else', () => {
+      const headers = backendWithKey()._buildHeaders();
+      expect(headers['Authorization']).toBe('Bearer test-key-123');
+      // Pins the header set, so a later change cannot quietly start sending
+      // something on every request to the GPU API.
+      expect(Object.keys(headers)).toHaveLength(1);
+    });
+
+    it('sends no Authorization header when no key is configured', () => {
+      expect(new GpuTranslateBackend()._buildHeaders()).toEqual({});
+    });
+
+    it('keeps the extra headers it is given', () => {
+      const headers = backendWithKey()._buildHeaders({ 'Content-Type': 'application/json' });
+      expect(headers['Content-Type']).toBe('application/json');
+      expect(headers['Authorization']).toBe('Bearer test-key-123');
+    });
+
+    it('does not let a caller-supplied header stand in for the configured key', () => {
+      // The key is the deployment's credential. A caller passing its own
+      // `Authorization` must not be able to replace it.
+      expect(backendWithKey()._buildHeaders({ Authorization: 'other' })['Authorization']).toBe('Bearer test-key-123');
+    });
+  });
+
+  describe('addressing', () => {
+    const REMOTE = 'https://gpu-node.example.com/translation';
+
+    it.each([
+      ['health check', (b) => b.healthCheck(), '/health', []],
+      ['model info', (b) => b.fetchModelInfo(), '/v1/models', []],
+      [
+        'chat completion',
+        (b) => b.callVllmService({ messages: [] }),
+        '/v1/chat/completions',
+        [JSON.stringify({ choices: [{ message: { content: 'traduit' } }] })]
+      ]
+    ])('prefixes the %s path with the endpoint path', async (_label, invoke, suffix, body) => {
+      process.env.VLLM_TRANSLATION_ENDPOINT = REMOTE;
+      const sink = { res: () => responding(200, body) };
+      https.request.mockImplementation(captures(sink));
+
+      const backend = new GpuTranslateBackend();
+      backend.initialized = true;
+      await invoke(backend);
+
+      expect(sink.opts.path).toBe(`/translation${suffix}`);
+    });
+
+    it('drops a trailing slash so the prefix does not double up', async () => {
+      process.env.VLLM_TRANSLATION_ENDPOINT = `${REMOTE}/`;
+      const sink = { res: () => responding(200, []) };
+      https.request.mockImplementation(captures(sink));
+
+      await new GpuTranslateBackend().healthCheck();
+
+      expect(sink.opts.path).toBe('/translation/health');
+    });
+
+    it('sends a remote https endpoint to the default port', async () => {
+      process.env.VLLM_TRANSLATION_ENDPOINT = REMOTE;
+      const sink = { res: () => responding(200, []) };
+      https.request.mockImplementation(captures(sink));
+
+      await new GpuTranslateBackend().healthCheck();
+
+      expect(sink.opts.hostname).toBe('gpu-node.example.com');
+      expect(sink.opts.port).toBe(443);
+    });
+
+    it('authenticates the startup probe itself, not only the helper', async () => {
+      // The probe is the boot gate for a remote HTTPS GPU node, which rejects
+      // an unauthenticated request. A token applied everywhere except here
+      // would let boot succeed against a node every later call is refused by.
+      const sink = { res: () => responding(200, []) };
+      https.request.mockImplementation(captures(sink));
+      const backend = backendWithKey();
+      backend.endpoint = REMOTE;
+
+      await backend.healthCheck();
+
+      expect(sink.opts.headers.Authorization).toBe('Bearer test-key-123');
+      expect(sink.opts.method).toBe('GET');
+    });
+
+    it('carries the bearer token on a real request, not just on the helper', async () => {
+      const sink = {
+        res: () => responding(200, [JSON.stringify({ choices: [{ message: { content: 'traduit' } }] })])
+      };
+      https.request.mockImplementation(captures(sink));
+      process.env.VLLM_TRANSLATION_ENDPOINT = REMOTE;
+
+      const backend = backendWithKey();
+      backend.initialized = true;
+      backend.endpoint = REMOTE;
+
+      expect(await backend.callVllmService({ messages: [{ role: 'user', content: 'hello' }] })).toBe('traduit');
+      expect(sink.opts.headers.Authorization).toBe('Bearer test-key-123');
+      expect(sink.opts.method).toBe('POST');
     });
   });
 });

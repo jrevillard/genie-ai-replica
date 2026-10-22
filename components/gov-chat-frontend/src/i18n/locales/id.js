@@ -1245,6 +1245,7 @@ export default {
   chatbot: {
     streamingError: 'Respons terputus. Silakan coba lagi.',
     aiGeneratedNoDocs: 'Dihasilkan oleh AI — tidak berdasarkan dokumen pustaka',
+    translationUnavailable: 'Terjemahan tidak tersedia — jawaban ini mungkin memuat teks yang belum diterjemahkan.',
     welcomeMessage: 'Selamat datang! Ada yang bisa saya bantu hari ini?',
     configMismatchWarning:
       'Ketidakcocokan konfigurasi: {warnings}. Harap periksa Bantuan Cepat dan konfigurasi hierarki pengetahuan.',

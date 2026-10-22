@@ -16,7 +16,19 @@ const DEFAULT_BATCHES = 5;
 const intraOpNumThreads = parseInt(process.env.TRANSLATION_THREADS, 10) || DEFAULT_THREADS;
 const numParallelBatches = parseInt(process.env.TRANSLATION_BATCHES, 10) || DEFAULT_BATCHES;
 const cacheEnabled = process.env.TRANSLATION_CACHE === 'on';
-const translationBackend = process.env.TRANSLATION_BACKEND || 'auto'; // Default to auto (probes the GPU endpoint once, then CPU if that probe fails)
+const translationBackend = process.env.TRANSLATION_BACKEND || 'auto';
+
+// A GPU API is "configured" when the deployment named one. Two independent
+// signals say so, and either is enough: a remote GPU node host, or an explicit
+// translation endpoint (a deployment may route through a proxy that sets only
+// the endpoint). Both reach this container — `GPU_NODE_HOST` is passed to
+// chatqna, retriever and dataprep, and a deployment that sets `gpu_node_host`
+// also gets `VLLM_TRANSLATION_ENDPOINT` rendered by Ansible's `env.j2`.
+// The endpoint half of the test is `GpuTranslateBackend.endpointExplicit`,
+// which compares against the in-cluster default rather than testing presence:
+// compose passes that same default through, so "is the var set?" would answer
+// yes on every deployment and make the rule unsatisfiable.
+const gpuNodeHost = process.env.GPU_NODE_HOST || '';
 
 // --- Get Redis cache settings from env ---
 const redisHost = process.env.TRANSLATION_CACHE_HOST || 'localhost';
@@ -86,18 +98,33 @@ class TranslationService {
     logger.info(`[TRANSLATION-SERVICE] Selecting backend: ${translationBackend}`);
 
     try {
-      if (translationBackend === 'gpu') {
-        // Force GPU backend
-        const backend = new GpuTranslateBackend();
-        await backend.init();
-        this.backend = backend;
+      // Constructed up front: `endpointExplicit` is how a deployment says it
+      // named a GPU API, and the instance is needed on every branch that
+      // resolves to GPU anyway.
+      const gpuBackend = new GpuTranslateBackend();
+      const gpuApiConfigured = Boolean(gpuNodeHost) || gpuBackend.endpointExplicit;
+
+      if (gpuApiConfigured) {
+        // A configured GPU API is mandatory. No value of TRANSLATION_BACKEND
+        // changes that — `cpu`, `gpu`, `auto` and unset all resolve here — so
+        // the knob is not an input to this decision and none of its values
+        // gets special treatment.
+        //
+        // A failure below propagates: the backend is not optional in
+        // `index.js`, so the service refuses to start rather than translating
+        // with a model the deployment did not ask for.
+        await gpuBackend.init();
+        this.backend = gpuBackend;
         this.backendType = 'gpu';
-        logger.info('[TRANSLATION-SERVICE] GPU backend selected and initialized');
+        logger.info(
+          `[TRANSLATION-SERVICE] GPU API configured — GPU backend selected and initialized (TRANSLATION_BACKEND=${translationBackend})`
+        );
         return this.backend;
       }
 
+      // No GPU API configured: the CPU backend is a legitimate outcome here,
+      // and TRANSLATION_BACKEND decides between the two.
       if (translationBackend === 'cpu') {
-        // Force CPU backend
         const backend = new CpuTranslateBackend();
         await backend.init();
         this.backend = backend;
@@ -106,12 +133,20 @@ class TranslationService {
         return this.backend;
       }
 
+      if (translationBackend === 'gpu') {
+        await gpuBackend.init();
+        this.backend = gpuBackend;
+        this.backendType = 'gpu';
+        logger.info('[TRANSLATION-SERVICE] GPU backend selected and initialized');
+        return this.backend;
+      }
+
       if (translationBackend === 'auto') {
-        // `auto` is a selection policy, not a resilience one: probe the GPU
-        // once and commit to whichever answers. The same pattern as the
-        // dataprep device resolution (`_resolve_docling_device`). A backend
-        // that dies later is a failure to report, not a reason to switch
-        // models for the rest of the process's life.
+        // One-shot choice between the two available backends, made once at
+        // startup — the same pattern as the dataprep device resolution
+        // (`_resolve_docling_device`). A backend that dies later is a failure
+        // to report, not a reason to switch models for the rest of the
+        // process's life.
         //
         // Each backend is assigned only after its init resolves. An instance
         // whose worker never started is not a backend, and `selectBackend`
@@ -120,7 +155,6 @@ class TranslationService {
         // process, with the service reporting itself ready.
         try {
           logger.info('[TRANSLATION-SERVICE] Auto mode: Probing GPU backend');
-          const gpuBackend = new GpuTranslateBackend();
           await gpuBackend.init();
           this.backend = gpuBackend;
           this.backendType = 'gpu';

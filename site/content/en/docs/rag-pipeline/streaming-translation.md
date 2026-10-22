@@ -119,7 +119,7 @@ the source) is passed through verbatim, so structure **between** units
 | Env var | Default | Effect |
 |---------|---------|--------|
 | `STREAMING_TRANSLATION_ENABLED` | `0` | Off by default. Set to `1` or `true` (case-insensitive) to enable unit-by-unit streaming translation. |
-| `TRANSLATION_BACKEND` | `cpu` | Backend used for the translation calls (`cpu` workers or `gpu`). The streaming path calls the same backend as the post-stream fallback. |
+| `TRANSLATION_BACKEND` | `auto` | Backend used for the translation calls (`cpu` workers or `gpu`). Ignored when a GPU API is configured — see below. |
 | `VLLM_TRANSLATION_MODEL_ID` | `google/gemma-3-4b-it` | The model that produces the translations. Must be in the GPU node's `model_store`. |
 
 Enable in `.env`:
@@ -127,6 +127,34 @@ Enable in `.env`:
 ```bash
 STREAMING_TRANSLATION_ENABLED=1
 ```
+
+### A configured GPU API is mandatory
+
+A deployment that names a GPU API — `GPU_NODE_HOST` set, or a
+`VLLM_TRANSLATION_ENDPOINT` of its own — always uses it. `TRANSLATION_BACKEND`
+is not consulted: `cpu`, `gpu`, `auto` and unset all resolve to the GPU.
+
+If that API does not answer, the backend **refuses to start**. This is
+deliberate. The previous behaviour — probe once, switch to CPU on failure —
+turned a five-second probe timeout into a permanent switch: on a remote-GPU
+deployment the chat answers then came from a different, local model, with
+nothing in the response to say so. The check now runs once at startup only;
+after that, a failure is reported as a failure.
+
+When no GPU API is configured, `TRANSLATION_BACKEND` decides, and `auto`
+still probes once and commits:
+
+| `GPU_NODE_HOST` / endpoint | `TRANSLATION_BACKEND` | Result |
+|---|---|---|
+| configured | any value | GPU — service fails to start if it does not answer |
+| not configured | `auto` (default) | GPU if it answers, otherwise CPU |
+| not configured | `cpu` | CPU |
+| not configured | `gpu` | GPU — service fails to start if it does not answer |
+
+`TRANSLATION_PROBE_TIMEOUT_SECONDS` (default `30`) bounds that startup check.
+It must cover a cold TLS handshake to a remote node: the endpoint's `/health`
+answers in tens of milliseconds once connected, so a budget that can expire on
+a healthy API would stop a working deployment.
 
 The flag is **read on every request** at
 [`query-routes.js:208`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/query-routes.js#L208)

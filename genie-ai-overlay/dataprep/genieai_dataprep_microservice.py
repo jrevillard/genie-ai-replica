@@ -155,6 +155,19 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
         span.set_attribute("dataprep.file_size_bytes", len(payload.fileBase64))
         span.set_attribute("dataprep.file_id", payload.fileId)
 
+        # --- Request validation, before the lock: a rejection here must not
+        # have to release anything.
+        CHUNK_SIZE = get_chunk_size_for_file(payload.fileName)
+        # Per-request chunkOverlap wins over env; env wins over hardcoded default.
+        CHUNK_OVERLAP = payload.chunkOverlap
+        if CHUNK_OVERLAP is None:
+            CHUNK_OVERLAP = int(os.getenv("DATAPREP_CHUNK_OVERLAP", 50))
+        # Reject negatives: RecursiveCharacterTextSplitter treats them as >=chunk_size
+        # (no splitting happens). Caller-side Joi already constrains the batch path;
+        # this is a defense-in-depth guard for the single-ingest endpoint.
+        if CHUNK_OVERLAP < 0:
+            raise ValueError(f"chunkOverlap must be >= 0, got {CHUNK_OVERLAP}")
+
         # --- SYNCHRONOUS LOCK CHECK ---
         # We acquire the lock HERE to ensure we can return 429 immediately if busy.
         # O_NOFOLLOW + 0600: the lock file lives in the shared /tmp, so open
@@ -183,19 +196,8 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
         TEXT_CAPITALIZATION_STRATEGY = os.getenv("TEXT_CAPITALIZATION_STRATEGY", "upper")
         INCLUDE_CHUNKS = os.getenv("INCLUDE_CHUNKS", "true").lower() == "true"
 
-        # --- FIX: Dynamic Chunking Configuration ---
-        # Determine chunk size based on file extension
-        CHUNK_SIZE = get_chunk_size_for_file(payload.fileName)
-        # Per-request chunkOverlap wins over env; env wins over hardcoded default.
-        CHUNK_OVERLAP = payload.chunkOverlap
-        if CHUNK_OVERLAP is None:
-            CHUNK_OVERLAP = int(os.getenv("DATAPREP_CHUNK_OVERLAP", 50))
-        # Reject negatives: RecursiveCharacterTextSplitter treats them as >=chunk_size
-        # (no splitting happens). Caller-side Joi already constrains the batch path;
-        # this is a defense-in-depth guard for the single-ingest endpoint.
-        if CHUNK_OVERLAP < 0:
-            raise ValueError(f"chunkOverlap must be >= 0, got {CHUNK_OVERLAP}")
-
+        save_path = None
+        task = None
         try:
             # Decode and temporarily save file
             file_bytes = base64.b64decode(payload.fileBase64)
@@ -256,11 +258,13 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
             span.record_exception(e)
             span.set_status(Status(StatusCode.ERROR, str(e)))
             logger.error(f"Error initiating dataprep ingest: {e}")
-            # Cleanup lock if we fail before task starts
-            fcntl.flock(lock_file, fcntl.LOCK_UN)
-            lock_file.close()
+            # Release the lock only when the background task has not picked
+            # it up: once created, the task owns it and unlocks on completion.
+            if task is None:
+                fcntl.flock(lock_file, fcntl.LOCK_UN)
+                lock_file.close()
 
-            if os.path.exists(save_path):
+            if save_path and os.path.exists(save_path):
                 os.remove(save_path)
             raise
 

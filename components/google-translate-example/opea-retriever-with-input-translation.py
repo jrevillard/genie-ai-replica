@@ -1,7 +1,10 @@
+import logging
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import requests
-import os
+
+logger = logging.getLogger(__name__)
 
 # Initialize FastAPI
 app = FastAPI()
@@ -58,8 +61,13 @@ async def retrieve_data(request: QueryRequest):
             "final_response": final_response,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Log the cause server-side; the client gets a fixed message so
+        # upstream URLs and exception internals are not echoed back.
+        logger.error("Retrieval failed: %s", e)
+        raise HTTPException(status_code=500, detail="Retrieval failed.") from e
 
 # Run the microservice (for local development)
 if __name__ == "__main__":

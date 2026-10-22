@@ -878,6 +878,31 @@ describe('Configuration Validation Suite', () => {
       expect(vars.RAGAS_LLM_MAX_RETRIES && vars.RAGAS_LLM_MAX_RETRIES.default).toBe('5');
     });
 
+    test('the scoring-leg throughput vars land in all four sites (2026-10-22)', () => {
+      // The scoring leg's worker pool was hardcoded to 8, the same number as
+      // the judge-concurrency cap, so the two ceilings could not be moved
+      // apart: 100 rows x ~13 judge calls at 8-way concurrency measured
+      // ~5.4 min per row (~8 h projected). The pool and the row batch have
+      // to be configurable together, and the per-call timeout has to be
+      // reachable from the deployment — a call that exceeds it scores NULL
+      // for its row without erroring the run.
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const ragasBlock = full.slice(full.indexOf('  ragas-service:'), full.indexOf('  document-repository:'));
+      expect(ragasBlock).toMatch(/- RAGAS_EVAL_MAX_WORKERS=\$\{RAGAS_EVAL_MAX_WORKERS:-8\}/);
+      expect(ragasBlock).toMatch(/- RAGAS_EVAL_BATCH_ROWS=\$\{RAGAS_EVAL_BATCH_ROWS:-1\}/);
+      expect(ragasBlock).toMatch(/- RAGAS_EVAL_TIMEOUT_SECONDS=\$\{RAGAS_EVAL_TIMEOUT_SECONDS:-600\}/);
+      const envText = fs.readFileSync(ENV_FILE, 'utf8');
+      expect(envText).toMatch(/^#\s*RAGAS_EVAL_MAX_WORKERS=8.*$/m);
+      expect(envText).toMatch(/^#\s*RAGAS_EVAL_BATCH_ROWS=1.*$/m);
+      expect(envText).toMatch(/^#\s*RAGAS_EVAL_TIMEOUT_SECONDS=600.*$/m);
+      const vars = parseAnsibleEnvVars(
+        fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+      );
+      expect(vars.RAGAS_EVAL_MAX_WORKERS && vars.RAGAS_EVAL_MAX_WORKERS.default).toBe('8');
+      expect(vars.RAGAS_EVAL_BATCH_ROWS && vars.RAGAS_EVAL_BATCH_ROWS.default).toBe('1');
+      expect(vars.RAGAS_EVAL_TIMEOUT_SECONDS && vars.RAGAS_EVAL_TIMEOUT_SECONDS.default).toBe('600');
+    });
+
     test('the ragas vars are emitted by ansible env.j2 (inherited defaults)', () => {
       const vars = parseAnsibleEnvVars(
         fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')

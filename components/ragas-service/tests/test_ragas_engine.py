@@ -1668,3 +1668,45 @@ def test_current_tqdm_step_never_leaks_nan_or_missing_desc():
         assert "rate_s" not in step
     finally:
         live.close()
+
+
+def test_the_scoring_worker_pool_is_configurable(monkeypatch):
+    """2026-10-22 (live): the pool was hardcoded to 8 — the same number as
+    the judge-concurrency cap, so the two ceilings could not be moved apart.
+    100 rows x ~13 judge calls at 8-way concurrency measured ~5.4 min per
+    row (17 rows in 92 minutes, ~8 h projected)."""
+    monkeypatch.delenv("RAGAS_EVAL_MAX_WORKERS", raising=False)
+    assert ragas_engine._eval_max_workers() == 8
+
+    monkeypatch.setenv("RAGAS_EVAL_MAX_WORKERS", "24")
+    assert ragas_engine._eval_max_workers() == 24
+
+    # a nonsense value must not break the run
+    monkeypatch.setenv("RAGAS_EVAL_MAX_WORKERS", "not-a-number")
+    assert ragas_engine._eval_max_workers() == 8
+
+    # and it never drops below one worker
+    monkeypatch.setenv("RAGAS_EVAL_MAX_WORKERS", "0")
+    assert ragas_engine._eval_max_workers() == 1
+
+
+def test_the_scoring_call_timeout_is_configurable_and_bounded(monkeypatch):
+    """A scoring call that exceeds the budget raises TimeoutError inside
+    ragas' executor, and evaluation runs with raise_exceptions=False — so
+    the metric scores NULL for that row and the run does NOT report an
+    error. The budget has to be reachable from the deployment."""
+    monkeypatch.delenv("RAGAS_EVAL_TIMEOUT_SECONDS", raising=False)
+    assert ragas_engine._eval_timeout_seconds() == 600
+    assert ragas_engine._eval_timeout_seconds(900) == 900
+
+    monkeypatch.setenv("RAGAS_EVAL_TIMEOUT_SECONDS", "180")
+    assert ragas_engine._eval_timeout_seconds() == 180
+    # an explicit per-request value still wins over the environment
+    assert ragas_engine._eval_timeout_seconds(900) == 900
+
+    monkeypatch.setenv("RAGAS_EVAL_TIMEOUT_SECONDS", "not-a-number")
+    assert ragas_engine._eval_timeout_seconds() == 600
+
+    # the floor is 30 s — a zero budget would fail every call
+    monkeypatch.setenv("RAGAS_EVAL_TIMEOUT_SECONDS", "0")
+    assert ragas_engine._eval_timeout_seconds() == 30

@@ -370,6 +370,48 @@ def _llm_max_retries() -> int:
         return 5
 
 
+def _eval_max_workers() -> int:
+    """RAGAS's own worker pool for the SCORING leg.
+
+    It was hardcoded to 8 — the same number as the judge-concurrency cap —
+    so the two ceilings could not be moved apart. On a judge plan with no
+    throttling the pool is the real limit: 100 rows x ~13 judge calls at
+    8-way concurrency measured ~5.4 min per row (live 2026-10-22: 17 rows
+    in 92 minutes, ~8 hours projected).
+
+    Raising the pool alone does not help, because a row only has ~13 calls
+    to run: the pool is filled from ONE row's calls, so per-row concurrency
+    is capped at the number of calls in that row. RAGAS_EVAL_BATCH_ROWS has
+    to move with it — 2 rows per evaluate() gives the pool ~26 calls to
+    spread, which is what actually fills it.
+    """
+    try:
+        return max(1, int(os.getenv("RAGAS_EVAL_MAX_WORKERS") or "8"))
+    except ValueError:
+        return 8
+
+
+def _eval_timeout_seconds(requested: int = 0) -> int:
+    """The per-call budget for a scoring call.
+
+    The default was 10 minutes, and a call that exceeded it raised
+    TimeoutError inside ragas's executor — with raise_exceptions=False the
+    metric then scored NULL for that row, silently (live 2026-10-22: one
+    such timeout in the first 45 minutes of a 100-row run). A judge call
+    that takes that long is a stuck call, not a slow one, so the ceiling
+    wants to be well under the client's own 300 s HTTP timeout.
+
+    Precedence: an explicit per-request value wins; 0 means "the deployment
+    decides" (RAGAS_EVAL_TIMEOUT_SECONDS), and 10 minutes is the fallback.
+    """
+    if requested and requested > 0:
+        return max(30, requested)
+    try:
+        return max(30, int(os.getenv("RAGAS_EVAL_TIMEOUT_SECONDS") or "600"))
+    except ValueError:
+        return 600
+
+
 def _async_semaphore():
     """A per-event-loop semaphore (the KG phase runs its own loop per
     transform, so the semaphore cannot be a single shared object)."""
@@ -1664,7 +1706,7 @@ def _resolve_distribution(
 async def evaluate_samples(
     samples: list[dict],
     metrics: list[str] | None,
-    timeout_s: int = 600,
+    timeout_s: int = 0,
     progress=None,
     cancel_event=None,
     judge: dict | None = None,
@@ -1679,6 +1721,10 @@ async def evaluate_samples(
     reports cancelled rather than shipping scores the user abandoned.
     judge / embed (8-7 model configs): optional per-request model overrides
     resolved by okf-server (build_llm / build_embeddings carry the shapes)."""
+    # 0 = "not specified by the caller" -> the environment decides
+    # (RAGAS_EVAL_TIMEOUT_SECONDS), falling back to 10 minutes. An explicit
+    # per-request value always wins.
+    timeout_s = _eval_timeout_seconds(timeout_s or 600)
     from ragas import EvaluationDataset, evaluate
     from ragas.run_config import RunConfig
 
@@ -1712,6 +1758,7 @@ async def evaluate_samples(
     # bar tick per question and sharpen cancel response, at no measurable
     # cost for the same reason. Raise RAGAS_EVAL_BATCH_ROWS to coarsen.
     batch_rows = max(1, int(os.getenv("RAGAS_EVAL_BATCH_ROWS") or "1"))
+    eval_workers = _eval_max_workers()
     metric_names = [m.name for m in metric_instances]
     per_query: list[dict[str, Any]] = []
     total = len(rows)
@@ -1729,7 +1776,7 @@ async def evaluate_samples(
             metrics=metric_instances,
             llm=llm,
             embeddings=embeddings,
-            run_config=RunConfig(timeout=int(timeout_s), max_workers=8),
+            run_config=RunConfig(timeout=int(timeout_s), max_workers=eval_workers),
             show_progress=False,
             raise_exceptions=False,
         )

@@ -348,7 +348,10 @@ async def generate_testset(req: GenerateRequest):
 class EvaluateRequest(BaseModel):
     samples: list[dict]
     metrics: list[str] | None = None
-    timeout_s: int = Field(default=600, ge=30, le=3600)
+    # 0 = "let the deployment decide" (RAGAS_EVAL_TIMEOUT_SECONDS, else 600).
+    # A per-request value still wins — this only makes the env var reachable
+    # when the client does not specify one.
+    timeout_s: int = Field(default=0, ge=0, le=3600)
     judge: ModelOverride | None = None
     embed: ModelOverride | None = None
 

@@ -997,6 +997,16 @@ services:
       # now caps its own concurrency and retries a 429 with jitter.
       - RAGAS_LLM_MAX_CONCURRENCY=${RAGAS_LLM_MAX_CONCURRENCY:-8}
       - RAGAS_LLM_MAX_RETRIES=${RAGAS_LLM_MAX_RETRIES:-5}
+      # Scoring-leg throughput (2026-10-22). The leg used to be hardcoded to
+      # ragas's max_workers=8 with one row per evaluate(), so a row's ~13
+      # judge calls could never fill the pool: 5.4 min per row, ~8 h for 100.
+      # MAX_WORKERS and BATCH_ROWS have to move together — a single row only
+      # has ~13 calls to offer the pool. TIMEOUT_SECONDS bounds a stuck
+      # judge call; a call that exceeds it scores NULL for that row
+      # (raise_exceptions=False), which is silent.
+      - RAGAS_EVAL_MAX_WORKERS=${RAGAS_EVAL_MAX_WORKERS:-8}
+      - RAGAS_EVAL_BATCH_ROWS=${RAGAS_EVAL_BATCH_ROWS:-1}
+      - RAGAS_EVAL_TIMEOUT_SECONDS=${RAGAS_EVAL_TIMEOUT_SECONDS:-600}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
       - ragas_llm_cache:/tmp/ragas-llm-cache

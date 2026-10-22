@@ -1833,6 +1833,32 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   so a throttled batch came back as a synchronised herd and was
 #   throttled again. 0 disables the retry.
 #   Used by: ragas-service.
+# RAGAS_EVAL_MAX_WORKERS=8
+#   Default: 8. How many judge calls ragas' own executor may run at once
+#   during the SCORING leg. This was hardcoded to 8 — the same number as
+#   RAGAS_LLM_MAX_CONCURRENCY, so the two ceilings could not be moved
+#   apart. On a judge plan with no throttling the pool is the real limit:
+#   100 rows x ~13 judge calls at 8-way concurrency measured ~5.4 min per
+#   row (live 2026-10-22: 17 rows in 92 minutes, ~8 h projected).
+#   Raise it together with RAGAS_EVAL_BATCH_ROWS — a single row only has
+#   ~13 calls to offer the pool, so the pool cannot be filled by the pool
+#   size alone.
+#   Used by: ragas-service.
+# RAGAS_EVAL_BATCH_ROWS=1
+#   Default: 1. How many rows are scored per evaluate() call. 1 makes the
+#   progress bar tick per question; 2 still ticks in twos and roughly
+#   doubles the work available to the worker pool. Raise it with
+#   RAGAS_EVAL_MAX_WORKERS, not on its own.
+#   Used by: ragas-service.
+# RAGAS_EVAL_TIMEOUT_SECONDS=600
+#   Default: 600. The per-call budget for a scoring call. A call that
+#   exceeds it raises TimeoutError inside ragas' executor and — because
+#   evaluation runs with raise_exceptions=False — that metric then scores
+#   NULL for the row, without an error on the run (live 2026-10-22: one
+#   such timeout in the first 45 min of a 100-row run). A judge call that
+#   takes this long is stuck rather than slow, so keep this well under the
+#   client's own 300 s HTTP timeout. 30 is the floor.
+#   Used by: ragas-service.
 
 # --- okf-server: retrieval mode governance (Story 1.7, ADR-okf-039 D3) ---
 # OKF_RETRIEVAL_MODE=legacy

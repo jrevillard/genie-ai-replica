@@ -10,6 +10,7 @@ const { normalizeInlineSpacing } = require('./translation/markdown-normalize');
 const { translationCacheKey } = require('./translation/translation-cache-key');
 const { UnsupportedLanguageError } = require('./translation/unsupported-language');
 const { languageForLog } = require('./translation/language-log');
+const { normalizeRequestedLanguage } = require('./translation/language-request');
 
 // --- Read settings from environment variables ---
 const DEFAULT_THREADS = 4;
@@ -250,7 +251,7 @@ class TranslationService {
    */
   _resolveTarget(targetLang) {
     this.ensureReady();
-    const requested = typeof targetLang === 'string' ? targetLang.trim().toLowerCase() : '';
+    const requested = normalizeRequestedLanguage(targetLang);
     if (!requested) {
       logger.warn('[TRANSLATION-SERVICE] Unsupported target language: empty value');
       throw new UnsupportedLanguageError('target');
@@ -314,7 +315,7 @@ class TranslationService {
    */
   _resolveSource(sourceLang) {
     this.ensureReady();
-    const requested = typeof sourceLang === 'string' ? sourceLang.trim().toLowerCase() : '';
+    const requested = normalizeRequestedLanguage(sourceLang);
     if (!requested) {
       logger.warn('[TRANSLATION-SERVICE] Unsupported source language: empty value');
       throw new UnsupportedLanguageError('source');

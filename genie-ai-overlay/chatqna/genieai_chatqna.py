@@ -684,6 +684,25 @@ _SCRIPT_NAMES = {
 _LANGUAGE_CODE_PATTERN = re.compile(r"^[a-z]{2,3}(-[a-z0-9]{2,8})?$")
 
 
+def _canonical_language_code(raw_language, language_codes: dict) -> str | None:
+    """The code a language map is keyed in, or None when it does not know it.
+
+    A language map is keyed in lower case ("fr"), so this is the form a
+    lookup needs. It is the one place that decides whether a caller-supplied
+    value is a language at all: a value that is not a string, an empty one,
+    "auto" (a request to detect the language, not a language) and a code the
+    map does not know are all refused here rather than at each call site.
+    """
+    if not isinstance(raw_language, str):
+        return None
+    candidate = raw_language.strip().lower()
+    if not candidate or candidate == "auto":
+        return None
+    if candidate not in language_codes:
+        return None
+    return candidate
+
+
 def _resolve_language_code(raw_language, language_codes: dict) -> str | None:
     """Canonical code for a caller-supplied language, or None when it is not one.
 
@@ -697,14 +716,8 @@ def _resolve_language_code(raw_language, language_codes: dict) -> str | None:
     The canonical form is upper case ("FR"), matching the auto-detected codes
     the rest of the service compares against ("EN").
     """
-    if not isinstance(raw_language, str):
-        return None
-    candidate = raw_language.strip().lower()
-    if not candidate or candidate == "auto":
-        return None
-    if candidate not in language_codes:
-        return None
-    return candidate.upper()
+    canonical = _canonical_language_code(raw_language, language_codes)
+    return canonical.upper() if canonical else None
 
 
 def _language_display(raw_language) -> str:
@@ -735,11 +748,11 @@ _LANGUAGE_SCRIPTS_CACHE: dict | None = None
 _LANGUAGE_SCRIPTS_CACHE_AT: float | None = None
 
 
-def _read_language_codes(filepath: str) -> dict:
-    """Read the language map from disk. An unreadable map reads as empty.
+def _read_language_table(filepath: str, label: str) -> dict:
+    """Read a language table from disk. An unreadable table reads as empty.
 
-    The map is a whitelist of language codes, so a file that holds something
-    else is not a map: a list of two-letter strings reads as {"e": "n", ...},
+    A table is a whitelist of language codes, so a file that holds something
+    else is not a table: a list of two-letter strings reads as {"e": "n", ...},
     and a map of objects answers every lookup with a dictionary. Both would
     be accepted as languages nobody configured, so a file that is not a map
     of strings is treated as unreadable.
@@ -748,31 +761,25 @@ def _read_language_codes(filepath: str) -> dict:
         with open(filepath) as file:
             loaded = json.load(file)
     except Exception as e:
-        logger.error(f"Error loading language codes from {filepath}: {e}")
+        logger.error(f"Error loading {label} from {filepath}: {e}")
         return {}
     if not isinstance(loaded, dict) or not all(
-        isinstance(code, str) and isinstance(name, str) for code, name in loaded.items()
+        isinstance(code, str) and isinstance(value, str) for code, value in loaded.items()
     ):
-        logger.error(f"Language codes file {filepath} is not a map of language codes to names — ignoring it.")
+        logger.error(f"The {label} file {filepath} is not a map of strings — ignoring it.")
         return {}
     return loaded
+
+
+def _read_language_codes(filepath: str) -> dict:
+    """The language map (code → name). An unreadable map reads as empty."""
+    return _read_language_table(filepath, "language codes")
 
 
 def _read_language_scripts(filepath: str) -> dict:
-    """Read the language -> script table from disk. An unreadable table reads
-    as empty, which leaves the translation prompt without a script clause."""
-    try:
-        with open(filepath) as file:
-            loaded = json.load(file)
-    except Exception as e:
-        logger.error(f"Error loading language scripts from {filepath}: {e}")
-        return {}
-    if not isinstance(loaded, dict) or not all(
-        isinstance(code, str) and isinstance(script, str) for code, script in loaded.items()
-    ):
-        logger.error(f"Language scripts file {filepath} is not a map of language codes to scripts — ignoring it.")
-        return {}
-    return loaded
+    """The language -> script table. An unreadable table reads as empty,
+    which leaves the translation prompt without a script clause."""
+    return _read_language_table(filepath, "language scripts")
 
 
 def language_scripts_map() -> dict:
@@ -3475,8 +3482,8 @@ class ChatQnAService:
         # can reach the translation model. An unknown code is refused and the
         # source text is returned untranslated.
         language_codes = language_codes_map()
-        canonical_code = str(iso_code).strip().lower()
-        if canonical_code not in language_codes:
+        canonical_code = _canonical_language_code(iso_code, language_codes)
+        if canonical_code is None:
             logger.warning(
                 f"Language code '{_language_display(iso_code)}' is not a known language code — "
                 "refusing to translate and returning the source text."
@@ -3555,8 +3562,8 @@ class ChatQnAService:
         answer is never a mix of translated and untranslated chunks.
         """
         language_codes = language_codes_map()
-        canonical_code = str(iso_code).strip().lower()
-        if canonical_code not in language_codes:
+        canonical_code = _canonical_language_code(iso_code, language_codes)
+        if canonical_code is None:
             logger.warning(
                 f"Language code '{_language_display(iso_code)}' is not a known language code — "
                 "refusing to translate and returning the source text."

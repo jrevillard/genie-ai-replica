@@ -82,7 +82,11 @@ helm install genieai charts/genieai-umbrella/ \
 ```
 
 The chart creates the `genieai` namespace; pass `--create-namespace` so
-helm propagates it before the pre-install hooks run.
+helm propagates it before the pre-install hooks run. `my-values.yaml` must
+carry the values the render requires — the public origin, the operator
+contact, a mail server and the client-secret placeholders (see
+[Configuration highlights](#configuration-highlights) and the chart
+README's Quickstart for a complete working set).
 
 ### Path B — Flux deploy-repo overlay
 

@@ -9,7 +9,7 @@ Gateway/HTTPRoute/Certificate; nginx is NOT part of the k8s data path), and
 the Keycloak realm-convergence + ArangoDB migrations hook Jobs — with one
 `helm install`.
 
-Chart version: **0.2.59**. `appVersion` mirrors `version` deliberately
+Chart version: **0.2.66**. `appVersion` mirrors `version` deliberately
 (chart layout, not product release; deployed image tags are governed by
 `values.yaml`, never `latest`).
 
@@ -31,25 +31,74 @@ Operator overrides only what differs on the target cluster.
 #    See "Cluster prerequisites" below.
 kubectl get crd | grep -E 'keycloak|sealedsecret|cluster\.arangodb|cnpg'
 
-# 2. Render + install. The chart creates the `genieai` namespace;
+# 2. Create the namespace and the operator-provided Secrets. The chart
+#    never creates a secret; the realm convergence Job reads these, and
+#    the five values it needs are the realm's unresolved placeholders:
+#    the admin password, the three client secrets and the SMTP password.
+#    Use whatever secret backend you run cluster-wide — these are the
+#    plain kubectl equivalent.
+kubectl create namespace genieai
+kubectl -n genieai create secret generic keycloak-convergence-credentials \
+  --from-literal=GENIE_ADMIN_PASSWORD="$(openssl rand -base64 24)" \
+  --from-literal=EMAIL_PASSWORD="$SMTP_PASSWORD"
+kubectl -n genieai create secret generic keycloak-proxy-client-secret \
+  --from-literal=KEYCLOAK_PROXY_CLIENT_SECRET="$(openssl rand -hex 16)"
+kubectl -n genieai create secret generic kc-dataprep-client-secret \
+  --from-literal=KC_DATAPREP_CLIENT_SECRET="$(openssl rand -hex 16)"
+kubectl -n genieai create secret generic kc-grafana-client-secret \
+  --from-literal=KEYCLOAK_GRAFANA_CLIENT_SECRET="$(openssl rand -hex 16)"
+
+# 3. Render + install. The chart creates the `genieai` namespace;
 #    pass --create-namespace so helm propagates it before any pre-install
 #    hooks (which create ServiceAccounts inside the namespace) run.
 #
 #    ingress.host and data.keycloak.adminEmail are `required`: without a
 #    public hostname Keycloak's issuer is unresolvable and the realm gets
 #    no operator contact, so the render fails on the knob rather than at
-#    the first browser request. The three client secrets are required
-#    too — with failOnPlaceholderSecrets on (the default, prod posture),
-#    a `change-me-*` value aborts the render.
+#    the first browser request.
+#
+#    data.keycloak.smtp is required for the same reason: the realm
+#    verifies addresses and resets passwords by default (the Compose
+#    values), and a realm that sends mail needs a mail server. Point it
+#    at YOUR relay — `smtp.gmail.com`, port 587, starttls, auth — and
+#    keep the flags on. A deployment that genuinely sends no mail turns
+#    `verifyEmail` and `resetPasswordAllowed` off instead, where the
+#    choice is visible.
+#
+#    The five convergence rows point the Job at the Secrets from step 2.
+#    `data.keycloak.clientSecrets.*` is NOT what reaches Keycloak: those
+#    three values are read by the render-time guard only (with
+#    failOnPlaceholderSecrets on — the default, prod posture — a
+#    `change-me-*` value aborts the render). The secrets the realm
+#    actually carries are the ones the rows below reference.
 helm install genieai charts/genieai-umbrella/ \
   --create-namespace --namespace genieai \
   --set ingress.host=genie.example.org \
   --set data.keycloak.adminEmail=ops@example.org \
+  --set data.keycloak.smtp.from=no-reply@genie.example.org \
+  --set data.keycloak.smtp.host=smtp.example.org \
+  --set data.keycloak.smtp.port=587 \
+  --set data.keycloak.smtp.starttls=true \
   --set data.keycloak.clientSecrets.proxyClient="$(openssl rand -hex 16)" \
   --set data.keycloak.clientSecrets.dataprep="$(openssl rand -hex 16)" \
-  --set data.keycloak.clientSecrets.grafana="$(openssl rand -hex 16)"
+  --set data.keycloak.clientSecrets.grafana="$(openssl rand -hex 16)" \
+  --set data.keycloak.convergence.envSecrets[0].envVar=KC_PROXY_CLIENT_SECRET \
+  --set data.keycloak.convergence.envSecrets[0].secretName=keycloak-proxy-client-secret \
+  --set data.keycloak.convergence.envSecrets[0].secretKey=KEYCLOAK_PROXY_CLIENT_SECRET \
+  --set data.keycloak.convergence.envSecrets[1].envVar=KC_DATAPREP_CLIENT_SECRET \
+  --set data.keycloak.convergence.envSecrets[1].secretName=kc-dataprep-client-secret \
+  --set data.keycloak.convergence.envSecrets[1].secretKey=KC_DATAPREP_CLIENT_SECRET \
+  --set data.keycloak.convergence.envSecrets[2].envVar=KC_GRAFANA_CLIENT_SECRET \
+  --set data.keycloak.convergence.envSecrets[2].secretName=kc-grafana-client-secret \
+  --set data.keycloak.convergence.envSecrets[2].secretKey=KEYCLOAK_GRAFANA_CLIENT_SECRET \
+  --set data.keycloak.convergence.envSecrets[3].envVar=GENIE_ADMIN_PASSWORD \
+  --set data.keycloak.convergence.envSecrets[3].secretName=keycloak-convergence-credentials \
+  --set data.keycloak.convergence.envSecrets[3].secretKey=GENIE_ADMIN_PASSWORD \
+  --set data.keycloak.convergence.envSecrets[4].envVar=EMAIL_PASSWORD \
+  --set data.keycloak.convergence.envSecrets[4].secretName=keycloak-convergence-credentials \
+  --set data.keycloak.convergence.envSecrets[4].secretKey=EMAIL_PASSWORD
 
-# 3. Smoke-test the release.
+# 4. Smoke-test the release.
 helm test genieai -n genieai
 ```
 
@@ -61,6 +110,10 @@ helm install genieai charts/genieai-umbrella/ \
   --create-namespace --namespace genieai \
   --set ingress.host=genie.example.org \
   --set data.keycloak.adminEmail=ops@example.org \
+  --set data.keycloak.smtp.from=no-reply@genie.example.org \
+  --set data.keycloak.smtp.host=smtp.example.org \
+  --set data.keycloak.smtp.port=587 \
+  --set data.keycloak.smtp.starttls=true \
   --set data.keycloak.clientSecrets.proxyClient="$PROXY_SECRET" \
   --set data.keycloak.clientSecrets.dataprep="$DATAPREP_SECRET" \
   --set data.keycloak.clientSecrets.grafana="$GRAFANA_SECRET" \

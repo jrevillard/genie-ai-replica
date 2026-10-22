@@ -92,6 +92,7 @@ export interface CallStrings {
   twin: string;
   ended: string;
   startCall: string;
+  startCallShort: string;
   tapToSpeak: string;
   demoUserLine: string;
 }
@@ -155,10 +156,10 @@ export const chatStrings: ChatStrings = {
   newChat: 'New chat',
   attachSoon: 'File attachments — coming soon',
   micSoon: 'Voice input — coming soon',
-  pickTwinTitle: 'Pick a twin to chat with',
+  pickTwinTitle: 'Pick a topic module to chat with',
   pickTwinDescription:
-    'Open an AI Twin from your library to start a conversation about non-communicable diseases.',
-  pickTwinAction: 'Browse AI Twins',
+    'Open a Topic Module from your library to start a conversation about non-communicable diseases.',
+  pickTwinAction: 'Browse Topic Modules',
   today: 'Today',
   yesterday: 'Yesterday',
   sendAria: 'Send message',
@@ -178,11 +179,12 @@ export const chatStrings: ChatStrings = {
     muted: 'Mic muted',
     mute: 'Mute',
     unmute: 'Unmute',
-    endCall: 'End call',
+    endCall: 'End audio',
     you: 'You',
-    twin: 'AI Twin',
-    ended: 'Call ended',
-    startCall: 'Start call',
+    twin: 'Topic Module',
+    ended: 'Audio ended',
+    startCall: 'Start audio',
+    startCallShort: 'Audio',
     tapToSpeak: 'Tap and hold to speak',
     demoUserLine: 'How can I lower my blood pressure naturally?',
   },

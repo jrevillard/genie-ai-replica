@@ -185,7 +185,7 @@ const deleteDialogDescription = computed(() => {
   return t(
     'knowledgeSet.deleteConfirmBody',
     { name: deleteTarget.value?.name ?? '' },
-    'This removes the file from the repository. Linked AI Twins will stop using it.\n{name}'
+    'This removes the file from the repository. Linked Topic Modules will stop using it.\n{name}'
   );
 });
 
@@ -611,7 +611,7 @@ async function quickLinkToTwin(twin: AiTwin): Promise<void> {
 async function confirmLinkToTwin() {
   const twinId = selectedTwinKey.value;
   if (!twinId) {
-    notify.warning(t('knowledgeSet.toasts.noTwinSelected', 'Select an AI Twin first'));
+    notify.warning(t('knowledgeSet.toasts.noTwinSelected', 'Select a Topic Module first'));
     return;
   }
   const fromPending = pendingLinkIds.value.length > 0;
@@ -627,7 +627,7 @@ async function confirmLinkToTwin() {
   const merged = [...new Set([...twin.linkedKbFileIds, ...ids])];
   try {
     await aiStore.replaceKbFiles(twinId, merged);
-    notify.success(t('knowledgeSet.toasts.linkSuccess', 'Knowledge files linked to twin'));
+    notify.success(t('knowledgeSet.toasts.linkSuccess', 'Knowledge files linked to topic module'));
     pendingLinkIds.value = [];
     documents.value.forEach((d) => {
       d.selected = false;
@@ -639,7 +639,7 @@ async function confirmLinkToTwin() {
     // Surface the backend's reason — usually "Unknown KB file id(s): …" when
     // a selected file isn't in the document-repository `files` collection.
     notify.error(
-      t('knowledgeSet.toasts.linkFailed', 'Failed to link files to twin'),
+      t('knowledgeSet.toasts.linkFailed', 'Failed to link files to topic module'),
       extractServerError(err) ?? aiStore.error ?? undefined
     );
   }
@@ -767,11 +767,11 @@ async function onTwinCreated(payload: {
       } catch (err) {
         if (isCreateAbortError(err)) throw err;
         notify.error(
-          aiStore.error ?? t('twins.list.avatarFailedToast', 'Twin created, but the avatar upload failed.')
+          aiStore.error ?? t('twins.list.avatarFailedToast', 'Topic module created, but the avatar upload failed.')
         );
       }
     }
-    notify.success(t('twins.list.createdToast', 'AI Twin created'));
+    notify.success(t('twins.list.createdToast', 'Topic Module created'));
     createTwinOpen.value = false;
     // Auto-select the freshly-created twin so the user can link straight away.
     selectedTwinKey.value = twin._key;
@@ -779,7 +779,7 @@ async function onTwinCreated(payload: {
     await aiStore.fetchAll().catch(() => {});
   } catch (err) {
     if (!isCreateAbortError(err)) {
-      notify.error(aiStore.error ?? t('twins.list.createFailedToast', 'Failed to create AI Twin'));
+      notify.error(aiStore.error ?? t('twins.list.createFailedToast', 'Failed to create Topic Module'));
     }
   } finally {
     activeCreateTwinRequest = null;
@@ -1667,7 +1667,7 @@ watch(
           <div class="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border-subtle bg-surface-muted px-3 py-2">
             <BaseCheckbox v-model="allDocumentsSelected" size="sm" class="min-w-0">
               <span class="truncate text-caption font-medium text-text-muted">
-                {{ t('knowledgeSet.selectHint', 'Select files to link them to an AI Twin') }}
+                {{ t('knowledgeSet.selectHint', 'Select files to link them to a Topic Module') }}
               </span>
             </BaseCheckbox>
             <div class="flex flex-wrap items-center gap-2">
@@ -2171,14 +2171,14 @@ watch(
             <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div class="flex min-w-0 flex-col gap-1">
                 <h1 class="text-headline text-text">
-                  {{ t('knowledgeSet.selectAiTwinsTitle', 'Select an AI Twin') }}
+                  {{ t('knowledgeSet.selectAiTwinsTitle', 'Select a Topic Module') }}
                 </h1>
                 <p v-if="pendingLinkIds.length" class="text-caption text-text-muted">
                   {{
                     t(
                       'knowledgeSet.linkingHint',
                       { count: pendingLinkIds.length },
-                      'Linking {count} file(s) to the chosen twin.'
+                      'Linking {count} file(s) to the chosen topic module.'
                     )
                   }}
                 </p>
@@ -2187,7 +2187,7 @@ watch(
                 <div class="w-full sm:w-72 lg:w-96">
                   <BaseInput
                     v-model="twinSearch"
-                    :placeholder="t('knowledgeSet.twinSearchPlaceholder', 'Search twins')"
+                    :placeholder="t('knowledgeSet.twinSearchPlaceholder', 'Search topic modules')"
                     rounded="full"
                   >
                     <template #leading><Icon :icon="Search01Icon" :size="18" /></template>
@@ -2195,7 +2195,7 @@ watch(
                 </div>
                 <BaseButton variant="primary" rounded="full" @click="openCreateTwin">
                   <Icon :icon="AddCircleIcon" :size="17" />
-                  {{ t('knowledgeSet.createAiTwin', 'Create AI Twin') }}
+                  {{ t('knowledgeSet.createAiTwin', 'Create Topic Module') }}
                 </BaseButton>
               </div>
             </div>
@@ -2241,7 +2241,7 @@ watch(
             v-if="twinsLoading"
             class="min-h-0 flex-1 overflow-y-auto pr-1"
             :aria-busy="true"
-            :aria-label="t('knowledgeSet.loadingTwins', 'Loading AI Twins…')"
+            :aria-label="t('knowledgeSet.loadingTwins', 'Loading Topic Modules…')"
           >
             <div class="grid gap-4 xl:grid-cols-2">
               <AiTwinCardSkeleton v-for="i in 4" :key="i" />
@@ -2258,7 +2258,7 @@ watch(
                 :aria-disabled="twinLinkState(twin).fullyRedundant || undefined"
                 :title="
                   twinLinkState(twin).fullyRedundant
-                    ? t('knowledgeSet.twinAllLinked', 'This twin already has every selected file')
+                    ? t('knowledgeSet.twinAllLinked', 'This topic module already has every selected file')
                     : ''
                 "
                 :class="[
@@ -2361,7 +2361,7 @@ watch(
                     >
                       <Icon :icon="Tick02Icon" :size="12" class="text-warning" />
                       <span class="text-text-muted">
-                        {{ t('knowledgeSet.breakdownAlready', 'Already on twin:') }}
+                        {{ t('knowledgeSet.breakdownAlready', 'Already on topic module:') }}
                       </span>
                       <template v-for="(f, idx) in linkBreakdown(twin).alreadyLinkedFiles" :key="f.fileId">
                         <span aria-hidden="true" v-if="idx > 0" class="text-border-strong">·</span>
@@ -2454,7 +2454,7 @@ watch(
               v-else
               :icon="Search01Icon"
               :title="t('knowledgeSet.twinsNoMatchesTitle', 'No matches')"
-              :description="t('knowledgeSet.twinsNoMatchesBody', 'No AI Twins match your search.')"
+              :description="t('knowledgeSet.twinsNoMatchesBody', 'No Topic Modules match your search.')"
             >
               <BaseButton variant="outline" @click="twinSearch = ''">
                 {{ t('knowledgeSet.clearSearch', 'Clear search') }}

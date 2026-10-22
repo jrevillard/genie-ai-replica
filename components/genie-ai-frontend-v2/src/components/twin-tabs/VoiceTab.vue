@@ -210,7 +210,7 @@ onBeforeUnmount(disposeAllPreviews);
 <template>
   <div class="space-y-5">
     <header class="flex items-center justify-between">
-      <h2 class="text-title text-text">{{ t('twins.voice.title', 'Pick a Voice For Your AI Twin') }}</h2>
+      <h2 class="text-title text-text">{{ t('twins.voice.title', 'Pick a Voice For Your Topic Module') }}</h2>
     </header>
 
     <VoiceListSkeleton v-if="loading && voices.length === 0" :rows="4" />

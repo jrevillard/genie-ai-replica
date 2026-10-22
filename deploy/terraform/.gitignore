@@ -1,0 +1,27 @@
+# Terraform working files — never commit
+.terraform/
+.artifacts/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# Saved plans and plan output. A binary plan embeds a state snapshot and the
+# resolved values of input variables — treat it as sensitive, never commit it.
+tfplan
+tfplan.*
+*.tfplan
+plan.log
+
+# Variable files may contain secrets (tokens, CIDRs) — commit only the example
+*.tfvars
+*.tfvars.json
+!terraform.tfvars.example
+
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Keep the provider lock file committed:
+!.terraform.lock.hcl

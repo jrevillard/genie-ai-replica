@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue';
 import { useTranslated } from '../../composables/useTranslated';
+import MarkdownText from './MarkdownText.vue';
 
 const props = defineProps<{
   text: string;
@@ -18,7 +19,7 @@ const sourceLang = computed(() => props.lang || 'en');
 // Authors read their own input verbatim — never re-translate user messages.
 const isUser = computed(() => props.role === 'user');
 
-const { value: translated, loading, isTranslated, showOriginal, canTranslate, toggle } = useTranslated(sourceText, sourceLang);
+const { value: translated, loading, isTranslated, showOriginal, canTranslate, toggle } = useTranslated(sourceText, sourceLang, { markdown: true });
 
 const value = computed(() => (isUser.value ? sourceText.value : translated.value));
 
@@ -46,5 +47,6 @@ defineExpose({
 </script>
 
 <template>
-  <p class="whitespace-pre-wrap leading-relaxed">{{ value }}</p>
+  <MarkdownText v-if="!isUser" :text="value" />
+  <p v-else class="whitespace-pre-wrap leading-relaxed">{{ value }}</p>
 </template>

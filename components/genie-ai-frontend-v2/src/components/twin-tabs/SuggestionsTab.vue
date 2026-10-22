@@ -163,7 +163,7 @@ async function doRegenerate(): Promise<void> {
       t('twins.suggestions.regenerated', 'Suggested questions regenerated'),
       t(
         'twins.suggestions.regeneratedBody',
-        'A fresh set has been generated from this twin\'s knowledge base.'
+        'A fresh set has been generated from this topic module\'s knowledge base.'
       )
     );
   } catch (err) {
@@ -636,7 +636,7 @@ const visibleCount = computed(() => displayQuestions.value.filter((q) => q.enabl
             ? t('twins.suggestions.emptyBodyEditing', 'Press Add question to create your first one, then Save Changes to apply.')
             : t(
                 'twins.suggestions.emptyBody',
-                'Add files to this twin\'s Knowledge Set or hit Regenerate to ask the model for a fresh set.'
+                'Add files to this topic module\'s Knowledge Set or hit Regenerate to ask the model for a fresh set.'
               )
         }}
       </p>

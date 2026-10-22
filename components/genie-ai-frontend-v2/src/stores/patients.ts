@@ -51,7 +51,7 @@ export const usePatientsStore = defineStore('patients', {
         this.offset = res.offset;
         this.limit = res.limit;
       } catch (err) {
-        this.error = extractError(err, 'Failed to load patients');
+        this.error = extractError(err, 'Failed to load users');
         throw err;
       } finally {
         this.loading = false;
@@ -73,7 +73,7 @@ export const usePatientsStore = defineStore('patients', {
         upsert(this.patients, patient);
         return patient;
       } catch (err) {
-        this.error = extractError(err, 'Failed to load patient');
+        this.error = extractError(err, 'Failed to load user');
         throw err;
       } finally {
         this.loading = false;
@@ -89,7 +89,7 @@ export const usePatientsStore = defineStore('patients', {
         this.total += 1;
         return patient;
       } catch (err) {
-        this.error = extractError(err, 'Failed to create patient');
+        this.error = extractError(err, 'Failed to create user');
         throw err;
       } finally {
         this.saving = false;
@@ -105,7 +105,7 @@ export const usePatientsStore = defineStore('patients', {
         if (this.current?._key === patientId) this.current = patient;
         return patient;
       } catch (err) {
-        this.error = extractError(err, 'Failed to update patient');
+        this.error = extractError(err, 'Failed to update user');
         throw err;
       } finally {
         this.saving = false;
@@ -124,7 +124,7 @@ export const usePatientsStore = defineStore('patients', {
           this.currentAccess = null;
         }
       } catch (err) {
-        this.error = extractError(err, 'Failed to delete patient');
+        this.error = extractError(err, 'Failed to delete user');
         throw err;
       } finally {
         this.saving = false;
@@ -138,7 +138,7 @@ export const usePatientsStore = defineStore('patients', {
         this.currentAccess = access;
         return access;
       } catch (err) {
-        this.error = extractError(err, 'Failed to load twin access');
+        this.error = extractError(err, 'Failed to load topic module access');
         throw err;
       } finally {
         this.accessLoading = false;
@@ -159,7 +159,7 @@ export const usePatientsStore = defineStore('patients', {
         return next;
       } catch (err) {
         this.currentAccess = previous;
-        this.error = extractError(err, 'Failed to update twin access');
+        this.error = extractError(err, 'Failed to update topic module access');
         throw err;
       }
     },
@@ -178,7 +178,7 @@ export const usePatientsStore = defineStore('patients', {
         return next;
       } catch (err) {
         this.currentAccess = previous;
-        this.error = extractError(err, 'Failed to enable twin');
+        this.error = extractError(err, 'Failed to enable topic module');
         throw err;
       }
     },
@@ -194,7 +194,7 @@ export const usePatientsStore = defineStore('patients', {
         return next;
       } catch (err) {
         this.currentAccess = previous;
-        this.error = extractError(err, 'Failed to disable twin');
+        this.error = extractError(err, 'Failed to disable topic module');
         throw err;
       }
     },

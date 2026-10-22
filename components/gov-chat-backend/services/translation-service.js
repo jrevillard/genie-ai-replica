@@ -19,6 +19,9 @@ const translationBackend = process.env.TRANSLATION_BACKEND || 'auto'; // Default
 const redisHost = process.env.TRANSLATION_CACHE_HOST || 'localhost';
 const redisPort = parseInt(process.env.TRANSLATION_CACHE_PORT, 10) || 6379;
 const redisPassword = process.env.TRANSLATION_CACHE_PASSWORD || null;
+// Enable TLS for managed Redis with in-transit encryption (e.g. AWS ElastiCache).
+// Off by default, so the bundled/on-prem Redis container is unaffected.
+const redisTls = process.env.TRANSLATION_CACHE_TLS === 'on';
 
 /**
  * @class TranslationService
@@ -50,6 +53,7 @@ class TranslationService {
         host: redisHost,
         port: redisPort,
         password: redisPassword,
+        ...(redisTls ? { tls: {} } : {}),
         // Optional: Add retry logic
         retryStrategy(times) {
           const delay = Math.min(times * 500, 2000);

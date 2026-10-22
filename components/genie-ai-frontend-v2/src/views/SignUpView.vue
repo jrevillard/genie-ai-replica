@@ -73,7 +73,7 @@ async function onSubmit() {
 
       <div class="flex flex-1 flex-col justify-center">
         <div class="mx-auto w-full max-w-md">
-          <h1 class="text-3xl font-semibold text-slate-900">{{ t('auth.signUp.title', 'Create your AI Twins Today') }}</h1>
+          <h1 class="text-3xl font-semibold text-slate-900">{{ t('auth.signUp.title', 'Create your Topic Modules Today') }}</h1>
           <p class="mt-1 text-sm text-slate-500">{{ t('auth.signUp.subtitle', 'Fill in your details to get started.') }}</p>
 
           <form class="mt-8 space-y-4" novalidate @submit.prevent="onSubmit">

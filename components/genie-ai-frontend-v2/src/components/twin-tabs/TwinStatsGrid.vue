@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { BubbleChatIcon, CallIcon, WhatsappIcon } from '@hugeicons/core-free-icons';
+import { AudioWave01Icon, BubbleChatIcon, WhatsappIcon } from '@hugeicons/core-free-icons';
 import Icon from '../ui/Icon.vue';
 import type { AiTwin } from '../../services/aiTwins';
 import { useT } from '../../i18n/composables';
+import { WHATSAPP_UI_ENABLED } from '../../lib/features';
 
 const { t } = useT();
 
@@ -34,19 +35,23 @@ const stats = computed<StatCard[]>(() => [
     iconBg: 'bg-rose-50',
     iconColor: 'text-rose-500',
   },
-  {
-    key: 'whatsapp',
-    label: t('twins.stats.whatsapp', 'WhatsApp Chats'),
-    value: props.twin.numWhatsappChats ?? 0,
-    icon: WhatsappIcon,
-    iconBg: 'bg-emerald-50',
-    iconColor: 'text-emerald-500',
-  },
+  ...(WHATSAPP_UI_ENABLED
+    ? [
+        {
+          key: 'whatsapp' as const,
+          label: t('twins.stats.whatsapp', 'WhatsApp Chats'),
+          value: props.twin.numWhatsappChats ?? 0,
+          icon: WhatsappIcon,
+          iconBg: 'bg-emerald-50',
+          iconColor: 'text-emerald-500',
+        },
+      ]
+    : []),
   {
     key: 'calls',
-    label: t('twins.stats.calls', 'Number of Calls'),
+    label: t('twins.stats.calls', 'Number of Audio Sessions'),
     value: props.twin.numCalls ?? 0,
-    icon: CallIcon,
+    icon: AudioWave01Icon,
     iconBg: 'bg-ieee-50',
     iconColor: 'text-ieee-600',
   },
@@ -54,8 +59,8 @@ const stats = computed<StatCard[]>(() => [
 </script>
 
 <template>
-  <section :aria-label="t('twins.stats.ariaLabel', 'Twin activity overview')">
-    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+  <section :aria-label="t('twins.stats.ariaLabel', 'Topic module activity overview')">
+    <div :class="['grid grid-cols-1 gap-4 sm:grid-cols-2', WHATSAPP_UI_ENABLED && 'lg:grid-cols-3']">
       <article
         v-for="stat in stats"
         :key="stat.key"

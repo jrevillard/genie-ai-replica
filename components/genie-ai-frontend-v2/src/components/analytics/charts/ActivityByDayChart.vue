@@ -64,7 +64,7 @@ const option = computed(() => {
         data: props.data.map((p) => p.chatSessions),
       },
       {
-        name: t('analytics.charts.legendCall', 'Calls'),
+        name: t('analytics.charts.legendCall', 'Audio Sessions'),
         type: 'line',
         smooth: true,
         symbolSize: 6,

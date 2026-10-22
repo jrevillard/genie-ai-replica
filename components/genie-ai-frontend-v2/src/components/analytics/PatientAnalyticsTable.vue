@@ -147,12 +147,12 @@ interface ColumnSpec {
 }
 
 const columns: ColumnSpec[] = [
-  { key: 'name', labelKey: 'analytics.tables.patients.col.name', fallback: 'Patient', align: 'left' },
+  { key: 'name', labelKey: 'analytics.tables.patients.col.name', fallback: 'User', align: 'left' },
   { key: 'chatSessions', labelKey: 'analytics.tables.patients.col.chats', fallback: 'Chats', align: 'right' },
-  { key: 'calls', labelKey: 'analytics.tables.patients.col.calls', fallback: 'Calls', align: 'right' },
+  { key: 'calls', labelKey: 'analytics.tables.patients.col.calls', fallback: 'Audio', align: 'right' },
   { key: 'totalMessages', labelKey: 'analytics.tables.patients.col.messages', fallback: 'Messages', align: 'right' },
   { key: 'avgSessionLength', labelKey: 'analytics.tables.patients.col.avgSession', fallback: 'Avg Session', align: 'right' },
-  { key: 'totalCallSecs', labelKey: 'analytics.tables.patients.col.totalCallTime', fallback: 'Total Call Time', align: 'right' },
+  { key: 'totalCallSecs', labelKey: 'analytics.tables.patients.col.totalCallTime', fallback: 'Total Audio Time', align: 'right' },
   { key: 'avgResponseTimeMs', labelKey: 'analytics.tables.patients.col.avgResp', fallback: 'Avg Response', align: 'right' },
   { key: 'lastActive', labelKey: 'analytics.tables.patients.col.lastActive', fallback: 'Last Active', align: 'right' },
 ];
@@ -174,7 +174,7 @@ const columns: ColumnSpec[] = [
         </BaseInput>
       </div>
       <p v-if="!loading" class="text-meta text-text-subtle">
-        {{ t('analytics.pagination.countLabel', { count: total }, '{count} patients') }}
+        {{ t('analytics.pagination.countLabel', { count: total }, '{count} users') }}
       </p>
     </div>
 
@@ -191,7 +191,7 @@ const columns: ColumnSpec[] = [
       v-else-if="rows.length === 0"
       class="rounded-xl bg-surface-subtle p-8 text-center text-body text-text-subtle"
     >
-      {{ t('analytics.tables.patients.empty', 'No patient activity in this period.') }}
+      {{ t('analytics.tables.patients.empty', 'No user activity in this period.') }}
     </div>
 
     <div v-else class="overflow-x-auto">

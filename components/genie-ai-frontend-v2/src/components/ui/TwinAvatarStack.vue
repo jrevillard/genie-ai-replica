@@ -4,7 +4,7 @@ import { storeToRefs } from 'pinia';
 import { useAiTwinsStore } from '../../stores/aiTwins';
 import type { AiTwin } from '../../services/aiTwins';
 
-// Overlapping-avatar group for the AI Twins linked to a knowledge file.
+// Overlapping-avatar group for the Topic Modules linked to a knowledge file.
 // Shows up to `max` (default 3) avatars; any extras roll up into a "+N" chip.
 // Twin metadata is resolved from the cached `aiTwinsStore.twins` list — the
 // caller is responsible for triggering `aiTwinsStore.fetchAll()` somewhere

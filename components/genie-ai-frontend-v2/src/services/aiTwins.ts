@@ -43,7 +43,7 @@ export interface AiTwin {
     createdAt?: string | null;
     updatedAt?: string | null;
     /** Twin IDs that link this file — used to render an avatar stack on the
-     *  file row showing every AI Twin currently using it. */
+     *  file row showing every Topic Module currently using it. */
     linkedTwinIds?: string[];
   }>;
   // Hydrated by the privileged read so PersonalityTab/InstructionsTab can
@@ -119,11 +119,20 @@ export async function listPublicAiTwins(params: ListAiTwinsParams = {}): Promise
   return res.data;
 }
 
-// Guest read of a twin — backend only exposes the default twin here, with
-// admin fields stripped. Returns 404 for any non-default twin id.
+// Guest read of a twin, with admin fields stripped. Returns 404 for an
+// unknown twin id.
 export async function getPublicAiTwin(twinId: string): Promise<AiTwin> {
   const res = await api.get<AiTwin>(`/public/ai-twins/${encodeURIComponent(twinId)}`);
   return res.data;
+}
+
+// The public endpoints answer 404 with this code when guests may not use the
+// module (backend PUBLIC_TWIN_IDS). Signed-in users never get it.
+export const GUEST_TWIN_NOT_ALLOWED = 'GUEST_TWIN_NOT_ALLOWED';
+
+export function isGuestTwinNotAllowed(err: unknown): boolean {
+  const e = err as { response?: { status?: number; data?: { code?: unknown } } };
+  return e?.response?.status === 404 && e.response.data?.code === GUEST_TWIN_NOT_ALLOWED;
 }
 
 export async function createAiTwin(

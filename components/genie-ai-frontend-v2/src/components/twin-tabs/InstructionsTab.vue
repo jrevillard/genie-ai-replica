@@ -200,7 +200,7 @@ defineExpose({ save, discard });
     <header>
       <h2 class="text-title text-text">{{ t('twins.instructions.title', 'Edit Your Instructions') }}</h2>
       <p class="mt-0.5 text-caption text-text-muted">
-        {{ t('twins.instructions.subtitle', "Specific dos and don'ts your AI Twin will follow during conversations.") }}
+        {{ t('twins.instructions.subtitle', "Specific dos and don'ts your Topic Module will follow during conversations.") }}
       </p>
     </header>
 
@@ -218,13 +218,13 @@ defineExpose({ save, discard });
       </button>
     </div>
 
-    <!-- Twin Instructions (currently applied). Always rendered; the fieldset
+    <!-- Topic Module Instructions (currently applied). Always rendered; the fieldset
          in AiTwinDetailView disables every button below when !editing. -->
     <section class="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-card">
       <div class="flex items-center justify-between gap-3">
         <div class="flex items-center gap-2">
           <h3 class="text-body font-semibold text-text">
-            {{ t('twins.instructions.appliedTitle', 'Twin Instructions') }}
+            {{ t('twins.instructions.appliedTitle', 'Topic Module Instructions') }}
           </h3>
           <span
             v-if="hasInstructions"
@@ -403,7 +403,7 @@ defineExpose({ save, discard });
       v-else-if="!loading && !hasInstructions && !error"
       :icon="Tag01Icon"
       :title="t('twins.instructions.emptyTitle', 'No instructions yet')"
-      :description="t('twins.instructions.emptyBody', 'Click Update to start adding rules your AI Twin will follow during conversations.')"
+      :description="t('twins.instructions.emptyBody', 'Click Update to start adding rules your Topic Module will follow during conversations.')"
     />
   </div>
 </template>

@@ -84,7 +84,7 @@ const resendLabel = computed(() => {
       class="relative mx-auto w-full max-w-2xl overflow-hidden rounded-3xl border border-slate-200 bg-white p-8 shadow-card sm:p-12"
     >
       <header class="mb-6 flex items-center">
-        <img src="/images/logo.svg" alt="IEEE" class="h-7" />
+        <img src="/images/logo.svg" alt="Health Navigator 1.0" class="h-7" />
       </header>
 
       <div class="flex flex-col items-center text-center">

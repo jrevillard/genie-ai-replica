@@ -261,31 +261,40 @@ docker push localhost:5000/genie-ai-db-migrations:latest
 If worker nodes do not have internet access, pull and push all external images to the local registry:
 
 ```bash
-# Pull external images
-docker pull postgres:13
-docker pull kong:latest
-docker pull redis:7-alpine
-docker pull clamav/clamav
+# Pull external images. These MUST match the pins in docker-compose.yaml — pulling a
+# floating tag here would stage a different image than the stack deploys, which in an
+# air-gapped registry means the pinned image is simply missing. Keep both lists in sync.
+docker pull postgres:13.23
+docker pull kong:3.9.3
+docker pull redis:7.4.10-alpine
+docker pull clamav/clamav:1.5.4
 docker pull arangodb/arangodb:3.12.4
-docker pull vllm/vllm-openai:latest
-docker pull opea/llm-textgen:latest
-docker pull opea/translation:latest
-docker pull opea/guardrails:latest
-docker pull opea/embedding:latest
-docker pull opea/chatqna-ui:latest
-docker pull opea/nginx:latest
+docker pull vllm/vllm-openai:v0.27.1
+docker pull opea/llm-textgen@sha256:e3e506c2796b768727212a0bd58d44b28d2100f9d12cafcce8c433580c770acd
+docker pull opea/translation@sha256:a527cfa761cc495a524e94e8b097b66d81b870c52c40a05b85a3b86de15447f1
+docker pull opea/guardrails@sha256:e164c2fa8b64f81fa7266a106f45f0584e75e3aa09dbe99bb85f2eae89121489
+docker pull opea/embedding@sha256:70a22b02646239f1a4f756e8780dd65bbde272045c30638bb0ecf761558be382
+docker pull opea/chatqna-ui@sha256:0865689031c59d0c55f5dd16a76e7f3e637aba66a597a390ca039e7210f80dce
+docker pull opea/nginx@sha256:c79c2ec88fc98cbe8990b8a152a4ca7e26ff8e1270dddccdfbf25478bca3f672
 docker pull ghcr.io/huggingface/text-embeddings-inference:1.9.3
 docker pull nginx:alpine
 docker pull quay.io/keycloak/keycloak:26.5.6
 docker pull adorsys/keycloak-config-cli:6.5.0-26
 
 # Tag and push (example for each)
-docker tag vllm/vllm-openai:latest localhost:5000/vllm/vllm-openai:latest
-docker push localhost:5000/vllm/vllm-openai:latest
+docker tag vllm/vllm-openai:v0.27.1 localhost:5000/vllm/vllm-openai:v0.27.1
+docker push localhost:5000/vllm/vllm-openai:v0.27.1
 # Repeat for all external images...
 ```
 
-Then override image references in `.env` or `docker-compose.yaml` to use the `SWARM_REGISTRY_URL` prefix (e.g., `192.168.1.10:5000/...`).
+Then point the per-image override variables at the local registry. Each third-party image
+in `docker-compose.yaml` reads a `${*_IMAGE:-<pin>}` override for exactly this purpose, so
+set them in `.env` rather than editing the compose file — for example:
+
+```bash
+VLLM_IMAGE=192.168.1.10:5000/vllm/vllm-openai:v0.27.1
+KONG_IMAGE=192.168.1.10:5000/kong:3.9.3
+```
 
 ## Step 6: Configure Environment
 

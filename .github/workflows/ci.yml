@@ -1,0 +1,233 @@
+# GENIE.AI — Continuous Integration
+#
+# Runs on every branch (goal #1 of docs/ci-cd-plan.md). Deployment is a separate
+# manual workflow; nothing here touches AWS.
+#
+# The check list is a RATCHET, deliberately split into two jobs:
+#
+#   verify    — gates that pass on the current tree. These BLOCK.
+#   advisory  — checks that currently fail. They run and stay visible, but do
+#               not block, so CI is meaningful from day one instead of being
+#               permanently red and ignored.
+#
+# Move a check from `advisory` to `verify` as soon as its debt is cleared.
+# Every advisory entry must name the reason and a plan reference — no silent
+# permanent exemptions.
+#
+# See docs/ci-cd-plan.md §5 and §5.1 for the measured state behind this split.
+
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same ref supersedes an in-flight run. Safe here: CI is
+# read-only. (The deploy workflow must NOT do this — see plan §3.4.)
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "20"
+  # Pinned: `npm run lint:py` resolves whatever ruff is on PATH, so an unpinned
+  # CI would drift as new rules ship. Bump deliberately.
+  RUFF_VERSION: "0.16.2"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Blocking gates — verified green against the tree at the time of writing.
+  # ---------------------------------------------------------------------------
+  verify:
+    name: verify / ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The frontend that is actually deployed (deploy.yml:495,
+          # docker-compose.yaml:274). Build is green; type-check is not (advisory).
+          - name: frontend-v2 (build)
+            path: components/genie-ai-frontend-v2
+            run: npm run build
+
+          - name: document-repository (lint)
+            path: components/document-repository
+            run: npm run lint
+
+          - name: document-repository (test)
+            path: components/document-repository
+            run: npx jest --ci
+
+          - name: shared-lib (lint)
+            path: components/shared/lib
+            run: npm run lint
+
+          # Promoted from advisory: these components were formatted and are now
+          # clean, so regressions should block rather than warn.
+          - name: document-repository (format)
+            path: components/document-repository
+            run: npm run format:check
+
+          - name: shared-lib (format)
+            path: components/shared/lib
+            run: npm run format:check
+
+          # Install alone is a real gate: two lockfiles were out of sync with
+          # their package.json and `npm ci` refused to run at all.
+          - name: gov-chat-backend (install)
+            path: components/gov-chat-backend
+            run: node --version
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ${{ matrix.path }}/package-lock.json
+
+      # `npm ci` (not `npm install`) on purpose: it fails loudly when a
+      # lockfile drifts from package.json instead of silently resolving new
+      # versions. There are no npm workspaces, so each component installs
+      # independently.
+      - name: Install
+        working-directory: ${{ matrix.path }}
+        run: npm ci --no-audit --no-fund
+
+      - name: ${{ matrix.name }}
+        working-directory: ${{ matrix.path }}
+        run: ${{ matrix.run }}
+
+  # ---------------------------------------------------------------------------
+  # Python unit tests that need no dependencies (OPEA is stubbed in the tests).
+  # Blocking: they pass on the current tree, so a regression must not merge green.
+  # ---------------------------------------------------------------------------
+  python-tests:
+    name: verify / python (unittest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: unittest (stub-based suites)
+        run: >-
+          python3 -m unittest -v
+          tests.test_reranker_threshold_floor
+          tests.test_strict_grounding
+          tests.test_kb_scope_filter
+          tests.test_appointment_guard
+          tests.test_style_echo_guard
+
+  # ---------------------------------------------------------------------------
+  # Python (OPEA overlay). Currently failing wholesale — see advisory job.
+  # Kept as its own job so it is easy to promote once the debt is paid.
+  # ---------------------------------------------------------------------------
+  python:
+    name: python / ruff (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10" # matches target-version in genie-ai-overlay/pyproject.toml
+
+      - name: Install ruff
+        run: pip install "ruff==${RUFF_VERSION}"
+
+      # ADVISORY: 381 errors across 33 files at time of writing.
+      # Promote to `verify` once `npm run lint:py:fix` + manual cleanup lands.
+      - name: ruff check
+        run: ruff check genie-ai-overlay/
+
+      # ADVISORY: 19 of 41 files would be reformatted.
+      # Promote once `npm run format:py` has been run and committed.
+      - name: ruff format --check
+        run: ruff format --check genie-ai-overlay/
+
+  # ---------------------------------------------------------------------------
+  # Advisory JS checks — visible, non-blocking, each with a stated reason.
+  # ---------------------------------------------------------------------------
+  advisory:
+    name: advisory / ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 42 eslint errors. Promote after `npm run lint:fix` + review.
+          - name: gov-chat-backend (lint)
+            path: components/gov-chat-backend
+            run: npm run lint
+
+          # 5 failures in __tests__/authController.test.js — the test specifies
+          # the Keycloak-era logout while the controller still holds the legacy
+          # implementation. This needs an auth-owner decision, NOT a test edit.
+          # See docs/ci-cd-plan.md §5.4.
+          - name: gov-chat-backend (test)
+            path: components/gov-chat-backend
+            run: npx jest --ci
+
+          # Fails on src/stores/chat.ts and src/stores/chatHistory.ts.
+          # Promote once those two type errors are resolved.
+          - name: frontend-v2 (type-check)
+            path: components/genie-ai-frontend-v2
+            run: npm run type-check
+
+          # Last remaining Prettier debt. document-repository and shared/lib are
+          # done and promoted to `verify`. This one stays advisory because the
+          # sweep is 86 files and would very likely conflict with in-flight
+          # branches — it should be its own formatting-only commit, made when the
+          # team expects it. Then: `npm run format` here and promote.
+          - name: gov-chat-backend (format)
+            path: components/gov-chat-backend
+            run: npm run format:check
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ${{ matrix.path }}/package-lock.json
+
+      - name: Install
+        working-directory: ${{ matrix.path }}
+        run: npm ci --no-audit --no-fund
+
+      - name: ${{ matrix.name }}
+        working-directory: ${{ matrix.path }}
+        run: ${{ matrix.run }}
+
+# ---------------------------------------------------------------------------
+# Deliberately NOT run here:
+#
+#   components/gov-chat-frontend
+#       `npm ci` fails with ERESOLVE — the lockfile pins eslint-plugin-vue@9.33.0
+#       while package.json wants ^10.8.0 (which needs vue-eslint-parser@^10.3.0).
+#       This component is NOT deployed: both deploy.yml:495 and
+#       docker-compose.yaml:274 build genie-ai-frontend-v2 instead. Confirm it is
+#       legacy and delete it, or repair the toolchain — see plan §5.
+#
+#   Playwright (tests/e2e/)
+#       playwright.config.js targets https://localhost and docs/e2e-tests/
+#       requires a manual Phase 0 against a live stack. These belong in a
+#       post-deploy workflow against the real domain, not here. Plan §4.
+#
+#   mobile/genie_ai_mobile (Flutter)
+#       Needs a Flutter toolchain; add as a path-filtered job when the mobile
+#       app is in active development.
+# ---------------------------------------------------------------------------

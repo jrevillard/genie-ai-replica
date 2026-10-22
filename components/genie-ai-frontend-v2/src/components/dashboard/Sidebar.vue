@@ -63,10 +63,10 @@ interface NavItem {
 }
 
 const allItems: NavItem[] = [
-  { labelKey: 'nav.aiTwins', fallback: 'AI Twins', icon: SparklesIcon, to: '/ai-twins', adminOnly: true },
-  { labelKey: 'nav.aiTwins', fallback: 'AI Twins', icon: SparklesIcon, to: '/my-twins', userOnly: true },
+  { labelKey: 'nav.aiTwins', fallback: 'Topic Modules', icon: SparklesIcon, to: '/ai-twins', adminOnly: true },
+  { labelKey: 'nav.aiTwins', fallback: 'Topic Modules', icon: SparklesIcon, to: '/my-twins', userOnly: true },
   { labelKey: 'nav.patients', fallback: 'Users', icon: UserMultipleIcon, to: '/users', adminOnly: true },
-  { labelKey: 'nav.chatCallHistory', fallback: 'Chat/Call History', icon: MessageMultiple01Icon, to: '/chat-history' },
+  { labelKey: 'nav.chatCallHistory', fallback: 'Chat/Audio History', icon: MessageMultiple01Icon, to: '/chat-history' },
   { labelKey: 'nav.knowledgeSet', fallback: 'Knowledge Set', icon: AiBrain01Icon, to: '/knowledge-set', adminOnly: true },
   { labelKey: 'nav.analytics', fallback: 'Analytics', icon: Analytics01Icon, to: '/analytics', adminOnly: true },
 ];
@@ -141,8 +141,8 @@ function isNavActive(to: string): boolean {
         collapsed ? 'flex flex-col items-center' : 'flex items-center justify-between',
       ]"
     >
-      <img v-if="!collapsed" src="/images/logo.svg" alt="IEEE" class="h-7" />
-      <img v-else src="/images/logo.svg" alt="IEEE" class="h-7 w-full object-contain" />
+      <img v-if="!collapsed" src="/images/logo.svg" alt="Health Navigator 1.0" class="h-7" />
+      <img v-else src="/images/logo.svg" alt="Health Navigator 1.0" class="h-7 w-full object-contain" />
       <div :class="collapsed ? 'flex flex-col items-center gap-1' : 'flex items-center gap-1'">
         <button
           v-if="collapsed"

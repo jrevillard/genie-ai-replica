@@ -37,7 +37,7 @@ ARANGO_USER=root
 
 # ArangoDB root password (vector + graph database)
 # Used by: backend, document-repository, dataprep, retriever
-ARANGO_PASSWORD=hZWkks8LTy7si4xafZrBZKfk0idcWGXS47wnC8wV2i8
+ARANGO_PASSWORD=
 
 # JWT token signing secret (backend auth + voice-bridge token verification)
 # Used by: backend, voice-bridge
@@ -50,7 +50,7 @@ SESSION_SECRET=
 
 # Redis cache password (translation service caching)
 # Used by: redis-cache, translation service
-TRANSLATION_CACHE_PASSWORD=TLIyYCWxIQhLOwcBFlUqjVV1-K3eXFGZVm38Kc6Mqhc
+TRANSLATION_CACHE_PASSWORD=
 
 # PostgreSQL shared instance (API gateway + Keycloak)
 # The shared PostgreSQL (postgres service) uses a superuser + dedicated users:
@@ -107,7 +107,7 @@ EMAIL_FROM=
 # Get your token at: https://huggingface.co/settings/tokens
 # Used by: vLLM, TEI (embedding/reranking services)
 # Accept: "Read" permissions sufficient
-HUGGING_FACE_HUB_TOKEN=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
+HUGGING_FACE_HUB_TOKEN=
 
 # Optional: vLLM API key if required by your vLLM deployment
 # VLLM_API_KEY=
@@ -135,9 +135,9 @@ HUGGING_FACE_HUB_TOKEN=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
 # - Reranking: Improves retrieval quality, optional but recommended
 
 # Main LLM model for chat (OPEA ChatQnA service)
-# Default: meta-llama/Meta-Llama-3.1-8B-Instruct
-# Options: meta-llama/Llama-3.1-70B-Instruct (more accurate, slower)
-VLLM_LLM_MODEL_ID=meta-llama/Meta-Llama-3.1-8B-Instruct
+# Default: the model CareLink runs (see the vllm service in docker-compose.yaml)
+# Options: meta-llama/Meta-Llama-3.1-8B-Instruct, meta-llama/Llama-3.1-70B-Instruct (larger: more accurate, slower, more GPU memory)
+VLLM_LLM_MODEL_ID=Qwen/Qwen2.5-3B-Instruct
 
 # Translation model (OPEA Translation service)
 # Default: google/gemma-3-4b-it
@@ -179,6 +179,16 @@ VLLM_LLM_MODEL_ID=meta-llama/Meta-Llama-3.1-8B-Instruct
 # RETRIEVER_ARANGO_FILTER_STRATEGY=OR
 # RETRIEVER_SUMMARIZER_ENABLED=false
 # RERANKING_THRESHOLD=0.9
+# Floor for the reranker's threshold strategy. The bar itself is the per-request
+# threshold ChatQnA sends (0.42 in code — NOT the RERANKING_THRESHOLD above; see the
+# CHATQNA_STRICT_MIN_SCORE NOTE further down). If at least one chunk clears that bar
+# but fewer than this many do, the next-best near-miss chunks (score >= half the bar)
+# are added up to this count. If none clears it, no chunks are sent and ChatQnA's
+# abstention text applies. Read by the reranker only; ChatQnA does not override it.
+# The default lives in the reranker code (DEFAULT_RERANKING_MIN_N in
+# genieai_tei_reranker.py) and is not repeated here. Leave unset or empty to use it;
+# set a number to override it. 0 disables the floor.
+# RERANKING_MIN_N=
 
 # =============================================================================
 # SECTION 5: FRONTEND CONFIGURATION
@@ -316,6 +326,67 @@ CERTBOT_REPLICAS=1
 # CHATQNA_ABSTENTION_INSTRUCTIONS="If no information found in the context..."
 # CHATQNA_ENFORCE_ABSTENTION="false"
 # LABEL_SELECTOR_SYSTEM_PROMPT="Categorize this document..."
+
+# -----------------------------------------------------------------------------
+# Strict grounding ("containment") mode
+# -----------------------------------------------------------------------------
+# Default behavior: when retrieval finds nothing, the assistant hedges briefly
+# and then answers from the model's own general knowledge. Good for a
+# conversational health companion; NOT sufficient to claim that every answer
+# comes from the uploaded document repository.
+#
+# Strict mode enforces containment in code, not by prompt instruction:
+#   - clinical questions can no longer skip retrieval (even 2-3 word ones, and
+#     even when prefixed with a greeting)
+#   - if no retrieved document clears the bar, the generated answer is discarded
+#     and CHATQNA_STRICT_REFUSAL is returned instead
+#   - the prompt sections telling the model to extend beyond the documents are
+#     overridden, including per-twin prompts stored in ArangoDB
+#
+# Urgent-care / red-flag turns (chest pain, stroke signs, BP >= 180/110,
+# self-harm) are deliberately EXEMPT — safety overrides containment.
+#
+# Verify with: python3 -m unittest tests.test_strict_grounding
+# CHATQNA_STRICT_GROUNDING="true"
+#
+# Minimum reranker score for a document to count as grounding. Defaults to the
+# reranking threshold ChatQnA itself applies (0.42 in code), and that default
+# matters: the reranker's threshold strategy can return chunks below its bar —
+# once one chunk clears it, the RERANKING_MIN_N floor tops the list up with
+# near-miss chunks (see the RERANKING_MIN_N comment above). A bar of 0.0 would count those
+# topped-up chunks as grounding; matching the threshold means "the best chunk
+# must have cleared the bar on its own". When nothing clears the bar the reranker
+# returns no documents, so the gate sees an empty list.
+#
+# NOTE: the RERANKING_THRESHOLD above is read by the reranker service, NOT by
+# ChatQnA — ChatQnA is not passed that variable and sends its own value, which
+# takes precedence per request. So changing RERANKING_THRESHOLD does not move
+# this bar. If you tune reranking, set this explicitly to match.
+#
+# Raise it if irrelevant documents still get through; lower it if legitimate
+# questions are being refused. The [STRICT_GROUNDING] log line prints the scores
+# for every turn, so tune from real traffic rather than guessing. With no
+# reranker in the graph (CHATQNA_TYPE=CHATQNA_NO_RERANK) this bar is skipped,
+# because retriever scores are on a different scale.
+# CHATQNA_STRICT_MIN_SCORE="0.42"
+#
+# Message returned when nothing is grounded. Translated into the user's language
+# by the normal response path.
+# CHATQNA_STRICT_REFUSAL="I'm sorry, this question cannot be answered with the information that has been vetted."
+
+# -----------------------------------------------------------------------------
+# Capability claims (independent of strict grounding, ON by default)
+# -----------------------------------------------------------------------------
+# Nothing in the prompts mentions booking, reminders or messaging, but the model
+# volunteers them anyway ("I can set up an appointment for you") because nothing
+# forbids it. Those are not features, so the offer is a promise the product
+# cannot keep. Enabled by default, it lists the non-capabilities explicitly and
+# redirects to what the user's health worker or clinic can do instead.
+#
+# Set to "false" to allow the aspirational framing — e.g. to show pilot users
+# what an integrated version could do. Be aware that this is the setting that
+# risks overselling the current build.
+# CHATQNA_NO_CAPABILITY_CLAIMS="false"
 
 # =============================================================================
 # SECTION 8b: VOICE BRIDGE (OPTIONAL — `--profile voice`)

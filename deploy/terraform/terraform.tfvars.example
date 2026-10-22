@@ -1,0 +1,60 @@
+# =============================================================================
+# Copy to terraform.tfvars and fill in. Values shown are the dev defaults.
+# =============================================================================
+
+region      = "us-east-1"
+aws_profile = "healthbot-dev" # named AWS CLI profile Terraform should use
+project     = "healthbot"
+environment = "dev"
+
+# Data backend: start "embedded" (bundled postgres/redis containers, all-in-one),
+# switch to "external" (managed RDS + ElastiCache) later — external also needs the
+# RDS force-SSL + Redis AUTH/TLS fixes documented in aws-dev-deployment-plan.md §8.
+data_backend = "embedded"
+
+# --- DNS / TLS ---------------------------------------------------------------
+domain_name = "asante.innov8ai.com"
+
+# Route 53 zone handling — SET THIS after confirming the account:
+#   false = innov8ai.com already exists as a hosted zone in THIS account
+#   true  = create a zone for asante.innov8ai.com, then delegate NS at the registrar
+create_route53_zone = false
+route53_zone_name   = "innov8ai.com" # used only when create_route53_zone = false
+
+# --- Access ------------------------------------------------------------------
+# DEV DEFAULT IS OPEN. Lock to stakeholder/office IPs, e.g. ["203.0.113.10/32"].
+allowed_ingress_cidrs = ["0.0.0.0/0"]
+
+# --- Storage -----------------------------------------------------------------
+# The live dev environment runs 600 GB (raised from 300 on 2026-08-09 at 87% full;
+# Docker images plus the HF model cache dominate). Recorded here because
+# terraform.tfvars is gitignored: applying from a fresh checkout without it would
+# fall back to the variables.tf default of 200 and plan a SHRINK, which AWS
+# rejects — EBS volumes can only grow. Keep this in step with the real value.
+data_volume_gb = 600
+
+# --- Model / instance (B1 default; uncomment B2 for Llama-8B) -----------------
+instance_type        = "g6e.2xlarge"
+llm_model_id         = "Qwen/Qwen2.5-3B-Instruct"
+vllm_gpu_utilization = "0.35"
+# Do not lower this. The system prompt (~3073 tokens) plus 1024 output tokens is
+# 4097, so 4096 breaks every chat request; see variables.tf for the full note.
+vllm_max_model_len   = "16384"
+# instance_type        = "g6e.4xlarge"
+# llm_model_id         = "meta-llama/Meta-Llama-3.1-8B-Instruct"  # gated on HuggingFace
+# vllm_gpu_utilization = "0.5"
+
+# --- Secrets you MUST supply -------------------------------------------------
+# HF token is read from Secrets Manager at runtime (default innov8ai/asante/hf-token,
+# JSON key HF_TOKEN) — override the secret id only if it moves.
+# hf_secret_id      = "innov8ai/asante/hf-token"
+genie_admin_email = "admin@innov8ai.com" # pending from Andy for Asante
+
+# Application code ships as an S3 zip that Terraform builds from this working tree
+# (artifact.tf) — no git repo or token needed. Nothing to set here.
+
+# --- Cost control (decision #7) ----------------------------------------------
+enable_scheduler     = true
+scheduler_timezone   = "America/Los_Angeles"
+scheduler_start_cron = "cron(0 8 ? * MON-FRI *)" # 08:00 weekdays
+scheduler_stop_cron  = "cron(0 19 ? * * *)"      # 19:00 daily

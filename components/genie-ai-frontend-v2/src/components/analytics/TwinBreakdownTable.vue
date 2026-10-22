@@ -70,16 +70,16 @@ interface ColumnSpec {
 const columns: ColumnSpec[] = [
   { key: 'name', labelKey: 'analytics.tables.twins.col.name', fallback: 'Twin', align: 'left' },
   { key: 'chatSessions', labelKey: 'analytics.tables.twins.col.chats', fallback: 'Chat Sessions', align: 'right' },
-  { key: 'calls', labelKey: 'analytics.tables.twins.col.calls', fallback: 'Calls', align: 'right' },
+  { key: 'calls', labelKey: 'analytics.tables.twins.col.calls', fallback: 'Audio', align: 'right' },
   { key: 'avgResponseTimeMs', labelKey: 'analytics.tables.twins.col.avgResp', fallback: 'Avg Response Time', align: 'right' },
   { key: 'avgMsgsPerSession', labelKey: 'analytics.tables.twins.col.avgMsgs', fallback: 'Avg Msgs/Session', align: 'right' },
-  { key: 'avgCallDurationSecs', labelKey: 'analytics.tables.twins.col.avgCallDur', fallback: 'Avg Call Duration', align: 'right' },
+  { key: 'avgCallDurationSecs', labelKey: 'analytics.tables.twins.col.avgCallDur', fallback: 'Avg Audio Duration', align: 'right' },
 ];
 </script>
 
 <template>
   <div v-if="data.length === 0" class="rounded-xl bg-surface-subtle p-8 text-center text-body text-text-subtle">
-    {{ t('analytics.tables.twins.empty', 'No twin activity in this period.') }}
+    {{ t('analytics.tables.twins.empty', 'No topic module activity in this period.') }}
   </div>
 
   <div v-else class="overflow-x-auto">

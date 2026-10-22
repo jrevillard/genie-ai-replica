@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { Alert02Icon } from '@hugeicons/core-free-icons';
 import BaseButton from '../components/ui/BaseButton.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
@@ -22,9 +22,11 @@ import DashboardLayout from '../layouts/DashboardLayout.vue';
 import { useT } from '../i18n/composables';
 import { defaultRange, type DateRange } from '../lib/analytics';
 import { extractError } from '../lib/errors';
+import { WHATSAPP_UI_ENABLED } from '../lib/features';
 import {
   getAdminSummary,
   type AdminAnalyticsSummary,
+  type ChannelSplitItem,
 } from '../services/analytics';
 
 const { t } = useT();
@@ -60,6 +62,21 @@ watch(
 function isAllZero<T>(arr: T[], pick: (x: T) => number): boolean {
   return arr.length === 0 || arr.every((d) => pick(d) === 0);
 }
+
+// While WhatsApp is hidden, its sessions count as Chat in this chart, the same
+// way the KPI tiles and the other charts already count them, so totals agree.
+const channelSplit = computed<ChannelSplitItem[]>(() => {
+  const rows = summary.value?.channelSplit ?? [];
+  if (WHATSAPP_UI_ENABLED) return rows;
+  const whatsapp = rows.find((d) => d.channel === 'whatsapp')?.count ?? 0;
+  const merged = rows
+    .filter((d) => d.channel !== 'whatsapp')
+    .map((d) => (d.channel === 'chat' ? { ...d, count: d.count + whatsapp } : d));
+  if (whatsapp > 0 && !merged.some((d) => d.channel === 'chat')) {
+    merged.unshift({ channel: 'chat', count: whatsapp });
+  }
+  return merged;
+});
 </script>
 
 <template>
@@ -69,7 +86,7 @@ function isAllZero<T>(arr: T[], pick: (x: T) => number): boolean {
         <div>
           <h1 class="text-headline text-text">{{ t('analytics.title', 'Analytics') }}</h1>
           <p class="mt-1 text-meta text-text-subtle">
-            {{ t('analytics.subtitle', 'How patients are engaging with your AI twins.') }}
+            {{ t('analytics.subtitle', 'How users are engaging with your AI topic modules.') }}
           </p>
         </div>
         <AnalyticsDateRange v-model="range" />
@@ -108,7 +125,7 @@ function isAllZero<T>(arr: T[], pick: (x: T) => number): boolean {
           <ChartCard
             class="lg:col-span-2"
             :title="t('analytics.charts.activityByDay', 'Activity Over Time')"
-            :subtitle="t('analytics.charts.activityByDaySubtitle', 'Chat sessions and calls per day')"
+            :subtitle="t('analytics.charts.activityByDaySubtitle', 'Chat and audio sessions per day')"
             :empty="isAllZero(summary.activityByDay, (d) => d.chatSessions + d.calls)"
           >
             <ActivityByDayChart :data="summary.activityByDay" />
@@ -117,14 +134,14 @@ function isAllZero<T>(arr: T[], pick: (x: T) => number): boolean {
           <ChartCard
             :title="t('analytics.charts.channelSplit', 'Channel Split')"
             :subtitle="t('analytics.charts.channelSplitSubtitle', 'Distribution by channel')"
-            :empty="isAllZero(summary.channelSplit, (d) => d.count)"
+            :empty="isAllZero(channelSplit, (d) => d.count)"
           >
-            <ChannelSplitChart :data="summary.channelSplit" />
+            <ChannelSplitChart :data="channelSplit" />
           </ChartCard>
 
           <ChartCard
-            :title="t('analytics.charts.callLanguages', 'Call Languages')"
-            :subtitle="t('analytics.charts.callLanguagesSubtitle', 'Languages used in voice calls')"
+            :title="t('analytics.charts.callLanguages', 'Audio Languages')"
+            :subtitle="t('analytics.charts.callLanguagesSubtitle', 'Languages used in audio sessions')"
             :empty="isAllZero(summary.callLanguages, (d) => d.count)"
           >
             <CallLanguagesChart :data="summary.callLanguages" />
@@ -139,8 +156,8 @@ function isAllZero<T>(arr: T[], pick: (x: T) => number): boolean {
           </ChartCard>
 
           <ChartCard
-            :title="t('analytics.charts.callDuration', 'Call Duration')"
-            :subtitle="t('analytics.charts.callDurationSubtitle', 'Distribution of call lengths')"
+            :title="t('analytics.charts.callDuration', 'Audio Duration')"
+            :subtitle="t('analytics.charts.callDurationSubtitle', 'Distribution of audio session lengths')"
             :empty="isAllZero(summary.callDurationDistribution, (d) => d.count)"
           >
             <CallDurationChart :data="summary.callDurationDistribution" />
@@ -148,7 +165,7 @@ function isAllZero<T>(arr: T[], pick: (x: T) => number): boolean {
 
           <ChartCard
             class="lg:col-span-2"
-            :title="t('analytics.charts.hourlyDistribution', 'When Are Patients Most Active?')"
+            :title="t('analytics.charts.hourlyDistribution', 'When Are Users Most Active?')"
             :subtitle="t('analytics.charts.hourlyDistributionSubtitle', 'Activity by hour of day')"
             :empty="isAllZero(summary.hourlyDistribution, (d) => d.count)"
           >
@@ -160,17 +177,17 @@ function isAllZero<T>(arr: T[], pick: (x: T) => number): boolean {
             :title="t('analytics.charts.topCategories', 'Top Conversation Topics')"
             :subtitle="t('analytics.charts.topCategoriesSubtitle', 'Most-discussed categories')"
             :empty="summary.topCategories.length === 0"
-            :empty-body="t('analytics.charts.empty.topCategoriesBody', 'Topics appear once patients start chatting.')"
+            :empty-body="t('analytics.charts.empty.topCategoriesBody', 'Topics appear once users start chatting.')"
           >
             <TopCategoriesChart :data="summary.topCategories" />
           </ChartCard>
         </div>
 
-        <ChartCard :title="t('analytics.tables.twins.title', 'Twin Performance')">
+        <ChartCard :title="t('analytics.tables.twins.title', 'Topic Module Performance')">
           <TwinBreakdownTable :data="summary.twinBreakdown" />
         </ChartCard>
 
-        <ChartCard :title="t('analytics.tables.patients.title', 'Patient Engagement')">
+        <ChartCard :title="t('analytics.tables.patients.title', 'User Engagement')">
           <PatientAnalyticsTable :from="range.from" :to="range.to" />
         </ChartCard>
       </template>

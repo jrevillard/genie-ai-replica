@@ -146,7 +146,7 @@ async function onCreated(payload: CreatePatientPayload) {
         full-height
         :icon="UserMultipleIcon"
         :title="t('patients.list.emptyTitle', 'No users yet')"
-        :description="t('patients.list.emptyBody', `Add your first user to start managing their AI Twin access.`)"
+        :description="t('patients.list.emptyBody', `Add your first user to start managing their Topic Module access.`)"
       />
     </section>
 

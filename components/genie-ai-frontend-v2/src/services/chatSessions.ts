@@ -390,41 +390,57 @@ export async function getPublicSuggestedQuestions(twinId: string): Promise<Sugge
 }
 
 // ============================================================================
-// Public (guest) endpoints — limited to the default twin. No auth header.
+// Public (guest) endpoints — limited to the modules guests may use (backend
+// PUBLIC_TWIN_IDS). No auth header.
 // ============================================================================
 
 export interface PublicCreateChatSessionResponse {
   sessionId: string;
+  // The backend serves the session only to requests that send this back.
   guestId: string;
   twinId: string;
   createdAt: string;
 }
 
-export async function createPublicChatSession(): Promise<PublicCreateChatSessionResponse> {
-  const res = await api.post<PublicCreateChatSessionResponse>('/public/chat-sessions');
+// A guest session's requests carry its guestId in a header, never in the URL
+// (URLs end up in browser history and access logs).
+function guestHeaders(guestId: string | null): Record<string, string> {
+  return guestId ? { 'X-Guest-Id': guestId } : {};
+}
+
+export async function createPublicChatSession(
+  twinId?: string
+): Promise<PublicCreateChatSessionResponse> {
+  const res = await api.post<PublicCreateChatSessionResponse>(
+    '/public/chat-sessions',
+    twinId ? { twinId } : {}
+  );
   return res.data;
 }
 
 export async function sendPublicChatMessage(
   sessionId: string,
+  guestId: string | null,
   payload: SendChatMessagePayload
 ): Promise<SendChatMessageResponse> {
   const res = await api.post<SendChatMessageResponse>(
     `/public/chat-sessions/${encodeURIComponent(sessionId)}/messages`,
-    payload
+    payload,
+    { headers: guestHeaders(guestId) }
   );
   return normalizeSendChatMessageResponse(res.data);
 }
 
 export async function getPublicChatSessionMessages(
   sessionId: string,
+  guestId: string | null,
   params: GetChatSessionMessagesParams = {}
 ): Promise<ChatSessionMessagesResponse> {
   const query: Record<string, string | number> = { limit: params.limit ?? 500 };
   if (params.q) query.q = params.q;
   const res = await api.get<ChatSessionMessagesResponse>(
     `/public/chat-sessions/${encodeURIComponent(sessionId)}/messages`,
-    { params: query }
+    { params: query, headers: guestHeaders(guestId) }
   );
   const data = res.data;
   return {
@@ -435,6 +451,7 @@ export async function getPublicChatSessionMessages(
 
 export async function sendPublicVoiceMessage(
   sessionId: string,
+  guestId: string | null,
   audio: Blob,
   opts: SendVoiceMessageOptions = {},
 ): Promise<SendVoiceMessageResponse> {
@@ -448,18 +465,19 @@ export async function sendPublicVoiceMessage(
   const res = await api.post<SendVoiceMessageResponse>(
     `/public/chat-sessions/${encodeURIComponent(sessionId)}/voice-messages`,
     form,
-    { headers: { 'Content-Type': 'multipart/form-data' } },
+    { headers: { 'Content-Type': 'multipart/form-data', ...guestHeaders(guestId) } },
   );
   return res.data;
 }
 
 export async function fetchPublicMessageAudio(
   sessionId: string,
+  guestId: string | null,
   messageId: string,
 ): Promise<Blob> {
   const res = await api.get<Blob>(
     `/public/chat-sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}/audio`,
-    { responseType: 'blob' },
+    { responseType: 'blob', headers: guestHeaders(guestId) },
   );
   return res.data;
 }

@@ -39,6 +39,9 @@ class RequestContext(BaseModel):
     language: str | None = None
     # True: use client category/service as-is (sidebar). False/omit: allow ChatQnA auto-routing.
     skipAutoRoute: bool | None = None
+    # Knowledge Set allow-list: document repository file ids the answer may draw on.
+    # Omitted or empty means unscoped retrieval (every ingested document).
+    kbFileIds: list[str] | None = None
 
 
 class ChatCompletionRequest(BaseModel):

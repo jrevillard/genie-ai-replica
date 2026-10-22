@@ -5,10 +5,10 @@ import { useI18n } from 'vue-i18n';
 import {
   AlertCircleIcon,
   ArrowRight01Icon,
+  AudioWave01Icon,
   BirthdayCakeIcon,
   BubbleChatIcon,
   CalendarAdd01Icon,
-  CallIcon,
   CheckmarkCircle02Icon,
   Login03Icon,
   WhatsappIcon,
@@ -17,6 +17,7 @@ import BaseAvatar from '../ui/BaseAvatar.vue';
 import Icon from '../ui/Icon.vue';
 import type { Patient } from '../../services/patients';
 import { formatRelative, type RelativeStrings } from '../../lib/analytics';
+import { WHATSAPP_UI_ENABLED } from '../../lib/features';
 import { useT } from '../../i18n/composables';
 
 const { t } = useT();
@@ -162,7 +163,7 @@ function open() {
     <!-- Engagement stats — the most-important new data, given premium tile
          treatment: subtle gradient, ring border, top icon + big number, label
          below. Slight lift on hover gives an interactive feel. -->
-    <div class="grid grid-cols-3 gap-2.5">
+    <div :class="['grid gap-2.5', WHATSAPP_UI_ENABLED ? 'grid-cols-3' : 'grid-cols-2']">
       <div class="stat-tile from-rose-50/80 to-white">
         <div class="flex items-center justify-between">
           <span class="stat-icon bg-white text-rose-500 ring-rose-100">
@@ -172,7 +173,7 @@ function open() {
         </div>
         <p class="stat-label">{{ t('patients.list.card.chats', 'Chats') }}</p>
       </div>
-      <div class="stat-tile from-emerald-50/80 to-white">
+      <div v-if="WHATSAPP_UI_ENABLED" class="stat-tile from-emerald-50/80 to-white">
         <div class="flex items-center justify-between">
           <span class="stat-icon bg-white text-emerald-500 ring-emerald-100">
             <Icon :icon="WhatsappIcon" :size="14" />
@@ -184,11 +185,11 @@ function open() {
       <div class="stat-tile from-ieee-50/80 to-white">
         <div class="flex items-center justify-between">
           <span class="stat-icon bg-white text-ieee-600 ring-ieee-100">
-            <Icon :icon="CallIcon" :size="14" />
+            <Icon :icon="AudioWave01Icon" :size="14" />
           </span>
           <span class="stat-value" :title="String(numCalls)">{{ formatStat(numCalls) }}</span>
         </div>
-        <p class="stat-label">{{ t('patients.list.card.calls', 'Calls') }}</p>
+        <p class="stat-label">{{ t('patients.list.card.calls', 'Audio') }}</p>
       </div>
     </div>
 

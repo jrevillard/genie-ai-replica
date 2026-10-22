@@ -111,10 +111,17 @@ module.exports = (chatSessionService, deps = {}) => {
    * Called fire-and-forget by the ChatQnA Python service to persist per-message
    * English translations so future turns skip re-translation.
    *
+   * ChatQnA calls the backend directly (BACKEND_SERVICE_URL). Every request from
+   * outside comes through the nginx gateway, which sets X-Forwarded-For and
+   * X-Real-IP, so a request carrying either is refused like an unknown route.
+   *
    * POST /api/chat-sessions/internal/message-translations
    * Body: { translations: [{ _key: string, contentEn: string }] }
    */
   router.post('/internal/message-translations', async (req, res) => {
+    if (req.get('X-Forwarded-For') || req.get('X-Real-IP')) {
+      return res.status(404).json({ message: 'Not Found' });
+    }
     try {
       const { translations } = req.body || {};
       if (!Array.isArray(translations) || translations.length === 0) {

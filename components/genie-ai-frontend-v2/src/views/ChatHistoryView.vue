@@ -4,9 +4,8 @@ import { storeToRefs } from 'pinia';
 import {
   ArrowLeft01Icon,
   ArrowRight01Icon,
+  AudioWave01Icon,
   BubbleChatIcon,
-  CallEnd01Icon,
-  CallIcon,
   Calendar03Icon,
   Cancel01Icon,
   Copy01Icon,
@@ -23,6 +22,7 @@ import {
   VolumeHighIcon,
 } from '@hugeicons/core-free-icons';
 import BaseAvatar from '../components/ui/BaseAvatar.vue';
+import MarkdownText from '../components/chat/MarkdownText.vue';
 import BaseDropdown from '../components/ui/BaseDropdown.vue';
 import ConfirmDialog from '../components/ui/ConfirmDialog.vue';
 import FlagIcon from '../components/ui/FlagIcon.vue';
@@ -35,6 +35,7 @@ import EmptyState from '../components/ui/EmptyState.vue';
 import Icon from '../components/ui/Icon.vue';
 import DashboardLayout from '../layouts/DashboardLayout.vue';
 import { playRecordStartChime, playRecordStopChime } from '../lib/chimes';
+import { WHATSAPP_UI_ENABLED } from '../lib/features';
 import { notify } from '../lib/notify';
 import { useAiTwinsStore } from '../stores/aiTwins';
 import { useAuthStore } from '../stores/auth';
@@ -211,7 +212,7 @@ const chatSortOptions = computed(() => [
 const typeOptions = [
   { value: '', label: 'All channels' },
   { value: 'chat', label: 'Chat' },
-  { value: 'whatsapp', label: 'WhatsApp' },
+  ...(WHATSAPP_UI_ENABLED ? [{ value: 'whatsapp', label: 'WhatsApp' }] : []),
 ];
 
 // TODO i18n: missing keys for scope filter labels (My sessions, All users)
@@ -392,7 +393,7 @@ const twinFilterOptions = computed(() =>
 );
 
 const callTwinFilterOptions = computed(() => [
-  { value: '', label: t('history.filters.allTwins', 'All twins') },
+  { value: '', label: t('history.filters.allTwins', 'All topic modules') },
   ...availableTwins.value.map((tw) => ({ value: tw._key, label: tw.name })),
 ]);
 
@@ -407,7 +408,7 @@ function twinById(twinId?: string | null): TwinOption | null {
 }
 
 // Backend now returns the chatting user on each session. Show that user
-// (avatar + name) in the row instead of the AI Twin — the twin is still
+// (avatar + name) in the row instead of the Topic Module — the twin is still
 // surfaced in the right-pane subtitle and via the twin filter dropdown.
 function sessionTitle(session: ChatSessionRecord | null | undefined): string {
   if (!session) return '';
@@ -443,17 +444,17 @@ function twinAvatarSrc(session: ChatSessionRecord | null | undefined): string | 
   return twinById(session.twinId)?.profilePicUrl ?? null;
 }
 function twinAvatarName(session: ChatSessionRecord | null | undefined): string {
-  if (!session) return 'AI Twin';
-  return twinById(session.twinId)?.name ?? 'AI Twin';
+  if (!session) return 'Topic Module';
+  return twinById(session.twinId)?.name ?? 'Topic Module';
 }
 
 // Right-pane subtitle: keep the twin name visible so the admin can still see
-// which AI Twin the conversation was with (the title is now the user).
+// which Topic Module the conversation was with (the title is now the user).
 function sessionSubtitle(session: ChatSessionRecord | null | undefined): string {
   if (!session) return '';
   if (session.type === 'whatsapp') return 'WhatsApp conversation';
   const twin = twinById(session.twinId);
-  return twin?.name ? `Chat with ${twin.name}` : 'AI Twin conversation';
+  return twin?.name ? `Chat with ${twin.name}` : 'Topic Module conversation';
 }
 
 const sortedChatSessions = computed<ChatSessionRecord[]>(() => {
@@ -665,6 +666,13 @@ function escapeHtml(input: string): string {
 
 function escapeRegex(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Only messages that actually contain the search term drop to the
+// plain-text branch, where highlightMessage can mark the matches.
+function searchMatchesMessage(content: string): boolean {
+  const term = chatSearchInput.value.trim().toLowerCase();
+  return !!term && (content ?? '').toLowerCase().includes(term);
 }
 
 function highlightMessage(content: string): string {
@@ -1459,7 +1467,7 @@ onBeforeUnmount(() => {
     <section class="h-full min-h-0 bg-white p-4 md:p-6">
       <div class="flex h-full min-h-[760px] flex-col gap-4 lg:min-h-[640px]">
         <header class="flex flex-col gap-4">
-          <h1 class="text-lg font-bold text-slate-900">{{ t('history.title', 'Chat/Call History') }}</h1>
+          <h1 class="text-lg font-bold text-slate-900">{{ t('history.title', 'Chat/Audio History') }}</h1>
           <div class="inline-flex w-fit gap-1 rounded-full border border-slate-200 bg-slate-50 p-1" role="tablist" :aria-label="t('history.aria.historyType', 'History type')">
             <button
               v-for="tab in ['Chats', 'Calls']"
@@ -1473,7 +1481,7 @@ onBeforeUnmount(() => {
               ]"
               @click="activeTab = tab as 'Chats' | 'Calls'"
             >
-              {{ tab === 'Chats' ? t('history.tabs.chats', 'Chats') : t('history.tabs.calls', 'Calls') }}
+              {{ tab === 'Chats' ? t('history.tabs.chats', 'Chats') : t('history.tabs.calls', 'Audio') }}
             </button>
           </div>
         </header>
@@ -1491,7 +1499,7 @@ onBeforeUnmount(() => {
               <BaseDropdown
                 v-model="twinFilterValue"
                 :options="twinFilterOptions"
-                :placeholder="t('history.aiTwin', 'AI Twin')"
+                :placeholder="t('history.aiTwin', 'Topic Module')"
                 width="w-full"
               />
               <BaseDropdown
@@ -1674,8 +1682,8 @@ onBeforeUnmount(() => {
                   :icon="BubbleChatIcon"
                   :title="chatSessions.length === 0 ? t('history.noChatsTitle', 'No chats yet') : t('history.noMatchesTitle', 'No matches')"
                   :description="chatSessions.length === 0
-                    ? t('history.noChatsBody', 'Conversations with your AI Twins will appear here.')
-                    : t('history.noMatchesBody', 'No calls match the current filters.')"
+                    ? t('history.noChatsBody', 'Conversations with your Topic Modules will appear here.')
+                    : t('history.noChatMatchesBody', 'No chats match the current filters.')"
                 />
               </div>
 
@@ -1933,14 +1941,18 @@ onBeforeUnmount(() => {
                     <div
                       v-else
                       :class="[
-                        'rounded-2xl px-3.5 py-3 text-xs leading-relaxed whitespace-pre-wrap',
+                        'rounded-2xl px-3.5 py-3 text-xs leading-relaxed',
                         message.role === 'user'
                           ? 'rounded-tr-md bg-ieee-700 text-white shadow-sm'
                           : 'rounded-tl-md bg-white text-slate-600 shadow-sm',
                       ]"
                       :title="message.createdAt ? formatFullDateTime(message.createdAt) : undefined"
                     >
-                      <p v-html="highlightMessage(message.content)" />
+                      <MarkdownText
+                        v-if="message.role !== 'user' && !searchMatchesMessage(message.content)"
+                        :text="message.content"
+                      />
+                      <p v-else class="whitespace-pre-wrap" v-html="highlightMessage(message.content)" />
                     </div>
                     <div
                       :class="[
@@ -2120,7 +2132,7 @@ onBeforeUnmount(() => {
             <BaseDropdown
               v-model="callTwinFilter"
               :options="callTwinFilterOptions"
-              :placeholder="t('history.aiTwin', 'AI Twin')"
+              :placeholder="t('history.aiTwin', 'Topic Module')"
             />
             <BaseDropdown
               v-model="callDateFilter"
@@ -2147,7 +2159,7 @@ onBeforeUnmount(() => {
               <span>{{ t('history.columns.endTime', 'End Time') }}</span>
               <span>{{ t('history.columns.duration', 'Duration') }}</span>
               <span>{{ t('history.columns.gender', 'Gender') }}</span>
-              <span>{{ t('history.aiTwin', 'AI Twin') }}</span>
+              <span>{{ t('history.aiTwin', 'Topic Module') }}</span>
               <span />
             </div>
             <div class="min-h-0 flex-1 divide-y divide-neutral-100 overflow-y-auto">
@@ -2172,11 +2184,11 @@ onBeforeUnmount(() => {
 
               <div v-else-if="displayedSessions.length === 0" class="px-5 py-12">
                 <EmptyState
-                  :icon="CallEnd01Icon"
-                  :title="callSessions.length === 0 ? t('history.noCallsTitle', 'No calls yet') : t('history.noMatchesTitle', 'No matches')"
+                  :icon="AudioWave01Icon"
+                  :title="callSessions.length === 0 ? t('history.noCallsTitle', 'No audio sessions yet') : t('history.noMatchesTitle', 'No matches')"
                   :description="callSessions.length === 0
-                    ? t('history.noCallsBody', 'Voice calls you make will appear here once they finish.')
-                    : t('history.noMatchesBody', 'No calls match the current filters.')"
+                    ? t('history.noCallsBody', 'Audio sessions will appear here once they finish.')
+                    : t('history.noMatchesBody', 'No audio sessions match the current filters.')"
                 />
               </div>
 
@@ -2188,7 +2200,7 @@ onBeforeUnmount(() => {
               >
                 <button type="button" class="flex items-center gap-3 text-left" @click="openCallDetails(record, 'transcript')">
                   <span class="grid h-9 w-9 place-items-center rounded-full bg-ieee-50 text-ieee-700 transition group-hover:bg-ieee-100">
-                    <Icon :icon="CallIcon" :size="16" />
+                    <Icon :icon="AudioWave01Icon" :size="16" />
                   </span>
                   <span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 py-0.5 pl-0.5 pr-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-700">
                     <FlagIcon v-if="record.language" :code="flagForLang(record.language)" :width="18" shape="circle" />
@@ -2222,7 +2234,7 @@ onBeforeUnmount(() => {
                 >
                   <BaseAvatar
                     :src="twinById(record.twinId)?.profilePicUrl ?? undefined"
-                    :name="twinById(record.twinId)?.name ?? 'AI Twin'"
+                    :name="twinById(record.twinId)?.name ?? 'Topic Module'"
                     size="xs"
                   />
                   <span class="truncate font-medium text-slate-700">
@@ -2232,7 +2244,7 @@ onBeforeUnmount(() => {
                 <button
                   type="button"
                   class="grid h-9 w-9 place-items-center justify-self-end rounded-full text-slate-400 opacity-0 transition hover:bg-red-50 hover:text-red-500 focus-visible:opacity-100 group-hover:opacity-100"
-                  :aria-label="t('history.aria.deleteCall', 'Delete call')"
+                  :aria-label="t('history.aria.deleteCall', 'Delete audio session')"
                   @click="openDeleteCallDialog(record)"
                 >
                   <Icon :icon="Delete02Icon" :size="16" />
@@ -2274,7 +2286,7 @@ onBeforeUnmount(() => {
           <section class="relative z-10 flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-[28px] bg-white shadow-[0_24px_64px_-16px_rgba(15,23,42,0.35)]">
             <header class="flex items-start justify-between gap-4 px-6 pt-6">
               <div class="min-w-0">
-                <h2 class="text-lg font-semibold text-slate-900">{{ t('history.callDetails', 'Call Details') }}</h2>
+                <h2 class="text-lg font-semibold text-slate-900">{{ t('history.callDetails', 'Audio Details') }}</h2>
                 <div v-if="currentSession" class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
                   <span v-if="twinById(currentSession.twinId)?.name" class="font-semibold text-slate-700">
                     {{ twinById(currentSession.twinId)?.name }}
@@ -2297,7 +2309,7 @@ onBeforeUnmount(() => {
               <button
                 type="button"
                 class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-neutral-100 text-neutral-700 transition hover:bg-neutral-200 hover:text-neutral-950"
-                :aria-label="t('history.aria.closeCallDetails', 'Close call details')"
+                :aria-label="t('history.aria.closeCallDetails', 'Close audio details')"
                 @click="closeCallDetails"
               >
                 <Icon :icon="Cancel01Icon" :size="16" />
@@ -2441,13 +2453,13 @@ onBeforeUnmount(() => {
                       <BaseAvatar
                         v-if="msg.isAssistant"
                         :src="twinById(currentSession?.twinId)?.profilePicUrl ?? undefined"
-                        :name="twinById(currentSession?.twinId)?.name ?? 'AI Twin'"
+                        :name="twinById(currentSession?.twinId)?.name ?? 'Topic Module'"
                         size="xs"
                       />
                       <BaseAvatar v-else :name="callerName" size="xs" />
                       <div class="flex max-w-[78%] flex-col gap-1" :class="msg.isAssistant ? 'items-start' : 'items-end'">
                         <span class="px-1 text-[11px] font-semibold" :class="msg.isAssistant ? 'text-ieee-700' : 'text-slate-500'">
-                          {{ msg.isAssistant ? (twinById(currentSession?.twinId)?.name ?? 'AI Twin') : 'You' }}
+                          {{ msg.isAssistant ? (twinById(currentSession?.twinId)?.name ?? 'Topic Module') : 'You' }}
                         </span>
                         <p
                           :class="[
@@ -2470,11 +2482,11 @@ onBeforeUnmount(() => {
                 <div v-else class="min-h-[240px] space-y-3 text-sm leading-relaxed">
                   <div v-if="currentSession" class="grid grid-cols-2 gap-3 sm:grid-cols-2">
                     <div class="rounded-2xl border border-slate-100 bg-slate-50/60 px-3 py-2.5">
-                      <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{{ t('history.aiTwin', 'AI Twin') }}</p>
+                      <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{{ t('history.aiTwin', 'Topic Module') }}</p>
                       <div class="mt-1 flex items-center gap-2">
                         <BaseAvatar
                           :src="twinById(currentSession.twinId)?.profilePicUrl ?? undefined"
-                          :name="twinById(currentSession.twinId)?.name ?? 'AI Twin'"
+                          :name="twinById(currentSession.twinId)?.name ?? 'Topic Module'"
                           size="xs"
                         />
                         <p class="truncate font-semibold text-slate-900">{{ twinById(currentSession.twinId)?.name ?? '—' }}</p>
@@ -2506,8 +2518,8 @@ onBeforeUnmount(() => {
 
       <ConfirmDialog
         v-model:open="deleteDialogOpen"
-        :title="t('history.deleteCallTitle', 'Are you sure you want to delete this call recording?')"
-        :description="t('history.deleteCallBody', `If you decide to delete, you'll lose all data related to this call. You can't recover them once deleted.`)"
+        :title="t('history.deleteCallTitle', 'Are you sure you want to delete this audio recording?')"
+        :description="t('history.deleteCallBody', `If you decide to delete, you'll lose all data related to this audio session. You can't recover them once deleted.`)"
         :confirm-label="t('common.delete', 'Delete')"
         :loading="deletingCall"
         @confirm="confirmDeleteCall"

@@ -1,6 +1,7 @@
 const { aql } = require('arangojs');
 const { logger, dbService, ensureCollection } = require('../shared-lib');
 const { NotFoundError, ValidationError, ForbiddenError } = require('../middleware/errors');
+const { knowledgeSetScope, readEmptyKnowledgeSetScope } = require('./knowledge-set-scope');
 
 const SESSIONS = 'chatSessions';
 const MESSAGES = 'chatSessionMessages';
@@ -314,10 +315,13 @@ class ChatSessionService {
     // we skip the directive.
     const opeaMessages = [];
     let twinSystemPrompt = null;
+    // The twin also decides the Knowledge Set scope (see knowledgeSetScope).
+    // Stays null when the session predates twins or the lookup below fails.
+    let twin = null;
     if (session.twinId) {
       try {
         const aiTwinService = require('./ai-twin-service');
-        const twin = await aiTwinService.getTwinByKey(session.twinId);
+        twin = await aiTwinService.getTwinByKey(session.twinId);
         // Twin's custom system prompt — used by chatqna instead of the hardcoded default.
         twinSystemPrompt = twin.systemPrompt || null;
         const directive = aiTwinService.buildTwinPromptFragment(twin);
@@ -332,6 +336,8 @@ class ChatSessionService {
       categoryLabel: context?.categoryLabel || 'General',
       serviceLabels: Array.isArray(context?.serviceLabels) ? context.serviceLabels : [],
       language: context?.language || 'EN',
+      // Server-owned: the scope comes from the twin, never from the client.
+      kbFileIds: knowledgeSetScope(twin, readEmptyKnowledgeSetScope()),
     };
 
     const result = await this.queryService.executeChatqnaTurn({

@@ -81,7 +81,7 @@ watch(
 <template>
   <BaseDrawer
     :open="open"
-    :title="t('twins.create.title', 'Create AI Twin')"
+    :title="t('twins.create.title', 'Create Topic Module')"
     :icon="SparklesIcon"
     width="md"
     @update:open="emit('update:open', $event)"
@@ -162,9 +162,9 @@ watch(
       <BaseTextarea
         id="twin-desc"
         v-model="form.description"
-        :label="t('twins.create.descLabel', 'Twin Description')"
+        :label="t('twins.create.descLabel', 'Topic Module Description')"
         :rows="8"
-        :placeholder="t('twins.create.descPlaceholder', 'Describe what this AI Twin should do…')"
+        :placeholder="t('twins.create.descPlaceholder', 'Describe what this Topic Module should do…')"
         :error="errors.description"
       />
     </section>
@@ -178,7 +178,7 @@ watch(
         {{ t('common.cancel', 'Cancel') }}
       </button>
       <BaseButton variant="primary" size="md" :loading="submitting" @click="onSubmit">
-        {{ t('twins.create.submit', 'Create Twin') }}
+        {{ t('twins.create.submit', 'Create Topic Module') }}
       </BaseButton>
     </template>
   </BaseDrawer>

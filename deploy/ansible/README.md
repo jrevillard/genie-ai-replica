@@ -147,6 +147,7 @@ Set in `group_vars/<env>/vault.yml`:
 | `kc_dataprep_client_secret` | Dataprep service account secret (client_credentials grant) |
 | `email_password` | SMTP password |
 | `hugging_face_hub_token` | Hugging Face Hub token |
+| `auth_service_password` | Plaintext password of the `http-service` service account. Optional — omit it and `http-service` will not start (see [Voice / auxiliary services](#voice--auxiliary-services)). |
 
 ## Environment Variables (Non-Secret)
 
@@ -158,6 +159,8 @@ Set in `group_vars/<env>/vars.yml`:
 |----------|---------|-------------|
 | `deploy_opea` | `1` | Deploy OPEA/AI services (GPU) |
 | `gpu_env_file` | `env.t4` | GPU defaults file (empty = none). Loaded first; Ansible `.env` takes precedence. |
+| `deploy_stabilization_timeout` | `900` | Seconds the post-deploy health gate waits for services to reach their replica count (polled every 30 s). |
+| `deploy_health_exempt` | see `group_vars/all.yml` | Service names the health gate ignores. Holds the one-shot jobs that legitimately end at 0/1 (`kong-config`, `kong-migrations`, `postgres-init`, `keycloak-config`, `db-migrations`) plus `http-service`. Removing a name puts that service back under the gate. |
 
 ### API Gateway (NGINX)
 
@@ -184,6 +187,9 @@ Set in `group_vars/<env>/vars.yml`:
 | `cors_allowed_origins` | `""` | CORS allowed origins |
 | `csp_connect_src` | `""` | Nginx CSP connect sources |
 | `log_level` | `info` | Log level for backend and document-repository: `error`, `warn`, `info`, `debug` |
+| `public_twin_ids` | set in `group_vars/all.yml`; unset → guests may use every Topic Module | Comma-separated twin ids guests (no account) may chat and use Audio with. Other modules send a guest to sign-in; signed-in users can use every module |
+| `chat_session_history_message_limit` | set in `group_vars/all.yml`; unset → backend code default (`historyLimit()` in `chat-session-service.js`) | Earlier chat messages the backend sends with each new question. A low value keeps an earlier topic from taking over the answer to a new question |
+| `empty_knowledge_set_scope` | unset → backend code default (`readEmptyKnowledgeSetScope()` in `knowledge-set-scope.js`) | What a Topic Module without a Knowledge Set searches: `all` = every document (the behaviour before this setting); `none`, unset or any other value = no documents |
 
 ### Email Configuration (non-secret)
 
@@ -207,8 +213,8 @@ Set in `group_vars/<env>/vars.yml`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `vllm_llm_model_id` | `meta-llama/Meta-Llama-3.1-8B-Instruct` | Main LLM model for chat |
-| `vllm_max_model_len` | `8192` | Maximum context length |
+| `vllm_llm_model_id` | unset: the `docker-compose.yaml` default | Main LLM model for chat |
+| `vllm_max_model_len` | `2048` (compose fallback) | Maximum context length. **Must exceed the system prompt plus the max output tokens.** The CHW system prompt alone is ~3073 tokens, so anything at or below 4096 makes every chat request fail with a vLLM 400 that surfaces as "unable to generate a response due to an upstream model error" — while `/api/health` keeps returning 200. The AWS dev environment runs `16384`; there is no Ansible default, so leaving this unset falls through to the compose fallback. |
 | `vllm_gpu_utilization` | `0.9` | GPU memory fraction (0.1-1.0) |
 | `vllm_dtype` | `auto` | Data type (auto, half, bfloat16, float32) |
 | `vllm_api_key` | `""` | Optional vLLM API key |
@@ -218,7 +224,7 @@ Set in `group_vars/<env>/vars.yml`:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `vllm_translation_model_id` | `google/gemma-3-4b-it` | Translation model |
-| `vllm_translation_max_model_len` | `8192` | Maximum context length |
+| `vllm_translation_max_model_len` | `2048` (compose fallback) | Maximum context length |
 | `vllm_translation_dtype` | `auto` | Data type |
 | `vllm_translation_gpu_utilization` | `0.9` | GPU memory fraction |
 | `vllm_translation_kv_cache_dtype` | `auto` | KV cache data type |
@@ -230,8 +236,37 @@ Set in `group_vars/<env>/vars.yml`:
 | `embedding_server_endpoint` | `/v1/embeddings` | Embedding service API endpoint path |
 | `embedding_model_id` | `BAAI/bge-base-en-v1.5` | Embedding model for vector search |
 | `reranker_model_id` | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Reranking model |
-| `reranking_strategy` | `hybrid` | Reranker strategy (hybrid, score, all) |
-| `reranking_threshold` | `0.9` | Threshold for reranker strategy |
+| `reranking_strategy` | `threshold` (compose fallback) | Reranker strategy: `slice`, `threshold` or `knee_threshold` |
+| `reranking_threshold` | `0.5` (compose fallback) | Reranker-service threshold. On the ChatQnA path it is overridden per request by ChatQnA's own value (0.42 in code) |
+| `reranking_min_n` | unset → code default (`DEFAULT_RERANKING_MIN_N` in the reranker) | Floor for the `threshold` strategy: top up with near-miss chunks to this count once one chunk clears the bar; nothing clears it → no documents. The bar is ChatQnA's per-request threshold (0.42), not `reranking_threshold`; 0 disables the floor |
+
+### Voice / auxiliary services
+
+`lid` and `tts-piper` need model assets that are **not** baked into their images
+and **not** in git. Nothing fetched them until 2026-08-09, so both services were
+down from first deployment: `tts-piper`'s bind-mount source did not exist and
+Swarm rejected the task outright ("bind source path does not exist"), while
+`lid` died on boot with `/models/lid.bin cannot be opened for loading!`.
+
+The `prepare` play now downloads both, with `force: false` so a redeploy
+re-checks presence instead of re-pulling ~1.8 GB.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `piper_voices` | 8 voices | Piper TTS voices to install. Must match the `TTS_PIPER_*` defaults in `docker-compose.yaml`. The download path is derived from the name, so adding a voice means adding a name: `en_US-lessac-high` → `en/en_US/lessac/high/…`. |
+| `piper_voices_base_url` | `https://huggingface.co/rhasspy/piper-voices/resolve/main` | Where voices are fetched from |
+| `lid_model_url` | `facebook/fasttext-language-identification` | Language-ID model. **Not** the smaller `lid.176`: chatqna and the backend both split the returned label on `_` and look the result up as an ISO 639-3 code (`eng`/`fra`/`swh`…), which `lid.176`'s two-letter codes never match — detection would fail silently and always fall back. Note this model is **CC-BY-NC-4.0** (non-commercial). |
+| `lid_volume_name` | `{{ stack_name }}_lid_models` | Named volume the model is placed in |
+| `auth_service_username` | `svc-http-service` | Service account `http-service` logs in as |
+
+`http-service` additionally needs the `auth_service_password` vault secret **and
+a matching row in the ArangoDB `users` collection**, with
+`encPassword = bcrypt(sha256(plaintext))` — the frontend SHA-256s the password
+client-side and the backend bcrypts that digest, so seeding `bcrypt(plaintext)`
+authenticates against nothing. Nothing in this playbook creates that row, so a
+rebuilt instance needs it re-created by hand. That is why `http-service` is in
+`deploy_health_exempt`; provision the account and remove it to bring the service
+under the health gate.
 
 ### ChatQnA Service
 

@@ -1,0 +1,170 @@
+#!/usr/bin/env bash
+# =============================================================================
+# GENIE.AI dev bootstrap — provisioned by Terraform, hands off to Ansible.
+# Rendered by Terraform templatefile(). Escaping: shell brace-variables use a doubled
+# dollar; command substitutions and awk fields keep a single dollar.
+# Watch progress:  sudo tail -f /var/log/genieai-bootstrap.log
+# =============================================================================
+set -euxo pipefail
+exec > >(tee -a /var/log/genieai-bootstrap.log) 2>&1
+echo "=== GENIE.AI bootstrap start: $(date -u) ==="
+
+# Ensure the SSM agent is running FIRST — this box has no SSH (port 22 closed),
+# so Session Manager is the only shell. Do it before anything that might fail.
+snap install amazon-ssm-agent --classic 2>/dev/null || true
+systemctl enable --now snap.amazon-ssm-agent.amazon-ssm-agent 2>/dev/null \
+  || systemctl enable --now amazon-ssm-agent 2>/dev/null || true
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -y
+apt-get install -y git python3-pip jq unzip curl rsync
+
+# AWS CLI v2 (skip if the Deep Learning AMI already ships it)
+if ! command -v aws >/dev/null 2>&1; then
+  curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o /tmp/awscliv2.zip
+  unzip -q /tmp/awscliv2.zip -d /tmp
+  /tmp/aws/install
+fi
+
+# Ansible + collections + docker SDK (used by the playbook's registry tasks)
+python3 -m pip install --quiet "ansible-core>=2.15,<2.18" docker || pip3 install ansible
+
+REGION="${region}"
+CLONE_DIR=/opt/genieai
+# ENVGRP / SSM_PREFIX / PRIVATE_IP are no longer needed here: the inventory and
+# group_vars rendering (the only consumer) moved to deploy/scripts/render-config.sh,
+# which reads /etc/genieai/deploy.env and derives the private IP from IMDS itself.
+
+# --- Put Docker + containerd state on the persistent data EBS ----------------
+# Images + named volumes (ArangoDB KB, ~30 GB HF model cache) must live on the data
+# volume, not the 100 GB root. This DLAMI runs Docker on the CONTAINERD SNAPSHOTTER,
+# so image layers go to /var/lib/containerd and volumes to /var/lib/docker — BOTH
+# default to root. We symlink both onto the EBS. LABEL survives NVMe renames.
+DATA_LABEL="genieai-data"
+ROOT_SRC="$(findmnt -no SOURCE / || true)"
+ROOT_DISK="$(lsblk -no PKNAME "$${ROOT_SRC}" 2>/dev/null | head -1 || true)"
+DATA_DEV=""
+# Pick the non-root *EBS* disk ONLY. g6e also has an ephemeral instance-store NVMe
+# that is WIPED on stop/start — never put persistent data there. EBS reports model
+# "Amazon Elastic Block Store"; instance store reports "Amazon EC2 NVMe Instance Storage".
+for d in $(lsblk -dn -o NAME,TYPE | awk '$2=="disk"{print $1}'); do
+  [ "$${d}" = "$${ROOT_DISK}" ] && continue
+  MODEL="$(lsblk -dno MODEL "/dev/$${d}" 2>/dev/null)"
+  case "$${MODEL}" in
+    *"Elastic Block Store"*) DATA_DEV="/dev/$${d}"; break ;;
+  esac
+done
+if [ -n "$${DATA_DEV}" ]; then
+  # Format only if the volume is fresh (keep data if it already has our label).
+  CUR_LABEL="$(lsblk -no LABEL "$${DATA_DEV}" | head -1)"
+  CUR_FSTYPE="$(lsblk -no FSTYPE "$${DATA_DEV}" | head -1)"
+  if [ "$${CUR_LABEL}" != "$${DATA_LABEL}" ] && [ -z "$${CUR_FSTYPE}" ]; then
+    mkfs.ext4 -F -L "$${DATA_LABEL}" "$${DATA_DEV}"
+  fi
+  # Mount the EBS at a DEDICATED dir — never over /var/lib/docker: mounting over a
+  # running dockerd's dir gets shadowed and docker keeps writing to the root disk.
+  mkdir -p /mnt/docker-data
+  grep -q " /mnt/docker-data " /etc/fstab || echo "LABEL=$${DATA_LABEL} /mnt/docker-data ext4 defaults,nofail 0 2" >> /etc/fstab
+  mountpoint -q /mnt/docker-data || mount "LABEL=$${DATA_LABEL}" /mnt/docker-data || mount "$${DATA_DEV}" /mnt/docker-data
+  # Grow the filesystem to the (possibly enlarged) volume size — an EBS resize alone
+  # doesn't extend ext4. No-op if already at full size.
+  resize2fs "$${DATA_DEV}" 2>/dev/null || true
+  # Relocate BOTH docker (volumes) and containerd (image layers) onto the EBS by
+  # symlinking their default dirs. Symlink (not bind-mount) so a daemon that reopens
+  # its dir can't silently fall back to root. Idempotent: skip if already a symlink;
+  # seed the target from the AMI's existing data only on first move.
+  systemctl stop docker docker.socket containerd 2>/dev/null || true
+  if [ ! -L /var/lib/containerd ]; then
+    mkdir -p /mnt/docker-data/containerd
+    [ -d /var/lib/containerd ] && [ -z "$(ls -A /mnt/docker-data/containerd 2>/dev/null)" ] && cp -a /var/lib/containerd/. /mnt/docker-data/containerd/ 2>/dev/null || true
+    rm -rf /var/lib/containerd && ln -s /mnt/docker-data/containerd /var/lib/containerd
+  fi
+  if [ ! -L /var/lib/docker ]; then
+    mkdir -p /mnt/docker-data/docker
+    [ -d /var/lib/docker ] && [ -z "$(ls -A /mnt/docker-data/docker 2>/dev/null)" ] && cp -a /var/lib/docker/. /mnt/docker-data/docker/ 2>/dev/null || true
+    rm -rf /var/lib/docker && ln -s /mnt/docker-data/docker /var/lib/docker
+  fi
+  systemctl start containerd docker 2>/dev/null || true
+fi
+
+# --- Persist Terraform-derived config for the repo-side scripts ---------------
+# deploy/scripts/render-config.sh and redeploy.sh read this file instead of being
+# templated by Terraform. That keeps the rendering logic versioned with the code
+# and keeps THIS template static, so a config change never replaces the instance.
+# See docs/ci-cd-plan.md decision #2 and §6.5.
+# Secrets are deliberately absent — they are fetched at runtime from SSM and
+# Secrets Manager by render-config.sh.
+mkdir -p /etc/genieai
+# Quoted delimiter: Terraform substitutes its refs before boot, so bash must not
+# then re-expand any '$' that happens to appear inside a rendered value.
+cat > /etc/genieai/deploy.env <<'DEPLOYENV'
+GENIEAI_REGION="${region}"
+GENIEAI_ENV_GROUP="${app_env_group}"
+GENIEAI_SSM_PREFIX="${ssm_prefix}"
+GENIEAI_CLONE_DIR="/opt/genieai"
+GENIEAI_HF_SECRET_ID="${hf_secret_id}"
+GENIEAI_DOMAIN_NAME="${domain_name}"
+GENIEAI_DATA_BACKEND="${data_backend}"
+GENIEAI_RDS_HOST="${rds_host}"
+GENIEAI_RDS_PORT="${rds_port}"
+GENIEAI_REDIS_HOST="${redis_host}"
+GENIEAI_REDIS_PORT="${redis_port}"
+GENIEAI_REDIS_AUTH_ENABLED="${redis_auth_enabled}"
+GENIEAI_LLM_MODEL_ID="${llm_model_id}"
+GENIEAI_VLLM_GPU_UTILIZATION="${vllm_gpu_utilization}"
+GENIEAI_VLLM_MAX_MODEL_LEN="${vllm_max_model_len}"
+GENIEAI_TRANSLATION_MODEL_ID="${translation_model_id}"
+GENIEAI_EMBEDDING_MODEL_ID="${embedding_model_id}"
+GENIEAI_RERANKER_MODEL_ID="${reranker_model_id}"
+GENIEAI_APP_S3_BUCKET="${app_s3_bucket}"
+GENIEAI_APP_S3_KEY="${app_s3_key}"
+DEPLOYENV
+chmod 644 /etc/genieai/deploy.env
+
+# --- Fetch application code from S3 (zip artifact) --------------------------
+# No git clone / repo token — this artifact is whatever CI last published to the
+# stable key. A local git init afterward gives the Ansible build play a HEAD to
+# label images with (it runs `git rev-parse HEAD`).
+mkdir -p "$${CLONE_DIR}"
+aws s3 cp "s3://${app_s3_bucket}/${app_s3_key}" /tmp/genie-ai.zip --region "$${REGION}"
+unzip -oq /tmp/genie-ai.zip -d "$${CLONE_DIR}"
+chown -R ubuntu:ubuntu "$${CLONE_DIR}"
+# Trust the repo regardless of owner (the build play runs `git rev-parse` as root).
+git config --system --add safe.directory '*' || true
+cd "$${CLONE_DIR}"
+if [ ! -d .git ]; then
+  git init -q
+  git add -A
+  git -c user.email=deploy@local -c user.name=deploy commit -qm "s3 artifact ${app_s3_key}" || true
+fi
+chmod +x deploy/scripts/*.sh 2>/dev/null || true
+cd "$${CLONE_DIR}/deploy/ansible"
+ansible-galaxy collection install -r requirements.yml || true
+
+# --- Render inventory + group_vars ------------------------------------------
+# Delegated to deploy/scripts/render-config.sh so that the bootstrap and the SSM
+# redeploy path render config identically by construction, and so changing the
+# rendering is an app-level change that never touches this template (and so can
+# never replace the instance). Terraform-derived values come from the deploy.env
+# written above; secrets are fetched at runtime from SSM + Secrets Manager by the
+# script itself. See docs/ci-cd-plan.md decision #2 and §6.5.
+bash "$${CLONE_DIR}/deploy/scripts/render-config.sh" /etc/genieai/deploy.env
+
+# The Deep Learning AMI pre-configures docker + nvidia-container-toolkit apt sources with a
+# different Signed-By key than the Ansible install play adds -> apt "Conflicting Signed-By".
+# Remove the AMI's .list files so only the playbook's .sources remain.
+rm -f /etc/apt/sources.list.d/docker.list /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+# --- Run the existing deployment playbook (non-interactive) ------------------
+export ANSIBLE_HOST_KEY_CHECKING=False
+# Dummy git creds only to satisfy the play's vars_prompt; the git clone/pull
+# tasks are skipped via skip_git_sync (code came from the S3 artifact).
+ansible-playbook -i inventory/aws.ini deploy.yml \
+  -e "git_username=s3 git_token=s3"
+
+# --- External mode only: retire the bundled DB/cache containers --------------
+%{ if data_backend == "external" ~}
+docker service scale genieai_postgres=0 genieai_redis-cache=0 2>/dev/null || true
+%{ endif ~}
+
+echo "=== GENIE.AI bootstrap complete: $(date -u) ==="

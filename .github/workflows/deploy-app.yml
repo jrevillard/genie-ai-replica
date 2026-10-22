@@ -1,0 +1,270 @@
+# GENIE.AI — application deploy (dev)
+#
+# Two triggers, ONE mechanism (docs/ci-cd-plan.md §3.2 option B):
+#   * push to asante/1.0  -> automatic deploy
+#   * workflow_dispatch   -> deploy the branch selected in the UI, from any branch
+#
+# The deploy is strictly IN-PLACE against the existing GPU instance over SSM.
+# It never creates, replaces, stops or terminates a machine — the IAM role
+# (deploy/terraform/github-oidc/) has no ec2:RunInstances/TerminateInstances at
+# all, so this is structurally impossible rather than merely unintended.
+#
+# REQUIREMENTS (one-time, already done):
+#   * deploy/terraform/github-oidc applied -> the OIDC role exists
+#   * GitHub Environment `dev` exists  <-- MANDATORY: the role's trust policy keys
+#     on the `environment:dev` subject claim. Without `environment: dev` below,
+#     the claim is absent and AssumeRoleWithWebIdentity fails.
+#   * Repo variable AWS_DEPLOY_ROLE_ARN set to the role ARN
+#
+# STILL OUTSTANDING: /etc/genieai/deploy.env must exist on the instance.
+# redeploy.sh hard-fails without it. The running box was bootstrapped from the
+# OLD user_data, which did not write that file, so it must be seeded once by hand.
+# See docs/ci-cd-plan.md — the first run of this workflow WILL fail until then.
+
+name: Deploy app (dev)
+
+on:
+  push:
+    branches: [asante/1.0]
+    # Prose changes must not trigger a multi-image GPU rebuild.
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - ".github/workflows/ci.yml"
+  workflow_dispatch:
+
+# Serialize deploys. cancel-in-progress MUST stay false: cancelling this workflow
+# does NOT stop an SSM command already executing on the box, so a cancel would
+# abandon a half-applied deploy with nothing watching it.
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write # required to mint the OIDC token
+
+env:
+  AWS_REGION: us-east-1
+  AWS_ACCOUNT_ID: "310997740503"
+  ARTIFACT_BUCKET: healthbot-dev-artifacts-310997740503
+  INSTANCE_NAME_TAG: healthbot-dev-app
+  STABLE_KEY: genie-ai.zip
+  HEALTH_URL: https://asante.innov8ai.com/api/health
+  # SSM RunCommand document execution ceiling. A cold multi-image OPEA rebuild can
+  # run long; the document default of 3600s is too tight to rely on.
+  SSM_EXECUTION_TIMEOUT: "7200"
+
+jobs:
+  deploy:
+    name: deploy ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    # MANDATORY — see header. This is what produces the OIDC subject the role trusts.
+    environment: dev
+    timeout-minutes: 150
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: gha-deploy-${{ github.run_id }}
+
+      # Fail closed if the assumed identity is not the expected account, rather
+      # than discovering it by having published an artifact somewhere unexpected.
+      - name: Verify AWS account
+        run: |
+          ACCT="$(aws sts get-caller-identity --query Account --output text)"
+          echo "Authenticated to account ${ACCT}"
+          if [ "${ACCT}" != "${AWS_ACCOUNT_ID}" ]; then
+            echo "::error::Wrong AWS account: got ${ACCT}, expected ${AWS_ACCOUNT_ID}"
+            exit 1
+          fi
+
+      # Exclude list mirrors deploy/terraform/artifact.tf. Dropping `secrets` or
+      # `.env` here would publish credentials into the artifact bucket.
+      - name: Build artifact
+        id: artifact
+        run: |
+          set -euo pipefail
+          KEY="genie-ai-${GITHUB_SHA}.zip"
+          zip -rq /tmp/app.zip . \
+            -x '.git/*' \
+            -x 'node_modules/*' -x '*/node_modules/*' \
+            -x 'deploy/terraform/*' \
+            -x 'mobile/*' \
+            -x '_bmad/*' -x '_bmad-output/*' \
+            -x 'docs/*' \
+            -x 'tests/*' \
+            -x 'test-results/*' \
+            -x 'secrets/*' \
+            -x '.idea/*' \
+            -x '.ruff_cache/*' \
+            -x '.env'
+          echo "key=${KEY}" >> "$GITHUB_OUTPUT"
+          ls -lh /tmp/app.zip
+          # Guard against the exclude list silently failing.
+          if unzip -l /tmp/app.zip | grep -qE ' (secrets/|\.env$)'; then
+            echo "::error::Artifact contains secrets/ or .env — exclude list is broken"
+            exit 1
+          fi
+
+      # Two keys: an immutable sha-keyed object for traceability/rollback, and the
+      # stable key that a freshly bootstrapped instance reads from user_data.
+      - name: Publish artifact to S3
+        run: |
+          set -euo pipefail
+          aws s3 cp /tmp/app.zip "s3://${ARTIFACT_BUCKET}/${{ steps.artifact.outputs.key }}"
+          aws s3 cp "s3://${ARTIFACT_BUCKET}/${{ steps.artifact.outputs.key }}" \
+                    "s3://${ARTIFACT_BUCKET}/${STABLE_KEY}"
+
+      - name: Resolve target instance
+        id: target
+        run: |
+          set -euo pipefail
+          ID="$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=${INSTANCE_NAME_TAG}" \
+                      "Name=instance-state-name,Values=running" \
+            --query 'Reservations[].Instances[].InstanceId' --output text)"
+          if [ -z "${ID}" ] || [ "$(echo "${ID}" | wc -w)" -ne 1 ]; then
+            echo "::error::Expected exactly one running instance tagged ${INSTANCE_NAME_TAG}, got: '${ID}'"
+            echo "::error::The instance may be stopped. This workflow deliberately cannot start or create one."
+            exit 1
+          fi
+          echo "instance_id=${ID}" >> "$GITHUB_OUTPUT"
+
+          # Running != reachable. A wedged agent accepts nothing and would only
+          # surface as an opaque timeout later.
+          PING="$(aws ssm describe-instance-information \
+            --filters "Key=InstanceIds,Values=${ID}" \
+            --query 'InstanceInformationList[0].PingStatus' --output text)"
+          echo "Instance ${ID}, SSM PingStatus=${PING}"
+          if [ "${PING}" != "Online" ]; then
+            echo "::error::SSM agent is not Online (${PING}) — cannot deploy"
+            exit 1
+          fi
+
+      # The script is fetched from the artifact and run as a real FILE (not piped
+      # to `bash -s`): that keeps BASH_SOURCE defined inside redeploy.sh, and
+      # guarantees the script and the application code come from the same commit.
+      #
+      # This preamble must be POSIX sh, NOT bash. AWS-RunShellScript executes the
+      # commands array with /bin/sh, which on Ubuntu is dash — `set -o pipefail`
+      # there fails with "Illegal option -o pipefail" on line 1, before anything
+      # runs. Hence `set -eux` and no pipes here. redeploy.sh itself is bash (it is
+      # invoked explicitly with `bash`), so it keeps its own `set -euo pipefail`.
+      - name: Send deploy command
+        id: send
+        run: |
+          set -euo pipefail
+          KEY='${{ steps.artifact.outputs.key }}'
+          cat > /tmp/params.json <<JSON
+          {
+            "commands": [
+              "set -eux",
+              "cd /tmp",
+              "aws s3 cp s3://${ARTIFACT_BUCKET}/${KEY} /tmp/deploy-artifact.zip --region ${AWS_REGION}",
+              "rm -rf /tmp/deploy-scripts && mkdir -p /tmp/deploy-scripts",
+              "unzip -oq /tmp/deploy-artifact.zip 'deploy/scripts/*' -d /tmp/deploy-scripts",
+              "chmod +x /tmp/deploy-scripts/deploy/scripts/*.sh",
+              "bash /tmp/deploy-scripts/deploy/scripts/redeploy.sh '${KEY}' '${GITHUB_SHA}'"
+            ],
+            "executionTimeout": ["${SSM_EXECUTION_TIMEOUT}"]
+          }
+          JSON
+          CMD_ID="$(aws ssm send-command \
+            --instance-ids '${{ steps.target.outputs.instance_id }}' \
+            --document-name AWS-RunShellScript \
+            --comment "gha deploy ${GITHUB_REF_NAME} ${GITHUB_SHA}" \
+            --parameters file:///tmp/params.json \
+            --query 'Command.CommandId' --output text)"
+          echo "command_id=${CMD_ID}" >> "$GITHUB_OUTPUT"
+          echo "SSM CommandId: ${CMD_ID}"
+
+      # `aws ssm wait command-executed` is unusable here: its waiter gives up after
+      # roughly 100 seconds, against a build that can run for tens of minutes.
+      - name: Wait for deploy to finish
+        id: wait
+        run: |
+          set -uo pipefail
+          CMD_ID='${{ steps.send.outputs.command_id }}'
+          INSTANCE='${{ steps.target.outputs.instance_id }}'
+          DEADLINE=$(( $(date +%s) + SSM_EXECUTION_TIMEOUT ))
+          STATUS=Pending
+          while :; do
+            if [ "$(date +%s)" -gt "${DEADLINE}" ]; then
+              echo "::error::Timed out after ${SSM_EXECUTION_TIMEOUT}s waiting for SSM command ${CMD_ID}"
+              exit 1
+            fi
+            STATUS="$(aws ssm get-command-invocation \
+              --command-id "${CMD_ID}" --instance-id "${INSTANCE}" \
+              --query Status --output text 2>/dev/null || echo Pending)"
+            case "${STATUS}" in
+              Pending|InProgress|Delayed) sleep 20 ;;
+              *) break ;;
+            esac
+          done
+          echo "status=${STATUS}" >> "$GITHUB_OUTPUT"
+          echo "Final SSM status: ${STATUS}"
+
+      # Always print the log, especially on failure. NOTE: GetCommandInvocation
+      # returns only the tail (~24,000 chars) of the output. Streaming the full log
+      # to S3 needs s3:PutObject on the INSTANCE role (SSM uploads as the instance,
+      # not as this caller) — see docs/ci-cd-plan.md §8.1. Until that is granted,
+      # configuring OutputS3BucketName here would silently produce no logs.
+      - name: Deploy log (tail)
+        if: always() && steps.send.outputs.command_id != ''
+        run: |
+          aws ssm get-command-invocation \
+            --command-id '${{ steps.send.outputs.command_id }}' \
+            --instance-id '${{ steps.target.outputs.instance_id }}' \
+            --query 'StandardOutputContent' --output text || true
+          echo "----- stderr -----"
+          aws ssm get-command-invocation \
+            --command-id '${{ steps.send.outputs.command_id }}' \
+            --instance-id '${{ steps.target.outputs.instance_id }}' \
+            --query 'StandardErrorContent' --output text || true
+
+      - name: Fail if the deploy did not succeed
+        if: steps.wait.outputs.status != 'Success'
+        run: |
+          echo "::error::Deploy failed with SSM status '${{ steps.wait.outputs.status }}'"
+          exit 1
+
+      # redeploy.sh already asserts that every locally-built image carries the new
+      # git_sha, so this is an end-user-facing reachability check, not the primary
+      # proof that code shipped. On its own /api/health cannot tell "deployed" from
+      # "deployed nothing" — the old app stays healthy either way.
+      - name: Smoke test
+        run: |
+          set -uo pipefail
+          for i in $(seq 1 30); do
+            CODE="$(curl -sS -o /tmp/health.json -w '%{http_code}' --max-time 15 "${HEALTH_URL}" || echo 000)"
+            if [ "${CODE}" = "200" ]; then
+              echo "Health OK:"; cat /tmp/health.json; echo
+              exit 0
+            fi
+            echo "attempt ${i}: http=${CODE}, retrying in 10s"
+            sleep 10
+          done
+          echo "::error::${HEALTH_URL} did not return 200 within ~5 minutes"
+          exit 1
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Deploy ${{ steps.wait.outputs.status || 'not started' }}"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Trigger | \`${{ github.event_name }}\` |"
+            echo "| Ref | \`${{ github.ref_name }}\` |"
+            echo "| Commit | \`${{ github.sha }}\` |"
+            echo "| Artifact | \`${{ steps.artifact.outputs.key }}\` |"
+            echo "| Instance | \`${{ steps.target.outputs.instance_id }}\` |"
+            echo "| SSM command | \`${{ steps.send.outputs.command_id }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"

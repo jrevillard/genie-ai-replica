@@ -73,7 +73,7 @@ export const changePasswordSchema = z
   });
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
-// ---------- AI Twins ----------
+// ---------- Topic Modules ----------
 
 export const createAiTwinSchema = z.object({
   name: trimmed('Name is required').max(120, 'Name is too long'),

@@ -135,7 +135,7 @@ export const useVoiceStore = defineStore('voice', {
         this.current = session;
         this.messages = messages;
       } catch (err) {
-        this.detailError = extractError(err, 'Failed to load call details');
+        this.detailError = extractError(err, 'Failed to load audio details');
         throw err;
       } finally {
         this.loadingDetail = false;

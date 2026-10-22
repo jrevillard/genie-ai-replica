@@ -570,8 +570,9 @@ Configuration for the reranker logic
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
 | RERANKING\_STRATEGY | Defines how the final subset of chunks is selected after reranking. Possible values are: 'slice', 'threshold', and 'knee_threshold'. | threshold |
-| RERANKER\_TOP\_N | Regulates the number of chunks returned by the reranker if RERANKING_STRATEGY is 'slice'. | 3 | 
-| RERANKING\_THRESHOLD | Defines the minimum relevance score required for a chunk to be included if RERANKING_STRATEGY is 'threshold'. | 0.75 |
+| RERANKER\_TOP\_N | Regulates the number of chunks returned by the reranker if RERANKING_STRATEGY is 'slice'. ChatQnA sends its own value per request (4 in code), so this env only matters for direct callers of the reranker. | 4 |
+| RERANKING\_THRESHOLD | Defines the minimum relevance score required for a chunk to be included if RERANKING_STRATEGY is 'threshold'. On the ChatQnA path this value is overridden by the threshold ChatQnA sends per request (0.42 in code). | 0.75 |
+| RERANKING\_MIN\_N | Floor for the 'threshold' strategy: when at least one chunk clears the threshold but fewer than this many do, the next-best near-miss chunks (score at least half the threshold) are added up to this count. When no chunk clears it, no chunks are returned. The bar is the threshold ChatQnA sends per request (0.42 in code). 0 disables the floor. | code default: DEFAULT_RERANKING_MIN_N in genieai_tei_reranker.py |
 
 
 ## The Reranker
@@ -582,11 +583,11 @@ The Reranker acts as the final quality filter. It receives the top candidates fr
 #### `RERANKING_STRATEGY`
 Defines how the final subset of chunks is selected after reranking.
 
-**slice (default)**
+**slice** (the reranker service's own code default; the deployed stack and ChatQnA use 'threshold')
 Selects the top N chunks based on ranking score. → Controlled by RERANKER_TOP_N.
 
 **threshold**
-Selects all chunks whose relevance score exceeds a fixed threshold. → Controlled by RERANKING_THRESHOLD.
+Selects all chunks whose relevance score exceeds a fixed threshold. → Controlled by RERANKING_THRESHOLD. If at least one chunk clears the threshold but fewer than RERANKING_MIN_N do, near-miss chunks are added up to RERANKING_MIN_N; if none clears it, nothing is returned.
 
 **knee_threshold**
 Dynamically determines a cutoff point (“knee” or “elbow”) in the score distribution using the kneed algorithm. → Automatically balances recall and precision based on score drop-off.

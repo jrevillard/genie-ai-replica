@@ -37,7 +37,7 @@ function viewDetails() {
 
     <div class="mt-auto flex items-center justify-end">
       <BaseButton variant="primary" size="md" rounded="full" @click="viewDetails">
-        {{ t('twins.list.card.view', 'View AI Twin') }}
+        {{ t('user.twins.card.select', 'Select this Health Topic') }}
       </BaseButton>
     </div>
   </article>

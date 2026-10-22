@@ -33,6 +33,7 @@ from langdetect import detect
 from datetime import date, datetime, timedelta
 from transformers import AutoTokenizer
 
+from appointment_guard import SAFE_SENTENCES, guard_answer
 from context_auto_router import (
     CHATQNA_AUTO_ROUTE,
     build_retrieval_from_route,
@@ -157,6 +158,95 @@ SMALL_TALK_PATTERN = re.compile(
     re.IGNORECASE | re.VERBOSE,
 )
 
+# Possible-emergency turns. These bypass the strict-grounding refusal gate so an
+# urgent-care referral is never suppressed for lack of a matching document.
+# Mirrors the SAFETY — RED FLAGS section of the system prompt.
+# Note on tuning: a false positive here is not free. An exempted turn is answered
+# by the normal safety path, which may be ungrounded — so this must stay a red-flag
+# detector, not a general "sounds medical" detector. Ambiguous single words
+# (`confused`, `headache`, `weak`) therefore require a corroborating symptom.
+#
+# In particular, condition *nouns* must never match on their own. "stroke",
+# "heart attack" and "seizure" are core NCD knowledge-base topics, so matching
+# them bare would exempt "what causes stroke" — precisely the question the
+# repository is meant to answer — from the containment gate. They require acute,
+# first-person framing ("having a stroke", "had a seizure") instead.
+RED_FLAG_PATTERN = re.compile(
+    r"""
+    (
+        # ---- Cardiac / chest ----
+        chest\s+(?:pain|pressure|tightness|tight|discomfort|heaviness) |
+        chest\s+(?:\w+\s+){0,2}(?:tight|hurts?|hurting|painful|heavy) |
+        # Reversed phrasing: "heavy pressure on my chest", "pain in my chest".
+        (?:pain|pressure|tight\w*|heav\w*|discomfort|burning)\s+(?:\w+\s+){0,3}chest |
+        (?:pain|numb\w*|tingl\w*)\s+(?:in|to|down)\s+(?:my\s+)?(?:left\s+|right\s+)?(?:arm|jaw|back) |
+        (?:left|right)\s+arm\s+(?:is\s+)?numb |
+
+        # ---- Acute events (noun alone is a knowledge-base topic, not a red flag) ----
+        (?:having|had)\s+(?:a\s+|an\s+)?(?:stroke|heart\s+attack|seizure|convulsion) |
+        (?:is|was)\s+(?:seizing|convulsing) |
+
+        # ---- Stroke ----
+        face\s+(?:droop\w*|is\s+drooping) | droop\w*\s+face |
+        slurr\w*\s+speech | can'?t\s+speak | trouble\s+speaking |
+        sudden\w*\s+(?:weak\w*|numb\w*|blind\w*) |
+        # One-sided weakness needs both halves of the signal to co-occur.
+        (?:weak\w*|numb\w*|paralys\w*)[^.!?]{0,25}(?:one\s+side|half\s+(?:of\s+)?my\s+body) |
+        (?:one\s+side|half\s+(?:of\s+)?my\s+body)[^.!?]{0,25}(?:weak\w*|numb\w*|paralys\w*) |
+
+        # ---- Vision ----
+        (?:blurr\w*|double|lost?\s+my)\s+vision | vision\s+(?:trouble|loss|problems?) |
+        vision\s+(?:\w+\s+){0,2}(?:blurr\w*|double|gone|dark) |
+        # Needs a sight qualifier: "can't see my chat history" is not a red flag.
+        (?:can'?t|cannot|unable\s+to)\s+see\s+(?:properly|clearly|anything|well|straight) |
+
+        # ---- Breathing ----
+        short(?:ness)?\s+of\s+breath | can'?t\s+breathe | cannot\s+breathe |
+        struggling\s+to\s+breathe | difficulty\s+breathing |
+
+        # ---- Collapse / neurological ----
+        (?:faint\w*|black\w*\s+out|pass\w*\s+out|collaps\w*) |
+        unconscious | not\s+responding |
+        worst\s+(?:headache|pain|migraine) | (?:sudden|severe|terrible)\s+headache |
+        # "worst ... ever" only counts alongside a pain word, so "worst thing that
+        # ever happened to my diet" is not treated as an emergency.
+        (?:hurts?|hurting|pain|ache\w*|headache)[^.!?]{0,30}worst\s+(?:\w+\s+){0,2}ever |
+
+        # ---- Bleeding / metabolic crisis ----
+        coughing\s+(?:up\s+)?blood | vomiting\s+blood |
+        vomit\w*[^.!?]{0,30}confus\w* | confus\w*[^.!?]{0,30}vomit\w* |
+
+        # ---- Self-harm / harm to others ----
+        suicid\w* | kill\s+myself | end\s+my\s+life |
+        (?:harm|hurt)\w*\s+(?:myself|my\s+self) | self[\s-]?harm |
+        hurt\s+(?:someone|somebody|others)
+    )
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+# Blood-pressure readings written as "180/110" or "180 over 110". A hyphen is
+# deliberately NOT accepted as a separator: "drink 200-300 ml" and "take 100-250 mg"
+# are ranges, and reading them as blood pressure would exempt those turns from the
+# containment gate.
+BP_READING_PATTERN = re.compile(
+    r"\b(\d{2,3})\s*(?:/|over)\s*(\d{2,3})\b",
+    re.IGNORECASE,
+)
+
+# Words that carry no question of their own, so they don't disqualify a turn from
+# being pure small talk in strict grounding mode. Without these, "thanks for the
+# help" would be routed to retrieval and refused instead of answered politely.
+SMALL_TALK_FILLER_WORDS = frozenset({
+    "a", "an", "the", "for", "to", "of", "and", "so", "much", "very", "too",
+    "i", "im", "me", "my", "you", "u", "ur", "your", "we", "it", "its",
+    "is", "am", "are", "was", "be", "been", "that", "this", "there", "here",
+    "ok", "okay", "please", "help", "again", "today", "now", "all", "lot",
+    "doctor", "doc", "sir", "madam", "genie", "bot", "friend", "everyone",
+    "yes", "no", "yeah", "nope", "sure", "good", "fine", "great", "well",
+    "morning", "afternoon", "evening", "night", "day",
+})
+
 
 def build_retrieval_embedding_text(user_text: str) -> tuple[str, str]:
     """
@@ -195,12 +285,55 @@ def is_small_talk_query(text: str) -> bool:
         return False
     normalized = str(text).strip()
     word_count = len(normalized.split())
+
+    if CHATQNA_STRICT_GROUNDING:
+        # Strict mode: only *purely* conversational turns may skip retrieval.
+        # Two holes have to stay closed here, because anything taking this path
+        # answers from the model alone with no documents and no citations:
+        #   - length-only small talk ("what is diabetes" is three words)
+        #   - a greeting carrying a real question ("hi what is diabetes")
+        # So a greeting must match AND almost nothing may be left once the
+        # greeting and filler words are removed.
+        if word_count > 10 or not SMALL_TALK_PATTERN.search(normalized):
+            return False
+        residue = SMALL_TALK_PATTERN.sub(" ", normalized)
+        residue_words = [
+            w.lower() for w in re.findall(r"[^\W\d_]+", residue, re.UNICODE)
+            if w.lower() not in SMALL_TALK_FILLER_WORDS
+        ]
+        return len(residue_words) <= 1
+
     # Short messages (≤ 10 words) that contain a greeting/pleasantry keyword
     if word_count <= 10 and SMALL_TALK_PATTERN.search(normalized):
         return True
     # Very short messages (≤ 4 words) are almost always small talk
     if word_count <= 4 and len(normalized) <= 30:
         return True
+    return False
+
+
+def is_red_flag_query(text: str) -> bool:
+    """
+    Return True when the turn describes a possible medical emergency.
+
+    Used to exempt a turn from the strict-grounding refusal gate: containment
+    must never stop the assistant from telling someone to seek urgent care.
+    Mirrors the SAFETY — RED FLAGS list in the system prompt, and is deliberately
+    over-inclusive — a false positive only means one turn is answered by the
+    normal safety path instead of being refused.
+    """
+    if not text:
+        return False
+    normalized = str(text).strip()
+    if RED_FLAG_PATTERN.search(normalized):
+        return True
+    # Reported blood pressure at or above 180/110 is urgent regardless of wording.
+    for systolic, diastolic in BP_READING_PATTERN.findall(normalized):
+        try:
+            if int(systolic) >= 180 or int(diastolic) >= 110:
+                return True
+        except ValueError:
+            continue
     return False
 
 
@@ -350,6 +483,157 @@ Reply only as the assistant. Never continue the user's voice or invent further t
 CHATQNA_SYSTEM_PROMPT = os.getenv("CHATQNA_SYSTEM_PROMPT", "").strip() or _CHATQNA_SYSTEM_DEFAULT
 CHATQNA_ENFORCE_ABSTENTION = os.getenv("CHATQNA_ENFORCE_ABSTENTION", "") or "true"
 CHATQNA_ABSTENTION_INSTRUCTIONS = os.getenv("CHATQNA_ABSTENTION_INSTRUCTIONS", "").strip() or None
+
+##################################################################################################################################
+# STRICT GROUNDING ("CONTAINMENT") MODE
+##################################################################################################################################
+# Default abstention only *softens* an ungrounded answer: the model hedges for a
+# clause and then answers from its own knowledge. That is fine for a general
+# health companion, but it cannot support a claim that every answer comes from
+# the operator-curated document repository.
+#
+# Strict grounding enforces containment in code, not by prompt instruction:
+#   1. Clinical questions can no longer take the `no_search` fast path, so every
+#      informational query goes through retrieval (see `is_small_talk_query`).
+#   2. If no retrieved chunk reaches `CHATQNA_STRICT_MIN_SCORE`, the answer is not
+#      considered grounded. (This is a yes/no bar on the whole turn — per-chunk
+#      filtering stays with the reranker, so citations keep matching what the LLM
+#      actually saw.)
+#   3. When ungrounded, `CHATQNA_STRICT_REFUSAL` is returned verbatim and the
+#      LLM's answer is dropped — the model cannot talk its way past this.
+#   4. The prompt sections that tell the model to extend beyond the documents and
+#      to hide that it is working from documents are overridden.
+#
+# Red-flag / emergency turns are deliberately exempt from the refusal gate: a
+# containment rule must never suppress an urgent-care referral. See
+# `is_red_flag_query`.
+CHATQNA_STRICT_GROUNDING = os.getenv("CHATQNA_STRICT_GROUNDING", "false").lower() in ("1", "true", "yes")
+# Minimum reranker score a chunk must reach to count as grounding.
+#
+# This defaults to RERANKING_THRESHOLD for a specific reason. The reranker's
+# `threshold` strategy can return chunks *below* its bar: once at least one chunk
+# clears it, the RERANKING_MIN_N floor tops the list up with near-miss chunks so a
+# typo cannot collapse the context (see select_by_threshold in
+# reranker/genieai_tei_reranker.py). Matching the reranker threshold makes this
+# gate read as: "the best chunk must have cleared the bar on its own — topped-up
+# near misses are context, not grounding." When nothing clears the bar the
+# reranker returns no documents at all, and the gate sees an empty list.
+#
+# Read via a blank check rather than a getenv default because docker-compose
+# passes the variable through as an empty string when it is unset, and
+# float("") would raise at import and take the service down on startup.
+_STRICT_MIN_SCORE_RAW = os.getenv("CHATQNA_STRICT_MIN_SCORE", "").strip()
+CHATQNA_STRICT_MIN_SCORE = float(_STRICT_MIN_SCORE_RAW) if _STRICT_MIN_SCORE_RAW else RERANKING_THRESHOLD
+CHATQNA_STRICT_REFUSAL = os.getenv("CHATQNA_STRICT_REFUSAL", "").strip() or (
+    "I'm sorry, this question cannot be answered with the information that has been vetted."
+)
+
+# Appended *last* to whatever system prompt is in effect, so it also overrides
+# per-twin prompts stored in ArangoDB (which this service cannot rewrite).
+_STRICT_GROUNDING_SUFFIX = """
+
+=== STRICT GROUNDING MODE — THESE RULES OVERRIDE EVERY INSTRUCTION ABOVE ===
+1. Every factual, clinical, or statistical claim in your reply MUST come from a [Retrieved Document]
+entry in this prompt. If it is not in those entries, you do not know it.
+2. Do NOT supplement, extend, or round out an answer with general knowledge, background, or
+"generally speaking" content. There are no exceptions.
+3. If there are no [Retrieved Document] entries, or none of them address the question, reply with
+exactly this sentence and nothing else: "{refusal}"
+4. Any earlier instruction telling you to extend beyond the documents, to avoid refusing, or to avoid
+revealing that you work from vetted documents is VOID in this mode. You MAY tell the user plainly
+that the vetted information does not cover their question.
+5. EXCEPTION — the urgent-care / red-flag referral rules above remain fully in force and may always
+be used, with or without retrieved documents. Safety overrides containment.
+"""
+
+
+def strict_grounding_suffix() -> str:
+    """Strict-mode system-prompt override block, with the refusal text injected."""
+    return _STRICT_GROUNDING_SUFFIX.replace("{refusal}", CHATQNA_STRICT_REFUSAL)
+
+
+##################################################################################################################################
+# CAPABILITY LIMITS
+##################################################################################################################################
+# Nothing in the prompts describes booking, reminders or messaging, yet the model
+# volunteers them ("I can set up an appointment for you") because nothing forbids
+# it. Those are not features, so the offer is a promise the product cannot keep.
+# Listing the non-capabilities explicitly is what stops it — an absent capability
+# is not an implicit prohibition as far as the model is concerned.
+#
+# Set CHATQNA_NO_CAPABILITY_CLAIMS=false to allow the aspirational framing, e.g.
+# to demo what an integrated version could do.
+CHATQNA_NO_CAPABILITY_CLAIMS = os.getenv("CHATQNA_NO_CAPABILITY_CLAIMS", "true").lower() in ("1", "true", "yes")
+
+_CAPABILITY_LIMITS_SUFFIX = f"""
+
+=== WHAT YOU CANNOT DO — never offer, promise, or imply any of these ===
+You cannot take actions outside this conversation. You cannot reach booking
+systems, phones, SMS, email, or clinic staff. You may freely use any USER
+INFORMATION provided to you in this prompt — it was given for this conversation —
+but you cannot query, add to, or change anything beyond what is already here.
+Never offer or claim that you can:
+- book, schedule, arrange, confirm, change, or cancel an appointment or visit
+- set a reminder or alarm, follow up later, or check back with the user
+- send an SMS, email, message, or referral to anyone
+- call, notify, or contact a clinic, health worker, or family member
+- fetch or update test results, prescriptions, or records that are not already
+  in this conversation
+- register or sign the user up for a programme, service, or clinic
+Never say "I have booked", "I'll remind you", "I'll follow up", "let me set that
+up", "I've let them know", or anything similar.
+Instead, tell the user who can help, for example: "{SAFE_SENTENCES['en']}"
+Do not end an answer by asking whether the user wants an appointment or a visit.
+Offering information and directing someone to the right person is the help you
+can genuinely give.
+"""
+
+
+def apply_system_prompt_policy(system_prompt: str) -> str:
+    """
+    Return the effective system prompt for the current policy flags.
+
+    Both blocks are appended rather than edited into the base prompt, so they
+    apply to per-twin prompts stored in ArangoDB as well — this service cannot
+    rewrite those, and editing the module default alone would not affect them.
+
+    Order matters: the containment block declares that it overrides every
+    instruction above it, so the capability limits go after it rather than before.
+    The two do not actually conflict, but this leaves nothing to interpret.
+    """
+    effective = system_prompt
+    if CHATQNA_STRICT_GROUNDING:
+        effective += strict_grounding_suffix()
+    if CHATQNA_NO_CAPABILITY_CLAIMS:
+        effective += _CAPABILITY_LIMITS_SUFFIX
+    return effective
+
+
+def abstention_instructions() -> str:
+    """
+    Instruction appended to the user turn when retrieval returned nothing.
+
+    An explicit `CHATQNA_ABSTENTION_INSTRUCTIONS` override always wins. Otherwise
+    strict mode demands the canned refusal, while default mode keeps the
+    conversational fallback.
+    """
+    if CHATQNA_ABSTENTION_INSTRUCTIONS is not None:
+        return CHATQNA_ABSTENTION_INSTRUCTIONS
+    if CHATQNA_STRICT_GROUNDING:
+        return (
+            "\n[Retrieved Documents] The knowledge base search returned no results. "
+            "You MUST NOT answer from your own knowledge. Unless this turn is an "
+            "urgent-care red flag, reply with exactly this sentence and nothing else: "
+            f"\"{CHATQNA_STRICT_REFUSAL}\""
+        )
+    return (
+        "\n[Retrieved Documents] The knowledge base search did not return any results. "
+        "Do not give a refusal-only reply. Briefly mention limited evidence, then continue "
+        "with a natural, helpful, conversational response using safe general guidance. "
+        "Avoid diagnosis, dosing, or treatment-change advice."
+    )
+
+
 SENSITIVE_KEYS = set(os.getenv("SENSITIVE_KEYS", "").split(","))
 
 ##################################################################################################################################
@@ -775,8 +1059,11 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         ###### Token limit handling ######
         ##################################
         # Use the per-request system prompt when present (twin-specific customisation),
-        # otherwise fall back to the module-level default.
-        system_instructions = (kwargs.get("system_prompt") or "").strip() or CHATQNA_SYSTEM_PROMPT
+        # otherwise fall back to the module-level default. In strict grounding mode a
+        # containment block is appended last so it also overrides stored twin prompts.
+        system_instructions = apply_system_prompt_policy(
+            (kwargs.get("system_prompt") or "").strip() or CHATQNA_SYSTEM_PROMPT
+        )
 
         # CRITICAL: Inject explicit English language instructions when language is EN
         # This overrides model bias toward Spanish responses
@@ -853,6 +1140,46 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
 
     return inputs
 
+def apply_kb_scope(retrieval_context: dict, raw_context: dict) -> dict:
+    """
+    Re-apply the server-owned Knowledge Set scope to a retrieval context.
+
+    The scope is an authorisation boundary, not a relevance filter, so it has to
+    survive every routing decision — and two of them discard it:
+
+      * the auto-router builds its retrieval context from the classifier route,
+        returning a fresh dict that carries only category/service/language
+      * vector_search replaces the context outright with {"language": ...},
+        because label filters hurt cosine recall
+
+    Both are correct for *relevance* filters and wrong for this one, so the scope
+    is re-applied at the last point before the context reaches the retriever
+    rather than being threaded through the routing branches.
+    """
+    if not isinstance(retrieval_context, dict):
+        return retrieval_context
+    file_ids = (raw_context or {}).get("kbFileIds")
+    if file_ids:
+        retrieval_context["kbFileIds"] = file_ids
+    return retrieval_context
+
+
+def kb_scope_from_context(context) -> set:
+    """
+    Knowledge Set allow-list for this turn, as a set of document-repository file ids.
+
+    An empty set means the caller pinned no Knowledge Set, and callers must read
+    that as "do not scope" rather than "scope to nothing" — otherwise every twin
+    without a Knowledge Set would abstain on every question.
+    """
+    if not isinstance(context, dict):
+        return set()
+    raw = context.get("kbFileIds")
+    if not isinstance(raw, (list, tuple, set)):
+        return set()
+    return {str(x).strip() for x in raw if isinstance(x, (str, int)) and str(x).strip()}
+
+
 def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_dict, **kwargs):
     next_data = {}
 
@@ -917,7 +1244,44 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
 
         if logflag:
             logger.debug(f'File ID Pairs: {file_id_pairs}')
-        
+
+        # Knowledge Set scope. Retrieval itself is still global — there is no
+        # file_id filter in the retriever AQL — so this is the only place the
+        # Twin's linked documents are enforced. The proper fix pushes these ids
+        # down into the retriever query; until then, post-filter here.
+        #
+        # Fail-closed on unattributed documents: one whose file_id could not be
+        # resolved cannot be shown to belong to the Knowledge Set, so it is
+        # dropped rather than passed through. Under RETRIEVER_SEARCH_START
+        # 'chunk' (the deployed default) every document carries a file_id, so
+        # this only bites on the node/edge paths, where the retriever leaves
+        # documents without RELATED INFORMATION unattributed by construction.
+        #
+        # Filtering to nothing is a legitimate outcome: the empty-docs branch
+        # below drops the reranker and the abstention instructions then apply,
+        # which is the desired answer for a question outside the Knowledge Set.
+        kb_scope = kb_scope_from_context(inputs.get("context"))
+        if kb_scope:
+            kept = []
+            dropped_unattributed = 0
+            for retrieved_doc in retrieved_docs:
+                file_id = file_id_pairs.get(retrieved_doc['id'], '')
+                if not file_id:
+                    dropped_unattributed += 1
+                elif file_id in kb_scope:
+                    kept.append(retrieved_doc)
+            if len(kept) != len(retrieved_docs):
+                logger.info(
+                    f"[KB_SCOPE] retrieved={len(retrieved_docs)} kept={len(kept)} "
+                    f"dropped_out_of_scope="
+                    f"{len(retrieved_docs) - len(kept) - dropped_unattributed} "
+                    f"dropped_unattributed={dropped_unattributed} "
+                    f"scope_size={len(kb_scope)}"
+                )
+            retrieved_docs = kept
+            file_id_pairs = {d['id']: file_id_pairs[d['id']] for d in kept}
+            doc_texts = [doc["text"] for doc in retrieved_docs]
+
         with_rerank = runtime_graph.downstream(cur_node)[0].startswith("rerank")
         if with_rerank and retrieved_docs:
             # prepare inputs for rerank
@@ -943,19 +1307,9 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             received_prompt = data.get("initial_query", inputs.get("text", ""))
             
             if str(CHATQNA_ENFORCE_ABSTENTION).lower() == "true" and not is_small_talk_query(received_prompt):
-                abstention_instructions = (
-                    CHATQNA_ABSTENTION_INSTRUCTIONS
-                    if CHATQNA_ABSTENTION_INSTRUCTIONS is not None
-                    else (
-                        "\n[Returned Documents] The knowledge base search did not return any results. "
-                        "Do not give a refusal-only reply. Briefly mention limited evidence, then continue "
-                        "with a natural, helpful, conversational response using safe general guidance. "
-                        "Avoid diagnosis, dosing, or treatment-change advice."
-                    )
-                )
-                received_prompt += abstention_instructions
-            
-            prompt = received_prompt 
+                received_prompt += abstention_instructions()
+
+            prompt = received_prompt
 
             # System instructions for integration of retrieved documents are already included in the CHATQNA_SYSTEM_PROMPT
             # OPTIONAL: 
@@ -1044,17 +1398,7 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         #     prompt = ChatTemplate.generate_rag_prompt(initial_query, docs)
             
         if not docs and str(CHATQNA_ENFORCE_ABSTENTION).lower() == "true" and not is_small_talk_query(initial_query):
-            abstention_instructions = (
-                CHATQNA_ABSTENTION_INSTRUCTIONS
-                if CHATQNA_ABSTENTION_INSTRUCTIONS is not None
-                else (
-                    "\n[Retrieved Documents] The knowledge base search did not return any results. "
-                    "Do not give a refusal-only reply. Briefly mention limited evidence, then continue "
-                    "with a natural, helpful, conversational response using safe general guidance. "
-                    "Avoid diagnosis, dosing, or treatment-change advice."
-                )
-            )
-            next_data["inputs"] = initial_query + abstention_instructions
+            next_data["inputs"] = initial_query + abstention_instructions()
         else:
             assembled_user_msg = initial_query + "".join(f"\n[Retrieved Document]: {doc}" for doc in docs)
             next_data["inputs"] = assembled_user_msg
@@ -1672,7 +2016,9 @@ class ChatQnAService:
         is in a different one — without this, Llama follows the conversation
         language naturally and ignores the UI's language picker.
         """
-        effective_system_prompt = (system_prompt or "").strip() or CHATQNA_SYSTEM_PROMPT
+        effective_system_prompt = apply_system_prompt_policy(
+            (system_prompt or "").strip() or CHATQNA_SYSTEM_PROMPT
+        )
         llm_messages = [{"role": "system", "content": effective_system_prompt}]
         # Hard language steer: applies on every turn the user explicitly set a
         # language. Cheap and pulls the reply back to the requested language
@@ -2028,6 +2374,9 @@ class ChatQnAService:
                 retrieval_context = {"language": lang_for_ctx}
                 routing_filter_strategy = None
 
+            # Must come after every reassignment above — see apply_kb_scope.
+            retrieval_context = apply_kb_scope(retrieval_context, raw_ctx)
+
             retriever_parameters = GenieaiRetrieverParms(
                 # search_type must stay similarity_score_threshold for confidence scoring
                 search_type=chat_request.search_type if chat_request.search_type else "similarity_score_threshold",
@@ -2093,18 +2442,54 @@ class ChatQnAService:
             retrieved_docs_with_scores = source_node_output.get("retrieved_docs", [])
             retriever_node_output = result_dict.get(retriever_key, {})
             file_id_pairs = retriever_node_output.get("file_id_pairs", {})
-            # Preserve the retriever's original cosine-similarity score keyed by
-            # doc id. The rerank node overwrites doc.score with its own
-            # cross-encoder logit (which is unbounded and renders as ~0% in the
-            # UI), so we look up the pre-rerank cosine here when building source
-            # citations. Falls back to the rerank score if the doc id is absent
-            # from the retriever output (no-rerank path or id-mapping miss).
-            _retriever_docs_for_cosine = retriever_node_output.get("retrieved_docs", [])
-            cosine_score_by_doc_id = {
-                d.get("id", "N/A"): d.get("score", 0.0)
-                for d in _retriever_docs_for_cosine
-                if isinstance(d, dict)
-            }
+
+        # ── Strict grounding gate ──────────────────────────────────────────────
+        # Containment is decided here, in code, outside the model: if retrieval
+        # produced nothing that clears the bar, the generated answer is discarded
+        # and the canned refusal is returned in its place. A prompt instruction
+        # can be argued past; this cannot.
+        #
+        # The refusal is assigned to `llm_response` rather than returned early so
+        # it still flows through the normal translation path below and reaches the
+        # user in their selected language.
+        #
+        # Per-chunk relevance filtering belongs to the reranker
+        # (RERANKING_STRATEGY=threshold + RERANKING_THRESHOLD). CHATQNA_STRICT_MIN_SCORE
+        # is only the "is this grounded at all" bar, so the citation list keeps
+        # matching what the LLM actually saw.
+        strict_refused = False
+        if CHATQNA_STRICT_GROUNDING and search_mode != "no_search":
+            doc_scores = [float(d.get("score") or 0.0) for d in retrieved_docs_with_scores]
+            best_score = max(doc_scores, default=0.0)
+            # CHATQNA_STRICT_MIN_SCORE is calibrated against cross-encoder scores.
+            # Without a rerank node these are retriever cosine scores on a
+            # different scale, so comparing them would be meaningless — fall back
+            # to "was anything retrieved at all".
+            if rerank_key:
+                grounded = bool(retrieved_docs_with_scores) and best_score >= CHATQNA_STRICT_MIN_SCORE
+                bar = f"min_score={CHATQNA_STRICT_MIN_SCORE}"
+            else:
+                grounded = bool(retrieved_docs_with_scores)
+                bar = "min_score=n/a (no reranker; scores are not comparable)"
+            logger.info(
+                f"[STRICT_GROUNDING] docs={len(retrieved_docs_with_scores)} "
+                f"best_score={best_score:.4f} {bar} "
+                f"grounded={grounded} scores={[round(s, 4) for s in doc_scores]}"
+            )
+            if not grounded:
+                if is_red_flag_query(qtext):
+                    # Safety overrides containment — never suppress an urgent-care
+                    # referral just because no document matched.
+                    logger.warning(
+                        "[STRICT_GROUNDING] no grounding, but this turn is a red flag — "
+                        "letting the safety response through instead of refusing."
+                    )
+                else:
+                    logger.info("[STRICT_GROUNDING] no grounding — returning canned refusal.")
+                    llm_response = CHATQNA_STRICT_REFUSAL
+                    strict_refused = True
+                    retrieved_docs_with_scores = []
+                    file_id_pairs = {}
 
         # Strip leaked conversation markers from the LLM response. The LLM
         # sometimes echoes the internal delimiters and turn markers used
@@ -2118,6 +2503,12 @@ class ChatQnAService:
         llm_response = re.split(
             r'\n\s*\[user\s+turn\]', llm_response, maxsplit=1, flags=re.IGNORECASE
         )[0].strip()
+        # The model does not always follow the rule against offering to book, so
+        # offers are also replaced in code, before translation (appointment_guard).
+        guarded_response = guard_answer(llm_response)
+        if guarded_response != llm_response:
+            logger.info("[GUARD] replaced an offer to book or schedule in the answer")
+            llm_response = guarded_response
         logger.info(f"[LATENCY] handle_request.total_ms={_ms_since(req_t0)}")
         
         if original_language and original_language != "EN":
@@ -2168,11 +2559,7 @@ class ChatQnAService:
                 logger.warning(f"Warning: No File ID mapped for Document ID {doc_id_by_orchestrator}.")
                 continue
 
-            # Prefer the retriever's original cosine-similarity score (bounded
-            # to [0, 1] and meaningful as a % match). Falls back to whatever
-            # score is on the (possibly reranked) item if the doc id isn't in
-            # the cosine map.
-            score = cosine_score_by_doc_id.get(doc_id_by_orchestrator, item.get("score", 0.0))
+            score = item.get("score", 0.0)
 
             if file_id in source_documents_file_ids:
                 logger.info(f"Note: Duplicate File ID {file_id} found. Skipping duplicate.")
@@ -2238,6 +2625,13 @@ class ChatQnAService:
                 "source_documents": source_documents_formatted,
                 "confidence_score": round(confidence_score, 2),
                 "routing": routing_meta,
+                # Containment audit trail — lets QA and reviewers confirm from the
+                # response itself whether an answer was grounded or refused.
+                "grounding": {
+                    "strict": CHATQNA_STRICT_GROUNDING,
+                    "refused": strict_refused,
+                    "documents_used": len(source_documents_formatted),
+                },
             },
         }
 

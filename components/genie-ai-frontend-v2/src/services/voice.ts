@@ -1,4 +1,4 @@
-import { api } from './http';
+import { api, readSession } from './http';
 
 export interface VoiceSession {
   _key: string;
@@ -56,7 +56,9 @@ export async function mintVoiceToken(
 ): Promise<VoiceTokenResponse> {
   const body: Record<string, string> = { language };
   if (twinId) body.twinId = twinId;
-  const res = await api.post<VoiceTokenResponse>('/voice/token', body);
+  // Guests have no session; the public endpoint mints the same token for them.
+  const path = readSession() ? '/voice/token' : '/public/voice/token';
+  const res = await api.post<VoiceTokenResponse>(path, body);
   return res.data;
 }
 

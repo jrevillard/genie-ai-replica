@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import BaseSkeleton from './BaseSkeleton.vue';
+import { WHATSAPP_UI_ENABLED } from '../../../lib/features';
 </script>
 
 <template>
@@ -23,10 +24,12 @@ import BaseSkeleton from './BaseSkeleton.vue';
       <BaseSkeleton height="2.5rem" width="9rem" rounded="full" />
     </header>
 
-    <!-- Stats grid: 4 cards (Chats / WhatsApp / Calls / Sessions) -->
-    <section class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <!-- Mirrors the stat cards in PatientDetailView.vue -->
+    <section
+      :class="['grid gap-3', WHATSAPP_UI_ENABLED ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3']"
+    >
       <article
-        v-for="n in 4"
+        v-for="n in WHATSAPP_UI_ENABLED ? 4 : 3"
         :key="n"
         class="rounded-2xl border border-border-subtle bg-surface p-4"
       >

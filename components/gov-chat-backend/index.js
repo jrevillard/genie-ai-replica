@@ -15,6 +15,7 @@ const swaggerUi = require('swagger-ui-express');
 const { Server: SocketIOServer } = require('socket.io');
 const { logger, dbService, securityHeaders, SecurityMiddleware } = require('./shared-lib');
 const { keycloakAuthMiddleware } = require('./middleware/keycloak-auth-middleware');
+const { uploadsGuard } = require('./middleware/uploads-guard');
 
 // Initialize Express app
 const app = express();
@@ -539,7 +540,8 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  // X-Guest-Id: the guest's key to their own chat on /api/public/chat-sessions/*
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Guest-Id'],
   optionsSuccessStatus: 204
 };
 
@@ -615,12 +617,7 @@ function formatTimestamps(obj) {
 
 // Configure static file serving
 try {
-  app.use('/Uploads', (req, res, next) => {
-    if (req.path === '/' || req.path === '') {
-      return res.status(404).json({ message: 'Not Found' });
-    }
-    next();
-  }, express.static(uploadsDir));
+  app.use('/Uploads', uploadsGuard, express.static(uploadsDir));
   logger.info('Static file serving configured for Uploads');
 } catch (error) {
   logger.error('Failed to configure static file serving for Uploads:', {
@@ -1163,9 +1160,9 @@ async function startApp() {
     }
   }
 
-  // Public guest routes — unauthenticated, default-twin only. Mounted
-  // here (outside the auth-bearing route table) so the regular routes are
-  // never affected. See routes/public-routes.js for the per-endpoint guard.
+  // Public guest routes — unauthenticated, limited to PUBLIC_TWIN_IDS when set.
+  // Mounted here (outside the auth-bearing route table) so the regular routes
+  // are never affected. See routes/public-routes.js for the per-endpoint guard.
   try {
     const publicRouter = require('./routes/public-routes');
     app.use('/api/public', publicRouter);

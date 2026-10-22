@@ -8,7 +8,7 @@ import { useAuthStore } from '../stores/auth';
 NProgress.configure({ showSpinner: false, trickleSpeed: 200, minimum: 0.1 });
 
 const routes: RouteRecordRaw[] = [
-  // Default lands on the AI Twins surface (post-login home). The actual
+  // Default lands on the Topic Modules surface (post-login home). The actual
   // landing page (admin vs. user) is decided by the global beforeEach guard
   // based on the authenticated user's role.
   { path: '/', name: 'home', redirect: '/ai-twins' },

@@ -26,14 +26,14 @@ const { t } = useT();
       class="relative z-10 flex h-full min-h-0 flex-1 flex-col justify-end gap-6 px-8 py-10 text-white sm:gap-8 sm:px-10 sm:py-12 lg:px-12 lg:py-14"
     >
       <header class="max-w-xl shrink-0">
-        <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-white/90">{{ t('auth.brand.eyebrow', 'IEEE') }}</p>
+        <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-white/90">{{ t('auth.brand.eyebrow', 'Health Navigator 1.0') }}</p>
         <h2
           class="mt-3 text-2xl font-bold leading-[1.15] tracking-tight sm:text-3xl lg:text-[2.25rem] lg:leading-tight xl:text-[2.5rem]"
         >
-          {{ t('auth.brand.title', 'Welcome to IEEE') }}
+          {{ t('auth.brand.title', 'Welcome to Health Navigator') }}
         </h2>
         <p class="mt-3 text-sm leading-relaxed text-white/90 sm:mt-4 sm:text-base sm:leading-relaxed">
-          {{ t('auth.brand.lead', 'IEEE helps you create and manage AI Twins, giving you full control over your data while seamlessly tracking all your chat and call history.') }}
+          {{ t('auth.brand.lead', 'Health Navigator helps you create and manage Topic Modules, giving you full control over your data while seamlessly tracking all your chat and audio history.') }}
         </p>
       </header>
 

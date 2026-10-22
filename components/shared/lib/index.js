@@ -2,7 +2,7 @@
 const loggerModule = require('./logger'); // Import the module object
 const securityHeaders = require('./security-headers');
 const SecurityMiddleware = require('./security-middleware');
-const dbService = require ('./db-connection-service');
+const dbService = require('./db-connection-service');
 
 /**
  * Idempotent: create the named ArangoDB collection if it does not already exist.
@@ -21,5 +21,5 @@ module.exports = {
   dbService,
   ensureCollection,
   securityHeaders,
-  SecurityMiddleware,
+  SecurityMiddleware
 };

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import {
+  AudioWave01Icon,
   BubbleChatIcon,
-  CallIcon,
   Clock01Icon,
   Message01Icon,
   Timer01Icon,
@@ -39,23 +39,23 @@ const cards = computed<KpiSpec[]>(() => {
       iconColor: 'text-ieee-700',
     },
     {
-      label: t('analytics.kpis.totalCalls', 'Total Calls'),
+      label: t('analytics.kpis.totalCalls', 'Total Audio Sessions'),
       value: formatNumber(k.totalCalls),
-      hint: t('analytics.kpis.callsUnit', 'calls'),
-      icon: CallIcon,
+      hint: t('analytics.kpis.callsUnit', 'sessions'),
+      icon: AudioWave01Icon,
       iconBg: 'bg-rose-50',
       iconColor: 'text-rose-500',
     },
     {
-      label: t('analytics.kpis.activePatients', 'Active Patients'),
+      label: t('analytics.kpis.activePatients', 'Active Users'),
       value: formatNumber(k.activePatients),
-      hint: t('analytics.kpis.patientsUnit', 'patients'),
+      hint: t('analytics.kpis.patientsUnit', 'users'),
       icon: UserMultipleIcon,
       iconBg: 'bg-violet-50',
       iconColor: 'text-violet-500',
     },
     {
-      label: t('analytics.kpis.newPatients', 'New Patients'),
+      label: t('analytics.kpis.newPatients', 'New Users'),
       value: formatNumber(k.newPatients),
       hint: t('analytics.kpis.patientsThisPeriodUnit', 'this period'),
       icon: UserAdd01Icon,
@@ -79,7 +79,7 @@ const cards = computed<KpiSpec[]>(() => {
       iconColor: 'text-amber-500',
     },
     {
-      label: t('analytics.kpis.avgCallDuration', 'Avg Call Duration'),
+      label: t('analytics.kpis.avgCallDuration', 'Avg Audio Duration'),
       value: k.avgCallDurationSecs === null ? '—' : `${secsToMinutes(k.avgCallDurationSecs)}m`,
       hint: t('analytics.kpis.minutesUnit', 'min'),
       icon: Timer01Icon,

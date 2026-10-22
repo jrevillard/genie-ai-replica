@@ -57,7 +57,7 @@ const filtered = computed(() => {
 
 function loadTwins() {
   store.fetchAll().catch(() => {
-    notify.error(store.error ?? t('twins.list.loadFailedToast', 'Failed to load AI Twins'));
+    notify.error(store.error ?? t('twins.list.loadFailedToast', 'Failed to load Topic Modules'));
   });
 }
 
@@ -82,14 +82,14 @@ async function onCreated(payload: { name: string; description: string; avatarFil
         await store.uploadAvatar(twin._key, payload.avatarFile, signal);
       } catch (err) {
         if (isAbortError(err)) throw err;
-        notify.error(store.error ?? t('twins.list.avatarFailedToast', 'Twin created, but the avatar upload failed.'));
+        notify.error(store.error ?? t('twins.list.avatarFailedToast', 'Topic module created, but the avatar upload failed.'));
       }
     }
-    notify.success(t('twins.list.createdToast', 'AI Twin created'));
+    notify.success(t('twins.list.createdToast', 'Topic Module created'));
     dialogOpen.value = false;
   } catch (err) {
     if (!isAbortError(err)) {
-      notify.error(store.error ?? t('twins.list.createFailedToast', 'Failed to create AI Twin'));
+      notify.error(store.error ?? t('twins.list.createFailedToast', 'Failed to create Topic Module'));
     }
   } finally {
     activeCreateRequest = null;
@@ -103,7 +103,7 @@ async function onCreated(payload: { name: string; description: string; avatarFil
     <section class="space-y-6 bg-surface p-6">
       <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <h1 class="text-headline text-text">{{ t('twins.list.title', 'AI Twins') }}</h1>
+          <h1 class="text-headline text-text">{{ t('twins.list.title', 'Topic Modules') }}</h1>
           <div class="w-full sm:w-[360px]">
             <BaseInput
               v-model="search"
@@ -127,7 +127,7 @@ async function onCreated(payload: { name: string; description: string; avatarFil
         </div>
         <BaseButton variant="primary" size="md" rounded="full" @click="dialogOpen = true">
           <Icon :icon="PlusSignIcon" :size="16" />
-          {{ t('twins.list.create', 'Create AI Twin') }}
+          {{ t('twins.list.create', 'Create Topic Module') }}
         </BaseButton>
       </header>
 
@@ -143,7 +143,7 @@ async function onCreated(payload: { name: string; description: string; avatarFil
         v-else-if="store.error && !search.trim()"
         full-height
         :icon="SparklesIcon"
-        :title="t('twins.list.loadFailedTitle', `Couldn't load AI Twins`)"
+        :title="t('twins.list.loadFailedTitle', `Couldn't load Topic Modules`)"
         :description="store.error"
       >
         <BaseButton variant="primary" size="md" @click="loadTwins">{{ t('common.retry', 'Retry') }}</BaseButton>
@@ -154,7 +154,7 @@ async function onCreated(payload: { name: string; description: string; avatarFil
         full-height
         :icon="Search01Icon"
         :title="t('twins.list.noMatchesTitle', 'No matches')"
-        :description="t('twins.list.noMatchesBody', 'No AI Twins match your search. Try a different keyword or clear the filter.')"
+        :description="t('twins.list.noMatchesBody', 'No Topic Modules match your search. Try a different keyword or clear the filter.')"
       >
         <BaseButton variant="outline" size="md" @click="search = ''">{{ t('twins.list.clearSearch', 'Clear search') }}</BaseButton>
       </EmptyState>
@@ -163,12 +163,12 @@ async function onCreated(payload: { name: string; description: string; avatarFil
         v-else
         full-height
         :icon="SparklesIcon"
-        :title="t('twins.list.emptyTitle', 'No AI Twins yet')"
-        :description="t('twins.list.emptyBody', 'Create your first AI Twin to start chatting and tracking conversations.')"
+        :title="t('twins.list.emptyTitle', 'No Topic Modules yet')"
+        :description="t('twins.list.emptyBody', 'Create your first Topic Module to start chatting and tracking conversations.')"
       >
         <BaseButton variant="primary" size="md" @click="dialogOpen = true">
           <Icon :icon="PlusSignIcon" :size="16" />
-          {{ t('twins.list.create', 'Create AI Twin') }}
+          {{ t('twins.list.create', 'Create Topic Module') }}
         </BaseButton>
       </EmptyState>
     </section>

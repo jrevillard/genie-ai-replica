@@ -38,6 +38,8 @@ export interface ChatMessage {
 interface ChatState {
   currentTwinId: string | null;
   sessionId: string | null;
+  // Guests only: the id the backend requires with every request for the session.
+  guestId: string | null;
   messages: ChatMessage[];
   sending: boolean;
   // True while a stored session is being fetched after a reload — lets the
@@ -51,6 +53,15 @@ const CHAT_LANG_STORAGE_KEY = 'chat.lang.v2';
 // same conversation rather than starting a new session — only "New chat"
 // (resetConversation) drops the entry.
 const ACTIVE_SESSIONS_STORAGE_KEY = 'chat.activeSessions.v1';
+// Guests: twinId -> { sessionId, guestId } in sessionStorage instead, so a
+// guest chat lasts only as long as the tab: a new tab or window starts fresh,
+// while a reload, a duplicated tab or a browser session restore keep it.
+const GUEST_SESSIONS_STORAGE_KEY = 'chat.guestSessions.v1';
+
+interface StoredSession {
+  sessionId: string;
+  guestId: string | null;
+}
 
 function readPersistedChatLang(): ChatLang {
   if (typeof window === 'undefined') return DEFAULT_CHAT_LANG;
@@ -87,9 +98,41 @@ function writeActiveSessionsMap(map: Record<string, string>): void {
   }
 }
 
-function readActiveSessionForTwin(twinId: string): string | null {
+function readGuestSessionsMap(): Record<string, StoredSession> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.sessionStorage.getItem(GUEST_SESSIONS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const out: Record<string, StoredSession> = {};
+    for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+      const entry = v as { sessionId?: unknown; guestId?: unknown } | null;
+      const { sessionId, guestId } = entry ?? {};
+      if (k && typeof sessionId === 'string' && sessionId && typeof guestId === 'string' && guestId) {
+        out[k] = { sessionId, guestId };
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function writeGuestSessionsMap(map: Record<string, StoredSession>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(GUEST_SESSIONS_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // Quota or disabled storage — non-fatal; resume just won't work.
+  }
+}
+
+function readActiveSessionForTwin(twinId: string): StoredSession | null {
   if (!twinId) return null;
-  return readActiveSessionsMap()[twinId] ?? null;
+  if (!readSession()) return readGuestSessionsMap()[twinId] ?? null;
+  const sessionId = readActiveSessionsMap()[twinId];
+  return sessionId ? { sessionId, guestId: null } : null;
 }
 
 function writeActiveSessionForTwin(twinId: string, sessionId: string): void {
@@ -99,12 +142,25 @@ function writeActiveSessionForTwin(twinId: string, sessionId: string): void {
   writeActiveSessionsMap(map);
 }
 
+function writeGuestSessionForTwin(twinId: string, sessionId: string, guestId: string): void {
+  if (!twinId || !sessionId || !guestId) return;
+  const map = readGuestSessionsMap();
+  map[twinId] = { sessionId, guestId };
+  writeGuestSessionsMap(map);
+}
+
+// Clears both maps: right after a sign-out the entry to drop is a signed-in one.
 function clearActiveSessionForTwin(twinId: string | null): void {
   if (!twinId) return;
   const map = readActiveSessionsMap();
   if (twinId in map) {
     delete map[twinId];
     writeActiveSessionsMap(map);
+  }
+  const guestMap = readGuestSessionsMap();
+  if (twinId in guestMap) {
+    delete guestMap[twinId];
+    writeGuestSessionsMap(guestMap);
   }
 }
 
@@ -129,6 +185,7 @@ export const useChatStore = defineStore('chat', {
   state: (): ChatState => ({
     currentTwinId: null,
     sessionId: null,
+    guestId: null,
     messages: [],
     sending: false,
     restoring: false,
@@ -140,6 +197,7 @@ export const useChatStore = defineStore('chat', {
       if (this.currentTwinId === twinId) return;
       this.currentTwinId = twinId;
       this.sessionId = null;
+      this.guestId = null;
       this.messages = [];
     },
 
@@ -155,6 +213,7 @@ export const useChatStore = defineStore('chat', {
       // Drop the persisted resume entry so the next reload starts fresh too.
       clearActiveSessionForTwin(this.currentTwinId);
       this.sessionId = null;
+      this.guestId = null;
       this.messages = [];
     },
 
@@ -167,20 +226,26 @@ export const useChatStore = defineStore('chat', {
         writeActiveSessionForTwin(this.currentTwinId, sessionId);
         return sessionId;
       }
-      // Guest path — backend assigns the default twin and returns its id.
-      const res = await createPublicChatSession();
+      // Guest path — the twin from the link, or the default twin when there is
+      // none; the backend returns the id it used.
+      const res = await createPublicChatSession(this.currentTwinId ?? undefined);
       this.sessionId = res.sessionId;
+      this.guestId = res.guestId;
       this.currentTwinId = res.twinId;
-      writeActiveSessionForTwin(res.twinId, res.sessionId);
+      writeGuestSessionForTwin(res.twinId, res.sessionId, res.guestId);
       return res.sessionId;
     },
 
-    async loadSessionMessages(sessionId: string): Promise<boolean> {
+    async loadSessionMessages(sessionId: string, guestId: string | null = null): Promise<boolean> {
       if (!sessionId) return false;
+      const signedIn = Boolean(readSession());
+      if (!signedIn && !guestId) return false;
       try {
-        const fetcher = readSession() ? getChatSessionMessages : getPublicChatSessionMessages;
-        const data = await fetcher(sessionId, { limit: 500 });
+        const data = signedIn
+          ? await getChatSessionMessages(sessionId, { limit: 500 })
+          : await getPublicChatSessionMessages(sessionId, guestId, { limit: 500 });
         this.sessionId = sessionId;
+        this.guestId = signedIn ? null : guestId;
         this.messages = data.messages.map((m) => {
           const docs = m.metadata?.source_documents;
           const conf = m.metadata?.confidence_score;
@@ -217,7 +282,7 @@ export const useChatStore = defineStore('chat', {
       if (!stored) return;
       this.restoring = true;
       try {
-        const ok = await this.loadSessionMessages(stored);
+        const ok = await this.loadSessionMessages(stored.sessionId, stored.guestId);
         if (!ok) clearActiveSessionForTwin(twinId);
       } finally {
         this.restoring = false;
@@ -250,12 +315,11 @@ export const useChatStore = defineStore('chat', {
 
       try {
         const sessionId = await this.ensureSession();
-        if (!sessionId) throw new Error('No twin selected');
-        const send = readSession() ? sendChatMessage : sendPublicChatMessage;
-        const res = await send(sessionId, {
-          text: trimmed,
-          context: { language: this.lang },
-        });
+        if (!sessionId) throw new Error('No topic module selected');
+        const payload = { text: trimmed, context: { language: this.lang } };
+        const res = readSession()
+          ? await sendChatMessage(sessionId, payload)
+          : await sendPublicChatMessage(sessionId, this.guestId, payload);
         if (res.userMessageId) {
           userMessage.serverId = res.userMessageId;
         }
@@ -265,8 +329,9 @@ export const useChatStore = defineStore('chat', {
         // "Listen" action can always call /messages/{messageId}/audio.
         if (!assistantId) {
           try {
-            const getMessages = readSession() ? getChatSessionMessages : getPublicChatSessionMessages;
-            const history = await getMessages(sessionId, { limit: 20 });
+            const history = readSession()
+              ? await getChatSessionMessages(sessionId, { limit: 20 })
+              : await getPublicChatSessionMessages(sessionId, this.guestId, { limit: 20 });
             assistantId = latestAssistantMessageId(history.messages);
           } catch {
             // Best effort only; message still renders even if id lookup fails.
@@ -333,9 +398,11 @@ export const useChatStore = defineStore('chat', {
 
       try {
         const sessionId = await this.ensureSession();
-        if (!sessionId) throw new Error('No twin selected');
-        const send = readSession() ? sendVoiceMessage : sendPublicVoiceMessage;
-        const res = await send(sessionId, audio, { language: this.lang, ...apiOpts });
+        if (!sessionId) throw new Error('No topic module selected');
+        const voiceOpts = { language: this.lang, ...apiOpts };
+        const res = readSession()
+          ? await sendVoiceMessage(sessionId, audio, voiceOpts)
+          : await sendPublicVoiceMessage(sessionId, this.guestId, audio, voiceOpts);
 
         const userTarget = this.messages.find((m) => m.id === userPlaceholder.id);
         if (userTarget) {
@@ -386,8 +453,9 @@ export const useChatStore = defineStore('chat', {
 
     async loadMessageAudio(messageId: string): Promise<Blob> {
       if (!this.sessionId) throw new Error('No active session');
-      const fetcher = readSession() ? fetchMessageAudio : fetchPublicMessageAudio;
-      return fetcher(this.sessionId, messageId);
+      return readSession()
+        ? fetchMessageAudio(this.sessionId, messageId)
+        : fetchPublicMessageAudio(this.sessionId, this.guestId, messageId);
     },
 
     async regenerateLast(): Promise<void> {

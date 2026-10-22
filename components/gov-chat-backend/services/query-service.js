@@ -551,6 +551,7 @@ class QueryService {
           serviceLabels: ctx.serviceLabels,
           language: ctx.language || 'EN',
           ...(ctx.skipAutoRoute !== undefined && { skipAutoRoute: ctx.skipAutoRoute }),
+          ...(Array.isArray(ctx.kbFileIds) && ctx.kbFileIds.length > 0 && { kbFileIds: ctx.kbFileIds }),
         },
         user_id: userId,
         stream: false,

@@ -17,6 +17,8 @@ COPY genie-ai-overlay/voice-bridge/requirements.txt /app/requirements.txt
 RUN pip install --upgrade pip && pip install -r /app/requirements.txt
 
 COPY genie-ai-overlay/voice-bridge/genieai_voice_bridge.py /app/genieai_voice_bridge.py
+COPY genie-ai-overlay/core/appointment_guard.py /app/appointment_guard.py
+COPY genie-ai-overlay/voice-bridge/style_echo_guard.py /app/style_echo_guard.py
 
 EXPOSE 9400
 

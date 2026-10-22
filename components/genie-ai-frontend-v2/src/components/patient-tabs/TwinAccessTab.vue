@@ -37,7 +37,7 @@ async function load(): Promise<void> {
     twins.value.length ? Promise.resolve() : twinsStore.fetchAll().catch(() => undefined),
     patientsStore.fetchAccess(props.patient._key).catch(() => {
       notify.error(
-        patientsStore.error ?? t('patients.access.loadFailedToast', 'Failed to load twin access')
+        patientsStore.error ?? t('patients.access.loadFailedToast', 'Failed to load topic module access')
       );
     }),
   ]);
@@ -54,12 +54,12 @@ async function toggleRestricted(on: boolean): Promise<void> {
     notify.success(
       result.message ??
         (on
-          ? t('patients.access.restrictedOnToast', 'Twin access restricted')
-          : t('patients.access.restrictedOffToast', 'Twin access unrestricted'))
+          ? t('patients.access.restrictedOnToast', 'Topic module access restricted')
+          : t('patients.access.restrictedOffToast', 'Topic module access unrestricted'))
     );
   } catch {
     notify.error(
-      patientsStore.error ?? t('patients.access.setFailedToast', 'Failed to update twin access')
+      patientsStore.error ?? t('patients.access.setFailedToast', 'Failed to update topic module access')
     );
   }
 }
@@ -72,15 +72,15 @@ async function toggleTwin(twinId: string, on: boolean): Promise<void> {
     notify.success(
       result.message ??
         (on
-          ? t('patients.access.enabledToast', 'Twin enabled')
-          : t('patients.access.disabledToast', 'Twin disabled'))
+          ? t('patients.access.enabledToast', 'Topic module enabled')
+          : t('patients.access.disabledToast', 'Topic module disabled'))
     );
   } catch {
     notify.error(
       patientsStore.error ??
         (on
-          ? t('patients.access.enableFailedToast', 'Failed to enable twin')
-          : t('patients.access.disableFailedToast', 'Failed to disable twin'))
+          ? t('patients.access.enableFailedToast', 'Failed to enable topic module')
+          : t('patients.access.disableFailedToast', 'Failed to disable topic module'))
     );
   }
 }
@@ -99,13 +99,13 @@ const isLoading = computed(() => accessLoading.value || twinsLoading.value);
 
   <div v-else class="space-y-6">
     <header>
-      <h2 class="text-title text-text">{{ t('patients.access.title', 'AI Twin Access') }}</h2>
+      <h2 class="text-title text-text">{{ t('patients.access.title', 'Topic Module Access') }}</h2>
       <p class="mt-0.5 text-caption text-text-muted">
-        {{ t('patients.access.subtitle', 'Control which AI Twins this user can chat or call with. Changes save automatically.') }}
+        {{ t('patients.access.subtitle', 'Control which Topic Modules this user can use for chat and audio. Changes save automatically.') }}
       </p>
     </header>
 
-    <!-- Master toggle: Restrict twin access on/off -->
+    <!-- Master toggle: Restrict topic module access on/off -->
     <section class="flex items-start justify-between gap-4 rounded-2xl border border-border bg-surface p-4 shadow-card">
       <div class="flex items-start gap-3">
         <span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
@@ -113,13 +113,13 @@ const isLoading = computed(() => accessLoading.value || twinsLoading.value);
         </span>
         <div>
           <p class="text-body font-semibold text-text">
-            {{ t('patients.access.restrictLabel', 'Restrict twin access') }}
+            {{ t('patients.access.restrictLabel', 'Restrict topic module access') }}
           </p>
           <p class="mt-0.5 max-w-xl text-caption text-text-muted">
             {{
               restricted
-                ? t('patients.access.restrictedHelp', 'This user can only see the AI Twins you enable below.')
-                : t('patients.access.unrestrictedHelp', 'This user can access every AI Twin you own.')
+                ? t('patients.access.restrictedHelp', 'This user can only see the Topic Modules you enable below.')
+                : t('patients.access.unrestrictedHelp', 'This user can access every Topic Module you own.')
             }}
           </p>
         </div>
@@ -135,7 +135,7 @@ const isLoading = computed(() => accessLoading.value || twinsLoading.value);
     <section v-if="restricted" class="space-y-3">
       <header class="flex items-center justify-between gap-3">
         <h3 class="text-body font-semibold text-text">
-          {{ t('patients.access.listTitle', 'Allowed AI Twins') }}
+          {{ t('patients.access.listTitle', 'Allowed Topic Modules') }}
         </h3>
         <span
           v-if="restricted && twins.length"
@@ -169,11 +169,11 @@ const isLoading = computed(() => accessLoading.value || twinsLoading.value);
       <EmptyState
         v-else
         :icon="SparklesIcon"
-        :title="t('patients.access.noTwinsTitle', 'No AI Twins yet')"
-        :description="t('patients.access.noTwinsBody', `You haven't created any AI Twins yet. Create one before assigning user access.`)"
+        :title="t('patients.access.noTwinsTitle', 'No Topic Modules yet')"
+        :description="t('patients.access.noTwinsBody', `You haven't created any Topic Modules yet. Create one before assigning user access.`)"
       >
         <BaseButton variant="primary" rounded="full" @click="goToTwins">
-          {{ t('patients.access.createTwinCta', 'Create your first AI Twin') }}
+          {{ t('patients.access.createTwinCta', 'Create your first Topic Module') }}
         </BaseButton>
       </EmptyState>
     </section>

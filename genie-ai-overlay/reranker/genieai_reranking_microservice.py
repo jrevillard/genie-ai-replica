@@ -18,6 +18,17 @@ from comps.cores.proto.api_protocol import ChatCompletionRequest, RerankingReque
 from comps.cores.proto.opea_docarray import LLMParamsDoc, LVMVideoDoc, RerankedDoc, SearchedDoc, SearchedMultimodalDoc
 from comps.cores.telemetry.opea_telemetry import opea_telemetry
 
+# Imported for its side effect: the module-level
+# @OpeaComponentRegistry.register("GENIE_TEI_RERANKING") decorator only runs when
+# the module is imported. Nothing else imports it — the Dockerfile merely drops the
+# file into integrations/, and OPEA v1.3's integrations/__init__.py is empty — so
+# without this line the component is never registered and OpeaComponentLoader below
+# fails with:
+#   KeyError: "No component found with the name 'GENIE_TEI_RERANKING'."
+# genieai_retriever_microservice.py already does exactly this; the reranker was the
+# odd one out, which is why it broke the moment the image was first rebuilt.
+from integrations.genieai_tei_reranker import GenieTEIReranking  # noqa: F401  # isort: skip
+
 logger = CustomLogger("opea_reranking_microservice")
 logflag = os.getenv("LOGFLAG", False)
 

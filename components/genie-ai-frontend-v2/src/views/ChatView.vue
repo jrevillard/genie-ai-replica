@@ -7,7 +7,6 @@ import {
   ArrowLeft01Icon,
   BookOpen01Icon,
   BubbleChatIcon,
-  CallIcon,
   Cancel01Icon,
   Copy01Icon,
   LinkSquare01Icon,
@@ -26,6 +25,7 @@ import ChatPageSkeleton from '../components/ui/skeletons/ChatPageSkeleton.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
 import Icon from '../components/ui/Icon.vue';
 import { chatStrings, flagForLang, flagUrl, type ChatLang } from '../lib/chatStrings';
+import { isGuestTwinNotAllowed } from '../services/aiTwins';
 import {
   getChatLanguages,
   getPublicSuggestedQuestions,
@@ -90,6 +90,20 @@ function chooseGuest(): void {
   loadSuggestedQuestions();
 }
 
+// Guests may use only the modules the backend allows them. For any other,
+// send them to sign-in and back to this link; the skeleton stays up meanwhile
+// instead of the error screen.
+const leavingForSignIn = ref(false);
+
+function sendToSignIn(): void {
+  if (leavingForSignIn.value) return;
+  leavingForSignIn.value = true;
+  notify.info(tt('chat.authGate.signInRequired', 'Sign in to use this Topic Module.'));
+  router.replace({ name: 'signin', query: { redirect: route.fullPath } }).catch(() => {
+    leavingForSignIn.value = false;
+  });
+}
+
 // Mid-session sign-out (e.g. user logs out from another tab while the chat
 // page is open): the chat store's sessionId was created against the now-stale
 // JWT and the next send would 401. Drop the conversation and re-show the gate
@@ -106,6 +120,8 @@ watch(
       }
       guestAccepted.value = false;
     }
+    // The module picker's list depends on who asks; reload it for the new state.
+    if (!twinId.value) void loadPublicTwinsForPicker();
   }
 );
 
@@ -121,7 +137,7 @@ const {
 const { messages, sending, lang, restoring } = storeToRefs(chatStore);
 
 const showTwinSkeleton = computed(
-  () => Boolean(twinId.value) && twinLoading.value && !twin.value
+  () => Boolean(twinId.value) && (twinLoading.value || leavingForSignIn.value) && !twin.value
 );
 const showTwinError = computed(
   () => Boolean(twinId.value) && !twinLoading.value && !twin.value && Boolean(twinError.value)
@@ -320,22 +336,29 @@ async function loadTwin(): Promise<void> {
     void loadPublicTwinsForPicker();
     return;
   }
-  chatStore.setTwinContext(twinId.value);
+  const id = twinId.value;
+  chatStore.setTwinContext(id);
   // Resume the prior conversation for this twin if one was persisted (page
   // reload, back-nav). No-op if no stored session or it's no longer valid.
-  void chatStore.restoreSessionForTwin(twinId.value);
+  void chatStore.restoreSessionForTwin(id);
   try {
-    await aiTwinsStore.fetchOne(twinId.value);
-  } catch {
-    // store.error renders into the empty fallback below.
+    await aiTwinsStore.fetchOne(id);
+  } catch (err) {
+    if (isGuestTwinNotAllowed(err) && twinId.value === id) sendToSignIn();
+    // Otherwise store.error renders into the empty fallback below.
   }
 }
 
 const publicTwinsLoading = ref(false);
 async function loadPublicTwinsForPicker(): Promise<void> {
   // Cache across renders: only fetch once unless the list comes back empty
-  // (e.g. transient network failure on a previous attempt).
-  if (publicTwinsLoading.value || publicTwins.value.length > 0) return;
+  // (e.g. transient network failure on a previous attempt), or it was fetched
+  // before a sign-in or sign-out: guests and signed-in users get different lists.
+  if (publicTwinsLoading.value) return;
+  const sameAudience = aiTwinsStore.publicTwinsSignedIn === authStore.isAuthenticated;
+  if (publicTwins.value.length > 0 && sameAudience) return;
+  // Never show the other audience's list while the right one loads.
+  if (!sameAudience) aiTwinsStore.$patch({ publicTwins: [], publicTotal: 0 });
   publicTwinsLoading.value = true;
   try {
     await aiTwinsStore.fetchAllPublic({ limit: 24 });
@@ -887,10 +910,10 @@ function startVoiceCall(): void {
   const selected = languageOptions.value.find((l) => l.code === lang.value);
   if (selected && selected.isVoiceSupported === false) {
     notify.info(
-      tt('chat.voiceLangUnsupportedTitle', 'Voice calls unavailable'),
+      tt('chat.voiceLangUnsupportedTitle', 'Audio unavailable'),
       tt(
         'chat.voiceLangUnsupportedBody',
-        `Calls aren't available in ${selected.label} yet. Pick a language that supports voice to start a call.`
+        `Audio isn't available in ${selected.label} yet. Pick a language that supports voice to use audio.`
       )
     );
     return;
@@ -1036,7 +1059,7 @@ function translationToggleLabel(id: string): string {
       class="flex h-full min-h-0 flex-col items-center justify-center bg-surface px-6"
     >
       <div class="flex w-full max-w-md flex-col items-center text-center">
-        <img src="/images/logo.svg" alt="IEEE" class="h-9 w-auto" />
+        <img src="/images/logo.svg" alt="Health Navigator 1.0" class="h-9 w-auto" />
 
         <h1 class="mt-10 text-[2rem] font-semibold leading-tight tracking-tight text-slate-900 sm:text-4xl">
           {{ tt('chat.authGate.title', 'Welcome') }}
@@ -1077,7 +1100,7 @@ function translationToggleLabel(id: string): string {
     <section v-else-if="showTwinError" class="flex h-full min-h-0 flex-col items-center justify-center bg-surface px-6">
       <EmptyState
         :icon="BubbleChatIcon"
-        :title="tt('chat.twinLoadError', 'Could not load this AI Twin')"
+        :title="tt('chat.twinLoadError', 'Could not load this Topic Module')"
         :description="twinError ?? tt('common.tryAgain', 'Please try again.')"
       >
         <div class="flex items-center gap-2">
@@ -1100,12 +1123,12 @@ function translationToggleLabel(id: string): string {
           <template v-if="twinId">
             <BaseAvatar
               :src="twin?.profilePicUrl ?? ''"
-              :name="twin?.name ?? 'AI Twin'"
+              :name="twin?.name ?? 'Topic Module'"
               size="sm"
               badge="online"
             />
             <div class="min-w-0 flex-1">
-              <p class="truncate text-title text-text">{{ twin?.name ?? 'AI Twin' }}</p>
+              <p class="truncate text-title text-text">{{ twin?.name ?? 'Topic Module' }}</p>
               <p class="truncate text-meta text-text-muted">
                 {{ tt('chat.subgreeting', t.subgreeting).split('.')[0] }}
               </p>
@@ -1200,9 +1223,7 @@ function translationToggleLabel(id: string): string {
             :title="tt('chat.startCall', t.call.startCall)"
             @click="startVoiceCall"
           >
-            <span class="header-btn__call-icon" aria-hidden="true">
-              <Icon :icon="CallIcon" :size="16" />
-            </span>
+            <span class="sm:hidden">{{ tt('chat.startCallShort', t.call.startCallShort) }}</span>
             <span class="hidden sm:inline">{{ tt('chat.startCall', t.call.startCall) }}</span>
           </button>
         </div>
@@ -1267,7 +1288,7 @@ function translationToggleLabel(id: string): string {
             <div v-else class="mt-8 flex flex-col items-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
               <Icon :icon="BubbleChatIcon" :size="28" class="text-slate-400" />
               <p class="text-sm text-slate-500">
-                {{ tt('chat.pickTwinEmpty', 'No AI Twins are available right now.') }}
+                {{ tt('chat.pickTwinEmpty', 'No Topic Modules are available right now.') }}
               </p>
               <BaseButton variant="outline" @click="loadPublicTwinsForPicker">
                 {{ tt('common.retry', 'Retry') }}
@@ -1381,7 +1402,7 @@ function translationToggleLabel(id: string): string {
                 <BaseAvatar
                   v-if="m.role === 'assistant'"
                   :src="twin?.profilePicUrl ?? ''"
-                  :name="twin?.name ?? 'AI Twin'"
+                  :name="twin?.name ?? 'Topic Module'"
                   size="sm"
                 />
                 <div
@@ -1577,7 +1598,13 @@ function translationToggleLabel(id: string): string {
                         v-if="m.confidenceScore != null"
                         class="ml-1 rounded-full bg-success/10 px-1.5 py-0.5 text-[11px] font-semibold text-success"
                       >
-                        {{ Math.round((m.confidenceScore ?? 0) * 100) }}% match
+                        {{
+                          tt(
+                            'chat.retrievalRelevance',
+                            { score: Math.round((m.confidenceScore ?? 0) * 100) },
+                            '{score}% retrieval relevance'
+                          )
+                        }}
                       </span>
                     </div>
                     <div v-if="m.sourceDocuments?.length" class="flex flex-col gap-0.5">
@@ -1856,16 +1883,14 @@ function translationToggleLabel(id: string): string {
   color: #ffffff;
   background: linear-gradient(135deg, #0073b9 0%, #003e62 100%);
   border: 1px solid rgba(0, 0, 0, 0);
-  width: 36px;
-  padding: 0;
+  padding: 0 0.875rem;
   box-shadow:
     0 6px 14px -4px rgba(0, 82, 128, 0.45),
     inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 @media (min-width: 640px) {
   .header-btn--call {
-    width: auto;
-    padding: 0 1rem 0 0.5rem;
+    padding: 0 1rem;
   }
 }
 .header-btn--call:hover {
@@ -1874,44 +1899,7 @@ function translationToggleLabel(id: string): string {
     0 10px 22px -6px rgba(0, 82, 128, 0.55),
     inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
-.header-btn__call-icon {
-  position: relative;
-  display: inline-grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 9999px;
-  background: transparent;
-  flex-shrink: 0;
-}
-@media (min-width: 640px) {
-  .header-btn__call-icon {
-    width: 28px;
-    height: 28px;
-    background: rgba(255, 255, 255, 0.18);
-  }
-}
-.header-btn__call-icon::after {
-  content: '';
-  position: absolute;
-  inset: -2px;
-  border-radius: 9999px;
-  border: 2px solid rgba(255, 255, 255, 0.35);
-  animation: header-call-pulse 2s ease-out infinite;
-  pointer-events: none;
-  display: none;
-}
-@media (min-width: 640px) {
-  .header-btn__call-icon::after {
-    display: block;
-  }
-}
-@keyframes header-call-pulse {
-  0% { transform: scale(1); opacity: 0.6; }
-  80%, 100% { transform: scale(1.45); opacity: 0; }
-}
 @media (prefers-reduced-motion: reduce) {
-  .header-btn__call-icon::after { animation: none; opacity: 0; }
   .header-btn:hover { transform: none; }
 }
 

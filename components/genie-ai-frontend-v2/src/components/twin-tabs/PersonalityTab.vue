@@ -150,7 +150,7 @@ const responseLengths: { value: ResponseLength; label: string; description: stri
     <section>
       <header class="mb-3">
         <h3 class="text-body font-semibold text-text">{{ t('twins.personality.languageStyleTitle', 'Language Style') }}</h3>
-        <p class="text-caption text-text-muted">{{ t('twins.personality.languageStyleSubtitle', 'Choose how you want your AI Twin to communicate') }}</p>
+        <p class="text-caption text-text-muted">{{ t('twins.personality.languageStyleSubtitle', 'Choose how you want your Topic Module to communicate') }}</p>
       </header>
       <div class="space-y-3">
         <BaseRadioCard
@@ -167,7 +167,7 @@ const responseLengths: { value: ResponseLength; label: string; description: stri
     <section>
       <header class="mb-3">
         <h3 class="text-body font-semibold text-text">{{ t('twins.personality.lengthTitle', 'Response Length') }}</h3>
-        <p class="text-caption text-text-muted">{{ t('twins.personality.lengthSubtitle', 'Choose how long your AI Twin responses should be') }}</p>
+        <p class="text-caption text-text-muted">{{ t('twins.personality.lengthSubtitle', 'Choose how long your Topic Module responses should be') }}</p>
       </header>
       <div class="space-y-3">
         <BaseRadioCard

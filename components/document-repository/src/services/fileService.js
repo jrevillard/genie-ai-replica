@@ -127,7 +127,7 @@ class FileService {
 
       logger.info(
         `[FILE-SERVICE] Unlinked file ${fileId} from ${affected.length} aiTwin(s) ` +
-        `(generated suggestedQuestions cleared; backend will regenerate on next read)`
+          `(generated suggestedQuestions cleared; backend will regenerate on next read)`
       );
     } catch (e) {
       logger.warn(`[FILE-SERVICE] Could not unlink ${fileId} from aiTwins: ${e.message}`);

@@ -29,7 +29,6 @@
  * @typedef {ForStatement | FilterStatement | LetStatement | CollectStatement | SortStatement | LimitStatement | ReturnStatement | UpdateStatement | RemoveStatement | InsertStatement} Statement
  */
 
-
 // === Statement Nodes ===
 
 /**
@@ -135,7 +134,6 @@
  * @property {string} collectionName - The name of the collection.
  */
 
-
 // === Expression Nodes ===
 
 /**
@@ -201,7 +199,6 @@
  * @property {string} key - The property key.
  * @property {Expression} value - The property value expression.
  */
-
 
 // -----------------------------------------------------------------------------
 // 2. Verification Example

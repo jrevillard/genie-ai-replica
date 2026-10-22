@@ -14,6 +14,21 @@ import fcntl
 import os
 import time
 
+# Side-effect import: registers GenieArangoDataprep with OpeaComponentRegistry.
+#
+# This MUST come before `import opea_dataprep_microservice` below, not merely
+# before GenieDataprepLoader. The upstream module constructs an OpeaDataprepLoader
+# at module scope (opea_dataprep_microservice.py line 45), so the registry is read
+# during that import — before any later line in this file executes. With this
+# import placed after it, startup died with:
+#   KeyError: "No component found with the name 'GENIE_DATAPREP_ARANGODB'."
+from integrations.genieai_dataprep_arangodb import GenieArangoDataprep  # noqa: F401  # isort: skip
+
+# isort: split
+# ^ Hard boundary. Without it, `ruff check --fix` / isort would re-sort the import
+# above back down into the block below to satisfy I001 — silently reintroducing the
+# startup crash. Do not remove.
+
 import opea_dataprep_microservice as base
 from comps import (
     CustomLogger,
@@ -24,11 +39,8 @@ from comps import (
 )
 from comps.cores.proto.genieai_api_protocol import ArangoDBDataprepRequestFromDocRepo
 from fastapi import HTTPException
-from pydantic import BaseModel
-
-# Side-effect: registers GenieArangoDataprep with OpeaComponentRegistry (must precede GenieDataprepLoader)
-from integrations.genieai_dataprep_arangodb import GenieArangoDataprep  # noqa: F401  # isort: skip
 from genieai_dataprep_loader import GenieDataprepLoader
+from pydantic import BaseModel
 
 logger = CustomLogger("genie_dataprep_microservice")
 logflag = os.getenv("LOGFLAG", False)

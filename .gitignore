@@ -134,3 +134,6 @@ data/**/*.bin
 # Local-only docker-compose overrides (never commit)
 docker-compose.override.yaml
 docker-compose.override.yml
+
+# IDE project settings (JetBrains)
+.idea/

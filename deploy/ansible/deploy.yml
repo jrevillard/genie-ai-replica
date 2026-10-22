@@ -351,21 +351,27 @@
         repo_url_with_credentials: >-
           {{ repo_url | regex_replace('^https://', 'https://' + git_username + ':' + git_token + '@') }}
       no_log: true
+      when: not (skip_git_sync | default(false) | bool)
 
     - name: Check if git repository exists
       ansible.builtin.stat:
         path: "{{ deploy_dir }}/.git"
       register: git_dir
+      when: not (skip_git_sync | default(false) | bool)
 
     - name: Remove stale deploy directory (exists but no .git)
       become_user: root
       ansible.builtin.file:
         path: "{{ deploy_dir }}"
         state: absent
-      when: git_dir.stat is defined and not git_dir.stat.exists
+      when:
+        - not (skip_git_sync | default(false) | bool)
+        - git_dir.stat is defined and not git_dir.stat.exists
 
+    # Skipped when skip_git_sync (code delivered via the S3 artifact, not git).
     - name: Clone or update project repository
       become_user: root
+      when: not (skip_git_sync | default(false) | bool)
       block:
         - name: Clone project repository
           ansible.builtin.git:
@@ -448,7 +454,52 @@
         - "{{ data_dir }}/logs/doc-repo"
         - "{{ data_dir }}/database_backups"
         - "{{ data_dir }}/huggingface"
+        # Bind-mount source for tts-piper. Swarm rejects the task outright if
+        # this is missing — the service never even starts a container.
+        - "{{ data_dir }}/piper-voices"
         - secrets/ssl
+
+    # Voice / LID model assets. See group_vars/all.yml for why these are fetched
+    # here instead of being baked into the images. Both are `force: false`, so a
+    # redeploy re-checks presence without re-downloading ~1.8 GB every time.
+    - name: Download Piper TTS voices
+      ansible.builtin.get_url:
+        url: >-
+          {{ piper_voices_base_url }}/{{ item.0.split('-')[0].split('_')[0] }}/{{ item.0.split('-')[0] }}/{{ item.0.split('-')[1] }}/{{ item.0.split('-')[2] }}/{{ item.0 }}.{{ item.1 }}
+        dest: "{{ deploy_dir }}/{{ data_dir }}/piper-voices/{{ item.0 }}.{{ item.1 }}"
+        mode: "0644"
+        force: false
+        timeout: 120
+      loop: "{{ piper_voices | product(['onnx', 'onnx.json']) | list }}"
+      loop_control:
+        label: "{{ item.0 }}.{{ item.1 }}"
+
+    # lid reads a named volume rather than a bind mount, so the file has to be
+    # placed inside the volume. Creating it here is safe: `docker volume create`
+    # is idempotent, and Swarm reuses an existing volume of the same name rather
+    # than making a second one.
+    - name: Ensure the lid model volume exists
+      become_user: root
+      ansible.builtin.command: "docker volume create {{ lid_volume_name }}"
+      register: _lid_volume
+      changed_when: false
+
+    - name: Resolve the lid model volume mountpoint
+      become_user: root
+      ansible.builtin.command: >
+        docker volume inspect {{ lid_volume_name }}
+        --format {{ '{{' }}.Mountpoint{{ '}}' }}
+      register: _lid_mountpoint
+      changed_when: false
+
+    - name: Download the fastText language-identification model
+      become_user: root
+      ansible.builtin.get_url:
+        url: "{{ lid_model_url }}"
+        dest: "{{ _lid_mountpoint.stdout | trim }}/lid.bin"
+        mode: "0644"
+        force: false
+        timeout: 300
 
 - name: GENIE.AI - Copy SSL certificates
   hosts: swarm_managers
@@ -482,6 +533,11 @@
   tags: [build]
   become: true
   tasks:
+    # `watch` lists the paths whose changes should trigger a rebuild of THIS image.
+    # It defaults to [dockerfile, context] and only needs setting where the build
+    # context is broader than what the Dockerfile actually COPYs — notably the five
+    # images with `context: .`, which would otherwise rebuild on any repo change.
+    # Keep these in sync with the COPY lines in the corresponding Dockerfile.
     - name: Define image build list
       ansible.builtin.set_fact:
         genieai_images:
@@ -494,12 +550,20 @@
           - name: backend
             dockerfile: components/gov-chat-backend/Dockerfile
             context: components
+            # COPYs gov-chat-backend/ and shared/lib — not all of components/
+            watch:
+              - components/gov-chat-backend
+              - components/shared/lib
             source_tag: genieai_mvp_backend:latest
             registry_tag: genie-ai-backend:latest
             opea: false
           - name: document-repository
             dockerfile: components/document-repository/Dockerfile
             context: components
+            # COPYs document-repository/ and shared/lib — not all of components/
+            watch:
+              - components/document-repository
+              - components/shared/lib
             source_tag: genieai_mvp_document-repository:latest
             registry_tag: genie-ai-document-repository:latest
             opea: false
@@ -536,40 +600,154 @@
           - name: db-migrations
             dockerfile: components/gov-chat-backend/Dockerfile.migrations
             context: .
+            # Only COPYs the migrations scripts, despite the repo-wide context.
+            watch:
+              - components/gov-chat-backend/scripts/migrations
             source_tag: genie-ai-db-migrations:latest
             registry_tag: genie-ai-db-migrations:latest
             opea: false
           - name: dataprep-arango
             dockerfile: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
             context: .
+            watch:
+              - genie-ai-overlay/dataprep
+              - genie-ai-overlay/core/genieai_api_protocol.py
+              - genie-ai-overlay/build-patches
             source_tag: genie-ai-dataprep-arango:latest
             registry_tag: genie-ai-dataprep-arango:latest
             opea: true
           - name: retriever-arango
             dockerfile: genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai
             context: .
+            watch:
+              - genie-ai-overlay/retriever
+              - genie-ai-overlay/core/genieai_api_protocol.py
+              - genie-ai-overlay/build-patches
             source_tag: genie-ai-retriever-arango:latest
             registry_tag: genie-ai-retriever-arango:latest
             opea: true
           - name: chatqna-server
             dockerfile: genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai
             context: .
+            watch:
+              - genie-ai-overlay/chatqna
+              - genie-ai-overlay/core
             source_tag: genie-ai-chatqna-server:latest
             registry_tag: genie-ai-chatqna-server:latest
             opea: true
           - name: reranker
             dockerfile: genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai
             context: .
+            watch:
+              - genie-ai-overlay/reranker
+              - genie-ai-overlay/build-patches
             source_tag: genie-ai-reranker:latest
             registry_tag: genie-ai-reranker:latest
             opea: true
 
-    - name: Get current git commit SHA
-      ansible.builtin.command: git rev-parse HEAD
-      args:
+          # --- Voice / messaging services -------------------------------------
+          # These were missing from this list while docker-compose.yaml referenced
+          # their images, so Swarm rejected them indefinitely with
+          # "No such image: localhost:5000/genie-ai-<name>:latest" — voice-bridge
+          # had been in that state for four weeks. Because the post-deploy health
+          # check requires every non-excluded service to reach its replica count,
+          # that drift made EVERY deploy fail verification regardless of what else
+          # was true. Compose referenced 19 local-registry images; this list had 13.
+          - name: asr-whisper
+            dockerfile: genie-ai-overlay/asr-whisper/Dockerfile-asr_genie-ai
+            context: .
+            watch:
+              - genie-ai-overlay/asr-whisper
+            source_tag: genie-ai-asr-whisper:latest
+            registry_tag: genie-ai-asr-whisper:latest
+            opea: false
+          - name: http-service
+            dockerfile: genie-ai-overlay/http-service/Dockerfile
+            context: .
+            watch:
+              - genie-ai-overlay/http-service
+            source_tag: genie-ai-http-service:latest
+            registry_tag: genie-ai-http-service:latest
+            opea: false
+          - name: tts-piper
+            dockerfile: genie-ai-overlay/tts-piper/Dockerfile-tts_genie-ai
+            context: .
+            watch:
+              - genie-ai-overlay/tts-piper
+            source_tag: genie-ai-tts-piper:latest
+            registry_tag: genie-ai-tts-piper:latest
+            opea: false
+          - name: voice-bridge
+            dockerfile: genie-ai-overlay/voice-bridge/Dockerfile-voicebridge_genie-ai
+            context: .
+            watch:
+              - genie-ai-overlay/voice-bridge
+              - genie-ai-overlay/core/appointment_guard.py
+            source_tag: genie-ai-voice-bridge:latest
+            registry_tag: genie-ai-voice-bridge:latest
+            opea: false
+          - name: whatsapp
+            dockerfile: genie-ai-overlay/whatsapp/Dockerfile-whatsapp_genie-ai
+            context: .
+            watch:
+              - genie-ai-overlay/whatsapp
+            source_tag: genie-ai-whatsapp:latest
+            registry_tag: genie-ai-whatsapp:latest
+            opea: false
+          # lid carries `profiles: [opea]` in compose, so it follows DEPLOY_OPEA.
+          - name: lid
+            dockerfile: genie-ai-overlay/lid/Dockerfile-lid_genie-ai
+            context: .
+            watch:
+              - genie-ai-overlay/lid
+            source_tag: genie-ai-lid:latest
+            registry_tag: genie-ai-lid:latest
+            opea: true
+
+    # Per-image source SHA: the last commit that touched THIS image's Dockerfile or
+    # its watched paths.
+    #
+    # This replaces a single repo-wide `git rev-parse HEAD`. That old scheme
+    # compared one global SHA against every image's git_sha label, so ANY commit
+    # invalidated ALL ~13 labels — every deploy rebuilt everything, pushed 13 new
+    # digests, and Swarm consequently restarted every service. A one-line frontend
+    # change cost a full-stack restart (~40 min, including a vLLM model reload).
+    #
+    # Keying on the image's own inputs means unchanged images keep their existing
+    # digest, so Swarm leaves those services running untouched. That removes most
+    # of the downtime, not just most of the build time.
+    #
+    # It also makes a no-op redeploy genuinely free: redeploy.sh commits with
+    # --allow-empty so HEAD always moves, but an empty commit touches no path, so
+    # `git log -1 -- <paths>` still resolves to the earlier commit and nothing is
+    # rebuilt.
+    - name: Compute per-image source SHA
+      ansible.builtin.command:
+        cmd: >-
+          git log -1 --format=%H --
+          {{ ([item.dockerfile] + (item.watch | default([item.context]))) | map('quote') | join(' ') }}
         chdir: "{{ deploy_dir }}"
-      register: git_sha
+      register: image_src_sha
       changed_when: false
+      # Never abort the deploy on a git hiccup (shallow clone, path not yet in
+      # history, etc). A non-zero rc leaves stdout empty, and the build condition
+      # below treats an empty SHA as "rebuild" — degrade to doing more work, not
+      # to skipping work or failing the run.
+      failed_when: false
+      loop: "{{ genieai_images }}"
+      when: not item.opea or deploy_opea != "0"
+      loop_control:
+        label: "{{ item.name }}"
+
+    # Flatten {image, sha} into one list so the later loops stay one level deep.
+    - name: Assemble build plan
+      ansible.builtin.set_fact:
+        build_plan: >-
+          {{ (build_plan | default([])) + [item.item | combine({'sha': item.stdout | trim})] }}
+      loop: "{{ image_src_sha.results }}"
+      when: item.skipped is not defined
+      loop_control:
+        label: "{{ item.item.name }}"
 
     - name: Check if images need rebuild
       ansible.builtin.command: >
@@ -578,26 +756,31 @@
       register: image_inspect
       changed_when: false
       failed_when: false
-      loop: "{{ genieai_images }}"
-      when: not item.opea or deploy_opea != "0"
+      loop: "{{ build_plan }}"
       loop_control:
         label: "{{ item.name }}"
 
-    - name: Build image (changed only)
+    - name: Build image (only when its own sources changed)
       ansible.builtin.shell: >
         docker build
         -f {{ deploy_dir }}/{{ item.item.dockerfile }}
         -t {{ item.item.source_tag }}
-        --label git_sha={{ git_sha.stdout }}
+        --label git_sha={{ item.item.sha }}
         {{ deploy_dir }}/{{ item.item.context }}
       loop: "{{ image_inspect.results }}"
+      # Rebuild when: the image is absent (rc != 0), its label differs from the
+      # source SHA, or the SHA is empty (paths not in history yet — fail safe by
+      # rebuilding rather than silently skipping).
       when: >
-        item.skipped is not defined
-        and (item.rc != 0 or item.stdout | trim != git_sha.stdout)
+        item.rc != 0
+        or item.item.sha == ''
+        or (item.stdout | trim) != item.item.sha
       loop_control:
         label: "{{ item.item.name }}"
       register: build_results
-      async: 300
+      # OPEA images (torch/CUDA, cold build) can take well over 5 min on a fresh
+      # box; a 30-min ceiling avoids a premature async timeout aborting the play.
+      async: 1800
       poll: 30
 
     - name: Tag image for registry
@@ -616,6 +799,29 @@
       when: item.skipped is not defined
       loop_control:
         label: "{{ item.item.item.name }}"
+
+    # Publish {registry_tag: sha} so the redeploy path can verify what shipped.
+    #
+    # redeploy.sh cannot recompute these itself: the SHA is per-image, derived from
+    # `git log -1 -- <that image's watch paths>`, and duplicating the image table
+    # from "Define image build list" into bash guarantees the two drift apart. It
+    # must not compare against a global `git rev-parse HEAD` either — unchanged
+    # images deliberately keep an older SHA, so every one of them would look stale.
+    #
+    # Written outside {{ deploy_dir }} on purpose: redeploy.sh runs `git add -A`
+    # over that tree, and a file regenerated on every deploy has no business
+    # entering the repo history.
+    - name: Ensure the state directory exists
+      ansible.builtin.file:
+        path: /var/lib/genieai
+        state: directory
+        mode: "0755"
+
+    - name: Record the per-image build plan for post-deploy verification
+      ansible.builtin.copy:
+        content: "{{ build_plan | items2dict(key_name='registry_tag', value_name='sha') | to_nice_json }}"
+        dest: /var/lib/genieai/build-plan.json
+        mode: "0644"
 
 - name: GENIE.AI - Generate .env and deploy stack
   hosts: swarm_managers
@@ -783,24 +989,117 @@
       when: _compose_changed | bool
 
     - name: Verify all running services are healthy
-      ansible.builtin.shell: >
-        docker service ls
-        --filter label=com.docker.stack.namespace={{ stack_name }}
-        --format '{{ "{{" }}.Name{{ "}}" }} {{ "{{" }}.Replicas{{ "}}" }}'
+      # Three independent signals. Replica counts alone give a false green, which is
+      # how the 2026-08-19 deploy passed this gate and then failed the backend smoke
+      # test below: the gateway tier was being recreated, Kong was 5.5 minutes from
+      # ready, and `docker service ls` reported kong 1/1 the whole time because the
+      # outgoing task lingers and is counted. Swarm keeps a task whose healthcheck has
+      # not passed OUT of its internal DNS, so nginx got NXDOMAIN for `kong` and 502'd
+      # every /api request — including real user logins — while this gate said healthy.
+      #
+      # Prints one line per unconverged thing; empty stdout means converged.
+      #
+      # Exemptions live in group_vars/all.yml (deploy_health_exempt) — see the note
+      # there for why the voice tier is not on the list.
+      ansible.builtin.shell:
+        # Explicit `cmd:` rather than free-form. Ansible splits a free-form shell body
+        # using shell quoting rules and has no idea `#` starts a comment, so one stray
+        # apostrophe in the prose below ("the stack prefix's underscore") makes the
+        # whole playbook fail to load with "unbalanced jinja2 block or quotes". `cmd:`
+        # is passed through untouched. Verified with `ansible-playbook --syntax-check`.
+        cmd: |
+          ns='com.docker.stack.namespace={{ stack_name }}'
+          # Exact service names, matched together with the leading underscore of the
+          # stack prefix so that `_kong-config` does not also match the `kong` service.
+          exempt='_({{ deploy_health_exempt | join("|") }})'
+
+          # (1) Replica counts — catches a service that never started at all. The
+          # patterns are anchored on a leading space so that a service scaled above 9
+          # replicas is not misread: "10/10" contains the substring "0/1", which an
+          # unanchored search would flag as permanently unhealthy. ' 0/0' is a service
+          # deliberately scaled to zero, not a failure.
+          docker service ls --filter "label=${ns}" \
+            --format '{{ "{{" }}.Name{{ "}}" }} {{ "{{" }}.Replicas{{ "}}" }}' \
+            | grep -Ev "${exempt} " | grep -v ' 0/0' | grep ' 0/' \
+            | sed 's/^/NO_REPLICAS /' || true
+
+          # (2) Rolling updates still in flight — the signal that was missing. Only
+          # `updating` and `rollback_started` mean Swarm is actively replacing tasks and
+          # the service DNS is therefore in flux; those are worth waiting on.
+          #
+          # `paused` and `rollback_paused` are NOT waited on. They do not mean "in
+          # progress" — they mean a rollout hit update_config.failure_action=pause and
+          # stopped, and that state then persists until the next update. Both vllm
+          # services sat in `paused` from 2026-08-19 (first replacement task exited 1, a
+          # later one came up healthy), so waiting on it would spin the full
+          # stabilization timeout and fail every deploy on stale state. A paused rollout
+          # that actually left something broken is still caught by (1) and (3) below;
+          # "Report stalled rolling updates" prints the rest for the record.
+          #
+          # An empty UpdateStatus means the service was never updated.
+          for svc in $(docker service ls --filter "label=${ns}" \
+                         --format '{{ "{{" }}.Name{{ "}}" }}' | grep -Ev "${exempt}$"); do
+            state=$(docker service inspect "${svc}" --format \
+              '{{ "{{" }}with .UpdateStatus{{ "}}" }}{{ "{{" }}.State{{ "}}" }}{{ "{{" }}end{{ "}}" }}')
+            case "${state}" in
+              updating|rollback_started) echo "UPDATING ${svc} ${state}" ;;
+            esac
+          done
+
+          # (3) Containers up but not yet passing their healthcheck — the same blind
+          # spot seen from the container side. Containers without a healthcheck report a
+          # bare "Up ..." and are correctly ignored.
+          #
+          # NOTE: `docker ps` is node-local, so on a multi-node swarm this covers only
+          # the manager. (1) and (2) go through the swarm API and are cluster-wide, so
+          # they remain the backbone; treat (3) as extra cover on single-node installs
+          # like aws_dev rather than a cluster-wide health check.
+          docker ps --filter "label=${ns}" \
+            --format '{{ "{{" }}.Names{{ "}}" }} {{ "{{" }}.Status{{ "}}" }}' \
+            | grep -Ev "${exempt}\." \
+            | grep -E 'health: starting|\(unhealthy\)' \
+            | sed 's/^/UNHEALTHY /' || true
+        executable: /bin/bash
       register: replica_check
-      until: >
-        replica_check.stdout_lines
-        | reject('search', 'kong-config')
-        | reject('search', 'kong-migrations')
-        | reject('search', 'postgres-init')
-        | reject('search', 'keycloak-config')
-        | reject('search', 'db-migrations')
-        | reject('search', '0/0')
-        | select('search', '0/')
-        | length == 0
+      until: (replica_check.stdout | trim) == ''
       retries: "{{ (deploy_stabilization_timeout | int) // 30 }}"
       delay: 30
       changed_when: false
+      when: _compose_changed | bool
+
+    - name: Report stalled rolling updates
+      # Deliberately not fatal and not retried — see the note in the gate above. A
+      # rollout that paused but left the service running and healthy is benign, and
+      # the state sticks around until the next update, so failing on it would block
+      # deploys on history. Printing it keeps it out of the silent-failure category.
+      ansible.builtin.shell:
+        # Explicit `cmd:` for the same reason as the gate above.
+        cmd: |
+          # One-shot jobs are excluded: a task that runs to completion IS an "early
+          # termination" to Swarm, so kong-migrations and friends report `paused` after
+          # every single deploy. Listing them would be pure noise.
+          for svc in $(docker service ls \
+                         --filter "label=com.docker.stack.namespace={{ stack_name }}" \
+                         --format '{{ "{{" }}.Name{{ "}}" }}' \
+                         | grep -Ev '_({{ deploy_health_exempt | join("|") }})$'); do
+            state=$(docker service inspect "${svc}" --format \
+              '{{ "{{" }}with .UpdateStatus{{ "}}" }}{{ "{{" }}.State{{ "}}" }}{{ "{{" }}end{{ "}}" }}')
+            case "${state}" in
+              paused|rollback_paused|rollback_completed)
+                echo "${svc}: ${state} — $(docker service inspect "${svc}" --format \
+                  '{{ "{{" }}with .UpdateStatus{{ "}}" }}{{ "{{" }}.Message{{ "}}" }}{{ "{{" }}end{{ "}}" }}')" ;;
+            esac
+          done
+        executable: /bin/bash
+      register: stalled_updates
+      changed_when: false
+      when: _compose_changed | bool
+
+    - name: Stalled rolling updates
+      ansible.builtin.debug:
+        msg: >-
+          {{ stalled_updates.stdout_lines if (stalled_updates.stdout | trim) != ''
+             else 'none — every service rollout reached a clean terminal state' }}
       when: _compose_changed | bool
 
     - name: Smoke test - backend health
@@ -811,7 +1110,12 @@
         return_content: true
       register: health_check
       until: health_check.status == 200
-      retries: 6
+      # Budget the same wall clock the rest of the deploy gets, rather than a
+      # hard-coded count. The old 6 x 15s = 90s was shorter than a gateway-tier
+      # restart: on 2026-08-19 Kong needed 5.5 minutes to converge, every attempt got
+      # nginx's 502 ("kong could not be resolved"), and CI failed a deploy that was
+      # already healthy 4 minutes later.
+      retries: "{{ (deploy_stabilization_timeout | int) // 15 }}"
       delay: 15
       when: _compose_changed | bool
 
@@ -823,7 +1127,9 @@
         return_content: true
       register: frontend_check
       until: frontend_check.status == 200
-      retries: 3
+      # Same reasoning as the backend smoke test: nginx resolves `frontend` lazily too,
+      # so 3 x 10s = 30s was shorter than a frontend task replacement.
+      retries: "{{ (deploy_stabilization_timeout | int) // 10 }}"
       delay: 10
       when: _compose_changed | bool
 

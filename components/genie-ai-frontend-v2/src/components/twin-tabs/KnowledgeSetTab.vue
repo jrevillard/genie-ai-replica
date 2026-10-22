@@ -404,7 +404,7 @@ defineExpose({ save, discard });
           {{
             props.editing
               ? t('twins.knowledge.subtitleEditing', 'Toggle files on or off — saved when you click Save Changes.')
-              : t('twins.knowledge.subtitle', "Files linked here are used to answer with this AI Twin's specific knowledge.")
+              : t('twins.knowledge.subtitle', "Files linked here are used to answer with this Topic Module's specific knowledge.")
           }}
         </p>
       </div>
@@ -428,7 +428,7 @@ defineExpose({ save, discard });
     <section class="space-y-3">
       <header class="flex items-center gap-2">
         <h3 class="text-body font-semibold text-text">
-          {{ t('twins.knowledge.sectionAssigned', 'Assigned to this twin') }}
+          {{ t('twins.knowledge.sectionAssigned', 'Assigned to this topic module') }}
         </h3>
         <span class="inline-flex items-center rounded-full bg-accent-soft px-2 py-0.5 text-meta font-semibold text-accent">
           {{ assignedFiles.length }}

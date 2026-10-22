@@ -30,6 +30,9 @@ export type VoiceStatus =
   | 'ended'
   | 'error';
 
+/** Why the microphone could not be opened: the user refused, or anything else. */
+export type MicFailure = 'denied' | 'unavailable';
+
 export type VoiceTranscriptKind = 'transcript' | 'agent_text';
 
 export interface VoiceTranscript {
@@ -45,6 +48,8 @@ interface VoiceCallEvents {
   bargeIn: () => void;
   muted: (muted: boolean) => void;
   error: (e: Error) => void;
+  /** The microphone could not be opened; the call ends itself right after. */
+  micFailed: (reason: MicFailure) => void;
   disconnected: () => void;
 }
 
@@ -74,6 +79,13 @@ export class VoiceCall {
   private muted = false;
   private agentSpeaking = false;
   private unmuteTimer: ReturnType<typeof setTimeout> | null = null;
+  // Set by stop(). A VoiceCall is single-use: once stopped, a token request
+  // or socket handshake still in flight must not bring it up.
+  private stopped = false;
+  // Set once the mic is capturing (status 'connected'). The bridge accepts the
+  // socket before it checks the token and speaks the greeting, so a close
+  // before this point means the call never started.
+  private live = false;
 
   private listeners: { [K in keyof VoiceCallEvents]?: VoiceCallEvents[K][] } = {};
 
@@ -114,7 +126,7 @@ export class VoiceCall {
 
   /** Begin the call: mint token, open WS, start mic. Resolves when WS opens. */
   async start(opts: StartCallOptions): Promise<void> {
-    if (this.ws) throw new Error('A call is already active');
+    if (this.ws) throw new Error('An audio session is already active');
     const language = opts.language ?? 'en';
     const gender = opts.gender && ['female', 'male'].includes(opts.gender)
       ? opts.gender
@@ -123,6 +135,7 @@ export class VoiceCall {
     this.emit('status', 'connecting');
 
     const tokenInfo = await mintVoiceToken(language, opts.twinId);
+    if (this.stopped) throw new Error('Audio session stopped while connecting');
     if (!tokenInfo?.wsUrl || !tokenInfo?.voiceToken) {
       const err = new Error('Backend did not return a valid voice token');
       this.emit('error', err);
@@ -135,11 +148,14 @@ export class VoiceCall {
 
   /** Graceful disconnect. Sends a "stop" frame, closes the WS, releases mic. */
   async stop(): Promise<void> {
+    this.stopped = true;
     try {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
         this.ws.send(JSON.stringify({ type: 'stop' }));
-        this.ws.close(1000, 'client closed');
       }
+      // Also abandons a socket that is still connecting, which would
+      // otherwise open after the user has left and start the session.
+      this.ws?.close(1000, 'client closed');
     } catch {
       /* ignore */
     }
@@ -162,11 +178,13 @@ export class VoiceCall {
       }
       ws.binaryType = 'arraybuffer';
       this.ws = ws;
+      let opened = false;
 
       ws.addEventListener('open', () => {
+        opened = true;
         try {
+          // Status stays 'connecting' until the mic is live (see 'ready').
           ws.send(JSON.stringify({ type: 'start', language, gender, voiceToken }));
-          this.emit('status', 'connected');
           resolve();
         } catch (err) {
           reject(err as Error);
@@ -176,8 +194,19 @@ export class VoiceCall {
       ws.addEventListener('message', (event) => this.handleMessage(event));
 
       ws.addEventListener('close', () => {
-        this.emit('status', 'ended');
-        this.emit('disconnected');
+        if (!opened) {
+          // A socket that never opened is a failed start. The error listener
+          // normally rejected already; this covers a close without one, which
+          // would otherwise leave start() pending forever.
+          reject(new Error('Voice connection closed before it opened'));
+        } else if (!this.live && !this.stopped) {
+          // Closed before the call went live (bad token, failed greeting,
+          // bridge restart): a failed start, not an end.
+          this.emit('status', 'error');
+        } else {
+          this.emit('status', 'ended');
+          this.emit('disconnected');
+        }
         this.cleanup();
       });
 
@@ -202,8 +231,21 @@ export class VoiceCall {
     }
     switch (msg.type) {
       case 'ready':
-        this.emit('status', 'connected');
-        await this.startMicrophone();
+        try {
+          await this.startMicrophone();
+          // Only now is anything listening. No socket: the call ended meanwhile.
+          if (this.ws) {
+            this.live = true;
+            this.emit('status', 'connected');
+          }
+        } catch {
+          // Without working audio capture nothing can be heard, so end the
+          // call rather than leave the UI showing "Listening…".
+          if (this.ws) {
+            this.emit('status', 'error');
+            await this.stop();
+          }
+        }
         break;
       case 'tts_start':
         this.currentPlaybackSampleRate = Number(msg.sample_rate) || 22050;
@@ -254,8 +296,9 @@ export class VoiceCall {
   private async startMicrophone(): Promise<void> {
     if (this.captureContext) return;
 
+    let stream: MediaStream;
     try {
-      this.mediaStream = await navigator.mediaDevices.getUserMedia({
+      stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
@@ -266,8 +309,18 @@ export class VoiceCall {
     } catch (err) {
       const e = new Error(`Microphone permission denied: ${(err as Error).message || err}`);
       this.emit('error', e);
+      if (this.ws) {
+        this.emit('micFailed', (err as Error).name === 'NotAllowedError' ? 'denied' : 'unavailable');
+      }
       throw e;
     }
+    if (!this.ws) {
+      // The call ended (stopped, or the socket closed) while the permission
+      // prompt was open: let the mic go again.
+      stream.getTracks().forEach((t) => t.stop());
+      return;
+    }
+    this.mediaStream = stream;
 
     const Ctx: typeof AudioContext =
       (window.AudioContext as typeof AudioContext) ||
@@ -288,6 +341,8 @@ export class VoiceCall {
       this.emit('error', e);
       throw e;
     }
+    // The call ended during the load; cleanup() has closed this context.
+    if (!this.ws) return;
 
     this.workletNode = new AudioWorkletNode(captureCtx, 'voice-pcm-extractor');
     this.workletNode.port.onmessage = (event) => this.onMicFrame(event.data);

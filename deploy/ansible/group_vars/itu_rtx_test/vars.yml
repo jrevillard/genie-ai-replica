@@ -26,6 +26,9 @@ vue_app_csp_connect_src: "'self' https://10.0.0.110:1443 wss://10.0.0.110:1443 h
 # BACKEND
 # =============================================================================
 cors_allowed_origins: "https://10.0.0.110:1443,http://localhost:1080,http://localhost:1443"
+# Module ids differ per database: the id in all.yml exists only in the AWS
+# deployment's database, so guests here may use every module.
+public_twin_ids: ""
 csp_connect_src: "'self' https://10.0.0.110:1443 wss://10.0.0.110:1443 http://localhost:1080 http://localhost:1443"
 
 # =============================================================================

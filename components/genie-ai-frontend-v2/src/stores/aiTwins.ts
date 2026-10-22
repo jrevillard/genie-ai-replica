@@ -15,6 +15,10 @@ interface AiTwinsState {
   limit: number;
   publicTwins: PublicAiTwin[];
   publicTotal: number;
+  // Whether publicTwins was fetched signed in (null = not fetched yet). The
+  // backend lists every module to a signed-in caller but only the guest modules
+  // to a guest, so the list is only valid for the same audience.
+  publicTwinsSignedIn: boolean | null;
   current: AiTwin | null;
   loading: boolean;
   saving: boolean;
@@ -29,6 +33,7 @@ export const useAiTwinsStore = defineStore('aiTwins', {
     limit: 50,
     publicTwins: [],
     publicTotal: 0,
+    publicTwinsSignedIn: null,
     current: null,
     loading: false,
     saving: false,
@@ -49,7 +54,7 @@ export const useAiTwinsStore = defineStore('aiTwins', {
         this.offset = res.offset;
         this.limit = res.limit;
       } catch (err) {
-        this.error = extractError(err, 'Failed to load AI Twins');
+        this.error = extractError(err, 'Failed to load Topic Modules');
         throw err;
       } finally {
         this.loading = false;
@@ -59,6 +64,7 @@ export const useAiTwinsStore = defineStore('aiTwins', {
     async fetchAllPublic(params?: { offset?: number; limit?: number }): Promise<void> {
       this.loading = true;
       this.error = null;
+      const signedIn = useAuthStore().isAuthenticated;
       try {
         const res = await api.listPublicAiTwins({
           offset: params?.offset ?? 0,
@@ -66,8 +72,9 @@ export const useAiTwinsStore = defineStore('aiTwins', {
         });
         this.publicTwins = res.twins;
         this.publicTotal = res.total;
+        this.publicTwinsSignedIn = signedIn;
       } catch (err) {
-        this.error = extractError(err, 'Failed to load AI Twins');
+        this.error = extractError(err, 'Failed to load Topic Modules');
         throw err;
       } finally {
         this.loading = false;
@@ -84,9 +91,9 @@ export const useAiTwinsStore = defineStore('aiTwins', {
       this.error = null;
       try {
         // Only admins hit the privileged read; everyone else (guests + normal
-        // users) gets the sanitized public payload. The backend only exposes
-        // the default twin via /public/ai-twins/:id, but that's enough for a
-        // read-only profile + chat surface.
+        // users) gets the sanitized public payload, which is enough for a
+        // read-only profile + chat surface. Guests may get only the modules
+        // the backend allows them (PUBLIC_TWIN_IDS); signed-in users get any.
         const isAdmin = useAuthStore().isAdmin;
         const twin = isAdmin
           ? await api.getAiTwin(twinId)
@@ -95,7 +102,7 @@ export const useAiTwinsStore = defineStore('aiTwins', {
         upsert(this.twins, twin);
         return twin;
       } catch (err) {
-        this.error = extractError(err, 'Failed to load AI Twin');
+        this.error = extractError(err, 'Failed to load Topic Module');
         throw err;
       } finally {
         this.loading = false;
@@ -111,7 +118,7 @@ export const useAiTwinsStore = defineStore('aiTwins', {
         this.total += 1;
         return twin;
       } catch (err) {
-        this.error = extractError(err, 'Failed to create AI Twin');
+        this.error = extractError(err, 'Failed to create Topic Module');
         throw err;
       } finally {
         this.saving = false;
@@ -127,7 +134,7 @@ export const useAiTwinsStore = defineStore('aiTwins', {
         if (this.current?._key === twinId) this.current = merged;
         return merged;
       } catch (err) {
-        this.error = extractError(err, 'Failed to update AI Twin');
+        this.error = extractError(err, 'Failed to update Topic Module');
         throw err;
       } finally {
         this.saving = false;
@@ -143,7 +150,7 @@ export const useAiTwinsStore = defineStore('aiTwins', {
         this.total = Math.max(0, this.total - 1);
         if (this.current?._key === twinId) this.current = null;
       } catch (err) {
-        this.error = extractError(err, 'Failed to delete AI Twin');
+        this.error = extractError(err, 'Failed to delete Topic Module');
         throw err;
       } finally {
         this.saving = false;

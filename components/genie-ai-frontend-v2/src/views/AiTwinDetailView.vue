@@ -186,10 +186,10 @@ async function confirmDelete() {
   try {
     await store.remove(twin.value._key);
     deleteDialog.value = false;
-    notify.success(t('twins.detail.toasts.twinDeleted', 'AI Twin deleted'));
+    notify.success(t('twins.detail.toasts.twinDeleted', 'Topic Module deleted'));
     router.push({ name: 'ai-twins' });
   } catch {
-    notify.error(store.error ?? t('twins.detail.toasts.deleteFailed', 'Failed to delete AI Twin'));
+    notify.error(store.error ?? t('twins.detail.toasts.deleteFailed', 'Failed to delete Topic Module'));
   } finally {
     deleting.value = false;
   }
@@ -263,7 +263,7 @@ async function confirmDelete() {
               @change="onImageChange"
             />
             <BaseButton variant="primary" size="md" rounded="xl" @click="chatWithTwin">
-              {{ t('twins.detail.chatWithTwin', 'Chat With Twin') }}
+              {{ t('twins.detail.chatWithTwin', 'Chat With Topic Module') }}
             </BaseButton>
           </div>
 
@@ -272,8 +272,8 @@ async function confirmDelete() {
             type="button"
             class="inline-flex h-10 items-center gap-2 rounded-full border border-danger/30 bg-danger/5 px-4 text-sm font-semibold text-danger transition duration-200 hover:-translate-y-0.5 hover:border-danger/60 hover:bg-danger/10 hover:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger/50 disabled:cursor-not-allowed disabled:opacity-60"
             :disabled="deleting"
-            :aria-label="t('twins.detail.delete', 'Delete AI Twin')"
-            :title="t('twins.detail.delete', 'Delete AI Twin')"
+            :aria-label="t('twins.detail.delete', 'Delete Topic Module')"
+            :title="t('twins.detail.delete', 'Delete Topic Module')"
             @click="deleteDialog = true"
           >
               <span
@@ -282,7 +282,7 @@ async function confirmDelete() {
                 aria-hidden="true"
               />
               <Icon v-else :icon="Delete02Icon" :size="16" />
-              <span class="hidden sm:inline">{{ t('twins.detail.delete', 'Delete AI Twin') }}</span>
+              <span class="hidden sm:inline">{{ t('twins.detail.delete', 'Delete Topic Module') }}</span>
             </button>
         </header>
 
@@ -379,7 +379,7 @@ async function confirmDelete() {
         v-else-if="store.error"
         full-height
         :icon="Cancel01Icon"
-        :title="t('twins.detail.loadFailedTitle', `Couldn't load AI Twin`)"
+        :title="t('twins.detail.loadFailedTitle', `Couldn't load Topic Module`)"
         :description="store.error"
       >
         <BaseButton variant="primary" @click="loadTwin">{{ t('common.retry', 'Retry') }}</BaseButton>
@@ -389,16 +389,16 @@ async function confirmDelete() {
         v-else
         full-height
         :icon="Cancel01Icon"
-        :title="t('twins.detail.notFoundTitle', 'Twin not found')"
-        :description="t('twins.detail.notFoundBody', `This AI Twin doesn't exist or has been deleted.`)"
+        :title="t('twins.detail.notFoundTitle', 'Topic module not found')"
+        :description="t('twins.detail.notFoundBody', `This Topic Module doesn't exist or has been deleted.`)"
       >
         <BaseButton variant="primary" @click="router.push({ name: 'ai-twins' })">{{ t('twins.detail.backToList', 'Back to list') }}</BaseButton>
       </EmptyState>
 
       <ConfirmDialog
         v-model:open="deleteDialog"
-        :title="t('twins.detail.deleteDialog.title', 'Delete AI Twin')"
-        :description="t('twins.detail.deleteDialog.body', `This action can't be undone. All chats and call history attached to this twin will be removed.`)"
+        :title="t('twins.detail.deleteDialog.title', 'Delete Topic Module')"
+        :description="t('twins.detail.deleteDialog.body', `This action can't be undone. All chats and audio history attached to this topic module will be removed.`)"
         :confirm-label="t('common.delete', 'Delete')"
         :loading="deleting"
         @confirm="confirmDelete"
@@ -407,7 +407,7 @@ async function confirmDelete() {
       <ConfirmDialog
         v-model:open="removeImageDialog"
         :title="t('twins.detail.removeImageDialog.title', 'Remove profile picture?')"
-        :description="t('twins.detail.removeImageDialog.body', 'The current profile picture will be removed and the twin will fall back to its initials.')"
+        :description="t('twins.detail.removeImageDialog.body', 'The current profile picture will be removed and the topic module will fall back to its initials.')"
         :confirm-label="t('twins.detail.removeImageDialog.confirm', 'Remove')"
         :loading="uploadingImage"
         @confirm="confirmRemoveImage"

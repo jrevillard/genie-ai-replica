@@ -1053,7 +1053,9 @@ class FileController {
         return res.status(400).json({ success: false, error: 'Validation error', message: error.details[0].message });
       }
       const { fileIds } = value;
-      logger.info(`[TRACE_TMP][doc-repo] ingestMultipleFiles:validated fileCount=${fileIds.length} fileIds=${JSON.stringify(fileIds)}`);
+      logger.info(
+        `[TRACE_TMP][doc-repo] ingestMultipleFiles:validated fileCount=${fileIds.length} fileIds=${JSON.stringify(fileIds)}`
+      );
       const results = [];
       for (const fileId of fileIds) {
         logger.info(`[TRACE_TMP][doc-repo] ingestMultipleFiles:processing fileId=${fileId}`);
@@ -1064,7 +1066,9 @@ class FileController {
           );
           results.push({ fileId, ...result });
         } catch (error) {
-          logger.error(`[TRACE_TMP][doc-repo] ingestMultipleFiles:exception fileId=${fileId} error=${error.message}`, { stack: error.stack });
+          logger.error(`[TRACE_TMP][doc-repo] ingestMultipleFiles:exception fileId=${fileId} error=${error.message}`, {
+            stack: error.stack
+          });
           results.push({ fileId, success: false, error: error.message });
         }
       }

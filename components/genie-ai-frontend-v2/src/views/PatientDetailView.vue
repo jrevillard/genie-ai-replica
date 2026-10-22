@@ -5,8 +5,8 @@ import { useI18n } from 'vue-i18n';
 import {
   AlertCircleIcon,
   ArrowLeft01Icon,
+  AudioWave01Icon,
   BubbleChatIcon,
-  CallIcon,
   Cancel01Icon,
   CheckmarkCircle02Icon,
   Delete02Icon,
@@ -29,6 +29,7 @@ import GeneralPatientTab from '../components/patient-tabs/GeneralPatientTab.vue'
 import TwinAccessTab from '../components/patient-tabs/TwinAccessTab.vue';
 import { usePatientsStore } from '../stores/patients';
 import { formatRelative, type RelativeStrings } from '../lib/analytics';
+import { WHATSAPP_UI_ENABLED } from '../lib/features';
 import { useT } from '../i18n/composables';
 
 const { t } = useT();
@@ -54,7 +55,7 @@ const savingTab = ref(false);
 
 const tabs = computed<TabItem[]>(() => [
   { value: 'general', label: t('patients.tabs.general', 'General') },
-  { value: 'access', label: t('patients.tabs.access', 'AI Twin Access') },
+  { value: 'access', label: t('patients.tabs.access', 'Topic Module Access') },
 ]);
 
 const patientId = computed(() => String(route.params.id ?? ''));
@@ -105,21 +106,25 @@ const statCards = computed(() => {
       iconBg: 'bg-rose-50',
       iconColor: 'text-rose-500',
     },
-    {
-      key: 'whatsapp',
-      label: t('patients.detail.stats.whatsapp', 'WhatsApp'),
-      sub: t('patients.detail.stats.whatsappSub', 'WhatsApp conversations'),
-      value: p.numWhatsappChats ?? 0,
-      icon: WhatsappIcon,
-      iconBg: 'bg-emerald-50',
-      iconColor: 'text-emerald-500',
-    },
+    ...(WHATSAPP_UI_ENABLED
+      ? [
+          {
+            key: 'whatsapp',
+            label: t('patients.detail.stats.whatsapp', 'WhatsApp'),
+            sub: t('patients.detail.stats.whatsappSub', 'WhatsApp conversations'),
+            value: p.numWhatsappChats ?? 0,
+            icon: WhatsappIcon,
+            iconBg: 'bg-emerald-50',
+            iconColor: 'text-emerald-500',
+          },
+        ]
+      : []),
     {
       key: 'calls',
-      label: t('patients.detail.stats.calls', 'Calls'),
-      sub: t('patients.detail.stats.callsSub', 'Voice calls placed'),
+      label: t('patients.detail.stats.calls', 'Audio'),
+      sub: t('patients.detail.stats.callsSub', 'Audio sessions started'),
       value: p.numCalls ?? 0,
-      icon: CallIcon,
+      icon: AudioWave01Icon,
       iconBg: 'bg-ieee-50',
       iconColor: 'text-ieee-600',
     },
@@ -261,7 +266,7 @@ async function confirmDelete() {
              diving into edit forms. -->
         <section
           :aria-label="t('patients.detail.stats.ariaLabel', 'User activity overview')"
-          class="grid grid-cols-2 gap-3 lg:grid-cols-4"
+          :class="['grid gap-3', WHATSAPP_UI_ENABLED ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3']"
         >
           <article
             v-for="stat in statCards"

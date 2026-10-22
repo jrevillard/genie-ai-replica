@@ -3,9 +3,10 @@ import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import {
-  CallEnd01Icon,
+  AudioWave01Icon,
   Mic01Icon,
   MicOff01Icon,
+  StopIcon,
 } from '@hugeicons/core-free-icons';
 
 import BaseAvatar from '../components/ui/BaseAvatar.vue';
@@ -13,6 +14,7 @@ import BaseButton from '../components/ui/BaseButton.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
 import Icon from '../components/ui/Icon.vue';
 import { chatStrings } from '../lib/chatStrings';
+import { notify } from '../lib/notify';
 import { useAiTwinsStore } from '../stores/aiTwins';
 import { useChatStore } from '../stores/chat';
 import { useVoiceCallStore } from '../stores/voiceCall';
@@ -34,6 +36,7 @@ const {
   status: callStatus,
   muted: callMuted,
   agentSpeaking,
+  isEnded: callEnded,
 } = storeToRefs(voiceCall);
 
 const t = chatStrings;
@@ -45,8 +48,9 @@ const twinId = computed(() => {
 });
 
 // `state` shapes what the orb / footer render. We map the live status to the
-// existing 'idle' | 'ended' values the template already expects.
-const state = computed<CallState>(() => (callStatus.value === 'ended' ? 'ended' : 'idle'));
+// existing 'idle' | 'ended' values the template already expects (a failed call
+// counts as ended; see the store's isEnded).
+const state = computed<CallState>(() => (callEnded.value ? 'ended' : 'idle'));
 const muted = computed<boolean>({
   get: () => callMuted.value,
   set: (v) => {
@@ -76,8 +80,26 @@ async function startVoiceCall(): Promise<void> {
       twinId: twinId.value,
     });
   } catch {
-    // store.error already populated; UI stays on the idle shell.
+    // The store marks the call 'error'; the state watcher reports it and leaves.
   }
+}
+
+// Say why a call failed before leaving the screen.
+function reportFailure(): void {
+  const mic = voiceCall.micFailure;
+  if (mic) {
+    notify.error(
+      tt('chat.micUnavailableTitle', 'Microphone unavailable'),
+      mic === 'denied'
+        ? tt('chat.micPermissionDenied', 'Permission denied. Allow microphone access and try again.')
+        : tt('chat.micGenericError', 'Could not access the microphone.')
+    );
+    return;
+  }
+  notify.error(
+    tt('chat.call.startFailedTitle', "Audio couldn't start"),
+    tt('chat.call.startFailedBody', 'Please try again in a moment, or continue in chat.')
+  );
 }
 
 onMounted(() => {
@@ -100,6 +122,14 @@ watch(twinId, () => {
 // have no twinId.
 watch(state, (next) => {
   if (next !== 'ended') return;
+  // Guests may use only the modules the backend allows them. For any other,
+  // send them to sign-in and back to this link.
+  if (voiceCall.guestTwinNotAllowed) {
+    notify.info(tt('chat.authGate.signInRequired', 'Sign in to use this Topic Module.'));
+    router.replace({ name: 'signin', query: { redirect: route.fullPath } });
+    return;
+  }
+  if (callStatus.value === 'error') reportFailure();
   if (twinId.value) {
     router.replace({ name: 'chat', params: { twinId: twinId.value } });
   } else {
@@ -107,9 +137,11 @@ watch(state, (next) => {
   }
 });
 
+// The bridge speaks its greeting before the mic is on, so the agent can be
+// speaking while the call is still connecting.
 const statusLabel = computed(() => {
   if (state.value === 'ended') return c.ended;
-  if (callStatus.value === 'connecting') return c.connecting;
+  if (callStatus.value === 'connecting') return agentSpeaking.value ? c.aiSpeaking : c.connecting;
   if (muted.value) return c.muted;
   if (agentSpeaking.value) return c.aiSpeaking;
   return c.listening;
@@ -125,7 +157,7 @@ function toggleMute(): void {
 
 const orbStateClass = computed(() => {
   if (state.value === 'ended') return 'orb--ended';
-  if (callStatus.value === 'connecting') return 'orb--connecting';
+  if (callStatus.value === 'connecting') return agentSpeaking.value ? 'orb--speaking' : 'orb--connecting';
   if (muted.value) return 'orb--muted';
   if (agentSpeaking.value) return 'orb--speaking';
   return 'orb--listening';
@@ -142,12 +174,12 @@ const orbStateClass = computed(() => {
       <!-- No twin: empty state -->
       <EmptyState
         v-if="!twinId"
-        :icon="CallEnd01Icon"
-        :title="tt('chat.call.emptyTitle', 'No AI Twin selected')"
-        :description="tt('chat.call.emptyBody', 'Open an AI Twin to start a voice call.')"
+        :icon="AudioWave01Icon"
+        :title="tt('chat.call.emptyTitle', 'No Topic Module selected')"
+        :description="tt('chat.call.emptyBody', 'Open a Topic Module to start an audio session.')"
       >
         <BaseButton variant="primary" @click="router.push({ name: 'ai-twins' })">
-          {{ tt('chat.call.emptyCta', 'Browse AI Twins') }}
+          {{ tt('chat.call.emptyCta', 'Browse Topic Modules') }}
         </BaseButton>
       </EmptyState>
 
@@ -195,7 +227,7 @@ const orbStateClass = computed(() => {
         :title="c.endCall"
         @click="endCall"
       >
-        <Icon :icon="CallEnd01Icon" :size="32" />
+        <Icon :icon="StopIcon" :size="32" />
       </button>
 
     </footer>

@@ -29,7 +29,7 @@ function goBack() {
         <Icon :icon="ArrowLeft01Icon" :size="18" />
       </button>
       <span v-else aria-hidden="true" class="w-9" />
-      <img src="/images/logo.svg" alt="IEEE" class="h-7" />
+      <img src="/images/logo.svg" alt="Health Navigator 1.0" class="h-7" />
       <span aria-hidden="true" class="w-9" />
     </header>
 

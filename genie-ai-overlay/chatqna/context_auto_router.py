@@ -254,7 +254,7 @@ def build_retrieval_from_route(
 
 def strip_non_retrieval_keys(ctx: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
-    for k in ("categoryLabel", "serviceLabels", "language"):
+    for k in ("categoryLabel", "serviceLabels", "language", "kbFileIds"):
         if k not in ctx:
             continue
         v = ctx[k]

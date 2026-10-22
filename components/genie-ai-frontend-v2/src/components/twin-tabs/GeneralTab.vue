@@ -14,6 +14,7 @@ import { useZodForm } from '../../composables/useZodForm';
 import { updateAiTwinSchema, type UpdateAiTwinInput } from '../../lib/validation/schemas';
 import { useT } from '../../i18n/composables';
 import { useTranslated } from '../../composables/useTranslated';
+import { WHATSAPP_UI_ENABLED } from '../../lib/features';
 
 const { t } = useT();
 
@@ -148,8 +149,8 @@ const { value: tCallGreeting } = useTranslated(() => form.callGreeting, 'en');
       <div class="mt-4 space-y-5">
         <BaseInput
           :model-value="editing ? form.name : tName"
-          :label="t('twins.general.nameLabel', 'AI Twin Name')"
-          :placeholder="t('twins.general.namePlaceholder', `Enter the twin's name`)"
+          :label="t('twins.general.nameLabel', 'Topic Module Name')"
+          :placeholder="t('twins.general.namePlaceholder', `Enter the topic module's name`)"
           :disabled="!editing"
           :error="errors.name"
           @update:model-value="(v) => (form.name = v)"
@@ -165,16 +166,16 @@ const { value: tCallGreeting } = useTranslated(() => form.callGreeting, 'en');
       </div>
     </section>
 
-    <section>
-      <h2 class="text-title text-text">{{ t('twins.general.numberTitle', 'AI Twin Number') }}</h2>
+    <section v-if="WHATSAPP_UI_ENABLED">
+      <h2 class="text-title text-text">{{ t('twins.general.numberTitle', 'Topic Module Number') }}</h2>
       <p class="mt-1 text-caption text-text-muted">
-        {{ t('twins.general.numberSubtitle', 'The phone number callers can use to reach this AI Twin.') }}
+        {{ t('twins.general.numberSubtitle', 'The phone number callers can use to reach this Topic Module.') }}
       </p>
       <div class="mt-3">
         <BaseInput
           v-model="form.twinNumber"
           type="tel"
-          :placeholder="t('twins.general.numberPlaceholder', 'Enter twin number')"
+          :placeholder="t('twins.general.numberPlaceholder', 'Enter topic module number')"
           disabled
         />
       </div>
@@ -197,9 +198,9 @@ const { value: tCallGreeting } = useTranslated(() => form.callGreeting, 'en');
     </section>
 
     <section>
-      <h2 class="text-title text-text">{{ t('twins.general.callGreetingTitle', 'Call Greeting') }}</h2>
+      <h2 class="text-title text-text">{{ t('twins.general.callGreetingTitle', 'Audio Greeting') }}</h2>
       <p class="mt-1 text-caption text-text-muted">
-        {{ t('twins.general.callGreetingSubtitle', 'First thing the AI says when a voice call connects.') }}
+        {{ t('twins.general.callGreetingSubtitle', 'First thing the AI says when an audio session starts.') }}
       </p>
       <div class="mt-3">
         <BaseTextarea

@@ -64,7 +64,7 @@ function closeMobile(): void {
           >
             <Icon :icon="SidebarLeftIcon" :size="20" />
           </button>
-          <img src="/images/logo.svg" alt="IEEE" class="h-6" />
+          <img src="/images/logo.svg" alt="Health Navigator 1.0" class="h-6" />
         </div>
         <slot />
       </div>

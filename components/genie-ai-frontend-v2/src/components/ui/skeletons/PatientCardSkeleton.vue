@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import BaseSkeleton from './BaseSkeleton.vue';
+import { WHATSAPP_UI_ENABLED } from '../../../lib/features';
 </script>
 
 <template>
@@ -25,10 +26,10 @@ import BaseSkeleton from './BaseSkeleton.vue';
       <BaseSkeleton height="1.5rem" width="7rem" rounded="full" />
     </header>
 
-    <!-- Stat tiles: 3 columns matching Chats / WhatsApp / Calls -->
-    <div class="grid grid-cols-3 gap-2.5">
+    <!-- Mirrors PatientCard's stat tiles -->
+    <div :class="['grid gap-2.5', WHATSAPP_UI_ENABLED ? 'grid-cols-3' : 'grid-cols-2']">
       <div
-        v-for="n in 3"
+        v-for="n in WHATSAPP_UI_ENABLED ? 3 : 2"
         :key="n"
         class="flex flex-col gap-2 rounded-2xl bg-slate-50/60 p-3 ring-1 ring-slate-200/60"
       >

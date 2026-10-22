@@ -36,22 +36,22 @@ interface PaletteItem {
 const items = computed<PaletteItem[]>(() => [
   {
     group: t('topbar.cmdPalette.pages', 'Pages'),
-    label: t('nav.aiTwins', 'AI Twins'),
-    description: t('topbar.cmdPalette.descriptions.aiTwins', 'Create and manage AI Twins'),
+    label: t('nav.aiTwins', 'Topic Modules'),
+    description: t('topbar.cmdPalette.descriptions.aiTwins', 'Create and manage Topic Modules'),
     to: '/ai-twins',
     icon: SparklesIcon,
   },
   {
     group: t('topbar.cmdPalette.pages', 'Pages'),
-    label: t('nav.chatCallHistory', 'Chat/Call History'),
-    description: t('topbar.cmdPalette.descriptions.chatCallHistory', 'Review chats, calls, transcripts, and summaries'),
+    label: t('nav.chatCallHistory', 'Chat/Audio History'),
+    description: t('topbar.cmdPalette.descriptions.chatCallHistory', 'Review chats, audio sessions, transcripts, and summaries'),
     to: '/chat-history',
     icon: MessageMultiple01Icon,
   },
   {
     group: t('topbar.cmdPalette.pages', 'Pages'),
     label: t('nav.knowledgeSet', 'Knowledge Set'),
-    description: t('topbar.cmdPalette.descriptions.knowledgeSet', 'Upload and ingest files for AI Twins'),
+    description: t('topbar.cmdPalette.descriptions.knowledgeSet', 'Upload and ingest files for Topic Modules'),
     to: '/knowledge-set',
     icon: AiBrain01Icon,
   },

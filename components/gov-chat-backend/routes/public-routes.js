@@ -2,30 +2,34 @@
  * Public guest routes — no authentication.
  *
  * Mirrors a narrow subset of the authenticated API so a shareable link can let
- * a stranger chat / call the project's default AI twin without signing in.
+ * a stranger chat / call a Topic Module (AI twin) without signing in.
  *
  * Hard constraints applied here:
  *   - All endpoints unauthenticated. We never trust user-provided ids that
  *     could leak someone else's data — sessions created via this router are
- *     stamped with `userId = "guest:<random>"` and access is allowed only
- *     when the row's userId starts with "guest:".
- *   - Twin is locked to the default twin. Other twins are not reachable via
- *     /api/public/*; callers can only see their data via the auth'd routes.
+ *     stamped with `userId = "guest:<random>"` and the hash of a separate
+ *     secret, returned once as `guestId`; a session is served only to a
+ *     request that sends that secret back in the X-Guest-Id header.
+ *   - When PUBLIC_TWIN_IDS is set, guests may use only those modules. The
+ *     module read routes are shared with signed-in users, who may read any.
  *   - Existing authenticated routes are untouched.
  */
+const { createHash, randomBytes, timingSafeEqual } = require('crypto');
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+// eslint-disable-next-line no-redeclare -- the form-data package (streams, getHeaders), not the global
 const FormData = require('form-data');
 const axios = require('axios');
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const { logger } = require('../shared-lib');
+const authMiddleware = require('../middleware/auth-middleware');
 const aiTwinService = require('../services/ai-twin-service');
 const chatSessionService = require('../services/chat-session-service');
 const voiceTokenService = require('../services/voice-token-service');
 const voiceCatalogService = require('../services/voice-catalog-service');
-const { NotFoundError, ValidationError } = require('../middleware/errors');
+const { NotFoundError } = require('../middleware/errors');
 
 // Direct vLLM endpoint for the translator-side Gemma instance. Used by the
 // translate-detect test endpoint to ask the model for both detection and
@@ -119,14 +123,17 @@ const CHAT_AUDIO_EXT = {
   'audio/webm': '.webm', 'audio/ogg': '.ogg',
   'audio/mpeg': '.mp3', 'audio/mp4': '.m4a', 'audio/m4a': '.m4a', 'audio/x-m4a': '.m4a',
 };
-try { fs.mkdirSync(CHAT_AUDIO_DIR, { recursive: true }); } catch (_) {}
+try { fs.mkdirSync(CHAT_AUDIO_DIR, { recursive: true }); } catch { /* best-effort */ }
 
 const audioUpload = multer({
   storage: multer.diskStorage({
     destination: CHAT_AUDIO_DIR,
     filename: (req, file, cb) => {
       const ext = CHAT_AUDIO_EXT[file.mimetype] || '.bin';
-      cb(null, `${req.params.sessionId}-${Date.now()}${ext}`);
+      // The key of the session the guest check loaded, never the raw URL parameter.
+      const key = req.guestSession && req.guestSession._key;
+      if (!key) return cb(new Error('guest session not loaded'));
+      cb(null, `${key}-${Date.now()}${ext}`);
     },
   }),
   limits: { fileSize: CHAT_AUDIO_MAX_BYTES, files: 1 },
@@ -184,6 +191,19 @@ function newGuestId() {
   return `guest:${uuidv4()}`;
 }
 
+/**
+ * Key to one guest chat session: returned once as `guestId` and sent back as
+ * X-Guest-Id. It is not the session's userId (which analytics and lists show),
+ * and only its SHA-256 is stored.
+ */
+function newGuestSecret() {
+  return randomBytes(32).toString('base64url');
+}
+
+function hashGuestSecret(secret) {
+  return createHash('sha256').update(secret).digest('hex');
+}
+
 /** Resolve the default twin _key. Throws 503 when no default has been seeded. */
 async function getDefaultTwinKey() {
   const twin = await aiTwinService.getDefaultTwin();
@@ -195,26 +215,114 @@ async function getDefaultTwinKey() {
   return twin._key;
 }
 
+// Stable code on the 404 a guest gets for a module outside PUBLIC_TWIN_IDS;
+// the frontend sends the guest to sign-in on it.
+const GUEST_TWIN_NOT_ALLOWED = 'GUEST_TWIN_NOT_ALLOWED';
+
+/** Twin _keys guests may use (PUBLIC_TWIN_IDS, comma-separated); null when unset = every twin. */
+function publicTwinIds() {
+  const ids = String(process.env.PUBLIC_TWIN_IDS || '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean);
+  return ids.length > 0 ? ids : null;
+}
+
+function isPublicTwin(twinId) {
+  const ids = publicTwinIds();
+  return !ids || ids.includes(String(twinId));
+}
+
+/** The same answer for any id outside the list, whether or not the twin exists. */
+function twinNotAllowedError() {
+  const err = new NotFoundError('This Topic Module is not available to guests');
+  err.code = GUEST_TWIN_NOT_ALLOWED;
+  return err;
+}
+
+function sendTwinNotAllowed(res) {
+  const err = twinNotAllowedError();
+  return res.status(404).json({ code: err.code, message: err.message });
+}
+
+/** Body for a 404 from a session route; keeps the code of a twin refusal. */
+function notFoundBody(error) {
+  if (error.code === GUEST_TWIN_NOT_ALLOWED) return { code: error.code, message: error.message };
+  return { message: error.message };
+}
+
 /**
- * Load a chatSessions row by id and reject if it isn't a public/guest session.
- * Used to scope access on /public — guests can never read a logged-in user's
- * session even if they guess the id.
+ * The twin a guest gets when the request names none: the default twin, or the
+ * first id in PUBLIC_TWIN_IDS when guests may not use the default.
  */
-async function loadGuestSession(sessionId) {
+async function getGuestDefaultTwinKey() {
+  const ids = publicTwinIds();
+  if (!ids) return getDefaultTwinKey();
+  const defaultTwin = await aiTwinService.getDefaultTwin();
+  if (defaultTwin && ids.includes(defaultTwin._key)) return defaultTwin._key;
+  try {
+    await aiTwinService.getTwinByKey(ids[0]);
+  } catch (e) {
+    logger.error(`PUBLIC_TWIN_IDS: cannot load twin ${ids[0]}: ${e.message}`);
+    const err = new Error('Public chat is not configured');
+    err.statusCode = 503;
+    throw err;
+  }
+  return ids[0];
+}
+
+/**
+ * The twin read routes are shared with signed-in users, who may read any twin.
+ * While guests are limited, a request carrying a session token goes through
+ * the normal auth check (an expired token gets 401, so the client refreshes
+ * it) and sets req.user; a request without one is a guest.
+ */
+function identifySignedInUser(req, res, next) {
+  if (!publicTwinIds() || !req.headers.authorization) return next();
+  return authMiddleware.authenticate(req, res, next);
+}
+
+/** Constant-time check that the X-Guest-Id header hashes to the session's stored guest secret hash. */
+function isSessionGuest(headerValue, guestSecretHash) {
+  if (typeof headerValue !== 'string' || !headerValue || typeof guestSecretHash !== 'string') return false;
+  const given = Buffer.from(hashGuestSecret(headerValue), 'hex');
+  const expected = Buffer.from(guestSecretHash, 'hex');
+  return given.length === expected.length && timingSafeEqual(given, expected);
+}
+
+/** A guest session as sent to the browser, without its secret hash. */
+function publicSessionView(doc) {
+  const view = { ...doc };
+  delete view.guestSecretHash;
+  return view;
+}
+
+/**
+ * Load the guest session named in the URL for the guest who created it: the
+ * X-Guest-Id header must be the guestId returned at creation. A missing or
+ * different id gets the same 404 as an unknown session, so a session id alone
+ * reveals nothing. Guests can never read a logged-in user's session either.
+ */
+async function loadGuestSession(req) {
   let doc;
   try {
-    doc = await chatSessionService.sessions.document(sessionId);
-  } catch (e) {
+    doc = await chatSessionService.sessions.document(req.params.sessionId);
+  } catch {
     const err = new NotFoundError('Chat session not found');
     err.statusCode = 404;
     throw err;
   }
-  if (typeof doc.userId !== 'string' || !doc.userId.startsWith('guest:')) {
-    // Authenticated user's session — never expose via /public.
+  if (
+    typeof doc.userId !== 'string' ||
+    !doc.userId.startsWith('guest:') ||
+    !isSessionGuest(req.get('X-Guest-Id'), doc.guestSecretHash)
+  ) {
+    // Authenticated user's session, or another guest's — never expose via /public.
     const err = new NotFoundError('Chat session not found');
     err.statusCode = 404;
     throw err;
   }
+  if (!isPublicTwin(doc.twinId)) throw twinNotAllowedError();
   return doc;
 }
 
@@ -224,7 +332,10 @@ const router = express.Router();
  * @swagger
  * tags:
  *   - name: Public (Guest)
- *     description: Unauthenticated guest endpoints — chat & call against the project's default AI twin via shareable link. No login required. Limited to the default twin only.
+ *     description: >-
+ *       Unauthenticated guest endpoints — chat & call against a Topic Module via shareable link. No login
+ *       required. When PUBLIC_TWIN_IDS is set, guests may use only those modules; other ids get 404 with
+ *       code GUEST_TWIN_NOT_ALLOWED. The module read routes serve every module to a signed-in caller.
  */
 
 /* =========================================================================
@@ -297,7 +408,8 @@ router.get('/suggested-questions', (req, res) => {
  * @swagger
  * /public/ai-twins:
  *   get:
- *     summary: List all AI twins (public directory — no admin fields)
+ *     summary: List AI twins (public directory — no admin fields)
+ *     description: Guests get only the twins in PUBLIC_TWIN_IDS when it is set; a signed-in caller gets all.
  *     tags: [Public (Guest)]
  *     parameters:
  *       - in: query
@@ -327,11 +439,12 @@ router.get('/suggested-questions', (req, res) => {
  *                       description:   { type: string }
  *                       profilePicUrl: { type: string, nullable: true }
  */
-router.get('/ai-twins', async (req, res) => {
+router.get('/ai-twins', identifySignedInUser, async (req, res) => {
   try {
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
     const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
-    const { twins, total } = await aiTwinService.listTwins({ limit, offset });
+    const allowedIds = req.user ? null : publicTwinIds();
+    const { twins, total } = await aiTwinService.listTwins({ limit, offset, allowedIds });
     res.json({
       total,
       offset,
@@ -375,9 +488,10 @@ router.get('/ai-twins', async (req, res) => {
  *                 name:          { type: string }
  *                 description:   { type: string }
  *                 profilePicUrl: { type: string, nullable: true }
- *       404: { description: Twin not found }
+ *       404: { description: "Twin not found, or code GUEST_TWIN_NOT_ALLOWED for a guest outside PUBLIC_TWIN_IDS" }
  */
-router.get('/ai-twins/:id', async (req, res) => {
+router.get('/ai-twins/:id', identifySignedInUser, async (req, res) => {
+  if (!req.user && !isPublicTwin(req.params.id)) return sendTwinNotAllowed(res);
   try {
     const twin = await aiTwinService.getTwinByKey(req.params.id);
     res.json({
@@ -438,9 +552,10 @@ router.get('/ai-twins/:id', async (req, res) => {
  *                   content:  { type: string }
  *                   enabled:  { type: boolean, nullable: true }
  *                   source:   { type: string, enum: [generated, manual], nullable: true }
- *       404: { description: Twin not found }
+ *       404: { description: "Twin not found, or code GUEST_TWIN_NOT_ALLOWED for a guest outside PUBLIC_TWIN_IDS" }
  */
-router.get('/ai-twins/:id/suggested-questions', async (req, res) => {
+router.get('/ai-twins/:id/suggested-questions', identifySignedInUser, async (req, res) => {
+  if (!req.user && !isPublicTwin(req.params.id)) return sendTwinNotAllowed(res);
   try {
     const status = req.query.status === 'all' ? 'all' : 'enabled';
     const questions = await aiTwinService.getSuggestedQuestions(
@@ -465,7 +580,7 @@ router.get('/ai-twins/:id/suggested-questions', async (req, res) => {
  * @swagger
  * /public/chat-sessions:
  *   post:
- *     summary: Create a new guest chat session against any twin (defaults to the default twin)
+ *     summary: Create a new guest chat session (defaults to the default twin)
  *     tags: [Public (Guest)]
  *     requestBody:
  *       required: false
@@ -476,7 +591,9 @@ router.get('/ai-twins/:id/suggested-questions', async (req, res) => {
  *             properties:
  *               twinId:
  *                 type: string
- *                 description: Optional. When omitted the session targets the default twin.
+ *                 description: >-
+ *                   Optional. When omitted the session targets the default twin, or the first id in
+ *                   PUBLIC_TWIN_IDS when guests may not use the default.
  *     responses:
  *       201:
  *         description: Created
@@ -486,10 +603,11 @@ router.get('/ai-twins/:id/suggested-questions', async (req, res) => {
  *               type: object
  *               properties:
  *                 sessionId: { type: string }
- *                 guestId:   { type: string, description: "Synthetic id stamped on the session" }
+ *                 guestId:   { type: string, description: "Send it as X-Guest-Id on every request for this session" }
  *                 twinId:    { type: string }
  *                 createdAt: { type: string, format: date-time }
  *       400: { description: Provided twinId does not exist }
+ *       404: { description: "code GUEST_TWIN_NOT_ALLOWED: twinId is outside PUBLIC_TWIN_IDS" }
  *       503: { description: No default twin configured (and no twinId provided) }
  */
 router.post('/chat-sessions', async (req, res) => {
@@ -498,23 +616,26 @@ router.post('/chat-sessions', async (req, res) => {
     // Validate either way so the session never points at a non-existent twin.
     let twinId = req.body?.twinId;
     if (twinId) {
+      if (!isPublicTwin(twinId)) return sendTwinNotAllowed(res);
       try {
         await aiTwinService.getTwinByKey(String(twinId));
-      } catch (e) {
+      } catch {
         return res.status(400).json({ message: 'twinId does not exist' });
       }
       twinId = String(twinId);
     } else {
-      twinId = await getDefaultTwinKey();
+      twinId = await getGuestDefaultTwinKey();
     }
 
     const guestId = newGuestId();
+    const guestSecret = newGuestSecret();
     // Write the session doc directly so the userId keeps the "guest:" prefix
     // that loadGuestSession() relies on (chatSessionService.createSession would
     // strip it via its internal _uid() helper).
     const now = new Date().toISOString();
     const meta = await chatSessionService.sessions.save({
       userId: guestId,
+      guestSecretHash: hashGuestSecret(guestSecret),
       twinId,
       type: 'chat',
       createdAt: now,
@@ -522,7 +643,8 @@ router.post('/chat-sessions', async (req, res) => {
     });
     res.status(201).json({
       sessionId: meta._key,
-      guestId,
+      // The browser's key to this session (sent back as X-Guest-Id), not the userId.
+      guestId: guestSecret,
       twinId,
       createdAt: now,
     });
@@ -547,6 +669,11 @@ router.post('/chat-sessions', async (req, res) => {
  *         name: sessionId
  *         required: true
  *         schema: { type: string }
+ *       - in: header
+ *         name: X-Guest-Id
+ *         required: true
+ *         schema: { type: string }
+ *         description: The guestId returned when the session was created.
  *     requestBody:
  *       required: true
  *       content:
@@ -577,12 +704,12 @@ router.post('/chat-sessions', async (req, res) => {
  *                 responseTime:       { type: integer, description: ms }
  *                 queryId:            { type: string, nullable: true }
  *       400: { description: Missing or invalid text }
- *       404: { description: Session not found / not a guest session }
+ *       404: { description: "Session not found, or X-Guest-Id missing or wrong (same answer); code GUEST_TWIN_NOT_ALLOWED: its twin is outside PUBLIC_TWIN_IDS" }
  *       500: { description: Internal error (LLM upstream, persistence, etc.) }
  */
 router.post('/chat-sessions/:sessionId/messages', async (req, res) => {
   try {
-    const session = await loadGuestSession(req.params.sessionId);
+    const session = await loadGuestSession(req);
     const text = req.body?.text;
     const context = req.body?.context || {};
     const out = await chatSessionService.sendMessage(
@@ -593,7 +720,7 @@ router.post('/chat-sessions/:sessionId/messages', async (req, res) => {
     );
     res.json(out);
   } catch (error) {
-    if (error.statusCode === 404) return res.status(404).json({ message: error.message });
+    if (error.statusCode === 404) return res.status(404).json(notFoundBody(error));
     if (error.statusCode === 400) return res.status(400).json({ message: error.message });
     logger.error(`public send message: ${error.message}`, { stack: error.stack });
     res.status(500).json({ message: error.message });
@@ -614,6 +741,11 @@ router.post('/chat-sessions/:sessionId/messages', async (req, res) => {
  *         name: sessionId
  *         required: true
  *         schema: { type: string }
+ *       - in: header
+ *         name: X-Guest-Id
+ *         required: true
+ *         schema: { type: string }
+ *         description: The guestId returned when the session was created.
  *       - in: query
  *         name: limit
  *         schema: { type: integer, minimum: 1, maximum: 1000, default: 500 }
@@ -623,15 +755,15 @@ router.post('/chat-sessions/:sessionId/messages', async (req, res) => {
  */
 router.get('/chat-sessions/:sessionId/messages', async (req, res) => {
   try {
-    const session = await loadGuestSession(req.params.sessionId);
+    const session = await loadGuestSession(req);
     const limit = Math.min(parseInt(req.query.limit, 10) || 500, 1000);
     const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
     const messages = q
       ? await chatSessionService.searchMessages(req.params.sessionId, q, limit)
       : await chatSessionService.getRecentMessagesChronological(req.params.sessionId, limit);
-    res.json({ session, messages });
+    res.json({ session: publicSessionView(session), messages });
   } catch (error) {
-    if (error.statusCode === 404) return res.status(404).json({ message: error.message });
+    if (error.statusCode === 404) return res.status(404).json(notFoundBody(error));
     logger.error(`public list messages: ${error.message}`, { stack: error.stack });
     res.status(500).json({ message: error.message });
   }
@@ -651,6 +783,11 @@ router.get('/chat-sessions/:sessionId/messages', async (req, res) => {
  *         name: sessionId
  *         required: true
  *         schema: { type: string }
+ *       - in: header
+ *         name: X-Guest-Id
+ *         required: true
+ *         schema: { type: string }
+ *         description: The guestId returned when the session was created.
  *       - in: path
  *         name: messageId
  *         required: true
@@ -658,11 +795,11 @@ router.get('/chat-sessions/:sessionId/messages', async (req, res) => {
  *     responses:
  *       200: { description: Audio stream — original mime for user, audio/wav for assistant TTS }
  *       400: { description: This user message has no audio (text-only) }
- *       404: { description: Message / twin / voice not found / file missing }
+ *       404: { description: "Message / twin / voice not found / file missing, or X-Guest-Id missing or wrong" }
  */
 router.get('/chat-sessions/:sessionId/messages/:messageId/audio', async (req, res) => {
   try {
-    const session = await loadGuestSession(req.params.sessionId);
+    const session = await loadGuestSession(req);
     const msg = await chatSessionService.getMessage(req.params.sessionId, req.params.messageId);
     if (msg.role === 'user') {
       if (!msg.audioUrl) {
@@ -676,14 +813,14 @@ router.get('/chat-sessions/:sessionId/messages/:messageId/audio', async (req, re
       const mime = CHAT_AUDIO_MIME_BY_EXT[ext] || 'application/octet-stream';
       res.setHeader('Content-Type', mime);
       res.setHeader('Cache-Control', 'no-store');
-      try { res.setHeader('Content-Length', String(fs.statSync(abs).size)); } catch (_) { /* best-effort */ }
+      try { res.setHeader('Content-Length', String(fs.statSync(abs).size)); } catch { /* best-effort */ }
       return fs.createReadStream(abs).pipe(res);
     }
     if (!session.twinId) return res.status(404).json({ message: 'Session has no twin assigned' });
     let twin;
     try {
       twin = await aiTwinService.getTwinByKey(session.twinId);
-    } catch (e) {
+    } catch {
       return res.status(404).json({ message: 'Twin not found for this session' });
     }
     if (!twin.voiceId) return res.status(404).json({ message: 'Twin has no voice assigned' });
@@ -703,7 +840,7 @@ router.get('/chat-sessions/:sessionId/messages/:messageId/audio', async (req, re
     res.setHeader('Content-Length', String(wav.length));
     res.send(wav);
   } catch (error) {
-    if (error.statusCode === 404) return res.status(404).json({ message: error.message });
+    if (error.statusCode === 404) return res.status(404).json(notFoundBody(error));
     logger.error(`public message audio: ${error.message}`, { stack: error.stack });
     res.status(error.response?.status || 500).json({ message: error.message });
   }
@@ -723,6 +860,11 @@ router.get('/chat-sessions/:sessionId/messages/:messageId/audio', async (req, re
  *         name: sessionId
  *         required: true
  *         schema: { type: string }
+ *       - in: header
+ *         name: X-Guest-Id
+ *         required: true
+ *         schema: { type: string }
+ *         description: The guestId returned when the session was created.
  *     requestBody:
  *       required: true
  *       content:
@@ -736,6 +878,17 @@ router.get('/chat-sessions/:sessionId/messages/:messageId/audio', async (req, re
  */
 router.post(
   '/chat-sessions/:sessionId/voice-messages',
+  // Check the guest before multer writes anything to disk.
+  async (req, res, next) => {
+    try {
+      req.guestSession = await loadGuestSession(req);
+      return next();
+    } catch (error) {
+      if (error.statusCode === 404) return res.status(404).json(notFoundBody(error));
+      logger.error(`public voice-message: ${error.message}`, { stack: error.stack });
+      return res.status(500).json({ message: error.message });
+    }
+  },
   (req, res, next) => {
     audioUpload.single('audio')(req, res, (err) => {
       if (err) {
@@ -747,9 +900,9 @@ router.post(
   },
   async (req, res) => {
     if (!req.file) return res.status(400).json({ message: 'audio file is required (form field "audio")' });
-    const cleanup = () => { try { fs.unlinkSync(req.file.path); } catch (_) {} };
+    const cleanup = () => { try { fs.unlinkSync(req.file.path); } catch { /* already gone */ } };
     try {
-      const session = await loadGuestSession(req.params.sessionId);
+      const session = req.guestSession;
 
       const language = (req.body.language || 'EN').toLowerCase().slice(0, 2);
       const form = new FormData();
@@ -800,7 +953,7 @@ router.post(
       });
     } catch (error) {
       cleanup();
-      if (error.statusCode === 404) return res.status(404).json({ message: error.message });
+      if (error.statusCode === 404) return res.status(404).json(notFoundBody(error));
       if (error.statusCode === 400) return res.status(400).json({ message: error.message });
       logger.error(`public voice-message: ${error.message}`, { stack: error.stack });
       res.status(500).json({ message: error.message });
@@ -815,7 +968,7 @@ router.post(
  * @swagger
  * /public/voice/token:
  *   post:
- *     summary: Mint a short-lived voice JWT for a guest live call against any twin (defaults to the default twin)
+ *     summary: Mint a short-lived voice JWT for a guest live call (defaults to the default twin)
  *     tags: [Public (Guest)]
  *     requestBody:
  *       required: false
@@ -831,7 +984,9 @@ router.post(
  *                 description: Must be a language with a Piper voice (see /public/chat-sessions/languages).
  *               twinId:
  *                 type: string
- *                 description: Optional. When omitted the call targets the default twin.
+ *                 description: >-
+ *                   Optional. When omitted the call targets the default twin, or the first id in
+ *                   PUBLIC_TWIN_IDS when guests may not use the default.
  *     responses:
  *       200:
  *         description: WS info + voiceToken (carries guest userId + chosen twinId)
@@ -846,6 +1001,7 @@ router.post(
  *                 language: { type: string }
  *                 twinId: { type: string }
  *       400: { description: Provided twinId does not exist }
+ *       404: { description: "code GUEST_TWIN_NOT_ALLOWED: twinId is outside PUBLIC_TWIN_IDS" }
  *       503: { description: Voice token service unavailable / no default twin }
  */
 const PUBLIC_VOICE_LANGUAGES = ['en', 'fr', 'es', 'sw', 'ar', 'de', 'hi', 'id', 'pt', 'ru', 'zh'];
@@ -867,14 +1023,15 @@ router.post('/voice/token', async (req, res) => {
     // Validate either way so the JWT never carries a non-existent twin.
     let twinId = req.body && req.body.twinId;
     if (twinId) {
+      if (!isPublicTwin(twinId)) return sendTwinNotAllowed(res);
       try {
         await aiTwinService.getTwinByKey(String(twinId));
-      } catch (e) {
+      } catch {
         return res.status(400).json({ message: 'twinId does not exist' });
       }
       twinId = String(twinId);
     } else {
-      twinId = await getDefaultTwinKey();
+      twinId = await getGuestDefaultTwinKey();
     }
 
     const guestId = newGuestId();

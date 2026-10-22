@@ -112,7 +112,7 @@ export async function updatePatient(
     payload.password !== undefined
       ? { ...payload, password: await sha256Hex(payload.password) }
       : payload;
-  // Note: backend uses PUT here (AI Twins use PATCH — different endpoints).
+  // Note: backend uses PUT here (Topic Modules use PATCH — different endpoints).
   const res = await api.put<Patient>(`/patients/${encodeURIComponent(patientId)}`, body);
   return res.data;
 }

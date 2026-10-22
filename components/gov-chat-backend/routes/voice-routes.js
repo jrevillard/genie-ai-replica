@@ -77,7 +77,7 @@ module.exports = (voiceTokenService, voiceSessionService) => {
    *         recordingUrl:
    *           type: string
    *           nullable: true
-   *           description: "Public path to the call recording WAV (set when the call ends). Served by the backend at this URL."
+   *           description: "Path of the call recording WAV (set when the call ends). Not served publicly; requests to it get a 404."
    *         createdAt: { type: string, format: date-time }
    *     CallMessage:
    *       type: object

@@ -11,21 +11,21 @@ export default defineConfig({
     host: true,
     proxy: {
       '/api': {
-        target: 'https://genie.innov8ai.com',
+        target: 'https://asante.innov8ai.com',
         changeOrigin: true,
         secure: true,
         headers: {
-          Origin: 'https://genie.innov8ai.com',
-          Referer: 'https://genie.innov8ai.com/',
+          Origin: 'https://asante.innov8ai.com',
+          Referer: 'https://asante.innov8ai.com/',
         },
       },
       '/Uploads': {
-        target: 'https://genie.innov8ai.com',
+        target: 'https://asante.innov8ai.com',
         changeOrigin: true,
         secure: true,
         headers: {
-          Origin: 'https://genie.innov8ai.com',
-          Referer: 'https://genie.innov8ai.com/',
+          Origin: 'https://asante.innov8ai.com',
+          Referer: 'https://asante.innov8ai.com/',
         },
       },
     },

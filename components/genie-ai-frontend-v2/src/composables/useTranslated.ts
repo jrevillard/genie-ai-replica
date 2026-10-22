@@ -28,7 +28,8 @@ interface UseTranslatedReturn {
  */
 export function useTranslated(
   source: MaybeRefOrGetter<string>,
-  sourceLang: MaybeRefOrGetter<string> = 'en'
+  sourceLang: MaybeRefOrGetter<string> = 'en',
+  opts: { markdown?: boolean } = {}
 ): UseTranslatedReturn {
   const store = useTranslationStore();
   const { locale } = useI18n();
@@ -78,7 +79,9 @@ export function useTranslated(
       if (showOriginalRef.value && canTranslate.value && cached.value === undefined) {
         loadingRef.value = true;
         try {
-          await store.getOne(sourceText.value, sourceLangValue.value, targetLang.value);
+          await (opts.markdown
+            ? store.getMarkdown(sourceText.value, sourceLangValue.value, targetLang.value)
+            : store.getOne(sourceText.value, sourceLangValue.value, targetLang.value));
         } catch {
           loadingRef.value = false;
           return;

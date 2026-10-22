@@ -45,6 +45,12 @@ from arango import ArangoClient
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 
+# Copied next to this file from genie-ai-overlay/core by the Dockerfile.
+from appointment_guard import guard_answer, is_booking_offer, safe_sentence
+
+# In this folder; the Dockerfile copies it next to this file too.
+from style_echo_guard import echo_labels, strip_echo
+
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("genieai_voice_bridge")
@@ -455,6 +461,12 @@ def _build_personality_prompt(personality: Optional[dict]) -> str:
         f"- Tone: {style_copy}.\n"
         f"- Length: {length_copy}."
     )
+
+
+# Opening words of each line of the style setting ("Style preferences for your
+# reply", "Tone:", "Length:"). They are the same for every personality, and the
+# model sometimes reads these lines out, so replies are checked for them.
+_STYLE_ECHO_LABELS = echo_labels(_build_personality_prompt(None))
 
 
 def _load_twin_settings_sync(twin_id: Optional[str]) -> Optional[dict]:
@@ -888,6 +900,29 @@ async def process_utterance(ws: WebSocket, pcm: bytes, language: str, history: l
                 voice, language, len(pcm))
     full_parts: List[str] = []
     sentence_buf = ""
+    said_safe_sentence = False
+
+    async def say(sentence: str) -> None:
+        # The model does not always follow the rule against offering to book, so
+        # an offer is replaced in code before it is spoken (appointment_guard),
+        # at most once per reply.
+        nonlocal said_safe_sentence
+        # The model sometimes reads its style setting out loud; those lines are
+        # dropped before they are spoken (style_echo_guard).
+        spoken = strip_echo(sentence, _STYLE_ECHO_LABELS)
+        if spoken != sentence:
+            logger.info("[GUARD] dropped a repeat of the style setting")
+            if not spoken:
+                return
+            sentence = spoken
+        if is_booking_offer(sentence):
+            if said_safe_sentence:
+                return
+            logger.info("[GUARD] replaced an offer to book or schedule")
+            sentence = safe_sentence(language)
+            said_safe_sentence = True
+        await speak(ws, sentence, language, voice=voice, session_id=session_id)
+
     try:
         try:
             text = await transcribe(pcm, language)
@@ -935,14 +970,14 @@ async def process_utterance(ws: WebSocket, pcm: bytes, language: str, history: l
                     full_parts.append(delta)
                     sentences, sentence_buf = split_sentences(sentence_buf)
                     for sent in sentences:
-                        await speak(ws, sent, language, voice=voice, session_id=session_id)
+                        await say(sent)
             else:
                 full_reply = await call_llm(history_for_call)
                 if full_reply:
                     full_parts.append(full_reply)
                     sentences, sentence_buf = split_sentences(full_reply + " ")
                     for sent in sentences:
-                        await speak(ws, sent, language, voice=voice, session_id=session_id)
+                        await say(sent)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -951,9 +986,11 @@ async def process_utterance(ws: WebSocket, pcm: bytes, language: str, history: l
             return
 
         if sentence_buf.strip():
-            await speak(ws, sentence_buf.strip(), language, voice=voice, session_id=session_id)
+            await say(sentence_buf.strip())
 
-        full_reply = "".join(full_parts).strip()
+        # History holds what was said, so the next turn does not build on an offer
+        # or on a repeat of the style setting.
+        full_reply = guard_answer(strip_echo("".join(full_parts).strip(), _STYLE_ECHO_LABELS), language)
         if not full_reply:
             logger.info("[PROCESS] LLM returned empty reply")
             return
@@ -961,7 +998,7 @@ async def process_utterance(ws: WebSocket, pcm: bytes, language: str, history: l
         history.append({"role": "assistant", "content": full_reply})
         logger.info("[PROCESS] complete, history now has %d turns", len(history))
     except asyncio.CancelledError:
-        partial = "".join(full_parts).strip()
+        partial = guard_answer(strip_echo("".join(full_parts).strip(), _STYLE_ECHO_LABELS), language)
         if partial:
             history.append({"role": "assistant", "content": partial + " [interrupted]"})
         logger.info("[BARGE-IN] processing cancelled mid-flight; partial reply len=%d",

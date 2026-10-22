@@ -48,7 +48,7 @@ OPEA provides microservices for:
 
 ### vLLM
 **Component Type:** LLM Inference Server
-**Version:** latest (Docker image: vllm/vllm-openai:latest)
+**Version:** v0.27.1 (Docker image: vllm/vllm-openai:v0.27.1)
 **Repository:** https://github.com/vllm-project/vllm
 **License:** Apache 2.0
 **License URL:** https://github.com/vllm-project/vllm/blob/main/LICENSE
@@ -124,7 +124,7 @@ OPEA provides microservices for:
 
 ### Redis
 **Component Type:** In-Memory Cache & Data Store
-**Version:** 7-alpine (Docker image: redis:7-alpine)
+**Version:** 7.4.10-alpine (Docker image: redis:7.4.10-alpine)
 **Repository:** https://redis.io/
 **License:** BSD 3-Clause
 **License URL:** https://github.com/redis/redis/blob/COPYING
@@ -135,7 +135,7 @@ OPEA provides microservices for:
 
 ### PostgreSQL
 **Component Type:** Relational Database
-**Version:** 13 (Kong database), 15 (Keycloak database)
+**Version:** 13.23 (Kong database), 15 (Keycloak database)
 **Repository:** https://www.postgresql.org/
 **License:** PostgreSQL License (similar to MIT/BSD)
 **License URL:** https://www.postgresql.org/about/licence/
@@ -274,7 +274,7 @@ OPEA provides microservices for:
 
 ### Kong
 **Component Type:** API Gateway & Management
-**Version:** latest (Docker image: kong:latest)
+**Version:** 3.9.3 (Docker image: kong:3.9.3)
 **Repository:** https://konghq.com/kong/
 **License:** Apache 2.0
 **License URL:** https://github.com/Kong/kong/blob/master/LICENSE
@@ -352,7 +352,7 @@ OPEA provides microservices for:
 
 ### ClamAV
 **Component Type:** Anti-Virus Scanner
-**Version:** latest (Docker image: clamav/clamav)
+**Version:** 1.5.4 (Docker image: clamav/clamav:1.5.4)
 **Repository:** https://www.clamav.net/
 **License:** GPL 2.0
 **License URL:** https://github.com/Cisco-Talos/clamav/blob/main/COPYING

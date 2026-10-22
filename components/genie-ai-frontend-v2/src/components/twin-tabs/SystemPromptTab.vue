@@ -113,7 +113,7 @@ defineExpose({ save, discard });
         {{
           t(
             'twins.systemPrompt.subtitle',
-            'The base instructions that define how this AI Twin behaves across all chat and voice interactions. Call-specific rules and context are automatically appended and cannot be edited here.'
+            'The base instructions that define how this Topic Module behaves across all chat and voice interactions. Audio-specific rules and context are automatically appended and cannot be edited here.'
           )
         }}
       </p>
@@ -176,7 +176,7 @@ defineExpose({ save, discard });
         id="system-prompt-textarea"
         v-model="prompt"
         rows="24"
-        :placeholder="t('twins.systemPrompt.placeholder', 'Enter the system prompt for this AI Twin…')"
+        :placeholder="t('twins.systemPrompt.placeholder', 'Enter the system prompt for this Topic Module…')"
         :disabled="!editing"
         class="w-full resize-y rounded-2xl border border-border bg-surface p-4 font-mono text-sm text-text outline-none transition placeholder:text-text-muted/70 focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:cursor-default pointer-events-auto"
       />
@@ -186,7 +186,7 @@ defineExpose({ save, discard });
           editing
             ? t(
                 'twins.systemPrompt.editingHint',
-                'Only the main prompt is editable. Voice-call rules and retrieved context are automatically appended by the system.'
+                'Only the main prompt is editable. Audio rules and retrieved context are automatically appended by the system.'
               )
             : t('twins.systemPrompt.viewHint', 'Click Update to edit the system prompt.')
         }}

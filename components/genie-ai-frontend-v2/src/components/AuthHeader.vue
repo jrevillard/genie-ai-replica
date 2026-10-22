@@ -53,7 +53,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocClick));
     class="mb-10 flex items-center"
     :class="align === 'center' ? 'justify-center' : 'justify-between'"
   >
-    <img src="/images/logo.svg" alt="IEEE" class="h-7" />
+    <img src="/images/logo.svg" alt="Health Navigator 1.0" class="h-7" />
 
     <div v-if="showLanguage" ref="wrapperRef" class="relative ml-auto">
       <button

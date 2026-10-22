@@ -24,7 +24,7 @@ withDefaults(defineProps<{ rows?: number }>(), { rows: 4 });
       <BaseSkeleton width="3rem" height="1.75rem" rounded="full" />
     </div>
 
-    <!-- Allowed AI Twins list section -->
+    <!-- Allowed Topic Modules list section -->
     <div class="space-y-3">
       <div class="flex items-center justify-between gap-3">
         <BaseSkeleton height="1rem" width="9rem" rounded="md" />

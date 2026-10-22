@@ -15,13 +15,34 @@
 #
 # Dual-mode notes:
 #   - deploy.placement / replicas: Swarm-focused; compose may ignore or partially apply
-#   - deploy.restart_policy with condition:any must not use max_attempts (Docker Engine
-#     rejects max_retry unless restart is on-failure); Swarm still honors condition+delay
+#   - deploy.restart_policy.max_attempts IS valid with condition:any — verified with
+#     both `docker compose config` and `docker stack config`, which preserve it. The
+#     max_retry restriction applies to the compose-up `restart:` SHORT FORM only
+#     (`restart: on-failure:5` is legal, `restart: always:5` is not). Do not conflate
+#     the two: dropping max_attempts here allows unbounded restart loops.
+#   - deploy.restart_policy.condition: use `any` for long-running services and
+#     `on-failure` ONLY for one-shot jobs. `on-failure` does not replace a task that
+#     exits 0, and a rolling update stops tasks gracefully (exit 0) — so a
+#     long-running service set to on-failure is silently never recreated after
+#     `docker stack deploy`. That took the stack down on 2026-08-09.
 #   - depends_on is for compose up ordering; Swarm ignores it
 #   - restart: is for compose up; Swarm uses deploy.restart_policy
 #   - profiles: [opea] controls OPEA services in compose up; Swarm ignores profiles
 #   - build: enables local builds (docker compose up); Swarm ignores it and uses image:
 #   - GPU access via NVIDIA_VISIBLE_DEVICES env var (no runtime: nvidia)
+#   - Third-party images are PINNED via ${*_IMAGE:-<pin>} overrides. `docker stack deploy`
+#     defaults to --resolve-image always, which rewrites every service spec with the digest
+#     its tag resolves to right now. A floating tag such as `kong:latest` therefore recreates
+#     the service whenever upstream pushes, even when nothing in this repo changed. On
+#     2026-08-19 that rebuilt the gateway tier (postgres -> kong-migrations -> kong) during an
+#     unrelated backend deploy; Kong needed 5.5 minutes to come back and every /api request
+#     502'd until it did, because Swarm keeps an unhealthy task out of its internal DNS.
+#     Pins below are digest-identical to what was running on 2026-08-19, so adopting them
+#     changes no image. Bump deliberately, do not un-pin.
+#     The `localhost:5000/*:latest` images MUST stay floating: digest re-resolution is
+#     exactly how a locally rebuilt image rolls out. Pinning those would stop deploys.
+#     OPEA images pin by digest, not version: their `latest` matches no published version
+#     tag (1.5, 1.4, ...), so a version pin would silently change the running image.
 #
 # Swarm prerequisites:
 #   1. Swarm initialized: docker swarm init
@@ -62,7 +83,7 @@ services:
   # ===========================================================================
 
   postgres:
-    image: postgres:13
+    image: ${POSTGRES_IMAGE:-postgres:13.23}
     networks:
       - genieai_network
     environment:
@@ -86,12 +107,12 @@ services:
         constraints:
           - node.labels.gateway == true
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 5s
 
   # Kong database migrations (one-shot init, runs automatically on first start)
   kong-migrations:
-    image: kong:latest
+    image: ${KONG_IMAGE:-kong:3.9.3}
     restart: "no"
     depends_on:
       - postgres
@@ -150,7 +171,7 @@ services:
       - postgres
       - kong-migrations
     restart: unless-stopped
-    image: kong:latest
+    image: ${KONG_IMAGE:-kong:3.9.3}
     environment:
       - KONG_DATABASE=${KONG_DATABASE:-postgres}
       - KONG_PG_HOST=${KONG_PG_HOST:-postgres}
@@ -189,7 +210,7 @@ services:
         constraints:
           - node.labels.gateway == true
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 5s
 
   nginx:
@@ -233,7 +254,7 @@ services:
         constraints:
           - node.labels.gateway == true
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 5s
 
   # ===========================================================================
@@ -244,7 +265,7 @@ services:
 
   certbot:
     restart: unless-stopped
-    image: certbot/certbot:latest
+    image: ${CERTBOT_IMAGE:-certbot/certbot:v5.7.0}
     entrypoint: ["/certbot-entrypoint.sh"]
     environment:
       - CERTBOT_EMAIL=${CERTBOT_EMAIL:-}
@@ -295,12 +316,12 @@ services:
         constraints:
           - node.labels.genieai == true
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 5s
 
   redis-cache:
     restart: unless-stopped
-    image: redis:7-alpine
+    image: ${REDIS_IMAGE:-redis:7.4.10-alpine}
     # Internal only - no host port mapping needed
     # ports:
     #   - "${TRANSLATION_CACHE_PORT:-6379}:6379"
@@ -322,7 +343,7 @@ services:
         constraints:
           - node.labels.genieai == true
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 5s
 
   db-migrations:
@@ -430,6 +451,12 @@ services:
       - CONTEXT_OPTION=${CONTEXT_OPTION:-conversation-with-context-labels}
       # Logging (error, warn, info, debug)
       - LOG_LEVEL=${LOG_LEVEL:-info}
+      # Topic Modules guests may use (comma-separated twin ids); empty = all
+      - PUBLIC_TWIN_IDS=${PUBLIC_TWIN_IDS:-}
+      # Earlier chat messages sent with each new question; empty = backend default
+      - CHAT_SESSION_HISTORY_MESSAGE_LIMIT=${CHAT_SESSION_HISTORY_MESSAGE_LIMIT:-}
+      # What a Topic Module without a Knowledge Set searches: none or all; empty = backend default
+      - EMPTY_KNOWLEDGE_SET_SCOPE=${EMPTY_KNOWLEDGE_SET_SCOPE:-}
       # CORS (deployment-specific, localhost defaults)
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8090,http://127.0.0.1:8090,https://localhost,http://localhost}
       - CSP_CONNECT_SRC=${CSP_CONNECT_SRC:-'self' http://localhost:3000 http://localhost:8090 http://127.0.0.1:8090 ws://localhost:3000 ws://localhost:8090}
@@ -446,7 +473,7 @@ services:
         constraints:
           - node.labels.genieai == true
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 5s
         max_attempts: 10
 
@@ -491,12 +518,14 @@ services:
     networks:
       - genieai_network
     deploy:
-      replicas: 1
+      # Off: the WhatsApp channel is not connected, so nothing should answer on
+      # /webhook/whatsapp. Set to 1 to run the service again.
+      replicas: 0
       placement:
         constraints:
           - node.labels.genieai == true
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 5s
 
   document-repository:
@@ -539,12 +568,12 @@ services:
         constraints:
           - node.labels.genieai == true
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 5s
 
   clamav:
     restart: unless-stopped
-    image: clamav/clamav
+    image: ${CLAMAV_IMAGE:-clamav/clamav:1.5.4}
     # Internal only
     # ports:
     #   - "3310:3310"
@@ -562,7 +591,7 @@ services:
         constraints:
           - node.labels.genieai == true
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 5s
 
   arango-vector-db:
@@ -592,7 +621,7 @@ services:
         constraints:
           - node.labels.genieai == true
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 5s
 
   http-service:
@@ -635,14 +664,14 @@ services:
 
   vllm:
     restart: unless-stopped
-    image: vllm/vllm-openai:latest
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.27.1}
     # Swarm: internal only - access via Kong or docker exec
     # ports:
     #   - "${LLM_SERVER_PORT:-8000}:8000"
     command: >
-      --model ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      --model ${VLLM_LLM_MODEL_ID:-Qwen/Qwen2.5-3B-Instruct}
       --gpu_memory_utilization ${VLLM_GPU_UTILIZATION:-0.4}
-      --served-model-name ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      --served-model-name ${VLLM_LLM_MODEL_ID:-Qwen/Qwen2.5-3B-Instruct}
       --max_model_len ${VLLM_MAX_MODEL_LEN:-2048}
       --max_num_seqs ${VLLM_MAX_NUM_SEQS:-64}
       --dtype=${VLLM_DTYPE:-half}
@@ -667,17 +696,17 @@ services:
         constraints:
           - node.labels.gpu == true
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
 
   textgen:
     depends_on:
       - vllm
     restart: unless-stopped
-    image: opea/llm-textgen:latest
+    image: ${OPEA_LLM_TEXTGEN_IMAGE:-opea/llm-textgen@sha256:e3e506c2796b768727212a0bd58d44b28d2100f9d12cafcce8c433580c770acd}
     environment:
       - LLM_ENDPOINT=http://vllm:8000
-      - LLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      - LLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-Qwen/Qwen2.5-3B-Instruct}
     # Internal only
     # ports:
     #   - "9000:9000"
@@ -695,12 +724,12 @@ services:
         constraints:
           - node.labels.gpu == true
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
 
   vllm-translation-guardrail:
     restart: unless-stopped
-    image: vllm/vllm-openai:latest
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.27.1}
     # Internal only
     # ports:
     #   - "9031:9031"
@@ -734,14 +763,14 @@ services:
         constraints:
           - node.labels.gpu == true
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
 
   translation:
     depends_on:
       - vllm-translation-guardrail
     restart: unless-stopped
-    image: opea/translation:latest
+    image: ${OPEA_TRANSLATION_IMAGE:-opea/translation@sha256:a527cfa761cc495a524e94e8b097b66d81b870c52c40a05b85a3b86de15447f1}
     environment:
       - LLM_ENDPOINT=http://vllm-translation-guardrail:9031
       - LLM_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
@@ -762,14 +791,14 @@ services:
         constraints:
           - node.labels.gpu == true
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
 
   guardrail:
     depends_on:
       - vllm-translation-guardrail
     restart: unless-stopped
-    image: opea/guardrails:latest
+    image: ${OPEA_GUARDRAILS_IMAGE:-opea/guardrails@sha256:e164c2fa8b64f81fa7266a106f45f0584e75e3aa09dbe99bb85f2eae89121489}
     environment:
       - LLM_ENDPOINT=http://vllm-translation-guardrail:9031
       - LLM_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
@@ -792,7 +821,7 @@ services:
         constraints:
           - node.labels.gpu == true
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
 
   tei:
@@ -821,14 +850,14 @@ services:
         constraints:
           - node.labels.gpu == true
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
 
   embedding:
     depends_on:
       - tei
     restart: unless-stopped
-    image: opea/embedding:latest
+    image: ${OPEA_EMBEDDING_IMAGE:-opea/embedding@sha256:70a22b02646239f1a4f756e8780dd65bbde272045c30638bb0ecf761558be382}
     environment:
       - EMBEDDING_MODEL_ENDPOINT=http://tei:80
       - TEI_EMBEDDING_ENDPOINT=http://tei:80
@@ -850,7 +879,7 @@ services:
         constraints:
           - node.labels.gpu == true
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
 
   tei_reranker:
@@ -879,7 +908,7 @@ services:
         constraints:
           - node.labels.gpu == true
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
 
   reranker:
@@ -896,6 +925,8 @@ services:
       - RERANK_COMPONENT_NAME=GENIE_TEI_RERANKING
       - RERANKING_STRATEGY=${RERANKING_STRATEGY:-threshold}
       - RERANKING_THRESHOLD=${RERANKING_THRESHOLD:-0.5}
+      # Empty means "use the reranker's code default" (DEFAULT_RERANKING_MIN_N) — one source of truth.
+      - RERANKING_MIN_N=${RERANKING_MIN_N:-}
     # Internal only
     # ports:
     #   - "6100:8000"
@@ -913,7 +944,7 @@ services:
         constraints:
           - node.labels.gpu == true
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
 
   lid:
@@ -961,7 +992,7 @@ services:
     #   - "5000:5000"
     environment:
       DATAPREP_COMPONENT_NAME: GENIE_DATAPREP_ARANGODB
-      VLLM_MODEL_ID: ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      VLLM_MODEL_ID: ${VLLM_LLM_MODEL_ID:-Qwen/Qwen2.5-3B-Instruct}
       VLLM_ENDPOINT: http://vllm:8000
       TEI_EMBEDDING_ENDPOINT: http://tei:80
       GUARDRAIL_URL: http://guardrail:9090/v1/guardrails
@@ -995,8 +1026,8 @@ services:
       VLLM_API_KEY: ${VLLM_API_KEY:-}
       OPENAI_API_KEY: ${VLLM_API_KEY:-EMPTY}
       OPENAI_BASE_URL: ${VLLM_ENDPOINT:-http://vllm:8000}/v1
-      OPENAI_LLM_MODEL: ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
-      OPENAI_CHAT_MODEL: ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      OPENAI_LLM_MODEL: ${VLLM_LLM_MODEL_ID:-Qwen/Qwen2.5-3B-Instruct}
+      OPENAI_CHAT_MODEL: ${VLLM_LLM_MODEL_ID:-Qwen/Qwen2.5-3B-Instruct}
     networks:
       - genieai_network
     healthcheck:
@@ -1011,7 +1042,7 @@ services:
         constraints:
           - node.labels.gpu == true
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
 
   retriever-arango-service:
@@ -1054,7 +1085,7 @@ services:
       RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES: ${RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES:-1}
       # AI services endpoints
       VLLM_ENDPOINT: http://vllm:8000
-      VLLM_MODEL_ID: ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      VLLM_MODEL_ID: ${VLLM_LLM_MODEL_ID:-Qwen/Qwen2.5-3B-Instruct}
       TEI_EMBEDDING_ENDPOINT: http://tei:80
       VLLM_API_KEY: ${VLLM_API_KEY:-}
     networks:
@@ -1071,7 +1102,7 @@ services:
         constraints:
           - node.labels.gpu == true
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
 
   chatqna-xeon-backend-server:
@@ -1099,7 +1130,7 @@ services:
       RERANK_SERVER_PORT: 8000
       LLM_SERVER_HOST_IP: vllm
       LLM_SERVER_PORT: 8000
-      LLM_MODEL: ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      LLM_MODEL: ${VLLM_LLM_MODEL_ID:-Qwen/Qwen2.5-3B-Instruct}
       HUGGING_FACE_HUB_TOKEN: ${HUGGING_FACE_HUB_TOKEN}
       HF_TOKEN: ${HUGGING_FACE_HUB_TOKEN}
       GUARDRAIL_SERVICE_HOST_IP: guardrail
@@ -1111,11 +1142,21 @@ services:
       LID_MIN_CONFIDENCE: ${LID_MIN_CONFIDENCE:-0.5}
       DOC_REPO_URL: http://document-repository:3001
       BACKEND_SERVICE_URL: http://backend:3000
+      # Base URL used to build the "Sources" links under each chat answer.
+      # Without this, the code default (a host that is not this deployment)
+      # is used and every source link points somewhere unreachable.
+      PUBLIC_API_URL: https://${NGINX_PUBLIC_DOMAIN:-localhost}
       KEYCLOAK_URL: https://${NGINX_PUBLIC_DOMAIN:-localhost}/auth
       KC_REALM: ${KEYCLOAK_REALM:-genie}
       KC_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-genie-app}
       CHATQNA_SYSTEM_PROMPT: ${CHATQNA_SYSTEM_PROMPT:-}
       CHATQNA_ENFORCE_ABSTENTION: ${CHATQNA_ENFORCE_ABSTENTION:-true}
+      CHATQNA_ABSTENTION_INSTRUCTIONS: ${CHATQNA_ABSTENTION_INSTRUCTIONS:-}
+      CHATQNA_STRICT_GROUNDING: ${CHATQNA_STRICT_GROUNDING:-false}
+      # Empty means "fall back to RERANKING_THRESHOLD" — see genieai_chatqna.py.
+      CHATQNA_STRICT_MIN_SCORE: ${CHATQNA_STRICT_MIN_SCORE:-}
+      CHATQNA_STRICT_REFUSAL: ${CHATQNA_STRICT_REFUSAL:-}
+      CHATQNA_NO_CAPABILITY_CLAIMS: ${CHATQNA_NO_CAPABILITY_CLAIMS:-true}
     networks:
       - genieai_network
     healthcheck:
@@ -1130,14 +1171,14 @@ services:
         constraints:
           - node.labels.gpu == true
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
 
   # OPEA UI/Nginx - disabled by default via profiles: [opea] (compose up) / replicas: 0 (Swarm).
   # Activate for OPEA debugging: compose up --profile opea / Swarm: change replicas to 1.
   chatqna-xeon-ui-server:
     restart: "no"
-    image: opea/chatqna-ui:latest
+    image: ${OPEA_CHATQNA_UI_IMAGE:-opea/chatqna-ui@sha256:0865689031c59d0c55f5dd16a76e7f3e637aba66a597a390ca039e7210f80dce}
     # Internal OPEA service - no host port needed
     # ports:
     #   - "${FRONTEND_SERVICE_PORT}:${FRONTEND_SERVICE_PORT}"
@@ -1157,12 +1198,12 @@ services:
         constraints:
           - node.labels.gpu == true
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
 
   chatqna-xeon-nginx-server:
     restart: "no"
-    image: opea/nginx:latest
+    image: ${OPEA_NGINX_IMAGE:-opea/nginx@sha256:c79c2ec88fc98cbe8990b8a152a4ca7e26ff8e1270dddccdfbf25478bca3f672}
     # Internal OPEA service - no host port needed
     # ports:
     #   - "${NGINX_PORT}:${NGINX_PORT}"
@@ -1188,7 +1229,7 @@ services:
         constraints:
           - node.labels.gpu == true
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
         max_attempts: 30
 
@@ -1201,7 +1242,7 @@ services:
     build: configs/postgres/
     image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-postgres-init:latest
     environment:
-      - PGHOST=postgres
+      - PGHOST=${POSTGRES_HOST:-postgres}
       - PGUSER=${POSTGRES_USER:-genieai}
       - PGDATABASE=${PGDATABASE:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -1263,7 +1304,7 @@ services:
         constraints:
           - node.labels.gateway == true
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 5s
         max_attempts: 10
 
@@ -1435,7 +1476,7 @@ services:
       # Direct vLLM (OpenAI-compatible) — bypass chatqna RAG for low latency.
       # Override via VOICE_BRIDGE_LLM_ENDPOINT in .env to switch back to chatqna.
       LLM_ENDPOINT: ${VOICE_BRIDGE_LLM_ENDPOINT:-http://vllm:8000/v1/chat/completions}
-      LLM_MODEL: ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      LLM_MODEL: ${VLLM_LLM_MODEL_ID:-Qwen/Qwen2.5-3B-Instruct}
       LLM_MAX_TOKENS: ${VOICE_BRIDGE_MAX_TOKENS:-128}
       LLM_TEMPERATURE: ${VOICE_BRIDGE_TEMPERATURE:-0.7}
       VAD_AGGRESSIVENESS: ${VOICE_BRIDGE_VAD_AGGRESSIVENESS:-2}
@@ -1458,14 +1499,14 @@ services:
       ARANGO_USERNAME: ${ARANGO_USERNAME:-root}
       ARANGO_PASSWORD: ${ARANGO_PASSWORD}
       LOGFLAG: ${LOGFLAG:-}
-      # Where call recordings are written. The backend serves the same path
-      # over HTTP via its /Uploads static route; the volume is shared.
+      # Where call recordings are written. The backend's /Uploads static route
+      # does not serve this folder (middleware/uploads-guard.js).
       CALL_RECORDING_ENABLED: ${CALL_RECORDING_ENABLED:-true}
       CALL_RECORDING_DIR: /app/Uploads/call-recordings
       CALL_RECORDING_URL_PREFIX: /Uploads/call-recordings
     volumes:
-      # Shared with the backend: voice-bridge writes WAVs here, backend serves
-      # them under /Uploads/call-recordings/<sessionId>.wav.
+      # Shared with the backend: voice-bridge writes WAVs here as
+      # call-recordings/<sessionId>.wav; they are not served publicly.
       - backend_uploads:/app/Uploads
     networks:
       - genieai_network

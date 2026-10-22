@@ -10,7 +10,7 @@ import BaseBadge from '../ui/BaseBadge.vue';
 import Icon from '../ui/Icon.vue';
 import { useT } from '../../i18n/composables';
 
-// Row component for the AI Twin → Knowledge Set tab. Used by both the
+// Row component for the Topic Module → Knowledge Set tab. Used by both the
 // "Assigned" and "Not assigned" sections so the visual treatment stays in
 // one place. The shape mirrors what the parent's `displayFiles` computed
 // produces; we keep it inline (instead of importing) to avoid coupling the

@@ -30,7 +30,7 @@ const filtered = computed(() => {
 
 function loadTwins() {
   store.fetchAll().catch(() => {
-    notify.error(store.error ?? t('twins.list.loadFailedToast', 'Failed to load AI Twins'));
+    notify.error(store.error ?? t('twins.list.loadFailedToast', 'Failed to load Topic Modules'));
   });
 }
 
@@ -42,7 +42,7 @@ onMounted(loadTwins);
     <section class="space-y-6 bg-surface p-6">
       <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <h1 class="text-headline text-text">{{ t('user.twins.title', 'My AI Twins') }}</h1>
+          <h1 class="text-headline text-text">{{ t('user.twins.title', 'My Topic Modules') }}</h1>
           <div class="w-full sm:w-[360px]">
             <BaseInput
               v-model="search"
@@ -64,6 +64,11 @@ onMounted(loadTwins);
             </BaseInput>
           </div>
         </div>
+        <span
+          class="hidden shrink-0 items-center rounded-full border-2 border-ieee-600 px-5 py-2 text-sm font-semibold text-ieee-700 md:inline-flex"
+        >
+          {{ t('user.twins.pickTopic', 'Pick your Health Topic') }}
+        </span>
       </header>
 
       <div v-if="loading && !filtered.length" class="grid gap-4 lg:grid-cols-2">
@@ -78,7 +83,7 @@ onMounted(loadTwins);
         v-else-if="store.error && !search.trim()"
         full-height
         :icon="SparklesIcon"
-        :title="t('twins.list.loadFailedTitle', `Couldn't load AI Twins`)"
+        :title="t('twins.list.loadFailedTitle', `Couldn't load Topic Modules`)"
         :description="store.error"
       >
         <BaseButton variant="primary" size="md" @click="loadTwins">{{ t('common.retry', 'Retry') }}</BaseButton>
@@ -89,7 +94,7 @@ onMounted(loadTwins);
         full-height
         :icon="Search01Icon"
         :title="t('twins.list.noMatchesTitle', 'No matches')"
-        :description="t('twins.list.noMatchesBody', 'No AI Twins match your search. Try a different keyword or clear the filter.')"
+        :description="t('twins.list.noMatchesBody', 'No Topic Modules match your search. Try a different keyword or clear the filter.')"
       >
         <BaseButton variant="outline" size="md" @click="search = ''">{{ t('twins.list.clearSearch', 'Clear search') }}</BaseButton>
       </EmptyState>
@@ -98,8 +103,8 @@ onMounted(loadTwins);
         v-else
         full-height
         :icon="SparklesIcon"
-        :title="t('user.twins.emptyTitle', 'No AI Twins available')"
-        :description="t('user.twins.emptyBody', 'There are no AI Twins to chat with right now. Check back later.')"
+        :title="t('user.twins.emptyTitle', 'No Topic Modules available')"
+        :description="t('user.twins.emptyBody', 'There are no Topic Modules to chat with right now. Check back later.')"
       />
     </section>
   </DashboardLayout>

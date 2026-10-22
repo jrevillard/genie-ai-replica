@@ -1,0 +1,20 @@
+# Copy to terraform.tfvars and adjust. Every value below is already the default in
+# variables.tf — this file exists to document what is configurable.
+#
+# terraform.tfvars is gitignored by deploy/terraform/.gitignore (*.tfvars).
+
+region      = "us-east-1"
+name_prefix = "healthbot-dev"
+
+# Case-sensitive: OIDC subject claims are compared exactly.
+github_repo = "Innov8AI-dev/ASante"
+
+# Add "staging"/"production" here when those GitHub Environments exist. Each entry
+# widens the trust policy, so keep it to environments that should be able to deploy.
+github_environments = ["dev"]
+
+artifacts_bucket       = "healthbot-dev-artifacts-310997740503"
+deploy_target_name_tag = "healthbot-dev-app"
+
+# Local only. Leave unset/empty in CI so the OIDC credential chain is used.
+aws_profile = "healthbot-dev"

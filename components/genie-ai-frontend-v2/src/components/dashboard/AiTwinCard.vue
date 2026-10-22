@@ -7,6 +7,7 @@ import Icon from '../ui/Icon.vue';
 import type { AiTwin } from '../../services/aiTwins';
 import { useT } from '../../i18n/composables';
 import { useTranslated } from '../../composables/useTranslated';
+import { WHATSAPP_UI_ENABLED } from '../../lib/features';
 
 const { t } = useT();
 
@@ -76,7 +77,7 @@ function closeImagePreview() {
         <span
           v-if="twin.isDefault"
           class="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent ring-1 ring-inset ring-accent/15"
-          :title="t('twins.list.card.defaultTooltip', 'This is your default AI Twin')"
+          :title="t('twins.list.card.defaultTooltip', 'This is your default Topic Module')"
         >
           <Icon :icon="SparklesIcon" :size="11" />
           {{ t('twins.list.card.default', 'Default') }}
@@ -101,24 +102,24 @@ function closeImagePreview() {
           <span class="font-medium text-slate-800">{{ twin.linkedKbFileIds.length }}</span>
         </div>
         <div
-          v-if="twin.twinNumber && twin.twinNumber.trim()"
+          v-if="WHATSAPP_UI_ENABLED && twin.twinNumber && twin.twinNumber.trim()"
           class="flex items-center justify-between gap-3"
         >
-          <span class="text-slate-500">{{ t('twins.list.card.twinNumber', 'Twin Number') }}</span>
+          <span class="text-slate-500">{{ t('twins.list.card.twinNumber', 'Topic Module Number') }}</span>
           <span class="font-medium text-slate-800" :title="twin.twinNumber">{{ twin.twinNumber }}</span>
         </div>
       </div>
     </div>
 
-    <!-- Action: View AI Twin — matches BaseButton primary (ieee-700) so it
-         reads as the same accent as "Create AI Twin" in the page header. -->
+    <!-- Action: View Topic Module — matches BaseButton primary (ieee-700) so it
+         reads as the same accent as "Create Topic Module" in the page header. -->
     <div class="flex justify-end">
       <button
         type="button"
         class="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-ieee-700 px-5 text-sm font-semibold text-white shadow-sm transition-colors duration-200 hover:bg-ieee-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ieee-700"
         @click="open"
       >
-        {{ t('twins.list.card.view', 'View AI Twin') }}
+        {{ t('twins.list.card.view', 'View Topic Module') }}
       </button>
     </div>
 

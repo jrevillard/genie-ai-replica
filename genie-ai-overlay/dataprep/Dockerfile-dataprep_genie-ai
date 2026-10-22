@@ -77,8 +77,29 @@ COPY genie-ai-overlay/dataprep/genieai_dataprep_utils.py /app/comps/dataprep/src
 RUN pip install --no-cache-dir -r ${REQ_PATH}
 
 # Step F: Install overlay-specific dependencies
-# **UPDATED**: Added 'docling' and 'opencv-python-headless' which are required by the new utils/arangodb code.
-RUN pip install --no-cache-dir rank_bm25 docling opencv-python-headless hf_xet "python-jose[cryptography]"
+# 'docling' and 'opencv-python-headless' are required by the utils/arangodb code.
+#
+# The docling family MUST stay pinned as a coherent set. It was previously
+# installed unpinned, which made the image non-reproducible: a rebuild on
+# 2026-08-09 (the first in weeks) resolved docling 2.30.0 against docling-core
+# 2.87.0 and broke the service with
+#
+#   ImportError: cannot import name 'BaseText' from 'docling_core.types.legacy_doc.document'
+#
+# That killed the integration import, so @OpeaComponentRegistry.register never ran
+# and the service died with the misleading
+#   KeyError: "No component found with the name 'GENIE_DATAPREP_ARANGODB'."
+#
+# docling 2.30.0 declares docling-core>=2.26.0,<3.0.0 and docling-parse>=4.0.0,
+# ranges wide enough to admit versions it was never built against. These three
+# are contemporaneous (all mid-April 2025) and verified together in the built
+# image with `pip check` (no conflicts) and a real import of the integration
+# module. Bump them deliberately and as a set, never individually.
+RUN pip install --no-cache-dir rank_bm25 \
+    "docling==2.30.0" \
+    "docling-core[chunking]==2.26.4" \
+    "docling-parse==4.0.1" \
+    opencv-python-headless hf_xet "python-jose[cryptography]"
 
 # Step G: Pre-install EasyOCR models (auto-download during build)
 # This prevents the service from hanging on its one-time model download at runtime.

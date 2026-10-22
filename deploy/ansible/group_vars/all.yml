@@ -37,6 +37,81 @@ deploy_stabilization_timeout: 900
 deploy_opea: "1"
 registry_port: "5000"
 
+# Piper voices and the fastText LID model are large assets that are NOT baked
+# into their images and NOT in git, and nothing used to fetch them. The result:
+# tts-piper's bind-mount source did not exist, so Swarm rejected the task
+# outright ("bind source path does not exist"), and lid died on boot with
+# "/models/lid.bin cannot be opened for loading!". Both were down from first
+# deployment until 2026-08-09 for exactly this reason.
+#
+# Voice names must match the TTS_PIPER_* defaults in docker-compose.yaml. The
+# download path is derived from the name, so adding a voice means adding a name:
+#   en_US-lessac-high -> en/en_US/lessac/high/en_US-lessac-high.onnx
+piper_voices_base_url: https://huggingface.co/rhasspy/piper-voices/resolve/main
+piper_voices:
+  - en_US-libritts_r-medium
+  - en_US-lessac-high
+  - en_US-ryan-high
+  - fr_FR-siwis-medium
+  - fr_FR-tom-medium
+  - es_MX-claude-high
+  - es_ES-sharvard-medium
+  - sw_CD-lanfrica-medium
+
+# facebook/fasttext-language-identification — NOT the much smaller lid.176.
+# chatqna (ISO3_TO_CHATQNA_CODE) and the backend (ISO3_DISPLAY_NAMES) both split
+# the returned label on "_" and look the result up as an ISO 639-3 code
+# (eng/fra/swh...). lid.176 emits two-letter codes, which match nothing in
+# either map, so language detection would fail silently and always fall back.
+# NOTE: this model is CC-BY-NC-4.0 — non-commercial use only.
+lid_model_url: https://huggingface.co/facebook/fasttext-language-identification/resolve/main/model.bin
+lid_volume_name: "{{ stack_name }}_lid_models"
+
+# Services the post-deploy health gate ignores. Matched as `_<name> ` against
+# `docker service ls` output, so entries are exact service names, not prefixes.
+#
+# Two groups, excluded for different reasons:
+#
+#   * One-shot jobs (kong-config .. db-migrations). These run to completion and
+#     then sit at 0/1 forever. That is success, not failure. The gate used to
+#     hard-code these five inline.
+#
+#   * http-service. It logs in with a service-account credential that only
+#     exists where someone has provisioned BOTH the SSM parameter
+#     (<prefix>/auth_service_password) and the matching user in the ArangoDB
+#     `users` collection. Anywhere that is missing, AUTH_SERVICE_PASSWORD comes
+#     through empty and the container dies on boot — and gating every deploy on
+#     optional per-environment provisioning is not worth it for what its own
+#     docstring calls a smoke-test harness for the auth client. Provision the
+#     account and delete this line to bring it under the gate.
+#
+# The voice tier (lid, tts-piper, asr-whisper, voice-bridge) is deliberately NOT
+# exempt. It was broken from first deployment until 2026-08-09 only for want of
+# model assets that nothing downloaded; the prepare play now fetches those, so
+# these are expected to run and CI should say so when they do not.
+# whatsapp-service is scaled to 0 in docker-compose.yaml. The gate reads 0/0 as
+# deliberately off, so it needs no exemption.
+deploy_health_exempt:
+  - kong-config
+  - kong-migrations
+  - postgres-init
+  - keycloak-config
+  - db-migrations
+  - http-service
+
+# Local registry the build play pushes to and the stack pulls from.
+#
+# This MUST be defined here rather than only inside the `install`-tagged registry
+# play (deploy.yml "Set swarm registry URL from port"). A tagged re-run such as
+# `--skip-tags install` — which the SSM redeploy path uses — never executes that
+# play, and the `build` play then fails with AnsibleUndefinedVariable. Ansible
+# does not cache facts between runs (no fact_caching in ansible.cfg), so the
+# set_fact from a previous run does not carry over.
+#
+# Derived from registry_port on purpose: group_vars/itu_rtx_test/vars.yml
+# overrides that to 5001, and Jinja resolves this lazily so the override wins.
+swarm_registry_url: "localhost:{{ registry_port }}"
+
 # =============================================================================
 # REPOSITORY
 # =============================================================================
@@ -49,6 +124,22 @@ repo_branch: main
 nginx_public_domain: "localhost"
 nginx_http_port: "80"
 nginx_https_port: "443"
+
+# =============================================================================
+# BACKEND (defaults)
+# =============================================================================
+# How many earlier chat messages the backend sends with each new question
+# (historyLimit() in components/gov-chat-backend/services/chat-session-service.js).
+# Keeping only the last question and answer stops an earlier topic from
+# taking over the answer to a new one. Remove to fall back to the code default.
+chat_session_history_message_limit: "2"
+
+# Topic Modules (twin ids, comma-separated) guests may use from a shared link.
+# Other modules send a guest to sign-in; signed-in users can use every module.
+# Remove to let guests use every module. This one is "General NCD" in the AWS
+# deployment's database; module ids differ per database, so other environments
+# set their own (group_vars/itu_rtx_test sets "").
+public_twin_ids: "6f7e04fd-9574-4d89-9c35-a6f9b887bc9d"
 
 # =============================================================================
 # SSL CERTIFICATES

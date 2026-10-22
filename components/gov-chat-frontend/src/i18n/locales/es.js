@@ -3237,6 +3237,93 @@ export default {
           text: 'Suites y resultados como xlsx (compatibles con las herramientas de pruebas comparativas) y un informe PDF de los gráficos.'
         }
       },
+      // GUIDE (David, 2026-10-23) — the operator playbook behind
+      // the "Guide" button. See en.js for the key-shape contract.
+      guide: {
+        open: 'Guía',
+        title: 'Guía de pruebas comparativas con RAGAS',
+        intro:
+          'Cómo construir, curar y ejecutar suites de pruebas comparativas — qué hacer, qué evitar y qué esperar en cada paso. El panel de Ayuda junto a este botón documenta los controles; este documento las decisiones.',
+        close: 'Cerrar',
+        more: 'Lea más en ragas.io',
+        labels: {
+          do: 'Haga esto',
+          dont: 'No',
+          expect: 'Qué esperar'
+        },
+        chapters: {
+          generate: {
+            title: 'Construir la suite',
+            intro:
+              'Una suite solo es tan buena como el corpus del que se generó. La generación es un trabajo del LLM en dos fases y es la mitad costosa de todo el flujo: primero un recorrido del grafo de conocimiento sobre el corpus que seleccionó y luego la síntesis de preguntas.',
+            d1: 'Publique antes de generar. La generación lee conceptos del repositorio, y una suite construida sobre un repositorio sin publicar o que aún se está drenando mide un corpus que el asistente realmente no puede ver.',
+            d2: 'Lea la nota de cobertura. Cuando el corpus es más grande que el presupuesto de fragmentos (1,600 fragmentos por defecto), la suite lo dice — «fundamentada en 1600 de 5590 fragmentos». Esa es una prueba comparativa válida de una porción, nunca del repositorio completo. Aumente OKF_RAGAS_MAX_CORPUS_CHUNKS si necesita todos.',
+            d3: 'Dimensione la suite según la pregunta que se está haciendo. Veinte preguntas son una prueba de humo, cien son una comparación. El costo crece de forma aproximadamente lineal en ambas ramas, y la rama de puntuación la domina.',
+            d4: 'Mezcle a propósito la distribución de saltos. El single-hop prueba la recuperación; el multi-hop (específico) prueba que el reranker combina la evidencia; el multi-hop (abstracto) prueba que el modelo razona más allá del texto literal. Una suite 100 % single-hop nunca puede revelar un fallo de composición.',
+            x1: 'No genere contra un repositorio que esté a medio drenar. Los conceptos que aún se están indexando son invisibles para la recuperación, así que la suite se escribe contra un corpus que diferirá del que después puntúe.',
+            x2: 'No lea los primeros minutos de la barra de progreso como una paralización. La fase del grafo de conocimiento puede permanecer sin completar un lote durante mucho tiempo; el reloj transcurrido y el contador de llamadas al modelo son las señales honestas.',
+            x3: 'No lea una suite corta como una buena generación. Los modelos con límite de cuota pierden preguntas, y el panel informa cuántas se descartaron. Revise la cantidad descartada antes de confiar en la suite.',
+            expect:
+              'Presupueste aproximadamente una llamada al modelo por fragmento del corpus en la fase del grafo, más unas cuantas por pregunta. En un corpus de 1,075 fragmentos, esa sola fase ha tardado más de dos horas. La generación continúa en segundo plano — puede cerrar el Lab y volver más tarde.'
+          },
+          curate: {
+            title: 'Mejorar la suite',
+            intro:
+              'Una suite generada es un primer borrador. Las dos mitades de cada entrada — la pregunta y la respuesta esperada — fueron escritas por una máquina, y la medición es tan confiable como ellas.',
+            d1: 'Pruebe antes de conservar. El botón ▶ ejecuta una pregunta contra el corpus real e informa si siquiera es respondible. Una pregunta que no devuelve nada es una pregunta sobre contenido que usted no tiene.',
+            d2: 'Marque las irrelevantes como fuera de alcance en lugar de eliminarlas. Las filas fuera de alcance se conservan para contraste y se excluyen de la puntuación. Eliminarlas pierde el hecho de que existieron.',
+            d3: 'Corrija la respuesta esperada, no la pregunta, cuando la referencia está mal. Las métricas faithfulness y answer relevancy se miden contra la referencia, de modo que una referencia que ningún modelo podría producir castiga una respuesta correcta.',
+            d4: 'Agregue sus propias preguntas difíciles. El generador escribe preguntas que el corpus responde de forma literal. Los fallos que vale la pena encontrar son los que escribe un curador desde la experiencia — la redacción ambigua, los dos documentos que se contradicen, el dato que se enuncia una vez y nunca se repite.',
+            x1: 'No reescriba una pregunta para que coincida con lo que el sistema responde hoy. Eso convierte la prueba comparativa en un test de regresión de la puntuación actual y oculta exactamente el defecto que buscaba.',
+            x2: 'No escale a una pregunta por concepto sin probar antes. La generación lee un presupuesto de fragmentos, no la estructura de sus documentos, así que una pregunta puede apoyarse en un pasaje que nunca estuvo en el corpus.',
+            x3: 'No cure contra una puntuación. Cure antes de ejecutar; editar la suite después de ver un resultado mueve la vara e invalida la comparación.',
+            expect:
+              'Cuarenta buenas preguntas son mejores que cien mezcladas. La cobertura del conjunto de conceptos importa más que el número en bruto — una suite que se deja la mitad de sus conceptos informará encantada una media alta para la mitad que sí cubre.'
+          },
+          run: {
+            title: 'Ejecutar la prueba comparativa',
+            intro:
+              'Una ejecución tiene tres fases — recuperación, respuesta y juicio — que se informan por separado para que siempre sepa en cuál está esperando. Solo la tercera consume llamadas al modelo juez, y es donde se va el tiempo.',
+            d1: 'Ejecute primero las cuatro predeterminadas: faithfulness, context precision, context recall y answer relevancy son el núcleo comparable. El catálogo ampliado multiplica el costo, no la información, hasta que ya sabe dónde está el fallo.',
+            d2: 'Vigile el contador de llamadas, no solo la barra. La fase de juicio avanza una fila a la vez, y en un endpoint de modelo con carga alta una ejecución choca con el límite de cuota con tanta frecuencia que los reintentos dominan el tiempo real. Un contador congelado con un reloj en marcha significa reintentos, no una ejecución colgada.',
+            d3: 'Cancele en lugar de abandonar. «Cancelar ejecución» detiene la ejecución de forma limpia y registra lo que se completó; cerrar la pestaña del navegador no — la ejecución sigue adelante y usted pierde la vista en vivo de ella.',
+            d4: 'Mantenga una sola ejecución por repositorio a la vez. Las ejecuciones comparten el endpoint del modelo; dos ejecuciones concurrentes se reparten el rendimiento y ambas se ralentizan, y ninguna informa por qué.',
+            x1: 'No compare una ejecución de cuatro métricas con una de diez métricas. El catálogo ampliado cambia el tiempo real unas cuatro veces, y las medias no son una serie comparable.',
+            x2: 'No vuelva a ejecutar para reemplazar una cifra que no le gustó. Una nueva ejecución con un modelo juez distinto, un top-N de recuperación distinto o una suite editada es una medición nueva — regístrela como tal.',
+            x3: 'No inicie una ejecución mientras una ingesta se está drenando. A medio drenar, parte del corpus falta en la recuperación, y la puntuación cae por un motivo que no tiene nada que ver con sus cambios.',
+            expect:
+              'Cuatro métricas cuestan aproximadamente siete llamadas al juez por pregunta — 7,1 medidos en una ejecución de cien preguntas. Eso da alrededor de una hora y media por cada cien preguntas en un endpoint con límite de cuota, y más cuando el modelo está más cargado. Tómelo como un mínimo, no como una promesa: el reloj y el contador de llamadas de la propia ejecución son la autoridad.'
+          },
+          models: {
+            title: 'Modelos, y qué esperar',
+            intro:
+              'Participan tres modelos distintos y no son intercambiables: el modelo que responde, el modelo que juzga y el modelo que genera los embeddings. Mueven la puntuación por motivos completamente diferentes.',
+            d1: 'El modelo de respuesta es el que está bajo prueba. La recuperación y la respuesta se reproducen en el servidor OKF contra las mismas colecciones y el mismo reranker que usa el asistente, así que cambiarlo cambia la respuesta, no el arnés de evaluación.',
+            d2: 'El juez debe ser fuerte y estable. Puntúa contra las referencias, de modo que un juez débil deprime todas las métricas a la vez y la ejecución sigue pareciendo completa. Las respuestas del juez se guardan en caché por identidad de juez — cambiar el juez o el modelo invalida esa caché y vuelve a puntuar cada fila.',
+            d3: 'El modelo de embeddings forma parte de la medición de la recuperación. Cámbielo y se mueven las métricas context precision y context recall, mientras que la puntuación de faithfulness por lo general no se mueve. Esa asimetría es una señal sobre dónde aterrizó el cambio, no ruido.',
+            d4: 'Registre el modelo junto con la ejecución. Cada ejecución guarda qué configuración y qué modelo produjeron las respuestas y las puntuaciones; dos ejecuciones solo son comparables cuando esos elementos coinciden.',
+            x1: 'No espere que un cambio de puntuación sea atribuible salvo que se haya movido exactamente una cosa. Una ejecución con un modelo de respuesta nuevo, un juez nuevo y un modelo de embeddings nuevo mide las tres cosas a la vez y no puede separarlas.',
+            x2: 'No lea una puntuación alta de faithfulness como un buen resultado por sí sola. Una puntuación alta de faithfulness con un context recall bajo significa que la respuesta está fundamentada en lo que se recuperó — y lo que se recuperó es demasiado poco.',
+            x3: 'No trate un modelo de razonamiento como algo gratuito. Gasta cientos de tokens antes de escribir una palabra; cuando el presupuesto de respuesta es menor que eso, cada respuesta se trunca, se descarta y se vuelve a llamar, y la ejecución paga dos veces por cada pregunta sin que se note.',
+            expect:
+              'Espere que la ejecución se ralentice y que la puntuación se mueva cada vez que cambie un modelo. Ninguna de las dos direcciones es un veredicto sobre el modelo: el juez, los parámetros de recuperación y la suite deciden en conjunto cuánto de ese movimiento es real.'
+          },
+          read: {
+            title: 'Leer los resultados',
+            intro:
+              'Cada métrica de RAGAS mide algo distinto, y una de ellas funciona al revés. Lea cada cifra por lo que realmente mide antes de actuar en consecuencia.',
+            d1: 'Lea primero el aviso de ejecución no válida. Una ejecución cuyas respuestas fallaron, o cuyo juez midió solo parte de la suite, no es una medición — las medias de abajo cubren únicamente las filas que sí se puntuaron.',
+            d2: 'Verifique la dirección de cada métrica. Casi todas son «cuanto más, mejor». La métrica noise sensitivity es la excepción: cuanto más bajo, mejor, así que una ejecución que puntúa mal en ella está fallando por el lado bueno.',
+            d3: 'Lea las filas que fallaron, no solo la media. Una pregunta rota entre cuarenta desplaza la media más que el cambio que intentaba medir.',
+            d4: 'Use «Explicar los fallos» antes de cambiar nada. Atribuye cada fila fallida a la recuperación, a la respuesta o a la propia referencia, y sus sugerencias son cautelosas — propone, usted decide.',
+            x1: 'No compare medias entre conjuntos de métricas distintos, jueces distintos o una suite editada. Ninguno de esos casos es la misma medición, y la diferencia que ve no es un cambio de calidad.',
+            x2: 'No ajuste la recuperación contra una sola cifra. La precisión y la exhaustividad se compensan entre sí; un cambio que eleva una normalmente cuesta la otra, y el intercambio suele ser la parte interesante.',
+            x3: 'No trate una puntuación nula como una puntuación baja. Un reintento agotado produce un nulo que se excluye de la media, así que sin puntuación no hay medición — vuelva a ejecutar la fila en lugar de asumir lo peor.',
+            expect:
+              'Una cifra de prueba comparativa es una comparación entre ejecuciones de la misma suite, no una calificación para el asistente. Exporte el xlsx cuando necesite conservar la evidencia: la línea de tendencia del panel solo conserva las ejecuciones guardadas en este repositorio.'
+          }
+        }
+      },
       current: 'actual',
       generate: {
         title: 'Generar una suite de pruebas comparativas',

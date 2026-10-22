@@ -3228,6 +3228,93 @@ export default {
           text: 'Disete le litseo e le xlsx (e lumellanang le didiriswa tsa ditekanyo) le tlaleho ea PDF ea dikerafo tsa dipalo.'
         }
       },
+      // GUIDE (David, 2026-10-23) — the operator playbook behind
+      // the "Guide" button. See en.js for the key-shape contract.
+      guide: {
+        open: 'Ngala',
+        title: 'Ngala ea ditekanyo tsa RAGAS',
+        intro:
+          'Mokhoa oa ho haha, ho hlokomela le ho phethahatsa disete tsa ditekanyo — ho etsa eng, ho qoboka eng, le ho lebela eng mehato ka mehato. Pane ya Thuso e fa thoko ea konopo ena e ka fa tlaleho ea lihokomiso; ena e ka fa tlaleho ea lintho tse u li etsang.',
+        close: 'Koala',
+        more: 'Bala haholo go ragas.io',
+        labels: {
+          do: 'Etsa ena',
+          dont: 'Se ka etse',
+          expect: 'Tseo o ka lebelelang'
+        },
+        chapters: {
+          generate: {
+            title: 'Haha sete',
+            intro:
+              'Sete e boole feela joalo le korpusi eo e neng e hlahiswa ho eona. Ho hlahisa ke mosebetsi oa LLM o nang le dikarolo tse ding, mme ke karolo e le ntlha ea ntle ea tsamaisohayo kaofela: pele kerafo ea tsebo holim’a korpusi oo o ile o khetha, ebe ho hlahiswa dipotso.',
+            d1: 'Hatisa pele o hlahise. Ho hlahisa ho bala mehopolo ho tswa polokelong, mme sete e hailoeng polokelong e sa phatlalatsweng kapa e ntse e ingesta e lekola korpusi e mofusi o sa bone ka nnete.',
+            d2: 'Bala tlhokomelo ea khato. Ha korpusi e le kholo ho morero oa dikarolo (1,600 dikarolo ka tloaelo) sete e tlasa o re tla — "grounded in 1600 of 5590 chunks". Hore e le tekanyo e nepahetseng ea likarolo tse ling feela, eseng le ea polokelo kaofela. Phakamisa OKF_RAGAS_MAX_CORPUS_CHUNKS ha o hloka eohle.',
+            d3: 'Bophatoloi bo sete bo lokolohela potso eo o ho botseng. Lipotso tse mashome a mantsi ke teko ea khutšo, le makolo a tekanyo ke papiso. Nako le tšebelezo di hula hangata ka mokhoa o tšoanang hodima litha tse ling, mme karolo ea ho lekanya e etsa hore e be e leholo.',
+            d4: 'Mixa kabo ea mehop ka morato. Single-hop e bopaka ho kgetha; multi-hop (e itseng) e bopaka hore reranker e kopanya bopaki; multi-hop (kakaretso) e bopaka hore modeli e nahana ka ho feta mongolo oa nnete. Sete e 100% single-hop e sa ka bontsha lehlohlo la kopano.',
+            x1: 'U se ke hlahise khahlano le polokelo e ntse e ingesta. Mehopolo e sa fihlile ea indexa ke a lekaneng ho kgetha, kahoo sete e ngwa khahlano le korpusi e tla fapana le eo o tla lekanya khale.',
+            x2: 'U se ke tlhalozia metsotso ea pele ea bar ea tsoelo-pele ho e-na le hore e eme. Karolo ea kerafo ea tsebo e ka lutsa nako e telele ho sa na le sete e felletseng; sebedi se nako se phetileng le sekheho sa mealo ea modeli ke linyane tse tšoanang.',
+            x3: 'U se ke tlhalozia sete e khutšo joalo le tlhahiso e ntle. Modeli tse lekanyang mealo li lahleheloa dipotso, mme pane e bontsha hore na ho ka e lokoeng. Lekola palo ea tse neng tsa lahloloa pele o lumela sete.',
+            expect:
+              'Ipola hoo e ka bang mealo ea modeli e le nngwe ka karolo ea korpusi bakeng sa karolo ea kerafo, ho feta tse ling ka potso. Korpusing ea dikarolo tse 1,075, karolo eo feela e ile ea matha ka hora tse ling tse haholo. Ho hlahisa ho tswela ka morao — o ka koala Lab o khutle.'
+          },
+          curate: {
+            title: 'Ntlafatsa sete',
+            intro:
+              'Sete e hlahiswang ke draft ya pele. Karolo tse peli tsa mula o mong — potso le karabo e lebetsweng — li ile tsa ngwa ho likomputha, mme tekanyo e ea tšoana feela le tseo.',
+            d1: 'Lekola pele o boloke. Mofopong o ▶ o potoloha potso khahlano le korpusi ea phelang mme o bontsha hore na e ka arabelwa hantle. Potso e ho se e khutliseng letho ke potso e ka serapeng sa lintho tseo o nang le tsona.',
+            d2: 'Fetola, u se ke tlosa, tse e sa amehang. Mela e ka ntle ho sepheo li bolokwa bakeng sa papiso mme lia sieoa tekanyong. Ho tlosa tsona o lahleheloa hore li ne li le bile.',
+            d3: 'Lokisa karabo e lebetsweng, eseng potso, ha boitlhisohedi bo fosahetse. Faithfulness le answer relevancy di tekanywa khahlano le boitlhisohedi, kahoo boitlhisohedi bo bo modeli e ka bang ea e hlahisa bo nyalatsa karabo e nepahetseng.',
+            d4: 'Eketsa dipotso tsa hao tse thata. Mohlahisi o ngwa dipotso tse korpusi e li arabang ka mokhoa o litsheo. Tse ho hlolehelwang tse ntle ho fumana ke tse ngwa ke mokgwacisi ho phola tseba — puo e sa hlalama hantle, litheko tse peli tse sa dumellane, ntho e hlalositsoeng ka boholo bo le kaeme.',
+            x1: 'U se ke ngola potso againa ho e etsa leheko le karabo ea kajeno ea sisteme. Ho etsa joalo ho fetola tekanyo ho eaba teko ea ho boetla sekhatho sa hajoa mme ho pata lehlohlo leo o o batlang.',
+            x2: 'U se ke fihlela ho potso e le nngwe ka mohopolo o sa lekole pele. Ho hlahisa ho bala morero oa dikarolo, eseng mokhoa oa litso tsa hao, kahoo potso e ka khutletsegenge karolo e neng e sa le mona korpuseng.',
+            x3: 'U se ke hlokomela ka sekhatho. Hlokomela pele o phethahatsa; ho lokisa sete ka mor’a ho bona se tsohiloa ho fika holimo ho sekheho mme ho etsa hore papiso e se sebetseng.',
+            expect:
+              'Dipotso tse mashome a mantsi tse ntle li feta le makolo a mantsi a tse hlahileng. Khato ea sete ya mehopolo e boholo ho feta palo feela — sete e lebetse eseng la bopaki boo o na le oona e tla bontsha kopo e phahameng ea la bopaki boo e koaroang.'
+          },
+          run: {
+            title: 'Phethahatsa tekanyo',
+            intro:
+              'Tsamaello e na le dikarolo tse tharo — ho kgetha, ho araba, le ho lekanya — tse bollswa ka boitumelo eo o ka lula o tseba ea o nolang eo o emang ho eona. Ea borobong feela e hlapa mealo ea modeli ea moahloli, mme eo ke nako e re neng e feta.',
+            d1: 'Phethahatsa tse nne tsa tloaelo pele. Faithfulness, context precision, context recall le answer relevancy ke bohareng bo ka bapaloa. Katalogo e atolositsoeng e multiplya tšebelezo, eseng tlhahumelo, ho fihlela u se o tsebe hore lehlohlo le le leng.',
+            d2: 'Beka sekheho sa mealo, eseng feela bar. Karolo ea moahloli e tswela mola o mong ka nako, mme mo endpoint e khahlisang ea modeli tsamaello e lekanyetsoa mealo ka makhethe a mantsi hore likhapiso li etsa boholo ba nako. Sekheho se emeng hael sa nako e tswelang ke likhapiso, eseng ho ema.',
+            d3: 'Khansela ho eaba o lahleheloa. Khansela tsamaello e ema ka hantle mme e rekota tse li qetileng; ho koala sepheo sa browser ha ho etse — tsamaello e tswela mme o lahleheloa ntla eo e phelang.',
+            d4: 'Boloka tsamaello e le nngwe ka polokelo ka nako e le nngwe. Ditsamaello di arolelana endpoint ea modeli; ditsamaello tse pedi tse parallel di arolelana ho throughput mme bobotho bo buta, mme e le e neng e bontsha hae.',
+            x1: 'U se ke bapisa tsamaello ea ditekanyo tse nne le ea ea lesome. Katalogo e atolositsoeng e fetola nako ea tsamaello ka makhethe a mane kaofela, mme di-average di se bapeheng tse tšoanang.',
+            x2: 'U se ke phethahatsa hape ho ka etsa hore o na le nomo e o sa e ratefong. Ho phethahatsa hape ka modeli e nngwe ea moahloli, top-N e nngwe ea ho kgetha kapa sete e lokisitsoeng ke tekanyo e nngwe — e rekote e le nngwe.',
+            x3: 'U se ke qala tsamaello ha ho na le ingest e sa fihlile. Karolo ea korpusi e tsohang ka nako e phatahileng e haese ho kgetha, mme sekhatho se theohile ka lebaka le se amang le liphetoho tsa hao.',
+            expect:
+              'Ditekanyo tse nne di nka hoo e ka bang mealo ea moahloli e supileng ka potso — 7,1 e ile ea lekoloa ho tsamaello ya dipotso tse makolo. Ho etsa feela hore ke hora le halete ho dipotso tse makolo ho endpoint e lekanyang mealo, mme ho fihla kapele ha modeli e kula hape kajale. U se ke u bona e-na le botsebatsi, empa ha e le boholo; sebedi sa tsamaello le sekheho sa mealo tsa tsamaello kaofela ke tseo e leng ke tseqapelo.'
+          },
+          models: {
+            title: 'Modeli le tseo o ka lebelelang',
+            intro:
+              'Modeli tse tharo tse fapaneng e nka karolo mme ha a fihlellane: modeli ea arabang, modeli ea moahloli, le modeli ea embedding. Di fetola sekhatho ka mabaka a tse fapaneng kaofela.',
+            d1: 'Modeli ea karabo ke eo e tekotsoeng. Ho kgetha le ho araba bo phetisoa ka server ea OKF khahlano le makole a tse tšoanang le reranker eo mofusi a e sebetsisang, kahoo ho e fetola ke ho fetola karabo — eseng moqolo oa tekanyo.',
+            d2: 'Moahloli o tlameha ho le matla le ho tshehane. O lekanya khahlano le boitlhisohedi, kahoo moahloli o mokhatho o theohisa ditekanyo tsohle ka nako e le nngwe mme tsamaello e ntse e sheba e felletseng. Dikarabo tsa moahloli di bolokwa ho latheoe mohopolong oo moahloli — ho fetola moahloli kapa modeli ho hlahisa hore boeke bo sa sebetseng mme mula o mong le o mong o hape o lekanywa.',
+            d3: 'Modeli ea embedding ke karolo ea tekanyo ea ho kgetha. E e fetotse mme context precision le context recall di fula, ha faithfulness ka tlhakoreng e sa fule. Boiketlo boo bo sa lumellane ke bopaki bo bolelang hore phetoho e fihlile kae, eseng mohumo.',
+            d4: 'Rekota modeli le tsamaello. Tsamaello e n’ngwe le e n’ngwe e boloka hore ke pehelo efe le modeli efe tse neng tsa hlahisa dikarabo le dipalo; ditsamaello tse pedi di ka bapaloa feela ha tseo di tlatswana.',
+            x1: 'U se ke lebelele hore phetoho ea sekhatho e ka attributioa ha feela ntho e le nngwe e feletse. Tsamaello e nang le modeli e nngwe ea karabo, moahloli o nngwe le modeli e nngwe ea embedding e tekanya tsohle ka nako e le nngwe mme e sa ka a arola.',
+            x2: 'U se ke bale sekhatho se phahameng sa faithfulness ho e bona se tla molemo ka sona. Faithfulness e phahameng le context recall e tlase ho bolela hore karabo e thehilwe eng eo e fumanweng — mme eo e fumanweng e le haholo ho lekana.',
+            x3: 'U se ke shebe modeli ea nahana joalo e sa ntlhise. E chaba lithente tsa maraka a makhoya a mangala pele a ka ngola lehlokobe; ha morero oa karabo o le tlase ho eo, karabo e n’ngwe le e n’ngwe e katsehang, e lahleheloa mme e bitsetsa, mme tsamaello e tjhapa e leha ka makhetlo a mangala ka potso e n’ngwe le e n’ngwe.',
+            expect:
+              'Lebela hore tsamaello e tla ba buta mme sekhatho se tla fula letsatsi la leha u fetola modeli. Boemong bo le bo ntle bo e ka nna bophatlalatsi ba modeli: moahloli, lintho tsa ho kgetha le sete li etsa hore bo nako boo bo le bo botle hore bo hokae ke bo bohlokoa.'
+          },
+          read: {
+            title: 'Bala litseo',
+            intro:
+              'Tekanyo e n’ngwe le e n’ngwe ea RAGAS e tekanya ntho e fapaneng, mme e le nngwe ea tsona e sebetsa ka tsela e tsolehileng. Bala nomo e n’ngwe le e n’ngwe ho e-na le ntho eo e tekanyang ka nnete pele o nka ntho.',
+            d1: 'Bala bane ea tsamaello e sa sebetsheng pele. Tsamaello e neng dikarabo tsa eona di hlolehile, kapa moahloli a lekantseng feela karolo ya sete, ha e na le tekanyo — di-average tse ka tlasa di akaretsa feela mela e neng a lekanywa.',
+            d2: 'Lekola tsela ea tekanyo e n’ngwe le e n’ngwe. Bo bang bo phahameng ke boka bo botle. Noise sensitivity ke khefiso: ha e tlase e le betere, kahoo tsamaello e phathileng ka eona e hlolehela ka tsela e ntle.',
+            d3: 'Bala mela e fosahetseng, eseng feela karabo e lekanang. Potso e le nngwe e phoofolong ho feta tse mashome a mantsi e fetosa karabo e lekanang ho feta phetoho o neng o leka ho e lekanya.',
+            d4: 'Sebenzisa Hlalosa tse fosahetseng pele o fetola ntho e le nngwe. E laela mula o mong le o mong o fosahetseng ho kgetha, ho araba, kapa ho boitlhisohedi bo boona, mme litlhutu tsa eona di sireletsekileng — e fana, o etsa qeto.',
+            x1: 'U se ke bapisa dikarabo tse lekanang mahareng ha sete tse fapaneng tsa ditekanyo, baahloli tse fapaneng, kapa sete e lokisitsoeng. Ha ho e neng ea tsona tekanyo e le nngwe, mme phapang o o bonang ha e na le phetoho boleng.',
+            x2: 'U se ke hlokomela ho kgetha ho latela nomo e le nngwe. Nepahalo le botlalo di fana ka hare; phetoho e phahamisang e le nngwe ka tlasa e le nngwe e ntle, mme kefiso ea tsona ka tlasa e le nngwe e ntle ka nako e ngata ke karolo e khahlisang.',
+            x3: 'U se ke shebe sekhatho se sehleng joalo le sekhatho se tlase. Ho pheta ka mor’a ho fihla ho hlahisa sekhatho se sehleng se neng se sa akaretswa karabong, kahoo nomo e se ho na le tekanyo — phethahatsa mula o mong hape ho e na le ho nahana ka maseo.',
+            expect:
+              'Nomo ea tekanyo ke papiso mahlare a ditsamaello tsa sete e le nngwe, eseng haholo ea mofusi. Romela xlsx ha o hloka ho boloka bopaki: mohlaka oa tsoelo-pele ka pane o na le ditsamaello tse bolokileng feela polokelong ena.'
+          }
+        }
+      },
       current: 'ea kajeno',
       generate: {
         title: 'Hlahisa sete ea ditekanyo',

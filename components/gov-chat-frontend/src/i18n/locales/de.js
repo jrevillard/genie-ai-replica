@@ -3240,6 +3240,93 @@ export default {
           text: 'Suites und Ergebnisse als xlsx (kompatibel mit dem Benchmark-Tooling) und ein PDF-Bericht der Diagramme.'
         }
       },
+      // GUIDE (David, 2026-10-23) — the operator playbook behind
+      // the "Guide" button. See en.js for the key-shape contract.
+      guide: {
+        open: 'Leitfaden',
+        title: 'RAGAS-Benchmark-Leitfaden',
+        intro:
+          'Wie Benchmark-Suites erstellt, kuratiert und ausgeführt werden — was zu tun ist, was zu vermeiden ist und was in jedem Schritt zu erwarten ist. Das Hilfepanel neben dieser Schaltfläche dokumentiert die Bedienelemente, dieser Leitfaden die Entscheidungen.',
+        close: 'Schließen',
+        more: 'Mehr auf ragas.io',
+        labels: {
+          do: 'Das ist zu tun',
+          dont: 'Nicht tun',
+          expect: 'Was zu erwarten ist'
+        },
+        chapters: {
+          generate: {
+            title: 'Die Suite erstellen',
+            intro:
+              'Eine Suite ist nur so gut wie der Korpus, aus dem sie erzeugt wurde. Die Generierung ist eine LLM-Aufgabe in zwei Phasen und der teure Teil des gesamten Ablaufs: zuerst ein Wissensgraph-Durchlauf über den ausgewählten Korpus, dann die Fragesynthese.',
+            d1: 'Vor der Generierung veröffentlichen. Die Generierung liest Konzepte aus dem Repository, und eine Suite auf einem unveröffentlichten Repository oder auf einem, dessen Ingest noch läuft, misst einen Korpus, den der Assistent tatsächlich nicht sieht.',
+            d2: 'Die Abdeckungsnotiz lesen. Ist der Korpus größer als das Chunk-Budget (standardmäßig 1.600 Chunks), weist die Suite darauf hin — „Basiert auf 1600 von 5590 Chunks“. Das ist ein gültiger Benchmark eines Ausschnitts, niemals des gesamten Repository. OKF_RAGAS_MAX_CORPUS_CHUNKS erhöhen, wenn der ganze Korpus gebraucht wird.',
+            d3: 'Die Suite auf die Fragestellung zuschneiden. Zwanzig Fragen sind ein Smoke-Test, hundert ein Vergleich. Die Kosten wachsen in beiden Phasen — Generierung und Bewertung — ungefähr linear, und die Bewertungsphase dominiert.',
+            d4: 'Die Hop-Verteilung bewusst mischen: single-hop belegt den Abruf; multi-hop (spezifisch) belegt, dass der Reranker Belege kombiniert; multi-hop (abstrakt) belegt, dass das Modell über den wörtlichen Text hinaus schlussfolgert. Eine Suite, die zu 100 % aus single-hop-Fragen besteht, kann einen Fehler in der Zusammensetzung nie zeigen.',
+            x1: 'Nicht gegen ein Repository generieren, dessen Ingest noch läuft. Konzepte, die noch indexiert werden, sind für den Abruf unsichtbar; die Suite wird also gegen einen Korpus geschrieben, der sich von dem unterscheidet, gegen den später bewertet wird.',
+            x2: 'Die ersten Minuten des Fortschrittsbalkens nicht als Stillstand lesen. Die Wissensgraph-Phase kann lange ohne einen abgeschlossenen Batch stehen; die verstrichene Zeit und der Zähler der Modellaufrufe sind die verlässlichen Signale.',
+            x3: 'Eine kurze Suite nicht als gute Generierung lesen. Ratenbegrenzte Modelle verlieren Fragen, und das Panel meldet, wie viele verworfen wurden. Die Zahl der verworfenen Fragen prüfen, bevor der Suite Vertrauen geschenkt wird.',
+            expect:
+              'Für die Graph-Phase ist etwa ein Modellaufruf pro Korpus-Chunk einzuplanen, dazu ein paar pro Frage. Auf einem Korpus von 1.075 Chunks hat allein diese Phase über zwei Stunden gedauert. Die Generierung läuft im Hintergrund weiter — das Lab kann geschlossen und später wieder geöffnet werden.'
+          },
+          curate: {
+            title: 'Die Suite verbessern',
+            intro:
+              'Eine generierte Suite ist ein erster Entwurf. Beide Hälften jedes Eintrags — die Frage und die erwartete Antwort — sind maschinell geschrieben, und die Messung ist nur so belastbar wie diese beiden.',
+            d1: 'Erst testen, dann behalten. Die Schaltfläche ▶ spielt eine Frage gegen den Live-Korpus und meldet, ob sie überhaupt beantwortbar ist. Eine Frage ohne Ergebnis ist eine Frage über Inhalte, die nicht vorhanden sind.',
+            d2: 'Die irrelevanten umschalten, nicht löschen. Zeilen außerhalb des Geltungsbereichs bleiben zum Kontrast erhalten und werden von der Bewertung ausgenommen. Ein Löschen verliert das Faktum, dass es sie gab.',
+            d3: 'Wenn die Referenz falsch ist, die erwartete Antwort korrigieren, nicht die Frage: faithfulness und answer relevancy werden gegen die Referenz gemessen, und eine Referenz, die kein Modell liefern könnte, bestraft eine korrekte Antwort.',
+            d4: 'Eigene schwierige Fragen ergänzen. Der Generator schreibt Fragen, die der Korpus wörtlich beantwortet. Die Fehlschläge, die sich lohnen, sind die aus der Erfahrung geschriebenen — die mehrdeutige Formulierung, die beiden widersprüchlichen Dokumente, die einmal genannte und nie wiederholte Tatsache.',
+            x1: 'Eine Frage nicht so umformulieren, dass sie zur heutigen Antwort passt. Das macht aus dem Benchmark einen Regressionstest für den aktuellen Score und verdeckt genau den Defekt, der gesucht war.',
+            x2: 'Nicht ohne vorherigen Test auf eine Frage pro Konzept hochskalieren. Die Generierung liest ein Chunk-Budget, nicht die Dokumentstruktur; eine Frage kann daher auf einer Textstelle beruhen, die nie im Korpus war.',
+            x3: 'Nicht gegen einen Score kuratieren. Vor dem Lauf kuratieren; ein Bearbeiten der Suite nach gesehenem Ergebnis verschiebt die Messlatte und entwertet den Vergleich.',
+            expect:
+              'Vierzig gute Fragen schlagen hundert gemischte. Die Abdeckung des Konzeptsatzes zählt mehr als die reine Anzahl — eine Suite, die die Hälfte der Konzepte verfehlt, meldet für die abgedeckte Hälfte problemlos einen hohen Mittelwert.'
+          },
+          run: {
+            title: 'Den Benchmark ausführen',
+            intro:
+              'Ein Lauf hat drei Phasen — Abruf, Antworten und Bewertung —, die getrennt gemeldet werden, damit stets klar ist, auf welche gerade gewartet wird. Nur die dritte kostet Judge-Modell-Aufrufe, und dort geht die Zeit hin.',
+            d1: 'Zuerst die vier Standards ausführen. Der vergleichbare Kern sind faithfulness, context precision, context recall und answer relevancy. Der erweiterte Katalog vervielfacht die Kosten, nicht den Erkenntnisgewinn — solange nicht bekannt ist, wo der Fehlschlag liegt.',
+            d2: 'Den Aufrufzähler beobachten, nicht nur den Balken. Die Bewertungsphase arbeitet Zeile für Zeile, und auf einem ausgelasteten Modell-Endpunkt wird ein Lauf so oft ratenbegrenzt, dass die Wiederholungen die Laufzeit bestimmen. Ein eingefrorener Zähler bei laufender Uhr bedeutet Wiederholungen, keinen Hänger.',
+            d3: 'Abbrechen statt aufgeben. Das Abbrechen hält sauber an und hält fest, was abgeschlossen wurde; das Schließen des Browser-Tabs tut das nicht — der Lauf läuft weiter und die Live-Ansicht darauf geht verloren.',
+            d4: 'Nur einen Lauf pro Repository gleichzeitig. Läufe teilen sich den Modell-Endpunkt; zwei parallele Läufe teilen sich den Durchsatz, beide werden langsamer, und keiner der beiden meldet, warum.',
+            x1: 'Einen Lauf mit vier Metriken nicht mit einem Lauf mit zehn vergleichen. Der erweiterte Katalog verlängert die Laufzeit um etwa den Faktor vier, und die Mittelwerte sind keine vergleichbare Reihe.',
+            x2: 'Nicht erneut ausführen, um eine unliebe Zahl zu ersetzen. Ein Wiederholungslauf mit einem anderen Judge-Modell, einem anderen Abruf-Top-N oder einer bearbeiteten Suite ist eine neue Messung — und wird auch als solche erfasst.',
+            x3: 'Keinen Lauf starten, solange ein Ingest noch läuft. Ein Teil des Korpus fehlt dann beim Abruf, und der Score sinkt aus einem Grund, der mit den eigenen Änderungen nichts zu tun hat.',
+            expect:
+              'Vier Metriken kosten etwa sieben Judge-Aufrufe pro Frage — bei einem Lauf mit hundert Fragen wurden 7,1 gemessen. Das ergibt rund eineinhalb Stunden je hundert Fragen auf einem ratenbegrenzten Endpunkt und mehr, wenn das Modell stärker ausgelastet ist. Behandle das als Untergrenze, nicht als Zusage: die Laufuhr und der Aufrufzähler des Laufs selbst sind die Autorität.'
+          },
+          models: {
+            title: 'Die Modelle und was zu erwarten ist',
+            intro:
+              'Drei verschiedene Modelle sind beteiligt, und sie sind nicht austauschbar: das Antwortmodell, das Judge-Modell und das Embedding-Modell. Sie verschieben den Score aus völlig unterschiedlichen Gründen.',
+            d1: 'Das Antwortmodell ist das getestete. Abruf und Antworten werden im OKF-Server gegen dieselben Collections und denselben Reranker wiederholt, den auch der Assistent nutzt; ein Wechsel ändert also die Antwort, nicht die Messvorrichtung.',
+            d2: 'Das Judge-Modell muss stark und stabil sein. Es bewertet anhand der Referenzen; ein schwaches Judge-Modell drückt daher alle Metriken gleichzeitig nach unten, und der Lauf sieht trotzdem vollständig aus. Judge-Antworten werden je Judge-Identität zwischengespeichert — ein Wechsel des Judge-Modells oder des Modells macht diesen Cache ungültig, und jede Zeile wird neu bewertet.',
+            d3: 'Das Embedding-Modell gehört zur Messung des Abrufs. Wird es gewechselt, verschieben sich context precision und context recall, faithfulness üblicherweise nicht. Diese Asymmetrie ist ein Signal darüber, wo die Änderung wirkt, kein Rauschen.',
+            d4: 'Das Modell mit dem Lauf festhalten. Jeder Lauf speichert, welche Konfiguration und welches Modell die Antworten und die Scores erzeugt hat; zwei Läufe sind nur vergleichbar, wenn diese übereinstimmen.',
+            x1: 'Nicht erwarten, dass sich eine Score-Änderung zuordnen lässt, wenn nicht genau eine Sache geändert wurde. Ein Lauf mit neuem Antwortmodell, neuem Judge und neuem Embedding-Modell misst alle drei gleichzeitig und kann sie nicht trennen.',
+            x2: 'Einen hohen Wert bei faithfulness nicht als eigenständig gutes Ergebnis lesen. Hohe faithfulness bei niedrigem context recall bedeutet, dass die Antwort auf dem beruht, was abgerufen wurde — und das Abgerufene ist zu wenig.',
+            x3: 'Ein Reasoning-Modell nicht als kostenlos behandeln. Es verbraucht Hunderte von Token, bevor es ein Wort schreibt; ist das Antwortbudget kleiner, wird jede Antwort gekürzt, verworfen und erneut aufgerufen — und der Lauf zahlt stillschweigend doppelt für jede Frage.',
+            expect:
+              'Dass der Lauf langsamer wird und sich der Score verschiebt, ist bei jedem Modellwechsel zu erwarten. Keine der beiden Richtungen ist ein Urteil über das Modell: Judge, Abruf-Stellschrauben und Suite bestimmen gemeinsam, wie viel von dieser Verschiebung echt ist.'
+          },
+          read: {
+            title: 'Die Ergebnisse lesen',
+            intro:
+              'Jede RAGAS-Metrik misst etwas anderes, und eine davon läuft umgekehrt. Jede Zahl ist danach zu lesen, was sie tatsächlich misst, bevor darauf gehandelt wird.',
+            d1: 'Zuerst das Banner zum ungültigen Lauf lesen. Ein Lauf, dessen Antworten fehlschlugen oder dessen Judge nur einen Teil der Suite bewertet hat, ist keine Messung — die darunter stehenden Mittelwerte decken nur die bewerteten Zeilen ab.',
+            d2: 'Die Richtung jeder Metrik prüfen. Die meisten sind höher-ist-besser. Die Ausnahme ist noise sensitivity: niedriger ist besser — ein Lauf, der dabei schlecht abschneidet, scheitert also in die gute Richtung.',
+            d3: 'Die fehlgeschlagenen Zeilen lesen, nicht nur den Mittelwert. Eine defekte Frage unter vierzig verschiebt den Mittelwert stärker als die Änderung, die gemessen werden sollte.',
+            d4: 'Vor jeder Änderung „Fehlschläge erklären“ verwenden. Die Funktion ordnet jede fehlgeschlagene Zeile dem Abruf, dem Antworten oder der Referenz selbst zu, und ihre Vorschläge sind abgesichert — sie schlägt vor, entschieden wird selbst.',
+            x1: 'Mittelwerte über verschiedene Metriksätze, verschiedene Judge-Modelle oder eine bearbeitete Suite hinweg nicht vergleichen. Keines davon ist dieselbe Messung, und der sichtbare Unterschied ist keine Änderung der Qualität.',
+            x2: 'Den Abruf nicht gegen eine einzelne Zahl optimieren. context precision und context recall stehen gegeneinander; eine Änderung, die den einen hebt, kostet normalerweise den anderen, und genau dieser Zielkonflikt ist meist der interessante Teil.',
+            x3: 'Einen null-Score nicht als niedrigen Score behandeln. Wenn alle Wiederholungsversuche aufgebraucht sind, entsteht ein null-Wert, der vom Mittelwert ausgenommen wird; kein Score bedeutet also keine Messung — die Zeile erneut ausführen, statt das Schlimmste anzunehmen.',
+            expect:
+              'Eine Benchmark-Zahl ist ein Vergleich zwischen Läufen derselben Suite, keine Note für den Assistenten. Das xlsx exportieren, wenn die Belege aufbewahrt werden sollen: die Trendlinie im Panel enthält nur die Läufe, die zu diesem Repository gespeichert sind.'
+          }
+        }
+      },
       current: 'aktuell',
       generate: {
         title: 'Vergleichstest-Suite generieren',

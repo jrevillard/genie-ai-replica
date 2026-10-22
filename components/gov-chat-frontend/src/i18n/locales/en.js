@@ -1865,6 +1865,99 @@ export default {
           text: 'Suites and results as xlsx (compatible with the benchmark tooling) and a PDF report of the charts.'
         }
       },
+      // GUIDE (David, 2026-10-23) — the operator playbook behind the
+      // "Guide" button. Deliberately NOT part of help: that block answers
+      // "what is this control?", this one answers "what should I do with
+      // it, in what order, and what happens if I get it wrong". Each
+      // chapter is 4 dos (d1..d4), 3 don'ts (x1..x3) and one grounded
+      // expectation. Values are individual keys, never arrays: the
+      // translateMixin resolves leaves as strings only, so an array value
+      // would fall through to the caller's fallback on every read.
+      guide: {
+        open: 'Guide',
+        title: 'RAGAS benchmarking guide',
+        intro:
+          'How to build, curate and run benchmark suites — what to do, what to avoid, and what to expect at each step. The Help panel beside this button documents the controls; this documents the decisions.',
+        close: 'Close',
+        more: 'Read more at ragas.io',
+        labels: {
+          do: 'Do this',
+          dont: "Don't",
+          expect: 'What to expect'
+        },
+        chapters: {
+          generate: {
+            title: 'Build the suite',
+            intro:
+              'A suite is only as good as the corpus it was generated from. Generation is an LLM job in two phases and it is the expensive half of the whole workflow: first a knowledge-graph pass over the corpus you selected, then question synthesis.',
+            d1: 'Publish before you generate. Generation reads concepts from the repository, and a suite built on an unpublished or still-draining repository measures a corpus the assistant cannot actually see.',
+            d2: 'Read the coverage note. When the corpus is larger than the chunk budget (1,600 chunks by default) the suite says so — "grounded in 1600 of 5590 chunks". That is a valid benchmark of a slice, never of the whole repository. Raise OKF_RAGAS_MAX_CORPUS_CHUNKS if you need all of it.',
+            d3: 'Size the suite to the question you are asking. Twenty questions is a smoke test, a hundred is a comparison. Cost grows roughly linearly on both legs, and the scoring leg dominates.',
+            d4: 'Mix the hop distribution on purpose. Single-hop proves retrieval; multi-hop (specific) proves the reranker combines evidence; multi-hop (abstract) proves the model reasons beyond the literal text. A suite that is 100% single-hop can never reveal a composition failure.',
+            x1: 'Do not generate against a repository that is mid-drain. Concepts still indexing are invisible to retrieval, so the suite is written against a corpus that will differ from the one you later score against.',
+            x2: 'Do not read the first minutes of the progress bar as a stall. The knowledge-graph phase can sit without a completed batch for a long time; the elapsed clock and the model-call counter are the honest signals.',
+            x3: 'Do not read a short suite as a good generation. Rate-limited models lose questions, and the panel reports how many were dropped. Check the dropped count before you trust the suite.',
+            expect:
+              'Budget roughly one model call per corpus chunk for the graph phase, plus a few per question. On a 1,075-chunk corpus that phase alone has run for over two hours. Generation continues in the background — you can close the Lab and come back.'
+          },
+          curate: {
+            title: 'Improve the suite',
+            intro:
+              'A generated suite is a first draft. Both halves of every entry — the question and the expected answer — were machine-written, and the measurement is only as trustworthy as they are.',
+            d1: 'Probe before you keep. The ▶ button runs a question against the live corpus and reports whether it is answerable at all. A question that returns nothing is a question about content you do not have.',
+            d2: 'Flip, do not delete, the irrelevant ones. Out-of-scope rows are kept for contrast and excluded from scoring. Deleting them loses the fact that they existed.',
+            d3: 'Fix the expected answer, not the question, when the reference is wrong. Faithfulness and relevancy are measured against the reference, so a reference no model could produce punishes a correct answer.',
+            d4: 'Add your own hard questions. The generator writes questions the corpus answers literally. The failures worth finding are the ones a curator writes from experience — the ambiguous phrasing, the two documents that disagree, the fact stated once and never repeated.',
+            x1: 'Do not rewrite a question to match what the system answers today. That turns the benchmark into a regression test for the current score and hides exactly the defect you were looking for.',
+            x2: 'Do not scale to one question per concept without probing. Generation reads a chunk budget, not your document structure, so a question can rest on a passage that was never in the corpus.',
+            x3: 'Do not curate against a score. Curate before you run; editing the suite after seeing a result moves the goalposts and invalidates the comparison.',
+            expect:
+              'Forty good questions beat a hundred mixed ones. Coverage of the concept set matters more than raw count — a suite that misses half your concepts will happily report a high mean for the half it covers.'
+          },
+          run: {
+            title: 'Run the benchmark',
+            intro:
+              'A run has three phases — retrieval, answering, and judging — reported separately so you always know which one you are waiting on. Only the third one costs judge-model calls, and it is where the time goes.',
+            d1: 'Run the four defaults first. Faithfulness, context precision, context recall and answer relevancy are the comparable core. The extended catalog multiplies cost, not information, until you already know where the failure is.',
+            d2: 'Watch the call counter, not just the bar. The judge phase advances one row at a time, and on a busy model endpoint a run is rate-limited often enough that retries dominate the wall-clock. A frozen counter with a moving clock means retries, not a hang.',
+            d3: 'Cancel rather than abandon. Cancel run stops cleanly and records what completed; closing the browser tab does not — the run keeps going and you lose the live view of it.',
+            d4: 'Keep one run per repository at a time. Runs share the model endpoint; two concurrent runs divide the throughput and both get slower, and neither reports why.',
+            x1: 'Do not compare a four-metric run against a ten-metric one. The extended catalog changes the wall-clock by roughly four times, and the averages are not a like-for-like series.',
+            x2: 'Do not re-run to replace a number you did not like. A re-run with a different judge model, a different retrieval top-N or an edited suite is a new measurement — record it as one.',
+            x3: 'Do not start a run while an ingestion is draining. Mid-drain part of the corpus is missing from retrieval, and the score drops for a reason that has nothing to do with your changes.',
+            expect:
+              "Four metrics cost roughly seven judge calls per question — 7.1 measured on a hundred-question run. That works out at about an hour and a half per hundred questions on a rate-limited endpoint, and longer when the model is busier. Treat that as a floor, not a promise: the run's own clock and call counter are the authority."
+          },
+          models: {
+            title: 'Models, and what to expect',
+            intro:
+              'Three different models take part and they are not interchangeable: the model that answers, the model that judges, and the model that embeds. They move the score for completely different reasons.',
+            d1: 'The answer model is the one under test. Retrieval and answering are replayed in the OKF server against the same collections and the same reranker the assistant uses, so changing this changes the answer — not the harness.',
+            d2: 'The judge must be strong and stable. It scores against the references, so a weak judge depresses every metric at once and the run still looks complete. Judge answers are cached per judge identity — changing the judge or the model invalidates that cache and every row is re-scored.',
+            d3: 'The embedding model is part of the retrieval measurement. Change it and context precision and context recall move, while faithfulness usually does not. That asymmetry is a signal about where the change landed, not noise.',
+            d4: 'Record the model with the run. Each run stores which configuration and which model produced the answers and the scores; two runs are comparable only when those match.',
+            x1: 'Do not expect a score change to be attributable unless exactly one thing moved. A run with a new answer model, a new judge and a new embedding model measures all three at once and cannot separate them.',
+            x2: 'Do not read a high faithfulness score as a good result on its own. High faithfulness with low context recall means the answer is grounded in whatever was retrieved — and what was retrieved is too little.',
+            x3: 'Do not treat a reasoning model as free. It spends hundreds of tokens before writing a word; when the answer budget is smaller than that, every answer is truncated, discarded and re-called, and the run quietly pays twice for every question.',
+            expect:
+              'Expect the run to slow down and the score to move whenever you change a model. Neither direction is a verdict on the model: the judge, the retrieval knobs and the suite together decide how much of that movement is real.'
+          },
+          read: {
+            title: 'Read the results',
+            intro:
+              'Each RAGAS metric measures something different, and one of them runs backwards. Read every number for what it actually measures before you act on it.',
+            d1: 'Read the invalid-run banner first. A run whose answers errored, or whose judge measured only part of the suite, is not a measurement — the averages below it cover only the rows that scored.',
+            d2: 'Check the direction of each metric. Most are higher-is-better. Noise sensitivity is the exception: lower is better, so a run that scores badly on it is failing in the good direction.',
+            d3: 'Read the failing rows, not only the mean. One broken question among forty moves the mean further than the change you were trying to measure.',
+            d4: 'Use Explain failures before you change anything. It attributes each failing row to retrieval, to answering, or to the reference itself, and its suggestions are guarded — it proposes, you decide.',
+            x1: 'Do not compare means across different metric sets, different judges, or an edited suite. None of those is the same measurement, and the difference you see is not a change in quality.',
+            x2: 'Do not tune retrieval against a single number. Precision and recall trade against each other; a change that lifts one normally costs the other, and the trade is usually the interesting part.',
+            x3: 'Do not treat a null score as a low score. An exhausted retry produces a null that is excluded from the mean, so no score means no measurement — re-run the row rather than assuming the worst.',
+            expect:
+              'A benchmark number is a comparison between runs of the same suite, not a grade for the assistant. Export the xlsx when you need to keep the evidence: the trend line in the panel holds only the runs stored on this repository.'
+          }
+        }
+      },
       current: 'current',
       generate: {
         title: 'Generate a benchmark suite',

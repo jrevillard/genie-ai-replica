@@ -3239,6 +3239,93 @@ export default {
           text: 'Suites et résultats en xlsx (compatibles avec l’outillage de banc d’essai) et un rapport PDF des graphiques.'
         }
       },
+      // GUIDE (David, 2026-10-23) — the operator playbook behind
+      // the "Guide" button. See en.js for the key-shape contract.
+      guide: {
+        open: 'Guide',
+        title: 'Guide du banc d’essai RAGAS',
+        intro:
+          'Comment construire, améliorer et exécuter des suites de bancs d’essai — ce qu’il faut faire, ce qu’il faut éviter et ce à quoi s’attendre à chaque étape. Le panneau d’aide à côté de ce bouton documente les commandes ; le présent guide documente les décisions.',
+        close: 'Fermer',
+        more: 'En savoir plus sur ragas.io',
+        labels: {
+          do: 'À faire',
+          dont: 'À éviter',
+          expect: 'À quoi s’attendre'
+        },
+        chapters: {
+          generate: {
+            title: 'Construire la suite',
+            intro:
+              'Une suite ne vaut que par le corpus dont elle est issue. La génération est un travail du LLM en deux phases, et c’est la moitié la plus coûteuse de tout le flux : d’abord un passage du graphe de connaissances sur le corpus que vous avez sélectionné, puis la synthèse des questions.',
+            d1: 'Publiez avant de générer. La génération lit les concepts du dépôt, et une suite construite sur un dépôt non publié ou encore en cours de drainage mesure un corpus que l’assistant ne peut pas réellement voir.',
+            d2: 'Lisez la note de couverture. Lorsque le corpus dépasse le budget de segments (1,600 segments par défaut), la suite l’indique — « fondé sur 1600 sur 5590 segments ». C’est un banc d’essai valide d’une tranche, jamais du dépôt entier. Augmentez OKF_RAGAS_MAX_CORPUS_CHUNKS si vous avez besoin de la totalité.',
+            d3: 'Dimensionnez la suite selon la question que vous posez. Vingt questions relèvent du test de fumée, cent questions d’une comparaison. Le coût croît à peu près linéairement sur les deux branches — génération et notation — et c’est la branche de notation qui domine.',
+            d4: 'Mélangez volontairement la répartition des sauts. Une question single-hop prouve la récupération ; une question multi-hop (spécifique) prouve que le reranker combine les preuves ; une question multi-hop (abstrait) prouve que le modèle raisonne au-delà du texte littéral. Une suite 100 % single-hop ne pourra jamais révéler une défaillance de composition.',
+            x1: 'Ne générez pas sur un dépôt en cours de drainage. Les concepts encore indexés sont invisibles à la récupération : la suite est donc écrite sur un corpus qui différera de celui que vous noterez ensuite.',
+            x2: 'Ne lisez pas les premières minutes de la barre de progression comme un blocage. La phase de construction du graphe de connaissances peut rester longtemps sans lot terminé ; l’horloge écoulée et le compteur d’appels au modèle sont les seuls signaux fiables.',
+            x3: 'Ne prenez pas une suite courte pour une bonne génération. Les modèles limités par quota perdent des questions, et le panneau indique combien ont été perdues. Vérifiez ce nombre avant de faire confiance à la suite.',
+            expect:
+              'Prévoyez environ un appel au modèle par segment du corpus pour la phase du graphe, plus quelques appels par question. Sur un corpus de 1,075 segments, cette seule phase a déjà duré plus de deux heures. La génération continue en arrière-plan — vous pouvez fermer le Lab et y revenir.'
+          },
+          curate: {
+            title: 'Améliorer la suite',
+            intro:
+              'Une suite générée n’est qu’un premier jet. Les deux moitiés de chaque entrée — la question et la réponse attendue — ont été écrites par une machine, et la mesure ne peut pas être plus fiable qu’elles.',
+            d1: 'Sondez avant de conserver la question. Le bouton ▶ soumet la question au corpus réel et indique s’il est possible d’y répondre. Une question qui ne renvoie rien porte sur un contenu que vous n’avez pas.',
+            d2: 'Basculez plutôt que ne supprimez les questions hors sujet. Les lignes hors périmètre sont conservées pour contraste et exclues de la notation. Les supprimer fait perdre le fait qu’elles ont existé.',
+            d3: 'Corrigez la réponse attendue, pas la question, lorsque c’est la référence qui est fausse. Les métriques faithfulness et answer relevancy se mesurent par rapport à la référence : une référence qu’aucun modèle ne pourrait produire pénalise une réponse correcte.',
+            d4: 'Ajoutez vos propres questions difficiles. Le générateur écrit des questions auxquelles le corpus répond littéralement. Les défaillances qui méritent d’être trouvées sont celles qu’un curateur écrit d’après son expérience — la formulation ambiguë, les deux documents qui se contredisent, le fait énoncé une fois et jamais repris.',
+            x1: 'Ne réécrivez pas une question pour qu’elle corresponde à ce que le système répond aujourd’hui. Cela transforme le banc d’essai en test de non-régression du score actuel et masque précisément le défaut que vous cherchiez.',
+            x2: 'Ne passez pas à une question par concept sans les sonder. La génération lit un budget de segments, pas la structure de vos documents : une question peut donc reposer sur un passage qui n’a jamais fait partie du corpus.',
+            x3: 'Ne faites pas la curation en fonction d’un score. Faites la curation avant d’exécuter ; modifier la suite après avoir vu un résultat déplace les règles et invalide la comparaison.',
+            expect:
+              'Quarante bonnes questions valent mieux que cent questions mêlées. La couverture de l’ensemble des concepts compte davantage que le nombre brut — une suite qui laisse de côté la moitié de vos concepts signalera volontiers une moyenne élevée pour la moitié qu’elle couvre.'
+          },
+          run: {
+            title: 'Exécuter le banc d’essai',
+            intro:
+              'Une exécution comporte trois phases — récupération, réponse et évaluation — rapportées séparément pour que vous sachiez toujours laquelle vous attendez. Seule la troisième coûte des appels au modèle juge, et c’est là que le temps se passe.',
+            d1: 'Lancez d’abord les quatre métriques par défaut. Les métriques faithfulness, context precision, context recall et answer relevancy forment le socle comparable. Le catalogue étendu multiplie le coût, pas l’information, tant que vous ne savez pas déjà où se situe la défaillance.',
+            d2: 'Surveillez le compteur d’appels, pas seulement la barre. La phase d’évaluation avance ligne par ligne et, sur un point de terminaison de modèle chargé, une exécution est suffisamment souvent limitée par quota pour que les reprises dominent le temps écoulé. Un compteur figé tandis que l’horloge avance signale des reprises, pas un blocage.',
+            d3: 'Annulez plutôt que n’abandonnez. « Annuler l’exécution » s’arrête proprement et enregistre ce qui a été fait ; fermer l’onglet du navigateur, non — l’exécution continue et vous perdez sa vue en direct.',
+            d4: 'Limitez-vous à une seule exécution par dépôt à la fois. Les exécutions partagent le point de terminaison du modèle ; deux exécutions simultanées se partagent le débit, les deux ralentissent, et aucune n’explique pourquoi.',
+            x1: 'Ne comparez pas une exécution à quatre métriques à une exécution à dix métriques. Le catalogue étendu multiplie le temps écoulé par environ quatre, et les moyennes ne forment pas une série homogène.',
+            x2: 'Ne relancez pas une exécution pour remplacer un chiffre qui ne vous plaît pas. Une ré-exécution avec un autre modèle juge, un autre top-N de récupération ou une suite modifiée est une nouvelle mesure — enregistrez-la comme telle.',
+            x3: 'Ne lancez pas une exécution pendant qu’une ingestion est en cours de drainage. Au milieu du drainage, une partie du corpus manque à la récupération, et le score baisse pour une raison qui n’a rien à voir avec vos modifications.',
+            expect:
+              'Quatre métriques coûtent environ sept appels au juge par question — 7,1 mesurés sur une exécution de cent questions. Cela fait environ une heure et demie par cent questions sur un point de terminaison limité par quota, et davantage quand le modèle est plus chargé. Considérez cela comme un plancher, pas comme une promesse : l’horloge et le compteur d’appels de l’exécution elle-même font foi.'
+          },
+          models: {
+            title: 'Les modèles, et à quoi s’attendre',
+            intro:
+              'Trois modèles différents participent à l’exercice et ils ne sont pas interchangeables : le modèle qui répond, le modèle qui juge et le modèle qui produit les embeddings. Ils font varier le score pour des raisons entièrement différentes.',
+            d1: 'Le modèle de réponse est celui qui est mis à l’épreuve. La récupération et la réponse sont rejouées dans le serveur OKF avec les mêmes collections et le même reranker que ceux utilisés par l’assistant : changer ce modèle change donc la réponse, pas le protocole de test.',
+            d2: 'Le juge doit être puissant et stable. Il note par rapport aux références : un juge faible dégrade toutes les métriques d’un coup, et l’exécution paraît pourtant complète. Les réponses du juge sont mises en cache par identité de juge — changer de juge ou de modèle invalide ce cache et chaque ligne est notée à nouveau.',
+            d3: 'Le modèle d’embedding fait partie de la mesure de la récupération. Changez-le et les scores de context precision et de context recall bougent, tandis que le score de faithfulness reste généralement stable. Cette asymétrie est un indice sur l’endroit où le changement a porté, pas du bruit.',
+            d4: 'Consignez le modèle avec l’exécution. Chaque exécution enregistre quelle configuration et quel modèle ont produit les réponses et les scores ; deux exécutions ne sont comparables que si ces éléments coïncident.',
+            x1: 'N’attribuez un changement de score à une cause que si un seul élément a bougé. Une exécution avec un nouveau modèle de réponse, un nouveau juge et un nouveau modèle d’embedding mesure les trois à la fois et ne permet pas de les séparer.',
+            x2: 'Ne lisez pas un score de faithfulness élevé comme un bon résultat en soi. Un score élevé de faithfulness avec un context recall faible signifie que la réponse est fondée sur ce qui a été récupéré — et que ce qui a été récupéré est insuffisant.',
+            x3: 'Ne traitez pas un modèle de raisonnement comme gratuit. Il consomme des centaines de jetons avant d’écrire le moindre mot ; lorsque le budget de réponse est inférieur à cela, chaque réponse est tronquée, jetée et rappelée, et l’exécution paie discrètement deux fois pour chaque question.',
+            expect:
+              'Attendez-vous à un ralentissement de l’exécution et à un déplacement du score chaque fois que vous changez de modèle. Ni un sens ni l’autre ne constitue un verdict sur le modèle : le juge, les réglages de récupération et la suite déterminent ensemble quelle part de ce mouvement est réelle.'
+          },
+          read: {
+            title: 'Lire les résultats',
+            intro:
+              'Chaque métrique RAGAS mesure quelque chose de différent, et l’une d’elles fonctionne à l’inverse. Lisez chaque chiffre pour ce qu’il mesure réellement avant d’agir en fonction de lui.',
+            d1: 'Lisez d’abord le bandeau d’exécution non valide. Une exécution dont les réponses ont échoué, ou dont le juge n’a mesuré qu’une partie de la suite, n’est pas une mesure — les moyennes affichées en dessous ne couvrent que les lignes notées.',
+            d2: 'Vérifiez le sens de chaque métrique. La plupart sont d’autant plus meilleures qu’elles sont élevées. La métrique noise sensitivity fait exception : plus bas est meilleur, si bien qu’une exécution qui y obtient un mauvais score échoue dans le bon sens.',
+            d3: 'Lisez les lignes en échec, pas seulement la moyenne. Une question défectueuse sur quarante déplace la moyenne davantage que le changement que vous cherchiez à mesurer.',
+            d4: 'Utilisez « Expliquer les échecs » avant de modifier quoi que ce soit. L’attribue chaque ligne en échec à la récupération, à la réponse ou à la référence elle-même, et ses suggestions sont prudentes — il propose, vous décidez.',
+            x1: 'Ne comparez pas des moyennes issues d’ensembles de métriques différents, de juges différents ou d’une suite modifiée. Aucune de ces comparaisons n’est la même mesure, et l’écart que vous observez ne traduit pas un changement de qualité.',
+            x2: 'N’ajustez pas la récupération sur la base d’un seul chiffre. La précision et le rappel s’opposent ; un changement qui fait monter l’un fait généralement baisser l’autre, et c’est cet arbitrage qui est le plus instructif.',
+            x3: 'Ne confondez pas un score nul avec un score faible. Une reprise épuisée produit un score nul qui est exclu de la moyenne : pas de score signifie pas de mesure — relancez la ligne plutôt que de supposer le pire.',
+            expect:
+              'Un chiffre de banc d’essai est une comparaison entre des exécutions d’une même suite, pas une note attribuée à l’assistant. Exportez le xlsx lorsque vous devez conserver les preuves : la courbe de tendance du panneau ne contient que les exécutions enregistrées sur ce dépôt.'
+          }
+        }
+      },
       current: 'en cours',
       generate: {
         title: 'Générer une suite de bancs d’essai',

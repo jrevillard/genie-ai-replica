@@ -3218,6 +3218,93 @@ export default {
           text: 'Suite dan hasil sebagai xlsx (kompatibel dengan perangkat tolok ukur) serta laporan PDF dari grafiknya.'
         }
       },
+      // GUIDE (David, 2026-10-23) — the operator playbook behind
+      // the "Guide" button. See en.js for the key-shape contract.
+      guide: {
+        open: 'Panduan',
+        title: 'Panduan tolok ukur RAGAS',
+        intro:
+          'Cara membangun, mengurasi, dan menjalankan suite tolok ukur — apa yang harus dilakukan, apa yang harus dihindari, dan apa yang dapat diharapkan pada setiap langkah. Panel Bantuan di samping tombol ini mendokumentasikan kontrolnya; panduan ini mendokumentasikan keputusannya.',
+        close: 'Tutup',
+        more: 'Baca selengkapnya di ragas.io',
+        labels: {
+          do: 'Lakukan ini',
+          dont: 'Jangan',
+          expect: 'Yang perlu diharapkan'
+        },
+        chapters: {
+          generate: {
+            title: 'Bangun suite-nya',
+            intro:
+              'Mutu sebuah suite tidak mungkin melampaui mutu korpus tempat ia dibuat. Pembuatan suite adalah pekerjaan LLM dalam dua tahap, dan itulah separuh termahal dari seluruh alur kerja: pertama satu lintasan graf pengetahuan atas korpus yang Anda pilih, lalu sintesis pertanyaan.',
+            d1: 'Terbitkan lebih dulu sebelum membuat. Pembuatan suite membaca konsep dari repositori, dan suite yang dibangun di atas repositori yang belum diterbitkan atau yang pengindeksannya belum selesai hanya mengukur korpus yang sebenarnya tidak dilihat oleh asisten.',
+            d2: 'Baca catatan cakupan. Ketika korpus lebih besar daripada anggaran potongan (1,600 potongan secara default), suite itu menyatakannya sendiri — "didasarkan pada 1600 dari 5590 potongan". Itu tetap tolok ukur yang sah untuk sebuah irisan, tidak pernah untuk keseluruhan repositori. Naikkan OKF_RAGAS_MAX_CORPUS_CHUNKS bila Anda membutuhkan semuanya.',
+            d3: 'Sesuaikan ukuran suite dengan pertanyaan yang sedang Anda ajukan. Dua puluh pertanyaan adalah uji asap, seratus pertanyaan adalah perbandingan. Biaya tumbuh kurang lebih linier pada kedua tahap, dan tahap penilaian justru yang mendominasi.',
+            d4: 'Campur sebaran hop dengan sengaja. Single-hop membuktikan pengambilan; multi-hop (spesifik) membuktikan reranker mampu menggabungkan bukti; multi-hop (abstrak) membuktikan model menalar melampaui teks literalnya. Suite yang 100% single-hop tidak akan pernah menampilkan kegagalan komposisi.',
+            x1: 'Jangan membuat suite dari repositori yang sedang diindeks. Konsep yang masih diindeks tidak terlihat oleh pengambilan, sehingga suite ditulis terhadap korpus yang akan berbeda dari korpus yang nanti Anda nilai.',
+            x2: 'Jangan menganggap beberapa menit pertama pada bilah kemajuan sebagai kemacetan. Tahap graf pengetahuan bisa berhenti lama tanpa satu pun batch selesai; jam waktu berjalan dan penghitung panggilan model adalah sinyal yang jujur.',
+            x3: 'Jangan membaca suite yang pendek sebagai tanda pembuatan yang baik. Model yang membatasi laju kehilangan pertanyaan, dan panel melaporkan berapa yang hilang. Periksa jumlah yang hilang sebelum Anda percaya suite itu.',
+            expect:
+              'Perkirakan sekitar satu panggilan model per potongan korpus untuk tahap graf, ditambah beberapa panggilan lagi per pertanyaan. Pada korpus 1,075 potongan, tahap itu saja pernah berjalan lebih dari dua jam. Pembuatan berlanjut di latar belakang — Anda bisa menutup Lab dan kembali lagi.'
+          },
+          curate: {
+            title: 'Tingkatkan suite-nya',
+            intro:
+              'Suite yang dihasilkan hanyalah draf pertama. Kedua bagian dari setiap entri — pertanyaannya dan jawaban yang diharapkan — ditulis oleh mesin, dan kelayakan pengukurannya tidak lebih baik daripada keduanya.',
+            d1: 'Uji dulu sebelum disimpan. Tombol ▶ menjalankan sebuah pertanyaan terhadap korpus langsung dan melaporkan apakah pertanyaan itu sama sekali dapat dijawab. Pertanyaan yang tidak mengembalikan apa pun adalah pertanyaan tentang konten yang memang tidak Anda miliki.',
+            d2: 'Kembalikan ke luar cakupan, jangan hapus, entri yang tidak relevan. Baris di luar cakupan disimpan sebagai pembanding dan dikecualikan dari penilaian. Menghapusnya menghilangkan fakta bahwa pertanyaan itu pernah ada.',
+            d3: 'Perbaiki jawaban yang diharapkan, bukan pertanyaannya, ketika referensinya keliru. Faithfulness dan answer relevancy diukur terhadap referensi, sehingga referensi yang mustahil dihasilkan model mana pun akan menghukum jawaban yang sebenarnya benar.',
+            d4: 'Tambahkan pertanyaan sulit milik Anda sendiri. Generator menulis pertanyaan yang dapat dijawab korpus secara harfiah. Kegagalan yang layak ditemukan adalah yang ditulis kurator berdasarkan pengalaman — kalimat yang ambigu, dua dokumen yang saling bertentangan, fakta yang disebut sekali dan tidak pernah diulang.',
+            x1: 'Jangan menulis ulang pertanyaan agar cocok dengan jawaban sistem saat ini. Itu menjadikan tolok ukur sebagai uji regresi untuk skor saat ini dan justru menyembunyikan cacat yang sedang Anda cari.',
+            x2: 'Jangan menaikkan skala menjadi satu pertanyaan per konsep tanpa mengujinya lebih dahulu. Pembuatan suite membaca anggaran potongan, bukan struktur dokumen Anda, sehingga sebuah pertanyaan bisa bertumpu pada pasase yang memang tidak pernah ada di korpus.',
+            x3: 'Jangan melakukan kurasi berdasarkan skor. Kurasi sebelum eksekusi; mengedit suite setelah melihat hasil memindahkan tiang gol dan membatalkan perbandingannya.',
+            expect:
+              'Empat puluh pertanyaan yang baik lebih unggul daripada seratus pertanyaan campuran. Cakupan terhadap himpunan konsep lebih penting daripada jumlah mentah — suite yang melewatkan separuh konsep Anda tetap dengan senang hati melaporkan rata-rata tinggi untuk separuh yang dicakupnya.'
+          },
+          run: {
+            title: 'Jalankan tolok ukur',
+            intro:
+              'Satu eksekusi terdiri atas tiga tahap — pengambilan, pemberian jawaban, dan penilaian — yang dilaporkan terpisah agar Anda selalu tahu sedang menunggu tahap mana. Hanya tahap ketiga yang memakai panggilan model juri, dan di situlah waktunya habis.',
+            d1: 'Jalankan dulu empat metrik default. Faithfulness, context precision, context recall, dan answer relevancy adalah inti yang sebanding. Katalog yang diperluas melipatgandakan biaya, bukan informasi, sampai Anda memang sudah tahu di mana kegagalannya.',
+            d2: 'Pantau penghitung panggilan, bukan sekadar bilah kemajuan. Tahap penilaian maju satu baris pada satu waktu, dan pada endpoint model yang sibuk, eksekusi cukup sering dibatasi laju sehingga percobaan ulang mendominasi waktu tempuh. Penghitung yang membeku sementara jam terus berjalan berarti percobaan ulang, bukan kemacetan.',
+            d3: 'Batalkan, jangan ditinggalkan. Membatalkan eksekusi menghentikannya dengan rapi dan mencatat apa yang sudah selesai; menutup tab peramban tidak demikian — eksekusi terus berjalan dan Anda kehilangan pandangan langsung atasnya.',
+            d4: 'Jalankan hanya satu eksekusi per repositori pada satu waktu. Eksekusi berbagi endpoint model yang sama; dua eksekusi yang berjalan bersamaan membagi throughput sehingga keduanya melambat, dan tidak satu pun melaporkan penyebabnya.',
+            x1: 'Jangan membandingkan eksekusi empat metrik dengan eksekusi sepuluh metrik. Katalog yang diperluas mengubah waktu tempuh sekitar empat kali lipat, dan rata-ratanya bukan rangkaian yang sebanding.',
+            x2: 'Jangan menjalankan ulang hanya untuk mengganti angka yang tidak Anda sukai. Eksekusi ulang dengan model juri berbeda, top-N pengambilan berbeda, atau suite yang telah diedit adalah pengukuran baru — catatlah sebagai pengukuran baru.',
+            x3: 'Jangan memulai eksekusi selagi sebuah proses ingest masih dikuras. Sebagian korpus yang belum selesai diindeks hilang dari pengambilan, dan skornya turun karena alasan yang sama sekali tidak ada hubungannya dengan perubahan Anda.',
+            expect:
+              'Empat metrik membutuhkan sekitar tujuh panggilan juri per pertanyaan — 7,1 terukur pada eksekusi seratus pertanyaan. Itu kira-kira satu jam setengah per seratus pertanyaan pada endpoint yang membatasi laju, dan lebih lama ketika modelnya lebih sibuk. Perlakukan itu sebagai batas bawah, bukan janji: jam eksekusi dan penghitung panggilan eksekusi itu sendiri yang berwenang.'
+          },
+          models: {
+            title: 'Model, dan apa yang diharapkan',
+            intro:
+              'Tiga model berbeda berperan dan tidak dapat saling menggantikan: model yang menjawab, model yang menilai, dan model yang menghasilkan embedding. Ketiganya menggerakkan skor dengan alasan yang sama sekali berbeda.',
+            d1: 'Model jawaban adalah model yang sedang diuji. Pengambilan dan pemberian jawaban diputar ulang di server OKF terhadap koleksi dan reranker yang sama dengan yang dipakai asisten, sehingga mengubah model ini mengubah jawabannya — bukan alat ujinya.',
+            d2: 'Model juri harus kuat dan stabil. Ia menilai terhadap referensi, sehingga juri yang lemah menekan semua metrik sekaligus dan eksekusi tetap terlihat lengkap. Jawaban juri di-cache per identitas juri — mengganti juri atau modelnya membatalkan cache tersebut dan setiap baris dinilai ulang.',
+            d3: 'Model embedding adalah bagian dari pengukuran pengambilan. Ganti model itu dan context precision serta context recall bergerak, sedangkan faithfulness biasanya tidak. Ketimpangan itu adalah sinyal tentang di mana perubahan mendarat, bukan derau.',
+            d4: 'Catat modelnya bersama eksekusi. Setiap eksekusi menyimpan konfigurasi dan model mana yang menghasilkan jawaban serta skornya; dua eksekusi hanya sebanding bila semuanya cocok.',
+            x1: 'Jangan berharap perubahan skor dapat diatribusikan kecuali tepat satu hal yang bergerak. Eksekusi dengan model jawaban baru, juri baru, dan model embedding baru mengukur ketiganya sekaligus dan tidak dapat memisahkannya.',
+            x2: 'Jangan membaca skor faithfulness yang tinggi sebagai hasil bagus semata. Faithfulness tinggi dengan context recall rendah berarti jawabannya berpijak pada apa pun yang berhasil diambil — dan yang berhasil diambil terlalu sedikit.',
+            x3: 'Jangan menganggap model penalaran itu gratis. Ia menghabiskan ratusan token sebelum menulis satu kata pun; ketika anggaran jawaban lebih kecil daripada itu, setiap jawaban terpotong, dibuang, lalu dipanggil ulang, sehingga eksekusi diam-diam membayar dua kali untuk setiap pertanyaan.',
+            expect:
+              'Begitu Anda mengganti model, wajar jika eksekusi melambat dan skornya bergerak. Arah perubahan itu sendiri bukan vonis atas model tersebut: juri, setelan pengambilan, dan suite-nya bersama-sama menentukan seberapa besar bagian dari perubahan itu yang benar-benar nyata.'
+          },
+          read: {
+            title: 'Baca hasilnya',
+            intro:
+              'Setiap metrik RAGAS mengukur hal yang berbeda, dan salah satunya berjalan terbalik. Bacalah setiap angka menurut apa yang sebenarnya diukurnya, baru bertindak.',
+            d1: 'Bacalah dulu spanduk peringatan eksekusi tidak valid. Eksekusi yang jawabannya error, atau yang hanya diukur juri pada sebagian suite, bukanlah sebuah pengukuran — rata-rata di bawahnya hanya mencakup baris yang benar-benar dinilai.',
+            d2: 'Periksa arah setiap metrik. Sebagian besar makin tinggi makin baik. Noise sensitivity adalah pengecualian: makin rendah makin baik, sehingga eksekusi yang skornya buruk pada metrik ini justru gagal pada arah yang benar.',
+            d3: 'Bacalah baris yang gagal, bukan hanya rata-ratanya. Satu pertanyaan rusak di antara empat puluh menggerakkan rata-rata lebih jauh daripada perubahan yang sedang Anda ukur.',
+            d4: 'Gunakan Jelaskan kegagalan sebelum mengubah apa pun. Fitur ini mengatribusikan setiap baris gagal ke pengambilan, ke pemberian jawaban, atau ke referensi itu sendiri, dan sarannya terjaga — ia mengusulkan, Anda yang memutuskan.',
+            x1: 'Jangan membandingkan rata-rata dari himpunan metrik berbeda, juri berbeda, atau suite yang telah diedit. Tidak satu pun merupakan pengukuran yang sama, dan selisih yang Anda lihat bukan perubahan kualitas.',
+            x2: 'Jangan menyetel pengambilan berdasarkan satu angka saja. Presisi dan recall saling mengorbankan satu sama lain; perubahan yang menaikkan satu biasanya mengorbankan yang lain, dan tukar-menukar itulah bagian yang biasanya paling menarik.',
+            x3: 'Jangan menganggap skor kosong sebagai skor rendah. Percobaan ulang yang habis menghasilkan nilai kosong yang dikecualikan dari rata-rata, jadi tanpa skor berarti tanpa pengukuran — jalankan ulang baris itu, bukan dengan mengasumsikan hal terburuk.',
+            expect:
+              'Angka tolok ukur adalah perbandingan antar eksekusi dari suite yang sama, bukan nilai rapor untuk asisten. Ekspor xlsx bila Anda perlu menyimpan buktinya: garis tren pada panel hanya memuat eksekusi yang tersimpan di repositori ini.'
+          }
+        }
+      },
       current: 'saat ini',
       generate: {
         title: 'Buat suite tolok ukur',

@@ -19,10 +19,18 @@
         href="https://www.ragas.io/"
         :link-label="translate('okf.ragas.aboutLink', 'Read more at ragas.io')"
       />
+      <button type="button" class="okf-ragas__help-toggle" @click="showGuide = true">
+        {{ translate('okf.ragas.guide.open', 'Guide') }}
+      </button>
       <button type="button" class="okf-ragas__help-toggle" @click="showHelp = !showHelp">
         {{ showHelp ? translate('okf.ragas.help.hide', 'Hide help') : translate('okf.ragas.help.show', 'Help') }}
       </button>
     </div>
+    <!-- GUIDE — the operator playbook (generate → curate → run → models →
+         read). Separate from the Help glossary above, which answers "what
+         is this control?"; the guide answers "what should I do with it?".
+         David, 2026-10-23. -->
+    <RagasGuideDialog :visible="showGuide" @close="showGuide = false" />
     <!-- HELP — every field and control on the screen, in one place. -->
     <div v-if="showHelp" class="okf-ragas__section okf-ragas__help">
       <dl class="okf-ragas__help-list">
@@ -630,6 +638,7 @@ import DsPill from '../../ds/Pill.vue';
 import DsSpinner from '../../ds/Spinner.vue';
 import DsProgress from '../../ds/Progress.vue';
 import DsInfoTip from '../../ds/InfoTip.vue';
+import RagasGuideDialog from './RagasGuideDialog.vue';
 import translateMixin from '../../../mixins/translateMixin';
 import { useChartTheme } from '@/composables/useChartTheme';
 
@@ -674,7 +683,7 @@ const METRIC_NOTE_FALLBACKS = {
 
 export default {
   name: 'OkfRagasPanel',
-  components: { DsButton, DsPill, DsSpinner, DsProgress, DsInfoTip },
+  components: { DsButton, DsPill, DsSpinner, DsProgress, DsInfoTip, RagasGuideDialog },
   mixins: [translateMixin],
   props: {
     repo: { type: Object, default: null },
@@ -695,6 +704,7 @@ export default {
   data() {
     return {
       showHelp: false,
+      showGuide: false,
       repoChoices: [],
       selectedRepoIds: [],
       genSize: 20,

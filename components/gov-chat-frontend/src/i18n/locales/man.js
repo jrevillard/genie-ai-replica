@@ -3186,6 +3186,93 @@ export default {
           text: 'Suites and results as xlsx (compatible with the benchmark tooling) and a PDF report of the charts.'
         }
       },
+      // GUIDE (David, 2026-10-23) — the operator playbook behind
+      // the "Guide" button. See en.js for the key-shape contract.
+      guide: {
+        open: 'Guide',
+        title: 'RAGAS benchmark guide',
+        intro:
+          'Na kobaiki, kojepel̦o̦ke ak mara benchmark suite ko — m̦akan na ke, m̦akan na bɔ, ak m̦akan na sa bɛ step kelen. Help panel min bɛ naanin kafuolu la i yele konɔ kafuolu biniyɛ; nii yele decision biniyɛ.',
+        close: 'Close',
+        more: 'A keta kɛlen fɛ ragas.io',
+        labels: {
+          do: 'A ke nii',
+          dont: 'Ban a ke nii',
+          expect: 'M̦akan na bɛ'
+        },
+        chapters: {
+          generate: {
+            title: 'Kobaiki suite',
+            intro:
+              'Suite e tobɔ kɔrɔn corpus min a jɔɔ fɛ ma. Generation e LLM baara e phase juon kɛ ani e bɛ to tobɔ kɔrɔn je baara bɛɛ: nana knowledge-graph pass kɛ corpus min i laban so bɛ, ani yɛlama question synthesis.',
+            d1: 'A mara sundi a generate. Generation bɛ keta kōm̦m̦an jikin kakwōn la, ani suite min kōnin jikin kakwōn bɛ publish si bē te, sani drain bɛ sen bē, i ye corpus min assistant man bɛ na kijeraa ye.',
+            d2: 'A keta kwal̦o̦k coverage note. Corpus bɛ chunk budget (1,600 chunks by default) bɛ dɔwama, suite ye yɛlen ko — "grounded in 1600 of 5590 chunks". Ni ye valid benchmark e slice kelen la, e ka jikin kakwōn bɛɛ ye m̦okta. I bɛ so kɔbɔ aolep, marala OKF_RAGAS_MAX_CORPUS_CHUNKS.',
+            d3: 'Suite kébala bwee awinen na i nyininyin. Kujon kajjien e smoke test, azuz kajjien e comparison. Tobɔ kɔrɔn bɛ karalo approximately ko bɛ kelen kelen la, ani leg min bɛ score ye tobɔ ye.',
+            d4: 'A kwal̦o̦k single-hop: retrieval ye; multi-hop (specific): reranker ye evidence ko barkatod; multi-hop (abstract): model ye ban jalen Kuma kelen. Suite min 100% single-hop ye, composition failure man bɛ na show.',
+            x1: 'Ban a generate bwee jikin kakwōn min bɛ drain sen. Kōm̦m̦an min bɛ index kɛ sen ko, retrieval man bɛ na kijeraa ye; ani generation bɛ yele suite bwee corpus min bɛ sɔnɔ na yɛlama score kerɛ la bɛ different.',
+            x2: 'Ban a keta progress bar min bipawoo bɛ minute munkoo ke stall. Knowledge-graph phase bɛ se ka temo bɛ batch kelen kelen te — elapsed clock ani model-call counter ko ye signal munkoo ye la.',
+            x3: 'Ban a keta suite kujon ko generation munkoo. Model min rate limiteda ye, ferege dii dii ye no fandegew, ani panel ye yelen basɛo. A yelema dropped count kisa i song suite la.',
+            expect:
+              'Graph phase la, marala model call juon corpus chunk kelen kɛ, ani kujon kelen kelen kɛ la basɛ. Corpus 1,075-chunk la, phase kelen kelen ye mooo kɔrɔn juon hours bɛ kɔbɔ. Generation bɛ nyɛ̃ fɔ a telat — i bɛ na datugu Lab bɛ na seginna.'
+          },
+          curate: {
+            title: 'Kojepel̦o̦k suite',
+            intro:
+              'Suite min generation jɔɔ ye e first draft ye. Ferege kelen kelen la ban kelen ni — kajjien ani jipañ naasu — bɛ machine yele, ani measurement siriku ye bɛ nyini ko nyakwan ye.',
+            d1: 'A kwal̦o̦k ▶ kafu kisa i song. Kafu ▶ ye kajjien kelen mara corpus sundi ye yele, ani i yelen i bɛ na jipa sɔnɔ jigi. Kajjien min bɛ laban dii dii ye, e kajjien ye ko Kuma min i man kɛn ye.',
+            d2: "A bara ferege min aa nyini ye mung — ban kuntu. Ferege scope baha ye bɛ mara kontrasti n'i, ani bɛ kuntu na score. I bɔdi ke, i em̦ōj ye bɔ.",
+            d3: "Reference bɛ dɔgɛ n'i, i mara jipañ naaset — ban mara kajjien. faithfulness ani relevancy bɛ meso reference n'i la, ani reference min model kɛnata mana ye, i bɛ jipañ munkoo ye mung.",
+            d4: 'Kafu kajjien mung dɔgɛ di yele i la. Generator bɛ kajjien yele corpus ye direct jipa. Failure min kɔnata naata na bɛ nɔta, e wɛn Juubelaa bɛ yele experience ye — kajjien munkoo aa kwal̦o̦k ye, wal̦o̦k juon kelen ye bɛ disagreement, ani kuma kelen bɛ yele juon kɛ te kisa.',
+            x1: 'Ban a yele kajjien seginna sa i ye system jipañ sundi ye men. Ni bɛ benchmark bɛna regression test kɛ current score ye, ani e hide defect munkoo min i nyininyin bɔ la.',
+            x2: 'Ban a karalo bwee kajjien juon kōm̦m̦an kelen la, i nyininyin kisa. Generation bɛ keta chunk budget, e ka keta document structure i la, ani kajjien bɛ se bɛna passage min corpus taara mana te.',
+            x3: 'Ban a kojepel̦o̦k bwee score. A kojepel̦o̦k kisa i mara sundi i run; suite yele baye laban na i kɛn ye la, ani goalposts ye inen, ani comparison bɛ sɔrɔ Ejjan̄in wōr.',
+            expect:
+              'Kujon kajjien munkoo ye kaɲi azuz kajjien mixed. Coverage min kōm̦m̦an sɛbɛn ye ka yele bwee count daga — suite min i joona kōm̦m̦an i soro fɛlɛ, i bɛ na yele mean munkoo mɔɔ fɛ ferege min i jepilen ko.'
+          },
+          run: {
+            title: 'Mara benchmark',
+            intro:
+              "Run e phase tɔɔ ye — retrieval, answering, ani judging — bɛ yele kelenkita, ani i na ko n'i ye bɛ sɔrɔ bana i nyininyin ben. Phase yelema kelen kɛ tan ye judge-model call bo, ani temo bɛ minen yen.",
+            d1: 'Run default kɛlen kan yelema nana. faithfulness, context precision, context recall ani answer relevancy ye comparable core. Extended catalog bɛ tobɔ kɔrɔn fo, e ka information fo, sundi i na ko failure kɛn yen mo.',
+            d2: 'A kijeraa call counter, e ka a kijeraa bar kɛlen kelen. Judge phase bɛ yele ferege juon kɛ juon, ani model endpoint min bɛ busy ye, run bɛ rate-limited ye nana wall-clock retries ye kan bɛ dominat. Counter min em̦ōj sen, clock min bɛ yele ye — ni bɛ retries, e ka hang.',
+            d3: "A bula, e ka a bō. 'Cancel run' bɛ datugu clean, ani i yele munkoo min benta; browser tab datuge kisa bɛ juru — run bɛ nyɛ̃ fɔ, ani live view min i la i bɔ.",
+            d4: "A kafu run juon jikin kakwōn kelen kelen la. Run ko bɛ model endpoint kelen bɛ share; run juon kelen bɛ throughput divide, ani kelen kelen bɛ yɔrɔ ma, ani n'i kelen ye yelen munun na.",
+            x1: 'Ban a bēta run min metric kɛlen ye, run min metric juon ye. Extended catalog bɛ wall-clock yelema kɔbɔ approximately bēn kɛlen ye kisa, ani averages ko like-for-like kɛlen ye mana.',
+            x2: 'Ban a run seginna na i bɛ na sula number mung. Run seginna min bɛ judge model kelen ye, retrieval top-N kelen ye, sani suite yelema, e ye measurement nyini ye — a yele i la munkoo.',
+            x3: 'Ban a mara run sa ingestion kelen bɛ drain sen. Corpus min bɛ drain la sen, so bɛ te la; retrieval bɛ i ye bɔ, ani score bɛ boŋo bwee munun min i bede ye.',
+            expect:
+              'Metric kɛlen bɛ judge call wopen e kajjien kelen kɛ — azuz-kajjien run la 7.1 measured. Ni ye approximatively hour juon ani bala kelen azuz kajjien la endpoint min rate-limited ye, ani mo kisa a model bɛ busy kafo. A sɔng ni ko floor, e ka promise: run i la clock ani call counter ko ye authority ye.'
+          },
+          models: {
+            title: 'Modelu, ani m̦akan na bɛ',
+            intro:
+              "Model tɔɔ ye bɛ kɛta, ani n'i ko bɛ interchangeable kɛnata: model min bɛ jipa, model min bɛ judge, ani model min bɛ embed. N'i ko bɛ score yele bwee munun tɔɔ ye wulilen.",
+            d1: 'Answer model ye model min bɛ test la ye. Retrieval ani answering bɛ jerbal kɛ OKF server ilo, collection kelenkita ani reranker kelen ye assistant bɛ jerbal ye ko, ani i yele ni ye jipañ yelema — e ka harness ye.',
+            d2: 'Judge ko rej strong ani stable. I bɛ score yele references la, ani judge weak ye bɛ metric kelen kelen la bɛ boŋo, ani run bɛ bankun bɛna benta. Judge jipañu bɛ cached judge identity kelen kɛ — judge yelema, model yelema, cache min bɛ sɔrɔ Ejjan̄in wōr, ani ferege kelen kelen bɛ kɔbɔ yele seginna.',
+            d3: 'Embedding model ye retrieval measurement la kelen ye. I yele, context precision ani context recall bɛ yele, ani faithfulness ye usual ye bɛ yelen mɔnɲin. Ni asymmetry ye signal ye ko munun min i bede, e ka noise.',
+            d4: "A yele model bwee run la. Run kelen kelen bɛ yele configuration munkoo ani model munkoo min jipa ani score wele. Run juon kelen bɛ comparable m̦okta n'i ye kelen ye sundi ye match ye.",
+            x1: 'Ban a nyininyin score yelema bɛ attributable kɛta, i ye m̦okta munun juon kelen bē yele. Run min bɛ answer model nyini ye, judge nyini ye, ani embedding model nyini ye, i bɛ tɔɔ ye kelen kelen mesen, ani bɛ se kila ye.',
+            x2: 'Ban a keta score faithfulness high ye result munkoo ye kelen ye. faithfulness high ani context recall low ye, ni ye kɛla kɛlan ye: jipañ min bɛ grounded jōg min retrieval wele, ani retrieval min wele ye small.',
+            x3: 'Ban a sɔng model munkoo bɛ reason la ko free ye. I bɛ tokens azuz dɔgɛ kɔbɔ kisa a word kelen yele kisa; answer budget bɛ i small ye, ni kelen ye, jipañ kelen kelen bɛ truncate, bɛ bɔ, ani bɛ kɔbɔ yele seginna, ani run bɛ quiet jipa kajjien kelen kɛ to bɔ ye.',
+            expect:
+              "Nyini i yele model kelen, nyini i kɔnisa run bɛ yɔrɔ ma ani score bɛ yele. Direction kelen ye man bɛ model ye verdict kɛta: judge, retrieval knobs ani suite, n'i tɔɔ ye kelenkita ye bɛ decision ye ni yelema min ye latal ye."
+          },
+          read: {
+            title: 'A keta labang',
+            intro:
+              'RAGAS metric kelen kelen ye measures munun kelen ye, ani kelen ye bɛ run kɛ tupu. A keta number kelen kelen ko munun min i ye measura la, kisa i mara a ye.',
+            d1: 'A keta invalid-run banner yelema nana. Run min jipañu bɛ Filiyata ye, sani judge min tuura ko suite tan kelen la te, e ye measurement ye mana — average min i ye kɛlen ye, ferege min score ye ko kɛlen ko.',
+            d2: 'A kwal̦o̦k direction min metric kelen kelen ye. Most ko high-is-better ye. noise sensitivity ye exception ye: low ye better ye, ani run min scores ba ko ye, i bɛ failing direction munkoo ye.',
+            d3: 'A keta ferege min failing ye la, e ka mean kɛlen kelen. Kajjien juon broken kelen kɔbɔ kujon na among ko, i ye mean yele mɔɔ bwee change min i nyininyin bɔ la ye.',
+            d4: "A jerbal 'Explain failures' kisa i yele dii mana. I bɛ ferege failing kelen kelen bɛ kila retrieval la, answering la, sani reference i ye. Suggestion min i la ye guarded ye — i bɛ propose, i di ye decision.",
+            x1: "Ban a bēta mean sugu metric set kelen ye ye, judge kelen ye ye, sani suite yelema ye — measurement kelen ye ko mana. N'i kelen ye kɛlen ye mana, ani difference min i kɛn ye e quality change ye mana.",
+            x2: 'Ban a yele retrieval tune na number juon ye. Precision ani recall bɛ bɔdi kɛ kɔnata; change min juon ye yelema ye, bar ye bɛ to bɔ ye, ani trade min ye e na bonya na kɔnata.',
+            x3: 'Ban a sɔng score null ko score low ye. Retry min bɛ tasalan ko null bɛ kɔbɔ min bɛ kuntu na mean, ani score te ye kɛlan measurement te ye — A run ferege seginna, ban a sula worst.',
+            expect:
+              "Benchmark number ye comparison ye run ko suite kelen ye la, e ka assistant la grade ye mana. Export xlsx a i so kɔbɔ na evidence marala, ani i bɛ keta min i mara: trend line min panel la ye bɛ mara run ko repository n'i ye store ye ko kɛlen ko."
+          }
+        }
+      },
       current: 'current',
       generate: {
         title: 'Generate a benchmark suite',

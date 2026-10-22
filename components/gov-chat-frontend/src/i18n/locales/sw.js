@@ -3213,6 +3213,93 @@ export default {
           text: 'Seti na matokeo kama xlsx (inayolingana na zana za kipimo) na ripoti ya PDF ya chati.'
         }
       },
+      // GUIDE (David, 2026-10-23) — the operator playbook behind
+      // the "Guide" button. See en.js for the key-shape contract.
+      guide: {
+        open: 'Mwongozo',
+        title: 'Mwongozo wa vipimo vya kulinganisha vya RAGAS',
+        intro:
+          'Jinsi ya kujenga, kuratibu na kuendesha seti za vipimo vya kulinganisha — unachopaswa kufanya, unachopaswa kuwa mbali, na unachotarajia katika kila hatua. Mvuko wa Msaada ulio kando ya konopo hii unaeleza vidhibiti; waraka huu unaeleza maamuzi.',
+        close: 'Funga',
+        more: 'Soma zaidi kwenye ragas.io',
+        labels: {
+          do: 'Fanya hii',
+          dont: 'Usifanye',
+          expect: 'Unachotarajia'
+        },
+        chapters: {
+          generate: {
+            title: 'Jenga seti',
+            intro:
+              'Seti ni nzuri kiasi cha korpusi iliyotengenezwa. Utengenezaji ni kazi ya LLM katika awamu mbili na ndiyo sehemu ya gharama kubwa za mtiririko wote: kwanza pitisho la grafu ya maarifa kwenye korpusi uliyochagua, kisha utunga maswali.',
+            d1: 'Chapisha kabla ya kutengeneza. Utengenezaji husoma dhana kutoka kwenye hazina, na seti iliyojengwa kwenye hazina isiyochapishwa au inayoendelea kuingizwa hupima korpusi ambayo msaidizi hana uwezo wa kuona.',
+            d2: 'Soma dokeo la ufikiaji. Korpusi inapopita bajeti ya vipande (1,600 vipande kwa chaguo-msingi), seti inaeleza hivyo — "imesingwa kwenye 1600 kati ya vipande 5590". Hii ni kipimo halali cha kipande tu, si kamwe cha hazina yote. Ongeza thamani ya OKF_RAGAS_MAX_CORPUS_CHUNKS ikiwa unahitaji yote.',
+            d3: 'Pima ukubwa wa seti kulingana na swali unalouliza. Maswali kumi na mbili ni jaribio la haraka, mia moja ni ulinganisho. Gharama hukua kwa karibu mstari kwenye sehemu zote mbili, na sehemu ya kupima ndiyo inayochagua.',
+            d4: 'Changanya usambamba wa hatua kwa makusudi. single-hop inaonyesha upatikanaji; multi-hop (maalum) inaonyesha kwamba reranker inachanganya ushahidi; multi-hop (dhahania) inaonyesha kwamba modeli inafikiri zaidi ya maandishi ya moja kwa moja. Seti ambayo ni 100% single-hop haiwezi hata kufunua kushindwa katika muundo.',
+            x1: 'Usitengeneze kwenye hazina ambayo iko katika hatua ya kuingizwa. Dhana zinazoendelea kuorodheshwa hazionekani kwenye upatikanaji, kwa hivyo seti inaandikwa kulingana na korpusi ambayo itatofautisha na ile utakayopimwa baadaye.',
+            x2: 'Usisoma dakika za kwanza za upa wa maendeleo kama kusimama. Awamu ya grafu ya maarifa inaweza kubaki bila kundi lililokamilika kwa muda mrefu; saa ya muda iliyopita na hesabu ya miito ya modeli ndiyo viashiria vya ukweli.',
+            x3: 'Usisome seti fupi kama utengenezaji mzuri. Modeli zinazopunguza kizazi kwa kikomo hupoteza maswali, na paneli inaripoti niangapi yaliyopotezwa. Angalia idadi iliyopotezwa kabla ya kumwamini seti.',
+            expect:
+              'Panga takriban miito moja ya modeli kwa kila kipande cha korpusi kwa awamu ya grafu, pamoja na miito michache kwa kila swali. Kwenye korpusi yenye vipande 1,075, awamu hiyo peke yake imeendeshwa kwa zaidi ya saa mbili. Utengenezaji unaendelea katika usuli — unaweza kufunga Lab na kurudi.'
+          },
+          curate: {
+            title: 'Boresha seti',
+            intro:
+              'Seti iliyotengenezwa ni rasimu ya kwanza. Nusu zote mbili za kila ingizo — swali na jibu linalotarajiwa — ziliandikwa na mashine, na kipimo ndicho ni cha kuaminika kiasi cha zile zilizoandikwa.',
+            d1: 'Jaribu kabla ya kuhifadhi. Konopo ya ▶ huendesha swali kwenye korpusi hai na kuripoti kama linaweza kujibiwa hata. Swali linalorudi chochote ni swali kuhusu maudhui ambayo huna.',
+            d2: 'Badilisha, usifute, zile hazihusiani. Mistari nje ya wigo huhifadhiwa kwa kulinganisha na huondolewa kwenye alama. Kufuta kwa hii hukupoteza ukweli kwamba zilikuwa zipo.',
+            d3: 'Sahihisha jibu linalotarajiwa, si swali, pale rejea ni yenye makosa. faithfulness na answer relevancy hupimwa kulingana na rejea, kwa hivyo rejea ambayo hakuna modeli inayoweza kuzalisha inaadhibu jibu sahihi.',
+            d4: 'Ongeza swali zako ngumu. Mzungenezaji huandika maswali ambayo korpusi huujibu kwa maneno hasa. Kushindwa kustahili kugundua ni kule ambacho mratibi anaandika kutoka uzoefu — maneno yaliyotatanisha, waraka wawili wanayotofautiana, ukweli uliotamkoa mara moja na kuwa haujawahi kurudiwa.',
+            x1: 'Usiandike upya swali ili linalane na jibu la mfumo leo. Hilo hubadilisha benchmark kuwa jaribio la regressioni la alama ya sasa na huficha mapungufu hasa uliyokuwa unaitafuta.',
+            x2: 'Usipanue hadi swali moja kwa kila dhana bila kujaribu. Utengenezaji husoma bajeti ya vipande, si muundo wa waraka wako, kwa hivyo swali linaweza kujitegea kwenye kifungu kilichokuwa kamwe kwenye korpusi.',
+            x3: 'Usiratibu kulingana na alama. Rati baada ya kuendesha; kuhariri seti baada ya kuona matokeo hubadilisha malengo na kufutilia uzingiti.',
+            expect:
+              'Maswali kati na mawazo mazuri yanaisha kuliko mia moja yenye mchanganyiko. Kufikia dhana zote kuna zaidi ya umuhimu kuliko idadi tu — seti inayokosa nusu ya dhana zako itaripoti kwa furaha wastani mkuu kwa nusu inayoifikia.'
+          },
+          run: {
+            title: 'Endesha kipimo cha kulinganisha',
+            intro:
+              'Uendeshaji una awamu tatu — upatikanaji, kujibu na uhakiki — zinaporotiwa kando ili ujue kila wakati ni upi unaosubiri. Tatu peke yake ndiyo inayolazimu miito ya modeli mhukumu, ndiyo muda inapokolewa.',
+            d1: 'Endesha manne ya chaguo-msingi kwanza. faithfulness, context precision, context recall na answer relevancy ndiyo msingi unaoweza kulinganisha. Katalogu iliyopanuliwa huzidisha gharama, si taarifa, hadi upate ujue tayari kushindwa kiko wapi.',
+            d2: 'Tazama hesabu ya miito, si upa pekee. Awamu ya uhakiki inasogeza safu moja kwa wakati mmoja, na kwenye kituo cha modeli chenye shughuli nyingi, uendeshaji hupunguzwa kizazi mara zake zaidi, hivyo marudio ndio zinazochagua muda mrefu. Hesabu iliyosimama na saa inayosogeza inamaanisha marudio, si kushindwa.',
+            d3: 'Ghairi badala ya kuiacha. Ghairi uendeshaji husitisha kwa utaratibu na kurekodi kilichokamilika; kufunga kichupo cha kivinjari hakufanyi hivyo — uendeshaji unaendelea na unapoteza mwonekano wake wa moja kwa moja.',
+            d4: 'Weka uendeshaji mmoja kwa kila hazina kwa wakati mmoja. Uendeshaji hushiriki kituo cha modeli; uendeshaji mawili unaoendelea pamoja hugawanya kasi na wote hupungua, na hakuna wao anoyeripoti kwa nini.',
+            x1: 'Usilinganishe uendeshaji wa vipimo vinne na uendeshaji wa vipimo kumi. Katalogu iliyopanuliwa hubadilisha muda kwa takriban mara nne, na wastani hazilinganiwi na mfululizo unaofanana.',
+            x2: 'Usiendeshe tena ili kubadilisha namba usiyopenda. Uendeshaji mpya kwa modeli mhukumu tofauti, top-N ya upatikanaji tofauti au seti iliyohaririwa ni kipimo kipya — andika kama kimoja.',
+            x3: 'Usiendeshe wakati kuna kuingizwa bado kinaendelea. Sehemu ya korpusi inayokuwa katika hatua ya kuingizwa haipo kwenye upatikanaji, na alama hushuka kwa sababu isiyohusiana na mabadiliko yako.',
+            expect:
+              'Vipimo vinne gharama zake ni takriban miito saba ya mhukumu kwa kila swali — 7.1 zilizopimwa kwenye utekelezaji wa maswali mia moja. Hiyo inamaanisha takriban saa moja na nusu kwa kila maswali mia moja kwenye kituo kilichopunguzwa kizazi, na muda mrefu zaidi modeli inapungua zaidi. Fikiri hilo kama kiingilio, si ahadi: saa ya utekelezaji na hesabu ya miito za utekelezaji huo wenyewe ndio mamlaka.'
+          },
+          models: {
+            title: 'Modeli na unachotarajia',
+            intro:
+              'Modeli tatu tofauti hushiriki na hazibadilishani: modeli inayojibu, modeli inayohakiki na modeli inayoweka pachiko. Zinabofisha alama kwa sababu kamili tofauti.',
+            d1: 'Modeli inayojibu ndiyo inayokaguliwa. Upatikanaji na kujibu hukaguliwa upya kwenye seva ya OKF dhidi ya makoleksheni haya na reranker ile ile anayotumia msaidizi, kwa hivyo kubadilisha hii hubadilisha jibu — si mchakato wa ukaguzi.',
+            d2: 'Mhukumu lazima awe na nguvu na thabiti. Hupima kulingana na rejea, kwa hivyo mhukumu dhaifu hushusha kila kipimo kwa wakati mmoja na uendeshaji bado unaonekana umekamilika. Majibu ya mhukumu huhifadhiwa kwa utambulisho wa kila mhukumu — kubadilisha mhukumu au modeli kunafutilia uhifadhi huo na kila safu inapimwa upya.',
+            d3: 'Modeli ya embedding ni sehemu ya kipimo cha upatikanaji. Ikibadilishwa, context precision na context recall hubadilika, wakati faithfulness kawaida hubaki. Ulinganisho huo wa kutofautiana ni ishara kuhusu mahali mabadiliko ulipofika, si kelele.',
+            d4: 'Andika modeli pamoja na uendeshaji. Kila uendeshaji huhifadhi mipangilio gani na modeli gani iliyotengeneza majibu na alama; uendeshaji mawili hulinganiwi tu pale yale yanapotana.',
+            x1: 'Usitarajie kuwa mabadiliko ya alama yanaweza kuhusishwa na sababu moja pekee pale kitu kimoja ndicho ndichobadilika. Uendeshaji wenye modeli ya jibu mpya, mhukumu mpya na modeli ya embedding mpya hupima zote tatu kwa wakati mmoja na haiwezi kuzitenga.',
+            x2: 'Usisome alama ya juu ya faithfulness kama matokeo mazuri peke yake. faithfulness ya juu pamoja na context recall ya chini inamaanisha jibu limejitegea kwenye kile kilichopatikana — na kilichopatikana ni kidogo mno.',
+            x3: 'Usifanye kama modeli ya uakili ni ya bure. Hutumia mamia ya tokeni kabla ya kuandika neno lolote; wakati bajeti ya jibu ni ndogo kuliko hayo, kila jibu hukatalwa, hukutupa na kuombwa tena, na uendeshaji hulipa mara mbili kwa utulivu kwa kila swali.',
+            expect:
+              'Tabiri uendeshaji kuthamini na alama kubadilika unapobadilisha modeli. Hakuna mwelekeo wowote ni ukosoaji wa modeli: mhukumu, vidhibiti vya upatikanaji na seti pamoja ndio vinaamuru ni kiasi gani cha mabadiliko hayo ni halisi.'
+          },
+          read: {
+            title: 'Soma matokeo',
+            intro:
+              'Kila kipimo cha RAGAS kinapima jambo tofauti, na kimoja mwao kinaenda kwa njia tofauti. Soma kila namba kwa kile inayopima hasa kabla ya kuiendelea.',
+            d1: 'Soma bango la kimbio batili kwanza. Uendeshaji ambao majibu yake yamekoseka, au ambao mhukumu alipima sehemu tu ya seti, si kipimo — wastani chini yake yanalenga mistari iliyopimwa tu.',
+            d2: 'Angalia mwelekeo wa kila kipimo. Mengi yana maana ya juu ni bora. noise sensitivity ndiyo pekee: chini ni bora, kwa hivyo uendeshaji unaofanya vibaya kwenye huo unashindwa kwa njia nzuri.',
+            d3: 'Soma mistari iliyoshindwa, si wastani pekee. Swali moja lililoharibika kati ya arobaini hubadilisha wastani zaidi kuliko mabadiliko uliyokuwa unajaribu kupima.',
+            d4: 'Tumia "Eleza makosa" kabla ya kubadilisha chochote. Huainisha kila safu iliyoshindwa kwa upatikanaji, kwa kujibu, au kwa rejea yenyewe, na mapendekezo yake yana tahadhari — yanapendekeza, wewe unachagua.',
+            x1: 'Usilinganishe wastani kati ya seti tofauti za vipimo, mahukumu tofauti, au seti iliyohaririwa. Hakuna yoyote ni kipimo sawa, na tofauti unayoona si mabadiliko ya ubora.',
+            x2: 'Usiboreshe upatikanaji kulingana na namba moja tu. context precision na context recall hushindana; mabadiliko yanayoinua moja kwa kawaida hulipa nyingine, na makubaliano hayo ndiyo sehemu ya kuvutia zaidi.',
+            x3: 'Usifanye alama ya null kuwa alama ya chini. Marudio yaliyoisha huzalisha null ambayo hubainishwa kwenye wastani, kwa hivyo hakuna alama inamaanisha hakuna kipimo — endesha safu hiyo upya badala ya kudhani hali mbaya.',
+            expect:
+              'Namba ya kipimo cha kulinganisha ni ulinganisho kati ya utekelezaji wa seti ile ile, si alama ya daraja kwa msaidizi. Hamisha xlsx unapohitaji kuhifadhi ushahidi: mstari wa mwelekeo katika paneli unaohifadhiwa kwa utekelezaji uliomo kwenye hazina hii pekee.'
+          }
+        }
+      },
       current: 'ya sasa',
       generate: {
         title: 'Tengeneza seti ya vipimo vya kulinganisha',

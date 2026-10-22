@@ -3230,6 +3230,93 @@ export default {
           text: 'Suítes e resultados como xlsx (compatíveis com as ferramentas de teste comparativo) e um relatório PDF dos gráficos.'
         }
       },
+      // GUIDE (David, 2026-10-23) — the operator playbook behind
+      // the "Guide" button. See en.js for the key-shape contract.
+      guide: {
+        open: 'Guia',
+        title: 'Guia de benchmarks RAGAS',
+        intro:
+          'Como construir, curar e executar suítes de benchmarks — o que fazer, o que evitar e o que esperar em cada etapa. O painel de Ajuda ao lado deste botão documenta os controles; este documento as decisões.',
+        close: 'Fechar',
+        more: 'Leia mais em ragas.io',
+        labels: {
+          do: 'Faça isto',
+          dont: 'Não',
+          expect: 'O que esperar'
+        },
+        chapters: {
+          generate: {
+            title: 'Construir a suíte',
+            intro:
+              'Uma suíte só é tão boa quanto o corpus de onde foi gerada. A geração é um trabalho do LLM em duas fases e corresponde à metade mais cara de todo o fluxo: primeiro uma passagem pelo grafo de conhecimento sobre o corpus selecionado, depois a síntese das perguntas.',
+            d1: 'Publique antes de gerar. A geração lê conceitos do repositório, e uma suíte construída sobre um repositório ainda não publicado ou em drenagem mede um corpus que o assistente não consegue realmente ver.',
+            d2: 'Leia a nota de cobertura. Quando o corpus é maior que o orçamento de fragmentos (1,600 fragmentos por padrão), a suíte informa isso — "grounded in 1600 of 5590 chunks". Isso é um benchmark válido de uma fatia, nunca do repositório inteiro. Aumente OKF_RAGAS_MAX_CORPUS_CHUNKS se precisar de tudo.',
+            d3: 'Dimensione a suíte conforme a pergunta que você está fazendo. Vinte perguntas são um teste de fumaça, cem são uma comparação. O custo cresce aproximadamente de forma linear nas duas etapas, e a etapa de pontuação domina.',
+            d4: 'Misture a distribuição de saltos de propósito. Single-hop prova a recuperação; multi-hop (specific) prova que o reranker combina evidências; multi-hop (abstract) prova que o modelo raciocina para além do texto literal. Uma suíte 100% single-hop nunca pode revelar uma falha de composição.',
+            x1: 'Não gere contra um repositório que está no meio da drenagem. Conceitos ainda em indexação são invisíveis para a recuperação, portanto a suíte é escrita contra um corpus que vai diferir daquele contra o qual você depois vai pontuar.',
+            x2: 'Não leia os primeiros minutos da barra de progresso como um travamento. A fase do grafo de conhecimento pode ficar muito tempo sem concluir um lote; o cronômetro decorrido e o contador de chamadas ao modelo são os sinais confiáveis.',
+            x3: 'Não leia uma suíte curta como uma boa geração. Modelos com limite de taxa perdem perguntas, e o painel informa quantas foram descartadas. Verifique a quantidade de descartes antes de confiar na suíte.',
+            expect:
+              'Reserve cerca de uma chamada ao modelo por fragmento do corpus para a fase do grafo, além de algumas por pergunta. Em um corpus de 1,075 fragmentos, apenas essa fase já levou mais de duas horas. A geração continua em segundo plano — você pode fechar o Lab e voltar depois.'
+          },
+          curate: {
+            title: 'Melhorar a suíte',
+            intro:
+              'Uma suíte gerada é um primeiro rascunho. As duas metades de cada entrada — a pergunta e a resposta esperada — foram escritas por máquina, e a medição só é tão confiável quanto elas.',
+            d1: 'Teste antes de manter. O botão ▶ executa uma pergunta contra o corpus real e informa se ela é sequer respondível. Uma pergunta que não devolve nada é uma pergunta sobre conteúdo que você não tem.',
+            d2: 'Alterne — não exclua — as irrelevantes. Linhas fora do escopo são mantidas por contraste e excluídas da pontuação. Excluí-las perde o fato de que existiram.',
+            d3: 'Corrija a resposta esperada, não a pergunta, quando a referência está errada. Faithfulness e answer relevancy são medidos contra a referência, portanto uma referência que nenhum modelo conseguiria produzir pune uma resposta correta.',
+            d4: 'Adicione suas próprias perguntas difíceis. O gerador escreve perguntas que o corpus responde de forma literal. As falhas que vale a pena encontrar são as que um curador escreve a partir da experiência — a formulação ambígua, os dois documentos que discordam, o fato afirmado uma vez e nunca repetido.',
+            x1: 'Não reescreva uma pergunta para casar com o que o sistema responde hoje. Isso transforma o benchmark em um teste de regressão da pontuação atual e esconde exatamente o defeito que você procurava.',
+            x2: 'Não escale para uma pergunta por conceito sem antes testá-las. A geração lê um orçamento de fragmentos, não a estrutura dos seus documentos, portanto uma pergunta pode se apoiar em um trecho que nunca esteve no corpus.',
+            x3: 'Não curate em função de uma pontuação. Curate antes de executar; editar a suíte depois de ver um resultado muda as regras do jogo e invalida a comparação.',
+            expect:
+              'Quarenta boas perguntas valem mais do que cem misturadas. A cobertura do conjunto de conceitos importa mais do que a contagem bruta — uma suíte que deixa de fora metade dos seus conceitos vai reportar tranquilamente uma média alta para a metade que cobre.'
+          },
+          run: {
+            title: 'Executar o benchmark',
+            intro:
+              'Uma execução tem três fases — recuperação, resposta e julgamento — relatadas separadamente para que você sempre saiba em qual delas está esperando. Apenas a terceira consome chamadas ao modelo juiz, e é ali que o tempo se vai.',
+            d1: 'Execute primeiro as quatro métricas padrão — o núcleo comparável é faithfulness, context precision, context recall e answer relevancy. O catálogo estendido multiplica o custo, não a informação, até você já saber onde está a falha.',
+            d2: 'Observe o contador de chamadas, não apenas a barra. A fase de julgamento avança uma linha por vez, e em um endpoint de modelo congestionado a execução sofre limitação de taxa com frequência suficiente para que as retentativas dominem o tempo real. Um contador congelado com o relógio correndo significa retentativas, não travamento.',
+            d3: 'Cancele em vez de abandonar. "Cancelar execução" encerra de forma limpa e registra o que foi concluído; fechar a aba do navegador não — a execução continua e você perde a visão ao vivo dela.',
+            d4: 'Mantenha apenas uma execução por repositório por vez. As execuções compartilham o endpoint do modelo; duas execuções simultâneas dividem a vazão e ambas ficam mais lentas, e nenhuma das duas informa por quê.',
+            x1: 'Não compare uma execução de quatro métricas com uma de dez métricas. O catálogo estendido altera o tempo real em cerca de quatro vezes, e as médias não formam uma série comparável.',
+            x2: 'Não reexecute para substituir um número de que você não gostou. Uma nova execução com outro modelo juiz, outro top-N de recuperação ou uma suíte editada é uma nova medição — registre-a como tal.',
+            x3: 'Não inicie uma execução enquanto uma ingestão ainda está drenando. No meio da drenagem, parte do corpus está ausente da recuperação, e a pontuação cai por um motivo que não tem nada a ver com suas mudanças.',
+            expect:
+              'Quatro métricas custam cerca de sete chamadas ao juiz por pergunta — 7,1 medidos em uma execução de cem perguntas. Isso dá cerca de uma hora e meia por cem perguntas em um endpoint com limite de taxa, e mais quando o modelo está mais ocupado. Trate isso como um piso, não como uma promessa: o cronômetro e o contador de chamadas da própria execução são a autoridade.'
+          },
+          models: {
+            title: 'Modelos e o que esperar',
+            intro:
+              'Três modelos diferentes participam e não são intercambiáveis: o modelo que responde, o modelo que julga e o modelo que gera os embeddings. Eles movem a pontuação por razões completamente diferentes.',
+            d1: 'O modelo de resposta é o que está em teste. A recuperação e a resposta são reproduzidas no servidor OKF contra as mesmas coleções e o mesmo reranker que o assistente usa, portanto mudar isto muda a resposta — não o mecanismo de medição.',
+            d2: 'O juiz precisa ser forte e estável. Ele pontua contra as referências, portanto um juiz fraco rebaixa todas as métricas de uma vez e a execução ainda parece completa. As respostas do juiz ficam em cache por identidade do juiz — mudar o juiz ou o modelo invalida esse cache e todas as linhas são reavaliadas.',
+            d3: 'O modelo de embeddings faz parte da medição da recuperação. Mude-o e a context precision e a context recall se movem, enquanto a faithfulness normalmente não. Essa assimetria é um sinal sobre onde a mudança teve efeito, não ruído.',
+            d4: 'Registre o modelo junto com a execução. Cada execução armazena qual configuração e qual modelo produziram as respostas e as pontuações; duas execuções só são comparáveis quando esses elementos coincidem.',
+            x1: 'Não espere que uma mudança na pontuação possa ser atribuída a uma causa, a menos que exatamente uma coisa tenha mudado. Uma execução com um novo modelo de resposta, um novo juiz e um novo modelo de embeddings mede os três de uma vez e não consegue separá-los.',
+            x2: 'Não leia uma pontuação alta de faithfulness como um bom resultado por si só: uma faithfulness alta com context recall baixa significa que a resposta está fundamentada no que foi recuperado — e o que foi recuperado é pouco.',
+            x3: 'Não trate um modelo de raciocínio como gratuito. Ele gasta centenas de tokens antes de escrever uma palavra; quando o orçamento de resposta é menor do que isso, toda resposta é truncada, descartada e chamada de novo, e a execução paga silenciosamente duas vezes por pergunta.',
+            expect:
+              'Espere que a execução fique mais lenta e que a pontuação se mova sempre que você mudar um modelo. Nenhum dos dois sentidos é um veredicto sobre o modelo: o juiz, os parâmetros de recuperação e a suíte decidem em conjunto quanto dessa variação é real.'
+          },
+          read: {
+            title: 'Ler os resultados',
+            intro:
+              'Cada métrica do RAGAS mede algo diferente, e uma delas funciona ao contrário. Leia cada número pelo que ele de fato mede antes de agir sobre ele.',
+            d1: 'Leia primeiro o aviso de execução inválida. Uma execução cujas respostas deram erro, ou cujo juiz mediu apenas parte da suíte, não é uma medição — as médias abaixo cobrem somente as linhas avaliadas.',
+            d2: 'Verifique o sentido de cada métrica. A maioria é "quanto maior, melhor". A exceção é noise sensitivity: quanto menor, melhor — portanto uma execução que pontua mal nessa métrica está falhando na direção certa.',
+            d3: 'Leia as linhas com falha, não apenas a média. Uma pergunta quebrada entre quarenta desloca a média mais do que a mudança que você tentava medir.',
+            d4: 'Use "Explicar as falhas" antes de mudar qualquer coisa. A ferramenta atribui cada linha com falha à recuperação, à resposta ou à própria referência, e suas sugestões são cautelosas — ela propõe, você decide.',
+            x1: 'Não compare médias entre conjuntos de métricas diferentes, juízes diferentes ou uma suíte editada. Nada disso é a mesma medição, e a diferença que você vê não é uma mudança de qualidade.',
+            x2: 'Não ajuste a recuperação contra um único número. A context precision e a context recall se compensam entre si; uma mudança que eleva uma normalmente custa a outra, e essa troca costuma ser a parte interessante.',
+            x3: 'Não trate uma pontuação nula como uma pontuação baixa. Uma retentativa esgotada produz um nulo que é excluído da média, portanto ausência de pontuação significa ausência de medição — reexecute a linha em vez de supor o pior.',
+            expect:
+              'Um número de benchmark é uma comparação entre execuções da mesma suíte, não uma nota para o assistente. Exporte o xlsx quando precisar preservar a evidência: a linha de tendência no painel contém apenas as execuções armazenadas neste repositório.'
+          }
+        }
+      },
       current: 'atual',
       generate: {
         title: 'Gerar uma suíte de testes comparativos',

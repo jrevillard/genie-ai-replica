@@ -154,7 +154,7 @@ on port 80). The rule carries no path match, so it redirects everything;
 cert-manager's per-Order solver route matches the challenge path EXACTLY,
 and Gateway API precedence (exact beats prefix) gives it the request
 before the redirect sees it. */ -}}
-{{- if .Values.ingress.tls.enabled }}
+{{- if and .Values.ingress.enabled .Values.ingress.tls.enabled }}
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -174,5 +174,13 @@ spec:
         - type: RequestRedirect
           requestRedirect:
             scheme: https
+            # The PUBLIC port, same single source the https listener
+            # uses. Without it Envoy strips the source :80 and the
+            # Location points at 443 — connection refused on the
+            # port-bearing origin (genieai.local:4443) the chart
+            # explicitly supports. Envoy Gateway drops a redirect port
+            # equal to the scheme's well-known port by itself, so the
+            # default here is harmless for a bare-host origin.
+            port: {{ .Values.ingress.host | default "" | splitList ":" | rest | first | default 443 | int }}
             statusCode: 301
 {{- end }}

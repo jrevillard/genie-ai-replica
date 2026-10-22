@@ -115,7 +115,20 @@ printf '==> server-side dry run\n'
 # reports it. The check is the OTHER errors — the strict-decoding and
 # validation ones. On the fresh cluster CI uses, nothing exists and the
 # filter is a no-op.
-output="$(kubectl create --dry-run=server -f "${WORK}/rest.yaml" 2>&1 || true)"
+#
+# The exit code is checked TOO, not only the output text: a dead API
+# server (or a lost kubeconfig) makes kubectl exit non-zero with a
+# message ("connection refused", a client-go backoff dump) that matches
+# none of the error patterns below — `|| true` + pattern-matching alone
+# would validate GREEN against a cluster that validated nothing.
+set +e
+output="$(kubectl create --dry-run=server -f "${WORK}/rest.yaml" 2>&1)"
+rc=$?
+set -e
+if [ "${rc}" -ne 0 ] && ! printf '%s\n' "${output}" | grep -qE 'Error from server|^Error|error:'; then
+  printf 'kubectl exited %s with no recognized validation error — the cluster may be unreachable. Full output:\n%s\n' "${rc}" "${output}" >&2
+  exit 1
+fi
 errors="$(printf '%s\n' "${output}" \
   | grep -E 'Error from server|^Error|error:' \
   | grep -v 'already exists' || true)"

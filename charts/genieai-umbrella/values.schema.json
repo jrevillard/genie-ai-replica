@@ -271,8 +271,38 @@
     "opea": {
       "type": "object",
       "properties": {
+        "chatqna": {
+          "type": "object",
+          "properties": {
+            "chatqnaEnforceAbstention": {
+              "type": "boolean"
+            },
+            "retrieverArangoTraversalEnabled": {
+              "type": "boolean"
+            }
+          }
+        },
+        "dataprep": {
+          "type": "object",
+          "properties": {
+            "contextualRetrievalEnabled": {
+              "type": "boolean"
+            },
+            "contextualLabelRaw": {
+              "type": "boolean"
+            }
+          }
+        },
         "enabled": {
           "type": "boolean"
+        },
+        "gpu": {
+          "type": "object",
+          "properties": {
+            "skipTlsVerify": {
+              "type": "boolean"
+            }
+          }
         },
         "models": {
           "type": "object",
@@ -287,10 +317,13 @@
             }
           }
         },
-        "gpu": {
+        "retriever": {
           "type": "object",
           "properties": {
-            "skipTlsVerify": {
+            "retrieverArangoTraversalEnabled": {
+              "type": "boolean"
+            },
+            "retrieverHybridRetrievalEnabled": {
               "type": "boolean"
             }
           }

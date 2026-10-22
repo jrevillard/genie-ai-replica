@@ -35,7 +35,10 @@ of the four pods Pending forever ("Insufficient nvidia.com/gpu") with
 the tier never Ready. NVIDIA_VISIBLE_DEVICES=all + the nodeSelector put
 every model pod on the GPU node and let the args divide the device —
 the same sharing model Compose runs. A multi-GPU operator who wants
-scheduler-enforced exclusivity sets opea.models.resources per model. */ -}}
+scheduler-enforced exclusivity sets opea.models.resources — ONE dict
+applied to all four model pods, not a per-model knob (llm gets a full
+GPU, the TEI sidecars need far less; a uniform exclusive grant
+over-provisions three of the four). */ -}}
 {{- $res := $root.Values.opea.models.resources | default dict -}}
 apiVersion: apps/v1
 kind: Deployment

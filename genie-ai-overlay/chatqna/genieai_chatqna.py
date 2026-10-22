@@ -729,9 +729,10 @@ def _language_display(raw_language) -> str:
 _LANGUAGE_CODES_CACHE: dict | None = None
 _LANGUAGE_CODES_CACHE_AT: float | None = None
 
-# The language -> script table, read once. Module level for the same reason
-# as the language map above.
-_LANGUAGE_SCRIPTS: dict | None = None
+# The language -> script table, and the moment it was read. Module level for
+# the same reason as the language map above.
+_LANGUAGE_SCRIPTS_CACHE: dict | None = None
+_LANGUAGE_SCRIPTS_CACHE_AT: float | None = None
 
 
 def _read_language_codes(filepath: str) -> dict:
@@ -777,14 +778,33 @@ def _read_language_scripts(filepath: str) -> dict:
 def language_scripts_map() -> dict:
     """The language -> script table, read once and cached.
 
-    Read on first use: the table ships with the service, and a file that is
-    not there is a broken image — the prompt then carries no script clause
-    rather than a wrong one.
+    The table decides whether the translation prompt asks for the right
+    ALPHABET, so it is read on first use and kept. A table that could not be
+    read is remembered only for LANGUAGE_MAP_RETRY_SECONDS, exactly like the
+    language map: a transient read failure must not leave every prompt
+    without its script clause for the lifetime of the process, but it must
+    not re-read (and re-log) the file on every chunk either.
+
+    The table is never None: an unreadable table is an empty table, and an
+    empty table means the prompt carries no script clause rather than a wrong
+    one.
+
+    The returned table is a copy, like the language map: a caller that
+    mutated it would change the script every later prompt asks for.
     """
-    global _LANGUAGE_SCRIPTS
-    if _LANGUAGE_SCRIPTS is None:
-        _LANGUAGE_SCRIPTS = _read_language_scripts(LANGUAGE_SCRIPTS_FILEPATH)
-    return _LANGUAGE_SCRIPTS
+    global _LANGUAGE_SCRIPTS_CACHE, _LANGUAGE_SCRIPTS_CACHE_AT
+
+    cached = _LANGUAGE_SCRIPTS_CACHE
+    if cached:
+        return dict(cached)
+    now = time.monotonic()
+    if _LANGUAGE_SCRIPTS_CACHE_AT is not None and now - _LANGUAGE_SCRIPTS_CACHE_AT < LANGUAGE_MAP_RETRY_SECONDS:
+        # The last read failed and the retry window has not elapsed yet.
+        return {}
+    loaded = _read_language_scripts(LANGUAGE_SCRIPTS_FILEPATH)
+    _LANGUAGE_SCRIPTS_CACHE = loaded
+    _LANGUAGE_SCRIPTS_CACHE_AT = now
+    return dict(loaded)
 
 
 def language_codes_map() -> dict:
@@ -3068,9 +3088,13 @@ class ChatQnAService:
         """Build a prompt for TranslateGemma using the completions API.
 
         The language names and the scripts come from the shipped tables, so
-        nothing a caller controls reaches the prompt: the caller supplies
-        codes, and a code that does not look like a code is replaced by the
-        default rather than written into the prompt.
+        nothing that is not a language reaches the prompt. A code the map does
+        not know is not a language: the target falls back to English, and the
+        SOURCE is not named at all — the prompt then asks for a translation
+        into the target without claiming to know what the source is. That is
+        the case the history hits when the detector answers with a code the
+        map does not key ('zh-cn', 'jw', 'tl'): the history is still
+        normalized to English, but no raw code is written into the prompt.
 
         The script clause follows the target: a target written in the Latin
         alphabet is asked for the Latin alphabet, and a target written in
@@ -3082,23 +3106,32 @@ class ChatQnAService:
         scripts = language_scripts_map()
 
         target_code = str(target_lang_code).strip().lower()
-        if not _LANGUAGE_CODE_PATTERN.match(target_code):
+        if not _LANGUAGE_CODE_PATTERN.match(target_code) or target_code not in language_codes:
             logger.warning(
-                f"Target language '{_language_display(target_lang_code)}' is not a language code — using English."
+                f"Target language '{_language_display(target_lang_code)}' is not a known language — using English."
             )
             target_code = "en"
+        target_name = language_codes[target_code]
+
+        # The source is named only when the map knows it. A code the map does
+        # not key is not a language the service knows, and naming it would put
+        # a raw code where a language belongs.
         source_code = str(source_lang_code).strip().lower()
+        source_name = None
         if not _LANGUAGE_CODE_PATTERN.match(source_code):
             logger.warning(
-                f"Source language '{_language_display(source_lang_code)}' is not a language code — using English."
+                f"Source language '{_language_display(source_lang_code)}' is not a language code — not naming a source."
             )
-            source_code = "en"
-
-        target_name = language_codes.get(target_code, target_code)
-        source_name = language_codes.get(source_code, source_code)
+        elif source_code not in language_codes:
+            logger.warning(
+                f"Source language '{_language_display(source_lang_code)}' is not in the language map"
+                " — not naming a source."
+            )
+        else:
+            source_name = language_codes[source_code]
 
         target_script = scripts.get(target_code)
-        source_script = scripts.get(source_code)
+        source_script = scripts.get(source_code) if source_name else None
         script_clause = ""
         if target_script == "Latn":
             script_clause = "Write the translation in the Latin alphabet only, and do not use any other script. "
@@ -3112,19 +3145,28 @@ class ChatQnAService:
                 f"Do not reproduce the source text in the {_SCRIPT_NAMES.get(source_script, source_script)} script. "
             )
 
+        if source_name:
+            role = f"a professional {source_name} ({source_code}) to {target_name} ({target_code}) translator"
+            source_text = f"the original {source_name} text"
+            not_output = f"Do NOT output in {source_name} or in any other language."
+            request = f"Please translate the following {source_name} text into {target_name}"
+        else:
+            role = f"a professional translator into {target_name} ({target_code})"
+            source_text = "the original text"
+            not_output = "Do NOT output in any other language."
+            request = f"Please translate the following text into {target_name}"
+
         return (
             f"<bos><start_of_turn>user\n"
-            f"You are a professional {source_name} ({source_code}) to "
-            f"{target_name} ({target_code}) translator. Your goal is to "
-            f"accurately convey the meaning and nuances of the original {source_name} "
-            f"text while adhering to {target_name} grammar, vocabulary, and cultural "
+            f"You are {role}. Your goal is to "
+            f"accurately convey the meaning and nuances of {source_text} "
+            f"while adhering to {target_name} grammar, vocabulary, and cultural "
             f"sensitivities.\n"
             f"CRITICAL: You MUST output ONLY in {target_name} ({target_code}). "
-            f"Do NOT output in {source_name} or in any other language. "
+            f"{not_output} "
             f"{script_clause}\n"
             f"Produce only the {target_name} translation, without any additional "
-            f"explanations or commentary. Please translate the following {source_name} "
-            f"text into {target_name}:\n\n\n{text}"
+            f"explanations or commentary. {request}:\n\n\n{text}"
             f"<end_of_turn>\n<start_of_turn>model\n"
         )
 
@@ -3707,8 +3749,8 @@ class ChatQnAService:
         # the language the user writes in, and the history still has to be
         # normalized to English for the English-only embedding space. The
         # detected code is used even when the translation models do not cover
-        # it — the source is named by the code and the target is English, so
-        # the history is still normalized.
+        # it — the target is English, so the history is still normalized, and
+        # a source the map does not know is not named in the prompt at all.
         history_language = detected_language if language_refused else original_language
 
         translated_history_string = ""

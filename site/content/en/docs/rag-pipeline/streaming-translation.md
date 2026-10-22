@@ -208,14 +208,19 @@ all: there is no translation to make. The backend:
 
 1. Emits the unit as-is (English) with the original separator.
 2. Sets `streamingTranslationFailed = true`.
-3. On the next unit, **falls back to the original English stream** for
-   the remainder of the response (the `streamingTranslationFailed` short
-   circuit).
-4. Continues with the post-stream full-translation as before.
+3. The answer stays in English **for the remainder**: the units that
+   follow are emitted as they are, without another attempt at
+   translating them. The English that was already buffered goes out
+   before the chunks that follow it, so the answer keeps its order.
+4. The post-stream translation is skipped — the same failure would
+   fail it again — and the `done` frame carries `translationFailed:
+   true`.
 
-The user never sees a half-translated answer: if streaming translation
-fails, they get the original English stream + the final translation at
-the end (the old behaviour).
+The units that were translated before the failure stay translated; from
+the failure on, the answer is the original English stream. The `done`
+frame says the translation failed: an `error` frame would truncate the
+answer and raise a system-down notification for a translation-only
+failure.
 
 ## Verifying it works
 
@@ -262,8 +267,10 @@ docker service update --env-rm LOG_LEVEL genieai_backend    # revert
 To confirm the fallback short-circuit fires correctly, point
 `TRANSLATION_BACKEND` at a service that is intentionally down
 (`TRANSLATION_BACKEND=nonexistent` or scale the workers to 0). Send a
-Spanish query: you should still see a complete answer (English stream +
-English + a final Spanish-only frame from the post-stream translate).
+Spanish query: you should still see a complete answer — the English
+stream, in order — and a `done` frame carrying `translationFailed:
+true`. No `translation` frame follows: the post-stream translation is
+skipped once the streaming translation failed.
 
 ## Failure modes and troubleshooting
 

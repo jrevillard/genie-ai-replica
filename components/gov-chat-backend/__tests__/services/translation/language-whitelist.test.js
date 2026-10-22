@@ -148,6 +148,49 @@ describe('target language boundary (real service, real language map)', () => {
   });
 });
 
+describe('the codes handed to the backend', () => {
+  it('refuses a code the loaded backend does not know', async () => {
+    // The codes handed to the backend are the ones the backend's own map
+    // produces. A code the map does not produce is not a language the model
+    // can be asked for, so it must not reach the model.
+    const translate = jest.spyOn(backend, 'translate').mockResolvedValue(['bonjour']);
+
+    await expect(service._translateWithBackend(['hello'], 'en', 'not-a-model-code')).rejects.toThrow(
+      /not one the loaded backend knows/
+    );
+    expect(translate).not.toHaveBeenCalled();
+  });
+
+  it('hands the backend the codes the map produces', async () => {
+    const translate = jest.spyOn(backend, 'translate').mockResolvedValue(['bonjour']);
+
+    await service._translateWithBackend(['hello'], 'en', 'fr');
+
+    expect(translate).toHaveBeenCalledWith(['hello'], 'en', 'fr');
+  });
+
+  it('does not hand the backend a code the backend did not produce', async () => {
+    // The codes the service hands over come from the backend's own map. A
+    // backend that hands out a code its map does not produce would put a
+    // language nobody vetted into the model request.
+    jest.spyOn(backend, 'getLanguageCode').mockReturnValue('not-a-model-code');
+    const translate = jest.spyOn(backend, 'translate').mockResolvedValue(['bonjour']);
+
+    await expect(service.translate(['hello'], 'en', 'fr')).rejects.toThrow(/not one the loaded backend knows/);
+    expect(translate).not.toHaveBeenCalled();
+  });
+
+  it('does not hand the backend a code the backend did not produce on the streaming path', async () => {
+    // The streaming path reaches the model through the backend too, so the
+    // same check applies there.
+    jest.spyOn(backend, 'getLanguageCode').mockReturnValue('not-a-model-code');
+    const translate = jest.spyOn(backend, 'translate').mockResolvedValue(['bonjour']);
+
+    await expect(service.translateStream('hello', 'en', 'fr')).rejects.toThrow(/not one the loaded backend knows/);
+    expect(translate).not.toHaveBeenCalled();
+  });
+});
+
 describe('backend language map lookups', () => {
   it('does not hand out an inherited property as a language code', () => {
     expect(backend.getLanguageCode('constructor')).toBeNull();
@@ -192,6 +235,15 @@ describe('backend language map lookups', () => {
     } finally {
       backend.languageMap.languageMap.fr = saved;
     }
+  });
+
+  it('answers whether a code is one the model knows', () => {
+    // The codes the service hands to the backend are the ones the map
+    // produces. The backend has to be able to say whether a code is one of
+    // them, or nothing can check the codes on the way to the model.
+    expect(backend.isModelLanguageCode('fr')).toBe(true);
+    expect(backend.isModelLanguageCode('not-a-model-code')).toBe(false);
+    expect(backend.isModelLanguageCode('constructor')).toBe(false);
   });
 
   it('hands out a copy of the language map', () => {

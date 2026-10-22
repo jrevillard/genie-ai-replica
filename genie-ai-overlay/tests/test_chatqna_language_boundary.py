@@ -48,9 +48,13 @@ def reset_language_codes_cache():
     next one."""
     chatqna_module._LANGUAGE_CODES_CACHE = None
     chatqna_module._LANGUAGE_CODES_CACHE_AT = None
+    chatqna_module._LANGUAGE_SCRIPTS_CACHE = None
+    chatqna_module._LANGUAGE_SCRIPTS_CACHE_AT = None
     yield
     chatqna_module._LANGUAGE_CODES_CACHE = None
     chatqna_module._LANGUAGE_CODES_CACHE_AT = None
+    chatqna_module._LANGUAGE_SCRIPTS_CACHE = None
+    chatqna_module._LANGUAGE_SCRIPTS_CACHE_AT = None
 
 
 class TestResolveLanguageCode:
@@ -563,3 +567,88 @@ class TestTranslatorBranchLanguageBoundary:
         message = mock_logger.warning.call_args[0][0]
         assert "\n" not in message
         assert len(message) < 300
+
+
+class TestTranslationPromptBoundary:
+    """The languages a translation prompt names come from the shipped tables.
+
+    The prompt is the last place a language name is written. A name that is
+    not in the language map is not a language the service knows: naming it
+    anyway puts a raw code where a language belongs, and the model is asked
+    to translate from a code it has never heard of.
+    """
+
+    def _prompt(self, source_lang_code, target_lang_code):
+        svc = create_service()
+        return svc._build_translategemma_prompt(
+            text="Hello",
+            source_lang_code=source_lang_code,
+            target_lang_code=target_lang_code,
+        )
+
+    def test_a_known_source_is_named_from_the_map(self):
+        prompt = self._prompt("fr", "en")
+        assert "French" in prompt
+
+    def test_an_unmapped_source_code_is_not_named_in_the_prompt(self):
+        """langdetect answers with codes the language map does not key
+        ('zh-cn', 'jw', 'tl'): the history is still normalized to English, but
+        the prompt must not name the source with a code the map does not
+        know."""
+        prompt = self._prompt("zh-cn", "en")
+        assert "zh-cn" not in prompt.lower()
+
+    def test_an_unmapped_source_code_does_not_name_a_source_at_all(self):
+        """Without a name the prompt asks for a translation into the target
+        without claiming to know what the source is."""
+        prompt = self._prompt("zh-cn", "en")
+        assert "to English (en) translator" not in prompt
+        assert "English (en)" in prompt
+
+    def test_an_unmapped_target_code_is_not_named_in_the_prompt(self):
+        prompt = self._prompt("en", "xx-yy")
+        assert "xx-yy" not in prompt.lower()
+
+    def test_a_malformed_source_code_is_not_named_in_the_prompt(self):
+        prompt = self._prompt("not a language", "en")
+        assert "not a language" not in prompt
+
+    def test_the_target_is_named_from_the_map(self):
+        prompt = self._prompt("en", "fr")
+        assert "French" in prompt
+
+
+class TestLanguageScriptsMap:
+    """The script table decides the alphabet the prompt asks for.
+
+    It is read from disk like the language map, so it fails the same way: a
+    file that is not there yet reads as an empty table. The empty table must
+    not be the answer for the life of the process — every later prompt would
+    ask for a translation in the wrong alphabet.
+    """
+
+    def test_an_unreadable_table_reads_as_empty(self):
+        with patch.object(chatqna_module, "LANGUAGE_SCRIPTS_FILEPATH", "/nonexistent/scripts.json"):
+            assert chatqna_module.language_scripts_map() == {}
+
+    def test_the_table_is_not_read_again_inside_the_retry_window(self):
+        with patch.object(chatqna_module, "LANGUAGE_SCRIPTS_FILEPATH", "/nonexistent/scripts.json"):
+            assert chatqna_module.language_scripts_map() == {}
+            with patch.object(chatqna_module, "_read_language_scripts") as reader:
+                assert chatqna_module.language_scripts_map() == {}
+                assert not reader.called
+
+    def test_the_table_is_read_again_after_the_retry_window(self):
+        with patch.object(chatqna_module, "LANGUAGE_SCRIPTS_FILEPATH", "/nonexistent/scripts.json"):
+            assert chatqna_module.language_scripts_map() == {}
+        chatqna_module._LANGUAGE_SCRIPTS_CACHE_AT = (
+            chatqna_module.time.monotonic() - chatqna_module.LANGUAGE_MAP_RETRY_SECONDS - 1
+        )
+        with patch.object(chatqna_module, "_read_language_scripts", return_value={"en": "Latn"}) as reader:
+            assert chatqna_module.language_scripts_map() == {"en": "Latn"}
+            assert reader.called
+
+    def test_the_caller_cannot_rewrite_the_table(self):
+        table = chatqna_module.language_scripts_map()
+        table["en"] = "tampered"
+        assert chatqna_module.language_scripts_map()["en"] == "Latn"

@@ -619,6 +619,21 @@ Uses AST-based translation: only text leaf nodes are sent to the
 translator; markdown structure (headings, lists, links) is preserved by
 the skeleton.
 
+**Refused language**: both languages travel in the request body, so both
+are checked against the language map the loaded translation backend
+ships. A language the map does not know is refused — it is never passed
+to the model, and never guessed.
+
+**`400` response** (same for both routes):
+
+```json
+{ "message": "Unsupported target language" }
+```
+
+`"Unsupported source language"` when the source is the one refused. The
+message names the refused side only: the caller's value is never echoed
+back into the response or into the logs.
+
 **Streaming translation** is a separate, optional path: set
 `STREAMING_TRANSLATION_ENABLED=1` to translate chat-stream units as they
 arrive (issue #829). See [SSE Streaming Protocol](#sse-streaming-protocol).

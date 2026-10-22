@@ -306,8 +306,12 @@ module.exports = (queryService) => {
       const scheduleUnitTranslation = (content, separator) => {
         translationChain = translationChain.then(async () => {
           if (res.writableEnded) return;
-          if (translationUnsupported) {
-            // Nothing to translate into: the unit goes out as it is.
+          if (translationUnsupported || streamingTranslationFailed) {
+            // Nothing to translate into: either the models do not cover the
+            // language, or the translation failed for an earlier unit. The
+            // answer is English for the remainder, so the unit goes out as it
+            // is — and it does not go to the translator again, or the user
+            // reads a half-translated answer.
             if (!res.writableEnded) {
               res.write(`data: ${JSON.stringify({ type: 'chunk', content: `${content}${separator}` })}\n\n`);
             }
@@ -441,6 +445,15 @@ module.exports = (queryService) => {
                 extracted = extractCommittableUnit(pendingEn);
               }
             } else {
+              // The answer is English for the remainder (the translation
+              // failed). The English that is already buffered is OLDER than
+              // this chunk: it goes out first, because flushed at the end of
+              // the stream it would land after the chunks that follow it, and
+              // the answer would read out of order.
+              if (pendingEn) {
+                res.write(`data: ${JSON.stringify({ type: 'chunk', content: pendingEn })}\n\n`);
+                pendingEn = '';
+              }
               res.write(`data: ${JSON.stringify({ type: 'chunk', content: parsed.content })}\n\n`);
             }
           } else if (parsed.type === 'metadata') {

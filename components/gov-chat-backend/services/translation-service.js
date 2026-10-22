@@ -426,15 +426,21 @@ class TranslationService {
       `[TRANSLATION-SERVICE] Translating ${texts.length} texts from ${languageForLog(resolvedSourceLang)} to ${languageForLog(resolvedTargetLang)}`
     );
 
-    return this.translateWithBackend(texts, sourceLangCode, targetLangCode, resolvedSourceLang, resolvedTargetLang);
+    return this._translateWithBackend(texts, sourceLangCode, targetLangCode, resolvedSourceLang, resolvedTargetLang);
   }
 
   /**
-   * @method translateWithBackend
+   * @method _translateWithBackend
    * @description Hands already-resolved language codes to the backend. The
    * resolution happens once per request: the markdown path splits a document
    * into batches, and resolving the same language again for every batch
    * repeats the same work (and would repeat any future side effect of it).
+   *
+   * Private on purpose: the codes it takes are model codes, and only the
+   * resolution (resolveLanguagePair) may produce them. A caller that hands
+   * this method a language of its own would put a code nobody vetted into
+   * the model request.
+   *
    * @param {string[]} texts - The texts to translate.
    * @param {string} sourceLangCode - The model-specific source language code.
    * @param {string} targetLangCode - The model-specific target language code.
@@ -444,13 +450,19 @@ class TranslationService {
    *   lines name it. Defaults to the model-specific code.
    * @returns {Promise<string[]>} The translated texts.
    */
-  async translateWithBackend(
+  async _translateWithBackend(
     texts,
     sourceLangCode,
     targetLangCode,
     sourceLang = sourceLangCode,
     targetLang = targetLangCode
   ) {
+    // The codes are the ones the loaded backend's own map produces. This
+    // asserts it at the last step before the model: a code the backend does
+    // not know is not a language it can be asked for, and the model would
+    // receive it as if it were one.
+    this._assertModelLanguageCodes(sourceLangCode, targetLangCode);
+
     try {
       // Delegate to backend
       const translatedTexts = await this.backend.translate(texts, sourceLangCode, targetLangCode);
@@ -472,6 +484,40 @@ class TranslationService {
         backend: this.backendType
       });
       throw error;
+    }
+  }
+
+  /**
+   * @method _assertModelLanguageCodes
+   * @description Refuses a language code the loaded backend does not know.
+   *
+   * The check is on the backend's own table, so the answer comes from the
+   * model that would be asked, not from a second list that could drift away
+   * from it. A backend that cannot answer (no such method) is not checked:
+   * the guard is there to catch a code that slipped through, not to replace
+   * the resolution.
+   * @param {string} sourceLangCode - The model-specific source language code.
+   * @param {string} targetLangCode - The model-specific target language code.
+   * @throws {Error} When either code is not one the loaded backend knows.
+   */
+  _assertModelLanguageCodes(sourceLangCode, targetLangCode) {
+    if (typeof this.backend?.isModelLanguageCode !== 'function') {
+      return;
+    }
+    const sides = [
+      ['source', sourceLangCode],
+      ['target', targetLangCode]
+    ];
+    for (const [side, code] of sides) {
+      if (!this.backend.isModelLanguageCode(code)) {
+        // The log carries a bounded, printable form of the code — the same
+        // rule the other language log lines follow. The thrown error names
+        // the side only: nothing a caller wrote is echoed back.
+        logger.error(
+          `[TRANSLATION-SERVICE] The ${side} language code (${languageForLog(code)}) is not one the loaded backend knows.`
+        );
+        throw new Error(`[TRANSLATION-SERVICE] The ${side} language code is not one the loaded backend knows.`);
+      }
     }
   }
 
@@ -501,6 +547,10 @@ class TranslationService {
     // streaming path would answer in English while the post-stream path
     // refused the same request.
     const { sourceLangCode, targetLangCode } = this.resolveLanguagePair(sourceLang, targetLang);
+
+    // The streaming path reaches the model through the backend too: the
+    // codes are checked the same way before they go there.
+    this._assertModelLanguageCodes(sourceLangCode, targetLangCode);
 
     if (!unit || unit.trim() === '') return '';
 
@@ -641,7 +691,7 @@ class TranslationService {
           // batches go straight to the backend with the codes already checked.
           // The canonical codes travel along so a failure names the same
           // languages as the rest of the log lines.
-          return this.translateWithBackend(
+          return this._translateWithBackend(
             batch,
             sourceLangCode,
             targetLangCode,

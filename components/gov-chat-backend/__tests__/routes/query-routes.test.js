@@ -594,6 +594,123 @@ describe('POST /stream', () => {
     delete process.env.STREAMING_TRANSLATION_ENABLED;
   });
 
+  it('keeps the buffered tail in order when the streaming translation fails', async () => {
+    // The failure happens while the answer is still being written. The English
+    // that is buffered but not committed is OLDER than the chunks that follow
+    // it, so it has to reach the client first — otherwise the answer reads out
+    // of order and the tail lands at the very end, after the remainder.
+    process.env.STREAMING_TRANSLATION_ENABLED = '1';
+    queryService.initStreamQuery.mockResolvedValue({
+      queryId: 'q1',
+      opeaUrl: 'http://chatqna:8888/v1/chatqna',
+      opeaPayload: { messages: [] }
+    });
+    queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
+    queryService.finalizeStreamQuery.mockResolvedValue(undefined);
+    translationService.init.mockResolvedValue(undefined);
+    // The translation of the first unit stays in flight: the failure has to
+    // land on a chosen moment, not on the first await.
+    let failFirstUnit;
+    const firstUnit = new Promise((resolve, reject) => {
+      failFirstUnit = reject;
+    });
+    translationService.translateMarkdown.mockImplementationOnce(() => firstUnit);
+
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ data: mockStream });
+
+    // .end() starts the request right away: awaiting the Test object would
+    // only send it at the end of the test, long after the stream was pushed.
+    const responsePromise = new Promise((resolve, reject) => {
+      authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hola' }],
+        context: { language: 'es' }
+      }).end((err, res) => (err ? reject(err) : resolve(res)));
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    // A complete unit: it is committed to the translator.
+    mockStream.push('data: {"type":"chunk","content":"First sentence. "}\n\n');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    // A partial unit: no boundary yet, so it stays buffered — and the
+    // translation of the first unit is still in flight, so the failure is not
+    // known yet.
+    mockStream.push('data: {"type":"chunk","content":"Buffered tail"}\n\n');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    // Now the translation fails.
+    failFirstUnit(new Error('GPU down'));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    // The next chunk goes out directly, in English.
+    mockStream.push('data: {"type":"chunk","content":"Raw English"}\n\n');
+    mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+    mockStream.push(null);
+
+    const response = await responsePromise;
+    expect(response.status).toBe(200);
+    const body = response.text || '';
+    // Nothing is lost: the buffered tail is part of the answer.
+    expect(body).toContain('Buffered tail');
+    expect(body).toContain('Raw English');
+    // And it is not emitted after the chunk that follows it.
+    expect(body.indexOf('Buffered tail')).toBeLessThan(body.indexOf('Raw English'));
+    delete process.env.STREAMING_TRANSLATION_ENABLED;
+  });
+
+  it('does not send a queued unit to the translator after the streaming translation failed', async () => {
+    // A unit committed while the previous one was still being translated is
+    // queued behind it. Once the translation failed, the answer is English for
+    // the remainder: the queued unit must not be sent to the translator again,
+    // or a half-translated answer is what the user reads.
+    process.env.STREAMING_TRANSLATION_ENABLED = '1';
+    queryService.initStreamQuery.mockResolvedValue({
+      queryId: 'q1',
+      opeaUrl: 'http://chatqna:8888/v1/chatqna',
+      opeaPayload: { messages: [] }
+    });
+    queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
+    queryService.finalizeStreamQuery.mockResolvedValue(undefined);
+    translationService.init.mockResolvedValue(undefined);
+    let failFirstUnit;
+    const firstUnit = new Promise((resolve, reject) => {
+      failFirstUnit = reject;
+    });
+    translationService.translateMarkdown.mockImplementationOnce(() => firstUnit);
+
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ data: mockStream });
+
+    // .end() starts the request right away: awaiting the Test object would
+    // only send it at the end of the test, long after the stream was pushed.
+    const responsePromise = new Promise((resolve, reject) => {
+      authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hola' }],
+        context: { language: 'es' }
+      }).end((err, res) => (err ? reject(err) : resolve(res)));
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    // The first unit is committed and its translation is in flight.
+    mockStream.push('data: {"type":"chunk","content":"Alpha. "}\n\n');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    // The second unit is committed too: it is queued behind the first one.
+    mockStream.push('data: {"type":"chunk","content":"Beta. "}\n\n');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    failFirstUnit(new Error('GPU down'));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+    mockStream.push(null);
+
+    const response = await responsePromise;
+    expect(response.status).toBe(200);
+    const body = response.text || '';
+    // The queued unit is part of the answer, in English.
+    expect(body).toContain('Alpha');
+    expect(body).toContain('Beta');
+    // And it did not go through the translator a second time.
+    expect(translationService.translateMarkdown).toHaveBeenCalledTimes(1);
+    delete process.env.STREAMING_TRANSLATION_ENABLED;
+  });
+
   it('keeps the answer in English without reporting a failure when the language is not covered', async () => {
     // The language the client asked for is not one the translation models
     // cover. There is no translation to make: the answer stays in English and

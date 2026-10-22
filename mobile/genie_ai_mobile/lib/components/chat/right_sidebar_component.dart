@@ -98,9 +98,12 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
             final dynamic translated = data['translated_markdown'];
             if (translated is List) {
               markdownContent = translated.join('\n');
-            } else if (translated is String) {
+            } else if (translated is String && translated.isNotEmpty) {
               markdownContent = translated;
             } else {
+              // A translation is a non-empty string. Anything else is not a
+              // translation: the English original is kept and the user is
+              // told, instead of an empty FAQ standing in for one.
               markdownContent = baseMarkdown;
               translationFailed = true;
             }

@@ -9,7 +9,7 @@ const { logger, spanAttrs, tracingBaggage } = require('../shared-lib');
 const translationService = require('../services/translation-service');
 const { extractCommittableUnit } = require('../services/translation/stream-boundary');
 const { languageForLog } = require('../services/translation/language-log');
-const { isUnsupportedLanguage } = require('../services/translation/unsupported-language');
+const { isUnsupportedLanguage, unsupportedLanguageBody } = require('../services/translation/unsupported-language');
 const { normalizeRequestedLanguage } = require('../services/translation/language-request');
 const { parsePositiveInt } = require('../shared-lib');
 
@@ -70,12 +70,10 @@ async function resolveRequestLanguage(targetLanguage) {
       return { refusal: null, translator: null };
     }
     logger.warn(`QueryService.unsupported_language: (lang=${languageForLog(targetLanguage)})`);
-    // The response names the refused side, never the value the caller sent:
-    // a value that came back in the answer could be handed on to a model. The
-    // code tells the client that the request was refused — not that the
-    // request failed — so it can tell the two apart without reading the
-    // message.
-    return { refusal: { message: error.message, code: error.code }, translator: null };
+    // The body is the one every refusal is answered with: it names the
+    // refused side, never the value the caller sent (a value that came back
+    // in the answer could be handed on to a model).
+    return { refusal: unsupportedLanguageBody(error), translator: null };
   }
 }
 

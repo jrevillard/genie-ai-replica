@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
-const { isUnsupportedLanguage } = require('../services/translation/unsupported-language');
+const { isUnsupportedLanguage, unsupportedLanguageBody } = require('../services/translation/unsupported-language');
 
 /**
  * Answers a refused language with the 400 it is.
@@ -20,9 +20,8 @@ function respondWithUnsupportedLanguage(error, res) {
   logger.warn(`[TRANSLATION-ROUTES] Rejected request: ${error.message}`);
   // The status code comes from the error (the refusal is a validation
   // error); a refusal that crossed a module boundary without one is still a
-  // bad request. The code tells the client the request was refused — not that
-  // it failed — without it having to read the message.
-  return res.status(error.statusCode || 400).json({ message: error.message, code: error.code });
+  // bad request. The body is the one every refusal is answered with.
+  return res.status(error.statusCode || 400).json(unsupportedLanguageBody(error));
 }
 
 /**

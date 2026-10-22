@@ -2,12 +2,7 @@ const { logger, parsePositiveInt } = require('../../shared-lib');
 const http = require('http');
 const https = require('https');
 const { languageForLog } = require('./language-log');
-const {
-  ownLanguageCode,
-  hasOwnLanguage,
-  isModelLanguageCode: mapProducesCode,
-  supportedLanguages
-} = require('./language-map-lookup');
+const { ownLanguageCode, hasOwnLanguage, mapProducesCode, supportedLanguages } = require('./language-map-lookup');
 
 // API key for remote GPU node authentication (standard OpenAI Bearer token)
 const VLLM_API_KEY = process.env.VLLM_API_KEY || '';

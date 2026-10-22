@@ -477,14 +477,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // Whether the backend could not translate the answer into the requested
     // language. The answer that arrives is then the English original, and the
     // user has to be told — an English answer presented as a translated one
-    // is the failure this flag exists to prevent.
+    // is the failure this flag exists to prevent. Each answer carries its own
+    // outcome: a failure reported for the previous answer must not follow
+    // this one.
     bool answerTranslationFailed = false;
 
     final String streamingId =
         'stream_${DateTime.now().millisecondsSinceEpoch}';
-    // Each answer carries its own outcome: a failure reported for the
-    // previous answer must not follow this one.
-    answerTranslationFailed = false;
     setState(() {
       _isStreaming = true;
       _messages.add({

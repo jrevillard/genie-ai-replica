@@ -51,9 +51,10 @@ function mountSidebar(props = {}) {
 /**
  * @param {object} options
  * @param {boolean} options.faqAvailable - whether /FAQ.md can be fetched
- * @param {boolean} options.translationSucceeds - whether the translation call answers
+ * @param {object|null} options.translation - the body the translation call answers with;
+ *   null makes the call fail
  */
-function mockFetch({ faqAvailable, translationSucceeds }) {
+function mockFetch({ faqAvailable, translation }) {
   return jest.fn((url) => {
     if (url === '/FAQ.md') {
       if (!faqAvailable) {
@@ -62,18 +63,16 @@ function mockFetch({ faqAvailable, translationSucceeds }) {
       return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(FAQ_MARKDOWN) });
     }
     if (url === '/api/translate/markdown') {
-      if (!translationSucceeds) {
+      if (translation === null) {
         return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) });
       }
-      return Promise.resolve({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve({ translated_markdown: '## Qu est-ce que GENIE.AI ?' })
-      });
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(translation) });
     }
     return Promise.reject(new Error(`unexpected fetch: ${url}`));
   });
 }
+
+const TRANSLATED_FAQ = { translated_markdown: '## Qu est-ce que GENIE.AI ?' };
 
 describe('RightSideBarComponent FAQ language contract', () => {
   let originalFetch;
@@ -87,7 +86,7 @@ describe('RightSideBarComponent FAQ language contract', () => {
   });
 
   it('shows the English FAQ and announces it when the translation fails', async () => {
-    global.fetch = mockFetch({ faqAvailable: true, translationSucceeds: false });
+    global.fetch = mockFetch({ faqAvailable: true, translation: null });
 
     const wrapper = mountSidebar();
     await flushPromises();
@@ -100,8 +99,28 @@ describe('RightSideBarComponent FAQ language contract', () => {
     expect(wrapper.find('.faq-question').text()).toContain('What is GENIE.AI?');
   });
 
+  it('shows the English FAQ when the answer carries no translation', async () => {
+    global.fetch = mockFetch({ faqAvailable: true, translation: {} });
+
+    const wrapper = mountSidebar();
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="faq-translation-notice"]').exists()).toBe(true);
+    expect(wrapper.find('.faq-question').text()).toContain('What is GENIE.AI?');
+  });
+
+  it('shows the English FAQ when the translation is empty', async () => {
+    global.fetch = mockFetch({ faqAvailable: true, translation: { translated_markdown: '' } });
+
+    const wrapper = mountSidebar();
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="faq-translation-notice"]').exists()).toBe(true);
+    expect(wrapper.find('.faq-question').text()).toContain('What is GENIE.AI?');
+  });
+
   it('shows no notice when the translation succeeds', async () => {
-    global.fetch = mockFetch({ faqAvailable: true, translationSucceeds: true });
+    global.fetch = mockFetch({ faqAvailable: true, translation: TRANSLATED_FAQ });
 
     const wrapper = mountSidebar();
     await flushPromises();
@@ -111,7 +130,7 @@ describe('RightSideBarComponent FAQ language contract', () => {
   });
 
   it('shows a localized error state when the FAQ cannot be loaded', async () => {
-    global.fetch = mockFetch({ faqAvailable: false, translationSucceeds: true });
+    global.fetch = mockFetch({ faqAvailable: false, translation: TRANSLATED_FAQ });
 
     const wrapper = mountSidebar();
     await flushPromises();

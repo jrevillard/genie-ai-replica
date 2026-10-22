@@ -259,6 +259,15 @@ export default {
         }
 
         const data = await response.json();
+        // A translation is a non-empty string. A response that carries
+        // nothing usable is not a translation: it would leave the FAQ empty
+        // (or unreadable) and the user would see an English FAQ they were
+        // told was translated. The caller keeps the English original and
+        // says so.
+        if (typeof data.translated_markdown !== 'string' || data.translated_markdown.length === 0) {
+          console.error('Translation response carried no translated markdown.');
+          return null;
+        }
         return data.translated_markdown;
       } catch (error) {
         console.error('Translation failed:', error);

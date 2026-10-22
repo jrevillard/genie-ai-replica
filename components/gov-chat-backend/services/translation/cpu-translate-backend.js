@@ -2,12 +2,7 @@ const { logger } = require('../../shared-lib');
 const { Worker } = require('worker_threads');
 const path = require('path');
 const { languageForLog } = require('./language-log');
-const {
-  ownLanguageCode,
-  hasOwnLanguage,
-  isModelLanguageCode: mapProducesCode,
-  supportedLanguages
-} = require('./language-map-lookup');
+const { ownLanguageCode, hasOwnLanguage, mapProducesCode, supportedLanguages } = require('./language-map-lookup');
 
 /**
  * CPU Translation Backend

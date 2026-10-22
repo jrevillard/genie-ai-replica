@@ -36,4 +36,22 @@ function isUnsupportedLanguage(error) {
   return error instanceof UnsupportedLanguageError || error?.code === 'UNSUPPORTED_LANGUAGE';
 }
 
-module.exports = { UnsupportedLanguageError, isUnsupportedLanguage };
+/**
+ * The body a refused language is answered with.
+ *
+ * The message names the side that was refused and never the value the caller
+ * sent: a value that came back in the answer could be handed on to a model.
+ * The code says the request was refused — not that it failed — so the client
+ * can tell the two apart without reading the message.
+ *
+ * Every route that refuses a language answers with this body: one shape, so
+ * a client parses one thing.
+ *
+ * @param {Error} error - The refusal.
+ * @returns {{message: string, code: string}} The body to answer with.
+ */
+function unsupportedLanguageBody(error) {
+  return { message: error.message, code: error.code };
+}
+
+module.exports = { UnsupportedLanguageError, isUnsupportedLanguage, unsupportedLanguageBody };

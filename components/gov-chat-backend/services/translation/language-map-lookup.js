@@ -64,7 +64,7 @@ function hasOwnLanguage(languageMap, isoCode) {
  * @param {string} code - A model-specific language code.
  * @returns {boolean} True when the map produces that code.
  */
-function isModelLanguageCode(languageMap, code) {
+function mapProducesCode(languageMap, code) {
   const codes = languageMap ? languageMap.languageMap : null;
   if (!codes || typeof code !== 'string' || code === '') {
     return false;
@@ -89,6 +89,6 @@ function supportedLanguages(languageMap) {
 module.exports = {
   ownLanguageCode,
   hasOwnLanguage,
-  isModelLanguageCode,
+  mapProducesCode,
   supportedLanguages
 };

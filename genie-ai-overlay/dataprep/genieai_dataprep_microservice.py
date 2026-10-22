@@ -244,22 +244,23 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
                 chunk_overlap=CHUNK_OVERLAP,
             )
 
-            # --- Trigger Tracked Background Task ---
-            # We use asyncio.create_task to maintain a reference for the "Kill" functionality.
-            task = asyncio.create_task(loader.ingest_file_with_guardrail(input_req, lock_file=lock_file))
-            active_ingestion_tasks[payload.fileId] = task
-
-            # Ensure the task is removed from the registry upon completion (success or failure)
-            task.add_done_callback(lambda t: active_ingestion_tasks.pop(payload.fileId, None))
-
+            # Metrics first: once the task exists it owns the lock and the
+            # file, so a failure in this tail must not report an ingestion
+            # that then starts anyway.
             statistics_dict["opea_service@dataprep"].append_latency(time.time() - start, None)
-
-            # Record custom ingestion metrics
             _ing_latency = time.time() - start
             _file_type = payload.fileType
             _ing_attrs = sanitize_attributes({"dataprep.file_type": _file_type, "error": "false"})
             _ingestion_requests.add(1, _ing_attrs)
             _ingestion_duration.record(_ing_latency, _ing_attrs)
+
+            # --- Trigger Tracked Background Task ---
+            # We use asyncio.create_task to maintain a reference for the "Kill" functionality.
+            # Last statement group before the return: everything that can
+            # still fail has failed before the lock and the file change owner.
+            task = asyncio.create_task(loader.ingest_file_with_guardrail(input_req, lock_file=lock_file))
+            active_ingestion_tasks[payload.fileId] = task
+            task.add_done_callback(lambda t: active_ingestion_tasks.pop(payload.fileId, None))
 
             return {"success": True, "status": 200, "message": "Ingestion started in background."}
 
@@ -280,10 +281,19 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
             # this, so a cancellation or interpreter exit in the window
             # cannot leave the flock held by this process.
             if task is None:
-                fcntl.flock(lock_file, fcntl.LOCK_UN)
-                lock_file.close()
+                # Each step is guarded: a failure here must not mask the
+                # original exception, and the temp file must still be
+                # reclaimed if the unlock misbehaves.
+                try:
+                    fcntl.flock(lock_file, fcntl.LOCK_UN)
+                    lock_file.close()
+                except OSError:
+                    logger.exception("Failed to release the ingestion lock")
                 if save_path and os.path.exists(save_path):
-                    os.remove(save_path)
+                    try:
+                        os.remove(save_path)
+                    except OSError:
+                        logger.exception("Failed to remove %s", save_path)
 
 
 # ------------------------------------------------------------------------------

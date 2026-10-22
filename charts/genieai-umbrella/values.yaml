@@ -302,8 +302,17 @@ data:
     # false where the placeholder is acceptable — that is CI's
     # `chart:lint` render (it supplies no envSecrets rows) and dev/kind.
     failOnPlaceholderSecrets: true
-    # SMTP for email verification — leave null to disable (no smtpServer
-    # block renders); set all fields in the environment override when used.
+    # SMTP for email verification and password reset. `smtp: null` is a
+    # value like any other, not a statement that the deployment has no
+    # mail server: the realm's smtpServer block always renders (the kcc
+    # substitution of `$(env:EMAIL_*)` is unconditional), and with no
+    # server declared it carries sentinel values that dial nothing. A
+    # deployment that sends no mail turns verifyEmail and
+    # resetPasswordAllowed off on purpose, in its overlay, where the
+    # choice is visible. A deployment that does send mail names its
+    # server here. The render FAILS when either flag is true and this is
+    # null — a sentinelled smtpServer would swallow the mail and leave
+    # the user staring at a form that never answers.
     smtp: null
     mobileClientId: genie-mobile          # Flutter OIDC client (public, PKCE)
     mobileRedirectScheme: genieai         # <scheme>://callback redirect

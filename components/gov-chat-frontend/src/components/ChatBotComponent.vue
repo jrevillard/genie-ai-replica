@@ -2445,6 +2445,13 @@ export default {
 
 /* Quick Help Overlay */
 .quick-help-overlay {
+  /* The narrow-panel adaptation below .quick-help-content is a container
+     query on this element, so the container has to exist whether the Living
+     Intelligence layer is on or off — otherwise the layer's presence would
+     decide the app's layout. The layer declares the same property on the same
+     element for its own art query; the two agree, and the app's declaration is
+     the one that is always there. */
+  container-type: inline-size;
   /* Every welcome constant is declared here, on the one element that
      contains all three of its consumers — the veil's content box, the
      composer wrapper and the card row — so each of them resolves
@@ -2566,11 +2573,12 @@ export default {
    spend on either.
 
    Two things give, both read from the same container — the overlay is
-   the Living Intelligence layer's `container-type: inline-size` element,
-   so the query keys on the panel and not on the viewport, and it fires
+   this component's own `container-type: inline-size` element, so the
+   query keys on the panel and not on the viewport, it fires
    identically whether the panel is narrow because the viewport is or
-   because a sidebar is collapsed. Above the threshold nothing here
-   applies and the render is the reference's.
+   because a sidebar is collapsed, and it fires identically whether the
+   Living Intelligence layer is on or off. Above the threshold nothing
+   here applies and the render is the reference's.
 
      --qh-veil-pad 32 -> 8 px. The veil has to be as wide as its widest
        child plus twice this, and 32 px of it is 64 px the title cannot

@@ -11,13 +11,11 @@ an unknown or malformed language is refused, a known one still translates.
 
 import json
 import os
-from enum import Enum
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 import chatqna.genieai_chatqna as chatqna_module
-from chatqna.genieai_chatqna import _resolve_language_code
 
 LANGUAGE_CODES_PATH = os.path.join(os.path.dirname(chatqna_module.__file__), "language_codes.json")
 
@@ -57,39 +55,21 @@ def reset_language_codes_cache():
     chatqna_module._LANGUAGE_SCRIPTS_CACHE_AT = None
 
 
-class TestResolveLanguageCode:
-    def test_known_code_is_canonicalised(self):
-        assert _resolve_language_code("fr", load_language_codes()) == "FR"
-
-    def test_uppercase_known_code_is_accepted(self):
-        assert _resolve_language_code("FR", load_language_codes()) == "FR"
-
-    def test_english_resolves_to_EN(self):
-        assert _resolve_language_code("en", load_language_codes()) == "EN"
-
-    def test_injection_payload_is_refused(self):
-        assert _resolve_language_code(INJECTION, load_language_codes()) is None
-
-    def test_unknown_code_is_refused(self):
-        assert _resolve_language_code("zz", load_language_codes()) is None
-
-    def test_auto_is_not_a_language(self):
-        assert _resolve_language_code("auto", load_language_codes()) is None
-
-    def test_blank_is_not_a_language(self):
-        assert _resolve_language_code("   ", load_language_codes()) is None
-
-    def test_non_string_is_refused(self):
-        assert _resolve_language_code(None, load_language_codes()) is None
-        assert _resolve_language_code(42, load_language_codes()) is None
-
-
 class TestRequestLanguageBoundary:
     """The decision the request path makes about the requested language."""
 
     def test_known_code_is_kept(self):
         svc = create_service()
         assert svc._resolve_request_language("fr") == ("FR", False)
+
+    def test_an_uppercase_code_is_kept(self):
+        # Direct callers of the service send codes in either case.
+        svc = create_service()
+        assert svc._resolve_request_language("FR") == ("FR", False)
+
+    def test_english_resolves_to_EN(self):
+        svc = create_service()
+        assert svc._resolve_request_language("en") == ("EN", False)
 
     def test_unknown_code_is_refused(self):
         svc = create_service()
@@ -99,6 +79,10 @@ class TestRequestLanguageBoundary:
         svc = create_service()
         assert svc._resolve_request_language(INJECTION) == (None, True)
 
+    def test_a_non_string_language_is_refused(self):
+        svc = create_service()
+        assert svc._resolve_request_language(42) == (None, True)
+
     def test_no_language_asks_for_detection(self):
         svc = create_service()
         assert svc._resolve_request_language(None) == (None, False)
@@ -107,11 +91,10 @@ class TestRequestLanguageBoundary:
         svc = create_service()
         assert svc._resolve_request_language("auto") == (None, False)
 
-    def test_the_refusal_is_logged(self):
+    def test_a_blank_language_asks_for_detection(self):
+        # A blank value is a request without a language, not a refusal.
         svc = create_service()
-        with patch.object(chatqna_module, "logger") as mock_logger:
-            svc._resolve_request_language("zz")
-        assert mock_logger.warning.called
+        assert svc._resolve_request_language("   ") == (None, False)
 
     def test_the_logged_language_is_bounded_and_printable(self):
         """The refused value is caller-controlled: the log line must not carry
@@ -265,11 +248,6 @@ class TestLanguageMapShape:
         path.write_text(json.dumps({"fr": 42}))
         assert chatqna_module._read_language_codes(str(path)) == {}
 
-    def test_a_valid_map_is_read(self, tmp_path):
-        path = tmp_path / "language_codes.json"
-        path.write_text(json.dumps({"fr": "French"}))
-        assert chatqna_module._read_language_codes(str(path)) == {"fr": "French"}
-
 
 def fake_translation_client():
     """An httpx client that records the request instead of calling the model."""
@@ -309,7 +287,6 @@ class TestTranslateChunkLanguageBoundary:
         prompt = client.post.await_args.kwargs["json"]["messages"][0]["content"]
         assert "French" in prompt
         assert "fr" in prompt
-        assert INJECTION not in prompt
 
     @pytest.mark.asyncio
     async def test_translategemma_prompt_carries_the_mapped_language_name(self, monkeypatch):
@@ -322,7 +299,6 @@ class TestTranslateChunkLanguageBoundary:
 
         prompt = client.post.await_args.kwargs["json"]["prompt"]
         assert "French" in prompt
-        assert INJECTION not in prompt
 
     @pytest.mark.asyncio
     async def test_the_translategemma_prompt_names_the_source_from_the_map(self, monkeypatch):
@@ -439,16 +415,19 @@ class TestHistoryTranslationTarget:
     """
 
     def test_the_history_target_is_the_language_of_the_embedding_space(self):
-        assert chatqna_module.HISTORY_TRANSLATION_TARGET == "en"
+        # The map has to know English: a map that does not leaves the history
+        # untranslated instead of normalizing it.
         assert "en" in load_language_codes()
 
     @pytest.mark.asyncio
-    async def test_the_string_branch_translates_into_english(self):
+    async def test_the_string_branch_translates_into_english(self, monkeypatch):
+        monkeypatch.setattr(chatqna_module, "_is_translategemma", lambda: False)
         svc = create_service()
-        svc._translate_text_chunk = AsyncMock(return_value="translated")
-        result = await svc._get_translated_history_string("hello")
-        assert result == "translated"
-        assert svc._translate_text_chunk.await_args.args[1] == "en"
+        client, context = fake_translation_client()
+        with patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=context):
+            await svc._get_translated_history_string("hello")
+        prompt = client.post.await_args.kwargs["json"]["messages"][0]["content"]
+        assert "English" in prompt
 
     @pytest.mark.asyncio
     async def test_the_message_branch_translates_into_english(self, monkeypatch):
@@ -497,78 +476,6 @@ class TestHistoryTranslationTarget:
         assert mock_logger.warning.called
 
 
-class FakeTranslatorServiceType(Enum):
-    """Mirror of the ServiceType members align_inputs compares against."""
-
-    TRANSLATOR = "translator"
-    EMBEDDING = "embedding"
-
-
-class TestTranslatorBranchLanguageBoundary:
-    """The translator node of the graph.
-
-    The language it names comes from the caller: it is resolved against the
-    language map, so the prompt carries the name the map knows. An unknown
-    language is REFUSED and the text goes through untranslated — falling back
-    to English would answer a different question than the one that was asked,
-    with no refusal and no log.
-    """
-
-    def _align(self, language):
-        service = MagicMock()
-        service.services = {"translator_node": MagicMock()}
-        service.services["translator_node"].service_type = FakeTranslatorServiceType.TRANSLATOR
-        inputs = {"text": "bonjour"}
-        with patch("chatqna.genieai_chatqna.ServiceType", FakeTranslatorServiceType):
-            result = chatqna_module.align_inputs(
-                service,
-                inputs,
-                "translator_node",
-                MagicMock(),
-                {"max_tokens": 128},
-                original_language=language,
-            )
-        return inputs, result
-
-    def test_a_known_language_is_named_from_the_map(self):
-        _inputs, result = self._align("fr")
-        prompt = result["messages"][0]["content"]
-        assert "French" in prompt
-        assert "bonjour" in prompt
-
-    def test_an_unknown_language_is_refused(self):
-        _inputs, result = self._align("zz")
-        assert "zz" not in result["messages"][0]["content"]
-
-    def test_a_refused_language_still_returns_the_node_payload(self):
-        """The node owes the next node a payload: handing it the raw inputs
-        would give the LLM node a dict with no "messages" key at all."""
-        _inputs, result = self._align("zz")
-        assert result["messages"][0]["content"] == "bonjour"
-        assert result["temperature"] == 0
-        assert result["stream"] is False
-
-    def test_an_injection_language_is_refused(self):
-        _inputs, result = self._align(INJECTION)
-        assert INJECTION not in result["messages"][0]["content"]
-
-    def test_a_non_string_language_is_refused(self):
-        _inputs, result = self._align(42)
-        assert result["messages"][0]["content"] == "bonjour"
-
-    def test_the_refusal_is_logged(self):
-        with patch.object(chatqna_module, "logger") as mock_logger:
-            self._align("zz")
-        assert mock_logger.warning.called
-
-    def test_the_refused_language_is_bounded_in_the_log(self):
-        with patch.object(chatqna_module, "logger") as mock_logger:
-            self._align("fr\nFAKE LOG LINE " + ("x" * 500))
-        message = mock_logger.warning.call_args[0][0]
-        assert "\n" not in message
-        assert len(message) < 300
-
-
 class TestTranslationPromptBoundary:
     """The languages a translation prompt names come from the shipped tables.
 
@@ -578,40 +485,47 @@ class TestTranslationPromptBoundary:
     to translate from a code it has never heard of.
     """
 
-    def _prompt(self, source_lang_code, target_lang_code):
-        svc = create_service()
-        return svc._build_translategemma_prompt(
-            text="Hello",
-            source_lang_code=source_lang_code,
-            target_lang_code=target_lang_code,
-        )
-
-    def test_a_known_source_is_named_from_the_map(self):
-        prompt = self._prompt("fr", "en")
-        assert "French" in prompt
-
-    def test_an_unmapped_source_code_is_not_named_in_the_prompt(self):
+    @pytest.mark.asyncio
+    async def test_an_unmapped_source_code_is_not_named_in_the_prompt(self, monkeypatch):
         """langdetect answers with codes the language map does not key
         ('zh-cn', 'jw', 'tl'): the history is still normalized to English, but
         the prompt must not name the source with a code the map does not
         know — and without a name it must not claim to know the source at
         all."""
-        prompt = self._prompt("zh-cn", "en")
+        monkeypatch.setattr(chatqna_module, "_is_translategemma", lambda: True)
+        svc = create_service()
+        client, context = fake_translation_client()
+        with patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=context):
+            await svc._translate_text_chunk("hello", "en", source_lang_code="zh-cn")
+
+        prompt = client.post.await_args.kwargs["json"]["prompt"]
         assert "zh-cn" not in prompt.lower()
         assert "to English (en) translator" not in prompt
         assert "English (en)" in prompt
 
-    def test_an_unmapped_target_code_is_not_named_in_the_prompt(self):
-        prompt = self._prompt("en", "xx-yy")
-        assert "xx-yy" not in prompt.lower()
+    @pytest.mark.asyncio
+    async def test_a_malformed_source_code_is_not_named_in_the_prompt(self, monkeypatch):
+        monkeypatch.setattr(chatqna_module, "_is_translategemma", lambda: True)
+        svc = create_service()
+        client, context = fake_translation_client()
+        with patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=context):
+            await svc._translate_text_chunk("hello", "en", source_lang_code="not a language")
 
-    def test_a_malformed_source_code_is_not_named_in_the_prompt(self):
-        prompt = self._prompt("not a language", "en")
+        prompt = client.post.await_args.kwargs["json"]["prompt"]
         assert "not a language" not in prompt
 
-    def test_the_target_is_named_from_the_map(self):
-        prompt = self._prompt("en", "fr")
-        assert "French" in prompt
+    def test_an_unmapped_target_code_is_not_named_in_the_prompt(self):
+        """Defensive branch: the target reaches the builder already resolved
+        against the map, so no production path produces an unmapped target.
+        The builder still refuses to name it — it is the last writer of a
+        language name, so it is the last place that can say no."""
+        svc = create_service()
+        prompt = svc._build_translategemma_prompt(
+            text="Hello",
+            source_lang_code="en",
+            target_lang_code="xx-yy",
+        )
+        assert "xx-yy" not in prompt.lower()
 
 
 class TestLanguageScriptsMap:

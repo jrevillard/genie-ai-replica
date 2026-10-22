@@ -356,18 +356,33 @@ with spaces is not a value the map cannot find.
 
 `"auto"` is not a language: it asks the service to detect the language the
 conversation is written in, which the chatqna service does on its own. It is
-accepted, never refused, and it asks for no translation — the answer is
-delivered in English, exactly as when the request named no language at all.
-English (`"en"`) is the language the answer is written in, so it is accepted
-too, and asks for no translation.
+accepted, never refused, and it names no translation target. English
+(`"en"`) is the language the answer is written in, so it is accepted too,
+and names no target either. A request that names no language at all is
+treated exactly like `"auto"`.
+
+What the answer looks like then depends on which path served the request,
+because the two paths translate in different places:
+
+- **Streaming** (`POST /api/queries/stream`) — the backend translates the
+  answer. No target named means no translation: the answer arrives as the
+  model wrote it, and the `done` frame carries `translationFailed: false`.
+- **Non-streaming** (`POST /api/queries`) — the chatqna service translates
+  the answer. It detects the language of the conversation, and when the
+  detected code is one the language map covers — and is not English — the
+  answer is translated into it and the metadata carries
+  `translation_status: "ok"`. When the detection fails, or names a code the
+  map does not cover, the answer stays in English and the status key is
+  absent.
 
 On the **non-streaming** path (`POST /api/queries`) the answer's metadata
-carries the same outcome under `translation_status`: `ok` when the answer was
+carries the outcome under `translation_status`: `ok` when the answer was
 translated, `refused` when the requested language was refused, `failed` when
-the translation broke. The key is **absent** when no translation was asked
-for (the request named English, or named no language). `refused` and `failed`
-both leave the English answer in place, so a client has to be able to tell an
-untranslated answer from a translated one — the status is that signal.
+the translation broke. The key is **absent** when nothing was translated
+(the request named English, or named no language and nothing was detected
+that the deployment can answer in). `refused` and `failed` both leave the
+English answer in place, so a client has to be able to tell an untranslated
+answer from a translated one — the status is that signal.
 
 **`GET /api/queries`** is paginated, scoped to the JWT user. Query params:
 
@@ -895,7 +910,7 @@ The 501 response body:
 | Stream starts then stops with `CHATQNA_STREAM_ERROR` | Upstream OPEA ChatQnA failure (timeouts, refused) |
 | Stream starts then stops with `STREAM_ERROR` | Generic upstream stream error |
 | Answer arrives in English, `done` carries `translationFailed: true` | The translation backend did not answer. Not a stream failure — the answer is complete, only its language is not |
-| Answer arrives in English, `done` carries `translationFailed: false` | No translation was asked for: the request named English, or named no language at all. Nothing failed |
+| Answer arrives in English, `done` carries `translationFailed: false` | No translation was asked for: the request named English, named `"auto"`, or named no language at all. Nothing failed |
 | Stream silently hangs and times out | Upstream ChatQnA unresponsive; check `CHATQNA_STREAM_TIMEOUT` (default 3600000 ms = 60 min) |
 
 ## Static & operational endpoints

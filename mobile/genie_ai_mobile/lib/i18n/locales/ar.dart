@@ -1011,6 +1011,7 @@ const Map<String, dynamic> arLocale = {
     "fileReceived": "تم استلام الملف بنجاح.",
     "fileUploadError": "خطأ في رفع الملف.",
     "processingError": "خطأ في معالجة طلبك.",
+    "unsupportedLanguage": 'هذه اللغة غير متاحة في هذا التثبيت.',
     "noResponse": "لم يتم تلقي أي رد.",
     "attachFile": "إرفاق ملف",
     "fileTooLarge": "الملف كبير جداً. الحجم الأقصى هو {maxSize}.",

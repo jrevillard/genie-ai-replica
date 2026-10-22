@@ -1020,6 +1020,8 @@ const Map<String, dynamic> enLocale = {
     "fileReceived": "File received successfully.",
     "fileUploadError": "Error uploading file.",
     "processingError": "Error processing your request.",
+    "unsupportedLanguage":
+        'This language is not available for this deployment.',
     "noResponse": "No response received.",
     "attachFile": "Attach File",
     "fileTooLarge": "File is too large. Maximum size is {maxSize}.",

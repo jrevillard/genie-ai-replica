@@ -202,9 +202,18 @@ stream opens**: the request is answered `400` with
 and nothing is generated. The answer is never produced in a language the
 caller did not ask for — that is the whole point of the boundary.
 
-Any other failure (GPU node down, model not loaded, OOM) is not a
-refusal: the request goes through and the answer is delivered in
-English. The backend:
+Any other failure is not a refusal — with one exception that happens
+before any request is served. The translation service is a **mandatory
+boot dependency** of the backend (`components/gov-chat-backend/index.js`):
+when a GPU API is configured and cannot be reached at startup, the
+backend does not start at all. There is no request to answer, and no
+English answer either — the deployment is down until the GPU API answers
+again. This is deliberate: a deployment that named a GPU API is not
+silently served by another model.
+
+Once the backend is up, a translation failure (GPU node down, model not
+loaded, OOM) is not a refusal: the request goes through and the answer
+is delivered in English. The backend:
 
 1. Emits the unit as-is (English) with the original separator.
 2. Sets `streamingTranslationFailed = true`.

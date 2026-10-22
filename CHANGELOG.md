@@ -290,6 +290,7 @@ Shortening any of these converts a slow-but-successful call into a visible failu
 - **Bare-severity rows in the admin logs TYPE column.** Python uvicorn / `logging` module messages no longer surface as `ERROR`, `WARNING`, `INFO` in the admin TYPE column — the leading level prefix is stripped at the collector and the column now shows the actual message head. (#343)
 - **The mobile app answered in English whatever the interface language was.** The mobile chat client never sent the language it wanted the answer in, so the backend had no way to honour it: every answer came back in English. The mobile app now sends the interface language with the query, and — like the web client — says so when the answer could not be translated instead of presenting the English original as a translation. The FAQ sidebar follows the same rule. (#1097, !589)
 - **The web client hid the reason the backend refused a request.** A failed request was reported as `HTTP <status>`, whatever the backend had actually said, so the user never learned why. The backend's message is now shown. (#1097, !589)
+- **The mobile app reported a refused language as a generic failure.** When the backend refuses a language the deployment cannot answer in, the mobile chat client showed only "Error processing your request." The refusal code is now read from the response body and shown as its own message, in the interface language, on both the chat and the FAQ paths. (#1097, !589)
 
 ### Security
 

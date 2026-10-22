@@ -1020,6 +1020,7 @@ const Map<String, dynamic> ruLocale = {
     "fileReceived": "Файл успешно получен.",
     "fileUploadError": "Ошибка загрузки файла.",
     "processingError": "Ошибка обработки вашего запроса.",
+    "unsupportedLanguage": 'Этот язык недоступен в текущем развёртывании.',
     "noResponse": "Ответ не получен.",
     "attachFile": "Прикрепить файл",
     "fileTooLarge": "Файл слишком большой. Максимальный размер {maxSize}.",

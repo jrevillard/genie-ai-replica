@@ -1030,6 +1030,8 @@ const Map<String, dynamic> frLocale = {
     "fileReceived": "Fichier reçu avec succès.",
     "fileUploadError": "Erreur lors du téléchargement du fichier.",
     "processingError": "Erreur lors du traitement de votre demande.",
+    "unsupportedLanguage":
+        "Cette langue n'est pas disponible pour ce déploiement.",
     "noResponse": "Aucune réponse reçue.",
     "attachFile": "Joindre un fichier",
     "fileTooLarge":

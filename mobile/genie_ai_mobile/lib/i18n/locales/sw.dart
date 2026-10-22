@@ -1025,6 +1025,7 @@ const Map<String, dynamic> swLocale = {
     "fileReceived": "Faili imepokelewa.",
     "fileUploadError": "Hitilafu kupakia faili.",
     "processingError": "Hitilafu kuchakata ombi lako.",
+    "unsupportedLanguage": 'Lugha hii haipatikani katika mfumo huu.',
     "noResponse": "Hakuna jibu lililopokelewa.",
     "attachFile": "Ambatanisha Faili",
     "fileTooLarge": "Faili ni kubwa mno. Ukubwa wa juu ni {maxSize}.",

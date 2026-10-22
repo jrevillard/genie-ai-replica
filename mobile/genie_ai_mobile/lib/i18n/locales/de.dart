@@ -1032,6 +1032,8 @@ const Map<String, dynamic> deLocale = {
     "fileReceived": "Datei erfolgreich empfangen.",
     "fileUploadError": "Fehler beim Hochladen der Datei.",
     "processingError": "Fehler bei der Verarbeitung deiner Anfrage.",
+    "unsupportedLanguage":
+        'Diese Sprache ist für diese Installation nicht verfügbar.',
     "noResponse": "Keine Antwort erhalten.",
     "attachFile": "Datei anhängen",
     "fileTooLarge": "Datei ist zu groß. Maximale Größe ist {maxSize}.",

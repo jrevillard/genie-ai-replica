@@ -916,6 +916,7 @@ const Map<String, dynamic> zhLocale = {
     "fileReceived": "文件接收成功。",
     "fileUploadError": "文件上传错误。",
     "processingError": "处理您的请求时出错。",
+    "unsupportedLanguage": '此语言在当前部署中不可用。',
     "noResponse": "未收到回复。",
     "attachFile": "附加文件",
     "fileTooLarge": "文件过大。最大大小为 {maxSize}。",

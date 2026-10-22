@@ -3822,17 +3822,16 @@ class ChatQnAService:
             # A refused language does not steer the answer: it stays in English.
             original_language = "EN"
 
-        # The language the history is written in. It is the requested language
-        # when that one is trusted, and the detected one when the request was
-        # refused: a language code the map does not know says nothing about
-        # the language the user writes in, and the history still has to be
-        # normalized to English for the English-only embedding space. The
-        # detected code is used even when the translation models do not cover
-        # it — the target is English, so the history is still normalized, and
-        # a source the map does not know is not named in the prompt at all.
-        # When the detection produced nothing there is no source to translate
-        # from, and the history is embedded as it is.
-        history_language = detected_language if language_refused else original_language
+        # The language the history is written in. The detection's answer wins
+        # whenever there is one: it is what the conversation is actually
+        # written in, and the history has to be normalized to English for the
+        # English-only embedding space. A code the map does not key ('zh-cn')
+        # names the source all the same — the prompt does not name it, but the
+        # history is translated to English regardless. Without a detected code
+        # the requested language is the only one there is, and when there is
+        # neither there is no source to translate from: the history is
+        # embedded as it is.
+        history_language = detected_language or original_language
 
         translated_history_string = ""
         if history_language and history_language.strip() != "EN":

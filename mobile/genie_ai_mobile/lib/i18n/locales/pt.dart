@@ -1025,6 +1025,8 @@ const Map<String, dynamic> ptLocale = {
     "fileReceived": "Arquivo recebido com sucesso.",
     "fileUploadError": "Erro ao carregar arquivo.",
     "processingError": "Erro ao processar sua solicitação.",
+    "unsupportedLanguage":
+        'Este idioma não está disponível para esta implantação.',
     "noResponse": "Nenhuma resposta recebida.",
     "attachFile": "Anexar Arquivo",
     "fileTooLarge": "O arquivo é muito grande. O tamanho máximo é {maxSize}.",

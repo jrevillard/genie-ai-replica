@@ -2,7 +2,7 @@ const { logger } = require('../../shared-lib');
 const { Worker } = require('worker_threads');
 const path = require('path');
 const { languageForLog } = require('./language-log');
-const { ownLanguageCode, hasOwnLanguage, mapProducesCode, supportedLanguages } = require('./language-map-lookup');
+const { ownLanguageCode, hasOwnLanguage, supportedLanguages } = require('./language-map-lookup');
 
 /**
  * CPU Translation Backend
@@ -241,21 +241,6 @@ class CpuTranslateBackend {
       return null;
     }
     return code;
-  }
-
-  /**
-   * Check whether a code is one the model answers to.
-   *
-   * The codes the service hands to the backend are the ones this map
-   * produces. A code the map does not produce is not a language the model can
-   * be asked for, and saying so is what lets the caller check the codes on
-   * the way here.
-   *
-   * @param {string} code - A model-specific language code.
-   * @returns {boolean} True when the map produces that code.
-   */
-  isModelLanguageCode(code) {
-    return mapProducesCode(this.languageMap, code);
   }
 
   /**

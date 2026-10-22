@@ -1024,6 +1024,7 @@ const Map<String, dynamic> bnLocale = {
     "fileReceived": "ফাইলটি সফলভাবে গৃহীত হয়েছে।",
     "fileUploadError": "ফাইল আপলোডে ত্রুটি।",
     "processingError": "আপনার অনুরোধ প্রক্রিয়া করতে ত্রুটি।",
+    "unsupportedLanguage": 'এই ভাষা এই ডিপ্লয়মেন্টে উপলব্ধ নয়।',
     "noResponse": "কোনো উত্তর পাওয়া যায়নি।",
     "attachFile": "ফাইল যুক্ত করুন",
     "fileTooLarge": "ফাইলটি খুব বড়। সর্বোচ্চ আকার হলো {maxSize}।",

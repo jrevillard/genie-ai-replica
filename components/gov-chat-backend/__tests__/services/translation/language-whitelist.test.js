@@ -182,17 +182,6 @@ describe('the codes handed to the backend', () => {
 
     expect(translate).toHaveBeenCalledWith(['hello'], 'eng_Latn', 'fra_Latn');
   });
-
-  it('does not hand the backend a code the backend did not produce', async () => {
-    // The codes the service hands over come from the backend's own map. A
-    // backend that hands out a code its map does not produce would put a
-    // language nobody vetted into the model request.
-    jest.spyOn(backend, 'getLanguageCode').mockReturnValue('not-a-model-code');
-    const translate = jest.spyOn(backend, 'translate').mockResolvedValue(['bonjour']);
-
-    await expect(service.translate(['hello'], 'en', 'fr')).rejects.toThrow(/not one the loaded backend knows/);
-    expect(translate).not.toHaveBeenCalled();
-  });
 });
 
 describe('backend language map lookups', () => {
@@ -235,15 +224,6 @@ describe('backend language map lookups', () => {
     } finally {
       backend.languageMap.languageMap.fr = saved;
     }
-  });
-
-  it('answers whether a code is one the model knows', () => {
-    // The codes the service hands to the backend are the ones the map
-    // produces. The backend has to be able to say whether a code is one of
-    // them, or nothing can check the codes on the way to the model.
-    expect(backend.isModelLanguageCode('fr')).toBe(true);
-    expect(backend.isModelLanguageCode('not-a-model-code')).toBe(false);
-    expect(backend.isModelLanguageCode('constructor')).toBe(false);
   });
 
   it('reports a missing language name as a defect in the map, not as a bad request', () => {

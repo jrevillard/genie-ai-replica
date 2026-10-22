@@ -14,6 +14,7 @@ import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
 import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
 import 'package:genie_ai_mobile/providers/api_providers.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N
+import 'package:genie_ai_mobile/services/language_refusal.dart';
 import 'package:genie_ai_mobile/services/notification_service.dart';
 import 'package:genie_ai_mobile/services/sse_parser.dart';
 import 'package:genie_ai_mobile/services/translation_status.dart';
@@ -511,6 +512,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       if (!mounted) return;
 
       if (streamedResponse.statusCode != 200) {
+        // The backend refuses a language the deployment cannot answer in
+        // before the stream opens. The refusal names the refused side in its
+        // body: the client shows its own text for it.
+        final String body = await streamedResponse.stream.bytesToString();
+        final String? code = languageRefusalCode(body);
+        if (code != null) {
+          throw LanguageRefusal(code);
+        }
         throw Exception('SSE returned ${streamedResponse.statusCode}');
       }
 
@@ -645,14 +654,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         setState(() {
           msg['content'] = accumulatedContent.isNotEmpty
               ? accumulatedContent
-              : tr('chatbot.processingError');
+              : _failureMessage(e);
         });
       }
       setState(() {
         _isStreaming = false;
         _isLoading = false;
       });
-      NotificationService.error(tr('chatbot.processingError'));
+      NotificationService.error(_failureMessage(e));
     }
   }
 
@@ -687,6 +696,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       final res = await queriesApi.apiQueriesPostWithHttpInfo(request);
 
       if (res.statusCode != 200 && res.statusCode != 201) {
+        // The backend refuses a language the deployment cannot answer in with
+        // a body that names the refused side: the client shows its own text
+        // for it instead of a bare status code.
+        final String? code = languageRefusalCode(res.body);
+        if (code != null) {
+          throw LanguageRefusal(code);
+        }
         throw Exception("Query failed: ${res.statusCode}");
       }
 
@@ -725,9 +741,21 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       _updateQuickHelpVisibility();
     } catch (e) {
       setState(() => _isLoading = false);
-      NotificationService.error(tr('chatbot.processingError'));
+      NotificationService.error(_failureMessage(e));
       debugPrint("[CHATBOT] Send error: $e");
     }
+  }
+
+  /// The message a failed request is shown with.
+  ///
+  /// A refused language is the caller's side of the boundary: the deployment
+  /// cannot answer in that language, and saying so is more useful than a
+  /// generic failure. Every other failure is shown as the generic one.
+  String _failureMessage(Object error) {
+    if (error is LanguageRefusal && error.code == unsupportedLanguageCode) {
+      return tr('chatbot.unsupportedLanguage');
+    }
+    return tr('chatbot.processingError');
   }
 
   List<dynamic> _mergeUniqueDocs(

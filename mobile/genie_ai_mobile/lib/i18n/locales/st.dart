@@ -1025,6 +1025,8 @@ const Map<String, dynamic> stLocale = {
     "fileReceived": "Faele e amohetsoe ka katleho.",
     "fileUploadError": "Phoso ho kenya faele.",
     "processingError": "Phoso ho sebetsana le kopo ea hao.",
+    "unsupportedLanguage":
+        'This language is not available for this deployment.',
     "noResponse": "No response received.",
     "attachFile": "Hlomathisa Faele",
     "fileTooLarge": "Faele e kholo haholo. Boholo ke {maxSize}.",

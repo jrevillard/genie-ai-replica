@@ -1022,6 +1022,8 @@ const Map<String, dynamic> esLocale = {
     "fileReceived": "Archivo recibido con éxito.",
     "fileUploadError": "Error al subir archivo.",
     "processingError": "Error al procesar tu solicitud.",
+    "unsupportedLanguage":
+        'Este idioma no está disponible para este despliegue.',
     "noResponse": "No se recibió ninguna respuesta.",
     "attachFile": "Adjuntar archivo",
     "fileTooLarge":

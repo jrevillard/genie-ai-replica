@@ -442,9 +442,10 @@ module.exports = (queryService) => {
           if (res.writableEnded) return;
           if (streamingTranslationFailed) {
             // The translation failed for an earlier unit: the answer stays in
-            // English for the remainder, so the unit goes out as it is — and
-            // it does not go to the translator again, or the user reads a
-            // half-translated answer.
+            // English for the remainder, so the unit goes out as it is. The
+            // translator is not asked again — from here on the answer is the
+            // English stream, and a unit that came back translated would
+            // disagree with the ones around it.
             if (!res.writableEnded) {
               res.write(`data: ${JSON.stringify({ type: 'chunk', content: `${content}${separator}` })}\n\n`);
             }
@@ -456,8 +457,9 @@ module.exports = (queryService) => {
             // in English, and the client is told so on `done`. Handing back the
             // English unit as if it were the translation would present an
             // untranslated answer as a translated one — the failure the flag
-            // exists for. The rest of the answer stays in English too, so the
-            // user does not read a half-translated answer.
+            // exists for. From here on the answer is the English stream: the
+            // units that were translated keep their translation, and the ones
+            // that follow stay in English.
             const empty = !translated || !translated.trim();
             if (empty) {
               logger.warn(

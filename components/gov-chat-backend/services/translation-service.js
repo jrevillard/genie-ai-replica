@@ -428,11 +428,10 @@ class TranslationService {
     sourceLang = sourceLangCode,
     targetLang = targetLangCode
   ) {
-    // The codes are the ones the loaded backend's own map produces. This
-    // asserts it at the last step before the model: a code the backend does
-    // not know is not a language it can be asked for, and the model would
-    // receive it as if it were one.
-    this._assertModelLanguageCodes(sourceLangCode, targetLangCode);
+    // The codes are the ones the loaded backend's own map produces: they
+    // come from `resolveLanguagePair`, which reads them out of that map and
+    // refuses a language the map does not carry. There is nothing to check
+    // here — a code the backend does not know cannot reach this call.
 
     try {
       // Delegate to backend
@@ -455,40 +454,6 @@ class TranslationService {
         backend: this.backendType
       });
       throw error;
-    }
-  }
-
-  /**
-   * @method _assertModelLanguageCodes
-   * @description Refuses a language code the loaded backend does not know.
-   *
-   * The check is on the backend's own table, so the answer comes from the
-   * model that would be asked, not from a second list that could drift away
-   * from it. A backend that cannot answer (no such method) is not checked:
-   * the guard is there to catch a code that slipped through, not to replace
-   * the resolution.
-   * @param {string} sourceLangCode - The model-specific source language code.
-   * @param {string} targetLangCode - The model-specific target language code.
-   * @throws {Error} When either code is not one the loaded backend knows.
-   */
-  _assertModelLanguageCodes(sourceLangCode, targetLangCode) {
-    if (typeof this.backend?.isModelLanguageCode !== 'function') {
-      return;
-    }
-    const sides = [
-      ['source', sourceLangCode],
-      ['target', targetLangCode]
-    ];
-    for (const [side, code] of sides) {
-      if (!this.backend.isModelLanguageCode(code)) {
-        // The log carries a bounded, printable form of the code — the same
-        // rule the other language log lines follow. The thrown error names
-        // the side only: nothing a caller wrote is echoed back.
-        logger.error(
-          `[TRANSLATION-SERVICE] The ${side} language code (${languageForLog(code)}) is not one the loaded backend knows.`
-        );
-        throw new Error(`[TRANSLATION-SERVICE] The ${side} language code is not one the loaded backend knows.`);
-      }
     }
   }
 

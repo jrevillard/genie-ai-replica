@@ -77,6 +77,13 @@ def build_translategemma_prompt(text: str, source_lang_code: str, target_lang_co
     builds the same prompt from the shipped language tables, naming the
     script of the target language instead of a hardcoded alphabet; the two
     are independent, this script is not part of the deployed stack.
+
+    The language names and codes land in the prompt, so they steer the
+    model. Here they come from this script's own constants — never from a
+    request. A caller that wants to name a language it was given has to
+    resolve it against a shipped language table first, the way the deployed
+    services do: a name that is not in the table is not a language, and
+    putting one in the prompt is a way of telling the model what to write.
     """
     return (
         f"<bos><start_of_turn>user\n"

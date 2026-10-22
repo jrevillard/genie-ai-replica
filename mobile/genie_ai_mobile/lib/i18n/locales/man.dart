@@ -1009,6 +1009,8 @@ const Map<String, dynamic> manLocale = {
     "fileReceived": "Kaito sotota a benta.",
     "fileUploadError": "Kaito wulu manta.",
     "processingError": "I la nyininka sabang manta.",
+    "unsupportedLanguage":
+        'This language is not available for this deployment.',
     "noResponse": "No response received.",
     "attachFile": "Kaito dii",
     "fileTooLarge": "Kaito baa tiyaata. A ka kanyaming le {maxSize} koto.",

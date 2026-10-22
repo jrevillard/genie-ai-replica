@@ -3929,6 +3929,63 @@ async def test_a_refused_language_with_an_undetectable_source_still_normalizes_t
 
 
 @pytest.mark.asyncio
+async def test_a_detected_language_the_models_do_not_cover_still_normalizes_the_history():
+    """The same rule, without a refused request in front of it.
+
+    A request that names no language at all is answered in the language the
+    conversation is written in, and the history is normalized to English
+    whatever the detector answered — including a code the translation models
+    do not cover. The answer stays in English (the models cannot write in the
+    detected language), the history is translated all the same: dropping the
+    detected code would leave the history in its own language, out of the
+    English-only embedding space.
+    """
+    svc = create_chatqna_service()
+    svc.user_profile_client = MagicMock()
+    svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
+
+    history_calls = []
+    scheduled = {}
+
+    async def fake_history(history, source_lang_code="en"):
+        history_calls.append(source_lang_code)
+        return "USER: qu'est-ce que X ?"
+
+    svc._get_translated_history_string = fake_history
+
+    async def fake_schedule(initial_inputs=None, llm_parameters=None, genie_params=None, **_kwargs):
+        scheduled["original_language"] = genie_params.get("original_language")
+        raise RuntimeError("stop right after the language decision")
+
+    svc.megaservice.schedule = fake_schedule
+
+    req = create_mock_request(
+        data=create_mock_chat_request_data(
+            messages=[{"role": "user", "content": "qu'est-ce que X ?"}],
+        ),
+        headers={"Authorization": "Bearer dummy.jwt.token"},
+    )
+    with (
+        patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
+        patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
+        patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
+        # "ne" is a language langdetect can return that the translation
+        # models do not cover.
+        patch.object(chatqna_module, "detect", return_value="ne"),
+        _patched_chat_request(
+            stream=False,
+            context=MagicMock(language=None),
+            messages=[{"role": "user", "content": "qu'est-ce que X ?"}],
+        ),
+        contextlib.suppress(Exception),
+    ):
+        await svc.handle_request(req)
+
+    assert history_calls == ["ne"]
+    assert scheduled["original_language"] == "EN"
+
+
+@pytest.mark.asyncio
 async def test_a_refused_language_with_a_failing_detection_leaves_the_history_alone():
     """A detection that raises leaves the history untranslated, not the
     request broken.

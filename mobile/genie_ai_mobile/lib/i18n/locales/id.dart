@@ -1018,6 +1018,7 @@ const Map<String, dynamic> idLocale = {
     "fileReceived": "Berkas berhasil diterima.",
     "fileUploadError": "Kesalahan mengunggah berkas.",
     "processingError": "Kesalahan memproses permintaan Anda.",
+    "unsupportedLanguage": 'Bahasa ini tidak tersedia untuk deployment ini.',
     "noResponse": "Tidak ada respons yang diterima.",
     "attachFile": "Lampirkan Berkas",
     "fileTooLarge": "Berkas terlalu besar. Ukuran maksimum adalah {maxSize}.",

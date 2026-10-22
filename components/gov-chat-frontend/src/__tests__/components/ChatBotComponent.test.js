@@ -418,6 +418,10 @@ describe('ChatBotComponent', () => {
       await wrapper.vm.$nextTick();
 
       expect(vm.systemStatus.online).toBe(true);
+      // The status panel reports the deployment, not the request: it shows
+      // no error line while the deployment is up, and the reason is carried
+      // by the answer bubble and the notification.
+      expect(vm.systemStatus.errorMessage).toBe('');
       expect(mockNotificationError).toHaveBeenCalledWith(expect.stringContaining('unsupportedLanguage'));
       const streamingMsg = vm.chatMessages[vm.chatMessages.length - 1];
       expect(streamingMsg.content).toContain('unsupportedLanguage');

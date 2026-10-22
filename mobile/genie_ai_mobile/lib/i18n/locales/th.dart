@@ -1009,6 +1009,7 @@ const Map<String, dynamic> thLocale = {
     "fileReceived": "ได้รับไฟล์เรียบร้อยแล้ว",
     "fileUploadError": "เกิดข้อผิดพลาดในการอัปโหลดไฟล์",
     "processingError": "เกิดข้อผิดพลาดในการประมวลผลคำขอของคุณ",
+    "unsupportedLanguage": 'ภาษานี้ไม่พร้อมใช้งานในการติดตั้งนี้',
     "noResponse": "ไม่ได้รับคำตอบ",
     "attachFile": "แนบไฟล์",
     "fileTooLarge": "ไฟล์มีขนาดใหญ่เกินไป ขนาดสูงสุดคือ {maxSize}",

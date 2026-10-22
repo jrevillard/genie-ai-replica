@@ -1082,8 +1082,12 @@ export default {
 
             // A 4xx is a request the backend refused: the deployment is up
             // and answered, so it stays online and the reason it gave is what
-            // the user is shown. Anything else — a 5xx, a dropped connection
-            // — leaves the deployment down.
+            // the user is shown — in the answer bubble and in the
+            // notification. The status panel reports the deployment, not the
+            // request, so it has nothing to add here: its error line only
+            // shows while the deployment is down.
+            // Anything else — a 5xx, a dropped connection — leaves the
+            // deployment down.
             const refused = Number.isInteger(error?.status) && error.status >= 400 && error.status < 500;
             const reason = refused
               ? error.code === 'UNSUPPORTED_LANGUAGE'
@@ -1097,7 +1101,7 @@ export default {
 
             this.systemStatus.lastResponseTime = null;
             this.systemStatus.online = refused;
-            this.systemStatus.errorMessage = error.message || this.translate('chatbot.processingError');
+            this.systemStatus.errorMessage = refused ? '' : error.message || this.translate('chatbot.processingError');
             this.systemStatus.lastUpdated = new Date();
             notificationService.error(reason);
           }

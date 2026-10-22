@@ -1,7 +1,7 @@
+
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
 from google_translator import GoogleTranslator
-import os
+from pydantic import BaseModel
 
 app = FastAPI()
 

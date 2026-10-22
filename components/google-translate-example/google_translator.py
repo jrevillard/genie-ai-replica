@@ -1,5 +1,6 @@
+
 from google.cloud import translate_v2 as translate
-import os
+
 
 class GoogleTranslator:
     def __init__(self):

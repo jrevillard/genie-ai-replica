@@ -159,7 +159,7 @@ The upstream `flutter_appauth` has an `InsecureConnectionBuilder` bug ([#386](ht
 
 **pubspec.yaml** points to the local fork via `path: flutter_appauth/flutter_appauth`.
 
-**Before merging to main**, revert `pubspec.yaml` back to `flutter_appauth: ^11.0.0` and remove the `flutter_appauth/` directory.
+The fork stays in the repository: upstream ignores the flag on Apple platforms, so dropping the fork would put an unconditional trust-all client in every build. Its trust-all paths are gated by `allowInsecureConnections` and covered by `test/config/flutter_appauth_insecure_gate_test.dart`, which fails if a rebased fork exposes them unguarded.
 
 To update the fork from upstream:
 ```bash
@@ -185,18 +185,18 @@ cd mobile/genie_ai_mobile
 ANDROID_HOME=/opt/android-sdk flutter pub get
 
 # Android
-ANDROID_HOME=/opt/android-sdk flutter build apk --flavor dev --debug
-ANDROID_HOME=/opt/android-sdk flutter build apk --flavor itu --release
-ANDROID_HOME=/opt/android-sdk flutter build appbundle --flavor itu --release
+ANDROID_HOME=/opt/android-sdk flutter build apk --flavor dev --debug --dart-define=FLAVOR=dev
+ANDROID_HOME=/opt/android-sdk flutter build apk --flavor itu --release --dart-define=FLAVOR=itu
+ANDROID_HOME=/opt/android-sdk flutter build appbundle --flavor itu --release --dart-define=FLAVOR=itu
 adb install -r build/app/outputs/flutter-apk/app-dev-debug.apk
 
 # iOS (requires Mac with Xcode)
-flutter build ipa --flavor dev
-flutter build ipa --flavor itu
+flutter build ipa --flavor dev --dart-define=FLAVOR=dev
+flutter build ipa --flavor itu --dart-define=FLAVOR=itu
 
 # Run on device/emulator
-flutter run --flavor dev
-flutter run --flavor itu
+flutter run --flavor dev --dart-define=FLAVOR=dev
+flutter run --flavor itu --dart-define=FLAVOR=itu
 ```
 
 ### Android Emulator Setup
@@ -262,10 +262,11 @@ The `dev` flavor uses dart-defines to point to the server:
 ```bash
 # Custom server, default port (443)
 flutter build apk --flavor dev --debug \
-  --dart-define=DEV_SERVER=192.168.78.153
+  --dart-define=FLAVOR=dev --dart-define=DEV_SERVER=192.168.78.153
 
 # Custom server + custom port (e.g. local nginx with self-signed cert)
 flutter build apk --flavor dev --debug \
+  --dart-define=FLAVOR=dev \
   --dart-define=DEV_SERVER=192.168.78.153 --dart-define=DEV_PORT=8443
 
 adb install -r build/app/outputs/flutter-apk/app-dev-debug.apk
@@ -367,7 +368,7 @@ Build the APK, then inspect the merged manifest to confirm the intent filter has
 ```bash
 # Build a flavor (e.g., itu)
 ${ANDROID_HOME:+ANDROID_HOME=$ANDROID_HOME }flutter build apk --flavor itu --debug \
-  -t lib/config/flavors/itu.dart --dart-define=FLAVOR=itu
+  --dart-define=FLAVOR=itu
 
 # Inspect merged manifest
 find build/app/intermediates/merged_manifests/ -path "*ituDebug*" -name "AndroidManifest.xml" | \
@@ -426,7 +427,7 @@ grep APP_AUTH_REDIRECT_SCHEME ios/Flutter/*-*.xcconfig
 If macOS is available, build the IPA and inspect the compiled `Info.plist`:
 
 ```bash
-flutter build ipa --flavor itu -t lib/config/flavors/itu.dart --dart-define=FLAVOR=itu
+flutter build ipa --flavor itu --dart-define=FLAVOR=itu
 
 # Inspect the compiled Info.plist in the IPA bundle
 unzip -p build/ios/ipa/*.ipa Payload/Runner.app/Info.plist | plutil -p -
@@ -439,7 +440,7 @@ unzip -p build/ios/ipa/*.ipa Payload/Runner.app/Info.plist | plutil -p -
 
 ## Key Pitfalls
 
-- **flutter_appauth `InsecureConnectionBuilder` bug:** Upstream `InsecureConnectionBuilder` is a no-op — it doesn't disable SSL verification. On iOS, `allowInsecureConnections` is completely ignored. Open upstream issue: [MaikuB/flutter_appauth#386](https://github.com/MaikuB/flutter_appauth/issues/386). **Fix:** local fork at `flutter_appauth/` patches both platforms — Android uses a real `TrustManager` + `HostnameVerifier`, iOS uses `NSURLProtocol` to intercept and trust all certs. Only active when `allowInsecureConnections=true`. Does NOT affect production (production uses CA-signed certs and `allowInsecureConnections=false`). **Revert `pubspec.yaml` before merge.**
+- **flutter_appauth `InsecureConnectionBuilder` bug:** Upstream `InsecureConnectionBuilder` is a no-op — it doesn't disable SSL verification. On iOS, `allowInsecureConnections` is completely ignored. Open upstream issue: [MaikuB/flutter_appauth#386](https://github.com/MaikuB/flutter_appauth/issues/386). **Fix:** local fork at `flutter_appauth/` patches both platforms — Android uses a real `TrustManager` + `HostnameVerifier`, iOS uses `NSURLProtocol` to intercept and trust all certs. Only active when `allowInsecureConnections=true`. Does NOT affect production (production uses CA-signed certs and `allowInsecureConnections=false`). **The fork stays in the repository — do not revert `pubspec.yaml`.**
 - **`taskAffinity=""` on MainActivity:** Flutter 3.x adds this by default. It prevents `AuthorizationManagementActivity` from receiving the OIDC callback on Android 12+ because `RedirectUriReceiverActivity` launches in a different task. The fix in `AndroidManifest.xml` removes `taskAffinity=""` from `MainActivity` and adds `taskAffinity="${applicationId}"` on `RedirectUriReceiverActivity` with `tools:replace`.
 - **`network_security_config.xml`:** Allows cleartext to `10.0.2.2`/`localhost` and trusts user certs in debug builds. Dev-only — harmless in production but only needed for local self-signed cert development.
 

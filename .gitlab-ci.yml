@@ -3162,20 +3162,13 @@ chart:lint:
     # listed file that is missing inlines as an empty dashboard.
     - ./scripts/sync-chart-dashboards.sh --check || { echo "grafana dashboard drift - run 'make chart-dashboards' and commit the result"; exit 1; }
     - helm lint charts/genieai-umbrella --strict
-    # Base tier render.
-    # The smtp.* flags below are a placeholder: verifyEmail and
-    # resetPasswordAllowed default to true (the compose default) and the
-    # render refuses them without a mail server. These renders check
-    # SHAPE; a real deployment names its own relay in its overlay.
+    # Base tier render. charts/ci/render-base-flags is the shared render
+    # fixture (required deployment data + placeholder-secret off + an
+    # smtp that answers nothing — see the file and the chart README's
+    # "Mail is not optional"): SHAPE values, nothing here reaches a
+    # cluster.
     - >-
-      helm template test charts/genieai-umbrella -n genieai
-      --set data.keycloak.failOnPlaceholderSecrets=false
-      --set data.keycloak.adminEmail=ci-render@example.org
-      --set data.keycloak.smtp.from=no-reply@ci.invalid
-      --set data.keycloak.smtp.host=smtp.invalid
-      --set data.keycloak.smtp.port=587
-      --set data.keycloak.smtp.starttls=true
-      --set ingress.host=ci-render.local
+      helm template test charts/genieai-umbrella -n genieai $(cat charts/ci/render-base-flags)
       --set ingress.enabled=true
       --set ingress.createGatewayClass=true
       --set 'data.keycloak.clientSecrets.proxyClient=lint-dummy'
@@ -3187,19 +3180,8 @@ chart:lint:
     # so ~half the templates never render and a typo in any of them
     # merges green. This is the gate that catches the class of defect the
     # base render cannot see.
-    # The smtp.* flags below are a placeholder: verifyEmail and
-    # resetPasswordAllowed default to true (the compose default) and the
-    # render refuses them without a mail server. These renders check
-    # SHAPE; a real deployment names its own relay in its overlay.
     - >-
-      helm template test charts/genieai-umbrella -n genieai
-      --set data.keycloak.failOnPlaceholderSecrets=false
-      --set data.keycloak.adminEmail=ci-render@example.org
-      --set data.keycloak.smtp.from=no-reply@ci.invalid
-      --set data.keycloak.smtp.host=smtp.invalid
-      --set data.keycloak.smtp.port=587
-      --set data.keycloak.smtp.starttls=true
-      --set ingress.host=ci-render.local
+      helm template test charts/genieai-umbrella -n genieai $(cat charts/ci/render-base-flags)
       --set ingress.enabled=true
       --set ingress.createGatewayClass=true
       --set 'data.keycloak.clientSecrets.proxyClient=lint-dummy'
@@ -3219,19 +3201,8 @@ chart:lint:
     # document-repository and frontend to 2, and it puts the Keycloak
     # database at 3 CNPG instances. ingress.tls.enabled adds the
     # cert-manager Certificate, which no other render emits either.
-    # The smtp.* flags below are a placeholder: verifyEmail and
-    # resetPasswordAllowed default to true (the compose default) and the
-    # render refuses them without a mail server. These renders check
-    # SHAPE; a real deployment names its own relay in its overlay.
     - >-
-      helm template test charts/genieai-umbrella -n genieai
-      --set data.keycloak.failOnPlaceholderSecrets=false
-      --set data.keycloak.adminEmail=ci-render@example.org
-      --set data.keycloak.smtp.from=no-reply@ci.invalid
-      --set data.keycloak.smtp.host=smtp.invalid
-      --set data.keycloak.smtp.port=587
-      --set data.keycloak.smtp.starttls=true
-      --set ingress.host=ci-render.local
+      helm template test charts/genieai-umbrella -n genieai $(cat charts/ci/render-base-flags)
       --set ingress.enabled=true
       --set ingress.createGatewayClass=true
       --set 'data.keycloak.clientSecrets.proxyClient=lint-dummy'
@@ -3246,19 +3217,8 @@ chart:lint:
     # Same render with the in-cluster GPU tier: every orchestrator's
     # endpoint, model Deployment, NetworkPolicy port and model-cache PVC
     # differs between the two modes.
-    # The smtp.* flags below are a placeholder: verifyEmail and
-    # resetPasswordAllowed default to true (the compose default) and the
-    # render refuses them without a mail server. These renders check
-    # SHAPE; a real deployment names its own relay in its overlay.
     - >-
-      helm template test charts/genieai-umbrella -n genieai
-      --set data.keycloak.failOnPlaceholderSecrets=false
-      --set data.keycloak.adminEmail=ci-render@example.org
-      --set data.keycloak.smtp.from=no-reply@ci.invalid
-      --set data.keycloak.smtp.host=smtp.invalid
-      --set data.keycloak.smtp.port=587
-      --set data.keycloak.smtp.starttls=true
-      --set ingress.host=ci-render.local
+      helm template test charts/genieai-umbrella -n genieai $(cat charts/ci/render-base-flags)
       --set ingress.enabled=true
       --set ingress.createGatewayClass=true
       --set 'data.keycloak.clientSecrets.proxyClient=lint-dummy'
@@ -3275,10 +3235,7 @@ chart:lint:
       curl -fsSL
       https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz
       | tar -xz -C /usr/local/bin kubeconform
-    - kubeconform -summary -ignore-missing-schemas -kubernetes-version 1.33.0 /tmp/rendered.yaml
-    - kubeconform -summary -ignore-missing-schemas -kubernetes-version 1.33.0 /tmp/rendered-full.yaml
-    - kubeconform -summary -ignore-missing-schemas -kubernetes-version 1.33.0 /tmp/rendered-prod.yaml
-    - kubeconform -summary -ignore-missing-schemas -kubernetes-version 1.33.0 /tmp/rendered-incluster.yaml
+    - kubeconform -summary -ignore-missing-schemas -kubernetes-version 1.33.0 /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-prod.yaml /tmp/rendered-incluster.yaml
     # values.yaml goes through the same duplicate-key check as the renders:
     # Helm resolves a repeated key last-wins BEFORE anything downstream sees
     # it, so a `services.<svc>.env` declared twice renders identically whether
@@ -3352,19 +3309,8 @@ chart:contract:
     - install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm
     - helm dependency update charts/genieai-umbrella
   script:
-    # The smtp.* flags below are a placeholder: verifyEmail and
-    # resetPasswordAllowed default to true (the compose default) and the
-    # render refuses them without a mail server. These renders check
-    # SHAPE; a real deployment names its own relay in its overlay.
     - >-
-      helm template test charts/genieai-umbrella -n genieai
-      --set data.keycloak.failOnPlaceholderSecrets=false
-      --set data.keycloak.adminEmail=ci-render@example.org
-      --set data.keycloak.smtp.from=no-reply@ci.invalid
-      --set data.keycloak.smtp.host=smtp.invalid
-      --set data.keycloak.smtp.port=587
-      --set data.keycloak.smtp.starttls=true
-      --set ingress.host=ci-render.local
+      helm template test charts/genieai-umbrella -n genieai $(cat charts/ci/render-base-flags)
       > /tmp/rendered.yaml
     # Extract the gateway OpenTelemetryCollector's inline config map and
     # swap the in-cluster VL endpoint for the smoke's container placeholder.
@@ -3488,23 +3434,16 @@ chart:parity:
     when: [runner_system_failure, stuck_or_timeout_failure, script_failure]
   interruptible: true
   before_script:
-    - apk add --no-cache bash tar curl python3 py3-yaml
-    - curl -fsSL https://get.helm.sh/helm-v3.16.3-linux-amd64.tar.gz | tar -xz -C /tmp
-    - install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm
+    # The dtzar/helm-kubectl image carries helm, kubectl, curl and bash;
+    # only python3 + pyyaml need installing.
+    - apk add --no-cache python3 py3-yaml
     - helm dependency update charts/genieai-umbrella
   script:
     # The OPEA tier must be ON: the gate compares the AI services too, and
     # they only exist when the tier is enabled. A GPU node host is needed
     # because the external mode refuses to render without one.
     - >
-      helm template test charts/genieai-umbrella -n genieai
-      --set data.keycloak.failOnPlaceholderSecrets=false
-      --set data.keycloak.adminEmail=ci-render@example.org
-      --set data.keycloak.smtp.from=no-reply@ci.invalid
-      --set data.keycloak.smtp.host=smtp.invalid
-      --set data.keycloak.smtp.port=587
-      --set data.keycloak.smtp.starttls=true
-      --set ingress.host=ci-render.local
+      helm template test charts/genieai-umbrella -n genieai $(cat charts/ci/render-base-flags)
       --set opea.enabled=true
       --set opea.gpu.nodeHost=https://gpu-node:444
       > /tmp/rendered.yaml
@@ -3553,7 +3492,7 @@ chart:crd-validate:
     - install -m 0755 /tmp/kind /usr/local/bin/kind
     - helm dependency update charts/genieai-umbrella
   script:
-    - trap 'kind delete cluster --name genieai 2>/dev/null || true' EXIT
+    - trap 'kind delete cluster --name genieai-crd 2>/dev/null || true' EXIT
     - trap 'exit 130' INT
     - trap 'exit 143' TERM
     # Same daemon-address derivation as chart:install: the kind API must
@@ -3580,12 +3519,13 @@ chart:crd-validate:
     # Purged only once the daemon address is known to be usable: the
     # runner's docker socket is shared with every other job on the host,
     # and a job that cannot even address its daemon has no business
-    # deleting a cluster on it first. The cluster is named `genieai`, not
-    # `kind`, so a leftover from another project is never in the blast
-    # radius either.
-    - kind delete cluster --name genieai 2>/dev/null || true
-    - kind create cluster --name genieai --config /tmp/kind-config.yaml --image kindest/node:v1.33.0 --wait 5m
-    - kind get kubeconfig --name genieai > "$KUBECONFIG"
+    # deleting a cluster on it first. The cluster is named `genieai-crd`,
+    # not `kind` — and NOT the name chart:install uses — so a leftover
+    # from another project, or from a concurrent manual install run on
+    # the other port, is never in the blast radius either.
+    - kind delete cluster --name genieai-crd 2>/dev/null || true
+    - kind create cluster --name genieai-crd --config /tmp/kind-config.yaml --image kindest/node:v1.33.0 --wait 5m
+    - kind get kubeconfig --name genieai-crd > "$KUBECONFIG"
     - export KUBECONFIG
     # The CRDs only — the operators never need to be Ready, and waiting on
     # them would only add minutes. --with-grafana covers the grafana CRs,
@@ -3593,14 +3533,7 @@ chart:crd-validate:
     - ./scripts/install-prereqs.sh --with-grafana
     - |
       set -e
-      helm template test charts/genieai-umbrella -n genieai \
-        --set data.keycloak.failOnPlaceholderSecrets=false \
-        --set data.keycloak.adminEmail=ci-render@example.org \
-        --set data.keycloak.smtp.from=no-reply@ci.invalid \
-        --set data.keycloak.smtp.host=smtp.invalid \
-        --set data.keycloak.smtp.port=587 \
-        --set data.keycloak.smtp.starttls=true \
-        --set ingress.host=ci-render.local \
+      helm template test charts/genieai-umbrella -n genieai $(cat charts/ci/render-base-flags) \
         --set ingress.enabled=true \
         --set ingress.createGatewayClass=true \
         --set 'data.keycloak.clientSecrets.proxyClient=lint-dummy' \
@@ -3624,14 +3557,7 @@ chart:crd-validate:
     # with helm lint, kubeconform and the CI YAML parse all green.
     - |
       set -e
-      helm template test charts/genieai-umbrella -n genieai \
-        --set data.keycloak.failOnPlaceholderSecrets=false \
-        --set data.keycloak.adminEmail=ci-render@example.org \
-        --set data.keycloak.smtp.from=no-reply@ci.invalid \
-        --set data.keycloak.smtp.host=smtp.invalid \
-        --set data.keycloak.smtp.port=587 \
-        --set data.keycloak.smtp.starttls=true \
-        --set ingress.host=ci-render.local \
+      helm template test charts/genieai-umbrella -n genieai $(cat charts/ci/render-base-flags) \
         --set ingress.enabled=true \
         --set ingress.createGatewayClass=true \
         --set 'data.keycloak.clientSecrets.proxyClient=lint-dummy' \
@@ -3671,8 +3597,12 @@ chart:install:
   image: docker:28-dind
   stage: test
   tags: [docker]
-  # Shares the chart-dind slot with chart:contract (see that job's note).
-  resource_group: chart-dind
+  # Own group, not chart-dind: this is a MANUAL 30-minute install. In the
+  # shared group one click parks the two per-push kind gates for its
+  # whole duration. Its kind cluster is also named differently
+  # (genieai-install) and its API port distinct (36443 vs 36444), so
+  # nothing about its runtime depends on the group for safety.
+  resource_group: chart-install-dind
   # Manual + allow_failure: a `when: manual` job WITHOUT allow_failure
   # leaves the pipeline blocked on a pending manual action — the MR
   # pipeline never goes green and merge gating never passes. With it,
@@ -3710,10 +3640,10 @@ chart:install:
     # exist' caused by the previous run's debris). The INT/TERM traps make
     # a GitLab cancel/timeout (SIGTERM to the process group) exit through
     # the EXIT trap — bash does NOT run EXIT traps on unhandled signals.
-    - trap 'kind delete cluster --name genieai 2>/dev/null || true' EXIT
+    - trap 'kind delete cluster --name genieai-install 2>/dev/null || true' EXIT
     - trap 'exit 130' INT
     - trap 'exit 143' TERM
-    - kind delete cluster --name genieai 2>/dev/null || true
+    - kind delete cluster --name genieai-install 2>/dev/null || true
     # Bind the API server on the DAEMON's docker0 address (kind's default
     # 127.0.0.1 is unreachable from the job container when the daemon is
     # remote — the runner socket-proxy setup). Using the real address (not
@@ -3742,8 +3672,8 @@ chart:install:
       echo "kind API on ${DAEMON_HOST}:36443"
     # Purged only once the daemon address is known to be usable (see the
     # note in chart:crd-validate).
-    - kind delete cluster --name genieai 2>/dev/null || true
-    - kind create cluster --name genieai --config /tmp/kind-config.yaml --image kindest/node:v1.33.0 --wait 5m
+    - kind delete cluster --name genieai-install 2>/dev/null || true
+    - kind create cluster --name genieai-install --config /tmp/kind-config.yaml --image kindest/node:v1.33.0 --wait 5m
     # kind ships no default StorageClass: every PVC stays Pending and
     # `helm install --wait` blocks on it until the job timeout — a
     # storage gap indistinguishable from a chart defect. local-path gives
@@ -3752,7 +3682,7 @@ chart:install:
       https://raw.githubusercontent.com/rancher/local-path-provisioner/v0.0.26/deploy/local-path-storage.yaml
     - kubectl wait --for=condition=Ready pod -l app=local-path-provisioner
       -n local-path-storage --timeout=120s
-    - kind get kubeconfig --name genieai > "$KUBECONFIG"
+    - kind get kubeconfig --name genieai-install > "$KUBECONFIG"
     - export KUBECONFIG
     - ./scripts/install-prereqs.sh
     # KNOWN INCOMPLETE (manual job): the operator-provided Secrets
@@ -3771,13 +3701,7 @@ chart:install:
     # kind cluster is not needed for.
     - >-
       helm install test charts/genieai-umbrella -n genieai --create-namespace
-      --set data.keycloak.failOnPlaceholderSecrets=false
-      --set data.keycloak.adminEmail=ci-render@example.org
-      --set data.keycloak.smtp.from=no-reply@ci.invalid
-      --set data.keycloak.smtp.host=smtp.invalid
-      --set data.keycloak.smtp.port=587
-      --set data.keycloak.smtp.starttls=true
-      --set ingress.host=ci-render.local
+      $(cat charts/ci/render-base-flags)
       --set "data.keycloak.clientSecrets.proxyClient=${CI_JOB_ID}-proxy"
       --set "data.keycloak.clientSecrets.dataprep=${CI_JOB_ID}-dataprep"
       --set "data.keycloak.clientSecrets.grafana=${CI_JOB_ID}-grafana"

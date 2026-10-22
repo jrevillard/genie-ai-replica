@@ -40,13 +40,11 @@ mode=write
 # carry them.
 if [ "${mode}" = "write" ]; then
   mkdir -p "${out}/dashboards/observability" "${out}/alerting"
-  for f in "${src}"/dashboards/*.json; do
-    [ -f "$f" ] || continue
-    cp "$f" "${out}/dashboards/$(basename "$f")"
-  done
-  for f in "${src}"/dashboards/observability/*.json; do
-    [ -f "$f" ] || continue
-    cp "$f" "${out}/dashboards/observability/$(basename "$f")"
+  for pair in "dashboards" "dashboards/observability"; do
+    for f in "${src}/${pair}"/*.json; do
+      [ -f "$f" ] || continue
+      cp "$f" "${out}/${pair}/$(basename "$f")"
+    done
   done
   cp "${src}/alerting/alert-rules.yml" "${out}/alerting/alert-rules.yml"
   echo "synced ${src} -> ${out}"

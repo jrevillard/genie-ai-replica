@@ -35,10 +35,15 @@ enabled alongside it. */ -}}
   them. Logs datasource stays local — VL is namespace-scoped to
   the admin-logs UI per environment.
 
-  Admin secret: spec.credentialsEx is the operator-managed way to
-  reference an existing admin user/password Secret (the deploy repo
-  materializes a SealedSecret with `user` + `password` keys). The
-  chart references the secret by name — values are not rendered.
+  Admin secret: the operator owns "<cr-name>-admin-credentials" and
+  reads exactly two keys — GF_SECURITY_ADMIN_USER and
+  GF_SECURITY_ADMIN_PASSWORD (grafana-operator v5 constants). With an
+  admin_user SET in spec.config.security (below), the operator
+  OVERWRITES the Secret's user with it on every reconcile — the value
+  here wins, an operator-provided user does not. Leave the default and
+  the generated Secret carries admin + a generated password; pin the
+  user through observability.grafana.adminUser and know it overrides
+  the Secret on every reconcile.
 
   root_url / server config: left at operator defaults; the
   gateway / ingress in front of the cluster sets the public origin
@@ -134,7 +139,11 @@ spec:
     log:
       mode: console
     security:
-      admin_user: __admin__
+      # The operator's own default user is "admin"; a literal here is
+      # what the admin secret reconciler writes into
+      # genieai-grafana-admin-credentials on every reconcile — it wins
+      # over whatever user an operator-provided Secret carried.
+      admin_user: {{ .Values.observability.grafana.adminUser | default "admin" }}
 ---
 {{- if .Values.observability.logs.enabled }}
 ---

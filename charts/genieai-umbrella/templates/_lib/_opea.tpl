@@ -105,18 +105,43 @@ Signature: {{ include "genieai-umbrella.opeaGpuNetwork" . }}
 */}}
 {{- define "genieai-umbrella.opeaGpuNetwork" -}}
 {{- $nodeHost := .Values.opea.gpu.nodeHost | default "" -}}
-{{- $host := include "genieai-umbrella.opeaGpuHostname" . -}}
+{{- include "genieai-umbrella.opeaNetworkFromUrl" (dict "root" . "url" $nodeHost) -}}
+{{- end -}}
+
+{{/*
+genieai-umbrella.opeaNetworkFromUrl — the ipBlock CIDRs and ports for ANY
+named external destination, as JSON: `{"cidrs": [...], "ports": [...]}`.
+Takes `{"root": <root ctx>, "url": <url>}`.
+
+The destination is NAMED (opea.gpu.nodeHost for the six orchestrators, the
+backend's translation endpoint for the BFF), so the egress rule does not
+have to be 0.0.0.0/0 the way it was when the chart ignored the URL:
+
+  - an IPv4 literal in the URL becomes a /32 — exact, and no operator
+    action (a laptop overlay pointing at 10.0.0.110:444 gets exactly
+    that);
+  - a DNS name cannot become a CIDR, so opea.gpu.allowedCIDRs applies
+    (the knob the crawler tier already uses), and an empty list falls
+    back to 0.0.0.0/0 — the same approximation Compose makes, since a
+    NetworkPolicy has no way to express a hostname;
+  - the port comes from the URL (`:444`, `:8443`, …), defaulting to 443.
+    The old rule hardcoded 443 + 444 on both ports at once.
+*/}}
+{{- define "genieai-umbrella.opeaNetworkFromUrl" -}}
+{{- $root := .root -}}
+{{- $url := .url | default "" -}}
+{{- $host := regexReplaceAll "^([a-z]+://)?(\\[[^\\]]+\\]|[^:/]+).*" $url "$2" -}}
 {{- $isIPv4 := regexMatch "^[0-9]{1,3}(\\.[0-9]{1,3}){3}$" $host -}}
 {{- $cidrs := list -}}
 {{- if $isIPv4 -}}
 {{- $cidrs = append $cidrs (printf "%s/32" $host) -}}
-{{- else if .Values.opea.gpu.allowedCIDRs -}}
-{{- $cidrs = .Values.opea.gpu.allowedCIDRs -}}
+{{- else if $root.Values.opea.gpu.allowedCIDRs -}}
+{{- $cidrs = $root.Values.opea.gpu.allowedCIDRs -}}
 {{- else -}}
 {{- $cidrs = list "0.0.0.0/0" -}}
 {{- end -}}
 {{- $port := "443" -}}
-{{- $matched := regexFind ":([0-9]{1,5})(?:/|$)" $nodeHost -}}
+{{- $matched := regexFind ":([0-9]{1,5})(?:/|$)" $url -}}
 {{- if $matched -}}
 {{- $port = regexFind "[0-9]{1,5}" $matched -}}
 {{- end -}}
@@ -132,10 +157,23 @@ in which other peers they reach.
 Relative indentation: callers apply `| nindent 4`.
 */}}
 {{- define "genieai-umbrella.opeaGpuEgressRule" -}}
-{{- $net := include "genieai-umbrella.opeaGpuNetwork" . | fromJson -}}
-{{- /* External GPU node. The destination is named, so the rule is a /32
-       when nodeHost is an IP and the operator's CIDR list otherwise —
-       not 0.0.0.0/0 on two ports. */}}
+{{- include "genieai-umbrella.opeaEgressRuleFromNetwork" (dict "net" (include "genieai-umbrella.opeaGpuNetwork" . | fromJson)) -}}
+{{- end -}}
+
+{{/*
+genieai-umbrella.opeaEgressRuleFromUrl — the same rule for an arbitrary
+named destination. Takes `{"root": <root ctx>, "url": <url>}`.
+Relative indentation: callers apply `| nindent 4`.
+*/}}
+{{- define "genieai-umbrella.opeaEgressRuleFromUrl" -}}
+{{- include "genieai-umbrella.opeaEgressRuleFromNetwork" (dict "net" (include "genieai-umbrella.opeaNetworkFromUrl" . | fromJson)) -}}
+{{- end -}}
+
+{{- define "genieai-umbrella.opeaEgressRuleFromNetwork" -}}
+{{- $net := .net -}}
+{{- /* The destination is named, so the rule is a /32 when the host is an
+       IP and the operator's CIDR list otherwise — not 0.0.0.0/0 on two
+       ports. */}}
 - to:
 {{- range $cidr := $net.cidrs }}
   - ipBlock:

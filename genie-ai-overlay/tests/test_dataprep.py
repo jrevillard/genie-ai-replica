@@ -9,6 +9,7 @@ utility methods with fully mocked ArangoDB, LangChain, aiohttp, and OpenAI deps.
 
 import asyncio
 import contextlib
+import fcntl
 import json
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -16,6 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 import dataprep.genieai_dataprep_arangodb as dp_module
+import dataprep.genieai_dataprep_microservice as ms
 from dataprep.genieai_dataprep_arangodb import GenieArangoDataprep
 
 # ---------------------------------------------------------------------------
@@ -2054,13 +2056,13 @@ class TestDocRepoIngestPayload:
         assert payload.chunkOverlap == 150
 
     @contextlib.contextmanager
-    def _ingest_mocks(self, lock_mock=None):
-        """Shared patch set for exercising the real ingest_file_from_repo."""
-        from unittest.mock import AsyncMock, MagicMock, patch
+    def _ingest_mocks(self):
+        """Shared patch set for exercising the real ingest_file_from_repo.
 
-        from dataprep import genieai_dataprep_microservice as ms
-
-        lock = lock_mock or MagicMock()
+        Yields (ms, mock_loader, flock_mock): the microservice module (so
+        tests can patch against it), the loader mock, and the module-wide
+        fcntl.flock mock.
+        """
         with (
             patch.object(ms, "loader") as mock_loader,
             patch.object(ms, "tracer"),
@@ -2070,17 +2072,15 @@ class TestDocRepoIngestPayload:
             patch("fcntl.flock") as flock_mock,
         ):
             mock_loader.ingest_file_with_guardrail = AsyncMock()
-            yield mock_loader, flock_mock, lock
+            yield ms, mock_loader, flock_mock
 
     @pytest.mark.asyncio
     async def test_chunk_overlap_rejects_negative(self):
         """Negative chunkOverlap would collapse the splitter into a single mega-chunk; rejected with 400 pre-lock."""
         from fastapi import HTTPException
 
-        from dataprep import genieai_dataprep_microservice as ms
-
         payload = ms.DocRepoIngestPayload(**self._payload(chunkOverlap=-50))
-        with self._ingest_mocks() as (_loader, flock_mock, _lock), pytest.raises(HTTPException) as exc_info:
+        with self._ingest_mocks() as (_ms, _loader, flock_mock), pytest.raises(HTTPException) as exc_info:
             await ms.ingest_file_from_repo(payload)
         assert exc_info.value.status_code == 400
         assert "chunkOverlap must be >= 0" in exc_info.value.detail
@@ -2096,10 +2096,8 @@ class TestDocRepoIngestPayload:
         """A non-bare fileName is a traversal write/delete primitive; rejected with 400 pre-lock."""
         from fastapi import HTTPException
 
-        from dataprep import genieai_dataprep_microservice as ms
-
         payload = ms.DocRepoIngestPayload(**self._payload(fileName=bad_name))
-        with self._ingest_mocks() as (_loader, flock_mock, _lock), pytest.raises(HTTPException) as exc_info:
+        with self._ingest_mocks() as (_ms, _loader, flock_mock), pytest.raises(HTTPException) as exc_info:
             await ms.ingest_file_from_repo(payload)
         assert exc_info.value.status_code == 400
         assert "bare file name" in exc_info.value.detail
@@ -2113,36 +2111,28 @@ class TestDocRepoIngestPayload:
         only the finally can release the lock — the regression this test
         guards is the release moving back into the except.
         """
-        import asyncio
-        import fcntl as fcntl_mod
-
-        from dataprep import genieai_dataprep_microservice as ms
-
         payload = ms.DocRepoIngestPayload(**self._payload())
         lock_mock = MagicMock()
         with (
-            self._ingest_mocks(lock_mock=lock_mock) as (_loader, flock_mock, _lock),
+            self._ingest_mocks() as (_ms, _loader, flock_mock),
             patch.object(ms.os, "open", return_value=7),
             patch.object(ms.os, "fdopen", return_value=lock_mock),
             patch.object(ms.base64, "b64decode", side_effect=asyncio.CancelledError()),
-            patch.object(fcntl_mod, "flock", flock_mock),
             pytest.raises(asyncio.CancelledError),
         ):
             await ms.ingest_file_from_repo(payload)
-        flock_mock.assert_any_call(lock_mock, fcntl_mod.LOCK_UN)
+        # fcntl.flock is patched module-wide by the helper; the handler
+        # releases through that same mock.
+        flock_mock.assert_any_call(lock_mock, fcntl.LOCK_UN)
         lock_mock.close.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_successful_start_keeps_the_lock_with_the_task(self):
         """On the success path the handler must NOT release the lock or close
         the file: the background task owns both until it finishes."""
-        import fcntl as fcntl_mod
-
-        from dataprep import genieai_dataprep_microservice as ms
-
         payload = ms.DocRepoIngestPayload(**self._payload(fileBase64="aGk="))
         lock_mock = MagicMock()
-        with self._ingest_mocks(lock_mock=lock_mock) as (mock_loader, flock_mock, _lock):
+        with self._ingest_mocks() as (_ms, mock_loader, flock_mock):
             fake_task = MagicMock()
             with (
                 patch.object(ms.os, "open", return_value=7),
@@ -2154,7 +2144,7 @@ class TestDocRepoIngestPayload:
         mock_loader.ingest_file_with_guardrail.assert_called_once()
         # The lock and the file were handed to the task untouched: no unlock
         # call, no close.
-        unlock_calls = [c for c in flock_mock.call_args_list if len(c.args) > 1 and c.args[1] == fcntl_mod.LOCK_UN]
+        unlock_calls = [c for c in flock_mock.call_args_list if len(c.args) > 1 and c.args[1] == fcntl.LOCK_UN]
         assert unlock_calls == []
         lock_mock.close.assert_not_called()
 
@@ -2162,14 +2152,11 @@ class TestDocRepoIngestPayload:
     async def test_failed_start_removes_the_saved_file(self):
         """A failure after the upload was written but before the task exists
         must reclaim the partially written file."""
-        from dataprep import genieai_dataprep_microservice as ms
-
         payload = ms.DocRepoIngestPayload(**self._payload(fileBase64="aGk="))
-        lock_mock = MagicMock()
         with (
-            self._ingest_mocks(lock_mock=lock_mock) as (_loader, _flock, _lock),
+            self._ingest_mocks() as (_ms, _loader, _flock),
             patch.object(ms.os, "open", return_value=7),
-            patch.object(ms.os, "fdopen", return_value=lock_mock),
+            patch.object(ms.os, "fdopen"),
             patch.object(
                 ms,
                 "ArangoDBDataprepRequestFromDocRepo",

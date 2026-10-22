@@ -37,10 +37,12 @@
 {{- if $t.logs -}}
 {{- /* The bare "datasource" placeholder belongs to the LOGS datasource:
      every panel of service-logs.json is a
-     "victoriametrics-logs-datasource" panel, and the operator's
-     substitution is a blind ReplaceAll — pointing it at the Prometheus
-     datasource makes the Logs panels query the wrong backend. */}}
-{{- $subs = concat $subs (list (dict "inputName" "DS_VICTORIALOGS" "datasourceName" "victorialogs") (dict "inputName" "datasource" "datasourceName" "victorialogs")) -}}
+     "victoriametrics-logs-datasource" panel. The substitution target is
+     the datasource's UID, not the GrafanaDatasource CR's name: the CR is
+     "victorialogs" but its uid is "victoriametrics-logs" (grafana.yaml),
+     and a value that is neither resolves to nothing — the Logs panel
+     renders "Datasource not found" forever. */}}
+{{- $subs = concat $subs (list (dict "inputName" "DS_VICTORIALOGS" "datasourceName" "victoriametrics-logs") (dict "inputName" "datasource" "datasourceName" "victoriametrics-logs")) -}}
 {{- end -}}
 {{- if $subs }}
   datasources:

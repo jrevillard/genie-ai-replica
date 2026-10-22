@@ -53,24 +53,65 @@ class GuardScanner {
 
   /// The first `{...}` block that follows a match of [signature], with
   /// comments removed — the body of a method or function declared by
-  /// [signature]. Returns `null` when the signature does not appear.
+  /// [signature]. Returns `null` when the signature does not appear or no
+  /// opening brace follows it.
   ///
-  /// Offsets are resolved on the raw source so they line up with the brace
-  /// pairs; only the returned text is stripped.
+  /// The scan from the signature to the body's opening brace skips comments
+  /// and string literals, so a trailing `/* ... */` note between the
+  /// parameter list and the body is not mistaken for it. The brace pairing
+  /// itself is naive — it counts braces inside comments and strings — so
+  /// sources where those braces are unpaired can resolve to the wrong block.
   String? blockAfter(Pattern signature) {
-    Match? match;
-    for (final m in signature.allMatches(source)) {
-      match = m;
-      break;
-    }
-    if (match == null) {
+    final matches = signature.allMatches(source);
+    if (matches.isEmpty) {
       return null;
     }
-    final open = source.indexOf('{', match.end);
+    final open = _firstStructuralBrace(matches.first.end);
     if (open < 0 || !_bracePairs.containsKey(open)) {
       return null;
     }
     return _stripComments(source.substring(open + 1, _bracePairs[open]!));
+  }
+
+  /// The offset of the first `{` at or after [from] that is not inside a
+  /// comment or a string literal, or -1.
+  int _firstStructuralBrace(int from) {
+    var i = from;
+    while (i < source.length) {
+      final c = source[i];
+      if (c == '{') {
+        return i;
+      }
+      if (c == '/' && i + 1 < source.length) {
+        if (source[i + 1] == '/') {
+          final nl = source.indexOf('\n', i);
+          if (nl < 0) {
+            return -1;
+          }
+          i = nl + 1;
+          continue;
+        }
+        if (source[i + 1] == '*') {
+          final end = source.indexOf('*/', i + 2);
+          if (end < 0) {
+            return -1;
+          }
+          i = end + 2;
+          continue;
+        }
+      }
+      if (c == '"' || c == "'") {
+        i++;
+        while (i < source.length && source[i] != c) {
+          if (source[i] == r'\') {
+            i++;
+          }
+          i++;
+        }
+      }
+      i++;
+    }
+    return -1;
   }
 
   bool _isGuarded(int offset, String guard) {

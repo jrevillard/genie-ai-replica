@@ -123,9 +123,7 @@ void main() {
       expect(body, isNotNull, reason: 'the end-session processor moved');
       expect(
         body,
-        isNot(
-          contains(RegExp(r'\bfinal\s+boolean\s+allowInsecureConnections\b')),
-        ),
+        isNot(contains(RegExp(r'\bboolean\s+allowInsecureConnections\b'))),
         reason:
             'a local shadows the field: end-session would ignore its '
             'own flag and reuse the previous call\'s',

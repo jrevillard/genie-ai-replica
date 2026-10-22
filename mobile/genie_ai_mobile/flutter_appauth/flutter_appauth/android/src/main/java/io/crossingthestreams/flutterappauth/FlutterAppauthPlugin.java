@@ -312,7 +312,6 @@ public class FlutterAppauthPlugin
         state,
         issuer,
         discoveryUrl,
-        allowInsecureConnections,
         serviceConfigurationParameters,
         additionalParameters);
   }
@@ -845,7 +844,6 @@ public class FlutterAppauthPlugin
     final String state;
     final String issuer;
     final String discoveryUrl;
-    final boolean allowInsecureConnections;
     final Map<String, String> serviceConfigurationParameters;
     final Map<String, String> additionalParameters;
 
@@ -855,7 +853,6 @@ public class FlutterAppauthPlugin
         String state,
         String issuer,
         String discoveryUrl,
-        boolean allowInsecureConnections,
         Map<String, String> serviceConfigurationParameters,
         Map<String, String> additionalParameters) {
       this.idTokenHint = idTokenHint;
@@ -863,7 +860,6 @@ public class FlutterAppauthPlugin
       this.state = state;
       this.issuer = issuer;
       this.discoveryUrl = discoveryUrl;
-      this.allowInsecureConnections = allowInsecureConnections;
       this.serviceConfigurationParameters = serviceConfigurationParameters;
       this.additionalParameters = additionalParameters;
     }

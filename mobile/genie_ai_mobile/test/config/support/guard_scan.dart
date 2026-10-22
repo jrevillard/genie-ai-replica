@@ -67,10 +67,11 @@ class GuardScanner {
       return null;
     }
     final open = _firstStructuralBrace(matches.first.end);
-    if (open < 0 || !_bracePairs.containsKey(open)) {
+    final close = open < 0 ? null : _bracePairs[open];
+    if (close == null) {
       return null;
     }
-    return _stripComments(source.substring(open + 1, _bracePairs[open]!));
+    return _stripComments(source.substring(open + 1, close));
   }
 
   /// The offset of the first `{` at or after [from] that is not inside a
@@ -158,55 +159,23 @@ class GuardScanner {
     final out = StringBuffer();
     var i = 0;
     while (i < text.length) {
-      final c = text[i];
-      if (c == '/' && i + 1 < text.length) {
-        if (text[i + 1] == '/') {
-          final nl = text.indexOf('\n', i);
-          if (nl < 0) {
-            break;
-          }
-          i = nl;
-          continue;
-        }
-        if (text[i + 1] == '*') {
-          final end = text.indexOf('*/', i + 2);
-          if (end < 0) {
-            break;
-          }
-          out.write(' ');
-          i = end + 2;
-          continue;
-        }
-      }
-      if (c == '"' || c == "'") {
-        // Copy the string literal verbatim.
-        out.write(c);
-        i++;
-        while (i < text.length && text[i] != c) {
-          if (text[i] == r'\' && i + 1 < text.length) {
-            out.write(text[i]);
-            out.write(text[i + 1]);
-            i += 2;
-            continue;
-          }
-          out.write(text[i]);
-          i++;
-        }
-        if (i < text.length) {
-          out.write(c);
-          i++;
-        }
+      final trivia = _triviaEnd(i, text);
+      if (trivia != null) {
+        // A comment collapses to a space; a string literal is copied whole.
+        out.write(text[i] == '/' ? ' ' : text.substring(i, trivia));
+        i = trivia;
         continue;
       }
-      out.write(c);
+      out.write(text[i]);
       i++;
     }
     return out.toString();
   }
 
-  /// If [i] starts a comment or string literal, the index just past it;
-  /// otherwise -1. The single trivia-skipping rule shared by the brace
-  /// pairing, the body scan and the comment stripper.
+  /// If [i] starts a comment or string literal in [text] (default: the
+  /// scanned source), the index just past it; otherwise null. The single
+  /// trivia-skipping rule shared by the brace pairing, the body-locate scan
+  /// and the comment stripper.
   int? _triviaEnd(int i, [String? text]) {
     final src = text ?? source;
     if (src[i] == '/' && i + 1 < src.length) {

@@ -135,51 +135,71 @@ void main() {
   });
 
   group('Android flag plumbing', () {
-    test('end-session reads the flag into the field, not a local', () {
+    test('no processor keeps the flag in a local', () {
       // getConnectionBuilder() and getAuthorizationService() both read the
-      // `allowInsecureConnections` field. A local of that name in the
-      // end-session processor would shadow the field, and the end-session
-      // request would use whatever the previous authorize or token call had
-      // set — an exchange that asked for TLS verification could still be
-      // intercepted.
-      final signature = RegExp(
-        r'EndSessionRequestParameters\s+processEndSessionRequestArguments',
-      );
+      // `allowInsecureConnections` field. A local of that name in any
+      // request processor would shadow the field, and that request would
+      // use whatever the previous call had set — an exchange that asked
+      // for TLS verification could still be intercepted.
       final scanner = GuardScanner(File(_javaPluginPath).readAsStringSync());
-      // A javadoc that mentions the signature would make it ambiguous which
-      // occurrence blockAfter resolves; the test would then police the wrong
-      // method without saying so.
-      expect(scanner.count(signature), 1, reason: 'the signature is ambiguous');
-      final body = scanner.blockAfter(signature);
-      expect(body, isNotNull, reason: 'the end-session processor moved');
-      // The body must process the arguments map — a canary for the block
-      // extraction: if the scanner ever resolves the wrong block, this is
-      // what fails, not one of the flag assertions below.
-      expect(body, contains('arguments.get('));
-      // Any local declaration shadows the field, whichever way it is
-      // spelled: boolean, boxed Boolean, or var, final or not.
-      expect(
-        body,
-        isNot(
-          contains(
-            RegExp(
-              r'\b(?:final\s+)?(?:Boolean|boolean|var)\s+'
-              r'allowInsecureConnections\b',
+      for (final processor in const [
+        'AuthorizationTokenRequestParameters\\s+'
+            'processAuthorizationTokenRequestArguments',
+        'TokenRequestParameters\\s+processTokenRequestArguments',
+        'EndSessionRequestParameters\\s+processEndSessionRequestArguments',
+      ]) {
+        final signature = RegExp(processor);
+        // A comment that mentions a signature would make it ambiguous
+        // which occurrence blockAfter resolves; the test would then
+        // police the wrong method without saying so.
+        expect(
+          scanner.count(signature),
+          1,
+          reason: 'the signature of $processor is ambiguous',
+        );
+        final body = scanner.blockAfter(signature);
+        expect(body, isNotNull, reason: 'a request processor moved');
+        // The body must process the arguments map — a canary for the
+        // block extraction: if the scanner ever resolves the wrong
+        // block, this is what fails, not a flag assertion below.
+        expect(body, contains('arguments.get('));
+        // Any local declaration shadows the field, whichever way it is
+        // spelled: boolean, boxed Boolean, or var, final or not.
+        expect(
+          body,
+          isNot(
+            contains(
+              RegExp(
+                r'\b(?:final\s+)?(?:Boolean|boolean|var)\s+'
+                r'allowInsecureConnections\b',
+              ),
             ),
           ),
+          reason:
+              'a local shadows the field: the request would ignore '
+              'its own flag and reuse the previous call\'s',
+        );
+      }
+    });
+
+    test('end-session reads its flag from the arguments map', () {
+      // The field write must take the value from the request arguments —
+      // a hard-coded right-hand side would silently drop the insecure
+      // option. The check is about the source of the value, not its
+      // spelling: == Boolean.TRUE, a helper, or extra spaces all pass.
+      final scanner = GuardScanner(File(_javaPluginPath).readAsStringSync());
+      final body = scanner.blockAfter(
+        RegExp(
+          r'EndSessionRequestParameters\s+processEndSessionRequestArguments',
         ),
-        reason:
-            'a local shadows the field: end-session would ignore its '
-            'own flag and reuse the previous call\'s',
       );
-      // The field write must read the flag from the arguments map — a
-      // hard-coded right-hand side would silently drop the insecure option.
+      expect(body, isNotNull, reason: 'the end-session processor moved');
       expect(
         body,
         contains(
           RegExp(
-            r'allowInsecureConnections\s*=\s*Boolean\.TRUE\.equals\(\s*'
-            r'arguments\.get\(\s*"allowInsecureConnections"\s*\)\s*\)',
+            r'allowInsecureConnections\s*=[^;]*'
+            r'arguments\.get\(\s*"allowInsecureConnections"',
           ),
         ),
         reason: 'the flag is not read from the end-session arguments',

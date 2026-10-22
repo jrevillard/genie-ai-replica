@@ -4,7 +4,7 @@ description: Translate the answer in the target language WHILE the English strea
 weight: 11
 mode: explanation
 audience: developer, deployer
-last_reviewed: 2026-09-18
+last_reviewed: 2026-10-22
 persona: developer
 owner: "docs-stewards"
 ---
@@ -171,30 +171,46 @@ when **all three** conditions are met
 const streamingTranslationEnabled = ['1', 'true'].includes(
   (process.env.STREAMING_TRANSLATION_ENABLED || '').toLowerCase()
 );
-const targetLanguage = queryData.context?.language?.toLowerCase();
-const useStreamingTranslation =
-  streamingTranslationEnabled && targetLanguage && targetLanguage.toUpperCase() !== 'EN';
+const targetLanguage = requestedTargetLanguage(queryData); // trimmed, lower-cased
+const useStreamingTranslation = streamingTranslationEnabled && targetLanguage && targetLanguage !== 'en';
 ```
 
 1. `STREAMING_TRANSLATION_ENABLED` is truthy (`1` or `true`).
 2. The request carries a non-empty `context.language`.
-3. `context.language` is not `EN` (English).
+3. `context.language` is not `en` (English).
 
 The third condition is the safety net for English users — even if an
 operator accidentally turns the flag on, English responses are not
 double-processed.
 
+The requested language is normalized in one place
+(`services/translation/language-request.js`) and then checked against
+the language map the translation backend ships. A language the map does
+not know is **not** translated: it is refused, not guessed.
+
 ## Failure handling
 
-If the translator throws on a unit
-([`query-routes.js:251-262`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/query-routes.js#L251)),
-the backend:
+Two different failures end the streaming translation, and they are not
+reported the same way.
+
+**A language the translation models do not cover** is not a failure at
+all: there is no translation to make. The backend:
+
+1. Emits the unit as-is (English) with the original separator.
+2. Stops trying to translate — the units that follow go out in English
+   too, without another attempt.
+3. Leaves the post-stream translation alone: it refuses the same
+   language, so the answer stays in English.
+4. Does **not** tell the client the translation broke. The answer is
+   complete, in a language the models do not have.
+
+**Any other failure** (GPU node down, model not loaded, OOM):
 
 1. Emits the unit as-is (English) with the original separator.
 2. Sets `streamingTranslationFailed = true`.
 3. On the next unit, **falls back to the original English stream** for
    the remainder of the response (the `streamingTranslationFailed` short
-   circuit at `query-routes.js:303`).
+   circuit).
 4. Continues with the post-stream full-translation as before.
 
 The user never sees a half-translated answer: if streaming translation
@@ -255,6 +271,7 @@ English + a final Spanish-only frame from the post-stream translate).
 |---------|-------|-----|
 | Spanish stream is **all-English** then flips at the end | `STREAMING_TRANSLATION_ENABLED=0`, or the request did not carry `context.language` | Confirm the env var. Confirm the frontend sets `context.language` from `currentLocale` (see [Frontend → Chat UX](/docs/frontend/chat-ux/)). |
 | Spanish stream is **half English, half Spanish** | Translator threw on one unit, fallback fired for the rest | Check `docker service logs genieai_backend --since 5m 2>&1 \| grep stream_translation_unit_failed`. Common causes: GPU node down, model not loaded, OOM in the GPU. |
+| The whole answer is in English, and the log says the language is not covered | The requested language is not one the translation models have | Nothing to fix on the backend: the answer stays in English by design, and the client is not told the translation broke. The covered languages are the keys of the shipped map (`components/gov-chat-backend/services/translation/language-maps/<model>-map.js`). |
 | Spanish stream has collapsed spacing (`"Frase uno.Frase dos."`) | Boundary detector missing the whitespace separator | This is the bug the boundary detector was designed to prevent — open an MR with a repro and the debug logs (`grep STREAM-TRANSLATE`). |
 | Translation latency is higher than the English stream rate | Translator is CPU-bound and falling behind | Switch `TRANSLATION_BACKEND` to `gpu` (much faster for the model). See [Deploy → Remote GPU node](/docs/deploy/gpu/). |
 | Every unit emits a debug line in production | `LOG_LEVEL=debug` was set and not reverted | The default `LOG_LEVEL=info` suppresses the `[STREAM-TRANSLATE]` lines. Confirm via `docker exec genieai_backend sh -c 'echo $LOG_LEVEL'`. |

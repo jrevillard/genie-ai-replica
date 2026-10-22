@@ -2560,7 +2560,7 @@ test:flutter:
     - export PATH="$PWD/../../flutter-sdk/bin:$PATH"
     # Pinned: the guard gates below grep the XML shape tojunit emits; an
     # unpinned bump that serialized skips differently would silence them.
-    - dart pub global activate junitreport_maintained:2.0.5
+    - dart pub global activate junitreport_maintained 2.0.5
     - export PATH="$PATH:$PUB_CACHE/bin"
     - mkdir -p reports
     - flutter test --machine --coverage > reports/flutter-machine.json 2>&1

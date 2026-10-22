@@ -256,20 +256,22 @@ data:
     # mirrored image.
     themeUnpackImage: busybox:1.36
     # Self-registration ("Register" link on the login page). Mirrors the
-    # compose default (KEYCLOAK_REGISTRATION_ENABLED:-true). Works without
-    # SMTP while verifyEmail is false — accounts activate immediately.
+    # compose default (KEYCLOAK_REGISTRATION_ENABLED:-true).
     registrationAllowed: true
-    # "Forgot password?" link on the login page. The reset flow sends a
-    # mail, so it needs data.keycloak.smtp — the render FAILS if this is
-    # true without one (a sentinelled smtpServer would swallow the mail
-    # and leave the user staring at a reset form that never answers).
-    resetPasswordAllowed: false
+    # "Forgot password?" link on the login page. Defaults to the compose
+    # default (KEYCLOAK_RESET_PASSWORD:-true): a deployment that has a mail
+    # server gets the feature, and one that has none says so explicitly by
+    # setting this false. The render FAILS when it is true without
+    # data.keycloak.smtp — a sentinelled smtpServer would swallow the mail
+    # and leave the user staring at a reset form that never answers.
+    resetPasswordAllowed: true
     # Email verification on new accounts. Same SMTP dependency as
-    # resetPasswordAllowed: the render fails if this is true without
-    # data.keycloak.smtp. Off by default because `smtp` is null by
-    # default — a verification that can never be delivered is worse than
-    # none.
-    verifyEmail: false
+    # resetPasswordAllowed, same default as compose
+    # (KEYCLOAK_VERIFY_EMAIL:-true). `smtp` being null in the values is a
+    # value like any other, not a statement that a deployment has no mail
+    # server: an environment that genuinely sends no mail turns this off on
+    # purpose, in its overlay, where the choice is visible.
+    verifyEmail: true
     # Realm password policy — defaults to the Swarm export value
     # (public-sector baseline). Non-empty on purpose: an empty value
     # would be dropped from the convergence Job's env (K8s omitempty),

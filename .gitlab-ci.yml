@@ -24,6 +24,12 @@ variables:
   # SAST_EXCLUDED_PATHS). Do NOT use SEARCH_IGNORED — it is not honored by
   # any official GitLab SAST template and will be silently dropped.
   # - mobile/**/windows/: Windows desktop CMake runner, not deployed to Docker Swarm prod
+  # - mobile/**/flutter_appauth/**: vendored fork of the flutter_appauth plugin
+  #   (a path dependency in mobile/genie_ai_mobile/pubspec.yaml). Third-party
+  #   code: its InsecureConnectionBuilder disables TLS verification by design,
+  #   for the dev and e2e flavors that reach a self-signed Keycloak. The
+  #   production (itu) and staging flavors never enable it — asserted by
+  #   mobile/genie_ai_mobile/test/config/keycloak_config_test.dart.
   # - genie-ai-overlay/contracts/: real-comps contract tests (test code, NOT shipped in image)
   # - **/scripts/**: dev/migration scripts NOT shipped in container. We list specific
   #   sub-patterns (rather than the broad **/scripts/) so the production entrypoint
@@ -33,6 +39,12 @@ variables:
   # - .claude/**: Claude Code agent skills, hooks, BMAD orchestration YAML. Not
   #   production code; YAML files use BMAD-specific syntax that semgrep can't
   #   parse, generating "Parsing errors" UI noise in the security dashboard.
+  #   NOTE: .claude/skills/* are symlinks into .agents/skills/*, so excluding
+  #   .claude/** alone does NOT exclude the real sources — .agents/** below is
+  #   what actually keeps the agent tooling out of the scan.
+  # - .agents/**: source tree of the BMAD agent skills that .claude/skills/* points
+  #   at. Agent tooling for AI assistants: never copied into a container image,
+  #   never executed in production. Same rationale as _bmad/** below.
   # - _bmad/**: BMAD/WDS agent framework modules (build tooling for AI agents,
   #   never shipped or executed in production).
   # - _bmad-output/**: generated BMAD planning/implementation/spec artifacts.
@@ -42,6 +54,7 @@ variables:
   # stays unset) so secrets in any BMAD sample content still surface in the dashboard.
   SAST_EXCLUDED_PATHS: >-
     mobile/**/windows/**,
+    mobile/**/flutter_appauth/**,
     genie-ai-overlay/contracts/**,
     **/seed-*.js,
     **/scripts/seed-*.js,
@@ -52,6 +65,7 @@ variables:
     **/tests/**,
     **/coverage/**,
     .claude/**,
+    .agents/**,
     _bmad/**,
     _bmad-output/**,
     update_quickhelp.js
@@ -67,7 +81,12 @@ variables:
   # Secret Detection is intentionally NOT excluded (see SAST comment above).
   # NOTE: separator is comma, NOT semicolon — semicolon-separated values are
   # silently ignored by gemnasium v6 (verified on job 93734).
-  DS_EXCLUDED_PATHS: "_bmad/**,_bmad-output/**,.claude/**"
+  # .agents/** mirrors the SAST exclusion above. It is not reachable by
+  # gemnasium-python today (DS_MAX_DEPTH=2 stops at .agents/skills/, while the
+  # only dependency file in that tree sits two levels deeper), so this is
+  # insurance against a future skill dropping a manifest where gemnasium would
+  # pick it up as a dep-dir and block the whole dependency-scanning job.
+  DS_EXCLUDED_PATHS: "_bmad/**,_bmad-output/**,.claude/**,.agents/**"
 
 # Prevent duplicate branch+MR pipelines — first match wins
 workflow:

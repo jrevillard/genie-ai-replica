@@ -3,7 +3,9 @@ import '../keycloak_config.dart';
 // Template for new deployment flavors.
 // Copy this file to flavors/<institution>.dart and fill in the values below.
 // The redirectScheme MUST match KC_MOBILE_REDIRECT_SCHEME in the deployment .env.
-// IMPORTANT: Also add a case in getConfig() in keycloak_config.dart for this flavor.
+// IMPORTANT: Also add a case in getConfig() in keycloak_config.dart for this
+// flavor, and extend the _knownFlavors list there so the startup error
+// messages mention it.
 
 final config = KeycloakConfig(
   keycloakUrl: 'https://keycloak.<institution>.int',

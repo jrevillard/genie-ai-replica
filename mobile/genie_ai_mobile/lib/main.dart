@@ -34,6 +34,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:genie_ai_mobile/components/shared/nav_bar_component.dart';
 import 'package:genie_ai_mobile/config/keycloak_config.dart';
+import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
 import 'package:genie_ai_mobile/components/sidebar/sidebar_component.dart';
 import 'package:genie_ai_mobile/components/chat/chatbot_component.dart';
 import 'package:genie_ai_mobile/components/chat/right_sidebar_component.dart';
@@ -73,7 +74,16 @@ void main() async {
   try {
     getConfig();
   } on Object catch (error) {
-    runApp(_StartupConfigError(message: error.toString()));
+    // StateError and ArgumentError wrap the diagnostic in "Bad state: " /
+    // "Invalid argument(s): " through toString(); the screen exists to name
+    // the fix, so it carries the message alone.
+    final detail = switch (error) {
+      StateError(:final message) => message,
+      ArgumentError(:final message) =>
+        message?.toString() ?? '${error.runtimeType}',
+      _ => error.toString(),
+    };
+    runApp(_StartupConfigError(message: detail));
     return;
   }
 
@@ -95,7 +105,7 @@ class _StartupConfigError extends StatelessWidget {
       home: Scaffold(
         body: Center(
           child: Padding(
-            padding: const EdgeInsets.all(24),
+            padding: EdgeInsets.all(DsSpacing.lg),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -104,7 +114,7 @@ class _StartupConfigError extends StatelessWidget {
                   'This build cannot start',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: DsSpacing.sm),
                 Text(message),
               ],
             ),

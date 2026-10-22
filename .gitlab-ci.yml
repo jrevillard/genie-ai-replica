@@ -2558,7 +2558,9 @@ test:flutter:
   stage: test
   script:
     - export PATH="$PWD/../../flutter-sdk/bin:$PATH"
-    - dart pub global activate junitreport_maintained
+    # Pinned: the guard gates below grep the XML shape tojunit emits; an
+    # unpinned bump that serialized skips differently would silence them.
+    - dart pub global activate junitreport_maintained:2.0.5
     - export PATH="$PATH:$PUB_CACHE/bin"
     - mkdir -p reports
     - flutter test --machine --coverage > reports/flutter-machine.json 2>&1
@@ -2591,7 +2593,9 @@ test:flutter:
     # a failure came from.
     - perl -pi -e 's{(<testsuite\b[^>]*?\bname=")([^"]*)(")}{${1}[flavor=itu] ${2}${3}}; s{(<testcase\b[^>]*?\bclassname=")([^"]*)(")}{${1}[flavor=itu] ${2}${3}}' reports/flutter-flavor-report.xml
     - perl -pi -e 's{(<testsuite\b[^>]*?\bname=")([^"]*)(")}{${1}[mode=release] ${2}${3}}; s{(<testcase\b[^>]*?\bclassname=")([^"]*)(")}{${1}[mode=release] ${2}${3}}' reports/flutter-release-guard-report.xml
+    - grep -q '\[mode=release\]' reports/flutter-release-guard-report.xml
     - perl -pi -e 's{(<testsuite\b[^>]*?\bname=")([^"]*)(")}{${1}[mode=profile] ${2}${3}}; s{(<testcase\b[^>]*?\bclassname=")([^"]*)(")}{${1}[mode=profile] ${2}${3}}' reports/flutter-profile-guard-report.xml
+    - grep -q '\[mode=profile\]' reports/flutter-profile-guard-report.xml
     - perl -pi -e 's/&#x1[bB];\[[0-9;]*m//g; s/&#27;\[[0-9;]*m//g; s/\x1b\[[0-9;]*m//g; s/&#x1[bB];//g; s/&#27;//g; s/[\x00-\x08\x0b\x0c\x0e-\x1f]//g' reports/flutter-report.xml reports/flutter-flavor-report.xml reports/flutter-release-guard-report.xml reports/flutter-profile-guard-report.xml
     - 'sed -i ''/lib\/i18n\//d'' coverage/lcov.info'
     - 'COV=$(awk ''/^LF:/{lf+=$2} /^LH:/{lh+=$2} END{if(lf>0) printf "%.1f",lh/lf*100}'' FS=: coverage/lcov.info) && echo "Lines: ${COV}%" || echo "No coverage data"'

@@ -169,13 +169,32 @@ void main() {
     });
   });
 
-  test('non-development flavors never allow insecure connections', () {
-    // The vendored flutter_appauth fork disables TLS verification when this
-    // flag is on. That is acceptable for the dev and e2e flavors, which talk
-    // to a self-signed Keycloak, and unacceptable for any flavor that reaches
-    // a real deployment, so prod and staging must keep it off.
-    expect(flavors.config.allowInsecureConnections, isFalse);
-    expect(stagingConfig.allowInsecureConnections, isFalse);
+  group('insecure connections', () {
+    test('deployment flavor configs keep them off', () {
+      // The vendored flutter_appauth fork disables TLS verification when this
+      // flag is on. That is acceptable for the dev and e2e flavors, which talk
+      // to a self-signed Keycloak, and unacceptable for any flavor that reaches
+      // a real deployment, so the deployment configs must keep it off.
+      expect(flavors.config.allowInsecureConnections, isFalse);
+      expect(stagingConfig.allowInsecureConnections, isFalse);
+    });
+
+    test('the exemption is exactly the dev and e2e configs', () {
+      // Asserted in both directions: a future flavor that turns the flag on is
+      // a deliberate act, and the two flavors that may do it stay the only ones.
+      expect(devConfig.allowInsecureConnections, isTrue);
+      expect(e2eConfig.allowInsecureConnections, isTrue);
+    });
+
+    test('the effective config is the dev config when FLAVOR is not set', () {
+      // getConfig() reads the FLAVOR dart-define and falls back to "dev", and
+      // the documented build commands do not set it. A release build produced
+      // that way therefore resolves devConfig, which enables the trust-all
+      // client and points at localhost. Pinned here so the fallback shows up in
+      // the test report rather than only in a comment.
+      expect(getConfig(), same(devConfig));
+      expect(getConfig().allowInsecureConnections, isTrue);
+    });
   });
 
   group('equality & locale whitelist', () {

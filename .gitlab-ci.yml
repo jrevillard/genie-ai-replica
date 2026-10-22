@@ -24,12 +24,25 @@ variables:
   # SAST_EXCLUDED_PATHS). Do NOT use SEARCH_IGNORED — it is not honored by
   # any official GitLab SAST template and will be silently dropped.
   # - mobile/**/windows/: Windows desktop CMake runner, not deployed to Docker Swarm prod
-  # - mobile/**/flutter_appauth/**: vendored fork of the flutter_appauth plugin
-  #   (a path dependency in mobile/genie_ai_mobile/pubspec.yaml). Third-party
-  #   code: its InsecureConnectionBuilder disables TLS verification by design,
-  #   for the dev and e2e flavors that reach a self-signed Keycloak. The
-  #   production (itu) and staging flavors never enable it — asserted by
+  # - mobile/genie_ai_mobile/flutter_appauth/flutter_appauth/**: vendored fork of
+  #   the flutter_appauth plugin (a `path:` dependency in
+  #   mobile/genie_ai_mobile/pubspec.yaml). Its InsecureConnectionBuilder disables
+  #   TLS verification by design, for the dev and e2e flavors that reach a
+  #   self-signed Keycloak. The fork is compiled into every APK, but the insecure
+  #   service is only constructed when KeycloakConfig.allowInsecureConnections is
+  #   true, and the itu / staging / per-institution flavor configs leave it off
+  #   (the field defaults to false) — asserted by
   #   mobile/genie_ai_mobile/test/config/keycloak_config_test.dart.
+  #   The glob is narrowed to the fork itself on purpose: the sibling
+  #   flutter_appauth_platform_interface/ copy is not compiled (pub resolves that
+  #   one from pub.dev) and stays scanned.
+  #   Provenance: vendored third-party code, with one GENIE.AI patch on top — the
+  #   allowInsecureConnections gate in FlutterAppauthPlugin.java, which is the
+  #   control the exclusion relies on.
+  #   Known gap, tracked separately: getConfig() reads the FLAVOR dart-define and
+  #   falls back to "dev", and the documented build commands do not set it, so a
+  #   release build resolves devConfig — which points at localhost and does not
+  #   authenticate against a real deployment.
   # - genie-ai-overlay/contracts/: real-comps contract tests (test code, NOT shipped in image)
   # - **/scripts/**: dev/migration scripts NOT shipped in container. We list specific
   #   sub-patterns (rather than the broad **/scripts/) so the production entrypoint
@@ -39,9 +52,11 @@ variables:
   # - .claude/**: Claude Code agent skills, hooks, BMAD orchestration YAML. Not
   #   production code; YAML files use BMAD-specific syntax that semgrep can't
   #   parse, generating "Parsing errors" UI noise in the security dashboard.
-  #   NOTE: .claude/skills/* are symlinks into .agents/skills/*, so excluding
-  #   .claude/** alone does NOT exclude the real sources — .agents/** below is
-  #   what actually keeps the agent tooling out of the scan.
+  #   NOTE: the BMAD skills under .claude/skills/ (bmad, bmad-*, …) are symlinks
+  #   into .agents/skills/*, so excluding .claude/** alone does NOT exclude the
+  #   real sources — .agents/** below is what actually keeps the agent tooling
+  #   out of the scan. (.claude/skills/test-audit is a real directory, not a
+  #   symlink, and is covered by .claude/** itself.)
   # - .agents/**: source tree of the BMAD agent skills that .claude/skills/* points
   #   at. Agent tooling for AI assistants: never copied into a container image,
   #   never executed in production. Same rationale as _bmad/** below.
@@ -54,7 +69,7 @@ variables:
   # stays unset) so secrets in any BMAD sample content still surface in the dashboard.
   SAST_EXCLUDED_PATHS: >-
     mobile/**/windows/**,
-    mobile/**/flutter_appauth/**,
+    mobile/genie_ai_mobile/flutter_appauth/flutter_appauth/**,
     genie-ai-overlay/contracts/**,
     **/seed-*.js,
     **/scripts/seed-*.js,
@@ -458,12 +473,17 @@ secret_detection:
   rules: *security_run_rules
 semgrep-sast:
   rules: *security_run_rules
-  # SAST_EXCLUDED_PATHS (set in global variables) hides:
+  # SAST_EXCLUDED_PATHS (set in global variables) is the single source of truth
+  # for the scan surface; the list below is a summary of it, not a second copy
+  # to maintain. It hides:
   #   mobile/**/windows/** — Windows desktop CMake runner, not deployed
+  #   mobile/genie_ai_mobile/flutter_appauth/flutter_appauth/** — vendored
+  #     flutter_appauth fork (trust-all TLS builder, gated by a config flag)
   #   genie-ai-overlay/contracts/** — real-comps contract tests, not shipped
   #   **/scripts/{seed-*.js,migrations/**,new-schema-scripts/**} — dev scripts
   #   **/__tests__/**, **/__mocks__/**, **/tests/**, **/coverage/** — test code
-  #   _bmad/** — BMAD/WDS agent framework modules, never shipped
+  #   .claude/**, .agents/**, _bmad/**, _bmad-output/** — agent tooling and
+  #     generated BMAD artifacts, never shipped
   # Production entrypoint components/document-repository/scripts/clamav-node.sh
   # is INTENTIONALLY left scanned (clamav-node.sh is the CMD of the prod image)
   # Re-enable other excluded paths only if they become shipping code

@@ -798,6 +798,13 @@ services:
       - OKF_RAGAS_TESTSET_SIZE_DEFAULT=${OKF_RAGAS_TESTSET_SIZE_DEFAULT:-20}
       - OKF_RAGAS_MAX_ENTRIES=${OKF_RAGAS_MAX_ENTRIES:-200}
       - OKF_RAGAS_RUN_CONCURRENCY=${OKF_RAGAS_RUN_CONCURRENCY:-2}
+      # The answer leg's INITIAL token budget. It was hardcoded to 800, and a
+      # reasoning-capable model burns 400-700 tokens before writing a word --
+      # every answer hit the length cap, was thrown away, and was re-called at
+      # 3200 by the adaptive ladder: two calls per question, the first one
+      # entirely wasted. max_tokens is a CAP, not a reservation, so a model
+      # that needs less never pays for it.
+      - OKF_RAGAS_ANSWER_MAX_TOKENS=${OKF_RAGAS_ANSWER_MAX_TOKENS:-5000}
       # Liveness horizon (NOT a job deadline): a reachable running job is
       # never timed out; this bounds only the unreachable-sidecar retries.
       # Cancel is the user's call (David 2026-10-18).

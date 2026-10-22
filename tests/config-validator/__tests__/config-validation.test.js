@@ -814,6 +814,23 @@ describe('Configuration Validation Suite', () => {
       expect(envText).toMatch(/^#\s*OKF_RAGAS_TESTSET_SIZE_DEFAULT=20.*$/m);
     });
 
+    test('the answer leg token budget lands in all four sites (2026-10-22)', () => {
+      // The answer leg's initial budget was hardcoded to 800 tokens. A
+      // reasoning-capable model burns 400-700 tokens BEFORE writing a word,
+      // so every answer hit the length cap, was thrown away, and was
+      // re-called at 3200 by the adaptive ladder — two calls per question
+      // with the first one entirely wasted.
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
+      expect(okfBlock).toMatch(/- OKF_RAGAS_ANSWER_MAX_TOKENS=\$\{OKF_RAGAS_ANSWER_MAX_TOKENS:-5000\}/);
+      const envText = fs.readFileSync(ENV_FILE, 'utf8');
+      expect(envText).toMatch(/^#\s*OKF_RAGAS_ANSWER_MAX_TOKENS=5000.*$/m);
+      const vars = parseAnsibleEnvVars(
+        fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+      );
+      expect(vars.OKF_RAGAS_ANSWER_MAX_TOKENS && vars.OKF_RAGAS_ANSWER_MAX_TOKENS.default).toBe('5000');
+    });
+
     test('the judge cache + liveness-horizon vars land in all four sites (2026-10-18 batch)', () => {
       // compose: sidecar carries the cache; okf-server carries the horizon
       const full = fs.readFileSync(COMPOSE_FILE, 'utf8');

@@ -74,6 +74,16 @@ const TOP_N = Math.max(1, parseInt(process.env.OKF_RAGAS_TOP_N || process.env.RE
 const maxCorpusChunks = () => Math.max(1, parseInt(process.env.OKF_RAGAS_MAX_CORPUS_CHUNKS || '1600', 10));
 const CONTEXT_CHARS = 2000; // per-context cap stored on run rows (xlsx uses answer_first_200 anyway)
 const CONCEPT_BODY_CAP = parseInt(process.env.OKF_MAX_CONCEPT_DOC_CHARS || '200000', 10);
+// The answer leg's INITIAL token budget. It was hardcoded to 800, and a
+// reasoning-capable judge burns 400-700 tokens BEFORE writing a word — so
+// every answer hit the length cap, was thrown away, and was re-called at
+// 3200 by the adaptive ladder. Two GLM calls per question, the first one
+// entirely wasted, which halved the answer leg's rate and doubled its
+// cost (live 2026-10-22: the answer leg fell from 10 questions/min to
+// 2 as the harder questions arrived). max_tokens is a CAP, not a
+// reservation — a model that needs less never pays for it, and the ladder
+// still climbs for the ones that do.
+const answerMaxTokens = () => Math.max(256, parseInt(process.env.OKF_RAGAS_ANSWER_MAX_TOKENS || '5000', 10));
 
 const DEFAULT_METRICS = ['faithfulness', 'context_precision', 'context_recall', 'answer_relevancy'];
 const EXTENDED_METRICS = [
@@ -553,7 +563,7 @@ async function generateAnswer(query, contexts) {
     // when that config is explicitly checked for benchmark answers. When it
     // is, the benchmark measures the configured model instead (and the run's
     // fidelity block says so). Openai-wire only, like every okf-server leg.
-    { maxTokens: 800, temperature: 0.0, service: 'ragas_answers' }
+    { maxTokens: answerMaxTokens(), temperature: 0.0, service: 'ragas_answers' }
   );
   const content =
     resp && resp.data && resp.data.choices && resp.data.choices[0] && resp.data.choices[0].message

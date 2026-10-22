@@ -732,6 +732,44 @@ describe('run', () => {
     expect(call[1]).toMatchObject({ service: 'ragas_answers' });
   });
 
+  it('the answer leg asks for enough tokens that a reasoning model answers in ONE call', async () => {
+    // 2026-10-22 (live): the answer leg's initial budget was hardcoded to
+    // 800 tokens. A reasoning-capable judge burns 400-700 tokens BEFORE
+    // writing a word, so every answer hit the length cap, was thrown away,
+    // and was re-called at 3200 by the adaptive ladder — two GLM calls per
+    // question with the first one entirely wasted. The answer leg's rate
+    // fell from 10 questions/min to 2 as the harder questions arrived.
+    const sk = await makeSuite();
+    const begun = await svc.beginRunSuite('me', sk, {}, {});
+    await begun.done;
+    const call = frontmatterService.vllmChatCompletions.mock.calls.find((c) => {
+      const sys = c[0] && c[0][0];
+      return sys && sys.role === 'system' && /information assistant/i.test(sys.content);
+    });
+    expect(call).toBeTruthy();
+    // max_tokens is a CAP, not a reservation — a model that needs less
+    // never pays for it, and the ladder still climbs for the ones that do.
+    expect(call[1].maxTokens).toBe(5000);
+  });
+
+  it('the answer leg token budget is configurable', async () => {
+    const prev = process.env.OKF_RAGAS_ANSWER_MAX_TOKENS;
+    process.env.OKF_RAGAS_ANSWER_MAX_TOKENS = '6144';
+    try {
+      const sk = await makeSuite();
+      const begun = await svc.beginRunSuite('me', sk, {}, {});
+      await begun.done;
+      const call = frontmatterService.vllmChatCompletions.mock.calls.find((c) => {
+        const sys = c[0] && c[0][0];
+        return sys && sys.role === 'system' && /information assistant/i.test(sys.content);
+      });
+      expect(call[1].maxTokens).toBe(6144);
+    } finally {
+      if (prev === undefined) delete process.env.OKF_RAGAS_ANSWER_MAX_TOKENS;
+      else process.env.OKF_RAGAS_ANSWER_MAX_TOKENS = prev;
+    }
+  });
+
   it('the run fidelity block records the ANSWER leg (deployment-chat unless a ragas_answers config is active)', async () => {
     const sk = await makeSuite();
     const begun = await svc.beginRunSuite('me', sk, {}, {});

@@ -1789,6 +1789,15 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 # OKF_RAGAS_MAX_ENTRIES=200
 #   Default: 200. Hard cap per suite (generation + import).
 # OKF_RAGAS_RUN_CONCURRENCY=2
+# OKF_RAGAS_ANSWER_MAX_TOKENS=5000
+#   Default: 5000. The answer leg's INITIAL token budget. It was hardcoded
+#   to 800, and a reasoning-capable model burns 400-700 tokens BEFORE
+#   writing a word -- so every answer hit the length cap, was thrown away,
+#   and was re-called at 3200 by the adaptive ladder. Two calls per question
+#   with the first one entirely wasted (live 2026-10-22: the answer leg's
+#   rate fell from 10 questions/min to 2 as the harder questions arrived).
+#   max_tokens is a CAP, not a reservation -- a model that needs less never
+#   pays for it, and the ladder still climbs for the ones that do.
 #   Default: 2. Per-run query concurrency — bounds LLM load on the shared
 #   GPU so benchmarking does not starve chat answering.
 # OKF_RAGAS_LONG_TIMEOUT_MS=3600000

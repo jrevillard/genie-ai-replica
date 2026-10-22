@@ -14,7 +14,6 @@
 {{- if .Values.opea.enabled -}}
 {{- $vals  := deepCopy .Values -}}
 {{- $ns    := .Values.namespace -}}
-{{- $arangoHost := include "genieai-umbrella.arangoHost" . -}}
 {{- $llmEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "llm") -}}
 {{- $embeddingEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "embedding") -}}
 {{- $tuningEnv := list
@@ -31,12 +30,12 @@
     (dict "name" "RETRIEVER_ARANGO_DISTANCE_STRATEGY" "value" (.Values.opea.retriever.retrieverArangoDistanceStrategy | default "COSINE"))
     (dict "name" "RETRIEVER_ARANGO_NUM_CENTROIDS" "value" (.Values.opea.retriever.retrieverArangoNumCentroids | default "1" | toString))
     (dict "name" "RETRIEVER_ARANGO_FILTER_STRATEGY" "value" (.Values.opea.retriever.retrieverArangoFilterStrategy | default "OR"))
-    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_ENABLED" "value" (ternary (.Values.opea.retriever.retrieverArangoTraversalEnabled | toString) "true" (not (kindIs "invalid" .Values.opea.retriever.retrieverArangoTraversalEnabled))))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_ENABLED" "value" (include "genieai-umbrella.boolEnvValue" (dict "value" .Values.opea.retriever.retrieverArangoTraversalEnabled "default" true)))
     (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH" "value" (.Values.opea.retriever.retrieverArangoTraversalMaxDepth | default "2" | toString))
     (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED" "value" (.Values.opea.retriever.retrieverArangoTraversalMaxReturned | default "5" | toString))
     (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD" "value" (.Values.opea.retriever.retrieverArangoTraversalScoreThreshold | default "0.7" | toString))
     (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES" "value" (.Values.opea.retriever.retrieverArangoTraversalConcurrentBatches | default "10" | toString))
-    (dict "name" "RETRIEVER_HYBRID_RETRIEVAL_ENABLED" "value" (ternary (.Values.opea.retriever.retrieverHybridRetrievalEnabled | toString) "true" (not (kindIs "invalid" .Values.opea.retriever.retrieverHybridRetrievalEnabled))))
+    (dict "name" "RETRIEVER_HYBRID_RETRIEVAL_ENABLED" "value" (include "genieai-umbrella.boolEnvValue" (dict "value" .Values.opea.retriever.retrieverHybridRetrievalEnabled "default" true)))
     (dict "name" "RETRIEVER_HYBRID_RRF_K" "value" (.Values.opea.retriever.retrieverHybridRrfK | default "60" | toString))
     (dict "name" "RETRIEVER_HYBRID_BM25_CANDIDATES" "value" (.Values.opea.retriever.retrieverHybridBm25Candidates | default "50" | toString))
     (dict "name" "RETRIEVER_HYBRID_DENSE_WEIGHT" "value" (.Values.opea.retriever.retrieverHybridDenseWeight | default "1.0" | toString))
@@ -50,7 +49,7 @@
     (dict "name" "GPU_NODE_HOST" "value" (include "genieai-umbrella.opeaGpuHostname" .))
     (dict "name" "TEI_EMBEDDING_ENDPOINT" "value" $embeddingEndpoint)
     (dict "name" "OPEA_SSL_SKIP_VERIFY" "value" (include "genieai-umbrella.opeaSslSkipVerify" .))
-    (dict "name" "ENABLE_OBSERVABILITY" "value" (ternary "1" "0" (or .Values.observability.logs.enabled .Values.observability.metrics.enabled .Values.observability.traces.enabled)))
+    (dict "name" "ENABLE_OBSERVABILITY" "value" (include "genieai-umbrella.observabilityEnabledFlag" .))
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
 -}}
 {{- $arangoSecretEnv := list (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "ARANGO_PASSWORD" "secret" "arango-root-secret" "key" "password" "optional" true) | fromJson) -}}

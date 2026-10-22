@@ -187,7 +187,6 @@ spec:
        the group names contain dots, and a map lookup on a dotted key is
        a path traversal in Helm's `get`. */ -}}
 {{- range $group := ($alertFile | fromYaml).groups }}
-{{- $any := or $.Values.observability.metrics.enabled $.Values.observability.logs.enabled $.Values.observability.traces.enabled }}
 {{- /* Every group's queries are PromQL over the COLLECTOR's own metrics
        (otelcol_receiver_accepted_log_points, vt_http_errors_total,
        vm_free_disk_space_bytes, ...) — they live in VictoriaMetrics, not
@@ -199,7 +198,7 @@ spec:
        in exactly the metrics-only deployment that still runs a
        collector. */}}
 {{- $onMetrics := $.Values.observability.metrics.enabled }}
-{{- if and $any $onMetrics }}
+{{- if $onMetrics }}
 ---
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaAlertRuleGroup

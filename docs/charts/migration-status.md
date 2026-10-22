@@ -6,8 +6,28 @@ the design of record ([`helm-charts-design.md`](helm-charts-design.md)).
 Plan checkboxes are not a status source — evidence is the chart, the deploy
 repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
-## Current state (2026-10-19)
+## Current state (2026-10-22)
 
+- **Chart `genieai-umbrella` at 0.2.66**, branch `feat/k8s-migration` rebased
+  onto `main` at `179a8a8f1` (0 commits behind), 50 commits ahead, 134 files
+  changed (+42 897 / −35).
+- **No application code in the branch**: the diff touches `charts/`,
+  `scripts/`, `docs/`, `deploy/`, `tests/`, `site/`, `.gitlab-ci.yml`,
+  `docker-compose.yaml`, `env`, `Makefile`, `CLAUDE.md`, `CHANGELOG.md` —
+  and nothing under `components/`, `genie-ai-overlay/` or `mobile/`. The
+  application defects the validation work surfaced (doc-repo ClamAV host
+  forwarding + issuer check + `CLAMSCAN_LOCAL_FALLBACK`, the backend's
+  `OPEA_HOST` default) left as three separate MRs off `main` (!586, !587,
+  !588), each with tests. That is why the laptop overlay no longer pins a
+  `feat-k8s-migration` document-repository image.
+- **Config parity is a gate, not a claim (0.2.61–0.2.64)**: the chart now
+  configures every service the way Compose does, and `scripts/config-parity-check.py`
+  compares the two renders variable by variable. The gate learned to judge
+  only what it was actually given (a tier-off render used to report every
+  variable of every unrendered service), to report a pair it cannot judge
+  as "not judged" rather than as a match, and to verify its `notRead`
+  claims against the source (a `notRead` claim that no longer holds is a
+  finding, not a pass).
 - **CRD blind spot closed (0.2.55–0.2.56)**: `kubeconform
   -ignore-missing-schemas` never validated a Custom Resource, and several
   operators decode their CRs strictly — `chart:crd-validate` runs the full
@@ -38,11 +58,50 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
   (the sites use `not (kindIs "invalid")`, and `httpEnabled` is typed
   in the schema), and the Keycloak theme `strip-components` mismatch
   (it counts path components, so any theme name works).
-- Chart `genieai-umbrella` at **0.2.60** on `feat/k8s-migration`; deployed on
+- **Review round 8 closed (0.2.61–0.2.66)** — the adversarial pass over the
+  whole diff, then the re-review of its fixes. What it changed:
+  - *The GPU egress named its destination.* The six OPEA NetworkPolicies
+    each carried a hand-written `ipBlock 0.0.0.0/0` on 443/444; they now
+    derive the CIDR and the port from `opea.gpu.nodeHost` (a literal IPv4
+    becomes a `/32`, a hostname resolves through `opea.gpu.allowedCIDRs`).
+    `opea.gpu.skipTlsVerify` is also no longer inferred from the URL
+    scheme — an operator says it, and the chart's default is `false`.
+  - *The operator RBAC stopped over-granting.* The chart's ClusterRole
+    handed the arango operator cluster-wide access to core resources
+    (secrets, configmaps, serviceaccounts, services, endpoints,
+    statefulsets) on top of the six cluster-wide roles the bootstrap
+    already ships. Only the `database.arangodb.com` rules need cluster
+    scope; the core-resource rules are gone, and ArangoDB was reinstalled
+    live to prove the trimmed role still lets the operator reconcile
+    (pod Ready, AQL answers).
+  - *The dependency graph learned the OPEA tier.* The pre-install
+    dependency check evaluated only services and data; an OPEA dependency
+    was silently invisible, and the render guard failed only when the
+    OPEA tier was on with no graph node at all.
+  - *One `services.backend.env`.* The values file declared the backend's
+    environment twice, and Helm's map merge let the second win — the
+    operator's rows replaced the chart's defaults instead of joining
+    them. A render guard now fails on a duplicate key.
+  - *Mail stopped being optional.* `verifyEmail` and
+    `resetPasswordAllowed` sat at `false` in the chart while Compose
+    ships `true`; the chart now matches Compose and refuses to render
+    without a mail server. The laptop cluster runs a mail **sink**
+    (mailpit, in the deploy overlay) so a validation run never sends real
+    mail; a deployment that owns a mailbox names its own relay and keeps
+    the same chart defaults. The realm now converges to
+    `verifyEmail: true` / `resetPasswordAllowed: true` /
+    `registrationAllowed: true`, verified live with a full SMTP
+    transaction readable in the sink.
+  - *The ArangoDB database is the operator's call.* The chart was
+    overriding the database name; the operator decides it.
+  - *A `#` inside a folded YAML scalar is not a comment.* Two CI steps
+    carried their explanation inside the command's folded scalar, so the
+    text reached `helm` as an argument and the job failed on a message
+    that read like a chart error. The comments moved above the step.
+- Chart `genieai-umbrella` at **0.2.66** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
-- Rebased onto main after issue #998 (runtime-theme model, 81 commits) —
-  tip `7a20c5913` at rebase time, theme delivery ported to the operator
-  world afterwards.
+- Rebased onto `main` at `179a8a8f1` (the tip that carries !586, !587,
+  !588) — the branch is 0 commits behind `main`.
 - **Edge tier shipped (0.2.21–0.2.26)**: Envoy Gateway as a chart dependency
   (`envoyGateway.enabled`, default on, disable-able), Gateway API Gateway/
   GatewayClass/HTTPRoute/Certificate/SecurityPolicy templates, **nginx
@@ -90,7 +149,14 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
   streamed chat, upload → ClamAV → dataprep ingestion, RAG answer with
   citations from a freshly ingested doc, genie-themed login page. Re-run on
   0.2.43 (2026-10-19) with the observability assertions added (VL enriched
-  rows, VT spans per service).
+  rows, VT spans per service). Re-run on 0.2.66 (2026-10-22) after the
+  review fixes: pre-install dependency check PASS, ArangoDB Ready with the
+  trimmed ClusterRole (AQL answers), FR chat streamed with
+  `is_grounded: true` citing the ingested file, `clamav.scan.complete` OK
+  in 108 ms against the cluster's clamd, realm converged to
+  `verifyEmail: true` / `resetPasswordAllowed: true` /
+  `registrationAllowed: true` with the mail sink, and a full SMTP
+  transaction readable in the sink's API.
 - GPU tier is a binary choice: `opea.gpu.mode=external` (remote OpenAI-compatible
   API) or `in-cluster` (model Deployments behind `gpu=true` nodeSelector).
   Laptop runs external; in-cluster is render-validated only (no GPU locally).
@@ -127,29 +193,39 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Remaining phases
 
-1. **Merge `feat/k8s-migration` → main** (MR open; description to be reworked
-   to cover the whole branch). Post-merge: unpin the doc-repo
-   `feat-k8s-migration` image tag in the laptop overlay (source fixes ride the
-   branch: `KEYCLOAK_EXPECTED_ISSUER`, ClamAV host forwarding, backend
-   `OPEA_HOST` default, streaming translation default-on).
-2. **Final whole-MR review** — the 2026-10-15 review predates the rebase +
-   edge tier + theme + realm-parity commits; re-run a fresh adversarial pass
-   over the full diff before merge.
-3. **Documentation pass** (in progress 2026-10-18):
-   - ✅ `site/content/en/docs/deploy/kubernetes.md` exists; refresh its
-     Access/Configuration sections (they still describe the pre-edge
-     port-forward-to-nginx loop) and add the exposure-scenario section.
-   - ✅ Root `CLAUDE.md` + `.claude/rules/K8s-WORKFLOW.md` exist; refresh
-     stale bits (nginx port-forward, image count, validation set).
-   - `charts/README.md` + `charts/genieai-umbrella/README.md` — refresh
-     against 0.2.32 (ingress/envoyGateway/theme values).
+1. **Merge `feat/k8s-migration` → main** (MR !520 open, Draft; the
+   description is being reworked to cover the whole branch rather than its
+   first week). The application fixes the validation work surfaced are
+   already on `main` (!586, !587, !588), so nothing has to be un-pinned
+   from the laptop overlay at merge time.
+2. **Final whole-MR review** — the round-8 pass covered the diff up to
+   0.2.66 and its fixes were re-reviewed; a last pass over the final diff
+   (docs included) still stands between the branch and a merge.
+3. **Documentation pass** (in progress 2026-10-22):
+   - ✅ `site/content/en/docs/deploy/kubernetes.md` exists; its Access and
+     Configuration sections describe the edge (Envoy) path, and the
+     exposure-scenario section is in.
+   - ✅ Root `CLAUDE.md` + `.claude/rules/K8s-WORKFLOW.md` — the
+     port-forward, image count and validation-set bits are current, and
+     the chart-version rule explains that the version is the artifact
+     identity Flux reconciles on (a content change under an unchanged
+     version is reported "in-sync" and never installed).
+   - ✅ `charts/README.md` + `charts/genieai-umbrella/README.md` — refreshed
+     against 0.2.66 (ingress/envoyGateway/theme values, namespace
+     ownership, the four real CI gates, `ct lint`/`ct install` named as
+     the gap).
+   - ✅ The agent working documents under `docs/superpowers/` are gone; the
+     design of record moved to `docs/charts/helm-charts-design.md` and
+     every citation was repointed.
    - genie-ai-deploy README — overlay/SealedSecret model if missing.
 4. **CI gap (plan 7 residual)** — ✅ `chart:contract` shipped (renders with
    overlay-shaped values, runs `PII_SMOKE_CONFIG=<rendered>
    tests/otel-collector/run-pii-smoke.sh`, asserts operator Service names);
    `chart:install` settled as **manual-only** (full install ≈ 30 min on the
    runner's kind — not tenable per push; same posture as the compose E2E
-   suite). Residual: `ct lint`/`ct install` full suite, kind+Calico
+   suite). The deploy repo's own CI now renders the laptop overlay
+   (`dry-run:jrevillard-laptop/dev`) instead of only parsing the Flux
+   CRs. Residual: `ct lint`/`ct install` full suite, kind+Calico
    NetworkPolicy install gate, dashboards for chart test results.
 
 Observability residuals (tier ✅ shipped 2026-10-15): whole-tier adversarial
@@ -160,12 +236,11 @@ the compose config, kept verbatim; backlog.
 
 ## Parked / backlog
 
-- **arango-operator ClusterRole over-grant (2026-10-19 review)**: the
-  chart's ClusterRole grants the operator cluster-wide core-resource
-  access (secrets, configmaps, SAs, services, statefulsets) while the
-  bootstrap already ships 6 cluster-wide operator roles; only the
-  `database.arangodb.com` rules need cluster scope. Trimming requires a
-  validation cycle with ArangoDB reinstalled — deferred, not done blind.
+- **arango-operator ClusterRole over-grant (2026-10-19 review)**: ✅ closed
+  in 0.2.65 — the core-resource rules are gone, only the
+  `database.arangodb.com` rules kept cluster scope, and ArangoDB was
+  reinstalled live to prove the operator still reconciles with the
+  trimmed role.
 - **RWO PVC + replicas>1**: `clusterProfileReplicas.prod` runs
   documentRepository ×2 against one ReadWriteOnce PVC with no node
   pinning — multi-attach risk on multi-node prod (single-node minikube
@@ -178,11 +253,14 @@ the compose config, kept verbatim; backlog.
   document or expose as a value.
 - `otlpEndpoint` helper assumes the OTel-operator `<cr>-collector` Service
   naming; sites without the operator need a `collectorService` override.
-- GPU egress NetworkPolicies use broad `ipBlock 0.0.0.0/0` on 443/444; derive
-  the port/host from the nodeHost URL when tightened.
+- GPU egress NetworkPolicies use broad `ipBlock 0.0.0.0/0` on 443/444: ✅
+  closed in 0.2.65 — the destination is derived from `opea.gpu.nodeHost`
+  (literal IPv4 → `/32`, hostname → `opea.gpu.allowedCIDRs`) and the port
+  from the URL.
 - SealedSecrets consolidation in the deploy repo (nine single-key secrets →
   one); dead `secrets.sops.yaml` template cleanup; arango RBAC leftovers in
-  `namespace.yaml`.
+  `namespace.yaml` (the ClusterRole trim landed in 0.2.65; the rest of the
+  file is untouched).
 - In-cluster `docling` endpoint resolves to a Service the chart does not
   render (no docling model template); in-cluster mode needs either the
   Deployment or a fail-fast guard.

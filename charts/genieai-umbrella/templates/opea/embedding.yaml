@@ -13,7 +13,7 @@
     (dict "name" "TEI_EMBEDDING_ENDPOINT" "value" $embeddingEndpoint)
     (dict "name" "EMBEDDING_MODEL_ID" "value" .Values.opea.embedding.modelId)
     (dict "name" "OPEA_SSL_SKIP_VERIFY" "value" (include "genieai-umbrella.opeaSslSkipVerify" .))
-    (dict "name" "ENABLE_OBSERVABILITY" "value" (ternary "1" "0" (or .Values.observability.logs.enabled .Values.observability.metrics.enabled .Values.observability.traces.enabled)))
+    (dict "name" "ENABLE_OBSERVABILITY" "value" (include "genieai-umbrella.observabilityEnabledFlag" .))
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
 -}}
 {{- $secretEnv := include "genieai-umbrella.gpuApiKeyEnv" (dict "keys" (list "HF_TOKEN" "VLLM_API_KEY")) | fromJsonArray -}}

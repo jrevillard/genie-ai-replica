@@ -133,7 +133,7 @@ spec:
             cidr: 0.0.0.0/0
       ports:
         - protocol: TCP
-          port: {{ .Values.observability.collectorPort | default 4318 }}
+          port: {{ include "genieai-umbrella.otlpPort" . }}
     {{- if and (eq .Values.opea.gpu.mode "external") .Values.opea.gpu.nodeHost }}
 {{- include "genieai-umbrella.opeaGpuEgressRule" . | nindent 4 }}
     {{- end }}
@@ -222,7 +222,7 @@ spec:
             cidr: 0.0.0.0/0
       ports:
         - protocol: TCP
-          port: {{ .Values.observability.collectorPort | default 4318 }}
+          port: {{ include "genieai-umbrella.otlpPort" . }}
     {{- if and (eq .Values.opea.gpu.mode "external") .Values.opea.gpu.nodeHost }}
 {{- include "genieai-umbrella.opeaGpuEgressRule" . | nindent 4 }}
     {{- end }}
@@ -329,7 +329,7 @@ spec:
             cidr: 0.0.0.0/0
       ports:
         - protocol: TCP
-          port: {{ .Values.observability.collectorPort | default 4318 }}
+          port: {{ include "genieai-umbrella.otlpPort" . }}
     {{- if and (eq .Values.opea.gpu.mode "external") .Values.opea.gpu.nodeHost }}
 {{- include "genieai-umbrella.opeaGpuEgressRule" . | nindent 4 }}
     {{- end }}
@@ -413,7 +413,7 @@ spec:
             cidr: 0.0.0.0/0
       ports:
         - protocol: TCP
-          port: {{ .Values.observability.collectorPort | default 4318 }}
+          port: {{ include "genieai-umbrella.otlpPort" . }}
     {{- if and (eq .Values.opea.gpu.mode "external") .Values.opea.gpu.nodeHost }}
 {{- include "genieai-umbrella.opeaGpuEgressRule" . | nindent 4 }}
     {{- end }}
@@ -482,7 +482,7 @@ spec:
             cidr: 0.0.0.0/0
       ports:
         - protocol: TCP
-          port: {{ .Values.observability.collectorPort | default 4318 }}
+          port: {{ include "genieai-umbrella.otlpPort" . }}
     {{- if and (eq .Values.opea.gpu.mode "external") .Values.opea.gpu.nodeHost }}
 {{- include "genieai-umbrella.opeaGpuEgressRule" . | nindent 4 }}
     {{- end }}
@@ -563,7 +563,7 @@ spec:
             cidr: 0.0.0.0/0
       ports:
         - protocol: TCP
-          port: {{ .Values.observability.collectorPort | default 4318 }}
+          port: {{ include "genieai-umbrella.otlpPort" . }}
     {{- if and (eq .Values.opea.gpu.mode "external") .Values.opea.gpu.nodeHost }}
 {{- include "genieai-umbrella.opeaGpuEgressRule" . | nindent 4 }}
     {{- end }}

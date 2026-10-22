@@ -27,7 +27,6 @@
 {{- if .Values.opea.enabled -}}
 {{- $vals  := deepCopy .Values -}}
 {{- $ns    := .Values.namespace -}}
-{{- $arangoHost := include "genieai-umbrella.arangoHost" . -}}
 {{- $llmEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "llm") -}}
 {{- $embeddingEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "embedding") -}}
 {{- $doclingEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "docling") -}}
@@ -48,13 +47,13 @@
     (dict "name" "EMBEDDING_LABEL_THRESHOLD" "value" (.Values.opea.dataprep.embeddingLabelThreshold | default "0.75" | toString))
     (dict "name" "BM25_LABEL_THRESHOLD" "value" (.Values.opea.dataprep.bm25LabelThreshold | default "2.00" | toString))
     (dict "name" "CONTENT_EXTRACTION_METHOD" "value" (.Values.opea.dataprep.contentExtractionMethod | default "docling"))
-    (dict "name" "CONTEXTUAL_RETRIEVAL_ENABLED" "value" (ternary (.Values.opea.dataprep.contextualRetrievalEnabled | toString) "true" (not (kindIs "invalid" .Values.opea.dataprep.contextualRetrievalEnabled))))
+    (dict "name" "CONTEXTUAL_RETRIEVAL_ENABLED" "value" (include "genieai-umbrella.boolEnvValue" (dict "value" .Values.opea.dataprep.contextualRetrievalEnabled "default" true)))
     (dict "name" "DATAPREP_CONTEXTUAL_MODEL" "value" (.Values.opea.dataprep.dataprepContextualModel | default ""))
     (dict "name" "DATAPREP_CONTEXTUAL_DOC_BUDGET" "value" (.Values.opea.dataprep.dataprepContextualDocBudget | default "6000" | toString))
     (dict "name" "DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL" "value" (.Values.opea.dataprep.dataprepContextualDocBudgetDocLevel | default "100000" | toString))
     (dict "name" "DATAPREP_CONTEXTUAL_MAX_TOKENS" "value" (.Values.opea.dataprep.dataprepContextualMaxTokens | default "512" | toString))
     (dict "name" "CONTEXTUAL_STRATEGY" "value" (.Values.opea.dataprep.contextualStrategy | default "per_chunk"))
-    (dict "name" "CONTEXTUAL_LABEL_RAW" "value" (ternary (.Values.opea.dataprep.contextualLabelRaw | toString) "true" (not (kindIs "invalid" .Values.opea.dataprep.contextualLabelRaw))))
+    (dict "name" "CONTEXTUAL_LABEL_RAW" "value" (include "genieai-umbrella.boolEnvValue" (dict "value" .Values.opea.dataprep.contextualLabelRaw "default" true)))
     (dict "name" "VLLM_MODEL_ID" "value" (.Values.opea.models.llm.modelId | default "ibm-granite/granite-4.1-8b"))
     (dict "name" "VLLM_ENDPOINT" "value" $llmEndpoint)
     (dict "name" "GPU_NODE_HOST" "value" (include "genieai-umbrella.opeaGpuHostname" .))
@@ -68,7 +67,7 @@
     (dict "name" "KC_DATAPREP_CLIENT_ID" "value" (.Values.opea.dataprep.kcDataprepClientId | default "dataprep-service-client"))
     (dict "name" "OPEA_SSL_SKIP_VERIFY" "value" (include "genieai-umbrella.opeaSslSkipVerify" .))
     (dict "name" "KEYCLOAK_SSL_SKIP_VERIFY" "value" (.Values.opea.dataprep.keycloakSslSkipVerify | default "0" | toString))
-    (dict "name" "ENABLE_OBSERVABILITY" "value" (ternary "1" "0" (or .Values.observability.logs.enabled .Values.observability.metrics.enabled .Values.observability.traces.enabled)))
+    (dict "name" "ENABLE_OBSERVABILITY" "value" (include "genieai-umbrella.observabilityEnabledFlag" .))
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
     (dict "name" "LOG_LEVEL" "value" (.Values.opea.dataprep.logLevel | default "info"))
 -}}
@@ -106,14 +105,14 @@ in the values file is honored end-to-end for multi-line prompts). */ -}}
 {{- end -}}
 {{- $arangoSecretEnv := list (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "ARANGO_PASSWORD" "secret" "arango-root-secret" "key" "password" "optional" true) | fromJson) -}}
 {{- $kcSecretEnv := list
-    (dict "name" "KC_DATAPREP_CLIENT_SECRET" "valueFrom" (dict "secretKeyRef" (dict "name" "kc-dataprep-client-secret" "key" "KC_DATAPREP_CLIENT_SECRET")))
+    (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "KC_DATAPREP_CLIENT_SECRET" "secret" "kc-dataprep-client-secret" "key" "KC_DATAPREP_CLIENT_SECRET") | fromJson)
 -}}
 {{- $gpuSecretEnv := include "genieai-umbrella.gpuApiKeyEnv" (dict "keys" (list "HF_TOKEN" "VLLM_API_KEY" "HUGGINGFACEHUB_API_TOKEN")) | fromJsonArray -}}
 {{- /* opea.dataprep.env: see the parity gate. The rows come last so an
 operator's value wins over a derived row of the same name. */ -}}
 {{- $opeaEnvRows := include "genieai-umbrella.envMapRows" (.Values.opea.dataprep.env | default dict) | fromJsonArray -}}
 {{- $arangoEnv := list
-    (dict "name" "ARANGO_URL" "value" (printf "http://%s.%s.svc.cluster.local:8529" $arangoHost $ns))
+    (dict "name" "ARANGO_URL" "value" (include "genieai-umbrella.arangoURL" .))
     (dict "name" "ARANGO_DB" "value" (.Values.data.arangodb.database | default "_system" | toString))
     (dict "name" "ARANGO_USERNAME" "value" "root")
 -}}

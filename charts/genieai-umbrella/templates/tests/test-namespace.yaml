@@ -83,7 +83,7 @@ spec:
        the namespace — the chart does not materialize the Secret itself
        (operator brings it via their secret backend of choice), so a
        release with all data tiers disabled has nothing to check. */ -}}
-{{- if or .Values.data.arangodb.enabled (or .Values.data.keycloak.enabled .Values.data.postgres.enabled) }}
+{{- if or .Values.data.arangodb.enabled .Values.data.keycloak.enabled .Values.data.postgres.enabled }}
 ---
 apiVersion: v1
 kind: Pod

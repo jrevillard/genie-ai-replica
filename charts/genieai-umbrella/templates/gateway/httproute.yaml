@@ -41,10 +41,6 @@ spec:
         - path:
             type: PathPrefix
             value: /api/files
-      backendRefs:
-        - name: document-repository
-          port: 80
-    - matches:
         - path:
             type: PathPrefix
             value: /api/labels

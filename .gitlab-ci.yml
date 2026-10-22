@@ -24,18 +24,20 @@ variables:
   # SAST_EXCLUDED_PATHS). Do NOT use SEARCH_IGNORED — it is not honored by
   # any official GitLab SAST template and will be silently dropped.
   # - mobile/**/windows/: Windows desktop CMake runner, not deployed to Docker Swarm prod
-  # - mobile/genie_ai_mobile/flutter_appauth/flutter_appauth/**: vendored fork of
+  # - mobile/genie_ai_mobile/flutter_appauth/**: the vendored upstream checkout of
   #   the flutter_appauth plugin (a `path:` dependency in
-  #   mobile/genie_ai_mobile/pubspec.yaml). Its InsecureConnectionBuilder disables
-  #   TLS verification by design, for the dev and e2e flavors that reach a
-  #   self-signed Keycloak. The fork is compiled into every APK, but the insecure
-  #   service is only constructed when KeycloakConfig.allowInsecureConnections is
-  #   true, and the itu / staging / per-institution flavor configs leave it off
-  #   (the field defaults to false) — asserted by
+  #   mobile/genie_ai_mobile/pubspec.yaml, which resolves to the
+  #   flutter_appauth/flutter_appauth package inside it). The checkout is a melos
+  #   monorepo: the app compiles only that one package, and the rest of the
+  #   checkout (the platform-interface package, the upstream GitHub Actions
+  #   workflows) is upstream code we do not run. Its InsecureConnectionBuilder
+  #   disables TLS verification by design, for the dev and e2e flavors that reach
+  #   a self-signed Keycloak. The fork is compiled into every APK, but the
+  #   insecure service is only constructed when
+  #   KeycloakConfig.allowInsecureConnections is true, and the itu / staging /
+  #   per-institution flavor configs leave it off (the field defaults to false) —
+  #   asserted by
   #   mobile/genie_ai_mobile/test/config/keycloak_config_test.dart.
-  #   The glob is narrowed to the fork itself on purpose: the sibling
-  #   flutter_appauth_platform_interface/ copy is not compiled (pub resolves that
-  #   one from pub.dev) and stays scanned.
   #   Provenance: vendored third-party code, with one GENIE.AI patch on top — the
   #   allowInsecureConnections gate in FlutterAppauthPlugin.java, which is the
   #   control the exclusion relies on.
@@ -69,7 +71,7 @@ variables:
   # stays unset) so secrets in any BMAD sample content still surface in the dashboard.
   SAST_EXCLUDED_PATHS: >-
     mobile/**/windows/**,
-    mobile/genie_ai_mobile/flutter_appauth/flutter_appauth/**,
+    mobile/genie_ai_mobile/flutter_appauth/**,
     genie-ai-overlay/contracts/**,
     **/seed-*.js,
     **/scripts/seed-*.js,
@@ -477,8 +479,8 @@ semgrep-sast:
   # for the scan surface; the list below is a summary of it, not a second copy
   # to maintain. It hides:
   #   mobile/**/windows/** — Windows desktop CMake runner, not deployed
-  #   mobile/genie_ai_mobile/flutter_appauth/flutter_appauth/** — vendored
-  #     flutter_appauth fork (trust-all TLS builder, gated by a config flag)
+  #   mobile/genie_ai_mobile/flutter_appauth/** — vendored flutter_appauth
+  #     checkout (trust-all TLS builder, gated by a config flag)
   #   genie-ai-overlay/contracts/** — real-comps contract tests, not shipped
   #   **/scripts/{seed-*.js,migrations/**,new-schema-scripts/**} — dev scripts
   #   **/__tests__/**, **/__mocks__/**, **/tests/**, **/coverage/** — test code

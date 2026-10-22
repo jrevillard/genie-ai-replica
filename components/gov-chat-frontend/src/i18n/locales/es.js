@@ -1374,6 +1374,7 @@ export default {
   },
   chatbot: {
     streamingError: 'Se interrumpió la respuesta. Inténtelo de nuevo.',
+    unsupportedLanguage: 'Este idioma no está disponible para este despliegue.',
     welcomeMessage: 'Welcome! How can I assist you today?',
     aiGeneratedNoDocs: 'Generado por IA — no basado en los documentos de la biblioteca',
     translationUnavailable: 'Traducción no disponible: esta respuesta puede contener texto sin traducir.',

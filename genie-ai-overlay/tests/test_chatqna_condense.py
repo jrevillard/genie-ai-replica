@@ -389,7 +389,7 @@ class TestHandleRequestCondenseWiring:
         svc = create_chatqna_service()
         svc.megaservice.schedule = AsyncMock(return_value=({"llm": {"text": "ok"}}, {}))
         svc._get_translated_history_string = AsyncMock(return_value=history_blob)
-        svc._finalize_llm_response = AsyncMock(return_value=("ok", None))
+        svc._finalize_llm_response = AsyncMock(return_value=("ok", None, None))
         svc._assemble_source_documents = AsyncMock(return_value=([], 0.5, True))
         return svc
 

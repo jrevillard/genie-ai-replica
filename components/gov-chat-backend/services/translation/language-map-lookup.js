@@ -60,6 +60,10 @@ function hasOwnLanguage(languageMap, isoCode) {
  * A code the map does not produce is not a language the model can be asked
  * for, and saying so is what lets the caller check the codes on the way here.
  *
+ * The codes are read from the table on every call: the table is the shipped
+ * map, and a set built from it once would go on answering for a table that
+ * changed — which is exactly what the check below exists to catch.
+ *
  * @param {object|null} languageMap - The shipped language map.
  * @param {string} code - A model-specific language code.
  * @returns {boolean} True when the map produces that code.

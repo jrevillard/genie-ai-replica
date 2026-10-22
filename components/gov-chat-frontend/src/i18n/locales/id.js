@@ -1361,6 +1361,7 @@ export default {
   },
   chatbot: {
     streamingError: 'Respons terputus. Silakan coba lagi.',
+    unsupportedLanguage: 'Bahasa ini tidak tersedia untuk deployment ini.',
     aiGeneratedNoDocs: 'Dihasilkan oleh AI — tidak berdasarkan dokumen perpustakaan',
     translationUnavailable: 'Terjemahan tidak tersedia — jawaban ini mungkin memuat teks yang belum diterjemahkan.',
     welcomeMessage: 'Welcome! How can I assist you today?',

@@ -137,6 +137,22 @@ class TranslationInputTooLongError(RuntimeError):
     """
 
 
+class TranslationFailedError(RuntimeError):
+    """Raised when a translation chunk could not be translated.
+
+    The translation model failed (an error, a timeout, or an empty answer) for
+    a chunk of an answer. The failure is raised rather than answered with the
+    English source: a chunk that goes through untranslated leaves the answer
+    half-translated, and an answer that reads as a translation but is not one
+    is the failure the translation status exists to report.
+
+    The caller decides what an untranslated answer means: the answer path
+    keeps the English answer and reports ``"failed"``, while the history path
+    — a text that is normalized for the retriever and never shown — falls back
+    to the English source.
+    """
+
+
 # Token-budget markers in vLLM/OpenAI error bodies. Shared with the dataprep
 # fail-loud pattern (dataprep/genieai_dataprep_arangodb.py).
 # Protocol marker carried in the reranker microservice's 422 body
@@ -683,6 +699,13 @@ _SCRIPT_NAMES = {
 # default rather than carried into the prompt.
 _LANGUAGE_CODE_PATTERN = re.compile(r"^[a-z]{2,3}(-[a-z0-9]{2,8})?$")
 
+# The longest a caller-supplied language may be. A code the language map
+# carries is a few characters long, so a longer value is not a language: the
+# bound keeps the lookup short whatever the caller sent. The backend applies
+# the same bound, in the same order, to the value it forwards
+# (components/gov-chat-backend/services/translation/language-request.js).
+MAX_LANGUAGE_LENGTH = 32
+
 
 def _canonical_language_code(raw_language, language_codes: dict) -> str | None:
     """The code a language map is keyed in, or None when it does not know it.
@@ -695,7 +718,13 @@ def _canonical_language_code(raw_language, language_codes: dict) -> str | None:
     """
     if not isinstance(raw_language, str):
         return None
-    candidate = raw_language.strip().lower()
+    # The value is trimmed, then cut, then lower-cased: the trim comes first
+    # so that a language the caller padded with spaces still names itself —
+    # a language cut before it is trimmed is a language that disappears, and
+    # the answer is then delivered in English without ever being refused.
+    # The backend applies the same order to the value it forwards
+    # (components/gov-chat-backend/services/translation/language-request.js).
+    candidate = raw_language.strip()[:MAX_LANGUAGE_LENGTH].lower()
     if not candidate or candidate == "auto":
         return None
     if candidate not in language_codes:
@@ -744,15 +773,17 @@ def _language_display(raw_language) -> str:
     The value is attacker-controlled, so it is cut to a bounded length and
     reduced to the characters a language name is made of: a log line must not
     become a channel for arbitrary text, nor for forged log lines through an
-    embedded newline. The backend applies the same rule to the value it logs
+    embedded newline. The value is trimmed before it is cut, so a language
+    the caller padded with spaces still names itself in the log. The backend
+    applies the same rule to the value it logs
     (services/translation/language-log.js) — including the sentinel it uses
     for a value that is not a string at all, so a log query written against
     one service finds the lines of the other.
     """
     if not isinstance(raw_language, str):
         return "<non-string>"
-    printable = "".join(char for char in raw_language if char.isalnum() or char in "_-")
-    return printable[:32] if printable else "<empty>"
+    printable = "".join(char for char in raw_language.strip()[:MAX_LANGUAGE_LENGTH] if char.isalnum() or char in "_-")
+    return printable or "<empty>"
 
 
 # The language map (code → name), and the moment it was read. Module level
@@ -1778,56 +1809,7 @@ def get_tokenizer():
 ##################################################################################################################################
 def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **kwargs):
 
-    if self.services[cur_node].service_type == ServiceType.TRANSLATOR:
-        original_text = inputs["text"]
-        original_language = _gp(kwargs, "original_language", "auto")
-
-        # No translator node is registered in the graph, but the branch is kept
-        # for parity with the upstream handler. The language it names comes
-        # from the caller, so it is resolved against the language map: the
-        # prompt carries the name the map knows, never the string the request
-        # carried. An unknown language is REFUSED and the text goes through
-        # untranslated — exactly as on the chat path. Falling back to English
-        # would answer a different question than the one that was asked, with
-        # no refusal and no log.
-        language_codes = language_codes_map()
-        requested_language = _resolve_language_code(original_language, language_codes)
-        if requested_language is None:
-            logger.warning(
-                f"Translator language '{_language_display(original_language)}' is not a known language code — "
-                "refusing to translate."
-            )
-            # The node still owes the next node the payload it expects: the
-            # raw inputs carry no "messages" key, and a node that returns
-            # them hands the LLM node a dict it cannot read. The text goes
-            # through untranslated.
-            return {
-                "messages": [{"role": "user", "content": original_text}],
-                "temperature": 0,
-                "max_tokens": llm_parameters_dict["max_tokens"],
-                "stream": False,
-            }
-        target_language = language_codes[requested_language.lower()]
-
-        prompt = (
-            f"Translate the following text to {target_language}. Only provide "
-            f"the translation, with no additional commentary or explanations. "
-            f'Text: "{original_text}"'
-        )
-
-        # Format the request for the LLM service
-        next_inputs = {}
-        next_inputs["messages"] = [{"role": "user", "content": prompt}]
-        next_inputs["temperature"] = 0  # Use low temperature for deterministic translation
-        next_inputs["max_tokens"] = llm_parameters_dict["max_tokens"]
-        next_inputs["stream"] = False
-
-        if logflag:
-            logger.debug(f"Aligned input to the translator: {next_inputs}")
-
-        return next_inputs
-
-    elif self.services[cur_node].service_type == ServiceType.EMBEDDING:
+    if self.services[cur_node].service_type == ServiceType.EMBEDDING:
         # Multi-turn vector-space blending (issue #833, E2 design): when a
         # history text is present, embed [query, history] as a SINGLE batched
         # TEI call instead of a side-channel httpx request. align_outputs
@@ -2115,17 +2097,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
 def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_dict, **kwargs):
     next_data = {}
 
-    if self.services[cur_node].service_type == ServiceType.TRANSLATOR:
-        if logflag:
-            logger.debug(f"Raw output of the translator\n {data}\n")
-        translated_text = data["choices"][0]["message"]["content"]
-
-        # Clean up potential LLM conversational artifacts
-        translated_text = translated_text.strip().strip('"')
-
-        return {"text": translated_text}
-
-    elif self.services[cur_node].service_type == ServiceType.EMBEDDING:
+    if self.services[cur_node].service_type == ServiceType.EMBEDDING:
         if logflag:
             logger.debug(
                 f"Raw output of the embedding: {type(data).__name__}, "
@@ -2626,13 +2598,21 @@ class ChatQnAService:
 
     async def _finalize_llm_response(
         self, llm_response: str, original_language: str | None
-    ) -> tuple[str, float | None]:
+    ) -> tuple[str, float | None, str | None]:
         """Strip leaked conversation markers + the self-grade sentinel, then translate.
 
         Extracted from handle_request so the strip-before-translate ordering (the #1
         sentinel/translation collision risk) is unit-testable: the sentinel is removed
         from ``llm_response`` BEFORE it is handed to the translation pipeline. Returns
-        ``(final_text_response, self_confidence_or_None)``.
+        ``(final_text_response, self_confidence_or_None, translation_status_or_None)``.
+
+        The translation status says what happened to the text the caller reads:
+        ``"ok"`` when it was translated, ``"refused"`` when the requested
+        language was refused and the English answer was kept, ``"failed"``
+        when the translation broke and the English answer was kept, and
+        ``None`` when no translation was asked for. A caller that shows an
+        answer the user asked to be translated has to be able to tell an
+        English answer it did not translate from a translated one.
         """
         # Strip leaked conversation markers from the LLM response. The LLM sometimes
         # echoes back the |<-MSG->| delimiters and USER:/ASSISTANT: role markers used
@@ -2650,6 +2630,10 @@ class ChatQnAService:
         self_confidence = None
         if LLM_SELF_CONFIDENCE_ENABLED:
             llm_response, self_confidence = _extract_self_confidence(llm_response)
+
+        # None until a translation is actually asked for: the status describes
+        # what happened to the text the caller reads.
+        translation_status = None
 
         if original_language and original_language.strip() != "EN":
             if logflag:
@@ -2680,6 +2664,7 @@ class ChatQnAService:
                         "Check that language_codes.json is readable at the configured path."
                     )
                 final_text_response = llm_response
+                translation_status = "refused"
             else:
                 target_lang_name = language_codes[resolved_language.lower()]
 
@@ -2689,6 +2674,7 @@ class ChatQnAService:
 
                 try:
                     final_text_response = await self._translate_with_chunking(llm_response, resolved_language)
+                    translation_status = "ok"
                     if logflag:
                         logger.info("Translation completed successfully")
                 except TranslationInputTooLongError:
@@ -2701,13 +2687,14 @@ class ChatQnAService:
                 except Exception as e:
                     logger.error(f"Translation failed: {e}, returning original response")
                     final_text_response = llm_response
+                    translation_status = "failed"
         else:
             final_text_response = llm_response
 
         if logflag:
             logger.debug(f"\nFinal Text Response: {final_text_response}")
 
-        return final_text_response, self_confidence
+        return final_text_response, self_confidence, translation_status
 
     async def _assemble_source_documents(self, result_dict: dict, token: str) -> tuple[list, float, bool]:
         """Build the source-document list, confidence, and grounding flag from the graph output.
@@ -3507,10 +3494,49 @@ class ChatQnAService:
         canonical_code, target_lang = _canonical_target_language(iso_code, language_codes)
         if canonical_code is None:
             return text
-        iso_code = canonical_code
 
+        try:
+            return await self._translate_chunk_in_language(
+                text,
+                canonical_code,
+                target_lang,
+                source_lang_code=source_lang_code,
+            )
+        except TranslationFailedError:
+            # This text is normalized for the retriever, not shown to the
+            # user: an untranslated history is a worse answer than a wrong
+            # one, and the answer the user reads is unaffected by it.
+            return text
+
+    async def _translate_chunk_in_language(
+        self,
+        text: str,
+        canonical_code: str,
+        target_lang: str,
+        source_lang_code: str = "en",
+    ) -> str:
+        """Translate a chunk into a language that has already been resolved.
+
+        The caller has already checked the target against the language map, so
+        this hop builds the prompt and sends it — nothing here resolves a
+        language, and nothing here can refuse one. A document is translated
+        chunk by chunk, and the language is resolved once for the whole
+        document: the chunks of one answer cannot disagree about the language
+        they are written in, and a refusal is logged once instead of once per
+        chunk.
+
+        A chunk that could not be translated raises ``TranslationFailedError``:
+        the answer is either translated or it is not, and a chunk that goes
+        through in English leaves an answer that is neither.
+
+        Args:
+            text: The chunk to translate.
+            canonical_code: The canonical target code the language map knows.
+            target_lang: The language name the map gives for that code.
+            source_lang_code: Source ISO language code (e.g. "en"). Defaults to "en".
+        """
         if _is_translategemma():
-            target_lang_code = iso_code
+            target_lang_code = canonical_code
             prompt = self._build_translategemma_prompt(
                 text=text,
                 source_lang_code=source_lang_code,
@@ -3533,7 +3559,7 @@ class ChatQnAService:
             note = language_notes.get(target_lang, "")
             prompt = (
                 f"Translate the following text to {target_lang} "
-                f"(ISO 639-1 code: {iso_code}). {note} "
+                f"(ISO 639-1 code: {canonical_code}). {note} "
                 f"Only output the translated text, nothing else."
                 f"\n\nText: {text}\n\nTranslation:"
             )
@@ -3553,9 +3579,9 @@ class ChatQnAService:
                 response.raise_for_status()
                 response_data = response.json()
                 if _is_translategemma():
-                    return response_data["choices"][0]["text"].strip()
+                    translated = response_data["choices"][0]["text"].strip()
                 else:
-                    return response_data["choices"][0]["message"]["content"].strip()
+                    translated = response_data["choices"][0]["message"]["content"].strip()
         except Exception as e:
             # Fail-loud on vLLM context overflow: silently returning the
             # original English text breaks the multilingual UX (#829). Classify
@@ -3568,15 +3594,26 @@ class ChatQnAService:
                 raise TranslationInputTooLongError(
                     f"translation chunk exceeds VLLM_TRANSLATION_MAX_MODEL_LEN: {type(e).__name__}: {str(e)[:200]}"
                 ) from e
-            logger.warning(f"Failed to translate chunk, returning original: {type(e).__name__}: {e}")
-            return text
+            logger.warning(f"Failed to translate chunk: {type(e).__name__}: {e}")
+            raise TranslationFailedError(f"translation chunk failed: {type(e).__name__}: {str(e)[:200]}") from e
+
+        if not translated and text.strip():
+            # The model answered with nothing. The chunk would join the answer
+            # as a hole, and the answer would read as a translation that is
+            # missing a section.
+            raise TranslationFailedError("translation model returned an empty translation for a non-empty chunk")
+
+        return translated
 
     async def _translate_with_chunking(self, text: str, iso_code: str, source_lang_code: str = "en") -> str:
         """Translate long text by splitting into chunks and translating separately.
 
         The target language is checked against the language map before the
         first chunk is sent: an unknown code is refused as a whole, so an
-        answer is never a mix of translated and untranslated chunks.
+        answer is never a mix of translated and untranslated chunks. A chunk
+        that could not be translated fails the whole answer, for the same
+        reason: an answer that is half translated is not an answer in the
+        requested language.
         """
         language_codes = language_codes_map()
         canonical_code, target_lang = _canonical_target_language(iso_code, language_codes)
@@ -3588,10 +3625,33 @@ class ChatQnAService:
         if logflag:
             logger.info(f"Translating {len(text)} chars in {len(chunks)} chunks to {target_lang}")
 
-        # Translate chunks concurrently
+        # The language was resolved once for the whole document: every chunk
+        # is written in the language the map named.
         translated_chunks = await asyncio.gather(
-            *[self._translate_text_chunk(chunk, canonical_code, source_lang_code=source_lang_code) for chunk in chunks]
+            *[
+                self._translate_chunk_in_language(
+                    chunk,
+                    canonical_code,
+                    target_lang,
+                    source_lang_code=source_lang_code,
+                )
+                for chunk in chunks
+            ],
+            # Every chunk is awaited before the answer fails: a chunk that is
+            # still in flight when the answer is abandoned would report an
+            # exception nobody retrieved.
+            return_exceptions=True,
         )
+
+        for outcome in translated_chunks:
+            if isinstance(outcome, BaseException):
+                if isinstance(outcome, TranslationInputTooLongError):
+                    # A permanent contract issue (the chunk exceeds the model
+                    # window): the route layer maps it to a 422.
+                    raise outcome
+                raise TranslationFailedError(
+                    f"translation chunk failed: {type(outcome).__name__}: {outcome}"
+                ) from outcome
 
         return " ".join(translated_chunks)
 
@@ -4089,26 +4149,17 @@ class ChatQnAService:
                 # span.
                 _emit_reranker_selection_span(candidate_chunk_keys=[], selected_chunk_keys=[], selected_scores=[])
 
-                # Route the English abstention text through the same
-                # strip-before-translate finalizer as normal LLM answers so
-                # non-English users get the abstention in their language.
+                # The English abstention text. Who translates it depends on the
+                # path: a streamed answer is translated by the backend (it owns
+                # the streaming translation), a non-streamed one by this
+                # service. One owner per path — translating on both would
+                # translate the abstention twice, once into the target
+                # language and once again from English.
                 abstention_text = (
                     "I cannot reliably answer this query because the "
                     "retrieved documents exceed the reranker's input "
                     "limit. This indicates a data ingestion issue."
                 )
-                # Translation overflow on the abstention path: fall back to
-                # the English source text and flag the failure in metadata so
-                # the contract (HTTP 200 + abstained=True + abstention_reason=
-                # reranker_input_too_long) holds for non-EN users whose
-                # translation service rejects the abstention text.
-                try:
-                    final_text, _ = await self._finalize_llm_response(abstention_text, original_language)
-                    _translation_status = "ok"
-                except TranslationInputTooLongError as e:
-                    logger.warning(f"Translation overflow on abstention path: {type(e).__name__}: {str(e)[:200]}")
-                    final_text = abstention_text
-                    _translation_status = "failed"
                 metadata = {
                     "source_documents": [],
                     "retrieval_confidence_score": 0.0,
@@ -4116,8 +4167,42 @@ class ChatQnAService:
                     "is_grounded": False,
                     "abstained": True,
                     "abstention_reason": "reranker_input_too_long",
-                    "translation_status": _translation_status,
                 }
+                if chat_request.stream:
+                    # The backend translates the stream. The English text goes
+                    # out as it is, and the backend reports its own translation
+                    # failure on the done frame.
+                    final_text = abstention_text
+                else:
+                    # Route the English abstention text through the same
+                    # strip-before-translate finalizer as normal LLM answers so
+                    # non-English users get the abstention in their language.
+                    #
+                    # Translation overflow on the abstention path: fall back to
+                    # the English source text and flag the failure in metadata so
+                    # the contract (HTTP 200 + abstained=True + abstention_reason=
+                    # reranker_input_too_long) holds for non-EN users whose
+                    # translation service rejects the abstention text.
+                    translation_status = None
+                    try:
+                        final_text, _, translation_status = await self._finalize_llm_response(
+                            abstention_text, original_language
+                        )
+                    except TranslationInputTooLongError as e:
+                        logger.warning(f"Translation overflow on abstention path: {type(e).__name__}: {str(e)[:200]}")
+                        final_text = abstention_text
+                        translation_status = "failed"
+                    if language_refused:
+                        # The request asked for a language the map does not
+                        # know: the answer stays in English, and the caller has
+                        # to be able to tell an answer it did not translate from
+                        # a translated one.
+                        translation_status = "refused"
+                    # The key is there only when a translation was asked for:
+                    # absent means the answer was never meant to leave the
+                    # language it was written in.
+                    if translation_status is not None:
+                        metadata["translation_status"] = translation_status
 
                 if chat_request.stream:
                     # Streaming callers get the same SSE envelope as a normal
@@ -4194,7 +4279,9 @@ class ChatQnAService:
         # (the #1 sentinel/translation collision risk) is unit-testable without the
         # full handle_request megaservice flow.
         try:
-            final_text_response, self_confidence = await self._finalize_llm_response(llm_response, original_language)
+            final_text_response, self_confidence, translation_status = await self._finalize_llm_response(
+                llm_response, original_language
+            )
         except TranslationInputTooLongError as _e_trans_overflow:
             # The translation service rejected a chunk for exceeding the model's
             # configured context window (4-12× oversized when DATAPREP_CONTEXTUAL_DOC_BUDGET
@@ -4261,6 +4348,18 @@ class ChatQnAService:
             # Raw LLM self-assessed groundedness; None when the sentinel was omitted
             # or malformed.
             metadata["self_confidence"] = round(self_confidence, 2) if self_confidence is not None else None
+        if language_refused:
+            # The request asked for a language the map does not know: the
+            # answer stays in English, and the caller has to be able to tell an
+            # answer it did not translate from a translated one.
+            translation_status = "refused"
+        if translation_status is not None:
+            # What happened to the answer the caller reads: "ok" when it was
+            # translated, "refused" when the requested language was refused,
+            # "failed" when the translation broke. Both of the last two leave
+            # the English answer in place, so the caller has to be able to
+            # tell an untranslated answer from a translated one.
+            metadata["translation_status"] = translation_status
 
         final_response_payload = {
             "response": final_text_response,

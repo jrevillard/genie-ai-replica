@@ -11,6 +11,7 @@ an unknown or malformed language is refused, a known one still translates.
 
 import json
 import os
+import re
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -96,6 +97,21 @@ class TestRequestLanguageBoundary:
         svc = create_service()
         assert svc._resolve_request_language("   ") == (None, False)
 
+    def test_a_padded_language_still_names_itself(self):
+        """The trim comes before the cut: a language cut before it is trimmed
+        is a language that disappears, and the answer is then delivered in
+        English without ever being refused. The backend applies the same
+        order to the value it forwards."""
+        svc = create_service()
+        assert svc._resolve_request_language("   fr   ") == ("FR", False)
+        assert svc._resolve_request_language(" " * 40 + "fr") == ("FR", False)
+
+    def test_a_value_longer_than_the_bound_is_refused(self):
+        """The request body may be large: a value that cannot be a language
+        code is cut to a bounded length before the lookup."""
+        svc = create_service()
+        assert svc._resolve_request_language("x" * 5000) == (None, True)
+
     def test_the_logged_language_is_bounded_and_printable(self):
         """The refused value is caller-controlled: the log line must not carry
         it whole, and must not carry a newline that could forge a log line."""
@@ -106,6 +122,21 @@ class TestRequestLanguageBoundary:
         message = mock_logger.warning.call_args[0][0]
         assert "\n" not in message
         assert len(message) < 300
+
+    def test_the_refusal_log_does_not_carry_the_callers_payload(self):
+        """The log line carries the reduced form of the value — the characters
+        a language name is made of — not the text the caller sent. A log line
+        is read by people and kept for a long time: the caller's words have
+        no business in it."""
+        svc = create_service()
+        with patch.object(chatqna_module, "logger") as mock_logger:
+            svc._resolve_request_language(INJECTION)
+        message = mock_logger.warning.call_args[0][0]
+        assert INJECTION not in message
+        # What is left of the value is one word: the spaces of the payload
+        # are gone.
+        displayed = message.split("'")[1]
+        assert " " not in displayed
 
 
 class TestFinalizeLanguageBoundary:
@@ -122,10 +153,33 @@ class TestFinalizeLanguageBoundary:
             return f"[{iso_code}]{text}"
 
         svc._translate_with_chunking = fake_translate
-        result, _confidence = await svc._finalize_llm_response("English answer", INJECTION)
+        result, _confidence, status = await svc._finalize_llm_response("English answer", INJECTION)
 
         assert calls == []
         assert result == "English answer"
+        assert status == "refused"
+
+    @pytest.mark.asyncio
+    async def test_the_refusal_log_does_not_carry_the_callers_payload(self, monkeypatch):
+        """The refusal is loud, but it is loud about the language, not about
+        the text the caller sent: the answer goes back in English and the log
+        line carries the reduced form of the value."""
+        monkeypatch.setattr(chatqna_module, "LLM_SELF_CONFIDENCE_ENABLED", False)
+        svc = create_service()
+
+        async def fake_translate(text, iso_code, **kwargs):
+            raise AssertionError("the translator must not be reached")
+
+        svc._translate_with_chunking = fake_translate
+        with patch.object(chatqna_module, "logger") as mock_logger:
+            result, _confidence, status = await svc._finalize_llm_response("English answer", INJECTION)
+
+        assert result == "English answer"
+        assert status == "refused"
+        message = mock_logger.warning.call_args[0][0]
+        assert INJECTION not in message
+        displayed = message.split("'")[1]
+        assert " " not in displayed
 
     @pytest.mark.asyncio
     async def test_unavailable_map_refuses_translation_and_logs(self, monkeypatch):
@@ -145,10 +199,11 @@ class TestFinalizeLanguageBoundary:
             patch.object(chatqna_module, "_read_language_codes", return_value={}),
             patch.object(chatqna_module, "logger") as mock_logger,
         ):
-            result, _confidence = await svc._finalize_llm_response("English answer", "fr")
+            result, _confidence, status = await svc._finalize_llm_response("English answer", "fr")
 
         assert calls == []
         assert result == "English answer"
+        assert status == "refused"
         assert mock_logger.error.called
 
     @pytest.mark.asyncio
@@ -163,10 +218,11 @@ class TestFinalizeLanguageBoundary:
             return f"[{iso_code}]{text}"
 
         svc._translate_with_chunking = fake_translate
-        result, _confidence = await svc._finalize_llm_response("English answer", "fr")
+        result, _confidence, status = await svc._finalize_llm_response("English answer", "fr")
 
         assert calls == ["FR"]
         assert result == "[FR]English answer"
+        assert status == "ok"
 
 
 class TestLanguageMapLoading:
@@ -355,6 +411,85 @@ class TestTranslateChunkingBoundary:
         assert client.post.await_count == 0
         assert result == "hello"
 
+    @pytest.mark.asyncio
+    async def test_a_failed_chunk_fails_the_whole_answer(self):
+        """A chunk that could not be translated is not answered with its
+        English source: the answer would then be half translated — neither
+        the language the caller asked for nor the one the answer was written
+        in."""
+        svc = create_service()
+
+        async def failing_chunk(chunk, canonical_code, target_lang, source_lang_code="en"):
+            raise RuntimeError("the model is unreachable")
+
+        with (
+            patch.object(svc, "_split_text_into_chunks", return_value=["chunk1", "chunk2"]),
+            patch.object(svc, "_translate_chunk_in_language", side_effect=failing_chunk),
+            pytest.raises(chatqna_module.TranslationFailedError),
+        ):
+            await svc._translate_with_chunking("long text", "fr")
+
+    @pytest.mark.asyncio
+    async def test_an_empty_translation_fails_the_chunk(self):
+        """The model answered with nothing: the chunk would join the answer as
+        a hole, and the answer would read as a translation that is missing a
+        section."""
+        svc = create_service()
+        response = MagicMock()
+        response.raise_for_status = MagicMock()
+        response.json = MagicMock(return_value={"choices": [{"message": {"content": "  "}}]})
+        client = MagicMock()
+        client.post = AsyncMock(return_value=response)
+        context = MagicMock()
+        context.__aenter__ = AsyncMock(return_value=client)
+        context.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=context),
+            pytest.raises(chatqna_module.TranslationFailedError),
+        ):
+            await svc._translate_chunk_in_language("hello", "fr", "French")
+
+
+class TestTranslationFailureStatus:
+    """What the caller is told about an answer it did not get translated.
+
+    The answer the user reads is the English one when the translation broke.
+    The status says so: an answer that reads as a translation but is not one
+    is the failure this signal exists for.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_broken_translation_reports_that_it_failed(self, monkeypatch):
+        monkeypatch.setattr(chatqna_module, "LLM_SELF_CONFIDENCE_ENABLED", False)
+        svc = create_service()
+
+        async def failing_translate(text, iso_code, **kwargs):
+            raise chatqna_module.TranslationFailedError("translation chunk failed")
+
+        svc._translate_with_chunking = failing_translate
+        result, _confidence, status = await svc._finalize_llm_response("English answer", "fr")
+
+        assert result == "English answer"
+        assert status == "failed"
+
+    @pytest.mark.asyncio
+    async def test_the_history_keeps_the_english_source_when_a_chunk_fails(self):
+        """The history is normalized for the retriever, never shown: an
+        untranslated history is a worse answer than a wrong one, and the
+        answer the user reads is unaffected by it."""
+        svc = create_service()
+        client = MagicMock()
+        client.post = AsyncMock(side_effect=RuntimeError("the model is unreachable"))
+        context = MagicMock()
+        context.__aenter__ = AsyncMock(return_value=client)
+        context.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=context):
+            result = await svc._translate_text_chunk("USER: what is X?", "en")
+
+        assert result == "USER: what is X?"
+
 
 class TestLanguageDisplay:
     """The bounded form of a caller-supplied language.
@@ -374,7 +509,11 @@ class TestLanguageDisplay:
         """The backend writes the same sentinel
         (components/gov-chat-backend/services/translation/language-log.js):
         the two must not drift apart, or a query over one service misses the
-        lines of the other."""
+        lines of the other.
+
+        The check is on the returned value, not on the mere presence of the
+        literal: a sentinel that survives only in a comment is not the one the
+        backend writes."""
         backend = os.path.join(
             os.path.dirname(chatqna_module.__file__),
             "..",
@@ -389,7 +528,7 @@ class TestLanguageDisplay:
             pytest.skip("the backend source tree is not reachable from here")
         with open(backend) as handle:
             source = handle.read()
-        assert "'<non-string>'" in source
+        assert re.search(r"return\s+'<non-string>'", source)
 
     def test_a_payload_is_reduced_to_language_characters(self):
         payload = "fr\nFAKE LOG LINE " + ("x" * 500)

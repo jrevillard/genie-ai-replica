@@ -30,6 +30,24 @@ function requestedTargetLanguage(queryData) {
 }
 
 /**
+ * Whether an answer has to be translated into the requested language.
+ *
+ * English is the language the answer is written in: there is no translation
+ * to make, and nothing to refuse. "auto" is not a language either — it asks
+ * the service to detect the language the conversation is written in, which
+ * the chatqna service does on its own. Every decision that depends on "is a
+ * translation wanted here" — the refusal check, the streaming translation,
+ * the post-stream translation — reads this one rule, so the three cannot
+ * disagree about the same request.
+ *
+ * @param {string} targetLanguage - The normalized language the caller asked for.
+ * @returns {boolean} True when the answer has to be translated.
+ */
+function wantsTranslation(targetLanguage) {
+  return Boolean(targetLanguage) && targetLanguage !== 'en' && targetLanguage !== 'auto';
+}
+
+/**
  * Resolves the language a request asked for — once.
  *
  * The language travels in the request body, so it is caller-controlled. The
@@ -56,7 +74,7 @@ function requestedTargetLanguage(queryData) {
  *   there is nothing to translate, or when no translator could be prepared).
  */
 async function resolveRequestLanguage(targetLanguage) {
-  if (!targetLanguage || targetLanguage === 'en') {
+  if (!wantsTranslation(targetLanguage)) {
     // English is the language the answer is written in: there is no
     // translation to make, and nothing to refuse.
     return { refusal: null, translator: null };
@@ -65,15 +83,61 @@ async function resolveRequestLanguage(targetLanguage) {
     await translationService.init();
     return { refusal: null, translator: translationService.createMarkdownTranslator('en', targetLanguage) };
   } catch (error) {
-    if (!isUnsupportedLanguage(error)) {
-      logger.warn(`QueryService.language_check_failed: ${error.message}`);
-      return { refusal: null, translator: null };
-    }
-    logger.warn(`QueryService.unsupported_language: (lang=${languageForLog(targetLanguage)})`);
-    // The body is the one every refusal is answered with: it names the
-    // refused side, never the value the caller sent (a value that came back
-    // in the answer could be handed on to a model).
-    return { refusal: unsupportedLanguageBody(error), translator: null };
+    return { refusal: languageRefusalOrNull(error, targetLanguage), translator: null };
+  }
+}
+
+/**
+ * The refusal a failed language check answers with, or null when the request
+ * may proceed.
+ *
+ * A language the map does not carry is the caller's mistake and is refused.
+ * A translation service that is not ready is not: the check could not run,
+ * so the request goes through and the answer is delivered in English with
+ * the failure reported on `done`.
+ *
+ * @param {Error} error - The failure the language check raised.
+ * @param {string} targetLanguage - The normalized language the caller asked for.
+ * @returns {object|null} The body to refuse with, or null when the request
+ *   may proceed.
+ */
+function languageRefusalOrNull(error, targetLanguage) {
+  if (!isUnsupportedLanguage(error)) {
+    logger.warn(`QueryService.language_check_failed: ${error.message}`);
+    return null;
+  }
+  logger.warn(`QueryService.unsupported_language: (lang=${languageForLog(targetLanguage)})`);
+  // The body is the one every refusal is answered with: it names the
+  // refused side, never the value the caller sent (a value that came back
+  // in the answer could be handed on to a model).
+  return unsupportedLanguageBody(error);
+}
+
+/**
+ * Refuses a request for a language the deployment cannot answer in — without
+ * preparing a translator.
+ *
+ * This is the check of the paths that do not translate in this service: the
+ * answer of a non-streamed request is translated by the chatqna service, so
+ * the backend only has to answer "may this request proceed". Preparing a
+ * translator here would build one the path never uses.
+ *
+ * @param {string} targetLanguage - The normalized language the caller asked for.
+ * @returns {Promise<object|null>} The body to refuse with, or null when the
+ *   request may proceed.
+ */
+async function refuseUnsupportedLanguage(targetLanguage) {
+  if (!wantsTranslation(targetLanguage)) {
+    return null;
+  }
+  try {
+    await translationService.init();
+    // The language is resolved, not translated: the resolution is what
+    // refuses a language the map does not carry.
+    translationService.resolveLanguagePair('en', targetLanguage);
+    return null;
+  } catch (error) {
+    return languageRefusalOrNull(error, targetLanguage);
   }
 }
 
@@ -231,12 +295,12 @@ module.exports = (queryService) => {
    *             schema:
    *               type: object
    *               properties:
+   *                 error:
+   *                   type: string
+   *                   example: UNSUPPORTED_LANGUAGE
    *                 message:
    *                   type: string
    *                   example: Unsupported target language
-   *                 code:
-   *                   type: string
-   *                   example: UNSUPPORTED_LANGUAGE
    *       501:
    *         description: Streaming is disabled
    */
@@ -353,7 +417,7 @@ module.exports = (queryService) => {
       );
       // The language was resolved above, before the stream opened: the
       // translator behind it works in the language the caller asked for.
-      const useStreamingTranslation = streamingTranslationEnabled && targetLanguage && targetLanguage !== 'en';
+      const useStreamingTranslation = streamingTranslationEnabled && wantsTranslation(targetLanguage);
 
       let pendingEn = '';
       let translationChain = Promise.resolve();
@@ -388,8 +452,21 @@ module.exports = (queryService) => {
           }
           try {
             const translated = await translator.translate(content);
-            const body =
-              translated && translated.trim() ? `${translated.trim()}${separator}` : `${content}${separator}`;
+            // An empty translation is a failed translation: the answer stays
+            // in English, and the client is told so on `done`. Handing back the
+            // English unit as if it were the translation would present an
+            // untranslated answer as a translated one — the failure the flag
+            // exists for. The rest of the answer stays in English too, so the
+            // user does not read a half-translated answer.
+            const empty = !translated || !translated.trim();
+            if (empty) {
+              logger.warn(
+                `QueryService.stream_translation_empty: (lang=${languageForLog(targetLanguage)}, unitLen=${content.length})`,
+                { queryId }
+              );
+              streamingTranslationFailed = true;
+            }
+            const body = empty ? `${content}${separator}` : `${translated.trim()}${separator}`;
             // Debug instrumentation for the streaming-translation path: the unit
             // content the real chatqna stream produced, its separator, and the
             // translator's output (head/tail). Emitted at debug level only —
@@ -427,39 +504,48 @@ module.exports = (queryService) => {
       const doHandleStreamDone = async () => {
         if (doneState.handled || res.writableEnded) return;
         doneState.handled = true;
-        if (useStreamingTranslation) {
-          if (streamingTranslationFailed) {
-            // Degraded: the units already queued are emitted first, in the
-            // order they were committed, then the remaining English directly
-            // (bypass translation). The chain is awaited before the flush: a
-            // queued unit that has not run yet would otherwise write its
-            // content after the remainder — and after the response ended, which
-            // drops it.
-            await translationChain;
-            if (pendingEn && !res.writableEnded) {
-              res.write(`data: ${JSON.stringify({ type: 'chunk', content: pendingEn })}\n\n`);
-              pendingEn = '';
+        try {
+          if (useStreamingTranslation) {
+            if (streamingTranslationFailed) {
+              // Degraded: the units already queued are emitted first, in the
+              // order they were committed, then the remaining English directly
+              // (bypass translation). The chain is awaited before the flush: a
+              // queued unit that has not run yet would otherwise write its
+              // content after the remainder — and after the response ended, which
+              // drops it.
+              await translationChain;
+              if (pendingEn && !res.writableEnded) {
+                res.write(`data: ${JSON.stringify({ type: 'chunk', content: pendingEn })}\n\n`);
+                pendingEn = '';
+              }
+            } else {
+              if (pendingEn.trim()) {
+                scheduleUnitTranslation(pendingEn, '');
+                pendingEn = '';
+              }
+              // Each scheduled unit swallows its own errors (see scheduleUnitTranslation),
+              // so the chain never rejects; awaiting it just orders completion before 'done'.
+              await translationChain;
             }
+            await handleStreamDone(queryId, fullResponseText, startTime, res, capturedMetadata, {
+              targetLanguage,
+              translator,
+              skipPostStreamTranslation: true,
+              alreadyFailedTranslation: streamingTranslationFailed
+            });
           } else {
-            if (pendingEn.trim()) {
-              scheduleUnitTranslation(pendingEn, '');
-              pendingEn = '';
-            }
-            // Each scheduled unit swallows its own errors (see scheduleUnitTranslation),
-            // so the chain never rejects; awaiting it just orders completion before 'done'.
-            await translationChain;
+            // The post-stream translation runs here, and the client may be
+            // gone by the time it answers.
+            await handleStreamDone(queryId, fullResponseText, startTime, res, capturedMetadata, {
+              targetLanguage,
+              translator
+            });
           }
-          await handleStreamDone(queryId, fullResponseText, startTime, res, capturedMetadata, {
-            targetLanguage,
-            translator,
-            skipPostStreamTranslation: true,
-            alreadyFailedTranslation: streamingTranslationFailed
-          });
-        } else {
-          handleStreamDone(queryId, fullResponseText, startTime, res, capturedMetadata, {
-            targetLanguage,
-            translator
-          });
+        } catch (error) {
+          // The promise is not left dangling: a rejection nobody handles takes
+          // the process down, and the answer the client has is already
+          // complete.
+          logger.error('QueryService.stream_done_failed', { queryId, error: error.message });
         }
       };
 
@@ -602,7 +688,7 @@ module.exports = (queryService) => {
     capturedMetadata,
     { targetLanguage = '', translator = null, skipPostStreamTranslation = false, alreadyFailedTranslation = false } = {}
   ) {
-    if (res.writableEnded) return;
+    if (res.writableEnded || res.destroyed) return;
 
     // Set by whichever translation path ran: a per-unit failure upstream, or the
     // post-stream attempt below. Either way the answer the client receives is
@@ -620,14 +706,27 @@ module.exports = (queryService) => {
     // the target language: the whole answer is translated here. The translator
     // is the one the request resolved — the languages cannot change between
     // the start of a request and the end of its answer.
-    const translationExpected = Boolean(targetLanguage) && targetLanguage !== 'en';
+    const translationExpected = wantsTranslation(targetLanguage);
     if (!skipPostStreamTranslation && translationExpected && fullResponseText) {
       try {
         if (!translator) {
           throw new Error('no translator was prepared for the requested language');
         }
         const translated = await translator.translate(fullResponseText);
-        res.write(`data: ${JSON.stringify({ type: 'translation', content: translated })}\n\n`);
+        if (!translated || !translated.trim()) {
+          // The model returned nothing. The answer the client already has is
+          // the English one; writing an empty translation frame would replace
+          // it with nothing. The failure travels on `done` instead.
+          logger.warn(
+            `QueryService.stream_translation_empty: (lang=${languageForLog(targetLanguage)}, answerLen=${fullResponseText.length})`,
+            { queryId }
+          );
+          translationFailed = true;
+        } else if (!res.writableEnded && !res.destroyed) {
+          // The client may have gone while the translation ran: a frame
+          // written to a response that is over is an error nobody reads.
+          res.write(`data: ${JSON.stringify({ type: 'translation', content: translated })}\n\n`);
+        }
       } catch (error) {
         // Not an `error` frame. The client treats that as terminal and stops
         // reading, and reports the whole system as down — neither is true when
@@ -643,6 +742,14 @@ module.exports = (queryService) => {
       await queryService.finalizeStreamQuery(queryId, fullResponseText, responseTime, metadata);
     } catch (error) {
       logger.error('QueryService.stream_finalize_failed', { queryId, error: error.message });
+    }
+
+    if (res.writableEnded || res.destroyed) {
+      // The response is over — the client gave up while the answer was being
+      // translated. Nothing is left to write, and writing anyway is an error
+      // nobody reads.
+      logger.info('QueryService.stream_client_gone', { queryId });
+      return;
     }
 
     res.write(`data: ${JSON.stringify({ type: 'done', queryId, translationFailed })}\n\n`);
@@ -754,12 +861,12 @@ module.exports = (queryService) => {
    *             schema:
    *               type: object
    *               properties:
+   *                 error:
+   *                   type: string
+   *                   example: UNSUPPORTED_LANGUAGE
    *                 message:
    *                   type: string
    *                   example: Unsupported target language
-   *                 code:
-   *                   type: string
-   *                   example: UNSUPPORTED_LANGUAGE
    *       500:
    *         description: Server error
    */
@@ -772,8 +879,9 @@ module.exports = (queryService) => {
       const queryData = { ...req.body, userId };
       // The language the client asked for, checked before the query is
       // created: a language the deployment cannot serve is refused, not
-      // answered in another language.
-      const { refusal } = await resolveRequestLanguage(requestedTargetLanguage(queryData));
+      // answered in another language. The answer of this path is translated
+      // by the chatqna service, so the backend only checks the language.
+      const refusal = await refuseUnsupportedLanguage(requestedTargetLanguage(queryData));
       if (refusal) {
         return res.status(400).json(refusal);
       }

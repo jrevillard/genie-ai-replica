@@ -4,7 +4,11 @@ const {
 } = require('../../../services/translation/translation-cache-key');
 
 describe('translationCacheKey', () => {
-  const V = TRANSLATION_LOGIC_VERSION;
+  // The version is written out rather than interpolated from the module: a
+  // bump of the constant has to be acknowledged here, in the file that says
+  // what the cache key means. The cache has no TTL, so a version that moved
+  // silently would strand every entry a released deployment wrote.
+  const V = '3';
 
   test('includes doc hash, source lang, target lang, model id, and logic version', () => {
     expect(translationCacheKey('abc123', 'en', 'es', 'google/gemma-3-4b-it')).toBe(
@@ -38,16 +42,20 @@ describe('translationCacheKey', () => {
     expect(translationCacheKey('h', 'en', 'es', '')).toBe(`translation:h:en:es:unknown:${V}`);
   });
 
-  test('TRANSLATION_LOGIC_VERSION is defined (bump on logic change)', () => {
-    expect(typeof TRANSLATION_LOGIC_VERSION).toBe('string');
-    expect(TRANSLATION_LOGIC_VERSION.length).toBeGreaterThan(0);
+  test('TRANSLATION_LOGIC_VERSION is the version the key is built with', () => {
+    expect(TRANSLATION_LOGIC_VERSION).toBe(V);
   });
 
-  test('the version is never one a released deployment already used', () => {
+  test('the version is the newest one ever used, and no version is used twice', () => {
     // The cache has no TTL: the entries a release wrote stay in Redis
     // forever. A version number therefore keeps one meaning for the life of
-    // the deployment, and a released one is never taken again. 1 and 2
-    // shipped; the next version is above them.
-    expect(Number(TRANSLATION_LOGIC_VERSION)).toBeGreaterThan(2);
+    // the deployment, and a released one is never taken again. The list of
+    // versions ever used only grows, and the version in the code is the
+    // newest of them — so a bump that forgets to extend the list, or a
+    // version taken twice, fails here instead of stranding the entries a
+    // released deployment wrote.
+    const versions = ['1', '2', '3'];
+    expect(new Set(versions).size).toBe(versions.length);
+    expect(TRANSLATION_LOGIC_VERSION).toBe(versions[versions.length - 1]);
   });
 });

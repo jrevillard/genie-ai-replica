@@ -1315,6 +1315,7 @@ export default {
   },
   chatbot: {
     streamingError: 'Jɛɛmɔgɔya labɛnnen na. A ñaa ma ñɔɔrɔ.',
+    unsupportedLanguage: 'This language is not available for this deployment.',
     aiGeneratedNoDocs: 'AI-generated — not based on library documents',
     translationUnavailable: 'Translation unavailable — this answer may contain untranslated text.',
     welcomeMessage: 'Welcome! How can I assist you today?',

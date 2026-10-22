@@ -1363,6 +1363,7 @@ export default {
   },
   chatbot: {
     streamingError: 'Jibu lilikatika. Tafadhali jaribu tena.',
+    unsupportedLanguage: 'Lugha hii haipatikani katika mfumo huu.',
     aiGeneratedNoDocs: 'Imezalishwa na AI — haizingatii nyaraka za maktaba',
     translationUnavailable: 'Tafsiri hazipatikani — jibu hili linaweza kuwa na maandishi ambayo hayajatafsiriwa.',
     welcomeMessage: 'Welcome! How can I assist you today?',

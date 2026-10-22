@@ -16,6 +16,7 @@ import 'package:genie_ai_mobile/providers/api_providers.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N
 import 'package:genie_ai_mobile/services/notification_service.dart';
 import 'package:genie_ai_mobile/services/sse_parser.dart';
+import 'package:genie_ai_mobile/services/translation_status.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:http/http.dart' as http;
 import 'package:openapi/api.dart';
@@ -692,6 +693,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       final response = jsonDecode(res.body) as Map<String, dynamic>;
       final Map<String, dynamic>? metadata = response['metadata'];
 
+      // What happened to the language of the answer: chatqna reports whether
+      // it translated it. An answer that was not translated is flagged, so
+      // the English original is never read as a translation of it.
+      final bool translationFailed = isTranslationFailed(metadata);
+
       final assistantMessage = {
         'id': response['queryId'],
         'queryId': response['queryId'],
@@ -701,6 +707,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         'sources': metadata?['sources'] ?? [],
         'confidence': metadata?['confidence_score'],
         'metadata': metadata,
+        'translationFailed': translationFailed,
         'isSaved': false,
       };
 

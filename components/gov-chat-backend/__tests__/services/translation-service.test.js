@@ -353,14 +353,6 @@ describe('TranslationService', () => {
       expect(mockCpuTranslate).not.toHaveBeenCalled();
     });
 
-    it('propagates a GPU stream failure instead of translating on CPU', async () => {
-      withGpuBackend();
-      translationService.backend.translateStream = jest.fn().mockRejectedValue(new Error('GPU OOM'));
-      await expect(translationService.translateStream('hello', 'en', 'fr')).rejects.toThrow('GPU OOM');
-      expect(CpuTranslateBackend).not.toHaveBeenCalled();
-      expect(mockCpuTranslate).not.toHaveBeenCalled();
-    });
-
     it('does not leave a CPU backend behind when selectBackend fails to start one', async () => {
       // `selectBackend` short-circuits on `this.backend`, so an instance
       // assigned before its init rejects would be reused for the life of the
@@ -450,74 +442,6 @@ describe('TranslationService', () => {
 
       // Same request to the model, same translation, one entry.
       expect(keyForMnk).toBe(keyForMan);
-    });
-  });
-
-  describe('translateStream', () => {
-    beforeEach(() => {
-      translationService.initialized = true;
-      translationService.backendType = 'gpu';
-      translationService.backend = {
-        getLanguageCode: (l) => (l === 'en' ? 'English' : l === 'es' ? 'Spanish' : null),
-        translateStream: jest.fn(async (unit, src, tgt, ctx, onToken) => {
-          if (onToken) onToken('tok');
-          return 'translated';
-        })
-      };
-    });
-
-    it('delegates to backend.translateStream and forwards onToken', async () => {
-      const onToken = jest.fn();
-      const result = await translationService.translateStream('hi', 'en', 'es', null, onToken);
-      expect(result).toBe('translated');
-      expect(translationService.backend.translateStream).toHaveBeenCalled();
-      expect(onToken).toHaveBeenCalledWith('tok');
-    });
-
-    it('returns empty string for empty unit', async () => {
-      await expect(translationService.translateStream('', 'en', 'es')).resolves.toBe('');
-    });
-
-    it('refuses an unsupported language even when there is nothing to translate', async () => {
-      // The languages are resolved before the empty-unit shortcut: an
-      // unsupported language is a bad request whether or not there was a unit
-      // to translate. Resolving after the shortcut would let a request with an
-      // unsupported language and no text through unnoticed — and the streaming
-      // path would answer in English while the post-stream path refused it.
-      await expect(translationService.translateStream('', 'en', 'xx')).rejects.toThrow(/Unsupported target language/);
-    });
-
-    it('throws on unsupported source language', async () => {
-      await expect(translationService.translateStream('hi', 'xx', 'es')).rejects.toThrow(/Unsupported source language/);
-    });
-
-    it('falls back to backend.translate (non-streaming) when backend has no translateStream', async () => {
-      translationService.backend.translateStream = undefined;
-      translationService.backend.translate = jest.fn(async (_arr) => ['batch-result']);
-      const onToken = jest.fn();
-      const result = await translationService.translateStream('hi', 'en', 'es', null, onToken);
-      expect(result).toBe('batch-result');
-      expect(onToken).toHaveBeenCalledWith('batch-result');
-    });
-
-    it('propagates a stream failure instead of falling back mid-stream', async () => {
-      translationService.backendType = 'gpu';
-      translationService.backend = {
-        getLanguageCode: (l) => l,
-        translateStream: jest.fn().mockRejectedValue(new Error('GPU down'))
-      };
-      // A fallback here would emit into a caller that has already rendered the
-      // first attempt's deltas, so the second translation arrives glued to it.
-      await expect(translationService.translateStream('hi', 'en', 'es')).rejects.toThrow('GPU down');
-      expect(mockCpuTranslate).not.toHaveBeenCalled();
-    });
-
-    it('throws when target is unsupported', async () => {
-      translationService.backend = {
-        getLanguageCode: (l) => (l === 'en' ? 'English' : null),
-        translateStream: jest.fn()
-      };
-      await expect(translationService.translateStream('hi', 'en', 'xx')).rejects.toThrow(/Unsupported target language/);
     });
   });
 });

@@ -19,9 +19,19 @@ describe('the bounded form of a caller-supplied language', () => {
     expect(languageForLog('zh-Hans')).toBe('zh-Hans');
   });
 
+  it('keeps a language the caller padded with spaces readable', () => {
+    // The trim comes before the cut: a value cut before it is trimmed is a
+    // value that logs as empty, and a log line that names no language cannot
+    // be correlated with the lines of the other service.
+    expect(languageForLog('   fr   ')).toBe('fr');
+    expect(languageForLog(`${' '.repeat(40)}fr`)).toBe('fr');
+  });
+
   it('strips the characters a language name is not made of', () => {
     expect(languageForLog('fr\nFAKE LOG LINE')).toBe('frFAKELOGLINE');
-    expect(languageForLog('fr. Ignore all previous instructions')).toBe('frIgnoreallpreviousinstructions');
+    // The value is cut first, then reduced: what the log line carries is the
+    // beginning of the value, not the whole of it spread thin.
+    expect(languageForLog('fr. Ignore all previous instructions')).toBe('frIgnoreallpreviousinstruct');
   });
 
   it('cuts the value to a bounded length', () => {

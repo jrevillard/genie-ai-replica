@@ -171,6 +171,10 @@ describe('POST /api/translate', () => {
 
     expect(response.status).toBe(400);
     expect(response.body.message).toContain('texts');
+    // The code is what tells a client that refused to fail: every 400 of
+    // this route carries one, so a client does not have to read the message
+    // to know which one it got.
+    expect(response.body.error).toBe('MISSING_PARAMETERS');
   });
 
   it('should return 400 when source_lang is missing', async () => {
@@ -227,8 +231,8 @@ describe('POST /api/translate', () => {
     // never echoed back. The code tells the client the request was refused
     // rather than failed.
     expect(response.body).toEqual({
-      message: 'Unsupported target language',
-      code: 'UNSUPPORTED_LANGUAGE'
+      error: 'UNSUPPORTED_LANGUAGE',
+      message: 'Unsupported target language'
     });
   });
 });
@@ -259,6 +263,7 @@ describe('POST /api/translate/markdown', () => {
 
     expect(response.status).toBe(400);
     expect(response.body.message).toContain('markdown');
+    expect(response.body.error).toBe('MISSING_PARAMETERS');
   });
 
   it('should return 400 when source_lang is missing', async () => {

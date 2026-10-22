@@ -1374,6 +1374,7 @@ export default {
   },
   chatbot: {
     streamingError: 'Die Antwort wurde unterbrochen. Bitte versuchen Sie es erneut.',
+    unsupportedLanguage: 'Diese Sprache ist für diese Installation nicht verfügbar.',
     aiGeneratedNoDocs: 'KI-generiert — nicht auf Bibliotheksdokumenten basierend',
     translationUnavailable: 'Übersetzung nicht verfügbar — diese Antwort kann unübersetzten Text enthalten.',
     welcomeMessage: 'Welcome! How can I assist you today?',

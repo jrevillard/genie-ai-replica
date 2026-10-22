@@ -399,6 +399,29 @@ describe('ChatBotComponent', () => {
 
       expect(mockNotificationError).toHaveBeenCalledWith(expect.stringContaining('streamingError'));
     });
+
+    it('keeps the deployment online and names the reason when the request is refused', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.newMessage = 'Trigger refusal';
+      await vm.sendMessage();
+      await wrapper.vm.$nextTick();
+
+      // A 4xx is a request the backend refused, not a deployment that is
+      // down: the backend answered. Saying otherwise sends the user off to
+      // check an infrastructure that is fine.
+      const refusal = new Error('Unsupported target language');
+      refusal.status = 400;
+      refusal.code = 'UNSUPPORTED_LANGUAGE';
+      capturedCallbacks.onError(refusal);
+      await wrapper.vm.$nextTick();
+
+      expect(vm.systemStatus.online).toBe(true);
+      expect(mockNotificationError).toHaveBeenCalledWith(expect.stringContaining('unsupportedLanguage'));
+      const streamingMsg = vm.chatMessages[vm.chatMessages.length - 1];
+      expect(streamingMsg.content).toContain('unsupportedLanguage');
+    });
   });
 
   // -----------------------------------------------------------------------

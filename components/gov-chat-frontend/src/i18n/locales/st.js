@@ -1368,6 +1368,7 @@ export default {
   },
   chatbot: {
     streamingError: 'Karabo e emisetsoe. Re leke hape.',
+    unsupportedLanguage: 'This language is not available for this deployment.',
     aiGeneratedNoDocs: 'AI-generated — not based on library documents',
     translationUnavailable: 'Translation unavailable — this answer may contain untranslated text.',
     welcomeMessage: 'Welcome! How can I assist you today?',

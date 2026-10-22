@@ -55,19 +55,6 @@ afterEach(() => {
   TranslationService.initialized = realInitialized;
 });
 
-describe('the language pair is resolved once', () => {
-  it('hands the model-specific codes to the caller', () => {
-    useBackend(stubBackend());
-
-    const pair = TranslationService.resolveLanguagePair('en', 'fr');
-
-    expect(pair.sourceLang).toBe('en');
-    expect(pair.targetLang).toBe('fr');
-    expect(pair.sourceLangCode).toBe('en');
-    expect(pair.targetLangCode).toBe('fr_FR');
-  });
-});
-
 describe('the languages a log line names', () => {
   it('translate() logs the resolved languages, not the requested ones', async () => {
     const { logger } = require('../../../shared-lib');

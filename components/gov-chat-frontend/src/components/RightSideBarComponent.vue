@@ -78,7 +78,12 @@
           </div>
           <div class="faq-list">
             <div v-for="(faq, index) in frequentlyAskedQuestions" :key="index" class="faq-item">
-              <div class="faq-question" :class="{ active: expandedFaqs.includes(index) }" @click="toggleFaq(index)">
+              <div
+                class="faq-question"
+                :class="{ active: expandedFaqs.includes(index) }"
+                data-testid="faq-question"
+                @click="toggleFaq(index)"
+              >
                 <!-- eslint-disable-next-line vue/no-v-html -->
                 <span v-html="faq.question"></span>
                 <ChevronUp v-if="expandedFaqs.includes(index)" :size="14" /><ChevronDown v-else :size="14" />

@@ -1342,6 +1342,7 @@ export default {
   },
   chatbot: {
     streamingError: 'প্রতিক্রিয়া ব্যাহত হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।',
+    unsupportedLanguage: 'এই ভাষা এই ডিপ্লয়মেন্টে উপলব্ধ নয়।',
     aiGeneratedNoDocs: 'এআই-উৎপাদিত — লাইব্রেরির নথিপত্রের উপর ভিত্তি করে নয়',
     translationUnavailable: 'অনুবাদ অনুপলব্ধ — এই উত্তরে অ অনুবাদিত লেখা থাকতে পারে।',
     welcomeMessage: 'Welcome! How can I assist you today?',

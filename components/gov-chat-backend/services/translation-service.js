@@ -493,57 +493,6 @@ class TranslationService {
   }
 
   /**
-   * @method translateStream
-   * @description Stream-translate a single COMPLETE unit (sentence/paragraph) from
-   * sourceLang to targetLang, invoking onToken for each output delta. Used by the
-   * chat streaming handler to show the target language WHILE streaming (issue #829)
-   * instead of flipping at the end. The caller buffers source chunks into complete
-   * units first (see services/translation/stream-boundary.js) — the translator must
-   * receive a complete unit.
-   * @param {string} unit - A complete source-language unit to translate
-   * @param {string} sourceLang - Source language code (e.g. 'en')
-   * @param {string} targetLang - Target language code (e.g. 'es')
-   * @param {{source: string, target: string}[]} [context] - Prior units EN+target for consistency
-   * @param {(delta: string) => void} [onToken] - Streaming callback
-   * @returns {Promise<string>} Full translated unit
-   */
-  async translateStream(unit, sourceLang, targetLang, context, onToken) {
-    this.ensureReady();
-
-    // Both languages are resolved the same way as in translate(), and before
-    // the empty-unit shortcut: the frontend may send upper-case locale codes
-    // ("ES") while the language maps use lower-case keys ("es"), and a
-    // language the map does not know is refused. Resolving after the shortcut
-    // would let a request for an unknown language through unnoticed — the
-    // streaming path would answer in English while the post-stream path
-    // refused the same request.
-    const { sourceLangCode, targetLangCode } = this.resolveLanguagePair(sourceLang, targetLang);
-
-    // The streaming path reaches the model through the backend too: the
-    // codes are checked the same way before they go there.
-    this._assertModelLanguageCodes(sourceLangCode, targetLangCode);
-
-    if (!unit || unit.trim() === '') return '';
-
-    try {
-      if (typeof this.backend.translateStream === 'function') {
-        return await this.backend.translateStream(unit, sourceLangCode, targetLangCode, context, onToken);
-      }
-      // Backend has no streaming support (e.g. CPU) — translate the unit in one
-      // shot and emit it as a single delta so the caller keeps streaming.
-      const [translated] = await this.backend.translate([unit], sourceLangCode, targetLangCode);
-      if (translated && onToken) onToken(translated);
-      return translated || '';
-    } catch (error) {
-      // Same contract as translate(): the startup-selected backend is the one
-      // used. Switching models mid-stream would emit a second translation into
-      // a caller that has already rendered the first.
-      logger.warn(`[TRANSLATION-SERVICE] Stream translation failed: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
    * @method translateMarkdown
    * @description Translates the content of a markdown file while preserving the markdown structure.
    * Caches the result to Redis permanently if caching is enabled.
@@ -586,8 +535,11 @@ class TranslationService {
     // ones: two languages the model answers with the same code are the same
     // request, and they belong in the same entry.
     const cacheKey = translationCacheKey(docName, sourceLangCode, targetLangCode, modelId);
-    // Key for in-flight tracking (combines doc hash and both model codes)
-    const inFlightKey = `${docName}:${sourceLangCode}:${targetLangCode}`;
+    // The in-flight key is the same key: two requests that would share a
+    // cache entry are the same request, and they share one translation. A
+    // key of its own would let a request be answered with a translation
+    // another request produced under a different model or logic version.
+    const inFlightKey = cacheKey;
 
     if (cacheEnabled && this.cacheClient) {
       try {

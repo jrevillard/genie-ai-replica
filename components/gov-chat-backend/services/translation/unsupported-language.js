@@ -41,17 +41,18 @@ function isUnsupportedLanguage(error) {
  *
  * The message names the side that was refused and never the value the caller
  * sent: a value that came back in the answer could be handed on to a model.
- * The code says the request was refused — not that it failed — so the client
- * can tell the two apart without reading the message.
+ * The error code says the request was refused — not that it failed — so the
+ * client can tell the two apart without reading the message.
  *
- * Every route that refuses a language answers with this body: one shape, so
- * a client parses one thing.
+ * The shape is the one every other coded error of this backend uses
+ * (`{ error, message }`) — the shape the frontend's error parser reads — so
+ * a client parses one thing wherever the refusal comes from.
  *
  * @param {Error} error - The refusal.
- * @returns {{message: string, code: string}} The body to answer with.
+ * @returns {{error: string, message: string}} The body to answer with.
  */
 function unsupportedLanguageBody(error) {
-  return { message: error.message, code: error.code };
+  return { error: error.code, message: error.message };
 }
 
 module.exports = { UnsupportedLanguageError, isUnsupportedLanguage, unsupportedLanguageBody };

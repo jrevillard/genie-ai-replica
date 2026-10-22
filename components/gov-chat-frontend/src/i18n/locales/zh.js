@@ -1302,6 +1302,7 @@ export default {
   },
   chatbot: {
     streamingError: '回复已中断。请重试。',
+    unsupportedLanguage: '此语言在当前部署中不可用。',
     aiGeneratedNoDocs: 'AI 生成 — 不基于文库文档',
     translationUnavailable: '翻译不可用 — 此回复可能包含未翻译的文本。',
     welcomeMessage: 'Welcome! How can I assist you today?',

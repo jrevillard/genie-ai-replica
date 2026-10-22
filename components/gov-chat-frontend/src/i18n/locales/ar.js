@@ -1354,6 +1354,7 @@ export default {
   },
   chatbot: {
     streamingError: 'تمت مقاطعة الاستجابة. يرجى المحاولة مرة أخرى.',
+    unsupportedLanguage: 'هذه اللغة غير متاحة في هذا التثبيت.',
     aiGeneratedNoDocs: 'مُولّد بواسطة الذكاء الاصطناعي — لا يعتمد على وثائق المكتبة',
     translationUnavailable: 'الترجمة غير متاحة — قد يحتوي هذا الرد على نص غير مترجم.',
     welcomeMessage: 'Welcome! How can I assist you today?',

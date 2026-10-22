@@ -85,7 +85,10 @@ module.exports = (translationService) => {
    *                   items:
    *                     type: string
    *       '400':
-   *         description: Bad Request - Missing parameters or unsupported language.
+   *         description: >-
+   *           Bad Request - Missing parameters or unsupported language. A
+   *           language the deployment cannot translate into is refused
+   *           whether or not the request had anything to translate.
    *       '401':
    *         description: Unauthorized - Authentication required.
    *       '500':
@@ -100,6 +103,7 @@ module.exports = (translationService) => {
         '[TRANSLATION-ROUTES] Bad request: Missing or invalid "texts" array, "source_lang", or "target_lang".'
       );
       return res.status(400).json({
+        error: 'MISSING_PARAMETERS',
         message: 'Request body must include a "texts" array, a "source_lang" string, and a "target_lang" string.'
       });
     }
@@ -176,6 +180,7 @@ module.exports = (translationService) => {
         '[TRANSLATION-ROUTES] Bad request: Missing or invalid "markdown" string, "source_lang", or "target_lang".'
       );
       return res.status(400).json({
+        error: 'MISSING_PARAMETERS',
         message: 'Request body must include a "markdown" string, a "source_lang" string, and a "target_lang" string.'
       });
     }

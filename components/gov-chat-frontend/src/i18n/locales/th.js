@@ -1358,6 +1358,7 @@ export default {
   },
   chatbot: {
     streamingError: 'การตอบกลับถูกขัดจังหวะ โปรดลองอีกครั้ง',
+    unsupportedLanguage: 'ภาษานี้ไม่พร้อมใช้งานในการติดตั้งนี้',
     aiGeneratedNoDocs: 'สร้างโดย AI — ไม่อิงจากเอกสารในคลังเอกสาร',
     translationUnavailable: 'ไม่สามารถแปลได้ — คำตอบนี้อาจมีข้อความที่ยังไม่ได้แปล',
     welcomeMessage: 'Welcome! How can I assist you today?',

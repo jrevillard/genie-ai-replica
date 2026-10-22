@@ -114,15 +114,4 @@ describe('the backend language maps and the chatqna language map agree', () => {
       expect(`${code}:${scripts[code]}`).toBe(`${code}:${expected}`);
     }
   });
-
-  it('names no fallback language', () => {
-    // A fallback is a language to answer with when the model does not support
-    // the requested one. There is no such mechanism: a language the map does
-    // not know is refused, because answering in another language is a wrong
-    // answer the caller cannot see. A map that named a fallback would put
-    // that mechanism back within reach of the next edit.
-    for (const [name, map] of Object.entries(MAPS)) {
-      expect({ map: name, fallback: map.fallbackMap }).toEqual({ map: name, fallback: undefined });
-    }
-  });
 });

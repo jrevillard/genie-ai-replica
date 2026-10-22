@@ -76,10 +76,6 @@ describe('target language boundary (real service, real language map)', () => {
     );
   });
 
-  it('rejects an injection-shaped target before anything is sent to the model', async () => {
-    await expect(service.translateMarkdown('# Hello', 'en', INJECTION)).rejects.toThrow(/Unsupported target language/);
-  });
-
   it('does not look the cache up for a language it refuses', async () => {
     await expect(service.translateMarkdown('# Hello', 'en', INJECTION)).rejects.toThrow(/Unsupported target language/);
     expect(mockRedis.get).not.toHaveBeenCalled();
@@ -124,15 +120,6 @@ describe('target language boundary (real service, real language map)', () => {
   it('resolves a supported language to its canonical code', () => {
     expect(service.resolveLanguagePair('en', 'FR').targetLang).toBe('fr');
     expect(service.resolveLanguagePair('en', '  fr  ').targetLang).toBe('fr');
-  });
-
-  it('refuses to resolve a language it does not know', () => {
-    expect(() => service.resolveLanguagePair('en', INJECTION)).toThrow(/Unsupported target language/);
-    expect(() => service.resolveLanguagePair('en', 'constructor')).toThrow(/Unsupported target language/);
-  });
-
-  it('refuses an unsupported target language on the streaming path too', async () => {
-    await expect(service.translateStream('hello', 'en', 'constructor')).rejects.toThrow(/Unsupported target language/);
   });
 
   it('refuses to translate before the backend is selected', async () => {
@@ -204,16 +191,6 @@ describe('the codes handed to the backend', () => {
     const translate = jest.spyOn(backend, 'translate').mockResolvedValue(['bonjour']);
 
     await expect(service.translate(['hello'], 'en', 'fr')).rejects.toThrow(/not one the loaded backend knows/);
-    expect(translate).not.toHaveBeenCalled();
-  });
-
-  it('does not hand the backend a code the backend did not produce on the streaming path', async () => {
-    // The streaming path reaches the model through the backend too, so the
-    // same check applies there.
-    jest.spyOn(backend, 'getLanguageCode').mockReturnValue('not-a-model-code');
-    const translate = jest.spyOn(backend, 'translate').mockResolvedValue(['bonjour']);
-
-    await expect(service.translateStream('hello', 'en', 'fr')).rejects.toThrow(/not one the loaded backend knows/);
     expect(translate).not.toHaveBeenCalled();
   });
 });

@@ -1414,6 +1414,7 @@ export default {
     exportSuccess: 'Chat exported successfully',
     exportError: 'Failed to export chat. Please try again.',
     streamingError: 'Response was interrupted. Please try again.',
+    unsupportedLanguage: 'This language is not available for this deployment.',
     removeItem: 'Remove item'
   },
   quickhelp: {

@@ -96,7 +96,7 @@ describe('RightSideBarComponent FAQ language contract', () => {
     expect(notice.text()).toContain('sidebar.faqTranslationUnavailable');
 
     // The English original is still usable.
-    expect(wrapper.find('.faq-question').text()).toContain('What is GENIE.AI?');
+    expect(wrapper.find('[data-testid="faq-question"]').text()).toContain('What is GENIE.AI?');
   });
 
   it('shows the English FAQ when the answer carries no translation', async () => {
@@ -106,7 +106,7 @@ describe('RightSideBarComponent FAQ language contract', () => {
     await flushPromises();
 
     expect(wrapper.find('[data-testid="faq-translation-notice"]').exists()).toBe(true);
-    expect(wrapper.find('.faq-question').text()).toContain('What is GENIE.AI?');
+    expect(wrapper.find('[data-testid="faq-question"]').text()).toContain('What is GENIE.AI?');
   });
 
   it('shows the English FAQ when the translation is empty', async () => {
@@ -116,7 +116,7 @@ describe('RightSideBarComponent FAQ language contract', () => {
     await flushPromises();
 
     expect(wrapper.find('[data-testid="faq-translation-notice"]').exists()).toBe(true);
-    expect(wrapper.find('.faq-question').text()).toContain('What is GENIE.AI?');
+    expect(wrapper.find('[data-testid="faq-question"]').text()).toContain('What is GENIE.AI?');
   });
 
   it('shows no notice when the translation succeeds', async () => {
@@ -126,7 +126,7 @@ describe('RightSideBarComponent FAQ language contract', () => {
     await flushPromises();
 
     expect(wrapper.find('[data-testid="faq-translation-notice"]').exists()).toBe(false);
-    expect(wrapper.find('.faq-question').text()).toContain('Qu est-ce que GENIE.AI ?');
+    expect(wrapper.find('[data-testid="faq-question"]').text()).toContain('Qu est-ce que GENIE.AI ?');
   });
 
   it('shows a localized error state when the FAQ cannot be loaded', async () => {
@@ -140,6 +140,29 @@ describe('RightSideBarComponent FAQ language contract', () => {
     expect(error.text()).toContain('sidebar.faqError');
 
     // No FAQ entry pretends to be content.
-    expect(wrapper.find('.faq-question').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="faq-question"]').exists()).toBe(false);
+  });
+
+  it('asks for the FAQ in the interface language, from English', async () => {
+    const fetchMock = mockFetch({ faqAvailable: true, translation: TRANSLATED_FAQ });
+    global.fetch = fetchMock;
+
+    mountSidebar({ currentLocale: 'fr' });
+    await flushPromises();
+
+    const call = fetchMock.mock.calls.find(([url]) => url === '/api/translate/markdown');
+    expect(call).toBeDefined();
+
+    // The languages are named by the contract the backend resolves: the
+    // interface language is the target, English is the source the FAQ is
+    // written in. A request that names them differently would be refused.
+    const body = JSON.parse(call[1].body);
+    expect(body.target_lang).toBe('fr');
+    expect(body.source_lang).toBe('en');
+    expect(body.markdown).toContain('What is GENIE.AI?');
+
+    // The endpoint is authenticated: an anonymous request comes back
+    // unauthorized and the user is left with the English original.
+    expect(call[1].headers.Authorization).toBe('Bearer mock-access-token');
   });
 });

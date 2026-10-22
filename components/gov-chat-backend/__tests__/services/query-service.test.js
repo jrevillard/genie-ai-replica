@@ -772,13 +772,16 @@ describe('QueryService', () => {
       expect(result.opeaPayload.context.categoryLabel).toBe('Crops');
     });
 
-    it('should forward the language to OPEA', async () => {
+    it('should forward the language to OPEA in its canonical form', async () => {
+      // The canonical form is the one the language maps are keyed in: trimmed
+      // and lower-case. The query routes normalize the same field the same
+      // way, so one request carries one spelling of one language.
       const data = createMockQueryData({
         context: { categoryLabel: 'Crops', serviceLabels: [], language: 'FR' }
       });
       mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
       const result = await queryService.initStreamQuery(data, {});
-      expect(result.opeaPayload.context.language).toBe('FR');
+      expect(result.opeaPayload.context.language).toBe('fr');
     });
 
     it('should drop a language that is not a string instead of forwarding it', async () => {

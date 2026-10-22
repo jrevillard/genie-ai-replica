@@ -381,14 +381,23 @@ class GpuTranslateBackend {
    * code would put an unmapped value into the prompt, which is the one thing
    * the map exists to prevent.
    *
+   * A code the map knows but does not name is a defect in the shipped map,
+   * not a bad request: the caller asked for a language the deployment
+   * supports. It is deliberately not an `UnsupportedLanguageError` — that
+   * error is the refusal of a caller's language (HTTP 400), and reporting
+   * our own defect as one would blame the request for it.
+   *
    * @param {string} code - Model-specific language code
    * @returns {string} The language name
+   * @throws {Error} When the language map has no name for the code.
    */
   _languageName(code) {
     const names = this.languageMap ? this.languageMap.languageNames : null;
     const name = names && Object.prototype.hasOwnProperty.call(names, code) ? names[code] : null;
     if (!name) {
-      throw new Error(`[GPU-BACKEND] No language name for code: ${code}`);
+      throw new Error(
+        `[GPU-BACKEND] The language map has no name for the model code "${code}" — the shipped map is missing an entry (server-side defect, not a bad request)`
+      );
     }
     return name;
   }

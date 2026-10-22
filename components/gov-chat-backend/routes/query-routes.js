@@ -10,23 +10,23 @@ const translationService = require('../services/translation-service');
 const { extractCommittableUnit } = require('../services/translation/stream-boundary');
 const { languageForLog } = require('../services/translation/language-log');
 const { isUnsupportedLanguage } = require('../services/translation/unsupported-language');
+const { normalizeRequestedLanguage } = require('../services/translation/language-request');
 const { parsePositiveInt } = require('../shared-lib');
 
 /**
  * @description The language the caller asked for, normalized.
  *
  * The language travels in the request body, so it is caller-controlled: it is
- * trimmed and lower-cased once, here, and the translator checks it against the
- * language map before it is used for anything. An empty result means "no
- * language asked for".
+ * normalized once, here, by the shared helper (the same one the query
+ * service uses when it forwards the language to OPEA), and the translator
+ * checks it against the language map before it is used for anything. An empty
+ * result means "no language asked for".
  *
  * @param {object} queryData - The parsed request body.
  * @returns {string} The normalized language code, or '' when none was asked for.
  */
 function requestedTargetLanguage(queryData) {
-  const raw = queryData?.context?.language;
-  if (typeof raw !== 'string') return '';
-  return raw.trim().toLowerCase();
+  return normalizeRequestedLanguage(queryData?.context?.language);
 }
 
 // Metadata persisted when chatqna never sent a metadata event (stream error,

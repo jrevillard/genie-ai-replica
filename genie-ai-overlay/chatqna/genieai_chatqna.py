@@ -642,6 +642,47 @@ LANGUAGE_CODES_FILEPATH = os.getenv(
 # read error.
 LANGUAGE_MAP_RETRY_SECONDS = 60.0
 
+# The language the chat history is normalized to before it reaches the
+# retriever. The embedding space is English-only, so the history is
+# translated into English whatever the caller asked for: the language a
+# request asks for steers the ANSWER, never the history. The target is a
+# constant rather than an argument of the translation helper, so the history
+# cannot be steered into another language — neither by a caller nor by a
+# later change to the call site.
+HISTORY_TRANSLATION_TARGET = "en"
+
+# The script each language is written in (ISO 15924). The translation prompt
+# has to agree with the target: asking for the Latin alphabet of a language
+# written in Devanagari makes the model answer in the wrong script. Read
+# next to the language map, from the same directory, for the same reason.
+LANGUAGE_SCRIPTS_FILEPATH = os.getenv(
+    "LANGUAGE_SCRIPTS_FILEPATH",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "language_scripts.json"),
+)
+
+# The script names the prompt uses. A script that is not listed is named by
+# its code, which is still an unambiguous script tag.
+_SCRIPT_NAMES = {
+    "Latn": "Latin",
+    "Arab": "Arabic",
+    "Beng": "Bengali",
+    "Cyrl": "Cyrillic",
+    "Deva": "Devanagari",
+    "Ethi": "Ethiopic",
+    "Guru": "Gurmukhi",
+    "Hans": "Han",
+    "Hant": "Han",
+    "Hang": "Hangul",
+    "Jpan": "Japanese",
+    "Mlym": "Malayalam",
+    "Thai": "Thai",
+}
+
+# The shape a language code has to have before it is written into a prompt.
+# A code that does not look like a code is not one: it is replaced by the
+# default rather than carried into the prompt.
+_LANGUAGE_CODE_PATTERN = re.compile(r"^[a-z]{2,3}(-[a-z0-9]{2,8})?$")
+
 
 def _resolve_language_code(raw_language, language_codes: dict) -> str | None:
     """Canonical code for a caller-supplied language, or None when it is not one.
@@ -688,15 +729,62 @@ def _language_display(raw_language) -> str:
 _LANGUAGE_CODES_CACHE: dict | None = None
 _LANGUAGE_CODES_CACHE_AT: float | None = None
 
+# The language -> script table, read once. Module level for the same reason
+# as the language map above.
+_LANGUAGE_SCRIPTS: dict | None = None
+
 
 def _read_language_codes(filepath: str) -> dict:
-    """Read the language map from disk. An unreadable map reads as empty."""
+    """Read the language map from disk. An unreadable map reads as empty.
+
+    The map is a whitelist of language codes, so a file that holds something
+    else is not a map: a list of two-letter strings reads as {"e": "n", ...},
+    and a map of objects answers every lookup with a dictionary. Both would
+    be accepted as languages nobody configured, so a file that is not a map
+    of strings is treated as unreadable.
+    """
     try:
         with open(filepath) as file:
-            return json.load(file)
+            loaded = json.load(file)
     except Exception as e:
         logger.error(f"Error loading language codes from {filepath}: {e}")
         return {}
+    if not isinstance(loaded, dict) or not all(
+        isinstance(code, str) and isinstance(name, str) for code, name in loaded.items()
+    ):
+        logger.error(f"Language codes file {filepath} is not a map of language codes to names — ignoring it.")
+        return {}
+    return loaded
+
+
+def _read_language_scripts(filepath: str) -> dict:
+    """Read the language -> script table from disk. An unreadable table reads
+    as empty, which leaves the translation prompt without a script clause."""
+    try:
+        with open(filepath) as file:
+            loaded = json.load(file)
+    except Exception as e:
+        logger.error(f"Error loading language scripts from {filepath}: {e}")
+        return {}
+    if not isinstance(loaded, dict) or not all(
+        isinstance(code, str) and isinstance(script, str) for code, script in loaded.items()
+    ):
+        logger.error(f"Language scripts file {filepath} is not a map of language codes to scripts — ignoring it.")
+        return {}
+    return loaded
+
+
+def language_scripts_map() -> dict:
+    """The language -> script table, read once and cached.
+
+    Read on first use: the table ships with the service, and a file that is
+    not there is a broken image — the prompt then carries no script clause
+    rather than a wrong one.
+    """
+    global _LANGUAGE_SCRIPTS
+    if _LANGUAGE_SCRIPTS is None:
+        _LANGUAGE_SCRIPTS = _read_language_scripts(LANGUAGE_SCRIPTS_FILEPATH)
+    return _LANGUAGE_SCRIPTS
 
 
 def language_codes_map() -> dict:
@@ -1660,7 +1748,16 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
                 f"Translator language '{_language_display(original_language)}' is not a known language code — "
                 "refusing to translate."
             )
-            return inputs
+            # The node still owes the next node the payload it expects: the
+            # raw inputs carry no "messages" key, and a node that returns
+            # them hands the LLM node a dict it cannot read. The text goes
+            # through untranslated.
+            return {
+                "messages": [{"role": "user", "content": original_text}],
+                "temperature": 0,
+                "max_tokens": llm_parameters_dict["max_tokens"],
+                "stream": False,
+            }
         target_language = language_codes[requested_language.lower()]
 
         prompt = (
@@ -2967,28 +3064,67 @@ class ChatQnAService:
         text: str,
         source_lang_code: str,
         target_lang_code: str,
-        source_lang_name: str = "English",
-        target_lang_name: str = "English",
     ) -> str:
         """Build a prompt for TranslateGemma using the completions API.
 
-        The language names come from the language map, so nothing a caller
-        controls reaches the prompt.
+        The language names and the scripts come from the shipped tables, so
+        nothing a caller controls reaches the prompt: the caller supplies
+        codes, and a code that does not look like a code is replaced by the
+        default rather than written into the prompt.
+
+        The script clause follows the target: a target written in the Latin
+        alphabet is asked for the Latin alphabet, and a target written in
+        another script is asked for that one. A source written in a script
+        the target does not use is named as well, so the model does not
+        answer in the script it was given.
         """
+        language_codes = language_codes_map()
+        scripts = language_scripts_map()
+
+        target_code = str(target_lang_code).strip().lower()
+        if not _LANGUAGE_CODE_PATTERN.match(target_code):
+            logger.warning(
+                f"Target language '{_language_display(target_lang_code)}' is not a language code — using English."
+            )
+            target_code = "en"
+        source_code = str(source_lang_code).strip().lower()
+        if not _LANGUAGE_CODE_PATTERN.match(source_code):
+            logger.warning(
+                f"Source language '{_language_display(source_lang_code)}' is not a language code — using English."
+            )
+            source_code = "en"
+
+        target_name = language_codes.get(target_code, target_code)
+        source_name = language_codes.get(source_code, source_code)
+
+        target_script = scripts.get(target_code)
+        source_script = scripts.get(source_code)
+        script_clause = ""
+        if target_script == "Latn":
+            script_clause = "Write the translation in the Latin alphabet only, and do not use any other script. "
+        elif target_script:
+            script_clause = (
+                f"Write the translation in {target_name}, "
+                f"using the {_SCRIPT_NAMES.get(target_script, target_script)} script. "
+            )
+        if source_script and source_script != "Latn" and source_script != target_script:
+            script_clause += (
+                f"Do not reproduce the source text in the {_SCRIPT_NAMES.get(source_script, source_script)} script. "
+            )
+
         return (
             f"<bos><start_of_turn>user\n"
-            f"You are a professional {source_lang_name} ({source_lang_code}) to "
-            f"{target_lang_name} ({target_lang_code}) translator. Your goal is to "
-            f"accurately convey the meaning and nuances of the original {source_lang_name} "
-            f"text while adhering to {target_lang_name} grammar, vocabulary, and cultural "
+            f"You are a professional {source_name} ({source_code}) to "
+            f"{target_name} ({target_code}) translator. Your goal is to "
+            f"accurately convey the meaning and nuances of the original {source_name} "
+            f"text while adhering to {target_name} grammar, vocabulary, and cultural "
             f"sensitivities.\n"
-            f"CRITICAL: You MUST output ONLY in {target_lang_name} ({target_lang_code}). "
-            f"Do NOT output in Nepali, Hindi, Bengali, or any other language. "
-            f"Do NOT use Devanagari, Bengali, or any non-Latin script. "
-            f"{target_lang_name} uses the LATIN alphabet only.\n"
-            f"Produce only the {target_lang_name} translation, without any additional "
-            f"explanations or commentary. Please translate the following {source_lang_name} "
-            f"text into {target_lang_name}:\n\n\n{text}"
+            f"CRITICAL: You MUST output ONLY in {target_name} ({target_code}). "
+            f"Do NOT output in {source_name} or in any other language. "
+            f"{script_clause}\n"
+            f"Produce only the {target_name} translation, without any additional "
+            f"explanations or commentary. Please translate the following {source_name} "
+            f"text into {target_name}:\n\n\n{text}"
             f"<end_of_turn>\n<start_of_turn>model\n"
         )
 
@@ -3013,9 +3149,7 @@ class ChatQnAService:
                 return None
         return cap
 
-    async def _get_translated_history_string(
-        self, history: list, target_language: str, source_lang_code: str = "en"
-    ) -> str:
+    async def _get_translated_history_string(self, history: list, source_lang_code: str = "en") -> str:
         """
         A helper that:
         1. Truncates history to stay within a token limit.
@@ -3027,11 +3161,13 @@ class ChatQnAService:
 
         Args:
             history: Chat history as list of dicts or plain string (single-message mode).
-            target_language: Target language CODE (e.g. "en"). The name the
-                prompt carries comes from the language map, so a caller cannot
-                put free text in the prompt. A code the map does not know is
-                refused: the history is used as it is.
             source_lang_code: Source ISO language code (e.g. "st") for TranslateGemma.
+
+        The target is not a parameter: the history is normalized to English,
+        the language of the embedding space, whatever the caller asked for.
+        The name the prompt carries comes from the language map, so a caller
+        cannot put free text in the prompt, and a map that does not know
+        English leaves the history as it is.
         """
         # Single-message mode sends history as a plain string
         if isinstance(history, str):
@@ -3076,19 +3212,14 @@ class ChatQnAService:
             flattened_history_string = " |<-MSG->| ".join(flattened_history_parts)
 
         # The target steers the prompt, so it is resolved against the language
-        # map — ONCE, for both shapes of the history. The two branches used to
-        # resolve it differently (the string branch ignored it and translated
-        # into English whatever the target was), so one history could be
-        # translated into two different languages. An unknown target is
-        # refused and the history is used as it is.
+        # map — ONCE, for both shapes of the history. The target is English:
+        # the history is normalized to the language of the embedding space,
+        # not to the language the caller asked for.
         language_codes = language_codes_map()
-        canonical_target = target_language.strip().lower() if isinstance(target_language, str) else ""
+        canonical_target = HISTORY_TRANSLATION_TARGET
         target_name = language_codes.get(canonical_target)
         if target_name is None:
-            logger.warning(
-                f"History translation target '{_language_display(target_language)}' is not a known language code — "
-                "refusing to translate the history."
-            )
+            logger.warning("The language map does not know English — refusing to translate the history.")
             return flattened_history_string
 
         # Single-message mode sends history as a plain string — translate it
@@ -3103,8 +3234,6 @@ class ChatQnAService:
                 text=flattened_history_string,
                 source_lang_code=source_lang_code,
                 target_lang_code=canonical_target,
-                source_lang_name=source_lang_code.upper(),
-                target_lang_name=target_name,
             )
             output_cap = self._translation_output_cap(flattened_history_string)
             if output_cap is None:
@@ -3320,8 +3449,6 @@ class ChatQnAService:
                 text=text,
                 source_lang_code=source_lang_code,
                 target_lang_code=target_lang_code,
-                source_lang_name=source_lang_code.upper(),
-                target_lang_name=target_lang,
             )
             payload = {
                 "model": _get_translation_model_id(),
@@ -3591,7 +3718,7 @@ class ChatQnAService:
                     f"Original language detected: {history_language}. Proceeding with translation of chat history."
                 )
             translated_history_string = await self._get_translated_history_string(
-                full_chat_history, "en", source_lang_code=history_language.lower()
+                full_chat_history, source_lang_code=history_language.lower()
             )
         else:
             # If already English, flatten without translation

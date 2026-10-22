@@ -8,16 +8,27 @@ again.
 
 ## Cache key — five invalidation dimensions
 
-`translation:<md5(content)>:<sourceLang>:<targetLang>:<modelId>:<logicVersion>`
+`translation:<md5(content)>:<sourceLangCode>:<targetLangCode>:<modelId>:<logicVersion>`
 (see `translation-cache-key.js`)
 
 | Dimension | What invalidates | Action needed |
 |-----------|------------------|---------------|
 | `md5(content)` | Source text changes (different chatqna output, prompt change that changes the EN answer) | **Automatic** — new hash → new key |
-| `sourceLang` | Different source language for the same content | **Automatic** |
-| `targetLang` | Different UI language | **Automatic** |
+| `sourceLangCode` | Different source language for the same content | **Automatic** |
+| `targetLangCode` | Different UI language | **Automatic** |
 | `modelId` | Switching `VLLM_TRANSLATION_MODEL_ID` (GPU) or the CPU NLLB model | **Automatic** — model id is in the key |
 | `logicVersion` (`TRANSLATION_LOGIC_VERSION`) | Translation **logic** change in source code | **Manual — bump the constant** |
+
+The two language dimensions carry the **model-specific** code (`eng_Latn`), not
+the canonical one (`en`). Two languages the model is asked for with the same
+code — `man` and `mnk` are both `dyu_Latn` in the NLLB map — are the same
+request to the model, so they are the same translation and belong in the same
+entry.
+
+**A version number is never reused for a different key shape.** The cache has
+no TTL: the entries a released deployment wrote stay in Redis forever, so a
+version that deployment used has to keep meaning what it meant then. Bump
+past the highest released version, never back onto it.
 
 ## When to bump `TRANSLATION_LOGIC_VERSION`
 
@@ -53,7 +64,7 @@ of the previous generation are never read again — but they are not removed
 either. They keep occupying Redis memory, one entry per (document,
 language pair, model), until a manual flush deletes them (command below).
 
-Versions 3 and 4 (both in issue #1097's branch) therefore left the version-2
+Version 3 (the language boundary of issue #1097) therefore left the version-2
 entries behind. This is the intended trade-off: an orphaned entry costs
 memory, a stale entry costs a wrong translation. When a deployment has been
 running several versions, flush the `translation:*` keys once to reclaim the

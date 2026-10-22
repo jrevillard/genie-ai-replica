@@ -425,7 +425,8 @@ class TestAlignInputs:
         def test_an_unknown_language_is_refused(self):
             """The language the translator node names comes from the caller: an
             unknown one is refused, and the text goes through untranslated
-            instead of being translated into English."""
+            instead of being translated into English. The node still owes the
+            next node the payload it expects."""
             self_mock = MagicMock()
             self_mock.services = {"translator_node": create_mock_service_node(FakeServiceType.TRANSLATOR)}
             llm_params = {"max_tokens": 512}
@@ -439,8 +440,8 @@ class TestAlignInputs:
                     llm_params,
                     original_language="zz",
                 )
-            assert result is inputs
-            assert "messages" not in result
+            assert result["messages"][0]["content"] == "Hello world"
+            assert "zz" not in result["messages"][0]["content"]
 
         def test_original_language_en_sets_target_english(self):
             self_mock = MagicMock()
@@ -1815,8 +1816,6 @@ class TestTranslationHelpers:
             text="Hello",
             source_lang_code="en",
             target_lang_code="fr",
-            source_lang_name="English",
-            target_lang_name="French",
         )
         assert "<bos>" in prompt
         assert "<start_of_turn>" in prompt
@@ -1864,7 +1863,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
             patch("chatqna.genieai_chatqna.TRANSLATION_MODEL_ID", "test-model"),
         ):
-            result = await svc._get_translated_history_string("Hello world", "fr")
+            result = await svc._get_translated_history_string("Hello world")
         assert "Translated" in result
 
     @pytest.mark.asyncio
@@ -1886,7 +1885,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
             patch("chatqna.genieai_chatqna.TRANSLATION_MODEL_ID", "test-model"),
         ):
-            result = await svc._get_translated_history_string(history, "en")
+            result = await svc._get_translated_history_string(history)
         assert "Translated history" in result
 
     @pytest.mark.asyncio
@@ -1916,7 +1915,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna._TRANSLATION_DISCOVERY_ENDPOINT", "https://gpu-host/translation"),
             patch("httpx.get", return_value=models_resp),
         ):
-            await svc._get_translated_history_string(history, "en")
+            await svc._get_translated_history_string(history)
 
         sent_prompt = mock_client.post.call_args.kwargs["json"]["messages"][0]["content"]
         assert "AAAA" in sent_prompt  # oldest message forwarded
@@ -1946,7 +1945,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.MAX_TRANSLATION_CHARS", 70),
             patch("chatqna.genieai_chatqna.history_truncation_total") as mock_counter,
         ):
-            await svc._get_translated_history_string(history, "en")
+            await svc._get_translated_history_string(history)
 
         sent_prompt = mock_client.post.call_args.kwargs["json"]["messages"][0]["content"]
         assert "DROPME" in sent_prompt  # newest kept
@@ -1983,7 +1982,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna._TRANSLATION_DISCOVERY_ENDPOINT", "https://gpu-host/translation"),
             patch("httpx.get", return_value=models_resp),
         ):
-            await svc._get_translated_history_string(history, "en")
+            await svc._get_translated_history_string(history)
 
         payload = mock_client.post.call_args.kwargs["json"]
         # Both messages survive the char-budget filter (8028 ≤ 8448). Flattened
@@ -2021,7 +2020,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna._TRANSLATION_DISCOVERY_ENDPOINT", "https://gpu-host/translation"),
             patch("httpx.get", return_value=models_resp),
         ):
-            result = await svc._get_translated_history_string(history, "en")
+            result = await svc._get_translated_history_string(history)
 
         assert result == "Translated"
         payload = mock_client.post.call_args.kwargs["json"]
@@ -2048,7 +2047,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna._TRANSLATION_DISCOVERY_ENDPOINT", "https://gpu-host/translation"),
             patch("httpx.get", return_value=MagicMock(json=lambda: {"data": [{"id": "m", "max_model_len": 768}]})),
         ):
-            result = await svc._get_translated_history_string(history, "en")
+            result = await svc._get_translated_history_string(history)
 
         assert result == ""  # nothing survived the budget: empty history, no junk
         mock_client.post.assert_not_called()
@@ -3831,8 +3830,8 @@ async def test_a_refused_language_leaves_the_answer_in_english_and_still_normali
     history_calls = []
     scheduled = {}
 
-    async def fake_history(history, target_language_code, source_lang_code="en"):
-        history_calls.append((target_language_code, source_lang_code))
+    async def fake_history(history, source_lang_code="en"):
+        history_calls.append(source_lang_code)
         return "USER: qu'est-ce que X ?"
 
     svc._get_translated_history_string = fake_history
@@ -3863,7 +3862,7 @@ async def test_a_refused_language_leaves_the_answer_in_english_and_still_normali
     ):
         await svc.handle_request(req)
 
-    assert history_calls == [("en", "fr")]
+    assert history_calls == ["fr"]
     assert scheduled["original_language"] == "EN"
 
 
@@ -3884,8 +3883,8 @@ async def test_a_refused_language_with_an_undetectable_source_still_normalizes_t
     history_calls = []
     scheduled = {}
 
-    async def fake_history(history, target_language_code, source_lang_code="en"):
-        history_calls.append((target_language_code, source_lang_code))
+    async def fake_history(history, source_lang_code="en"):
+        history_calls.append(source_lang_code)
         return "USER: qu'est-ce que X ?"
 
     svc._get_translated_history_string = fake_history
@@ -3918,7 +3917,7 @@ async def test_a_refused_language_with_an_undetectable_source_still_normalizes_t
     ):
         await svc.handle_request(req)
 
-    assert history_calls == [("en", "ne")]
+    assert history_calls == ["ne"]
     assert scheduled["original_language"] == "EN"
 
 
@@ -3937,8 +3936,8 @@ async def test_a_refused_language_with_a_failing_detection_leaves_the_history_al
     history_calls = []
     scheduled = {}
 
-    async def fake_history(history, target_language_code, source_lang_code="en"):
-        history_calls.append((target_language_code, source_lang_code))
+    async def fake_history(history, source_lang_code="en"):
+        history_calls.append(source_lang_code)
         return "USER: qu'est-ce que X ?"
 
     svc._get_translated_history_string = fake_history

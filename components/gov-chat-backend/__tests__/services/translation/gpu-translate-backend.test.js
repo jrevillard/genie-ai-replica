@@ -333,6 +333,27 @@ describe('GpuTranslateBackend streaming', () => {
       expect(backend.isLanguageSupported('es')).toBe(true);
     });
 
+    it('reports a missing language name as a defect in the map, not as a bad request', () => {
+      // The caller asked for a language the deployment supports; the map
+      // simply does not name the code. Blaming the request for it (an
+      // UnsupportedLanguageError is a 400) would hide our own defect.
+      const { UnsupportedLanguageError } = require('../../../services/translation/unsupported-language');
+      const original = backend.languageMap;
+      backend.languageMap = { languageMap: { en: 'en' }, languageNames: {}, fallbackMap: {} };
+
+      let error;
+      try {
+        backend._languageName('en');
+      } catch (caught) {
+        error = caught;
+      }
+
+      expect(error).toBeDefined();
+      expect(error.message).toMatch(/language map/i);
+      expect(error).not.toBeInstanceOf(UnsupportedLanguageError);
+      backend.languageMap = original;
+    });
+
     it('formatRequest builds a gemma-3 chat-completions request with translation instructions', () => {
       // The request carries the model-specific codes; the prompt names the
       // languages from the map.

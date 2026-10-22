@@ -77,7 +77,14 @@ module.exports = {
     ko: 'ko' // Korean
   },
 
-  // Language fallback chains for graceful degradation
+  // Language fallback chains for graceful degradation.
+  //
+  // A fallback names the language to use when the model does not support the
+  // requested one. Every language listed here is one the map above supports
+  // too, so the chain never walks today — the language the caller asked for
+  // is the language the model is asked for. A language removed from the map
+  // above has to be removed from here as well: left in place, it would
+  // silently translate into another language.
   fallbackMap: {
     // West African languages fallback to Swahili (regional lingua franca)
     ff: 'sw',

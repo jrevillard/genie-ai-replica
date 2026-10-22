@@ -293,9 +293,11 @@ class TranslationService {
    * lands on a language the map knows.
    *
    * The chain exists for a map that lists a language as a fallback without
-   * supporting it directly; in the shipped maps every fallback key is also a
-   * supported language, so the chain is a no-op there. The visited set stops a
-   * map that points a language at itself (or in a circle) from spinning here.
+   * supporting it directly. The shipped maps do not: every language they list
+   * a fallback for is one they support, so the chain never walks and the
+   * language the caller asked for is the language the model is asked for. The
+   * visited set stops a map that points a language at itself (or in a circle)
+   * from spinning here.
    * @param {string} requested - A canonical (lower-case) language code.
    * @returns {string|null} The language to translate into, or null when the
    *   chain leads nowhere.
@@ -490,12 +492,17 @@ class TranslationService {
    */
   async translateStream(unit, sourceLang, targetLang, context, onToken) {
     this.ensureReady();
-    if (!unit || unit.trim() === '') return '';
 
-    // Both languages are resolved the same way as in translate(): the frontend
-    // may send upper-case locale codes ("ES") while the language maps use
-    // lower-case keys ("es"), and a language the map does not know is refused.
+    // Both languages are resolved the same way as in translate(), and before
+    // the empty-unit shortcut: the frontend may send upper-case locale codes
+    // ("ES") while the language maps use lower-case keys ("es"), and a
+    // language the map does not know is refused. Resolving after the shortcut
+    // would let a request for an unknown language through unnoticed — the
+    // streaming path would answer in English while the post-stream path
+    // refused the same request.
     const { sourceLangCode, targetLangCode } = this.resolveLanguagePair(sourceLang, targetLang);
+
+    if (!unit || unit.trim() === '') return '';
 
     try {
       if (typeof this.backend.translateStream === 'function') {
@@ -543,9 +550,12 @@ class TranslationService {
     // Cache key includes the model id so switching the translation model
     // invalidates the cache automatically (no stale translations on model change).
     const modelId = this.backend && this.backend.getBackendInfo ? this.backend.getBackendInfo().model : undefined;
-    const cacheKey = translationCacheKey(docName, resolvedSourceLang, resolvedTargetLang, modelId);
-    // Key for in-flight tracking (combines doc hash and both languages)
-    const inFlightKey = `${docName}:${resolvedSourceLang}:${resolvedTargetLang}`;
+    // The key carries the codes the MODEL was asked for, not the canonical
+    // ones: two languages the model answers with the same code are the same
+    // request, and they belong in the same entry.
+    const cacheKey = translationCacheKey(docName, sourceLangCode, targetLangCode, modelId);
+    // Key for in-flight tracking (combines doc hash and both model codes)
+    const inFlightKey = `${docName}:${sourceLangCode}:${targetLangCode}`;
 
     if (cacheEnabled && this.cacheClient) {
       try {

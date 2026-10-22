@@ -4,6 +4,7 @@ const { logger, dbService } = require('../shared-lib');
 const { Worker } = require('worker_threads');
 const path = require('path');
 const { NotFoundError } = require('../middleware/errors');
+const { normalizeRequestedLanguage } = require('./translation/language-request');
 const api = require('@opentelemetry/api');
 const { parsePositiveInt } = require('../shared-lib');
 
@@ -61,20 +62,22 @@ function opeaChatQnaUrl() {
 // validates it against its own language map before it is used, so only a
 // string is forwarded: anything else is dropped rather than handed to the
 // request model as something it has to reject.
+//
+// The normalization is the shared one (services/translation/language-request):
+// the query routes normalize the same field for the translation path, and two
+// spellings of one language is how a request ends up refused by one path and
+// accepted by the other.
 function pickLanguage(context) {
   const language = context ? context.language : undefined;
-  if (typeof language === 'string') {
-    // An empty string means "no language asked for", which is a normal
-    // request and not something to warn about.
-    return language.trim() || undefined;
-  }
-  if (language != null) {
+  if (language != null && typeof language !== 'string') {
     logger.warn('pickLanguage.ignored_non_string_language', {
       type: typeof language,
       isArray: Array.isArray(language)
     });
   }
-  return undefined;
+  // An empty language means "no language asked for", which is a normal
+  // request and not something to warn about.
+  return normalizeRequestedLanguage(language) || undefined;
 }
 
 class QueryService {

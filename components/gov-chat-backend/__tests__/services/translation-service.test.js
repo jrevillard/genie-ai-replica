@@ -390,6 +390,83 @@ describe('TranslationService', () => {
     });
   });
 
+  describe('the markdown translation cache key', () => {
+    // The cache is permanent, so the key has to say everything that makes two
+    // translations different: the content, the language pair as the MODEL sees
+    // it, the model, and the version of the translation logic.
+    const serviceWithCache = (backend) => {
+      setEnv('TRANSLATION_CACHE', 'on');
+      jest.isolateModules(() => {
+        translationService = require('../../services/translation-service');
+      });
+      translationService.initialized = true;
+      translationService.backend = backend;
+      translationService.backendType = 'stub';
+      // The markdown pipeline is injected: the service loads unified and
+      // remark through a dynamic import, which Jest cannot intercept.
+      translationService.unified = () => ({
+        use: () => ({
+          parse: () => ({ type: 'root' }),
+          stringify: () => 'TRANSLATED'
+        })
+      });
+      translationService.remarkParse = {};
+      translationService.remarkStringify = {};
+      translationService.visit = (tree, type, callback) => callback({ value: 'hello' });
+      return translationService;
+    };
+
+    // A backend whose map sends two languages to the same model code — the
+    // NLLB map does that for "man" and "mnk" (both "dyu_Latn").
+    const stubBackendWithModelCodes = (codes) => ({
+      getLanguageCode: jest.fn((code) => (Object.prototype.hasOwnProperty.call(codes, code) ? codes[code] : null)),
+      isLanguageSupported: jest.fn(() => true),
+      getFallbackLanguage: jest.fn(() => null),
+      translate: jest.fn().mockResolvedValue(['translated']),
+      getBackendInfo: jest.fn(() => ({ model: 'stub-model' }))
+    });
+
+    const lastCacheKey = () => mockRedis.get.mock.calls[mockRedis.get.mock.calls.length - 1][0];
+
+    it('keys the cache on the codes the model is asked for', async () => {
+      const svc = serviceWithCache(stubBackendWithModelCodes({ en: 'eng_Latn', fr: 'fra_Latn' }));
+
+      await svc.translateMarkdown('hello', 'en', 'fr');
+
+      const key = lastCacheKey();
+      expect(key).toContain('eng_Latn');
+      expect(key).toContain('fra_Latn');
+      // The canonical codes would name a language the model was never asked
+      // for: the key has to say what the model was asked.
+      expect(key).not.toContain(':en:');
+      expect(key).not.toContain(':fr:');
+    });
+
+    it('gives two languages the model answers alike one cache entry', async () => {
+      const svc = serviceWithCache(stubBackendWithModelCodes({ en: 'eng_Latn', man: 'dyu_Latn', mnk: 'dyu_Latn' }));
+
+      await svc.translateMarkdown('hello', 'en', 'man');
+      const keyForMan = lastCacheKey();
+      await svc.translateMarkdown('hello', 'en', 'mnk');
+      const keyForMnk = lastCacheKey();
+
+      // Same request to the model, same translation, one entry.
+      expect(keyForMnk).toBe(keyForMan);
+    });
+
+    it('keeps a different source language in a different entry', async () => {
+      const svc = serviceWithCache(stubBackendWithModelCodes({ en: 'eng_Latn', de: 'deu_Latn', fr: 'fra_Latn' }));
+
+      await svc.translateMarkdown('hello', 'en', 'fr');
+      const keyFromEnglish = lastCacheKey();
+      await svc.translateMarkdown('hello', 'de', 'fr');
+      const keyFromGerman = lastCacheKey();
+
+      expect(keyFromGerman).not.toBe(keyFromEnglish);
+      expect(keyFromGerman).toContain('deu_Latn');
+    });
+  });
+
   describe('translateStream', () => {
     beforeEach(() => {
       translationService.initialized = true;
@@ -415,6 +492,15 @@ describe('TranslationService', () => {
 
     it('returns empty string for empty unit', async () => {
       await expect(translationService.translateStream('', 'en', 'es')).resolves.toBe('');
+    });
+
+    it('refuses an unsupported language even when there is nothing to translate', async () => {
+      // The languages are resolved before the empty-unit shortcut: an
+      // unsupported language is a bad request whether or not there was a unit
+      // to translate. Resolving after the shortcut would let a request with an
+      // unsupported language and no text through unnoticed — and the streaming
+      // path would answer in English while the post-stream path refused it.
+      await expect(translationService.translateStream('', 'en', 'xx')).rejects.toThrow(/Unsupported target language/);
     });
 
     it('throws on unsupported source language', async () => {

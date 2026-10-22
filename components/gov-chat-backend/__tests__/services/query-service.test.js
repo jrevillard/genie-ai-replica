@@ -1563,6 +1563,37 @@ describe('QueryService', () => {
       expect(result.queryId).toBe('stream-1');
     });
 
+    it('treats a blank language as no language, without complaining', async () => {
+      // A blank language is a normal request ("no language asked for"), not
+      // something to warn about: the warning is for a value that is not a
+      // language at all.
+      const { logger } = require('../../shared-lib');
+      const data = {
+        userId: 'u1',
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'test' }],
+        context: { serviceLabels: [], language: '   ' }
+      };
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      const result = await queryService.initStreamQuery(data, {});
+      expect(result.opeaPayload.context.language).toBeUndefined();
+      expect(logger.warn).not.toHaveBeenCalledWith('pickLanguage.ignored_non_string_language', expect.anything());
+    });
+
+    it('warns when the language is not a string', async () => {
+      const { logger } = require('../../shared-lib');
+      const data = {
+        userId: 'u1',
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'test' }],
+        context: { serviceLabels: [], language: 42 }
+      };
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      const result = await queryService.initStreamQuery(data, {});
+      expect(result.opeaPayload.context.language).toBeUndefined();
+      expect(logger.warn).toHaveBeenCalledWith('pickLanguage.ignored_non_string_language', expect.anything());
+    });
+
     it('should handle category resolution error gracefully', async () => {
       const data = createMockQueryData();
       mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });

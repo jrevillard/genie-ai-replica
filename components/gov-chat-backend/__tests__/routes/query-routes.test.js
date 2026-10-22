@@ -594,6 +594,89 @@ describe('POST /stream', () => {
     delete process.env.STREAMING_TRANSLATION_ENABLED;
   });
 
+  it('keeps the answer in English without reporting a failure when the language is not covered', async () => {
+    // The language the client asked for is not one the translation models
+    // cover. There is no translation to make: the answer stays in English and
+    // the client is NOT told the translation failed — nothing failed, the
+    // request simply asks for a language the deployment does not have.
+    process.env.STREAMING_TRANSLATION_ENABLED = '1';
+    queryService.initStreamQuery.mockResolvedValue({
+      queryId: 'q1',
+      opeaUrl: 'http://chatqna:8888/v1/chatqna',
+      opeaPayload: { messages: [] }
+    });
+    queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
+    queryService.finalizeStreamQuery.mockResolvedValue(undefined);
+    translationService.init.mockResolvedValue(undefined);
+    const { UnsupportedLanguageError } = require('../../services/translation/unsupported-language');
+    translationService.translateMarkdown.mockRejectedValue(new UnsupportedLanguageError('target'));
+
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ data: mockStream });
+
+    const responsePromise = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hola' }],
+      context: { language: 'zz' }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    mockStream.push('data: {"type":"chunk","content":"First sentence. "}\n\n');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    mockStream.push('data: {"type":"chunk","content":"Second sentence. "}\n\n');
+    mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+    mockStream.push(null);
+
+    const response = await responsePromise;
+    expect(response.status).toBe(200);
+    const body = response.text || '';
+    // The answer is complete and in English.
+    expect(body).toContain('First sentence');
+    expect(body).toContain('Second sentence');
+    // One refusal is enough: the second unit is not sent to the translator
+    // again, so a request does not produce one refused call per unit.
+    expect(translationService.translateMarkdown).toHaveBeenCalledTimes(1);
+    // No failure is reported: the client is not told the translation broke.
+    expect(body).not.toMatch(/"translationFailed":true/);
+    expect(body).not.toMatch(/"type":"error"/);
+    delete process.env.STREAMING_TRANSLATION_ENABLED;
+  });
+
+  it('does not report a failure on done when the post-stream language is not covered', async () => {
+    // The post-stream path (streaming translation off) has its own refusal
+    // branch: the answer is complete in English and the stream ends normally.
+    queryService.initStreamQuery.mockResolvedValue({
+      queryId: 'q1',
+      opeaUrl: 'http://chatqna:8888/v1/chatqna',
+      opeaPayload: { messages: [] }
+    });
+    queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
+    queryService.finalizeStreamQuery.mockResolvedValue(undefined);
+    translationService.init.mockResolvedValue(undefined);
+    const { UnsupportedLanguageError } = require('../../services/translation/unsupported-language');
+    translationService.translateMarkdown.mockRejectedValue(new UnsupportedLanguageError('target'));
+
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ data: mockStream });
+
+    const responsePromise = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hola' }],
+      context: { language: 'zz' }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    mockStream.push('data: {"type":"chunk","content":"Hello world. "}\n\n');
+    mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+    mockStream.push(null);
+
+    const response = await responsePromise;
+    expect(response.status).toBe(200);
+    const body = response.text || '';
+    expect(body).toContain('Hello world');
+    expect(body).not.toMatch(/"type":"translation"/);
+    expect(body).not.toMatch(/"translationFailed":true/);
+    expect(body).not.toMatch(/"type":"error"/);
+  });
+
   it('should preserve inter-unit paragraph breaks (\\n\\n) during streaming (#829)', async () => {
     // Regression guard for the formatting bug: the separator between units must
     // be passed through verbatim so paragraphs/lists survive streaming. The EN

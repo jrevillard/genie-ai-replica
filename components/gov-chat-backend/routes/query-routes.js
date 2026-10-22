@@ -9,6 +9,7 @@ const { logger, spanAttrs, tracingBaggage } = require('../shared-lib');
 const translationService = require('../services/translation-service');
 const { extractCommittableUnit } = require('../services/translation/stream-boundary');
 const { languageForLog } = require('../services/translation/language-log');
+const { isUnsupportedLanguage } = require('../services/translation/unsupported-language');
 const { parsePositiveInt } = require('../shared-lib');
 
 /**
@@ -287,6 +288,10 @@ module.exports = (queryService) => {
       let pendingEn = '';
       let translationChain = Promise.resolve();
       let streamingTranslationFailed = false;
+      // The language the client asked for is not one the translation models
+      // cover. There is no translation to make, so the answer stays in English
+      // and the client is not told the translation failed.
+      let translationUnsupported = false;
       let loggedStreamTranslateActive = false;
 
       // Translate one COMPLETE unit (see services/translation/stream-boundary.js)
@@ -301,6 +306,13 @@ module.exports = (queryService) => {
       const scheduleUnitTranslation = (content, separator) => {
         translationChain = translationChain.then(async () => {
           if (res.writableEnded) return;
+          if (translationUnsupported) {
+            // Nothing to translate into: the unit goes out as it is.
+            if (!res.writableEnded) {
+              res.write(`data: ${JSON.stringify({ type: 'chunk', content: `${content}${separator}` })}\n\n`);
+            }
+            return;
+          }
           try {
             await translationService.init();
             const translated = await translationService.translateMarkdown(content, 'en', targetLanguage);
@@ -326,6 +338,20 @@ module.exports = (queryService) => {
               res.write(`data: ${JSON.stringify({ type: 'chunk', content: body })}\n\n`);
             }
           } catch (error) {
+            if (isUnsupportedLanguage(error)) {
+              // The language is not one the translation models cover: there is
+              // no translation to make and no failure to report. The unit goes
+              // out in English, and the units that follow do not even try.
+              translationUnsupported = true;
+              logger.warn(
+                `QueryService.stream_translation_unsupported_language: (lang=${languageForLog(targetLanguage)})`,
+                { queryId }
+              );
+              if (!res.writableEnded) {
+                res.write(`data: ${JSON.stringify({ type: 'chunk', content: `${content}${separator}` })}\n\n`);
+              }
+              return;
+            }
             // The language is caller-controlled: the log carries a bounded,
             // printable form of it, never the raw value.
             logger.warn(
@@ -344,7 +370,7 @@ module.exports = (queryService) => {
         if (doneState.handled || res.writableEnded) return;
         doneState.handled = true;
         if (useStreamingTranslation) {
-          if (streamingTranslationFailed) {
+          if (streamingTranslationFailed || translationUnsupported) {
             // Degraded: flush remaining EN directly (bypass translation)
             if (pendingEn && !res.writableEnded) {
               res.write(`data: ${JSON.stringify({ type: 'chunk', content: pendingEn })}\n\n`);
@@ -525,13 +551,22 @@ module.exports = (queryService) => {
         const translated = await translationService.translateMarkdown(fullResponseText, 'en', userLanguage);
         res.write(`data: ${JSON.stringify({ type: 'translation', content: translated })}\n\n`);
       } catch (error) {
-        // Not an `error` frame. The client treats that as terminal and stops
-        // reading, and reports the whole system as down — neither is true when
-        // only the translator failed and the answer is complete in English.
-        // The outcome travels on `done` instead, where the client already
-        // expects the stream to end.
-        logger.warn('QueryService.stream_translation_failed', { queryId, error: error.message });
-        translationFailed = true;
+        if (isUnsupportedLanguage(error)) {
+          // The language is not one the translation models cover: there is no
+          // translation to make, so the answer stays in English and the client
+          // is not told the translation failed. The stream still ends the way
+          // it would have: the answer is complete, only its language is not
+          // the one that was asked for.
+          logger.warn('QueryService.stream_translation_unsupported_language', { queryId });
+        } else {
+          // Not an `error` frame. The client treats that as terminal and stops
+          // reading, and reports the whole system as down — neither is true when
+          // only the translator failed and the answer is complete in English.
+          // The outcome travels on `done` instead, where the client already
+          // expects the stream to end.
+          logger.warn('QueryService.stream_translation_failed', { queryId, error: error.message });
+          translationFailed = true;
+        }
       }
     }
 

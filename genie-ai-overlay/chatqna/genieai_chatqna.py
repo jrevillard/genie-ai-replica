@@ -709,12 +709,19 @@ def language_codes_map() -> dict:
 
     The map is never None: an unreadable map is an empty map, and an empty
     map means every language is unknown.
+
+    The returned map is a copy. The cache is the whitelist every request is
+    checked against, and a caller that mutated the map it got back would
+    rewrite that whitelist for the whole process.
+
+    The retry read is a blocking read of a small file, at most once a minute,
+    and only for as long as the file stays unreadable.
     """
     global _LANGUAGE_CODES_CACHE, _LANGUAGE_CODES_CACHE_AT
 
     cached = _LANGUAGE_CODES_CACHE
     if cached:
-        return cached
+        return dict(cached)
     now = time.monotonic()
     if _LANGUAGE_CODES_CACHE_AT is not None and now - _LANGUAGE_CODES_CACHE_AT < LANGUAGE_MAP_RETRY_SECONDS:
         # The last read failed and the retry window has not elapsed yet.
@@ -722,7 +729,7 @@ def language_codes_map() -> dict:
     loaded = _read_language_codes(LANGUAGE_CODES_FILEPATH)
     _LANGUAGE_CODES_CACHE = loaded
     _LANGUAGE_CODES_CACHE_AT = now
-    return loaded
+    return dict(loaded)
 
 
 # Fallback context window for the LLM, used when runtime discovery from the
@@ -3495,7 +3502,16 @@ class ChatQnAService:
                     # Load supported languages to validate the detection
                     language_codes = language_codes_map()
 
-                    # Only use detected language if it's in our supported list OR if it's 'en'
+                    # The detected code is the server's own answer to "what
+                    # language is this text in": a bounded ISO code from
+                    # langdetect, never text the caller supplied. It is kept
+                    # even when the translation models do not cover it, because
+                    # the history still has to be normalized to English for the
+                    # English-only embedding space.
+                    detected_language = detected_lang.upper() if detected_lang else None
+
+                    # The answer is written in the detected language only when
+                    # the translation models cover it.
                     is_supported = detected_lang and (
                         detected_lang.lower() in language_codes or detected_lang.lower() == "en"
                     )
@@ -3508,8 +3524,7 @@ class ChatQnAService:
                         )
 
                     if is_supported:
-                        if detected_lang.upper() != "EN":
-                            detected_language = detected_lang.upper()
+                        if detected_language != "EN":
                             original_language = detected_language
                             logger.info(f"Auto-detected language: {original_language}")
                     else:
@@ -3534,7 +3549,10 @@ class ChatQnAService:
         # when that one is trusted, and the detected one when the request was
         # refused: a language code the map does not know says nothing about
         # the language the user writes in, and the history still has to be
-        # normalized to English for the English-only embedding space.
+        # normalized to English for the English-only embedding space. The
+        # detected code is used even when the translation models do not cover
+        # it — the source is named by the code and the target is English, so
+        # the history is still normalized.
         history_language = detected_language if language_refused else original_language
 
         translated_history_string = ""

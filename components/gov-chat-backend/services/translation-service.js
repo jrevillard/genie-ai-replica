@@ -8,7 +8,7 @@ const GpuTranslateBackend = require('./translation/gpu-translate-backend');
 const { splitEdges } = require('./translation/text-edges');
 const { normalizeInlineSpacing } = require('./translation/markdown-normalize');
 const { translationCacheKey } = require('./translation/translation-cache-key');
-const UnsupportedLanguageError = require('./translation/unsupported-language-error');
+const { UnsupportedLanguageError } = require('./translation/unsupported-language');
 const { languageForLog } = require('./translation/language-log');
 
 // --- Read settings from environment variables ---
@@ -254,31 +254,46 @@ class TranslationService {
       throw new UnsupportedLanguageError('target');
     }
 
-    // A fallback chain is followed until it lands on a language the map knows.
-    // The chain exists for a map that lists a language as a fallback without
-    // supporting it directly; in the shipped maps every fallback key is also
-    // a supported language, so the chain is a no-op there. The visited set
-    // stops a map that points a language at itself (or in a circle) from
-    // spinning here.
+    const candidate = this._resolveTargetCode(requested);
+    if (candidate) {
+      if (candidate !== requested) {
+        logger.warn(
+          `[TRANSLATION-SERVICE] Target language ${languageForLog(requested)} is not directly supported, using fallback ${languageForLog(candidate)}`
+        );
+      }
+      return candidate;
+    }
+
+    logger.warn(`[TRANSLATION-SERVICE] Unsupported target language: ${languageForLog(requested)}`);
+    throw new UnsupportedLanguageError('target');
+  }
+
+  /**
+   * @method _resolveTargetCode
+   * @description Follows the fallback chain of the loaded backend's map until it
+   * lands on a language the map knows.
+   *
+   * The chain exists for a map that lists a language as a fallback without
+   * supporting it directly; in the shipped maps every fallback key is also a
+   * supported language, so the chain is a no-op there. The visited set stops a
+   * map that points a language at itself (or in a circle) from spinning here.
+   * @param {string} requested - A canonical (lower-case) language code.
+   * @returns {string|null} The language to translate into, or null when the
+   *   chain leads nowhere.
+   */
+  _resolveTargetCode(requested) {
     const visited = new Set();
     let candidate = requested;
     while (!visited.has(candidate)) {
       visited.add(candidate);
       if (this.backend.isLanguageSupported(candidate)) {
-        if (candidate !== requested) {
-          logger.warn(
-            `[TRANSLATION-SERVICE] Target language ${languageForLog(requested)} is not directly supported, using fallback ${languageForLog(candidate)}`
-          );
-        }
         return candidate;
       }
       const fallback = this.backend.getFallbackLanguage(candidate);
       if (!fallback) break;
       candidate = String(fallback).trim().toLowerCase();
     }
-
-    logger.warn(`[TRANSLATION-SERVICE] Unsupported target language: ${languageForLog(requested)}`);
-    throw new UnsupportedLanguageError('target');
+    return null;
   }
 
   /**
@@ -364,6 +379,12 @@ class TranslationService {
   async translate(texts, sourceLang, targetLang) {
     this.ensureReady();
 
+    // Both languages are resolved against the map the backend ships: a
+    // language the map does not know never reaches the model. The check comes
+    // before the empty-texts shortcut, so a request for an unknown language
+    // is refused whether or not it had anything to translate.
+    const { sourceLangCode, targetLangCode } = this.resolveLanguagePair(sourceLang, targetLang);
+
     if (!texts || texts.length === 0) {
       logger.warn('[TRANSLATION-SERVICE] translate method called with empty array.');
       return [];
@@ -372,10 +393,6 @@ class TranslationService {
     logger.info(
       `[TRANSLATION-SERVICE] Translating ${texts.length} texts from ${languageForLog(sourceLang)} to ${languageForLog(targetLang)}`
     );
-
-    // Both languages are resolved against the map the backend ships: a
-    // language the map does not know never reaches the model.
-    const { sourceLangCode, targetLangCode } = this.resolveLanguagePair(sourceLang, targetLang);
 
     return this.translateWithBackend(texts, sourceLangCode, targetLangCode);
   }

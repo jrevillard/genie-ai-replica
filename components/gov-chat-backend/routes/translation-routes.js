@@ -2,20 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
-const UnsupportedLanguageError = require('../services/translation/unsupported-language-error');
-
-/**
- * @description Whether an error is a refused language.
- *
- * The check is on the error type, not on its message: a message-sniffing
- * check would also match a translation failure whose text happens to start
- * the same way, and it would break the day the message is reworded.
- * @param {Error} error - The error the translation call raised.
- * @returns {boolean} True when the error is a refused language.
- */
-function isUnsupportedLanguage(error) {
-  return error instanceof UnsupportedLanguageError || error?.code === 'UNSUPPORTED_LANGUAGE';
-}
+const { isUnsupportedLanguage } = require('../services/translation/unsupported-language');
 
 /**
  * @swagger

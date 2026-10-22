@@ -63,8 +63,10 @@ function opeaChatQnaUrl() {
 // request model as something it has to reject.
 function pickLanguage(context) {
   const language = context ? context.language : undefined;
-  if (typeof language === 'string' && language.trim()) {
-    return language.trim();
+  if (typeof language === 'string') {
+    // An empty string means "no language asked for", which is a normal
+    // request and not something to warn about.
+    return language.trim() || undefined;
   }
   if (language != null) {
     logger.warn('pickLanguage.ignored_non_string_language', {

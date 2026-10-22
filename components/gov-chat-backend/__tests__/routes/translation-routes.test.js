@@ -100,7 +100,7 @@ const { createValidToken } = require('../fixtures/tokens');
 
 const translationService = require('../../services/translation-service');
 const { keycloakAuthMiddleware } = require('../../middleware/keycloak-auth-middleware');
-const UnsupportedLanguageError = require('../../services/translation/unsupported-language-error');
+const { UnsupportedLanguageError } = require('../../services/translation/unsupported-language');
 
 const validToken = createValidToken();
 

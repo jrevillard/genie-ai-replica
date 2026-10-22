@@ -310,6 +310,18 @@ describe('TranslationService', () => {
       );
     });
 
+    it('should refuse an unsupported language even when there is nothing to translate', async () => {
+      // The languages are resolved before the empty-texts shortcut: an
+      // unsupported language is a bad request whether or not there was text to
+      // translate. Resolving after the shortcut would let a request with an
+      // unsupported language and no text through unnoticed.
+      translationService.initialized = true;
+      const backend = new CpuTranslateBackend();
+      backend.getLanguageCode.mockReturnValueOnce(null);
+      translationService.backend = backend;
+      await expect(translationService.translate([], 'invalid', 'fr')).rejects.toThrow('Unsupported source language');
+    });
+
     it('should translate texts via backend', async () => {
       translationService.initialized = true;
       translationService.backend = new CpuTranslateBackend();

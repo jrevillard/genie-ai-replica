@@ -19,6 +19,10 @@ const MAPS = {
  * and the post-stream path answers 400, while the same request in
  * non-streaming mode comes back translated. The user sees a different answer
  * depending on the transport.
+ *
+ * The names have to agree too: the same language reaches two translation
+ * prompts, and a prompt that calls one language "Swahili" and another
+ * "Kiswahili" is a prompt that was edited on one side only.
  */
 function findRepoFile(relativePath) {
   let dir = __dirname;
@@ -63,6 +67,26 @@ describe('the backend language maps and the chatqna language map agree', () => {
     for (const code of Object.keys(map.languageMap)) {
       expect(typeof map.languageNames[code]).toBe('string');
       expect(map.languageNames[code].length).toBeGreaterThan(0);
+    }
+  });
+
+  it('the gemma-3 map names every model code it hands to the prompt builder', () => {
+    // The prompt builder is given the MODEL code, not the canonical one, and
+    // it looks the name up by that code. The two coincide only while the map
+    // is an identity mapping: the day it stops being one, a name that is
+    // missing under the model code is a translation that throws for every
+    // request.
+    const map = MAPS['gemma-3'];
+    for (const modelCode of Object.values(map.languageMap)) {
+      expect(typeof map.languageNames[modelCode]).toBe('string');
+      expect(map.languageNames[modelCode].length).toBeGreaterThan(0);
+    }
+  });
+
+  it('both sides call every language the same thing', () => {
+    const map = MAPS['gemma-3'];
+    for (const code of chatqnaLanguages) {
+      expect(map.languageNames[code]).toBe(chatqnaCodes[code]);
     }
   });
 });

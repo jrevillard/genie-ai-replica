@@ -2962,9 +2962,6 @@ class TestExcessBlankCollapse:
         pre-collapse that re-introduce blanks on cache hit."""
         monkeypatch.setattr(chatqna_module, "LLM_SELF_CONFIDENCE_ENABLED", False)
         svc = create_chatqna_service()
-        # The map is what decides whether a language may be translated at
-        # all, so it must know the code the test uses.
-        svc.load_language_codes = MagicMock(return_value={"es": "Spanish"})
         captured = {}
 
         async def fake_translate(text, iso_code):
@@ -3296,9 +3293,6 @@ class TestSelfConfidenceSentinel:
         captured. Mocks only the translator — no megaservice harness needed."""
         monkeypatch.setattr(chatqna_module, "LLM_SELF_CONFIDENCE_ENABLED", True)
         svc = create_chatqna_service()
-        # The map is what decides whether a language may be translated at
-        # all, so it must know the code the test uses.
-        svc.load_language_codes = MagicMock(return_value={"es": "Spanish"})
         captured = {}
 
         async def fake_translate(text, iso_code):
@@ -3843,4 +3837,110 @@ async def test_a_refused_language_leaves_the_answer_in_english_and_still_normali
         await svc.handle_request(req)
 
     assert history_calls == [("en", "fr")]
+    assert scheduled["original_language"] == "EN"
+
+
+@pytest.mark.asyncio
+async def test_a_refused_language_with_an_undetectable_source_still_normalizes_the_history():
+    """The detected code does not have to be one the translation models cover.
+
+    The history is translated with the detected code as the source and
+    English as the target: the source names what the text is, and the
+    translation model is asked for a target it knows. Dropping the code
+    because the map does not list it would leave the history in its own
+    language, out of the English-only embedding space.
+    """
+    svc = create_chatqna_service()
+    svc.user_profile_client = MagicMock()
+    svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
+
+    history_calls = []
+    scheduled = {}
+
+    async def fake_history(history, target_language_code, source_lang_code="en"):
+        history_calls.append((target_language_code, source_lang_code))
+        return "USER: qu'est-ce que X ?"
+
+    svc._get_translated_history_string = fake_history
+
+    async def fake_schedule(initial_inputs=None, llm_parameters=None, genie_params=None, **_kwargs):
+        scheduled["original_language"] = genie_params.get("original_language")
+        raise RuntimeError("stop right after the language decision")
+
+    svc.megaservice.schedule = fake_schedule
+
+    req = create_mock_request(
+        data=create_mock_chat_request_data(
+            messages=[{"role": "user", "content": "qu'est-ce que X ?"}],
+        ),
+        headers={"Authorization": "Bearer dummy.jwt.token"},
+    )
+    with (
+        patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
+        patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
+        patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
+        # "ne" is a language langdetect can return that the translation
+        # models do not cover.
+        patch.object(chatqna_module, "detect", return_value="ne"),
+        _patched_chat_request(
+            stream=False,
+            context=MagicMock(language="zz-not-a-language"),
+            messages=[{"role": "user", "content": "qu'est-ce que X ?"}],
+        ),
+        contextlib.suppress(Exception),
+    ):
+        await svc.handle_request(req)
+
+    assert history_calls == [("en", "ne")]
+    assert scheduled["original_language"] == "EN"
+
+
+@pytest.mark.asyncio
+async def test_a_refused_language_with_a_failing_detection_leaves_the_history_alone():
+    """A detection that raises leaves the history untranslated, not the
+    request broken.
+
+    Without a detected code there is nothing to translate the history from,
+    so it is flattened as it is and the request carries on.
+    """
+    svc = create_chatqna_service()
+    svc.user_profile_client = MagicMock()
+    svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
+
+    history_calls = []
+    scheduled = {}
+
+    async def fake_history(history, target_language_code, source_lang_code="en"):
+        history_calls.append((target_language_code, source_lang_code))
+        return "USER: qu'est-ce que X ?"
+
+    svc._get_translated_history_string = fake_history
+
+    async def fake_schedule(initial_inputs=None, llm_parameters=None, genie_params=None, **_kwargs):
+        scheduled["original_language"] = genie_params.get("original_language")
+        raise RuntimeError("stop right after the language decision")
+
+    svc.megaservice.schedule = fake_schedule
+
+    req = create_mock_request(
+        data=create_mock_chat_request_data(
+            messages=[{"role": "user", "content": "qu'est-ce que X ?"}],
+        ),
+        headers={"Authorization": "Bearer dummy.jwt.token"},
+    )
+    with (
+        patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
+        patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
+        patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
+        patch.object(chatqna_module, "detect", side_effect=RuntimeError("detector is down")),
+        _patched_chat_request(
+            stream=False,
+            context=MagicMock(language="zz-not-a-language"),
+            messages=[{"role": "user", "content": "qu'est-ce que X ?"}],
+        ),
+        contextlib.suppress(Exception),
+    ):
+        await svc.handle_request(req)
+
+    assert history_calls == []
     assert scheduled["original_language"] == "EN"

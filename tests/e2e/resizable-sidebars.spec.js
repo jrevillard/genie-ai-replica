@@ -550,13 +550,12 @@ test.describe('Resizable sidebars behind one handle', () => {
   });
 
   // The decorative wave band's box must span the welcome panel's
-  // padding box exactly — no bleed past either edge — and the panel
-  // must clip what does bleed. The banner underneath, by contrast, is
-  // full-bleed by design (`width: calc(100% + 2*--space-lg)` plus two
-  // negative margins, in flow, so the panel clips the banner's
-  // overshoot with `overflow-x: hidden`).
+  // padding box exactly — no bleed past either edge. The banner
+  // underneath, by contrast, is full-bleed by design (`width: calc(100%
+  // + 2*--space-lg)` plus two negative margins, in flow, so the panel
+  // has to clip the banner's overshoot).
   //
-  // Two invariants, in two viewports:
+  // Three invariants, in three viewport bands:
   //
   //   A. At the file's 1920×900 default the waves' `::after` resolves
   //      to used `margin-left: 0`, used `margin-right: 0`, and used
@@ -569,27 +568,35 @@ test.describe('Resizable sidebars behind one handle', () => {
   //      (`@media (max-width: 1299px) { .quick-help-overlay { padding: 0 } }`),
   //      so the banner's bleed becomes real (its box reports past
   //      the overlay's content box on both sides by exactly the
-  //      --space-lg token). The panel's `overflow-x` must STILL be
-  //      hidden — that's the property doing the clipping work, and
-  //      it's the property that decides whether a horizontal scrollbar
-  //      is drawn. The clipper is read on the WELCOME OVERLAY itself,
-  //      not on `.chatbot-container` (a different element — the
-  //      overlay is the scroller that bounds the welcome panel).
+  //      --space-lg token). Measured here rather than trusted.
+  //
+  //   C. At 2400 and 3200 the height cap binds (the band would want
+  //      more than 320 px tall) while its width still tracks the panel,
+  //      and the panel draws no horizontal scrollbar with the banner
+  //      left in.
+  //
+  // What this file does NOT assert is the overlay's `overflow-x` — the
+  // property doing the clipping. That belongs to the welcome-panel
+  // describe in `responsive-layout.spec.js`, which asserts it at 8
+  // viewports in both themes with its preconditions hard. It used to be
+  // restated here at four widths in one theme; the two states are the
+  // same geometry (measured: panel clientWidth 1150 px at 1920, 1024 px
+  // at 1024, and the same in both specs at every width they share), and
+  // `overflow-x` is a declared property with no width- or state-dependent
+  // rule — `hidden` in all 13 states measured across 414..3200 px, both
+  // sidebar configurations and both themes. One owner, stated once.
   test('the waves span the panel and the panel clips what bleeds', async ({ page }) => {
-    // The Living Intelligence visual layer has to be on for the
-    // ::after to render at all (otherwise `getComputedStyle(...,
-    // '::after').width` is "auto" and parseFloat returns 0 — every
-    // assertion here would fail for an unrelated reason). Skip the
-    // block explicitly on routes that don't load the layer; the
-    // companion block in `tests/e2e/responsive-layout.spec.js`
-    // guards the same precondition, from the shared read.
+    // The Living Intelligence visual layer has to be on for the ::after to
+    // render at all (otherwise `getComputedStyle(..., '::after').width` is
+    // "auto" and parseFloat returns 0 — every assertion here would fail for
+    // an unrelated reason). Asserted rather than skipped: a `return` here
+    // leaves this test green having measured nothing, which is the failure
+    // mode the companion describe in `responsive-layout.spec.js` — the owner
+    // of the same precondition, over the shared read — used to share.
     const visualOn = await readVisualLayerState(page);
-    if (!visualOn.hasOverlay || !visualOn.visualOn || !visualOn.gliOn) {
-      // Either the welcome panel isn't on screen, or the Living
-      // Intelligence layer is off (no `::after`, no banner artwork,
-      // no clip — nothing to assert).
-      return;
-    }
+    expect(visualOn.hasOverlay, 'the welcome overlay should be present on /chat').toBe(true);
+    expect(visualOn.visualOn, 'data-visual="on" must be set for the wave band to render').toBe(true);
+    expect(visualOn.gliOn, '.genie-living-intelligence must be on <html> or an ancestor').toBe(true);
 
     // (A) — 1920×900 from `beforeEach`. The clamped-band regression
     // was invisible at this width (panel ≈ 1150 px, below the
@@ -604,11 +611,10 @@ test.describe('Resizable sidebars behind one handle', () => {
         afterMarginLeft: parseFloat(after.marginLeft) || 0,
         afterMarginRight: parseFloat(after.marginRight) || 0,
         afterWidth: parseFloat(after.width) || 0,
-        panelClientWidth: overlay.clientWidth,
-        overlayOverflowX: getComputedStyle(overlay).overflowX
+        panelClientWidth: overlay.clientWidth
       };
     });
-    if (a.none) return; // layer off; nothing to assert
+    expect(a.none, 'the welcome overlay should be readable at the file default viewport').toBe(false);
     // The wave band's box overshoots neither edge after the fix:
     expect(
       Math.abs(a.afterMarginLeft),
@@ -625,13 +631,6 @@ test.describe('Resizable sidebars behind one handle', () => {
       `the waves' used width (${a.afterWidth}px) must equal the panel's client width ` +
         `(${a.panelClientWidth}px) ±1 px — the band spans the panel exactly`
     ).toBeLessThanOrEqual(1);
-    // The panel clips what does bleed (the banner).
-    expect(
-      a.overlayOverflowX,
-      `the welcome overlay's overflow-x must be 'hidden' or 'clip' — that property ` +
-        `decides whether the panel draws a horizontal scrollbar; got '${a.overlayOverflowX}'`
-    ).toMatch(/^(hidden|clip)$/);
-
     // (B) — switch to 1024×800 (overlay padding stripped by the
     // @media (max-width: 1299px) rule). At this width the banner's
     // box really DOES extend past the overlay's content box by
@@ -654,7 +653,6 @@ test.describe('Resizable sidebars behind one handle', () => {
         none: false,
         overlayLeft: oRect.left,
         overlayRight: oRect.right,
-        overlayOverflowX: getComputedStyle(overlay).overflowX,
         overlayPadding: getComputedStyle(overlay).padding,
         bannerLeft: bRect.left,
         bannerRight: bRect.right
@@ -679,17 +677,11 @@ test.describe('Resizable sidebars behind one handle', () => {
       leftBleed,
       `same on the left side; measured left bleed = ${leftBleed}px`
     ).toBeLessThanOrEqual(-(spaceLg - 2));
-    // And the clipper is what keeps the bleed from becoming a
-    // scrollbar. The clipper is the WELCOME OVERLAY, not
-    // .chatbot-container — the prior version of this test read on
-    // .chatbot-container, which is a different element and not the
-    // one bounding the welcome panel's content.
-    expect(
-      b.overlayOverflowX,
-      `the welcome overlay's overflow-x must still be 'hidden' or 'clip' at 1024×800 ` +
-        `(this is the property that clips the banner's intentional bleed and decides ` +
-        `whether the panel draws a horizontal scrollbar); got '${b.overlayOverflowX}'`
-    ).toMatch(/^(hidden|clip)$/);
+    // And the clipper is what keeps the bleed from becoming a scrollbar —
+    // the WELCOME OVERLAY's `overflow-x`, owned by the welcome-panel
+    // describe in `responsive-layout.spec.js` (8 viewports x 2 themes,
+    // asserted with its preconditions hard rather than skipped). Not
+    // restated here.
 
     // (C) — wide viewports that exercise the height cap. With
     // `inset: auto 0 0; width: auto` and `max-height: 320px`, the
@@ -702,12 +694,14 @@ test.describe('Resizable sidebars behind one handle', () => {
     // visible — a band that tracks the panel reads at panel width
     // here, not at 1617.97 px.
     //
-    // The block collapses both sidebars via the same localStorage
-    // hints `beforeEach` sets (sidebarOpen=false / sidebarOpenRight
-    // absent so right sidebar follows the default-collapsed state);
-    // we only widen the viewport. The CSS doesn't gate the band's
-    // behaviour on viewport width — the cap binds at any width
-    // that resolves to a band-height > 320 px.
+    // The block widens the viewport on the state `beforeEach` already set —
+    // both sidebars open at their defaults. Note that `beforeEach` opened the
+    // LEFT panel (`sidebarOpen: 'true'`) and removed the RIGHT key, which
+    // leaves the right panel at its default too, not collapsed; measured at
+    // 2400 the panel is 2056 px (2400 - 24 chrome - 320 right), and at 3200
+    // it is 2856. The CSS doesn't gate the band's behaviour on viewport
+    // width — the cap binds at any width that resolves to a band-height
+    // above 320 px.
     for (const wide of [2400, 3200]) {
       await page.setViewportSize({ width: wide, height: 900 });
       await page.waitForTimeout(2500);
@@ -720,11 +714,10 @@ test.describe('Resizable sidebars behind one handle', () => {
           none: false,
           afterWidth: parseFloat(after.width) || 0,
           afterHeight: parseFloat(after.height) || 0,
-          panelClientWidth: overlay.clientWidth,
-          overlayOverflowX: getComputedStyle(overlay).overflowX
+          panelClientWidth: overlay.clientWidth
         };
       });
-      if (c.none) continue; // layer off at this width; nothing to assert
+      expect(c.none, `the welcome overlay should be readable at ${wide}px`).toBe(false);
       // The maximum band height any platform should hand the user:
       const maxBandHeight = 320;
       expect(
@@ -744,14 +737,10 @@ test.describe('Resizable sidebars behind one handle', () => {
           `must be ≤ ${maxBandHeight}px (the cap is supposed to bind — that is what ` +
           `makes the band stop growing vertically past wide panels).`
       ).toBeLessThanOrEqual(maxBandHeight + 0.5);
-      // And the panel still has to clip what does bleed.
-      expect(
-        c.overlayOverflowX,
-        `the welcome overlay's overflow-x at viewport ${wide} must still be 'hidden' ` +
-          `or 'clip'; got '${c.overlayOverflowX}'`
-      ).toMatch(/^(hidden|clip)$/);
-      // And no horizontal scrollbar: overlay.scrollWidth should not
-      // exceed clientWidth even at the very wide viewport.
+      // And no horizontal scrollbar: the banner is NOT hidden for this
+      // read, so it also proves the panel absorbs the banner's own bleed at
+      // a wide viewport — a state the wave-only read in
+      // `responsive-layout.spec.js` deliberately does not cover.
       const sw = await page.evaluate(() => {
         const overlay = document.querySelector('.quick-help-overlay');
         if (!overlay) return null;

@@ -211,10 +211,8 @@ const LAYER_STATE_BIND = `return (${visualLayerState.toString()});`;
 module.exports = {
   openWelcomeScreen,
   readVisualLayerState,
-  visualLayerState,
   capturePixels,
   lum,
-  contrastRatio,
   WCAG_BIND,
   LAYER_STATE_BIND
 };

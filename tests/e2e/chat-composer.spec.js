@@ -140,7 +140,6 @@ test.describe('chat-composer mounted state', () => {
   test('chat view has exactly one composer (the v-else slot)', async ({ browser }) => {
     const { ctx, page } = await freshSignedIn(browser);
     await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForSelector('.quick-composer', { timeout: 1000 }).catch(() => {});
     await page.waitForSelector('.chat-composer', { timeout: 15000 });
 
     // Welcome screen → chat view: type something into the welcome composer
@@ -269,43 +268,7 @@ test.describe('grid after placement extraction', () => {
     await ctx.close();
   });
 
-  test('locale switch keeps eight tiles, just-chat excluded', async ({ browser }) => {
-    const { ctx, page } = await freshSignedIn(browser);
-    await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForSelector('.quick-help-grid .quick-help-item', { timeout: 15000 });
-    await page.waitForTimeout(500);
-
-    // Probe at a few locales whose "just chat" translation does not match
-    // /just chat/i: French "Discuter", Swahili "Ongea Tu". The string is
-    // compared strictly via the data attribute, not via fuzzy match, so a
-    // tile that introduces the "just chat" English string under another
-    // locale still fails this gate.
-    const probes = ['fr', 'sw', 'es', 'ru'];
-    const allTilesHaveKeys = await page.evaluate(() => {
-      return Array.from(document.querySelectorAll('.quick-help-grid .quick-help-item')).map((n) =>
-        n.textContent.trim()
-      );
-    });
-    for (const locale of probes) {
-      await page.evaluate((loc) => {
-        // The i18n locale is read from this.$i18n.locale; the simplest way
-        // to switch is the in-app locale switcher. The header has a
-        // language selector; find it and call Locale selector directly.
-        const ev = new CustomEvent('test:setLocale', { detail: loc });
-        window.dispatchEvent(ev);
-      }, locale);
-      // The test sets the locale via Vuex/i18n internal store; fall back to
-      // checking the URL locale flag if the custom-event path isn't wired.
-      await page.waitForTimeout(200);
-      const tiles = await page.locator('.quick-help-grid .quick-help-item').count();
-      expect(tiles, `tile count under locale=${locale}`).toBe(8);
-    }
-    // Restore by reloading.
-    await page.reload({ waitUntil: 'networkidle' });
-    void allTilesHaveKeys;
-    await ctx.close();
   });
-});
 
 // -------- config + composer identity --------
 

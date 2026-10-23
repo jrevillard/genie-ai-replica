@@ -36,6 +36,14 @@ decision — a scanner or a single web page is not proof.
 | **`false_positive`** | Scanner misattribution / test-only data | `FALSE_POSITIVE` | Dismiss |
 | **`fixable`** | A fix exists in the distro repo or an upstream release we can pull | — | **Fix, do not dismiss** (base-image bump, `apt-get upgrade` layer, dependency bump) |
 
+The buckets above are the container-scanning reading. For a **SAST** finding whose
+code ships but whose dangerous path is gated (a vendored dependency compiled into a
+binary, behind a config flag the deployment flavors keep off), `NOT_APPLICABLE`
+would claim the code is unreachable — it is reachable in the dev flavors and in
+any build made without the flag. Use `MITIGATING_CONTROL` there, and say in the
+comment where the code ships, where it is reachable, and which control keeps it
+out of the deployment.
+
 ## Dismissal comment semantics
 
 > *"awaiting upstream"* is not an honest label — we are affected.
@@ -114,6 +122,20 @@ Never conflate the two.
 - No auto-resolve: since GitLab 17.0, findings no longer seen by the
   latest default-branch scan stay `detected` forever until manually
   transitioned.
+- SAST finding ids are not stable. An id is built from the rule id (with
+  its revision suffix), the analyzer's tracking signature and the
+  location; an analyzer version bump changes the tracking signature and
+  re-mints the id. A dismissed SAST finding therefore only stays
+  dismissed while the analyzer keeps emitting that exact id — the
+  durable state is "the analyzer no longer produces this finding at
+  all": fix the code, or exclude the path from scanning.
+- `SAST_EXCLUDED_PATHS` **overrides** GitLab's default excluded paths
+  (`spec`, `test`, `tests`, `tmp`). Each comma-separated element is a
+  gitignore-style pattern for the analyzer's own pre-filter and a
+  doublestar pattern for GitLab's post-filter. Ruby `File.fnmatch` —
+  under which a trailing `/**` does not match a file inside the
+  directory — is the *Secret Detection* dialect, so a SAST pattern must
+  not be copied into `SECRET_DETECTION_EXCLUDED_PATHS` as-is.
 
 ## Related
 

@@ -30,6 +30,48 @@ variables:
   # SAST_EXCLUDED_PATHS). Do NOT use SEARCH_IGNORED — it is not honored by
   # any official GitLab SAST template and will be silently dropped.
   # - mobile/**/windows/: Windows desktop CMake runner, not deployed to Docker Swarm prod
+  # - mobile/genie_ai_mobile/flutter_appauth/**: the vendored checkout of the
+  #   flutter_appauth plugin (a `path:` dependency in
+  #   mobile/genie_ai_mobile/pubspec.yaml, which resolves to the
+  #   flutter_appauth/flutter_appauth package inside it). The checkout is a melos
+  #   monorepo: the app compiles only that one package, and the rest of the
+  #   checkout (the platform-interface package, the upstream GitHub Actions
+  #   workflows) is upstream code we do not run. The glob covers the whole
+  #   checkout on purpose: narrowing it to the compiled package was tried and
+  #   measured, and the fork's upstream workflows then produced 9 kics findings
+  #   that nobody owns (docs/security/cve-triage-2026q3.md, wave-6).
+  #
+  #   Why the tree is excluded: it carries TLS-verification-disabling code —
+  #   Android InsecureConnectionBuilder, iOS InsecureURLProtocol — that no
+  #   analyzer should keep reporting on every run. Both are reachable only when
+  #   KeycloakConfig.allowInsecureConnections is true.
+  #
+  #   Provenance: the trust-all code is partly ours. Upstream ignores
+  #   allowInsecureConnections on iOS (MaikuB/flutter_appauth#386), so the fork
+  #   adds the NSURLProtocol interception, and GENIE.AI adds the
+  #   allowInsecureConnections gate in FlutterAppauthPlugin.java.
+  #
+  #   What makes the exclusion safe: the flag is off in the itu, staging and
+  #   per-institution flavor configs (the per-institution template leaves it at
+  #   its safe default) — asserted by
+  #   mobile/genie_ai_mobile/test/config/keycloak_config_test.dart, which the
+  #   test:flutter job also runs a second time with --dart-define=FLAVOR=itu
+  #   (the release recipe, exercised rather than asserted). The gates inside the
+  #   fork itself are asserted by
+  #   mobile/genie_ai_mobile/test/config/flutter_appauth_insecure_gate_test.dart:
+  #   once the tree is out of the scan nothing else checks them, and the fork is
+  #   rebased onto upstream from time to time.
+  #
+  #   Known gap, tracked in #1099: getConfig() reads the FLAVOR dart-define and
+  #   falls back to "dev" when the define is absent — so a build made without
+  #   it resolves devConfig, where the trust-all client IS enabled (every
+  #   endpoint points at localhost, so it cannot reach a real deployment). The
+  #   documented build commands now always set both selectors — see
+  #   mobile/genie_ai_mobile/README.md (§ Build Flavors),
+  #   mobile/genie_ai_mobile/CLAUDE.md (§ Build & Run) and
+  #   site/content/en/docs/mobile/mobile-deployment-guide.md (§ Build) — but
+  #   the fallback itself is still there, and #1099 tracks making it fail
+  #   loudly instead.
   # - genie-ai-overlay/contracts/: real-comps contract tests (test code, NOT shipped in image)
   # - **/scripts/**: dev/migration scripts NOT shipped in container. We list specific
   #   sub-patterns (rather than the broad **/scripts/) so the production entrypoint
@@ -39,6 +81,14 @@ variables:
   # - .claude/**: Claude Code agent skills, hooks, BMAD orchestration YAML. Not
   #   production code; YAML files use BMAD-specific syntax that semgrep can't
   #   parse, generating "Parsing errors" UI noise in the security dashboard.
+  #   NOTE: the BMAD skills under .claude/skills/ (bmad, bmad-*, …) are symlinks
+  #   into .agents/skills/*, so excluding .claude/** alone does NOT exclude the
+  #   real sources — .agents/** below is what actually keeps the agent tooling
+  #   out of the scan. (.claude/skills/test-audit is a real directory, not a
+  #   symlink, and is covered by .claude/** itself.)
+  # - .agents/**: source tree of the BMAD agent skills that .claude/skills/* points
+  #   at. Agent tooling for AI assistants: never copied into a container image,
+  #   never executed in production. Same rationale as _bmad/** below.
   # - _bmad/**: BMAD/WDS agent framework modules (build tooling for AI agents,
   #   never shipped or executed in production).
   # - _bmad-output/**: generated BMAD planning/implementation/spec artifacts.
@@ -48,6 +98,7 @@ variables:
   # stays unset) so secrets in any BMAD sample content still surface in the dashboard.
   SAST_EXCLUDED_PATHS: >-
     mobile/**/windows/**,
+    mobile/genie_ai_mobile/flutter_appauth/**,
     genie-ai-overlay/contracts/**,
     **/seed-*.js,
     **/scripts/seed-*.js,
@@ -58,6 +109,7 @@ variables:
     **/tests/**,
     **/coverage/**,
     .claude/**,
+    .agents/**,
     _bmad/**,
     _bmad-output/**,
     update_quickhelp.js
@@ -73,7 +125,17 @@ variables:
   # Secret Detection is intentionally NOT excluded (see SAST comment above).
   # NOTE: separator is comma, NOT semicolon — semicolon-separated values are
   # silently ignored by gemnasium v6 (verified on job 93734).
-  DS_EXCLUDED_PATHS: "_bmad/**,_bmad-output/**,.claude/**"
+  # .agents/** mirrors the SAST exclusion above. Measured on pipeline 14093
+  # (main, before this exclusion): the python analyzer reported exactly one
+  # dependency root ("Detected supported dependency files in
+  # 'genie-ai-overlay'"), never listed .agents among the directories it
+  # skipped, and produced a single SBOM (genie-ai-overlay/gl-sbom-pypi-uv.cdx.json)
+  # — the tree's only manifest (.agents/skills/bmad/scripts/setup.py) was not
+  # scanned. The exclusion is therefore insurance against a future skill
+  # dropping a manifest where the analyzer would pick it up as a dependency
+  # root and block the whole dependency-scanning job; it is not a fix for an
+  # observed failure.
+  DS_EXCLUDED_PATHS: "_bmad/**,_bmad-output/**,.claude/**,.agents/**"
 
 # Prevent duplicate branch+MR pipelines — first match wins
 workflow:
@@ -445,12 +507,19 @@ secret_detection:
   rules: *security_run_rules
 semgrep-sast:
   rules: *security_run_rules
-  # SAST_EXCLUDED_PATHS (set in global variables) hides:
+  # SAST_EXCLUDED_PATHS (set in global variables) is the single source of truth
+  # for the scan surface; the list below is a summary of it, not a second copy
+  # to maintain. It hides:
   #   mobile/**/windows/** — Windows desktop CMake runner, not deployed
+  #   mobile/genie_ai_mobile/flutter_appauth/** — vendored flutter_appauth
+  #     checkout (trust-all TLS builder, gated by a config flag)
   #   genie-ai-overlay/contracts/** — real-comps contract tests, not shipped
+  #   **/seed-*.js — seed scripts (data fixtures for a fresh database)
   #   **/scripts/{seed-*.js,migrations/**,new-schema-scripts/**} — dev scripts
+  #   update_quickhelp.js — generated help text
   #   **/__tests__/**, **/__mocks__/**, **/tests/**, **/coverage/** — test code
-  #   _bmad/** — BMAD/WDS agent framework modules, never shipped
+  #   .claude/**, .agents/**, _bmad/**, _bmad-output/** — agent tooling and
+  #     generated BMAD artifacts, never shipped
   # Production entrypoint components/document-repository/scripts/clamav-node.sh
   # is INTENTIONALLY left scanned (clamav-node.sh is the CMD of the prod image)
   # Re-enable other excluded paths only if they become shipping code
@@ -459,9 +528,19 @@ semgrep-sast:
 nodejs-scan-sast:
   rules:
     - when: never
-# spotbugs-sast is the Java analyzer — GENIE.AI has no Java, so it tries to
-# build a non-existent Gradle project and fails (advisory noise). semgrep-sast
-# covers our stack. Disable it.
+# spotbugs-sast is the Java analyzer. The repo does contain Java — the vendored
+# flutter_appauth fork under mobile/genie_ai_mobile/flutter_appauth/, whose
+# classes are compiled into every APK — but it is a `path:` dependency, not a
+# Gradle project of ours, so the analyzer tries to build a project that does
+# not exist and fails (advisory noise). Keeping it disabled also keeps the
+# fork out of the SAST report: the fork is on the SAST_EXCLUDED_PATHS list
+# (see the exclusion rationale above), so a SpotBugs run would report the
+# trust-all TLS builder that the exclusion deliberately removes.
+#
+# Consequence to keep in mind: the Java surface has semgrep-only coverage, and
+# the vendored fork has no static analysis at all — its gates are pinned by
+# mobile/genie_ai_mobile/test/config/flutter_appauth_insecure_gate_test.dart
+# instead. Re-enabling the analyzer is tracked in #1103.
 spotbugs-sast:
   rules:
     - when: never
@@ -2855,14 +2934,31 @@ test:flutter:
     - mkdir -p reports
     - flutter test --machine --coverage > reports/flutter-machine.json 2>&1
     - cat reports/flutter-machine.json | tojunit --output reports/flutter-report.xml
-    - perl -pi -e 's/&#x1[bB];\[[0-9;]*m//g; s/&#27;\[[0-9;]*m//g; s/\x1b\[[0-9;]*m//g; s/&#x1[bB];//g; s/&#27;//g; s/[\x00-\x08\x0b\x0c\x0e-\x1f]//g' reports/flutter-report.xml
+    # Release-build control: getConfig() resolves the flavor from the FLAVOR
+    # dart-define and falls back to "dev" when it is absent (#1099 tracks
+    # making that fallback fail loudly). The documented build commands now set
+    # the define, so running the config test with it proves the release recipe
+    # — itu selected, trust-all client off — instead of only asserting it in
+    # prose.
+    - flutter test --machine --dart-define=FLAVOR=itu test/config/keycloak_config_test.dart > reports/flutter-flavor-machine.json 2>&1
+    - cat reports/flutter-flavor-machine.json | tojunit --output reports/flutter-flavor-report.xml
+    # The flavor run re-runs test/config/keycloak_config_test.dart, so it
+    # produces the same suite name and the same testcase names as the full
+    # run above. tojunit (junitreport_maintained) has no --suite-name, so the
+    # suite and class names are marked here: without this the two reports
+    # collide in the merged JUnit view and it is impossible to tell which run
+    # a failure came from.
+    - perl -pi -e 's{(<testsuite\b[^>]*?\bname=")([^"]*)(")}{${1}[flavor=itu] ${2}${3}}; s{(<testcase\b[^>]*?\bclassname=")([^"]*)(")}{${1}[flavor=itu] ${2}${3}}' reports/flutter-flavor-report.xml
+    - perl -pi -e 's/&#x1[bB];\[[0-9;]*m//g; s/&#27;\[[0-9;]*m//g; s/\x1b\[[0-9;]*m//g; s/&#x1[bB];//g; s/&#27;//g; s/[\x00-\x08\x0b\x0c\x0e-\x1f]//g' reports/flutter-report.xml reports/flutter-flavor-report.xml
     - 'sed -i ''/lib\/i18n\//d'' coverage/lcov.info'
     - 'COV=$(awk ''/^LF:/{lf+=$2} /^LH:/{lh+=$2} END{if(lf>0) printf "%.1f",lh/lf*100}'' FS=: coverage/lcov.info) && echo "Lines: ${COV}%" || echo "No coverage data"'
     - python3 -m venv /tmp/lcov-cov && . /tmp/lcov-cov/bin/activate && pip install lcov-cobertura && lcov_cobertura coverage/lcov.info --output reports/coverage-cobertura.xml
   coverage: '/^Lines:\s+(\d+\.?\d*)%/'
   artifacts:
     reports:
-      junit: mobile/genie_ai_mobile/reports/flutter-report.xml
+      junit:
+        - mobile/genie_ai_mobile/reports/flutter-report.xml
+        - mobile/genie_ai_mobile/reports/flutter-flavor-report.xml
       coverage_report:
         coverage_format: cobertura
         path: mobile/genie_ai_mobile/reports/coverage-cobertura.xml

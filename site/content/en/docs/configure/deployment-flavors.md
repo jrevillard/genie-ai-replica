@@ -70,7 +70,7 @@ After deploying a flavor change:
 curl -s https://<domain>/config/genie-ai-config.json | jq -r '.appTitle'
 
 # Mobile: confirm the OIDC client id matches what Keycloak was configured for
-flutter run --flavor itu
+flutter run --flavor itu --dart-define=FLAVOR=itu
 # → check lib/config/flavors/itu.dart → KeycloakConfig.clientId
 
 # Keycloak: confirm the realm client id is the per-flavor value

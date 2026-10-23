@@ -462,6 +462,24 @@ flutter pub run build_runner build
 
 ## Building for Release
 
+### Build Flavors
+
+Every build must select a flavor, and **both** selectors are required:
+
+| Selector | Effect |
+|----------|--------|
+| `--flavor <name>` | Selects the build variant — application id, URL scheme, signing config. |
+| `--dart-define=FLAVOR=<name>` | Selects the deployment configuration compiled into the app — Keycloak realm, client id, endpoints, TLS policy. |
+
+Omitting `--dart-define=FLAVOR=` makes the app fall back to the `dev`
+configuration at runtime: every endpoint points at `localhost`, and the
+trust-all TLS client of the vendored `flutter_appauth` fork is armed. A build
+that reaches a real deployment must therefore always set the define — see
+[Mobile Deployment Guide](/docs/mobile/mobile-deployment-guide/) for the
+per-institution flavor setup.
+
+Available flavors: `dev`, `staging`, `e2e`, `itu` (plus one per institution).
+
 ### Android Release Build
 
 #### The Windows "File Lock" Issue
@@ -478,14 +496,15 @@ On Windows, file locking by Gradle, VS Code, or OneDrive can cause `OS Error 32`
 Use [build-release.ps1](build-release.ps1):
 
 ```powershell
-# Close VS Code first, then run:
-.\build-release.ps1
+# Close VS Code first, then run (the flavor is mandatory):
+.\build-release.ps1 itu
 ```
 
 The script:
 1. Kills zombie Java/Dart processes
 2. Cleans the project (`flutter clean`)
-3. Builds the release APK with `--no-tree-shake-icons`
+3. Builds the release APK with `--no-tree-shake-icons`, for the flavor passed
+   as argument (`.\build-release.ps1 itu`)
 
 #### Manual Build Steps
 
@@ -494,15 +513,19 @@ The script:
 flutter clean
 
 # 2. Build APK (for direct installation)
-flutter build apk --no-tree-shake-icons
+flutter build apk --flavor itu --release --no-tree-shake-icons --dart-define=FLAVOR=itu
 
 # 3. Build App Bundle (for Play Store)
-flutter build appbundle --no-tree-shake-icons
+flutter build appbundle --flavor itu --release --no-tree-shake-icons --dart-define=FLAVOR=itu
 ```
 
+Replace `itu` with the flavor you deploy — `staging`, or your own institution
+flavor. Never build a release from `dev` or `e2e`: both arm the trust-all TLS
+client, and `build-release.ps1` refuses them.
+
 **Output locations:**
-- APK: `build/app/outputs/flutter-apk/app-release.apk`
-- AAB: `build/app/outputs/bundle/release/app-release.aab`
+- APK: `build/app/outputs/flutter-apk/app-itu-release.apk`
+- AAB: `build/app/outputs/bundle/ituRelease/app-itu-release.aab`
 
 #### Installing on Device
 
@@ -510,7 +533,7 @@ flutter build appbundle --no-tree-shake-icons
 # Install the built APK
 flutter install
 # or
-adb install build/app/outputs/flutter-apk/app-release.apk
+adb install build/app/outputs/flutter-apk/app-itu-release.apk
 ```
 
 ### iOS Release Build
@@ -531,7 +554,7 @@ adb install build/app/outputs/flutter-apk/app-release.apk
 
 ```bash
 # 1. Build the iOS app
-flutter build ios --no-tree-shake-icons
+flutter build ios --flavor itu --release --no-tree-shake-icons --dart-define=FLAVOR=itu
 
 # 2. Open in Xcode
 open ios/Runner.xcworkspace
@@ -572,7 +595,7 @@ Update [android/app/build.gradle](android/app/build.gradle) to reference the key
 #### 2. Build App Bundle
 
 ```bash
-flutter build appbundle --no-tree-shake-icons
+flutter build appbundle --flavor itu --release --no-tree-shake-icons --dart-define=FLAVOR=itu
 ```
 
 #### 3. Upload to Play Console
@@ -580,7 +603,7 @@ flutter build appbundle --no-tree-shake-icons
 1. Go to [Google Play Console](https://play.google.com/console)
 2. Create a new app or select existing
 3. Navigate to **Release > Production** (or Internal Testing)
-4. Upload `build/app/outputs/bundle/release/app-release.aab`
+4. Upload `build/app/outputs/bundle/ituRelease/app-itu-release.aab`
 5. Complete the store listing and privacy policy
 6. Submit for review
 
@@ -601,7 +624,7 @@ Requires Apple Developer Program membership ($99/year).
 On macOS with Xcode:
 ```bash
 # Build using Flutter
-flutter build ios --no-tree-shake-icons
+flutter build ios --flavor itu --release --no-tree-shake-icons --dart-define=FLAVOR=itu
 
 # Open in Xcode
 open ios/Runner.xcworkspace
@@ -691,8 +714,8 @@ final String assetPath = kIsWeb
 
 **Solution:** Add `--no-tree-shake-icons` flag to build commands:
 ```bash
-flutter build apk --no-tree-shake-icons
-flutter build appbundle --no-tree-shake-icons
+flutter build apk --flavor itu --release --no-tree-shake-icons --dart-define=FLAVOR=itu
+flutter build appbundle --flavor itu --release --no-tree-shake-icons --dart-define=FLAVOR=itu
 ```
 
 ### Gradle Daemon Issues

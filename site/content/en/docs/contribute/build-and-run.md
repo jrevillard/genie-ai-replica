@@ -469,9 +469,13 @@ cd mobile/genie_ai_mobile
 flutter pub get
 
 # Run on a connected device / emulator
-flutter run --flavor dev           # dev flavour (localhost)
-flutter run --flavor itu           # prod flavour (real OIDC client id)
-flutter run --flavor staging       # staging flavour
+# --flavor picks the build variant (bundle id, redirect scheme, assets);
+# --dart-define=FLAVOR picks the Keycloak URL and client id the app reads
+# at startup. Both are needed: --flavor alone leaves the app on the dev
+# configuration.
+flutter run --flavor dev --dart-define=FLAVOR=dev           # dev flavour (localhost)
+flutter run --flavor itu --dart-define=FLAVOR=itu           # prod flavour (real OIDC client id)
+flutter run --flavor staging --dart-define=FLAVOR=staging   # staging flavour
 
 # Static analysis (Dart linting)
 flutter analyze                    # aliased as `npm run lint:dart` at repo root
@@ -486,7 +490,7 @@ PKCE flow to work on a real device:
 
 | Location | Where to set | What to set | Verify |
 |---|---|---|---|
-| `lib/config/flavors/<flavor>.dart` | Flutter source | `keycloakUrl`, `realm`, `clientId` (camelCase fields on `KeycloakConfig`) | `flutter run --flavor dev` shows the login screen |
+| `lib/config/flavors/<flavor>.dart` | Flutter source | `keycloakUrl`, `realm`, `clientId` (camelCase fields on `KeycloakConfig`) | `flutter run --flavor dev --dart-define=FLAVOR=dev` shows the login screen |
 | `mobile/genie_ai_mobile/android/app/build.gradle` | Android Gradle | `applicationId` + `manifestPlaceholders["appAuthRedirectScheme"]` | `adb shell pm dump <package> \| grep -i redirect` |
 | `mobile/genie_ai_mobile/ios/Runner/Info.plist` | Xcode | `CFBundleURLSchemes` (must match `KC_MOBILE_REDIRECT_SCHEME`) | Xcode target → Info → URL Types |
 | `configs/keycloak/genie-realm.yaml` | Keycloak | `redirectUris`, `webOrigins` (must include the bundle id) | `docker logs keycloak-config` after deploy |

@@ -25,7 +25,7 @@ The wire protocol and code paths are in [Mobile Architecture](/docs/mobile/mobil
 | Running GENIE.AI stack with a reachable Keycloak | OIDC discovery + token endpoints |
 | Mobile OIDC client created (`genie-mobile-<institution>`) | See [Mobile Deployment Guide §2](/docs/mobile/mobile-deployment-guide/#step-2-keycloak-client) |
 | Matching redirect scheme across the 5 layers | See [Mobile Deployment Guide §3](/docs/mobile/mobile-deployment-guide/#step-3-scheme-coherence-rule) |
-| App built with `--flavor <flavor>` | The flavor selects which Keycloak URL and client ID the app uses at startup |
+| App built with `--flavor <flavor> --dart-define=FLAVOR=<flavor>` | `--flavor` selects the build variant (bundle id, redirect scheme); `FLAVOR` selects which Keycloak URL and client ID the app reads at startup |
 
 ## 1. Login — what the user sees
 

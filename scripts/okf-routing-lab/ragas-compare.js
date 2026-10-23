@@ -7,6 +7,7 @@
 // anything: the suite and its runs are the operator's.
 //
 //   node scripts/okf-routing-lab/ragas-compare.js <repo_id> [suite_key]
+//   node scripts/okf-routing-lab/ragas-compare.js <repo_id> --attach <run_key> [suite_key]
 //
 // What it prints: per-metric means (before vs after), the failing-row
 // count, and the stage distribution of the failures — so the question
@@ -21,13 +22,16 @@ const fs = require('fs');
 const crypto = require('crypto');
 
 const REPO_ID = process.argv[2];
-const SUITE_OVERRIDE = process.argv[3];
-// Third form: `--attach <run_key>` polls an ALREADY-RUNNING run instead of
-// starting a new one — two concurrent runs share the model endpoint and both
-// slow down (the guide's own rule), so a poll that outlived its process must
-// re-attach, never re-start.
-const ATTACH = process.argv[3] === '--attach' ? process.argv[4] : null;
-const SUITE_FOR_ATTACH = process.argv[3] === '--attach' ? process.argv[5] : null;
+// Third form: `--attach <run_key> [suite_key]` polls an ALREADY-RUNNING run
+// instead of starting a new one — two concurrent runs share the model
+// endpoint and both slow down (the guide's own rule), so a poll that outlived
+// its process must re-attach, never re-start. In attach mode argv[3] is the
+// FLAG, so the two-arg suite override must not read it (it would resolve
+// suiteKey to the literal '--attach').
+const ATTACH_MODE = process.argv[3] === '--attach';
+const ATTACH = ATTACH_MODE ? process.argv[4] || null : null;
+const SUITE_FOR_ATTACH = ATTACH_MODE ? process.argv[5] || null : null;
+const SUITE_OVERRIDE = ATTACH_MODE ? null : process.argv[3] || null;
 const SMOKE_USER = 'okf-ragas-compare';
 const SMOKE_PW = crypto.randomBytes(18).toString('base64url') + '#aA1!';
 
@@ -62,6 +66,7 @@ function req(method, url, { token, form, json } = {}) {
         port: u.port || 443,
         path: u.pathname + u.search,
         rejectUnauthorized: false,
+        timeout: 30000,
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...(body
@@ -74,11 +79,18 @@ function req(method, url, { token, form, json } = {}) {
       },
       (res) => {
         const chunks = [];
+        // Without this, a reset mid-response-body emits an unhandled 'error'
+        // on the stream — an uncaughtException that kills the process before
+        // the finally block can revert ROPC.
+        res.on('error', reject);
         res.on('data', (c) => chunks.push(c));
         res.on('end', () => resolve({ status: res.statusCode, body: Buffer.concat(chunks) }));
       }
     );
     r.on('error', reject);
+    // No timeout means one silent socket wedges the poll past its deadline —
+    // the deadline is only checked between iterations.
+    r.on('timeout', () => r.destroy(new Error('no response within 30s')));
     if (body) r.write(body);
     r.end();
   });
@@ -109,11 +121,21 @@ async function mintUserToken() {
   USER_TOKEN = tok.access_token;
   return USER_TOKEN;
 }
+// Every API call goes through here: one re-mint on 401, then ANY non-2xx is
+// THROWN. A 404/500/error body must never reach the poll loops — their status
+// checks cannot tell an error body from a finished run (the 2026-10-23 silent
+// death was exactly a no-status body being read as "not running, not failed").
 async function call(method, url, opts = {}) {
+  const describe = (r) => `${method} ${url} -> HTTP ${r.status}: ${r.body.toString().slice(0, 160)}`;
   const first = await req(method, url, { ...opts, token: opts.token || USER_TOKEN });
-  if (first.status !== 401) return first;
-  await mintUserToken();
-  return req(method, url, { ...opts, token: USER_TOKEN });
+  if (first.status === 401) {
+    await mintUserToken();
+    const second = await req(method, url, { ...opts, token: USER_TOKEN });
+    if (second.status >= 400) throw new Error(describe(second));
+    return second;
+  }
+  if (first.status >= 400) throw new Error(describe(first));
+  return first;
 }
 
 let ADMIN_TOKEN = '';
@@ -136,11 +158,21 @@ async function ropcEnable() {
 }
 async function ropcRevert() {
   if (!ROPC_ON || !CLIENT_UUID || !ADMIN_TOKEN) return;
+  // Cleanup can outlive the master token minted at start (a 2-hour poll does)
+  // — re-mint first; on a soft mint failure the PUT below surfaces its status.
+  try {
+    await refreshAdminToken();
+  } catch {
+    // keep the previous master token
+  }
   const r = await req('PUT', `${AUTH_BASE}/admin/realms/${REALM}/clients/${CLIENT_UUID}`, {
     token: ADMIN_TOKEN,
     json: { directAccessGrantsEnabled: false }
   });
   ROPC_ON = false;
+  if (r.status < 200 || r.status >= 300) {
+    throw new Error(`ROPC revert HTTP ${r.status} — VERIFY MANUALLY: directAccessGrantsEnabled on ${CLIENT_ID}`);
+  }
 }
 async function refreshAdminToken() {
   const at = j(
@@ -183,6 +215,13 @@ function fidelityLine(runDoc) {
 async function main() {
   if (!REPO_ID) {
     console.error('usage: node ragas-compare.js <repo_id> [suite_key]');
+    console.error('       node ragas-compare.js <repo_id> --attach <run_key> [suite_key]');
+    process.exit(2);
+  }
+  if (ATTACH_MODE && !ATTACH) {
+    console.error(
+      '--attach needs the run_key to re-attach to (starting a new run instead would be the bug it exists to prevent)'
+    );
     process.exit(2);
   }
   console.log(`ragas-compare against repo ${REPO_ID}`);
@@ -207,30 +246,50 @@ async function main() {
   if (mk.status === 409) {
     // Leftover from an aborted round — adopt it (never PUT the user object:
     // that overwrites the credentials).
-    await req('PUT', `${AUTH_BASE}/admin/realms/${REALM}/users/${USER_ID}/reset-password`, {
+    const rp = await req('PUT', `${AUTH_BASE}/admin/realms/${REALM}/users/${USER_ID}/reset-password`, {
       token: ADMIN_TOKEN,
       json: { type: 'password', value: SMOKE_PW, temporary: false }
     });
+    if (rp.status >= 400) throw new Error(`adopted-user password reset HTTP ${rp.status} — re-mint would fail`);
   }
   const role = j(await req('GET', `${AUTH_BASE}/admin/realms/${REALM}/roles/tools-admin`, { token: ADMIN_TOKEN }));
-  await req('POST', `${AUTH_BASE}/admin/realms/${REALM}/users/${USER_ID}/role-mappings/realm`, {
+  if (!role.id) throw new Error(`tools-admin role lookup failed: ${JSON.stringify(role).slice(0, 160)}`);
+  const rm = await req('POST', `${AUTH_BASE}/admin/realms/${REALM}/users/${USER_ID}/role-mappings/realm`, {
     token: ADMIN_TOKEN,
     json: [role]
   });
+  if (rm.status >= 400) throw new Error(`role mapping HTTP ${rm.status} — API calls would 403`);
   await ropcEnable();
   await mintUserToken();
 
   // --- find the suite + the baseline run ---
-  const runsRes = j(await call('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/runs`));
+  // limit=100: the default projection is the 20 NEWEST runs repo-wide, so a
+  // done baseline older than that window silently disappears and the compare
+  // runs baseline-less.
+  const runsRes = j(await call('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/runs?limit=100`));
   const runs = (runsRes.runs || []).map((r) => ({ ...r, run_key: r.run_key || r._key }));
   console.log(`existing runs: ${runs.length}`);
   runs.forEach((r) => console.log(`  ${r.run_key}  suite=${r.suite_key}  status=${r.status}  ${r.created_at || ''}`));
-  const suiteKey = SUITE_FOR_ATTACH || SUITE_OVERRIDE || (runs[0] && runs[0].suite_key);
+  let attachRun = null;
+  if (ATTACH_MODE) {
+    attachRun = runs.find((r) => r.run_key === ATTACH) || null;
+    if (!attachRun)
+      throw new Error(`--attach: run ${ATTACH} is not among the ${runs.length} listed runs — wrong key, or purged`);
+    console.log(`  attach target: suite=${attachRun.suite_key} status=${attachRun.status}`);
+  }
+  // The attached run's OWN suite wins over runs[0] — the newest list row can
+  // belong to a different suite than the run being re-attached to.
+  const suiteKey =
+    SUITE_FOR_ATTACH || (attachRun && attachRun.suite_key) || SUITE_OVERRIDE || (runs[0] && runs[0].suite_key);
   if (!suiteKey) throw new Error('no suite with runs — pass the suite key as the second argument');
   // The list projection exposes the doc _key as the run's id — normalise it
   // BEFORE the baseline lookup, or the newest done run is missed and the
-  // comparison silently prints no baseline (caught live 2026-10-23).
-  const baselineKey = runs.find((r) => r.suite_key === suiteKey && r.status === 'done')?.run_key;
+  // comparison silently prints no baseline (caught live 2026-10-23). The
+  // attached run is excluded, or re-attaching to a finished run compares it
+  // against itself (+0.0000 everywhere).
+  const baselineKey = runs.find(
+    (r) => r.suite_key === suiteKey && r.status === 'done' && r.run_key !== ATTACH
+  )?.run_key;
   console.log(`suite=${suiteKey}  baseline run=${baselineKey || '(none)'}`);
 
   const suiteDoc = j(await call('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${suiteKey}`));
@@ -240,17 +299,24 @@ async function main() {
   let baselineRun = null;
   let baselineExplain = null;
   if (baselineKey) {
-    baselineRun = j(
-      await call('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${suiteKey}/runs/${baselineKey}`)
-    );
-    baselineExplain = j(
-      await call('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${suiteKey}/explain/${baselineKey}`)
-    );
+    const [runRes, explainRes] = await Promise.all([
+      call('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${suiteKey}/runs/${baselineKey}`),
+      // An older baseline may have no explain doc — degrade to '?', do not
+      // abort the whole comparison.
+      call('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${suiteKey}/explain/${baselineKey}`).catch(
+        (e) => {
+          console.log(`  (no baseline explain: ${e.message.slice(0, 120)})`);
+          return null;
+        }
+      )
+    ]);
+    baselineRun = j(runRes);
+    baselineExplain = explainRes ? j(explainRes) : null;
     console.log(`\n--- BASELINE (${baselineKey}) ---`);
     console.log(`  metrics: ${fmtMetrics(metricMeans(baselineRun))}`);
     console.log(`  fidelity: ${fidelityLine(baselineRun)}`);
     console.log(
-      `  failures: ${(baselineExplain.payload && baselineExplain.payload.failing_count) || '?'}  ` +
+      `  failures: ${(baselineExplain.payload && baselineExplain.payload.failing_count) ?? '?'}  ` +
         `stages: ${JSON.stringify(stageCounts(baselineExplain))}`
     );
   }
@@ -270,6 +336,7 @@ async function main() {
   }
   let runDoc = null;
   let lastProgress = null;
+  let pollErrors = 0;
   const runDeadline = Date.now() + 120 * 60 * 1000;
   for (;;) {
     if (Date.now() > runDeadline) {
@@ -277,19 +344,40 @@ async function main() {
       break;
     }
     await sleep(5000);
-    const doc = j(await call('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${suiteKey}/runs/${runKey}`));
+    let doc;
+    try {
+      doc = j(await call('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${suiteKey}/runs/${runKey}`));
+      pollErrors = 0;
+    } catch (e) {
+      // A blip must not kill a 2-hour poll — the run continues server-side.
+      pollErrors += 1;
+      console.log(`  poll error ${pollErrors}: ${e.message.slice(0, 120)}`);
+      if (pollErrors >= 12) {
+        console.log('  giving up: 12 consecutive poll errors');
+        break;
+      }
+      continue;
+    }
     if (doc.status === 'running') {
-      if (doc.progress && JSON.stringify(doc.progress) !== lastProgress) {
-        lastProgress = JSON.stringify(doc.progress);
-        console.log(`  progress: ${JSON.stringify(doc.progress).slice(0, 160)}`);
+      const p = doc.progress ? JSON.stringify(doc.progress) : null;
+      if (p && p !== lastProgress) {
+        lastProgress = p;
+        console.log(`  progress: ${p.slice(0, 160)}`);
       }
       continue;
     }
     if (doc.status === 'failed') {
       console.log('  run failed:', JSON.stringify(doc.error).slice(0, 300));
+      EXIT_CODE = 1;
       break;
     }
-    runDoc = doc;
+    if (doc.status === 'done') {
+      runDoc = doc;
+      break;
+    }
+    // 2xx but no recognizable status — not a finished run; say so instead of
+    // printing a fabricated AFTER report.
+    console.log(`  unexpected run doc (status=${JSON.stringify(doc.status)}): ${JSON.stringify(doc).slice(0, 200)}`);
     break;
   }
   if (!runDoc) {
@@ -298,25 +386,45 @@ async function main() {
   }
 
   // --- explain the new run ---
-  const ex = j(
+  try {
     await call('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${suiteKey}/explain`, {
       json: { run_key: runKey }
-    })
-  );
+    });
+  } catch (e) {
+    // EXPLAIN_IN_FLIGHT (409) or a lost race — the GET poll below decides.
+    console.log(`  explain start: ${e.message.slice(0, 160)}`);
+  }
   let explainDoc = null;
+  pollErrors = 0;
   const exDeadline = Date.now() + 15 * 60 * 1000;
   for (;;) {
     if (Date.now() > exDeadline) break;
     await sleep(4000);
-    const doc = j(
-      await call('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${suiteKey}/explain/${runKey}`)
-    );
+    let doc;
+    try {
+      doc = j(await call('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${suiteKey}/explain/${runKey}`));
+      pollErrors = 0;
+    } catch (e) {
+      pollErrors += 1;
+      console.log(`  explain poll error ${pollErrors}: ${e.message.slice(0, 120)}`);
+      if (pollErrors >= 12) {
+        console.log('  giving up: 12 consecutive explain poll errors');
+        break;
+      }
+      continue;
+    }
     if (doc.status === 'running') continue;
     if (doc.status === 'failed') {
       console.log('  explain failed:', JSON.stringify(doc.error).slice(0, 300));
       break;
     }
-    explainDoc = doc;
+    // A finished explain doc carries payload and NO status field — requiring
+    // a status here would reject the happy path.
+    if (doc.payload) {
+      explainDoc = doc;
+      break;
+    }
+    console.log(`  unexpected explain doc: ${JSON.stringify(doc).slice(0, 200)}`);
     break;
   }
 
@@ -324,7 +432,7 @@ async function main() {
   console.log(`  metrics: ${fmtMetrics(metricMeans(runDoc))}`);
   console.log(`  fidelity: ${fidelityLine(runDoc)}`);
   console.log(
-    `  failures: ${(explainDoc && explainDoc.payload && explainDoc.payload.failing_count) || '?'}  ` +
+    `  failures: ${(explainDoc && explainDoc.payload && explainDoc.payload.failing_count) ?? '?'}  ` +
       `stages: ${JSON.stringify(stageCounts(explainDoc))}`
   );
   if (explainDoc && explainDoc.payload && explainDoc.payload.advice) {
@@ -351,15 +459,35 @@ async function main() {
   }
 }
 
+let EXIT_CODE = 0;
+async function revertOnce() {
+  try {
+    await ropcRevert();
+  } catch (e) {
+    console.error('CLEANUP FAILED —', e.message);
+    EXIT_CODE = 1;
+  }
+}
+// Ctrl-C must still revert ROPC (SERVER-TESTING.md: non-negotiable) — a bare
+// SIGINT/SIGTERM kills the process without running finally blocks.
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, () => {
+    revertOnce().finally(() => process.exit(sig === 'SIGINT' ? 130 : 143));
+  });
+}
 (async () => {
   try {
     await main();
   } catch (e) {
     console.error('COMPARE ERROR:', e.message);
+    EXIT_CODE = 1;
   } finally {
-    await ropcRevert();
+    await revertOnce();
     // The throwaway user is left in place (it holds no data); deleting it is
     // a compensating write that can fail silently and strand it.
-    process.exit(0);
+    // Flush piped stdout before the hard exit — process.exit can truncate
+    // pending writes, and the comparison block is this run's payload.
+    await new Promise((resolve) => process.stdout.write('', resolve));
+    process.exit(EXIT_CODE);
   }
 })();

@@ -55,16 +55,17 @@ function req(method, url, { token, form, json, binary } = {}) {
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...(body
-            ? { 'Content-Type': json ? 'application/json' : 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) }
+            ? {
+                'Content-Type': json ? 'application/json' : 'application/x-www-form-urlencoded',
+                'Content-Length': Buffer.byteLength(body)
+              }
             : {})
         }
       },
       (res) => {
         const chunks = [];
         res.on('data', (c) => chunks.push(c));
-        res.on('end', () =>
-          resolve({ status: res.statusCode, body: Buffer.concat(chunks), headers: res.headers })
-        );
+        res.on('end', () => resolve({ status: res.statusCode, body: Buffer.concat(chunks), headers: res.headers }));
       }
     );
     r.on('error', reject);
@@ -97,7 +98,9 @@ function check(name, ok, detail = '') {
 }
 
 async function ropcEnable() {
-  const clients = j(await req('GET', `${AUTH_BASE}/admin/realms/${REALM}/clients?clientId=${CLIENT_ID}`, { token: ADMIN_TOKEN }));
+  const clients = j(
+    await req('GET', `${AUTH_BASE}/admin/realms/${REALM}/clients?clientId=${CLIENT_ID}`, { token: ADMIN_TOKEN })
+  );
   CLIENT_UUID = clients[0] && clients[0].id;
   if (!CLIENT_UUID) throw new Error('client not found');
   const r = await req('PUT', `${AUTH_BASE}/admin/realms/${REALM}/clients/${CLIENT_UUID}`, {
@@ -186,9 +189,7 @@ async function main() {
     check('throwaway user created', false, `HTTP ${mk.status}`);
   }
   if (!USER_ID) throw new Error('smoke user id unresolved');
-  const role = j(
-    await req('GET', `${AUTH_BASE}/admin/realms/${REALM}/roles/tools-admin`, { token: ADMIN_TOKEN })
-  );
+  const role = j(await req('GET', `${AUTH_BASE}/admin/realms/${REALM}/roles/tools-admin`, { token: ADMIN_TOKEN }));
   const ar = await req('POST', `${AUTH_BASE}/admin/realms/${REALM}/users/${USER_ID}/role-mappings/realm`, {
     token: ADMIN_TOKEN,
     json: [role]
@@ -196,7 +197,18 @@ async function main() {
   check('tools-admin granted', ar.status >= 200 && ar.status < 300, `HTTP ${ar.status}`); // repeat grant is a no-op
   await ropcEnable();
   check('ROPC enabled (will revert)', ROPC_ON);
-  const token = await userToken();
+  let token = await userToken();
+  // A full generation/run on a real corpus outlives the access token (live
+  // 2026-10-23: the El Salvador generation poll died at ~5 min with
+  // "Token has expired", the poll read the 401 body as no-status and fell
+  // out, then cleanup deleted a HEALTHY generating suite). Re-mint on 401 —
+  // the same fix ragas-compare carries.
+  const call = async (method, url, opts = {}) => {
+    const first = await req(method, url, { ...opts, token: opts.token || token });
+    if (first.status !== 401) return first;
+    token = await userToken();
+    return req(method, url, { ...opts, token });
+  };
 
   // --- 1. generate (202 + poll) ---
   console.log('generate: 2 questions, single repo…');
@@ -206,14 +218,18 @@ async function main() {
       json: { testset_size: 2, num_personas: 1 }
     })
   );
-  check('generate answers 202 + suite_key', gen.suite_key && gen.status === 'generating', JSON.stringify(gen).slice(0, 120));
+  check(
+    'generate answers 202 + suite_key',
+    gen.suite_key && gen.status === 'generating',
+    JSON.stringify(gen).slice(0, 120)
+  );
   SUITE_KEY = gen.suite_key;
   let suite = null;
   const genDeadline = Date.now() + 65 * 60 * 1000; // matches OKF_RAGAS_LONG_TIMEOUT_MS (60 min) + margin
   for (;;) {
     if (Date.now() > genDeadline) break;
     await sleep(4000);
-    const doc = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}`, { token }));
+    const doc = j(await call('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}`));
     if (doc.status === 'generating') continue;
     if (doc.status === 'failed') {
       console.log('  generation failed:', JSON.stringify(doc.error).slice(0, 300));
@@ -233,7 +249,7 @@ async function main() {
   // --- 2. run (202 + poll) ---
   console.log('run: retrieval + answer + judge…');
   const run = j(
-    await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}/run`, { token, json: {} })
+    await call('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}/run`, { json: {} })
   );
   check('run answers 202 + run_key', run.run_key && run.status === 'running', JSON.stringify(run).slice(0, 120));
   let runDoc = null;
@@ -243,7 +259,7 @@ async function main() {
     if (Date.now() > runDeadline) break;
     await sleep(3000);
     const doc = j(
-      await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}/runs/${run.run_key}`, { token })
+      await call('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}/runs/${run.run_key}`)
     );
     if (doc.status === 'running') {
       if (doc.progress && doc.progress !== lastProgress) {
@@ -262,7 +278,10 @@ async function main() {
   check('run completed', !!(runDoc && runDoc.status === 'done'));
   if (runDoc) {
     const r0 = runDoc.payload.results[0];
-    check('results carry contexts + answer + metrics', !!(r0 && Array.isArray(r0.contexts) && typeof r0.answer === 'string' && r0.metrics));
+    check(
+      'results carry contexts + answer + metrics',
+      !!(r0 && Array.isArray(r0.contexts) && typeof r0.answer === 'string' && r0.metrics)
+    );
     check(
       'default four metrics present',
       ['faithfulness', 'context_precision', 'context_recall', 'answer_relevancy'].every((m) => m in (r0.metrics || {}))
@@ -274,8 +293,7 @@ async function main() {
     // --- 3. explain (202 + poll) ---
     console.log('explain: attribution + advice…');
     const ex = j(
-      await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}/explain`, {
-        token,
+      await call('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}/explain`, {
         json: { run_key: run.run_key }
       })
     );
@@ -285,7 +303,7 @@ async function main() {
       if (Date.now() > exDeadline) break;
       await sleep(2500);
       const doc = j(
-        await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}/explain/${run.run_key}`, { token })
+        await call('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}/explain/${run.run_key}`)
       );
       if (doc.status === 'running') continue;
       if (doc.status === 'failed') {
@@ -305,16 +323,20 @@ async function main() {
 
     // --- 4. suite export (his format bytes) ---
     const exp = await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}/export`, { token });
-    check('suite export streams xlsx', exp.status === 200 && exp.body.length > 500 && exp.body.slice(0, 2).toString() === 'PK');
+    check(
+      'suite export streams xlsx',
+      exp.status === 200 && exp.body.length > 500 && exp.body.slice(0, 2).toString() === 'PK'
+    );
     fs.writeFileSync('smoke-8-6-suite.xlsx', exp.body);
-    console.log(`  exported ${exp.body.length} bytes -> smoke-8-6-suite.xlsx (feed to xlsx_to_gold.py for the compat check)`);
+    console.log(
+      `  exported ${exp.body.length} bytes -> smoke-8-6-suite.xlsx (feed to xlsx_to_gold.py for the compat check)`
+    );
 
     // --- 5. results export ---
-    const expr = await req(
-      'POST',
-      `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}/results-export`,
-      { token, json: { suite_key: SUITE_KEY, run_keys: [run.run_key] } }
-    );
+    const expr = await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}/results-export`, {
+      token,
+      json: { suite_key: SUITE_KEY, run_keys: [run.run_key] }
+    });
     check('results export streams xlsx', expr.status === 200 && expr.body.slice(0, 2).toString() === 'PK');
     fs.writeFileSync('smoke-8-6-results.xlsx', expr.body);
   }
@@ -338,7 +360,9 @@ async function main() {
       if (SUITE_KEY && ROPC_ON) {
         // the suite delete needs a user token, so it must run while ROPC is ON
         const t = await userToken();
-        const del = await req('DELETE', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}`, { token: t });
+        const del = await req('DELETE', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}`, {
+          token: t
+        });
         check('suite deleted (cleanup)', del.status === 200 || del.status === 404, `HTTP ${del.status}`);
       }
     } catch (e) {
@@ -356,7 +380,11 @@ async function main() {
         if (!USER_ID) USER_ID = await resolveUserId(); // resolve even if main() died before its own lookup
         if (USER_ID) {
           const du = await req('DELETE', `${AUTH_BASE}/admin/realms/${REALM}/users/${USER_ID}`, { token: ADMIN_TOKEN });
-          check('user deleted (cleanup)', (du.status >= 200 && du.status < 300) || du.status === 404, `HTTP ${du.status}`);
+          check(
+            'user deleted (cleanup)',
+            (du.status >= 200 && du.status < 300) || du.status === 404,
+            `HTTP ${du.status}`
+          );
         }
       }
     } catch (e) {

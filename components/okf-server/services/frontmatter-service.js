@@ -188,7 +188,12 @@ const RETRIABLE_UPSTREAM_CODES = new Set([
   'ETIMEDOUT',
   'ERR_STREAM_PREMATURE_CLOSE' // axios: upstream closed mid-response
 ]);
-const RETRIABLE_UPSTREAM_STATUS = new Set([502, 503, 504]);
+// 429 joined 2026-10-23: the shared endpoint's burst limiter answers 429
+// long before the plan's 5-hour/weekly quotas are anywhere near spent (live:
+// 4 of 100 benchmark rows died on a 429 that sailed straight through this
+// set). A rate limit is the definition of "wait and try again" — pausing is
+// the fix, failing is not.
+const RETRIABLE_UPSTREAM_STATUS = new Set([429, 502, 503, 504]);
 
 function isRetriableUpstreamError(err) {
   if (!err) return false;
@@ -203,16 +208,23 @@ function isRetriableUpstreamError(err) {
 }
 
 async function withUpstreamRetry(label, fn, ctx) {
+  // Binary exponential backoff (David, 2026-10-23): 1s, 2s, 4s, 8s — four
+  // attempts. The server's own Retry-After wins when it sends one (a rate
+  // limiter that says "come back in 3s" knows better than our ladder).
   const base = 1000;
   const max = 8000;
   let lastErr;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
     try {
       return await fn();
     } catch (err) {
       lastErr = err;
-      if (!isRetriableUpstreamError(err) || attempt === 2) break;
-      const delay = Math.min(max, base * Math.pow(2, attempt)) + Math.floor(Math.random() * 250);
+      if (!isRetriableUpstreamError(err) || attempt === 3) break;
+      const retryAfter = Number(err.response && err.response.headers && err.response.headers['retry-after']);
+      const delay =
+        (Number.isFinite(retryAfter) && retryAfter > 0
+          ? retryAfter * 1000
+          : Math.min(max, base * Math.pow(2, attempt))) + Math.floor(Math.random() * 250);
       logger.warn(`frontmatter.${label}.retry`, {
         ...ctx,
         attempt: attempt + 1,

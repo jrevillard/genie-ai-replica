@@ -591,3 +591,33 @@ describe('1-8g-m — suggestTags integration', () => {
     expect(call).toBeTruthy();
   });
 });
+
+describe('withUpstreamRetry — 429 is retriable (2026-10-23)', () => {
+  // Live 2026-10-23: 4 of 100 benchmark rows died on a gateway burst-limit
+  // 429 that sailed straight through RETRIABLE_UPSTREAM_STATUS. A rate limit
+  // is the definition of wait-and-retry — assert the guard now treats it so.
+  it('teiEmbed retries a 429 and succeeds on the next attempt', async () => {
+    axios.post
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Request failed with status code 429'), {
+          code: 'ERR_BAD_REQUEST',
+          response: { status: 429, headers: {}, data: {} }
+        })
+      )
+      .mockResolvedValue({ data: { data: [[0.1, 0.2, 0.3]] } });
+    const vectors = await svc.teiEmbed(['probe query']);
+    expect(vectors).toEqual([[0.1, 0.2, 0.3]]);
+    expect(axios.post).toHaveBeenCalledTimes(2);
+  });
+
+  it('teiEmbed honors a persistent 429 by exhausting and throwing (honest failure)', async () => {
+    const err429 = Object.assign(new Error('Request failed with status code 429'), {
+      code: 'ERR_BAD_REQUEST',
+      response: { status: 429, headers: {}, data: {} }
+    });
+    axios.post.mockRejectedValue(err429);
+    await expect(svc.teiEmbed(['probe query'])).rejects.toBeTruthy();
+    // 4 attempts (the binary exponential ladder), then honest failure.
+    expect(axios.post.mock.calls.filter((c) => String(c[0]).includes('/embed'))).toHaveLength(4);
+  }, 20000); // the real 1s+2s+4s backoff sleeps exceed the 5s default
+});

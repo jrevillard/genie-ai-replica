@@ -151,8 +151,14 @@ async function main() {
       `\n=== ${id} === contexts=${(r.contexts || []).length} candidate_keys=${(r.candidate_keys || []).length} ` +
         `context_keys=${(r.context_keys || []).length} abstained=${r.abstained} ragas_nan=${r.ragas_nan}`
     );
+    if (r.metrics) {
+      console.log(`  metrics: ${JSON.stringify(r.metrics)}`);
+    }
     if (r.error) console.log(`  error: ${JSON.stringify(r.error).slice(0, 300)}`);
-    if (r.answer) console.log(`  answer: ${String(r.answer).slice(0, 120)}`);
+    if (r.answer) console.log(`  answer: ${String(r.answer).slice(0, 200)}`);
+    (r.contexts || []).forEach((c, i) => {
+      console.log(`  ctx[${i}]: ${String(c).slice(0, 90).replace(/\s+/g, ' ')}`);
+    });
   }
 }
 

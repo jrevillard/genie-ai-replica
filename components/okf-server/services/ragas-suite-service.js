@@ -430,9 +430,15 @@ async function pollSidecarJobOwned(jobId, meta, { onProgress } = {}) {
 
 // ---------- retrieval leg (Lab-internal replay) ---------------------------
 
-const RERANK_RETRY_ATTEMPTS = 3;
+// Four attempts with binary exponential backoff (0.5s..8s + jitter) —
+// enough to outlive a gateway burst limiter without stalling a run.
+const RERANK_RETRY_ATTEMPTS = 4;
 const RERANK_RETRY_STATUSES = new Set([429, 502, 503, 504]);
-const RERANK_TIMEOUT_MS = 15000;
+// 30s, matching teiEmbed's budget: a full batch is 32 texts of up to 2,000
+// chars through a cross-encoder on a GPU that also serves chat. The old 15s
+// aborted healthy-but-busy batches (live 2026-10-23, 2 of 100 rows) — and an
+// abort used to be non-retryable on top.
+const RERANK_TIMEOUT_MS = 30000;
 // TEI rerankers cap batches (live 2026-10-18: "batch size 48 > maximum
 // allowed batch size 32" — 24 candidates x 2 graphs 422'd EVERY probe and
 // run row, surfacing as "unknown" answers). Client-side batching like
@@ -510,6 +516,14 @@ async function rerankTexts(query, texts) {
         if (!Array.isArray(decoded)) throw new Error('unexpected rerank response shape');
         break;
       } catch (e) {
+        // Our own RERANK_TIMEOUT_MS abort (Node fetch rejects with a
+        // DOMException, name AbortError / code 20) is transient by
+        // definition — the endpoint was busy, not wrong. Live 2026-10-23:
+        // 2 of 100 rows died on exactly this at a 6x-bigger pool because an
+        // abort carried no retryable marker and sailed straight through.
+        if (e && (e.name === 'AbortError' || e.code === 20 || e.code === 'ABORT_ERR')) {
+          e.retryable = true;
+        }
         if (e.retryable === true && attempt < RERANK_RETRY_ATTEMPTS) {
           await sleepMs(retryDelayMs(e, attempt));
           continue;
@@ -562,7 +576,12 @@ async function rerankTexts(query, texts) {
 }
 
 function retryDelayMs(e, attempt) {
-  return e.retryAfterMs || 500 * attempt + Math.floor(Math.random() * 250);
+  // Binary exponential backoff (David, 2026-10-23): 0.5s, 1s, 2s, ... capped
+  // at 8s, jittered so parallel batches do not synchronise into a stampede.
+  // The server's own Retry-After wins when it sends one — a rate limiter
+  // that says "come back in 3s" knows better than our ladder.
+  if (e.retryAfterMs) return e.retryAfterMs;
+  return Math.min(8000, 500 * Math.pow(2, attempt - 1)) + Math.floor(Math.random() * 250);
 }
 
 /**
@@ -1511,6 +1530,64 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     }
     await Promise.all(Array.from({ length: Math.min(RUN_CONCURRENCY, entries.length) }, worker));
 
+    // COMPLETENESS SWEEP (David, 2026-10-23: "we must have complete
+    // benchmarks"). A row whose retrieval or answer call died on a transient
+    // infra error (429, timeout) makes the whole run INVALID — the panel
+    // banners it and the means are over a subset. Before declaring the run
+    // done, retry every errored row ONCE, sequentially: the burst that
+    // killed it (2 questions x N calls racing the gateway limiter) is over
+    // by now, and a sequential single-flight retry is the politest possible
+    // shape. A row that fails again keeps its error and still counts against
+    // validity — honesty is not traded away for completeness.
+    const erroredIdx = results.reduce((acc, r, i) => (r && r.error ? [...acc, i] : acc), []);
+    if (erroredIdx.length && !abortErr && !userCancelledRun.has(opts.runKey)) {
+      logger.info('ragas-suite.run_completeness_sweep', {
+        repo_id: repoId,
+        suite_key: suiteKey,
+        run_key: opts.runKey,
+        retrying: erroredIdx.length
+      });
+      for (const i of erroredIdx) {
+        const e = entries[i];
+        try {
+          const embeddings = await frontmatterService.teiEmbed([e.query]);
+          const emb = Array.isArray(embeddings) && embeddings[0];
+          if (!emb) throw new Error('query embedding failed');
+          const retrieved = await retrieveContexts(db, graphNames, e.query, emb);
+          const gen = await generateAnswer(e.query, retrieved.contexts);
+          results[i] = {
+            id: e.id,
+            query: e.query,
+            contexts: retrieved.contexts,
+            context_keys: retrieved.context_keys,
+            candidate_keys: retrieved.candidate_keys,
+            candidates: retrieved.candidates,
+            answer: gen.answer,
+            abstained: gen.abstained,
+            abstention_reason: gen.abstained ? 'answer contract' : '',
+            error: null
+          };
+          logger.info('ragas-suite.run_sweep_recovered', {
+            repo_id: repoId,
+            run_key: opts.runKey,
+            row_id: e.id
+          });
+        } catch (err) {
+          // Keep the ORIGINAL error (it is the forensically honest one — the
+          // sweep's failure would just repeat it); note the sweep happened.
+          results[i].error.sweep_retried = true;
+          logger.warn('ragas-suite.run_sweep_failed_again', {
+            repo_id: repoId,
+            run_key: opts.runKey,
+            row_id: e.id,
+            message: String(err && err.message).slice(0, 200)
+          });
+        }
+        doneCount += 1;
+        await report(opts, { phase: 'retrieval', done: doneCount, total });
+      }
+    }
+
     // Fill any gaps left by an abort, then FAIL LOUD: a run whose answers
     // failed is never a scored "done" run — zeros are not results. Judge
     // only the rows that produced an answer; if none did (or a terminal
@@ -2027,6 +2104,16 @@ function attributeFailures(suite, runDoc, evidence) {
       stage = 'judge';
       recommendation =
         'judge failure, not pipeline failure — verify RAGAS_JUDGE_* (reasoning-token budget, non-JSON judge, missing embed model)';
+    } else if (r.error) {
+      // The row's retrieval leg itself THREW (live 2026-10-23: 4x HTTP 429
+      // rate-limit and 2x aborted calls on the shared endpoint — contexts and
+      // candidate_keys both empty). This is NOT routing: the repo was
+      // published and drained, and "check the repo is published" sent the
+      // operator somewhere wrong. The honest stage names the infrastructure,
+      // and these rows are exactly the ones that make a run INVALID (the
+      // banner counts them), so the recommendation says re-run.
+      stage = 'retrieval-error';
+      recommendation = `the retrieval call failed before anything was retrieved (${(r.error && (r.error.message || r.error.code)) || 'unknown error'}) — this row has no answer and no score; re-run the benchmark (quieter endpoint or lower run concurrency), it is not a retrieval or content defect`;
     } else if (!r.contexts || !r.contexts.length) {
       stage = 'routing';
       recommendation = 'nothing was retrieved — check the repo is published and its graph drained';

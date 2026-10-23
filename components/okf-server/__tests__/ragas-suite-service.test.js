@@ -865,7 +865,10 @@ describe('run', () => {
     expect(global.fetch.mock.calls.some((c) => String(c[0]).includes('/evaluate'))).toBe(false);
   });
 
-  it('a TRANSIENT answer error (503) does not abort the run — the row fails, the rest continue', async () => {
+  it('a TRANSIENT answer error (503) is recovered by the completeness sweep — the run stays whole', async () => {
+    // 2026-10-23 (David: "we must have complete benchmarks"): a row killed by
+    // one transient blip used to stay dead, invalidating the run. The sweep
+    // retries errored rows sequentially once the concurrent phase ends.
     const sk = await makeSuite();
     frontmatterService.vllmChatCompletions
       .mockRejectedValueOnce(
@@ -878,11 +881,39 @@ describe('run', () => {
     const begun = await svc.beginRunSuite('me', sk, {}, {});
     await begun.done;
     const doc = await svc.getRunSuite('me', sk, begun.run_key);
-    expect(doc.status).toBe('done'); // one row degraded, the run measured something
+    expect(doc.status).toBe('done');
+    expect(doc.payload.results.filter((r) => r.error)).toHaveLength(0); // recovered
+    expect(doc.payload.results.every((r) => typeof r.answer === 'string' && r.answer)).toBe(true);
+    expect(doc.payload.summary.n_errors).toBe(0);
+  });
+
+  it('a PERSISTENT answer failure still lands as an honest error row after the sweep', async () => {
+    // Completeness never trades away honesty: the sweep retries once, the row
+    // fails again, and the error (marked sweep_retried) still invalidates.
+    // Keyed to row 0's query (its first two answer calls fail) so the outcome
+    // is deterministic under RUN_CONCURRENCY=2.
+    const sk = await makeSuite();
+    const answerCalls = {};
+    frontmatterService.vllmChatCompletions.mockImplementation(async (messages) => {
+      const key = JSON.stringify(messages);
+      answerCalls[key] = (answerCalls[key] || 0) + 1;
+      if (key.includes(GEN_SAMPLES[0].user_input) && answerCalls[key] <= 2) {
+        throw Object.assign(new Error('upstream unavailable'), {
+          code: 'ERR_BAD_RESPONSE',
+          response: { status: 503, data: {} }
+        });
+      }
+      return llmResponse({ answer: 'A grounded answer.', abstained: false });
+    });
+    const begun = await svc.beginRunSuite('me', sk, {}, {});
+    await begun.done;
+    const doc = await svc.getRunSuite('me', sk, begun.run_key);
+    expect(doc.status).toBe('done'); // the other row measured; this row is an honest error
     const errored = doc.payload.results.filter((r) => r.error);
     expect(errored).toHaveLength(1);
     expect(errored[0].error.status).toBe(503);
-    expect(doc.payload.results.some((r) => !r.error)).toBe(true);
+    expect(errored[0].error.sweep_retried).toBe(true);
+    expect(doc.payload.summary.n_errors).toBe(1);
   });
 
   // Review F1 (2026-10-21): cancel during the answer phase used to be a
@@ -973,14 +1004,37 @@ describe('run', () => {
     await first.done;
   });
 
-  it('an entry failure becomes an honest error row, not a dead run', async () => {
+  it('a transient entry failure is recovered by the sweep; a persistent one stays an honest error', async () => {
+    // Transient: teiEmbed blips ONCE — the initial attempt for row 0. The
+    // sweep's retry succeeds, the row measures, the run is whole.
     const sk = await makeSuite();
     frontmatterService.teiEmbed.mockRejectedValueOnce(new Error('TEI down'));
     const begun = await svc.beginRunSuite('me', sk, {}, {});
     await begun.done;
-    const doc = await svc.getRunSuite('me', sk, begun.run_key);
+    let doc = await svc.getRunSuite('me', sk, begun.run_key);
+    expect(doc.status).toBe('done');
+    expect(doc.payload.results[0].error).toBeNull(); // recovered by the sweep
+    expect(doc.payload.results[1].error).toBeNull();
+    expect(doc.payload.summary.n_errors).toBe(0);
+
+    // Persistent: the sweep's retry fails too — the row keeps its ORIGINAL
+    // error, marked sweep_retried, and still counts against validity. The
+    // rejection is keyed to row 0's QUERY (its first two embed attempts fail,
+    // however the two workers interleave), so the outcome is deterministic
+    // under RUN_CONCURRENCY=2.
+    const sk2 = await makeSuite();
+    const embedCalls = {};
+    frontmatterService.teiEmbed.mockImplementation(async ([q]) => {
+      embedCalls[q] = (embedCalls[q] || 0) + 1;
+      if (q === GEN_SAMPLES[0].user_input && embedCalls[q] <= 2) throw new Error('TEI down');
+      return [[0.1, 0.2, 0.3]];
+    });
+    const begun2 = await svc.beginRunSuite('me', sk2, {}, {});
+    await begun2.done;
+    doc = await svc.getRunSuite('me', sk2, begun2.run_key);
     expect(doc.status).toBe('done');
     expect(doc.payload.results[0].error).toBeTruthy();
+    expect(doc.payload.results[0].error.sweep_retried).toBe(true);
     expect(doc.payload.results[1].error).toBeNull();
     expect(doc.payload.summary.n_errors).toBe(1);
   });
@@ -1544,5 +1598,84 @@ describe('rerank batch concurrency', () => {
     expect(seen.maxInFlight).toBeGreaterThanOrEqual(2); // workers overlapped
     expect(seen.maxInFlight).toBeLessThanOrEqual(4); // RUN_CONCURRENCY x cap
     expect(doc.payload.results[0].context_keys[0]).toBe('k65'); // batch 2's winner survived the queueing
+  });
+});
+
+describe('transient infra guards (2026-10-23 live incident)', () => {
+  it('a rerank timeout abort is retried, not fatal', async () => {
+    // Live: 2 of 100 rows died on our own RERANK_TIMEOUT_MS abort — a Node
+    // fetch DOMException (name AbortError, code 20) carried no retryable
+    // marker and sailed straight through the ladder.
+    const sk = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
+    await sk.done;
+    let rerankCalls = 0;
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url) => {
+      if (String(url).includes('/rerank')) {
+        rerankCalls += 1;
+        if (rerankCalls === 1) {
+          const e = new Error('This operation was aborted');
+          e.name = 'AbortError';
+          e.code = 20;
+          return Promise.reject(e);
+        }
+        return Promise.resolve(
+          okJson([
+            { index: 0, score: 0.9 },
+            { index: 1, score: 0.4 }
+          ])
+        );
+      }
+      return baseFetch(url);
+    });
+    const run = await svc.beginRunSuite('me', sk.suite_key, {}, { actor: { user_id: 'u1' } });
+    await run.done;
+    const doc = await svc.getRunSuite('me', sk.suite_key, run.run_key);
+    expect(doc.status).toBe('done');
+    expect(doc.payload.results[0].contexts.length).toBeGreaterThan(0); // the retry delivered
+    expect(rerankCalls).toBeGreaterThanOrEqual(2);
+  });
+
+  it('a row that errored attributes to retrieval-error, not routing', async () => {
+    // Live: 6 rows with a 429/timeout got labeled "routing — check the repo
+    // is published" while the evidence showed the passage at rank #1. The
+    // label must name the infrastructure and say re-run. The judge scores an
+    // empty-context row 0 — which is what puts it below threshold.
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url) => {
+      if (String(url).includes('/jobs/j-eval'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-eval',
+            kind: 'evaluate',
+            status: 'done',
+            result: {
+              aggregate: {},
+              per_query: [
+                { faithfulness: 0, context_precision: 0, context_recall: 0, answer_relevancy: 0 },
+                { faithfulness: 1, context_precision: 0.9, context_recall: 0.9, answer_relevancy: 0.9 }
+              ],
+              model: 'm',
+              n: 2
+            }
+          })
+        );
+      return baseFetch(url);
+    });
+    const sk = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
+    await sk.done;
+    frontmatterService.teiEmbed.mockImplementation(async ([q]) => {
+      if (q === GEN_SAMPLES[0].user_input) throw new Error('Request failed with status code 429');
+      return [[0.1, 0.2, 0.3]];
+    });
+    const run = await svc.beginRunSuite('me', sk.suite_key, {}, { actor: { user_id: 'u1' } });
+    await run.done;
+    const explained = await svc.beginExplainFailures('me', sk.suite_key, { run_key: run.run_key }, {});
+    await explained.done;
+    const doc = await svc.getExplainFailures('me', sk.suite_key, run.run_key);
+    const row = doc.payload.attributions.find((a) => a.query === GEN_SAMPLES[0].user_input);
+    expect(row).toBeTruthy();
+    expect(row.stage).toBe('retrieval-error');
+    expect(row.recommendation).toMatch(/re-run/i);
   });
 });

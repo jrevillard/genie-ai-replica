@@ -1295,6 +1295,10 @@ export default {
      */
     stageVariant(stage) {
       if (stage === 'corpus') return 'danger';
+      // The run's own retrieval call failed (rate limit, timeout) — the row
+      // has no answer and makes the run invalid. Red, like a corpus gap: it
+      // demands action (re-run), not tuning.
+      if (stage === 'retrieval-error') return 'danger';
       if (stage === 'judge' || stage === 'pipeline') return 'neutral';
       return 'warning';
     },

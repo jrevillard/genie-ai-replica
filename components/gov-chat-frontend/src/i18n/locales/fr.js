@@ -3431,7 +3431,9 @@ export default {
         none: 'Aucune ligne en échec à attribuer.',
         stage: 'Étape',
         fails: 'Métriques en échec',
-        recommendation: 'Recommandation'
+        recommendation: 'Recommandation',
+        unfair: 'question injuste',
+        unfairTitle: "Le passage attendu n'est pas dans le corpus — cette ligne évalue le benchmark, pas l'assistant"
       },
       history: {
         title: 'Historique des exécutions',

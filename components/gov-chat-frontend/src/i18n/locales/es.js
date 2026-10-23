@@ -3430,7 +3430,9 @@ export default {
         none: 'No hay filas fallidas que atribuir.',
         stage: 'Etapa',
         fails: 'Métricas fallidas',
-        recommendation: 'Recomendación'
+        recommendation: 'Recomendación',
+        unfair: 'pregunta injusta',
+        unfairTitle: 'El pasaje esperado no está en el corpus: esta fila evalúa el benchmark, no al asistente'
       },
       history: {
         title: 'Historial de ejecuciones',

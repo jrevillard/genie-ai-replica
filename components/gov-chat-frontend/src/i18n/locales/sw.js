@@ -3406,7 +3406,9 @@ export default {
         none: 'Hakuna safu zilizoshindwa za kuelezwa.',
         stage: 'Hatua',
         fails: 'Vipimo vilivyoshindwa',
-        recommendation: 'Pendekezo'
+        recommendation: 'Pendekezo',
+        unfair: 'swali lisilo',
+        unfairTitle: 'Kifungu kilichotajikwa hakiki hakipo kwenye korpus — mstari huu unapima benchmark, si msaidizi'
       },
       history: {
         title: 'Historia ya utekelezaji',

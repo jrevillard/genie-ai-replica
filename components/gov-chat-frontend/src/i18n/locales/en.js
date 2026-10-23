@@ -2064,7 +2064,12 @@ export default {
         none: 'No failing rows to attribute.',
         stage: 'Stage',
         fails: 'Failing metrics',
-        recommendation: 'Recommendation'
+        recommendation: 'Recommendation',
+        // A row whose expected passage is not in the indexed corpus cannot
+        // be answered by the system it measures — it is a benchmark
+        // defect, not a pipeline defect.
+        unfair: 'unfair question',
+        unfairTitle: 'The expected passage is not in the corpus — this row measures the benchmark, not the assistant'
       },
       history: {
         title: 'Run history',

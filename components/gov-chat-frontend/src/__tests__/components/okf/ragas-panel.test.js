@@ -105,7 +105,12 @@ function mountPanel(props = {}) {
       mocks: { $store: fakeStore() },
       stubs: {
         DsButton: { template: '<button><slot /></button>' },
-        DsPill: { props: ['label', 'variant'], template: '<span class="pill">{{ label }}</span>' },
+        // DsPill renders its SLOT and declares only `variant` — there is no
+        // `label` prop (components/ds/Pill.vue). The stub used to declare
+        // one, which made every <DsPill :label="..."> render its label in
+        // tests while rendering EMPTY in the app — that is how the Stage
+        // column shipped blank without a single test failing.
+        DsPill: { props: ['variant'], template: '<span class="pill"><slot /></span>' },
         DsSpinner: true,
         DsProgress: true,
         apexchart: { props: ['options', 'series', 'type', 'height'], template: '<div class="chart-stub" />' }
@@ -304,6 +309,60 @@ describe('RagasPanel', () => {
     expect(w.text()).toContain('raise RERANKER_TOP_N');
     expect(w.text()).toContain('tomato-season');
     expect(w.text()).toContain('missing frost dates');
+  });
+
+  // 2026-10-23: the Stage column shipped BLANK. DsPill renders its slot and
+  // declares no `label` prop, so <DsPill :label="a.stage" /> put the stage
+  // into $attrs and rendered nothing — while the test stub declared a
+  // `label` prop the real component does not have, so every test passed.
+  // The stub now mirrors the real component; this test locks the render.
+  it('renders the attribution stage INSIDE the pill (not as a dropped prop)', async () => {
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    w.vm.explainDoc = {
+      attributions: [
+        {
+          id: 'new-1',
+          query: 'q',
+          fails: ['context_recall'],
+          stage: 'vector-recall',
+          recommendation: 'raise OKF_RAGAS_CANDIDATE_K'
+        }
+      ],
+      advice: { knob_changes: [], repo_tag_changes: [], content_curation: [], prompt_tweaks: [], note: '' }
+    };
+    await w.vm.$nextTick();
+    const pills = w.findAll('.okf-headtest__scores .pill');
+    const stages = pills.map((p) => p.text()).filter((t) => t.includes('vector-recall'));
+    expect(stages.length).toBe(1);
+    expect(stages[0]).toContain('vector-recall');
+  });
+
+  // A row whose expected passage is not in the corpus measures the
+  // benchmark, not the assistant — the operator must be told, or they will
+  // tune the pipeline for an unanswerable question.
+  it('marks an unfair question (expected passage absent from the corpus)', async () => {
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    w.vm.explainDoc = {
+      attributions: [
+        {
+          id: 'new-9',
+          query: 'q',
+          fails: ['context_recall'],
+          stage: 'corpus',
+          recommendation: 'regenerate this entry',
+          unfair_question: true
+        }
+      ],
+      advice: { knob_changes: [], repo_tag_changes: [], content_curation: [], prompt_tweaks: [], note: '' }
+    };
+    await w.vm.$nextTick();
+    expect(w.text()).toContain('unfair question');
+    // The corpus stage is a benchmark defect, not a retrieval knob.
+    expect(w.vm.stageVariant('corpus')).toBe('danger');
+    expect(w.vm.stageVariant('vector-recall')).toBe('warning');
+    expect(w.vm.stageVariant('judge')).toBe('neutral');
   });
 
   it('formats progress labels with the phase and counts', () => {

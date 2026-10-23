@@ -46,6 +46,7 @@ const frontmatterService = require('./frontmatter-service');
 const repositoryService = require('./repository-service');
 const headTestService = require('./head-test-service');
 const modelConfigService = require('./model-config-service');
+const ragasAttributionService = require('./ragas-attribution-service');
 
 const COLLECTION = 'okf_head_test_runs'; // kinds: ragas_suite | ragas_run | ragas_explain
 
@@ -1895,8 +1896,34 @@ async function getExplainFailures(repoId, suiteKey, runKey) {
   return rows[0];
 }
 
-/** The failure-attribution matrix, mechanically computed from run evidence. */
-function attributeFailures(suite, runDoc) {
+/**
+ * The failure-attribution matrix.
+ *
+ * `evidence` (from ragas-attribution-service) says WHERE the expected
+ * passage went; this says what that MEANS. The two are separate on
+ * purpose: the evidence is facts about the corpus, this is the judgement.
+ *
+ * The evidence ladder (each step is a place the passage can be lost):
+ *
+ *   retrieved   the passage reached the selected contexts — the pipeline
+ *               found it; whatever failed is downstream (answer, judge).
+ *   reranker    the passage was in the candidate pool but the reranker cut
+ *               it — raise RERANKER_TOP_N / change the strategy.
+ *   vector-recall
+ *               the passage is in the corpus but the dense top-K never
+ *               surfaced it — raise OKF_RAGAS_CANDIDATE_K (the rank probe
+ *               says how far) or improve the embedding.
+ *   corpus      the passage is NOT in the corpus. The question is then
+ *               UNANSWERABLE AS ASKED: the benchmark row expects content
+ *               the system was never given. It measures the benchmark, not
+ *               the assistant — so it is reported as an unfair question and
+ *               is never turned into content-curation work.
+ *
+ * The order matters: the DEEPEST loss wins, because the deepest loss is
+ * the one that must be fixed first (a passage the dense stage never
+ * surfaced cannot be rescued by a bigger rerank window).
+ */
+function attributeFailures(suite, runDoc, evidence) {
   const thresholds = { ...FAIL_BELOW_DEFAULTS, ...((suite.payload && suite.payload.thresholds) || {}) };
   const entriesById = new Map(suite.payload.entries.map((e) => [e.id, e]));
   const attributions = [];
@@ -1912,11 +1939,16 @@ function attributeFailures(suite, runDoc) {
       })
       .map(([name]) => name);
     if (!failed.length) continue;
-    const passages = (e.reference_passages || []).map((p) => norm(p));
-    const contexts = (r.contexts || []).map((c) => norm(c));
-    const candidates = (r.candidates || []).map((c) => norm(c));
-    const passageInContexts = passages.some((p) => p && contexts.some((c) => c.includes(p.slice(0, 80))));
-    const passageInCandidates = passages.some((p) => p && candidates.some((c) => c.includes(p.slice(0, 80))));
+
+    // Where the expected passage went — proven against the corpus, not
+    // inferred from the run's truncated candidate texts. The ladder only
+    // explains a RECALL failure: if recall passed, the passage WAS found,
+    // so the failure is downstream and the ladder has nothing to say.
+    const ev = evidence && evidence.byRow ? evidence.byRow.get(r.id) : null;
+    const ladder = ev ? retrievalLadder(ev, r) : null;
+    const recallFailed = failed.includes('context_recall');
+    const ladderStage = recallFailed ? ladder && ladder.stage : null;
+
     let stage;
     let recommendation;
     if (r.ragas_nan) {
@@ -1926,13 +1958,30 @@ function attributeFailures(suite, runDoc) {
     } else if (!r.contexts || !r.contexts.length) {
       stage = 'routing';
       recommendation = 'nothing was retrieved — check the repo is published and its graph drained';
-    } else if (failed.includes('context_recall') && !passageInContexts && passageInCandidates) {
+    } else if (ladderStage === 'corpus') {
+      // The passage is not in the corpus at all. This is a benchmark defect,
+      // not a system defect — the assistant cannot retrieve content that
+      // was never indexed. Never propose retrieval work for it.
+      stage = 'corpus';
+      recommendation =
+        'the expected passage is not in the indexed corpus — this row asks about content the system was never given, so it measures the benchmark, not the assistant. Regenerate this entry against the current corpus; only curate the concept if that content was deliberately removed.';
+    } else if (ladderStage === 'vector-recall') {
+      stage = 'vector-recall';
+      recommendation = ladder.rank
+        ? `the expected passage IS in the corpus but the dense top-${CANDIDATE_K} never surfaced it — it ranks #${ladder.rank} of ${ladder.searched}. Raise OKF_RAGAS_CANDIDATE_K to at least ${ladder.rank} (${ladder.caveat}), or improve the retrieval query.`
+        : `the expected passage IS in the corpus but the dense top-${CANDIDATE_K} never surfaced it — raise OKF_RAGAS_CANDIDATE_K or improve the retrieval query.`;
+    } else if (ladderStage === 'reranker') {
       stage = 'reranker';
       recommendation =
-        'the expected passage was a candidate but not selected — reranker dropped it (RERANKER_TOP_N / strategy)';
-    } else if (failed.includes('context_recall') && !passageInContexts) {
-      stage = 'corpus';
-      recommendation = 'the expected passage is not retrievable — re-curate the concept or regenerate this entry';
+        'the expected passage WAS a retrieval candidate but the reranker cut it — raise RERANKER_TOP_N / OKF_RAGAS_TOP_N or change the rerank strategy';
+    } else if (ladderStage === 'retrieved') {
+      // The passage reached the answer. Whatever failed is downstream:
+      // either the judge scored the coverage harshly, or the passage is
+      // only partially covered by the selected chunks. Either way this is
+      // NOT a retrieval failure and NOT a content gap.
+      stage = 'retrieved';
+      recommendation =
+        'the expected passage WAS retrieved and delivered to the model — the recall miss is about coverage or the judge, not about finding the content. Inspect the row detail; do not curate content for it.';
     } else if (
       failed.includes('faithfulness') ||
       failed.includes('factual_correctness') ||
@@ -1971,9 +2020,89 @@ function attributeFailures(suite, runDoc) {
       stage = 'pipeline';
       recommendation = 'metric below threshold — inspect the row detail';
     }
-    attributions.push({ id: r.id, query: r.query, fails: failed, stage, recommendation });
+    attributions.push({
+      id: r.id,
+      query: r.query,
+      fails: failed,
+      stage,
+      recommendation,
+      // The evidence behind the verdict, so a reader can check the call
+      // instead of taking it on trust.
+      evidence: ladder
+        ? {
+            passages: ladder.passages,
+            probeable_passages: ladder.probeable,
+            in_corpus: ladder.inCorpus,
+            in_candidates: ladder.inCandidates,
+            in_contexts: ladder.inContexts,
+            carrier_chunk: ladder.carrierKey || null,
+            candidate_rank: ladder.rank || null,
+            corpus_matched_chunks: ev.matched_chunks,
+            method: evidence.method
+          }
+        : null,
+      // A row whose expected passage is not in the corpus is an unfair
+      // question: it cannot be answered by the system it is measuring.
+      unfair_question: !!(ladder && ladder.stage === 'corpus')
+    });
   }
   return attributions;
+}
+
+/**
+ * Walk the evidence ladder for one row and report where the expected
+ * passage was lost. `r` is the run row (it carries the candidate_keys and
+ * context_keys the run actually used).
+ */
+function retrievalLadder(ev, r) {
+  const candidateKeys = new Set(r.candidate_keys || []);
+  const contextKeys = new Set(r.context_keys || []);
+  let inCorpus = 0;
+  let inCandidates = 0;
+  let inContexts = 0;
+  let probeable = 0;
+  let carrierKey = null;
+  for (const c of ev.carriers || []) {
+    if (!c.probeable) continue;
+    probeable += 1;
+    // Only a passage PROVEN present in the corpus counts — a passage that
+    // matched a needle but whose content is absent is not in the corpus.
+    if (!c.present) continue;
+    inCorpus += 1;
+    // A passage counts as "in a tier" when ANY chunk carrying it is in
+    // that tier — the passage may span several chunks.
+    const hits = c.chunks.filter((ch) => candidateKeys.has(ch.key));
+    if (hits.length) {
+      inCandidates += 1;
+      carrierKey = carrierKey || hits[0].key;
+      if (hits.some((ch) => contextKeys.has(ch.key))) inContexts += 1;
+    }
+  }
+  const total = ev.passages || 0;
+  let stage;
+  if (total === 0) stage = null;
+  // A row whose passages could not be probed is UNPROVEN, not proven
+  // absent — it must never be reported as a corpus gap.
+  else if (probeable === 0) stage = 'unproven';
+  else if (inCorpus === 0) stage = 'corpus';
+  else if (inCandidates === 0) stage = 'vector-recall';
+  else if (inContexts === 0) stage = 'reranker';
+  else stage = 'retrieved';
+  // The rank probe (when it ran) says where the carrier WOULD have landed
+  // in the dense ranking — the actionable number for a vector-recall miss.
+  const rank = ev.rank && ev.rank_owner === r.id ? ev.rank : null;
+  return {
+    stage,
+    passages: total,
+    probeable,
+    inCorpus,
+    inCandidates,
+    inContexts,
+    carrierKey,
+    rank: rank ? rank.rank : null,
+    searched: rank ? rank.searched : null,
+    caveat: rank ? rank.caveat : null
+  };
 }
 
 function norm(s) {
@@ -1981,6 +2110,90 @@ function norm(s) {
     .toLowerCase()
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/**
+ * Collect the retrieval evidence for the rows that failed, then rank-probe
+ * the ones where the DENSE stage was the culprit.
+ *
+ * The rank probe is what makes the recommendation actionable: "the dense
+ * top-24 missed it" becomes "it ranks #26 of 1075 — raise
+ * OKF_RAGAS_CANDIDATE_K to 26+". It re-embeds the query and searches
+ * deeper than the run did, so it is best-effort: a failure leaves the
+ * stage standing and only the rank missing.
+ */
+async function collectAttributionEvidence(db, suite, runDoc) {
+  const entriesById = new Map(
+    (suite.payload && suite.payload.entries ? suite.payload.entries : []).map((e) => [e.id, e])
+  );
+  const thresholds = { ...FAIL_BELOW_DEFAULTS, ...((suite.payload && suite.payload.thresholds) || {}) };
+  const failing = [];
+  for (const r of runDoc.payload.results || []) {
+    const e = entriesById.get(r.id) || {};
+    if (e.oos) continue;
+    const m = r.metrics || {};
+    const failed = Object.entries(thresholds).some(([name, t]) => {
+      const v = m[name];
+      if (typeof v !== 'number' || v !== v) return false;
+      return name === 'noise_sensitivity' ? v > t : v < t;
+    });
+    if (!failed) continue;
+    failing.push({
+      id: r.id,
+      query: r.query,
+      passages: (e.reference_passages || []).filter(Boolean)
+    });
+  }
+  if (!failing.length) {
+    return { byRow: new Map(), method: 'no failing rows', truncated: false, matched_chunks: 0 };
+  }
+
+  // The graphs the RUN used — not the ones the repo has now. A repo
+  // re-drained between generation and this run would otherwise be probed
+  // against a corpus the run never saw.
+  const graphs =
+    (runDoc.payload &&
+    runDoc.payload.fidelity &&
+    runDoc.payload.fidelity.retrieval &&
+    Array.isArray(runDoc.payload.fidelity.retrieval.graphs) &&
+    runDoc.payload.fidelity.retrieval.graphs.length
+      ? runDoc.payload.fidelity.retrieval.graphs
+      : null) || (await graphNamesFor(db, suite.repo_ids || [suite.repo_id]));
+
+  const evidence = await ragasAttributionService.collectEvidence(db, { rows: failing, graphs });
+  if (evidence.truncated) {
+    logger.warn('ragas attribution: corpus probe hit its chunk guard — carrier coverage may be incomplete', {
+      suite_key: suite.suite_key,
+      matched_chunks: evidence.matched_chunks
+    });
+  }
+
+  // Rank-probe the rows where the dense stage lost the passage: the rank
+  // is the actionable half of "the vector search missed it".
+  for (const row of failing) {
+    const ev = evidence.byRow.get(row.id);
+    if (!ev) continue;
+    // Only passages PROVEN present in the corpus have a meaningful rank.
+    const present = (ev.carriers || []).filter((c) => c.present);
+    if (!present.length) continue;
+    const candidateKeys = new Set((runDoc.payload.results.find((r) => r.id === row.id) || {}).candidate_keys || []);
+    // Only probe rows the dense stage actually lost — a passage that WAS a
+    // candidate was lost by the reranker, and the candidate rank is noise.
+    const lost = present.flatMap((c) => c.chunks).find((ch) => !candidateKeys.has(ch.key));
+    if (!lost) continue;
+    const rank = await ragasAttributionService.probeCandidateRank(db, {
+      graphs,
+      query: row.query,
+      carrierKey: lost.key
+    });
+    if (rank) {
+      ev.rank = rank;
+      ev.rank_owner = row.id;
+    }
+  }
+  // The rank belongs to the row that owns it; attributeFailures reads it
+  // from the evidence row, so carry it into the ladder there.
+  return evidence;
 }
 
 async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
@@ -1996,7 +2209,13 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
       err.status = 404;
       throw err;
     }
-    const attributions = attributeFailures(suite, runDoc);
+    // The evidence pass (Story 8-6, 2026-10-23): prove WHERE each expected
+    // passage went, against the corpus itself, before blaming any tier.
+    // This is what stops a content-curation instruction for content that is
+    // already indexed — the advisor's most expensive mistake.
+    explainProgress.set(suiteKey, { phase: 'probing', started_ms: Date.now(), failing: 0 });
+    const evidence = await collectAttributionEvidence(db, suite, runDoc);
+    const attributions = attributeFailures(suite, runDoc, evidence);
     explainProgress.set(suiteKey, { phase: 'advising', started_ms: Date.now(), failing: attributions.length });
     try {
       // ONE guided-JSON advice call; tag suggestions pass the existing guardrail.
@@ -2018,7 +2237,19 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
                   'You are a RAG pipeline tuning advisor. Given benchmark failures with stage attributions, ' +
                   'propose concrete actions. Respond as JSON: {"knob_changes": ["..."], "repo_tag_changes": ["..."], ' +
                   '"content_curation": [{"concept": "...", "gap": "..."}], "prompt_tweaks": ["..."]}. ' +
-                  'Every item must name the surface it changes. Do not invent failures.'
+                  'Every item must name the surface it changes. Do not invent failures. ' +
+                  // The stage is proven against the corpus, and the advisor
+                  // must respect it: a stage of "vector-recall" or "reranker"
+                  // means the content EXISTS and the retrieval pipeline lost
+                  // it — the answer is a knob (candidate pool, top-N), never
+                  // new content. A stage of "corpus" means the expected
+                  // passage is not indexed at all: that row is an unfair
+                  // question (it measures the benchmark, not the assistant),
+                  // so the action is to regenerate the entry, not to author
+                  // content for it. Only propose content_curation for rows
+                  // whose stage is "corpus".
+                  'Propose content_curation ONLY for rows whose stage is "corpus"; ' +
+                  'for "vector-recall" and "reranker" propose a knob change instead.'
               },
               {
                 role: 'user',
@@ -2053,6 +2284,48 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
               prompt_tweaks: arr(parsed.prompt_tweaks),
               note: ''
             };
+            // Guard the content-curation suggestions against the proven
+            // evidence (2026-10-23). A curator is asked to WRITE content, so
+            // this is the expensive kind of advice: sending someone to
+            // author a passage that is already indexed is pure waste — and
+            // the pre-fix matrix did exactly that for 18 of 29 rows.
+            //
+            // The guard is MECHANICAL, not a prompt instruction:
+            //   * no row was PROVEN to have a corpus gap -> the advisor has
+            //     no licence to propose content work at all;
+            //   * a proposal that names a row whose stage is NOT "corpus" is
+            //     dropped, because it is proposing content for a retrieval
+            //     failure — where the content demonstrably exists.
+            // The advisor writes about concepts, not row ids, so a proposal
+            // is not REQUIRED to name a row.
+            const corpusGapRows = attributions.filter((a) => a.stage === 'corpus' && a.unfair_question);
+            const nonCorpusRows = attributions.filter((a) => a.stage !== 'corpus');
+            const kept = [];
+            const dropped = [];
+            for (const item of advice.content_curation) {
+              const text = `${item.concept} ${item.gap}`.toLowerCase();
+              const namesNonCorpusRow = nonCorpusRows.some((a) => {
+                const id = String(a.id || '').toLowerCase();
+                const q = String(a.query || '')
+                  .toLowerCase()
+                  .slice(0, 40);
+                return (id && text.includes(id)) || (q.length > 12 && text.includes(q));
+              });
+              if (namesNonCorpusRow) {
+                dropped.push(`${item.concept} — ${item.gap}`);
+                continue;
+              }
+              if (!corpusGapRows.length) {
+                dropped.push(`${item.concept} — ${item.gap}`);
+                continue;
+              }
+              kept.push(item);
+            }
+            advice.content_curation = kept;
+            if (dropped.length) {
+              advice.rejected_curation = dropped.map((d) => `${d} — no proven corpus gap behind it`);
+              advice.note = `dropped ${dropped.length} content-curation suggestion(s) that no proven corpus gap supports`;
+            }
           }
         } catch (e) {
           advice.note = `LLM advice failed (${e.message}) — mechanical attribution stands`;
@@ -2083,12 +2356,26 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
           run_key: runKey,
           run_created_at: runDoc.created_at,
           failing_count: attributions.length,
+          // Rows whose expected passage is not in the indexed corpus. These
+          // are UNFAIR QUESTIONS: the system cannot answer content it was
+          // never given, so they measure the benchmark, not the assistant.
+          // They are counted separately so an operator can tell a real
+          // regression from a stale benchmark entry.
+          unfair_count: attributions.filter((a) => a.unfair_question).length,
+          unfair_ids: attributions.filter((a) => a.unfair_question).map((a) => a.id),
+          // The stage histogram — the one number that says whether the
+          // pipeline or the corpus is at fault.
+          stage_counts: attributions.reduce((acc, a) => {
+            acc[a.stage] = (acc[a.stage] || 0) + 1;
+            return acc;
+          }, {}),
           attributions,
           advice
         }
       };
       await db.collection(COLLECTION).save(doc);
       span.setAttribute('okf.ragas.failing', attributions.length);
+      span.setAttribute('okf.ragas.unfair', attributions.filter((a) => a.unfair_question).length);
       return doc;
     } finally {
       explainProgress.delete(suiteKey);

@@ -167,6 +167,19 @@ beforeEach(() => {
       if (/RETURN c\._key\s*$/.test(aql.trim())) {
         return { all: async () => corpus.map((c) => c.key) };
       }
+      // The attribution corpus probe: find the chunks whose text contains
+      // any of the needles, tagged with the passage ids they matched.
+      if (aql.includes('LET hits =')) {
+        const probes = (bind && bind.probes) || [];
+        const hitRows = corpus
+          .map((c) => {
+            const lc = String(c.text || '').toLowerCase();
+            const hits = probes.filter((p) => lc.includes(p.needle)).map((p) => p.pid);
+            return hits.length ? { key: c.key, text: c.text, hits } : null;
+          })
+          .filter(Boolean);
+        return { all: async () => hitRows };
+      }
       if (aql.includes('c._key IN @keys')) {
         const keys = (bind && bind.keys) || [];
         return { all: async () => corpus.filter((c) => keys.includes(c.key)) };
@@ -1093,7 +1106,15 @@ describe('explain', () => {
     expect(doc.payload.attributions[0].recommendation).toMatch(/entity extraction/i);
   });
 
-  it('entity-recall misses WITH context recall failing still attribute to the corpus', async () => {
+  // 2026-10-23: this test used to require stage === 'corpus' for every row.
+  // That assertion encoded the very bug the evidence layer was built to
+  // remove: the mocked corpus HOLDS entry 0's reference passage ('Plant
+  // after the last frost date.'), so calling that row a corpus gap sent a
+  // curator to author content that was already indexed. The verdict now
+  // follows the PROVEN evidence:
+  //   entry 0 — passage in the corpus AND delivered  -> 'retrieved'
+  //   entry 1 — passages absent from the corpus      -> 'corpus' (unfair)
+  it('entity-recall misses with context recall failing follow the PROVEN evidence', async () => {
     const baseFetch = global.fetch;
     global.fetch = jest.fn((url) => {
       const u = String(url);
@@ -1125,7 +1146,20 @@ describe('explain', () => {
     const explained = await svc.beginExplainFailures('me', begunSuite.suite_key, { run_key: run.run_key }, {});
     await explained.done;
     const doc = await svc.getExplainFailures('me', begunSuite.suite_key, run.run_key);
-    expect(doc.payload.attributions.every((a) => a.stage === 'corpus')).toBe(true);
+    const attr = doc.payload.attributions;
+    expect(attr.length).toBe(2);
+    // The row whose passage IS in the corpus and WAS delivered is not a
+    // corpus gap.
+    const present = attr.find((a) => a.evidence && a.evidence.in_corpus > 0);
+    expect(present).toBeTruthy();
+    expect(present.stage).not.toBe('corpus');
+    expect(present.unfair_question).toBe(false);
+    // The row whose passages are absent from the corpus IS one — and it is
+    // reported as an unfair question, not a system defect.
+    const absent = attr.find((a) => a !== present);
+    expect(absent.stage).toBe('corpus');
+    expect(absent.unfair_question).toBe(true);
+    expect(absent.recommendation).toMatch(/regenerate/i);
   });
 
   it('routes tag suggestions through the existing guardrail', async () => {
@@ -1179,8 +1213,112 @@ describe('explain', () => {
     const explained = await svc.getExplainFailures('me', begunSuite.suite_key, run.run_key);
     expect(explained.payload.attributions.length).toBeGreaterThan(0);
     expect(explained.payload.advice.repo_tag_changes).toEqual(['tomato-season']);
-    expect(explained.payload.advice.content_curation[0].concept).toBe('c1');
     expect(headTestService.guardSuggestions).toHaveBeenCalled();
+  });
+
+  // 2026-10-23: the content-curation guard. A curator is asked to WRITE
+  // content, so proposing it for a row whose passage is already in the
+  // corpus is the expensive mistake — it was made for 18 of 29 live
+  // failures. The guard is mechanical: no proven corpus gap, no curation.
+  it('drops a content-curation proposal when NO row has a proven corpus gap', async () => {
+    // Seed the corpus with EVERY reference passage, so no row has a gap.
+    __mockDb.__corpusRows = [
+      { key: 'k1', text: 'Plant after the last frost date.', score: 0.9 },
+      { key: 'k2', text: 'Tomatoes are a crop.', score: 0.8 },
+      { key: 'k3', text: 'Legal aid has income criteria.', score: 0.7 }
+    ];
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-cur', status: 'queued' }));
+      if (u.includes('/jobs/j-cur'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-cur',
+            status: 'done',
+            result: {
+              aggregate: {},
+              per_query: GEN_SAMPLES.map(() => ({ context_recall: 0.2, faithfulness: 1.0 })),
+              model: 'm',
+              n: 2
+            }
+          })
+        );
+      return baseFetch(url);
+    });
+    const begunSuite = await svc.beginSuiteGeneration('me', { testset_size: 2 }, {});
+    await begunSuite.done;
+    const run = await svc.beginRunSuite('me', begunSuite.suite_key, {}, {});
+    await run.done;
+    global.fetch = baseFetch;
+    frontmatterService.vllmChatCompletions.mockResolvedValue(
+      llmResponse({
+        knob_changes: ['raise OKF_RAGAS_CANDIDATE_K'],
+        repo_tag_changes: [],
+        content_curation: [{ concept: 'c1', gap: 'missing frost dates' }],
+        prompt_tweaks: []
+      })
+    );
+    const begun = await svc.beginExplainFailures('me', begunSuite.suite_key, { run_key: run.run_key }, {});
+    await begun.done;
+    const explained = await svc.getExplainFailures('me', begunSuite.suite_key, run.run_key);
+    // The proposal is dropped — every passage is in the corpus.
+    expect(explained.payload.advice.content_curation).toEqual([]);
+    expect(explained.payload.advice.rejected_curation).toBeTruthy();
+    // ...and the KNOB suggestion survives: the advice is not discarded, only
+    // the part that would send a curator to write existing content.
+    expect(explained.payload.advice.knob_changes).toEqual(['raise OKF_RAGAS_CANDIDATE_K']);
+    delete __mockDb.__corpusRows;
+  });
+
+  // The evidence layer must never report a corpus gap it has not proven.
+  it('attributes a row whose passage IS in the corpus to a retrieval stage, not the corpus', async () => {
+    // Entry 0's passage IS in the mocked corpus (k1); entry 1's passages are
+    // NOT. The two rows must therefore get DIFFERENT verdicts — that is
+    // the whole point of the evidence layer.
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-ev', status: 'queued' }));
+      if (u.includes('/jobs/j-ev'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-ev',
+            status: 'done',
+            result: {
+              aggregate: {},
+              per_query: GEN_SAMPLES.map(() => ({ context_recall: 0.2, faithfulness: 1.0 })),
+              model: 'm',
+              n: 2
+            }
+          })
+        );
+      return baseFetch(url);
+    });
+    const begunSuite = await svc.beginSuiteGeneration('me', { testset_size: 2 }, {});
+    await begunSuite.done;
+    const run = await svc.beginRunSuite('me', begunSuite.suite_key, {}, {});
+    await run.done;
+    global.fetch = baseFetch;
+    const begun = await svc.beginExplainFailures('me', begunSuite.suite_key, { run_key: run.run_key }, {});
+    await begun.done;
+    const doc = await svc.getExplainFailures('me', begunSuite.suite_key, run.run_key);
+    const attr = doc.payload.attributions;
+    expect(attr.length).toBe(2);
+    // The row whose passage IS in the corpus is NOT a corpus gap.
+    const present = attr.find((a) => a.evidence && a.evidence.in_corpus > 0);
+    expect(present).toBeTruthy();
+    expect(present.stage).not.toBe('corpus');
+    expect(present.unfair_question).toBe(false);
+    // The row whose passages are NOT in the corpus IS one.
+    const absent = attr.find((a) => a !== present);
+    expect(absent.stage).toBe('corpus');
+    expect(absent.unfair_question).toBe(true);
+    // No row may be flagged as an unfair question unless its passage was
+    // proven absent.
+    for (const a of attr) {
+      if (a.unfair_question) expect(a.evidence.in_corpus).toBe(0);
+    }
   });
 });
 

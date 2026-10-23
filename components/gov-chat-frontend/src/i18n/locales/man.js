@@ -3378,7 +3378,9 @@ export default {
         none: 'No failing rows to attribute.',
         stage: 'Stage',
         fails: 'Failing metrics',
-        recommendation: 'Recommendation'
+        recommendation: 'Recommendation',
+        unfair: 'soqaa milɣiɣi',
+        unfairTitle: 'Weyaa kan kee buniiru tigi e ko korpuuni — ndinɣe beeci eɣa nkaɣeɣi, Assistant ma'
       },
       history: {
         title: 'Run history',

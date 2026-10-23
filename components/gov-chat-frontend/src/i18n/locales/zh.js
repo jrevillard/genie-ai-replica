@@ -3342,7 +3342,9 @@ export default {
         none: '没有可归因的失败行。',
         stage: '阶段',
         fails: '失败的指标',
-        recommendation: '建议'
+        recommendation: '建议',
+        unfair: '不公平的问题',
+        unfairTitle: '期望的段落不在语料库中 —— 该行衡量的是基准测试，而非助手'
       },
       history: {
         title: '运行历史',

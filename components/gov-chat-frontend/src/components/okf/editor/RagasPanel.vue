@@ -65,11 +65,9 @@
             :disabled="r.repo_id === (repo && repo.repo_id) || generateBusy"
           />
           <span>{{ r.name }}</span>
-          <DsPill
-            v-if="r.repo_id === (repo && repo.repo_id)"
-            variant="accent"
-            :label="translate('okf.ragas.current', 'current')"
-          />
+          <DsPill v-if="r.repo_id === (repo && repo.repo_id)" variant="accent">{{
+            translate('okf.ragas.current', 'current')
+          }}</DsPill>
         </label>
       </div>
       <div class="okf-ragas__dims">
@@ -203,7 +201,7 @@
           @change="onRename($event.target.value)"
         />
         <code>{{ suite.suite_key }}</code>
-        <DsPill variant="accent" label="RAGAS" />
+        <DsPill variant="accent">RAGAS</DsPill>
         <span v-if="suite.payload && suite.payload.generator" class="okf-ragas__muted">{{
           suite.payload.generator
         }}</span>
@@ -320,16 +318,16 @@
               >
             </td>
             <td>
-              <DsPill
-                :variant="e.oos ? 'warning' : 'success'"
-                :label="e.oos ? translate('okf.ragas.oos', 'out-of-scope') : translate('okf.ragas.inscope', 'in scope')"
-              />
+              <DsPill :variant="e.oos ? 'warning' : 'success'">{{
+                e.oos ? translate('okf.ragas.oos', 'out-of-scope') : translate('okf.ragas.inscope', 'in scope')
+              }}</DsPill>
               <DsPill
                 v-if="runOutcome(e)"
                 :variant="runOutcome(e).ok ? 'success' : 'danger'"
-                :label="runOutcomeLabel(e)"
                 class="okf-ragas__run-chip"
-              />
+              >
+                {{ runOutcomeLabel(e) }}
+              </DsPill>
             </td>
             <td v-if="!readOnly" class="okf-ragas__row-actions">
               <button
@@ -389,7 +387,8 @@
         <DsPill
           v-if="runDoc.payload.summary"
           :variant="invalidRunReason ? 'danger' : runDoc.payload.summary.failing_count ? 'warning' : 'success'"
-          :label="
+        >
+          {{
             invalidRunReason
               ? translate('okf.ragas.results.invalidPill', 'invalid run')
               : runDoc.payload.summary.failing_count
@@ -398,8 +397,8 @@
                     String(runDoc.payload.summary.failing_count)
                   )
                 : translate('okf.ragas.results.allPass', 'all passing')
-          "
-        />
+          }}
+        </DsPill>
         <DsButton variant="secondary" small :disabled="pdfBusy" @click="downloadPdf">
           {{ translate('okf.ragas.results.pdf', 'Export PDF report') }}
         </DsButton>
@@ -540,13 +539,11 @@
                 </button>
               </td>
               <td>
-                <DsPill v-if="r.error" variant="danger" :label="translate('okf.ragas.results.error', 'error')" />
-                <DsPill
-                  v-else-if="r.abstained"
-                  variant="warning"
-                  :label="translate('okf.ragas.results.abstained', 'abstained')"
-                />
-                <DsPill v-else variant="neutral" :label="translate('okf.ragas.results.answered', 'answered')" />
+                <DsPill v-if="r.error" variant="danger">{{ translate('okf.ragas.results.error', 'error') }}</DsPill>
+                <DsPill v-else-if="r.abstained" variant="warning">{{
+                  translate('okf.ragas.results.abstained', 'abstained')
+                }}</DsPill>
+                <DsPill v-else variant="neutral">{{ translate('okf.ragas.results.answered', 'answered') }}</DsPill>
               </td>
             </tr>
           </tbody>
@@ -573,7 +570,19 @@
             <td>
               <code>{{ a.id }}</code>
             </td>
-            <td><DsPill variant="warning" :label="a.stage" /></td>
+            <td>
+              <DsPill :variant="stageVariant(a.stage)">{{ a.stage }}</DsPill>
+              <!-- An unfair question (its expected passage is not in the
+                   corpus) measures the benchmark, not the assistant. It is
+                   called out so nobody tunes the pipeline for it. -->
+              <span
+                v-if="a.unfair_question"
+                class="okf-ragas__muted"
+                :title="translate('okf.ragas.explain.unfairTitle', 'The expected passage is not in the corpus')"
+              >
+                · {{ translate('okf.ragas.explain.unfair', 'unfair question') }}
+              </span>
+            </td>
             <td>{{ (a.fails || []).join(', ') }}</td>
             <td>{{ a.recommendation }}</td>
           </tr>
@@ -612,10 +621,9 @@
             </td>
             <td>{{ shortDate(h.created_at) }}</td>
             <td>
-              <DsPill
-                :variant="h.status === 'done' ? 'success' : h.status === 'failed' ? 'danger' : 'warning'"
-                :label="h.status"
-              />
+              <DsPill :variant="h.status === 'done' ? 'success' : h.status === 'failed' ? 'danger' : 'warning'">{{
+                h.status
+              }}</DsPill>
             </td>
             <td v-for="m in historyMetricKeys" :key="m">
               {{ scoreText(h.summary && h.summary.metrics && h.summary.metrics[m]) }}
@@ -1271,6 +1279,18 @@ export default {
       return o.ok
         ? this.translate('okf.ragas.run.pass', 'pass')
         : `${this.translate('okf.ragas.run.fail', 'fail')}: ${o.fails.join(', ')}`;
+    },
+    /**
+     * Colour the attribution stage by what it means for the operator:
+     * a retrieval-stage failure is a knob to turn (warning), a corpus gap
+     * is a benchmark defect (danger), and a judge/llm failure is neither
+     * (neutral). 2026-10-23 — the stages came from the evidence ladder,
+     * so they now carry real meaning.
+     */
+    stageVariant(stage) {
+      if (stage === 'corpus') return 'danger';
+      if (stage === 'judge' || stage === 'pipeline') return 'neutral';
+      return 'warning';
     },
     passagesTitle(e) {
       const ps = e.reference_passages || [];

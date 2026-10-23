@@ -3433,7 +3433,10 @@ export default {
         none: 'Keine fehlgeschlagenen Zeilen zuzuordnen.',
         stage: 'Phase',
         fails: 'Fehlgeschlagene Metriken',
-        recommendation: 'Empfehlung'
+        recommendation: 'Empfehlung',
+        unfair: 'unfaire Frage',
+        unfairTitle:
+          'Die erwartete Passage liegt nicht im Korpus – diese Zeile bewertet den Benchmark, nicht den Assistenten'
       },
       history: {
         title: 'Ausführungsverlauf',

@@ -3410,7 +3410,9 @@ export default {
         none: 'Tidak ada baris gagal untuk diatribusikan.',
         stage: 'Tahap',
         fails: 'Metrik yang gagal',
-        recommendation: 'Rekomendasi'
+        recommendation: 'Rekomendasi',
+        unfair: 'pertanyaan tidak adil',
+        unfairTitle: 'Bagian yang diharapkan tidak ada dalam korpus — baris ini menilai benchmark, bukan asisten'
       },
       history: {
         title: 'Riwayat eksekusi',

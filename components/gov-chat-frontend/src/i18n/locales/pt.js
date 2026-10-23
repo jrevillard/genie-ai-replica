@@ -3423,7 +3423,9 @@ export default {
         none: 'Não há linhas com falha a atribuir.',
         stage: 'Etapa',
         fails: 'Métricas com falha',
-        recommendation: 'Recomendação'
+        recommendation: 'Recomendação',
+        unfair: 'pergunta injusta',
+        unfairTitle: 'A passagem esperada não está no corpus — esta linha avalia o benchmark, não o assistente'
       },
       history: {
         title: 'Histórico de execuções',

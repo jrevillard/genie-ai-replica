@@ -3421,7 +3421,9 @@ export default {
         none: 'Ha ho mela e fosahetseng ea ho e hlalosa.',
         stage: 'Setha',
         fails: 'Ditekanyo tse fosahetseng',
-        recommendation: 'Khothaletso'
+        recommendation: 'Khothaletso',
+        unfair: 'potso e sa molemo',
+        unfairTitle: 'Karolo eo e lebelagoa ha ho corpus — mofutofuto ena o lekola benchmark, eseng ha mhoabi'
       },
       history: {
         title: 'Histori ea tsamaello',

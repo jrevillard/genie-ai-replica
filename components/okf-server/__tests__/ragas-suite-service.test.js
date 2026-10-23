@@ -1421,3 +1421,128 @@ describe('xlsx passthrough + listing', () => {
     await begun.done; // let the poller finish so no work dangles past the test
   });
 });
+
+describe('rerank batch concurrency', () => {
+  // 40 rows -> 2 batches at RERANK_BATCH=32; 96 rows -> 3 batches. The
+  // dispatcher's _SOURCE fallback serves the dense-search query straight from
+  // __corpusRows, so the retrieval leg sees the whole corpus as its pool.
+  function corpusOf(n) {
+    return Array.from({ length: n }, (_, i) => ({
+      key: `k${String(i + 1).padStart(2, '0')}`,
+      text: `chunk ${i + 1} of the concurrency corpus`,
+      score: 1 - i / 1000
+    }));
+  }
+
+  function installFetch(batchDelaysMs, scoreFor) {
+    let inFlight = 0;
+    const seen = { maxInFlight: 0, batches: 0 };
+    global.fetch = jest.fn((url, opts) => {
+      if (!String(url).includes('/rerank')) {
+        if (String(url).includes('/generate-testset'))
+          return Promise.resolve(okJson({ job_id: 'j-gen', status: 'queued', poll: '/jobs/j-gen' }));
+        if (String(url).includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-eval', status: 'queued' }));
+        if (String(url).includes('/jobs/j-gen'))
+          return Promise.resolve(
+            okJson({
+              job_id: 'j-gen',
+              kind: 'generate-testset',
+              status: 'done',
+              result: { samples: GEN_SAMPLES, generator: { model: 'm', embed_model: 'e' } }
+            })
+          );
+        if (String(url).includes('/jobs/j-eval'))
+          return Promise.resolve(
+            okJson({
+              job_id: 'j-eval',
+              kind: 'evaluate',
+              status: 'done',
+              result: {
+                aggregate: { faithfulness: 1.0 },
+                per_query: GEN_SAMPLES.map(() => ({
+                  faithfulness: 1.0,
+                  context_precision: 0.5,
+                  context_recall: 0.5,
+                  answer_relevancy: 1.0
+                })),
+                evaluation_log: []
+              }
+            })
+          );
+        return Promise.reject(new Error(`unexpected fetch ${url}`));
+      }
+      seen.batches += 1;
+      inFlight += 1;
+      seen.maxInFlight = Math.max(seen.maxInFlight, inFlight);
+      const body = JSON.parse(opts.body);
+      const firstText = body.texts[0];
+      const globalIndex = Number(firstText.match(/chunk (\d+)/)[1]) - 1;
+      const batchStart = globalIndex - (globalIndex % 32);
+      const delay = batchDelaysMs[batchStart / 32] || 0;
+      return new Promise((resolve) =>
+        setTimeout(() => {
+          inFlight -= 1;
+          resolve(okJson(body.texts.map((_, i) => ({ index: i, score: scoreFor(batchStart + i) }))));
+        }, delay)
+      );
+    });
+    return seen;
+  }
+
+  async function runOnce() {
+    const begun = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
+    await begun.done;
+    const run = await svc.beginRunSuite('me', begun.suite_key, {}, { actor: { user_id: 'u1' } });
+    await run.done;
+    return svc.getRunSuite('me', begun.suite_key, run.run_key);
+  }
+
+  afterEach(() => {
+    delete process.env.OKF_RAGAS_RERANK_CONCURRENCY;
+    delete __mockDb.__corpusRows;
+  });
+
+  it('overlaps batches up to the concurrency cap and keeps results identical (order preserved)', async () => {
+    process.env.OKF_RAGAS_RERANK_CONCURRENCY = '2';
+    __mockDb.__corpusRows = corpusOf(40);
+    // Batch 0 (rows 1..32) is SLOW and scores low; batch 1 (rows 33..40) is
+    // fast and its first row scores highest. If reassembly followed
+    // completion order, batch 1's local index 0 would land at global index 0
+    // and the top context would be k01 — the assertion below catches it.
+    const seen = installFetch([80, 5], (g) => (g === 32 ? 0.99 : 0.01));
+    const doc = await runOnce();
+    expect(seen.batches).toBe(4); // 2 questions x 2 batches — retrieval runs per question
+    // The GLOBAL in-flight ceiling is RUN_CONCURRENCY (2 rows at a time) x
+    // rerankConcurrency (2) = 4; the floor proves a question's two batches
+    // actually overlapped. Exact values would be timing-fragile.
+    expect(seen.maxInFlight).toBeGreaterThanOrEqual(2);
+    expect(seen.maxInFlight).toBeLessThanOrEqual(4);
+    const r0 = doc.payload.results[0];
+    expect(r0.context_keys[0]).toBe('k33'); // the designed winner, correctly reassembled
+    // The pool is recorded whole (see candidate-pool tests) — all 40 keys.
+    expect(r0.candidate_keys).toHaveLength(40);
+  });
+
+  it('keeps the old sequential behaviour at concurrency 1', async () => {
+    process.env.OKF_RAGAS_RERANK_CONCURRENCY = '1';
+    __mockDb.__corpusRows = corpusOf(40);
+    const seen = installFetch([30, 5], (g) => (g === 32 ? 0.99 : 0.01));
+    await runOnce();
+    expect(seen.batches).toBe(4); // 2 questions x 2 batches
+    // C=1 keeps ONE call's batches sequential; two questions may still each
+    // have one in flight (RUN_CONCURRENCY=2), so the global bound is 2.
+    expect(seen.maxInFlight).toBeGreaterThanOrEqual(1);
+    expect(seen.maxInFlight).toBeLessThanOrEqual(2);
+  });
+
+  it('workers drain a batch list longer than the pool without losing a batch', async () => {
+    process.env.OKF_RAGAS_RERANK_CONCURRENCY = '2';
+    __mockDb.__corpusRows = corpusOf(96); // 3 batches, 2 workers
+    const seen = installFetch([10, 30, 10], (g) => (g === 64 ? 0.98 : 0.01));
+    const doc = await runOnce();
+    expect(seen.batches).toBe(6); // 2 questions x 3 batches
+    expect(seen.maxInFlight).toBeGreaterThanOrEqual(2); // workers overlapped
+    expect(seen.maxInFlight).toBeLessThanOrEqual(4); // RUN_CONCURRENCY x cap
+    expect(doc.payload.results[0].context_keys[0]).toBe('k65'); // batch 2's winner survived the queueing
+  });
+});

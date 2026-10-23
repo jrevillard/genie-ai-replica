@@ -440,8 +440,28 @@ const RERANK_TIMEOUT_MS = 15000;
 const RERANK_BATCH = 32;
 const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * How many rerank batch calls may be in flight at once (2026-10-23, David:
+ * "the reranker is lightweight and there is no pressure on the GPU server;
+ * benchmarks and curation will not be running while users are using the
+ * system"). The batch calls are INDEPENDENT — the reranker scores
+ * (query, text) pairs, and results reassemble by index — so overlapping them
+ * changes transport only, never scores. 1 = the old polite sequential
+ * behaviour; the default 3 turns a 6-batch pool from ~6 sequential round
+ * trips into ~2 waves. Read per call so a deployment can turn it without
+ * touching code, and clamped hard because a retry stampede helps nobody.
+ */
+function rerankConcurrency() {
+  const n = parseInt(process.env.OKF_RAGAS_RERANK_CONCURRENCY || '3', 10);
+  if (!Number.isFinite(n)) return 3;
+  return Math.max(1, Math.min(n, 8));
+}
+
 /** Same TEI rerank contract as head-suite's rerankTexts (env-shared).
- * Batches at RERANK_BATCH and remaps chunk-local indices to global ones. */
+ * Batches at RERANK_BATCH and remaps chunk-local indices to global ones.
+ * Batches run up to rerankConcurrency() at a time; per-batch retry keeps its
+ * jittered backoff (retryDelayMs randomises, so parallel retries do not
+ * synchronise into a stampede). */
 async function rerankTexts(query, texts) {
   const rerankUrl = process.env.OKF_RERANK_ENDPOINT || '';
   if (!rerankUrl) {
@@ -452,11 +472,23 @@ async function rerankTexts(query, texts) {
   const headers = { 'Content-Type': 'application/json' };
   const token = process.env.OKF_RERANK_TOKEN || '';
   if (token) headers.Authorization = `Bearer ${token}`;
-  const merged = [];
+  const batches = [];
   for (let offset = 0; offset < texts.length; offset += RERANK_BATCH) {
-    const batch = texts.slice(offset, offset + RERANK_BATCH);
+    batches.push({ offset, batch: texts.slice(offset, offset + RERANK_BATCH) });
+  }
+  const concurrency = rerankConcurrency();
+  const started = Date.now();
+  logger.info('ragas-suite.rerank.start', {
+    texts: texts.length,
+    batches: batches.length,
+    concurrency
+  });
+
+  async function rerankBatch(batch) {
     let decoded;
+    let attempts = 0;
     for (let attempt = 1; attempt <= RERANK_RETRY_ATTEMPTS; attempt += 1) {
+      attempts = attempt;
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), RERANK_TIMEOUT_MS);
       try {
@@ -487,14 +519,45 @@ async function rerankTexts(query, texts) {
         clearTimeout(timer);
       }
     }
-    // chunk-local indices -> global indices before merging
-    for (const r of decoded) {
-      const i = Number(r && r.index);
-      if (Number.isInteger(i) && i >= 0 && i < batch.length) {
-        merged.push({ index: i + offset, score: Number(r && r.score) || 0 });
+    return { decoded, attempts };
+  }
+
+  // Worker pool over the batch list: each worker takes the next batch index
+  // when it frees up, so a slow batch never idles the other workers. Results
+  // land in decodedByBatch[i] — batch order is preserved regardless of
+  // completion order.
+  const decodedByBatch = new Array(batches.length);
+  let retries = 0;
+  let next = 0;
+  const worker = async () => {
+    for (;;) {
+      const i = next;
+      if (i >= batches.length) return;
+      next += 1;
+      const { decoded, attempts } = await rerankBatch(batches[i].batch);
+      retries += attempts - 1;
+      decodedByBatch[i] = decoded;
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, batches.length) || 1 }, worker));
+
+  // chunk-local indices -> global indices before merging
+  const merged = [];
+  batches.forEach(({ offset, batch }, i) => {
+    for (const r of decodedByBatch[i] || []) {
+      const idx = Number(r && r.index);
+      if (Number.isInteger(idx) && idx >= 0 && idx < batch.length) {
+        merged.push({ index: idx + offset, score: Number(r && r.score) || 0 });
       }
     }
-  }
+  });
+  logger.info('ragas-suite.rerank.done', {
+    texts: texts.length,
+    batches: batches.length,
+    concurrency,
+    retries,
+    wall_ms: Date.now() - started
+  });
   return merged;
 }
 

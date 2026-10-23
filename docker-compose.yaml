@@ -798,6 +798,12 @@ services:
       - OKF_RAGAS_TESTSET_SIZE_DEFAULT=${OKF_RAGAS_TESTSET_SIZE_DEFAULT:-20}
       - OKF_RAGAS_MAX_ENTRIES=${OKF_RAGAS_MAX_ENTRIES:-200}
       - OKF_RAGAS_RUN_CONCURRENCY=${OKF_RAGAS_RUN_CONCURRENCY:-2}
+      # Benchmark rerank batch concurrency (2026-10-23). Batch calls are
+      # independent and scores are identical at any concurrency — transport
+      # only. 1 = sequential; default 3 overlaps a 6-batch pool into ~2 waves
+      # (~3x faster retrieval leg). Global in-flight ceiling is
+      # OKF_RAGAS_RUN_CONCURRENCY x this value.
+      - OKF_RAGAS_RERANK_CONCURRENCY=${OKF_RAGAS_RERANK_CONCURRENCY:-3}
       # The answer leg's INITIAL token budget. It was hardcoded to 800, and a
       # reasoning-capable model burns 400-700 tokens before writing a word --
       # every answer hit the length cap, was thrown away, and was re-called at

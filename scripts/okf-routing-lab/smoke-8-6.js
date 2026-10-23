@@ -132,7 +132,10 @@ async function userToken() {
       }
     })
   );
-  if (!r.access_token) throw new Error('no token for smoke user');
+  // Keycloak's answer is the whole diagnosis (invalid_grant vs expired vs
+  // client-not-allowed) — never swallow it (live 2026-10-23: a re-mint died
+  // as a bare "no token" and the cause stayed invisible).
+  if (!r.access_token) throw new Error(`no token for smoke user: ${JSON.stringify(r).slice(0, 300)}`);
   return r.access_token;
 }
 

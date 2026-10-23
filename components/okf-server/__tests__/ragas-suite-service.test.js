@@ -1840,3 +1840,51 @@ describe('serve mode — the benchmark measures the SERVED system (2026-10-23)',
     expect(doc.payload.results[0].abstained).toBe(true);
   });
 });
+
+describe('cancel-race guard (live 2026-10-23)', () => {
+  // A cancel that lands between the pre-judge check and the evaluate
+  // submission found NOTHING registered in activeSidecarJobs — the evaluate
+  // job then ran UNCANCELLED for hours while the run doc said cancelled, and
+  // (with MAX_CONCURRENT_JOBS=2) it bricked the sidecar with 503 busy for
+  // every later run. The guard: after the submit, re-check the cancel flag,
+  // kill the fresh job, honour the cancel.
+  it('a cancel landing during the judge-submit window kills the fresh evaluate job', async () => {
+    const begunSuite = await svc.beginSuiteGeneration('me', { testset_size: 2 }, {});
+    await begunSuite.done;
+    let releaseEval;
+    const deleted = [];
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url, opts = {}) => {
+      const u = String(url);
+      if (u.includes('/evaluate')) {
+        // Hold the submit open so the test can land a cancel in the window
+        // between the pre-judge check and the job registration.
+        return new Promise((resolve) => {
+          releaseEval = () => resolve(okJson({ job_id: 'j-race', status: 'queued', poll: '/jobs/j-race' }));
+        });
+      }
+      if (u.includes('/jobs/j-race') && opts && opts.method === 'DELETE') {
+        deleted.push('j-race');
+        return Promise.resolve(okJson({ job_id: 'j-race', status: 'cancelled' }));
+      }
+      if (u.includes('/jobs/j-race')) return Promise.resolve(okJson({ job_id: 'j-race', status: 'cancelled' }));
+      return baseFetch(url, opts);
+    });
+    const begun = await svc.beginRunSuite('me', begunSuite.suite_key, { mode: 'whatif' }, {});
+    // Wait until the evaluate submit is in flight (the answer leg is done).
+    for (let i = 0; i < 100 && !releaseEval; i += 1) await new Promise((r) => setImmediate(r));
+    expect(typeof releaseEval).toBe('function');
+    // The user cancels NOW — mid-window: nothing is registered yet.
+    await svc.cancelSuiteRun('me', begunSuite.suite_key, begun.run_key);
+    // The submit completes after the cancel.
+    releaseEval();
+    // The cancel REJECTS the done promise by design (the doc is the state).
+    await expect(begun.done).rejects.toMatchObject({ code: 'RAGAS_JOB_CANCELLED' });
+    const doc = await svc.getRunSuite('me', begunSuite.suite_key, begun.run_key);
+    expect(doc.status).toBe('cancelled');
+    // The freshly submitted job was explicitly killed.
+    expect(deleted).toContain('j-race');
+    // And the judge never scored: no evaluation result was consumed.
+    expect(doc.payload && doc.payload.summary).toBeFalsy();
+  });
+});

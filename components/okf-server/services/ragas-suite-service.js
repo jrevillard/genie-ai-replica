@@ -1159,6 +1159,16 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
       { repo_id: repoId }
     );
     const genStarted = await genResp.json();
+    // Cancel-race guard (same shape as the evaluate submit): a user cancel
+    // landing between the sidecar POST and the poll registration finds no
+    // registered job to cancel — the generation would run uncancelled for
+    // the whole KG build. Kill the fresh job and honour the cancel.
+    if (userCancelledGen.has(opts.suiteKey)) {
+      await cancelSidecarJob(genStarted.job_id, 'generation cancelled by user (landed during submit)');
+      const cancelled = new Error('generation cancelled by user');
+      cancelled.code = 'RAGAS_JOB_CANCELLED';
+      throw cancelled;
+    }
     const gen = await pollSidecarJobOwned(
       genStarted.job_id,
       {
@@ -1944,6 +1954,19 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       { repo_id: repoId, suite_key: suiteKey, run_key: opts.runKey }
     );
     const evalStartedBody = await evalStarted.json();
+    // Cancel-race guard (live 2026-10-23): a cancel that lands between the
+    // pre-judge check above and this submission finds NOTHING in
+    // activeSidecarJobs to cancel (the job is not registered until
+    // pollSidecarJobOwned runs) — so the evaluate job would run UNCANCELLED
+    // for hours of judge calls while the run doc already says cancelled.
+    // Re-check here, after the submit: if the user cancelled meanwhile, kill
+    // the job we just created and honour the cancel.
+    if (userCancelledRun.has(opts.runKey)) {
+      await cancelSidecarJob(evalStartedBody.job_id, 'run cancelled by user (landed during judge submit)');
+      const cancelled = new Error('run cancelled by user');
+      cancelled.code = 'RAGAS_JOB_CANCELLED';
+      throw cancelled;
+    }
     const evaluation = await pollSidecarJobOwned(
       evalStartedBody.job_id,
       {

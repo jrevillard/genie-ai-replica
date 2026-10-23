@@ -3432,7 +3432,10 @@ export default {
         fails: 'Métricas fallidas',
         recommendation: 'Recomendación',
         unfair: 'pregunta injusta',
-        unfairTitle: 'El pasaje esperado no está en el corpus: esta fila evalúa el benchmark, no al asistente'
+        unfairTitle: 'El pasaje esperado no está en el corpus: esta fila evalúa el benchmark, no al asistente',
+        evidenceTitle:
+          'Pasajes encontrados en el corpus / conjunto de candidatos / entregados al modelo. Método: {method}',
+        rankTitle: 'El pasaje está en el corpus pero fuera del conjunto de candidatos: ocupa la posición #{n}.'
       },
       history: {
         title: 'Historial de ejecuciones',

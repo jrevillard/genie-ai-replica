@@ -3423,7 +3423,9 @@ export default {
         fails: 'Ditekanyo tse fosahetseng',
         recommendation: 'Khothaletso',
         unfair: 'potso e sa molemo',
-        unfairTitle: 'Karolo eo e lebelagoa ha ho corpus — mofutofuto ena o lekola benchmark, eseng ha mhoabi'
+        unfairTitle: 'Karolo eo e lebelagoa ha ho corpus — mofutofuto ena o lekola benchmark, eseng ha mhoabi',
+        evidenceTitle: 'Lifa tse tsefumaditseng, corpus / lihore tsa bakatsi / ho model. Mokhoa: {method}',
+        rankTitle: 'Karolo ena e le corpus, empa e ka ntle ho lihore tsa bakatsi — boemong # {n}.'
       },
       history: {
         title: 'Histori ea tsamaello',

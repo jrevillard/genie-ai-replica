@@ -3380,7 +3380,9 @@ export default {
         fails: 'Failing metrics',
         recommendation: 'Recommendation',
         unfair: 'soqaa milɣiɣi',
-        unfairTitle: 'Weyaa kan kee buniiru tigi e ko korpuuni — ndinɣe beeci eɣa nkaɣeɣi, Assistant ma'
+        unfairTitle: 'Weyaa kan kee buniiru tigi e ko korpuuni — ndinɣe beeci eɣa nkaɣeɣi, Assistant ma',
+        evidenceTitle: 'Weyaa kan kee founoo e korpuuni / e kandidet koo / e Assistant ma. Modo: {method}',
+        rankTitle: 'Weyaa kan e korpuuni, amma kɔnɔ e kandidet kɔnɔ dɔw — e nia yɔrɔ #{n}.'
       },
       history: {
         title: 'Run history',

@@ -3433,7 +3433,10 @@ export default {
         fails: 'Métriques en échec',
         recommendation: 'Recommandation',
         unfair: 'question injuste',
-        unfairTitle: "Le passage attendu n'est pas dans le corpus — cette ligne évalue le benchmark, pas l'assistant"
+        unfairTitle: "Le passage attendu n'est pas dans le corpus — cette ligne évalue le benchmark, pas l'assistant",
+        evidenceTitle:
+          'Passages trouvés dans le corpus / le vivret de candidats / transmis au modèle. Méthode : {method}',
+        rankTitle: 'Le passage est dans le corpus mais hors du vivret de candidats — il se classe #{n}.'
       },
       history: {
         title: 'Historique des exécutions',

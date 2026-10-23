@@ -2069,7 +2069,9 @@ export default {
         // be answered by the system it measures — it is a benchmark
         // defect, not a pipeline defect.
         unfair: 'unfair question',
-        unfairTitle: 'The expected passage is not in the corpus — this row measures the benchmark, not the assistant'
+        unfairTitle: 'The expected passage is not in the corpus — this row measures the benchmark, not the assistant',
+        evidenceTitle: 'Passages found in the corpus / candidate pool / delivered to the model. Method: {method}',
+        rankTitle: 'The passage is in the corpus but outside the candidate pool — it ranks #{n}.'
       },
       history: {
         title: 'Run history',

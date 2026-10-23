@@ -3436,7 +3436,9 @@ export default {
         recommendation: 'Empfehlung',
         unfair: 'unfaire Frage',
         unfairTitle:
-          'Die erwartete Passage liegt nicht im Korpus – diese Zeile bewertet den Benchmark, nicht den Assistenten'
+          'Die erwartete Passage liegt nicht im Korpus – diese Zeile bewertet den Benchmark, nicht den Assistenten',
+        evidenceTitle: 'Im Korpus / im Kandidatenpool / an das Modell gefundene Passagen. Methode: {method}',
+        rankTitle: 'Die Passage liegt im Korpus, aber außerhalb des Kandidatenpools – sie rangiert auf Platz #{n}.'
       },
       history: {
         title: 'Ausführungsverlauf',

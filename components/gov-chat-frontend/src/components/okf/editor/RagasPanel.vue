@@ -582,6 +582,12 @@
               >
                 · {{ translate('okf.ragas.explain.unfair', 'unfair question') }}
               </span>
+              <!-- Where the passage was lost, proven against the corpus. The
+                   counts are only meaningful when the ladder decided the
+                   verdict (ladder_applied). -->
+              <span v-if="a.evidence && a.evidence.ladder_applied" class="okf-ragas__muted" :title="evidenceTitle(a)">
+                · {{ evidenceSummary(a) }}
+              </span>
             </td>
             <td>{{ (a.fails || []).join(', ') }}</td>
             <td>{{ a.recommendation }}</td>
@@ -1291,6 +1297,33 @@ export default {
       if (stage === 'corpus') return 'danger';
       if (stage === 'judge' || stage === 'pipeline') return 'neutral';
       return 'warning';
+    },
+    /**
+     * Where the expected passage was lost, in one line: how many passages
+     * were found in the corpus, how many made the candidate pool, and how
+     * many reached the model. The counts are only shown for rows whose
+     * stage came from the retrieval ladder — for the others the judge
+     * credited the content as covered, so the counts would mislead.
+     */
+    evidenceSummary(a) {
+      const e = a.evidence;
+      if (!e) return '';
+      const rank = e.candidate_rank ? `, rank #${e.candidate_rank}` : '';
+      return `${e.in_corpus}/${e.passages} in corpus, ${e.in_candidates} candidate, ${e.in_contexts} in context${rank}`;
+    },
+    evidenceTitle(a) {
+      const e = a.evidence;
+      if (!e) return '';
+      const rank = e.candidate_rank
+        ? this.translate(
+            'okf.ragas.explain.rankTitle',
+            'The passage is in the corpus but outside the candidate pool — it ranks #{n}.'
+          ).replace('{n}', String(e.candidate_rank))
+        : '';
+      return `${this.translate(
+        'okf.ragas.explain.evidenceTitle',
+        'Passages found in the corpus / candidate pool / delivered to the model. Method: {method}'
+      ).replace('{method}', String(e.method || ''))}${rank ? ` ${rank}` : ''}`;
     },
     passagesTitle(e) {
       const ps = e.reference_passages || [];

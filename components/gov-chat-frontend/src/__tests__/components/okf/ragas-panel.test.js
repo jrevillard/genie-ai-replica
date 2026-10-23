@@ -365,6 +365,62 @@ describe('RagasPanel', () => {
     expect(w.vm.stageVariant('judge')).toBe('neutral');
   });
 
+  // The evidence counts are shown ONLY for rows whose stage came from the
+  // retrieval ladder. For the others the judge credited the content as
+  // covered, so showing "0 in context" would contradict the verdict.
+  it('shows the retrieval evidence only when the ladder decided the verdict', async () => {
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    w.vm.explainDoc = {
+      attributions: [
+        {
+          id: 'new-1',
+          query: 'q',
+          fails: ['context_recall'],
+          stage: 'vector-recall',
+          recommendation: 'raise OKF_RAGAS_CANDIDATE_K',
+          evidence: {
+            passages: 1,
+            probeable_passages: 1,
+            in_corpus: 1,
+            in_candidates: 0,
+            in_contexts: 0,
+            ladder_applied: true,
+            candidate_rank: 28,
+            method: 'containment(8-word needles, stride 4) + token coverage >= 0.85'
+          }
+        },
+        {
+          id: 'new-2',
+          query: 'q',
+          fails: ['context_precision'],
+          stage: 'reranker',
+          recommendation: 'noise ranked above signal',
+          evidence: {
+            passages: 1,
+            probeable_passages: 1,
+            in_corpus: 1,
+            in_candidates: 0,
+            in_contexts: 0,
+            ladder_applied: false
+          }
+        }
+      ],
+      advice: { knob_changes: [], repo_tag_changes: [], content_curation: [], prompt_tweaks: [], note: '' }
+    };
+    await w.vm.$nextTick();
+    // The ladder-driven row shows the counts and the rank.
+    expect(w.text()).toContain('1/1 in corpus');
+    expect(w.text()).toContain('rank #28');
+    // The metric-driven row shows NONE — its 0/0 counts would contradict
+    // the "noise ranked above signal" verdict.
+    const summaries = w.findAll('.okf-ragas__muted').filter((n) => n.text().includes('in corpus'));
+    expect(summaries.length).toBe(1);
+    expect(w.vm.evidenceSummary(w.vm.explainDoc.attributions[1])).toContain('1/1 in corpus');
+    // ...and the tooltip carries the method, so the verdict is auditable.
+    expect(w.vm.evidenceTitle(w.vm.explainDoc.attributions[0])).toContain('containment');
+  });
+
   it('formats progress labels with the phase and counts', () => {
     const w = mountPanel();
     w.vm.runProgress = { phase: 'retrieval', done: 3, total: 10 };

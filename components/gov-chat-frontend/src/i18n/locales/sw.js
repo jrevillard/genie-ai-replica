@@ -3408,7 +3408,10 @@ export default {
         fails: 'Vipimo vilivyoshindwa',
         recommendation: 'Pendekezo',
         unfair: 'swali lisilo',
-        unfairTitle: 'Kifungu kilichotajikwa hakiki hakipo kwenye korpus — mstari huu unapima benchmark, si msaidizi'
+        unfairTitle: 'Kifungu kilichotajikwa hakiki hakipo kwenye korpus — mstari huu unapima benchmark, si msaidizi',
+        evidenceTitle:
+          'Vifungu vilivyopatikwa kwenye korpus / seti ya wagombwa / vilivyotolewa kwa modeli. Njia: {method}',
+        rankTitle: 'Kifungu kiko kiko kwenye korpus lakini nje ya seti ya wagombwa — nafasi ya #{n}.'
       },
       history: {
         title: 'Historia ya utekelezaji',

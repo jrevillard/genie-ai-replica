@@ -2035,6 +2035,14 @@ function attributeFailures(suite, runDoc, evidence) {
             in_corpus: ladder.inCorpus,
             in_candidates: ladder.inCandidates,
             in_contexts: ladder.inContexts,
+            // Whether the LADDER decided this row's stage. It only does so
+            // for a RECALL failure — when recall passed, the passage was
+            // effectively found and the metric that failed (precision,
+            // faithfulness, ...) explains the row on its own. Without this
+            // flag the counts look contradictory: a row can show
+            // in_contexts=0 and still be a "reranker" verdict, because the
+            // judge credited the content as covered by other chunks.
+            ladder_applied: ladderStage != null,
             carrier_chunk: ladder.carrierKey || null,
             candidate_rank: ladder.rank || null,
             corpus_matched_chunks: ev.matched_chunks,

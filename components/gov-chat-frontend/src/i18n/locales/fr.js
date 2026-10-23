@@ -3420,6 +3420,9 @@ export default {
         error: 'erreur',
         abstained: 'abstention',
         answered: 'répondu',
+        noisy: 'réponse correcte — bruit de récupération',
+        noisyTitle:
+          "La réponse a réussi toutes les métriques de qualité de réponse ; seul l'ensemble de contextes livré (précision/rappel) est passé sous le seuil",
         pdf: 'Exporter le rapport PDF'
       },
       explain: {

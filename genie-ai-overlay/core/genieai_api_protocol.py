@@ -109,6 +109,7 @@ class ChatCompletionRequest(BaseModel):
     # each source document in the metadata event, so an evaluator measures the
     # contexts the model actually saw instead of re-retrieving in parallel.
     # Citizens never set it; without it the response is byte-identical to before.
+    # OVERRIDE core.genieai_api_protocol.ChatCompletionRequest.include_contexts | disposition: still-needed | reason: benchmark opt-in field absent upstream — attaches served chunk texts to source documents (RAGAS serve mode)  # noqa: E501
     include_contexts: bool = False
     image_path: str | None = None
     audio_path: str | None = None

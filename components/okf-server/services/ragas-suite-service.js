@@ -47,6 +47,10 @@ const repositoryService = require('./repository-service');
 const headTestService = require('./head-test-service');
 const modelConfigService = require('./model-config-service');
 const ragasAttributionService = require('./ragas-attribution-service');
+// Serve-mode calls hit chatqna, whose handler 401s ANY unauthenticated
+// request (genieai_chatqna.py handle_request) — the same service-account
+// bearer the doc-repo calls use authenticates the benchmark's serve leg.
+const { getServiceToken } = require('./service-token');
 
 const COLLECTION = 'okf_head_test_runs'; // kinds: ragas_suite | ragas_run | ragas_explain
 
@@ -434,6 +438,10 @@ async function pollSidecarJobOwned(jobId, meta, { onProgress } = {}) {
 // enough to outlive a gateway burst limiter without stalling a run.
 const RERANK_RETRY_ATTEMPTS = 4;
 const RERANK_RETRY_STATUSES = new Set([429, 502, 503, 504]);
+// Ceiling for a server-provided Retry-After (review 2026-10-23): the
+// server's number wins over our ladder, but never past 60s — an uncapped
+// 'Retry-After: 3600' would sleep an hour per attempt.
+const RETRY_AFTER_CAP_MS = 60000;
 // 30s, matching teiEmbed's budget: a full batch is 32 texts of up to 2,000
 // chars through a cross-encoder on a GPU that also serves chat. The old 15s
 // aborted healthy-but-busy batches (live 2026-10-23, 2 of 100 rows) — and an
@@ -606,71 +614,139 @@ function decodePyRepr(content, quote) {
     .replace(/\\t/g, '\t')
     .replace(/\\r/g, '\r')
     .replace(quote === "'" ? /\\'/g : /\\"/g, quote === '"' ? '"' : "'");
+  // Restore the backslash sentinel BEFORE the control-char strip — the
+  // sentinel's \x00 markers sit INSIDE the strip range, so stripping first
+  // eats them and leaves literal 'BS' in the answer (the exact order the
+  // backend's parseChatQnASSELine applies; drifted in review 2026-10-23).
   // eslint-disable-next-line no-control-regex -- mirror the backend's strip
-  return out.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '').replace(new RegExp(BS, 'g'), '\\');
+  return out.replace(new RegExp(BS, 'g'), '\\').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
 }
 
+// Bounded like every sibling leg (rerank 30s abort, teiEmbed 30s, vllm 60s+):
+// undici's bodyTimeout only fires on SILENCE between chunks, so without an
+// overall budget a keepalive-trickling stream would wedge the worker — and
+// runInFlight (cleared only when the run promise settles) — until the
+// process restarts. A served answer can stream for a while on a shared GPU,
+// hence the generous 5-minute ceiling.
+const SERVE_TIMEOUT_MS = 300000;
+
 async function serveAnswer(query) {
-  const resp = await fetch(SERVE_URL(), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages: query, stream: true, include_contexts: true })
-  });
-  if (!resp.ok) {
-    const err = new Error(`chatqna HTTP ${resp.status}`);
-    err.status = resp.status;
-    err.retryable = resp.status === 429 || resp.status >= 500;
-    throw err;
-  }
-  const decoder = new TextDecoder();
-  let answer = '';
-  let meta = null;
-  let buffer = '';
-  for await (const chunk of resp.body) {
-    buffer += decoder.decode(chunk, { stream: true });
-    let idx;
-    while ((idx = buffer.indexOf('\n')) >= 0) {
-      const line = buffer.slice(0, idx).trim();
-      buffer = buffer.slice(idx + 1);
-      if (!line.startsWith('data:')) continue;
-      const data = line.slice(5).trim();
-      if (data === '[DONE]') continue;
-      if (data.startsWith('{')) {
-        try {
-          const obj = JSON.parse(data);
-          if (obj && obj.type === 'metadata') meta = obj;
-        } catch {
-          // not the metadata event — ignore
-        }
-        continue;
-      }
-      const m = data.match(/^b(['"])([\s\S]*)\1$/);
-      if (m) answer += decodePyRepr(m[2], m[1]);
+  // chatqna 401s unauthenticated calls before body parse — attach the
+  // okf-server service-account bearer (same token the doc-repo calls use).
+  // Unconfigured deployments still get the 401, loudly (service-token warns).
+  const token = await getServiceToken();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SERVE_TIMEOUT_MS);
+  const markOwnAbortRetryable = (e) => {
+    // Our own budget abort is transient by definition (the endpoint was
+    // busy, not wrong) — same classification the rerank leg applies.
+    if (e && (e.name === 'AbortError' || e.code === 20 || e.code === 'ABORT_ERR')) {
+      e.retryable = true;
     }
-  }
-  const docs = (meta && meta.source_documents) || [];
-  return {
-    answer: answer.trim(),
-    abstained: Boolean(meta && meta.abstained),
-    abstention_reason: (meta && meta.abstention_reason) || '',
-    confidence: meta ? meta.confidence_score : null,
-    is_grounded: Boolean(meta && meta.is_grounded),
-    // The SERVED contexts — the exact chunks the model answered from.
-    contexts: docs.map((d) => String(d.text || '')).filter(Boolean),
-    // chatqna speaks in document ids (file_id == concept_id for OKF chunks),
-    // not graph chunk keys. The ladder's delivered tier is decided by text
-    // containment for serve rows; these ids are recorded for forensics.
-    context_keys: docs.map((d) => String(d.document_id || '')),
-    source_documents: docs
+    throw e;
   };
+  try {
+    let resp;
+    try {
+      resp = await fetch(SERVE_URL(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ messages: query, stream: true, include_contexts: true }),
+        signal: controller.signal
+      });
+    } catch (e) {
+      throw markOwnAbortRetryable(e);
+    }
+    if (!resp.ok) {
+      const err = new Error(`chatqna HTTP ${resp.status}`);
+      err.status = resp.status;
+      err.retryable = resp.status === 429 || resp.status >= 500;
+      throw err;
+    }
+    const decoder = new TextDecoder();
+    let answer = '';
+    let meta = null;
+    let buffer = '';
+    try {
+      for await (const chunk of resp.body) {
+        buffer += decoder.decode(chunk, { stream: true });
+        let idx;
+        while ((idx = buffer.indexOf('\n')) >= 0) {
+          const line = buffer.slice(0, idx).trim();
+          buffer = buffer.slice(idx + 1);
+          if (!line.startsWith('data:')) continue;
+          const data = line.slice(5).trim();
+          if (data === '[DONE]') continue;
+          if (data.startsWith('{')) {
+            try {
+              const obj = JSON.parse(data);
+              if (obj && obj.type === 'metadata') meta = obj;
+            } catch {
+              // not the metadata event — ignore
+            }
+            continue;
+          }
+          const m = data.match(/^b(['"])([\s\S]*)\1$/);
+          if (m) answer += decodePyRepr(m[2], m[1]);
+        }
+      }
+    } catch (e) {
+      throw markOwnAbortRetryable(e);
+    }
+    if (!meta) {
+      // The stream ended without the metadata event — the contract broke
+      // (proxy cut the stream, chatqna died post-tokens). Recording this as
+      // a zero-context success would mislabel the row 'routing' and keep the
+      // run "valid" with garbage scores; name the infra error instead.
+      const err = new Error('chatqna SSE stream ended without the metadata event');
+      err.retryable = true;
+      throw err;
+    }
+    const docs = meta.source_documents || [];
+    const contexts = docs.map((d) => String(d.text || '')).filter(Boolean);
+    if (docs.length && !contexts.length) {
+      // Documents came back but none carried text — the deployed chatqna
+      // predates include_contexts (pydantic drops the unknown field and the
+      // metadata event omits 'text'). Loud config error, not a silent
+      // all-zero context-metric run blamed on publishing.
+      throw new Error(
+        'chatqna returned source documents without served chunk texts — include_contexts unsupported (chatqna image older than okf-server?)'
+      );
+    }
+    // chatqna's normal metadata event carries no 'abstained' key (only the
+    // reranker-overflow branch emits one), so detect the refusal text the
+    // same way the whatif leg's generateAnswer does.
+    const abstained = meta.abstained === true || matchAbstention(answer.trim());
+    return {
+      answer: answer.trim(),
+      abstained,
+      abstention_reason: meta.abstention_reason || '',
+      confidence: meta.confidence_score !== undefined ? meta.confidence_score : null,
+      is_grounded: Boolean(meta.is_grounded),
+      // The SERVED contexts — the exact chunks the model answered from.
+      contexts,
+      // chatqna speaks in document ids (file_id == concept_id for OKF chunks),
+      // not graph chunk keys. The ladder's delivered tier is decided by text
+      // containment for serve rows; these ids are recorded for forensics.
+      context_keys: docs.map((d) => String(d.document_id || '')),
+      source_documents: docs
+    };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function retryDelayMs(e, attempt) {
   // Binary exponential backoff (David, 2026-10-23): 0.5s, 1s, 2s, ... capped
   // at 8s, jittered so parallel batches do not synchronise into a stampede.
   // The server's own Retry-After wins when it sends one — a rate limiter
-  // that says "come back in 3s" knows better than our ladder.
-  if (e.retryAfterMs) return e.retryAfterMs;
+  // that says "come back in 3s" knows better than our ladder — but CAPPED:
+  // a limiter that says "come back in an hour" must not park the benchmark
+  // (or an interactive caller) for an hour per attempt.
+  if (e.retryAfterMs) return Math.min(RETRY_AFTER_CAP_MS, e.retryAfterMs);
   return Math.min(8000, 500 * Math.pow(2, attempt - 1)) + Math.floor(Math.random() * 250);
 }
 
@@ -1671,6 +1747,10 @@ async function runSuite(repoId, suiteKey, opts = {}) {
         retrying: erroredIdx.length
       });
       for (const i of erroredIdx) {
+        // Same per-row cancel check the worker loop has (review F1 class):
+        // a cancel during the sweep must stop it here, not after every
+        // remaining retry has hit the shared endpoint.
+        if (userCancelledRun.has(opts.runKey)) break;
         const e = entries[i];
         try {
           let row;
@@ -1723,7 +1803,9 @@ async function runSuite(repoId, suiteKey, opts = {}) {
             message: String(err && err.message).slice(0, 200)
           });
         }
-        doneCount += 1;
+        // The row was already counted done when it errored in the worker
+        // phase — re-report the same progress as a heartbeat, never more:
+        // incrementing again would publish done > total (104/100).
         await report(opts, { phase: 'retrieval', done: doneCount, total });
       }
     }
@@ -2254,7 +2336,12 @@ function attributeFailures(suite, runDoc, evidence) {
       runDoc.payload && runDoc.payload.fidelity && runDoc.payload.fidelity.retrieval
         ? runDoc.payload.fidelity.retrieval.mode === 'serve'
         : false;
-    const rowPassages = (e.reference_passages || []).filter(Boolean);
+    // Index-aligned with the evidence builder's carriers: collectEvidence
+    // (ragas-attribution-service) drops passages whose norm() is empty, so a
+    // whitespace-only entry kept by a bare filter(Boolean) would shift every
+    // later carriers[idx]/passages[idx] pair — the serve ladder pairs the
+    // two lists BY INDEX and would test the wrong passage's text.
+    const rowPassages = (e.reference_passages || []).filter((p) => norm(p));
     const ladder = ev ? retrievalLadder(ev, r, rowPassages, serveMode) : null;
     const recallFailed = failed.includes('context_recall');
     const ladderStage = recallFailed ? ladder && ladder.stage : null;
@@ -2287,9 +2374,20 @@ function attributeFailures(suite, runDoc, evidence) {
         'the expected passage is not in the indexed corpus — this row asks about content the system was never given, so it measures the benchmark, not the assistant. Regenerate this entry against the current corpus; only curate the concept if that content was deliberately removed.';
     } else if (ladderStage === 'vector-recall') {
       stage = 'vector-recall';
-      recommendation = ladder.rank
-        ? `the expected passage IS in the corpus but the dense top-${CANDIDATE_K} never surfaced it — it ranks #${ladder.rank} of ${ladder.searched}. Raise OKF_RAGAS_CANDIDATE_K to at least ${ladder.rank} (${ladder.caveat}), or improve the retrieval query.`
-        : `the expected passage IS in the corpus but the dense top-${CANDIDATE_K} never surfaced it — raise OKF_RAGAS_CANDIDATE_K or improve the retrieval query.`;
+      // Serve rows were answered by chatqna's OWN retriever — OKF_RAGAS_CANDIDATE_K
+      // only governs the whatif replay, so recommending it for a serve row
+      // prescribes a no-op. The rank probe still runs (it says where the
+      // passage sat in the OKF replay index — a hint, not the served
+      // pipeline's own ranking), but the advice must name the real surface.
+      if (serveMode) {
+        recommendation = ladder.rank
+          ? `the expected passage IS in the corpus but chatqna's served retriever did not deliver it — in the OKF replay index it ranks #${ladder.rank} of ${ladder.searched} (${ladder.caveat}; a hint, not the served pipeline's own ranking). Raise the retriever's candidate count in the chatqna deployment (or rerun this suite in whatif mode to experiment with OKF_RAGAS_CANDIDATE_K), or improve the retrieval query.`
+          : `the expected passage IS in the corpus but chatqna's served retriever did not deliver it — raise the retriever's candidate count in the chatqna deployment, or improve the retrieval query.`;
+      } else {
+        recommendation = ladder.rank
+          ? `the expected passage IS in the corpus but the dense top-${CANDIDATE_K} never surfaced it — it ranks #${ladder.rank} of ${ladder.searched}. Raise OKF_RAGAS_CANDIDATE_K to at least ${ladder.rank} (${ladder.caveat}), or improve the retrieval query.`
+          : `the expected passage IS in the corpus but the dense top-${CANDIDATE_K} never surfaced it — raise OKF_RAGAS_CANDIDATE_K or improve the retrieval query.`;
+      }
     } else if (ladderStage === 'reranker') {
       stage = 'reranker';
       recommendation =

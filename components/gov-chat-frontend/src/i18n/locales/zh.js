@@ -3331,6 +3331,8 @@ export default {
         error: '错误',
         abstained: '已拒答',
         answered: '已回答',
+        noisy: '回答正常 — 检索噪声',
+        noisyTitle: '该回答通过了所有回答质量指标；仅交付的上下文集（精确率/召回率）低于阈值',
         pdf: '导出 PDF 报告'
       },
       explain: {

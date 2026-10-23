@@ -110,6 +110,12 @@ overrides:
     justification: Top-n filtering (reranker) — upstream lacks this field. Reranker returns top-n results after scoring.
     added_in: v1.3
     last_validated: v1.5
+  - override: core.genieai_api_protocol.ChatCompletionRequest.include_contexts
+    disposition: still-needed
+    owner: genie-ai
+    justification: Benchmark opt-in field absent upstream — okf-server's RAGAS serve mode sets it so chatqna attaches each served chunk's text to its source document in the SSE metadata event (citizen payloads never set it; responses are otherwise byte-identical).
+    added_in: v1.5
+    last_validated: v1.5
   - override: build-patches.docarray_alias_shim
     disposition: re-graft-to-new-API
     owner: genie-ai

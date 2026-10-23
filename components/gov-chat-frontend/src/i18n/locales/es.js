@@ -3419,6 +3419,9 @@ export default {
         error: 'error',
         abstained: 'abstenido',
         answered: 'respondido',
+        noisy: 'respuesta correcta — ruido de recuperación',
+        noisyTitle:
+          'La respuesta superó todas las métricas de calidad de la respuesta; solo el conjunto de contextos entregado (precisión/exhaustividad) quedó por debajo del umbral',
         pdf: 'Exportar informe PDF'
       },
       explain: {

@@ -3399,6 +3399,9 @@ export default {
         error: 'galat',
         abstained: 'menahan diri',
         answered: 'terjawab',
+        noisy: 'jawaban baik — derau retrieval',
+        noisyTitle:
+          'Jawaban lolos semua metrik kualitas jawaban; hanya set konteks yang dikirim (presisi/recall) yang berada di bawah ambang batas',
         pdf: 'Ekspor laporan PDF'
       },
       explain: {

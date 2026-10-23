@@ -210,7 +210,8 @@ function isRetriableUpstreamError(err) {
 async function withUpstreamRetry(label, fn, ctx) {
   // Binary exponential backoff (David, 2026-10-23): 1s, 2s, 4s, 8s — four
   // attempts. The server's own Retry-After wins when it sends one (a rate
-  // limiter that says "come back in 3s" knows better than our ladder).
+  // limiter that says "come back in 3s" knows better than our ladder), but
+  // capped at 60s — "come back in an hour" must not park the caller an hour.
   const base = 1000;
   const max = 8000;
   let lastErr;
@@ -223,7 +224,7 @@ async function withUpstreamRetry(label, fn, ctx) {
       const retryAfter = Number(err.response && err.response.headers && err.response.headers['retry-after']);
       const delay =
         (Number.isFinite(retryAfter) && retryAfter > 0
-          ? retryAfter * 1000
+          ? Math.min(60000, retryAfter * 1000)
           : Math.min(max, base * Math.pow(2, attempt))) + Math.floor(Math.random() * 250);
       logger.warn(`frontmatter.${label}.retry`, {
         ...ctx,

@@ -3367,6 +3367,9 @@ export default {
         error: 'error',
         abstained: 'abstained',
         answered: 'answered',
+        noisy: 'answer OK — retrieval noise',
+        noisyTitle:
+          'The answer passed every answer-quality metric; only the delivered context set (precision/recall) fell below threshold',
         pdf: 'Export PDF report'
       },
       explain: {

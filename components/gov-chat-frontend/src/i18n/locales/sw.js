@@ -3395,6 +3395,9 @@ export default {
         error: 'hitilafu',
         abstained: 'imejiepusha',
         answered: 'imejibiwa',
+        noisy: 'jibu sawa — kelele za upatikanaji',
+        noisyTitle:
+          'Jibu limethibitisha kila kipimo cha ubora wa jibu; ni seti ya muktadha iliyotumwa pekee (usahihi/ukumbukufu) iliyoshuka chini ya kikomo',
         pdf: 'Hamisha ripoti ya PDF'
       },
       explain: {

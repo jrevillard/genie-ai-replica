@@ -28,20 +28,31 @@ const REPO_ID = process.argv[2];
 // its process must re-attach, never re-start. In attach mode argv[3] is the
 // FLAG, so the two-arg suite override must not read it (it would resolve
 // suiteKey to the literal '--attach').
+// Positional args must never swallow a flag: without the guard,
+// `--metrics a,b` as argv[3] resolves suiteKey to the literal '--metrics'
+// and the suite GET 404s after the whole ROPC dance.
+const isFlagArg = (a) => typeof a === 'string' && a.startsWith('--');
 const ATTACH_MODE = process.argv[3] === '--attach';
 const ATTACH = ATTACH_MODE ? process.argv[4] || null : null;
 const SUITE_FOR_ATTACH = ATTACH_MODE ? process.argv[5] || null : null;
-const SUITE_OVERRIDE = ATTACH_MODE ? null : process.argv[3] || null;
+const SUITE_OVERRIDE = !ATTACH_MODE && process.argv[3] && !isFlagArg(process.argv[3]) ? process.argv[3] : null;
 // `--metrics m1,m2,...` starts the run with an explicit metric selection —
 // a 10-metric run is a DIFFERENT measurement from a 4-metric one (the
-// guide's own rule) and must be recorded as what it is.
+// guide's own rule) and must be recorded as what it is. A missing value is
+// a usage error (exit 2), never an undefined.split crash at module load.
 const METRICS_FLAG = process.argv.includes('--metrics');
-const METRICS = METRICS_FLAG
-  ? process.argv[process.argv.indexOf('--metrics') + 1]
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)
-  : null;
+let METRICS = null;
+if (METRICS_FLAG) {
+  const raw = process.argv[process.argv.indexOf('--metrics') + 1];
+  if (!raw || raw.startsWith('--')) {
+    console.error('--metrics needs a comma-separated metric list: --metrics faithfulness,context_recall');
+    process.exit(2);
+  }
+  METRICS = raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
 const SMOKE_USER = 'okf-ragas-compare';
 const SMOKE_PW = crypto.randomBytes(18).toString('base64url') + '#aA1!';
 

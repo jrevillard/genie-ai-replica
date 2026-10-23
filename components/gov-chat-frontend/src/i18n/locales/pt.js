@@ -3412,6 +3412,9 @@ export default {
         error: 'erro',
         abstained: 'absteve-se',
         answered: 'respondeu',
+        noisy: 'resposta correta — ruído de recuperação',
+        noisyTitle:
+          'A resposta passou em todas as métricas de qualidade da resposta; apenas o conjunto de contextos entregue (precisão/revocação) ficou abaixo do limiar',
         pdf: 'Exportar relatório PDF'
       },
       explain: {

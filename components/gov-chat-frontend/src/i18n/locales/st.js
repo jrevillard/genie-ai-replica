@@ -3410,6 +3410,9 @@ export default {
         error: 'phoso',
         abstained: 'e ikgethetse',
         answered: 'e arabitse',
+        noisy: 'karabo e nepahetse — lerata la phumullo',
+        noisyTitle:
+          'Karabo e fetile meeli eohle ea boleng ba karabo; e le sete ea context e fanoeng feela (precision/recall) e ka tlase ea moeli',
         pdf: 'Romela tlaleho ea PDF ka ntle'
       },
       explain: {

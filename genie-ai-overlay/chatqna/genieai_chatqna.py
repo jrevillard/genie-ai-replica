@@ -2606,6 +2606,20 @@ class ChatQnAService:
             if file_id in source_documents_file_ids:
                 logger.info(f"Note: Duplicate File ID {file_id} found. Skipping duplicate.")
                 scores.append(_calibrate_reranker_score(item.get("score", 0.0)))
+                # Benchmark opt-in (include_contexts): the skipped chunk WAS
+                # served to the model (the citizen payload is unchanged — no
+                # text on it), but the evaluator must see every served
+                # chunk's text, so append it to the surviving doc instead of
+                # dropping it — otherwise a reference passage living in the
+                # second chunk of a file scores context_recall 0 although it
+                # was delivered.
+                if include_contexts:
+                    dup_text = text_by_doc.get(doc_id_by_orchestrator)
+                    if dup_text:
+                        for existing in source_documents_formatted:
+                            if existing.get("document_id") == file_id and "text" in existing:
+                                existing["text"] = f"{existing['text']}\n{dup_text}"
+                                break
                 continue
 
             logger.info(f"Document ID {doc_id_by_orchestrator} mapped to File ID {file_id}.")

@@ -3422,6 +3422,9 @@ export default {
         error: 'Fehler',
         abstained: 'enthalten',
         answered: 'beantwortet',
+        noisy: 'Antwort in Ordnung — Retrieval-Rauschen',
+        noisyTitle:
+          'Die Antwort bestand jede Metrik der Antwortqualität; nur das gelieferte Kontextset (Precision/Recall) lag unter dem Schwellenwert',
         pdf: 'PDF-Bericht exportieren'
       },
       explain: {

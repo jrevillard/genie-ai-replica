@@ -1709,6 +1709,9 @@ describe('serve mode — the benchmark measures the SERVED system (2026-10-23)',
         return Promise.resolve(
           sseResponse([
             "data: b'High moisture content drives cob rot.\\nSecond line with \\'quotes\\'.'\n\n",
+            // A literal backslash (Python repr emits \\\\): the sentinel must
+            // round-trip — strip-then-restore mangles it to literal 'BS'.
+            "data: b' See C:\\\\temp\\\\x.'\n\n",
             'data: {"type":"metadata","source_documents":[' +
               '{"document_id":"concept-1","score":0.9,"text":"Chunk one about cob rot."},' +
               '{"document_id":"concept-2","score":0.4,"text":"Bean guide noise."}],' +
@@ -1743,8 +1746,9 @@ describe('serve mode — the benchmark measures the SERVED system (2026-10-23)',
     const doc = await svc.getRunSuite('me', begun.suite_key, run.run_key);
     expect(doc.status).toBe('done');
     const r0 = doc.payload.results[0];
-    // The Python-repr escapes decoded: \n is a newline, \' is a quote.
-    expect(r0.answer).toBe("High moisture content drives cob rot.\nSecond line with 'quotes'.");
+    // The Python-repr escapes decoded: \n is a newline, \' is a quote,
+    // \\\\ is ONE literal backslash (sentinel round-trip, not 'BS').
+    expect(r0.answer).toBe("High moisture content drives cob rot.\nSecond line with 'quotes'. See C:\\temp\\x.");
     // The SERVED contexts, not a replay.
     expect(r0.contexts).toEqual(['Chunk one about cob rot.', 'Bean guide noise.']);
     expect(r0.context_keys).toEqual(['concept-1', 'concept-2']);
@@ -1766,5 +1770,73 @@ describe('serve mode — the benchmark measures the SERVED system (2026-10-23)',
     expect(doc.status).toBe('done');
     expect(doc.payload.fidelity.retrieval.mode).toBe('whatif');
     expect(doc.payload.fidelity.retrieval.candidate_k).toBeGreaterThan(0);
+  });
+
+  it('a stream that ends WITHOUT the metadata event is an honest error row, not a silent zero-context success', async () => {
+    // The contract break must be named (proxy cut the stream / chatqna died
+    // post-tokens) — recording answer + contexts=[] + error:null would
+    // mislabel the row 'routing' and keep the run "valid" with garbage
+    // context metrics. Keyed to row 0's query so the outcome is
+    // deterministic under RUN_CONCURRENCY=2; the sweep retries it and fails
+    // again (sweep_retried), the other row measures normally.
+    const begun = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
+    await begun.done;
+    const baseFetch = global.fetch;
+    const goodStream = () =>
+      sseResponse([
+        "data: b'A grounded answer.'\n\n",
+        'data: {"type":"metadata","source_documents":[' +
+          '{"document_id":"concept-1","score":0.9,"text":"Chunk one about cob rot."}],' +
+          '"confidence_score":0.8,"is_grounded":true}\n\n',
+        'data: [DONE]\n\n'
+      ]);
+    global.fetch = jest.fn((url, opts = {}) => {
+      const u = String(url);
+      if (u.includes('/v1/chatqna')) {
+        const isRow0 = String((opts && opts.body) || '').includes(GEN_SAMPLES[0].user_input);
+        return Promise.resolve(
+          isRow0
+            ? sseResponse(["data: b'Partial answer, then the stream died.'\n\n", 'data: [DONE]\n\n'])
+            : goodStream()
+        );
+      }
+      return baseFetch(url, opts);
+    });
+    const run = await svc.beginRunSuite('me', begun.suite_key, {}, { actor: { user_id: 'u1' } });
+    await run.done;
+    const doc = await svc.getRunSuite('me', begun.suite_key, run.run_key);
+    expect(doc.status).toBe('done');
+    expect(doc.payload.results[0].error).toMatchObject({ sweep_retried: true });
+    expect(doc.payload.results[0].error.message).toMatch(/metadata/);
+    expect(doc.payload.results[1].error).toBeNull();
+    expect(doc.payload.summary.n_errors).toBe(1);
+  });
+
+  it('detects a served abstention from the refusal text (the normal metadata event carries no abstained key)', async () => {
+    // chatqna's normal streaming metadata never emits 'abstained' (only the
+    // reranker-overflow branch does) — the refusal must be recognised from
+    // the answer text exactly like the whatif leg's generateAnswer does,
+    // or every served abstention is recorded as 'answered'.
+    const begun = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
+    await begun.done;
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url, opts = {}) => {
+      const u = String(url);
+      if (u.includes('/v1/chatqna')) {
+        return Promise.resolve(
+          sseResponse([
+            "data: b'I cannot find that information in the provided documents.'\n\n",
+            'data: {"type":"metadata","source_documents":[],"confidence_score":0.0,"is_grounded":false}\n\n',
+            'data: [DONE]\n\n'
+          ])
+        );
+      }
+      return baseFetch(url, opts);
+    });
+    const run = await svc.beginRunSuite('me', begun.suite_key, {}, { actor: { user_id: 'u1' } });
+    await run.done;
+    const doc = await svc.getRunSuite('me', begun.suite_key, run.run_key);
+    expect(doc.status).toBe('done');
+    expect(doc.payload.results[0].abstained).toBe(true);
   });
 });

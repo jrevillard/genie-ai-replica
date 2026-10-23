@@ -22,6 +22,12 @@ const crypto = require('crypto');
 
 const REPO_ID = process.argv[2];
 const SUITE_OVERRIDE = process.argv[3];
+// Third form: `--attach <run_key>` polls an ALREADY-RUNNING run instead of
+// starting a new one — two concurrent runs share the model endpoint and both
+// slow down (the guide's own rule), so a poll that outlived its process must
+// re-attach, never re-start.
+const ATTACH = process.argv[3] === '--attach' ? process.argv[4] : null;
+const SUITE_FOR_ATTACH = process.argv[3] === '--attach' ? process.argv[5] : null;
 const SMOKE_USER = 'okf-ragas-compare';
 const SMOKE_PW = crypto.randomBytes(18).toString('base64url') + '#aA1!';
 
@@ -85,6 +91,30 @@ const j = (r) => {
   }
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// The compare user's ROPC token, in a holder, with one re-mint on 401. A
+// full 100-question run outlives a typical access-token lifespan — the poll
+// died silently at retrieval 36/100 on the first live use (2026-10-23) when
+// the token expired and every later GET returned a 401 body with no status
+// field, which the poll loop read as "not running, not failed" and fell out
+// of. The run itself continues server-side; only the VIEW died.
+let USER_TOKEN = '';
+async function mintUserToken() {
+  const tok = j(
+    await req('POST', `${AUTH_BASE}/realms/${REALM}/protocol/openid-connect/token`, {
+      form: { grant_type: 'password', client_id: CLIENT_ID, username: SMOKE_USER, password: SMOKE_PW }
+    })
+  );
+  if (!tok.access_token) throw new Error('could not (re)mint the compare user token');
+  USER_TOKEN = tok.access_token;
+  return USER_TOKEN;
+}
+async function call(method, url, opts = {}) {
+  const first = await req(method, url, { ...opts, token: opts.token || USER_TOKEN });
+  if (first.status !== 401) return first;
+  await mintUserToken();
+  return req(method, url, { ...opts, token: USER_TOKEN });
+}
 
 let ADMIN_TOKEN = '';
 let CLIENT_UUID = '';
@@ -188,20 +218,14 @@ async function main() {
     json: [role]
   });
   await ropcEnable();
-  const tok = j(
-    await req('POST', `${AUTH_BASE}/realms/${REALM}/protocol/openid-connect/token`, {
-      form: { grant_type: 'password', client_id: CLIENT_ID, username: SMOKE_USER, password: SMOKE_PW }
-    })
-  );
-  if (!tok.access_token) throw new Error('no token for the compare user');
-  const token = tok.access_token;
+  await mintUserToken();
 
   // --- find the suite + the baseline run ---
-  const runsRes = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/runs`, { token }));
+  const runsRes = j(await call('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/runs`));
   const runs = (runsRes.runs || []).map((r) => ({ ...r, run_key: r.run_key || r._key }));
   console.log(`existing runs: ${runs.length}`);
   runs.forEach((r) => console.log(`  ${r.run_key}  suite=${r.suite_key}  status=${r.status}  ${r.created_at || ''}`));
-  const suiteKey = SUITE_OVERRIDE || (runs[0] && runs[0].suite_key);
+  const suiteKey = SUITE_FOR_ATTACH || SUITE_OVERRIDE || (runs[0] && runs[0].suite_key);
   if (!suiteKey) throw new Error('no suite with runs — pass the suite key as the second argument');
   // The list projection exposes the doc _key as the run's id — normalise it
   // BEFORE the baseline lookup, or the newest done run is missed and the
@@ -209,7 +233,7 @@ async function main() {
   const baselineKey = runs.find((r) => r.suite_key === suiteKey && r.status === 'done')?.run_key;
   console.log(`suite=${suiteKey}  baseline run=${baselineKey || '(none)'}`);
 
-  const suiteDoc = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${suiteKey}`, { token }));
+  const suiteDoc = j(await call('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${suiteKey}`));
   console.log(`suite status=${suiteDoc.status} entries=${(suiteDoc.payload.entries || []).length}`);
 
   // --- baseline numbers ---
@@ -217,14 +241,10 @@ async function main() {
   let baselineExplain = null;
   if (baselineKey) {
     baselineRun = j(
-      await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${suiteKey}/runs/${baselineKey}`, {
-        token
-      })
+      await call('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${suiteKey}/runs/${baselineKey}`)
     );
     baselineExplain = j(
-      await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${suiteKey}/explain/${baselineKey}`, {
-        token
-      })
+      await call('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${suiteKey}/explain/${baselineKey}`)
     );
     console.log(`\n--- BASELINE (${baselineKey}) ---`);
     console.log(`  metrics: ${fmtMetrics(metricMeans(baselineRun))}`);
@@ -235,30 +255,29 @@ async function main() {
     );
   }
 
-  // --- the new run ---
+  // --- the new run (or re-attach to one already in flight) ---
   console.log('\n--- NEW RUN ---');
-  const run = j(
-    await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${suiteKey}/run`, {
-      token,
-      json: {}
-    })
-  );
-  if (!run.run_key) throw new Error(`run did not start: ${JSON.stringify(run).slice(0, 200)}`);
-  console.log(`  run_key=${run.run_key}`);
+  let runKey = ATTACH;
+  if (ATTACH) {
+    console.log(`  re-attaching to run_key=${ATTACH} (no new run started)`);
+  } else {
+    const run = j(
+      await call('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${suiteKey}/run`, { json: {} })
+    );
+    if (!run.run_key) throw new Error(`run did not start: ${JSON.stringify(run).slice(0, 200)}`);
+    runKey = run.run_key;
+    console.log(`  run_key=${runKey}`);
+  }
   let runDoc = null;
   let lastProgress = null;
-  const runDeadline = Date.now() + 90 * 60 * 1000;
+  const runDeadline = Date.now() + 120 * 60 * 1000;
   for (;;) {
     if (Date.now() > runDeadline) {
       console.log('  TIMED OUT waiting for the run');
       break;
     }
     await sleep(5000);
-    const doc = j(
-      await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${suiteKey}/runs/${run.run_key}`, {
-        token
-      })
-    );
+    const doc = j(await call('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${suiteKey}/runs/${runKey}`));
     if (doc.status === 'running') {
       if (doc.progress && JSON.stringify(doc.progress) !== lastProgress) {
         lastProgress = JSON.stringify(doc.progress);
@@ -280,9 +299,8 @@ async function main() {
 
   // --- explain the new run ---
   const ex = j(
-    await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${suiteKey}/explain`, {
-      token,
-      json: { run_key: run.run_key }
+    await call('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${suiteKey}/explain`, {
+      json: { run_key: runKey }
     })
   );
   let explainDoc = null;
@@ -291,9 +309,7 @@ async function main() {
     if (Date.now() > exDeadline) break;
     await sleep(4000);
     const doc = j(
-      await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${suiteKey}/explain/${run.run_key}`, {
-        token
-      })
+      await call('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${suiteKey}/explain/${runKey}`)
     );
     if (doc.status === 'running') continue;
     if (doc.status === 'failed') {
@@ -304,7 +320,7 @@ async function main() {
     break;
   }
 
-  console.log(`\n--- AFTER (${run.run_key}) ---`);
+  console.log(`\n--- AFTER (${runKey}) ---`);
   console.log(`  metrics: ${fmtMetrics(metricMeans(runDoc))}`);
   console.log(`  fidelity: ${fidelityLine(runDoc)}`);
   console.log(

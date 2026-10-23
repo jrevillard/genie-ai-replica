@@ -536,7 +536,16 @@ async function retrieveContexts(db, graphNames, query, emb) {
   return {
     contexts: selected.map((s) => String(s.text || '').slice(0, CONTEXT_CHARS)),
     context_keys: selected.map((s) => s.key),
-    candidate_keys: perGraph.slice(0, 24).map((c) => c.key),
+    // The recorded candidate pool MUST be the pool the dense search
+    // actually returned. It used to be a hardcoded top-24 slice of a pool
+    // whose size is OKF_RAGAS_CANDIDATE_K — so the moment an operator
+    // raised that knob (which is exactly what the advisor tells them to
+    // do) the run searched K chunks but RECORDED 24, and the evidence
+    // ladder answered "was the passage in the dense pool?" against the
+    // wrong pool: a carrier at rank 28 of a 192-pool was reported as
+    // never having been retrieved. The advice would then look as if it
+    // had not worked.
+    candidate_keys: perGraph.map((c) => c.key),
     candidates: perGraph.slice(0, 8).map((c) => String(c.text || '').slice(0, 200))
   };
 }

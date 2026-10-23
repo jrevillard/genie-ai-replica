@@ -17,7 +17,7 @@ const https = require('https');
 const fs = require('fs');
 const crypto = require('crypto');
 
-const REPO_ID = process.argv[2] || 'f043215b-cead-4af2-ad37-e675a8eec4b7';
+const REPO_ID = process.argv[2] || 'f9e08ce2-ddb4-4654-b59e-a27fdabfcb70';
 const SMOKE_USER = 'okf-smoke-86';
 const SMOKE_PW = crypto.randomBytes(18).toString('base64url') + '#aA1!';
 

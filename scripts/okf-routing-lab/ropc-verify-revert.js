@@ -67,9 +67,7 @@ async function main() {
   if (!at.access_token) throw new Error('no master token');
   const token = at.access_token;
 
-  const clients = j(
-    await req('GET', `${AUTH_BASE}/admin/realms/${REALM}/clients?clientId=${CLIENT_ID}`, { token })
-  );
+  const clients = j(await req('GET', `${AUTH_BASE}/admin/realms/${REALM}/clients?clientId=${CLIENT_ID}`, { token }));
   const client = clients[0];
   if (!client) throw new Error('client not found');
   const before = client.directAccessGrantsEnabled === true;
@@ -84,9 +82,7 @@ async function main() {
     if (put.status !== 204) throw new Error(`revert failed — VERIFY MANUALLY`);
   }
 
-  const check = j(
-    await req('GET', `${AUTH_BASE}/admin/realms/${REALM}/clients?clientId=${CLIENT_ID}`, { token })
-  );
+  const check = j(await req('GET', `${AUTH_BASE}/admin/realms/${REALM}/clients?clientId=${CLIENT_ID}`, { token }));
   const after = check[0] && check[0].directAccessGrantsEnabled === true;
   console.log(`verified after: directAccessGrantsEnabled=${after}`);
   if (after) {

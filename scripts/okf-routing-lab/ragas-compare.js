@@ -32,6 +32,16 @@ const ATTACH_MODE = process.argv[3] === '--attach';
 const ATTACH = ATTACH_MODE ? process.argv[4] || null : null;
 const SUITE_FOR_ATTACH = ATTACH_MODE ? process.argv[5] || null : null;
 const SUITE_OVERRIDE = ATTACH_MODE ? null : process.argv[3] || null;
+// `--metrics m1,m2,...` starts the run with an explicit metric selection —
+// a 10-metric run is a DIFFERENT measurement from a 4-metric one (the
+// guide's own rule) and must be recorded as what it is.
+const METRICS_FLAG = process.argv.includes('--metrics');
+const METRICS = METRICS_FLAG
+  ? process.argv[process.argv.indexOf('--metrics') + 1]
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+  : null;
 const SMOKE_USER = 'okf-ragas-compare';
 const SMOKE_PW = crypto.randomBytes(18).toString('base64url') + '#aA1!';
 
@@ -328,7 +338,9 @@ async function main() {
     console.log(`  re-attaching to run_key=${ATTACH} (no new run started)`);
   } else {
     const run = j(
-      await call('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${suiteKey}/run`, { json: {} })
+      await call('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${suiteKey}/run`, {
+        json: METRICS ? { metrics: METRICS } : {}
+      })
     );
     if (!run.run_key) throw new Error(`run did not start: ${JSON.stringify(run).slice(0, 200)}`);
     runKey = run.run_key;

@@ -847,6 +847,24 @@ describe('Configuration Validation Suite', () => {
       expect(vars.OKF_RAGAS_RERANK_CONCURRENCY && vars.OKF_RAGAS_RERANK_CONCURRENCY.default).toBe('3');
     });
 
+    test('the SERVE-mode benchmark URL lands in all four sites (2026-10-23)', () => {
+      // SERVE is the benchmark default: the question goes through the SAME
+      // chatqna pipeline citizens use. whatif runs (knob experiments) ignore it.
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
+      expect(okfBlock).toMatch(
+        /- OKF_RAGAS_SERVE_URL=\$\{OKF_RAGAS_SERVE_URL:-http:\/\/chatqna-xeon-backend-server:8888\/v1\/chatqna\}/
+      );
+      const envText = fs.readFileSync(ENV_FILE, 'utf8');
+      expect(envText).toMatch(/^#\s*OKF_RAGAS_SERVE_URL=http:\/\/chatqna-xeon-backend-server:8888\/v1\/chatqna.*$/m);
+      const vars = parseAnsibleEnvVars(
+        fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+      );
+      expect(vars.OKF_RAGAS_SERVE_URL && vars.OKF_RAGAS_SERVE_URL.default).toBe(
+        'http://chatqna-xeon-backend-server:8888/v1/chatqna'
+      );
+    });
+
     test('the judge cache + liveness-horizon vars land in all four sites (2026-10-18 batch)', () => {
       // compose: sidecar carries the cache; okf-server carries the horizon
       const full = fs.readFileSync(COMPOSE_FILE, 'utf8');

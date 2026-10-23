@@ -804,6 +804,10 @@ services:
       # (~3x faster retrieval leg). Global in-flight ceiling is
       # OKF_RAGAS_RUN_CONCURRENCY x this value.
       - OKF_RAGAS_RERANK_CONCURRENCY=${OKF_RAGAS_RERANK_CONCURRENCY:-3}
+      # SERVE mode (the default): the benchmark answers via the SAME chatqna
+      # pipeline citizens use. 'whatif' runs ignore this and replay retrieval
+      # in-process.
+      - OKF_RAGAS_SERVE_URL=${OKF_RAGAS_SERVE_URL:-http://chatqna-xeon-backend-server:8888/v1/chatqna}
       # The answer leg's INITIAL token budget. It was hardcoded to 800, and a
       # reasoning-capable model burns 400-700 tokens before writing a word --
       # every answer hit the length cap, was thrown away, and was re-called at

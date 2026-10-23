@@ -2512,7 +2512,9 @@ class ChatQnAService:
 
         return final_text_response, self_confidence
 
-    async def _assemble_source_documents(self, result_dict: dict, token: str) -> tuple[list, float, bool]:
+    async def _assemble_source_documents(
+        self, result_dict: dict, token: str, include_contexts: bool = False
+    ) -> tuple[list, float, bool]:
         """Build the source-document list, confidence, and grounding flag from the graph output.
 
         Source documents reflect the **reranker's verdict**, not the retriever's raw cosine
@@ -2529,6 +2531,9 @@ class ChatQnAService:
 
         Args:
             result_dict: The megaservice orchestrator output keyed by node name.
+            include_contexts: Benchmark opt-in — attach each doc's served chunk text to the
+              source document, so an evaluator scores the contexts the model actually saw.
+              Citizen payloads never set it; responses are otherwise byte-identical.
 
         Returns:
             (source_documents, retrieval_confidence_score, is_grounded)
@@ -2568,6 +2573,18 @@ class ChatQnAService:
             f"(reranker_present={bool(rerank_key)}, "
             f"rerank_verdict={len(rerank_verdict)}, retriever_docs={len(retrieved_docs)})"
         )
+
+        # Benchmark opt-in: id -> served chunk text, from the reranker's verdict
+        # (each verdict doc is {id, text, score}) with the retriever's raw docs as
+        # fallback when no reranker node ran. Only consulted when the caller set
+        # include_contexts — the citizen path never builds the map.
+        text_by_doc = {}
+        if include_contexts:
+            for doc in rerank_verdict if rerank_key else retrieved_docs:
+                doc_id = doc.get("id")
+                doc_text = doc.get("text")
+                if doc_id and doc_text:
+                    text_by_doc[doc_id] = doc_text
 
         source_documents_formatted = []
         scores = []
@@ -2656,6 +2673,8 @@ class ChatQnAService:
                         okf_source["graph_name"] = prov["graph_name"]
                     if prov.get("repo_id"):
                         okf_source["repo_id"] = prov["repo_id"]
+                    if include_contexts and text_by_doc.get(doc_id_by_orchestrator):
+                        okf_source["text"] = text_by_doc[doc_id_by_orchestrator]
                     source_documents_formatted.append(okf_source)
                     scores.append(score)
                     continue
@@ -2664,16 +2683,17 @@ class ChatQnAService:
             # so a duplicate of a file whose metadata failed does not contribute its
             # score to the aggregate while the file remains invisible (M3).
             source_documents_file_ids.append(file_id)
-            source_documents_formatted.append(
-                {
-                    "document_id": file_id,
-                    "document_name": file_name,
-                    "url": file_read_url,
-                    "categoryLabels": labels if isinstance(labels, list) else [labels] if labels else [],
-                    "serviceLabels": [],
-                    "score": score,
-                }
-            )
+            formatted_doc = {
+                "document_id": file_id,
+                "document_name": file_name,
+                "url": file_read_url,
+                "categoryLabels": labels if isinstance(labels, list) else [labels] if labels else [],
+                "serviceLabels": [],
+                "score": score,
+            }
+            if include_contexts and text_by_doc.get(doc_id_by_orchestrator):
+                formatted_doc["text"] = text_by_doc[doc_id_by_orchestrator]
+            source_documents_formatted.append(formatted_doc)
             scores.append(score)
             logger.debug(f"appending document conf score: {score} ")
 
@@ -2697,7 +2717,9 @@ class ChatQnAService:
 
         return source_documents_formatted, retrieval_confidence_score, is_grounded
 
-    async def _stream_with_metadata(self, body_iterator, result_dict, token: str, parent_context=None):
+    async def _stream_with_metadata(
+        self, body_iterator, result_dict, token: str, parent_context=None, include_contexts: bool = False
+    ):
         """Forward the LLM token stream, then append a `metadata` SSE event.
 
         The metadata event carries the reranker-grounded source documents, confidence,
@@ -2786,7 +2808,7 @@ class ChatQnAService:
 
         # Compute metadata after tokens so TTFT is unaffected by the doc-metadata fetches.
         source_documents, retrieval_confidence, is_grounded = await self._assemble_source_documents(
-            result_dict, token=token
+            result_dict, token=token, include_contexts=include_contexts
         )
         _cs = round(
             _display_confidence(retrieval_confidence, self_confidence)
@@ -3889,7 +3911,11 @@ class ChatQnAService:
                 # backend would re-run retrieval without the category filter / reranker.
                 return StreamingResponse(
                     self._stream_with_metadata(
-                        response.body_iterator, result_dict, token=token_str, parent_context=_orchestrate_context
+                        response.body_iterator,
+                        result_dict,
+                        token=token_str,
+                        parent_context=_orchestrate_context,
+                        include_contexts=bool(getattr(chat_request, "include_contexts", False)),
                     ),
                     media_type="text/event-stream",
                 )
@@ -3931,7 +3957,7 @@ class ChatQnAService:
         # Assemble source documents + confidence + grounding flag. Reflects the reranker's
         # verdict; not grounded (is_grounded=False) when the reranker found nothing relevant.
         source_documents_formatted, retrieval_confidence, is_grounded = await self._assemble_source_documents(
-            result_dict, token=token_str
+            result_dict, token=token_str, include_contexts=bool(getattr(chat_request, "include_contexts", False))
         )
         _conf_score = round(
             _display_confidence(retrieval_confidence, self_confidence)

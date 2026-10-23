@@ -1790,6 +1790,11 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   Default: 200. Hard cap per suite (generation + import).
 # OKF_RAGAS_RUN_CONCURRENCY=2
 # OKF_RAGAS_RERANK_CONCURRENCY=3
+# OKF_RAGAS_SERVE_URL=http://chatqna-xeon-backend-server:8888/v1/chatqna
+#   Default: the compose chatqna service. SERVE mode (the benchmark default)
+#   posts each question to this URL - the same pipeline a citizen question
+#   takes - and measures the served answer and served contexts. Only a
+#   'whatif' run (knob experiments) ignores it.
 #   Default: 3. How many benchmark rerank batch calls (32 texts each) may be
 #   in flight at once. Batch calls are independent and scores are identical
 #   at any concurrency — this is transport, not computation. 1 = the old

@@ -105,6 +105,11 @@ class ChatCompletionRequest(BaseModel):
         default=None, description="Application-specific context for metadata filtering in retrieval."
     )
     language: str = "auto"  # can be "en", "zh"
+    # Benchmark opt-in (Story 8-6, 2026-10-23): attach the served chunk text to
+    # each source document in the metadata event, so an evaluator measures the
+    # contexts the model actually saw instead of re-retrieving in parallel.
+    # Citizens never set it; without it the response is byte-identical to before.
+    include_contexts: bool = False
     image_path: str | None = None
     audio_path: str | None = None
 

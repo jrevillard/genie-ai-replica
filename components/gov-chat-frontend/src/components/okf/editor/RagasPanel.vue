@@ -510,7 +510,11 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="r in runRows" :key="r.id" :class="{ 'okf-ragas__row--fail': rowFails(r) }">
+            <tr
+              v-for="r in runRows"
+              :key="r.id"
+              :class="{ 'okf-ragas__row--fail': rowFails(r) && !rowAnswerOkButNoisy(r) }"
+            >
               <td>
                 <code>{{ r.id }}</code>
               </td>
@@ -540,6 +544,18 @@
               </td>
               <td>
                 <DsPill v-if="r.error" variant="danger">{{ translate('okf.ragas.results.error', 'error') }}</DsPill>
+                <DsPill
+                  v-else-if="rowFails(r) && rowAnswerOkButNoisy(r)"
+                  variant="warning"
+                  :title="
+                    translate(
+                      'okf.ragas.results.noisyTitle',
+                      'The answer passed every answer-quality metric; only the delivered context set (precision/recall) fell below threshold'
+                    )
+                  "
+                >
+                  {{ translate('okf.ragas.results.noisy', 'answer OK — retrieval noise') }}
+                </DsPill>
                 <DsPill v-else-if="r.abstained" variant="warning">{{
                   translate('okf.ragas.results.abstained', 'abstained')
                 }}</DsPill>
@@ -1258,6 +1274,25 @@ export default {
       const s = this.runDoc && this.runDoc.payload && this.runDoc.payload.summary;
       if (!s) return false;
       return (s.failing || []).some((f) => f.id === r.id);
+    },
+    // Retrieval-set metrics judge the DELIVERED CONTEXT SET, not the answer.
+    // A row that fails only those — while every answer-quality metric passed
+    // — is "answer OK, retrieval noise" (David, 2026-10-23: a good answer
+    // must not read as a red failure and send an admin scurrying to fix
+    // nothing). The row keeps its amber noise pill; it loses the red row.
+    rowAnswerOkButNoisy(r) {
+      const s = this.runDoc && this.runDoc.payload && this.runDoc.payload.summary;
+      if (!s) return false;
+      const f = (s.failing || []).find((x) => x.id === r.id);
+      if (!f || !f.fails || !f.fails.length) return false;
+      const ANSWER_METRICS = [
+        'faithfulness',
+        'answer_relevancy',
+        'answer_similarity',
+        'answer_correctness',
+        'factual_correctness'
+      ];
+      return f.fails.every((k) => !ANSWER_METRICS.includes(k));
     },
     /** Latest-run outcome for a suite entry, by id (null before any run).
      * Pass/fail comes from the SERVER's summary.failing (the same source

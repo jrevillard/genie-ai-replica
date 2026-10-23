@@ -688,7 +688,7 @@ describe('run', () => {
 
   it('runs retrieval + answer + evaluate and persists results, summary, fidelity', async () => {
     const sk = await makeSuite();
-    const begun = await svc.beginRunSuite('me', sk, {}, { actor: { user_id: 'u1' } });
+    const begun = await svc.beginRunSuite('me', sk, { mode: 'whatif' }, { actor: { user_id: 'u1' } });
     await begun.done;
     const doc = await svc.getRunSuite('me', sk, begun.run_key);
     expect(doc.status).toBe('done');
@@ -713,7 +713,7 @@ describe('run', () => {
 
   it('respects an extended metric selection (default four always included)', async () => {
     const sk = await makeSuite();
-    const begun = await svc.beginRunSuite('me', sk, { metrics: ['factual_correctness'] }, {});
+    const begun = await svc.beginRunSuite('me', sk, { mode: 'whatif', metrics: ['factual_correctness'] }, {});
     await begun.done;
     const doc = await svc.getRunSuite('me', sk, begun.run_key);
     expect(doc.metrics).toEqual([...svc.DEFAULT_METRICS, 'factual_correctness']);
@@ -727,7 +727,7 @@ describe('run', () => {
   // the deployed chat answers.
   it('the answer leg serves with the chatqna contract, not a terse extractive prompt', async () => {
     const sk = await makeSuite();
-    const begun = await svc.beginRunSuite('me', sk, {}, {});
+    const begun = await svc.beginRunSuite('me', sk, { mode: 'whatif' }, {});
     await begun.done;
     const call = frontmatterService.vllmChatCompletions.mock.calls.find((c) => {
       const sys = c[0] && c[0][0];
@@ -753,7 +753,7 @@ describe('run', () => {
     // question with the first one entirely wasted. The answer leg's rate
     // fell from 10 questions/min to 2 as the harder questions arrived.
     const sk = await makeSuite();
-    const begun = await svc.beginRunSuite('me', sk, {}, {});
+    const begun = await svc.beginRunSuite('me', sk, { mode: 'whatif' }, {});
     await begun.done;
     const call = frontmatterService.vllmChatCompletions.mock.calls.find((c) => {
       const sys = c[0] && c[0][0];
@@ -770,7 +770,7 @@ describe('run', () => {
     process.env.OKF_RAGAS_ANSWER_MAX_TOKENS = '6144';
     try {
       const sk = await makeSuite();
-      const begun = await svc.beginRunSuite('me', sk, {}, {});
+      const begun = await svc.beginRunSuite('me', sk, { mode: 'whatif' }, {});
       await begun.done;
       const call = frontmatterService.vllmChatCompletions.mock.calls.find((c) => {
         const sys = c[0] && c[0][0];
@@ -785,7 +785,7 @@ describe('run', () => {
 
   it('the run fidelity block records the ANSWER leg (deployment-chat unless a ragas_answers config is active)', async () => {
     const sk = await makeSuite();
-    const begun = await svc.beginRunSuite('me', sk, {}, {});
+    const begun = await svc.beginRunSuite('me', sk, { mode: 'whatif' }, {});
     await begun.done;
     const doc = await svc.getRunSuite('me', sk, begun.run_key);
     expect(doc.payload.fidelity.answers).toMatchObject({ source: 'deployment-chat', config: null });
@@ -805,7 +805,12 @@ describe('run', () => {
       }
     };
     const sk = await makeSuite();
-    const begun = await svc.beginRunSuite('me', sk, { judge_config_key: 'mm', judge_model: 'mm-large' }, {});
+    const begun = await svc.beginRunSuite(
+      'me',
+      sk,
+      { mode: 'whatif', judge_config_key: 'mm', judge_model: 'mm-large' },
+      {}
+    );
     await begun.done;
     const doc = await svc.getRunSuite('me', sk, begun.run_key);
     expect(doc.payload.fidelity.judge).toMatchObject({
@@ -826,7 +831,7 @@ describe('run', () => {
     process.env.CHATQNA_SYSTEM_PROMPT = 'PINNED CHAT CONTRACT';
     try {
       const sk = await makeSuite();
-      const begun = await svc.beginRunSuite('me', sk, {}, {});
+      const begun = await svc.beginRunSuite('me', sk, { mode: 'whatif' }, {});
       await begun.done;
       const call = frontmatterService.vllmChatCompletions.mock.calls.find(
         (c) => c[0] && c[0][0] && c[0][0].role === 'system' && c[0][0].content === 'PINNED CHAT CONTRACT'
@@ -851,7 +856,7 @@ describe('run', () => {
         response: { status: 400, data: { error: { message: 'invalid request body' } } }
       })
     );
-    const begun = await svc.beginRunSuite('me', sk, {}, {});
+    const begun = await svc.beginRunSuite('me', sk, { mode: 'whatif' }, {});
     await begun.done;
     // getRunSuite strips a failed doc to {run_key, suite_key, status, error}
     // — the envelope the panel renders.
@@ -878,7 +883,7 @@ describe('run', () => {
         })
       )
       .mockResolvedValue(llmResponse({ answer: 'A grounded answer.', abstained: false }));
-    const begun = await svc.beginRunSuite('me', sk, {}, {});
+    const begun = await svc.beginRunSuite('me', sk, { mode: 'whatif' }, {});
     await begun.done;
     const doc = await svc.getRunSuite('me', sk, begun.run_key);
     expect(doc.status).toBe('done');
@@ -905,7 +910,7 @@ describe('run', () => {
       }
       return llmResponse({ answer: 'A grounded answer.', abstained: false });
     });
-    const begun = await svc.beginRunSuite('me', sk, {}, {});
+    const begun = await svc.beginRunSuite('me', sk, { mode: 'whatif' }, {});
     await begun.done;
     const doc = await svc.getRunSuite('me', sk, begun.run_key);
     expect(doc.status).toBe('done'); // the other row measured; this row is an honest error
@@ -936,7 +941,7 @@ describe('run', () => {
       }
       return llmResponse({ answer: 'A grounded answer.', abstained: false });
     });
-    const begun = await svc.beginRunSuite('me', sk, {}, {});
+    const begun = await svc.beginRunSuite('me', sk, { mode: 'whatif' }, {});
     resolveRunKey(begun.run_key);
     // A cancelled run REJECTS the done promise (the cancel is not a result)
     await expect(begun.done).rejects.toThrow(/cancelled by user/);
@@ -963,7 +968,7 @@ describe('run', () => {
       }
     };
     const sk = await makeSuite();
-    const begun = await svc.beginRunSuite('me', sk, { judge_config_key: 'nomodel' }, {});
+    const begun = await svc.beginRunSuite('me', sk, { mode: 'whatif', judge_config_key: 'nomodel' }, {});
     await begun.done;
     const doc = await svc.getRunSuite('me', sk, begun.run_key);
     expect(doc.status).toBe('done');
@@ -990,12 +995,12 @@ describe('run', () => {
       if (u.includes('/rerank')) return Promise.resolve(okJson([{ index: 0, score: 0.9 }]));
       return Promise.reject(new Error('unexpected'));
     });
-    const first = await svc.beginRunSuite('me', sk, {}, {});
+    const first = await svc.beginRunSuite('me', sk, { mode: 'whatif' }, {});
     await new Promise((resolve) => setImmediate(resolve));
     await new Promise((resolve) => setImmediate(resolve));
     await new Promise((resolve) => setImmediate(resolve));
     expect(typeof releaseEval).toBe('function');
-    await expect(svc.beginRunSuite('me', sk, {}, {})).rejects.toMatchObject({
+    await expect(svc.beginRunSuite('me', sk, { mode: 'whatif' }, {})).rejects.toMatchObject({
       code: 'RUN_IN_FLIGHT',
       status: 409,
       details: { run_key: first.run_key }
@@ -1009,7 +1014,7 @@ describe('run', () => {
     // sweep's retry succeeds, the row measures, the run is whole.
     const sk = await makeSuite();
     frontmatterService.teiEmbed.mockRejectedValueOnce(new Error('TEI down'));
-    const begun = await svc.beginRunSuite('me', sk, {}, {});
+    const begun = await svc.beginRunSuite('me', sk, { mode: 'whatif' }, {});
     await begun.done;
     let doc = await svc.getRunSuite('me', sk, begun.run_key);
     expect(doc.status).toBe('done');
@@ -1029,7 +1034,7 @@ describe('run', () => {
       if (q === GEN_SAMPLES[0].user_input && embedCalls[q] <= 2) throw new Error('TEI down');
       return [[0.1, 0.2, 0.3]];
     });
-    const begun2 = await svc.beginRunSuite('me', sk2, {}, {});
+    const begun2 = await svc.beginRunSuite('me', sk2, { mode: 'whatif' }, {});
     await begun2.done;
     doc = await svc.getRunSuite('me', sk2, begun2.run_key);
     expect(doc.status).toBe('done');
@@ -1044,7 +1049,7 @@ describe('explain', () => {
   async function makeSuiteWithRun() {
     const begun = await svc.beginSuiteGeneration('me', { testset_size: 2 }, {});
     await begun.done;
-    const run = await svc.beginRunSuite('me', begun.suite_key, {}, {});
+    const run = await svc.beginRunSuite('me', begun.suite_key, { mode: 'whatif' }, {});
     await run.done;
     return { suite_key: begun.suite_key, run_key: run.run_key };
   }
@@ -1087,7 +1092,7 @@ describe('explain', () => {
     });
     const begunSuite = await svc.beginSuiteGeneration('me', { testset_size: 2 }, {});
     await begunSuite.done;
-    const run = await svc.beginRunSuite('me', begunSuite.suite_key, {}, {});
+    const run = await svc.beginRunSuite('me', begunSuite.suite_key, { mode: 'whatif' }, {});
     await run.done;
     global.fetch = baseFetch;
 
@@ -1148,7 +1153,7 @@ describe('explain', () => {
     const run = await svc.beginRunSuite(
       'me',
       begunSuite.suite_key,
-      { metrics: ['context_recall', 'context_entities_recall'] },
+      { mode: 'whatif', metrics: ['context_recall', 'context_entities_recall'] },
       {}
     );
     await run.done;
@@ -1193,7 +1198,7 @@ describe('explain', () => {
     const run = await svc.beginRunSuite(
       'me',
       begunSuite.suite_key,
-      { metrics: ['context_recall', 'context_entities_recall'] },
+      { mode: 'whatif', metrics: ['context_recall', 'context_entities_recall'] },
       {}
     );
     await run.done;
@@ -1248,7 +1253,7 @@ describe('explain', () => {
     });
     const begunSuite = await svc.beginSuiteGeneration('me', { testset_size: 2 }, {});
     await begunSuite.done;
-    const run = await svc.beginRunSuite('me', begunSuite.suite_key, {}, {});
+    const run = await svc.beginRunSuite('me', begunSuite.suite_key, { mode: 'whatif' }, {});
     await run.done;
     frontmatterService.vllmChatCompletions.mockResolvedValue(
       llmResponse({
@@ -1302,7 +1307,7 @@ describe('explain', () => {
     });
     const begunSuite = await svc.beginSuiteGeneration('me', { testset_size: 2 }, {});
     await begunSuite.done;
-    const run = await svc.beginRunSuite('me', begunSuite.suite_key, {}, {});
+    const run = await svc.beginRunSuite('me', begunSuite.suite_key, { mode: 'whatif' }, {});
     await run.done;
     global.fetch = baseFetch;
     frontmatterService.vllmChatCompletions.mockResolvedValue(
@@ -1351,7 +1356,7 @@ describe('explain', () => {
     });
     const begunSuite = await svc.beginSuiteGeneration('me', { testset_size: 2 }, {});
     await begunSuite.done;
-    const run = await svc.beginRunSuite('me', begunSuite.suite_key, {}, {});
+    const run = await svc.beginRunSuite('me', begunSuite.suite_key, { mode: 'whatif' }, {});
     await run.done;
     global.fetch = baseFetch;
     const begun = await svc.beginExplainFailures('me', begunSuite.suite_key, { run_key: run.run_key }, {});
@@ -1404,7 +1409,7 @@ describe('xlsx passthrough + listing', () => {
   it('listRuns filters ragas kinds', async () => {
     const begun = await svc.beginSuiteGeneration('me', { testset_size: 2 }, {});
     await begun.done;
-    const run = await svc.beginRunSuite('me', begun.suite_key, {}, {});
+    const run = await svc.beginRunSuite('me', begun.suite_key, { mode: 'whatif' }, {});
     await run.done;
     const runs = await svc.listRuns('me', { kind: 'ragas_run' });
     expect(runs).toHaveLength(1);
@@ -1546,7 +1551,7 @@ describe('rerank batch concurrency', () => {
   async function runOnce() {
     const begun = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
     await begun.done;
-    const run = await svc.beginRunSuite('me', begun.suite_key, {}, { actor: { user_id: 'u1' } });
+    const run = await svc.beginRunSuite('me', begun.suite_key, { mode: 'whatif' }, { actor: { user_id: 'u1' } });
     await run.done;
     return svc.getRunSuite('me', begun.suite_key, run.run_key);
   }
@@ -1628,7 +1633,7 @@ describe('transient infra guards (2026-10-23 live incident)', () => {
       }
       return baseFetch(url);
     });
-    const run = await svc.beginRunSuite('me', sk.suite_key, {}, { actor: { user_id: 'u1' } });
+    const run = await svc.beginRunSuite('me', sk.suite_key, { mode: 'whatif' }, { actor: { user_id: 'u1' } });
     await run.done;
     const doc = await svc.getRunSuite('me', sk.suite_key, run.run_key);
     expect(doc.status).toBe('done');
@@ -1668,7 +1673,7 @@ describe('transient infra guards (2026-10-23 live incident)', () => {
       if (q === GEN_SAMPLES[0].user_input) throw new Error('Request failed with status code 429');
       return [[0.1, 0.2, 0.3]];
     });
-    const run = await svc.beginRunSuite('me', sk.suite_key, {}, { actor: { user_id: 'u1' } });
+    const run = await svc.beginRunSuite('me', sk.suite_key, { mode: 'whatif' }, { actor: { user_id: 'u1' } });
     await run.done;
     const explained = await svc.beginExplainFailures('me', sk.suite_key, { run_key: run.run_key }, {});
     await explained.done;
@@ -1677,5 +1682,89 @@ describe('transient infra guards (2026-10-23 live incident)', () => {
     expect(row).toBeTruthy();
     expect(row.stage).toBe('retrieval-error');
     expect(row.recommendation).toMatch(/re-run/i);
+  });
+});
+
+describe('serve mode — the benchmark measures the SERVED system (2026-10-23)', () => {
+  // David: "the RAGAS responses MUST equal the UI responses or they are
+  // useless." The default run posts the question to chatqna exactly like the
+  // UI's backend does, with the include_contexts opt-in, and measures the
+  // SERVED contexts — no parallel retrieval.
+  function sseResponse(lines) {
+    async function* body() {
+      for (const l of lines) yield Buffer.from(l, 'utf8');
+    }
+    return { ok: true, status: 200, body: body() };
+  }
+
+  it('parses the chatqna SSE wire and measures the served contexts', async () => {
+    const begun = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
+    await begun.done;
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url, opts = {}) => {
+      const u = String(url);
+      if (u.includes('/v1/chatqna')) {
+        // The wire the backend parses: Python-repr token chunks + one JSON
+        // metadata event + [DONE]. The escape exercises decodePyRepr.
+        return Promise.resolve(
+          sseResponse([
+            "data: b'High moisture content drives cob rot.\\nSecond line with \\'quotes\\'.'\n\n",
+            'data: {"type":"metadata","source_documents":[' +
+              '{"document_id":"concept-1","score":0.9,"text":"Chunk one about cob rot."},' +
+              '{"document_id":"concept-2","score":0.4,"text":"Bean guide noise."}],' +
+              '"confidence_score":0.88,"abstained":false,"is_grounded":true}\n\n',
+            'data: [DONE]\n\n'
+          ])
+        );
+      }
+      if (u.includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-eval', status: 'queued' }));
+      if (u.includes('/jobs/j-eval'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-eval',
+            kind: 'evaluate',
+            status: 'done',
+            result: {
+              aggregate: { faithfulness: 1.0 },
+              per_query: GEN_SAMPLES.map(() => ({
+                faithfulness: 1.0,
+                context_precision: 0.9,
+                context_recall: 0.9,
+                answer_relevancy: 1.0
+              })),
+              evaluation_log: []
+            }
+          })
+        );
+      return baseFetch(url, opts);
+    });
+    const run = await svc.beginRunSuite('me', begun.suite_key, {}, { actor: { user_id: 'u1' } });
+    await run.done;
+    const doc = await svc.getRunSuite('me', begun.suite_key, run.run_key);
+    expect(doc.status).toBe('done');
+    const r0 = doc.payload.results[0];
+    // The Python-repr escapes decoded: \n is a newline, \' is a quote.
+    expect(r0.answer).toBe("High moisture content drives cob rot.\nSecond line with 'quotes'.");
+    // The SERVED contexts, not a replay.
+    expect(r0.contexts).toEqual(['Chunk one about cob rot.', 'Bean guide noise.']);
+    expect(r0.context_keys).toEqual(['concept-1', 'concept-2']);
+    expect(r0.confidence).toBe(0.88);
+    expect(r0.abstained).toBe(false);
+    // Serve rows never touched the rerank replay.
+    expect(global.fetch.mock.calls.some((c) => String(c[0]).includes('/rerank'))).toBe(false);
+    // The fidelity block says which mode served.
+    expect(doc.payload.fidelity.retrieval.mode).toBe('serve');
+    expect(doc.payload.fidelity.retrieval.algorithm).toMatch(/SERVED/);
+  });
+
+  it('honors mode: whatif for the knob experiments (replay path)', async () => {
+    const begun = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
+    await begun.done;
+    const run = await svc.beginRunSuite('me', begun.suite_key, { mode: 'whatif' }, { actor: { user_id: 'u1' } });
+    await run.done;
+    const doc = await svc.getRunSuite('me', begun.suite_key, run.run_key);
+    expect(doc.status).toBe('done');
+    expect(doc.payload.fidelity.retrieval.mode).toBe('whatif');
+    expect(doc.payload.fidelity.retrieval.candidate_k).toBeGreaterThan(0);
   });
 });

@@ -176,7 +176,7 @@ describe('recorded candidate pool', () => {
     const begun = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
     await begun.done;
     const sk = begun.suite_key;
-    const run = await svc.beginRunSuite('me', sk, {}, { actor: { user_id: 'u1' } });
+    const run = await svc.beginRunSuite('me', sk, { mode: 'whatif' }, { actor: { user_id: 'u1' } });
     await run.done;
     return svc.getRunSuite('me', sk, run.run_key);
   }

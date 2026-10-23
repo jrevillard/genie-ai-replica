@@ -575,6 +575,96 @@ async function rerankTexts(query, texts) {
   return merged;
 }
 
+// ---------- serve mode (the benchmark measures the SERVED system) ----------
+//
+// 2026-10-23, David: "the RAGAS responses MUST equal the UI responses or they
+// are useless." The default answer leg is no longer a parallel replay: it is
+// the SAME chatqna call a citizen's question takes, with one benchmark
+// opt-in (include_contexts) that makes chatqna echo the served chunk text on
+// each source document. The retrieval replay survives as the explicit
+// "whatif" mode for knob experiments, and every run records which mode
+// served it.
+//
+// Equality shape: same endpoint, same payload, chatqna's own sampling
+// (temperature 0.01 — near-greedy), so the benchmark answer is what the UI
+// would show for the same question, not a lookalike from another assembly.
+
+const SERVE_URL = () => process.env.OKF_RAGAS_SERVE_URL || 'http://chatqna-xeon-backend-server:8888/v1/chatqna';
+
+// Decode one Python-repr token chunk (data: b'...') — the same rules the
+// backend's parseChatQnASSELine applies: hex escapes, \n/\t/\r, quote
+// unescaping, control-char strip. Order matters: \\ before \x.
+function decodePyRepr(content, quote) {
+  const BS = '\x00BS\x00';
+  const out = content
+    .replace(/\\\\/g, BS)
+    .replace(/(?:\\x([0-9a-fA-F]{2}))+/g, (m) => {
+      const hex = m.replace(/\\x/g, '');
+      return Buffer.from(hex, 'hex').toString('utf8');
+    })
+    .replace(/\\n/g, '\n')
+    .replace(/\\t/g, '\t')
+    .replace(/\\r/g, '\r')
+    .replace(quote === "'" ? /\\'/g : /\\"/g, quote === '"' ? '"' : "'");
+  // eslint-disable-next-line no-control-regex -- mirror the backend's strip
+  return out.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '').replace(new RegExp(BS, 'g'), '\\');
+}
+
+async function serveAnswer(query) {
+  const resp = await fetch(SERVE_URL(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages: query, stream: true, include_contexts: true })
+  });
+  if (!resp.ok) {
+    const err = new Error(`chatqna HTTP ${resp.status}`);
+    err.status = resp.status;
+    err.retryable = resp.status === 429 || resp.status >= 500;
+    throw err;
+  }
+  const decoder = new TextDecoder();
+  let answer = '';
+  let meta = null;
+  let buffer = '';
+  for await (const chunk of resp.body) {
+    buffer += decoder.decode(chunk, { stream: true });
+    let idx;
+    while ((idx = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, idx).trim();
+      buffer = buffer.slice(idx + 1);
+      if (!line.startsWith('data:')) continue;
+      const data = line.slice(5).trim();
+      if (data === '[DONE]') continue;
+      if (data.startsWith('{')) {
+        try {
+          const obj = JSON.parse(data);
+          if (obj && obj.type === 'metadata') meta = obj;
+        } catch {
+          // not the metadata event — ignore
+        }
+        continue;
+      }
+      const m = data.match(/^b(['"])([\s\S]*)\1$/);
+      if (m) answer += decodePyRepr(m[2], m[1]);
+    }
+  }
+  const docs = (meta && meta.source_documents) || [];
+  return {
+    answer: answer.trim(),
+    abstained: Boolean(meta && meta.abstained),
+    abstention_reason: (meta && meta.abstention_reason) || '',
+    confidence: meta ? meta.confidence_score : null,
+    is_grounded: Boolean(meta && meta.is_grounded),
+    // The SERVED contexts — the exact chunks the model answered from.
+    contexts: docs.map((d) => String(d.text || '')).filter(Boolean),
+    // chatqna speaks in document ids (file_id == concept_id for OKF chunks),
+    // not graph chunk keys. The ladder's delivered tier is decided by text
+    // containment for serve rows; these ids are recorded for forensics.
+    context_keys: docs.map((d) => String(d.document_id || '')),
+    source_documents: docs
+  };
+}
+
 function retryDelayMs(e, attempt) {
   // Binary exponential backoff (David, 2026-10-23): 0.5s, 1s, 2s, ... capped
   // at 8s, jittered so parallel batches do not synchronise into a stampede.
@@ -1390,7 +1480,10 @@ async function beginRunSuite(repoId, suiteKey, payload = {}, opts = {}) {
     reportProgress,
     // 8-7: an explicit judge pick from the Run dialog rides the opts
     judge_config_key: payload.judge_config_key || null,
-    judge_model: payload.judge_model || null
+    judge_model: payload.judge_model || null,
+    // 2026-10-23: 'whatif' opts into the Lab's retrieval replay; the default
+    // (undefined/'serve') measures the served system through chatqna.
+    mode: payload.mode || null
   })
     .then((runDoc) => runDoc)
     .catch(async (e) => {
@@ -1466,6 +1559,17 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       const s = statusOfErr(err);
       return typeof s === 'number' && s >= 400 && s < 500 && s !== 429;
     };
+    // SERVE by default (2026-10-23): the benchmark measures the served
+    // system. `mode: 'whatif'` opts back into the Lab's retrieval replay.
+    const serveMode = (opts.mode || 'serve') !== 'whatif';
+    if (serveMode) {
+      logger.info('ragas-suite.run_mode_serve', {
+        repo_id: repoId,
+        suite_key: suiteKey,
+        run_key: opts.runKey,
+        serve_url: SERVE_URL()
+      });
+    }
     async function worker() {
       for (;;) {
         if (abortErr) return;
@@ -1479,23 +1583,42 @@ async function runSuite(repoId, suiteKey, opts = {}) {
         if (i >= entries.length) return;
         const e = entries[i];
         try {
-          const embeddings = await frontmatterService.teiEmbed([e.query]);
-          const emb = Array.isArray(embeddings) && embeddings[0];
-          if (!emb) throw new Error('query embedding failed');
-          const retrieved = await retrieveContexts(db, graphNames, e.query, emb);
-          const gen = await generateAnswer(e.query, retrieved.contexts);
-          results[i] = {
-            id: e.id,
-            query: e.query,
-            contexts: retrieved.contexts,
-            context_keys: retrieved.context_keys,
-            candidate_keys: retrieved.candidate_keys,
-            candidates: retrieved.candidates,
-            answer: gen.answer,
-            abstained: gen.abstained,
-            abstention_reason: gen.abstained ? 'answer contract' : '',
-            error: null
-          };
+          if (serveMode) {
+            // SERVE: the question goes through the citizen's own pipeline.
+            // No parallel retrieval — the served contexts ARE the contexts.
+            const served = await serveAnswer(e.query);
+            results[i] = {
+              id: e.id,
+              query: e.query,
+              contexts: served.contexts,
+              context_keys: served.context_keys,
+              candidate_keys: served.context_keys,
+              candidates: [],
+              answer: served.answer,
+              abstained: served.abstained,
+              abstention_reason: served.abstained ? served.abstention_reason || 'answer contract' : '',
+              confidence: served.confidence,
+              error: null
+            };
+          } else {
+            const embeddings = await frontmatterService.teiEmbed([e.query]);
+            const emb = Array.isArray(embeddings) && embeddings[0];
+            if (!emb) throw new Error('query embedding failed');
+            const retrieved = await retrieveContexts(db, graphNames, e.query, emb);
+            const gen = await generateAnswer(e.query, retrieved.contexts);
+            results[i] = {
+              id: e.id,
+              query: e.query,
+              contexts: retrieved.contexts,
+              context_keys: retrieved.context_keys,
+              candidate_keys: retrieved.candidate_keys,
+              candidates: retrieved.candidates,
+              answer: gen.answer,
+              abstained: gen.abstained,
+              abstention_reason: gen.abstained ? 'answer contract' : '',
+              error: null
+            };
+          }
         } catch (err) {
           results[i] = {
             id: e.id,
@@ -1550,21 +1673,38 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       for (const i of erroredIdx) {
         const e = entries[i];
         try {
-          const embeddings = await frontmatterService.teiEmbed([e.query]);
-          const emb = Array.isArray(embeddings) && embeddings[0];
-          if (!emb) throw new Error('query embedding failed');
-          const retrieved = await retrieveContexts(db, graphNames, e.query, emb);
-          const gen = await generateAnswer(e.query, retrieved.contexts);
+          let row;
+          if (serveMode) {
+            const served = await serveAnswer(e.query);
+            row = {
+              contexts: served.contexts,
+              context_keys: served.context_keys,
+              candidate_keys: served.context_keys,
+              answer: served.answer,
+              abstained: served.abstained,
+              abstention_reason: served.abstained ? served.abstention_reason || 'answer contract' : '',
+              confidence: served.confidence
+            };
+          } else {
+            const embeddings = await frontmatterService.teiEmbed([e.query]);
+            const emb = Array.isArray(embeddings) && embeddings[0];
+            if (!emb) throw new Error('query embedding failed');
+            const retrieved = await retrieveContexts(db, graphNames, e.query, emb);
+            const gen = await generateAnswer(e.query, retrieved.contexts);
+            row = {
+              contexts: retrieved.contexts,
+              context_keys: retrieved.context_keys,
+              candidate_keys: retrieved.candidate_keys,
+              candidates: retrieved.candidates,
+              answer: gen.answer,
+              abstained: gen.abstained,
+              abstention_reason: gen.abstained ? 'answer contract' : ''
+            };
+          }
           results[i] = {
             id: e.id,
             query: e.query,
-            contexts: retrieved.contexts,
-            context_keys: retrieved.context_keys,
-            candidate_keys: retrieved.candidate_keys,
-            candidates: retrieved.candidates,
-            answer: gen.answer,
-            abstained: gen.abstained,
-            abstention_reason: gen.abstained ? 'answer contract' : '',
+            ...row,
             error: null
           };
           logger.info('ragas-suite.run_sweep_recovered', {
@@ -1657,12 +1797,15 @@ async function runSuite(repoId, suiteKey, opts = {}) {
           summary: null,
           error: runError,
           fidelity: {
-            retrieval: {
-              algorithm: 'per-graph APPROX_NEAR_COSINE + unified rerank',
-              candidate_k: CANDIDATE_K,
-              top_n: TOP_N,
-              graphs: graphNames
-            },
+            retrieval: serveMode
+              ? { algorithm: 'SERVED — chatqna /v1/chatqna', mode: 'serve', serve_url: SERVE_URL(), graphs: graphNames }
+              : {
+                  algorithm: 'per-graph APPROX_NEAR_COSINE + unified rerank',
+                  mode: 'whatif',
+                  candidate_k: CANDIDATE_K,
+                  top_n: TOP_N,
+                  graphs: graphNames
+                },
             judge: null,
             answers: await answerFidelity()
           }
@@ -1789,16 +1932,29 @@ async function runSuite(repoId, suiteKey, opts = {}) {
           per_metric: judgeCoverage
         },
         fidelity: {
-          retrieval: {
-            algorithm: 'per-graph APPROX_NEAR_COSINE + unified rerank',
-            candidate_k: CANDIDATE_K,
-            top_n: TOP_N,
-            graphs: graphNames
-          },
-          prompt: {
-            system_prompt_sha: sha256(ANSWER_SYSTEM_PROMPT()),
-            source: process.env.CHATQNA_SYSTEM_PROMPT ? 'CHATQNA_SYSTEM_PROMPT' : 'builtin-default'
-          },
+          retrieval: serveMode
+            ? {
+                algorithm: 'SERVED — chatqna /v1/chatqna (the citizen pipeline), include_contexts opt-in',
+                mode: 'serve',
+                serve_url: SERVE_URL(),
+                graphs: graphNames
+              }
+            : {
+                algorithm: 'per-graph APPROX_NEAR_COSINE + unified rerank',
+                mode: 'whatif',
+                candidate_k: CANDIDATE_K,
+                top_n: TOP_N,
+                graphs: graphNames
+              },
+          prompt: serveMode
+            ? {
+                system_prompt_sha: null,
+                source: 'chatqna serving prompt (CHATQNA_SYSTEM_PROMPT as deployed)'
+              }
+            : {
+                system_prompt_sha: sha256(ANSWER_SYSTEM_PROMPT()),
+                source: process.env.CHATQNA_SYSTEM_PROMPT ? 'CHATQNA_SYSTEM_PROMPT' : 'builtin-default'
+              },
           judge: {
             ...modelConfigService.judgeFidelity(effectiveJudge),
             sidecar_reported_model: evaluation.model || null,
@@ -2094,7 +2250,12 @@ function attributeFailures(suite, runDoc, evidence) {
     // explains a RECALL failure: if recall passed, the passage WAS found,
     // so the failure is downstream and the ladder has nothing to say.
     const ev = evidence && evidence.byRow ? evidence.byRow.get(r.id) : null;
-    const ladder = ev ? retrievalLadder(ev, r) : null;
+    const serveMode =
+      runDoc.payload && runDoc.payload.fidelity && runDoc.payload.fidelity.retrieval
+        ? runDoc.payload.fidelity.retrieval.mode === 'serve'
+        : false;
+    const rowPassages = (e.reference_passages || []).filter(Boolean);
+    const ladder = ev ? retrievalLadder(ev, r, rowPassages, serveMode) : null;
     const recallFailed = failed.includes('context_recall');
     const ladderStage = recallFailed ? ladder && ladder.stage : null;
 
@@ -2221,21 +2382,36 @@ function attributeFailures(suite, runDoc, evidence) {
  * passage was lost. `r` is the run row (it carries the candidate_keys and
  * context_keys the run actually used).
  */
-function retrievalLadder(ev, r) {
+function retrievalLadder(ev, r, passages, serveMode) {
   const candidateKeys = new Set(r.candidate_keys || []);
   const contextKeys = new Set(r.context_keys || []);
+  // Serve rows: the delivered tier is decided by text containment, because
+  // chatqna speaks in document ids, not chunk keys.
+  const ctxNorms = serveMode ? (r.contexts || []).map(norm) : null;
   let inCorpus = 0;
   let inCandidates = 0;
   let inContexts = 0;
   let probeable = 0;
   let carrierKey = null;
-  for (const c of ev.carriers || []) {
-    if (!c.probeable) continue;
+  (ev.carriers || []).forEach((c, idx) => {
+    if (!c.probeable) return;
     probeable += 1;
     // Only a passage PROVEN present in the corpus counts — a passage that
     // matched a needle but whose content is absent is not in the corpus.
-    if (!c.present) continue;
+    if (!c.present) return;
     inCorpus += 1;
+    if (serveMode) {
+      // The served pipeline's only visible pool IS the delivered set: a
+      // passage that arrived was past every earlier tier of that pipeline;
+      // one that did not is a serving-retrieval miss (the rank probe says
+      // where it sat). The reranker tier is not observable from outside
+      // chatqna and never fires in serve mode.
+      if (passageInContexts(passages ? passages[idx] : null, ctxNorms)) {
+        inCandidates += 1;
+        inContexts += 1;
+      }
+      return;
+    }
     // A passage counts as "in a tier" when ANY chunk carrying it is in
     // that tier — the passage may span several chunks.
     const hits = c.chunks.filter((ch) => candidateKeys.has(ch.key));
@@ -2244,7 +2420,7 @@ function retrievalLadder(ev, r) {
       carrierKey = carrierKey || hits[0].key;
       if (hits.some((ch) => contextKeys.has(ch.key))) inContexts += 1;
     }
-  }
+  });
   const total = ev.passages || 0;
   let stage;
   if (total === 0) stage = null;
@@ -2277,6 +2453,31 @@ function norm(s) {
     .toLowerCase()
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/**
+ * Verbatim containment of a passage inside the SERVED contexts.
+ *
+ * Serve rows record chatqna's document ids, not graph chunk keys, so the
+ * delivered tier cannot be decided by key membership. Containment is decided
+ * by two 8-word needles per passage (start and middle): if either appears
+ * verbatim in a served context, the model saw content carrying the passage.
+ * A context need only contain ONE needle — chunks are cut mid-passage all
+ * the time, and demanding both would miss exactly the boundary case.
+ */
+function passageInContexts(passage, ctxNorms) {
+  if (!passage || !ctxNorms || !ctxNorms.length) return false;
+  const words = norm(passage).split(' ').filter(Boolean);
+  if (words.length < 4) return false;
+  const needles = [];
+  if (words.length <= 8) {
+    needles.push(words.join(' '));
+  } else {
+    needles.push(words.slice(0, 8).join(' '));
+    const mid = Math.max(1, Math.floor(words.length / 2) - 4);
+    needles.push(words.slice(mid, mid + 8).join(' '));
+  }
+  return ctxNorms.some((ctx) => needles.some((n) => ctx.includes(n)));
 }
 
 /**
@@ -2337,16 +2538,31 @@ async function collectAttributionEvidence(db, suite, runDoc) {
 
   // Rank-probe the rows where the dense stage lost the passage: the rank
   // is the actionable half of "the vector search missed it".
+  const serveMode =
+    runDoc.payload && runDoc.payload.fidelity && runDoc.payload.fidelity.retrieval
+      ? runDoc.payload.fidelity.retrieval.mode === 'serve'
+      : false;
   for (const row of failing) {
     const ev = evidence.byRow.get(row.id);
     if (!ev) continue;
     // Only passages PROVEN present in the corpus have a meaningful rank.
     const present = (ev.carriers || []).filter((c) => c.present);
     if (!present.length) continue;
-    const candidateKeys = new Set((runDoc.payload.results.find((r) => r.id === row.id) || {}).candidate_keys || []);
-    // Only probe rows the dense stage actually lost — a passage that WAS a
-    // candidate was lost by the reranker, and the candidate rank is noise.
-    const lost = present.flatMap((c) => c.chunks).find((ch) => !candidateKeys.has(ch.key));
+    const runRow = runDoc.payload.results.find((r) => r.id === row.id) || {};
+    let lost;
+    if (serveMode) {
+      // Serve rows: probe when the SERVED set did not deliver the passage
+      // (text containment — the doc ids chatqna returns are not chunk keys).
+      const ctxNorms = (runRow.contexts || []).map(norm);
+      const delivered = (row.passages || []).some((p) => passageInContexts(p, ctxNorms));
+      if (delivered) continue;
+      lost = present.flatMap((c) => c.chunks)[0];
+    } else {
+      const candidateKeys = new Set(runRow.candidate_keys || []);
+      // Only probe rows the dense stage actually lost — a passage that WAS a
+      // candidate was lost by the reranker, and the candidate rank is noise.
+      lost = present.flatMap((c) => c.chunks).find((ch) => !candidateKeys.has(ch.key));
+    }
     if (!lost) continue;
     const rank = await ragasAttributionService.probeCandidateRank(db, {
       graphs,

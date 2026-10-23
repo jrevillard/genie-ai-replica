@@ -198,11 +198,14 @@ async function main() {
 
   // --- find the suite + the baseline run ---
   const runsRes = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/runs`, { token }));
-  const runs = runsRes.runs || [];
+  const runs = (runsRes.runs || []).map((r) => ({ ...r, run_key: r.run_key || r._key }));
   console.log(`existing runs: ${runs.length}`);
   runs.forEach((r) => console.log(`  ${r.run_key}  suite=${r.suite_key}  status=${r.status}  ${r.created_at || ''}`));
   const suiteKey = SUITE_OVERRIDE || (runs[0] && runs[0].suite_key);
   if (!suiteKey) throw new Error('no suite with runs — pass the suite key as the second argument');
+  // The list projection exposes the doc _key as the run's id — normalise it
+  // BEFORE the baseline lookup, or the newest done run is missed and the
+  // comparison silently prints no baseline (caught live 2026-10-23).
   const baselineKey = runs.find((r) => r.suite_key === suiteKey && r.status === 'done')?.run_key;
   console.log(`suite=${suiteKey}  baseline run=${baselineKey || '(none)'}`);
 

@@ -630,7 +630,7 @@ function decodePyRepr(content, quote) {
 // hence the generous 5-minute ceiling.
 const SERVE_TIMEOUT_MS = 300000;
 
-async function serveAnswer(query) {
+async function serveAnswer(query, graphs) {
   // chatqna 401s unauthenticated calls before body parse — attach the
   // okf-server service-account bearer (same token the doc-repo calls use).
   // Unconfigured deployments still get the 401, loudly (service-token warns).
@@ -645,6 +645,19 @@ async function serveAnswer(query) {
     }
     throw e;
   };
+  // The FAN-OUT CARRIER (live 2026-10-23, rr1792774608075-8d3d95): without
+  // it chatqna falls back to the LEGACY retrieval path — the first serve
+  // run measured 96/100 abstentions with zero contexts because the legacy
+  // graph holds nothing for OKF concepts. The UI's backend attaches
+  // authorized_graph_names + exclude_legacy to every citizen call
+  // (query-service _attachFanoutCarrier); the benchmark replicates that
+  // carrier, scoped to the SUITE'S graphs — the corpus the suite tests.
+  // Same keys, same retriever fan-out: the served pipeline, measured over
+  // the corpus it is being benchmarked on.
+  const context =
+    graphs && graphs.length
+      ? { mode: 'okf_only', authorized_graph_names: [...new Set(graphs)], exclude_legacy: true }
+      : undefined;
   try {
     let resp;
     try {
@@ -654,7 +667,12 @@ async function serveAnswer(query) {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
-        body: JSON.stringify({ messages: query, stream: true, include_contexts: true }),
+        body: JSON.stringify({
+          messages: query,
+          stream: true,
+          include_contexts: true,
+          ...(context ? { context } : {})
+        }),
         signal: controller.signal
       });
     } catch (e) {
@@ -1672,7 +1690,7 @@ async function runSuite(repoId, suiteKey, opts = {}) {
           if (serveMode) {
             // SERVE: the question goes through the citizen's own pipeline.
             // No parallel retrieval — the served contexts ARE the contexts.
-            const served = await serveAnswer(e.query);
+            const served = await serveAnswer(e.query, graphNames);
             results[i] = {
               id: e.id,
               query: e.query,
@@ -1765,7 +1783,7 @@ async function runSuite(repoId, suiteKey, opts = {}) {
         try {
           let row;
           if (serveMode) {
-            const served = await serveAnswer(e.query);
+            const served = await serveAnswer(e.query, graphNames);
             row = {
               contexts: served.contexts,
               context_keys: served.context_keys,

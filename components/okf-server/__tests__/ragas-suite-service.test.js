@@ -1701,9 +1701,15 @@ describe('serve mode — the benchmark measures the SERVED system (2026-10-23)',
     const begun = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
     await begun.done;
     const baseFetch = global.fetch;
+    let servePayload = null;
     global.fetch = jest.fn((url, opts = {}) => {
       const u = String(url);
       if (u.includes('/v1/chatqna')) {
+        // The FAN-OUT CARRIER is the contract (live 2026-10-23: the first
+        // serve run measured 96/100 abstentions with zero contexts because
+        // the bare payload fell back to legacy retrieval — the legacy graph
+        // holds nothing for OKF concepts).
+        servePayload = JSON.parse(opts.body);
         // The wire the backend parses: Python-repr token chunks + one JSON
         // metadata event + [DONE]. The escape exercises decodePyRepr.
         return Promise.resolve(
@@ -1759,6 +1765,15 @@ describe('serve mode — the benchmark measures the SERVED system (2026-10-23)',
     // The fidelity block says which mode served.
     expect(doc.payload.fidelity.retrieval.mode).toBe('serve');
     expect(doc.payload.fidelity.retrieval.algorithm).toMatch(/SERVED/);
+    // The fan-out carrier: the same routing keys the citizen backend
+    // attaches, scoped to the suite's graphs — without it chatqna retrieves
+    // legacy-only and every OKF question abstains with zero contexts.
+    expect(servePayload).toBeTruthy();
+    expect(servePayload.context).toEqual({
+      mode: 'okf_only',
+      authorized_graph_names: ['GRAPH_AGRI'],
+      exclude_legacy: true
+    });
   });
 
   it('honors mode: whatif for the knob experiments (replay path)', async () => {

@@ -33,12 +33,16 @@ static NSString *InsecureHostKey(NSURL *url) {
   return [NSString stringWithFormat:@"%@:%@", url.host.lowercaseString, port];
 }
 
-// String values out of the service configuration: Dart null arrives over the
-// method channel as NSNull, which is non-nil and would poison a ?: chain
-// (the same normalization processServiceConfigurationParameters: applies).
-static NSString *EndpointString(NSDictionary *configuration, NSString *key) {
-  id value = configuration[key];
+// A usable string from a channel value: Dart null arrives over the method
+// channel as NSNull, which is non-nil and would poison a ?: chain or an
+// @[] literal (the same normalization processServiceConfigurationParameters:
+// applies).
+static NSString *AsNSString(id value) {
   return [value isKindOfClass:[NSString class]] ? value : nil;
+}
+
+static NSString *EndpointString(NSDictionary *configuration, NSString *key) {
+  return AsNSString(configuration[key]);
 }
 
 @implementation InsecureURLProtocol
@@ -58,10 +62,11 @@ serviceConfigurationParameters:(NSDictionary *)serviceConfigurationParameters {
   // (what the app usually passes, and what the exchange will actually hit),
   // plus the issuer or discovery URL for the discovery flow. A host the
   // exchange needs but that is not armed fails its certificate check.
-  // EndpointString filters the NSNulls the channel sends for absent fields —
-  // the same normalization processServiceConfigurationParameters: needs on
-  // its end-session field; the candidates are collected into a mutable
-  // array because an @[] literal throws on a nil element.
+  // AsNSString and EndpointString filter the NSNulls the channel sends for
+  // absent fields — the same normalization
+  // processServiceConfigurationParameters: needs on its end-session field;
+  // the candidates are collected into a mutable array because an @[]
+  // literal throws on a nil element.
   NSMutableArray<NSString *> *endpoints = [NSMutableArray array];
   for (NSString *key in @[
     @"authorizationEndpoint",
@@ -73,10 +78,12 @@ serviceConfigurationParameters:(NSDictionary *)serviceConfigurationParameters {
       [endpoints addObject:endpoint];
     }
   }
-  if ([issuer isKindOfClass:[NSString class]]) {
+  issuer = AsNSString(issuer);
+  if (issuer) {
     [endpoints addObject:issuer];
   }
-  if ([discoveryUrl isKindOfClass:[NSString class]]) {
+  discoveryUrl = AsNSString(discoveryUrl);
+  if (discoveryUrl) {
     [endpoints addObject:discoveryUrl];
   }
 

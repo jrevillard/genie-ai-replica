@@ -125,3 +125,38 @@ test.describe('Conversation V1', () => {
     await ctx.close();
   });
 });
+
+test.describe('Conversation V1 — answer card', () => {
+  // Task 5 — the assistant answer renders inside one elevated card, from the
+  // first frame of the stream (D9 + D14).
+  test('the assistant answer renders inside one elevated card, from the first frame', async ({ browser }) => {
+    const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
+    // Throttle the stream so the thinking frame is stable and observable —
+    // otherwise the answer may complete before the first read.
+    await page.route('**/queries/stream**', async (route) => {
+      const resp = await route.fetch();
+      const body = await resp.text();
+      await new Promise((r) => setTimeout(r, 800));
+      await route.fulfill({ response: resp, body });
+    });
+    await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
+    await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
+    // The card exists immediately (the thinking frame), before the answer text.
+    await page.waitForSelector('[data-testid="answer-card"]', { timeout: 15000 });
+    const early = await page.evaluate(() => {
+      const card = document.querySelector('[data-testid="answer-card"]');
+      const cs = getComputedStyle(card);
+      return { shadow: cs.boxShadow !== 'none', hasThinking: !!card.querySelector('.streaming-indicator') };
+    });
+    expect(early.shadow, 'the card is elevated').toBe(true);
+    await page.waitForSelector('.chat-message.bot .message-bubble', { timeout: 30000 });
+    const late = await page.evaluate(() => {
+      const card = document.querySelector('[data-testid="answer-card"]');
+      const bubble = card.querySelector('.message-bubble');
+      return { bubbleInside: !!bubble, text: (bubble.textContent || '').length };
+    });
+    expect(late.bubbleInside, 'the bubble lives inside the card').toBe(true);
+    expect(late.text, 'the answer text arrives in the card').toBeGreaterThan(0);
+    await ctx.close();
+  });
+});

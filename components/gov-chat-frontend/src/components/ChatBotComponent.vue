@@ -135,38 +135,45 @@
             <span v-else class="message-avatar__silhouette" aria-hidden="true"><User :size="18" /></span>
           </div>
           <div class="message-wrapper">
-            <div class="message-bubble">
-              <!-- Render bot messages as sanitized HTML for Markdown, user messages as plain text -->
-              <span v-if="msg.sender === 'user'">{{ msg.content }}</span>
-              <template v-else>
+            <!-- D9/D14: the assistant answer lives in one elevated card from the
+                 first streaming frame; sources, actions and the confidence block
+                 render inside it below the bubble. -->
+            <div v-if="msg.sender === 'bot'" class="answer-card" data-testid="answer-card">
+              <div class="message-bubble">
                 <div v-if="msg.isStreaming && !msg.content" class="streaming-indicator">
                   <DsSpinner size="sm" />
                   <span>{{ translate('chatbot.thinking', 'Thinking...') }}</span>
                 </div>
+                <!-- Render bot messages as sanitized HTML for Markdown -->
                 <!-- eslint-disable-next-line vue/no-v-html -->
                 <div v-else v-html="renderMarkdown(msg.content)"></div>
-              </template>
+              </div>
+              <!-- Feedback and confidence score for bot messages -->
+              <div class="bot-message-meta">
+                <div v-if="msg.confidenceScore != null && msg.isGrounded !== false" class="confidence-score">
+                  <Brain :size="16" />
+                  <span>Confidence: {{ (msg.confidenceScore * 100).toFixed(0) }}%</span>
+                </div>
+                <!-- Not grounded: the answer came from the LLM's own knowledge, not library documents -->
+                <div v-else-if="msg.isGrounded === false" class="grounding-flag">
+                  <Sparkles :size="16" />
+                  <span>{{
+                    translate('chatbot.aiGeneratedNoDocs', 'AI-generated — not based on library documents')
+                  }}</span>
+                </div>
+                <div class="feedback-trigger">
+                  <DsPill>
+                    <DsButton variant="ghost" :small="true" @click="openFeedbackDialog(index)">
+                      {{ translate('feedback.button') }}
+                    </DsButton>
+                  </DsPill>
+                </div>
+              </div>
+            </div>
+            <div v-else class="message-bubble">
+              <span>{{ msg.content }}</span>
             </div>
             <span class="message-time">{{ formatMessageTime(msg.timestamp) }}</span>
-          </div>
-          <!-- Feedback and confidence score for bot messages -->
-          <div v-if="msg.sender === 'bot'" class="bot-message-meta">
-            <div v-if="msg.confidenceScore != null && msg.isGrounded !== false" class="confidence-score">
-              <Brain :size="16" />
-              <span>Confidence: {{ (msg.confidenceScore * 100).toFixed(0) }}%</span>
-            </div>
-            <!-- Not grounded: the answer came from the LLM's own knowledge, not library documents -->
-            <div v-else-if="msg.isGrounded === false" class="grounding-flag">
-              <Sparkles :size="16" />
-              <span>{{ translate('chatbot.aiGeneratedNoDocs', 'AI-generated — not based on library documents') }}</span>
-            </div>
-            <div class="feedback-trigger">
-              <DsPill>
-                <DsButton variant="ghost" :small="true" @click="openFeedbackDialog(index)">
-                  {{ translate('feedback.button') }}
-                </DsButton>
-              </DsPill>
-            </div>
           </div>
         </div>
         <!-- Auto-scroll anchor element -->
@@ -2413,6 +2420,26 @@ export default {
   border-bottom-left-radius: var(--radius-sm);
 }
 
+/* D9: one elevated card per answer; the bubble loses its own chrome inside it. */
+.answer-card {
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.answer-card .message-bubble {
+  background: transparent;
+  border: none;
+  padding: 0;
+  border-radius: 0;
+}
+
 .message-wrapper {
   display: flex;
   align-items: flex-end;
@@ -2546,8 +2573,6 @@ export default {
 }
 
 .bot-message-meta {
-  margin-left: var(--space-sm);
-  align-self: center;
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);

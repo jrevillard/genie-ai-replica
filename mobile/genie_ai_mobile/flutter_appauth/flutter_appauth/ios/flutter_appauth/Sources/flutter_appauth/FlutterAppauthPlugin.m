@@ -11,10 +11,27 @@
 
 static NSString *const kInsecureURLProtocolHandledKey = @"InsecureURLProtocolHandled";
 
+// The host of the OIDC provider the current insecure exchange talks to. Set
+// when the protocol is registered, cleared implicitly by unregister: while
+// registered, the protocol is consulted by every NSURLSession in the process
+// and may only intercept this host.
+static NSString *_insecureAllowedHost = nil;
+
 @implementation InsecureURLProtocol
 
++ (void)setAllowedHost:(NSString *)host {
+  _insecureAllowedHost = [host copy];
+}
+
 + (BOOL)canInitWithRequest:(NSURLRequest *)request {
-  return [self propertyForKey:kInsecureURLProtocolHandledKey inRequest:request] == nil;
+  if ([self propertyForKey:kInsecureURLProtocolHandledKey inRequest:request] != nil) {
+    return NO;
+  }
+  // Only the OIDC provider's host may be intercepted: everything else keeps
+  // its certificate verification even during an insecure exchange.
+  NSString *requestHost = request.URL.host;
+  return _insecureAllowedHost.length > 0 && requestHost != nil &&
+         [requestHost caseInsensitiveCompare:_insecureAllowedHost] == NSOrderedSame;
 }
 
 + (NSURLRequest *)canonicalRequestForRequest:(NSURLRequest *)request {
@@ -291,6 +308,9 @@ AppAuthAuthorization *authorization;
   }
 
   if (requestParameters.allowInsecureConnections) {
+    NSURL *providerUrl =
+        [NSURL URLWithString:requestParameters.issuer ?: requestParameters.discoveryUrl];
+    [InsecureURLProtocol setAllowedHost:providerUrl.host];
     [NSURLProtocol registerClass:[InsecureURLProtocol class]];
   }
 
@@ -440,6 +460,9 @@ AppAuthAuthorization *authorization;
       [[TokenRequestParameters alloc] initWithArguments:arguments];
 
   if (requestParameters.allowInsecureConnections) {
+    NSURL *providerUrl =
+        [NSURL URLWithString:requestParameters.issuer ?: requestParameters.discoveryUrl];
+    [InsecureURLProtocol setAllowedHost:providerUrl.host];
     [NSURLProtocol registerClass:[InsecureURLProtocol class]];
   }
 
@@ -506,6 +529,9 @@ AppAuthAuthorization *authorization;
       [[EndSessionRequestParameters alloc] initWithArguments:arguments];
 
   if (requestParameters.allowInsecureConnections) {
+    NSURL *providerUrl =
+        [NSURL URLWithString:requestParameters.issuer ?: requestParameters.discoveryUrl];
+    [InsecureURLProtocol setAllowedHost:providerUrl.host];
     [NSURLProtocol registerClass:[InsecureURLProtocol class]];
   }
 

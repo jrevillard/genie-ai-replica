@@ -43,6 +43,31 @@ const _macosPluginPath =
 /// constructor, so this qualified reference is the only way to reach it.
 final _trustAllBuilder = RegExp(r'InsecureConnectionBuilder\s*\.\s*INSTANCE');
 
+/// The first `{...}` block following [signature], comments stripped — the
+/// body of the ObjC method declared by [signature], or null.
+String? _methodBody(String source, Pattern signature) {
+  final match = signature.allMatches(source).toList();
+  if (match.isEmpty) return null;
+  final open = source.indexOf('{', match.first.end);
+  if (open < 0) return null;
+  // Brace-match on the raw source.
+  var depth = 0;
+  for (var i = open; i < source.length; i++) {
+    if (source[i] == '{') {
+      depth++;
+    } else if (source[i] == '}') {
+      depth--;
+      if (depth == 0) {
+        final body = source.substring(open + 1, i);
+        return body
+            .replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), ' ')
+            .replaceAll(RegExp(r'//[^\n]*'), ' ');
+      }
+    }
+  }
+  return null;
+}
+
 /// Any registration of a URL protocol, whichever protocol it is.
 final _protocolRegistration = RegExp(r'\[\s*NSURLProtocol\s+registerClass:');
 
@@ -256,6 +281,69 @@ void main() {
           expect(
             scanner.count(_protocolUnregistration),
             scanner.count(_protocolRegistration),
+          );
+        });
+      });
+    }
+  });
+
+  group('Apple protocol host scoping', () {
+    // While registered, the trust-all protocol is consulted by every
+    // NSURLSession in the process. canInitWithRequest must therefore only
+    // intercept the OIDC provider's host — and each registration must arm
+    // that host, or the interception would refuse everything (fail closed,
+    // but the insecure exchange would break).
+    for (final (label, path) in <(String, String)>[
+      ('iOS', _iosPluginPath),
+      ('macOS', _macosPluginPath),
+    ]) {
+      group(label, () {
+        test('canInitWithRequest intercepts only the allowed host', () {
+          final source = File(path).readAsStringSync();
+          final body = _methodBody(
+            source,
+            RegExp(r'\+\s*\(BOOL\)\s*canInitWithRequest'),
+          );
+          expect(body, isNotNull, reason: 'canInitWithRequest moved');
+          expect(
+            body,
+            contains('_insecureAllowedHost'),
+            reason:
+                'the interception is not scoped to the provider host: '
+                'while registered it would trust unrelated traffic too',
+          );
+          expect(body, contains('caseInsensitiveCompare'));
+          expect(body, contains('request.URL.host'));
+        });
+
+        test('every registration arms the host right before it', () {
+          final source = File(path).readAsStringSync();
+          final registrations = RegExp(
+            r'\[\s*NSURLProtocol\s+registerClass:',
+          ).allMatches(source).length;
+          expect(registrations, greaterThan(0));
+          final armed = RegExp(
+            r'setAllowedHost:[^;]*;\s*\[\s*NSURLProtocol\s+registerClass:',
+            dotAll: true,
+          ).allMatches(source).length;
+          expect(
+            armed,
+            registrations,
+            reason:
+                'a registration without setAllowedHost trusts nothing: '
+                'the exchange itself would fail, or worse a stale host from '
+                'another exchange would be trusted',
+          );
+          // Arming must sit behind the flag like the registration itself.
+          final scanner = GuardScanner(File(path).readAsStringSync());
+          final unguarded = scanner.unguarded(
+            RegExp(r'\[\s*InsecureURLProtocol\s+setAllowedHost:'),
+            'allowInsecureConnections',
+          );
+          expect(
+            unguarded,
+            isEmpty,
+            reason: 'setAllowedHost ran without allowInsecureConnections',
           );
         });
       });

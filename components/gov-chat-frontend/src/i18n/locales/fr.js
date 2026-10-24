@@ -1385,8 +1385,7 @@ export default {
   chatbot: {
     justChat: 'Simple discussion',
     closeConversation: 'Fermer la conversation',
-    relatedSourcesOne: 'Source associée ({n})',
-    relatedSources: 'Sources associées ({n})',
+    relatedSources: 'Source associée ({n}) | Sources associées ({n})',
     retry: 'Réessayer',
     copyAnswer: 'Copier la réponse',
     confidence: 'Confiance',

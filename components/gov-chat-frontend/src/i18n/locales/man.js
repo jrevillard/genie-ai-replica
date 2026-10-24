@@ -1322,8 +1322,7 @@ export default {
   chatbot: {
     justChat: 'Feewre tanngay',
     closeConversation: 'Uddita haala',
-    relatedSourcesOne: 'Hobbe jowtaande ({n})',
-    relatedSources: 'Hobbe jowtaande ({n})',
+    relatedSources: 'Hobbe jowtaande ({n}) | Hobbe jowtaande ({n})',
     copyAnswer: 'Natto jaabol',
     confidence: 'Hooreytingol',
     errorUnableToComplete: 'Jaabol timmaani.',

@@ -316,8 +316,8 @@ test.describe('Conversation V1 — documents panel', () => {
       const faq = document.querySelector('[data-testid="faq-section"]');
       return {
         emptyText: empty ? empty.textContent : '',
-        hasTitle: !!empty?.querySelector('.documents-empty__title'),
-        hasHint: !!empty?.querySelector('.documents-empty__hint'),
+        hasTitle: !!empty?.querySelector('.ds-state__message'),
+        hasHint: !!empty?.querySelector('.ds-state__hint'),
         faqVisible: !!faq
       };
     });

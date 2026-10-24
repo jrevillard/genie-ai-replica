@@ -1309,8 +1309,7 @@ export default {
   chatbot: {
     justChat: '仅聊天',
     closeConversation: '关闭对话',
-    relatedSourcesOne: '相关来源 ({n})',
-    relatedSources: '相关来源 ({n})',
+    relatedSources: '相关来源 ({n}) | 相关来源 ({n})',
     copyAnswer: '复制回答',
     confidence: '置信度',
     errorUnableToComplete: '无法完成回答。',

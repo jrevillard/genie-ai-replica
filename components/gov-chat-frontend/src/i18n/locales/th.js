@@ -1365,8 +1365,7 @@ export default {
   chatbot: {
     justChat: 'แชทเท่านั้น',
     closeConversation: 'ปิดการสนทนา',
-    relatedSourcesOne: 'แหล่งที่เกี่ยวข้อง ({n})',
-    relatedSources: 'แหล่งข้อมูลที่เกี่ยวข้อง ({n})',
+    relatedSources: 'แหล่งที่เกี่ยวข้อง ({n}) | แหล่งข้อมูลที่เกี่ยวข้อง ({n})',
     copyAnswer: 'คัดลอกคำตอบ',
     confidence: 'ความมั่นใจ',
     errorUnableToComplete: 'ไม่สามารถสรุปคำตอบได้',

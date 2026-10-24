@@ -167,11 +167,7 @@
                   :aria-expanded="msg.sourcesOpen ? 'true' : 'false'"
                   @click="msg.sourcesOpen = !msg.sourcesOpen"
                 >
-                  <span>{{
-                    msg.sources.length === 1
-                      ? $t('chatbot.relatedSourcesOne', { n: msg.sources.length })
-                      : $t('chatbot.relatedSources', { n: msg.sources.length })
-                  }}</span>
+                  <span>{{ $t('chatbot.relatedSources', { n: msg.sources.length }) }}</span>
                   <ChevronUp v-if="msg.sourcesOpen" :size="16" aria-hidden="true" />
                   <ChevronDown v-else :size="16" aria-hidden="true" />
                 </button>
@@ -247,8 +243,8 @@
               </div>
               <!-- D1: the confidence percentage is a state, not an action —
                    it renders with the card even when nothing is rateable. -->
-              <div class="bot-message-meta">
-                <span v-if="msg.confidenceScore != null && msg.isGrounded !== false" class="confidence-score">
+              <div v-if="msg.confidenceScore != null && msg.isGrounded !== false" class="bot-message-meta">
+                <span class="confidence-score">
                   <Brain :size="14" aria-hidden="true" />
                   <span>{{ $t('chatbot.confidence') }}: {{ (msg.confidenceScore * 100).toFixed(0) }}%</span>
                 </span>
@@ -296,8 +292,7 @@
             :placeholder="translate('chatbot.composerPlaceholder')"
             :accessible-name="composerEntry.service"
             :tint="composerEntry.styles"
-            :show-attach="true"
-            :show-mic="true"
+            :show-actions="true"
             :attach-title="translate('chatbot.composerAttachTitle')"
             :mic-title="translate('chatbot.composerMicTitle')"
             :send-title="translate('chatbot.composerSendTitle')"
@@ -338,8 +333,7 @@
           v-model="newMessage"
           input-id="chat-composer-input"
           :placeholder="translate('chatbot.placeholder')"
-          :show-attach="false"
-          :show-mic="false"
+          :show-actions="false"
           :max-lines="5"
           :save-title="translate('chatbot.saveChat')"
           :export-title="translate('chatbot.exportChat')"
@@ -464,7 +458,7 @@ import {
   X
 } from '@lucide/vue';
 import { formatFileSize } from '../utils/fileUtils.js';
-import httpService from '../services/httpService';
+import documentFileService from '../services/documentFileService';
 import { eventBus } from '../eventBus.js';
 import notificationService from '../services/notificationService';
 import { mapGetters, mapActions } from 'vuex';
@@ -472,7 +466,8 @@ import { getUserId } from '../utils/userUtils';
 import ChatResponseFeedbackDialog from './ChatResponseFeedbackDialog.vue';
 import ModalDialog from './ModalDialog.vue';
 import RightSideBarComponent from './RightSideBarComponent.vue';
-import chatbotService from '../services/chatbotService';
+import chatbotService, { THUMB_RATINGS } from '../services/chatbotService';
+import { config as runtimeConfig } from '../config-loader';
 import serviceTreeService from '../services/serviceTreeService'; // *** NEW: Import serviceTreeService
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import ChatComposer from './ChatComposer.vue';
@@ -692,7 +687,7 @@ export default {
     assistantIcon() {
       // The product icon, the same one the navbar renders; the default is
       // the navbar's own until the runtime config has loaded.
-      return this.cachedConfig?.app?.icon || { type: 'file', value: '/config/logo-genie-ai.jpeg' };
+      return this.cachedConfig?.app?.icon || runtimeConfig?.app?.icon;
     },
     authUser() {
       // The auth getters are root-level, not namespaced (the settings page
@@ -702,9 +697,11 @@ export default {
     userAvatarUrl() {
       return this.authUser.avatarUrl || '';
     },
+    userName() {
+      return this.authUser.name || this.authUser.preferred_username || '';
+    },
     userInitials() {
-      const n = this.authUser.name || this.authUser.preferred_username || '';
-      const parts = n.trim().split(/\s+/).filter(Boolean);
+      const parts = this.userName.trim().split(/\s+/).filter(Boolean);
       if (!parts.length) return '';
       return parts
         .slice(0, 2)
@@ -713,7 +710,7 @@ export default {
     },
     userAvatarStyle() {
       // A stable colour per name, drawn from the DS accents — never a raw hex.
-      const n = this.authUser.name || this.authUser.preferred_username || '';
+      const n = this.userName;
       const palette = ['var(--accent)', 'var(--accent-secondary)', 'var(--info)', 'var(--success)'];
       let h = 0;
       for (let i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) >>> 0;
@@ -905,25 +902,13 @@ export default {
   },
 
   methods: {
-    // D2: the "TYPE · size" line of a source card. Type+size are fetched once
-    // per document and cached on the doc object; the line degrades to the
-    // type alone when the repository does not answer.
+    // D2: the "TYPE · size" line of a source card. The repository fields are
+    // fetched once where the sources arrive (onMetadata) onto the reactive
+    // doc objects; this is only the formatter, degrading to the type alone
+    // when the repository does not answer.
     docMeta(d) {
-      const type = d._type || (d.url ? d.url.split('.').pop().toUpperCase() : 'LINK');
+      const type = d._type || d.type || 'LINK';
       const size = d._size ? formatFileSize(d._size) : '';
-      if (!d._fetched && d.id) {
-        d._fetched = true;
-        httpService
-          .get(`files/${d.id}`)
-          .then((r) => {
-            d._size = r.data?.file_size || 0;
-            d._type = (r.data?.file_type || type).toUpperCase();
-            this.$forceUpdate();
-          })
-          .catch(() => {
-            /* the meta line degrades to the type alone */
-          });
-      }
       return size ? `${type} · ${size}` : type;
     },
     ...mapActions('chatHistory', ['createChat', 'updateChat']),
@@ -1368,12 +1353,12 @@ export default {
 
     // The one send pathway: takes the query text (and what the user saw, for
     // the dual-prompt case) and runs it. The composer and the retry share it.
-    async sendMessageFromText(content, displayOverride) {
+    async sendMessageFromText(content) {
       if (!content) return;
 
       // For dual-prompt mechanism: use hidden prompt for backend, visible text for display
       const messageForBackend = this.hiddenPromptForNextMessage || content;
-      const messageForDisplay = displayOverride || content;
+      const messageForDisplay = content;
 
       this.chatMessages.push({
         sender: 'user',
@@ -1396,7 +1381,6 @@ export default {
         sender: 'bot',
         content: '',
         _query: messageForBackend,
-        _queryDisplay: messageForDisplay,
         timestamp: new Date().toISOString(),
         isSaved: false,
         metadata: {},
@@ -1521,6 +1505,20 @@ export default {
               // sidebar keeps its accumulated view, the card keeps its own.
               this.chatMessages[lastMessageIndex].sources = newDocs;
               this.chatMessages[lastMessageIndex].sourcesOpen = true;
+              // Fetch the repository fields through the reactive proxies —
+              // writing the raw objects would bypass the render triggers.
+              this.chatMessages[lastMessageIndex].sources.forEach((doc) => {
+                if (!doc.id) return;
+                documentFileService
+                  .getFileMetadata(doc.id)
+                  .then((file) => {
+                    doc._size = file?.file_size || 0;
+                    doc._type = (file?.file_type || doc.type || 'LINK').toUpperCase();
+                  })
+                  .catch(() => {
+                    /* the meta line degrades to the extension type alone */
+                  });
+              });
             }
           },
           onTranslation: (translatedContent) => {
@@ -1615,7 +1613,7 @@ export default {
     },
 
     async handleFeedbackSubmit(feedback) {
-      const rating = feedback.rating || (feedback.thumbFeedback === 'up' ? 4 : 2);
+      const rating = feedback.rating || THUMB_RATINGS[feedback.thumbFeedback] || feedback.rating;
       const ok = await this.submitFeedbackPayload(feedback.message, rating, feedback.text || '');
       if (ok) notificationService.success(this.translate('chatbot.feedbackSubmitted'));
       this.closeFeedbackDialog();
@@ -1623,7 +1621,7 @@ export default {
 
     async rateAnswer(index, value) {
       const msg = this.chatMessages[index];
-      const rating = value === 'up' ? 5 : 1;
+      const rating = THUMB_RATINGS[value];
       const ok = await this.submitFeedbackPayload(msg, rating, '');
       if (ok) msg.userFeedback = value;
     },
@@ -1631,13 +1629,18 @@ export default {
     retryAnswer(index) {
       const msg = this.chatMessages[index];
       const q = msg._query;
-      const display = msg._queryDisplay;
       // The failed turn is its question plus the failed answer — replaced,
-      // not stacked.
+      // not stacked. The visible text lives on the user turn being dropped.
       const before = this.chatMessages[index - 1];
       const dropUser = before && before.sender === 'user';
+      const display = dropUser ? before.content : q;
       this.chatMessages.splice(dropUser ? index - 1 : index, dropUser ? 2 : 1);
-      this.sendMessageFromText(q, display);
+      this.sendMessageFromText(q);
+      if (display !== q) {
+        // The retry re-runs the hidden-prompt query, but shows what the user
+        // saw — the display text rides the same mechanism the composer uses.
+        this.chatMessages[this.chatMessages.length - 2].content = display;
+      }
     },
 
     async copyAnswer(msg) {
@@ -2452,8 +2455,6 @@ export default {
   padding: var(--space-xs) var(--space-md);
   background: var(--surface);
   border-bottom: 1px solid var(--border);
-  position: relative;
-  z-index: 1;
 }
 
 .conversation-header__title {
@@ -2548,8 +2549,6 @@ export default {
   overflow-y: auto;
   padding: var(--space-sm);
   background: var(--surface);
-  position: relative;
-  z-index: 1;
 }
 
 .chat-message {
@@ -2619,9 +2618,7 @@ export default {
   padding: var(--space-xs) var(--space-sm);
   border-radius: var(--radius-sm);
   background: var(--warning-bg);
-  /* The badge token cannot carry body text on a light ground — the ink is
-     the token darkened, derived, never a raw hex. */
-  color: color-mix(in oklch, var(--warning), black 55%);
+  color: var(--warning-ink);
   font-size: var(--text-xs);
 }
 
@@ -2632,7 +2629,7 @@ export default {
   padding: var(--space-sm);
   border-radius: var(--radius-sm);
   background: var(--warning-bg);
-  color: color-mix(in oklch, var(--warning), black 55%);
+  color: var(--warning-ink);
   font-size: var(--text-sm);
 }
 
@@ -2640,9 +2637,9 @@ export default {
   display: inline-flex;
   align-items: center;
   gap: var(--space-xs);
-  border: 1px solid color-mix(in oklch, var(--warning), black 55%);
+  border: 1px solid var(--warning-ink);
   background: transparent;
-  color: color-mix(in oklch, var(--warning), black 55%);
+  color: var(--warning-ink);
   padding: 2px var(--space-sm);
   border-radius: var(--radius-sm);
   font-size: var(--text-xs);
@@ -3226,8 +3223,6 @@ export default {
   background: transparent;
   border-top: none;
   padding: var(--space-sm) var(--space-md);
-  position: relative;
-  z-index: 1;
 }
 
 /* Form Styles for Save Dialog */

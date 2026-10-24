@@ -611,6 +611,13 @@ body.dark-mode {
  * over it; it shows behind the composer and rises a little on the
  * sides only.
  */
+html[data-visual='on'] .genie-living-intelligence .chatbot-container {
+  /* The layer owns the stacking its artwork creates: the container becomes
+     its own stacking context and the wave paints below every child — the
+     app's own rules carry no layer compensations. */
+  isolation: isolate;
+}
+
 html[data-visual='on'] .genie-living-intelligence .chatbot-container::after {
   content: '';
   position: absolute;
@@ -621,5 +628,5 @@ html[data-visual='on'] .genie-living-intelligence .chatbot-container::after {
   background: var(--visual-waves) bottom / 100% auto no-repeat;
   opacity: 0.72;
   pointer-events: none;
-  z-index: 0;
+  z-index: -1;
 }

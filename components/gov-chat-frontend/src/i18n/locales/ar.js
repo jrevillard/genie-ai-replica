@@ -1361,8 +1361,7 @@ export default {
   chatbot: {
     justChat: 'دردشة فقط',
     closeConversation: 'إغلاق المحادثة',
-    relatedSourcesOne: 'مصدر ذو صلة ({n})',
-    relatedSources: 'مصادر ذات صلة ({n})',
+    relatedSources: 'مصدر ذو صلة ({n}) | مصادر ذات صلة ({n})',
     copyAnswer: 'نسخ الإجابة',
     confidence: 'الثقة',
     errorUnableToComplete: 'تعذر إكمال الإجابة.',

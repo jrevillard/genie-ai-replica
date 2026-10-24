@@ -1381,8 +1381,7 @@ export default {
   chatbot: {
     justChat: 'Einfacher Chat',
     closeConversation: 'Konversation schließen',
-    relatedSourcesOne: 'Verwandte Quelle ({n})',
-    relatedSources: 'Verwandte Quellen ({n})',
+    relatedSources: 'Verwandte Quelle ({n}) | Verwandte Quellen ({n})',
     copyAnswer: 'Antwort kopieren',
     confidence: 'Konfidenz',
     errorUnableToComplete: 'Die Antwort konnte nicht abgeschlossen werden.',

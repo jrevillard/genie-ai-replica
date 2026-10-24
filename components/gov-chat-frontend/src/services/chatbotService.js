@@ -2,6 +2,11 @@
 import httpService from './httpService';
 import keycloakAuthService from './keycloakAuthService';
 
+// The one thumb→rating mapping. The dialog's thumbs and the answer card's
+// inline thumbs are the same gesture and must reach analytics as the same
+// values; explicit star ratings pass through unchanged.
+export const THUMB_RATINGS = { up: 5, down: 1 };
+
 export default {
   /**
    * Submit a query to the chatbot

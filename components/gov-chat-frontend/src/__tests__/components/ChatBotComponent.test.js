@@ -74,7 +74,8 @@ jest.mock('../../config-loader', () => ({
   default: jest.fn().mockResolvedValue({
     features: { chat: { quickHelp: { buttons: [] } } }
   }),
-  config: {}
+  config: { app: { icon: { type: 'file', value: '/config/logo-genie-ai.jpeg' } } },
+  defaults: { app: { icon: { type: 'file', value: '/config/logo-genie-ai.jpeg' } } }
 }));
 
 // Mock heavy libraries

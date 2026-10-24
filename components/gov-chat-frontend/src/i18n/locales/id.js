@@ -1368,8 +1368,7 @@ export default {
   chatbot: {
     justChat: 'Obrolan saja',
     closeConversation: 'Tutup percakapan',
-    relatedSourcesOne: 'Sumber terkait ({n})',
-    relatedSources: 'Sumber terkait ({n})',
+    relatedSources: 'Sumber terkait ({n}) | Sumber terkait ({n})',
     copyAnswer: 'Salin jawaban',
     confidence: 'Keyakinan',
     errorUnableToComplete: 'Tidak dapat menyelesaikan jawaban.',

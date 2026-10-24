@@ -48,7 +48,7 @@
     />
     <div class="chat-composer__actions">
       <button
-        v-if="showAttach"
+        v-if="showActions"
         type="button"
         class="chat-composer__icon-btn chat-composer__icon-btn--disabled"
         :title="attachTitle"
@@ -60,7 +60,7 @@
         <Paperclip :size="18" aria-hidden="true" />
       </button>
       <button
-        v-if="showMic"
+        v-if="showActions"
         type="button"
         class="chat-composer__icon-btn chat-composer__icon-btn--disabled"
         :title="micTitle"
@@ -150,16 +150,14 @@ export default {
     // The dead attach/mic buttons ship on the welcome screen only (its
     // reference shows them); the conversation mounts the composer without
     // them — a permanently disabled control is a lie in a production UI.
-    showAttach: {
-      type: Boolean,
-      default: true
-    },
-    showMic: {
-      type: Boolean,
-      default: true
-    },
     // Cap the field's growth in lines (0 = uncapped). The conversation
     // caps at five; beyond that the field scrolls internally.
+    // D6: the conversation composer drops the attach/mic pair; the welcome
+    // keeps it. One switch — the two buttons live or die together.
+    showActions: {
+      type: Boolean,
+      default: true
+    },
     maxLines: {
       type: Number,
       default: 0
@@ -197,8 +195,11 @@ export default {
   computed: {
     fieldCapStyle() {
       if (!this.maxLines) return null;
-      // N lines x 27px line box + the field's own vertical padding.
-      return { '--composer-field-max-height': `${this.maxLines * 27 + 16}px` };
+      // The cap's units live in the CSS layer (line box + padding tokens);
+      // this only carries the line count.
+      return {
+        '--composer-field-max-height': `calc(${this.maxLines} * 1lh + 2 * var(--space-xs))`
+      };
     },
     model: {
       get() {

@@ -1375,8 +1375,7 @@ export default {
   chatbot: {
     justChat: 'Puisano feela',
     closeConversation: 'Koala puisano',
-    relatedSourcesOne: 'Mohlahlobi o amanang ({n})',
-    relatedSources: 'MeHLAHLOBI e amanang ({n})',
+    relatedSources: 'Mohlahlobi o amanang ({n}) | MeHLAHLOBI e amanang ({n})',
     copyAnswer: 'Kopitsa karabo',
     confidence: 'Tshepo',
     errorUnableToComplete: 'Ha e khone ho phethahatsa karabo.',

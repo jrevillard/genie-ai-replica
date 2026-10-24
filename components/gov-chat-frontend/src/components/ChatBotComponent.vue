@@ -73,21 +73,23 @@
         </button>
       </div>
       <!-- System Status Panel -->
-      <div class="system-status-panel">
-        <div class="status-left">
-          <DsPill :variant="systemStatus.online ? 'success' : 'danger'">{{
-            systemStatus.online ? translate('analytics.status.online') : translate('analytics.status.offline')
-          }}</DsPill>
+      <!-- D4: one compact strip; the response time rides the pill's title,
+           and the offline case carries an accessible explanation. -->
+      <div class="system-status-panel" :data-status="systemStatus.online ? 'online' : 'offline'">
+        <div class="status-left" :role="systemStatus.online ? null : 'status'">
+          <DsPill
+            :variant="systemStatus.online ? 'success' : 'danger'"
+            :title="
+              systemStatus.online && systemStatus.lastResponseTime !== null
+                ? `${systemStatus.lastResponseTime}ms`
+                : null
+            "
+            >{{
+              systemStatus.online ? translate('analytics.status.online') : translate('analytics.status.offline')
+            }}</DsPill
+          >
           <div v-if="!systemStatus.online && systemStatus.errorMessage" class="status-error-message">
             {{ systemStatus.errorMessage }}
-          </div>
-        </div>
-        <div class="status-metrics">
-          <div class="metric">
-            <span class="metric-label">{{ translate('analytics.status.responseTime') }}</span>
-            <span class="metric-value">
-              {{ systemStatus.lastResponseTime !== null ? systemStatus.lastResponseTime + 'ms' : 'N/A' }}
-            </span>
           </div>
         </div>
       </div>
@@ -2475,21 +2477,19 @@ export default {
 .system-status-panel {
   background: var(--surface);
   border-bottom: 1px solid var(--border-light);
-  padding: var(--space-sm) var(--space-md);
+  padding: 4px var(--space-md);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  font-size: var(--text-base);
-  min-height: 45px;
+  font-size: var(--text-xs);
 }
 
 .status-left {
   display: flex;
-  flex-direction: column; /* Stack status and error */
-  align-items: flex-start;
-  gap: var(--space-xs); /* Space between status and error */
-  flex: 1; /* Allow error message to take space */
-  overflow: hidden; /* Prevent long errors from breaking layout */
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-xs);
+  flex: 1;
+  overflow: hidden;
 }
 
 .status-error-message {
@@ -2501,30 +2501,6 @@ export default {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
-}
-
-.status-metrics {
-  display: flex;
-  gap: var(--space-lg);
-  padding-left: var(--space-md); /* Add space between error and metric */
-}
-
-.metric {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.metric-label {
-  font-size: var(--text-xs);
-  color: var(--muted-soft);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.metric-value {
-  font-weight: 600;
-  color: var(--fg);
 }
 
 /* Context Panel Styles */
@@ -3275,11 +3251,6 @@ export default {
     flex-direction: column;
     align-items: flex-start;
     gap: var(--space-sm);
-  }
-
-  .status-metrics {
-    width: 100%;
-    justify-content: space-between;
   }
 }
 

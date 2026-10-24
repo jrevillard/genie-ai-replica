@@ -284,6 +284,24 @@ test.describe('Conversation V1 — warning and error', () => {
   });
 });
 
+test.describe('Conversation V1 — status strip', () => {
+  // Task 9 — the status indicator is one compact strip; offline carries an
+  // accessible explanation (D4-offline).
+  test('the status indicator is one compact strip; offline carries an accessible explanation', async ({ browser }) => {
+    const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
+    await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
+    await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
+    await page.waitForSelector('.system-status-panel', { timeout: 15000 });
+    const s = await page.evaluate(() => {
+      const p = document.querySelector('.system-status-panel');
+      return { h: p.getBoundingClientRect().height, role: p.getAttribute('data-status') };
+    });
+    expect(s.h, 'the strip is compact').toBeLessThan(40);
+    expect(['online', 'offline'], 'the strip carries its state').toContain(s.role);
+    await ctx.close();
+  });
+});
+
 test.describe('Conversation V1 — answer card', () => {
   // Task 5 — the assistant answer renders inside one elevated card, from the
   // first frame of the stream (D9 + D14).

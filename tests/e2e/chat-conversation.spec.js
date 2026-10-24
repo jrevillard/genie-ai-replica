@@ -15,7 +15,9 @@ async function askAndAnswer(page, question) {
 
 test.describe('Conversation V1', () => {
   // Task 1 — the header names the conversation and closes it.
-  test('the header names the conversation and × returns to the welcome screen, keeping history', async ({ browser }) => {
+  test('the header names the conversation and × returns to the welcome screen, keeping history', async ({
+    browser
+  }) => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
     await askAndAnswer(page, 'What is GENIE.AI?');
     const title = page.locator('[data-testid="conversation-header-title"]');
@@ -43,15 +45,25 @@ test.describe('Conversation V1', () => {
     expect(before.content, 'the wave pseudo must paint').not.toBe('none');
     expect(['fixed', 'absolute'], 'the wave must hold its place in the container').toContain(before.position);
     expect(before.image, 'the wave carries the asset').toContain('url');
-    await page.evaluate(() => { document.querySelector('.chat-window').scrollTop = 400; });
+    await page.evaluate(() => {
+      document.querySelector('.chat-window').scrollTop = 400;
+    });
     await page.waitForTimeout(200);
-    const after = await page.evaluate(() => getComputedStyle(document.querySelector('.chatbot-container'), '::after').bottom);
+    const after = await page.evaluate(
+      () => getComputedStyle(document.querySelector('.chatbot-container'), '::after').bottom
+    );
     expect(after, 'the wave must not scroll with the messages').toBe(before.bottom);
     // Layer-off: the paint goes, the layout stays.
-    const boxes = () => page.evaluate(() => {
-      const r = (sel) => { const el = document.querySelector(sel); if (!el) return null; const b = el.getBoundingClientRect(); return [b.x, b.y, b.width, b.height].map((v) => Math.round(v)); };
-      return { input: r('.chat-input'), window: r('.chat-window') };
-    });
+    const boxes = () =>
+      page.evaluate(() => {
+        const r = (sel) => {
+          const el = document.querySelector(sel);
+          if (!el) return null;
+          const b = el.getBoundingClientRect();
+          return [b.x, b.y, b.width, b.height].map((v) => Math.round(v));
+        };
+        return { input: r('.chat-input'), window: r('.chat-window') };
+      });
     const on = await boxes();
     await page.evaluate(() => document.documentElement.setAttribute('data-visual', 'off'));
     await page.waitForTimeout(300);
@@ -77,6 +89,39 @@ test.describe('Conversation V1', () => {
     });
     expect(m.maxH, 'the field caps at five lines (27px x 5 + 16px padding)').toBeLessThan(m.scrollH);
     expect(m.overflowY, 'beyond five lines the field scrolls internally').toBe('auto');
+    await ctx.close();
+  });
+
+  // Task 4 — every turn carries its avatar.
+  test('each turn carries its avatar: the product tile for the assistant, initials for the user', async ({
+    browser
+  }) => {
+    const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
+    await askAndAnswer(page, 'What is GENIE.AI?');
+    const a = await page.evaluate(() => {
+      const el = document.querySelector('.message-avatar--assistant');
+      const cs = el ? getComputedStyle(el) : null;
+      return el
+        ? { w: el.getBoundingClientRect().width, h: el.getBoundingClientRect().height, radius: cs.borderRadius }
+        : null;
+    });
+    expect(a, 'the assistant tile renders').not.toBeNull();
+    expect(a.w, 'the assistant tile is 36px wide').toBe(36);
+    expect(a.h, 'the assistant tile is 36px tall').toBe(36);
+    const u = await page.evaluate(() => {
+      const el = document.querySelector('.message-avatar--user');
+      const initials = el ? el.querySelector('.message-avatar__initials') : null;
+      return el
+        ? {
+            text: el.textContent.trim(),
+            hasPhoto: !!el.querySelector('img'),
+            color: initials ? getComputedStyle(initials).backgroundColor : null
+          }
+        : null;
+    });
+    expect(u, 'the user avatar renders').not.toBeNull();
+    expect(u.text.length > 0 || u.hasPhoto, 'initials or a photo, never empty').toBe(true);
+    expect(u.color, 'the initials circle is painted from a token, not transparent').not.toBe('rgba(0, 0, 0, 0)');
     await ctx.close();
   });
 });

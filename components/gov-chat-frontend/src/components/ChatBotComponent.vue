@@ -118,6 +118,22 @@
           class="chat-message"
           :class="msg.sender"
         >
+          <div
+            v-if="msg.sender === 'bot'"
+            class="message-avatar message-avatar--assistant"
+            data-testid="assistant-avatar"
+          >
+            <img v-if="assistantIcon.type === 'file'" :src="assistantIcon.value" alt="" />
+            <!-- eslint-disable-next-line vue/no-v-html -->
+            <span v-else class="message-avatar__glyph" v-html="assistantIcon.value"></span>
+          </div>
+          <div v-else class="message-avatar message-avatar--user" data-testid="user-avatar">
+            <img v-if="userAvatarUrl" :src="userAvatarUrl" alt="" />
+            <span v-else-if="userInitials" class="message-avatar__initials" :style="userAvatarStyle">{{
+              userInitials
+            }}</span>
+            <span v-else class="message-avatar__silhouette" aria-hidden="true"><User :size="18" /></span>
+          </div>
           <div class="message-wrapper">
             <div class="message-bubble">
               <!-- Render bot messages as sanitized HTML for Markdown, user messages as plain text -->
@@ -338,7 +354,7 @@
 </template>
 
 <script>
-import { Brain, Loader2, Sparkles, SquarePlus, X } from '@lucide/vue';
+import { Brain, Loader2, Sparkles, SquarePlus, User, X } from '@lucide/vue';
 import { eventBus } from '../eventBus.js';
 import notificationService from '../services/notificationService';
 import { mapGetters, mapActions } from 'vuex';
@@ -462,6 +478,7 @@ export default {
     Brain,
     Loader2,
     Sparkles,
+    User,
     X,
     SquarePlus,
     ChatResponseFeedbackDialog,
@@ -552,6 +569,36 @@ export default {
 
   computed: {
     ...mapGetters('chatHistory', ['getAllFolders', 'getChatById']),
+    assistantIcon() {
+      // The product icon, the same one the navbar renders; the default is
+      // the navbar's own until the runtime config has loaded.
+      return this.cachedConfig?.app?.icon || { type: 'file', value: '/config/logo-genie-ai.jpeg' };
+    },
+    authUser() {
+      // The auth getters are root-level, not namespaced (the settings page
+      // reads them the same way).
+      return this.$store.getters.currentUser || {};
+    },
+    userAvatarUrl() {
+      return this.authUser.avatarUrl || '';
+    },
+    userInitials() {
+      const n = this.authUser.name || this.authUser.preferred_username || '';
+      const parts = n.trim().split(/\s+/).filter(Boolean);
+      if (!parts.length) return '';
+      return parts
+        .slice(0, 2)
+        .map((p) => p[0].toUpperCase())
+        .join('');
+    },
+    userAvatarStyle() {
+      // A stable colour per name, drawn from the DS accents — never a raw hex.
+      const n = this.authUser.name || this.authUser.preferred_username || '';
+      const palette = ['var(--accent)', 'var(--accent-secondary)', 'var(--info)', 'var(--success)'];
+      let h = 0;
+      for (let i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) >>> 0;
+      return { background: palette[h % palette.length] };
+    },
 
     // The heading's brand comes from the runtime config through a slot,
     // never through an HTML string, so the operator-editable title is
@@ -2156,6 +2203,45 @@ export default {
   overflow: hidden;
 }
 
+/* The per-turn avatars (D11): the assistant carries the product icon in a
+   36px rounded tile, the user a photo, initials in an accent circle, or a
+   silhouette when even the name is absent. */
+.message-avatar {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.message-avatar--assistant {
+  border: 1px solid var(--border-light);
+  background: var(--surface);
+}
+
+.message-avatar--user {
+  border-radius: var(--radius-pill, 999px);
+}
+
+.message-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.message-avatar__initials {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--accent-fg);
+}
+
+.message-avatar__silhouette {
+  color: var(--muted);
+}
+
 /* The conversation header strip (D13). */
 .conversation-header {
   display: flex;
@@ -2803,7 +2889,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
+  width: 36px;
   height: 40px;
 }
 

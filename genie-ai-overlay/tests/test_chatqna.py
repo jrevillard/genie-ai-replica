@@ -1594,14 +1594,15 @@ class TestAlignGenerator:
         self._assert_stream(result, "Hi", "ok", excludes='"content": null')
 
     def test_lone_surrogate_content_does_not_kill_the_stream(self):
-        """A JSON \\ud800 escape parses to a lone surrogate; the rest of the
-        text survives via a replacement character, the stream survives."""
+        """A JSON \\ud800 escape parses to a lone surrogate; the text is
+        forwarded lossily (str.encode's replacement marker '?'), the stream
+        survives."""
         chunks = [
             b'data:{"choices":[{"delta":{"content":"\\ud800"}}]}\n\n',
             b'data:{"choices":[{"delta":{"content":"after"}}]}\n\n',
         ]
         result = self._run_generator(align_generator(None, gen=chunks))
-        self._assert_stream(result, "after")
+        self._assert_stream(result, "after", "b'?'\n\n")
 
     def test_upstream_error_object_frame_is_skipped_not_leaked(self):
         """A parsed upstream error frame carries no forwardable content: it is
@@ -1626,14 +1627,14 @@ class TestAlignGenerator:
 
     def test_undecodable_upstream_bytes_do_not_kill_the_stream(self):
         """Invalid UTF-8 in an upstream line decodes lossily (one replacement
-        character per bad byte); the frame still routes and the stream
-        survives."""
+        character per bad byte); the text still routes to the user and the
+        stream survives."""
         chunks = [
             b'data:{"choices":[{"delta":{"content":"caf\xe9"}}]}\n\n',
             b'data:{"choices":[{"delta":{"content":" after"}}]}\n\n',
         ]
         result = self._run_generator(align_generator(None, gen=chunks))
-        self._assert_stream(result, " after")
+        self._assert_stream(result, " after", "\\xef\\xbf\\xbd")
 
 
 # ===========================================================================

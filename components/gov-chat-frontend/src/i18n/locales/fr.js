@@ -727,6 +727,8 @@ export default {
     relatedDocs: 'Documents connexes',
     noDocuments: 'Aucun document connexe',
     faq: 'Foire aux questions',
+    faqError: 'Impossible de charger la FAQ.',
+    faqTranslationUnavailable: 'Traduction indisponible — la version originale en anglais est affichée.',
     tab: {
       all: 'Toutes les discussions',
       folders: 'Dossiers',
@@ -1382,6 +1384,7 @@ export default {
     configMismatchWarning:
       "Incohérence de configuration : {warnings}. Vérifiez la configuration de l'Aide rapide et la hiérarchie de connaissances.",
     streamingError: 'La réponse a été interrompue. Veuillez réessayer.',
+    unsupportedLanguage: "Cette langue n'est pas disponible pour ce déploiement.",
     aiGeneratedNoDocs: 'Généré par IA — non basé sur les documents de la bibliothèque',
     translationUnavailable: 'Traduction indisponible — cette réponse peut contenir du texte non traduit.',
     placeholder: 'Tapez votre requête ici...',

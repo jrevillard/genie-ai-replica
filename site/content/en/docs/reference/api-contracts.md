@@ -337,6 +337,53 @@ The analytics emission is identical in both modes; the `conversationId`
 controls whether the query shows up under "today's chats" or as an orphan
 turn.
 
+**Requested language**: the language the answer should be written in
+travels in the request body (`context.language`), so it is caller-controlled.
+It is resolved against the language map the loaded translation backend
+ships. A language the map does not know is **refused** — `400` with
+`{ "error": "UNSUPPORTED_LANGUAGE", "message": "Unsupported target language" }`
+— before anything is generated, so an answer is never produced in a
+language the caller did not ask for. The message names the refused side
+only: the caller's value is never echoed back into the response or into
+the logs. A translation that fails for another reason (the translator is
+down, the call times out) is not a refusal: the request goes through, the
+answer is delivered in English, and the stream reports the failure on the
+`done` frame — see [SSE Streaming Protocol](#sse-streaming-protocol).
+
+The value is normalized before it is resolved — trimmed, bounded, and
+lower-cased — so `"FR"` and `"fr"` name the same language, and a value padded
+with spaces is not a value the map cannot find.
+
+`"auto"` is not a language: it asks the service to detect the language the
+conversation is written in, which the chatqna service does on its own. It is
+accepted, never refused, and it names no translation target. English
+(`"en"`) is the language the answer is written in, so it is accepted too,
+and names no target either. A request that names no language at all is
+treated exactly like `"auto"`.
+
+What the answer looks like then depends on which path served the request,
+because the two paths translate in different places:
+
+- **Streaming** (`POST /api/queries/stream`) — the backend translates the
+  answer. No target named means no translation: the answer arrives as the
+  model wrote it, and the `done` frame carries `translationFailed: false`.
+- **Non-streaming** (`POST /api/queries`) — the chatqna service translates
+  the answer. It detects the language of the conversation, and when the
+  detected code is one the language map covers — and is not English — the
+  answer is translated into it and the metadata carries
+  `translation_status: "ok"`. When the detection fails, or names a code the
+  map does not cover, the answer stays in English and the status key is
+  absent.
+
+On the **non-streaming** path (`POST /api/queries`) the answer's metadata
+carries the outcome under `translation_status`: `ok` when the answer was
+translated, `refused` when the requested language was refused, `failed` when
+the translation broke. The key is **absent** when nothing was translated
+(the request named English, or named no language and nothing was detected
+that the deployment can answer in). `refused` and `failed` both leave the
+English answer in place, so a client has to be able to tell an untranslated
+answer from a translated one — the status is that signal.
+
 **`GET /api/queries`** is paginated, scoped to the JWT user. Query params:
 
 | Param | Type | Default | Notes |
@@ -619,6 +666,23 @@ Uses AST-based translation: only text leaf nodes are sent to the
 translator; markdown structure (headings, lists, links) is preserved by
 the skeleton.
 
+**Refused language**: both languages travel in the request body, so both
+are checked against the language map the loaded translation backend
+ships. A language the map does not know is refused — it is never passed
+to the model, and never guessed.
+
+**`400` response** (same for both routes):
+
+```json
+{ "error": "UNSUPPORTED_LANGUAGE", "message": "Unsupported target language" }
+```
+
+`"Unsupported source language"` when the source is the one refused. The
+message names the refused side only: the caller's value is never echoed
+back into the response or into the logs. The `code` tells the client the
+request was *refused* — not that it failed — without it having to read
+the message.
+
 **Streaming translation** is a separate, optional path: set
 `STREAMING_TRANSLATION_ENABLED=1` to translate chat-stream units as they
 arrive (issue #829). See [SSE Streaming Protocol](#sse-streaming-protocol).
@@ -760,10 +824,10 @@ stable; renaming a field is a breaking change.
 |------|--------|-------|
 | `chunk` | `content: string` | One streaming chunk (an English text unit by default) |
 | `metadata` | `queryId: string`, `responseTime: number`, `source_documents?: array`, `confidence_score?: number`, `is_grounded?: boolean`, `retrieval_confidence_score?: number \| null`, `self_confidence?: number \| null`, `abstained?: boolean`, `abstention_reason?: string \| null` | Captured from chatqna's in-stream metadata, forwarded to client (no separate backend retrieval) |
-| `translation` | `content: string` | Emitted by `/api/translate/*` only when `STREAMING_TRANSLATION_ENABLED=0` (the English-then-flip path) |
+| `translation` | `content: string` | Emitted by `/api/queries/stream` on the post-stream translation path (`STREAMING_TRANSLATION_ENABLED=0`, the English-then-flip path). The standalone `/api/translate` endpoints answer with JSON, not with stream events |
 | `chunk` | `content: string` (translated) | Emitted by streaming-translation path — see below |
 | `error` | `message: string`, `code: string` | Closes the stream after emission |
-| `done` | `queryId: string`, `translationFailed: boolean` | Always last; closes the stream. `translationFailed` is `true` when the answer was not translated and the client is showing the English original |
+| `done` | `queryId: string`, `translationFailed: boolean` | Always last; closes the stream. `translationFailed` is `true` when a translation was attempted and failed, and the client is showing the English original. A language the translation models do not cover is refused before the stream opens, so it never reaches this frame |
 
 Example stream (English-then-flip path):
 
@@ -842,9 +906,11 @@ The 501 response body:
 |---------|--------------|
 | HTTP 501 `STREAMING_DISABLED` | `OPEA_STREAMING=false` |
 | HTTP 401 `UNAUTHENTICATED` | Bearer token missing or invalid |
+| HTTP 400 `UNSUPPORTED_LANGUAGE` | The requested language is not one the deployment can serve. Refused before the stream opens — nothing was generated |
 | Stream starts then stops with `CHATQNA_STREAM_ERROR` | Upstream OPEA ChatQnA failure (timeouts, refused) |
 | Stream starts then stops with `STREAM_ERROR` | Generic upstream stream error |
 | Answer arrives in English, `done` carries `translationFailed: true` | The translation backend did not answer. Not a stream failure — the answer is complete, only its language is not |
+| Answer arrives in English, `done` carries `translationFailed: false` | No translation was asked for: the request named English, named `"auto"`, or named no language at all. Nothing failed |
 | Stream silently hangs and times out | Upstream ChatQnA unresponsive; check `CHATQNA_STREAM_TIMEOUT` (default 3600000 ms = 60 min) |
 
 ## Static & operational endpoints

@@ -29,11 +29,11 @@ module.exports = {
     pt: 'por_Latn', // Portuguese
     sw: 'swh_Latn', // Kiswahili
 
-    // Newly added languages (total 34)
+    // Newly added languages (total 41)
     am: 'amh_Ethi', // Amharic
     az: 'azj_Latn', // Azerbaijani (North/Latin)
     bn: 'ben_Beng', // Bengali
-    ckb: 'ckb_Arab', // Sorani Kurdish (34th language)
+    ckb: 'ckb_Arab', // Sorani Kurdish
     fa: 'pes_Arab', // Persian (Farsi)
     ff: 'fuv_Latn', // Fulah (Fulfulde)
     ha: 'hau_Latn', // Hausa
@@ -58,43 +58,10 @@ module.exports = {
     // Newly added languages - Mandinka and Sesotho
     man: 'dyu_Latn', // Mandinka (using Dyula as linguistic proxy - Mande language family)
     mnk: 'dyu_Latn', // Mandinka (alternative ISO code - maps to same Dyula proxy)
-    st: 'sot_Latn' // Sesotho (Southern Sotho)
-  },
-
-  // Language fallback chains for graceful degradation
-  fallbackMap: {
-    // West African languages fallback to Swahili (regional lingua franca)
-    ff: 'sw',
-    ha: 'sw',
-    yo: 'sw',
-    // South Asian fallbacks
-    skr: 'ur',
-    sd: 'ur',
-    pa: 'ur',
-    // Central Asian fallbacks
-    kk: 'tr',
-    uz: 'tr',
-    ug: 'tr',
-    // Southeast Asian fallbacks
-    ms: 'id',
-    su: 'id',
-    jv: 'id',
-    // Middle Eastern fallbacks
-    ps: 'fa',
-    ku: 'fa',
-    ckb: 'ar', // Sorani Kurdish → Arabic
-    // Horn of Africa fallbacks
-    om: 'sw',
-    so: 'sw',
-    // Other fallbacks
-    am: 'en', // Amharic to English
-    az: 'tr', // Azerbaijani to Turkish
-    bn: 'en', // Bengali to English
-    ml: 'en', // Malayalam to English
-    // Newly added fallbacks
-    man: 'en', // Mandinka to English (proxy language may have quality issues)
-    mnk: 'en', // Mandinka (alternative code) to English
-    st: 'en' // Sesotho to English
+    st: 'sot_Latn', // Sesotho (Southern Sotho)
+    hi: 'hin_Deva', // Hindi
+    ja: 'jpn_Jpan', // Japanese
+    ko: 'kor_Hang' // Korean
   },
 
   // NLLB-200 does not use prompt templates (direct model call)

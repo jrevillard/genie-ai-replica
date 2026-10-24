@@ -728,6 +728,8 @@ export default {
     relatedDocs: 'Zugehörige Dokumente',
     noDocuments: 'Keine zugehörigen Dokumente',
     faq: 'Häufig gestellte Fragen',
+    faqError: 'Die FAQ konnte nicht geladen werden.',
+    faqTranslationUnavailable: 'Übersetzung nicht verfügbar – das englische Original wird angezeigt.',
     tab: {
       all: 'Alle Chats',
       folders: 'Ordner',
@@ -1372,6 +1374,7 @@ export default {
   },
   chatbot: {
     streamingError: 'Die Antwort wurde unterbrochen. Bitte versuchen Sie es erneut.',
+    unsupportedLanguage: 'Diese Sprache ist für diese Installation nicht verfügbar.',
     aiGeneratedNoDocs: 'KI-generiert — nicht auf Bibliotheksdokumenten basierend',
     translationUnavailable: 'Übersetzung nicht verfügbar — diese Antwort kann unübersetzten Text enthalten.',
     welcomeMessage: 'Welcome! How can I assist you today?',

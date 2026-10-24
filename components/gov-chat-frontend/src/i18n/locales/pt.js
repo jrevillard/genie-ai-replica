@@ -725,6 +725,8 @@ export default {
     relatedDocs: 'Documentos Relacionados',
     noDocuments: 'Nenhum documento relacionado',
     faq: 'Perguntas Frequentes',
+    faqError: 'Não foi possível carregar as perguntas frequentes.',
+    faqTranslationUnavailable: 'Tradução indisponível — a versão original em inglês é exibida.',
     tab: {
       all: 'Todos os Chats',
       folders: 'Pastas',
@@ -1373,6 +1375,7 @@ export default {
   },
   chatbot: {
     streamingError: 'A resposta foi interrompida. Tente novamente.',
+    unsupportedLanguage: 'Este idioma não está disponível para esta implantação.',
     aiGeneratedNoDocs: 'Gerado por IA — não baseado nos documentos da biblioteca',
     translationUnavailable: 'Tradução indisponível — esta resposta pode conter texto não traduzido.',
     welcomeMessage: 'Welcome! How can I assist you today?',

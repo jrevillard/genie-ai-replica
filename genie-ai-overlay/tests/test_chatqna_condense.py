@@ -389,7 +389,7 @@ class TestHandleRequestCondenseWiring:
         svc = create_chatqna_service()
         svc.megaservice.schedule = AsyncMock(return_value=({"llm": {"text": "ok"}}, {}))
         svc._get_translated_history_string = AsyncMock(return_value=history_blob)
-        svc._finalize_llm_response = AsyncMock(return_value=("ok", None))
+        svc._finalize_llm_response = AsyncMock(return_value=("ok", None, None))
         svc._assemble_source_documents = AsyncMock(return_value=([], 0.5, True))
         return svc
 
@@ -424,6 +424,20 @@ class TestHandleRequestCondenseWiring:
         # test_chatqna.py:3726). Mandatory for >1 wiring test.
         stack.enter_context(patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms))
         stack.enter_context(patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms))
+        # Under the comps mock the request model is a MagicMock, so its
+        # ``language`` attribute would be a MagicMock too — not a language
+        # code, so the language boundary refuses it. Pin a real code so the
+        # request takes the same path as a real client.
+        chat_request = MagicMock()
+        chat_request.context.language = "ES"
+        chat_request.language = "ES"
+        stack.enter_context(
+            patch.object(
+                chatqna_module.ChatCompletionRequest,
+                "model_validate",
+                return_value=chat_request,
+            )
+        )
         return stack
 
     @pytest.mark.asyncio

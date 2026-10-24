@@ -70,13 +70,21 @@ export default {
     })
       .then((response) => {
         if (!response.ok) {
+          // Read the body first, then throw once: the backend says why it
+          // refused (an unsupported language, a validation error), and that
+          // reason must reach the user instead of a bare status code.
+          //
+          // The status travels with the error so the caller can tell a
+          // refused request (4xx — the deployment is up, the request was not
+          // acceptable) from a broken one (5xx — the deployment is down).
           return response
             .json()
+            .catch(() => ({}))
             .then((err) => {
-              throw new Error(err.message || `HTTP ${response.status}`);
-            })
-            .catch(() => {
-              throw new Error(`HTTP ${response.status}`);
+              const error = new Error(err.message || `HTTP ${response.status}`);
+              error.status = response.status;
+              error.code = err.error;
+              throw error;
             });
         }
 

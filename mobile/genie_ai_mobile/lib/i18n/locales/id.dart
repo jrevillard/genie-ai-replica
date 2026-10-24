@@ -298,6 +298,8 @@ const Map<String, dynamic> idLocale = {
     "relatedDocs": "Dokumen Terkait",
     "noDocuments": "Tidak ada dokumen terkait",
     "faq": "Pertanyaan yang Sering Diajukan",
+    "faqTranslationUnavailable":
+        "Terjemahan tidak tersedia — versi aslinya dalam bahasa Inggris ditampilkan.",
     "tab": {
       "all": "Semua Obrolan",
       "folders": "Folder",
@@ -1009,11 +1011,15 @@ const Map<String, dynamic> idLocale = {
   "chatbot": {
     "aiGeneratedNoDocs":
         "Dihasilkan oleh AI — tidak berdasarkan dokumen perpustakaan",
+    "translationUnavailable":
+        "Terjemahan tidak tersedia — jawaban ini mungkin memuat teks yang belum diterjemahkan.",
     "placeholder": "Ketik pertanyaan Anda di sini...",
     "sendButton": "Kirim",
     "fileReceived": "Berkas berhasil diterima.",
     "fileUploadError": "Kesalahan mengunggah berkas.",
     "processingError": "Kesalahan memproses permintaan Anda.",
+    "unsupportedLanguage": 'Bahasa ini tidak tersedia untuk deployment ini.',
+    "noResponse": "Tidak ada respons yang diterima.",
     "attachFile": "Lampirkan Berkas",
     "fileTooLarge": "Berkas terlalu besar. Ukuran maksimum adalah {maxSize}.",
     "saveChat": "Simpan Obrolan",

@@ -723,6 +723,8 @@ export default {
     relatedDocs: 'Связанные документы',
     noDocuments: 'Нет связанных документов',
     faq: 'Часто задаваемые вопросы',
+    faqError: 'Не удалось загрузить часто задаваемые вопросы.',
+    faqTranslationUnavailable: 'Перевод недоступен — показан оригинал на английском.',
     tab: {
       all: 'Все чаты',
       folders: 'Папки',
@@ -1369,6 +1371,7 @@ export default {
   },
   chatbot: {
     streamingError: 'Ответ был прерван. Повторите попытку.',
+    unsupportedLanguage: 'Этот язык недоступен в текущем развёртывании.',
     aiGeneratedNoDocs: 'Сгенерировано ИИ — не основано на документах библиотеки',
     translationUnavailable: 'Перевод недоступен — в этом ответе может быть непереведённый текст.',
     welcomeMessage: 'Welcome! How can I assist you today?',

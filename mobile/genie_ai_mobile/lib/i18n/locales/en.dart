@@ -304,6 +304,8 @@ const Map<String, dynamic> enLocale = {
     "relatedDocs": "Related Documents",
     "noDocuments": "No related documents",
     "faq": "Frequently Asked Questions",
+    "faqTranslationUnavailable":
+        "Translation unavailable — showing the original English.",
     "tab": {
       "all": "All Chats",
       "folders": "Folders",
@@ -1012,10 +1014,15 @@ const Map<String, dynamic> enLocale = {
   "chatbot": {
     "placeholder": "Type your query here...",
     "aiGeneratedNoDocs": "AI-generated — not based on library documents",
+    "translationUnavailable":
+        "Translation unavailable — this answer may contain untranslated text.",
     "sendButton": "Send",
     "fileReceived": "File received successfully.",
     "fileUploadError": "Error uploading file.",
     "processingError": "Error processing your request.",
+    "unsupportedLanguage":
+        'This language is not available for this deployment.',
+    "noResponse": "No response received.",
     "attachFile": "Attach File",
     "fileTooLarge": "File is too large. Maximum size is {maxSize}.",
     "saveChat": "Save Chat",

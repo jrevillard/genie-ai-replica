@@ -4,6 +4,7 @@ const { logger, dbService } = require('../shared-lib');
 const { Worker } = require('worker_threads');
 const path = require('path');
 const { NotFoundError } = require('../middleware/errors');
+const { normalizeRequestedLanguage } = require('./translation/language-request');
 const api = require('@opentelemetry/api');
 const { parsePositiveInt } = require('../shared-lib');
 
@@ -55,6 +56,28 @@ const DEFAULT_OPEA_PORT = '8888';
 
 function opeaChatQnaUrl() {
   return `http://${process.env.OPEA_HOST || DEFAULT_OPEA_HOST}:${process.env.OPEA_PORT || DEFAULT_OPEA_PORT}/v1/chatqna`;
+}
+
+// The target language the client asked for. It travels to OPEA, which
+// validates it against its own language map before it is used, so only a
+// string is forwarded: anything else is dropped rather than handed to the
+// request model as something it has to reject.
+//
+// The normalization is the shared one (services/translation/language-request):
+// the query routes normalize the same field for the translation path, and two
+// spellings of one language is how a request ends up refused by one path and
+// accepted by the other.
+function pickLanguage(context) {
+  const language = context ? context.language : undefined;
+  if (language != null && typeof language !== 'string') {
+    logger.warn('pickLanguage.ignored_non_string_language', {
+      type: typeof language,
+      isArray: Array.isArray(language)
+    });
+  }
+  // An empty language means "no language asked for", which is a normal
+  // request and not something to warn about.
+  return normalizeRequestedLanguage(language) || undefined;
 }
 
 class QueryService {
@@ -451,7 +474,7 @@ class QueryService {
         context: {
           categoryLabel: queryData.context.categoryLabel,
           serviceLabels: queryData.context.serviceLabels,
-          language: queryData.context.language
+          language: pickLanguage(queryData.context)
         },
         stream: true
       };
@@ -684,7 +707,7 @@ class QueryService {
             messages: queryText,
             stream: false,
             context: {
-              language: queryData.context?.language
+              language: pickLanguage(queryData.context)
             }
           };
         } else {
@@ -694,7 +717,7 @@ class QueryService {
             context: {
               categoryLabel: queryData.context.categoryLabel,
               serviceLabels: queryData.context.serviceLabels,
-              language: queryData.context.language
+              language: pickLanguage(queryData.context)
             },
             stream: false
           };

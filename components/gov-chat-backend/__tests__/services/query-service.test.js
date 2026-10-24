@@ -772,6 +772,37 @@ describe('QueryService', () => {
       expect(result.opeaPayload.context.categoryLabel).toBe('Crops');
     });
 
+    it('should forward the language to OPEA in its canonical form', async () => {
+      // The canonical form is the one the language maps are keyed in: trimmed
+      // and lower-case. The query routes normalize the same field the same
+      // way, so one request carries one spelling of one language.
+      const data = createMockQueryData({
+        context: { categoryLabel: 'Crops', serviceLabels: [], language: 'FR' }
+      });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      const result = await queryService.initStreamQuery(data, {});
+      expect(result.opeaPayload.context.language).toBe('fr');
+    });
+
+    it('should drop a language that is not a language instead of forwarding it', async () => {
+      // The language travels to OPEA, which validates it against its own
+      // language map. A value that is not a string, and a blank one, are
+      // dropped here rather than handed over for OPEA to reject.
+      const blank = createMockQueryData({
+        context: { categoryLabel: 'Crops', serviceLabels: [], language: '   ' }
+      });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      const blankResult = await queryService.initStreamQuery(blank, {});
+      expect(blankResult.opeaPayload.context.language).toBeUndefined();
+
+      const notAString = createMockQueryData({
+        context: { categoryLabel: 'Crops', serviceLabels: [], language: { code: 'fr' } }
+      });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      const result = await queryService.initStreamQuery(notAString, {});
+      expect(result.opeaPayload.context.language).toBeUndefined();
+    });
+
     // Regression test for the Query Inspector empty-text bug: when the frontend
     // sends the dual-prompt shape (messages ends with a hidden persona prompt +
     // empty assistant placeholder + a separate `userQuestion` field), the saved
@@ -1540,6 +1571,24 @@ describe('QueryService', () => {
       mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
       const result = await queryService.initStreamQuery(data, {});
       expect(result.queryId).toBe('stream-1');
+    });
+
+    it('warns when the language is not a string, without logging what it was', async () => {
+      const { logger } = require('../../shared-lib');
+      const data = {
+        userId: 'u1',
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'test' }],
+        context: { serviceLabels: [], language: 42 }
+      };
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      const result = await queryService.initStreamQuery(data, {});
+      expect(result.opeaPayload.context.language).toBeUndefined();
+      expect(logger.warn).toHaveBeenCalledWith('pickLanguage.ignored_non_string_language', expect.anything());
+      // The value the caller sent is never written to the log: it is the
+      // thing the warning is about, and a log line is not a safe place for
+      // it.
+      expect(JSON.stringify(logger.warn.mock.calls)).not.toContain('42');
     });
 
     it('should handle category resolution error gracefully', async () => {

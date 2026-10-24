@@ -3325,6 +3325,8 @@ export default {
         defaultNamed: 'Default ea deployment — {name}{model}',
         effective: 'Kutathibiri ka {name}{model}',
         envDefault: 'm-simobo wa tikamiso',
+        envJudge: 'Mokhoa oa kamehla ea tsamaiso (tikoloho){model}',
+        envJudgePlain: 'Mokhoa oa kamehla ea tsamaiso (tikoloho)',
         model: 'Modeli',
         modelPick: 'Ya kamehla ea pehelo',
         modelDefault: 'ya kamehla ea pehelo',

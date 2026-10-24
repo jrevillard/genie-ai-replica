@@ -3337,6 +3337,8 @@ export default {
         defaultNamed: 'Deployment-Standard — {name}{model}',
         effective: 'Bewertung mit {name}{model}',
         envDefault: 'Umgebungs-Standard',
+        envJudge: 'Systemstandard (Umgebung){model}',
+        envJudgePlain: 'Systemstandard (Umgebung)',
         model: 'Modell',
         modelPick: 'Standard der Konfiguration',
         modelDefault: 'Standard der Konfiguration',

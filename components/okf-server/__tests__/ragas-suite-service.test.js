@@ -984,6 +984,51 @@ describe('run', () => {
     expect(doc.payload.fidelity.judge.source).not.toBe('picked');
   });
 
+  // David 2026-10-24: the system-default LLM (.env RAGAS_JUDGE_*) must be
+  // selectable. The '__env__' sentinel bypasses even an ACTIVE config —
+  // without it "default" silently meant the active config (here: the GLM
+  // one), and the env judge was unreachable whenever one existed.
+  it('the __env__ sentinel picks the SYSTEM default judge, active config bypassed', async () => {
+    __mockDb._stores.okf_model_configs = {
+      glm: {
+        _key: 'glm',
+        name: 'Active GLM',
+        provider: 'openai',
+        base_url: 'https://z.ai/v1',
+        default_model: 'glm-5.3-flash',
+        api_key: 'k',
+        services: ['ragas_judge'],
+        active: true
+      }
+    };
+    const sk = await makeSuite();
+    // judgeFidelity(null) names env vs builtin from RAGAS_JUDGE_BASE_URL —
+    // pin it so the assertion is deterministic in the test shell.
+    const prevBase = process.env.RAGAS_JUDGE_BASE_URL;
+    const prevModel = process.env.RAGAS_JUDGE_MODEL;
+    process.env.RAGAS_JUDGE_BASE_URL = 'https://ai.assembly.govstack.global:444/llm/v1';
+    process.env.RAGAS_JUDGE_MODEL = 'ibm-granite/granite-4.1-8b';
+    try {
+      const begun = await svc.beginRunSuite('me', sk, { mode: 'whatif', judge_config_key: '__env__' }, {});
+      await begun.done;
+      const doc = await svc.getRunSuite('me', sk, begun.run_key);
+      expect(doc.status).toBe('done');
+      // The sidecar got NO judge override → its env/builtin default applies.
+      const evalCall = global.fetch.mock.calls.find((c) => String(c[0]).includes('/evaluate'));
+      expect(JSON.parse(evalCall[1].body).judge).toBeNull();
+      // Fidelity says env, and the pick is remembered as the sentinel — the
+      // panel restores '__env__' as itself, never demoting it to '' (active).
+      expect(doc.payload.fidelity.judge.source).toBe('env');
+      expect(doc.payload.fidelity.judge.model).toBe('ibm-granite/granite-4.1-8b');
+      expect(doc.payload.fidelity.judge.pick.config_key).toBe('__env__');
+    } finally {
+      if (prevBase === undefined) delete process.env.RAGAS_JUDGE_BASE_URL;
+      else process.env.RAGAS_JUDGE_BASE_URL = prevBase;
+      if (prevModel === undefined) delete process.env.RAGAS_JUDGE_MODEL;
+      else process.env.RAGAS_JUDGE_MODEL = prevModel;
+    }
+  });
+
   it('409 RUN_IN_FLIGHT with the adoptable run_key', async () => {
     const sk = await makeSuite();
     let releaseEval;

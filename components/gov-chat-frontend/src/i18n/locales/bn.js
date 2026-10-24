@@ -3308,6 +3308,8 @@ export default {
         defaultNamed: 'ডিফলয়মেন্টের ডিফল্ট — {name}{model}',
         effective: '{name}{model} দিয়ে মূল্যায়ন',
         envDefault: 'পরিবেশের ডিফল্ট',
+        envJudge: 'সিস্টেম ডিফল্ট (পরিবেশ){model}',
+        envJudgePlain: 'সিস্টেম ডিফল্ট (পরিবেশ)',
         model: 'মডেল',
         modelPick: 'কনফিগারেশনের ডিফল্ট',
         modelDefault: 'কনফিগারেশনের ডিফল্ট',

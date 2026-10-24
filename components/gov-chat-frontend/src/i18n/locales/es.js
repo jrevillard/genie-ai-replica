@@ -3334,6 +3334,8 @@ export default {
         defaultNamed: 'Predeterminado del despliegue — {name}{model}',
         effective: 'Evaluando con {name}{model}',
         envDefault: 'valor por defecto del entorno',
+        envJudge: 'Predeterminado del sistema (entorno){model}',
+        envJudgePlain: 'Predeterminado del sistema (entorno)',
         model: 'Modelo',
         modelPick: 'Predeterminado de la configuración',
         modelDefault: 'predeterminado de la configuración',

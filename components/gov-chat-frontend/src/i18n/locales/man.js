@@ -3283,6 +3283,8 @@ export default {
         defaultNamed: 'Deployment default — {name}{model}',
         effective: 'Judging with {name}{model}',
         envDefault: 'environment default',
+        envJudge: 'System default (environment){model}',
+        envJudgePlain: 'System default (environment)',
         model: 'Model',
         modelPick: 'Configuration default',
         modelDefault: 'configuration default',

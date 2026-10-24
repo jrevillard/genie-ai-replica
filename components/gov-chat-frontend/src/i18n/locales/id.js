@@ -3315,6 +3315,8 @@ export default {
         defaultNamed: 'Default deployment — {name}{model}',
         effective: 'Menilai dengan {name}{model}',
         envDefault: 'default lingkungan',
+        envJudge: 'Default sistem (lingkungan){model}',
+        envJudgePlain: 'Default sistem (lingkungan)',
         model: 'Model',
         modelPick: 'Default konfigurasi',
         modelDefault: 'default konfigurasi',

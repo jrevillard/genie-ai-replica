@@ -32,6 +32,10 @@ const PROVIDERS = new Set(['openai', 'anthropic']);
 // consumer that can also drive an anthropic-provider config
 // (langchain-anthropic). The UI disables the incompatible boxes.
 const SERVICES = new Set(['ragas_judge', 'okf_curation', 'okf_tagging', 'ragas_answers']);
+// Sentinel config_key the panel sends for "System default (environment)" —
+// an explicit choice of the env/builtin judge that bypasses the active
+// config. Never a real _key (they are mc<timestamp>-<hex>).
+const ENV_PICK = '__env__';
 const NAME_MAX = 120;
 const LIST_TIMEOUT_MS = 15000;
 const TEST_TIMEOUT_MS = 20000;
@@ -154,7 +158,15 @@ async function listConfigs() {
     const db = await dbService.getConnection();
     await ensureCollection(db);
     const rows = await (await db.query(`FOR c IN ${COLLECTION} SORT c.active DESC, c.name ASC RETURN c`)).all();
-    return rows.map(mask);
+    // The env judge rides along so the panel's "System default (environment)"
+    // option can NAME the model it resolves to (David 2026-10-24: the default
+    // LLM config — the .env RAGAS_JUDGE_* pair — must be selectable, and a
+    // default control must never be the only statement of what is in use).
+    // base_url + model only — the env key never crosses the wire.
+    const envJudge = process.env.RAGAS_JUDGE_BASE_URL
+      ? { base_url: process.env.RAGAS_JUDGE_BASE_URL, model: process.env.RAGAS_JUDGE_MODEL || null }
+      : null;
+    return { configs: rows.map(mask), env_judge: envJudge, env_pick: ENV_PICK };
   });
 }
 
@@ -577,6 +589,13 @@ async function resolveModelOverride(pick = {}) {
   const db = await dbService.getConnection();
   await ensureCollection(db);
   let doc;
+  // ENV_PICK (David 2026-10-24: "RAGAS generation/benchmark must allow the
+  // user to choose the default LLM configuration for the system"): the UI's
+  // explicit "System default (environment)" choice. Without it, an empty pick
+  // means the ACTIVE config — on this deployment GLM-5.3-flash (rate-limited)
+  // — and the env-configured judge is unreachable whenever an active config
+  // exists. Returning null here sends the sidecar to the env/builtin judge.
+  if (pick.config_key === ENV_PICK) return null;
   if (pick.config_key) {
     doc = await loadDoc(db, pick.config_key).catch(() => null);
     if (!doc) throw httpErr('MODEL_CONFIG_NOT_FOUND', 404, `model configuration ${pick.config_key} not found`);

@@ -3336,6 +3336,8 @@ export default {
         defaultNamed: 'Défaut du déploiement — {name}{model}',
         effective: 'Évaluation avec {name}{model}',
         envDefault: 'valeur par défaut de l’environnement',
+        envJudge: 'Défaut système (environnement){model}',
+        envJudgePlain: 'Défaut système (environnement)',
         model: 'Modèle',
         modelPick: 'Valeur par défaut de la configuration',
         modelDefault: 'valeur par défaut de la configuration',

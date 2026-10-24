@@ -3289,6 +3289,8 @@ export default {
         defaultNamed: 'ค่าเริ่มต้นของการติดตั้ง — {name}{model}',
         effective: 'กำลังประเมินด้วย {name}{model}',
         envDefault: 'ค่าเริ่มต้นของสภาพแวดล้อม',
+        envJudge: 'ค่าเริ่มต้นของระบบ (สภาพแวดล้อม){model}',
+        envJudgePlain: 'ค่าเริ่มต้นของระบบ (สภาพแวดล้อม)',
         model: 'โมเดล',
         modelPick: 'ค่าเริ่มต้นของการตั้งค่า',
         modelDefault: 'ค่าเริ่มต้นของการตั้งค่า',

@@ -14,7 +14,8 @@ function actorFrom(req) {
 
 async function list(_req, res, next) {
   try {
-    res.status(200).json({ configs: await svc.listConfigs() });
+    // listConfigs returns the full envelope {configs, env_judge, env_pick}.
+    res.status(200).json(await svc.listConfigs());
   } catch (err) {
     next(err);
   }

@@ -3327,6 +3327,8 @@ export default {
         defaultNamed: 'Padrão da implantação — {name}{model}',
         effective: 'Avaliando com {name}{model}',
         envDefault: 'padrão do ambiente',
+        envJudge: 'Padrão do sistema (ambiente){model}',
+        envJudgePlain: 'Padrão do sistema (ambiente)',
         model: 'Modelo',
         modelPick: 'Padrão da configuração',
         modelDefault: 'padrão da configuração',

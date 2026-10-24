@@ -3324,6 +3324,8 @@ export default {
         defaultNamed: 'По умолчанию развёртывания — {name}{model}',
         effective: 'Оценка с {name}{model}',
         envDefault: 'значение по умолчанию окружения',
+        envJudge: 'Системный по умолчанию (окружение){model}',
+        envJudgePlain: 'Системный по умолчанию (окружение)',
         model: 'Модель',
         modelPick: 'По умолчанию у конфигурации',
         modelDefault: 'по умолчанию у конфигурации',

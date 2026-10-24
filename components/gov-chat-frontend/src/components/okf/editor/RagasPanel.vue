@@ -101,12 +101,13 @@
             <option value="">
               {{ defaultJudgeLabel }}
             </option>
+            <option :value="envPickKey">{{ envJudgeLabel }}</option>
             <option v-for="c in modelConfigs" :key="c._key" :value="c._key">
               {{ c.name }}{{ c.active ? ' ★' : '' }}
             </option>
           </select>
         </label>
-        <label v-if="judgeConfigKey" class="okf-ragas__dim">
+        <label v-if="judgeConfigKey && judgeConfigKey !== envPickKey" class="okf-ragas__dim">
           <span>{{ translate('okf.ragas.generate.model', 'Model') }}</span>
           <select v-if="judgeModels.length" v-model="judgeModel" :disabled="generateBusy">
             <option value="">{{ translate('okf.ragas.generate.modelPick', 'Configuration default') }}</option>
@@ -233,12 +234,13 @@
             <option value="">
               {{ defaultJudgeLabel }}
             </option>
+            <option :value="envPickKey">{{ envJudgeLabel }}</option>
             <option v-for="c in modelConfigs" :key="c._key" :value="c._key">
               {{ c.name }}{{ c.active ? ' ★' : '' }}
             </option>
           </select>
           <select
-            v-if="judgeConfigKey && judgeModels.length"
+            v-if="judgeConfigKey && judgeConfigKey !== envPickKey && judgeModels.length"
             v-model="judgeModel"
             :disabled="runBusy"
             class="okf-ragas__judge-model"
@@ -708,6 +710,10 @@ import translateMixin from '../../../mixins/translateMixin';
 import { useChartTheme } from '@/composables/useChartTheme';
 
 const DEFAULT_METRICS = ['faithfulness', 'context_precision', 'context_recall', 'answer_relevancy'];
+// Sentinel the backend's model-config service defines for "System default
+// (environment)" — the .env RAGAS_JUDGE_* pair (David 2026-10-24). Mirrored
+// here because it is a wire contract, not a shareable module.
+const ENV_PICK = '__env__';
 const ALL_METRICS = [
   ...DEFAULT_METRICS,
   'context_utilization',
@@ -804,6 +810,8 @@ export default {
       copiedId: '', // row whose answer was just copied (transient ✓)
       modelConfigs: [], // 8-7: named judge configurations (admin-managed)
       judgeConfigKey: '', // '' = deployment default (active config / env)
+      envJudge: null, // {base_url, model} the env/system default resolves to
+      envPickKey: '__env__', // sentinel: explicit System default (environment) pick
       judgeModel: '', // '' = the configuration's default model
       judgeModels: [],
       suiteEpoch: 0
@@ -839,6 +847,18 @@ export default {
       return this.translate('okf.ragas.generate.defaultNamed', 'Deployment default — {name}{model}')
         .replace('{name}', active.name)
         .replace('{model}', model);
+    },
+    /** David 2026-10-24: "the default LLM configuration for the system [.env]
+     * must be selectable". Names the model the env pick resolves to — a
+     * default control is never the only statement of what is in use.
+     */
+    envJudgeLabel() {
+      if (!this.envJudge) return this.translate('okf.ragas.generate.envJudgePlain', 'System default (environment)');
+      const model = this.envJudge.model ? ` (${this.envJudge.model})` : '';
+      return this.translate('okf.ragas.generate.envJudge', 'System default (environment){model}').replace(
+        '{model}',
+        model
+      );
     },
     /** The model the RUNNING generation is actually using, by name. The
      * dropdown shows the SELECTION; for an in-flight generation that
@@ -1174,7 +1194,13 @@ export default {
      * it stops being an option, so the panel can never lie about the
      * model a run uses. */
     modelConfigs(list) {
-      if (this.judgeConfigKey && !list.some((c) => c._key === this.judgeConfigKey)) {
+      // The env sentinel is not a config doc — a list refresh must never
+      // demote an explicit system-default pick to the active-config default.
+      if (
+        this.judgeConfigKey &&
+        this.judgeConfigKey !== ENV_PICK &&
+        !list.some((c) => c._key === this.judgeConfigKey)
+      ) {
         this.judgeConfigKey = '';
         this.judgeModel = '';
         this.judgeModels = [];
@@ -1206,7 +1232,11 @@ export default {
      *  simply hides the selector; the deployment default keeps applying. */
     async loadJudgeConfigs() {
       const res = await this.$store.dispatch('okf/modelConfigList').catch(() => null);
-      if (res && res.ok) this.modelConfigs = res.configs || [];
+      if (res && res.ok) {
+        this.modelConfigs = res.configs || [];
+        this.envJudge = res.env_judge || null;
+        if (res.env_pick) this.envPickKey = res.env_pick;
+      }
       // pre-select the ACTIVE configuration's model choices? No — the active
       // config applies server-side automatically; the pick here is an
       // explicit OVERRIDE, which starts empty (deployment default).
@@ -1214,7 +1244,9 @@ export default {
     async onJudgeConfigChange() {
       this.judgeModel = '';
       this.judgeModels = [];
-      if (!this.judgeConfigKey) return;
+      // ENV_PICK is not a config _key — no model list to fetch; the env judge
+      // carries its own model, named by the run's fidelity/progress envelope.
+      if (!this.judgeConfigKey || this.judgeConfigKey === ENV_PICK) return;
       const res = await this.$store.dispatch('okf/modelConfigModels', { key: this.judgeConfigKey }).catch(() => null);
       if (res && res.ok) this.judgeModels = res.models || [];
       // listing failure leaves the free-text input — honest fallback
@@ -1245,6 +1277,13 @@ export default {
         pick = (run && run.judge_pick) || (this.suite.payload && this.suite.payload.judge_pick) || null;
       }
       const key = pick && pick.config_key;
+      if (key === ENV_PICK) {
+        // An explicit system-default pick is not a config doc — restore it as
+        // itself, never demote it to the active-config default.
+        this.judgeConfigKey = ENV_PICK;
+        this.judgeModel = '';
+        return;
+      }
       if (key && this.modelConfigs.some((c) => c._key === key)) {
         this.judgeConfigKey = key;
         await this.onJudgeConfigChange();

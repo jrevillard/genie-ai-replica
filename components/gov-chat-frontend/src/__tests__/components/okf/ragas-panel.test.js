@@ -694,6 +694,90 @@ describe('RagasPanel', () => {
     });
   });
 
+  describe('system default (environment) judge pick (David 2026-10-24)', () => {
+    const flush = () => new Promise((r) => setTimeout(r, 0));
+    const ENVELOPE = {
+      ok: true,
+      configs: [
+        { _key: 'glm', name: 'GLM-5.3 Flash ITU - OpenAI', active: true },
+        { _key: 'mm', name: 'Minimax David OpenAI', active: false }
+      ],
+      env_judge: { base_url: 'https://ai.assembly.govstack.global:444/llm/v1', model: 'ibm-granite/granite-4.1-8b' },
+      env_pick: '__env__'
+    };
+
+    function envDispatch(extraRuns) {
+      const suiteRow = {
+        kind: 'ragas_suite',
+        _key: 'rs1-test',
+        suite_key: 'rs1-test',
+        created_at: '2026-10-17T11:00:00.000Z'
+      };
+      return async (action, payload) => {
+        if (action === 'okf/modelConfigList') return ENVELOPE;
+        if (action === 'okf/modelConfigModels')
+          return { ok: true, models: payload.key === 'mm' ? ['MiniMax-M3.1-Flash', 'MiniMax-M3'] : [] };
+        if (action === 'okf/ragasListRuns') return { ok: true, runs: [suiteRow, ...(extraRuns || [])] };
+        if (action === 'okf/ragasGetSuite') return { ok: true, result: suiteFixture() };
+        if (action === 'okf/ragasGetRunQuiet') return { ok: true, result: runFixture() };
+        if (action === 'okf/ragasRun') return { ok: true, result: runFixture() };
+        if (action === 'okf/fetchRepos') return { ok: true, repos: [] };
+        return { ok: true, result: null, runs: [] };
+      };
+    }
+
+    it('offers the option in BOTH dropdowns and NAMES the env model it resolves to', async () => {
+      dispatch.mockImplementation(envDispatch());
+      const w = mountPanel();
+      await flush();
+      await flush();
+      const judgeSelects = w
+        .findAll('select')
+        .filter((s) => s.findAll('option').some((o) => o.element.value === '__env__'));
+      expect(judgeSelects.length).toBe(2); // generation + benchmark run
+      const html = w.html();
+      expect(html).toContain('System default (environment) (ibm-granite/granite-4.1-8b)');
+    });
+
+    it('picking it submits the sentinel and fetches NO per-config model list', async () => {
+      dispatch.mockImplementation(envDispatch());
+      const w = mountPanel();
+      await flush();
+      await flush();
+      w.vm.judgeConfigKey = '__env__';
+      await w.vm.onJudgeConfigChange();
+      expect(w.vm.judgeModels).toEqual([]); // no model sub-field for the env judge
+      const modelListCalls = dispatch.mock.calls.filter((c) => c[0] === 'okf/modelConfigModels');
+      expect(modelListCalls.length).toBe(0);
+      await w.vm.onRun();
+      const runCall = dispatch.mock.calls.find((c) => c[0] === 'okf/ragasRun');
+      expect(runCall[1].judge_config_key).toBe('__env__');
+    });
+
+    it('judge memory restores __env__ as itself — never demoted to the active-config default', async () => {
+      const suite = suiteFixture();
+      suite.payload.judge_pick = { config_key: '__env__', model: null };
+      const suiteRow = {
+        kind: 'ragas_suite',
+        _key: 'rs1-test',
+        suite_key: 'rs1-test',
+        created_at: '2026-10-17T11:00:00.000Z'
+      };
+      dispatch.mockImplementation(async (action) => {
+        if (action === 'okf/modelConfigList') return ENVELOPE;
+        if (action === 'okf/ragasGetSuite') return { ok: true, result: suite };
+        if (action === 'okf/ragasListRuns') return { ok: true, runs: [suiteRow] };
+        if (action === 'okf/fetchRepos') return { ok: true, repos: [] };
+        return { ok: true, result: null, runs: [] };
+      });
+      const w = mountPanel();
+      await flush();
+      await flush();
+      expect(w.vm.suite).toBeTruthy(); // the suite loaded — restore path engaged
+      expect(w.vm.judgeConfigKey).toBe('__env__'); // not '' (the active GLM default)
+    });
+  });
+
   describe('judge pick memory', () => {
     const flush = () => new Promise((r) => setTimeout(r, 0));
 

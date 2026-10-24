@@ -1763,7 +1763,9 @@ const actions = {
   async modelConfigList() {
     try {
       ensureServices();
-      return { ok: true, configs: await modelConfigService.list() };
+      // Envelope: {configs, env_judge, env_pick} — env_judge names the model
+      // the "System default (environment)" option resolves to.
+      return { ok: true, ...(await modelConfigService.list()) };
     } catch (err) {
       return { ok: false, code: (err && err.code) || 'MODEL_CONFIG_LIST_FAILED', message: err.message };
     }

@@ -3283,6 +3283,8 @@ export default {
         defaultNamed: 'الافتراضي للنشر — {name}{model}',
         effective: 'التقييم باستخدام {name}{model}',
         envDefault: 'الافتراضي للبيئة',
+        envJudge: 'الافتراضي للنظام (البيئة){model}',
+        envJudgePlain: 'الافتراضي للنظام (البيئة)',
         model: 'النموذج',
         modelPick: 'افتراضي التكوين',
         modelDefault: 'افتراضي التكوين',

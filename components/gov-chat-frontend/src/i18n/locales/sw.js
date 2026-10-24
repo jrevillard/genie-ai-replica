@@ -3310,6 +3310,8 @@ export default {
         defaultNamed: 'Msimbo wa deployment — {name}{model}',
         effective: 'Kutathibiri kwa {name}{model}',
         envDefault: 'msimbo wa mazingira',
+        envJudge: 'Chaguo-msingi cha mfumo (mazingira){model}',
+        envJudgePlain: 'Chaguo-msingi cha mfumo (mazingira)',
         model: 'Modeli',
         modelPick: 'Chaguo-msingi ya mipangilio',
         modelDefault: 'chaguo-msingi ya mipangilio',

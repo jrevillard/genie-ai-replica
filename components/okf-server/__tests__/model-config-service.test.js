@@ -83,8 +83,13 @@ describe('model-config lifecycle', () => {
     const [saved] = Object.values(store());
     expect(saved.api_key).toBe('sk-secret-1234');
     const listed = await svc.listConfigs();
-    expect(listed[0].api_key).toBeUndefined();
-    expect(JSON.stringify(listed)).not.toContain('sk-secret-1234');
+    expect(listed.configs[0].api_key).toBeUndefined();
+    expect(JSON.stringify(listed.configs)).not.toContain('sk-secret-1234');
+    // The envelope carries the env-judge descriptor (David 2026-10-24: the
+    // system-default LLM must be selectable) — base_url + model only, no key.
+    expect(listed.env_pick).toBe('__env__');
+    listed.configs.forEach((c) => expect(c.api_key).toBeUndefined());
+    expect(JSON.stringify(listed.env_judge || {})).not.toContain('sk-');
   });
 
   test('duplicate names are rejected (409 NAME_TAKEN)', async () => {
@@ -120,7 +125,7 @@ describe('model-config lifecycle', () => {
     expect(store()[c._key].api_key).toBe('sk-ant-0001'); // no api_key in patch → kept
     await svc.updateConfig(c._key, { api_key: 'sk-ant-9999' }, {});
     expect(store()[c._key].api_key).toBe('sk-ant-9999');
-    expect((await svc.listConfigs())[0].api_key).toBeUndefined();
+    expect((await svc.listConfigs()).configs[0].api_key).toBeUndefined();
   });
 
   test('copy duplicates name-deduped and always INACTIVE with the same key', async () => {
@@ -157,6 +162,22 @@ describe('model-config lifecycle', () => {
     await expect(svc.resolveModelOverride({ config_key: c._key })).rejects.toMatchObject({
       code: 'MODEL_CONFIG_NOT_FOUND'
     });
+  });
+
+  // David 2026-10-24: "the default LLM configuration for the system [.env]
+  // must be selectable". The '__env__' sentinel is an EXPLICIT env choice —
+  // it must bypass even an ACTIVE config, not 404 as an unknown key.
+  test('the __env__ sentinel resolves to null even with an active config', async () => {
+    const a = await svc.createConfig(
+      { name: 'Active GW', provider: 'openai', base_url: 'https://a/v1', api_key: 'k' },
+      {}
+    );
+    await svc.activateConfig(a._key, {});
+    // no pick → the active config (today's meaning of "default")
+    expect((await svc.resolveModelOverride({})).config_key).toBe(a._key);
+    // explicit env pick → the system default, active config ignored
+    expect(await svc.resolveModelOverride({ config_key: '__env__' })).toBeNull();
+    expect(await svc.resolveModelOverride({ config_key: '__env__', service: 'ragas_judge' })).toBeNull();
   });
 });
 

@@ -3250,6 +3250,8 @@ export default {
         defaultNamed: '部署默认 — {name}{model}',
         effective: '使用 {name}{model} 评判',
         envDefault: '环境默认值',
+        envJudge: '系统默认（环境）{model}',
+        envJudgePlain: '系统默认（环境）',
         model: '模型',
         modelPick: '配置默认',
         modelDefault: '配置默认',

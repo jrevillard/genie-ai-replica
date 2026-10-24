@@ -621,3 +621,43 @@ describe('withUpstreamRetry — 429 is retriable (2026-10-23)', () => {
     expect(axios.post.mock.calls.filter((c) => String(c[0]).includes('/embed'))).toHaveLength(4);
   }, 20000); // the real 1s+2s+4s backoff sleeps exceed the 5s default
 });
+
+describe('vllmChatCompletions — which judge an explicit env request actually names', () => {
+  // The panel's "system default" label and the sidecar's default judge both
+  // name the .env RAGAS_JUDGE_* pair. An explicit `config: null` asks for
+  // exactly that judge, so it must read exactly those variables.
+  const ENV_JUDGE = {
+    RAGAS_JUDGE_BASE_URL: 'https://judge.example/v1',
+    RAGAS_JUDGE_MODEL: 'judge-model-x',
+    RAGAS_JUDGE_API_KEY: 'judge-key'
+  };
+
+  beforeEach(() => {
+    axios.post.mockResolvedValue(vllmResponse('{}'));
+    Object.entries(ENV_JUDGE).forEach(([k, v]) => {
+      process.env[k] = v;
+    });
+  });
+
+  afterEach(() => {
+    Object.keys(ENV_JUDGE).forEach((k) => {
+      delete process.env[k];
+    });
+  });
+
+  it('the explicit env request calls the RAGAS_JUDGE_* pair the UI names', async () => {
+    await svc.vllmChatCompletions([{ role: 'user', content: 'hi' }], { config: null });
+    expect(axios.post).toHaveBeenCalledTimes(1);
+    const [url, body, cfg] = axios.post.mock.calls[0];
+    expect(url).toBe('https://judge.example/v1/chat/completions');
+    expect(body.model).toBe('judge-model-x');
+    expect(cfg.headers.Authorization).toBe('Bearer judge-key');
+  });
+
+  it('the DEFAULT path still calls the VLLM_* pair (unchanged behaviour)', async () => {
+    await svc.vllmChatCompletions([{ role: 'user', content: 'hi' }], {});
+    const [url, body] = axios.post.mock.calls[0];
+    expect(url).not.toBe('https://judge.example/v1/chat/completions');
+    expect(body.model).not.toBe('judge-model-x');
+  });
+});

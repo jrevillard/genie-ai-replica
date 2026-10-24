@@ -366,6 +366,18 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
   let model = VLLM_LLM_MODEL_ID;
   let apiKey = VLLM_LLM_API_KEY;
   let viaOverride = false;
+  // The ENV JUDGE is the .env RAGAS_JUDGE_* pair — the same variables the
+  // sidecar's default judge and the OKF panel's "system default" label name.
+  // An explicit `config: null` asks for exactly that judge, so it must read
+  // exactly those variables. It used to fall through to the VLLM_* pair,
+  // which held the same values in this deployment but was tied to nothing:
+  // changing RAGAS_JUDGE_* would have left the advisor calling a DIFFERENT
+  // model than the one it names.
+  if (opts.config === null) {
+    if (process.env.RAGAS_JUDGE_BASE_URL) host = process.env.RAGAS_JUDGE_BASE_URL;
+    if (process.env.RAGAS_JUDGE_MODEL) model = process.env.RAGAS_JUDGE_MODEL;
+    if (process.env.RAGAS_JUDGE_API_KEY) apiKey = process.env.RAGAS_JUDGE_API_KEY;
+  }
   try {
     // opts.config === null → the caller explicitly wants the ENV judge (the
     // .env RAGAS_JUDGE_* / VLLM_* pair), bypassing the active model config.

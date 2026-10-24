@@ -51,31 +51,6 @@ String _collapseLiteral(String literal) => literal
     .replaceAll(', ]', ']')
     .replaceAll(' ]', ']');
 
-/// The first `{...}` block following [signature], comments stripped — the
-/// body of the ObjC method declared by [signature], or null.
-String? _methodBody(String source, Pattern signature) {
-  final match = signature.allMatches(source).toList();
-  if (match.isEmpty) return null;
-  final open = source.indexOf('{', match.first.end);
-  if (open < 0) return null;
-  // Brace-match on the raw source.
-  var depth = 0;
-  for (var i = open; i < source.length; i++) {
-    if (source[i] == '{') {
-      depth++;
-    } else if (source[i] == '}') {
-      depth--;
-      if (depth == 0) {
-        final body = source.substring(open + 1, i);
-        return body
-            .replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), ' ')
-            .replaceAll(RegExp(r'//[^\n]*'), ' ');
-      }
-    }
-  }
-  return null;
-}
-
 /// Any registration of a URL protocol, whichever protocol it is.
 final _protocolRegistration = RegExp(r'\[\s*NSURLProtocol\s+registerClass:');
 
@@ -308,10 +283,9 @@ void main() {
       group(label, () {
         test('canInitWithRequest intercepts only the armed host:port', () {
           final source = File(path).readAsStringSync();
-          final body = _methodBody(
+          final body = GuardScanner(
             source,
-            RegExp(r'\+\s*\(BOOL\)\s*canInitWithRequest'),
-          );
+          ).blockAfter(RegExp(r'\+\s*\(BOOL\)\s*canInitWithRequest'));
           expect(body, isNotNull, reason: 'canInitWithRequest moved');
           expect(
             body,
@@ -323,10 +297,9 @@ void main() {
           expect(body, contains('request.URL.host'));
           // The key carries the port: a second TLS service on the provider's
           // host at another port must not be intercepted.
-          final keyBody = _methodBody(
+          final keyBody = GuardScanner(
             source,
-            RegExp(r'NSString\s*\*?\s*InsecureHostKey\(NSURL'),
-          );
+          ).blockAfter(RegExp(r'NSString\s*\*?\s*InsecureHostKey\(NSURL'));
           expect(keyBody, isNotNull, reason: 'InsecureHostKey moved');
           expect(
             keyBody,
@@ -380,10 +353,9 @@ void main() {
           // normalization itself; the tests below pin each consumer's
           // delegation to it.
           final source = File(path).readAsStringSync();
-          final body = _methodBody(
+          final body = GuardScanner(
             source,
-            RegExp(r'NSString\s*\*?\s*AsNSString\(id'),
-          );
+          ).blockAfter(RegExp(r'NSString\s*\*?\s*AsNSString\(id'));
           expect(body, isNotNull, reason: 'AsNSString moved');
           expect(
             body,
@@ -396,8 +368,7 @@ void main() {
 
         test('EndpointString routes through the helper', () {
           final source = File(path).readAsStringSync();
-          final body = _methodBody(
-            source,
+          final body = GuardScanner(source).blockAfter(
             RegExp(r'NSString\s*\*?\s*EndpointString\(NSDictionary'),
           );
           expect(body, isNotNull, reason: 'EndpointString moved');
@@ -415,8 +386,7 @@ void main() {
           // consumer: a rebase conflict resolved to upstream's raw
           // objectForKey: form would feed a channel NSNull straight to NSURL.
           final source = File(path).readAsStringSync();
-          final body = _methodBody(
-            source,
+          final body = GuardScanner(source).blockAfter(
             RegExp(
               r'OIDServiceConfiguration \*\)processServiceConfigurationParameters',
             ),
@@ -444,10 +414,9 @@ void main() {
             // would arm nothing, and the insecure exchange itself would
             // fail its certificate check.
             final source = File(path).readAsStringSync();
-            final body = _methodBody(
+            final body = GuardScanner(
               source,
-              RegExp(r'armForIssuer:\(NSString \*\)issuer'),
-            );
+            ).blockAfter(RegExp(r'armForIssuer:\(NSString \*\)issuer'));
             expect(body, isNotNull, reason: 'armForIssuer moved');
             expect(
               body,
@@ -484,9 +453,8 @@ void main() {
             );
             // The one @[] literal in the body holds the three quoted
             // endpoint keys. Compared whole (a substring scan can be
-            // truncated by a ']' inside a string constant) after collapsing
-            // whitespace and dropping a trailing comma, so a reformat that
-            // only moves the comma stays green.
+            // truncated by a ']' inside a string constant), normalized by
+            // _collapseLiteral (see its doc).
             final actualLiterals = RegExp(r'@\[[^\]]*\]')
                 .allMatches(body!)
                 .map((m) => _collapseLiteral(m.group(0)!))

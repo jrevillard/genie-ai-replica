@@ -21,9 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that span no longer reads as zero because abstentions went unrecorded.
   **Note on streamed token usage:** `llm.usage.*` on a streamed turn depends on
   `stream_options: {include_usage: true}` surviving the chatqna → textgen → vLLM
-  chain. That has not been verified against a running deployment; on a streamed
-  turn the usage attributes are omitted rather than guessed if the flag does not
-  arrive. The non-streamed path records usage unconditionally.
+  chain. Verified against the shared vLLM 0.29 endpoint on 2026-10-24 (the flag
+  survives; see the Fixed entry below). On a streamed turn the usage attributes
+  are omitted rather than guessed if the flag does not arrive. The non-streamed
+  path records usage unconditionally.
 
 - **Trace-to-query correlation:** the spans on a chat turn carry
   `genie.query_id`, so a trace can be joined to the stored query document. The
@@ -79,6 +80,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A structural regression test in
   `test/config/flutter_appauth_insecure_gate_test.dart` fails if a rebased
   fork reintroduces the local. (#1102)
+- **Streamed chat answers could end with raw transport JSON.** (!595) ChatQnA
+  requests streamed token usage from vLLM (`stream_options.include_usage`,
+  for the `llm.invoke` span); the terminal usage-only frame of that stream was
+  re-emitted by the orchestrator as if it were answer text, so answers
+  displayed in the web UI and mobile app — and scored by the RAGAS judge —
+  ended with a `{"id":"chatcmpl-...","usage":{...}}` tail. The orchestrator now
+  only re-emits lines it could not parse as JSON; any parsed frame that carries
+  no forwardable content (the usage-only frame, a keepalive with
+  `"choices": null`) feeds the tracing span and is skipped instead of leaking
+  its raw JSON. Any deployment of a chatqna build that streams with the
+  `include_usage` opt-in was exposed — the opt-in is sent on every streamed
+  turn whether or not observability is enabled. Answers on
+  `release/el-salvador` were never exposed (that build does not send the
+  opt-in).
 
 - **Virus scanning could not reach a ClamAV service running beside the
   document repository.** `CLAMSCAN_HOST` was read into the configuration and

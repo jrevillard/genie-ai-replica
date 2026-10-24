@@ -1530,6 +1530,112 @@ class TestAlignGenerator:
         assert any(b"X" in r.encode() for r in result)
         assert result[-1] == "data: [DONE]\n\n"
 
+    def _assert_stream(self, result, *contains, excludes=()):
+        """Shared coda for the frame-routing tests: every expected fragment is
+        present in the decoded stream, every excluded one absent, and the
+        terminal [DONE] closes the stream."""
+        joined = "".join(result)
+        excludes = (excludes,) if isinstance(excludes, str) else tuple(excludes)
+        for text in contains:
+            assert text in joined
+        for text in excludes:
+            assert text not in joined
+        assert result[-1] == "data: [DONE]\n\n"
+
+    def test_usage_only_frame_dropped_from_stream(self):
+        """vLLM's terminal usage-only chunk (choices:[] + usage) is transport
+        metadata: it feeds the llm.invoke span, never the user-visible stream."""
+        usage_frame = (
+            '{"id":"chatcmpl-x","object":"chat.completion.chunk","created":1,'
+            '"model":"m","choices":[],"usage":{"prompt_tokens":1,"total_tokens":2},'
+            '"system_fingerprint":"vllm-0.29.0-nohash"}'
+        )
+        chunks = [
+            b'data:{"choices":[{"delta":{"content":"Hello"}}]}\n\n',
+            ("data:" + usage_frame + "\n\n").encode("utf-8"),
+            b'data:{"choices":[{"delta":{"content":" world"}}]}\n\n',
+        ]
+        result = self._run_generator(align_generator(None, gen=chunks))
+        self._assert_stream(result, "Hello", " world", excludes="chat.completion.chunk")
+
+    def test_parsed_frame_without_content_is_not_forwarded_raw(self):
+        """A frame that PARSES but carries no forwardable content (e.g. a
+        keepalive with "choices": null) must be skipped, not dumped on the
+        user as raw transport JSON — the fallback below json.loads is for
+        UNPARSEABLE lines only."""
+        chunks = [
+            b'data:{"choices":[{"delta":{"content":"Hi"}}]}\n\n',
+            b'data:{"choices": null}\n\n',
+            b'data:{"choices": [{"delta": null}]}\n\n',
+        ]
+        result = self._run_generator(align_generator(None, gen=chunks))
+        self._assert_stream(result, "Hi", excludes=('"choices": null', '"delta": null'))
+
+    def test_content_frame_carrying_usage_still_forwards_content(self):
+        """Provider variants exist that attach usage to the LAST content chunk:
+        the usage key must not disqualify a frame with non-empty choices."""
+        chunk = (
+            b'data:{"choices":[{"delta":{"content":"tail"},"finish_reason":"stop"}],'
+            b'"usage":{"prompt_tokens":10,"total_tokens":12}}\n\n'
+        )
+        result = self._run_generator(align_generator(None, gen=[chunk]))
+        self._assert_stream(result, "tail")
+
+    def test_content_null_frame_does_not_kill_the_stream(self):
+        """The OpenAI tool-call delta shape carries "content": null. Key
+        presence alone would route it into .encode on None — the skip path
+        must degrade, never tear down a live answer mid-stream."""
+        chunks = [
+            b'data:{"choices":[{"delta":{"content":"Hi"}}]}\n\n',
+            b'data:{"choices":[{"delta":{"content": null}}]}\n\n',
+            b'data:{"choices":[{"delta":{"content":"ok"}}]}\n\n',
+        ]
+        result = self._run_generator(align_generator(None, gen=chunks))
+        self._assert_stream(result, "Hi", "ok", excludes='"content": null')
+
+    def test_lone_surrogate_content_does_not_kill_the_stream(self):
+        """A JSON \\ud800 escape parses to a lone surrogate; the text is
+        forwarded lossily (str.encode's replacement marker '?'), the stream
+        survives."""
+        chunks = [
+            b'data:{"choices":[{"delta":{"content":"\\ud800"}}]}\n\n',
+            b'data:{"choices":[{"delta":{"content":"after"}}]}\n\n',
+        ]
+        result = self._run_generator(align_generator(None, gen=chunks))
+        self._assert_stream(result, "after", "b'?'\n\n")
+
+    def test_upstream_error_object_frame_is_skipped_not_leaked(self):
+        """A parsed upstream error frame carries no forwardable content: it is
+        skipped (diagnostics, not raw JSON in the answer) and the stream
+        survives to [DONE]."""
+        chunks = [
+            b'data:{"choices":[{"delta":{"content":"Hi"}}]}\n\n',
+            b'data:{"error": {"message": "Model overloaded"}}\n\n',
+            b'data:{"choices":[{"delta":{"content":"ok"}}]}\n\n',
+        ]
+        result = self._run_generator(align_generator(None, gen=chunks))
+        self._assert_stream(result, "Hi", "ok", excludes="Model overloaded")
+
+    def test_content_parts_array_frame_forwards_joined_text(self):
+        """A provider streaming text as OpenAI content parts must not lose the
+        answer: the parts are joined and forwarded."""
+        chunk = (
+            b'data:{"choices":[{"delta":{"content":[{"type":"text","text":"par"},{"type":"text","text":"tial"}]}}]}\n\n'
+        )
+        result = self._run_generator(align_generator(None, gen=[chunk]))
+        self._assert_stream(result, "partial")
+
+    def test_undecodable_upstream_bytes_do_not_kill_the_stream(self):
+        """Invalid UTF-8 in an upstream line decodes lossily (one replacement
+        character per bad byte); the text still routes to the user and the
+        stream survives."""
+        chunks = [
+            b'data:{"choices":[{"delta":{"content":"caf\xe9"}}]}\n\n',
+            b'data:{"choices":[{"delta":{"content":" after"}}]}\n\n',
+        ]
+        result = self._run_generator(align_generator(None, gen=chunks))
+        self._assert_stream(result, " after", "\\xef\\xbf\\xbd")
+
 
 # ===========================================================================
 # Task 9: Test ChatQnAService initialization and service graph

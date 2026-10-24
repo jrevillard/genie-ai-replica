@@ -73,12 +73,11 @@ serviceConfigurationParameters:(NSDictionary *)serviceConfigurationParameters {
       [endpoints addObject:endpoint];
     }
   }
-  // issuer and discoveryUrl are nil (not NSNull) on the app's standard
-  // path: they cannot go through a collection literal.
-  for (NSString *candidate in @[ issuer ?: @"", discoveryUrl ?: @"" ]) {
-    if (candidate.length > 0) {
-      [endpoints addObject:candidate];
-    }
+  if ([issuer isKindOfClass:[NSString class]]) {
+    [endpoints addObject:issuer];
+  }
+  if ([discoveryUrl isKindOfClass:[NSString class]]) {
+    [endpoints addObject:discoveryUrl];
   }
 
   // Keys are computed before the critical section: the same lock guards

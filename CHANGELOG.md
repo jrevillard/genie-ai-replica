@@ -52,6 +52,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **In the vendored `flutter_appauth` fork (Android), an end-session request
+  could reuse the TLS setting of the previous sign-in instead of its own.**
+  The end-session processor read `allowInsecureConnections` into a local
+  variable while the connection builder and the authorization service read
+  the plugin field — a field that only the sign-in and token paths assign.
+  An end-session call therefore ran on whatever the previous call had set:
+  after an insecure sign-in, a logout that asked for certificate verification
+  still used the trust-all client, and on a fresh process the discovery fetch
+  could use the wrong builder too. The flag is now read into the field, and a
+  missing key defaults to `false` instead of throwing. No shipped code path
+  calls the fork's end-session API today — the app's logout talks to Keycloak
+  directly — so this hardens the vendored API surface rather than a user flow.
+  A structural regression test in
+  `test/config/flutter_appauth_insecure_gate_test.dart` fails if a rebased
+  fork reintroduces the local. (#1102)
+
 - **Virus scanning could not reach a ClamAV service running beside the
   document repository.** `CLAMSCAN_HOST` was read into the configuration and
   then dropped before it reached the scanner, so the scanner always dialled

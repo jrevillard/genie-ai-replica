@@ -51,6 +51,47 @@ class GuardScanner {
   /// How many times [token] occurs in the source.
   int count(Pattern token) => token.allMatches(source).length;
 
+  /// The first `{...}` block that follows a match of [signature], with
+  /// comments removed — the body of a method or function declared by
+  /// [signature]. Returns `null` when the signature does not appear or no
+  /// opening brace follows it.
+  ///
+  /// The scan from the signature to the body's opening brace — and the brace
+  /// pairing underneath — skips comments and string literals, so a trailing
+  /// `/* ... */` note between the parameter list and the body is not
+  /// mistaken for the body, and a brace inside a string cannot desynchronize
+  /// the pairing.
+  String? blockAfter(Pattern signature) {
+    final matches = signature.allMatches(source);
+    if (matches.isEmpty) {
+      return null;
+    }
+    final open = _firstStructuralBrace(matches.first.end);
+    final close = open < 0 ? null : _bracePairs[open];
+    if (close == null) {
+      return null;
+    }
+    return _stripComments(source.substring(open + 1, close));
+  }
+
+  /// The offset of the first `{` at or after [from] that is not inside a
+  /// comment or a string literal, or -1.
+  int _firstStructuralBrace(int from) {
+    var i = from;
+    while (i < source.length) {
+      final trivia = _triviaEnd(i);
+      if (trivia != null) {
+        i = trivia;
+        continue;
+      }
+      if (source[i] == '{') {
+        return i;
+      }
+      i++;
+    }
+    return -1;
+  }
+
   bool _isGuarded(int offset, String guard) {
     // Inside a block whose opening condition names the guard.
     for (final open in _openBraces) {
@@ -111,23 +152,79 @@ class GuardScanner {
     return _stripComments(source.substring(start, end));
   }
 
-  /// Removes `/* ... */` and `// ...` comments from [text].
-  static String _stripComments(String text) {
-    return text
-        .replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), ' ')
-        .replaceAll(RegExp(r'//[^\n]*'), ' ');
+  /// Removes `/* ... */` and `// ...` comments from [text], leaving string
+  /// literals untouched: a `//` inside a Java string is data, not a comment,
+  /// and stripping it would truncate the code the guard inspects.
+  String _stripComments(String text) {
+    final out = StringBuffer();
+    var i = 0;
+    while (i < text.length) {
+      final trivia = _triviaEnd(i, text);
+      if (trivia != null) {
+        // A comment collapses to a space; a string literal is copied whole.
+        out.write(text[i] == '/' ? ' ' : text.substring(i, trivia));
+        i = trivia;
+        continue;
+      }
+      out.write(text[i]);
+      i++;
+    }
+    return out.toString();
+  }
+
+  /// If [i] starts a comment or string literal in [text] (default: the
+  /// scanned source), the index just past it; otherwise null. The single
+  /// trivia-skipping rule shared by the brace pairing, the body-locate scan
+  /// and the comment stripper.
+  int? _triviaEnd(int i, [String? text]) {
+    final src = text ?? source;
+    if (src[i] == '/' && i + 1 < src.length) {
+      if (src[i + 1] == '/') {
+        final nl = src.indexOf('\n', i);
+        return nl < 0 ? src.length : nl + 1;
+      }
+      if (src[i + 1] == '*') {
+        final end = src.indexOf('*/', i + 2);
+        return end < 0 ? src.length : end + 2;
+      }
+      return null;
+    }
+    if (src[i] == '"' || src[i] == "'") {
+      final quote = src[i];
+      var j = i + 1;
+      while (j < src.length && src[j] != quote) {
+        if (src[j] == r'\') {
+          j++;
+        }
+        j++;
+      }
+      return j < src.length ? j + 1 : src.length;
+    }
+    return null;
   }
 
   Map<int, int> _computeBracePairs() {
+    // Brace pairing that skips comments and string literals: a `{` inside
+    // either is not structural, and an unpaired one would desynchronize
+    // every pair after it (a Java string like "no brace { inside" is enough).
     final pairs = <int, int>{};
     final stack = <int>[];
-    for (var i = 0; i < source.length; i++) {
+    var i = 0;
+    while (i < source.length) {
+      final trivia = _triviaEnd(i);
+      if (trivia != null) {
+        i = trivia;
+        continue;
+      }
       final c = source[i];
       if (c == '{') {
         stack.add(i);
-      } else if (c == '}' && stack.isNotEmpty) {
-        pairs[stack.removeLast()] = i;
+      } else if (c == '}') {
+        if (stack.isNotEmpty) {
+          pairs[stack.removeLast()] = i;
+        }
       }
+      i++;
     }
     return pairs;
   }

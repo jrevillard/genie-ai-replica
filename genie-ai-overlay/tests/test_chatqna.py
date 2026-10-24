@@ -2698,6 +2698,43 @@ class TestStreamWithMetadata:
         assert '"source_documents": []' in joined
 
     @pytest.mark.asyncio
+    async def test_usage_only_frame_never_leaks(self):
+        """vLLM's terminal usage-only chunk (choices:[] + usage) is transport
+        metadata the orchestrator forwards like a token. Live 2026-10-23: the
+        raw JSON leaked into user-visible answers AND benchmark answers (the
+        judge scored it as answer content). It must be dropped from the
+        stream; ordinary JSON-looking answer text is unaffected."""
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
+        usage_frame = (
+            '{"id":"chatcmpl-x","object":"chat.completion.chunk","created":1,'
+            '"model":"m","choices":[],"usage":{"prompt_tokens":1,"total_tokens":2}}'
+        )
+        body = self._make_body(
+            [
+                "data: b'Real answer text.'\n\n",
+                f"data: b'{usage_frame}'\n\n",
+                "data: [DONE]\n\n",
+            ]
+        )
+        out = await self._drain(svc._stream_with_metadata(body, {}, token="t"))
+        joined = "".join(out)
+        assert "Real answer text." in joined
+        assert "chat.completion.chunk" not in joined
+        assert "usage" not in joined.split('"type": "metadata"')[0]
+
+    def test_is_usage_only_frame_discriminator(self):
+        from chatqna.genieai_chatqna import _is_usage_only_frame
+
+        usage = '{"id":"chatcmpl-x","choices":[],"usage":{"total_tokens":2}}'
+        assert _is_usage_only_frame(usage) is True
+        # Content-bearing frames are NEVER usage-only
+        assert _is_usage_only_frame('{"id":"x","choices":[{"delta":{"content":"hi"}}]}') is False
+        assert _is_usage_only_frame("plain answer text") is False
+        assert _is_usage_only_frame("{broken json") is False
+        assert _is_usage_only_frame("") is False
+
+    @pytest.mark.asyncio
     async def test_appends_done_if_missing(self):
         svc = create_chatqna_service()
         svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))

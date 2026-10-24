@@ -907,6 +907,29 @@ _MAX_TRAILING_WS_WITHHOLD = 32
 _EXCESS_BLANK_RE = re.compile(r"\n{3,}")
 
 
+def _is_usage_only_frame(content: str) -> bool:
+    """True when a decoded token chunk is vLLM's terminal usage-only frame.
+
+    The OpenAI streaming wire ends generation with a chunk carrying
+    ``"choices": []`` and the token ``usage`` — no content. The orchestrator's
+    ``align_generator`` forwards it like any token, so without this check the
+    raw JSON (``{"id":"chatcmpl-…","usage":{…}}``) leaks into the user-visible
+    answer text (live 2026-10-23: pasted into chat responses AND into
+    benchmark answers, where the judge scores it as answer content).
+
+    A legitimate answer token never parses as a JSON object with a ``usage``
+    key and empty/absent ``choices``.
+    """
+    stripped = content.strip()
+    if not (stripped.startswith("{") and stripped.endswith("}")):
+        return False
+    try:
+        obj = json.loads(stripped)
+    except (ValueError, TypeError):
+        return False
+    return isinstance(obj, dict) and "usage" in obj and not obj.get("choices")
+
+
 def _streaming_marker_tail_len(buffer: str) -> int:
     """Length of the longest buffer suffix that could grow into a marker.
 
@@ -2443,9 +2466,12 @@ class ChatQnAService:
         # streaming path (_stream_with_metadata) — see _CONV_SEP_RE / _CONV_ROLE_RE.
         llm_response = _CONV_SEP_RE.sub("\n", llm_response)
         llm_response = _CONV_ROLE_RE.sub("", llm_response)
-        # Same excess-blank collapse the streaming path applies (see _stream_with_metadata).
-        # Keeps the non-streaming branch consistent and removes the visual gaps the user
-        # sees in stored/displayed answers.
+        # vLLM's terminal usage-only frame can also be embedded in the
+        # assembled non-streaming text (the orchestrator concatenates the
+        # same chunk stream) — strip it so the non-streaming path matches the
+        # streaming one (live 2026-10-23 system-leak fix).
+        if _is_usage_only_frame(llm_response):
+            llm_response = ""
         llm_response = _EXCESS_BLANK_RE.sub("\n\n", llm_response)
 
         # Strip the self-grade sentinel before translation so it never reaches the
@@ -2766,6 +2792,10 @@ class ChatQnAService:
                 # Unparseable chunk (not data: b'...'): forward verbatim so an
                 # unexpected orchestrator format never breaks the stream.
                 yield text
+                continue
+            if _is_usage_only_frame(content):
+                # vLLM's terminal usage-only chunk: transport metadata, not
+                # answer content — never forward it to the user.
                 continue
             buffer += content
             buffer = _CONV_SEP_RE.sub("\n", buffer)

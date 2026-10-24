@@ -1718,6 +1718,10 @@ describe('serve mode — the benchmark measures the SERVED system (2026-10-23)',
             // A literal backslash (Python repr emits \\\\): the sentinel must
             // round-trip — strip-then-restore mangles it to literal 'BS'.
             "data: b' See C:\\\\temp\\\\x.'\n\n",
+            // vLLM's terminal usage-only frame: transport metadata that must
+            // NEVER land in the benchmark's answer text (live 2026-10-23 —
+            // the judge scored it as answer content).
+            'data: b\'{"id":"chatcmpl-x","object":"chat.completion.chunk","choices":[],"usage":{"prompt_tokens":9,"total_tokens":11}}\'\n\n',
             'data: {"type":"metadata","source_documents":[' +
               '{"document_id":"concept-1","score":0.9,"text":"Chunk one about cob rot."},' +
               '{"document_id":"concept-2","score":0.4,"text":"Bean guide noise."}],' +

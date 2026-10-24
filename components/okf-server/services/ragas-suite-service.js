@@ -708,7 +708,23 @@ async function serveAnswer(query, graphs) {
             continue;
           }
           const m = data.match(/^b(['"])([\s\S]*)\1$/);
-          if (m) answer += decodePyRepr(m[2], m[1]);
+          if (m) {
+            const decoded = decodePyRepr(m[2], m[1]);
+            // vLLM's terminal usage-only frame (choices:[] + usage) is
+            // transport metadata the orchestrator forwards like a token —
+            // the judge would score the raw JSON as answer content. Dropped
+            // here too even though chatqna strips it at the source: the
+            // benchmark must stay safe against an older chatqna image.
+            if (decoded.trim().startsWith('{')) {
+              try {
+                const obj = JSON.parse(decoded);
+                if (obj && typeof obj === 'object' && 'usage' in obj && !(obj.choices && obj.choices.length)) continue;
+              } catch {
+                // not JSON — ordinary answer content
+              }
+            }
+            answer += decoded;
+          }
         }
       }
     } catch (e) {

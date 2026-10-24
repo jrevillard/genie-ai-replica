@@ -393,6 +393,22 @@ void main() {
           );
         });
 
+        test('EndpointString routes through the helper', () {
+          final source = File(path).readAsStringSync();
+          final body = _methodBody(
+            source,
+            RegExp(r'NSString\s*\*?\s*EndpointString\(NSDictionary'),
+          );
+          expect(body, isNotNull, reason: 'EndpointString moved');
+          expect(
+            body,
+            contains('AsNSString(configuration[key]'),
+            reason:
+                'the endpoint lookup dropped the type-check: a raw channel '
+                'value would put an NSNull into the arming collection',
+          );
+        });
+
         test(
           'arming resolves the provider from the serviceConfiguration too',
           () {

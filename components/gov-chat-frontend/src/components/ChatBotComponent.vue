@@ -148,6 +148,38 @@
                 <!-- eslint-disable-next-line vue/no-v-html -->
                 <div v-else v-html="renderMarkdown(msg.content)"></div>
               </div>
+              <!-- D2: per-answer collapsible sources -->
+              <div v-if="msg.sources && msg.sources.length" class="answer-sources" data-testid="answer-sources">
+                <button
+                  type="button"
+                  class="answer-sources__toggle"
+                  data-testid="answer-sources-toggle"
+                  :aria-expanded="msg.sourcesOpen ? 'true' : 'false'"
+                  @click="msg.sourcesOpen = !msg.sourcesOpen"
+                >
+                  <span>{{ translate('chatbot.relatedSources', { n: msg.sources.length }) }}</span>
+                  <ChevronUp v-if="msg.sourcesOpen" :size="16" aria-hidden="true" />
+                  <ChevronDown v-else :size="16" aria-hidden="true" />
+                </button>
+                <div v-show="msg.sourcesOpen" class="answer-sources__list">
+                  <a
+                    v-for="(d, di) in msg.sources"
+                    :key="d.id"
+                    class="answer-source-card"
+                    :data-testid="`answer-source-card-${di}`"
+                    :href="d.url"
+                    target="_blank"
+                    rel="noopener"
+                  >
+                    <span class="answer-source-card__icon"><FileText :size="16" aria-hidden="true" /></span>
+                    <span class="answer-source-card__body">
+                      <span class="answer-source-card__title">{{ d.title }}</span>
+                      <span class="answer-source-card__meta">{{ docMeta(d) }}</span>
+                    </span>
+                    <ExternalLink :size="14" class="answer-source-card__open" aria-hidden="true" />
+                  </a>
+                </div>
+              </div>
               <!-- Feedback and confidence score for bot messages -->
               <div class="bot-message-meta">
                 <div v-if="msg.confidenceScore != null && msg.isGrounded !== false" class="confidence-score">
@@ -361,7 +393,20 @@
 </template>
 
 <script>
-import { Brain, Loader2, Sparkles, SquarePlus, User, X } from '@lucide/vue';
+import {
+  Brain,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
+  FileText,
+  Loader2,
+  Sparkles,
+  SquarePlus,
+  User,
+  X
+} from '@lucide/vue';
+import { formatFileSize } from '../utils/fileUtils.js';
+import httpService from '../services/httpService';
 import { eventBus } from '../eventBus.js';
 import notificationService from '../services/notificationService';
 import { mapGetters, mapActions } from 'vuex';
@@ -483,6 +528,10 @@ export default {
   name: 'ChatBotComponent',
   components: {
     Brain,
+    ChevronDown,
+    ChevronUp,
+    ExternalLink,
+    FileText,
     Loader2,
     Sparkles,
     User,
@@ -792,6 +841,27 @@ export default {
   },
 
   methods: {
+    // D2: the "TYPE · size" line of a source card. Type+size are fetched once
+    // per document and cached on the doc object; the line degrades to the
+    // type alone when the repository does not answer.
+    docMeta(d) {
+      const type = d._type || (d.url ? d.url.split('.').pop().toUpperCase() : 'LINK');
+      const size = d._size ? formatFileSize(d._size) : '';
+      if (!d._fetched && d.id) {
+        d._fetched = true;
+        httpService
+          .get(`files/${d.id}`)
+          .then((r) => {
+            d._size = r.data?.file_size || 0;
+            d._type = (r.data?.file_type || type).toUpperCase();
+            this.$forceUpdate();
+          })
+          .catch(() => {
+            /* the meta line degrades to the type alone */
+          });
+      }
+      return size ? `${type} · ${size}` : type;
+    },
     ...mapActions('chatHistory', ['createChat', 'updateChat']),
 
     // --- Right sidebar resize + collapse ---
@@ -1372,6 +1442,10 @@ export default {
               const existingIds = new Set(this.relatedDocuments.map((d) => d.id));
               const uniqueNewDocs = newDocs.filter((d) => !existingIds.has(d.id));
               this.relatedDocuments.unshift(...uniqueNewDocs);
+              // D2: the sources belong to the answer that cites them — the
+              // sidebar keeps its accumulated view, the card keeps its own.
+              this.chatMessages[lastMessageIndex].sources = newDocs;
+              this.chatMessages[lastMessageIndex].sourcesOpen = true;
             }
           },
           onTranslation: (translatedContent) => {
@@ -2438,6 +2512,79 @@ export default {
   border: none;
   padding: 0;
   border-radius: 0;
+}
+
+/* D2: the per-answer collapsible sources. */
+.answer-sources {
+  border-top: 1px solid var(--border-light);
+  padding-top: var(--space-sm);
+}
+
+.answer-sources__toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.answer-sources__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
+}
+
+.answer-source-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.answer-source-card:hover {
+  border-color: var(--accent);
+}
+
+.answer-source-card__icon {
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+}
+
+.answer-source-card__body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.answer-source-card__title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.answer-source-card__meta {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.answer-source-card__open {
+  margin-left: auto;
+  color: var(--muted);
+  flex: 0 0 auto;
 }
 
 .message-wrapper {

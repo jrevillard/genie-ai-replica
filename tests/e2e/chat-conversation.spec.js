@@ -126,6 +126,55 @@ test.describe('Conversation V1', () => {
   });
 });
 
+test.describe('Conversation V1 — sources', () => {
+  // Task 6 — the answer card carries its own collapsible sources (D2).
+  // The stream is scripted: the local stack holds no ingested corpus, so no
+  // real answer here is ever grounded — the UI contract under test is how a
+  // grounded metadata frame renders, not the retriever.
+  test('the answer card carries its own collapsible sources', async ({ browser }) => {
+    const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
+    await page.route('**/queries/stream', async (route) => {
+      const sse = [
+        `data: ${JSON.stringify({ type: 'chunk', content: 'GENIE.AI answers from the library documents.' })}`,
+        '',
+        `data: ${JSON.stringify({
+          type: 'metadata',
+          confidence_score: 0.82,
+          is_grounded: true,
+          source_documents: [
+            {
+              document_id: 'doc-1',
+              document_name: 'National ID Application Guide',
+              file_name: 'guide.pdf',
+              url: '/api/files/doc-1/download',
+              score: 0.91
+            }
+          ]
+        })}`,
+        '',
+        `data: ${JSON.stringify({ type: 'done' })}`,
+        ''
+      ].join('\n');
+      await route.fulfill({ status: 200, contentType: 'text/event-stream', body: sse });
+    });
+    await page.locator('[data-testid="welcome-composer"] textarea').fill('How do I apply for a national ID?');
+    await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
+    await page.waitForSelector('[data-testid="answer-sources"]', { timeout: 45000 });
+    const state = async () =>
+      page.evaluate(() => {
+        const s = document.querySelector('[data-testid="answer-sources"]');
+        const cards = s.querySelectorAll('[data-testid^="answer-source-card-"]');
+        return { n: cards.length, open: getComputedStyle(s.querySelector('.answer-sources__list')).display !== 'none' };
+      });
+    const open = await state();
+    expect(open.n, 'sources render as cards').toBeGreaterThan(0);
+    expect(open.open, 'open by default').toBe(true);
+    await page.locator('[data-testid="answer-sources-toggle"]').click();
+    expect((await state()).open, 'the section collapses').toBe(false);
+    await ctx.close();
+  });
+});
+
 test.describe('Conversation V1 — answer card', () => {
   // Task 5 — the assistant answer renders inside one elevated card, from the
   // first frame of the stream (D9 + D14).
@@ -134,10 +183,16 @@ test.describe('Conversation V1 — answer card', () => {
     // Throttle the stream so the thinking frame is stable and observable —
     // otherwise the answer may complete before the first read.
     await page.route('**/queries/stream**', async (route) => {
-      const resp = await route.fetch();
-      const body = await resp.text();
-      await new Promise((r) => setTimeout(r, 800));
-      await route.fulfill({ response: resp, body });
+      try {
+        const resp = await route.fetch();
+        const body = await resp.text();
+        await new Promise((r) => setTimeout(r, 800));
+        // The browser context may close while the throttle is still pending —
+        // the fulfilled stream would then outlive its test.
+        await route.fulfill({ response: resp, body });
+      } catch {
+        /* the context closed mid-throttle */
+      }
     });
     await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');

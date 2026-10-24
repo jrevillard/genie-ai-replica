@@ -1530,6 +1530,38 @@ class TestAlignGenerator:
         assert any(b"X" in r.encode() for r in result)
         assert result[-1] == "data: [DONE]\n\n"
 
+    def test_usage_only_frame_dropped_from_stream(self):
+        """vLLM's terminal usage-only chunk (choices:[] + usage) is transport
+        metadata: it feeds the llm.invoke span, never the user-visible stream."""
+        usage_frame = (
+            '{"id":"chatcmpl-x","object":"chat.completion.chunk","created":1,'
+            '"model":"m","choices":[],"usage":{"prompt_tokens":1,"total_tokens":2},'
+            '"system_fingerprint":"vllm-0.29.0-nohash"}'
+        )
+        chunks = [
+            b'data:{"choices":[{"delta":{"content":"Hello"}}]}\n\n',
+            ("data:" + usage_frame + "\n\n").encode("utf-8"),
+            b'data:{"choices":[{"delta":{"content":" world"}}]}\n\n',
+        ]
+        result = self._run_generator(align_generator(None, gen=chunks))
+        joined = "".join(result)
+        assert any(b"Hello" in r.encode() for r in result)
+        assert any(b"world" in r.encode() for r in result)
+        assert "chat.completion.chunk" not in joined
+        assert result[-1] == "data: [DONE]\n\n"
+
+    def test_usage_only_payload_discriminator(self):
+        from chatqna.genieai_chatqna import _is_usage_only_payload
+
+        assert _is_usage_only_payload({"usage": {"total_tokens": 2}, "choices": []}) is True
+        assert _is_usage_only_payload({"usage": {"total_tokens": 2}}) is True
+        # Content-bearing frames are NEVER usage-only.
+        assert _is_usage_only_payload({"choices": [{"delta": {"content": "hi"}}]}) is False
+        assert _is_usage_only_payload({"usage": {"total_tokens": 2}, "choices": [{"delta": {}}]}) is False
+        assert _is_usage_only_payload(["not", "a", "dict"]) is False
+        assert _is_usage_only_payload("plain text") is False
+        assert _is_usage_only_payload(None) is False
+
 
 # ===========================================================================
 # Task 9: Test ChatQnAService initialization and service graph
@@ -2574,6 +2606,30 @@ class TestStreamWithMetadata:
         joined = "".join(out)
         assert '"type": "metadata"' in joined
         assert joined.rstrip().endswith("data: [DONE]")
+
+    @pytest.mark.asyncio
+    async def test_usage_only_frame_never_leaks(self):
+        """vLLM's terminal usage-only frame (choices:[] + usage) is transport
+        metadata: any consumer rendering the stream would show raw transport
+        JSON to the user, so it must never ride the forwarded token stream."""
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
+        usage_frame = (
+            '{"id":"chatcmpl-x","object":"chat.completion.chunk","created":1,'
+            '"model":"m","choices":[],"usage":{"prompt_tokens":1,"total_tokens":2}}'
+        )
+        body = self._make_body(
+            [
+                "data: b'Real answer text.'\n\n",
+                f"data: b'{usage_frame}'\n\n",
+                "data: [DONE]\n\n",
+            ]
+        )
+        out = await self._drain(svc._stream_with_metadata(body, {}, token="t"))
+        decoded = self._decode_content(out)
+        assert "Real answer text." in decoded
+        assert "chat.completion.chunk" not in decoded
+        assert "usage" not in decoded
 
     # ----------------------------------------------------------------------
     # Conversation-marker stripping in the streaming path (issue #830).

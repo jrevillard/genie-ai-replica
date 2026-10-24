@@ -1180,6 +1180,33 @@ _MAX_TRAILING_WS_WITHHOLD = 32
 _EXCESS_BLANK_RE = re.compile(r"\n{3,}")
 
 
+def _is_usage_only_payload(obj: object) -> bool:
+    """True for the terminal streaming frame that reports token usage: a JSON
+    object carrying a ``usage`` key with empty/absent ``choices`` and no
+    content.
+
+    Streaming requests opt into that frame via ``stream_options.include_usage``
+    (see ``align_inputs``) so the ``llm.invoke`` span can report streamed token
+    counts. The frame is transport metadata: it must feed the span, never ride
+    the token stream as answer text. A legitimate answer token never matches —
+    any chunk carrying content has a non-empty ``choices``.
+    """
+    return isinstance(obj, dict) and "usage" in obj and not obj.get("choices")
+
+
+def _is_usage_only_frame(content: str) -> bool:
+    """String-level twin of ``_is_usage_only_payload`` for a decoded token
+    chunk: True when the chunk text IS a usage-only frame."""
+    stripped = content.strip()
+    if not (stripped.startswith("{") and stripped.endswith("}")):
+        return False
+    try:
+        obj = json.loads(stripped)
+    except (ValueError, TypeError):
+        return False
+    return _is_usage_only_payload(obj)
+
+
 def _streaming_marker_tail_len(buffer: str) -> int:
     """Length of the longest buffer suffix that could grow into a marker.
 
@@ -2510,6 +2537,11 @@ def _align_generator_body(gen, llm_parameters_dict, parent_context):
                     # sometimes yield empty chunk, do a fallback here
                     json_data = json.loads(json_str)
                     _emit_llm_invoke_record(_llm_span, json_data)
+                    if _is_usage_only_payload(json_data):
+                        # Terminal usage frame: the span above already took the
+                        # token counts; without this skip the fallback below
+                        # re-emits the raw JSON as if it were answer text.
+                        continue
                     if "ops" in json_data and "op" in json_data["ops"][0]:
                         if "value" in json_data["ops"][0] and isinstance(json_data["ops"][0]["value"], str):
                             yield f"data: {repr(json_data['ops'][0]['value'].encode('utf-8'))}\n\n"
@@ -2879,6 +2911,10 @@ class ChatQnAService:
                 # Unparseable chunk (not data: b'...'): forward verbatim so an
                 # unexpected orchestrator format never breaks the stream.
                 yield text
+                continue
+            if _is_usage_only_frame(content):
+                # vLLM's terminal usage-only chunk: transport metadata, not
+                # answer content — never forward it to the user.
                 continue
             buffer += content
             buffer = _CONV_SEP_RE.sub("\n", buffer)

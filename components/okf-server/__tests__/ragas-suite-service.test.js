@@ -1302,6 +1302,88 @@ describe('explain', () => {
     expect(absent.recommendation).toMatch(/regenerate/i);
   });
 
+  it('sends the advisor EVERY attributed row — a silent 40-row cap hid 46 failures', async () => {
+    // The advisor payload capped the attributions at 40 while a run can
+    // attribute 100+, so 46 of this run's 86 rows reached the advisor with
+    // NO evidence — and the advisor said so itself ("46 summary-listed
+    // failures from new-53 through new-100 for which no row-level stage
+    // attribution appears in the supplied payload"). The operator would
+    // have seen failures with no advice and no explanation.
+    const N = 45;
+    const samples = Array.from({ length: N }, (_, i) => ({
+      user_input: `question number ${i}`,
+      reference: `answer number ${i}`,
+      reference_contexts: [`passage number ${i}`],
+      persona_name: 'agronomist',
+      query_style: 'web-search',
+      query_length: 'short',
+      synthesizer_name: 'single_hop_specific'
+    }));
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/generate-testset'))
+        return Promise.resolve(okJson({ job_id: 'j-gen', status: 'queued', poll: '/jobs/j-gen' }));
+      if (u.includes('/jobs/j-gen'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-gen',
+            kind: 'generate-testset',
+            status: 'done',
+            result: { samples, generator: { model: 'm', embed_model: 'e' } }
+          })
+        );
+      if (u.includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-eval', status: 'queued' }));
+      if (u.includes('/jobs/j-eval'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-eval',
+            kind: 'evaluate',
+            status: 'done',
+            result: {
+              aggregate: {},
+              per_query: samples.map(() => ({
+                faithfulness: 0.9,
+                context_recall: 0.9,
+                context_entities_recall: 0.2
+              })),
+              model: 'm',
+              n: N
+            }
+          })
+        );
+      return baseFetch(url);
+    });
+    const begunSuite = await svc.beginSuiteGeneration('me', { testset_size: N }, {});
+    await begunSuite.done;
+    const run = await svc.beginRunSuite('me', begunSuite.suite_key, { mode: 'whatif' }, {});
+    await run.done;
+    global.fetch = baseFetch;
+    frontmatterService.vllmChatCompletions.mockResolvedValue(
+      llmResponse({
+        knob_changes: [],
+        repo_tag_changes: [],
+        content_curation: [],
+        prompt_tweaks: []
+      })
+    );
+    const begun = await svc.beginExplainFailures('me', begunSuite.suite_key, { run_key: run.run_key }, {});
+    await begun.done;
+
+    const explained = await svc.getExplainFailures('me', begunSuite.suite_key, run.run_key);
+    expect(explained.payload.attributions.length).toBe(N);
+    // The advisor's PAYLOAD must carry every attributed row.
+    const call = frontmatterService.vllmChatCompletions.mock.calls.find((c) =>
+      String(c[0] && c[0][0] && c[0][0].content).includes('RAG pipeline tuning advisor')
+    );
+    expect(call).toBeTruthy();
+    const payload = JSON.parse(call[0][1].content);
+    expect(payload.attributions.length).toBe(N);
+    // And what it could not carry is NAMED, never silently dropped.
+    expect(Array.isArray(payload.attributions_omitted)).toBe(true);
+    expect(payload.attributions_omitted.length).toBe(0);
+  });
+
   it('routes tag suggestions through the existing guardrail', async () => {
     // Seed a failing metric so the advice path fires (all-passing runs get
     // attribution only — by design).

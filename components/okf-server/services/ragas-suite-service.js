@@ -3133,6 +3133,31 @@ async function collectAttributionEvidence(db, suite, runDoc) {
   return evidence;
 }
 
+/**
+ * Pack the attributions the advisor will read.
+ *
+ * The payload used to be capped at 40 rows while a run can attribute 100+,
+ * so the advisor saw a third of the failures and said so itself. It now
+ * packs as many rows as fit a character budget and NAMES the rows that did
+ * not — a silent cap is the thing that made the advisor's advice
+ * unverifiable.
+ */
+function packAttributions(attributions, budget = 60000) {
+  const included = [];
+  const omitted = [];
+  let used = 0;
+  for (const a of attributions) {
+    const size = JSON.stringify(a).length;
+    if (used + size > budget) {
+      omitted.push({ id: a.id, stage: a.stage, fails: a.fails || [] });
+      continue;
+    }
+    included.push(a);
+    used += size;
+  }
+  return { included, omitted, bytes: used };
+}
+
 async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
   return withSpan('okf.ragas.explain', async (span) => {
     span.setAttribute('okf.repo_id', repoId);
@@ -3248,7 +3273,12 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
             // score — which read as confirmation. A metric the judge did
             // not score on a row says NOTHING about that row.
             '(7) Check summary.coverage: a metric scored on fewer rows than the run has is UNMEASURED on the rest. ' +
-            'Never prescribe a change for a row whose metric the judge did not score — say the metric was not measured.';
+            'Never prescribe a change for a row whose metric the judge did not score — say the metric was not measured. ' +
+            // The advisor named the rows it could not see (46 of 86 on one
+            // run) and asked for them to be marked. Say so instead.
+            '(8) If attributions_omitted is not empty, say how many failing rows had no stage attribution in the payload and ' +
+            'prescribe nothing for them — their stage is unknown, not benign.';
+          const advisorAttributions = packAttributions(attributions);
           const advisorUserPayload = JSON.stringify({
             repo: suite.name,
             metrics: runDoc.metrics,
@@ -3259,7 +3289,16 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
             // prescribed "tighten grounding" on a run that was already
             // over-constraining the model.
             run_facts: runFacts,
-            attributions: attributions.slice(0, 40)
+            // EVERY attributed row, or a named account of what did not fit.
+            // The payload used to cap at 40 attributions while the run had
+            // 86, so 46 rows reached the advisor with NO evidence — and the
+            // advisor said so itself ("46 summary-listed failures from
+            // new-53 through new-100 for which no row-level stage
+            // attribution appears in the supplied payload"). The operator
+            // would have seen failures with no advice and no explanation.
+            attributions: advisorAttributions.included,
+            // What did not fit, named — never a silent cap.
+            attributions_omitted: advisorAttributions.omitted
           });
           const resp = await frontmatterService
             .vllmChatCompletions(

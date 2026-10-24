@@ -142,6 +142,10 @@ class TestLlmInvokeSync:
             None,
             {"choices": [{"delta": {"content": {"non": "str"}}}]},
             {},
+            {"choices": 42},
+            {"choices": True},
+            {"choices": 3.14},
+            {"choices": {"a": 1}},
         ]
         span = chatqna_module._emit_llm_invoke_open({"stream": True})
         for frame in hostile_frames:

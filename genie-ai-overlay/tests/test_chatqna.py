@@ -1630,6 +1630,19 @@ class TestAlignGenerator:
         assert "partial" in "".join(result)
         assert result[-1] == "data: [DONE]\n\n"
 
+    def test_undecodable_upstream_bytes_do_not_kill_the_stream(self):
+        """Invalid UTF-8 in an upstream line decodes lossily (one replacement
+        character per bad byte); the frame still routes and the stream
+        survives."""
+        chunks = [
+            b'data:{"choices":[{"delta":{"content":"caf\xe9"}}]}\n\n',
+            b'data:{"choices":[{"delta":{"content":" after"}}]}\n\n',
+        ]
+        result = self._run_generator(align_generator(None, gen=chunks))
+        joined = "".join(result)
+        assert " after" in joined
+        assert result[-1] == "data: [DONE]\n\n"
+
 
 # ===========================================================================
 # Task 9: Test ChatQnAService initialization and service graph

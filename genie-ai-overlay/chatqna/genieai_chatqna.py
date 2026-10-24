@@ -316,7 +316,10 @@ def _emit_llm_invoke_record(span, response) -> None:
             value = usage.get(key)
             if value is not None:
                 span.set_attribute(ATTRIBUTE_NAMES[attr], value)
-    for choice in response.get("choices") or []:
+    choices = response.get("choices")
+    if not isinstance(choices, (list, tuple)):
+        return
+    for choice in choices:
         if not isinstance(choice, dict):
             continue
         reason = choice.get("finish_reason")
@@ -2524,7 +2527,9 @@ def _align_generator_body(gen, llm_parameters_dict, parent_context):
     )
     try:
         for line in gen:
-            line = line.decode("utf-8")
+            # errors="replace" mirrors the encode side: one undecodable byte
+            # costs a replacement character, never a torn-down stream.
+            line = line.decode("utf-8", errors="replace")
             chunks = [chunk.strip() for chunk in line.split("\n\n") if chunk.strip()]
             for line in chunks:
                 start = line.find("{")
@@ -2556,17 +2561,22 @@ def _align_generator_body(gen, llm_parameters_dict, parent_context):
                 if _skip_reason is not None:
                     # A parsed frame with no forwardable content is transport
                     # metadata — the terminal usage-only frame the
-                    # include_usage opt-in adds, a keepalive with
-                    # "choices": null, an upstream error object, a tool-call
-                    # delta. It was already recorded on the span above and is
-                    # skipped here rather than leaked as raw JSON or allowed
-                    # to tear down a live stream. The span event + log keep
-                    # the skip diagnosable; the terminal usage frame is
-                    # expected on every streamed turn, so it logs at debug to
-                    # keep the warn-rate baseline meaningful.
+                    # include_usage opt-in adds, the guaranteed finish_reason
+                    # chunk (empty delta), a keepalive with "choices": null,
+                    # an upstream error object, a tool-call delta. It was
+                    # already recorded on the span above and is skipped here
+                    # rather than leaked as raw JSON or allowed to tear down a
+                    # live stream. The span event + log keep the skip
+                    # diagnosable; frames that are EXPECTED on every streamed
+                    # turn (the usage frame, the finish_reason chunk) log at
+                    # debug so the warn-rate baseline stays meaningful — only
+                    # a frame we could not route at all warns.
                     _llm_span.add_event("chatqna.stream.frame_skipped", {"reason": _skip_reason})
-                    if isinstance(json_data, dict) and "usage" in json_data and not json_data.get("choices"):
-                        logger.debug(f"Skipped the terminal usage-only LLM stream frame ({_skip_reason})")
+                    _expected_contentless = _skip_reason == "no forwardable content" or (
+                        isinstance(json_data, dict) and "usage" in json_data and not json_data.get("choices")
+                    )
+                    if _expected_contentless:
+                        logger.debug(f"Skipped a contentless LLM stream frame ({_skip_reason})")
                     else:
                         _frame_keys = sorted(json_data) if isinstance(json_data, dict) else type(json_data).__name__
                         logger.warning(

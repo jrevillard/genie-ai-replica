@@ -1179,7 +1179,15 @@ describe('explain', () => {
   // judge's two entity-extraction calls disagree with each other. The advisor
   // must attribute that to the judge, not send the curator to enrich entity
   // mentions in content that was returned character-for-character.
-  it('entity-recall misses with context recall PASSING attribute to the judge, not the corpus', async () => {
+  it('entity-recall misses follow the PROVEN evidence, not the context_recall proxy (2026-10-25)', async () => {
+    // context_recall PASSING does NOT mean the expected passage was
+    // delivered. RAGAS's context_recall classifies the reference ANSWER's
+    // sentences against the retrieved contexts — so other documents can
+    // cover the answer while the expected passage itself is absent from the
+    // corpus. The ladder proves where the passage went, and its verdict
+    // wins. This test used to assert that every such row is staged "judge",
+    // which sent the advisor to "treat as judge noise" for content the
+    // system was never given.
     const baseFetch = global.fetch;
     global.fetch = jest.fn((url) => {
       const u = String(url);
@@ -1211,9 +1219,21 @@ describe('explain', () => {
     const explained = await svc.beginExplainFailures('me', begunSuite.suite_key, { run_key: run.run_key }, {});
     await explained.done;
     const doc = await svc.getExplainFailures('me', begunSuite.suite_key, run.run_key);
-    expect(doc.payload.attributions.length).toBeGreaterThan(0);
-    expect(doc.payload.attributions.every((a) => a.stage === 'judge')).toBe(true);
-    expect(doc.payload.attributions[0].recommendation).toMatch(/entity extraction/i);
+    const attr = doc.payload.attributions;
+    expect(attr.length).toBe(2);
+    // The row whose passage IS in the corpus and WAS delivered: the
+    // entity-recall miss is the judge's extraction, not missing content.
+    const present = attr.find((a) => a.evidence && a.evidence.in_corpus > 0);
+    expect(present).toBeTruthy();
+    expect(present.stage).toBe('judge');
+    expect(present.unfair_question).toBe(false);
+    expect(present.recommendation).toMatch(/entity extraction/i);
+    // The row whose passage is PROVEN ABSENT from the corpus: it is an
+    // unfair question, whatever context_recall said.
+    const absent = attr.find((a) => a !== present);
+    expect(absent.stage).toBe('corpus');
+    expect(absent.unfair_question).toBe(true);
+    expect(absent.recommendation).toMatch(/regenerate/i);
   });
 
   // 2026-10-23: this test used to require stage === 'corpus' for every row.

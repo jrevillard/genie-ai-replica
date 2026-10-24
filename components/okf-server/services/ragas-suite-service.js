@@ -2742,10 +2742,23 @@ function attributeFailures(suite, runDoc, evidence) {
     } else if (!r.contexts || !r.contexts.length) {
       stage = 'routing';
       recommendation = 'nothing was retrieved — check the repo is published and its graph drained';
-    } else if (ladderStage === 'corpus') {
+    } else if (ladderStage === 'corpus' || (ladder && ladder.stage === 'corpus')) {
       // The passage is not in the corpus at all. This is a benchmark defect,
       // not a system defect — the assistant cannot retrieve content that
       // was never indexed. Never propose retrieval work for it.
+      //
+      // The verdict is honoured EVEN WHEN context_recall passed. The ladder
+      // proves the passage's absence from the corpus (it was probeable and
+      // its content was confirmed missing) — a fact about the corpus, not a
+      // judge metric. context_recall passing only says the reference
+      // ANSWER's sentences are attributable to whatever was retrieved (other
+      // documents may state the same facts); it does not put the expected
+      // passage in the corpus. Measured 2026-10-25: 5 rows (new-17, new-29,
+      // new-78, new-95, new-96) had ladder=corpus while being staged
+      // "judge" or "llm" — so the advisor was told to treat them as judge
+      // noise or to tighten the prompt for content the system was never
+      // given. Gating the corpus verdict on a recall failure hid exactly
+      // the rows the evidence pass was built to find.
       stage = 'corpus';
       recommendation =
         'the expected passage is not in the indexed corpus — this row asks about content the system was never given, so it measures the benchmark, not the assistant. Regenerate this entry against the current corpus; only curate the concept if that content was deliberately removed.';

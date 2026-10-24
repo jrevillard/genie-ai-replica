@@ -85,9 +85,10 @@ knowledge base.
 - When the question refers to a figure or table, report only what the content
   text explicitly says about it. Never describe or infer visual details that
   are not written.
-- Use the documents' own terminology (including Spanish pest, disease and
-  variety names) as written; when answering in another language, keep the
-  original term in parentheses.
+- Use the documents' own terminology (including non-English terms — e.g.
+  Spanish pest, disease and variety names, or foreign agency and program
+  names) as written; when answering in another language, keep the original
+  term in parentheses.
 - Start with the answer itself. Do not add general framing, background
   knowledge or caveats beyond the provided content.
 
@@ -111,12 +112,20 @@ abstention settings untouched, one variable at a time.
 - **Re-score `context_entities_recall` with a stronger judge before any knob
   change** (advisor's explicit instruction): 14 rows fail ONLY entity recall
   while context recall passes — MiniMax-Flash's entity extraction is the
-  suspect, not the corpus. Cheap: the judged answers are disk-cached, so a
-  re-run with a different judge re-scores without re-answering.
+  suspect, not the corpus.
 - `factual_correctness` 0.600 mean with faithfulness 0.815 and new-26's proof
   row says part of that gap is judge claim-matching strictness. Re-scoring the
-  10-metric set with GLM-5.3 (or a larger MiniMax) on a cache-warm re-run
-  quantifies it in one hour.
+  10-metric set with a stronger judge quantifies it.
+- **Judge pick (2026-10-24, from the shelf of model configs): `Deepseek V4 Pro
+  David - OpenAI` (`mc1792482278295-e02f3b`)** — the only non-flash model
+  available, already tagged `ragas_judge`, OpenAI protocol (no adapter risk),
+  pay-per-token without GLM-ITU's daytime throttling. GLM-5.3-flash is NOT
+  recommended as judge (same flash class + the strict-JSON gap).
+- **Cost correction (superseding the first draft of this section): the judge
+  re-score is a FULL run (~5 h), not cache-warm.** The disk cache keys on
+  `model|prompt|…`, so a different judge model misses every entry — all
+  judge calls re-fire. The "cache-warm" claim applied only to same-model
+  re-runs.
 
 ## 6. Retrieval-side (17 attributions — size in whatif mode first)
 
@@ -152,10 +161,15 @@ Two consequences:
 
 ## 8. Recommended order
 
-1. **Judge re-score** (cache-warm, same suite, stronger judge) — establishes
-   the honest baseline; zero pipeline risk. *(~1 h)*
-2. **Prompt A/B** — deploy §4 text via env, re-run the suite, compare all 10
-   metrics + abstention count. Reversible in one env flip. *(~5 h run)*
+1. **Judge re-score** (same suite, stronger judge) — establishes the honest
+   baseline; zero pipeline risk. Full run, ~5 h. **Done first because the
+   prompt A/B below is already deployed — the next run measures BOTH; run a
+   Pro-judged baseline with the new prompt live, and compare against
+   `rr1792807688575-1e1b0c` keeping in mind two variables moved.**
+2. **Prompt A/B** — deployed 2026-10-24 via `CHATQNA_SYSTEM_PROMPT` on the
+   local build (chatqna recreated, verified in-container). Reversible in one
+   env flip. *(folds into run 1; if the combined result is ambiguous, flip
+   the prompt off and re-run to isolate)*
 3. **Whatif sizing → port candidate pool/rerank values** to the served
    deployment. *(analysis exists; deploy after 1–2)*
 4. **Suite hygiene** — regenerate new-17/new-29 (unfair), keep reference

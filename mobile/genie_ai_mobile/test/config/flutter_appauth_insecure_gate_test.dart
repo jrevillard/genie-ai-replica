@@ -43,6 +43,14 @@ const _macosPluginPath =
 /// constructor, so this qualified reference is the only way to reach it.
 final _trustAllBuilder = RegExp(r'InsecureConnectionBuilder\s*\.\s*INSTANCE');
 
+/// A collection literal normalized for comparison: whitespace collapsed to
+/// single spaces and a trailing comma before the closing bracket dropped, so
+/// a reformat that only moves the comma stays green.
+String _collapseLiteral(String literal) => literal
+    .replaceAll(RegExp(r'\s+'), ' ')
+    .replaceAll(', ]', ']')
+    .replaceAll(' ]', ']');
+
 /// The first `{...}` block following [signature], comments stripped — the
 /// body of the ObjC method declared by [signature], or null.
 String? _methodBody(String source, Pattern signature) {
@@ -329,7 +337,7 @@ void main() {
           );
           expect(
             keyBody,
-            contains('scheme'),
+            contains('url.scheme.lowercaseString'),
             reason:
                 'the default port is hard-coded regardless of scheme: '
                 'an http provider would key as :443 and its own requests '
@@ -352,16 +360,6 @@ void main() {
                 'a registration without arming trusts nothing: the exchange '
                 'itself would fail, or a stale host from another exchange '
                 'would be trusted',
-          );
-          // The issuer/discoveryUrl candidates are filtered through an
-          // empty-string check (they are genuine nils on the app's standard
-          // path and must never enter a collection literal).
-          expect(
-            source,
-            contains("issuer ?: @\"\""),
-            reason:
-                'issuer/discoveryUrl are nil on the standard path: in a '
-                'collection literal they crash the arming',
           );
           // Arming must sit behind the flag like the registration itself.
           final scanner = GuardScanner(source);
@@ -425,29 +423,23 @@ void main() {
                   'the endpoints bypass the NSNull type-check: the first '
                   'null field would crash the arming',
             );
-            // Every @[] literal in the body must be one of the two known
-            // safe shapes, compared whole (a substring scan can be truncated
-            // by a ']' inside a string constant): the quoted endpoint keys,
-            // and the nil-safe issuer/discoveryUrl candidates. Anything else
-            // risks a nil element, and an @[] literal throws on nil.
-            const safeLiterals = {
-              '@[ @"authorizationEndpoint", @"tokenEndpoint", '
-                  '@"endSessionEndpoint", ]',
-              '@[ issuer ?: @"", discoveryUrl ?: @""]',
-            };
+            // The one @[] literal in the body holds the three quoted
+            // endpoint keys. Compared whole (a substring scan can be
+            // truncated by a ']' inside a string constant) after collapsing
+            // whitespace and dropping a trailing comma, so a reformat that
+            // only moves the comma stays green.
             final actualLiterals = RegExp(r'@\[[^\]]*\]')
                 .allMatches(body!)
-                .map(
-                  (m) => m
-                      .group(0)!
-                      .replaceAll(RegExp(r'\s+'), ' ')
-                      .replaceAll('" ', '"')
-                      .replaceAll(' "', '"'),
-                )
+                .map((m) => _collapseLiteral(m.group(0)!))
                 .toSet();
             expect(
-              actualLiterals.difference(safeLiterals),
-              isEmpty,
+              actualLiterals,
+              {
+                _collapseLiteral(
+                  '@[ @"authorizationEndpoint", @"tokenEndpoint", '
+                  '@"endSessionEndpoint", ]',
+                ),
+              },
               reason:
                   'an unrecognized @[] literal: its elements are not pinned, '
                   'and a nil or NSNull element throws NSInvalidArgumentException '

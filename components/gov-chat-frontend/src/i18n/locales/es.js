@@ -3440,6 +3440,7 @@ export default {
         unfairTitle: 'El pasaje esperado no está en el corpus: esta fila evalúa el benchmark, no al asistente',
         evidenceTitle:
           'Pasajes encontrados en el corpus / conjunto de candidatos / entregados al modelo. Método: {method}',
+        facts: 'Datos de la ejecución: {rows} filas · {abstentions} abstenciones · ~{chars} caracteres por respuesta',
         rankTitle: 'El pasaje está en el corpus pero fuera del conjunto de candidatos: ocupa la posición #{n}.'
       },
       history: {

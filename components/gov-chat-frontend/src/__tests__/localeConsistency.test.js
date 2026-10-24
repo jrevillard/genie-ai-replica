@@ -177,6 +177,10 @@ describe('Locale consistency', () => {
     // to, and which model the running generation is actually using.
     'okf.ragas.generate.defaultNamed',
     'okf.ragas.generate.effective',
+    // RAGAS run facts (2026-10-25): the row/abstention/answer-length facts
+    // the advisor CITES — consumed via .replace() for {rows}/{abstentions}/
+    // {chars}, so they must carry the plain {x} form.
+    'okf.ragas.explain.facts',
     // Model-config connection test (2026-10-19): composed in
     // ModelConfigPanel.testMessage() via .replace() for {n}/{ms}/{model}.
     'okf.models.modelsLoaded',

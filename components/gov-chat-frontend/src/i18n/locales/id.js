@@ -3419,6 +3419,7 @@ export default {
         unfair: 'pertanyaan tidak adil',
         unfairTitle: 'Bagian yang diharapkan tidak ada dalam korpus — baris ini menilai benchmark, bukan asisten',
         evidenceTitle: 'Bagian yang ditemukan di korpus / kumpulan kandidat / diberikan ke model. Metode: {method}',
+        facts: 'Fakta eksekusi: {rows} baris · {abstentions} penolakan · ~{chars} karakter per jawaban',
         rankTitle: 'Bagian ini ada di korpus tetapi di luar kumpulan kandidat — peringkatnya #{n}.'
       },
       history: {

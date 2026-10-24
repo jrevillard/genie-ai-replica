@@ -3441,6 +3441,7 @@ export default {
         unfairTitle: "Le passage attendu n'est pas dans le corpus — cette ligne évalue le benchmark, pas l'assistant",
         evidenceTitle:
           'Passages trouvés dans le corpus / le vivret de candidats / transmis au modèle. Méthode : {method}',
+        facts: 'Faits de l’exécution : {rows} lignes · {abstentions} abstentions · ~{chars} caractères par réponse',
         rankTitle: 'Le passage est dans le corpus mais hors du vivret de candidats — il se classe #{n}.'
       },
       history: {

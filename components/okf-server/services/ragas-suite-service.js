@@ -3114,6 +3114,29 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
     const evidence = await collectAttributionEvidence(db, suite, runDoc);
     const attributions = attributeFailures(suite, runDoc, evidence);
     explainProgress.set(suiteKey, { phase: 'advising', started_ms: Date.now(), failing: attributions.length });
+    // The run-level facts the advisor must read before it prescribes anything
+    // (David 2026-10-24): how many rows abstained and how long the answers
+    // are. Without these it prescribed "tighten grounding" on a run that was
+    // already over-constraining the model. They are computed HERE, once, and
+    // stored on the explain doc as well as sent to the advisor: the advice
+    // cites them ("run_facts show 0 abstentions and mean_answer_chars of
+    // 717"), so the reader has to be able to check them.
+    const runFacts = {
+      rows: (runDoc.payload.results || []).length,
+      abstentions: (runDoc.payload.results || []).filter((r) => r.abstained).length,
+      mean_answer_chars: Math.round(
+        (runDoc.payload.results || []).reduce((a, r) => a + String(r.answer || '').length, 0) /
+          Math.max(1, (runDoc.payload.results || []).length)
+      ),
+      abstained_rows: (runDoc.payload.results || [])
+        .filter((r) => r.abstained)
+        .map((r) => r.id)
+        .slice(0, 20),
+      stage_counts: attributions.reduce((acc, a) => {
+        acc[a.stage] = (acc[a.stage] || 0) + 1;
+        return acc;
+      }, {})
+    };
     try {
       // ONE guided-JSON advice call; tag suggestions pass the existing guardrail.
       let advice = {
@@ -3183,22 +3206,7 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
             // abstained and how long the answers are. Without these it
             // prescribed "tighten grounding" on a run that was already
             // over-constraining the model.
-            run_facts: {
-              rows: (runDoc.payload.results || []).length,
-              abstentions: (runDoc.payload.results || []).filter((r) => r.abstained).length,
-              mean_answer_chars: Math.round(
-                (runDoc.payload.results || []).reduce((a, r) => a + String(r.answer || '').length, 0) /
-                  Math.max(1, (runDoc.payload.results || []).length)
-              ),
-              abstained_rows: (runDoc.payload.results || [])
-                .filter((r) => r.abstained)
-                .map((r) => r.id)
-                .slice(0, 20),
-              stage_counts: attributions.reduce((acc, a) => {
-                acc[a.stage] = (acc[a.stage] || 0) + 1;
-                return acc;
-              }, {})
-            },
+            run_facts: runFacts,
             attributions: attributions.slice(0, 40)
           });
           const resp = await frontmatterService
@@ -3340,6 +3348,10 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
             acc[a.stage] = (acc[a.stage] || 0) + 1;
             return acc;
           }, {}),
+          // The facts the advice CITES. Without them stored here, the advice
+          // says "run_facts show 0 abstentions and mean_answer_chars of 717"
+          // and the reader has no way to check either number.
+          run_facts: runFacts,
           attributions,
           advice
         }

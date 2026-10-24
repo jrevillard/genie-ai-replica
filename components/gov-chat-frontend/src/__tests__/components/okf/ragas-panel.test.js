@@ -1179,4 +1179,37 @@ describe('RagasPanel', () => {
       expect(w.vm.error).toContain('busy');
     });
   });
+
+  describe('run facts the advice cites (2026-10-25)', () => {
+    const ADVICE = {
+      knob_changes: [],
+      repo_tag_changes: [],
+      content_curation: [],
+      prompt_tweaks: [],
+      note: ''
+    };
+
+    it('shows the row/abstention/answer-length facts next to the advice', async () => {
+      const w = mountPanel();
+      await new Promise((r) => setTimeout(r, 0));
+      w.vm.explainDoc = {
+        attributions: [],
+        run_facts: { rows: 100, abstentions: 0, mean_answer_chars: 717 },
+        advice: ADVICE
+      };
+      await w.vm.$nextTick();
+      expect(w.vm.explainFactsLabel).toContain('100');
+      expect(w.vm.explainFactsLabel).toContain('717');
+      // The rendered panel must show it too — the advice cites these numbers.
+      expect(w.text()).toContain('717');
+    });
+
+    it('says nothing when the explain doc carries no facts', async () => {
+      const w = mountPanel();
+      await new Promise((r) => setTimeout(r, 0));
+      w.vm.explainDoc = { attributions: [], advice: ADVICE };
+      await w.vm.$nextTick();
+      expect(w.vm.explainFactsLabel).toBe('');
+    });
+  });
 });

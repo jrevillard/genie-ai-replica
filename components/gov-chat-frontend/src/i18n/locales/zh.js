@@ -3350,6 +3350,7 @@ export default {
         unfair: '不公平的问题',
         unfairTitle: '期望的段落不在语料库中 —— 该行衡量的是基准测试，而非助手',
         evidenceTitle: '在语料库／候选集／传递给模型的段落数量。方法：{method}',
+        facts: '运行事实：{rows} 行 · {abstentions} 次拒答 · ~{chars} 字符答案',
         rankTitle: '该段落存在于语料库中，但不在候选集内 —— 排名第 {n}。'
       },
       history: {

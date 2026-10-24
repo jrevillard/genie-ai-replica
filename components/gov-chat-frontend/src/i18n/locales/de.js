@@ -3443,6 +3443,7 @@ export default {
         unfairTitle:
           'Die erwartete Passage liegt nicht im Korpus – diese Zeile bewertet den Benchmark, nicht den Assistenten',
         evidenceTitle: 'Im Korpus / im Kandidatenpool / an das Modell gefundene Passagen. Methode: {method}',
+        facts: 'Lauf-Fakten: {rows} Zeilen · {abstentions} Verweigerungen · ~{chars} Zeichen pro Antwort',
         rankTitle: 'Die Passage liegt im Korpus, aber außerhalb des Kandidatenpools – sie rangiert auf Platz #{n}.'
       },
       history: {

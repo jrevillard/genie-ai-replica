@@ -3416,6 +3416,7 @@ export default {
         unfairTitle: 'Kifungu kilichotajikwa hakiki hakipo kwenye korpus — mstari huu unapima benchmark, si msaidizi',
         evidenceTitle:
           'Vifungu vilivyopatikwa kwenye korpus / seti ya wagombwa / vilivyotolewa kwa modeli. Njia: {method}',
+        facts: 'Ukweli wa uendeshaji: {rows} safu · {abstentions} kukataa · ~{chars} herufi kwa jibu',
         rankTitle: 'Kifungu kiko kiko kwenye korpus lakini nje ya seti ya wagombwa — nafasi ya #{n}.'
       },
       history: {

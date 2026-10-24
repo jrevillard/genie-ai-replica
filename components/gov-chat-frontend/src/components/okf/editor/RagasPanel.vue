@@ -574,6 +574,9 @@
       <h4 class="okf-headtest__pane-title">
         {{ translate('okf.ragas.explain.title', 'Failure attribution and advice') }}
       </h4>
+      <!-- The facts the advice cites — visible so the numbers it reasons
+           from can be checked, not just believed. -->
+      <p v-if="explainFactsLabel" class="okf-ragas__muted">{{ explainFactsLabel }}</p>
       <table v-if="explainDoc.attributions && explainDoc.attributions.length" class="okf-headtest__scores">
         <thead>
           <tr>
@@ -936,6 +939,20 @@ export default {
         '{model}',
         model
       );
+    },
+    /** The run-level facts the ADVICE cites. The advice says "run_facts show
+     * 0 abstentions and mean_answer_chars of 717" — the reader has to be
+     * able to check both numbers, so they are shown next to it. */
+    explainFactsLabel() {
+      const f = this.explainDoc && this.explainDoc.run_facts;
+      if (!f) return '';
+      return this.translate(
+        'okf.ragas.explain.facts',
+        'Run facts: {rows} rows · {abstentions} abstentions · ~{chars} answer chars'
+      )
+        .replace('{rows}', String(f.rows))
+        .replace('{abstentions}', String(f.abstentions))
+        .replace('{chars}', String(f.mean_answer_chars));
     },
     /** The re-score dialog's action buttons (DsDialog emits the action KEY). */
     rescoreActions() {

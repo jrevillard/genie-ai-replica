@@ -44,6 +44,8 @@ directly, drive a live benchmark, or repair stored state.
 | `trigger-explain.js` | Run **inside** the okf-server container: regenerate attribution + advisor advice for one run against the deployed code |
 | `run-judge-baseline.js` | Read-only: the recent runs with their judge, row count and per-metric means |
 | `row-peek.js` / `run-peek.js` / `run-results.js` | Read-only Arango views: rows of a run, newest runs of a suite, full summary of one run |
+| `ragas-regenerate-reference.js` | Run **inside** the okf-server container: rewrite a suite entry's reference answer so it is grounded in the corpus VERBATIM, and write it only if `context_entities_recall` on the rewrite scores BETTER than on the original |
+| `ragas-gate-audit.js` | Run inside the okf-server container: read-only — which of a suite's references the metric gate would refuse |
 | `ropc-verify-revert.js` | One-shot: mint a master token, force ROPC off, verify — the hardening the earlier harness left unchecked |
 
 **Sidecar-internal scripts.** `ragas-rescore-judge.js` and `trigger-explain.js`

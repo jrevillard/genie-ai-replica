@@ -66,7 +66,7 @@ function resolve(source) {
   return {
     text: rebuilt,
     keptMain,
-    keptHead: headLines,
+    keptHead: headLines
   };
 }
 
@@ -85,15 +85,12 @@ for (const locale of LOCALES) {
   const counts = {
     unsupportedLanguage: (result.text.match(/^\s*unsupportedLanguage:/gm) || []).length,
     aiGeneratedNoDocs: (result.text.match(/^\s*aiGeneratedNoDocs:/gm) || []).length,
-    welcomeMessage: (result.text.match(/^\s*welcomeMessage:/gm) || []).length,
+    welcomeMessage: (result.text.match(/^\s*welcomeMessage:/gm) || []).length
   };
   const markers = /^(<<<<<<<|=======|>>>>>>>)/m.test(result.text);
 
   const bad =
-    markers ||
-    counts.unsupportedLanguage !== 1 ||
-    counts.aiGeneratedNoDocs !== 1 ||
-    counts.welcomeMessage !== 1;
+    markers || counts.unsupportedLanguage !== 1 || counts.aiGeneratedNoDocs !== 1 || counts.welcomeMessage !== 1;
 
   if (bad) {
     failures += 1;

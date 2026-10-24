@@ -23,3 +23,28 @@ are therefore not byte-faithful to production routing.
 The productized version of these experiments lives in
 `components/okf-server/services/head-test-service.js`
 (POST `/api/okf/repos/:id/routing-test`).
+
+## Story 8-6 — RAGAS benchmarking lab
+
+Added for the RAGAS benchmarking work (2026-10). The scripts above are
+**read-only probes of the local build**; the ones below either read Arango
+directly, drive a live benchmark, or repair stored state.
+
+| Script | What it does |
+|---|---|
+| `smoke-8-6.js` | Live smoke of the whole RAGAS surface against the deployed stack (sidecar + okf-server + remote GPU judge) |
+| `ragas-compare.js` | Re-runs an existing suite and compares the new run against the stored one |
+| `ragas-diff.js` | Read-only row-by-row comparison of two runs: per-metric means, the answer-changed set, per-row deltas |
+| `ragas-precision-analysis.js` | Read-only: why `context_precision` dropped between two runs |
+| `ragas-probe.js` | Read-only shape probe — repos, suites, runs and their metrics |
+| `ragas-row-inspector.js` | Read-only: the run-doc fields for named failing rows |
+| `ragas-rescore-judge.js` | Re-score a **stored** run with a **different** judge (needs `x-ragas-secret`) |
+| `ragas-abstention-backfill.js` | One-off repair: re-flag every stored run with the authoritative abstention detector |
+| `trigger-explain.js` | Run **inside** the okf-server container: regenerate attribution + advisor advice for one run against the deployed code |
+| `row-peek.js` / `run-peek.js` / `run-results.js` | Read-only Arango views: rows of a run, newest runs of a suite, full summary of one run |
+| `ropc-verify-revert.js` | One-shot: mint a master token, force ROPC off, verify — the hardening the earlier harness left unchecked |
+
+**Sidecar-internal scripts.** `ragas-rescore-judge.js` and `trigger-explain.js`
+call the RAGAS sidecar / the deployed service directly and expect
+`x-ragas-secret` (`RAGAS_INTERNAL_SECRET` / `OKF_INTERNAL_SECRET`). They are
+dev tools, not part of the product surface.

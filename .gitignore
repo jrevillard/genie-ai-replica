@@ -165,6 +165,9 @@ bash.exe.stackdump
 # OKF smoke tokens (host-side mint output — never commit)
 okf-smoke-tokens.json
 
+# Story 8-6 smoke exports (host-side xlsx output — never commit)
+smoke-*.xlsx
+
 # Agent scratch space (never commit)
 # Throwaway diagnostic scripts, AQL probes, and GitLab draft bodies written
 # while investigating. Regenerable — nothing here is a source of truth.

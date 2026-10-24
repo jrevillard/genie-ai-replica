@@ -192,15 +192,15 @@ void main() {
   group('Apple protocol host scoping', () {
     // While registered, the trust-all protocol is consulted by every
     // NSURLSession in the process. canInitWithRequest must therefore only
-    // intercept the OIDC provider's host — and each registration must arm
-    // that host, or the interception would refuse everything (fail closed,
-    // but the insecure exchange would break).
+    // intercept the armed provider's host and port — and each registration
+    // must arm that host, or the interception would refuse everything (fail
+    // closed, but the insecure exchange would break).
     for (final (label, path) in <(String, String)>[
       ('iOS', _iosPluginPath),
       ('macOS', _macosPluginPath),
     ]) {
       group(label, () {
-        test('canInitWithRequest intercepts only the allowed host', () {
+        test('canInitWithRequest intercepts only the armed host:port', () {
           final source = File(path).readAsStringSync();
           final body = _methodBody(
             source,
@@ -209,45 +209,80 @@ void main() {
           expect(body, isNotNull, reason: 'canInitWithRequest moved');
           expect(
             body,
-            contains('_insecureAllowedHost'),
+            contains('containsObject:InsecureHostKey'),
             reason:
-                'the interception is not scoped to the provider host: '
+                'the interception is not scoped to the armed providers: '
                 'while registered it would trust unrelated traffic too',
           );
-          expect(body, contains('caseInsensitiveCompare'));
           expect(body, contains('request.URL.host'));
+          // The key carries the port: a second TLS service on the provider's
+          // host at another port must not be intercepted.
+          final keyBody = _methodBody(
+            source,
+            RegExp(r'NSString\s*\*?\s*InsecureHostKey\(NSURL'),
+          );
+          expect(keyBody, isNotNull, reason: 'InsecureHostKey moved');
+          expect(
+            keyBody,
+            contains('port'),
+            reason:
+                'the interception key ignores the port: every TLS service '
+                'on the provider host would be trusted',
+          );
         });
 
         test('every registration arms the host right before it', () {
           final source = File(path).readAsStringSync();
-          final registrations = RegExp(
-            r'\[\s*NSURLProtocol\s+registerClass:',
-          ).allMatches(source).length;
+          final registrations = _protocolRegistration.allMatches(source).length;
           expect(registrations, greaterThan(0));
           final armed = RegExp(
-            r'setAllowedHost:[^;]*;\s*\[\s*NSURLProtocol\s+registerClass:',
+            r'armForIssuer:[^;]*;\s*\[\s*NSURLProtocol\s+registerClass:',
             dotAll: true,
           ).allMatches(source).length;
           expect(
             armed,
             registrations,
             reason:
-                'a registration without setAllowedHost trusts nothing: '
-                'the exchange itself would fail, or worse a stale host from '
-                'another exchange would be trusted',
+                'a registration without arming trusts nothing: the exchange '
+                'itself would fail, or a stale host from another exchange '
+                'would be trusted',
           );
           // Arming must sit behind the flag like the registration itself.
-          final scanner = GuardScanner(File(path).readAsStringSync());
+          final scanner = GuardScanner(source);
           final unguarded = scanner.unguarded(
-            RegExp(r'\[\s*InsecureURLProtocol\s+setAllowedHost:'),
+            RegExp(r'\[\s*InsecureURLProtocol\s+armForIssuer:'),
             'allowInsecureConnections',
           );
           expect(
             unguarded,
             isEmpty,
-            reason: 'setAllowedHost ran without allowInsecureConnections',
+            reason: 'arming ran without allowInsecureConnections',
           );
         });
+
+        test(
+          'arming resolves the provider from the serviceConfiguration too',
+          () {
+            // The app passes serviceConfiguration and leaves issuer and
+            // discoveryUrl nil: an arming path that only read those two
+            // would arm nothing, and the insecure exchange itself would
+            // fail its certificate check.
+            final source = File(path).readAsStringSync();
+            final body = _methodBody(
+              source,
+              RegExp(r'armForIssuer:\(NSString \*\)issuer'),
+            );
+            expect(body, isNotNull, reason: 'armForIssuer moved');
+            expect(
+              body,
+              contains('tokenEndpoint'),
+              reason:
+                  'arming ignores the serviceConfiguration endpoints: the '
+                  'app passes those, so the host would arm nil',
+            );
+            expect(body, contains('authorizationEndpoint'));
+          },
+        );
       });
     }
   });

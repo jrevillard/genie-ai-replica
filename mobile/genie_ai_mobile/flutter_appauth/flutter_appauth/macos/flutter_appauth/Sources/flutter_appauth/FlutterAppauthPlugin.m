@@ -11,27 +11,71 @@
 
 static NSString *const kInsecureURLProtocolHandledKey = @"InsecureURLProtocolHandled";
 
-// The host of the OIDC provider the current insecure exchange talks to. Set
-// when the protocol is registered, cleared implicitly by unregister: while
-// registered, the protocol is consulted by every NSURLSession in the process
-// and may only intercept this host.
-static NSString *_insecureAllowedHost = nil;
+// Hosts of the OIDC providers with a live insecure registration. While the
+// protocol is registered it is consulted by every NSURLSession in the
+// process and may only intercept these host:port pairs; everything else
+// keeps its certificate verification. The set is guarded because
+// canInitWithRequest runs on URL-loading threads while arming happens on the
+// platform thread. Hosts stay armed after their exchange ends —
+// unregisterClass: cannot know which registration to drop, and overlapping
+// exchanges share it; a host only gets here because its deployment opted
+// into the insecure flag.
+static NSMutableSet<NSString *> *_insecureAllowedHosts = nil;
+
+// The interception key of a URL: host (case-folded) and port, with the
+// https default filled in so a provider on :443 and one on :8443 stay
+// distinct.
+static NSString *InsecureHostKey(NSURL *url) {
+  NSNumber *port = url.port ?: @443;
+  return [NSString stringWithFormat:@"%@:%@", url.host.lowercaseString, port];
+}
 
 @implementation InsecureURLProtocol
 
-+ (void)setAllowedHost:(NSString *)host {
-  _insecureAllowedHost = [host copy];
++ (NSMutableSet<NSString *> *)allowedHosts {
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    _insecureAllowedHosts = [NSMutableSet set];
+  });
+  return _insecureAllowedHosts;
+}
+
++ (void)armForIssuer:(NSString *)issuer
+         discoveryUrl:(NSString *)discoveryUrl
+serviceConfigurationParameters:(NSDictionary *)serviceConfigurationParameters {
+  // The app usually passes a serviceConfiguration and leaves issuer and
+  // discoveryUrl nil, so the endpoints inside the configuration are the
+  // primary source.
+  NSString *endpoint = issuer ?: discoveryUrl;
+  if (!endpoint) {
+    endpoint = serviceConfigurationParameters[@"tokenEndpoint"] ?:
+               serviceConfigurationParameters[@"authorizationEndpoint"] ?:
+               serviceConfigurationParameters[@"endSessionEndpoint"];
+  }
+  NSURL *providerUrl = [NSURL URLWithString:endpoint];
+  if (!providerUrl.host) {
+    return;
+  }
+  NSMutableSet<NSString *> *allowedHosts = [InsecureURLProtocol allowedHosts];
+  @synchronized(allowedHosts) {
+    [allowedHosts addObject:InsecureHostKey(providerUrl)];
+  }
 }
 
 + (BOOL)canInitWithRequest:(NSURLRequest *)request {
   if ([self propertyForKey:kInsecureURLProtocolHandledKey inRequest:request] != nil) {
     return NO;
   }
-  // Only the OIDC provider's host may be intercepted: everything else keeps
-  // its certificate verification even during an insecure exchange.
-  NSString *requestHost = request.URL.host;
-  return _insecureAllowedHost.length > 0 && requestHost != nil &&
-         [requestHost caseInsensitiveCompare:_insecureAllowedHost] == NSOrderedSame;
+  // Only the OIDC provider's host (and port) may be intercepted: everything
+  // else keeps its certificate verification even during an insecure
+  // exchange.
+  if (!request.URL.host) {
+    return NO;
+  }
+  NSMutableSet<NSString *> *allowedHosts = [InsecureURLProtocol allowedHosts];
+  @synchronized(allowedHosts) {
+    return [allowedHosts containsObject:InsecureHostKey(request.URL)];
+  }
 }
 
 + (NSURLRequest *)canonicalRequestForRequest:(NSURLRequest *)request {
@@ -307,9 +351,9 @@ AppAuthAuthorization *authorization;
   }
 
   if (requestParameters.allowInsecureConnections) {
-    NSURL *providerUrl =
-        [NSURL URLWithString:requestParameters.issuer ?: requestParameters.discoveryUrl];
-    [InsecureURLProtocol setAllowedHost:providerUrl.host];
+    [InsecureURLProtocol armForIssuer:requestParameters.issuer
+                          discoveryUrl:requestParameters.discoveryUrl
+       serviceConfigurationParameters:requestParameters.serviceConfigurationParameters];
     [NSURLProtocol registerClass:[InsecureURLProtocol class]];
   }
 
@@ -459,9 +503,9 @@ AppAuthAuthorization *authorization;
       [[TokenRequestParameters alloc] initWithArguments:arguments];
 
   if (requestParameters.allowInsecureConnections) {
-    NSURL *providerUrl =
-        [NSURL URLWithString:requestParameters.issuer ?: requestParameters.discoveryUrl];
-    [InsecureURLProtocol setAllowedHost:providerUrl.host];
+    [InsecureURLProtocol armForIssuer:requestParameters.issuer
+                          discoveryUrl:requestParameters.discoveryUrl
+       serviceConfigurationParameters:requestParameters.serviceConfigurationParameters];
     [NSURLProtocol registerClass:[InsecureURLProtocol class]];
   }
 
@@ -528,9 +572,9 @@ AppAuthAuthorization *authorization;
       [[EndSessionRequestParameters alloc] initWithArguments:arguments];
 
   if (requestParameters.allowInsecureConnections) {
-    NSURL *providerUrl =
-        [NSURL URLWithString:requestParameters.issuer ?: requestParameters.discoveryUrl];
-    [InsecureURLProtocol setAllowedHost:providerUrl.host];
+    [InsecureURLProtocol armForIssuer:requestParameters.issuer
+                          discoveryUrl:requestParameters.discoveryUrl
+       serviceConfigurationParameters:requestParameters.serviceConfigurationParameters];
     [NSURLProtocol registerClass:[InsecureURLProtocol class]];
   }
 

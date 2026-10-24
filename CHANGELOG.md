@@ -21,9 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that span no longer reads as zero because abstentions went unrecorded.
   **Note on streamed token usage:** `llm.usage.*` on a streamed turn depends on
   `stream_options: {include_usage: true}` surviving the chatqna → textgen → vLLM
-  chain. That has not been verified against a running deployment; on a streamed
-  turn the usage attributes are omitted rather than guessed if the flag does not
-  arrive. The non-streamed path records usage unconditionally.
+  chain. Verified against the shared vLLM 0.29 endpoint on 2026-10-24 (the flag
+  survives; see the Fixed entry below). On a streamed turn the usage attributes
+  are omitted rather than guessed if the flag does not arrive. The non-streamed
+  path records usage unconditionally.
 
 - **Trace-to-query correlation:** the spans on a chat turn carry
   `genie.query_id`, so a trace can be joined to the stored query document. The
@@ -79,6 +80,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A structural regression test in
   `test/config/flutter_appauth_insecure_gate_test.dart` fails if a rebased
   fork reintroduces the local. (#1102)
+- **Streamed chat answers could end with raw transport JSON.** ChatQnA
+  requests streamed token usage from vLLM (`stream_options.include_usage`,
+  for the `llm.invoke` span); the terminal usage-only frame of that stream was
+  re-emitted by the orchestrator as if it were answer text, so answers
+  displayed in the web UI and mobile app — and scored by the RAGAS judge —
+  ended with a `{"id":"chatcmpl-...","usage":{...}}` tail. The frame now feeds
+  the span and is dropped before it can reach any consumer, both at the
+  orchestrator source and at the streaming HTTP boundary. Only deployments
+  whose chatqna runs this tracing feature are affected; answers on
+  `release/el-salvador` were never exposed.
 
 - **Virus scanning could not reach a ClamAV service running beside the
   document repository.** `CLAMSCAN_HOST` was read into the configuration and

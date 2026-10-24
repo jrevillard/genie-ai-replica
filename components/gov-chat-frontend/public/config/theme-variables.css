@@ -43,6 +43,9 @@
   /* --- Semantic status --- */
   --success: #10b981;
   --warning: #f59e0b;
+  /* The badge token cannot carry body text on a light ground — the ink is
+     the token darkened, derived here so components never re-derive it. */
+  --warning-ink: color-mix(in oklch, var(--warning), black 55%);
   --danger: #ef4444;
 
   /* --- Typography --- */
@@ -144,6 +147,9 @@ body[data-theme='dark'],
   --muted-soft: oklch(from var(--brand) 0.45 calc(c * 0.12) h);
   --border: oklch(from var(--brand) 0.3 calc(c * 0.2) h);
   --border-light: oklch(from var(--brand) 0.24 calc(c * 0.18) h);
+
+  /* On a dark ground the badge token itself is the readable ink. */
+  --warning-ink: var(--warning);
 
   /* --- Accent (lighter for dark bg, derived from --brand) --- */
   --accent: oklch(from var(--brand) calc(l + 0.2) calc(c * 0.85) h);

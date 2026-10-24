@@ -54,6 +54,24 @@
         </template>
       </modal-dialog>
 
+      <!-- The conversation header: names the open conversation and closes
+           it. The close button runs startNewChat, whose confirm guards
+           unsaved changes; saved history is never removed by closing. -->
+      <div class="conversation-header">
+        <span class="conversation-header__title" data-testid="conversation-header-title">
+          {{ currentChatTitle || translate('chatbot.justChat', 'Just Chat') }}
+        </span>
+        <button
+          type="button"
+          class="conversation-header__close"
+          :title="translate('chatbot.closeConversation', 'Close conversation')"
+          :aria-label="translate('chatbot.closeConversation', 'Close conversation')"
+          data-testid="conversation-header-close"
+          @click="startNewChat"
+        >
+          <X :size="16" aria-hidden="true" />
+        </button>
+      </div>
       <!-- System Status Panel -->
       <div class="system-status-panel">
         <div class="status-left">
@@ -317,7 +335,7 @@
 </template>
 
 <script>
-import { Brain, Loader2, Sparkles, SquarePlus } from '@lucide/vue';
+import { Brain, Loader2, Sparkles, SquarePlus, X } from '@lucide/vue';
 import { eventBus } from '../eventBus.js';
 import notificationService from '../services/notificationService';
 import { mapGetters, mapActions } from 'vuex';
@@ -441,6 +459,7 @@ export default {
     Brain,
     Loader2,
     Sparkles,
+    X,
     SquarePlus,
     ChatResponseFeedbackDialog,
     ModalDialog,
@@ -2132,6 +2151,46 @@ export default {
   position: relative;
   flex: 1;
   overflow: hidden;
+}
+
+/* The conversation header strip (D13). */
+.conversation-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-md);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: relative;
+  z-index: 1;
+}
+
+.conversation-header__title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-header__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.conversation-header__close:hover {
+  background: var(--accent-muted);
+  color: var(--fg);
 }
 
 /* System Status Panel */

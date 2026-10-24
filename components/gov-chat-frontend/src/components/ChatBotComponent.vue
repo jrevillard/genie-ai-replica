@@ -223,6 +223,10 @@
                 >
                   <Copy :size="15" aria-hidden="true" />
                 </button>
+              </div>
+              <!-- D1: the confidence percentage is a state, not an action —
+                   it renders with the card even when nothing is rateable. -->
+              <div class="bot-message-meta">
                 <span v-if="msg.confidenceScore != null && msg.isGrounded !== false" class="confidence-score">
                   <Brain :size="14" aria-hidden="true" />
                   <span>Confidence: {{ (msg.confidenceScore * 100).toFixed(0) }}%</span>

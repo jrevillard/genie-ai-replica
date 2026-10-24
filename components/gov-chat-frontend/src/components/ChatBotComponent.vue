@@ -2905,23 +2905,6 @@ export default {
   gap: var(--space-xs);
 }
 
-/* Shown when the answer is not backed by retrieved documents (LLM-only). */
-
-.feedback-trigger {
-  margin-left: 0;
-}
-
-.feedback-trigger button {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: inherit;
-  font-weight: inherit;
-  color: inherit;
-  padding: 0;
-}
-
 /* Quick Help Overlay */
 .quick-help-overlay {
   /* The narrow-panel adaptation below .quick-help-content is a container

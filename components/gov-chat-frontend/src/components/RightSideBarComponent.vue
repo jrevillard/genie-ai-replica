@@ -103,7 +103,6 @@ import DOMPurify from 'dompurify';
 import { formatFileSize } from '../utils/fileUtils.js';
 import { Files, FileText, HelpCircle, ChevronUp, ChevronDown, Globe, FileSpreadsheet, FileImage } from '@lucide/vue';
 import DsCard from './ds/Card.vue';
-import DsStateDisplay from './ds/StateDisplay.vue';
 import SidebarHandle from './SidebarHandle.vue';
 import { SIDEBAR_DEFAULTS, SIDEBAR_MIN_WIDTHS, SIDEBAR_MAX_WIDTHS } from '../composables/sidebarLayout.js';
 
@@ -112,7 +111,6 @@ export default {
 
   components: {
     DsCard,
-    DsStateDisplay,
     SidebarHandle,
     FileText,
     HelpCircle,

@@ -1190,8 +1190,8 @@ def _stream_answer_text(json_data: object) -> str | None:
     text.
 
     Raises only on frames too malformed to route at all (a non-object
-    payload, a non-list choices); the streaming loop turns that into the
-    warning tier. Content that arrives as OpenAI content parts
+    payload, a malformed ops payload); the streaming loop turns that into
+    the warning tier. Content that arrives as OpenAI content parts
     (``[{"type": "text", "text": ...}]``) is joined into one string.
     """
     if not isinstance(json_data, dict):
@@ -2533,8 +2533,9 @@ def _align_generator_body(gen, llm_parameters_dict, parent_context):
     )
     try:
         for line in gen:
-            # errors="replace" mirrors the encode side: one undecodable byte
-            # costs a replacement character, never a torn-down stream.
+            # errors="replace" matches the encode-side policy: one undecodable
+            # byte costs one replacement character (U+FFFD on decode, '?' on
+            # encode), never a torn-down stream.
             line = line.decode("utf-8", errors="replace")
             chunks = [chunk.strip() for chunk in line.split("\n\n") if chunk.strip()]
             for line in chunks:

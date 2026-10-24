@@ -3141,18 +3141,44 @@ async function collectAttributionEvidence(db, suite, runDoc) {
  * packs as many rows as fit a character budget and NAMES the rows that did
  * not — a silent cap is the thing that made the advisor's advice
  * unverifiable.
+ *
+ * Each row is sent SLIMMED to what the advisor reasons over (the stage, the
+ * failing metrics, the evidence COUNTS and a shortened recommendation). The
+ * full row — including the matched passage texts — stays in the explain doc
+ * for the panel. Measured on a 100-row run: 87 KB full, 40 KB slimmed, so
+ * every attributed row fits comfortably.
  */
-function packAttributions(attributions, budget = 60000) {
+function packAttributions(attributions, budget = 120000) {
+  const slim = (a) => ({
+    id: a.id,
+    stage: a.stage,
+    fails: a.fails || [],
+    unfair_question: a.unfair_question,
+    query: String(a.query || '').slice(0, 200),
+    recommendation: String(a.recommendation || '').slice(0, 240),
+    evidence: a.evidence
+      ? {
+          passages: (a.evidence.passages || []).length,
+          in_corpus: a.evidence.in_corpus,
+          in_candidates: a.evidence.in_candidates,
+          in_contexts: a.evidence.in_contexts,
+          ladder_stage: a.evidence.ladder_stage,
+          candidate_rank: a.evidence.candidate_rank,
+          carrier_chunk: a.evidence.carrier_chunk
+        }
+      : null
+  });
   const included = [];
   const omitted = [];
   let used = 0;
   for (const a of attributions) {
-    const size = JSON.stringify(a).length;
+    const row = slim(a);
+    const size = JSON.stringify(row).length;
     if (used + size > budget) {
       omitted.push({ id: a.id, stage: a.stage, fails: a.fails || [] });
       continue;
     }
-    included.push(a);
+    included.push(row);
     used += size;
   }
   return { included, omitted, bytes: used };

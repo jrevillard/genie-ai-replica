@@ -1379,6 +1379,14 @@ describe('explain', () => {
     expect(call).toBeTruthy();
     const payload = JSON.parse(call[0][1].content);
     expect(payload.attributions.length).toBe(N);
+    // The advisor's copy is slimmed to what it reasons over — but the
+    // evidence COUNTS must survive, or it cannot tell a corpus gap from a
+    // retrieval loss.
+    const first = payload.attributions[0];
+    expect(first).toHaveProperty('stage');
+    expect(first).toHaveProperty('fails');
+    expect(first).toHaveProperty('recommendation');
+    expect(first.evidence).not.toBeUndefined();
     // And what it could not carry is NAMED, never silently dropped.
     expect(Array.isArray(payload.attributions_omitted)).toBe(true);
     expect(payload.attributions_omitted.length).toBe(0);

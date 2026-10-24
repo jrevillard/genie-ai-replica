@@ -278,8 +278,9 @@ void main() {
 
         test('channel values are type-checked against NSString', () {
           // AsNSString is the single normalization choke point: EndpointString
-          // and the arming candidates both route through it, so pinning its
-          // body pins every path a channel NSNull could take.
+          // and the arming candidates both route through it. Its body pins the
+          // normalization itself; the tests below pin each consumer's
+          // delegation to it.
           final source = File(path).readAsStringSync();
           final body = _methodBody(
             source,
@@ -308,6 +309,32 @@ void main() {
             reason:
                 'the endpoint lookup dropped the type-check: a raw channel '
                 'value would put an NSNull into the arming collection',
+          );
+        });
+
+        test('end-session configuration routes through the helper', () {
+          // processServiceConfigurationParameters: is the other EndpointString
+          // consumer: a rebase conflict resolved to upstream's raw
+          // objectForKey: form would feed a channel NSNull straight to NSURL.
+          final source = File(path).readAsStringSync();
+          final body = _methodBody(
+            source,
+            RegExp(
+              r'OIDServiceConfiguration \*\)processServiceConfigurationParameters',
+            ),
+          );
+          expect(
+            body,
+            isNotNull,
+            reason: 'processServiceConfigurationParameters: moved',
+          );
+          expect(
+            body,
+            contains('EndpointString(serviceConfigurationParameters'),
+            reason:
+                'the end-session configuration reads raw channel values: an '
+                'NSNull endpoint would crash NSURL URLWithString: on the '
+                'platform thread',
           );
         });
 

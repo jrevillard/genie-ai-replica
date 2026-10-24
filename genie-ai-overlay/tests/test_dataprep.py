@@ -2508,6 +2508,14 @@ class TestDocRepoIngestPayload:
         lock_mock = MagicMock()
         with self._ingest_mocks() as (_ms, mock_loader, flock_mock):
             fake_task = MagicMock()
+            # A task that has just been created is NOT done. The bare
+            # MagicMock answers every attribute with a truthy mock, so
+            # `fake_task.done()` would claim the task had ALREADY FINISHED —
+            # and the handler's slot-lifetime guard, which releases the lock
+            # only when the task is finished or was never created, would then
+            # take the lock away from a task that is still running. Model the
+            # real thing: a live task.
+            fake_task.done.return_value = False
             with (
                 patch.object(ms.os, "open", return_value=7),
                 patch.object(ms.os, "fdopen", return_value=lock_mock),

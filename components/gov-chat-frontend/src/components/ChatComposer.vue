@@ -29,7 +29,7 @@
   -->
   <div
     class="chat-composer"
-    :style="tintStyle"
+    :style="[tintStyle, fieldCapStyle]"
     :aria-label="accessibleName || undefined"
     data-testid="chat-composer"
     @keydown="onKeydown"
@@ -48,6 +48,7 @@
     />
     <div class="chat-composer__actions">
       <button
+        v-if="showAttach"
         type="button"
         class="chat-composer__icon-btn chat-composer__icon-btn--disabled"
         :title="attachTitle"
@@ -59,6 +60,7 @@
         <Paperclip :size="18" aria-hidden="true" />
       </button>
       <button
+        v-if="showMic"
         type="button"
         class="chat-composer__icon-btn chat-composer__icon-btn--disabled"
         :title="micTitle"
@@ -139,11 +141,28 @@ export default {
     },
     attachTitle: {
       type: String,
-      required: true
+      default: ''
     },
     micTitle: {
       type: String,
-      required: true
+      default: ''
+    },
+    // The dead attach/mic buttons ship on the welcome screen only (its
+    // reference shows them); the conversation mounts the composer without
+    // them — a permanently disabled control is a lie in a production UI.
+    showAttach: {
+      type: Boolean,
+      default: true
+    },
+    showMic: {
+      type: Boolean,
+      default: true
+    },
+    // Cap the field's growth in lines (0 = uncapped). The conversation
+    // caps at five; beyond that the field scrolls internally.
+    maxLines: {
+      type: Number,
+      default: 0
     },
     saveTitle: {
       type: String,
@@ -176,6 +195,11 @@ export default {
   },
   emits: ['update:modelValue', 'send', 'save', 'export', 'focus'],
   computed: {
+    fieldCapStyle() {
+      if (!this.maxLines) return null;
+      // N lines x 27px line box + the field's own vertical padding.
+      return { '--composer-field-max-height': `${this.maxLines * 27 + 16}px` };
+    },
     model: {
       get() {
         return this.modelValue;
@@ -303,6 +327,10 @@ export default {
      and grows with the text from there. The bar's own min-height is the
      floor. */
   min-height: 0;
+  /* max-lines caps the growth (the conversation: five lines) — past the
+     cap the field scrolls internally instead of pushing the bar. */
+  max-height: var(--composer-field-max-height, none);
+  overflow-y: auto;
   field-sizing: content;
 }
 

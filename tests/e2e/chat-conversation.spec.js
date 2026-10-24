@@ -60,4 +60,23 @@ test.describe('Conversation V1', () => {
     expect(off.window, 'the message window box does not move with the layer off').toEqual(on.window);
     await ctx.close();
   });
+
+  // Task 3 — no dead buttons in the conversation; the field caps at five lines.
+  test('the conversation composer has no attach or mic buttons and grows to five lines', async ({ browser }) => {
+    const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
+    await askAndAnswer(page, 'What is GENIE.AI?');
+    await expect(page.locator('[data-testid="composer-attach-btn"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="composer-mic-btn"]')).toHaveCount(0);
+    const lines = Array(8).fill('line').join('\n');
+    await page.locator('[data-testid="chat-composer"] textarea').fill(lines);
+    await page.waitForTimeout(300);
+    const m = await page.evaluate(() => {
+      const ta = document.querySelector('[data-testid="chat-composer"] textarea');
+      const cs = getComputedStyle(ta);
+      return { scrollH: ta.scrollHeight, maxH: parseFloat(cs.maxHeight), overflowY: cs.overflowY };
+    });
+    expect(m.maxH, 'the field caps at five lines (27px x 5 + 16px padding)').toBeLessThan(m.scrollH);
+    expect(m.overflowY, 'beyond five lines the field scrolls internally').toBe('auto');
+    await ctx.close();
+  });
 });

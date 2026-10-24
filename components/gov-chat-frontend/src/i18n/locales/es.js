@@ -732,6 +732,7 @@ export default {
     noChats: 'No hay chats recientes',
     relatedDocs: 'Documentos Relacionados',
     noDocuments: 'No hay documentos relacionados',
+    documentsWillAppear: 'Los documentos citados en la conversación aparecerán aquí',
     faq: 'Preguntas Frecuentes',
     tab: {
       all: 'Todos los Chats',

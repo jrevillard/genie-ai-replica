@@ -730,6 +730,7 @@ export default {
     noChats: 'لا توجد محادثات حديثة',
     relatedDocs: 'الوثائق ذات الصلة',
     noDocuments: 'لا توجد وثائق ذات صلة',
+    documentsWillAppear: 'ستظهر هنا المستندات التي يستشهد بها الحوار',
     faq: 'الأسئلة الشائعة',
     tab: {
       all: 'جميع المحادثات',

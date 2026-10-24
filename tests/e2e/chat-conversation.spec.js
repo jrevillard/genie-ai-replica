@@ -302,6 +302,31 @@ test.describe('Conversation V1 — status strip', () => {
   });
 });
 
+test.describe('Conversation V1 — documents panel', () => {
+  // Task 10 — the empty documents state explains itself, FAQs stay (D16).
+  test('the documents panel shows a neutral empty state and keeps the FAQs', async ({ browser }) => {
+    const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
+    await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
+    await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
+    await page.waitForSelector('.chat-message.bot', { timeout: 45000 });
+    await page.waitForSelector('[data-testid="documents-empty"]', { timeout: 15000 });
+    const s = await page.evaluate(() => {
+      const empty = document.querySelector('[data-testid="documents-empty"]');
+      const faq = document.querySelector('[data-testid="faq-section"]');
+      return {
+        emptyText: empty ? empty.textContent : '',
+        hasTitle: !!empty?.querySelector('.documents-empty__title'),
+        hasHint: !!empty?.querySelector('.documents-empty__hint'),
+        faqVisible: !!faq
+      };
+    });
+    expect(s.emptyText.length, 'the empty state explains itself').toBeGreaterThan(0);
+    expect(s.hasTitle && s.hasHint, 'title and hint both render').toBe(true);
+    expect(s.faqVisible, 'the FAQs stay accessible').toBe(true);
+    await ctx.close();
+  });
+});
+
 test.describe('Conversation V1 — answer card', () => {
   // Task 5 — the assistant answer renders inside one elevated card, from the
   // first frame of the stream (D9 + D14).

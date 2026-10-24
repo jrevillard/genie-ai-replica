@@ -725,6 +725,7 @@ export default {
     noChats: '无最近聊天',
     relatedDocs: '相关文档',
     noDocuments: '无相关文档',
+    documentsWillAppear: '对话中引用的文档将显示在这里',
     faq: '常见问题',
     tab: {
       all: '所有聊天',

@@ -728,6 +728,7 @@ export default {
     noChats: 'Tidak ada obrolan terbaru',
     relatedDocs: 'Dokumen Terkait',
     noDocuments: 'Tidak ada dokumen terkait',
+    documentsWillAppear: 'Dokumen yang dikutip dalam percakapan akan muncul di sini',
     faq: 'Pertanyaan yang Sering Diajukan',
     tab: {
       all: 'Semua Obrolan',

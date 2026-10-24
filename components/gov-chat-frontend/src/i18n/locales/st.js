@@ -723,6 +723,7 @@ export default {
     noChats: 'Ha ho meqoqo ya morao-rao',
     relatedDocs: 'Ditokomane tse Amanang',
     noDocuments: 'Ha ho ditokomane tse amanang',
+    documentsWillAppear: 'Maitlhaloa a puisano ea maqephe a tla hlaha mona',
     faq: 'Dipotso tse Botswang Kgafetsa (FAQ)',
     tab: {
       all: 'Meqoqo Yotlhe',

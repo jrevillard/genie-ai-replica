@@ -719,6 +719,7 @@ export default {
     noChats: 'Kuma kura mang je',
     relatedDocs: 'Dokuuma kafo',
     noDocuments: 'Dokuuma kafo mang je',
+    documentsWillAppear: 'Dokumaa ji wallitaagal oo ngal feeñi ɗoo',
     faq: 'Ñiningo Ka Ke-yaa',
     tab: {
       all: 'Kumal bee',

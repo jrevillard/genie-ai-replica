@@ -727,6 +727,7 @@ export default {
     noChats: 'No recent chats',
     relatedDocs: 'Related Documents',
     noDocuments: 'No related documents',
+    documentsWillAppear: 'Documents cited by the conversation will appear here',
     faq: 'Frequently Asked Questions',
     tab: {
       all: 'All Chats',

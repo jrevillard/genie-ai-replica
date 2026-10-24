@@ -726,6 +726,7 @@ export default {
     noChats: 'Hakuna mazungumzo ya hivi karibuni',
     relatedDocs: 'Nyaraka Zinazohusiana',
     noDocuments: 'Hakuna nyaraka zinazohusiana',
+    documentsWillAppear: 'Nyaraka zinazotajwa katika mazungumzo zitaonekana hapa',
     faq: 'Maswali Yanayoulizwa Mara kwa Mara',
     tab: {
       all: 'Mazungumzo Yote',

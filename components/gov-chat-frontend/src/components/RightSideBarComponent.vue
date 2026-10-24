@@ -67,12 +67,15 @@
                 </div>
               </div>
             </DsCard>
-            <DsStateDisplay v-if="relatedDocuments.length === 0" type="empty">
-              {{ $t('sidebar.noDocuments') }}
-            </DsStateDisplay>
+            <!-- D16: the empty panel explains itself; the FAQs stay below. -->
+            <div v-if="relatedDocuments.length === 0" class="documents-empty" data-testid="documents-empty">
+              <Files :size="28" class="documents-empty__icon" aria-hidden="true" />
+              <p class="documents-empty__title">{{ $t('sidebar.noDocuments') }}</p>
+              <p class="documents-empty__hint">{{ $t('sidebar.documentsWillAppear') }}</p>
+            </div>
           </div>
         </div>
-        <div class="sidebar-section">
+        <div class="sidebar-section" data-testid="faq-section">
           <h4 class="section-title">
             <HelpCircle :size="16" />
             {{ $t('sidebar.faq') }}
@@ -98,7 +101,7 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { formatFileSize } from '../utils/fileUtils.js';
-import { FileText, HelpCircle, ChevronUp, ChevronDown, Globe, FileSpreadsheet, FileImage } from '@lucide/vue';
+import { Files, FileText, HelpCircle, ChevronUp, ChevronDown, Globe, FileSpreadsheet, FileImage } from '@lucide/vue';
 import DsCard from './ds/Card.vue';
 import DsStateDisplay from './ds/StateDisplay.vue';
 import SidebarHandle from './SidebarHandle.vue';
@@ -117,7 +120,8 @@ export default {
     ChevronDown,
     Globe,
     FileSpreadsheet,
-    FileImage
+    FileImage,
+    Files
   },
 
   props: {
@@ -521,6 +525,32 @@ export default {
 
 .document-header:hover .document-url-link {
   text-decoration: underline;
+}
+
+/* D16: the empty panel's neutral pictogram + explanation. */
+.documents-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-lg) var(--space-md);
+  color: var(--muted);
+  text-align: center;
+}
+
+.documents-empty__icon {
+  opacity: 0.5;
+}
+
+.documents-empty__title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.documents-empty__hint {
+  margin: 0;
+  font-size: var(--text-xs);
 }
 
 .document-details {

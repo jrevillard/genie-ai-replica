@@ -734,6 +734,7 @@ export default {
     noChats: 'Keine aktuellen Chats',
     relatedDocs: 'Zugehörige Dokumente',
     noDocuments: 'Keine zugehörigen Dokumente',
+    documentsWillAppear: 'In der Konversation zitierte Dokumente erscheinen hier',
     faq: 'Häufig gestellte Fragen',
     tab: {
       all: 'Alle Chats',

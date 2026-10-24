@@ -733,6 +733,7 @@ export default {
     noChats: 'Aucune discussion récente',
     relatedDocs: 'Documents connexes',
     noDocuments: 'Aucun document connexe',
+    documentsWillAppear: 'Les documents cités dans la conversation apparaîtront ici',
     faq: 'Foire aux questions',
     tab: {
       all: 'Toutes les discussions',

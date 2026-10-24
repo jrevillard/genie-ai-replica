@@ -23,11 +23,22 @@ static NSString *const kInsecureURLProtocolHandledKey = @"InsecureURLProtocolHan
 static NSMutableSet<NSString *> *_insecureAllowedHosts = nil;
 
 // The interception key of a URL: host (case-folded) and port, with the
-// https default filled in so a provider on :443 and one on :8443 stay
-// distinct.
+// scheme default filled in (https 443, http 80) so a provider on :443 and
+// one on :8443 stay distinct.
 static NSString *InsecureHostKey(NSURL *url) {
-  NSNumber *port = url.port ?: @443;
+  NSNumber *port = url.port;
+  if (port == nil) {
+    port = [url.scheme.lowercaseString isEqualToString:@"http"] ? @80 : @443;
+  }
   return [NSString stringWithFormat:@"%@:%@", url.host.lowercaseString, port];
+}
+
+// String values out of the service configuration: Dart null arrives over the
+// method channel as NSNull, which is non-nil and would poison a ?: chain
+// (the same normalization processServiceConfigurationParameters: applies).
+static NSString *EndpointString(NSDictionary *configuration, NSString *key) {
+  id value = configuration[key];
+  return [value isKindOfClass:[NSString class]] ? value : nil;
 }
 
 @implementation InsecureURLProtocol
@@ -43,22 +54,29 @@ static NSString *InsecureHostKey(NSURL *url) {
 + (void)armForIssuer:(NSString *)issuer
          discoveryUrl:(NSString *)discoveryUrl
 serviceConfigurationParameters:(NSDictionary *)serviceConfigurationParameters {
-  // The app usually passes a serviceConfiguration and leaves issuer and
-  // discoveryUrl nil, so the endpoints inside the configuration are the
-  // primary source.
-  NSString *endpoint = issuer ?: discoveryUrl;
-  if (!endpoint) {
-    endpoint = serviceConfigurationParameters[@"tokenEndpoint"] ?:
-               serviceConfigurationParameters[@"authorizationEndpoint"] ?:
-               serviceConfigurationParameters[@"endSessionEndpoint"];
-  }
-  NSURL *providerUrl = [NSURL URLWithString:endpoint];
-  if (!providerUrl.host) {
-    return;
-  }
+  // Arm every host the exchange can contact: the configuration's endpoints
+  // (what the app usually passes, and what the exchange will actually hit),
+  // plus the issuer or discovery URL for the discovery flow. A host the
+  // exchange needs but that is not armed fails its certificate check.
   NSMutableSet<NSString *> *allowedHosts = [InsecureURLProtocol allowedHosts];
-  @synchronized(allowedHosts) {
-    [allowedHosts addObject:InsecureHostKey(providerUrl)];
+  NSArray<NSString *> *endpoints = @[
+    serviceConfigurationParameters[@"authorizationEndpoint"],
+    serviceConfigurationParameters[@"tokenEndpoint"],
+    serviceConfigurationParameters[@"endSessionEndpoint"],
+    issuer,
+    discoveryUrl,
+  ];
+  for (NSString *endpoint in endpoints) {
+    if (![endpoint isKindOfClass:[NSString class]]) {
+      continue;
+    }
+    NSURL *providerUrl = [NSURL URLWithString:endpoint];
+    if (!providerUrl.host) {
+      continue;
+    }
+    @synchronized(allowedHosts) {
+      [allowedHosts addObject:InsecureHostKey(providerUrl)];
+    }
   }
 }
 

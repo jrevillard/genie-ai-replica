@@ -1185,20 +1185,26 @@ _EXCESS_BLANK_RE = re.compile(r"\n{3,}")
 
 def _stream_answer_text(json_data: object) -> str | None:
     """The text a parsed LLM stream frame contributes to the answer, or None
-    when it is transport metadata (the terminal usage-only frame, a keepalive,
-    an upstream error object, a tool-call delta with no text).
+    when the frame is well-formed transport metadata: the terminal usage-only
+    frame, the finish_reason chunk, a keepalive, a tool-call delta with no
+    text.
 
-    Raises on frames too malformed to route (no choices list, non-dict
-    payload); the streaming loop treats that exactly like None, plus
-    diagnostics. Content that arrives as OpenAI content parts
+    Raises only on frames too malformed to route at all (a non-object
+    payload, a non-list choices); the streaming loop turns that into the
+    warning tier. Content that arrives as OpenAI content parts
     (``[{"type": "text", "text": ...}]``) is joined into one string.
     """
     if not isinstance(json_data, dict):
-        return None
+        raise ValueError(f"non-object stream frame: {type(json_data).__name__}")
     if "ops" in json_data:
-        value = json_data["ops"][0].get("value")
+        first = json_data["ops"][0] if isinstance(json_data["ops"][0], dict) else {}
+        value = first.get("value")
         return value if isinstance(value, str) else None
-    delta = json_data["choices"][0].get("delta")
+    choices = json_data.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return None
+    first = choices[0] if isinstance(choices[0], dict) else {}
+    delta = first.get("delta")
     if not isinstance(delta, dict):
         return None
     content = delta.get("content")
@@ -2551,10 +2557,11 @@ def _align_generator_body(gen, llm_parameters_dict, parent_context):
                 # skip guard so a recorder bug surfaces instead of being
                 # swallowed.
                 _emit_llm_invoke_record(_llm_span, json_data)
+                _unroutable = False
                 try:
                     answer_text = _stream_answer_text(json_data)
                 except Exception as _e:
-                    answer_text = None
+                    _unroutable = True
                     _skip_reason = f"exception={type(_e).__name__}"
                 else:
                     _skip_reason = None if answer_text is not None else "no forwardable content"
@@ -2562,27 +2569,22 @@ def _align_generator_body(gen, llm_parameters_dict, parent_context):
                     # A parsed frame with no forwardable content is transport
                     # metadata — the terminal usage-only frame the
                     # include_usage opt-in adds, the guaranteed finish_reason
-                    # chunk (empty delta), a keepalive with "choices": null,
-                    # an upstream error object, a tool-call delta. It was
-                    # already recorded on the span above and is skipped here
-                    # rather than leaked as raw JSON or allowed to tear down a
-                    # live stream. The span event + log keep the skip
-                    # diagnosable; frames that are EXPECTED on every streamed
-                    # turn (the usage frame, the finish_reason chunk) log at
-                    # debug so the warn-rate baseline stays meaningful — only
-                    # a frame we could not route at all warns.
+                    # chunk (empty delta), a keepalive, a tool-call delta, an
+                    # upstream error object. It was already recorded on the
+                    # span above and is skipped here rather than leaked as raw
+                    # JSON or allowed to tear down a live stream. The span
+                    # event + log keep the skip diagnosable: contentless
+                    # metadata is EXPECTED on every streamed turn and logs at
+                    # debug (a per-turn warning would flatten the warn-rate
+                    # baseline); an upstream error and a frame the extractor
+                    # cannot route at all are worth a warning.
                     _llm_span.add_event("chatqna.stream.frame_skipped", {"reason": _skip_reason})
-                    _expected_contentless = _skip_reason == "no forwardable content" or (
-                        isinstance(json_data, dict) and "usage" in json_data and not json_data.get("choices")
-                    )
-                    if _expected_contentless:
-                        logger.debug(f"Skipped a contentless LLM stream frame ({_skip_reason})")
+                    if isinstance(json_data, dict) and "error" in json_data:
+                        logger.warning(f"LLM stream frame carried an upstream error (frame keys={sorted(json_data)})")
+                    elif _unroutable:
+                        logger.warning(f"Skipped an LLM stream frame that could not be routed ({_skip_reason})")
                     else:
-                        _frame_keys = sorted(json_data) if isinstance(json_data, dict) else type(json_data).__name__
-                        logger.warning(
-                            f"Skipped an LLM stream frame with no forwardable content "
-                            f"(reason={_skip_reason}, frame keys={_frame_keys})"
-                        )
+                        logger.debug(f"Skipped a contentless LLM stream frame ({_skip_reason})")
                 else:
                     # errors="replace": one unencodable codepoint must not
                     # discard the whole chunk's answer text.

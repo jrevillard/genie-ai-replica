@@ -1530,6 +1530,18 @@ class TestAlignGenerator:
         assert any(b"X" in r.encode() for r in result)
         assert result[-1] == "data: [DONE]\n\n"
 
+    def _assert_stream(self, result, *contains, excludes=()):
+        """Shared coda for the frame-routing tests: every expected fragment is
+        present in the decoded stream, every excluded one absent, and the
+        terminal [DONE] closes the stream."""
+        joined = "".join(result)
+        excludes = (excludes,) if isinstance(excludes, str) else tuple(excludes)
+        for text in contains:
+            assert text in joined
+        for text in excludes:
+            assert text not in joined
+        assert result[-1] == "data: [DONE]\n\n"
+
     def test_usage_only_frame_dropped_from_stream(self):
         """vLLM's terminal usage-only chunk (choices:[] + usage) is transport
         metadata: it feeds the llm.invoke span, never the user-visible stream."""
@@ -1544,11 +1556,7 @@ class TestAlignGenerator:
             b'data:{"choices":[{"delta":{"content":" world"}}]}\n\n',
         ]
         result = self._run_generator(align_generator(None, gen=chunks))
-        joined = "".join(result)
-        assert any(b"Hello" in r.encode() for r in result)
-        assert any(b"world" in r.encode() for r in result)
-        assert "chat.completion.chunk" not in joined
-        assert result[-1] == "data: [DONE]\n\n"
+        self._assert_stream(result, "Hello", " world", excludes="chat.completion.chunk")
 
     def test_parsed_frame_without_content_is_not_forwarded_raw(self):
         """A frame that PARSES but carries no forwardable content (e.g. a
@@ -1561,11 +1569,7 @@ class TestAlignGenerator:
             b'data:{"choices": [{"delta": null}]}\n\n',
         ]
         result = self._run_generator(align_generator(None, gen=chunks))
-        joined = "".join(result)
-        assert any(b"Hi" in r.encode() for r in result)
-        assert '"choices": null' not in joined
-        assert '"delta": null' not in joined
-        assert result[-1] == "data: [DONE]\n\n"
+        self._assert_stream(result, "Hi", excludes=('"choices": null', '"delta": null'))
 
     def test_content_frame_carrying_usage_still_forwards_content(self):
         """Provider variants exist that attach usage to the LAST content chunk:
@@ -1575,8 +1579,7 @@ class TestAlignGenerator:
             b'"usage":{"prompt_tokens":10,"total_tokens":12}}\n\n'
         )
         result = self._run_generator(align_generator(None, gen=[chunk]))
-        assert any(b"tail" in r.encode() for r in result)
-        assert result[-1] == "data: [DONE]\n\n"
+        self._assert_stream(result, "tail")
 
     def test_content_null_frame_does_not_kill_the_stream(self):
         """The OpenAI tool-call delta shape carries "content": null. Key
@@ -1588,21 +1591,17 @@ class TestAlignGenerator:
             b'data:{"choices":[{"delta":{"content":"ok"}}]}\n\n',
         ]
         result = self._run_generator(align_generator(None, gen=chunks))
-        assert any(b"Hi" in r.encode() for r in result)
-        assert any(b"ok" in r.encode() for r in result)
-        assert '"content": null' not in "".join(result)
-        assert result[-1] == "data: [DONE]\n\n"
+        self._assert_stream(result, "Hi", "ok", excludes='"content": null')
 
     def test_lone_surrogate_content_does_not_kill_the_stream(self):
-        """A JSON \\ud800 escape parses to a lone surrogate that .encode
-        cannot serialize; the frame is skipped, the stream survives."""
+        """A JSON \\ud800 escape parses to a lone surrogate; the rest of the
+        text survives via a replacement character, the stream survives."""
         chunks = [
             b'data:{"choices":[{"delta":{"content":"\\ud800"}}]}\n\n',
             b'data:{"choices":[{"delta":{"content":"after"}}]}\n\n',
         ]
         result = self._run_generator(align_generator(None, gen=chunks))
-        assert any(b"after" in r.encode() for r in result)
-        assert result[-1] == "data: [DONE]\n\n"
+        self._assert_stream(result, "after")
 
     def test_upstream_error_object_frame_is_skipped_not_leaked(self):
         """A parsed upstream error frame carries no forwardable content: it is
@@ -1614,11 +1613,7 @@ class TestAlignGenerator:
             b'data:{"choices":[{"delta":{"content":"ok"}}]}\n\n',
         ]
         result = self._run_generator(align_generator(None, gen=chunks))
-        joined = "".join(result)
-        assert any(b"Hi" in r.encode() for r in result)
-        assert any(b"ok" in r.encode() for r in result)
-        assert "Model overloaded" not in joined
-        assert result[-1] == "data: [DONE]\n\n"
+        self._assert_stream(result, "Hi", "ok", excludes="Model overloaded")
 
     def test_content_parts_array_frame_forwards_joined_text(self):
         """A provider streaming text as OpenAI content parts must not lose the
@@ -1627,8 +1622,7 @@ class TestAlignGenerator:
             b'data:{"choices":[{"delta":{"content":[{"type":"text","text":"par"},{"type":"text","text":"tial"}]}}]}\n\n'
         )
         result = self._run_generator(align_generator(None, gen=[chunk]))
-        assert "partial" in "".join(result)
-        assert result[-1] == "data: [DONE]\n\n"
+        self._assert_stream(result, "partial")
 
     def test_undecodable_upstream_bytes_do_not_kill_the_stream(self):
         """Invalid UTF-8 in an upstream line decodes lossily (one replacement
@@ -1639,9 +1633,7 @@ class TestAlignGenerator:
             b'data:{"choices":[{"delta":{"content":" after"}}]}\n\n',
         ]
         result = self._run_generator(align_generator(None, gen=chunks))
-        joined = "".join(result)
-        assert " after" in joined
-        assert result[-1] == "data: [DONE]\n\n"
+        self._assert_stream(result, " after")
 
 
 # ===========================================================================

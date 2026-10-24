@@ -131,11 +131,56 @@ choice, it is a broken instrument.
 The run names its judge and every metric carries its coverage, so a future
 run cannot silently change the baseline.
 
+## The reference regeneration — done, and what it did
+
+`scripts/okf-routing-lab/ragas-regenerate-reference.js` (runs inside the
+okf-server container) rewrites a suite entry's reference answer FROM the
+corpus text and writes it **only when `context_entities_recall` on the
+rewrite scores better than on the original**. The gate is the metric
+itself, not a proxy — see the note on the rejected cheaper gate below.
+
+Measured on the 29 judge-stage rows whose recommendation was "regenerate
+the reference answer":
+
+| outcome | rows |
+|---|---|
+| rewritten, metric improved | 14 |
+| refused — no rewrite scored better | 15 |
+
+Every rewrite moved the metric up. The 14 that landed include the
+biggest movers: new-81 `0.250 → 0.625`, new-13 `0.647 → 0.800`,
+new-10 `0.414 → 0.565`, new-12 `0.375 → 0.500`, new-94 `0.500 → 0.667`.
+
+**The cheap gate was wrong, and the metric is why.** The first version
+checked "does every number and proper noun in the answer appear in the
+passage?" — it refused **86 of 100** rows, flagging ordinary connectives
+the entity extractor never treats as entities ("according", "covers"),
+and it passed rewrites whose entity sets still differed. The metric is
+the thing being fixed, so the metric is what decides.
+
+**The 15 refusals are a different population, not failures of the tool.**
+Several are near-misses the same rewrite cannot clear (new-5 stays at
+`0.636` across three attempts; new-80 at `0.526`; new-14 at `0.429`),
+and two had a reference that already scored `1.000` (new-4, new-22) —
+those rows were never reference-wording failures at all, and rewriting
+their reference made the metric WORSE. The tool refusing them is the
+gate working, not the gate failing.
+
+**What the refusals mean.** A reference whose entities the corpus
+cannot produce is not repairable by rephrasing: the corpus does not
+contain the fact the reference claims. Those rows belong with the five
+unfair questions — regenerate the ENTRY against the current corpus, not
+the wording of its answer.
+
 ## Still open
 
-- The 30 rows whose reference wording does not match the corpus need their
-  reference answers regenerated — a benchmark-side fix, not a RAG fix.
+- The 15 rows the gate refused need their ENTRIES regenerated against the
+  current corpus, like the 5 unfair questions — their references name
+  facts the corpus does not contain, which is the same defect at a
+  different depth.
 - The 5 unfair questions need their suite entries regenerated.
 - The remaining judge-stage rows (`llm`: new-44, new-46, new-51) are real
   faithfulness failures with delivered context — the only rows that
   currently justify a prompt change.
+- The benchmark must be RE-RUN to measure the regeneration: the stored
+  run still carries the old references and the old scores.

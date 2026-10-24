@@ -1620,6 +1620,16 @@ class TestAlignGenerator:
         assert "Model overloaded" not in joined
         assert result[-1] == "data: [DONE]\n\n"
 
+    def test_content_parts_array_frame_forwards_joined_text(self):
+        """A provider streaming text as OpenAI content parts must not lose the
+        answer: the parts are joined and forwarded."""
+        chunk = (
+            b'data:{"choices":[{"delta":{"content":[{"type":"text","text":"par"},{"type":"text","text":"tial"}]}}]}\n\n'
+        )
+        result = self._run_generator(align_generator(None, gen=[chunk]))
+        assert "partial" in "".join(result)
+        assert result[-1] == "data: [DONE]\n\n"
+
 
 # ===========================================================================
 # Task 9: Test ChatQnAService initialization and service graph

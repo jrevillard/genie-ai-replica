@@ -1180,6 +1180,30 @@ _MAX_TRAILING_WS_WITHHOLD = 32
 _EXCESS_BLANK_RE = re.compile(r"\n{3,}")
 
 
+def _stream_answer_text(json_data: object) -> str | None:
+    """The text a parsed LLM stream frame contributes to the answer, or None
+    when it is transport metadata (the terminal usage-only frame, a keepalive,
+    an upstream error object, a tool-call delta with no text).
+
+    Raises on frames too malformed to route (no choices list, non-dict
+    payload); the streaming loop treats that exactly like None, plus
+    diagnostics. Content that arrives as OpenAI content parts
+    (``[{"type": "text", "text": ...}]``) is joined into one string.
+    """
+    if not isinstance(json_data, dict):
+        return None
+    if "ops" in json_data:
+        value = json_data["ops"][0].get("value")
+        return value if isinstance(value, str) else None
+    delta = json_data["choices"][0].get("delta")
+    if not isinstance(delta, dict):
+        return None
+    content = delta.get("content")
+    if isinstance(content, list):
+        content = "".join(part.get("text", "") for part in content if isinstance(part, dict))
+    return content if isinstance(content, str) else None
+
+
 def _streaming_marker_tail_len(buffer: str) -> int:
     """Length of the longest buffer suffix that could grow into a marker.
 
@@ -2517,45 +2541,42 @@ def _align_generator_body(gen, llm_parameters_dict, parent_context):
                     continue
                 # From here the frame PARSED: it is structured data, not answer
                 # text gone missing — nothing below may re-emit its raw JSON.
-                # The recorder is defensive by contract (never raises on
-                # malformed frames); it stays outside the skip guard so a
-                # recorder bug surfaces instead of being swallowed.
+                # The recorder is defensive by contract (never raises on any
+                # JSON-decoded frame; pinned by tests) — it stays outside the
+                # skip guard so a recorder bug surfaces instead of being
+                # swallowed.
                 _emit_llm_invoke_record(_llm_span, json_data)
                 try:
-                    if "ops" in json_data and "op" in json_data["ops"][0]:
-                        value = json_data["ops"][0].get("value")
-                        if isinstance(value, str):
-                            yield f"data: {repr(value.encode('utf-8'))}\n\n"
-                    else:
-                        # Key-presence alone would route non-string deltas
-                        # ("content": null — the tool-call delta shape) into
-                        # str-only encoding; the positive isinstance check is
-                        # the discriminator.
-                        delta = json_data["choices"][0].get("delta")
-                        content = delta.get("content") if isinstance(delta, dict) else None
-                        if isinstance(content, str):
-                            yield f"data: {repr(content.encode('utf-8'))}\n\n"
+                    answer_text = _stream_answer_text(json_data)
                 except Exception as _e:
-                    # The policy this block implements: a parsed frame with no
-                    # forwardable content is transport metadata — the terminal
-                    # usage-only frame the include_usage opt-in adds, a
-                    # keepalive with "choices": null, an upstream error object,
-                    # non-serializable content. It was already recorded on the
-                    # span above, and it must be skipped here rather than leak
-                    # its raw JSON as answer text or tear down a live stream:
-                    # no exception out of this block, whatever upstream emits
-                    # next. Span event + warning keep the skip diagnosable (the
-                    # pre-skip behavior leaked the frame, which at least was
-                    # visible).
-                    _llm_span.add_event(
-                        "chatqna.stream.frame_skipped",
-                        {"exception.type": type(_e).__name__},
-                    )
-                    _frame_keys = sorted(json_data) if isinstance(json_data, dict) else type(json_data).__name__
-                    logger.warning(
-                        f"Skipped an LLM stream frame with no forwardable content "
-                        f"(exception={type(_e).__name__}, frame keys={_frame_keys})"
-                    )
+                    answer_text = None
+                    _skip_reason = f"exception={type(_e).__name__}"
+                else:
+                    _skip_reason = None if answer_text is not None else "no forwardable content"
+                if _skip_reason is not None:
+                    # A parsed frame with no forwardable content is transport
+                    # metadata — the terminal usage-only frame the
+                    # include_usage opt-in adds, a keepalive with
+                    # "choices": null, an upstream error object, a tool-call
+                    # delta. It was already recorded on the span above and is
+                    # skipped here rather than leaked as raw JSON or allowed
+                    # to tear down a live stream. The span event + log keep
+                    # the skip diagnosable; the terminal usage frame is
+                    # expected on every streamed turn, so it logs at debug to
+                    # keep the warn-rate baseline meaningful.
+                    _llm_span.add_event("chatqna.stream.frame_skipped", {"reason": _skip_reason})
+                    if isinstance(json_data, dict) and "usage" in json_data and not json_data.get("choices"):
+                        logger.debug(f"Skipped the terminal usage-only LLM stream frame ({_skip_reason})")
+                    else:
+                        _frame_keys = sorted(json_data) if isinstance(json_data, dict) else type(json_data).__name__
+                        logger.warning(
+                            f"Skipped an LLM stream frame with no forwardable content "
+                            f"(reason={_skip_reason}, frame keys={_frame_keys})"
+                        )
+                else:
+                    # errors="replace": one unencodable codepoint must not
+                    # discard the whole chunk's answer text.
+                    yield f"data: {repr(answer_text.encode('utf-8', errors='replace'))}\n\n"
         yield "data: [DONE]\n\n"
     finally:
         # Closes even if the upstream generator raises or the consumer abandons

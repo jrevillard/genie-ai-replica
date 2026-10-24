@@ -89,8 +89,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   only re-emits lines it could not parse as JSON; any parsed frame that carries
   no forwardable content (the usage-only frame, a keepalive with
   `"choices": null`) feeds the tracing span and is skipped instead of leaking
-  its raw JSON. Only deployments whose chatqna runs this tracing feature are
-  affected; answers on `release/el-salvador` were never exposed.
+  its raw JSON. Any deployment of a chatqna build that streams with the
+  `include_usage` opt-in was exposed — the opt-in is sent on every streamed
+  turn whether or not observability is enabled. Answers on
+  `release/el-salvador` were never exposed (that build does not send the
+  opt-in).
 
 - **Virus scanning could not reach a ClamAV service running beside the
   document repository.** `CLAMSCAN_HOST` was read into the configuration and

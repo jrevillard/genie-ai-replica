@@ -618,6 +618,14 @@ html[data-visual='on'] .genie-living-intelligence .chatbot-container {
   isolation: isolate;
 }
 
+html[data-visual='on'] .genie-living-intelligence .chatbot-container .chat-window {
+  /* The reference shows the wave band behind the last messages, not below
+     an opaque panel — the window's own surface steps aside while the layer
+     is on; the bubbles and cards keep theirs. Layer off = the app's
+     surface returns untouched. */
+  background: transparent;
+}
+
 html[data-visual='on'] .genie-living-intelligence .chatbot-container::after {
   content: '';
   position: absolute;

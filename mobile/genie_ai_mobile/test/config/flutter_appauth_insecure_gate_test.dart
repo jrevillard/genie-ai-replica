@@ -241,9 +241,9 @@ void main() {
             keyBody,
             contains('url.scheme.lowercaseString'),
             reason:
-                'the default port is hard-coded regardless of scheme: '
-                'an http provider would key as :443 and its own requests '
-                'would keep certificate verification',
+                'the default port is hard-coded regardless of scheme: an '
+                'http provider keyed as host:443 would also trust unrelated '
+                'https traffic to that host',
           );
         });
 
@@ -276,13 +276,16 @@ void main() {
           );
         });
 
-        test('EndpointString type-checks the channel values', () {
+        test('channel values are type-checked against NSString', () {
+          // AsNSString is the single normalization choke point: EndpointString
+          // and the arming candidates both route through it, so pinning its
+          // body pins every path a channel NSNull could take.
           final source = File(path).readAsStringSync();
           final body = _methodBody(
             source,
-            RegExp(r'NSString\s*\*?\s*EndpointString\(NSDictionary'),
+            RegExp(r'NSString\s*\*?\s*AsNSString\(id'),
           );
-          expect(body, isNotNull, reason: 'EndpointString moved');
+          expect(body, isNotNull, reason: 'AsNSString moved');
           expect(
             body,
             contains('isKindOfClass:[NSString class]'),
@@ -324,6 +327,19 @@ void main() {
               reason:
                   'the endpoints bypass the NSNull type-check: the first '
                   'null field would crash the arming',
+            );
+            // The discovery-flow candidates pass through the same helper: a
+            // rebase that rewrites the type-check back to a plain nil check
+            // would admit a channel NSNull into the collection.
+            expect(
+              body,
+              contains('AsNSString(issuer'),
+              reason: 'the issuer bypasses the NSNull type-check',
+            );
+            expect(
+              body,
+              contains('AsNSString(discoveryUrl'),
+              reason: 'the discoveryUrl bypasses the NSNull type-check',
             );
             // The one @[] literal in the body holds the three quoted
             // endpoint keys. Compared whole (a substring scan can be

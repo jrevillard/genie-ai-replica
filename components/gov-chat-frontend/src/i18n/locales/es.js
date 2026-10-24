@@ -3448,7 +3448,18 @@ export default {
         when: 'Cuándo',
         status: 'Estado',
         load: 'Ver',
-        delete: 'Eliminar'
+        delete: 'Eliminar',
+        rescore: 'Reevaluar',
+        rescoreOf: 'reevaluado desde {key}',
+        judgeUnknown: 'Juez no registrado'
+      },
+      rescore: {
+        title: 'Reevaluar con otro juez',
+        body: 'Las respuestas almacenadas se reevalúan con otro juez: no se regeneran. El resultado es una ejecución independiente.',
+        source: 'Ejecución de origen',
+        judge: 'Configuración del juez',
+        confirm: 'Reevaluar',
+        failed: 'No se pudo reevaluar la ejecución.'
       },
       runDelete: {
         title: 'Eliminar ejecución',

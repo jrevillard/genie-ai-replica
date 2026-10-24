@@ -3424,7 +3424,18 @@ export default {
         when: 'Lini',
         status: 'Hali',
         load: 'Tazama',
-        delete: 'Futa'
+        delete: 'Futa',
+        rescore: 'Tathmini upya',
+        rescoreOf: 'ilithinishwa kutoka {key}',
+        judgeUnknown: 'Hakimu haijasishwa'
+      },
+      rescore: {
+        title: 'Tathmini upya kwa hakimu mwingine',
+        body: 'Majibu yaliyohifadhiwa yatathminiwa upya kwa hakimu mwingine — hayajatengenezwa upya. Matokeo ni run tofauti.',
+        source: 'Run asilia',
+        judge: 'Mipangilio ya hakimu',
+        confirm: 'Tathmini upya',
+        failed: 'Imeshindikana kuthathmini upya run.'
       },
       runDelete: {
         title: 'Futa utekelezaji',

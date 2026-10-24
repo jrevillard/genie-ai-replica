@@ -3438,7 +3438,18 @@ export default {
         when: 'Neng',
         status: 'Seemo',
         load: 'Jarisa',
-        delete: 'Phumula'
+        delete: 'Phumula',
+        rescore: 'Hahlola hape',
+        rescoreOf: 'hahlolwa ho tsa {key}',
+        judgeUnknown: 'Kahlolo ha ho ngeng'
+      },
+      rescore: {
+        title: 'Hahlola hape ka kahlolo ho ling',
+        body: 'Likarabo tse tsebokeng li hahloloa ka kahlolo ho ling — ha li hlahloheng. Sehlaho ke balekila bo bo karolo.',
+        source: 'Balekila ba pele',
+        judge: 'Kopano ya kahlolo',
+        confirm: 'Hahlola hape',
+        failed: 'Ho hahlola hape balekila ho ka hlehlehela.'
       },
       runDelete: {
         title: 'Phumula tsamaello',

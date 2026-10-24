@@ -1474,6 +1474,22 @@ const actions = {
     }
   },
 
+  /** Re-score a finished run with a different judge — a NEW run doc, the
+   * source untouched (David 2026-10-24). */
+  async ragasRescoreRun(_ctx, { repoId, suiteKey, runKey, payload } = {}) {
+    try {
+      ensureServices();
+      const result = await ragasService.rescoreRun(repoId, suiteKey, runKey, payload || {});
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'RESCORE_FAILED',
+        message: err.message
+      };
+    }
+  },
+
   async ragasGetSuite(_ctx, { repoId, suiteKey } = {}) {
     try {
       ensureServices();

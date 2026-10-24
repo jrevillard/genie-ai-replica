@@ -3451,7 +3451,18 @@ export default {
         when: 'Wann',
         status: 'Status',
         load: 'Ansehen',
-        delete: 'Löschen'
+        delete: 'Löschen',
+        rescore: 'Neu bewerten',
+        rescoreOf: 'neu bewertet aus {key}',
+        judgeUnknown: 'Richter nicht erfasst'
+      },
+      rescore: {
+        title: 'Mit einem anderen Richter neu bewerten',
+        body: 'Die gespeicherten Antworten werden mit einem anderen Richter neu bewertet – sie werden nicht neu erzeugt. Das Ergebnis ist ein eigener Lauf.',
+        source: 'Quelllauf',
+        judge: 'Richter-Konfiguration',
+        confirm: 'Neu bewerten',
+        failed: 'Die Neubewertung des Laufs ist fehlgeschlagen.'
       },
       runDelete: {
         title: 'Ausführung löschen',

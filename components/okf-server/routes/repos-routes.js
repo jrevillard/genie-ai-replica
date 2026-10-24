@@ -222,6 +222,14 @@ router.get(
   requireRepoScope('repo_id', 'read'),
   ctrl.getRagasSuiteRun
 );
+// Re-score a finished run with a DIFFERENT judge (David 2026-10-24). The
+// answers are reused verbatim — only the judge changes — and the result is a
+// NEW run doc that names its judge (the history's RUN column shows it).
+router.post(
+  '/:repo_id/ragas-testsuite/:suite_key/runs/:run_key/rescore',
+  requireRepoScope('repo_id', 'admin'),
+  ctrl.rescoreRagasSuiteRun
+);
 // Per-run delete (David 2026-10-24): clean up old runs from the history —
 // cascades the run's explain docs; refuses a running run (cancel first).
 router.delete(

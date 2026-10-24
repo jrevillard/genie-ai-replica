@@ -641,7 +641,14 @@
             :class="{ 'okf-ragas__row--selected': runDoc && h._key === runDoc._key }"
           >
             <td>
-              <code>{{ h._key }}</code>
+              <!-- David 2026-10-24: the RUN column names the JUDGE that
+                   scored it — "rr1792843333604-268dad" means nothing to an
+                   operator. The key stays, small, for support. -->
+              <div class="okf-ragas__judge-name">{{ runJudgeLabel(h) }}</div>
+              <code class="okf-ragas__run-key">{{ h._key }}</code>
+              <div v-if="h.rescore_of" class="okf-ragas__muted">
+                {{ translate('okf.ragas.history.rescoreOf', 're-scored from {key}').replace('{key}', h.rescore_of) }}
+              </div>
             </td>
             <td>{{ shortDate(h.created_at) }}</td>
             <td>
@@ -665,6 +672,17 @@
                   @click="runDeleteAsk = h"
                 >
                   {{ translate('okf.ragas.history.delete', 'Delete') }}
+                </DsButton>
+                <!-- Re-score with another judge (David 2026-10-24): the answers
+                     are reused verbatim; a NEW run names its own judge. -->
+                <DsButton
+                  v-if="!readOnly"
+                  variant="secondary"
+                  small
+                  :disabled="runBusy || rescoreBusy || h.status !== 'done'"
+                  @click="onRescoreOpen(h)"
+                >
+                  {{ translate('okf.ragas.history.rescore', 'Re-score') }}
                 </DsButton>
               </div>
             </td>
@@ -694,6 +712,60 @@
         }}
         <code v-if="runDeleteAsk">{{ runDeleteAsk._key }}</code>
       </p>
+    </DsDialog>
+
+    <!-- RE-SCORE (David 2026-10-24): score the SAME answers with a different
+         judge. The answers are not regenerated, so the two runs differ ONLY
+         by the judge — which is the whole point (a re-run would churn the
+         answers and confound the comparison). The result is a separate run
+         row that names its judge. -->
+    <DsDialog
+      :visible="rescoreAsk !== null"
+      :title="translate('okf.ragas.rescore.title', 'Re-score with another judge')"
+      size="sm"
+      :actions="rescoreActions"
+      @close="onRescoreClose"
+      @action="onRescoreAction"
+    >
+      <p class="okf-ragas__muted">
+        {{
+          translate(
+            'okf.ragas.rescore.body',
+            'The stored answers are re-scored with another judge — they are not regenerated. The result is a separate run.'
+          )
+        }}
+      </p>
+      <p v-if="rescoreAsk" class="okf-ragas__muted">
+        {{ translate('okf.ragas.rescore.source', 'Source run') }}: <code>{{ rescoreAsk._key }}</code> ({{
+          runJudgeLabel(rescoreAsk)
+        }})
+      </p>
+      <label class="okf-ragas__dim">
+        <span>{{ translate('okf.ragas.rescore.judge', 'Judge configuration') }}</span>
+        <select v-model="rescoreConfigKey" :disabled="rescoreBusy" @change="onRescoreConfigChange">
+          <option value="">
+            {{ defaultJudgeLabel }}
+          </option>
+          <option :value="envPickKey">{{ envJudgeLabel }}</option>
+          <option v-for="c in modelConfigs" :key="c._key" :value="c._key">
+            {{ c.name }}{{ c.active ? ' ★' : '' }}
+          </option>
+        </select>
+      </label>
+      <label v-if="rescoreConfigKey && rescoreConfigKey !== envPickKey" class="okf-ragas__dim">
+        <span>{{ translate('okf.ragas.generate.model', 'Model') }}</span>
+        <select v-if="rescoreModels.length" v-model="rescoreModel" :disabled="rescoreBusy">
+          <option value="">{{ translate('okf.ragas.generate.modelPick', 'Configuration default') }}</option>
+          <option v-for="m in rescoreModels" :key="m" :value="m">{{ m }}</option>
+        </select>
+        <input
+          v-else
+          v-model="rescoreModel"
+          type="text"
+          :placeholder="translate('okf.ragas.generate.modelDefault', 'configuration default')"
+          :disabled="rescoreBusy"
+        />
+      </label>
     </DsDialog>
   </div>
 </template>
@@ -799,6 +871,11 @@ export default {
       runBusy: false,
       runDeleteAsk: null, // the run-history row pending delete-confirm
       runDeleteBusy: false,
+      rescoreAsk: null, // the run-history row pending re-score
+      rescoreBusy: false,
+      rescoreConfigKey: '', // the judge config for the re-score ('' = default)
+      rescoreModel: '',
+      rescoreModels: [],
       explainBusy: false,
       explainProgress: null, // {phase, failing, elapsed_s} from the explain job's poll
       importBusy: false,
@@ -859,6 +936,23 @@ export default {
         '{model}',
         model
       );
+    },
+    /** The re-score dialog's action buttons (DsDialog emits the action KEY). */
+    rescoreActions() {
+      return [
+        {
+          key: 'cancel',
+          label: this.translate('common.cancel', 'Cancel'),
+          variant: 'secondary',
+          disabled: this.rescoreBusy
+        },
+        {
+          key: 'confirm',
+          label: this.translate('okf.ragas.rescore.confirm', 'Re-score'),
+          variant: 'primary',
+          disabled: this.rescoreBusy
+        }
+      ];
     },
     /** The model the RUNNING generation is actually using, by name. The
      * dropdown shows the SELECTION; for an in-flight generation that
@@ -1840,6 +1934,90 @@ export default {
       await this.refreshHistory();
       this.$emit('changed');
     },
+    /** Open the re-score dialog for a finished run. The judge starts from the
+     * run's OWN judge — the operator usually wants a different one, but the
+     * default must be visible, not a mystery. */
+    /** The judge that scored a run, by name (David 2026-10-24: the RUN
+     * column must name the JUDGE, not the opaque run key). */
+    runJudgeLabel(run) {
+      if (!run) return '';
+      const model = run.judge_model || (run.judge_pick && run.judge_pick.model) || null;
+      const config = run.judge_config || null;
+      if (model && config) return `${model} · ${config}`;
+      if (model) return model;
+      if (config) return config;
+      if (run.judge_source === 'env') return this.envJudgeLabel();
+      return this.translate('okf.ragas.history.judgeUnknown', 'Judge not recorded');
+    },
+    async onRescoreOpen(run) {
+      this.rescoreAsk = run;
+      this.rescoreModel = '';
+      this.rescoreModels = [];
+      const pick = run.judge_pick || null;
+      this.rescoreConfigKey = pick && pick.config_key ? pick.config_key : '';
+      if (this.rescoreConfigKey) await this.onRescoreConfigChange();
+    },
+    async onRescoreConfigChange() {
+      this.rescoreModel = '';
+      this.rescoreModels = [];
+      if (!this.rescoreConfigKey || this.rescoreConfigKey === ENV_PICK) return;
+      const res = await this.$store.dispatch('okf/modelConfigModels', { key: this.rescoreConfigKey }).catch(() => null);
+      if (res && res.ok) this.rescoreModels = res.models || [];
+    },
+    onRescoreClose() {
+      this.rescoreAsk = null;
+      this.rescoreBusy = false;
+    },
+    /** Re-score: the same answers, a different judge, a SEPARATE run. */
+    async onRescoreAction(key) {
+      if (key === 'cancel') {
+        this.onRescoreClose();
+        return;
+      }
+      if (key !== 'confirm' || !this.rescoreAsk || this.rescoreBusy) return;
+      const source = this.rescoreAsk;
+      this.rescoreBusy = true;
+      this.error = '';
+      const res = await this.$store.dispatch('okf/ragasRescoreRun', {
+        repoId: this.repo && this.repo.repo_id,
+        suiteKey: source.suite_key,
+        runKey: source._key,
+        payload: {
+          judge_config_key: this.rescoreConfigKey || undefined,
+          judge_model: this.rescoreConfigKey && this.rescoreModel ? this.rescoreModel : undefined
+        }
+      });
+      if (!res.ok) {
+        this.error = res.message || this.translate('okf.ragas.rescore.failed', 'Re-scoring the run failed.');
+        this.rescoreBusy = false;
+        return; // dialog stays open for a retry
+      }
+      this.rescoreAsk = null;
+      const newKey = res.result && res.result.run_key;
+      // The judge leg is minutes-to-hours: poll the new run until it lands,
+      // then refresh the history so the new row (with its judge) appears.
+      await this.pollRescore(newKey);
+      this.rescoreBusy = false;
+      await this.refreshHistory();
+      this.$emit('changed');
+    },
+    /** Poll the re-scored run until it is terminal. */
+    async pollRescore(runKey) {
+      if (!runKey) return;
+      for (let i = 0; i < 720; i += 1) {
+        const res = await this.$store
+          .dispatch('okf/ragasGetRunQuiet', {
+            repoId: this.repo && this.repo.repo_id,
+            suiteKey: this.rescoreAsk ? this.rescoreAsk.suite_key : this.suite && this.suite.suite_key,
+            runKey
+          })
+          .catch(() => null);
+        const status = res && res.ok && res.result ? res.result.status : null;
+        if (status === 'done' || status === 'failed' || status === 'cancelled') return status;
+        await new Promise((r) => setTimeout(r, 5000));
+      }
+      return null;
+    },
     async onLoadRun(runKey, suiteKey, opts = {}) {
       if (suiteKey && (!this.suite || this.suite.suite_key !== suiteKey)) await this.loadSuite(suiteKey);
       const res = await this.$store
@@ -2493,6 +2671,17 @@ export default {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+}
+
+/* The RUN column names the judge; the key is secondary (David 2026-10-24). */
+.okf-ragas__judge-name {
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.okf-ragas__run-key {
+  font-size: 0.8em;
+  opacity: 0.7;
 }
 
 .okf-ragas__advice-chip {

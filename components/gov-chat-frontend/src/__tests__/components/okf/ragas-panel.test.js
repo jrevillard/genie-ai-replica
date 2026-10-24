@@ -1106,4 +1106,77 @@ describe('RagasPanel', () => {
       expect(deleteButton(w).attributes('disabled')).toBeDefined();
     });
   });
+  describe('judge visibility + re-score (David 2026-10-24)', () => {
+    const flush = () => new Promise((r) => setTimeout(r, 0));
+    const RUN = {
+      kind: 'ragas_run',
+      _key: 'rr1-run',
+      suite_key: 'rs1-test',
+      status: 'done',
+      created_at: '2026-10-17T12:00:00.000Z',
+      judge_model: 'MiniMax-M3.1-Flash',
+      judge_config: 'Minimax David OpenAI',
+      judge_source: 'picked',
+      judge_pick: { config_key: 'mc-mini', model: null },
+      summary: runFixture().payload.summary
+    };
+
+    function judgeDispatch() {
+      const base = dispatch.getMockImplementation();
+      dispatch.mockImplementation(async (action) => {
+        if (action === 'okf/ragasListRuns')
+          return { ok: true, runs: [RUN, { kind: 'ragas_suite', _key: 'rs1-test', suite_key: 'rs1-test' }] };
+        if (action === 'okf/ragasRescoreRun') return { ok: true, result: { run_key: 'rr-new', status: 'running' } };
+        if (action === 'okf/ragasGetRunQuiet') return { ok: true, result: { status: 'done' } };
+        if (action === 'okf/modelConfigModels') return { ok: true, models: ['strong-model', 'strong-model-2'] };
+        return base(action);
+      });
+    }
+
+    it('the RUN column names the JUDGE, not just the opaque key', async () => {
+      judgeDispatch();
+      const w = mountPanel();
+      await flush();
+      await flush();
+      expect(w.text()).toContain('MiniMax-M3.1-Flash');
+      expect(w.text()).toContain('Minimax David OpenAI');
+      expect(w.text()).toContain('rr1-run');
+    });
+
+    it('re-scores through the store and refreshes the history afterwards', async () => {
+      judgeDispatch();
+      const w = mountPanel();
+      await flush();
+      await flush();
+      const buttons = w.findAll('.okf-ragas__row-actions button');
+      const rescore = buttons.find((b) => /re-score/i.test(b.text()));
+      expect(rescore).toBeTruthy();
+      await rescore.trigger('click');
+      expect(w.vm.rescoreAsk && w.vm.rescoreAsk._key).toBe('rr1-run');
+      expect(w.vm.rescoreConfigKey).toBe('mc-mini');
+      await w.vm.onRescoreConfigChange();
+      expect(w.vm.rescoreModels).toEqual(['strong-model', 'strong-model-2']);
+      w.vm.rescoreModel = 'strong-model';
+      await w.vm.onRescoreAction('confirm');
+      const call = dispatch.mock.calls.find((c) => c[0] === 'okf/ragasRescoreRun');
+      expect(call).toBeTruthy();
+      expect(call[1]).toMatchObject({ runKey: 'rr1-run', suiteKey: 'rs1-test' });
+      expect(call[1].payload).toMatchObject({ judge_config_key: 'mc-mini', judge_model: 'strong-model' });
+    });
+
+    it('a failed re-score keeps the dialog open and surfaces the error', async () => {
+      dispatch.mockImplementation(async (action) => {
+        if (action === 'okf/ragasListRuns') return { ok: true, runs: [RUN] };
+        if (action === 'okf/ragasRescoreRun') return { ok: false, code: 'RESCORE_FAILED', message: 'sidecar is busy' };
+        return { ok: true, result: null, runs: [] };
+      });
+      const w = mountPanel();
+      await flush();
+      await flush();
+      w.vm.rescoreAsk = RUN;
+      await w.vm.onRescoreAction('confirm');
+      expect(w.vm.rescoreAsk).not.toBeNull();
+      expect(w.vm.error).toContain('busy');
+    });
+  });
 });

@@ -3441,7 +3441,18 @@ export default {
         when: 'Quando',
         status: 'Status',
         load: 'Ver',
-        delete: 'Excluir'
+        delete: 'Excluir',
+        rescore: 'Reavaliar',
+        rescoreOf: 'reavaliado a partir de {key}',
+        judgeUnknown: 'Juiz não registado'
+      },
+      rescore: {
+        title: 'Reavaliar com outro juiz',
+        body: 'As respostas armazenadas são reavaliadas com outro juiz — não são regeneradas. O resultado é uma execução separada.',
+        source: 'Execução de origem',
+        judge: 'Configuração do juiz',
+        confirm: 'Reavaliar',
+        failed: 'Falha ao reavaliar a execução.'
       },
       runDelete: {
         title: 'Excluir execução',

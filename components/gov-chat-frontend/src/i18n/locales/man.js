@@ -3395,7 +3395,18 @@ export default {
         when: 'When',
         status: 'Status',
         load: 'View',
-        delete: 'Delete'
+        delete: 'Delete',
+        rescore: 'Re-score',
+        rescoreOf: 're-scored from {key}',
+        judgeUnknown: 'Judge not recorded'
+      },
+      rescore: {
+        title: 'Re-score with another judge',
+        body: 'The stored answers are re-scored with another judge — they are not regenerated. The result is a separate run.',
+        source: 'Source run',
+        judge: 'Judge configuration',
+        confirm: 'Re-score',
+        failed: 'Re-scoring the run failed.'
       },
       runDelete: {
         title: 'Delete run',

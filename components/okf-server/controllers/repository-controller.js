@@ -2039,6 +2039,26 @@ async function deleteRagasSuiteRun(req, res, next) {
   }
 }
 
+/** Re-score a finished run with a different judge (David 2026-10-24). The
+ * answers are reused verbatim; a NEW run doc carries the new scores and
+ * names its judge. 202 + poll, like the other long operations. */
+async function rescoreRagasSuiteRun(req, res, next) {
+  try {
+    const ragasSuiteService = require('../services/ragas-suite-service');
+    const out = await ragasSuiteService.rescoreRun(
+      req.params.repo_id,
+      req.params.suite_key,
+      req.params.run_key,
+      req.body || {},
+      { actor: actorFrom(req) }
+    );
+    out.done.catch(() => {});
+    res.status(202).json({ run_key: out.run_key, source_run_key: out.source_run_key, status: out.status });
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function runRagasSuite(req, res, next) {
   try {
     const ragasSuiteService = require('../services/ragas-suite-service');
@@ -2205,6 +2225,7 @@ module.exports = {
   renameRagasSuite,
   deleteRagasSuite,
   deleteRagasSuiteRun,
+  rescoreRagasSuiteRun,
   runRagasSuite,
   getRagasSuiteRun,
   listRagasSuiteRuns,

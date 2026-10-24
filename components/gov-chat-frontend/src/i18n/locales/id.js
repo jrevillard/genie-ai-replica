@@ -3427,7 +3427,18 @@ export default {
         when: 'Kapan',
         status: 'Status',
         load: 'Lihat',
-        delete: 'Hapus'
+        delete: 'Hapus',
+        rescore: 'Nilai ulang',
+        rescoreOf: 'dinilai ulang dari {key}',
+        judgeUnknown: 'Hakim tidak tercatat'
+      },
+      rescore: {
+        title: 'Nilai ulang dengan hakim lain',
+        body: 'Jawaban yang tersimpan dinilai ulang dengan hakim lain — jawaban tidak dibuat ulang. Hasilnya adalah run terpisah.',
+        source: 'Run sumber',
+        judge: 'Konfigurasi hakim',
+        confirm: 'Nilai ulang',
+        failed: 'Gagal menilai ulang run.'
       },
       runDelete: {
         title: 'Hapus eksekusi',

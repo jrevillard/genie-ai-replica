@@ -11,6 +11,7 @@
  *   POST /okf/repos/:id/ragas-testsuite/:key/run                — run (202+poll)
  *   GET  /okf/repos/:id/ragas-testsuite/:key/runs/:runKey       — run poll / load
  *   DELETE /okf/repos/:id/ragas-testsuite/:key/runs/:runKey     — delete one run + explains
+ *   POST   /okf/repos/:id/ragas-testsuite/:key/runs/:runKey/rescore — re-score with another judge
  *   GET  /okf/repos/:id/ragas-testsuite/runs?kind=              — listing
  *   POST /okf/repos/:id/ragas-testsuite/:key/probe              — per-entry probe
  *   POST /okf/repos/:id/ragas-testsuite/:key/explain            — explain (202+poll)
@@ -108,6 +109,18 @@ const ragasService = {
   async deleteRun(repoId, suiteKey, runKey) {
     const res = await httpService.delete(
       `/okf/repos/${rid(repoId)}/ragas-testsuite/${sk(suiteKey)}/runs/${encodeURIComponent(runKey)}`
+    );
+    return res && res.data ? res.data : null;
+  },
+
+  /** Re-score a FINISHED run with a different judge (David 2026-10-24). The
+   * answers are reused verbatim — only the judge changes — and the result is
+   * a NEW run that names its judge. body: {judge_config_key?, judge_model?,
+   * metrics?}. 202 + poll. */
+  async rescoreRun(repoId, suiteKey, runKey, payload = {}) {
+    const res = await httpService.post(
+      `/okf/repos/${rid(repoId)}/ragas-testsuite/${sk(suiteKey)}/runs/${encodeURIComponent(runKey)}/rescore`,
+      payload
     );
     return res && res.data ? res.data : null;
   },

@@ -2131,3 +2131,66 @@ describe('deleteRun (per-run delete, 2026-10-24)', () => {
     expect(out.removed_docs).toBe(2);
   });
 });
+
+describe('rescoreRun — re-score a finished run with a different judge (2026-10-24)', () => {
+  async function makeSuite() {
+    const begun = await svc.beginSuiteGeneration('me', { testset_size: 2 }, {});
+    await begun.done;
+    return begun.suite_key;
+  }
+
+  it('re-scores the STORED answers and writes a SEPARATE run naming its judge', async () => {
+    __mockDb._stores.okf_model_configs = {
+      judge2: {
+        _key: 'judge2',
+        name: 'Second Judge',
+        provider: 'openai',
+        base_url: 'https://second/v1',
+        default_model: 'strong-model',
+        api_key: 'k2',
+        services: ['ragas_judge'],
+        active: false
+      }
+    };
+    const sk = await makeSuite();
+    const first = await svc.beginRunSuite('me', sk, { mode: 'whatif' }, {});
+    await first.done;
+    const source = await svc.getRunSuite('me', sk, first.run_key);
+    const sourceAnswers = source.payload.results.map((r) => r.answer);
+
+    const begun = await svc.rescoreRun('me', sk, first.run_key, { judge_config_key: 'judge2' }, {});
+    const newDoc = await begun.done;
+
+    // A NEW run doc — the source is untouched.
+    expect(newDoc._key).not.toBe(first.run_key);
+    expect(newDoc.payload.fidelity.rescore_of).toBe(first.run_key);
+    expect(newDoc.payload.fidelity.judge.config).toBe('Second Judge');
+    expect(newDoc.payload.fidelity.judge.model).toBe('strong-model');
+    expect(newDoc.payload.fidelity.judge.pick.config_key).toBe('judge2');
+    // The ANSWERS are the source's, verbatim — only the judge changed.
+    expect(newDoc.payload.results.map((r) => r.answer)).toEqual(sourceAnswers);
+    // The source still exists with its own judge.
+    const stillThere = await svc.getRunSuite('me', sk, first.run_key);
+    expect(stillThere.status).toBe('done');
+    expect(stillThere.payload.fidelity.judge.pick.config_key).not.toBe('judge2');
+  });
+
+  it('refuses a run that is not finished', async () => {
+    const sk = await makeSuite();
+    const begun = await svc.beginRunSuite('me', sk, { mode: 'whatif' }, {});
+    // Not awaited: the run is still in flight.
+    await expect(svc.rescoreRun('me', sk, begun.run_key, {}, {})).rejects.toMatchObject({
+      code: 'RUN_NOT_DONE',
+      status: 409
+    });
+    await begun.done;
+  });
+
+  it('404s for a foreign run key', async () => {
+    const sk = await makeSuite();
+    await expect(svc.rescoreRun('me', sk, 'rr-nope', {}, {})).rejects.toMatchObject({
+      code: 'RUN_NOT_FOUND',
+      status: 404
+    });
+  });
+});

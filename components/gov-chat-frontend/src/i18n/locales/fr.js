@@ -3449,7 +3449,18 @@ export default {
         when: 'Quand',
         status: 'Statut',
         load: 'Voir',
-        delete: 'Supprimer'
+        delete: 'Supprimer',
+        rescore: 'Ré-évaluer',
+        rescoreOf: 'ré-évalué à partir de {key}',
+        judgeUnknown: 'Juge non enregistré'
+      },
+      rescore: {
+        title: 'Ré-évaluer avec un autre juge',
+        body: 'Les réponses enregistrées sont ré-évaluées avec un autre juge — elles ne sont pas régénérées. Le résultat est une exécution distincte.',
+        source: 'Exécution source',
+        judge: 'Configuration du juge',
+        confirm: 'Ré-évaluer',
+        failed: 'La ré-évaluation de l’exécution a échoué.'
       },
       runDelete: {
         title: 'Supprimer l’exécution',

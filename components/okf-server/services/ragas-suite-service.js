@@ -1617,6 +1617,207 @@ async function deleteRun(repoId, suiteKey, runKey) {
   return { deleted: runKey, removed_docs: removed.length };
 }
 
+/**
+ * Re-score a FINISHED run with a different judge (David 2026-10-24: "so you
+ * are giving me the ability to re-score the same benchmark with a different
+ * judge … so long as we know which judge was used for each run and the runs
+ * are separate").
+ *
+ * The answers are NOT regenerated: the source run's stored answers, served
+ * contexts, references and reference passages are reused verbatim, so the ONLY
+ * thing that changes between the two runs is the judge. That matters — vLLM
+ * is only near-greedy, and two runs of the same prompt churned 100/100
+ * answers, which would confound a judge comparison with answer churn.
+ *
+ * The result is a NEW run doc (its own key, its own fidelity block naming
+ * the judge, `rescore_of` pointing at the source). The source run is never
+ * modified.
+ */
+async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
+  const db = await dbService.getConnection();
+  await ensureCollection(db);
+  const source = await loadDoc(db, runKey, 'RUN_NOT_FOUND', `run ${runKey}`);
+  if (source.repo_id !== repoId || source.suite_key !== suiteKey || source.kind !== 'ragas_run') {
+    const err = new Error(`run ${runKey} not found for suite ${suiteKey}`);
+    err.code = 'RUN_NOT_FOUND';
+    err.status = 404;
+    throw err;
+  }
+  if (source.status !== 'done') {
+    const err = new Error('only a finished run can be re-scored');
+    err.code = 'RUN_NOT_DONE';
+    err.status = 409;
+    throw err;
+  }
+  const suite = await loadSuite(db, repoId, suiteKey);
+  const entries = (suite.payload && suite.payload.entries) || [];
+  const byId = new Map(entries.map((e) => [e.id, e]));
+  const srcResults = (source.payload && source.payload.results) || [];
+  if (!srcResults.length) {
+    const err = new Error('this run has no rows to re-score');
+    err.code = 'RUN_EMPTY';
+    err.status = 409;
+    throw err;
+  }
+  // The metrics to re-score: the source run's own set unless narrowed.
+  const requested = Array.isArray(opts.metrics) && opts.metrics.length ? opts.metrics : source.metrics;
+  const metrics = requested.filter((m) => ALL_METRICS.includes(m));
+  if (!metrics.length) {
+    const err = new Error('no known metrics selected');
+    err.code = 'VALIDATION_ERROR';
+    err.status = 400;
+    throw err;
+  }
+  // The judge: picked > active > env (same chain as a run).
+  const judgeOverride = await modelConfigService.resolveModelOverride({
+    config_key: opts.judge_config_key,
+    model: opts.judge_model,
+    service: 'ragas_judge'
+  });
+  const effectiveJudge = judgeOverride && judgeOverride.model ? judgeOverride : null;
+  const newRunKey = `rr${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
+  const startedAt = new Date().toISOString();
+  const report = (p) => {
+    const inflight = rescoreInFlight.get(newRunKey);
+    if (inflight) inflight.progress = p;
+  };
+  rescoreInFlight.set(newRunKey, { source_run_key: runKey, progress: { phase: 'judge', done: 0, total: 1 } });
+  // A re-score is a JUDGE-only operation: the answers are copied verbatim.
+  const results = srcResults.map((r) => ({ ...r, metrics: {} }));
+  const samples = results
+    .filter((r) => !r.error && r.answer)
+    .map((r) => {
+      const e = byId.get(r.id) || {};
+      return {
+        user_input: r.query,
+        retrieved_contexts: r.contexts || [],
+        response: r.answer,
+        reference: e.reference_answer || '',
+        reference_contexts: e.reference_passages || []
+      };
+    });
+  const done = (async () => {
+    try {
+      const started = await sidecarSubmitWithRetry(
+        '/evaluate',
+        {
+          samples,
+          metrics,
+          judge: effectiveJudge
+            ? {
+                provider: effectiveJudge.provider,
+                base_url: effectiveJudge.base_url,
+                model: effectiveJudge.model,
+                api_key: effectiveJudge.api_key
+              }
+            : null
+        },
+        { repo_id: repoId, suite_key: suiteKey, run_key: newRunKey }
+      );
+      const body = await started.json();
+      const evaluation = await pollSidecarJobOwned(
+        body.job_id,
+        {
+          kind: 'evaluate',
+          repo_id: repoId,
+          suite_key: suiteKey,
+          run_key: newRunKey
+        },
+        {
+          // The sidecar's rows-done/rows-total becomes the re-score's
+          // progress (the panel polls it while the judge leg runs).
+          onProgress: (p) =>
+            report({
+              phase: 'judge',
+              done: Number(p && p.done) || 0,
+              total: Number(p && p.total) || samples.length
+            })
+        }
+      );
+      const perQuery = Array.isArray(evaluation.per_query) ? evaluation.per_query : [];
+      for (let i = 0; i < results.length; i += 1) {
+        const q = perQuery[i] || {};
+        results[i].metrics = q || {};
+        delete results[i].metrics.user_input;
+        delete results[i].metrics.retrieved_contexts;
+        delete results[i].metrics.response;
+        delete results[i].metrics.reference;
+        results[i].ragas_nan = q.ragas_nan === 'ALL_NAN';
+      }
+      const summary = summarizeRun(suite, results, metrics);
+      const judgeFid = modelConfigService.judgeFidelity(effectiveJudge);
+      const newDoc = {
+        _key: newRunKey,
+        repo_id: repoId,
+        kind: 'ragas_run',
+        status: 'done',
+        suite_key: suiteKey,
+        created_at: startedAt,
+        created_by: (ctx.actor && ctx.actor.user_id) || 'system',
+        repo_ids: source.repo_ids || [],
+        metrics,
+        payload: {
+          suite_created_at: suite.created_at,
+          entries: entries.map((e) => ({
+            id: e.id,
+            query: e.query,
+            oos: e.oos,
+            reference_answer: e.reference_answer,
+            reference_passages: e.reference_passages
+          })),
+          results,
+          summary,
+          fidelity: {
+            // The SAME retrieval as the source run — the answers were not
+            // regenerated, only re-judged.
+            retrieval: (source.payload && source.payload.fidelity && source.payload.fidelity.retrieval) || null,
+            judge: {
+              ...judgeFid,
+              pick: { config_key: opts.judge_config_key || null, model: opts.judge_model || null }
+            },
+            // The lineage: this run re-scored that one.
+            rescore_of: runKey,
+            rescore_note: `re-scored ${runKey} with a different judge — the answers are identical`
+          }
+        }
+      };
+      await db.collection(COLLECTION).save(newDoc);
+      logger.info('ragas-suite.run_rescored', {
+        repo_id: repoId,
+        suite_key: suiteKey,
+        run_key: newRunKey,
+        source_run_key: runKey,
+        judge: judgeFid.model || judgeFid.source,
+        metrics: metrics.join(',')
+      });
+      return newDoc;
+    } finally {
+      rescoreInFlight.delete(newRunKey);
+    }
+  })();
+  done.catch((e) =>
+    logger.error('ragas-suite.rescore.async_failed', {
+      repo_id: repoId,
+      suite_key: suiteKey,
+      run_key: newRunKey,
+      error: e.message
+    })
+  );
+  return { run_key: newRunKey, source_run_key: runKey, status: 'running', done };
+}
+
+/** The live progress of an in-flight re-score (for the panel's poll). */
+async function getRescoreProgress(runKey) {
+  const inflight = rescoreInFlight.get(runKey);
+  if (!inflight) return null;
+  return {
+    run_key: runKey,
+    status: 'running',
+    progress: inflight.progress || null,
+    source_run_key: inflight.source_run_key
+  };
+}
+
 async function loadSuite(db, repoId, suiteKey) {
   const doc = await loadDoc(db, suiteKey, 'SUITE_NOT_FOUND', `suite ${suiteKey} for repo ${repoId}`);
   if (doc.repo_id !== repoId || doc.kind !== 'ragas_suite') {
@@ -2317,7 +2518,18 @@ async function listRuns(repoId, payload = {}) {
       // The run's judge pick as made (judge memory, 2026-10-21) — the panel
       // restores its selector from the latest run of the loaded suite.
       'judge_pick: HAS(d, "payload") && HAS(d.payload, "fidelity") && HAS(d.payload.fidelity, "judge") && ' +
-      'HAS(d.payload.fidelity.judge, "pick") ? d.payload.fidelity.judge.pick : null })',
+      'HAS(d.payload.fidelity.judge, "pick") ? d.payload.fidelity.judge.pick : null, ' +
+      // The judge that scored this run, BY NAME (David 2026-10-24: "display
+      // the JUDGE in the run column instead of the cryptic key") + the
+      // re-score lineage (which run this one re-scored).
+      'judge_model: HAS(d, "payload") && HAS(d.payload, "fidelity") && HAS(d.payload.fidelity, "judge") ? ' +
+      '(d.payload.fidelity.judge.model || null) : null, ' +
+      'judge_config: HAS(d, "payload") && HAS(d.payload, "fidelity") && HAS(d.payload.fidelity, "judge") ? ' +
+      '(d.payload.fidelity.judge.config || null) : null, ' +
+      'judge_source: HAS(d, "payload") && HAS(d.payload, "fidelity") && HAS(d.payload.fidelity, "judge") ? ' +
+      '(d.payload.fidelity.judge.source || null) : null, ' +
+      'rescore_of: HAS(d, "payload") && HAS(d.payload, "fidelity") ? ' +
+      '(d.payload.fidelity.rescore_of || null) : null })',
     { rid: repoId, kinds, lim: limit }
   );
   const rows = await cursor.all();
@@ -2349,6 +2561,7 @@ async function listRuns(repoId, payload = {}) {
 // ---------- explain / advise ----------------------------------------------
 
 const explainInFlight = new Map(); // suite_key -> explain_key
+const rescoreInFlight = new Map(); // new run_key -> {source_run_key, progress} (re-score legs)
 // Explain progress (David 2026-10-21: "clicked explain… the UX is terrible as
 // it does not show a progress bar"). The explain is ONE advisor LLM call that
 // a reasoning judge can legitimately think over for minutes (live: MiniMax
@@ -3364,6 +3577,8 @@ module.exports = {
   renameSuite,
   deleteSuite,
   deleteRun,
+  rescoreRun,
+  getRescoreProgress,
   beginRunSuite,
   cancelSuiteRun,
   runSuite,

@@ -3358,7 +3358,18 @@ export default {
         when: '时间',
         status: '状态',
         load: '查看',
-        delete: '删除'
+        delete: '删除',
+        rescore: '重新评分',
+        rescoreOf: '重新评分自 {key}',
+        judgeUnknown: '未记录评判模型'
+      },
+      rescore: {
+        title: '用另一个评判模型重新评分',
+        body: '使用另一个评判模型对已保存的答案重新评分——不会重新生成答案。结果是一条独立的运行记录。',
+        source: '源运行',
+        judge: '评判模型配置',
+        confirm: '重新评分',
+        failed: '重新评分失败。'
       },
       runDelete: {
         title: '删除运行',

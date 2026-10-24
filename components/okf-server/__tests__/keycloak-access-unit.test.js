@@ -73,4 +73,26 @@ describe('keycloak-access-service HTTP seam', () => {
       svc.setGroupRole({ id: 'g1', name: 'curators' }, { id: 'r1', name: SCOPE }, true)
     ).resolves.toBeUndefined();
   });
+
+  // Live 2026-10-24: opening a repo's Access panel whose role was never
+  // granted 404s BOTH member listings — the users leg threw and the panel
+  // said "An error occurred". A role that does not exist has no members.
+  test('roleMembers treats a MISSING role as empty members, not an error', async () => {
+    global.fetch
+      .mockResolvedValueOnce(respond(200, { access_token: 'tok' }))
+      // role users → 404 (the live failure: "OKF access: role users failed")
+      .mockResolvedValueOnce(respond(404, JSON.stringify({ error: 'Could not find role' })))
+      // role groups → 404 too
+      .mockResolvedValueOnce(respond(404, JSON.stringify({ error: 'Could not find role' })));
+
+    const members = await svc.roleMembers(SCOPE);
+    expect(members).toEqual({ users: [], groups: [] });
+  });
+
+  test('roleMembers still surfaces NON-404 failures', async () => {
+    global.fetch
+      .mockResolvedValueOnce(respond(200, { access_token: 'tok' }))
+      .mockResolvedValueOnce(respond(500, JSON.stringify({ error: 'boom' })));
+    await expect(svc.roleMembers(SCOPE)).rejects.toMatchObject({ statusCode: 502 });
+  });
 });

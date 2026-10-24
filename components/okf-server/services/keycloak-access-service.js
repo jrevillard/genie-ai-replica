@@ -229,7 +229,18 @@ async function setGroupRole(group, role, assign) {
 
 /** Direct user members + groups holding the role (raw-colon paths — verified live). */
 async function roleMembers(scope) {
-  const users = await jsonOrThrow(await adminApi('GET', `/roles/${scope}/users?max=${USERS_PAGE}`), 'role users');
+  // A role that does not exist yet (no grant ever ran, or the realm lost it)
+  // HAS no members — Keycloak 404s both member listings. The groups leg always
+  // treated that as empty; the users leg threw, surfacing "An error occurred"
+  // in the Access panel the first time a repo without a prior grant was
+  // opened (live 2026-10-24: "OKF access: role users failed").
+  let users;
+  try {
+    users = await jsonOrThrow(await adminApi('GET', `/roles/${scope}/users?max=${USERS_PAGE}`), 'role users');
+  } catch (err) {
+    if (err.statusCode !== 404) throw err;
+    users = [];
+  }
   let groups;
   try {
     groups = await jsonOrThrow(await adminApi('GET', `/roles/${scope}/groups?max=${USERS_PAGE}`), 'role groups');

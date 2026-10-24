@@ -1231,7 +1231,13 @@ describe('explain', () => {
     expect(present).toBeTruthy();
     expect(present.stage).toBe('judge');
     expect(present.unfair_question).toBe(false);
-    expect(present.recommendation).toMatch(/entity extraction/i);
+    // The recommendation must name the lever (the reference answer) and
+    // must NOT tell the operator to tune the RAG for a row whose answer is
+    // faithful to the delivered context. It used to say "treat as judge
+    // noise" — which a second judge disproved on 30 of 39 such rows.
+    expect(present.recommendation).toMatch(/reference/i);
+    expect(present.recommendation).toMatch(/do NOT tune/i);
+    expect(present.recommendation).not.toMatch(/judge noise/i);
     // The row whose passage is PROVEN ABSENT from the corpus: it is an
     // unfair question, whatever context_recall said.
     const absent = attr.find((a) => a !== present);

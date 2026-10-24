@@ -2830,8 +2830,13 @@ function attributeFailures(suite, runDoc, evidence) {
           'the answer IS grounded in the retrieved context (faithfulness ' +
           `${typeof m.faithfulness === 'number' ? m.faithfulness.toFixed(2) : 'n/a'}` +
           (selfHigh ? `, chatqna self-grade ${r.self_confidence.toFixed(2)}` : '') +
-          ') — the gap is judge claim-matching, not a prompt defect; ' +
-          'treat as judge noise unless a stronger judge model reproduces it, and do NOT tighten the prompt for this row';
+          ') — the gap is judge claim-matching, not a prompt defect. ' +
+          // "Judge noise" was the wrong conclusion: a second judge (the env
+          // judge, granite) cleared 9 of 21 such rows on factual_correctness
+          // and kept 12 failing, so roughly half are judge variance and half
+          // are real. The row is UNPROVEN, not dismissed.
+          'A second judge disagrees on roughly half of these rows, so treat the row as unproven rather than as judge noise: ' +
+          'check the reference answer against the corpus, and do NOT tighten the prompt, the corpus or a retrieval knob for it';
       } else {
         stage = 'llm';
         recommendation =
@@ -2859,7 +2864,12 @@ function attributeFailures(suite, runDoc, evidence) {
       // for content that was retrieved character-for-character is wasted work.
       stage = 'judge';
       recommendation =
-        'context recall passed — the reference content WAS retrieved; the entity-recall miss comes from the judge’s entity extraction, not missing content. Treat as judge noise unless a stronger judge model reproduces it.';
+        'context recall passed and the expected passage WAS delivered — yet the reference answer’s entity strings are absent from the retrieved context. ' +
+        // Not "judge noise": a second judge (granite) REPRODUCED this on 30
+        // of 39 such rows and cleared only 9, so the miss is mostly real.
+        // The lever is the reference answer's wording, not the RAG.
+        'A second judge reproduces this on most of these rows, so it is not judge harshness: the reference answer is worded differently from the corpus. ' +
+        'Regenerate the reference answer against the corpus; do NOT tune the RAG, the corpus or a retrieval knob for this row.';
     } else if (failed.includes('context_entities_recall')) {
       stage = 'corpus';
       recommendation = 'key entities of the reference are unretrievable — enrich entity mentions in the concept';
@@ -3219,8 +3229,14 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
             // shorter. The run-level facts are in the payload below —
             // READ them before prescribing anything.
             'RULES: ' +
-            '(1) A row with stage "judge" is a JUDGE-side finding (the answer is grounded and the judge scored it harshly). ' +
-            'Do NOT propose a prompt tweak, a content change or a knob change for it; say it needs a stronger judge to confirm. ' +
+            // Rule (1) said "say it needs a stronger judge to confirm". That
+            // is how the advisor told David to dismiss ~30 rows that a
+            // second judge had ALREADY reproduced on (2026-10-25). The rows
+            // are unproven, not dismissed: the lever is the reference
+            // answer, never the RAG.
+            '(1) A row with stage "judge" means the answer is grounded in the delivered context and the failure is a metric-side finding. ' +
+            'Do NOT propose a prompt tweak, a content change or a knob change for it; say the reference answer must be checked against the corpus. ' +
+            'Do NOT call it judge noise — a second judge disagrees on roughly half of these rows, so they are unproven rather than dismissed. ' +
             '(2) A row with stage "abstention" means the model declined — the abstention contract may be too strict; that is a COVERAGE argument, not a grounding one. ' +
             '(3) Only rows staged "llm" justify a grounding change, and only when their faithfulness actually failed. ' +
             '(4) Check run_facts.abstentions against run_facts.rows: if a large share of rows abstained, the prompt is OVER-CONSTRAINING — ' +

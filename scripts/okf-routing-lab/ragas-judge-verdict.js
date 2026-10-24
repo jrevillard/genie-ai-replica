@@ -57,11 +57,12 @@ const metric = process.argv[4] || 'context_entities_recall';
   const oldScored = orig.filter((r) => isNum(r.oldV));
   const newScored = orig.filter((r) => r.newScored);
   const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
+  const fmt = (v) => (v === null ? '-' : v.toFixed(4));
   console.log(
-    `ORIGINAL judge scored ${oldScored.length}/${orig.length}  mean ${mean(oldScored.map((r) => r.oldV)).toFixed(4)}`
+    `ORIGINAL judge scored ${oldScored.length}/${orig.length}  mean ${fmt(mean(oldScored.map((r) => r.oldV)))}`
   );
   console.log(
-    `NEW judge      scored ${newScored.length}/${orig.length}  mean ${mean(newScored.map((r) => r.newV)).toFixed(4)}`
+    `NEW judge      scored ${newScored.length}/${orig.length}  mean ${fmt(mean(newScored.map((r) => r.newV)))}`
   );
 
   // Per stage: does the row still fail under the new judge?
@@ -103,13 +104,15 @@ const metric = process.argv[4] || 'context_entities_recall';
   // The rows the attribution called judge noise, and what the new judge says.
   const judged = orig.filter((r) => r.stage === 'judge');
   const jScored = judged.filter((r) => r.newScored);
-  const jStillFail = jScored.filter((r) => r.newV < THRESHOLD);
-  const jNowPass = jScored.filter((r) => r.newV >= THRESHOLD);
+  const jOldFail = jScored.filter((r) => isNum(r.oldV) && r.oldV < THRESHOLD);
+  const jStillFail = jOldFail.filter((r) => r.newV < THRESHOLD);
+  const jNowPass = jOldFail.filter((r) => r.newV >= THRESHOLD);
   console.log(`\n=== the ${judged.length} judge-stage rows ===`);
   console.log(`  the new judge scored ${jScored.length}`);
-  console.log(`  STILL failing: ${jStillFail.length}  -> a real gap, not judge harshness`);
-  console.log(`  now passing:   ${jNowPass.length}  -> the old judge was harsh`);
-  if (jNowPass.length) console.log(`  now passing: ${jNowPass.map((r) => r.id).join(', ')}`);
+  console.log(`  of the ${jOldFail.length} that failed under the OLD judge:`);
+  console.log(`    STILL failing: ${jStillFail.length}  -> a real gap, not judge harshness`);
+  console.log(`    now passing:   ${jNowPass.length}  -> the old judge was harsh`);
+  if (jNowPass.length) console.log(`    now passing: ${jNowPass.map((r) => r.id).join(', ')}`);
   const unmeasured = judged.filter((r) => !r.newScored);
   if (unmeasured.length) {
     console.log(

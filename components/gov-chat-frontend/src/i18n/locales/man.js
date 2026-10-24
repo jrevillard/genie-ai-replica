@@ -3350,6 +3350,7 @@ export default {
         advisorHint:
           '{n} questions are below their metric thresholds. Run the advisor to attribute each failure to a pipeline stage and get concrete actions.',
         copy: 'Copy the full answer',
+        coverageTitle: 'Ɲɛri kunnafoni kɛse: nimɔrɔ bɛn na {n} yɔrɔ niin {total} — a yɛrɛma bɛn na kelen ye.',
         colResizeTip: 'Drag the grip to resize — double-click the header to reset',
         trendTitle: 'Metric trend across runs',
         trendNote:

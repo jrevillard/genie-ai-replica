@@ -705,6 +705,10 @@ describe('run', () => {
     expect(r0.metrics.faithfulness).toBe(1.0);
     expect(doc.payload.summary.n).toBe(2);
     expect(doc.payload.summary.metrics.faithfulness).toBe(1.0);
+    // How many rows the judge actually scored for each metric (2026-10-25):
+    // a mean over a fraction of the rows is not the run's score for that
+    // metric, and the panel must be able to say so.
+    expect(doc.payload.summary.coverage.faithfulness).toEqual({ scored: 2, total: 2 });
     expect(doc.payload.fidelity.retrieval.algorithm).toContain('APPROX_NEAR_COSINE');
     expect(doc.payload.fidelity.prompt.system_prompt_sha).toBeTruthy();
     // Judge memory (2026-10-21): the pick AS MADE rides next to the resolved
@@ -2204,6 +2208,42 @@ describe('rescoreRun — re-score a finished run with a different judge (2026-10
       status: 409
     });
     await begun.done;
+  });
+
+  it('records how many rows the new judge actually scored for each metric', async () => {
+    // A judge that could not score a metric on every row produces a mean
+    // over a FRACTION of the run — which read as a like-for-like delta
+    // (2026-10-25: MiniMax-M3 scored context_entities_recall on 21 of 100
+    // rows and the comparison showed a clean +0.009). The coverage has to
+    // travel with the number.
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-eval', status: 'queued' }));
+      if (u.includes('/jobs/j-eval'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-eval',
+            kind: 'evaluate',
+            status: 'done',
+            // Only the FIRST row carries a score for any metric.
+            result: { aggregate: {}, per_query: [{ faithfulness: 1.0 }, {}], n: 2 }
+          })
+        );
+      return baseFetch(url);
+    });
+    const sk = await makeSuite();
+    const first = await svc.beginRunSuite('me', sk, { mode: 'whatif' }, {});
+    await first.done;
+
+    const begun = await svc.rescoreRun('me', sk, first.run_key, {}, {});
+    const newDoc = await begun.done;
+    const cov = newDoc.payload.summary.coverage;
+    expect(cov.faithfulness).toEqual({ scored: 1, total: 2 });
+    // A metric the judge never scored is reported as scored 0 — never a
+    // mean that silently covers nothing.
+    expect(cov.answer_relevancy).toEqual({ scored: 0, total: 2 });
+    expect(newDoc.payload.summary.metrics.faithfulness).toBe(1.0);
   });
 
   it('404s for a foreign run key', async () => {

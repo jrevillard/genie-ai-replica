@@ -3392,6 +3392,8 @@ export default {
         advisorHint:
           'Lipotso {n} li ka tlase ho meelo ea tsona ea metriki. Mathusa moeletsi ho beha ho hloleha ho mohala oa pipeline le ho fumana liketso tse sebetsang.',
         copy: 'Kopola karabo e felletseng',
+        coverageTitle:
+          'Kahlolo e na qaba likarabo tse {n} ho {total} tsa metsa — karabo eo na sebetsa mantsana oa tsona.',
         colResizeTip: 'Tsoasa seatla ho fetosa boholo — tlanya habeli hlooho ho qala hape',
         trendTitle: 'Tsoelo-pele ea liteko hara ditsamaiso',
         trendNote:

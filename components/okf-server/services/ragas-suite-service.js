@@ -2464,9 +2464,17 @@ function summarizeRun(suite, results, metrics) {
     if (fails.length && !e.oos) failing.push({ id: r.id, query: r.query, fails });
   }
   const means = {};
+  const coverage = {};
   for (const m of metrics) {
     const vals = results.map((r) => (r.metrics ? r.metrics[m] : null)).filter((v) => typeof v === 'number' && v === v);
     means[m] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    // HOW MANY ROWS the judge actually scored for this metric. A mean over
+    // a fifth of the rows is not this run's score for that metric, and the
+    // panel has to be able to say so: a re-score with MiniMax-M3 produced
+    // context_entities_recall for 21 of 100 rows (the metric's entity
+    // extraction does not survive that model family) and the comparison
+    // read as a like-for-like delta over the whole run.
+    coverage[m] = { scored: vals.length, total: results.length };
   }
   return {
     n,
@@ -2474,6 +2482,7 @@ function summarizeRun(suite, results, metrics) {
     n_abstained: nAbstained,
     n_evaluable: results.filter((r) => !(byId.get(r.id) || {}).oos).length,
     metrics: means,
+    coverage,
     failing_count: failing.length,
     failing: failing.slice(0, 100)
   };
@@ -3217,7 +3226,13 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
             '(4) Check run_facts.abstentions against run_facts.rows: if a large share of rows abstained, the prompt is OVER-CONSTRAINING — ' +
             'recommend restoring coverage (answer every part the context supports, keep the facts) instead of tightening grounding. ' +
             '(5) Check run_facts.mean_answer_chars: if answers are very short, completeness is being lost — recommend coverage, not brevity. ' +
-            '(6) Every prompt_tweak must name the rows it is based on and the evidence behind them.';
+            '(6) Every prompt_tweak must name the rows it is based on and the evidence behind them. ' +
+            // David 2026-10-25: a judge that could not score a metric on
+            // most rows "reproduced" the low score on the few it did
+            // score — which read as confirmation. A metric the judge did
+            // not score on a row says NOTHING about that row.
+            '(7) Check summary.coverage: a metric scored on fewer rows than the run has is UNMEASURED on the rest. ' +
+            'Never prescribe a change for a row whose metric the judge did not score — say the metric was not measured.';
           const advisorUserPayload = JSON.stringify({
             repo: suite.name,
             metrics: runDoc.metrics,

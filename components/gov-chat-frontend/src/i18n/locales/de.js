@@ -3404,6 +3404,8 @@ export default {
         advisorHint:
           '{n} Fragen liegen unter ihren Metrik-Schwellenwerten. Starten Sie den Advisor, um jeden Fehlschlag einer Pipeline-Stufe zuzuordnen und konkrete Maßnahmen zu erhalten.',
         copy: 'Vollständige Antwort kopieren',
+        coverageTitle:
+          'Der Richter hat diese Metrik in {n} von {total} Zeilen bewertet — die Punktzahl deckt nur diese Zeilen ab.',
         colResizeTip: 'Ziehen Sie den Griff zum Skalieren — Doppelklick auf die Kopfzeile setzt zurück',
         trendTitle: 'Metrik-Trend über Läufe',
         trendNote:

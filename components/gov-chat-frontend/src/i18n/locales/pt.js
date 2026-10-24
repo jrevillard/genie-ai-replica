@@ -3394,6 +3394,7 @@ export default {
         advisorHint:
           '{n} perguntas estão abaixo dos seus limiares de métricas. Execute o assistente para atribuir cada falha a um estágio do pipeline e obter ações concretas.',
         copy: 'Copiar a resposta completa',
+        coverageTitle: 'O juiz avaliou esta métrica em {n} de {total} linhas — a pontuação cobre apenas essas linhas.',
         colResizeTip: 'Arraste a alça para redimensionar — duplo clique no cabeçalho para redefinir',
         trendTitle: 'Tendência das métricas por execução',
         trendNote:

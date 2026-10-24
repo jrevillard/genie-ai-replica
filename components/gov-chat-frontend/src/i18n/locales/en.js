@@ -2035,6 +2035,7 @@ export default {
         advisorHint:
           '{n} questions are below their metric thresholds. Run the advisor to attribute each failure to a pipeline stage and get concrete actions.',
         copy: 'Copy the full answer',
+        coverageTitle: 'The judge scored this metric on {n} of {total} rows — the score covers only those rows.',
         colResizeTip: 'Drag the grip to resize — double-click the header to reset',
         trendTitle: 'Metric trend across runs',
         trendNote:

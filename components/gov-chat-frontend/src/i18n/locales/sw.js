@@ -3377,6 +3377,7 @@ export default {
         advisorHint:
           'Maswali {n} yako chini ya vikwazo vyao vya kipimo. Endesha mshauri ili kuhusisha kila kushindwa na hatua ya pipeline na kupata vitendo maalum.',
         copy: 'Nakili jibu kamili',
+        coverageTitle: 'Msimamizi alipima kipimo hiki kwenye safu {n} kati ya {total} — alama inahusu safu hizo tu',
         colResizeTip: 'Buruta handlesi kubadilisha ukubwa — bonyeza mara mbili kichwa kuanza upya',
         trendTitle: 'Mwelekeo wa vipimo kati ya uendeshaji',
         trendNote:

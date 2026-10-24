@@ -441,6 +441,9 @@
           <span class="okf-ragas__gauge-label">
             {{ g.label }}
             <DsInfoTip :label="g.label" :text="metricNote(g.key)" />
+            <!-- The gauge is the run's score for this metric. If the judge
+                 only scored it on some rows, the gauge covers only those. -->
+            <span v-if="g.coverage" class="okf-ragas__muted" :title="g.coverageTitle">{{ g.coverage }}</span>
           </span>
         </div>
       </div>
@@ -661,6 +664,20 @@
             </td>
             <td v-for="m in historyMetricKeys" :key="m">
               {{ scoreText(h.summary && h.summary.metrics && h.summary.metrics[m]) }}
+              <span
+                v-if="coverageText(h.summary, m)"
+                class="okf-ragas__muted"
+                :title="
+                  translate(
+                    'okf.ragas.results.coverageTitle',
+                    'The judge scored this metric on {n} of {total} rows — the mean covers only those rows.'
+                  )
+                    .replace('{n}', String((h.summary.coverage[m] || {}).scored))
+                    .replace('{total}', String((h.summary.coverage[m] || {}).total))
+                "
+              >
+                {{ coverageText(h.summary, m) }}
+              </span>
             </td>
             <td>
               <div class="okf-ragas__row-actions">
@@ -1029,12 +1046,28 @@ export default {
       return (this.runDoc && this.runDoc.payload && this.runDoc.payload.results) || [];
     },
     aggregateRows() {
-      const metrics =
-        (this.runDoc && this.runDoc.payload && this.runDoc.payload.summary && this.runDoc.payload.summary.metrics) ||
-        {};
+      const summary = (this.runDoc && this.runDoc.payload && this.runDoc.payload.summary) || {};
+      const metrics = summary.metrics || {};
       return Object.entries(metrics)
         .filter(([, v]) => typeof v === 'number')
-        .map(([key, v]) => ({ key, label: this.metricLabel(key), series: [Math.round(v * 100)] }));
+        .map(([key, v]) => {
+          const cov = summary.coverage && summary.coverage[key];
+          const partial = cov && typeof cov.scored === 'number' && typeof cov.total === 'number' && cov.scored < cov.total;
+          return {
+            key,
+            label: this.metricLabel(key),
+            series: [Math.round(v * 100)],
+            coverage: partial ? `${cov.scored}/${cov.total}` : '',
+            coverageTitle: partial
+              ? this.translate(
+                  'okf.ragas.results.coverageTitle',
+                  'The judge scored this metric on {n} of {total} rows — the score covers only those rows.'
+                )
+                  .replace('{n}', String(cov.scored))
+                  .replace('{total}', String(cov.total))
+              : ''
+          };
+        });
     },
     trendSeries() {
       const history = [...this.runHistory].filter((h) => h.summary && h.summary.metrics).reverse();
@@ -1417,6 +1450,17 @@ export default {
     },
     scoreText(v) {
       return typeof v === 'number' && v === v ? v.toFixed(2) : '—';
+    },
+    /** How many rows the judge actually scored for a metric. A mean over a
+     * fraction of the rows is NOT the run's score for that metric, and the
+     * panel has to say so: a re-score with MiniMax-M3 produced
+     * context_entities_recall for 21 of 100 rows and the comparison read as
+     * a like-for-like delta over the whole run. */
+    coverageText(summary, metric) {
+      const c = summary && summary.coverage && summary.coverage[metric];
+      if (!c || typeof c.scored !== 'number' || typeof c.total !== 'number') return '';
+      if (c.total <= 0 || c.scored >= c.total) return '';
+      return `${c.scored}/${c.total}`;
     },
     colStyle(key) {
       const w = this.colWidths[key];

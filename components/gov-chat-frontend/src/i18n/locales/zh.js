@@ -3316,6 +3316,7 @@ export default {
         failing: '{n} 项失败',
         advisorHint: '{n} 个问题低于其指标阈值。运行顾问，将每个失败归因于某个管道阶段并获取具体操作。',
         copy: '复制完整答案',
+        coverageTitle: '评审仅在 {total} 行中的 {n} 行上对该指标评分——得分只覆盖这些行。',
         colResizeTip: '拖动手柄调整大小——双击表头重置',
         trendTitle: '各次运行的指标趋势',
         trendNote:

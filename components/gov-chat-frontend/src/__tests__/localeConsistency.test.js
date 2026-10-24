@@ -181,6 +181,9 @@ describe('Locale consistency', () => {
     // the advisor CITES — consumed via .replace() for {rows}/{abstentions}/
     // {chars}, so they must carry the plain {x} form.
     'okf.ragas.explain.facts',
+    // RAGAS metric coverage (2026-10-25): how many rows the judge scored
+    // for a metric — consumed via .replace() for {n}/{total}.
+    'okf.ragas.results.coverageTitle',
     // Model-config connection test (2026-10-19): composed in
     // ModelConfigPanel.testMessage() via .replace() for {n}/{ms}/{model}.
     'okf.models.modelsLoaded',

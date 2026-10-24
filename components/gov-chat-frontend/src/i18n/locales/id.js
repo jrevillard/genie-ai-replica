@@ -3382,6 +3382,8 @@ export default {
         advisorHint:
           '{n} pertanyaan berada di bawah ambang batas metriknya. Jalankan penasihat untuk mengaitkan setiap kegagalan dengan tahap pipeline dan mendapatkan tindakan konkret.',
         copy: 'Salin jawaban lengkap',
+        coverageTitle:
+          'Penilai memberi skor metrik ini pada {n} dari {total} baris — skor hanya mencakup baris tersebut.',
         colResizeTip: 'Seret pegangan untuk mengubah ukuran — klik ganda header untuk mengatur ulang',
         trendTitle: 'Tren metrik per run',
         trendNote:

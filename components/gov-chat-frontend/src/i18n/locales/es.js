@@ -3401,6 +3401,7 @@ export default {
         advisorHint:
           '{n} preguntas están por debajo de sus umbrales de métricas. Ejecute el asesor para atribuir cada fallo a una etapa del pipeline y obtener acciones concretas.',
         copy: 'Copiar la respuesta completa',
+        coverageTitle: 'El juez puntuó esta métrica en {n} de {total} filas — la puntuación solo cubre esas filas.',
         colResizeTip: 'Arrastre el tirador para redimensionar — doble clic en el encabezado para restablecer',
         trendTitle: 'Tendencia de métricas por ejecución',
         trendNote:

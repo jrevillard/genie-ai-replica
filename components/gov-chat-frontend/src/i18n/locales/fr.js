@@ -3403,6 +3403,7 @@ export default {
         advisorHint:
           '{n} questions sont sous leurs seuils de métriques. Lancez le conseiller pour attribuer chaque échec à une étape du pipeline et obtenir des actions concrètes.',
         copy: 'Copier la réponse complète',
+        coverageTitle: 'Le juge a noté cette métrique sur {n} lignes sur {total} — le score ne couvre que ces lignes.',
         colResizeTip: 'Faites glisser la poignée pour redimensionner — double-cliquez sur l’en-tête pour réinitialiser',
         trendTitle: 'Tendance des métriques par exécution',
         trendNote:

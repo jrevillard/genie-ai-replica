@@ -16,6 +16,7 @@ const dbService = require('/app/shared-lib/db-connection-service');
 
 const runKey = process.argv[2];
 const metric = process.argv[3] || 'context_entities_recall';
+const metrics = metric.split(',').map((x) => x.trim()).filter(Boolean);
 const SIDECAR = process.env.OKF_RAGAS_URL || 'http://ragas-service:8090';
 
 function reqJson(method, url, body) {
@@ -75,7 +76,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // judge: null → the sidecar's own env judge (RAGAS_JUDGE_*).
   const submitted = await reqJson('POST', `${SIDECAR}/evaluate`, {
     samples,
-    metrics: [metric],
+    metrics,
     judge: null
   });
   if (submitted.status !== 202) {
@@ -96,7 +97,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     process.exit(1);
   }
   const pq = (job.result && job.result.per_query) || [];
-  const scored = pq.filter((q) => typeof q[metric] === 'number' && !Number.isNaN(q[metric]));
+  const scored = pq.filter((q) => typeof q[metric] === "number" && !Number.isNaN(q[metric]));
   const mean = scored.length ? scored.reduce((a, b) => a + b[metric], 0) / scored.length : null;
   console.log(`\nscored ${scored.length}/${pq.length}  mean=${mean === null ? '-' : mean.toFixed(4)}`);
   const old = rows.map((r) => (r.metrics || {})[metric]);

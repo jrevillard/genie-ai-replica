@@ -1180,6 +1180,46 @@ describe('RagasPanel', () => {
     });
   });
 
+  describe('metric coverage (2026-10-25)', () => {
+    it('says how many rows a metric was actually scored on', () => {
+      const summary = {
+        n: 100,
+        metrics: { faithfulness: 0.9, context_entities_recall: 0.42 },
+        // The judge scored the entity metric on 21 of 100 rows only.
+        coverage: {
+          faithfulness: { scored: 100, total: 100 },
+          context_entities_recall: { scored: 21, total: 100 }
+        }
+      };
+      expect(summary.coverage.faithfulness.scored).toBe(summary.coverage.faithfulness.total);
+      const w = mountPanel();
+      w.vm.runHistory = [{ _key: 'rr1', summary }];
+      // A fully covered metric says nothing extra.
+      expect(w.vm.coverageText(summary, 'faithfulness')).toBe('');
+      // A partial one names the fraction.
+      expect(w.vm.coverageText(summary, 'context_entities_recall')).toBe('21/100');
+      // A summary with no coverage at all (an older run) says nothing.
+      expect(w.vm.coverageText({ metrics: {} }, 'faithfulness')).toBe('');
+    });
+
+    it('marks the gauge when the metric was scored on a fraction of the rows', () => {
+      const w = mountPanel();
+      w.vm.runDoc = {
+        metrics: ['faithfulness'],
+        payload: {
+          summary: {
+            n: 100,
+            metrics: { faithfulness: 0.42 },
+            coverage: { faithfulness: { scored: 21, total: 100 } }
+          }
+        }
+      };
+      const g = w.vm.aggregateRows[0];
+      expect(g.coverage).toBe('21/100');
+      expect(g.coverageTitle).toContain('21');
+    });
+  });
+
   describe('run facts the advice cites (2026-10-25)', () => {
     const ADVICE = {
       knob_changes: [],

@@ -1,0 +1,1055 @@
+// Copyright (C) 2026 International Telecommunication Union (ITU)
+// SPDX-License-Identifier: Apache-2.0
+// Repository CRUD service — business logic + direct AQL via the SHARED
+// db-connection-service (components/shared/lib) — no reinvented connection,
+// no ORM/repository pattern. The shared service manages the connection lifecycle
+// (pooling, self-healing, recovery) and exposes the arangojs Database interface.
+// Every method is MELT-instrumented: OTel span (withSpan) + structured log +
+// okf_repo_operations_total business counter. Audit rows written on mutations.
+// Per ADR-okf-018: same ArangoDB database as the graphs. Repository uniqueness
+// on (name, domain) is DB-ENFORCED via a unique index on [name, domain, deleted_at]
+// (live docs share deleted_at=null → collide; soft-deleted tombstones have a unique
+// timestamp → re-create allowed). repo_id is used AS the document _key.
+
+const { v4: uuidv4 } = require('uuid');
+const { DateTime } = require('luxon');
+const { aql } = require('arangojs');
+const dbService = require('../shared-lib/db-connection-service');
+const { logger } = require('../shared-lib/logger');
+const { withSpan } = require('../shared-lib/tracing');
+const { getMeter } = require('../shared-lib/metrics');
+const auditService = require('./audit-service');
+const conformanceService = require('./conformance-service');
+const piiService = require('./pii-service');
+const { retractRepoGraph } = require('./graph-retract-service');
+const backingFileService = require('./backing-file-service');
+const { workingGraphName } = require('./graph-lifecycle-service');
+
+const COLLECTION = 'okf_repositories';
+
+// FR-9 lifecycle states — inlined per story; extract to lifecycle.js in Story 4.3.
+// 'draft' (Story 4.8, design addendum D-V5): a CLONED repository enters 'draft' —
+// a fork not yet in the register→…→retire flow. Story 4.3's TRANSITIONS map must
+// include a 'draft' entry (noted in the 4.8 scope boundary). Manually-created
+// repos keep INITIAL_STATE='register' — two distinct entry states, both valid.
+const LIFECYCLE_STATES = [
+  'draft',
+  'register',
+  'validate',
+  'review',
+  'approve',
+  'publish',
+  'retracted', // Story #978 lifecycle: a pulled-from-service repo (own lane)
+  'version',
+  'deprecate',
+  'retire'
+];
+const INITIAL_STATE = 'register';
+const IMMUTABLE_FIELDS = ['graph_name', 'repo_id', 'domain'];
+// Story 1.7 (2026-10-08): `frontmatter` is now a top-level updatable
+// field on the repo doc (the canonical store for the per-repo tag
+// set). The wizard's Curate step / editor's center pane write the
+// index.md YAML and that writes through to this field (via the
+// concept-meta PATCH in the existing concept service). Adding it
+// here so a direct PATCH /api/okf/repos/:id with a `frontmatter` key
+// is also accepted (back-stop for the operator migration script).
+const UPDATABLE_FIELDS = ['name', 'source', 'acl', 'retention', 'studio_step', 'frontmatter'];
+// How long a frontmatter save will WAIT for the routing head before
+// releasing the HTTP response. The head is a derived artifact and the TEI
+// embed behind it is a network call to the shared remote GPU node, so the
+// save must never be hostage to another tenant's load. See the bounded
+// rebuild in update().
+const HEAD_REBUILD_BUDGET_MS = 5000;
+// Story 1-8d — frontmatter_history bound (revert support for the Lab).
+const FRONTMATTER_HISTORY_LIMIT = 10;
+
+// ArangoDB error codes used for control flow.
+const ARANGO_NOT_FOUND = (err) => err && (err.code === 404 || err.errorNum === 1204 || err.statusCode === 404);
+const ARANGO_UNIQUE_VIOLATION = (err) =>
+  err && (err.errorNum === 1210 || err.errorNum === 1185 || err.code === 409 || err.statusCode === 409);
+
+/** firstExample that treats a no-match as null (real arangojs + the shared db
+ * wrapper THROW "no match"; the unit mock returns null). API smoke test caught
+ * this divergence in repo-create's dup-check — a no-match caused a 500. */
+function notFoundAsNull(err) {
+  return err && (ARANGO_NOT_FOUND(err) || (err.message && /no match|not found/i.test(String(err.message))));
+}
+async function findExampleOrNull(col, example) {
+  try {
+    return await col.firstExample(example);
+  } catch (err) {
+    if (!notFoundAsNull(err)) throw err; // transient — surface, don't mask
+    return null;
+  }
+}
+
+// MELT — OKF business operations counter (no-op when observability is off).
+const meter = getMeter();
+const opsCounter = meter.createCounter('okf_repo_operations_total', {
+  description: 'OKF repository operations (create/list/get/update/delete)'
+});
+
+function recordOp(operation, status) {
+  try {
+    opsCounter.add(1, { operation, status });
+  } catch {
+    /* meter is a no-op when observability is disabled — ignore */
+  }
+}
+
+function nowIso() {
+  return DateTime.now().toUTC().toISO();
+}
+
+// Shared DB connection — cache the RESOLVED proxy (not the promise), mirroring
+// gov-chat-backend's chat-history-service. On failure _db stays null, so the next
+// call retries (resilient: a transient boot-time outage does NOT permanently wedge
+// the service, unlike caching a rejected promise).
+let _db = null;
+async function getDb() {
+  if (_db) return _db;
+  _db = await dbService.getConnection('default');
+  return _db;
+}
+
+class RepoError extends Error {
+  constructor(code, message, status) {
+    super(message);
+    this.code = code;
+    this.status = status;
+  }
+}
+
+/** Strip Arango internals; repo_id already carries identity (it IS _key). */
+function toResponse(doc) {
+  if (!doc) return null;
+  const out = { ...doc };
+  delete out._id;
+  delete out._rev;
+  delete out._key;
+  return out;
+}
+
+function encodeCursor(created_at, repo_id) {
+  return Buffer.from(JSON.stringify({ ts: created_at, id: repo_id })).toString('base64url');
+}
+
+function decodeCursor(cursor) {
+  let decoded;
+  try {
+    decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+  } catch {
+    throw new RepoError('VALIDATION_ERROR', 'Invalid cursor', 400);
+  }
+  if (!decoded || typeof decoded.ts !== 'string' || typeof decoded.id !== 'string') {
+    throw new RepoError('VALIDATION_ERROR', 'Invalid cursor payload', 400);
+  }
+  return decoded;
+}
+
+/**
+ * Create a repository: mint repo_id, reserve graph_name=OKF_{repo_id}, bind domain.
+ * Uniqueness on (name, domain) is DB-ENFORCED (unique index on [name,domain,deleted_at]);
+ * the app-layer check is a clean-error fast path, and save() catches the unique-violation
+ * so concurrent creates cannot produce duplicates.
+ * @param {object} input {name, domain, source?, acl, retention?}
+ * @param {object} actor {sub, name?, source_ip?}
+ * @param {object} [opts] ADDITIVE (Story 4.8, R5) — { lifecycle_state?, cloned_from?,
+ *        audit_action?, okf_version? }. Defaults reproduce the pre-4.8 behavior
+ *        byte-identically ('register', no cloned_from field, audit 'repo.create',
+ *        okf_version '0.2') so existing callers are untouched. The clone passes
+ *        { lifecycle_state:'draft', cloned_from:{repo_id,version},
+ *        audit_action:'repo.clone', okf_version: source.okf_version }.
+ */
+async function create(input, actor, opts = {}) {
+  return withSpan('okf.repo.create', async (span) => {
+    span.setAttribute('okf.operation', 'create');
+    span.setAttribute('okf.domain', input.domain);
+    // Review fix (4.8): the additive opts are a public API surface now — validate
+    // them so a typo'd lifecycle_state or malformed cloned_from can never persist
+    // an out-of-invariant registry doc (the clone path itself is hardcoded safe).
+    if (opts.lifecycle_state != null && !LIFECYCLE_STATES.includes(opts.lifecycle_state)) {
+      throw new RepoError(
+        'VALIDATION_ERROR',
+        `invalid lifecycle_state '${opts.lifecycle_state}' (must be one of ${LIFECYCLE_STATES.join('|')})`,
+        400
+      );
+    }
+    if (opts.cloned_from != null && typeof opts.cloned_from.repo_id !== 'string') {
+      throw new RepoError('VALIDATION_ERROR', 'cloned_from.repo_id must be a string', 400);
+    }
+    logger.info('Creating OKF repository', { name: input.name, domain: input.domain });
+    const db = await getDb();
+
+    // App-layer dup-check (clean 409 fast path). firstExample may return a soft-deleted
+    // tombstone (deleted_at set) — that does NOT block re-create; the DB index is the
+    // authoritative guard for the live-uniqueness invariant.
+    const dup = await findExampleOrNull(db.collection(COLLECTION), { name: input.name, domain: input.domain });
+    if (dup && !dup.deleted_at) {
+      recordOp('create', 'duplicate');
+      throw new RepoError(
+        'DUPLICATE_REPO',
+        `Repository "${input.name}" already exists in domain "${input.domain}"`,
+        409
+      );
+    }
+
+    const repo_id = uuidv4();
+    const graph_name = `OKF_${repo_id}`;
+    const ts = nowIso();
+    const doc = {
+      _key: repo_id, // repo_id AS the document _key
+      repo_id,
+      name: input.name,
+      domain: input.domain,
+      source: input.source || null,
+      graph_name,
+      okf_version: opts.okf_version || '0.2', // Story 4.8: the clone inherits the source's okf_version (additive; default '0.2')
+      lifecycle_state: opts.lifecycle_state || INITIAL_STATE, // Story 4.8: the clone enters 'draft' (additive; default = register)
+      version: null,
+      curator: actor ? { sub: actor.sub || null, name: actor.name || null } : null,
+      acl: input.acl || {},
+      retention: input.retention || null,
+      created_at: ts,
+      updated_at: ts,
+      deleted_at: null,
+      delete_after: null
+    };
+    // Story 4.8 (D-V5): a clone records its origin lineage. Additive — a regular
+    // create carries NO cloned_from field, so its doc shape is byte-identical.
+    if (opts.cloned_from) {
+      doc.cloned_from = opts.cloned_from;
+    }
+    try {
+      await db.collection(COLLECTION).save(doc);
+    } catch (err) {
+      // Race-proof backstop: a concurrent create that raced past the app-layer check
+      // hits the DB unique index → unique-violation → clean 409.
+      if (ARANGO_UNIQUE_VIOLATION(err)) {
+        recordOp('create', 'duplicate');
+        throw new RepoError(
+          'DUPLICATE_REPO',
+          `Repository "${input.name}" already exists in domain "${input.domain}"`,
+          409
+        );
+      }
+      throw err;
+    }
+    span.setAttribute('okf.repo_id', repo_id);
+
+    await auditService.writeAudit({
+      actor: (actor && actor.sub) || 'system',
+      actor_name: (actor && actor.name) || null,
+      action: opts.audit_action || 'repo.create', // Story 4.8: the clone audits 'repo.clone' (additive)
+      repo_id,
+      source_ip: (actor && actor.source_ip) || null,
+      description:
+        opts.audit_action === 'repo.clone'
+          ? 'Cloned repository as "' + input.name + '" (domain ' + input.domain + ')'
+          : 'Created repository "' + input.name + '" in domain "' + input.domain + '"'
+    });
+    recordOp('create', 'success');
+    logger.info('OKF repository created', { repo_id, graph_name, domain: input.domain });
+    return toResponse(doc);
+  });
+}
+
+/**
+ * Clone an OKF repository (Story 4.8 — design addendum D-V5 backend semantics).
+ * Creates a NEW repository (new repo_id + OKF_{repo_id} graph, unique registry
+ * entry, lifecycle_state='draft') whose registry doc records the origin lineage
+ * `cloned_from: { repo_id, version }`, then copies the source's okf_concepts_meta
+ * rows VERBATIM — the D-V1 ingestion-identity triple (title, bundle_version,
+ * content_hash) AND the indexing state (index_status/pii_state/conformance_issues/
+ * lifecycle_status/trust_tier/labels/links/frontmatter/sources/created_at) are
+ * preserved; `concept_id` is copied AS-IS (never re-derived — the 2.9.3
+ * `concepts/`-prefix lesson). The copy is METADATA-ONLY (D-V5 v1 semantics):
+ * chunks/edges are NOT copied; content materializes into the clone's OWN graph on
+ * re-ingest through the EXISTING write path (2.9.1 orchestrator → 2.9.4 worker →
+ * 2.9.6 graph wiring). Because index_status is preserved, an unchanged+indexed
+ * concept dedup-skips on the clone's re-ingest (the 4e rule); a MODIFIED concept
+ * re-ingests into the clone graph. The SOURCE is never written (isolation).
+ * @param {string} source_id — the repository to fork
+ * @param {object} [input] { name?, domain?, acl?, source?, retention? } — target
+ *        identity overrides (defaults: `<source> (clone)`, source domain/acl)
+ * @param {object} [actor] { sub, name?, source_ip? } — audit
+ * @returns {Promise<{...repo, cloned_from, copied_concepts}>}
+ * @throws RepoError REPO_NOT_FOUND (404) | DUPLICATE_REPO (409)
+ */
+async function cloneRepository(source_id, input, actor) {
+  return withSpan('okf.repo.clone', async (span) => {
+    span.setAttribute('okf.operation', 'clone');
+    span.setAttribute('okf.source_repo_id', source_id);
+    const db = await getDb();
+
+    // Resolve the source — the same getById semantics (404 when missing or
+    // soft-deleted; transient DB errors surface, never masked). The controller's
+    // authz-aware getById pre-gate ran FIRST (anti-enumeration); this fetch is
+    // the authoritative existence check + the derivation fields.
+    const source = await getById(source_id);
+
+    // Target identity (D-V5 §8.1): defaults `<source> (clone)` + the source's
+    // domain + the source's ACL (a fork keeps the source's access policy). The
+    // (name, domain, deleted_at) unique index + create()'s dup-check backstop
+    // enforce the D-V2 unique-registry invariant → 409 DUPLICATE_REPO.
+    // Review fix (4.8): the fork does NOT inherit the source's external
+    // `source` (git/s3 origin + syncSchedule) or `retention` — D-V5 says
+    // "upstream updates never propagate automatically"; a clone is an in-app
+    // fork with no external origin and its own lifecycle.
+    // The derived name is clamped to the 200-char registry bound (a source
+    // named at the Joi max would otherwise derive a 209-char name past it).
+    const derivedName = String(source.name || '').slice(0, 190) + ' (clone)';
+    const target = {
+      name: (input && input.name) || derivedName,
+      domain: (input && input.domain) || source.domain,
+      acl: (input && input.acl) || source.acl || {}
+    };
+
+    // New registry entry via the shared create() registry logic — additive opts
+    // (lifecycle_state='draft', cloned_from lineage, audit 'repo.clone',
+    // okf_version from the source).
+    const clone = await create(target, actor, {
+      lifecycle_state: 'draft',
+      cloned_from: { repo_id: source_id, version: source.version != null ? source.version : null },
+      audit_action: 'repo.clone',
+      okf_version: source.okf_version || '0.2'
+    });
+
+    // Copy the source's concepts + meta VERBATIM into the clone's repo. The
+    // (repo_id, concept_id) unique index guards each inserted row. Bounded: a
+    // source's concept set is ingest-capped (OKF_INGEST_MAX_CONCEPTS per ingest),
+    // so the sequential copy is bounded per-repo in practice (review note).
+    // COMPENSATION (review fix, 4.8): create() commits the registry entry before
+    // the copy — a mid-copy failure must NEVER leave an orphaned partial fork.
+    // On any error we hard-delete the fresh registry doc + any copied rows and
+    // rethrow (with a clone failure metric), so a retry starts clean.
+    const metaCol = db.collection('okf_concepts_meta');
+    let copied = 0;
+    try {
+      const sourceRows = await (
+        await db.query('FOR m IN okf_concepts_meta FILTER m.repo_id == @source_id RETURN m', { source_id })
+      ).all();
+      const ts = nowIso();
+      for (const row of sourceRows) {
+        const copy = { ...row };
+        delete copy._key;
+        delete copy._id;
+        delete copy._rev;
+        copy.repo_id = clone.repo_id;
+        // Born-right: the clone's rows drain into the clone's OWN versioned
+        // draft graph (its first publish mints version+1 — the same name).
+        copy.graph_name = workingGraphName(clone);
+        copy.updated_at = ts; // created_at preserved (the content's origin lineage)
+        await metaCol.save(copy);
+        copied += 1;
+      }
+    } catch (err) {
+      try {
+        await db.collection(COLLECTION).remove(clone.repo_id);
+        await db.query('FOR m IN okf_concepts_meta FILTER m.repo_id == @clone_id REMOVE m IN okf_concepts_meta', {
+          clone_id: clone.repo_id
+        });
+        logger.warn('OKF clone compensated (rolled back partial fork)', { source_id, repo_id: clone.repo_id });
+      } catch (cleanupErr) {
+        logger.error('OKF clone compensation cleanup failed', {
+          source_id,
+          repo_id: clone.repo_id,
+          error: cleanupErr.message
+        });
+      }
+      recordOp('clone', 'error');
+      throw err;
+    }
+
+    span.setAttribute('okf.clone.repo_id', clone.repo_id);
+    span.setAttribute('okf.clone.copied_concepts', copied);
+    recordOp('clone', 'success');
+    logger.info('OKF repository cloned', { source_id, repo_id: clone.repo_id, copied_concepts: copied });
+    // concept_count rides the response too (David, 2026-09-30): the wizard's
+    // Choose step patches the draft straight from it — the bare
+    // copied_concepts spelling left the draft at "0 topics" until the next
+    // full list refresh.
+    return { ...clone, copied_concepts: copied, concept_count: copied };
+  });
+}
+
+/**
+ * List repositories, optionally domain-filtered, cursor-paginated (created_at DESC).
+ * @param {object} opts {domain?, cursor?, limit?}
+ */
+/**
+ * List repositories. Default-deny (Story 6.1): `authz` is a Set of authorized
+ * repo_ids (empty ⇒ NOTHING — never the full catalog) or null/absent ⇒
+ * unrestricted (super-admin / internal callers). Any other type THROWS —
+ * a wrong-typed authz must never fail open to unrestricted (review fix).
+ * @param {object} opts { domain?, authz?: Set<string>|null, cursor?, limit? }
+ */
+async function list({ domain, authz, cursor, limit } = {}) {
+  return withSpan('okf.repo.list', async (span) => {
+    span.setAttribute('okf.operation', 'list');
+    if (domain) span.setAttribute('okf.domain', domain);
+    if (authz != null && !(authz instanceof Set)) {
+      throw new RepoError('AUTHZ_TYPE_ERROR', 'authz must be a Set of repo_ids or null', 500);
+    }
+    // Default-deny (Story 6.1, G3): an EMPTY authorized set sees NOTHING —
+    // short-circuit before the query; it must never fall through to the full
+    // catalog. authz = null/absent ⇒ unrestricted (super-admin / internal).
+    if (authz instanceof Set && authz.size === 0) {
+      span.setAttribute('okf.result_count', 0);
+      recordOp('list', 'success');
+      logger.info('OKF repositories listed (empty authorized set)', { count: 0 });
+      return { items: [], next_cursor: null };
+    }
+    const db = await getDb();
+
+    const safeLimit = Math.max(1, Math.min(parseInt(limit, 10) || 50, 100));
+    let cursorTs = null;
+    let cursorId = null;
+    if (cursor) {
+      const c = decodeCursor(cursor);
+      cursorTs = c.ts;
+      cursorId = c.id;
+    }
+
+    const domainFilter = domain ? aql`FILTER d.domain == ${domain}` : aql``;
+    const authzFilter = authz instanceof Set ? aql`FILTER d.repo_id IN ${[...authz]}` : aql``;
+    // Sort is created_at DESC, repo_id ASC — so "after the cursor" within the same
+    // created_at means repo_id STRICTLY GREATER than the cursor's repo_id.
+    const cursorFilter = cursor
+      ? aql`FILTER d.created_at < ${cursorTs} OR (d.created_at == ${cursorTs} AND d.repo_id > ${cursorId})`
+      : aql``;
+
+    const query = aql`
+      FOR d IN ${db.collection(COLLECTION)}
+        FILTER d.deleted_at == null
+        ${domainFilter}
+        ${authzFilter}
+        ${cursorFilter}
+        SORT d.created_at DESC, d.repo_id ASC
+        LIMIT ${safeLimit}
+        RETURN d
+    `;
+    const result = await db.query(query);
+    const docs = await result.all();
+    const items = docs.map(toResponse);
+    await attachIndexingPending(items);
+    await attachConceptCounts(items);
+    await attachFailedCounts(items);
+    const next_cursor =
+      items.length === safeLimit && items.length > 0
+        ? encodeCursor(items[items.length - 1].created_at, items[items.length - 1].repo_id)
+        : null;
+    span.setAttribute('okf.result_count', items.length);
+    recordOp('list', 'success');
+    logger.info('OKF repositories listed', { count: items.length, domain: domain || 'all' });
+    return { items, next_cursor };
+  });
+}
+
+/**
+ * BUILDING UI SIGNAL (David, 2026-09-02): attach `indexing_pending` (the
+ * repo's parsed-row count) to repo rows so the dashboard can pin building
+ * repos to "In progress" and show an animated builder. One grouped query for
+ * the whole page — never per-repo. Fail-soft: a count failure leaves the
+ * field undefined (the UI treats it as 0).
+ * @param {object[]} rows repo response rows (mutated in place)
+ */
+async function attachIndexingPending(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return;
+  try {
+    const db = await getDb();
+    const counts = await (
+      await db.query(
+        'FOR m IN okf_concepts_meta FILTER m.index_status == @st AND m.repo_id IN @ids ' +
+          'COLLECT repo_id = m.repo_id WITH COUNT INTO n RETURN { repo_id, n }',
+        { st: 'parsed', ids: rows.map((r) => r.repo_id) }
+      )
+    ).all();
+    const byRepo = new Map(counts.map((c) => [c.repo_id, c.n]));
+    for (const r of rows) r.indexing_pending = byRepo.get(r.repo_id) || 0;
+  } catch (err) {
+    logger.warn('indexing_pending attach failed (non-fatal)', { error: err.message });
+  }
+}
+
+/**
+ * FAILED-CONCEPT COUNT on every repo row (David, 2026-10-14: "the re-ingest
+ * menu should only appear for repo's with failed concept ingestions").
+ *
+ * Same shape as attachIndexingPending: ONE grouped COUNT for the whole page,
+ * never per-repo, fail-soft. The card needs a LIVE count because
+ * `rag_ingestion.failed_concepts` is a settle-time snapshot that the re-ingest
+ * arm wipes to [] — reading it would hide the button on exactly the repos that
+ * need it.
+ *
+ * Absent/undefined means "unknown", NOT "zero": the UI must not hide the
+ * action on a count that simply failed to load.
+ * @param {object[]} rows repo response rows (mutated in place)
+ */
+async function attachFailedCounts(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return;
+  try {
+    const db = await getDb();
+    const counts = await (
+      await db.query(
+        'FOR m IN okf_concepts_meta FILTER m.index_status == @st AND m.repo_id IN @ids ' +
+          'COLLECT repo_id = m.repo_id WITH COUNT INTO n RETURN { repo_id, n }',
+        { st: 'failed', ids: rows.map((r) => r.repo_id) }
+      )
+    ).all();
+    const byRepo = new Map(counts.map((c) => [c.repo_id, c.n]));
+    for (const r of rows) r.failed_count = byRepo.get(r.repo_id) || 0;
+  } catch (err) {
+    logger.warn('failed_count attach failed (non-fatal)', { error: err.message });
+  }
+}
+
+/**
+ * LIVE CONCEPT COUNTS on every repo row (David, 2026-09-30, "0 topics" on
+ * the cloned card): the dashboard and the wizard sidebar read
+ * `concept_count` off the LIST rows, but nothing wrote that field since the
+ * legacy ingest path — the registry doc carried a stale denormalized value
+ * (or none at all: clones are born from create()'s fixed shape, so
+ * "Indonesia 2 - Heuristics" showed "0 topics" over 996 copied concepts).
+ * One grouped COUNT for the whole page — never per-repo — overwrites any
+ * stale doc field with the meta-row truth (the same honest-number source
+ * conformanceService.getRepoMetrics uses). Fail-soft: on a count failure
+ * the field is left as-is (0 on new docs) rather than failing the list.
+ * @param {object[]} rows repo response rows (mutated in place)
+ */
+async function attachConceptCounts(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return;
+  try {
+    const db = await getDb();
+    const counts = await (
+      await db.query(
+        'FOR m IN okf_concepts_meta FILTER m.repo_id IN @ids ' +
+          'COLLECT repo_id = m.repo_id WITH COUNT INTO n RETURN { repo_id, n }',
+        { ids: rows.map((r) => r.repo_id) }
+      )
+    ).all();
+    const byRepo = new Map(counts.map((c) => [c.repo_id, c.n]));
+    for (const r of rows) r.concept_count = byRepo.get(r.repo_id) || 0;
+  } catch (err) {
+    logger.warn('concept_count attach failed (non-fatal)', { error: err.message });
+  }
+}
+
+/**
+ * Read one repository by repo_id. Domain-scoped callers get 404 for foreign repos
+ * (avoid leakage; ADR-okf-006 philosophy). Transient DB errors are NOT masked as 404.
+ * @param {string} repo_id
+ * @param {object} opts {domain?}
+ */
+/**
+ * Read one repository by repo_id. Domain-scoped callers get 404 for foreign repos
+ * (avoid leakage; ADR-okf-006 philosophy). Transient DB errors are NOT masked as 404.
+ * `authz` (Story 6.1): Set of authorized repo_ids — a repo outside the set 404s
+ * identically to a missing one (anti-enumeration). null/absent ⇒ unrestricted;
+ * any other type THROWS (never fail open — review fix).
+ * @param {string} repo_id
+ * @param {object} opts {domain?, authz?: Set<string>|null}
+ */
+async function getById(repo_id, { domain, authz } = {}) {
+  return withSpan('okf.repo.getById', async (span) => {
+    span.setAttribute('okf.operation', 'get');
+    span.setAttribute('okf.repo_id', repo_id);
+    if (authz != null && !(authz instanceof Set)) {
+      throw new RepoError('AUTHZ_TYPE_ERROR', 'authz must be a Set of repo_ids or null', 500);
+    }
+    const db = await getDb();
+    let doc;
+    try {
+      doc = await db.collection(COLLECTION).document(repo_id);
+    } catch (err) {
+      if (!ARANGO_NOT_FOUND(err)) throw err; // transient — surface, don't mask as 404
+    }
+    // authz (Story 6.1): a repo outside the caller's authorized set is
+    // indistinguishable from a missing one (same 404 — anti-enumeration).
+    const outsideAuthz = authz instanceof Set && !authz.has(repo_id);
+    if (!doc || doc.deleted_at || (domain && doc.domain !== domain) || outsideAuthz) {
+      recordOp('get', 'not_found');
+      throw new RepoError('REPO_NOT_FOUND', `Repository ${repo_id} not found`, 404);
+    }
+    recordOp('get', 'success');
+    const repo = toResponse(doc);
+    await attachIndexingPending([repo]);
+    try {
+      repo.metrics = await conformanceService.getRepoMetrics(repo_id);
+    } catch (err) {
+      logger.warn('Failed to compute repo metrics (non-fatal)', { repo_id, error: err.message });
+      repo.metrics = null;
+    }
+    // FR-28: stable document references (doc-repo view/download URLs) for the
+    // repo's uploaded files. Non-fatal — a doc-repo blip must not 404 the repo.
+    try {
+      repo.document_references = await piiService.getRepoDocumentReferences(repo_id);
+    } catch (err) {
+      logger.warn('Failed to list document references (non-fatal)', { repo_id, error: err.message });
+      repo.document_references = [];
+    }
+    return repo;
+  });
+}
+
+/**
+ * Partial update of updatable fields only. graph_name/repo_id/domain are immutable.
+ * Renaming to a name that already exists (live) in the same domain is rejected 409.
+ * @param {string} repo_id
+ * @param {object} patch subset of {name, source, acl, retention}
+ * @param {object} actor
+ */
+async function update(repo_id, patch, actor) {
+  return withSpan('okf.repo.update', async (span) => {
+    span.setAttribute('okf.operation', 'update');
+    span.setAttribute('okf.repo_id', repo_id);
+    const db = await getDb();
+
+    const attempted = IMMUTABLE_FIELDS.filter((f) => Object.prototype.hasOwnProperty.call(patch, f));
+    if (attempted.length) {
+      recordOp('update', 'immutable');
+      throw new RepoError('FIELD_IMMUTABLE', `Immutable fields cannot be changed: ${attempted.join(', ')}`, 409);
+    }
+
+    let existing;
+    try {
+      existing = await db.collection(COLLECTION).document(repo_id);
+    } catch (err) {
+      if (!ARANGO_NOT_FOUND(err)) throw err;
+    }
+    if (!existing || existing.deleted_at) {
+      recordOp('update', 'not_found');
+      throw new RepoError('REPO_NOT_FOUND', `Repository ${repo_id} not found`, 404);
+    }
+
+    // SERVING MAINTENANCE (1-8g-q, David 2026-10-11: "I see it as a
+    // maintenance operation, similar to indexing a database"): a serving
+    // repo accepts HEAD/METADATA patches — `frontmatter`, the tag-set the
+    // vectorized head is built from; the Routing Lab + advisor exist to
+    // tune exactly this, and the old blanket lock (2026-08-30) froze the
+    // whole editor on every ingested repo, making the tuning loop
+    // read-only for the only repos that are actually serving. Still
+    // rejected while serving: everything that would desync the versioned
+    // serving graph or its NAME — a rename orphans `OKF_<name-slug>_v<N>`,
+    // and content/structure mutations belong to retract → edit → publish.
+    if (existing.ingested_at) {
+      const disallowed = Object.keys(patch).filter((k) => k !== 'frontmatter');
+      if (disallowed.length) {
+        recordOp('update', 'read_only');
+        throw new RepoError(
+          'REPO_READ_ONLY',
+          'repository is serving (ingested): only head/metadata (frontmatter) ' +
+            `maintenance is allowed — retract it to change: ${disallowed.join(', ')}`,
+          409
+        );
+      }
+      recordOp('update', 'frontmatter_maintenance');
+    }
+
+    // If renaming, reject collision with another LIVE repo in the same domain.
+    if (Object.prototype.hasOwnProperty.call(patch, 'name') && patch.name !== existing.name) {
+      const clash = await findExampleOrNull(db.collection(COLLECTION), { name: patch.name, domain: existing.domain });
+      if (clash && !clash.deleted_at && clash.repo_id !== repo_id) {
+        recordOp('update', 'duplicate');
+        throw new RepoError(
+          'DUPLICATE_REPO',
+          `Repository "${patch.name}" already exists in domain "${existing.domain}"`,
+          409
+        );
+      }
+    }
+
+    // Studio wizard resume pointer (3.4 Amendment A, A4): an optional int
+    // 0..9 or null. Anything else is a client bug — refuse with 400 rather
+    // than silently clamp (a bogus pointer would desync the wizard's lock
+    // model). Serving repos never reach here (READ-ONLY above) — by design:
+    // a serving repo has nothing left to draft, so its pointer is inert.
+    if (Object.prototype.hasOwnProperty.call(patch, 'studio_step')) {
+      const step = patch.studio_step;
+      const validStep = step === null || (Number.isInteger(step) && step >= 0 && step <= 9);
+      if (!validStep) {
+        recordOp('update', 'validation');
+        throw new RepoError('VALIDATION_ERROR', 'studio_step must be an integer 0-9 or null', 400);
+      }
+    }
+
+    const setFields = {};
+    for (const f of UPDATABLE_FIELDS) {
+      if (Object.prototype.hasOwnProperty.call(patch, f)) setFields[f] = patch[f];
+    }
+    // Tag-array dedup at the WRITE BOUNDARY (2026-10-09): the LLM suggester
+    // once emitted "mental-health" 5x inside one forbidden array and it rode
+    // through client + validator into the stored doc. No write path — manual
+    // chips, advisor apply, teach loop, revert of a legacy dup payload — may
+    // persist duplicate tags again. Case-insensitive, first occurrence wins,
+    // order preserved.
+    if (setFields.frontmatter && typeof setFields.frontmatter === 'object') {
+      for (const field of ['topic', 'entity', 'keyword', 'forbidden']) {
+        const list = setFields.frontmatter[field];
+        if (Array.isArray(list)) {
+          const seen = new Set();
+          setFields.frontmatter[field] = list.filter((v) => {
+            const k = String(v).toLowerCase();
+            if (seen.has(k)) return false;
+            seen.add(k);
+            return true;
+          });
+        }
+      }
+      // The save timestamp is a SERVER invariant, not a client courtesy:
+      // every frontmatter write through update() restamps updated_at. The
+      // 2026-10-10 live bug: chip-panel saves replaced frontmatter without
+      // updated_at, so okf_repositories.frontmatter.updated_at kept the
+      // IMPORT-time stamp — the Lab's stale badge (fm.updated_at vs
+      // head.computed_at) and any freshness consumer read a 14h-old lie.
+      setFields.frontmatter.updated_at = nowIso();
+    }
+    // Story 1-8d — bounded frontmatter save history (the Lab's Revert-tags
+    // panel). Every save that CHANGES frontmatter snapshots the shape; the
+    // teaching loop's cycle (add tags -> rebuild -> test) is then reversible
+    // in one click (David 2026-10-09: "we can revert the changes if
+    // necessary in the lab"). Capped at 10 entries.
+    if (Object.prototype.hasOwnProperty.call(setFields, 'frontmatter')) {
+      const prev = Array.isArray(existing.frontmatter_history) ? existing.frontmatter_history : [];
+      setFields.frontmatter_history = [
+        {
+          saved_at: nowIso(),
+          actor: (actor && (actor.sub || actor.user_id || actor.name)) || 'system',
+          shape: setFields.frontmatter
+        },
+        ...prev
+      ].slice(0, FRONTMATTER_HISTORY_LIMIT);
+    }
+    const nameChanged = Object.prototype.hasOwnProperty.call(setFields, 'name') && setFields.name !== existing.name;
+    const oldName = existing.name;
+    setFields.updated_at = nowIso();
+    try {
+      await db.collection(COLLECTION).update(repo_id, setFields);
+    } catch (err) {
+      // Race-proof backstop for the rename dup-check (DB unique index on [name,domain,deleted_at]).
+      if (ARANGO_UNIQUE_VIOLATION(err)) {
+        recordOp('update', 'duplicate');
+        throw new RepoError('DUPLICATE_REPO', `Repository name already exists in this domain`, 409);
+      }
+      throw err;
+    }
+
+    // THE HEAD MUST TRACK THE FRONTMATTER (David, 2026-10-12: "the test still
+    // sits at 80%... it is not suggesting any further improvements").
+    //
+    // The head is the gate vector the retriever scores queries against, and
+    // buildVectorizedHead is its only writer besides the explicit rebuild
+    // endpoint and publish. update() wrote the frontmatter and never told it,
+    // so the head stayed frozen while the tag set grew underneath it. Live
+    // proof on the Alphabet repo: four saves at 04:15/04:17/04:17/04:19, the
+    // head recomputed ONCE at 04:15:37 and never again, and three Lab runs
+    // then scored bit-identically (avg_margin equal to 17 decimal places)
+    // against an unchanged gate while the forbidden list grew 5->6->7->8. The
+    // advisor reported "no safe tag lever" because it had nothing new to
+    // simulate — it was reasoning over a stale corpus, not failing to help.
+    //
+    // Two more repos were frozen the same way (www-gov-uk-full-crawl, NCD
+    // Information), so this is systemic, not an Alphabet quirk.
+    //
+    // BOUNDED, NOT BLOCKING. Awaiting this outright — the first cut of this
+    // fix — made every tag save hostage to the shared remote GPU node: TEI
+    // embed is a network call with a 30s axios timeout and three retries, so
+    // a slow embedding endpoint pushed the PATCH past the gateway's read
+    // timeout and the curator got a 504 for a write that had actually
+    // succeeded. Live 2026-10-12: PATCH /api/okf/repos/:id returned
+    // 504 Gateway Time-out while the frontmatter persisted correctly.
+    //
+    // So the rebuild gets HEAD_REBUILD_BUDGET_MS and then the response goes
+    // regardless. buildVectorizedHead writes the head in ONE update at the
+    // very end, so an overrun means "not written yet", never a half-written
+    // head — the late write still lands. A failure never rolls the save back
+    // (the frontmatter is already durable, and losing a curator's tag edit
+    // over an embedding blip is strictly worse than a stale head); it logs at
+    // error, and the Lab's existing stale badge (frontmatter.updated_at vs
+    // head.computed_at) is the designed detector.
+    //
+    // Lazy require: head-test-service requires this module, so a top-level
+    // import here would be a cycle. Same pattern as graph-lifecycle below.
+    if (Object.prototype.hasOwnProperty.call(setFields, 'frontmatter')) {
+      const frontmatterService = require('./frontmatter-service');
+      const headActor = (actor && actor.sub) || 'system';
+      const rebuild = frontmatterService
+        .buildVectorizedHead(repo_id, setFields.frontmatter, { actor: headActor, version: existing.version })
+        .then((head) => {
+          logger.info('OKF repo updated: head rebuilt from the new frontmatter', {
+            repo_id,
+            dim: head && head.dim
+          });
+        })
+        .catch((headErr) => {
+          logger.error('OKF repo updated: HEAD REBUILD FAILED — the gate is now stale', {
+            repo_id,
+            error: headErr && headErr.message,
+            code: (headErr && headErr.code) || null
+          });
+        });
+      await Promise.race([
+        rebuild,
+        new Promise((resolve) => {
+          const timer = setTimeout(resolve, HEAD_REBUILD_BUDGET_MS);
+          if (timer.unref) timer.unref();
+        })
+      ]);
+    }
+
+    // BORN-RIGHT RENAME (David, 2026-09-02): the graph name derives from the
+    // repo NAME — a rename must move the graph (same versions, new slug), or
+    // the next drain would create a differently-named graph and orphan the
+    // drained content. Runs AFTER the registry write; a failure throws (no
+    // silent split — the audit trail shows the rename attempt and a follow-up
+    // update heals via the drained-graph authority).
+    if (nameChanged) {
+      try {
+        const refreshedForGraph = await db.collection(COLLECTION).document(repo_id);
+        await require('./graph-lifecycle-service').renameForRepoNameChange(refreshedForGraph, oldName, actor);
+      } catch (err) {
+        recordOp('update', 'graph_rename_failed');
+        logger.error('OKF repo rename: graph move failed', {
+          repo_id,
+          from: oldName,
+          to: setFields.name,
+          error: err.message
+        });
+        throw err;
+      }
+      await auditService.writeAudit({
+        actor: (actor && actor.sub) || 'system',
+        actor_name: (actor && actor.name) || null,
+        action: 'repo.rename',
+        repo_id,
+        source_ip: (actor && actor.source_ip) || null,
+        description: 'Renamed repository "' + oldName + '" to "' + setFields.name + '"'
+      });
+    }
+
+    await auditService.writeAudit({
+      actor: (actor && actor.sub) || 'system',
+      actor_name: (actor && actor.name) || null,
+      action: 'repo.update',
+      repo_id,
+      source_ip: (actor && actor.source_ip) || null,
+      description:
+        'Updated repository fields: ' +
+        Object.keys(setFields)
+          .filter((f) => f !== 'updated_at')
+          .join(', '),
+      details: { fields: Object.keys(setFields).filter((f) => f !== 'updated_at') }
+    });
+    recordOp('update', 'success');
+    logger.info('OKF repository updated', { repo_id, fields: Object.keys(setFields) });
+    const refreshed = await db.collection(COLLECTION).document(repo_id);
+    return toResponse(refreshed);
+  });
+}
+
+/**
+ * Delete a repository — CLEANS EVERYTHING UP (David, 2026-08-18): the cascade
+ * retract (per-repo graph drop + meta rows + dangling files docs + version
+ * manifests) AND the registry entry itself are removed — no lingering tombstone.
+ * The `delete_after` grace metadata is retained in the response for the audit
+ * trail, but deletion is immediate (the soft-delete grace window is superseded;
+ * re-create of the same (name, domain) is allowed because the doc is gone).
+ * @param {string} repo_id
+ * @param {object} actor
+ */
+async function remove(repo_id, actor) {
+  return withSpan('okf.repo.delete', async (span) => {
+    span.setAttribute('okf.operation', 'delete');
+    span.setAttribute('okf.repo_id', repo_id);
+    const db = await getDb();
+
+    let existing;
+    try {
+      existing = await db.collection(COLLECTION).document(repo_id);
+    } catch (err) {
+      if (!ARANGO_NOT_FOUND(err)) throw err;
+    }
+    if (!existing || existing.deleted_at) {
+      recordOp('delete', 'not_found');
+      throw new RepoError('REPO_NOT_FOUND', `Repository ${repo_id} not found`, 404);
+    }
+
+    // Story #978 lifecycle (David, 2026-08-28): an INGESTED repository is
+    // serving content — deletion is blocked until the steward retracts it
+    // (retract clears ingested_at; then delete is allowed and cascades fully).
+    if (existing.ingested_at) {
+      recordOp('delete', 'ingested-block');
+      throw new RepoError(
+        'INGESTED_DELETE_BLOCKED',
+        'repository has an ingested version — retract it before deleting',
+        409
+      );
+    }
+
+    const graceHours = parseInt(process.env.OKF_DELETE_GRACE_HOURS || '168', 10);
+    const ts = nowIso();
+    const delete_after = DateTime.now().plus({ hours: graceHours }).toUTC().toISO();
+
+    // HARD-DELETE THE BACKING FILES FIRST (David, 2026-10-12). Order matters:
+    // this MUST run before retractRepoGraph below, because that sweep removes
+    // the files DOCS with a raw Arango REMOVE (`FOR f IN files FILTER
+    // f.repo_id == repo_id`) — once the docs are gone, this service has no
+    // file_id left to hand document-repository, and the upload BYTES stay
+    // orphaned in the storage dir forever (no FK, no reclamation path).
+    //
+    // Going through doc-repo's DELETE route is what actually unlinks the bytes
+    // and purges the crawl/ingestion log rows. It also fixes a coverage hole:
+    // that sweep filters files.repo_id, but SOURCE documents are stamped
+    // files.okf_repo_id — so deleting a document-built repo orphaned every
+    // upload it was built from. backingFileService covers both stamps.
+    //
+    // Files still backing ANOTHER live repository are skipped (never deleted),
+    // and a file whose "still in use" check errors is kept — failing closed on
+    // a data-loss check. Best-effort: the registry entry is what must go.
+    try {
+      await backingFileService.hardDelete(repo_id, { actor });
+    } catch (backingErr) {
+      logger.warn('Backing file hard-delete failed (non-fatal)', {
+        repo_id,
+        error: backingErr && backingErr.message
+      });
+    }
+
+    // Cascade retract FIRST — retractRepoGraph reads the registry doc for the
+    // graph_name, so the registry entry must still exist while it runs. It drops
+    // the per-repo graph (definition + 4 collections) + the repo's meta rows +
+    // dangling files docs + version manifests. Never fatal (best-effort).
+    try {
+      await retractRepoGraph(repo_id);
+    } catch (err) {
+      logger.warn('Graph retract failed (non-fatal)', { repo_id, error: err.message });
+    }
+
+    // Story 10.5 — ORPHAN CASCADE for the wizard's resumable curation draft.
+    // Best-effort and placed AFTER the graph retract (the draft must not
+    // outlive its repo). A draft that does outlive one is dead weight, never a
+    // correctness problem, and must NEVER fail a DELETE — hence the same
+    // try/catch + logger.warn shape as the retract above. Deliberately a raw
+    // collection handle, not a studio-draft-service require: this file is
+    // imported BY that service (its 404 pre-gate), and requiring back would
+    // be a require cycle. The sweep's orphan pass is the safety net if this
+    // ever misses. (remove() only runs for a non-ingested repo — an ingested
+    // one 409s above — so a serving repo is never draft-cascaded.)
+    try {
+      await db.collection('okf_studio_drafts').remove(repo_id);
+    } catch (err) {
+      // "No draft stored" is the overwhelmingly common case (most repos are
+      // never opened in the wizard) and is NOT a cascade failure — keep it at
+      // debug so a warn here always means something went genuinely wrong.
+      if (ARANGO_NOT_FOUND(err)) {
+        logger.debug('Studio draft cascade: no draft stored (nothing to remove)', { repo_id });
+      } else {
+        logger.warn('Studio draft cascade failed (non-fatal)', { repo_id, error: err.message });
+      }
+    }
+
+    // Then remove the registry entry entirely — the delete service cleans
+    // everything up (no tombstone). Re-create of the same identity is now
+    // allowed (no unique-index tombstone collision).
+    // IDEMPOTENT (David's 2026-09-06 deletes 500): a double-fired DELETE races —
+    // both requests pass the existence check above, the faster one removes the
+    // doc first, and the loser's remove() hits "not found" mid-cascade. That is
+    // not a failure: the end state is exactly what both callers asked for, so
+    // a 404-class error here resolves as success. Real failures (auth,
+    // connectivity, permission) still throw. (Live-verified 2026-09-05 17:57:
+    // trace e6fa84b4 lost the race to fb521fc0 → "Unhandled OKF error" 500
+    // after the delete had fully landed.)
+    try {
+      await db.collection(COLLECTION).remove(repo_id);
+    } catch (err) {
+      // notFoundAsNull = this file's 404-class predicate (codes AND message-only
+      // shapes — the DB wrapper rethrows plain Errors that lost statusCode).
+      if (!notFoundAsNull(err)) throw err;
+      logger.info('OKF repository delete: registry entry already gone (racing delete) — idempotent success', {
+        repo_id
+      });
+    }
+
+    await auditService.writeAudit({
+      actor: (actor && actor.sub) || 'system',
+      actor_name: (actor && actor.name) || null,
+      action: 'repo.delete',
+      repo_id,
+      source_ip: (actor && actor.source_ip) || null,
+      description: 'Deleted the repository with its concepts, graph, bundle artifacts and manifests'
+    });
+    recordOp('delete', 'success');
+    logger.info('OKF repository deleted (fully cleaned)', { repo_id });
+    return { repo_id, deleted_at: ts, delete_after, status: 'deleted' };
+  });
+}
+
+/**
+ * Story 1-8d — read the bounded frontmatter save history (the Lab's
+ * Revert-tags panel). Entries are newest-first; each carries the FULL
+ * frontmatter shape so a revert is an exact restore.
+ */
+async function frontmatterHistory(repo_id) {
+  return withSpan('okf.repo.frontmatter_history', async (span) => {
+    span.setAttribute('okf.repo_id', repo_id);
+    const db = await getDb();
+    let existing;
+    try {
+      existing = await db.collection(COLLECTION).document(repo_id);
+    } catch (err) {
+      if (ARANGO_NOT_FOUND(err)) throw new RepoError('REPO_NOT_FOUND', `Repository ${repo_id} not found`, 404);
+      throw err;
+    }
+    const entries = Array.isArray(existing.frontmatter_history) ? existing.frontmatter_history : [];
+    return {
+      repo_id,
+      entries: entries.map((e) => ({
+        saved_at: e.saved_at,
+        actor: e.actor || 'system',
+        forbidden_count: Array.isArray(e.shape && e.shape.forbidden) ? e.shape.forbidden.length : null,
+        shape: e.shape || null
+      }))
+    };
+  });
+}
+
+/**
+ * Story 1-8d — revert frontmatter to a history entry. Goes back through
+ * update(), so the revert itself is snapshotted (revert-of-revert works)
+ * and every writer shares one code path.
+ */
+async function revertFrontmatter(repo_id, saved_at, actor) {
+  return withSpan('okf.repo.frontmatter_revert', async (span) => {
+    span.setAttribute('okf.repo_id', repo_id);
+    span.setAttribute('okf.revert_to', String(saved_at));
+    const db = await getDb();
+    let existing;
+    try {
+      existing = await db.collection(COLLECTION).document(repo_id);
+    } catch (err) {
+      if (ARANGO_NOT_FOUND(err)) throw new RepoError('REPO_NOT_FOUND', `Repository ${repo_id} not found`, 404);
+      throw err;
+    }
+    const entries = Array.isArray(existing.frontmatter_history) ? existing.frontmatter_history : [];
+    const entry = entries.find((e) => e.saved_at === saved_at);
+    if (!entry || !entry.shape) {
+      throw new RepoError('HISTORY_ENTRY_NOT_FOUND', `no frontmatter history entry at ${saved_at}`, 404);
+    }
+    await update(repo_id, { frontmatter: entry.shape }, actor);
+    logger.info('OKF frontmatter reverted', { repo_id, to: saved_at, actor: (actor && actor.sub) || null });
+    return { repo_id, reverted_to: saved_at, frontmatter: entry.shape };
+  });
+}
+
+module.exports = {
+  create,
+  cloneRepository,
+  list,
+  getById,
+  update,
+  remove,
+  frontmatterHistory,
+  revertFrontmatter,
+  RepoError,
+  LIFECYCLE_STATES
+};

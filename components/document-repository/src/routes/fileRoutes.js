@@ -1,6 +1,7 @@
 const express = require('express');
 const fileController = require('../controllers/fileController');
-const { uploadSingle, uploadMultiple, validateFiles } = require('../middlewares/fileUpload');
+const appConfig = require('../config/appConfig');
+const { uploadSingle, uploadMultiple, validateFiles, handleMulterError } = require('../middlewares/fileUpload');
 const { authenticateToken, authorizeRole } = require('../middlewares/keycloak-auth-middleware');
 
 const router = express.Router();
@@ -47,7 +48,26 @@ router.use(authenticateToken);
  *       '403':
  *         description: Forbidden - Admin role required
  */
-router.post('/upload', authorizeRole(['Admin']), uploadSingle, validateFiles, fileController.uploadFile);
+// handleMulterError sits immediately after the multer middleware (and before
+// validateFiles) because that is where Express reaches it: when fileFilter
+// calls cb(new Error(...)), multer forwards the error with next(err), and the
+// router then skips every remaining 3-arg layer in this stack until it hits a
+// 4-arg error handler. Without it the error ran past this route entirely and
+// landed in app.js's global errorHandler, which has no branch for it → a
+// client-side "csv is not allowed" (a 400 by design; see the allowlist in
+// config/appConfig.js and the [NOT PLANNED] csv/json rows in the OKF
+// import-scope gap analysis) was answered 500 Internal Server Error with the
+// reason discarded. Production evidence 2026-10-12: POST /api/files/upload
+// with a .csv → 500. Note there was no "Handling custom file filter error"
+// warn line in the log — proof this handler was never reached.
+router.post(
+  '/upload',
+  authorizeRole(['Admin']),
+  uploadSingle,
+  handleMulterError,
+  validateFiles,
+  fileController.uploadFile
+);
 
 /**
  * @swagger
@@ -90,7 +110,17 @@ router.post('/upload', authorizeRole(['Admin']), uploadSingle, validateFiles, fi
  *       '403':
  *         description: Forbidden - Admin role required
  */
-router.post('/uploads', authorizeRole(['Admin']), uploadMultiple, validateFiles, fileController.uploadMultipleFiles);
+// Same reasoning as /upload above: uploadMultiple's fileFilter rejection has
+// to be caught by a 4-arg handler inside this route's own middleware stack,
+// or it becomes a 500 from the global handler.
+router.post(
+  '/uploads',
+  authorizeRole(['Admin']),
+  uploadMultiple,
+  handleMulterError,
+  validateFiles,
+  fileController.uploadMultipleFiles
+);
 
 /**
  * @swagger
@@ -583,7 +613,10 @@ router.post('/downloads', fileController.downloadMultipleFiles);
  *       '404':
  *         description: File not found
  */
-router.delete('/:fileId', authorizeRole(['Admin']), fileController.deleteFile);
+// Story #978 lifecycle: the okf-server service account deletes SUPERSEDED
+// bundle zips at publish (one live bundle per repo) — same trust as the
+// ingest-bundle route above.
+router.delete('/:fileId', authorizeRole(['Admin', 'okf-service']), fileController.deleteFile);
 
 /**
  * @swagger
@@ -650,7 +683,17 @@ router.delete('/', authorizeRole(['Admin']), fileController.deleteMultipleFiles)
  *       '404':
  *         description: File not found
  */
-router.patch('/:fileId', authorizeRole(['Admin']), fileController.updateFile);
+// okf-service allowed (Story 1-8g-q, 2026-10-11): okf-server stamps
+// okf_repo_id onto each source file it imports (producer-service
+// stampSources), so the wizard can tell a file that already belongs to a
+// repository from a free-form one. That stamp was 403-ing 41/41 files —
+// this route alone carried the Admin-only gate while every comparable
+// orchestrator mutation below (ingest, retract, delete, enqueue, status)
+// already permitted the same service account. This restores the intended
+// role; it is not an admin escalation (mapRole maps okf-service to exactly
+// that scalar — it holds no admin composite).
+const UPDATE_FILE_ROLES = ['Admin', 'okf-service'];
+router.patch('/:fileId', authorizeRole(UPDATE_FILE_ROLES), fileController.updateFile);
 
 /**
  * @swagger
@@ -677,7 +720,10 @@ router.patch('/:fileId', authorizeRole(['Admin']), fileController.updateFile);
  *       '404':
  *         description: File not found
  */
-router.post('/:fileId/ingest', authorizeRole(['Admin']), fileController.ingestFile);
+// okf-service allowed (Story 2.9.6/2.9.4): the OKF orchestrator's worker owns
+// draining per-concept Pending files — it authenticates as the okf-server
+// service client (okf-service role), same as the enqueue route below.
+router.post('/:fileId/ingest', authorizeRole(['Admin', 'okf-service']), fileController.ingestFile);
 
 /**
  * @swagger
@@ -704,7 +750,9 @@ router.post('/:fileId/ingest', authorizeRole(['Admin']), fileController.ingestFi
  *       '404':
  *         description: File not found
  */
-router.post('/:fileId/retract', authorizeRole(['Admin']), fileController.retractFile);
+// okf-service allowed: the 2.9.4 orphan sweeper retracts chunks via the service
+// client; retracts carry the file's graph_name (G5 — never the wrong graph).
+router.post('/:fileId/retract', authorizeRole(['Admin', 'okf-service']), fileController.retractFile);
 
 /**
  * @swagger
@@ -754,6 +802,63 @@ router.post('/:fileId/retract', authorizeRole(['Admin']), fileController.retract
  *         description: Forbidden - Admin role required
  */
 router.post('/ingest', authorizeRole(['Admin']), fileController.ingestMultipleFiles);
+
+/**
+ * @swagger
+ * /api/files/ingest-bundle:
+ *   post:
+ *     summary: Ingest an OKF bundle (bypasses upload allowlist; ClamAV scanned; threads graph_name)
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - bundle
+ *               - graph_name
+ *               - repo_id
+ *             properties:
+ *               bundle:
+ *                 type: string
+ *                 format: byte
+ *                 description: Base64-encoded bundle content
+ *               graph_name:
+ *                 type: string
+ *                 description: The OKF graph name (OKF_{repo_id})
+ *               repo_id:
+ *                 type: string
+ *                 description: The OKF repository ID
+ *               originalFileName:
+ *                 type: string
+ *                 description: Original file name for the stored file
+ *               labels:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Selected knowledge-hierarchy labels (persisted on the files doc; scopes chunk labeling)
+ *     responses:
+ *       '202':
+ *         description: Bundle accepted for async ingestion
+ *       '400':
+ *         description: Invalid input or malware detected
+ *       '403':
+ *         description: Forbidden - Admin role required
+ */
+// The bundle body is exempt from the app's global 10mb JSON parser (see
+// app.js) — this route parses it with its own, config-driven limit
+// (upload.bundleMaxBodyMb, OKF_BUNDLE_MAX_MB, default 100 MB = 10× the
+// global JSON cap).
+const bundleBodyLimit = `${appConfig.upload.bundleMaxBodyMb}mb`;
+router.post(
+  '/ingest-bundle',
+  express.json({ limit: bundleBodyLimit }),
+  authorizeRole(['Admin', 'okf-service']),
+  fileController.bundleIngest
+);
 
 /**
  * @swagger
@@ -849,7 +954,16 @@ router.post('/retract', authorizeRole(['Admin']), fileController.retractMultiple
  *       '404':
  *         description: File not found
  */
-router.post('/:fileId/ingestion-log', authorizeRole(['Admin', 'dataprep-service']), fileController.addIngestionLog);
+// Story 4.8-amend: the OKF ingest worker mirrors per-concept ingestion
+// progress to the bundle zip's ingestion log (David's 3rd-time directive
+// 2026-08-20). The okf-server service-account client holds the bootstrap
+// `tools-admin` super-role (see genie-realm.yaml client role mapping) so
+// the worker's mirror POSTs succeed.
+router.post(
+  '/:fileId/ingestion-log',
+  authorizeRole(['Admin', 'dataprep-service', 'okf-service', 'tools-admin']),
+  fileController.addIngestionLog
+);
 
 /**
  * @swagger
@@ -910,6 +1024,17 @@ router.get('/:fileId/ingestion-log', authorizeRole(['Admin', 'dataprep-service']
  *       '401':
  *         description: Unauthorized
  */
-router.patch('/:fileId/status', authorizeRole(['Admin', 'dataprep-service']), fileController.updateFileStatus);
+router.patch(
+  '/:fileId/status',
+  // Story 4.8-amend: the okf-server service client drives the BUNDLE state
+  // machine (Pending → Ingesting → Ingested|Error) through this route.
+  authorizeRole(['Admin', 'dataprep-service', 'okf-service', 'tools-admin']),
+  fileController.updateFileStatus
+);
 
 module.exports = router;
+// The role list PATCH /:fileId is registered with, exported so the regression
+// that shipped the broken stamp (2026-10-11) cannot come back: the okf-server
+// orchestrator stamps okf_repo_id through this route, and the integration suite
+// mocks authorizeRole, so nothing else asserts who may write.
+module.exports.UPDATE_FILE_ROLES = UPDATE_FILE_ROLES;

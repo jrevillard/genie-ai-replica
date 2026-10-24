@@ -263,8 +263,15 @@ class WeatherService {
         }))
       };
 
-      // Store request in ArangoDB (best-effort audit log — never block the
-      // user-facing response on persistence failure).
+      // Store request in ArangoDB
+      //
+      // If `init()` failed (e.g. ipapi.co was unreachable at startup,
+      // `this.weatherRequests` stays null), the analytics/persistence step
+      // would throw `Cannot read properties of null (reading 'save')` and
+      // surface as a 500 to the frontend. The weather data itself is valid;
+      // we log and continue so the user still gets an answer. A subsequent
+      // request after the operator restarts the backend will recover
+      // persistence normally.
       const requestDoc = {
         userId: userId || null,
         latitude,
@@ -274,22 +281,25 @@ class WeatherService {
       };
       let requestId = null;
       if (!this.weatherRequests) {
-        logger.warn('WeatherService.request_persistence_skipped', { reason: 'collection_unavailable' });
+        logger.warn('WeatherService.persistence_unavailable_skipping_save', {
+          reason: 'weatherRequests collection not initialized (init() likely failed)'
+        });
       } else {
         try {
           logger.debug('WeatherService.saving_request', { requestDoc });
           const request = await this.weatherRequests.save(requestDoc);
           requestId = request._key;
-        } catch (persistError) {
-          logger.warn('WeatherService.request_persistence_failed', {
-            error: persistError.message,
-            userId: requestDoc.userId
+        } catch (saveErr) {
+          // Persistence is best-effort; surface the failure but still return data
+          logger.error('WeatherService.save_request_failed', {
+            error: saveErr.message,
+            stack: saveErr.stack
           });
         }
       }
 
       // Record in analytics
-      if (this.analyticsService) {
+      if (requestId && this.analyticsService) {
         try {
           logger.debug('WeatherService.recording_analytics', { requestId });
           await this.analyticsService.recordWeatherRequest({

@@ -181,6 +181,12 @@ HUGGING_FACE_HUB_TOKEN=
 # RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED=3
 # RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD=0.5
 # RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES=1
+# RETRIEVER_ARANGO_TRAVERSAL_MAX_LINKS=300000             # 1-8g-l: skip the traversal above this many
+#                                                         # <GRAPH>_LINKS_TO edges (vector results stand
+#                                                         # alone; 0 = unbounded). Calibrated live: indonesia
+#                                                         # 1.05M edges starved every answer in the 8s leg.
+# RETRIEVER_ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE=2000      # 1-8g-l: per-hop edge-visit cap in the traversal
+#                                                         # AQL (0 = unbounded) — bounds hub-entity cost.
 
 # Retriever tuning (used by retriever and chatqna)
 # RETRIEVER_ARANGO_K=4
@@ -195,6 +201,37 @@ HUGGING_FACE_HUB_TOKEN=
 # RETRIEVER_ARANGO_NUM_CENTROIDS=1
 # RETRIEVER_ARANGO_FILTER_STRATEGY=OR
 # RETRIEVER_SUMMARIZER_ENABLED=false
+# Story 1.6 (2026-10-07) — env-driven OKF search style. Three values:
+#   hybrid           — frontmatter tags primary, k=40 chunk-probe always-on validator (DEFAULT; UNION result)
+#   frontmatter_tags — frontmatter primary, chunk-probe SKIPPED (latency mode)
+#   vector_probe     — Story 1.3 behavior only (transitional; for legacy repos without frontmatter)
+# Invalid value → fail-closed to vector_probe with a loud log. RETRIEVER_FRONTMATTER_ROUTING_ENABLED=false
+# is the master kill switch (forces vector_probe regardless of OKF_SEARCH_STYLE).
+# OKF_SEARCH_STYLE=hybrid
+# RETRIEVER_FRONTMATTER_ROUTING_ENABLED=true
+# RETRIEVER_FRONTMATTER_TAG_WEIGHT_TOPIC=1.0
+# RETRIEVER_FRONTMATTER_TAG_WEIGHT_ENTITY=0.7
+# RETRIEVER_FRONTMATTER_TAG_WEIGHT_KEYWORD=0.5
+# RETRIEVER_FRONTMATTER_TAG_WEIGHT_SUMMARY=0.5
+# RETRIEVER_FRONTMATTER_TAG_WEIGHT_SCOPE=0.3
+# RETRIEVER_FRONTMATTER_FORBIDDEN_PENALTY=1.5
+# RETRIEVER_FRONTMATTER_MIN_SCORE=0.25
+# RETRIEVER_FRONTMATTER_TOP_K=5
+# Story 1-8 routing head — OKF graph affinity + the forbidden/noise gate
+# (read by the retriever's graph routing; rollback: ROUTE_HEAD_WEIGHT=0.0).
+# RETRIEVER_ROUTE_HEAD_WEIGHT=1.0          # head pseudo-row weight in the global top-K pool
+# RETRIEVER_ROUTE_HEAD_MARGIN=0.01         # min head-over-forbidden margin for a claim (heads without a forbidden centroid skip it)
+# RETRIEVER_ROUTE_HEAD_FLOOR=0.55          # off-domain noise bar for the routing head claim
+# RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX=0.55   # hard forbidden-tag veto bar
+# RETRIEVER_ROUTE_HEADS_SUPERSEDE=true     # a gate-passing head claim routes EXCLUSIVELY (probe skipped, headless graphs out); false = 1-8 pool semantics
+# GPU service endpoints for the okf-server publish pipeline (Story 1.6):
+#   VLLM_LLM_HOST  — OpenAI-compatible /v1/chat/completions for tag suggest + validate (AsyncOpenAI-equivalent)
+#   TEI_EMBED_HOST — /embed for tag vectorization (1024-dim, shared embedding space with chunks)
+# VLLM_LLM_HOST=http://vllm-llm-served:8000
+# TEI_EMBED_HOST=http://embedding-tei:80
+# OKF_FRONTMATTER_TAG_BATCH_SIZE=1        # one repo at a time for suggestTags
+# OKF_FRONTMATTER_VALIDATE_BATCH_SIZE=4    # 4 parallel vLLM calls for per-tag consistency check
+# OKF_FRONTMATTER_SUMMARY_TTL_MS=60000     # 60s BFF cache for the denormalized summary
 # RERANKING_THRESHOLD=0.75
 # RERANKING_STRATEGY=slice      # slice (default) | threshold | slice_threshold | knee_threshold | adaptive
 # RERANKER_TOP_N=3              # chunks kept for slice/slice_threshold strategies (default 3)
@@ -224,6 +261,12 @@ HUGGING_FACE_HUB_TOKEN=
 # produces markdown-wrapped or malformed JSON -> per-chunk fallback (slower,
 # lower label quality). Validated on ibm-granite/granite-4.1-8b.
 # DATAPREP_MAX_CONCURRENT_BATCHES=20  # concurrent LLM label calls (default 20; was 5)
+# DATAPREP_INGEST_CONCURRENCY=1       # parallel ingest slots per dataprep container
+#                                     #   (David, 2026-09-03). Each slot is a flock file;
+#                                     #   429 only when ALL are busy. 1 = historical
+#                                     #   single-flight. Pair with okf-server's
+#                                     #   OKF_INGEST_CONCURRENCY drain lanes to use the
+#                                     #   machine's cores (vLLM/TEI batch natively).
 # DATAPREP_LLM_LABEL_BATCH_SIZE=4     # chunks per LLM labeling call (default 4).
 #                                     #   >1 batches chunks to cut network round-trips
 #                                     #   to a remote vLLM. Raise to 8 on capable models
@@ -253,17 +296,49 @@ HUGGING_FACE_HUB_TOKEN=
 # DATAPREP_CONTEXTUAL_MODEL=           # model for context generation; empty = reuse
 #                                      #   VLLM_LLM_MODEL_ID. MUST support guided JSON
 #                                      #   (response_format=json_object) like granite-4.1-8b.
-# DATAPREP_CONTEXTUAL_DOC_BUDGET=100000 # max chars of doc text fed to the context LLM
-# DATAPREP_CONTEXTUAL_MAX_TOKENS=512   # max OUTPUT tokens for the context LLM (doc-level + per-chunk). Model writes ~196 tokens; 200 truncated the JSON under load. 512 = safe margin.
-#                                      #   (~1500 tokens); <=0 disables truncation.
-# CONTEXTUAL_STRATEGY=per_chunk         # per_chunk (default; one call/chunk, section-tailored context)
-#                                      #   every chunk — N× cheaper, still propagates the doc
-#                                      #   subject) | per_chunk (one call/chunk, section-tailored
-#                                      #   context — the Anthropic recipe).
+# DATAPREP_CONTEXTUAL_DOC_BUDGET=0     # 0 = DERIVE from VLLM_MAX_MODEL_LEN (recommended, and the
+#                                      #   default). The context LLM receives: system prompt +
+#                                      #   document context + the batch's chunk text, and reserves
+#                                      #   DATAPREP_CONTEXTUAL_MAX_TOKENS *per chunk in the batch*.
+#                                      #   Everything except the document context is subtracted
+#                                      #   from the window, so the budget is right for your GPU:
+#                                      #   ~250k chars on the default 65536-token window, ~11k on
+#                                      #   env.rtx6000 (4096), none on env.t4 (2048) — see the note
+#                                      #   below. Set an explicit number to pin it; a negative
+#                                      #   value disables contextualization for the document.
+#                                      #   Do NOT copy a number from another deployment: a budget
+#                                      #   sized for a big GPU overflows a small one, and the calls
+#                                      #   are rejected and silently fall back to raw chunks.
+# DATAPREP_CONTEXTUAL_MAX_TOKENS=512   # max OUTPUT tokens per chunk in the batch. Model writes ~196
+#                                      #   tokens; the legacy cap of 200 truncated the JSON under
+#                                      #   concurrent load. 512 = safe margin. This is PER CHUNK, so a
+#                                      #   batch of 4 reserves 2048 output tokens — which is why a
+#                                      #   2048-token window cannot run contextualization at all.
+# CONTEXTUAL_STRATEGY=per_chunk        # per_chunk (default; one call per batch, section-tailored
+#                                      #   context — the Anthropic recipe, highest precision, N calls
+#                                      #   per document) | doc_level (ONE call for the whole
+#                                      #   document, same context on every chunk — N× cheaper, still
+#                                      #   propagates the document subject).
 # CONTEXTUAL_LABEL_RAW=true            # decoupled mode (default): label the RAW chunk and use the
 #                                      #   context ONLY for the embedding — keeps label precision
-#                                      #   while propagating the subject via vectors).
+#                                      #   while propagating the subject via vectors.
+# OKF_MAX_CONCEPT_DOC_CHARS=250000    # okf-server: max characters in ONE concept document. An
+#                                      #   import whose document exceeds this SPLITS it into
+#                                      #   several concepts (losslessly, on heading boundaries)
+#                                      #   rather than storing it degraded — a document past the
+#                                      #   budget has its deep chunks embedded against a
+#                                      #   description of its start. The first part keeps the
+#                                      #   original concept_id so existing links still resolve.
+#                                      #   Must track the document-context budget above, which
+#                                      #   derives from VLLM_MAX_MODEL_LEN. If a document cannot
+#                                      #   be split without losing content, the import is rejected
+#                                      #   with CONCEPT_TOO_LARGE naming the section.
+# VLLM_MAX_MODEL_LEN                   # the serving model's context window. Set by env.t4 (2048),
+#                                      #   env.rtx6000 (4096) or the compose default (65536). This is
+#                                      #   what DATAPREP_CONTEXTUAL_DOC_BUDGET is derived from, so it
+#                                      #   is not only a vLLM tuning knob.
 
+# Hybrid Retrieval — BM25 + Reciprocal Rank Fusion (Contextual Retrieval Part B) — ON by default, opt-out via env var.
 # --- Model-endpoint HTTP budgets (optional) ---
 # Per-request timeouts for calls to the LLM and embedding endpoints. Read by
 # every in-repo client (core/model_http_policy.py), except the two named below
@@ -451,10 +526,10 @@ HUGGING_FACE_HUB_TOKEN=
 # alongside the dense vector search and fuses the two result sets with weighted
 # Reciprocal Rank Fusion. Recovers exact-match / rare-term / keyword-heavy queries
 # that dense embeddings rank poorly. Both channels read the same `text` field
-# (contextualized by Part A). Opt-in; OFF = true no-op (dense-only, byte-for-byte).
+# (contextualized by Part A). ON by default; OFF = true no-op (dense-only, byte-for-byte). Opt-out via env var.
 # The BM25 ArangoSearch view is created idempotently + lazily per graph_name.
 # See _bmad-output/implementation-artifacts/spec-hybrid-retrieval-bm25-rrf.md
-# RETRIEVER_HYBRID_RETRIEVAL_ENABLED=false  # opt-in (default false; OFF = true no-op)
+# RETRIEVER_HYBRID_RETRIEVAL_ENABLED=false  # opt-out (default true; OFF = true no-op)
 # RETRIEVER_HYBRID_RRF_K=60                 # RRF ranking constant (literature standard)
 # RETRIEVER_HYBRID_BM25_CANDIDATES=50       # BM25 candidate fetch depth; fused then cut to top_k
 # RETRIEVER_HYBRID_DENSE_WEIGHT=1.0         # weight on the dense channel's rank contribution
@@ -661,7 +736,9 @@ HUGGING_FACE_HUB_TOKEN=
 # Override here ONLY for deployment-specific customization.
 #
 # **Prompts** (text instructions for AI):
-#   - CHATQNA_SYSTEM_PROMPT: Main system prompt for chat behavior
+#   - CHATQNA_SYSTEM_PROMPT: Main system prompt for chat behavior. ALSO shapes
+#     the OKF RAGAS benchmark answer leg (forwarded to okf-server) — the
+#     benchmark scores the answerer the deployment's users actually get.
 #   - CHATQNA_ABSTENTION_INSTRUCTIONS: Instructions for when to refuse answering
 #   - LABEL_SELECTOR_SYSTEM_PROMPT: Prompt for automatic document labeling
 #
@@ -693,6 +770,24 @@ HUGGING_FACE_HUB_TOKEN=
 # Note: keycloak-config service uses its own internal KEYCLOAK_URL (http://keycloak:8080)
 # REQUIRED — app will not start without this value
 KEYCLOAK_URL=https://localhost/auth
+
+# Split-URL OIDC (optional — deployments where the public KEYCLOAK_URL is NOT
+# reachable from inside the container network, e.g. Docker Desktop WSL2):
+#   KEYCLOAK_PUBLIC_URL   — browser-facing issuer alias for token validation
+#                           (backend, document-repository, okf-server). Unset = disabled.
+#   KEYCLOAK_INTERNAL_URL — internal Keycloak base (http://keycloak:8080) used by
+#                           chatqna (JWKS fetch) and dataprep (service-account token
+#                           mint). Unset = disabled (services use KEYCLOAK_URL).
+# Cloud/Swarm deployments where the public URL resolves internally: leave both unset.
+# KEYCLOAK_PUBLIC_URL=https://localhost/auth
+# KEYCLOAK_INTERNAL_URL=http://keycloak:8080
+
+# OKF audience binding (Story 6.1, RFC 8707 — optional): set to okf-server to make
+# the okf-server reject tokens whose aud does not include it (requires the realm
+# audience mapper — shipped in genie-realm.yaml). Unset = no audience check.
+# KC_OKF_SERVER_CLIENT_SECRET is the confidential-client secret for the
+# okf-server Keycloak client (service-to-service).
+# OKF_AUDIENCE=okf-server
 
 # Keycloak redirect URIs and web origins are auto-derived from NGINX_PUBLIC_DOMAIN + NGINX_HTTPS_PORT:
 #   KC_PUBLIC_ORIGIN=https://<NGINX_PUBLIC_DOMAIN>[:<NGINX_HTTPS_PORT>]
@@ -781,6 +876,132 @@ KEYCLOAK_PROXY_CLIENT_SECRET=
 # Used by: Dataprep → Document Repository and Backend API calls
 # Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 KC_DATAPREP_CLIENT_ID=dataprep-service-client
+# OKF server confidential-client secret (REQUIRED for the okf-server Keycloak
+# client; empty ships a secretless confidential client). Generate: openssl rand -hex 24.
+# UPGRADE NOTE (Story 6.1): okf-server enforces okf-scope authorization after this
+# upgrade. Existing tools-admin holders are AUTO-GRANTED the wildcard scope by the
+# keycloak-config entrypoint (non-breaking). New stewards: set the user attribute
+# okf_scopes (e.g. ["okf:tenant:repo-id:admin"]) via the Keycloak admin API.
+KC_OKF_SERVER_CLIENT_SECRET=
+
+# --- OKF ingestion worker (Story 2.9.4; crawlWorker pattern) ---
+# Drains parsed concepts to dataprep. OKF_INGEST_WORKER_ENABLED=false disables
+# the worker entirely.
+# OKF_INGEST_WORKER_ENABLED=true
+# OKF_INGEST_WORKER_INTERVAL_MS=15000
+# OKF_INGEST_WORKER_SWEEP_INTERVAL_MS=3600000
+# PARALLEL DRAIN (David, 2026-09-03): number of independent worker lanes. Each
+# lane claims a different parsed concept and drains it concurrently (requires
+# dataprep to accept parallel ingests — set DATAPREP_INGEST_CONCURRENCY to
+# match). 1 = the historical sequential behavior. Repos are independent units
+# of work: raise both values to scale with machine capacity. Set BOTH halves
+# to the same value; a higher OKF_INGEST_CONCURRENCY only earns 429 backoffs
+# while a lower one under-uses the worker. This pair is bounded by the MODEL
+# services, not the host -- watch dataprep/vLLM headroom, and lower it if chat
+# answering slows during a large drain.
+#
+#   SIZING (set deliberately, the default is a floor not a recommendation):
+#     4 cores  /  8 GB -> 2      16 cores / 32 GB -> 8
+#     8 cores  / 16 GB -> 4      24 cores / 64 GB -> 12
+#     32+ cores/ 64GB+ -> 16, then follow the model services
+#
+#   Apply to BOTH: OKF_INGEST_CONCURRENCY = DATAPREP_INGEST_CONCURRENCY
+#   After changing: docker compose up -d --force-recreate okf-server \
+#     pii-service dataprep-arango-service   (values are read at process start)
+#
+# OKF_INGEST_CONCURRENCY=1
+# IMPORT LANES (perf 2026-09-05): per-concept import pipeline parallelism in
+# okf-server (creation-side import, NOT the post-publish drain). 1 = the
+# historical single-flight; clamp 1..16. Raise together with
+# PII_WEB_CONCURRENCY — the PII sidecar scans dominate lane time (measured
+# ~100% of a 4.3 min/batch wikipedia import before the bump).
+#
+# PAIRING RULE (!1080) — these two are ONE capacity setting, not two:
+#   OKF_IMPORT_CONCURRENCY  how many concepts flow through the pipeline at once
+#   PII_WEB_CONCURRENCY     how many NER scans the sidecar can absorb
+# Import lanes ABOVE the sidecar's worker count do not add throughput — the
+# extra lanes queue at the sidecar, so you pay latency for nothing. Raise them
+# together or not at all.
+#
+# SIZING: both ≈ min(16, cores / 2). Measured on a 24-core / 64GB host with the
+# pair at 4/4: the PII sidecar ran 443% CPU while okf-server sat at 0.5% and
+# dataprep at 0.2% — about 18% of the machine, with the rest idle. At 4/4 on a
+# 24-core host you are leaving roughly 5x on the table; at 4/4 on a 4-core VPS
+# you are already oversubscribed. There is no correct constant — read the core
+# count.
+#
+# WHY THE IMPORT PAIR SHIPS AT 4 AND THE DRAIN PAIR AT 1 (not an oversight):
+# the two are limited by DIFFERENT things. Import is bounded by the host's own CPU
+# — the PII scan runs locally and scales with cores. The drain is bounded by the
+# MODEL SERVICES: labelling calls the LLM and the embedding service, both shared
+# and often on one GPU. Raising the drain pair does not use more of the machine; it
+# queues on the model, and on a shared GPU it takes capacity away from chat
+# answering. Size the drain pair against the model's headroom, not the core count.
+#
+# Every import logs the lane capacity it actually got ("OKF import lane
+# capacity"), including both values and whether they are paired, so a
+# misconfigured host is visible in the logs rather than inferred from timings.
+# OKF_IMPORT_CONCURRENCY=4
+# Stuck-drain reaper: a concept claimed but not terminal after this many ms is
+# dead-lettered (dead lane / lost callback), and a concept claimed more than
+# OKF_INGEST_WORKER_MAX_CLAIMS times is treated as poison. WAITING concepts
+# are never reaped, whatever the queue depth.
+# OKF_INGEST_WORKER_REAP_GRACE_MS=3600000
+# OKF_INGEST_WORKER_MAX_CLAIMS=8
+
+# --- OKF retrieval mode governance (Story 1.7; ADR-okf-039 D3) ---
+# BOOT DEFAULTS only — the governed row in okf_system_config (_key='retrieval')
+# overrides field-by-field once a steward PUTs /api/okf/retrieval-config
+# (tools-admin; audited). mode 'legacy' runs today's single-graph retriever
+# byte-for-byte; 'okf_only'/'hybrid' engage the Epic-1 fan-out ONLY when ≥1 OKF
+# graph is serving. Garbage values fall back to the safe defaults in code
+# (mode → legacy; caps clamped to sane maxima) — these env vars can never
+# enable the fan-out on a misconfigured deployment.
+# OKF_RETRIEVAL_MODE=legacy
+# OKF_RETRIEVAL_MAX_FANOUT_GRAPHS=5
+# OKF_RETRIEVAL_SPINE_MAX_HOPS=2
+# OKF_RETRIEVAL_EXTRACTED_HOP_CAP=1
+# OKF_RETRIEVAL_CANDIDATE_CAP_PER_GRAPH=50
+# OKF_RETRIEVAL_CANDIDATE_CAP_GLOBAL=200
+# BFF-side carrier cache (Story 1.1): the retrieval-posture/authz window and
+# per-call okf-server timeout consumed by gov-chat-backend (code defaults
+# 30000/3000 ms). Latency tuning only — these can never engage the fan-out.
+# OKF_RETRIEVAL_CONFIG_TTL_MS=30000
+# OKF_RETRIEVAL_CONFIG_TIMEOUT_MS=3000
+
+# --- OKF content-only chunking (Story 4.8-amend) ---
+# Concepts never become doc-repo files docs — the worker POSTs the concept's
+# markdown DIRECTLY to dataprep (DATAPREP_URL below). Dataprep's completion
+# callback then hits the OKF_SERVER_URL (set in compose, defaults to
+# http://okf-server:3002) and authenticates with OKF_INTERNAL_SECRET. The
+# okf-server controller is FAIL-CLOSED — empty secret ⇒ every callback 401s.
+# MUST be the SAME value on both services.
+# OKF_INTERNAL_SECRET=<set this — same value on okf-server + dataprep-arango-service>
+# DATAPREP_URL=http://dataprep-arango-service:5000
+
+# Maximum size (MB) of a crawled source file okf-server will convert into an
+# OKF repository (server-side streaming conversion job — authoritative check
+# against the doc-repo Content-Length before any processing). Default:
+# 10240 (10 GB). Mode B (per-page) scales to the cap via batched in-process
+# ingests; mode A (single mega-concept) is additionally limited to ~45 MB
+# (one request body).
+# OKF_MAX_CRAWL_SOURCE_MB=10240
+# Debug logging for the crawl→OKF conversion job (1 = per-page/per-batch logs
+# from okf-server). Leave empty to disable.
+# OKF_CONVERSION_DEBUG=
+
+# Maximum body size (MB) doc-repo accepts for the OKF bundle-ingest route
+# (POST /api/files/ingest-bundle). Publish ships the whole repository zip as
+# base64-in-JSON, so large repos need this headroom: a 1000-concept wikipedia
+# repo zips to ~30 MB ≈ ~42 MB of JSON. Default 100 (10× the app's 10mb JSON
+# cap); every other JSON route stays at the 10mb default.
+# OKF_BUNDLE_MAX_MB=100
+# Timeout (ms) for okf-server's bundle-store POST to doc-repo during publish.
+# Large bundles (tens of MB) plus the ClamAV scan can outrun a short timeout.
+# Default 300000 (5 min).
+# OKF_BUNDLE_STORE_TIMEOUT_MS=300000
+
+# Dataprep service account secret (client_credentials grant)
 KC_DATAPREP_CLIENT_SECRET=
 
 # Mobile OIDC client for institutional deployments (Flutter app)
@@ -917,6 +1138,20 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # Enable via: docker compose --profile observability up -d
 #   or Swarm:  ENABLE_OBSERVABILITY=1 in .env (MUST be 0 or 1, not true/false)
 #   or Ansible: enable_observability: "1" in group_vars/all.yml
+#
+# --- OKF feature flag (2026-10-21, merge prep) -----------------------------
+# OKF_ENABLED parks the entire OKF stack behind one variable:
+#   0 (default) — okf-server, ragas-service and pii-service run ZERO replicas
+#                 (compose: they sit behind the `okf` profile), Kong gets no
+#                 /api/okf route (any existing one is deleted), the Admin
+#                 Dashboard hides the OKF Studio and Models tabs, and the
+#                 backend's retrieval posture resolves straight to legacy mode
+#                 with no dead-connection attempts. Nothing is deleted — data,
+#                 collections and configs stay; flipping to 1 restores everything.
+#   1           — the full OKF feature set (current feat/okf-server behavior).
+# MUST be 0 or 1, not true/false. Ansible: okf_enabled in group_vars.
+# The local/dev build and el-salvador run with 1; main ships 0.
+# OKF_ENABLED=1
 #
 # Uncomment to override defaults (all have sensible defaults in docker-compose):
 # ENABLE_OBSERVABILITY=0
@@ -1144,6 +1379,15 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 # EMBEDDING_SERVICE_URL=https://${GPU_NODE_HOST}/embed
 # RERANKER_SERVICE_URL=https://${GPU_NODE_HOST}/rerank
 #
+# TEI_EMBED_HOST=https://${GPU_NODE_HOST}
+#   TEI embed endpoint BASE for okf-server (frontmatter tag embedding,
+#   vectorized-head build, Story 1-8 head tests). The service appends
+#   /embed. David 2026-10-08: the TEI service runs on the SAME host:port
+#   as the inference server — same value as VLLM_ENDPOINT's scheme://host:port,
+#   path excluded. okf-server reads ONLY this var for its embed endpoint;
+#   deployments without a remote GPU leave it unset (local full-stack
+#   default http://tei:80 applies).
+#
 # DOCLING_ENDPOINT=https://${GPU_NODE_HOST}/docling
 #   Remote docling-serve endpoint for document extraction.
 #   When set, dataprep sends documents to the remote GPU node for processing.
@@ -1195,3 +1439,485 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   Only affects dataprep-arango-service. Backend and chatqna use NODE_TLS_REJECT_UNAUTHORIZED
 #   for NGINX TLS verification instead.
 
+
+# =============================================================================
+# SECTION 15: OKF SERVICES (OPTIONAL — every default lives in code/compose;
+#              set here only to override for THIS deployment)
+# =============================================================================
+# AI-AGENT-READABLE INVENTORY (David 2026-10-08): every OKF_* variable and
+# the model-endpoint variables the OKF services read, one entry per var:
+#   Default:   the fallback when unset (code or docker-compose)
+#   Used by:   the container(s) reading it
+#   Compose:   whether the local docker-compose okf-server block declares it
+#   Ansible:   whether deploy/ansible/templates/env.j2 emits it with the
+#              SAME default (tests/config-validator enforces the parity)
+# Entries are COMMENTED because defaults apply; uncomment to override.
+
+# --- okf-server: HTTP + auth ---
+# PORT=3002
+#   Default: 3002. Used by: okf-server. Compose: no (container-internal).
+# CORS_ALLOWED_ORIGINS=https://example.org
+#   Default: unset (= allow all). Used by: okf-server. Compose: yes.
+# OKF_AUDIENCE=okf-server
+#   Default: unset (= no RFC 8707 audience check on bearer JWTs).
+#   Used by: okf-server. Compose: yes. Ansible: yes (guarded).
+# OKF_SCOPE_MODE=open
+#   Default: open (when the variable is ABSENT). Values: open | closed.
+#   An EXPLICIT garbage value degrades to closed (a misconfigured attempt to
+#   pin the deployment must not silently fail open). An EMPTY value counts as
+#   explicit garbage, not as absence (compose uses the unset-only ${VAR-open}
+#   form so an empty setting reaches the container and degrades to closed
+#   with a logged warning).
+#   Used by: okf-server (read side).
+#   Compose: yes. Ansible: yes (okf_scope_mode).
+#   DEFAULT-OPEN OKF read authorization (product decision 2026-10-16):
+#   open — a caller whose JWT carries NO okf:* scopes is authorized for ALL
+#   serving repos, so every regular user's chat query can reach each
+#   ingested+published repo. closed — the historical default-deny (Story 6.1,
+#   ADR-okf-025): nothing granted = nothing authorized (legacy GRAPH only).
+#   In BOTH modes a granted scope still restricts its holder to exactly the
+#   scoped repos, and the WRITE side (repo CRUD, ingest, lifecycle) stays
+#   closed-list — the flag never opens a write path. Flipping requires an
+#   okf-server container recreate (read per call, no rebuild).
+#   Full capability reference: site/content/en/docs/knowledge-base/access-control.md
+# KC_OKF_ACCESS_CLIENT_ID=genie-proxy-client
+#   Default: genie-proxy-client. Story 6-1c: the service account okf-server
+#   uses for the access-control grant/revoke facility (Keycloak Admin API
+#   writes to a user's okf_scopes attribute). Used by: okf-server.
+#   Compose: yes. Ansible: yes (kc_okf_access_client_id).
+# KC_OKF_ACCESS_CLIENT_SECRET=<secret>
+#   Default: unset (= the grant/revoke routes answer 503
+#   ACCESS_CONTROL_UNCONFIGURED). Set to the genie-proxy-client secret to
+#   enable the facility. Restriction ENFORCEMENT (acl.restricted on a repo)
+#   needs no Keycloak and works either way. Used by: okf-server.
+#   Compose: yes. Ansible: yes (vault: kc_okf_access_client_secret).
+
+# --- okf-server: internal service wiring (container DNS defaults) ---
+# DATAPREP_URL=http://dataprep-arango-service:5000
+#   Default: http://dataprep-arango-service:5000. Used by: okf-server
+#   (ingest worker concept kicks). Compose: yes. Ansible: yes.
+# OKF_INTERNAL_SECRET=<shared-random>
+#   Default: '' (= fail-closed: dataprep callbacks REFUSED). MUST match the
+#   dataprep side. Used by: okf-server + dataprep-arango-service.
+#   Compose: yes. Ansible: yes (vault: okf_internal_secret).
+# DOCUMENT_REPOSITORY_URL=http://document-repository:3001
+#   Default: http://document-repository:3001. Used by: okf-server
+#   (bundle store, crawl sources). Compose: no.
+# PII_SERVICE_URL=http://pii-service:8000
+#   Default: http://pii-service:8000. Used by: okf-server (concept PII
+#   scans). Compose: no.
+# PII_TIMEOUT_MS=10000
+#   Default: 10000. Used by: okf-server. Compose: no.
+# PII_RETRIES=2
+#   Default: 2. Used by: okf-server. Compose: no.
+# PII_CONCEPT_RETRY_PAUSE_MS=8000
+#   Default: 8000. Pause between retries when a concept's PII scan comes back
+#   'error' during a bulk repo rescan (retries at 8s/16s/24s). Must outlast a
+#   sidecar worker respawn — one was observed taking ~10-20s, and recording a
+#   permanent error for it is what once blocked a repository indefinitely.
+#   Used by: okf-server. Compose: no. Ansible: yes (pii_concept_retry_pause_ms).
+# PII_WEB_CONCURRENCY=4
+#   Default: 4 (was 2 — chosen when the sidecar had 2 uvicorn workers).
+#   Worker PROCESSES, not threads (GIL-bound NER). Each loads its own model
+#   copy: MEASURED ~640MB per worker (sidecar at 2.57GiB with 4 workers), so
+#   budget workers x 640MB against free RAM before raising it. This is the
+#   sidecar's MEMORY knob first and a CPU knob second.
+#   NOTE when checking it is live: the spawned workers are
+#   multiprocessing.spawn children, so they do NOT appear as "uvicorn" in ps.
+#   Count /proc/*/comm == python3.11 instead, or you will wrongly conclude the
+#   workers never started.
+#   SET IT TO MATCH OKF_IMPORT_CONCURRENCY — they are one capacity setting. See
+#   the PAIRING RULE at the OKF_IMPORT_CONCURRENCY entry above: import lanes
+#   above the sidecar's worker count queue instead of adding throughput.
+#   Compose: yes. Ansible: yes (pii_web_concurrency).
+# PII_REGION_MAX_CHARS=50000
+#   Default: 50000 in the sidecar. Max chars per analyze() call. A single long
+#   scan holds the GIL inside native spaCy/thinc code, which starves uvicorn's
+#   own supervisor: it SIGKILLs a worker that fails its 5 s liveness ping and
+#   respawns it. Measured 2026-10-13 — an 850 KB page killed the worker 8/8
+#   before this knob existed and 0/10 after; the same page was split into 18
+#   regions. LOWER it on a slower host: a region must stay under ~5 s, which
+#   is what stops the supervisor kill. Raise it only when a region measures
+#   below that. Smaller regions cost a little throughput, never recall.
+#   Used by: pii-service. Compose: yes. Ansible: yes (pii_region_max_chars).
+
+# --- okf-server: lifecycle + bundle ---
+# OKF_DELETE_GRACE_HOURS=168
+#   Default: 168 (7 days soft-delete before purge). Used by: okf-server.
+#   Compose: yes. Ansible: yes.
+# OKF_BUNDLE_STORE_TIMEOUT_MS=300000
+#   Default: 300000. Used by: okf-server. Compose: yes. Ansible: yes.
+# OKF_SETTLE_LEASE_MS=600000
+#   Default: 600000 (settle-lease window serializing concurrent settlers).
+#   Used by: okf-server. Compose: no.
+# OKF_BUNDLE_MAX_MB=100
+#   Default: 100. Used by: document-repository (zip accept cap). Compose: yes.
+
+# --- okf-server: ingest worker (post-publish drain) ---
+# OKF_INGEST_WORKER_ENABLED=true
+#   Default: true (any value but 'false' = on). Compose: yes. Ansible: yes.
+# OKF_INGEST_WORKER_INTERVAL_MS=15000
+#   Default: 15000. Compose: yes. Ansible: yes.
+# OKF_INGEST_WORKER_SWEEP_INTERVAL_MS=3600000
+#   Default: 3600000. Compose: yes. Ansible: yes.
+# OKF_INGEST_WORKER_REAP_GRACE_MS=3600000
+#   Default: 3600000 (claim-age grace before dead-letter). Compose: yes. Ansible: yes.
+# OKF_INGEST_WORKER_SWEEP_GRACE_MS=3600000
+#   Default: 3600000. Compose: no.
+# OKF_INGEST_WORKER_MAX_CLAIMS=8
+#   Default: 8 (poison-pill threshold). Compose: yes. Ansible: yes.
+# OKF_INGEST_WORKER_JOB_POLL_MS=5000
+#   Default: 5000. Compose: no.
+# OKF_INGEST_WORKER_JOB_TIMEOUT_MS=1800000
+#   Default: 1800000 (flat 30-min job window). Compose: no.
+# OKF_INGEST_WORKER_CYCLE_TIMEOUT_MS=1800000
+#   Default: 1800000. Compose: no.
+# OKF_JOB_WINDOW_ADAPTIVE=false
+#   Default: false (size-adaptive windows off). Compose: no.
+# OKF_JOB_WINDOW_FLOOR_MS=1800000
+#   Default: 1800000. Compose: no.
+# OKF_JOB_WINDOW_MAX_MS=21600000
+#   Default: 21600000 (6 h cap). Compose: no.
+# OKF_JOB_WINDOW_SEC_PER_CHUNK_MS=5000
+#   Default: 5000. Compose: no.
+# OKF_INGEST_CONCURRENCY=1
+#   Default: 1 (drain lanes; raise with DATAPREP_INGEST_CONCURRENCY).
+#   Compose: yes. Ansible: yes.
+# OKF_CLAIM_STRATEGY=fifo
+#   Default: fifo ('fair' = least in-flight repo first). Compose: no.
+# OKF_REPO_INGEST_CAP=0
+#   Default: 0 (unlimited; fair-strategy per-repo cap). Compose: no.
+# OKF_KICK_429_COOLDOWN_MS=15000
+#   Default: 15000 (dataprep-429 lane cooldown). Compose: yes. Ansible: yes.
+# OKF_KICK_BACKOFF_BASE_MS=0
+#   Default: 0 (= 5xx backoff OFF). Compose: no.
+# OKF_KICK_BACKOFF_MAX_MS=900000
+#   Default: 900000. Compose: no.
+
+# --- okf-server: import + conversion (creation side) ---
+# OKF_IMPORT_CONCURRENCY=4
+#   Default: 4 (was 1 — strictly serial). Parallel per-concept import lanes;
+#   PII scans dominate; distinct from the drain OKF_INGEST_CONCURRENCY.
+#   PAIRED WITH PII_WEB_CONCURRENCY — see the PAIRING RULE above. Clamp 1..16.
+#   Compose: yes. Ansible: yes.
+# OKF_INGEST_MAX_CONCEPTS=1000
+#   Default: 1000 (was 200). Max concepts per import batch.
+#   USE-CASE DEPENDENT — this is a CAPACITY knob, not a safety limit:
+#     pilot / demo repository      a few hundred is plenty
+#     department knowledge base    ~1000 (the default)
+#     national / crawl-scale base  10,000+ — raise it deliberately
+#   Why 200 was wrong: the cap is checked AFTER the document-ceiling split, so
+#   the operator's "how many documents did I select" is NOT the number the cap
+#   sees. Measured on Bali: 999 documents in, 1112 concepts out (89 split
+#   families) — a 200 cap rejects that outright. An operator picking 400
+#   documents has no way to predict that oversized pages multiply it to 600+.
+#   Raising it is safe because the bounds that actually protect the machine are
+#   the per-concept document ceiling (OKF_MAX_CONCEPT_DOC_CHARS) and the lane
+#   caps — not this number. At 1000, TOO_MANY_CONCEPTS stays reserved for
+#   genuine misconfiguration rather than firing on ordinary large crawls.
+#   Compose: yes. Ansible: yes.
+# OKF_INGEST_MAX_ZIP_BYTES=268435456
+#   Default: 268435456 (256 MiB decompressed zip-bomb guard; was 25 MiB).
+#   25 MiB was BELOW real bundles — Bali decompresses to 91.9 MB and Indonesia
+#   to 109.4 MB, so the guard rejected both. This is a BOMB GUARD, not a capacity
+#   knob: unlike OKF_INGEST_MAX_CONCEPTS there is no legitimate reason to raise
+#   it further, so leave it alone on a working deployment.
+#   Compose: yes. Ansible: yes.
+# OKF_MAX_CRAWL_SOURCE_MB=10240
+#   Default: 10240 (10 GB crawled-source cap). Compose: yes. Ansible: yes.
+# OKF_MAX_CONCURRENT_CONVERSIONS=2
+#   Default: 2 (simultaneous crawl-to-OKF jobs). Compose: no.
+# OKF_CONVERSION_DEBUG=1
+#   Default: off unless exactly '1'. Compose: yes. Ansible: yes.
+# OKF_XLSX_ROWS_PER_CONCEPT=200
+#   Default: 200 (clamped 10..500). Compose: no.
+# OKF_CSV_ROWS_PER_CONCEPT=200
+#   Default: 200 (clamped 10..500) — CSV row-group size, per FR-42 dictionary
+#   + row-group import. Compose: no.
+
+# --- okf-server: LLM curation engine (D-B, DP-8: okf-server owns the client) ---
+# VLLM_ENDPOINT=https://GPU_HOST:444/llm
+#   Default: '' (= engine fail-softs to heuristics). Compose: yes.
+#   Ansible: yes (gpu_node_host block — same host:port as TEI_EMBED_HOST).
+# VLLM_LLM_MODEL_ID=ibm-granite/granite-4.1-8b
+#   Default: '' (must support guided JSON for labeling). Compose: yes
+#   (nested VLLM_MODEL_ID fallback). Ansible: yes (guarded).
+# VLLM_API_KEY=secret
+#   Default: '' (Bearer on vLLM + TEI calls). Compose: yes. Ansible: yes.
+# OKF_CURATION_TIMEOUT_MS=30000
+#   Default: 30000 per call. Compose: yes (empty passthrough). Ansible: guarded.
+# OKF_CURATION_LANES=4
+#   Default: 4 parallel labeling lanes. Compose: yes (empty passthrough). Ansible: guarded.
+
+# --- okf-server: WHOLE-CORPUS TOPIC-LINK AUTHORING (Story 1-8g-p) -----------
+# The import wizard authors the cross-links a corpus that never cites itself is
+# born without (a corpus of bulletins imports with an empty graph otherwise,
+# and graph retrieval then returns isolated hits). The SAME pass is available
+# on demand from the editor (Step 7 "Cross-link topics"), so a repository built
+# before this feature can be cross-linked without re-importing. It is GENERIC:
+# candidate pairs come from token overlap + an assistant pass over title and
+# summary, with no lexicon and no domain assumption — bean bulletins, asteroids
+# and statute sections all cross-link through the same code path. Re-running is
+# safe: existing links are kept and only new ones are added.
+# OKF_TOPIC_LINK_ENABLED=true
+#   Default: true (the import runs the pass automatically). Set 0 to skip it
+#   import-time — the assistant calls are the only cost worth avoiding.
+#   Compose: yes. Ansible: yes (guarded).
+# OKF_TOPIC_LINK_TIMEOUT_MS=60000
+#   Default: 60000 per assistant call (a large batch prompt takes ~25s).
+#   Compose: yes (empty passthrough). Ansible: guarded.
+# OKF_TOPIC_LINK_LANES=4
+#   Default: 4 concurrent assistant calls. Lower it when the GPU is shared and
+#   you want the pass to queue rather than compete for the model server.
+#   Compose: yes (empty passthrough). Ansible: guarded.
+# OKF_TOPIC_LINK_BATCH=8
+#   Default: 8 concepts per assistant call (prompt size vs call count).
+#   Compose: yes (empty passthrough). Ansible: guarded.
+# OKF_TOPIC_LINK_MAX_PER_CONCEPT=6
+#   Default: 6 links written per page (graph density; higher = denser but
+#   noisier traversal). Compose: yes (empty passthrough). Ansible: guarded.
+
+# --- okf-server: TEI embedding + the vectorized head (Story 1.7a / 1-8) ---
+# TEI_EMBED_HOST=https://GPU_HOST:444
+#   Default: http://tei:80 (local full stack). The TEI embed service runs
+#   on the SAME host:port as the inference server (David 2026-10-08) — the
+#   value is VLLM_ENDPOINT's scheme://host:port, path excluded; the service
+#   appends /embed. Used by: okf-server (tag embedding, head build, head
+#   tests). Compose: yes. Ansible: yes (auto-derived from gpu_node_host).
+# EMBEDDING_MODEL_ID=BAAI/bge-large-en-v1.5
+#   Default: '' (= no BGE query-instruction prefix; the Routing Lab honestly
+#   reports "unknown (no prefix)"). Used by: okf-server + embedding.
+#   Compose: yes. Ansible: yes (guarded).
+# EMBED_QUERY_PREFIX_OVERRIDE=Represent this sentence for searching relevant passages:
+#   Default: unset (prefix comes from the model-id table). Used by: okf-server
+#   head tests. Compose: no.
+# EMBEDDING_DIM=1024
+#   Default: 1024 (head vector dimension guard). Compose: no.
+# OKF_FRONTMATTER_VALIDATE_BATCH_SIZE=4
+#   Default: 4 (chunks per tag-validation LLM call). Compose: no.
+
+# --- okf-server: Routing Lab knobs (Story 1-8; mirror the retriever router) ---
+# ROUTE_TOP_K=40
+#   Default: 40 (global top-K chunk pool in the chunk-probe replay).
+#   Used by: okf-server head tests. Compose: no.
+# ROUTE_MIN_CHUNKS=3
+#   Default: 3 (graph qualifies iff it contributes at least this many chunks).
+#   Used by: okf-server head tests. Compose: no.
+# ROUTE_PROBE_TIMEOUT_MS=2000
+#   Default: 2000 per-graph probe timeout. Used by: okf-server. Compose: no.
+# ROUTE_RETRY=1
+#   Default: 1 probe retry. Used by: okf-server. Compose: no.
+
+# --- okf-server: teaching-loop suggestion guardrail (Story 1-8d) ---
+# OKF_GUARD_SELF_SUBJECT=0.55
+#   Default: 0.55 (cosine vs ANY of the repo's own topic/entity/keyword head
+#   vectors at/above this rejects a suggested forbidden tag as self-forbidding
+#   — the mechanical backstop after the 2026-10-09 teaching-loop poisoning
+#   applied 'lung-cancer', the repo's OWN entity tag, and positives collapsed
+#   7/8 -> 2/8). Used by: okf-server head tests (guardSuggestions).
+# --- okf-server: corpus probe / click-test (Story 1-8g) ---
+# OKF_RERANK_ENDPOINT=https://<tei-host>:444/rerank
+#   Default: EMPTY (the probe answers verdict=unknown with an honest note).
+#   The TEI /rerank endpoint okf-server calls for the Lab click-test — the
+#   SAME reranker the chat pipeline grounds on (bge cross-encoder). Set it
+#   to the reranker stack's TEI endpoint so click-tests report real
+#   coverage verdicts (answerable >= 0.5, weak >= 0.15, else unanswerable).
+#   Used by: okf-server (probeSuiteQuery). Compose: yes (empty default).
+# OKF_RERANK_TOKEN=<bearer token for OKF_RERANK_ENDPOINT>
+#   Default: EMPTY (anonymous call — works against TEI stacks without
+#   auth). The remote nginx 401s node-fetch clients that aiohttp passes,
+#   so cloud deployments against the shared TEI set this (same token the
+#   reranker stack uses). Used by: okf-server (probeSuiteQuery).
+#   Compose: yes. Ansible: yes.
+# OKF_GUARD_DUPLICATE_FORBIDDEN=0.9
+#   Default: 0.9 (cosine vs an existing forbidden vector at/above this rejects
+#   a suggested tag as a near-duplicate — nothing new to learn). Used by:
+#   okf-server head tests (guardSuggestions). Compose: yes. Ansible: yes.
+
+# --- RAGAS benchmarking in the OKF Lab (Story 8-6, ADR-okf-043) ---
+# The ragas-service Python sidecar owns testset generation, metric
+# evaluation, and the xlsx interchange with tests/rag-benchmarks; the
+# okf-server orchestrates. NO feature is indexed on a specific model —
+# the judge/embedder vars point at the deployment's chosen OpenAI-
+# compatible endpoints and default to the deployment's LLM config; the
+# per-task capability minimums live in the spec's model-requirements
+# companion (guided JSON, window sizes, no reasoning-token leak).
+# OKF_RAGAS_URL=http://ragas-service:8090
+#   Default: http://ragas-service:8090. The sidecar's base URL as okf-server
+#   resolves it on the overlay. Unreachable = honest 503 RAGAS_UNAVAILABLE
+#   per Lab route. Used by: okf-server (ragas-suite-service).
+# RAGAS_INTERNAL_SECRET=<shared secret with the sidecar>
+#   Default: OKF_INTERNAL_SECRET (the dataprep-callback contract — one
+#   deployment-wide internal secret). Fail-closed: unset rejects everything.
+#   Used by: okf-server -> ragas-service auth. Compose: yes. Ansible: yes.
+# RAGAS_JUDGE_BASE_URL=http://vllm:8000/v1
+#   Default: the deployment's vLLM endpoint. OpenAI-compatible judge/generator
+#   endpoint — any local server qualifies (vLLM, LiteLLM, ollama).
+# RAGAS_JUDGE_MODEL=<model id>
+#   Default: VLLM_LLM_MODEL_ID. The judge+generator model. Must meet the
+#   model-requirements minimums (strict JSON output; window sized for
+#   question+answer+contexts; no reasoning tokens in completions).
+# RAGAS_JUDGE_API_KEY=<bearer for the judge endpoint>
+#   Default: VLLM_API_KEY.
+# RAGAS_JUDGE_CONTEXT_TOKENS=<the judge model's context window>
+#   Default: VLLM_MAX_MODEL_LEN (65536 if unset). The benchmark KG-input cap
+#   derives from it (RAGAS_DOC_CHAR_CAP=auto): (window - 3072) / 2 pair-safe
+#   tokens * 4 chars/token, clamped by RAGAS_DOC_CHAR_MAX — so transform
+#   prompts fit whatever model is selected, local or frontier.
+# RAGAS_DOC_CHAR_CAP=<chars | auto | 0>
+#   Default: auto (derive from the window above). Explicit number wins; 0
+#   disables (the relationship builder joins concept PAIRS — only disable
+#   if you know every concept is small).
+# RAGAS_DOC_CHAR_MAX=<chars>
+#   Default: 48000. Auto-mode ceiling — huge windows stop here so generation
+#   runtime stays sane.
+# RAGAS_EMBED_BASE_URL=http://tei-embedding-server:80
+#   Default: the TEI embedding service host. Required for answer_relevancy
+#   and testset generation (KG transforms embed); unset drops those
+#   honestly with a warning.
+# RAGAS_EMBED_API=tei
+#   Default: tei — POSTs {RAGAS_EMBED_BASE_URL}/embed with {inputs,
+#   truncate} (the project's TEI-behind-nginx contract; the OpenAI-style
+#   /v1/embeddings route is NOT exposed by those nginxes). Set openai for
+#   any OpenAI-compatible embeddings endpoint (LiteLLM, external APIs).
+# RAGAS_EMBED_MODEL=<embedding model id>
+#   Default: EMBEDDING_MODEL_ID. Consistent within a run; matching the corpus
+#   embedder is recommended but not required for answer_relevancy.
+# OKF_RAGAS_TESTSET_SIZE_DEFAULT=20
+#   Default: 20. The generate form's initial size; the user sets the actual
+#   dimensions per generation (size, distribution weights, personas).
+# OKF_RAGAS_MAX_ENTRIES=200
+#   Default: 200. Hard cap per suite (generation + import).
+# OKF_RAGAS_RUN_CONCURRENCY=2
+# OKF_RAGAS_RERANK_CONCURRENCY=3
+# OKF_RAGAS_SERVE_URL=http://chatqna-xeon-backend-server:8888/v1/chatqna
+#   Default: the compose chatqna service. SERVE mode (the benchmark default)
+#   posts each question to this URL - the same pipeline a citizen question
+#   takes - and measures the served answer and served contexts. Only a
+#   'whatif' run (knob experiments) ignores it.
+#   Default: 3. How many benchmark rerank batch calls (32 texts each) may be
+#   in flight at once. Batch calls are independent and scores are identical
+#   at any concurrency — this is transport, not computation. 1 = the old
+#   sequential behaviour; 3 overlaps a 192-chunk pool (6 batches) into ~2
+#   waves, ~3x faster retrieval leg. Global in-flight ceiling is
+#   OKF_RAGAS_RUN_CONCURRENCY x this value — raise on an idle GPU, lower to
+#   1 when the benchmark shares the GPU with live chat traffic.
+# OKF_RAGAS_ANSWER_MAX_TOKENS=5000
+#   Default: 5000. The answer leg's INITIAL token budget. It was hardcoded
+#   to 800, and a reasoning-capable model burns 400-700 tokens BEFORE
+#   writing a word -- so every answer hit the length cap, was thrown away,
+#   and was re-called at 3200 by the adaptive ladder. Two calls per question
+#   with the first one entirely wasted (live 2026-10-22: the answer leg's
+#   rate fell from 10 questions/min to 2 as the harder questions arrived).
+#   max_tokens is a CAP, not a reservation -- a model that needs less never
+#   pays for it, and the ladder still climbs for the ones that do.
+#   Default: 2. Per-run query concurrency — bounds LLM load on the shared
+#   GPU so benchmarking does not starve chat answering.
+# OKF_RAGAS_LONG_TIMEOUT_MS=3600000
+#   Default: 3600000 (1h). LIVENESS HORIZON, not a job deadline: a
+#   reachable, running job is NEVER timed out — the horizon bounds only how
+#   long an UNREACHABLE sidecar is retried before the job record fails
+#   honestly. The only things that end a healthy long job are its own
+#   completion or the user's Cancel (never a timer). Used by: okf-server.
+# RAGAS_LLM_CACHE=1
+#   Default: 1 (on). Disk judge cache — responses keyed by model+prompt+
+#   params persist under RAGAS_LLM_CACHE_DIR, so a repeat generation over
+#   the same repositories skips the whole knowledge-graph phase (minutes to
+#   seconds) and re-runs of a suite re-judge only what changed. 0 disables.
+#   Used by: ragas-service.
+# RAGAS_LLM_CACHE_DIR=/tmp/ragas-llm-cache
+#   Default: /tmp/ragas-llm-cache (inside the container — survives job
+#   churn, cleared when the container is recreated). Cache IO is
+#   best-effort: a cache failure can never fail a job.
+# RAGAS_LLM_CACHE_LEGACY=0
+#   Default: 0 (off). Migration switch for the 2026-10-21 cache-key fix:
+#   the judge identity in the cache key now carries the ENDPOINT as well as
+#   the model, so a repointed judge can never replay another endpoint's
+#   answers — at the price of a cold cache, and the entries written by an
+#   earlier deployment become unreachable. Set 1 ONLY when the judge
+#   endpoint has NOT changed since those entries were written: each read
+#   then falls back to the legacy key and MIGRATES the entry to the new key
+#   (the cache heals itself, one answer at a time). Leave 0 on a deployment
+#   whose judge was repointed — that is the case the fix protects.
+#   Used by: ragas-service.
+# RAGAS_LLM_MAX_CONCURRENCY=8
+#   Default: 8. How many judge calls may be in flight at once. The
+#   upstream answered 82 of ~500 synthesis calls with 429 Too Many
+#   Requests and the throttled questions were dropped (live 2026-10-21:
+#   a 100-question suite arrived with 63). ragas' own executor runs 16
+#   workers; this is the real ceiling, and it is what the upstream's rate
+#   limit has to accommodate. Lower it on a stricter or shared plan.
+#   Used by: ragas-service.
+# RAGAS_LLM_MAX_RETRIES=5
+#   Default: 5. How many times a rate-limited (429) call is retried
+#   before the question is lost. The backoff is exponential WITH jitter
+#   and honours Retry-After — the openai SDK's own retry has no jitter,
+#   so a throttled batch came back as a synchronised herd and was
+#   throttled again. 0 disables the retry.
+#   Used by: ragas-service.
+# RAGAS_EVAL_MAX_WORKERS=8
+#   Default: 8. How many judge calls ragas' own executor may run at once
+#   during the SCORING leg. This was hardcoded to 8 — the same number as
+#   RAGAS_LLM_MAX_CONCURRENCY, so the two ceilings could not be moved
+#   apart. On a judge plan with no throttling the pool is the real limit:
+#   100 rows x ~13 judge calls at 8-way concurrency measured ~5.4 min per
+#   row (live 2026-10-22: 17 rows in 92 minutes, ~8 h projected).
+#   Raise it together with RAGAS_EVAL_BATCH_ROWS — a single row only has
+#   ~13 calls to offer the pool, so the pool cannot be filled by the pool
+#   size alone.
+#   Used by: ragas-service.
+# RAGAS_EVAL_BATCH_ROWS=1
+#   Default: 1. How many rows are scored per evaluate() call. 1 makes the
+#   progress bar tick per question; 2 still ticks in twos and roughly
+#   doubles the work available to the worker pool. Raise it with
+#   RAGAS_EVAL_MAX_WORKERS, not on its own.
+#   Used by: ragas-service.
+# RAGAS_EVAL_TIMEOUT_SECONDS=600
+#   Default: 600. The per-call budget for a scoring call. A call that
+#   exceeds it raises TimeoutError inside ragas' executor and — because
+#   evaluation runs with raise_exceptions=False — that metric then scores
+#   NULL for the row, without an error on the run (live 2026-10-22: one
+#   such timeout in the first 45 min of a 100-row run). A judge call that
+#   takes this long is stuck rather than slow, so keep this well under the
+#   client's own 300 s HTTP timeout. 30 is the floor.
+#   Used by: ragas-service.
+
+# --- okf-server: retrieval mode governance (Story 1.7, ADR-okf-039 D3) ---
+# OKF_RETRIEVAL_MODE=legacy
+#   Default: legacy (boot default; the okf_system_config doc overrides
+#   field-by-field). Compose: no.
+# OKF_RETRIEVAL_MAX_FANOUT_GRAPHS=5
+#   Default: 5. Compose: no.
+# OKF_RETRIEVAL_SPINE_MAX_HOPS=2
+#   Default: 2. Compose: no.
+# OKF_RETRIEVAL_EXTRACTED_HOP_CAP=1
+#   Default: 1. Compose: no.
+# OKF_RETRIEVAL_CANDIDATE_CAP_PER_GRAPH=50
+#   Default: 50. Compose: no.
+# OKF_RETRIEVAL_CANDIDATE_CAP_GLOBAL=200
+#   Default: 200. Compose: no.
+
+# --- OKF retrieval-config readers (backend BFF) ---
+# OKF_SERVER_URL=http://okf-server:3002
+#   Default: http://okf-server:3002. Used by: backend + dataprep. Compose: yes.
+# OKF_RETRIEVAL_CONFIG_TTL_MS=30000
+#   Default: 30000 (read-side TTL cache). Used by: backend. Compose: yes.
+# OKF_RETRIEVAL_CONFIG_TIMEOUT_MS=3000
+#   Default: 3000. Used by: backend. Compose: yes.
+
+# --- dataprep OKF labeling (client_credentials service account) ---
+# OKF_LLM_RETRY_ATTEMPTS=3
+#   Default: 3. Used by: dataprep-arango-service. Compose: yes.
+# OKF_LLM_RETRY_BASE_MS=500
+#   Default: 500. Used by: dataprep-arango-service. Compose: yes.
+# OKF_LLM_RETRY_MAX_MS=8000
+#   Default: 8000. Used by: dataprep-arango-service. Compose: yes.
+# OKF_LLM_STORM_COOLDOWN_S=2
+#   Default: 2. Used by: dataprep-arango-service. Compose: yes.
+# OKF_LLM_STORM_COOLDOWN_MAX_S=30
+#   Default: 30. Used by: dataprep-arango-service. Compose: yes.
+# OKF_LLM_ROUND2_DELAY_S=10
+#   Default: 10. Used by: dataprep-arango-service. Compose: yes.
+# EMBEDDING_LABEL_THRESHOLD=0.35
+#   Default: 0.35 (cosine floor for chunk-label acceptance). Used by:
+#   dataprep-arango-service. Compose: yes.

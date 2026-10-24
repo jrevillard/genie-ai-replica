@@ -16,6 +16,16 @@ const securityService = require('./securityService');
 // Import utils
 const appConfig = require('../config/appConfig');
 
+// Kill-before-delete: how long deleteFile waits for a 'Crawling' job to leave
+// that state after the kill signal, and how often it re-checks.
+const CRAWL_KILL_WAIT_MS = appConfig.crawler?.killWaitMs || 30000;
+const CRAWL_KILL_POLL_MS = 500;
+
+// Definitive arangojs not-found (ArangoError 404 / 1202 "document not found").
+// Distinct from transient connection errors, which must not be mistaken for it.
+const isDocumentNotFound = (e) =>
+  !!e && (e.statusCode === 404 || e.errorNum === 1202 || /not found/i.test(e.message || ''));
+
 class FileService {
   constructor() {
     this.uploadDir = path.join(__dirname, '..', '..', appConfig.upload.uploadDir || 'uploads');
@@ -225,6 +235,13 @@ class FileService {
       logger.debug(`[FILE-SERVICE] File creation date: ${createdDate}`);
 
       // Create file record in database
+      // Story 3.10 T1 (D1): every file carries an ORIGIN — 'crawl' when the
+      // crawler produced it (either kind arrives with sourceUrl and/or
+      // author 'crawler'), 'upload' for user uploads. crawl_session_id
+      // groups a crawl's files in the wizard picker; today each crawl is
+      // one combined .md (session == file), but the field is the grouping
+      // key the moment a crawler ever splits pages into separate files.
+      const isCrawl = Boolean(fileInfo.sourceUrl) || fileInfo.author === 'crawler';
       const fileRecord = {
         file_id: fileId,
         file_name: originalFileName,
@@ -237,6 +254,8 @@ class FileService {
         uploaded_date: new Date().toISOString(),
         created_date: createdDate,
         crawl_date: fileInfo.crawlDate || null,
+        source: isCrawl ? 'crawl' : 'upload',
+        crawl_session_id: isCrawl ? fileId : null,
         source_url: fileInfo.sourceUrl || '',
         language: detectedLang, // Use the final validated content language
         chunk_count: 0,
@@ -441,6 +460,10 @@ class FileService {
     const fileName = `${domain}_full_crawl.md`;
 
     // 1. Create File Stub
+    // Story 3.10 T1 (D1): the async crawl stub is born tagged — origin
+    // 'crawl', session == its own id (1:1 today; the grouping key if a
+    // crawler ever emits one file per page), seed URL for picker grouping
+    // ("Crawl of naat.digital (47 pages)").
     const fileRecord = {
       file_id: fileId,
       file_name: fileName,
@@ -453,6 +476,8 @@ class FileService {
       uploaded_date: new Date().toISOString(),
       created_date: new Date().toISOString(),
       crawl_date: new Date().toISOString(),
+      source: 'crawl',
+      crawl_session_id: fileId,
       source_url: url,
       language: null,
       chunk_count: 0,
@@ -594,7 +619,7 @@ class FileService {
    */
   async getFiles(options = {}) {
     try {
-      const { page = 1, limit = 10, language, mimeType, search, dataprepStatus } = options;
+      const { page = 1, limit = 10, language, mimeType, search, dataprepStatus, repo_id, is_bundle, source } = options;
       const offset = (page - 1) * limit;
 
       // Build query
@@ -632,6 +657,30 @@ class FileService {
         // Use case-insensitive matching for status
         filters.push('LOWER(file.dataprep.status) == LOWER(@status)');
         bindVars.status = dataprepStatus;
+      }
+      // Story 3.10 T1 (D1): origin filter. Files created BEFORE the stamp
+      // landed have no `source` attribute — match them to 'upload' (the
+      // only pre-stamp creation path was the upload controller) so the
+      // wizard's chips partition cleanly from day one.
+      if (source) {
+        if (source === 'upload') {
+          filters.push('(file.source == @source OR file.source == null)');
+        } else {
+          filters.push('file.source == @source');
+        }
+        bindVars.source = source;
+      }
+      // Story 4.8-amend: bundle-file lookup by repo_id + is_bundle=true
+      // (the OKF worker mirrors per-concept ingest progress to the bundle zip's
+      // ingestion log, so it must resolve the bundle file_id).
+      if (repo_id) {
+        filters.push('file.repo_id == @repo_id');
+        bindVars.repo_id = repo_id;
+      }
+      if (is_bundle === true) {
+        filters.push('file.is_bundle == true');
+      } else if (is_bundle === false) {
+        filters.push('(file.is_bundle == false OR file.is_bundle == null)');
       }
 
       if (filters.length > 0) {
@@ -676,6 +725,59 @@ class FileService {
     }
   }
 
+  // Kill-before-delete (server-enforced). The kill channel for a running crawl
+  // IS its crawl_job document — deleting a file mid-crawl used to REMOVE that
+  // job doc, leaving an unkillable zombie crawl that holds the single-flight
+  // worker so no new crawl can start (2026-09-12 zalora incident). An active
+  // crawl must be terminated and confirmed dead before any file state is
+  // removed: Crawling ⇒ kill + confirm; Pending ⇒ remove the not-yet-started
+  // job so the worker never picks it up for a deleted file.
+  async _terminateActiveCrawl(fileId) {
+    const db = await this.getDb();
+
+    const cursor = await db.query(
+      'FOR job IN crawl_job FILTER job.file_id == @id AND job.status IN [@p, @c] RETURN job',
+      { id: fileId, p: 'Pending', c: 'Crawling' }
+    );
+    const jobs = await cursor.all();
+
+    for (const job of jobs) {
+      if (job.status === 'Crawling') {
+        await this.killCrawlTask(fileId);
+        const confirmed = await this._waitCrawlStopped(job._key);
+        if (!confirmed) {
+          throw new Error('Crawl is still stopping; try deleting again in a few seconds');
+        }
+      } else {
+        await db.query(
+          "FOR job IN crawl_job FILTER job.file_id == @id AND job.status == 'Pending' REMOVE job IN crawl_job",
+          { id: fileId }
+        );
+        logger.info(`[FILE-SERVICE] Removed Pending crawl job for deleted file ${fileId}`);
+      }
+    }
+  }
+
+  // Waits until the crawl_job doc `jobKey` leaves 'Crawling' (worker marks it
+  // Killed/Failed), or the doc disappears, or timeout. Returns true when the
+  // stop is confirmed.
+  async _waitCrawlStopped(jobKey) {
+    const db = await this.getDb();
+    const deadline = Date.now() + CRAWL_KILL_WAIT_MS;
+    while (Date.now() < deadline) {
+      let current;
+      try {
+        current = await db.collection('crawl_job').document(jobKey);
+      } catch (e) {
+        if (isDocumentNotFound(e)) return true; // doc gone = job dead
+        throw e;
+      }
+      if (!current || current.status !== 'Crawling') return true;
+      await new Promise((r) => setTimeout(r, CRAWL_KILL_POLL_MS));
+    }
+    return false;
+  }
+
   /**
    * Delete file by ID
    * MODIFIED: Added cleanup for crawl_job, crawl_log, and crawl_metrics
@@ -684,6 +786,11 @@ class FileService {
    */
   async deleteFile(fileId) {
     try {
+      // Kill-before-delete: an active crawl must be terminated and confirmed
+      // dead BEFORE its job doc / logs / physical file are removed, otherwise
+      // the worker keeps crawling a deleted file (2026-09-12 zalora incident).
+      await this._terminateActiveCrawl(fileId);
+
       // Get file record
       const file = await metadataService.getMetadataById(fileId);
       if (!file) {
@@ -841,6 +948,12 @@ class FileService {
   async addIngestionLog(fileId, logData) {
     try {
       const db = await this.getDb();
+      // NOTE (live-caught 2026-08-23, then reverted): do NOT enforce a
+      // files-doc existence check here — under OKF content-only chunking the
+      // PRIMARY log write keys on the concept_id, which has NO files doc by
+      // design; the check 500'd every per-stage write and emptied the bundle
+      // log. The stale-caller problem it guarded against is solved at the
+      // source (dataprep clears its bundle-id cache per ingest).
       const logEntry = {
         file_id: fileId,
         timestamp: new Date().toISOString(),
@@ -900,6 +1013,77 @@ class FileService {
       logger.error(`Error deleting ingestion logs for file ${fileId}: ${error}`);
       throw error;
     }
+  }
+
+  // --- OKF Bundle Upload (Story 2.5) ---
+  // Mirrors uploadFile (fileId → ClamAV → disk write → files doc) but OMITS
+  // langdetect/allowlist/text-extraction (the bundle pipeline bypass).
+  // The files doc carries graph_name + repo_id (metadataService.extractMetadata
+  // persists them via the T5 fix).
+  async uploadBundle(buffer, bundleInfo = {}) {
+    // Story 2.9.5-amend (2026-08-18): a ZIP bundle is ALSO stored as a file doc —
+    // the bundle file is associated with the OKF repo (repo_id + graph_name +
+    // labels) and is the ingestion INPUT (its concepts are enqueued separately,
+    // never re-chunked). Stored at dataprep.status='Ingested' + is_bundle=true so
+    // the 2.9.4 worker ignores it (it polls Pending only).
+    const isBundle = !!bundleInfo.is_bundle;
+    const fileId = fileUtils.generateUniqueFileId();
+    const fileName = isBundle ? `${fileId}.zip` : `${fileId}.md`;
+    const filePath = path.join(this.uploadDir, fileName);
+
+    // ClamAV scan (the one pipeline stage we KEEP)
+    const scanResult = await securityService.scanBuffer(buffer);
+    if (scanResult.isInfected) {
+      throw new Error(`File contains virus: ${scanResult.viruses}`);
+    }
+
+    // Ensure upload directory exists
+    await fileUtils.ensureDirectoryExists(this.uploadDir);
+
+    // Write to disk + create files doc. On metadata failure, clean up the
+    // orphan file so nothing sits on disk untracked (mirrors uploadFile's
+    // cleanup pattern — code-review fix 2026-08-14).
+    try {
+      await fs.writeFile(filePath, buffer);
+
+      // Create files doc (graph_name + repo_id + bundle_version persisted via
+      // the T5 extractMetadata fix + Story 2.9.7; the bundle-zip doc carries the
+      // same knowledge-hierarchy labels + is_bundle + an 'Ingested' status).
+      await metadataService.addMetadata(filePath, {
+        file_id: fileId,
+        file_name: bundleInfo.originalFileName || fileName,
+        file_type: isBundle ? 'application/zip' : 'text/markdown',
+        storage_path: filePath,
+        labels: bundleInfo.labels || [],
+        graph_name: bundleInfo.graph_name,
+        repo_id: bundleInfo.repo_id,
+        bundle_version: bundleInfo.bundle_version != null ? bundleInfo.bundle_version : null,
+        ...(isBundle
+          ? {
+              is_bundle: true,
+              // Story 4.8-amend (bundle state machine, David's directive): a
+              // bundle zip is STORED at 'Pending' — its CONCEPTS are ingested
+              // asynchronously. The okf-server transitions it 'Ingesting' →
+              // 'Ingested' (or 'Ingestion Error') as its concepts complete.
+              // It must NEVER be born 'Ingested' — nothing has been ingested
+              // at store time.
+              dataprep: { status: 'Pending', retract_date: '' }
+            }
+          : {})
+      });
+    } catch (error) {
+      try {
+        await fs.unlink(filePath);
+      } catch (unlinkErr) {
+        logger.warn(`[FILE-SERVICE] Failed to clean up orphan bundle ${filePath}: ${unlinkErr.message}`);
+      }
+      throw error;
+    }
+
+    logger.info(
+      `[FILE-SERVICE] Bundle uploaded: ${fileId} (graph_name=${bundleInfo.graph_name} is_bundle=${isBundle})`
+    );
+    return { file_id: fileId, file_name: bundleInfo.originalFileName || fileName, storage_path: filePath };
   }
 }
 

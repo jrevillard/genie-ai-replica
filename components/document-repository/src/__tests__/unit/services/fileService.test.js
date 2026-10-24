@@ -72,7 +72,8 @@ jest.mock('../../../config/appConfig', () => ({
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     ],
     allowedExtensions: ['.pdf', '.txt', '.html', '.md', '.docx'],
-    maxFileSize: 52428800
+    maxFileSize: 52428800,
+    bundleMaxBodyMb: 100
   },
   virusScanning: false,
   crawler: { maxPages: 100 },
@@ -294,6 +295,112 @@ describe('fileService', () => {
     });
   });
 
+  // Story 3.10 T1 (D1): every file knows its origin — the wizard's source
+  // picker can search/filter crawls vs uploads without filename archaeology.
+  describe('origin stamps + source filter (3.10 T1)', () => {
+    const crawlHappyPathMocks = () => {
+      mime.lookup.mockReturnValue('application/pdf');
+      fileUtils.generateUniqueFileId.mockReturnValue('file-crawl1');
+      fileUtils.ensureDirectoryExists.mockResolvedValue();
+      fileUtils.getFileHash.mockResolvedValue('hash123');
+      fs.writeFile.mockResolvedValue();
+      fs.stat.mockResolvedValue({ birthtime: new Date('2025-01-01') });
+      pdf.mockResolvedValue({ text: 'This is an English document for testing language detection' });
+      langdetect.detectOne.mockReturnValue('en');
+      metadataService.addMetadata.mockResolvedValue({});
+    };
+
+    it('uploadFile stamps a user upload as source=upload with no crawl session', async () => {
+      crawlHappyPathMocks();
+
+      const result = await fileService.uploadFile(
+        { originalname: 'test.pdf', mimetype: 'application/pdf', size: 1024, buffer: Buffer.from('x') },
+        { labels: [], author: 'Test' }
+      );
+
+      expect(result.source).toBe('upload');
+      expect(result.crawl_session_id).toBeNull();
+      const saved = metadataService.addMetadata.mock.calls[0][1];
+      expect(saved.source).toBe('upload');
+      expect(saved.crawl_session_id).toBeNull();
+    });
+
+    it('uploadFile stamps crawler-origin files as source=crawl with a session id', async () => {
+      crawlHappyPathMocks();
+
+      const result = await fileService.uploadFile(
+        {
+          originalname: 'naat.digital_full_crawl.md',
+          mimetype: 'text/markdown',
+          size: 2048,
+          buffer: Buffer.from('# page')
+        },
+        {
+          labels: [],
+          author: 'crawler',
+          sourceUrl: 'https://naat.digital',
+          crawlDate: new Date().toISOString(),
+          language: 'en'
+        }
+      );
+
+      expect(result.source).toBe('crawl');
+      expect(result.crawl_session_id).toBe('file-crawl1');
+      const saved = metadataService.addMetadata.mock.calls[0][1];
+      expect(saved.source).toBe('crawl');
+      expect(saved.crawl_session_id).toBe('file-crawl1');
+      expect(saved.source_url).toBe('https://naat.digital');
+    });
+
+    it('scheduleSiteCrawl stub is born tagged: source=crawl, session, seed URL', async () => {
+      fileUtils.generateUniqueFileId.mockReturnValue('file-site1');
+      const saved = {};
+      const collection = jest.fn(() => ({
+        save: jest.fn(async (doc) => {
+          Object.assign(saved, doc);
+        })
+      }));
+      fileService.getDb = jest.fn().mockResolvedValue({ collection });
+
+      const stub = await fileService.scheduleSiteCrawl('https://naat.digital', 2, {});
+
+      expect(stub.source).toBe('crawl');
+      expect(stub.crawl_session_id).toBe('file-site1');
+      expect(stub.source_url).toBe('https://naat.digital');
+      expect(collection).toHaveBeenCalledWith('files');
+      expect(collection).toHaveBeenCalledWith('crawl_job');
+    });
+
+    it('getFiles filters by source=crawl (strict match)', async () => {
+      const mockCursor = { all: jest.fn().mockResolvedValue([]) };
+      const mockCountCursor = { next: jest.fn().mockResolvedValue(0) };
+      const mockDb = {
+        query: jest.fn().mockResolvedValueOnce(mockCursor).mockResolvedValueOnce(mockCountCursor)
+      };
+      fileService.getDb = jest.fn().mockResolvedValue(mockDb);
+
+      await fileService.getFiles({ page: 1, limit: 10, source: 'crawl' });
+
+      const query = mockDb.query.mock.calls[0][0];
+      expect(query).toContain('file.source == @source');
+      expect(query).not.toContain('file.source == null');
+    });
+
+    it('getFiles source=upload tolerates pre-stamp legacy docs (source==null)', async () => {
+      const mockCursor = { all: jest.fn().mockResolvedValue([]) };
+      const mockCountCursor = { next: jest.fn().mockResolvedValue(0) };
+      const mockDb = {
+        query: jest.fn().mockResolvedValueOnce(mockCursor).mockResolvedValueOnce(mockCountCursor)
+      };
+      fileService.getDb = jest.fn().mockResolvedValue(mockDb);
+
+      await fileService.getFiles({ page: 1, limit: 10, source: 'upload' });
+
+      const query = mockDb.query.mock.calls[0][0];
+      expect(query).toContain('file.source == @source OR file.source == null');
+    });
+  });
+
   describe('deleteFile', () => {
     it('should delete file and metadata successfully', async () => {
       const file = {
@@ -305,7 +412,7 @@ describe('fileService', () => {
       metadataService.deleteMetadata.mockResolvedValue(true);
       fs.access.mockResolvedValue();
 
-      const mockCursor = { next: jest.fn() };
+      const mockCursor = { next: jest.fn(), all: jest.fn().mockResolvedValue([]) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
       fileService.getDb = jest.fn().mockResolvedValue(mockDb);
 
@@ -321,6 +428,91 @@ describe('fileService', () => {
       metadataService.getMetadataById.mockResolvedValue(null);
 
       await expect(fileService.deleteFile('nonexistent')).rejects.toThrow('not found');
+    });
+
+    it('kills and confirms a Crawling job before deleting', async () => {
+      jest.useFakeTimers();
+      const file = { file_id: 'file-123', file_name: 'test.pdf', storage_path: './uploads/file-123.pdf' };
+      metadataService.getMetadataById.mockResolvedValue(file);
+      metadataService.deleteMetadata.mockResolvedValue(true);
+      fs.access.mockResolvedValue();
+      fs.unlink.mockResolvedValue();
+
+      const jobCursor = { all: jest.fn().mockResolvedValue([{ _key: 'k1', status: 'Crawling' }]) };
+      const document = jest
+        .fn()
+        .mockResolvedValueOnce({ status: 'Crawling' })
+        .mockResolvedValueOnce({ status: 'Killed' });
+      const mockDb = {
+        query: jest.fn().mockResolvedValue(jobCursor),
+        collection: jest.fn().mockReturnValue({ document })
+      };
+      fileService.getDb = jest.fn().mockResolvedValue(mockDb);
+      const killSpy = jest.spyOn(fileService, 'killCrawlTask').mockResolvedValue();
+
+      const pending = fileService.deleteFile('file-123');
+      await jest.advanceTimersByTimeAsync(1000);
+      await pending;
+      expect(fileService.killCrawlTask).toHaveBeenCalledWith('file-123');
+      expect(metadataService.deleteMetadata).toHaveBeenCalledWith('file-123');
+      killSpy.mockRestore();
+      jest.useRealTimers();
+    });
+
+    it('refuses delete while the kill is unconfirmed (timeout)', async () => {
+      jest.useFakeTimers();
+      const file = { file_id: 'file-123', file_name: 'test.pdf', storage_path: './uploads/file-123.pdf' };
+      metadataService.getMetadataById.mockResolvedValue(file);
+      const jobCursor = { all: jest.fn().mockResolvedValue([{ _key: 'k1', status: 'Crawling' }]) };
+      const mockDb = {
+        query: jest.fn().mockResolvedValue(jobCursor),
+        collection: jest.fn().mockReturnValue({
+          document: jest.fn().mockResolvedValue({ status: 'Crawling' })
+        })
+      };
+      fileService.getDb = jest.fn().mockResolvedValue(mockDb);
+      const killSpy = jest.spyOn(fileService, 'killCrawlTask').mockResolvedValue();
+
+      const pending = expect(fileService.deleteFile('file-123')).rejects.toThrow('still stopping');
+      await jest.advanceTimersByTimeAsync(31000);
+      await pending;
+      expect(metadataService.deleteMetadata).not.toHaveBeenCalled();
+      killSpy.mockRestore();
+      jest.useRealTimers();
+    });
+
+    it('removes a Pending job without kill-waiting', async () => {
+      const file = { file_id: 'file-123', file_name: 'test.pdf', storage_path: './uploads/file-123.pdf' };
+      metadataService.getMetadataById.mockResolvedValue(file);
+      metadataService.deleteMetadata.mockResolvedValue(true);
+      fs.access.mockResolvedValue();
+      fs.unlink.mockResolvedValue();
+
+      const jobCursor = { all: jest.fn().mockResolvedValue([{ _key: 'k2', status: 'Pending' }]) };
+      const mockDb = { query: jest.fn().mockResolvedValue(jobCursor) };
+      fileService.getDb = jest.fn().mockResolvedValue(mockDb);
+      const killSpy = jest.spyOn(fileService, 'killCrawlTask').mockResolvedValue();
+
+      await fileService.deleteFile('file-123');
+      const removePendingQuery = mockDb.query.mock.calls
+        .map((c) => c[0])
+        .find((q) => q.includes("status == 'Pending' REMOVE"));
+      expect(removePendingQuery).toBeDefined();
+      expect(fileService.killCrawlTask).not.toHaveBeenCalled();
+      expect(metadataService.deleteMetadata).toHaveBeenCalledWith('file-123');
+      killSpy.mockRestore();
+      jest.useRealTimers();
+    });
+
+    it('_waitCrawlStopped: deleted job doc counts as stopped', async () => {
+      const mockDb = {
+        collection: jest.fn().mockReturnValue({
+          document: jest.fn().mockRejectedValue(Object.assign(new Error('document not found'), { statusCode: 404 }))
+        })
+      };
+      fileService.getDb = jest.fn().mockResolvedValue(mockDb);
+
+      await expect(fileService._waitCrawlStopped('k1')).resolves.toBe(true);
     });
   });
 
@@ -396,12 +588,37 @@ describe('fileService', () => {
     it('should add an ingestion log entry', async () => {
       const mockResult = { new: { file_id: 'f1', level: 'INFO', message: 'test' } };
       const mockSave = jest.fn().mockResolvedValue(mockResult);
-      const mockDb = { collection: jest.fn().mockReturnValue({ save: mockSave }) };
+      const mockDb = {
+        collection: jest.fn().mockReturnValue({
+          save: mockSave,
+          // integrity pre-check: the target file exists
+          firstExample: jest.fn().mockResolvedValue({ file_id: 'f1' })
+        })
+      };
 
       fileService.getDb = jest.fn().mockResolvedValue(mockDb);
 
       const result = await fileService.addIngestionLog('f1', { level: 'INFO', stage: 'test', message: 'test' });
       expect(result).toEqual(mockResult.new);
+    });
+
+    it('should accept an ingestion log for a concept key (no files doc — content-only chunking)', async () => {
+      // OKF concepts have NO files doc by design; their logs key on the
+      // concept_id. addIngestionLog must NOT require a files doc (the
+      // existence check 500'd every per-stage write — live-caught 2026-08-23).
+      const mockResult = { new: { file_id: 'some_concept', level: 'INFO', message: 'x' } };
+      const mockSave = jest.fn().mockResolvedValue(mockResult);
+      const mockDb = { collection: jest.fn().mockReturnValue({ save: mockSave }) };
+
+      fileService.getDb = jest.fn().mockResolvedValue(mockDb);
+
+      const result = await fileService.addIngestionLog('some_concept', {
+        level: 'INFO',
+        stage: 'Chunking',
+        message: 'x'
+      });
+      expect(result).toEqual(mockResult.new);
+      expect(mockSave).toHaveBeenCalled();
     });
 
     it('should get ingestion logs for a file', async () => {

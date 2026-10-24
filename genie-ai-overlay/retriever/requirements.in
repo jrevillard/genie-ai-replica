@@ -39,7 +39,6 @@ langchain-mariadb
 langchain-openai
 langchain-pinecone
 langchain-opengauss
-langchain-vdms>=0.1.4
 langchain_community
 langchain_huggingface
 langchain_milvus
@@ -54,9 +53,9 @@ mariadb
 neo4j
 numpy
 opensearch-py
-opentelemetry-api==1.27.0
-opentelemetry-exporter-otlp==1.27.0
-opentelemetry-sdk==1.27.0
+opentelemetry-api==1.44.0
+opentelemetry-exporter-otlp==1.44.0
+opentelemetry-sdk==1.44.0
 pathway
 Pillow==11.3.0
 pgvector
@@ -78,8 +77,8 @@ tiktoken
 uvicorn
 
 # === OpenTelemetry instrumentation (distributed tracing) ===
-opentelemetry-instrumentation-fastapi>=0.43b0
-opentelemetry-instrumentation-httpx>=0.43b0
-opentelemetry-instrumentation-aiohttp-client>=0.43b0
-opentelemetry-instrumentation-requests>=0.43b0
+opentelemetry-instrumentation-fastapi>=0.65b0
+opentelemetry-instrumentation-httpx>=0.65b0
+opentelemetry-instrumentation-aiohttp-client>=0.65b0
+opentelemetry-instrumentation-requests>=0.65b0
 opentelemetry-exporter-otlp-proto-http>=1.22

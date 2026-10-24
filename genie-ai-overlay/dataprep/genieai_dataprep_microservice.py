@@ -10,10 +10,15 @@ document repository ingestion and retraction, using ArangoDB as the backend.
 
 import asyncio
 import base64
-import fcntl
+import hashlib
 import importlib
 import os
 import time
+
+try:
+    import fcntl  # POSIX file locking — the service runs in a Linux container
+except ModuleNotFoundError:  # Windows dev checkout: locking degrades to a no-op
+    fcntl = None  # type: ignore[assignment]
 
 from opentelemetry.trace import Status, StatusCode
 
@@ -62,6 +67,7 @@ from comps import (
 )
 from comps.cores.proto.genieai_api_protocol import ArangoDBDataprepRequestFromDocRepo
 from fastapi import HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from genieai_dataprep_loader import GenieDataprepLoader
@@ -73,6 +79,66 @@ install_uvicorn_access_logging()
 logflag = os.getenv("LOGFLAG", False)
 upload_folder = "./uploaded_files/"
 LOCK_FILE_PATH = "/tmp/genie_dataprep.lock"
+# F-1 (#1021, spec §5.6): filesystems cap a single filename at 255 BYTES.
+# Names whose UTF-8 encoding passes this threshold are hashed instead —
+# 200 leaves ample margin for the extension and any filesystem overhead.
+_UPLOAD_NAME_MAX_BYTES = 200
+
+
+def _upload_save_name(file_name: str) -> str:
+    """Filesystem-safe name for the temporary upload file.
+
+    Long OKF concept ids overflow the 255-byte filename limit and made the
+    ingest kick fail with OSError ENAMETOOLONG on every deterministic retry.
+    Names over the byte threshold map to sha256(name)<ext> — stable per name
+    (re-kicks overwrite the same temp file instead of littering), and the
+    original extension is preserved for extension-based behavior. Identity
+    fields (file_id, concept_id, file_name) are never derived from this; it
+    names ONLY the temporary bytes vehicle, removed after ingest.
+    """
+    name_bytes = file_name.encode("utf-8")
+    if len(name_bytes) <= _UPLOAD_NAME_MAX_BYTES:
+        return file_name
+    ext = os.path.splitext(file_name)[1] or ".md"
+    return hashlib.sha256(name_bytes).hexdigest() + ext
+
+
+# PARALLEL INGEST (David, 2026-09-03): number of concurrently accepted ingest
+# requests. Each slot is its own flock file; a request takes any FREE slot and
+# 429s only when ALL are busy. Default 1 = the historical single-flight
+# (one lock file, same 429 behavior).
+DATAPREP_INGEST_CONCURRENCY = max(1, int(os.getenv("DATAPREP_INGEST_CONCURRENCY", "1")))
+
+
+def acquire_ingest_slot():
+    """Try to claim one of the N ingest slots (non-blocking). Returns the
+    open lock file (held by the caller until the ingest's finally-block
+    releases it) or None when every slot is busy.
+
+    All slot files derive from LOCK_FILE_PATH (slot 0 keeps the legacy name;
+    slot i lives at `LOCK_FILE_PATH.i`) — tests redirect that single base to a
+    per-test tmp dir, so slot files inherit the isolation instead of leaking
+    across tests/workers through a hardcoded global path."""
+    for i in range(DATAPREP_INGEST_CONCURRENCY):
+        path = LOCK_FILE_PATH if i == 0 else f"{LOCK_FILE_PATH}.{i}"
+        # O_NOFOLLOW + 0600 (main, 2026-10-24): the lock file lives in the
+        # shared /tmp, so open it WITHOUT following a pre-planted symlink and
+        # keep it private. O_NOFOLLOW is POSIX-only — a Windows dev checkout
+        # has no fcntl either, and there the flag is simply absent.
+        flags = os.O_WRONLY | os.O_CREAT
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        fd = os.open(path, flags, 0o600)
+        lock_file = os.fdopen(fd, "w")  # noqa: SIM115 — held across the request task
+        if fcntl is None:  # Windows dev checkout — single-process, no locking
+            return lock_file
+        try:
+            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return lock_file
+        except OSError:
+            lock_file.close()
+    return None
+
 
 dataprep_component_name = "GENIE_DATAPREP_ARANGODB"
 # Initialize OpeaComponentLoader
@@ -126,10 +192,30 @@ class DocRepoIngestPayload(BaseModel):
     storagePath: str | None = None
     # Per-request chunk_overlap override; falls back to env var DATAPREP_CHUNK_OVERLAP when None.
     chunkOverlap: int | None = None
+    # OKF per-repo graph (Story 2.9.6): OKF_{repo_id}. Absent/None → the env
+    # default (ARANGO_GRAPH_NAME) — the legacy single-graph behavior is unchanged.
+    graphName: str | None = None
+    # OKF minted repo version (Story 2.9.7, ADR-031): stamped onto every chunk
+    # doc so citations can pin (repo_id, bundle_version, concept_id).
+    # Absent/None → chunks carry no version (legacy behavior unchanged).
+    bundleVersion: int | None = None
+    # OKF concept id (Story 4.8-amend, 2026-08-19): content-only chunking — when
+    # set, chunks are stamped with this citation field AND the completion status
+    # callback routes to the OKF Server (no doc-repo files doc exists for a
+    # concept). Absent/None → legacy single-file behavior (doc-repo callback).
+    conceptId: str | None = None
+    # OKF repo id (David, 2026-08-31): the EXPLICIT completion-callback
+    # identity. Born-right graph names carry repo NAME+VERSION — a graph name
+    # is not an identity field, so it must never be parsed for one. Absent →
+    # legacy graph-name-parse fallback.
+    repoId: str | None = None
 
 
 class DocRepoRetractPayload(BaseModel):
     fileId: str
+    # Target graph for the retract (OKF_{repo_id}); None → env default. Retract
+    # MUST hit the graph the file was ingested into (G5: wrong-graph retract).
+    graphName: str | None = None
 
 
 # ------------------------------------------------------------------------------
@@ -193,29 +279,81 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
         TEXT_CAPITALIZATION_STRATEGY = os.getenv("TEXT_CAPITALIZATION_STRATEGY", "upper")
         INCLUDE_CHUNKS = os.getenv("INCLUDE_CHUNKS", "true").lower() == "true"
 
-        # --- SYNCHRONOUS LOCK CHECK ---
-        # We acquire the lock HERE to ensure we can return 429 immediately if busy.
-        # O_NOFOLLOW + 0600: the lock file lives in the shared /tmp, so open
-        # it without following a pre-planted symlink and keep it private.
-        lock_fd = os.open(LOCK_FILE_PATH, os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW, 0o600)
-        lock_file = os.fdopen(lock_fd, "w")
-        try:
-            # LOCK_EX: Exclusive, LOCK_NB: Non-blocking (throws error immediately if busy)
-            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError:
-            lock_file.close()
-            logger.warning(f"[ ingest ] Rejected file_id {payload.fileId}: System busy.")
+        # --- SYNCHRONOUS SLOT CHECK ---
+        # We acquire an ingest slot HERE to return 429 immediately when all
+        # slots are busy (PARALLEL INGEST: DATAPREP_INGEST_CONCURRENCY slots,
+        # default 1 = the historical single-flight).
+        # The slot file is opened O_NOFOLLOW + 0600 (the lock lives in the
+        # shared /tmp: do not follow a pre-planted symlink, keep it private).
+        lock_file = acquire_ingest_slot()
+        if lock_file is None:
+            logger.warning(
+                f"[ ingest ] Rejected file_id {payload.fileId}: System busy "
+                f"({DATAPREP_INGEST_CONCURRENCY} slot(s) all in use)."
+            )
             raise HTTPException(
                 status_code=429,
-                detail="System is currently processing another document. Only one ingestion can run at a time.",
-            ) from None
+                detail=(
+                    "System is currently processing other documents. "
+                    f"All {DATAPREP_INGEST_CONCURRENCY} ingestion slot(s) are in use."
+                ),
+            )
+
+        # SLOT-LIFETIME DEFENSE (David, 2026-09-15): the slot FD is passed to
+        # the background task which owns it via a `finally:` in
+        # `ingest_file_with_guardrail`. Live-captured: 6 of 6 slots stayed
+        # flock-held for 7 hours after the worker stopped dispatching,
+        # blocking every subsequent ingest with 429 — root cause was tasks
+        # created by `asyncio.create_task` that were canceled or never
+        # reached their finally blocks. Hold a strong-ref to the FD and
+        # assert ownership via a wrapper that explicitly checks the lock is
+        # not still held by the time the request returns to the FastAPI
+        # event loop. If the task completes BEFORE we return 200, release
+        # proactively. This is a release guard, not a replacement for the
+        # task-level finally (that still owns the canonical release).
+        _slot_owner_task = []  # filled in when create_task runs
+
+        def _release_slot_if_orphan():
+            """If the background task hasn't claimed the slot (or finished
+            already), release the lock FD synchronously so it doesn't leak.
+            Live: a task created by asyncio.create_task may be cancelled
+            before it ever reaches its finally block; the slot would then
+            stay locked for the lifetime of the Python process."""
+            try:
+                if lock_file is None:
+                    return
+                # If the task is still alive and owns the slot, leave it.
+                if _slot_owner_task and not _slot_owner_task[0].done():
+                    return
+                if fcntl is not None:  # Windows dev checkout: no-op
+                    fcntl.flock(lock_file, fcntl.LOCK_UN)
+                lock_file.close()
+                logger.info("[ ingest ] Released slot FD synchronously — task never claimed or already done")
+            except Exception as e:  # noqa: BLE001 — last-resort cleanup
+                logger.warning(f"[ ingest ] slot-FD synchronous release failed: {e}")
 
         save_path = None
         task = None
         try:
             # Decode and temporarily save file
             file_bytes = base64.b64decode(payload.fileBase64)
-            save_path = os.path.join(upload_folder, payload.fileName)
+            # F-1 (#1021, spec §5.6): OKF concept ids can exceed the
+            # filesystem's 255-byte filename limit — the kick then failed with
+            # OSError ENAMETOOLONG on EVERY attempt (live 2026-09-26: 230-char
+            # UK consultation concepts dead-lettered after 8 deterministic
+            # failures). Map over-long upload names to sha256(name).ext. The
+            # path is a temporary vehicle for the bytes only — identity
+            # (file_id / concept_id / file_name for logs) is untouched, and
+            # the file is removed after ingest.
+            save_path = os.path.join(upload_folder, _upload_save_name(payload.fileName))
+            # OKF concept file names can carry folder structure (a zip import
+            # preserves the bundle's internal directories, e.g.
+            # "kenya-okf/concepts/ecitizen-digital-payments.md"). The save path
+            # must be guaranteed to exist — open() does NOT create intermediate
+            # directories and a missing one crashed the ingest with
+            # FileNotFoundError, leaving the concept stuck in the okf-server's
+            # 'parsed' queue forever (live-caught 2026-08-30).
+            os.makedirs(os.path.dirname(save_path) or upload_folder, exist_ok=True)
             with open(save_path, "wb") as f:
                 f.write(file_bytes)
             logger.info(f"[ ingest ] File saved to: {save_path}")
@@ -227,7 +365,25 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
                 file_path=save_path,
                 file_type=payload.fileType,
                 file_labels=payload.fileLabels,
-                graph_name=ARANGO_GRAPH_NAME,
+                # Story 2.9.6 (G5): honor the per-repo graph from the request;
+                # fall back to the env default when absent (legacy behavior).
+                graph_name=payload.graphName or ARANGO_GRAPH_NAME,
+                # Story 2.9.7: the minted version rides through to chunk docs.
+                bundle_version=payload.bundleVersion,
+                # Story 4.8-amend: the OKF concept id rides through to chunk docs
+                # (citation provenance) + routes the completion callback.
+                concept_id=payload.conceptId,
+                # David (2026-08-31): the EXPLICIT repo id for the completion
+                # callback — born-right graph names carry name+version, so
+                # identity must not be parsed out of them.
+                repo_id=getattr(payload, "repoId", None),
+                # Story 4.8-amend follow-up: concept's source filename mirrors
+                # into the bundle zip's ingestion log so the bundle's UI
+                # Ingestion Log tab can trace each entry to its concept file.
+                # (file_name is already in the parent payload — the docs
+                # repo's addIngestionLog file_id-keyed POST keys on it.)
+                # The ArangoDBDataprepRequest class sets it on the instance
+                # via the super().__init__() chain.
                 insert_async=ARANGO_INSERT_ASYNC,
                 insert_batch_size=ARANGO_BATCH_SIZE,
                 embed_nodes=True,
@@ -244,9 +400,24 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
                 chunk_overlap=CHUNK_OVERLAP,
             )
 
-            # Metrics first: once the task exists it owns the lock and the
-            # file, so a failure in this tail must not report an ingestion
-            # that then starts anyway.
+            # IDEMPOTENCY GUARD (review 2026-10-15): refuse a second ingest while a
+            # task for the SAME fileId is still running. Overwriting the registry
+            # entry orphaned the first task — untouchable, unkillable, its writes
+            # racing the new run and its generic-Exception auto-retract able to
+            # delete the NEW run's chunks after it reported Ingested. The worker's
+            # liveness probe makes this rare; this makes it harmless (409, the
+            # worker's existing backoff handles it).
+            _existing = active_ingestion_tasks.get(payload.fileId)
+            if _existing is not None and not _existing.done():
+                logger.warning(f"Rejecting ingest for {payload.fileId}: a task is already in flight (409)")
+                return JSONResponse(
+                    status_code=409,
+                    content={"detail": f"An ingest task for fileId '{payload.fileId}' is already running"},
+                )
+
+            # Metrics first (main, 2026-10-24): once the task exists it owns
+            # the lock and the file, so a failure in this tail must not report
+            # an ingestion that then starts anyway.
             statistics_dict["opea_service@dataprep"].append_latency(time.time() - start, None)
             _ing_latency = time.time() - start
             _file_type = payload.fileType
@@ -256,11 +427,29 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
 
             # --- Trigger Tracked Background Task ---
             # We use asyncio.create_task to maintain a reference for the "Kill" functionality.
-            # Last statement group before the return: everything that can
-            # still fail has failed before the lock and the file change owner.
             task = asyncio.create_task(loader.ingest_file_with_guardrail(input_req, lock_file=lock_file))
+            _slot_owner_task.append(task)  # register for the synchronous-release guard
             active_ingestion_tasks[payload.fileId] = task
-            task.add_done_callback(lambda t: active_ingestion_tasks.pop(payload.fileId, None))
+
+            # Ensure the task is removed from the registry upon completion (success or failure).
+            # REVIEW FIX #11 (#1020): pop only if the registry STILL points at THIS
+            # task — a re-kick overwrites the entry with a newer task, and the OLD
+            # task's completion callback would otherwise delete the NEW task's
+            # registration (task_status then reports dead for a live task, and the
+            # OKF worker's probe-defer logic retracts running work; kill_ingest
+            # would 404 or cancel the wrong task).
+            task.add_done_callback(
+                lambda t, _fid=payload.fileId, _me=task: (
+                    active_ingestion_tasks.pop(_fid) if active_ingestion_tasks.get(_fid) is _me else None
+                )
+            )
+
+            # SLOT-LIFETIME GUARD: by the time we reach this point, the
+            # task has been created. If the asyncio.create_task ran but the
+            # task is already done (synchronous error in the task's
+            # creation path), release the slot synchronously. The task's
+            # own finally will no-op because the FD is already closed.
+            _release_slot_if_orphan()
 
             return {"success": True, "status": 200, "message": "Ingestion started in background."}
 
@@ -285,7 +474,8 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
                 # original exception, and the temp file must still be
                 # reclaimed if the unlock misbehaves.
                 try:
-                    fcntl.flock(lock_file, fcntl.LOCK_UN)
+                    if fcntl is not None:  # Windows dev checkout: no-op
+                        fcntl.flock(lock_file, fcntl.LOCK_UN)
                     lock_file.close()
                 except OSError:
                     logger.exception("Failed to release the ingestion lock")
@@ -329,6 +519,31 @@ async def kill_ingest_task(payload: DocRepoRetractPayload):
 
 
 # ------------------------------------------------------------------------------
+# Ingestion task liveness probe (spec #1020 §5.9 — size-adaptive job windows)
+# ------------------------------------------------------------------------------
+@register_microservice(
+    name="opea_service@dataprep",
+    service_type=ServiceType.DATAPREP,
+    endpoint="/v1/dataprep/task_status",
+    host="0.0.0.0",
+    port=5000,
+)
+async def ingestion_task_status(payload: DocRepoRetractPayload):
+    """
+    Reports whether an ingestion task is ACTIVELY running for this fileId.
+    The OKF worker's window expiry (§5.9) probes this before touching a
+    timed-out concept: alive → the worker defers (parks the row, never
+    re-kicks) because a re-kick would retract and destroy the in-flight
+    work; dead/unknown → the reclaim + retract is safe.
+    """
+    file_id = payload.fileId
+    task = active_ingestion_tasks.get(file_id)
+    alive = task is not None and not task.done()
+    logger.info(f"[ task_status ] file_id={file_id} alive={alive}")
+    return {"success": True, "status": 200, "fileId": file_id, "alive": alive}
+
+
+# ------------------------------------------------------------------------------
 # Retract (delete) a file from graph
 # ------------------------------------------------------------------------------
 @register_microservice(
@@ -343,7 +558,10 @@ async def retract_file(payload: DocRepoRetractPayload):
     """Deletes a file and its entities/relations from the graph."""
     start = time.time()
     file_id = payload.fileId
-    graph_name = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
+    # Unified fallback (G5 fix): the ingest default is GRAPH — retract used a
+    # divergent 'genie_graph' default, silently retracting NOTHING for files in
+    # the default graph. Payload graphName (the file's actual graph) wins.
+    graph_name = payload.graphName or os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
 
     logger.info(f"[ retract ] Start to delete ingested file {file_id}")
 

@@ -102,7 +102,19 @@ const getFilesSchema = Joi.object({
   search: Joi.string().max(100).optional(),
   dataprepStatus: Joi.string()
     .valid('pending', 'ingesting', 'ingested', 'ingested with warnings', 'ingestion error', 'retracted', 'killed')
-    .optional()
+    .optional(),
+  // Story 4.8-amend: the OKF ingest worker mirrors per-concept ingest
+  // progress to the bundle zip's ingestion log, so it needs to resolve
+  // the bundle file_id from doc-repo via repo_id + is_bundle=true.
+  // Accept any non-empty string for repo_id (was Joi.string().uuid(), but
+  // the smoke uses short test IDs + some integration paths pass prefixed IDs;
+  // the route is authenticated + scoped, so no security risk in relaxing).
+  repo_id: Joi.string().min(1).max(256).optional(),
+  is_bundle: Joi.boolean().optional(),
+  // Story 3.10 T1 (D1): origin filter for the OKF wizard's source picker —
+  // "show me the crawled files". 'link' reserved for the future add-by-link
+  // path distinct from the crawler.
+  source: Joi.string().valid('crawl', 'upload', 'link').optional()
 });
 
 const updateFileSchema = Joi.object({
@@ -115,7 +127,16 @@ const updateFileSchema = Joi.object({
   create_date: Joi.date().optional(),
   crawl_date: Joi.date().optional(),
   source_url: Joi.string().uri().optional(),
-  language: Joi.string().min(2).max(5).optional()
+  language: Joi.string().min(2).max(5).optional(),
+  // Story 1-8g-q (2026-10-11): okf-server stamps okf_repo_id onto each source
+  // file it imports, so the wizard can tell a file that already belongs to a
+  // repository from a free-form one. Joi rejects unknown keys by default, so
+  // without this the stamp is refused as a 400 the moment the route gate is
+  // fixed — two independent blockers, both needed for the stamp to land.
+  // Loose string (not .uuid()), matching repo_id above: repository ids in this
+  // system are not guaranteed UUID-shaped, and the stamp must be clearable on
+  // detach. Additive: this only widens the whitelist.
+  okf_repo_id: Joi.string().allow(null, '').max(256).optional()
 });
 
 // --- NEW SCHEMAS ADDED ---
@@ -177,6 +198,8 @@ class FileController {
     this.addIngestionLog = this.addIngestionLog.bind(this);
     this.getIngestionLogs = this.getIngestionLogs.bind(this);
     this.updateFileStatus = this.updateFileStatus.bind(this);
+    this.bundleIngest = this.bundleIngest.bind(this);
+    this._markIngestFailure = this._markIngestFailure.bind(this);
     this.killIngestion = this.killIngestion.bind(this);
 
     // --- CRAWLER BINDS ---
@@ -702,6 +725,37 @@ class FileController {
         });
       }
 
+      // WS2 (David, 2026-09-25): bundle zips (is_bundle=true) are OKF
+      // per-version ingestion artifacts — they live forever, governed by
+      // the OKF lifecycle (supersede/superseded by minting a new version),
+      // not by doc-repo's document management tab. Only the okf-service
+      // service account may delete them; Admin / steward roles get a
+      // explicit 403 with code=BUNDLE_PROTECTED so the UI can hide the
+      // action entirely. Live-caught 2026-09-25: all 4 ingested repos'
+      // bundle zips were deleted by the hourly ingest sweep because this
+      // protection did not exist; without it the entire ingest pipeline
+      // loses the per-version trace.
+      const callerRoles = req.user && Array.isArray(req.user.roles) ? req.user.roles : [];
+      const isOkfService = callerRoles.some((r) => String(r).toLowerCase() === 'okf-service');
+      if (!isOkfService) {
+        let meta = null;
+        try {
+          meta = await metadataService.getMetadataById(fileId);
+        } catch {
+          // metadata fetch failed — fall through (the existing delete handler
+          // will surface any actual error from the deletion path itself)
+        }
+        if (meta && meta.is_bundle === true) {
+          return res.status(403).json({
+            success: false,
+            code: 'BUNDLE_PROTECTED',
+            error: 'Bundle zips are managed by the OKF lifecycle and cannot be deleted from document management',
+            message:
+              'Bundle zip files are owned by the OKF repository lifecycle. Delete is only allowed via the okf-service account.'
+          });
+        }
+      }
+
       const deleted = await fileService.deleteFile(fileId);
       if (deleted) {
         res.json({
@@ -716,6 +770,18 @@ class FileController {
       }
     } catch (error) {
       logger.error('Delete file error:', error);
+
+      // Kill-before-delete in progress or unconfirmed within the wait window —
+      // the file is untouched; the client should retry shortly. Code per the
+      // kill-first contract ruling (#992).
+      if (error.message.includes('still stopping')) {
+        return res.status(409).json({
+          success: false,
+          code: 'CRAWL_ACTIVE',
+          error: 'Crawl still stopping',
+          message: error.message
+        });
+      }
 
       if (error.message.includes('not found')) {
         return res.status(404).json({
@@ -747,6 +813,31 @@ class FileController {
         });
       }
       const { fileIds } = value;
+
+      // WS2 (David, 2026-09-25): same bundle protection in batch mode —
+      // a single bundle in the batch fails the WHOLE batch with 403 so
+      // the UI can surface the error clearly (partial-deletion is worse
+      // than no-deletion for the bundle semantics).
+      const callerRoles = req.user && Array.isArray(req.user.roles) ? req.user.roles : [];
+      const isOkfService = callerRoles.some((r) => String(r).toLowerCase() === 'okf-service');
+      if (!isOkfService) {
+        for (const fileId of fileIds) {
+          let meta = null;
+          try {
+            meta = await metadataService.getMetadataById(fileId);
+          } catch {
+            // metadata fetch failed — fall through
+          }
+          if (meta && meta.is_bundle === true) {
+            return res.status(403).json({
+              success: false,
+              code: 'BUNDLE_PROTECTED',
+              error: 'Bundle zips are managed by the OKF lifecycle and cannot be deleted from document management',
+              message: `Bundle zip "${fileId}" is owned by the OKF repository lifecycle. Delete is only allowed via the okf-service account.`
+            });
+          }
+        }
+      }
 
       const results = [];
       for (const fileId of fileIds) {
@@ -1081,16 +1172,41 @@ class FileController {
     }
     const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.ingestPath}`;
     logger.debug(`[FILE-CONTROLLER] Sending file to dataprep service at ${dataprepUrl}`);
-    const response = await axios.post(dataprepUrl, {
-      fileId: file.file_id,
-      fileName: file.file_name,
-      fileType: file.file_type,
-      fileLabels: file.labels,
-      storagePath: file.storage_path,
-      fileBase64: base64String,
-      // Optional per-request override; dataprep falls back to env DATAPREP_CHUNK_OVERLAP when omitted.
-      chunkOverlap: Number.isInteger(chunkOverlap) ? chunkOverlap : undefined
-    });
+    let response;
+    try {
+      response = await axios.post(dataprepUrl, {
+        fileId: file.file_id,
+        fileName: file.file_name,
+        fileType: file.file_type,
+        fileLabels: file.labels,
+        storagePath: file.storage_path,
+        fileBase64: base64String,
+        graphName: file.graph_name || null,
+        // Story 2.9.7: chunk-doc version stamping (null = unminted legacy).
+        bundleVersion: file.bundle_version != null ? file.bundle_version : null,
+        // Optional per-request override; dataprep falls back to env DATAPREP_CHUNK_OVERLAP when omitted.
+        chunkOverlap: Number.isInteger(chunkOverlap) ? chunkOverlap : undefined
+      });
+    } catch (err) {
+      // Follow the ingestion state machine: a dataprep failure MUST transition
+      // Pending/Ingesting -> 'Ingestion Error' and record an ingestion-log entry
+      // (the UI surfaces these; a stuck 'Ingesting' with empty logs is a defect —
+      // API smoke test caught it on the bundle path). RETHROW so the caller's
+      // error mapping is preserved (e.g. the regular path maps dataprep 429 busy
+      // -> 429; the bundle fire-and-forget .catch() logs).
+      //
+      // EXCEPT a 429: "dataprep busy" is TRANSIENT (single-flight), not a file
+      // failure — marking the file 'Ingestion Error' poisons it permanently
+      // (the 2.9.4 worker backs off and retries, but a poisoned file is never
+      // Pending again — live-caught run 9). Leave it Pending; rethrow the 429.
+      const busy = err && err.response && err.response.status === 429;
+      if (!busy) {
+        const detail =
+          (err.response && err.response.data && (err.response.data.detail || err.response.data.message)) || err.message;
+        await this._markIngestFailure(fileId, file, `dataprep call failed: ${detail}`);
+      }
+      throw err;
+    }
     if (response.data.success) {
       await metadataService.updateMetadata(fileId, {
         // After a degraded clear, `file.chunk_count` is the PREVIOUS run's count of
@@ -1108,7 +1224,151 @@ class FileController {
       });
       return { success: true };
     } else {
+      await this._markIngestFailure(fileId, file, `dataprep rejected: ${JSON.stringify(response.data).slice(0, 300)}`);
       return { success: false, error: response.data };
+    }
+  }
+
+  /** Transition a file to 'Ingestion Error' + write an ingestion-log entry (state machine). */
+  async _markIngestFailure(fileId, file, detail) {
+    try {
+      await metadataService.updateMetadata(fileId, {
+        dataprep: {
+          status: 'Ingestion Error',
+          ingest_date: file.dataprep ? file.dataprep.ingest_date || new Date().toISOString() : new Date().toISOString(),
+          retract_date: (file.dataprep && file.dataprep.retract_date) || null
+        }
+      });
+    } catch (metaErr) {
+      logger.error(`Failed to mark file ${fileId} as Ingestion Error: ${metaErr.message}`);
+    }
+    try {
+      await fileService.addIngestionLog(fileId, {
+        level: 'ERROR',
+        stage: 'dataprep',
+        message: String(detail).slice(0, 500)
+      });
+    } catch (logErr) {
+      logger.error(`Failed to write ingestion log for ${fileId}: ${logErr.message}`);
+    }
+    logger.error(`Ingest failed for ${fileId}: ${detail}`);
+  }
+
+  // --- OKF Bundle Ingest (Story 2.5) ---
+  // Accepts a base64 bundle, ClamAV scans (reuses fileService.uploadBundle),
+  // bypasses the upload allowlist/langdetect/text-extraction pipeline, and
+  // creates a files doc carrying graph_name + repo_id (T5 extractMetadata fix).
+  // Returns 202 and kicks off ingestion fire-and-forget (code-review fix,
+  // 2026-08-14): there is NO background worker that drains Pending files today
+  // (crawlWorker polls crawl_job only), so the route itself must trigger
+  // _ingestFileById — which reads graph_name from the files doc (T1) — without
+  // blocking the response. The Redis-Streams ingestionWorker (Story 2.9.4)
+  // will replace this kick when it lands.
+  async bundleIngest(req, res) {
+    try {
+      const { bundle, graph_name, repo_id, originalFileName, labels, defer_kick, bundle_version, is_bundle } = req.body;
+
+      // Joi validation
+      const schema = Joi.object({
+        bundle: Joi.string().base64().required(),
+        // Story #978 born-right graph naming (David, 2026-08-31): okf-server
+        // derives the graph name from the repo NAME + version —
+        // `OKF_<name-slug>_v<N>` — so the legacy uuid-only shape
+        // (`OKF_<repo_id>`) is no longer the only legal form.
+        graph_name: Joi.string()
+          .pattern(/^OKF_[a-z0-9-]+(_v[0-9]+)?$/)
+          .required(),
+        repo_id: Joi.string().uuid().required(),
+        originalFileName: Joi.string().allow('').optional(),
+        // Selected knowledge-hierarchy labels ride on the files doc (same as
+        // the single-upload path) and flow to dataprep as file_labels, where
+        // they scope chunk labeling (see dataprep _finalize_chunk_labels).
+        labels: Joi.array().items(Joi.string().max(200)).default([]),
+        // Story 2.9.7 (ADR-031): the minted repo version rides the files doc
+        // and is forwarded to datapretreat at kick time (null = unminted).
+        bundle_version: Joi.number().integer().min(1).allow(null).default(null),
+        // Story 2.9.1: when true, store + ClamAV-scan + create the Pending
+        // files doc but do NOT kick dataprep — the OKF ingestionWorker (2.9.4)
+        // owns draining. Per-concept orchestrator enqueues use this so they
+        // never race dataprep's single-ingest lock (429).
+        defer_kick: Joi.boolean().default(false),
+        // Story 2.9.5-amend (2026-08-18): a ZIP BUNDLE file doc — the zip is the
+        // ingestion INPUT, stored at 'Ingested' + is_bundle=true (never re-chunked;
+        // its concepts are enqueued separately). The worker ignores it (non-Pending).
+        is_bundle: Joi.boolean().default(false)
+      });
+      const { error, value } = schema.validate({
+        bundle,
+        graph_name,
+        repo_id,
+        originalFileName,
+        labels,
+        defer_kick,
+        bundle_version,
+        is_bundle
+      });
+      if (error) {
+        return res.status(400).json({ error: 'VALIDATION_ERROR', message: error.details[0].message });
+      }
+
+      // Ownership assertion: the LEGACY uuid-named graph must match
+      // OKF_{repo_id}. Born-right names (`OKF_<slug>_v<N>`) derive from the
+      // repo NAME + version — doc-repo cannot recompute them, so they pass on
+      // format alone (okf-server derives them from the registry server-side;
+      // this route is internal, service-token-gated).
+      const isBornRightName = /^OKF_[a-z0-9-]+_v[0-9]+$/.test(graph_name);
+      const isLegacyOwned = graph_name === `OKF_${repo_id}`;
+      if (!isBornRightName && !isLegacyOwned) {
+        return res.status(400).json({
+          error: 'OWNERSHIP_MISMATCH',
+          message: `graph_name must be the born-right OKF_<slug>_v<N> form or equal OKF_${repo_id}`
+        });
+      }
+
+      // Decode base64 → buffer
+      const buffer = Buffer.from(bundle, 'base64');
+
+      // Store + ClamAV scan + files doc (graph_name + repo_id + bundle_version
+      // persisted via T5 + Story 2.9.7; is_bundle stores the ZIP + labels)
+      const result = await fileService.uploadBundle(buffer, {
+        originalFileName,
+        graph_name,
+        repo_id,
+        bundle_version: value.bundle_version,
+        labels: value.labels,
+        is_bundle: value.is_bundle
+      });
+
+      // Fire-and-forget ingestion kick (does not block the 202). dataprep.status
+      // transitions Pending → Ingesting via _ingestFileById; a failure is
+      // logged and surfaces via the files doc status, never a silent drop.
+      // SKIPPED when defer_kick (Story 2.9.1): the doc stays 'Pending' for the
+      // 2.9.4 worker to drain (per-concept enqueues would race the 429 lock).
+      // ALWAYS skipped for a bundle-zip doc (is_bundle): the zip is the ingestion
+      // INPUT, not a chunkable file — its concepts were enqueued separately.
+      if (!value.defer_kick && !value.is_bundle) {
+        setImmediate(() => {
+          this._ingestFileById(result.file_id).catch((ingestErr) => {
+            logger.error(`[FILE-CONTROLLER] Bundle async ingestion failed for ${result.file_id}: ${ingestErr.message}`);
+          });
+        });
+      }
+
+      return res.status(value.is_bundle ? 201 : 202).json({
+        success: true,
+        message: value.is_bundle ? 'OKF bundle zip stored' : 'Bundle accepted for async ingestion',
+        file_id: result.file_id,
+        graph_name,
+        ...(value.is_bundle ? { is_bundle: true, file_name: result.file_name } : {})
+      });
+    } catch (err) {
+      if (err.message && err.message.includes('virus')) {
+        // AC2/AC6: reject + log + audit trail (malware attempt must be visible)
+        logger.error(`[FILE-CONTROLLER] Bundle ingest malware rejected: ${err.message}`);
+        return res.status(400).json({ error: 'MALWARE_DETECTED', message: err.message });
+      }
+      logger.error(`Bundle ingest error: ${err.message}`);
+      return res.status(500).json({ error: 'BUNDLE_INGEST_ERROR', message: err.message });
     }
   }
 
@@ -1186,7 +1446,13 @@ class FileController {
       return { success: false, error: 'File has already been retracted' };
     }
     const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.retractPath}`;
-    const response = await axios.post(dataprepUrl, { fileId: file.file_id });
+    // G5 fix (Story 2.9.6): retract must target the graph the file was ingested
+    // into — the file's graph_name (OKF per-repo graphs), falling back to
+    // dataprep's unified default when unset.
+    const response = await axios.post(dataprepUrl, {
+      fileId: file.file_id,
+      graphName: file.graph_name || null
+    });
     if (response.data.success) {
       await metadataService.updateMetadata(fileId, {
         chunk_count: 0, // Reset chunk count on retract
@@ -1360,6 +1626,18 @@ class FileController {
       const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}/v1/dataprep/kill_ingest`;
 
       const response = await axios.post(dataprepUrl, { fileId });
+      // dataprep reports "no active task" as {success:false, status:404} in a
+      // 200 body — forward it as a real error status so the UI does not show
+      // "Kill request sent" for a file whose ingest already finished (or was
+      // never dispatched). Live 2026-09-15: the Bali kill toasted success on a
+      // completed file while the repo-wide drain kept running.
+      if (response.data && response.data.success === false) {
+        return res.status(response.data.status || 502).json({
+          success: false,
+          error: 'NO_ACTIVE_INGEST',
+          message: response.data.message || 'No active ingestion task found for this file.'
+        });
+      }
       res.json(response.data);
     } catch (error) {
       logger.error('Kill ingestion error:', error);

@@ -1,0 +1,51 @@
+{
+  "_README": [
+    "SYNTHETIC EXAMPLE — safe to commit. Copy to cases.local.json and replace with real cases.",
+    "",
+    "FORMAT",
+    "  id            unique string; appears in the report, so name it after the source",
+    "  text          the realistic text to scan",
+    "  expect        list of {entity, value} that MUST be found. Keyed on VALUE, not offset,",
+    "                because offsets move when text is edited and region-splitting can shift them.",
+    "  must_not_flag list of entity types that must NOT fire on this case. This is how the",
+    "                known-broad national-ID recognizers are pinned down.",
+    "  note          free text, never parsed",
+    "",
+    "A case with expect: [] and no must_not_flag asserts the text is clean.",
+    "Include BOTH genuine-PII cases and look-alike clean cases. A corpus of only",
+    "positives rewards detectors that find less — that is the trap this format exists to avoid."
+  ],
+  "cases": [
+    {
+      "id": "example-positive-contact-block",
+      "text": "Para consultas sobre el expediente, escribir a maria.gonzalez@ejemplo.gob.sv o llamar al +504 2234-5678. La titular, Rosa Maria Alvarez, presenta su documento de identidad.",
+      "expect": [
+        { "entity": "EMAIL_ADDRESS", "value": "maria.gonzalez@ejemplo.gob.sv" },
+        { "entity": "PERSON", "value": "Rosa Maria Alvarez" }
+      ],
+      "note": "Genuine PII in government prose. PERSON is optional here because NER boundaries vary by model — drop it if the detector legitimately disagrees about the span, but never drop the EMAIL."
+    },
+    {
+      "id": "example-lookalike-measurements",
+      "text": "Orbital period 365.25 days. Distance 149597870.7 km. Perihelion 147098291 km. Aphelion 152097291 km. Mass 5.9722e24 kg. Survey reference 20261012.",
+      "expect": [],
+      "must_not_flag": ["LS_NATIONAL_ID", "BD_NATIONAL_ID", "GM_NATIONAL_ID", "PERSON", "LOCATION"],
+      "note": "THE KNOWN FALSE-POSITIVE CASE. Bare 8/9/10/13/17-digit regexes fire on the long numbers here. A detector that flags any of these is costing you the curator's attention for nothing."
+    },
+    {
+      "id": "example-lookalike-institutional",
+      "text": "El Ministerio de Agricultura y Ganadería, a través de la Dirección de Política Agrícola, publicó el boletín estadístico del segundo trimestre. La oficina regional de San Salvador reporta 124000 hectáreas.",
+      "expect": [],
+      "must_not_flag": ["PERSON"],
+      "note": "San Salvador is a place and the ministry is an organisation — neither is a natural person, so neither is personal data under GDPR Art. 4(1) on its own. A PERSON firing here is pure noise. Note also that '124000' is six digits, below every national-ID pattern length, so it should stay clean."
+    },
+    {
+      "id": "example-structured-identifier",
+      "text": "Pago mediante IBAN ES91 2100 0418 4502 0005 1332, titular Sr. Juan Perez.",
+      "expect": [
+        { "entity": "IBAN_CODE", "value": "ES91 2100 0418 4502 0005 1332" }
+      ],
+      "note": "High-value structured identifier. If a tuning change suppresses THIS to quiet the numeric noise, the change has gone too far."
+    }
+  ]
+}

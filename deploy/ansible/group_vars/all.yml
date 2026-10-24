@@ -47,6 +47,10 @@ compose_file: docker-compose.yaml
 deploy_stabilization_timeout: 900
 deploy_opea: "1"
 enable_observability: "0"
+# OKF feature flag (2026-10-21): 0 parks the OKF stack (containers, Kong
+# route, UI). Deployments running OKF (el-salvador, the local build) override
+# to "1" in their group_vars.
+okf_enabled: "0"
 grafana_admin_user: "admin"
 victoriametrics_retention: "30d"
 victorialogs_retention: "30d"
@@ -145,6 +149,39 @@ keycloak_ssl_skip_verify: ""
 #   dataprep_llm_label_batch_size: 4     # chunks per LLM call (code default 4); raise to 8 on
 #                                        #   capable models (e.g. granite-4.1-8b). Batches fall
 #                                        #   back to per-chunk on parse failure.
+# Contextual Retrieval (ON by default) — per-chunk LLM doc-context prefix
+# prepended before embedding (Anthropic-style). Adds one vLLM call per batch at
+# ingest; never blocks ingestion (raw-chunk fallback). Labels run on the raw
+# chunk regardless — contextual_label_raw decouples the two.
+#
+# Every one of these is emitted by env.j2 with the compose default, so you only
+# need to set one when you are deliberately changing it. config-validator (AC8)
+# fails if compose and env.j2 disagree.
+#
+#   contextual_retrieval_enabled: false   # true (default). false is a true no-op
+#   dataprep_contextual_model: ""         # empty = auto-detect the served model;
+#                                         #   must support guided JSON (response_format=json_object)
+#   dataprep_contextual_doc_budget: 0     # 0 (default) = DERIVED from vllm_max_model_len.
+#                                         #   The context call carries the system prompt +
+#                                         #   document context + the batch's chunk text and
+#                                         #   reserves max_tokens per chunk in the batch; all of
+#                                         #   that is subtracted from the window and the remainder
+#                                         #   is the budget. Leave this at 0 unless you have a
+#                                         #   reason — a budget copied from a deployment with a
+#                                         #   larger window overflows this one, and the rejected
+#                                         #   calls fall back to raw chunks SILENTLY.
+#   dataprep_contextual_max_tokens: 512   # max OUTPUT tokens PER CHUNK in the batch.
+#                                         #   200 truncated the JSON under load → raw-chunk fallback;
+#                                         #   512 = safe margin (model stops early ~196).
+#                                         #   A batch of 4 therefore reserves 2048 output tokens,
+#                                         #   which is why vllm_max_model_len=2048 (env.t4) cannot
+#                                         #   run contextualization at all.
+#   contextual_strategy: per_chunk        # per_chunk (default, Anthropic recipe — one context
+#                                         #   per chunk, section-tailored) | doc_level (one call
+#                                         #   per document, same context on every chunk, N× cheaper)
+#   contextual_label_raw: true            # true (default): label the RAW chunk, embed the
+#                                         #   contextualized one. Keeps label precision while
+#                                         #   propagating the document subject via the vector.
 #
 # Model-endpoint HTTP budgets. Defaults live in code (core/model_http_policy.py);
 # override here if a model is slower than the default budget allows. A request

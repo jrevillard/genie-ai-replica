@@ -25,6 +25,11 @@ function parseEnvTemplate(filePath) {
 
   const variables = [];
   const sections = [];
+  // Commented-out variable definitions (`# NAME=value`) — the operator-facing
+  // DOCUMENTATION of a knob that is not active config. Kept apart from
+  // `variables` on purpose (!1073): `env` has 300 of these against 61 active
+  // lines, so merging them would swamp every check that reads `variables`.
+  const documented = [];
   let currentSection = 'Uncategorized';
 
   for (const line of lines) {
@@ -61,6 +66,29 @@ function parseEnvTemplate(filePath) {
 
     // Skip empty lines and pure comment lines (not variable definitions)
     if (trimmed === '' || trimmed.startsWith('#')) {
+      // ...EXCEPT a commented-out variable DEFINITION (`# OKF_X=200`). Those
+      // are not active config, but they ARE the operator-facing documentation
+      // of a knob, and `env` carries 300 of them against only 61 active lines.
+      // They used to be dropped entirely, which is why 28 documented OKF_*
+      // knobs could sit in `env` while reaching no container at all — the
+      // orphan gate could not see them even in principle (!1073).
+      //
+      // They are returned SEPARATELY rather than merged into `variables`:
+      // merging would make all 300 look like active config and swamp every
+      // existing check that reads `variables`.
+      const docMatch = trimmed.match(/^#\s*([A-Z_][A-Z0-9_]*)=(.*)$/);
+      if (docMatch) {
+        const name = docMatch[1];
+        const rawValue = docMatch[2];
+        const commentMatch = rawValue.match(/^(.*?)\s+#\s+(.+)$/);
+        documented.push({
+          name,
+          value: commentMatch ? commentMatch[1].trim() : rawValue.trim(),
+          section: currentSection,
+          comment: commentMatch ? commentMatch[2] : '',
+          commentedOut: true
+        });
+      }
       continue;
     }
 
@@ -92,7 +120,7 @@ function parseEnvTemplate(filePath) {
     }
   }
 
-  return { variables, sections };
+  return { variables, sections, documented };
 }
 
 /**

@@ -5,7 +5,12 @@ jest.mock('../../__tests__/__mocks__/shared-lib', () => ({}), { virtual: true })
 jest.mock(
   '../../../shared-lib',
   () => ({
-    logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() },
+    logger: {
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn()
+    },
     dbService: { getConnection: jest.fn() }
   }),
   { virtual: true }
@@ -32,6 +37,7 @@ jest.mock('../../config/appConfig', () => ({
     allowedMimeTypes: ['application/pdf', 'text/plain', 'text/html'],
     allowedExtensions: ['.pdf', '.txt', '.html'],
     maxFileSize: 52428800,
+    bundleMaxBodyMb: 100,
     maxFilesUpload: 5
   },
   labels: {
@@ -78,7 +84,13 @@ jest.mock('../../services/securityService', () => ({
 jest.mock('../../middlewares/fileUpload', () => ({
   uploadSingle: jest.fn((req, res, next) => next()),
   uploadMultiple: jest.fn((req, res, next) => next()),
-  validateFiles: jest.fn((req, res, next) => next())
+  validateFiles: jest.fn((req, res, next) => next()),
+  // Mounted in fileRoutes.js between the multer middleware and validateFiles
+  // (2026-10-12). Express throws at router-registration time if a layer is not
+  // a function, so every suite that replaces this whole module must provide it.
+  // Pass-through: these suites inject no multer errors, so nothing should reach
+  // the global handler via this path.
+  handleMulterError: jest.fn((err, req, res, next) => next(err))
 }));
 
 const request = require('supertest');

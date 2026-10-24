@@ -34,6 +34,21 @@ sys.path.insert(0, str(OVERLAY_ROOT))
 import dataprep.genieai_dataprep_arangodb as dataprep  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _workable_contextual_window(monkeypatch):
+    """A window the doc-context derivation can fit inside (merged from
+    feat/okf-server 2026-10-21).
+
+    The branch derives the document-context budget from VLLM_MAX_MODEL_LEN,
+    clamping to a 2048-token fallback when unset — and 2048 cannot fit the
+    per-chunk output reservation (512 x batch 4), so every real-contextualization
+    test below would be gated out at the derivation with
+    DEGRADED_WINDOW_TOO_SMALL before the phase logic it exists to test runs.
+    Give the derivation a default-profile window instead.
+    """
+    monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "65536")
+
+
 async def _noop_log(*_args, **_kwargs):
     return None
 
@@ -71,6 +86,13 @@ def _stub_dataprep():
     dp = dataprep.GenieArangoDataprep.__new__(dataprep.GenieArangoDataprep)
     dp._write_ingestion_log = AsyncMock()
     dp.llm_transformer = MagicMock()
+    # OKF-branch attrs (merged from feat/okf-server 2026-10-21): the bundle-log
+    # mirror caches and the log semaphore live in __init__, which __new__
+    # bypasses — ingest_file_with_guardrail invalidates/reads them eagerly.
+    dp._bundle_file_id_cache = {}
+    dp._concept_file_name_cache = {}
+    dp._log_semaphore = asyncio.Semaphore(100)
+    dp._current_repo_id = None
     return dp
 
 

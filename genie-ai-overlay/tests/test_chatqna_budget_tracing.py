@@ -203,7 +203,7 @@ class TestOrchestrateSpanIsActive:
     """
 
     def test_handle_request_opens_orchestrate_as_the_current_span(self):
-        tree = ast.parse(CHATQNA_SOURCE.read_text())
+        tree = ast.parse(CHATQNA_SOURCE.read_text(encoding="utf-8"))
         calls = [
             node
             for node in ast.walk(tree)
@@ -222,7 +222,7 @@ class TestOrchestrateSpanIsActive:
 
     def test_align_inputs_reads_the_current_span(self):
         """align_inputs is the emission site for the counts and the event."""
-        tree = ast.parse(CHATQNA_SOURCE.read_text())
+        tree = ast.parse(CHATQNA_SOURCE.read_text(encoding="utf-8"))
         align = next(
             node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "align_inputs"
         )
@@ -238,7 +238,7 @@ class TestOrchestrateSpanIsActive:
 
 
 def _function_node(name: str) -> ast.AST:
-    tree = ast.parse(CHATQNA_SOURCE.read_text())
+    tree = ast.parse(CHATQNA_SOURCE.read_text(encoding="utf-8"))
     return next(
         node
         for node in ast.walk(tree)

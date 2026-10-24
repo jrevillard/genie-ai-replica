@@ -29,6 +29,10 @@ const config = {
   upload: {
     maxFilesUpload: parseInt(process.env.MAX_FILES_UPLOAD) || 10, // Maximum number of files that can be uploaded at once
     maxFileSize: parseInt(process.env.MAX_FILE_SIZE) || 50 * 1024 * 1024, // 50MB
+    // OKF bundle ingest (POST /api/files/ingest-bundle) carries a whole
+    // repository zip as base64-in-JSON — the app's default 10mb JSON cap
+    // × 10 (a 1000-concept repo ships ~42 MB of JSON). Default 100 MB.
+    bundleMaxBodyMb: parseInt(process.env.OKF_BUNDLE_MAX_MB) || 100,
     uploadDir: process.env.UPLOAD_DIR || './uploads',
     allowedMimeTypes: [
       'application/pdf', // pdf files .pdf
@@ -39,10 +43,12 @@ const config = {
       'text/markdown', // markdown files .md, .markdown
       'text/plain', // text files .txt (also sent by some browsers for .md)
       'text/html', // html files .html
+      'text/csv', // comma/semicolon/tab-separated values .csv
+      'application/csv', // non-standard CSV type some Windows exports send
       'application/zip', // browsers sometimes report .docx/.xlsx as zip
       'application/x-zip-compressed' // Windows browsers sometimes report Office files as this
     ],
-    allowedExtensions: ['.pdf', '.docx', '.xlsx', '.md', '.html', '.txt'],
+    allowedExtensions: ['.pdf', '.docx', '.xlsx', '.csv', '.md', '.html', '.txt'],
     requiredIngestionLanguage: process.env.DOCUMENT_INGESTION_LANGUAGE || 'en' // Added per spec
   },
 

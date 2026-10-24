@@ -1183,6 +1183,34 @@ _MAX_TRAILING_WS_WITHHOLD = 32
 _EXCESS_BLANK_RE = re.compile(r"\n{3,}")
 
 
+def _is_usage_only_frame(content: str) -> bool:
+    """True when a decoded token chunk is vLLM's terminal usage-only frame.
+
+    The OpenAI streaming wire ends generation with a chunk carrying
+    ``"choices": []`` and the token ``usage`` — no content. The orchestrator's
+    ``align_generator`` forwards it like any token, so without this check the
+    raw JSON (``{"id":"chatcmpl-…","usage":{…}}``) leaks into the user-visible
+    answer text (live 2026-10-23: pasted into chat responses AND into
+    benchmark answers, where the judge scores it as answer content).
+
+    A legitimate answer token never parses as a JSON object with a ``usage``
+    key and empty/absent ``choices``.
+
+    This is the CONSUMER-side guard. The producer-side router
+    (``_stream_answer_text``) already drops such frames in the streamed
+    path, but the NON-streaming path assembles the raw chunk text and can
+    still carry one, so both ends need a check.
+    """
+    stripped = content.strip()
+    if not (stripped.startswith("{") and stripped.endswith("}")):
+        return False
+    try:
+        obj = json.loads(stripped)
+    except (ValueError, TypeError):
+        return False
+    return isinstance(obj, dict) and "usage" in obj and not obj.get("choices")
+
+
 def _stream_answer_text(json_data: object) -> str | None:
     """The text a parsed LLM stream frame contributes to the answer, or None
     when the frame is well-formed transport metadata: the terminal usage-only
@@ -1917,7 +1945,8 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
             safe_params = retriever_parameters.model_dump(exclude_unset=True, exclude_none=True)
             inputs.update(safe_params)
 
-        # DATA CONTRACT: encode filter labels into search_start.
+        # DATA CONTRACT: encode filter labels AND the authorized graph set
+        # into search_start.
         #
         # The OPEA MicroService framework creates a dynamic __main__ input type
         # from the HTTP body when parsing requests at the retriever endpoint.
@@ -1926,20 +1955,71 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         # fields like "context" are silently dropped — verified via probes
         # (POST body has context, retriever's parsed input does not).
         #
-        # To pass filter labels through this contract boundary, encode them in
-        # search_start (a standard EmbedDoc string field that survives parsing).
-        # Format: "{base_mode}::labels:{label1},{label2},..."
+        # To pass filter labels + the authorized graph set through this
+        # contract boundary, encode them in search_start (a standard EmbedDoc
+        # string field that survives parsing).
+        # Format: "{base_mode}::labels:{l1},...::graphs:{g1},...::no_legacy:{true|false}"
         # The retriever parses this to build labels_to_filter for its DB-level
-        # label filter (BM25 aql_filter_clause + dense post-filter).
+        # label filter (BM25 aql_filter_clause + dense post-filter) AND to
+        # build the authorized graph set for the Epic-1 fan-out
+        # (Story 1.0b/1.1/1.2; default [] = single-graph legacy).
         retrieval_context = _gp(kwargs, "retrieval_context", {})
         # Build filter labels (category singular/plural + service). Extracted to
         # _build_filter_labels for testability.
         _filter_labels = _build_filter_labels(retrieval_context)
-        if _filter_labels:
+        # Authorized graph set (Story 1.0b/1.2) + the okf_only signal (Story
+        # 1.1). The BFF carries both inside `context` — the only wire that
+        # reaches genie_params (RequestContext → model_dump → retrieval_context)
+        # — so read them from retrieval_context first; the flat kwargs paths
+        # stay for the mocked test surface (genie_params={"authorized_graph_
+        # names": [...]}) and any future direct forwarder. Empty list / False =
+        # the legacy single-graph path runs unchanged.
+        _ctx = retrieval_context if isinstance(retrieval_context, dict) else {}
+        _graph_names = (_ctx.get("authorized_graph_names") or []) or (_gp(kwargs, "authorized_graph_names", []) or [])
+        _exclude_legacy = bool(_ctx.get("exclude_legacy")) or bool(_gp(kwargs, "exclude_legacy", False))
+        # Story 1.3 — conversation-continuity set (sticky routing). Read from the
+        # same wire as authorized_graph_names (the `context` object). Empty =
+        # first query of a conversation / feature absent → segment omitted and
+        # the mocked pre-1.3 encode never sees the kwarg.
+        _sticky_graph_names = (_ctx.get("sticky_graph_names") or []) or (_gp(kwargs, "sticky_graph_names", []) or [])
+        if _exclude_legacy:
+            logger.info("Carrier carries the okf_only signal (::no_legacy:) — the legacy free-form corpus is excluded")
+        if _sticky_graph_names:
+            logger.info(f"Carrier carries the sticky continuity set (::sticky:) — {len(_sticky_graph_names)} graph(s)")
+        if _filter_labels and not _graph_names and not _exclude_legacy:
+            # LEGACY CALL SURFACE: the chatqna test suite (test_chatqna.py)
+            # mocks `core.label_contract.encode_filter_labels`; calling it
+            # here keeps the labels-only path byte-identical to pre-1.0b.
             from core.label_contract import encode_filter_labels
 
             _base_mode = inputs.get("search_start", "chunk")
             inputs["search_start"] = encode_filter_labels(_base_mode, _filter_labels)
+        elif _filter_labels or _graph_names or _exclude_legacy:
+            from core.label_contract import encode
+
+            _base_mode = inputs.get("search_start", "chunk")
+            if _exclude_legacy:
+                # no_legacy/sticky are passed ONLY when set — the mocked encode in the
+                # existing test suite has the pre-1.1 signature and must never
+                # receive the kwargs on the default path.
+                if _sticky_graph_names:
+                    inputs["search_start"] = encode(
+                        _base_mode,
+                        labels=_filter_labels,
+                        graphs=_graph_names,
+                        no_legacy=True,
+                        sticky=_sticky_graph_names,
+                    )
+                else:
+                    inputs["search_start"] = encode(
+                        _base_mode, labels=_filter_labels, graphs=_graph_names, no_legacy=True
+                    )
+            elif _sticky_graph_names:
+                inputs["search_start"] = encode(
+                    _base_mode, labels=_filter_labels, graphs=_graph_names, sticky=_sticky_graph_names
+                )
+            else:
+                inputs["search_start"] = encode(_base_mode, labels=_filter_labels, graphs=_graph_names)
 
     elif self.services[cur_node].service_type == ServiceType.RERANK:
         reranker_parameters = _gp(kwargs, "reranker_parameters")
@@ -2285,6 +2365,21 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             }
             if any(v != "N/A" for v in _text_to_chunk_key.values()):
                 next_data["text_to_chunk_key"] = _text_to_chunk_key
+
+            # Story 1.1 — per-hit provenance (graph_name/repo_id/concept_id)
+            # rides the retriever's parallel metadata[] array (Story 1.0
+            # fusion-time attribution). Preserve it keyed by doc id so the
+            # source-assembly step can attribute OKF concept sources WITHOUT
+            # calling okf-server (chatqna stays a service consumer — spec
+            # Never rule; the BFF is the trusted side).
+            _provenance_by_doc = {}
+            for i in range(len(retrieved_docs)):
+                md = _ck_meta[i] if i < len(_ck_meta) else {}
+                prov = {k: md[k] for k in ("graph_name", "repo_id", "concept_id") if md.get(k) is not None}
+                if prov:
+                    _provenance_by_doc[retrieved_docs[i].get("id", "")] = prov
+            if _provenance_by_doc:
+                next_data["provenance_by_doc"] = _provenance_by_doc
 
             # Expected data format if using tei_reranker directly (bypassing reranker service):
             # next_data["query"] = data["initial_query"]
@@ -2694,9 +2789,12 @@ class ChatQnAService:
         # streaming path (_stream_with_metadata) — see _CONV_SEP_RE / _CONV_ROLE_RE.
         llm_response = _CONV_SEP_RE.sub("\n", llm_response)
         llm_response = _CONV_ROLE_RE.sub("", llm_response)
-        # Same excess-blank collapse the streaming path applies (see _stream_with_metadata).
-        # Keeps the non-streaming branch consistent and removes the visual gaps the user
-        # sees in stored/displayed answers.
+        # vLLM's terminal usage-only frame can also be embedded in the
+        # assembled non-streaming text (the orchestrator concatenates the
+        # same chunk stream) — strip it so the non-streaming path matches the
+        # streaming one (live 2026-10-23 system-leak fix).
+        if _is_usage_only_frame(llm_response):
+            llm_response = ""
         llm_response = _EXCESS_BLANK_RE.sub("\n\n", llm_response)
 
         # Strip the self-grade sentinel before translation so it never reaches the
@@ -2770,7 +2868,9 @@ class ChatQnAService:
 
         return final_text_response, self_confidence, translation_status
 
-    async def _assemble_source_documents(self, result_dict: dict, token: str) -> tuple[list, float, bool]:
+    async def _assemble_source_documents(
+        self, result_dict: dict, token: str, include_contexts: bool = False
+    ) -> tuple[list, float, bool]:
         """Build the source-document list, confidence, and grounding flag from the graph output.
 
         Source documents reflect the **reranker's verdict**, not the retriever's raw cosine
@@ -2787,6 +2887,9 @@ class ChatQnAService:
 
         Args:
             result_dict: The megaservice orchestrator output keyed by node name.
+            include_contexts: Benchmark opt-in — attach each doc's served chunk text to the
+              source document, so an evaluator scores the contexts the model actually saw.
+              Citizen payloads never set it; responses are otherwise byte-identical.
 
         Returns:
             (source_documents, retrieval_confidence_score, is_grounded)
@@ -2796,6 +2899,9 @@ class ChatQnAService:
 
         retriever_node_output = result_dict.get(retriever_key, {})
         file_id_pairs = retriever_node_output.get("file_id_pairs", {})
+        # Story 1.1 — per-hit retrieval provenance carried from the retriever
+        # node (graph_name/repo_id/concept_id, keyed by orchestrator doc id).
+        provenance_by_doc = retriever_node_output.get("provenance_by_doc", {}) or {}
         # Retriever docs carry the orchestrator id + text + similarity score (metadata.score).
         retrieved_docs = retriever_node_output.get("retrieved_docs", [])
 
@@ -2824,6 +2930,18 @@ class ChatQnAService:
             f"rerank_verdict={len(rerank_verdict)}, retriever_docs={len(retrieved_docs)})"
         )
 
+        # Benchmark opt-in: id -> served chunk text, from the reranker's verdict
+        # (each verdict doc is {id, text, score}) with the retriever's raw docs as
+        # fallback when no reranker node ran. Only consulted when the caller set
+        # include_contexts — the citizen path never builds the map.
+        text_by_doc = {}
+        if include_contexts:
+            for doc in rerank_verdict if rerank_key else retrieved_docs:
+                doc_id = doc.get("id")
+                doc_text = doc.get("text")
+                if doc_id and doc_text:
+                    text_by_doc[doc_id] = doc_text
+
         source_documents_formatted = []
         scores = []
         source_documents_file_ids = []
@@ -2844,6 +2962,20 @@ class ChatQnAService:
             if file_id in source_documents_file_ids:
                 logger.info(f"Note: Duplicate File ID {file_id} found. Skipping duplicate.")
                 scores.append(_calibrate_reranker_score(item.get("score", 0.0)))
+                # Benchmark opt-in (include_contexts): the skipped chunk WAS
+                # served to the model (the citizen payload is unchanged — no
+                # text on it), but the evaluator must see every served
+                # chunk's text, so append it to the surviving doc instead of
+                # dropping it — otherwise a reference passage living in the
+                # second chunk of a file scores context_recall 0 although it
+                # was delivered.
+                if include_contexts:
+                    dup_text = text_by_doc.get(doc_id_by_orchestrator)
+                    if dup_text:
+                        for existing in source_documents_formatted:
+                            if existing.get("document_id") == file_id and "text" in existing:
+                                existing["text"] = f"{existing['text']}\n{dup_text}"
+                                break
                 continue
 
             logger.info(f"Document ID {doc_id_by_orchestrator} mapped to File ID {file_id}.")
@@ -2877,26 +3009,61 @@ class ChatQnAService:
                     # the confidence mean whenever the document-repository/backend
                     # metadata call failed intermittently — the prime cause of
                     # "anormally low" confidence reported in production.
-                    logger.warning(
-                        f"Skipping document {doc_id_by_orchestrator}: metadata fetch "
-                        f"failed for file ID {file_id}; not surfacing as a source."
+                    #
+                    # OKF concept chunks (Story 4.8-amend content-only chunking)
+                    # carry file_id == concept_id — those resolve in okf-server,
+                    # NOT doc-repository, so this fetch 404s BY DESIGN for every
+                    # OKF-sourced hit. Skipping them (the old behavior) threw
+                    # away all OKF ground truth and forced is_grounded=False on
+                    # every OKF query (live-caught 2026-10-06: retriever
+                    # legs=9/fused=20 with Alphabet concepts in hand, yet zero
+                    # sources surfaced and the answer was flagged AI-generated).
+                    # Surface the hit from its IN-PAYLOAD retrieval provenance
+                    # instead — no okf-server call (chatqna stays a service
+                    # consumer; the BFF is the trusted side). Doc-repo files
+                    # keep the enriched path above verbatim.
+                    prov = provenance_by_doc.get(doc_id_by_orchestrator, {})
+                    logger.info(
+                        f"doc-repo metadata absent for file ID {file_id} — surfacing "
+                        f"as OKF concept source (graph_name={prov.get('graph_name', 'n/a')}, "
+                        f"concept_id={file_id})"
                     )
+                    source_documents_file_ids.append(file_id)
+                    okf_source = {
+                        "document_id": file_id,
+                        "document_name": str(file_id).replace("_", " ").strip(),
+                        "url": "",
+                        "categoryLabels": [],
+                        "serviceLabels": [],
+                        "score": score,
+                        "concept_id": file_id,
+                        "source": "okf-concept",
+                    }
+                    if prov.get("graph_name"):
+                        okf_source["graph_name"] = prov["graph_name"]
+                    if prov.get("repo_id"):
+                        okf_source["repo_id"] = prov["repo_id"]
+                    if include_contexts and text_by_doc.get(doc_id_by_orchestrator):
+                        okf_source["text"] = text_by_doc[doc_id_by_orchestrator]
+                    source_documents_formatted.append(okf_source)
+                    scores.append(score)
                     continue
 
             # Mark this file as surfaced only after a successful metadata resolution,
             # so a duplicate of a file whose metadata failed does not contribute its
             # score to the aggregate while the file remains invisible (M3).
             source_documents_file_ids.append(file_id)
-            source_documents_formatted.append(
-                {
-                    "document_id": file_id,
-                    "document_name": file_name,
-                    "url": file_read_url,
-                    "categoryLabels": labels if isinstance(labels, list) else [labels] if labels else [],
-                    "serviceLabels": [],
-                    "score": score,
-                }
-            )
+            formatted_doc = {
+                "document_id": file_id,
+                "document_name": file_name,
+                "url": file_read_url,
+                "categoryLabels": labels if isinstance(labels, list) else [labels] if labels else [],
+                "serviceLabels": [],
+                "score": score,
+            }
+            if include_contexts and text_by_doc.get(doc_id_by_orchestrator):
+                formatted_doc["text"] = text_by_doc[doc_id_by_orchestrator]
+            source_documents_formatted.append(formatted_doc)
             scores.append(score)
             logger.debug(f"appending document conf score: {score} ")
 
@@ -2920,7 +3087,9 @@ class ChatQnAService:
 
         return source_documents_formatted, retrieval_confidence_score, is_grounded
 
-    async def _stream_with_metadata(self, body_iterator, result_dict, token: str, parent_context=None):
+    async def _stream_with_metadata(
+        self, body_iterator, result_dict, token: str, parent_context=None, include_contexts: bool = False
+    ):
         """Forward the LLM token stream, then append a `metadata` SSE event.
 
         The metadata event carries the reranker-grounded source documents, confidence,
@@ -2953,6 +3122,10 @@ class ChatQnAService:
                 # Unparseable chunk (not data: b'...'): forward verbatim so an
                 # unexpected orchestrator format never breaks the stream.
                 yield text
+                continue
+            if _is_usage_only_frame(content):
+                # vLLM's terminal usage-only chunk: transport metadata, not
+                # answer content — never forward it to the user.
                 continue
             buffer += content
             buffer = _CONV_SEP_RE.sub("\n", buffer)
@@ -3009,7 +3182,7 @@ class ChatQnAService:
 
         # Compute metadata after tokens so TTFT is unaffected by the doc-metadata fetches.
         source_documents, retrieval_confidence, is_grounded = await self._assemble_source_documents(
-            result_dict, token=token
+            result_dict, token=token, include_contexts=include_contexts
         )
         _cs = round(
             _display_confidence(retrieval_confidence, self_confidence)
@@ -4338,7 +4511,11 @@ class ChatQnAService:
                 # backend would re-run retrieval without the category filter / reranker.
                 return StreamingResponse(
                     self._stream_with_metadata(
-                        response.body_iterator, result_dict, token=token_str, parent_context=_orchestrate_context
+                        response.body_iterator,
+                        result_dict,
+                        token=token_str,
+                        parent_context=_orchestrate_context,
+                        include_contexts=bool(getattr(chat_request, "include_contexts", False)),
                     ),
                     media_type="text/event-stream",
                 )
@@ -4382,7 +4559,7 @@ class ChatQnAService:
         # Assemble source documents + confidence + grounding flag. Reflects the reranker's
         # verdict; not grounded (is_grounded=False) when the reranker found nothing relevant.
         source_documents_formatted, retrieval_confidence, is_grounded = await self._assemble_source_documents(
-            result_dict, token=token_str
+            result_dict, token=token_str, include_contexts=bool(getattr(chat_request, "include_contexts", False))
         )
         _conf_score = round(
             _display_confidence(retrieval_confidence, self_confidence)

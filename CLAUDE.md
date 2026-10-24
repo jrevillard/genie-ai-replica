@@ -254,7 +254,8 @@ Following DRY principle, defaults live in code/docker-compose, not in env files.
 - `RERANKER_TOP_N` - Number of top chunks kept by `slice`/`slice_threshold` strategies (default 3).
 - `CONTEXTUAL_RETRIEVAL_ENABLED` - Contextual Retrieval (Anthropic-style), **on by default**: prepend an LLM doc-context prefix to each chunk before embedding + labeling (default `true`; set `false` to disable — a no-op beyond skipping context generation). Adds one vLLM call/chunk at ingest; never blocks ingestion (raw-chunk fallback). See the [Data Labelling Strategy](site/content/en/docs/rag/data-labeling.md) doc (§7 — Contextual Retrieval).
 - `DATAPREP_CONTEXTUAL_MODEL` - Model for context generation (empty = reuse `VLLM_LLM_MODEL_ID`); must support guided JSON.
-- `DATAPREP_CONTEXTUAL_DOC_BUDGET` - Max chars of doc text fed to the context LLM (~1500 tokens); <=0 disables truncation (default 100000).
+- `DATAPREP_CONTEXTUAL_DOC_BUDGET` - Max chars of document text fed to the context LLM as part of its system prompt. **Default `0` = derive from `VLLM_MAX_MODEL_LEN`** — the context call is `system prompt + document context + batch chunk text` and reserves `DATAPREP_CONTEXTUAL_MAX_TOKENS` **per chunk in the batch**, so everything but the document context is subtracted from the window. Deriving is what makes one setting correct across hardware that differs 32×: ~250k chars at the default 65536-token window, ~11k on `env.rtx6000` (4096), and **none** on `env.t4` (2048), where the output reservation alone exceeds the window. **Never hardcode this from another deployment**: a budget sized for a large GPU overflows a small one, and the rejected calls fall back to raw chunks *silently*. Set `>0` to pin a value, `<0` to disable contextualization. Truncation (document longer than the budget) is now recorded in the admin Ingestion Log — check it after changing this.
+- `VLLM_MAX_MODEL_LEN` - The serving model's context window (`env.t4` 2048, `env.rtx6000` 4096, compose default 65536). Not only a vLLM tuning knob: dataprep reads it to derive `DATAPREP_CONTEXTUAL_DOC_BUDGET`, and it must reach the dataprep container for that to work. **Deployment sizes with the model**: a customer who provisions a larger-parameter model and raises this to, say, 131072 automatically gets a proportionally larger document-context budget and can ingest correspondingly larger concept documents, with no other change and nothing to re-tune. Raising it is only useful if the GPU has the memory for the KV cache — the window costs memory roughly linearly, which is why `env.t4` is pinned to 2048.
 - `DATAPREP_CONTEXTUAL_MAX_TOKENS` - Max output tokens for the context-generation LLM call (doc-level + per-chunk). The model writes ~196 tokens; the legacy hard cap of 200 left no headroom, so the JSON `{"context":"..."}` was truncated mid-string under concurrent vLLM load → JSONDecodeError → raw-chunk fallback. 512 gives comfortable margin at no extra cost (default 512).
 - `CONTEXTUAL_STRATEGY` - `per_chunk` (default; one call/chunk, section-tailored context — the Anthropic recipe) or `doc_level` (one call/doc, same context on every chunk — N× cheaper, still propagates the doc subject).
 - `CONTEXTUAL_LABEL_RAW` - Decoupled mode (default `true`): label the RAW chunk, use the generated context ONLY for the embedding (keeps label precision while propagating the subject via vectors).
@@ -263,6 +264,89 @@ Following DRY principle, defaults live in code/docker-compose, not in env files.
 - `NGINX_PUBLIC_DOMAIN` - Public domain for Nginx
 - `VUE_APP_API_URL` - Frontend API URL
 - `VUE_APP_AVAILABLE_LOCALES` - Whitelist of active UI locales (comma-separated codes, e.g. `en,es`; unset = all locales)
+- `OKF_MAX_CRAWL_SOURCE_MB` - Max crawled-source file size (MB) okf-server converts into an OKF repository (authoritative pre-flight of the server-side streaming conversion job). Default 10240 (10 GB); mode B batches to the cap, mode A limited to ~45 MB (one request body)
+- `OKF_CONVERSION_DEBUG` - `1` = fine-grained per-page/per-batch logging in the crawl→OKF conversion job
+- `OKF_IMPORT_CONCURRENCY` - okf-server import lanes (parallel per-concept import pipeline on the creation side — NOT the post-publish drain). Default **4** (was 1); clamp 1..16. **PAIRED with `PII_WEB_CONCURRENCY` — they are one capacity setting, not two** (see *Import capacity* below)
+- `PII_WEB_CONCURRENCY` - PII sidecar worker PROCESSES (not threads; GIL-bound NER, ~390 MB spaCy each). Default **4** (was 2, chosen when the sidecar had 2 uvicorn workers). Paired with `OKF_IMPORT_CONCURRENCY`
+- `OKF_INGEST_MAX_CONCEPTS` - max concepts per import batch. Default **1000** (was 200). A **capacity knob, not a safety limit** — see *Import capacity* below
+- `OKF_INGEST_CONCURRENCY` - okf-server drain lanes (parallel concept indexing; repos are independent units of work). Default 1 (sequential). Raise together with `DATAPREP_INGEST_CONCURRENCY` to scale with machine capacity
+- `OKF_SCOPE_MODE` - OKF read authorization mode. Default **`open`**: the serving UNRESTRICTED repos are the public base for EVERY caller, and `okf:*` scopes only decide RESTRICTED repos — grants ADD on top of public access, never remove it. `closed` restores the Story-6.1 exact-list default-deny (scopes = the caller's whole reachable set); an explicit garbage value degrades to `closed`, only absence means open. **Per-repo restriction (6-1c)**: `acl.restricted` on a repo doc fences it from non-privileged users in BOTH modes (stewards + granted users only); NEW repos default open; the editor's Access panel toggles restriction and grants/revokes per-user `okf_scopes` via Keycloak (`KC_OKF_ACCESS_CLIENT_ID/SECRET`, empty secret = grant/revoke 503, enforcement unaffected). Full model: `site/content/en/docs/knowledge-base/access-control.md`; enforcement in `components/okf-server/services/scope-authz-service.js` + `access-control-service.js`
+- `DATAPREP_INGEST_CONCURRENCY` - concurrent ingest slots per dataprep container (flock slot pool; 429 only when all busy). Default 1 (historical single-flight)
+
+#### Import capacity — sizing for a host (!1080, !1081)
+
+Two **separate pairs**, each of which only works when both halves move together:
+
+| Pair | Creation side | Worker side | Consequence of raising one alone |
+|---|---|---|---|
+| **Import** | `OKF_IMPORT_CONCURRENCY` | `PII_WEB_CONCURRENCY` | extra lanes **queue at the sidecar** — latency up, throughput flat |
+| **Drain** | `OKF_INGEST_CONCURRENCY` | `DATAPREP_INGEST_CONCURRENCY` | extra lanes get **429** from dataprep; the worker backs off and retries |
+
+- **Rule of thumb: both halves ≈ `min(16, cores / 2)`.** There is no correct
+  constant — it is hardware-dependent and nothing infers it for you.
+- **The two pairs are limited by different things, which is why the import pair
+  ships at 4/4 and the drain pair at 1/1.** Import is bounded by the host's own
+  CPU (the PII sidecar's scan runs locally and scales with cores). Indexing is
+  bounded by the **model services** — labelling calls the LLM and the embedding
+  service, both shared and often on one GPU. Raising the drain pair does not use
+  more of the machine; it queues on the model and, on a shared GPU, takes capacity
+  away from chat answering. Size the drain pair against the model's headroom, not
+  the core count.
+- **Measured, not estimated.** On a 24-core / 64 GB host with the import pair at
+  4/4: the PII sidecar ran **443 % CPU** while okf-server sat at 0.5 % and dataprep
+  at 0.2 % — ~18 % of the machine, the rest idle. 4/4 is a *floor* for that host,
+  and already oversubscribed on a 4-core VPS.
+- **Every import logs the capacity it actually got** (`OKF import lane capacity`),
+  with both values and whether they are paired — so a misconfigured host is visible
+  in the logs instead of inferred from timings.
+- **`OKF_INGEST_MAX_CONCEPTS` is checked AFTER the document-ceiling split**, so an
+  operator's "how many documents did I pick" is **not** the number the cap sees.
+  Measured on Bali: 999 documents in → **1112** concepts out (89 split families).
+  That is why 200 fired on ordinary crawls and 1000 is the default. Raise it
+  deliberately for crawl-scale deployments (10,000+ for a national base); the
+  bounds that actually protect the machine are `OKF_MAX_CONCEPT_DOC_CHARS` and the
+  lane caps, not this number.
+
+→ Full sizing procedure for the four lane variables (both pairs, the memory
+budget, how to verify what a host actually got): `.claude/rules/CAPACITY-SIZING.md`
+
+##### Sizing the four lane variables for a target host
+
+**These are configuration, not hard-coded behaviour.** Never edit service source
+to change them. Set them in `.env` (Compose) or `group_vars` (Ansible) — nothing
+is rebuilt, but the values are read once at process start, so the affected
+containers must be recreated:
+
+```bash
+docker compose up -d --force-recreate okf-server pii-service dataprep-arango-service
+```
+
+| Cores | RAM | Import pair (`OKF_IMPORT_CONCURRENCY` = `PII_WEB_CONCURRENCY`) | Drain pair (`OKF_INGEST_CONCURRENCY` = `DATAPREP_INGEST_CONCURRENCY`) |
+|---:|---:|---:|---:|
+| 4 | 8 GB | `2` | `2` |
+| 8 | 16 GB | `4` | `4` |
+| 16 | 32 GB | `8` | `8` |
+| 24 | 64 GB | `12` | `12` |
+| 32+ | 64 GB+ | `16` (clamp ceiling) | `16`, then follow the model services |
+
+- **`PII_WEB_CONCURRENCY` is a memory setting first.** Each worker process loads
+  its own model copy — measured **~640 MB/worker** on the current image (2.57 GiB
+  at 4 workers). Budget `workers × 640 MB` against free RAM *before* choosing the
+  value. The spawned workers are `multiprocessing.spawn` children, so they are
+  **not** visible as `uvicorn` in `ps` — count `/proc/*/comm == python3.11`, or
+  you will wrongly conclude the workers did not start.
+- **Verify, do not infer.** After an import, read `OKF import lane capacity` from
+  the okf-server log: it reports `import_concurrency`, `pii_web_concurrency`,
+  `cores` and `paired`. `paired: false` means import lanes exceed the sidecar's
+  workers — the extra lanes are queueing. `pii_web_concurrency: unset` means the
+  two were not applied to the same deployment. **`paired` is a configuration
+  check, not a contention gauge** — it cannot see other in-flight imports, and
+  `POST /:repo_id/import` has no guard against a concurrent one, so N concurrent
+  imports demand N × lanes and all report `paired: true` (BUG-17).
+- **The shipped defaults are a floor, not a recommendation.** 4/4 on 24 cores is
+  ~18 % utilisation (measured). If you are deploying to a host larger than a
+  small VPS, set these deliberately from the table.
+
 - `KEYCLOAK_SUPPORTED_LOCALES` - Keycloak login-page locales (JSON array, e.g. `["en","es"]`; unset = curated default)
 - `STREAMING_TRANSLATION_ENABLED` - Stream the target-language chat translation during generation instead of English-then-flip (issue #829). `1`/`0`; default `0` (current behavior)
 - `CONFIG_DIR_FRONTEND` / `CONFIG_DIR_KEYCLOAK` - Host paths bind-mounted read-only into the frontend (`/app/dist/config`) and Keycloak (`/opt/keycloak/themes/genie`) containers. Hold the theme CSS, runtime JSON config, logo, splash assets and the whole `genie` Keycloak theme, so all of it is editable on the node without an image rebuild. Normally set by Ansible (`deploy/ansible/templates/env.j2`, from `config_dir` in `group_vars/all.yml`) and seeded by the `config_bootstrap` role; the root `env` template carries the local-dev defaults. **A bind mount never falls back to image contents** — Docker creates a missing source path as an empty root-owned directory that shadows the image, so an unseeded host yields an unbranded frontend and Keycloak with no error anywhere.

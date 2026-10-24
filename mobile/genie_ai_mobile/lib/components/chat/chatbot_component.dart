@@ -14,8 +14,10 @@ import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
 import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
 import 'package:genie_ai_mobile/providers/api_providers.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N
+import 'package:genie_ai_mobile/services/language_refusal.dart';
 import 'package:genie_ai_mobile/services/notification_service.dart';
 import 'package:genie_ai_mobile/services/sse_parser.dart';
+import 'package:genie_ai_mobile/services/translation_status.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:http/http.dart' as http;
 import 'package:openapi/api.dart';
@@ -474,6 +476,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     List<dynamic>? sources;
     double? confidence;
     bool? isGrounded;
+    // Whether the backend could not translate the answer into the requested
+    // language. The answer that arrives is then the English original, and the
+    // user has to be told — an English answer presented as a translated one
+    // is the failure this flag exists to prevent. Each answer carries its own
+    // outcome: a failure reported for the previous answer must not follow
+    // this one.
+    bool answerTranslationFailed = false;
 
     final String streamingId =
         'stream_${DateTime.now().millisecondsSinceEpoch}';
@@ -503,6 +512,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       if (!mounted) return;
 
       if (streamedResponse.statusCode != 200) {
+        // The backend refuses a language the deployment cannot answer in
+        // before the stream opens. The refusal names the refused side in its
+        // body: the client shows its own text for it.
+        final String body = await streamedResponse.stream.bytesToString();
+        final String? code = languageRefusalCode(body);
+        if (code != null) {
+          throw LanguageRefusal(code);
+        }
         throw Exception('SSE returned ${streamedResponse.statusCode}');
       }
 
@@ -540,8 +557,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                       msg['content'] = content;
                     });
                     _scrollToBottom();
-                  case SseDoneEvent(:final queryId):
+                  case SseDoneEvent(:final queryId, :final translationFailed):
                     streamQueryId = queryId;
+                    answerTranslationFailed = translationFailed;
                   case SseErrorEvent(:final message):
                     debugPrint('[SSE] Error event: $message');
                 }
@@ -553,8 +571,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                 switch (event) {
                   case SseChunkEvent(:final content):
                     accumulatedContent += content;
-                  case SseDoneEvent(:final queryId):
+                  case SseDoneEvent(:final queryId, :final translationFailed):
                     streamQueryId = queryId;
+                    answerTranslationFailed = translationFailed;
                   case SseMetadataEvent(
                     :final sourceDocuments,
                     :final confidenceScore,
@@ -575,11 +594,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                 setState(() {
                   msg['content'] = accumulatedContent.isNotEmpty
                       ? accumulatedContent
-                      : 'No response received';
+                      : tr('chatbot.noResponse');
                   msg['queryId'] = streamQueryId;
                   msg['sources'] = sources ?? [];
                   msg['confidence'] = confidence;
                   msg['isGrounded'] = isGrounded;
+                  msg['translationFailed'] = answerTranslationFailed;
                   msg['metadata'] = {
                     'sources': sources,
                     'confidence_score': confidence,
@@ -616,7 +636,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                 setState(() {
                   msg['content'] = accumulatedContent.isNotEmpty
                       ? accumulatedContent
-                      : 'Streaming error';
+                      : tr('chatbot.processingError');
                 });
               }
               setState(() {
@@ -634,14 +654,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         setState(() {
           msg['content'] = accumulatedContent.isNotEmpty
               ? accumulatedContent
-              : 'Connection error';
+              : _failureMessage(e);
         });
       }
       setState(() {
         _isStreaming = false;
         _isLoading = false;
       });
-      NotificationService.error(tr('chatbot.processingError'));
+      NotificationService.error(_failureMessage(e));
     }
   }
 
@@ -664,6 +684,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
               ),
             )
             .toList(),
+        // The language the user reads. Without it the backend answers in
+        // English, whatever the interface language is.
+        context: ApiQueriesPostRequestContext(
+          language: I18nService().currentLocale.languageCode.toUpperCase(),
+        ),
         categoryId: _selectedCategoryId,
         timestamp: DateTime.now().toUtc(),
       );
@@ -671,21 +696,34 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       final res = await queriesApi.apiQueriesPostWithHttpInfo(request);
 
       if (res.statusCode != 200 && res.statusCode != 201) {
+        // The backend refuses a language the deployment cannot answer in with
+        // a body that names the refused side: the client shows its own text
+        // for it instead of a bare status code.
+        final String? code = languageRefusalCode(res.body);
+        if (code != null) {
+          throw LanguageRefusal(code);
+        }
         throw Exception("Query failed: ${res.statusCode}");
       }
 
       final response = jsonDecode(res.body) as Map<String, dynamic>;
       final Map<String, dynamic>? metadata = response['metadata'];
 
+      // What happened to the language of the answer: chatqna reports whether
+      // it translated it. An answer that was not translated is flagged, so
+      // the English original is never read as a translation of it.
+      final bool translationFailed = isTranslationFailed(metadata);
+
       final assistantMessage = {
         'id': response['queryId'],
         'queryId': response['queryId'],
         'role': 'assistant',
-        'content': response['response'] ?? 'No response received',
+        'content': response['response'] ?? tr('chatbot.noResponse'),
         'timestamp': DateTime.now().toIso8601String(),
         'sources': metadata?['sources'] ?? [],
         'confidence': metadata?['confidence_score'],
         'metadata': metadata,
+        'translationFailed': translationFailed,
         'isSaved': false,
       };
 
@@ -703,9 +741,21 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       _updateQuickHelpVisibility();
     } catch (e) {
       setState(() => _isLoading = false);
-      NotificationService.error(tr('chatbot.processingError'));
+      NotificationService.error(_failureMessage(e));
       debugPrint("[CHATBOT] Send error: $e");
     }
+  }
+
+  /// The message a failed request is shown with.
+  ///
+  /// A refused language is the caller's side of the boundary: the deployment
+  /// cannot answer in that language, and saying so is more useful than a
+  /// generic failure. Every other failure is shown as the generic one.
+  String _failureMessage(Object error) {
+    if (error is LanguageRefusal && error.code == unsupportedLanguageCode) {
+      return tr('chatbot.unsupportedLanguage');
+    }
+    return tr('chatbot.processingError');
   }
 
   List<dynamic> _mergeUniqueDocs(
@@ -1363,6 +1413,38 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                 }
                               },
                             ),
+
+                            // The backend could not translate the answer into
+                            // the requested language: the text above is the
+                            // original answer, not a translation of it. Saying
+                            // so is what keeps an English answer from being
+                            // read as a translated one.
+                            if (!isUser && msg['translationFailed'] == true)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  top: DsSpacing.sm,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.translate,
+                                      size: 14,
+                                      color: tokens.warning,
+                                    ),
+                                    const SizedBox(width: DsSpacing.xs),
+                                    Expanded(
+                                      child: Text(
+                                        tr('chatbot.translationUnavailable'),
+                                        style: TextStyle(
+                                          fontSize: tokens.textXs,
+                                          color: tokens.warning,
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
 
                             // Footer: Confidence & Feedback
                             if (!isUser)

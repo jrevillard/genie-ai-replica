@@ -301,6 +301,8 @@ const Map<String, dynamic> ptLocale = {
     "relatedDocs": "Documentos Relacionados",
     "noDocuments": "Nenhum documento relacionado",
     "faq": "Perguntas Frequentes",
+    "faqTranslationUnavailable":
+        "Tradução indisponível — a versão original em inglês é exibida.",
     "tab": {
       "all": "Todos os Chats",
       "folders": "Pastas",
@@ -1016,11 +1018,16 @@ const Map<String, dynamic> ptLocale = {
   "chatbot": {
     "aiGeneratedNoDocs":
         "Gerado por IA — não baseado nos documentos da biblioteca",
+    "translationUnavailable":
+        "Tradução indisponível — esta resposta pode conter texto não traduzido.",
     "placeholder": "Digite sua consulta aqui...",
     "sendButton": "Enviar",
     "fileReceived": "Arquivo recebido com sucesso.",
     "fileUploadError": "Erro ao carregar arquivo.",
     "processingError": "Erro ao processar sua solicitação.",
+    "unsupportedLanguage":
+        'Este idioma não está disponível para esta implantação.',
+    "noResponse": "Nenhuma resposta recebida.",
     "attachFile": "Anexar Arquivo",
     "fileTooLarge": "O arquivo é muito grande. O tamanho máximo é {maxSize}.",
     "saveChat": "Salvar Chat",

@@ -10,7 +10,7 @@ TRACING = OVERLAY / "tracing.py"
 
 
 def test_no_otlp_log_exporter_in_tracing():
-    src = TRACING.read_text()
+    src = TRACING.read_text(encoding="utf-8")
     assert "OTLPLogExporter" not in src
     assert "LoggerProvider" not in src
     assert "set_logger_provider" not in src

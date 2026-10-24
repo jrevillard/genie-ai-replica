@@ -772,6 +772,8 @@ export default {
     relatedDocs: 'Dokuuma kafo',
     noDocuments: 'Dokuuma kafo mang je',
     faq: 'Ñiningo Ka Ke-yaa',
+    faqError: 'The FAQ could not be loaded.',
+    faqTranslationUnavailable: 'Translation unavailable — showing the original English.',
     tab: {
       all: 'Kumal bee',
       folders: 'Foldalu',
@@ -1231,6 +1233,7 @@ export default {
   },
   chatbot: {
     streamingError: 'Jɛɛmɔgɔya labɛnnen na. A ñaa ma ñɔɔrɔ.',
+    unsupportedLanguage: 'This language is not available for this deployment.',
     aiGeneratedNoDocs: 'AI-e kõm̦m̦ane — ejjab pedped ioon peba ko ilo laibri',
     translationUnavailable: 'Translation unavailable — this answer may contain untranslated text.',
     welcomeMessage: 'Iakwe! Ewi wāween aõ maron̦ jipañ eok rainin?',

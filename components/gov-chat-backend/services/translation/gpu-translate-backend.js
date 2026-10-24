@@ -1,6 +1,8 @@
 const { logger, parsePositiveInt } = require('../../shared-lib');
 const http = require('http');
 const https = require('https');
+const { languageForLog } = require('./language-log');
+const { ownLanguageCode, hasOwnLanguage, supportedLanguages } = require('./language-map-lookup');
 
 // API key for remote GPU node authentication (standard OpenAI Bearer token)
 const VLLM_API_KEY = process.env.VLLM_API_KEY || '';
@@ -59,7 +61,6 @@ class GpuTranslateBackend {
     // Runtime state
     this.initialized = false;
     this.languageMap = null;
-    this.fallbackMap = null;
     this.healthCheckPassed = false;
     this.maxModelLen = 4096; // Will be updated from /v1/models during init
 
@@ -91,7 +92,6 @@ class GpuTranslateBackend {
       }
 
       this.languageMap = require(mapPath);
-      this.fallbackMap = this.languageMap.fallbackMap || {};
 
       logger.info(`[GPU-BACKEND] Loaded language map: ${this.languageMap.modelName}`);
       logger.info(`[GPU-BACKEND] Code format: ${this.languageMap.codeFormat}`);
@@ -263,43 +263,29 @@ class GpuTranslateBackend {
       throw new Error('[GPU-BACKEND] Language map not loaded');
     }
 
-    const code = this.languageMap.languageMap[isoCode];
+    const code = ownLanguageCode(this.languageMap, isoCode);
     if (!code) {
-      logger.warn(`[GPU-BACKEND] No language code mapping for: ${isoCode}`);
+      if (hasOwnLanguage(this.languageMap, isoCode)) {
+        // The map carries the language and maps it to an empty code: the
+        // shipped map is broken. That is our defect, not the caller's
+        // request, and the caller must not be answered as if their language
+        // were unknown.
+        throw new Error(
+          `[GPU-BACKEND] The shipped language map maps "${isoCode}" to an empty code (server-side defect, not a bad request)`
+        );
+      }
+      logger.warn(`[GPU-BACKEND] No language code mapping for: ${languageForLog(isoCode)}`);
       return null;
     }
-
     return code;
   }
 
   /**
-   * Get fallback language code
-   * @param {string} isoCode - ISO 639-1 language code
-   * @returns {string|null} Fallback language code or null
-   */
-  getFallbackLanguage(isoCode) {
-    if (!this.fallbackMap) {
-      return null;
-    }
-
-    return this.fallbackMap[isoCode] || null;
-  }
-
-  /**
-   * Check if language is supported
-   * @param {string} isoCode - ISO 639-1 language code
-   * @returns {boolean} True if supported
-   */
-  isLanguageSupported(isoCode) {
-    return this.languageMap && Object.prototype.hasOwnProperty.call(this.languageMap.languageMap, isoCode);
-  }
-
-  /**
    * Get all supported languages
-   * @returns {Object} Language map
+   * @returns {Object} A copy of the language map
    */
   getSupportedLanguages() {
-    return this.languageMap ? this.languageMap.languageMap : {};
+    return supportedLanguages(this.languageMap);
   }
 
   /**
@@ -331,15 +317,11 @@ class GpuTranslateBackend {
    * estimate is treated as a guess to be survived, not a measurement.
    *
    * A budget is a ceiling, so a translation that genuinely needs more stops at
-   * `max_tokens`. That is not left as a quiet shortfall: `callVllmService` and
-   * `callVllmStream` reject on `finish_reason === 'length'`, so a truncated
-   * translation surfaces as a failed request rather than being accepted and
-   * cached as a shortened answer. A prompt that cannot fit at all is refused
-   * here rather than sent with an unusable budget.
-   *
-   * Re-applying after a caller has grown the messages only lowers the budget
-   * further (see `translateStream`'s context window), which is what that
-   * second pass is for: the injection must not be able to overflow the window.
+   * `max_tokens`. That is not left as a quiet shortfall: `callVllmService`
+   * rejects on `finish_reason === 'length'`, so a truncated translation
+   * surfaces as a failed request rather than being accepted and cached as a
+   * shortened answer. A prompt that cannot fit at all is refused here rather
+   * than sent with an unusable budget.
    *
    * @param {Object} requestBody - OpenAI-compatible request body; mutated
    * @returns {Object} the same body, with `max_tokens` capped
@@ -361,6 +343,34 @@ class GpuTranslateBackend {
     const needed = 4 * inputTokens + 256;
     requestBody.max_tokens = Math.min(requestBody.max_tokens ?? room, room, needed);
     return requestBody;
+  }
+
+  /**
+   * The language name a prompt is built from.
+   *
+   * The name comes from the language map or not at all: falling back to the
+   * code would put an unmapped value into the prompt, which is the one thing
+   * the map exists to prevent.
+   *
+   * A code the map knows but does not name is a defect in the shipped map,
+   * not a bad request: the caller asked for a language the deployment
+   * supports. It is deliberately not an `UnsupportedLanguageError` — that
+   * error is the refusal of a caller's language (HTTP 400), and reporting
+   * our own defect as one would blame the request for it.
+   *
+   * @param {string} code - Model-specific language code
+   * @returns {string} The language name
+   * @throws {Error} When the language map has no name for the code.
+   */
+  _languageName(code) {
+    const names = this.languageMap ? this.languageMap.languageNames : null;
+    const name = names && Object.prototype.hasOwnProperty.call(names, code) ? names[code] : null;
+    if (!name) {
+      throw new Error(
+        `[GPU-BACKEND] The language map has no name for the model code "${code}" — the shipped map is missing an entry (server-side defect, not a bad request)`
+      );
+    }
+    return name;
   }
 
   /**
@@ -395,8 +405,8 @@ class GpuTranslateBackend {
 
     // Gemma-3 format (prompt-based translation)
     if (modelId.includes('gemma-3')) {
-      const sourceLangName = this.languageMap.languageNames?.[sourceCode] || sourceCode;
-      const targetLangName = this.languageMap.languageNames?.[targetCode] || targetCode;
+      const sourceLangName = this._languageName(sourceCode);
+      const targetLangName = this._languageName(targetCode);
       const prompt = this.languageMap.promptTemplate
         ? this.languageMap.promptTemplate(sourceCode, targetCode, sourceLangName, targetLangName, text)
         : `Translate the following text from ${sourceLangName} to ${targetLangName}. Only return the translation, no explanation.\n\nText: ${text}`;
@@ -514,104 +524,6 @@ class GpuTranslateBackend {
   }
 
   /**
-   * Call vLLM service with streaming output (stream:true). Invokes onToken for
-   * each generated delta token and resolves with the full concatenated text.
-   * @param {Object} requestBody - Request body (stream:true is added automatically)
-   * @param {(delta: string) => void} [onToken] - Called for each output delta
-   * @returns {Promise<string>} Full concatenated translated text
-   */
-  async callVllmStream(requestBody, onToken) {
-    const url = new URL(this.endpoint);
-    const isHttps = url.protocol === 'https:';
-    const client = isHttps ? https : http;
-    const basePath = url.pathname.replace(/\/$/, '');
-    const postData = JSON.stringify({ ...requestBody, stream: true });
-
-    const options = {
-      hostname: url.hostname,
-      port: url.port || (url.protocol === 'https:' ? 443 : 80),
-      path: `${basePath}/v1/chat/completions`,
-      method: 'POST',
-      headers: this._buildHeaders({
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(postData)
-      }),
-      timeout: 60000
-    };
-
-    return new Promise((resolve, reject) => {
-      let full = '';
-      let buffer = '';
-      let finishReason = null;
-      const req = client.request(options, (res) => {
-        if (res.statusCode < 200 || res.statusCode >= 300) {
-          let errBody = '';
-          res.on('data', (c) => (errBody += c));
-          res.on('end', () => reject(new Error(`vLLM stream service error: ${res.statusCode} ${errBody}`)));
-          return;
-        }
-        res.setEncoding('utf8');
-        res.on('data', (chunk) => {
-          buffer += chunk;
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed.startsWith('data: ')) continue;
-            const payload = trimmed.slice(6);
-            if (payload === '[DONE]') continue;
-            try {
-              const parsed = JSON.parse(payload);
-              const choice = parsed.choices?.[0];
-              if (choice?.finish_reason) finishReason = choice.finish_reason;
-              const delta = choice?.delta?.content || '';
-              if (delta) {
-                full += delta;
-                if (onToken) onToken(delta);
-              }
-            } catch {
-              // Ignore non-JSON keepalive/partial lines
-            }
-          }
-        });
-        res.on('end', () => {
-          // Deltas have already been emitted by this point, so a truncation is
-          // only detectable here — reject rather than hand back a partial text.
-          if (finishReason === 'length') {
-            logger.error(
-              `[GPU-BACKEND] vLLM stream stopped at max_tokens=${requestBody.max_tokens} without finishing the translation`
-            );
-            reject(new Error(`vLLM truncated the translation at max_tokens=${requestBody.max_tokens}`));
-            return;
-          }
-          if (!full) {
-            // A refusal, a moderation block or an empty completion is not a
-            // translation. The non-streaming path rejects a contentless choice
-            // for the same reason; resolving '' here would blank the caller.
-            logger.error(`[GPU-BACKEND] vLLM stream produced no content (finish_reason=${finishReason})`);
-            reject(new Error(`vLLM returned no content for the translation (finish_reason=${finishReason})`));
-            return;
-          }
-          resolve(full);
-        });
-      });
-
-      req.on('error', (error) => {
-        logger.error(`[GPU-BACKEND] vLLM stream request failed: ${error.message}`);
-        reject(new Error(`vLLM stream request failed: ${error.message}`));
-      });
-
-      req.on('timeout', () => {
-        req.destroy();
-        reject(new Error('vLLM stream request timeout'));
-      });
-
-      req.write(postData);
-      req.end();
-    });
-  }
-
-  /**
    * Translate using vLLM service
    * @param {string[]} texts - Texts to translate
    * @param {string} sourceCode - Source language code (model-specific)
@@ -667,44 +579,6 @@ class GpuTranslateBackend {
       });
       throw new Error(`[GPU-BACKEND] Failed to perform translation: ${error.message}`, { cause: error });
     }
-  }
-
-  /**
-   * Stream-translate a single COMPLETE unit (sentence/paragraph — see
-   * services/translation/stream-boundary.js). The translator streams its output
-   * via onToken. An optional rolling context window (prior units) keeps
-   * terminology/pronouns consistent across units (prompt-based models only).
-   * @param {string} text - Complete unit to translate
-   * @param {string} sourceCode - Source language code (model-specific)
-   * @param {string} targetCode - Target language code (model-specific)
-   * @param {{source: string, target: string}[]} [context] - Prior units EN+target
-   * @param {(delta: string) => void} [onToken] - Streaming callback
-   * @returns {Promise<string>} Full translated text
-   */
-  async translateStream(text, sourceCode, targetCode, context, onToken) {
-    if (!this.initialized) {
-      throw new Error('[GPU-BACKEND] Backend is not ready.');
-    }
-    if (!text || text.trim() === '') return '';
-
-    const requestBody = this.formatRequest(this.modelId, sourceCode, targetCode, text);
-
-    // Context window: prepend prior units to formatRequest's EXISTING prompt
-    // (which has "Only return the translation, no explanation"). We AUGMENT
-    // the prompt — never replace it. Replacing would lose the constraint and
-    // the model would add commentary/alternatives, breaking formatting.
-    if (context && context.length > 0 && !this.modelId.includes('translategemma')) {
-      const ctxBlock = context.map((c) => `EN: ${c.source}\n${targetCode.toUpperCase()}: ${c.target}`).join('\n');
-      requestBody.messages[0].content =
-        `Prior context (for terminology consistency only — do NOT translate or repeat it):\n${ctxBlock}\n\n` +
-        requestBody.messages[0].content;
-    }
-
-    // Re-cap after context injection: the injected block grows the prompt, so
-    // the budget formatRequest derived is no longer the whole story.
-    this._capMaxTokens(requestBody);
-
-    return this.callVllmStream(requestBody, onToken);
   }
 
   /**

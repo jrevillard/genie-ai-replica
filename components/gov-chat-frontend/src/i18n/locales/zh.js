@@ -769,6 +769,8 @@ export default {
     relatedDocs: '相关文档',
     noDocuments: '无相关文档',
     faq: '常见问题',
+    faqError: '无法加载常见问题。',
+    faqTranslationUnavailable: '翻译不可用 — 显示英文原文。',
     tab: {
       all: '所有聊天',
       folders: '文件夹',
@@ -1224,6 +1226,7 @@ export default {
   },
   chatbot: {
     streamingError: '回复已中断。请重试。',
+    unsupportedLanguage: '此语言在当前部署中不可用。',
     aiGeneratedNoDocs: 'AI 生成 — 非基于知识库文档',
     translationUnavailable: '翻译不可用 — 此回复可能包含未翻译的文本。',
     welcomeMessage: '欢迎！今天有什么我可以协助您的吗？',

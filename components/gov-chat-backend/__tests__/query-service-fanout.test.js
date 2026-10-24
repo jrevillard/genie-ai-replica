@@ -71,7 +71,7 @@ function makeQueryData(overrides = {}) {
     userId: 'user-1',
     sessionId: 'session-1',
     messages: [{ role: 'user', content: 'What is the tax rate?' }],
-    context: { categoryLabel: null, serviceLabels: [], language: 'EN' },
+    context: { categoryLabel: null, serviceLabels: [], language: 'en' },
     ...overrides
   };
 }
@@ -118,7 +118,7 @@ describe('QueryService fan-out carrier (Story 1.1 — I/O Matrix)', () => {
     expect(opeaPayload.context).toEqual({
       categoryLabel: null,
       serviceLabels: [],
-      language: 'EN'
+      language: 'en'
     });
     // No carrier keys at all — the pre-1.1 context, byte for byte.
     expect(Object.keys(opeaPayload.context).sort()).toEqual(['categoryLabel', 'language', 'serviceLabels']);
@@ -223,7 +223,7 @@ describe('QueryService fan-out carrier (Story 1.1 — I/O Matrix)', () => {
     expect(opeaPayload.context).toEqual({
       categoryLabel: null,
       serviceLabels: [],
-      language: 'EN'
+      language: 'en'
     });
     expect(retrievalConfigClient.getAuthorizedGraphs).not.toHaveBeenCalled();
   });
@@ -258,7 +258,7 @@ describe('QueryService fan-out carrier (Story 1.1 — I/O Matrix)', () => {
     expect(opeaPayload.context).toEqual({
       categoryLabel: null,
       serviceLabels: [],
-      language: 'EN'
+      language: 'en'
     });
   });
 
@@ -272,7 +272,7 @@ describe('QueryService fan-out carrier (Story 1.1 — I/O Matrix)', () => {
     expect(opeaPayload.context).toEqual({
       categoryLabel: null,
       serviceLabels: [],
-      language: 'EN'
+      language: 'en'
     });
     expect(retrievalConfigClient.getRetrievalConfig).not.toHaveBeenCalled();
   });

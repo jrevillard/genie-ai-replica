@@ -777,6 +777,8 @@ export default {
     relatedDocs: 'Documentos Relacionados',
     noDocuments: 'No hay documentos relacionados',
     faq: 'Preguntas Frecuentes',
+    faqError: 'No se pudo cargar la sección de preguntas frecuentes.',
+    faqTranslationUnavailable: 'Traducción no disponible: se muestra el original en inglés.',
     tab: {
       all: 'Todos los Chats',
       folders: 'Carpetas',
@@ -1247,6 +1249,7 @@ export default {
   },
   chatbot: {
     streamingError: 'Se interrumpió la respuesta. Inténtelo de nuevo.',
+    unsupportedLanguage: 'Este idioma no está disponible para este despliegue.',
     translationUnavailable: 'Traducción no disponible: esta respuesta puede contener texto sin traducir.',
     welcomeMessage: '¡Le damos la bienvenida! ¿Cómo puedo asistirle hoy?',
     aiGeneratedNoDocs: 'Generado por IA — no basado en documentos de la biblioteca',

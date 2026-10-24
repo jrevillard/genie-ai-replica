@@ -232,10 +232,6 @@ describe('CpuTranslateBackend', () => {
       expect(testBackend.languageMap).toBeDefined();
       delete process.env.TRANSLATION_CPU_MODEL_ID;
     });
-
-    it('should set fallback map from language map', () => {
-      expect(backend.fallbackMap).toBeDefined();
-    });
   });
 
   describe('getLanguageCode', () => {
@@ -248,24 +244,18 @@ describe('CpuTranslateBackend', () => {
       const result = backend.getLanguageCode('xyz');
       expect(result).toBeNull();
     });
-  });
 
-  describe('getFallbackLanguage', () => {
-    it('should return null when fallback map not loaded', () => {
-      backend.fallbackMap = null;
-      expect(backend.getFallbackLanguage('en')).toBeNull();
-    });
-
-    it('should return null for language without fallback', () => {
-      const result = backend.getFallbackLanguage('xyz');
-      expect(result).toBeNull();
-    });
-  });
-
-  describe('isLanguageSupported', () => {
-    it('should return false when language map not loaded', () => {
-      backend.languageMap = null;
-      expect(backend.isLanguageSupported('en')).toBeFalsy();
+    it('reports a language mapped to an empty code as a defect in the map', () => {
+      // The map carries the language and maps it to nothing: the shipped map
+      // is broken, and the caller must not be answered as if their language
+      // were unknown.
+      const saved = backend.languageMap.languageMap.fr;
+      backend.languageMap.languageMap.fr = '';
+      try {
+        expect(() => backend.getLanguageCode('fr')).toThrow(/server-side defect/i);
+      } finally {
+        backend.languageMap.languageMap.fr = saved;
+      }
     });
   });
 

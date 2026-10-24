@@ -770,6 +770,8 @@ export default {
     relatedDocs: 'Nyaraka Zinazohusiana',
     noDocuments: 'Hakuna nyaraka zinazohusiana',
     faq: 'Maswali Yanayoulizwa Mara kwa Mara',
+    faqError: 'Maswali Yanayoulizwa Mara kwa Mara hayakuweza kupakiwa.',
+    faqTranslationUnavailable: 'Tafsiri hazipatikani — asili ya Kiingereza inaonyeshwa.',
     tab: {
       all: 'Mazungumzo Yote',
       folders: 'Mafolda',
@@ -1238,6 +1240,7 @@ export default {
   },
   chatbot: {
     streamingError: 'Jibu lilikatika. Tafadhali jaribu tena.',
+    unsupportedLanguage: 'Lugha hii haipatikani katika mfumo huu.',
     aiGeneratedNoDocs: 'Imezalishwa na AI — haitokani na nyaraka za maktaba',
     translationUnavailable: 'Tafsiri hazipatikani — jibu hili linaweza kuwa na maandishi ambayo hayajatafsiriwa.',
     welcomeMessage: 'Karibu! Nawezaje kukusaidia leo?',

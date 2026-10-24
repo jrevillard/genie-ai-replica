@@ -128,6 +128,30 @@ class TestLlmInvokeSync:
 
         assert captured_spans("llm.invoke")[0].attributes[A["llm_finish_reason"]] == "length"
 
+    def test_recorder_never_raises_on_malformed_frames(self):
+        """The stream router calls the recorder outside its own skip guard,
+        relying on the contract that ANY json-decoded frame is safe to
+        record; a raise there would tear down a live user stream."""
+        hostile_frames = [
+            {"model": {"nested": "dict"}, "usage": "not-a-dict", "choices": "nope"},
+            {"usage": {"prompt_tokens": {"deeply": ["nested"]}}, "choices": [{"delta": {"content": ["list"]}}]},
+            {"finish_reason": {"object": "why"}, "choices": [{"delta": 42}]},
+            {"error": {"message": "boom"}},
+            [1, 2, 3],
+            "plain string",
+            None,
+            {"choices": [{"delta": {"content": {"non": "str"}}}]},
+            {},
+            {"choices": 42},
+            {"choices": True},
+            {"choices": 3.14},
+            {"choices": {"a": 1}},
+        ]
+        span = chatqna_module._emit_llm_invoke_open({"stream": True})
+        for frame in hostile_frames:
+            chatqna_module._emit_llm_invoke_record(span, frame)
+        chatqna_module._emit_llm_invoke_close(span)
+
     def test_stream_flag_has_one_source_of_truth(self, captured_spans):
         """llm.stream and llm.stream_options.include_usage cannot disagree."""
         span = chatqna_module._emit_llm_invoke_open({"max_tokens": 8, "stream": True})
@@ -290,6 +314,10 @@ class TestAlignGeneratorWiring:
         (emitted,) = captured_spans("llm.invoke")
         assert emitted.attributes[A["llm_stream"]] is True
         assert emitted.attributes[A["llm_stream_options_include_usage"]] is True
+        # The usage-only terminal frame is recorded (above) and then skipped:
+        # the skip leaves an event so a swallowed frame stays diagnosable.
+        event_names = [event.name for event in emitted.events]
+        assert "chatqna.stream.frame_skipped" in event_names
         assert emitted.attributes[A["llm_req_max_tokens"]] == 256
         assert emitted.attributes[A["llm_usage_prompt_tokens"]] == 1200
         assert emitted.attributes[A["llm_usage_completion_tokens"]] == 2

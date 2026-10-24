@@ -471,10 +471,12 @@ Every build must select a flavor, and **both** selectors are required:
 | `--flavor <name>` | Selects the build variant — application id, URL scheme, signing config. |
 | `--dart-define=FLAVOR=<name>` | Selects the deployment configuration compiled into the app — Keycloak realm, client id, endpoints, TLS policy. |
 
-Omitting `--dart-define=FLAVOR=` makes the app fall back to the `dev`
-configuration at runtime: every endpoint points at `localhost`, and the
-trust-all TLS client of the vendored `flutter_appauth` fork is armed. A build
-that reaches a real deployment must therefore always set the define — see
+In a debug `flutter run`, omitting `--dart-define=FLAVOR=` falls back to the
+`dev` configuration for convenience. In a release or profile build the same
+omission is fatal by design: the app fails at startup with a `StateError`
+naming both selectors, instead of silently running with the trust-all TLS
+client of the vendored `flutter_appauth` fork armed. A build that reaches a
+real deployment must always set the define — see
 [Mobile Deployment Guide](/docs/mobile/mobile-deployment-guide/) for the
 per-institution flavor setup.
 

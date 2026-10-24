@@ -774,6 +774,8 @@ export default {
     relatedDocs: 'Dokumen Terkait',
     noDocuments: 'Tidak ada dokumen terkait',
     faq: 'Pertanyaan yang Sering Diajukan',
+    faqError: 'FAQ tidak dapat dimuat.',
+    faqTranslationUnavailable: 'Terjemahan tidak tersedia — versi aslinya dalam bahasa Inggris ditampilkan.',
     tab: {
       all: 'Semua Obrolan',
       folders: 'Folder',
@@ -1244,6 +1246,7 @@ export default {
   },
   chatbot: {
     streamingError: 'Respons terputus. Silakan coba lagi.',
+    unsupportedLanguage: 'Bahasa ini tidak tersedia untuk deployment ini.',
     aiGeneratedNoDocs: 'Dihasilkan oleh AI — tidak berdasarkan dokumen pustaka',
     translationUnavailable: 'Terjemahan tidak tersedia — jawaban ini mungkin memuat teks yang belum diterjemahkan.',
     welcomeMessage: 'Selamat datang! Ada yang bisa saya bantu hari ini?',

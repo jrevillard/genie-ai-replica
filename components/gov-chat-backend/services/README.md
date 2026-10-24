@@ -283,7 +283,6 @@ The translation service supports 34+ languages through modular language maps:
 
 Each language map includes:
 - Language code mappings (ISO to model-specific)
-- Fallback chains for graceful degradation
 - Model-specific prompt templates
 - Language names for prompt generation
 
@@ -375,13 +374,6 @@ module.exports = {
   languageMap: {
     en: 'eng_Latn',
     fr: 'fra_Latn',
-    // ...
-  },
-
-  // Fallback chains for graceful degradation
-  fallbackMap: {
-    bn: 'en',  // Bengali to English
-    st: 'en',  // Sesotho to English
     // ...
   },
 
@@ -627,7 +619,7 @@ The translation service uses a modular language map system to support multiple t
 
 **Purpose**:
 - Maps ISO 639-1 language codes to model-specific codes
-- Provides fallback chains for graceful degradation
+- Refuses a language the map does not know, rather than answering in another one
 - Contains model-specific prompt templates
 - Defines language names for prompt generation
 
@@ -642,15 +634,7 @@ The translation service uses a modular language map system to support multiple t
    }
    ```
 
-2. **Add Fallback Chain** (optional):
-   ```javascript
-   fallbackMap: {
-     // Existing fallbacks...
-     xx: 'en',  // Fallback to English
-   }
-   ```
-
-3. **Add Language Name** (for LLM-based models):
+2. **Add Language Name** (for LLM-based models):
    ```javascript
    // translation/language-maps/gemma-3-map.js
    languageNames: {
@@ -659,7 +643,7 @@ The translation service uses a modular language map system to support multiple t
    }
    ```
 
-4. **Create New Language Map** (for new model):
+3. **Create New Language Map** (for new model):
    ```javascript
    // translation/language-maps/new-model-map.js
    module.exports = {
@@ -667,7 +651,6 @@ The translation service uses a modular language map system to support multiple t
      modelType: 'model-type',
      codeFormat: 'ISO-639-1' | 'FLORES-200' | 'custom',
      languageMap: { /* ... */ },
-     fallbackMap: { /* ... */ },
      promptTemplate: (srcCode, tgtCode, srcName, tgtName, text) => {
        return `Prompt template here: ${text}`;
      },
@@ -675,7 +658,7 @@ The translation service uses a modular language map system to support multiple t
    };
    ```
 
-5. **Register Language Map** (in backend):
+4. **Register Language Map** (in backend):
    ```javascript
    // cpu-translate-backend.js or gpu-translate-backend.js
    loadLanguageMap(modelId) {
@@ -1261,10 +1244,6 @@ To add a new translation backend:
        // Return model-specific code
      }
 
-     isLanguageSupported(isoCode) {
-       // Check language support
-     }
-
      getBackendInfo() {
        return {
          type: 'new',
@@ -1300,9 +1279,6 @@ To add a new translation backend:
    languageMap: {
      // ... existing languages
      xx: 'xxx_Latn',  // New language code
-   },
-   fallbackMap: {
-     xx: 'en',  // Fallback to English
    }
    ```
 
@@ -1345,7 +1321,7 @@ node create-translations.js ID --translation-engine=internal
 **Language Support Expansion**:
 - Recently added: Mandinka (man/mnk), Sesotho (st)
 - Total supported languages: 34+
-- Supports fallback chains for unsupported languages
+- Refuses an unsupported language (no fallback language)
 
 ### Testing OPEA Integration
 
@@ -1446,15 +1422,14 @@ TRANSLATION_BATCHES=3
 **Adding New Languages**:
 1. Check model support for target language
 2. Add language code to all language maps
-3. Configure fallback chain if needed
-4. Test translation quality
-5. Update documentation
+3. Test translation quality
+4. Update documentation
 
-**Language Fallbacks**:
-- Configure sensible fallbacks for similar languages
-- Use English as universal fallback when appropriate
-- Document fallback chains for transparency
-- Test fallback behavior regularly
+**Unsupported Languages**:
+- A language the map does not know is refused (HTTP 400 on the translate routes, an English answer on the chat path)
+- There is no fallback language: answering a request in another language is a wrong answer the caller cannot see
+- The maps name no fallback, so the refusal cannot be turned into a silent substitution
+- A map that carries a language and maps it to an empty code is a defect in the shipped map: it is reported as such, not as an unsupported language the caller asked for
 
 ### Monitoring and Logging
 
@@ -1643,8 +1618,7 @@ curl http://vllm-translation-guardrail:9031/health
 **Problem: Language not supported**
 - Check language map files in `services/translation/language-maps/`
 - Verify language code is in the map
-- Check if fallback language is configured
-- Consider adding the language to the language map
+- Consider adding the language to the language map (there is no fallback language: an unknown one is refused)
 
 **Problem: Worker thread crashes**
 - Check for memory issues (NLLB-200 requires ~2-4 GB)

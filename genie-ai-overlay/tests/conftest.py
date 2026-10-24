@@ -381,15 +381,28 @@ def owned_span_names():
 OVERLAY_ROOT = Path(__file__).resolve().parent.parent
 
 OVERLAY_SKIP_DIRS = frozenset(
-    {"tests", "contracts", ".venv", "reports", ".ruff_cache", "__pycache__", ".git", "build-patches", "site"}
+    {"tests", "contracts", "reports", ".ruff_cache", "__pycache__", ".git", "build-patches", "site"}
 )
+
+# Virtualenvs are pruned by PREFIX, not by exact name: CI creates ``.venv`` at
+# the overlay root, and a local checkout may carry a sibling (``.venv-linux``
+# for a cross-platform venv, ``.venv-py312`` for a pinned interpreter). An
+# exact-name list prunes one of them and walks the other — and site-packages
+# holds third-party source the AST sweepers must never parse (numpy ships
+# PEP-695 syntax that a 3.11 interpreter cannot even read).
+_VENV_DIR_PREFIX = ".venv"
+
+
+def _is_skipped_dir(name: str) -> bool:
+    """True for a directory the overlay walk must not descend into."""
+    return name in OVERLAY_SKIP_DIRS or name.startswith(_VENV_DIR_PREFIX)
 
 
 def overlay_source_files() -> list[Path]:
     """Every Python file under the overlay that is project source, recursively."""
     found: list[Path] = []
     for dirpath, dirnames, filenames in os.walk(OVERLAY_ROOT):
-        dirnames[:] = [d for d in dirnames if d not in OVERLAY_SKIP_DIRS]
+        dirnames[:] = [d for d in dirnames if not _is_skipped_dir(d)]
         for name in sorted(filenames):
             if name.endswith(".py"):
                 found.append(Path(dirpath, name))

@@ -62,16 +62,15 @@ variables:
   #   once the tree is out of the scan nothing else checks them, and the fork is
   #   rebased onto upstream from time to time.
   #
-  #   Known gap, tracked in #1099: getConfig() reads the FLAVOR dart-define and
-  #   falls back to "dev" when the define is absent — so a build made without
-  #   it resolves devConfig, where the trust-all client IS enabled (every
-  #   endpoint points at localhost, so it cannot reach a real deployment). The
-  #   documented build commands now always set both selectors — see
-  #   mobile/genie_ai_mobile/README.md (§ Build Flavors),
+  #   The FLAVOR gap is closed: the documented build commands set both
+  #   selectors — see mobile/genie_ai_mobile/README.md (§ Build Flavors),
   #   mobile/genie_ai_mobile/CLAUDE.md (§ Build & Run) and
-  #   site/content/en/docs/mobile/mobile-deployment-guide.md (§ Build) — but
-  #   the fallback itself is still there, and #1099 tracks making it fail
-  #   loudly instead.
+  #   site/content/en/docs/mobile/mobile-deployment-guide.md (§ Build) — and
+  #   getConfig() fails at startup in a release or profile build made without
+  #   the define (#1099), so the missing-define fallback cannot reach a
+  #   release artifact any more. (An explicit FLAVOR=dev release still runs
+  #   devConfig — a developer's --release run against the local stack — and
+  #   build-release.ps1 refuses dev/e2e on the artifact path.)
   # - genie-ai-overlay/contracts/: real-comps contract tests (test code, NOT shipped in image)
   # - **/scripts/**: dev/migration scripts NOT shipped in container. We list specific
   #   sub-patterns (rather than the broad **/scripts/) so the production entrypoint
@@ -2929,19 +2928,33 @@ test:flutter:
   stage: test
   script:
     - export PATH="$PWD/../../flutter-sdk/bin:$PATH"
-    - dart pub global activate junitreport_maintained
+    # Pinned: the guard gates below grep the XML shape tojunit emits; an
+    # unpinned bump that serialized skips differently would silence them.
+    - dart pub global activate junitreport_maintained 2.0.5
     - export PATH="$PATH:$PUB_CACHE/bin"
     - mkdir -p reports
     - flutter test --machine --coverage > reports/flutter-machine.json 2>&1
     - cat reports/flutter-machine.json | tojunit --output reports/flutter-report.xml
     # Release-build control: getConfig() resolves the flavor from the FLAVOR
-    # dart-define and falls back to "dev" when it is absent (#1099 tracks
-    # making that fallback fail loudly). The documented build commands now set
-    # the define, so running the config test with it proves the release recipe
-    # — itu selected, trust-all client off — instead of only asserting it in
-    # prose.
+    # dart-define and fails at startup in a release or profile build made
+    # without it (#1099). Running the config test with the define proves the
+    # release recipe — itu selected, trust-all client off — instead of only
+    # asserting it in prose.
     - flutter test --machine --dart-define=FLAVOR=itu test/config/keycloak_config_test.dart > reports/flutter-flavor-machine.json 2>&1
     - cat reports/flutter-flavor-machine.json | tojunit --output reports/flutter-flavor-report.xml
+    # The same control, from the other side: the release guard test asserts
+    # that a release or profile compilation WITHOUT the define fails at
+    # startup. kReleaseMode is the dart.vm.product compile-time constant and
+    # kProfileMode the dart.vm.profile one, so each mode is exercised by
+    # defining it; the test skips itself outside those modes. The assertion
+    # after each run exists because flutter test exits 0 on a skipped test:
+    # a green job must mean the guard EXECUTED, not that it skipped.
+    - flutter test --machine --dart-define=dart.vm.product=true test/config/keycloak_config_release_guard_test.dart > reports/flutter-release-guard-machine.json 2>&1
+    - cat reports/flutter-release-guard-machine.json | tojunit --output reports/flutter-release-guard-report.xml
+    - grep -q '<testcase' reports/flutter-release-guard-report.xml && ! grep -q '<skipped' reports/flutter-release-guard-report.xml
+    - flutter test --machine --dart-define=dart.vm.profile=true test/config/keycloak_config_release_guard_test.dart > reports/flutter-profile-guard-machine.json 2>&1
+    - cat reports/flutter-profile-guard-machine.json | tojunit --output reports/flutter-profile-guard-report.xml
+    - grep -q '<testcase' reports/flutter-profile-guard-report.xml && ! grep -q '<skipped' reports/flutter-profile-guard-report.xml
     # The flavor run re-runs test/config/keycloak_config_test.dart, so it
     # produces the same suite name and the same testcase names as the full
     # run above. tojunit (junitreport_maintained) has no --suite-name, so the
@@ -2949,7 +2962,11 @@ test:flutter:
     # collide in the merged JUnit view and it is impossible to tell which run
     # a failure came from.
     - perl -pi -e 's{(<testsuite\b[^>]*?\bname=")([^"]*)(")}{${1}[flavor=itu] ${2}${3}}; s{(<testcase\b[^>]*?\bclassname=")([^"]*)(")}{${1}[flavor=itu] ${2}${3}}' reports/flutter-flavor-report.xml
-    - perl -pi -e 's/&#x1[bB];\[[0-9;]*m//g; s/&#27;\[[0-9;]*m//g; s/\x1b\[[0-9;]*m//g; s/&#x1[bB];//g; s/&#27;//g; s/[\x00-\x08\x0b\x0c\x0e-\x1f]//g' reports/flutter-report.xml reports/flutter-flavor-report.xml
+    - perl -pi -e 's{(<testsuite\b[^>]*?\bname=")([^"]*)(")}{${1}[mode=release] ${2}${3}}; s{(<testcase\b[^>]*?\bclassname=")([^"]*)(")}{${1}[mode=release] ${2}${3}}' reports/flutter-release-guard-report.xml
+    - grep -q '\[mode=release\]' reports/flutter-release-guard-report.xml
+    - perl -pi -e 's{(<testsuite\b[^>]*?\bname=")([^"]*)(")}{${1}[mode=profile] ${2}${3}}; s{(<testcase\b[^>]*?\bclassname=")([^"]*)(")}{${1}[mode=profile] ${2}${3}}' reports/flutter-profile-guard-report.xml
+    - grep -q '\[mode=profile\]' reports/flutter-profile-guard-report.xml
+    - perl -pi -e 's/&#x1[bB];\[[0-9;]*m//g; s/&#27;\[[0-9;]*m//g; s/\x1b\[[0-9;]*m//g; s/&#x1[bB];//g; s/&#27;//g; s/[\x00-\x08\x0b\x0c\x0e-\x1f]//g' reports/flutter-report.xml reports/flutter-flavor-report.xml reports/flutter-release-guard-report.xml reports/flutter-profile-guard-report.xml
     - 'sed -i ''/lib\/i18n\//d'' coverage/lcov.info'
     - 'COV=$(awk ''/^LF:/{lf+=$2} /^LH:/{lh+=$2} END{if(lf>0) printf "%.1f",lh/lf*100}'' FS=: coverage/lcov.info) && echo "Lines: ${COV}%" || echo "No coverage data"'
     - python3 -m venv /tmp/lcov-cov && . /tmp/lcov-cov/bin/activate && pip install lcov-cobertura && lcov_cobertura coverage/lcov.info --output reports/coverage-cobertura.xml
@@ -2959,6 +2976,8 @@ test:flutter:
       junit:
         - mobile/genie_ai_mobile/reports/flutter-report.xml
         - mobile/genie_ai_mobile/reports/flutter-flavor-report.xml
+        - mobile/genie_ai_mobile/reports/flutter-release-guard-report.xml
+        - mobile/genie_ai_mobile/reports/flutter-profile-guard-report.xml
       coverage_report:
         coverage_format: cobertura
         path: mobile/genie_ai_mobile/reports/coverage-cobertura.xml

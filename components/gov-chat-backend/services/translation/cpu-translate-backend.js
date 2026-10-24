@@ -1,6 +1,8 @@
 const { logger } = require('../../shared-lib');
 const { Worker } = require('worker_threads');
 const path = require('path');
+const { languageForLog } = require('./language-log');
+const { ownLanguageCode, hasOwnLanguage, supportedLanguages } = require('./language-map-lookup');
 
 /**
  * CPU Translation Backend
@@ -26,7 +28,6 @@ class CpuTranslateBackend {
     this.initialized = false;
     this.workerError = null;
     this.languageMap = null;
-    this.fallbackMap = null;
 
     logger.info(`[CPU-BACKEND] Initializing with model: ${this.modelId}`);
     logger.info(`[CPU-BACKEND] Threads: ${this.threads}, Batches: ${this.batches}`);
@@ -166,8 +167,6 @@ class CpuTranslateBackend {
         this.languageMap = require(mapPath);
         logger.info(`[CPU-BACKEND] Loaded language map: ${this.languageMap.modelName}`);
       }
-
-      this.fallbackMap = this.languageMap.fallbackMap || {};
     } catch (error) {
       logger.error(`[CPU-BACKEND] Failed to load language map: ${error.message}`);
       throw new Error(`Failed to load language map for model ${modelId}`, { cause: error });
@@ -227,43 +226,29 @@ class CpuTranslateBackend {
       throw new Error('[CPU-BACKEND] Language map not loaded');
     }
 
-    const code = this.languageMap.languageMap[isoCode];
+    const code = ownLanguageCode(this.languageMap, isoCode);
     if (!code) {
-      logger.warn(`[CPU-BACKEND] No language code mapping for: ${isoCode}`);
+      if (hasOwnLanguage(this.languageMap, isoCode)) {
+        // The map carries the language and maps it to an empty code: the
+        // shipped map is broken. That is our defect, not the caller's
+        // request, and the caller must not be answered as if their language
+        // were unknown.
+        throw new Error(
+          `[CPU-BACKEND] The shipped language map maps "${isoCode}" to an empty code (server-side defect, not a bad request)`
+        );
+      }
+      logger.warn(`[CPU-BACKEND] No language code mapping for: ${languageForLog(isoCode)}`);
       return null;
     }
-
     return code;
   }
 
   /**
-   * Get fallback language code
-   * @param {string} isoCode - ISO 639-1 language code
-   * @returns {string|null} Fallback language code or null
-   */
-  getFallbackLanguage(isoCode) {
-    if (!this.fallbackMap) {
-      return null;
-    }
-
-    return this.fallbackMap[isoCode] || null;
-  }
-
-  /**
-   * Check if language is supported
-   * @param {string} isoCode - ISO 639-1 language code
-   * @returns {boolean} True if supported
-   */
-  isLanguageSupported(isoCode) {
-    return this.languageMap && Object.prototype.hasOwnProperty.call(this.languageMap.languageMap, isoCode);
-  }
-
-  /**
    * Get all supported languages
-   * @returns {Object} Language map
+   * @returns {Object} A copy of the language map
    */
   getSupportedLanguages() {
-    return this.languageMap ? this.languageMap.languageMap : {};
+    return supportedLanguages(this.languageMap);
   }
 
   /**

@@ -8,6 +8,7 @@ utility methods with fully mocked ArangoDB, LangChain, aiohttp, and OpenAI deps.
 """
 
 import asyncio
+import contextlib
 import json
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -15,8 +16,20 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
+try:
+    import fcntl  # POSIX file locking — the service runs in a Linux container
+except ModuleNotFoundError:  # Windows dev checkout: locking degrades to a no-op
+    fcntl = None  # type: ignore[assignment]
+
 import dataprep.genieai_dataprep_arangodb as dp_module
+import dataprep.genieai_dataprep_microservice as ms
 from dataprep.genieai_dataprep_arangodb import GenieArangoDataprep
+
+# The lock-acquisition tests assert on fcntl itself. POSIX locking does not
+# exist on a Windows dev checkout, so those tests are skipped there (the
+# microservice degrades to a no-op lock); they run everywhere else, including
+# CI and the Linux container image.
+requires_fcntl = pytest.mark.skipif(fcntl is None, reason="POSIX fcntl is unavailable on this platform")
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -2412,27 +2425,124 @@ class TestDocRepoIngestPayload:
         payload = DocRepoIngestPayload(**self._payload(chunkOverlap=150))
         assert payload.chunkOverlap == 150
 
-    def test_chunk_overlap_rejects_negative(self):
-        """Negative chunkOverlap would collapse the splitter into a single mega-chunk; reject at runtime."""
-        from unittest.mock import patch
+    @contextlib.contextmanager
+    def _ingest_mocks(self):
+        """Shared patch set for exercising the real ingest_file_from_repo.
 
-        from dataprep import genieai_dataprep_microservice as ms
+        Yields (ms, mock_loader, flock_mock): the microservice module (so
+        tests can patch against it), the loader mock, and the module-wide
+        fcntl.flock mock.
+        """
+        with (
+            patch.object(ms, "loader") as mock_loader,
+            patch.object(ms, "tracer"),
+            patch.object(ms, "active_ingestion_tasks", {}),
+            patch.object(ms, "upload_folder", "/tmp/test-ingest"),
+            patch("builtins.open", MagicMock()),
+            patch("fcntl.flock") as flock_mock,
+        ):
+            mock_loader.ingest_file_with_guardrail = AsyncMock()
+            yield ms, mock_loader, flock_mock
+
+    @pytest.mark.asyncio
+    @requires_fcntl
+    async def test_chunk_overlap_rejects_negative(self):
+        """Negative chunkOverlap would collapse the splitter into a single mega-chunk; rejected with 400 pre-lock."""
+        from fastapi import HTTPException
 
         payload = ms.DocRepoIngestPayload(**self._payload(chunkOverlap=-50))
+        with self._ingest_mocks() as (_ms, _loader, flock_mock), pytest.raises(HTTPException) as exc_info:
+            await ms.ingest_file_from_repo(payload)
+        assert exc_info.value.status_code == 400
+        assert "chunkOverlap must be >= 0" in exc_info.value.detail
+        # "Pre-lock" is a promise: the rejection must not even acquire it.
+        flock_mock.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "bad_name",
+        ["../escape.md", "/absolute/path.md", "a\x00b.md", "..", ""],
+    )
+    @requires_fcntl
+    async def test_file_name_must_be_bare(self, bad_name):
+        """A non-bare fileName is a traversal write/delete primitive; rejected with 400 pre-lock."""
+        from fastapi import HTTPException
+
+        payload = ms.DocRepoIngestPayload(**self._payload(fileName=bad_name))
+        with self._ingest_mocks() as (_ms, _loader, flock_mock), pytest.raises(HTTPException) as exc_info:
+            await ms.ingest_file_from_repo(payload)
+        assert exc_info.value.status_code == 400
+        assert "bare file name" in exc_info.value.detail
+        flock_mock.assert_not_called()
+
+    @pytest.mark.asyncio
+    @requires_fcntl
+    async def test_failed_start_releases_the_lock(self):
+        """A cancellation between lock acquisition and task creation must unlock.
+
+        CancelledError is a BaseException: it bypasses the except handler, so
+        only the finally can release the lock — the regression this test
+        guards is the release moving back into the except.
+        """
+        payload = ms.DocRepoIngestPayload(**self._payload())
+        lock_mock = MagicMock()
         with (
-            patch.object(ms, "get_chunk_size_for_file", return_value=500),
-            patch.dict("os.environ", {}, clear=False),
-            patch.object(ms, "os") as os_mock,
+            self._ingest_mocks() as (_ms, _loader, flock_mock),
+            patch.object(ms.os, "open", return_value=7),
+            patch.object(ms.os, "fdopen", return_value=lock_mock),
+            patch.object(ms.base64, "b64decode", side_effect=asyncio.CancelledError()),
+            pytest.raises(asyncio.CancelledError),
         ):
-            os_mock.getenv.return_value = None  # env override absent
-            with pytest.raises(ValueError, match="chunkOverlap must be >= 0"):
-                # The handler validates CHUNK_OVERLAP before launching the background task.
-                # Simulate the first half of ingest_file_from_repo inline.
-                chunk_overlap = payload.chunkOverlap
-                if chunk_overlap is None:
-                    chunk_overlap = int(ms.os.getenv("DATAPREP_CHUNK_OVERLAP", 50))
-                if chunk_overlap < 0:
-                    raise ValueError(f"chunkOverlap must be >= 0, got {chunk_overlap}")
+            await ms.ingest_file_from_repo(payload)
+        # fcntl.flock is patched module-wide by the helper; the handler
+        # releases through that same mock.
+        flock_mock.assert_any_call(lock_mock, fcntl.LOCK_UN)
+        lock_mock.close.assert_called_once()
+
+    @pytest.mark.asyncio
+    @requires_fcntl
+    async def test_successful_start_keeps_the_lock_with_the_task(self):
+        """On the success path the handler must NOT release the lock or close
+        the file: the background task owns both until it finishes."""
+        payload = ms.DocRepoIngestPayload(**self._payload(fileBase64="aGk="))
+        lock_mock = MagicMock()
+        with self._ingest_mocks() as (_ms, mock_loader, flock_mock):
+            fake_task = MagicMock()
+            with (
+                patch.object(ms.os, "open", return_value=7),
+                patch.object(ms.os, "fdopen", return_value=lock_mock),
+                patch.object(ms.asyncio, "create_task", return_value=fake_task),
+            ):
+                result = await ms.ingest_file_from_repo(payload)
+        assert result["success"] is True
+        mock_loader.ingest_file_with_guardrail.assert_called_once()
+        # The lock and the file were handed to the task untouched: no unlock
+        # call, no close.
+        unlock_calls = [c for c in flock_mock.call_args_list if len(c.args) > 1 and c.args[1] == fcntl.LOCK_UN]
+        assert unlock_calls == []
+        lock_mock.close.assert_not_called()
+
+    @pytest.mark.asyncio
+    @requires_fcntl
+    async def test_failed_start_removes_the_saved_file(self):
+        """A failure after the upload was written but before the task exists
+        must reclaim the partially written file."""
+        payload = ms.DocRepoIngestPayload(**self._payload(fileBase64="aGk="))
+        with (
+            self._ingest_mocks() as (_ms, _loader, _flock),
+            patch.object(ms.os, "open", return_value=7),
+            patch.object(ms.os, "fdopen"),
+            patch.object(
+                ms,
+                "ArangoDBDataprepRequestFromDocRepo",
+                side_effect=RuntimeError("request build failed"),
+            ),
+            patch.object(ms.os, "remove") as remove_mock,
+            patch.object(ms.os.path, "exists", return_value=True),
+            pytest.raises(RuntimeError, match="request build failed"),
+        ):
+            await ms.ingest_file_from_repo(payload)
+        remove_mock.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

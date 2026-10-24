@@ -173,7 +173,7 @@ const BEARER_B = 'Bearer token-user-b';
 const chatBody = (authorization) => ({
   sessionId: 'session-e2e',
   messages: [{ role: 'user', content: 'Que servicios hay?' }],
-  context: { categoryLabel: null, serviceLabels: [], language: 'EN' },
+  context: { categoryLabel: null, serviceLabels: [], language: 'en' },
   // the raw header is forwarded by the route — carry the caller identity here
   authorization
 });
@@ -243,7 +243,7 @@ describe('e2e fan-out wire-up (Story 1.1)', () => {
     expect(payload.context).toEqual({
       categoryLabel: null,
       serviceLabels: [],
-      language: 'EN'
+      language: 'en'
     });
     expect(Object.keys(payload.context).sort()).toEqual(['categoryLabel', 'language', 'serviceLabels']);
   });

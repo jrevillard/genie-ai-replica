@@ -2,6 +2,27 @@ const express = require('express');
 const router = express.Router();
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
+const { isUnsupportedLanguage, unsupportedLanguageBody } = require('../services/translation/unsupported-language');
+
+/**
+ * Answers a refused language with the 400 it is.
+ *
+ * The language travels in the request body, so an unsupported one is a bad
+ * request, not a server error. The status code comes from the error itself
+ * (the refusal is a validation error), and the response names the refused
+ * side only — the caller's value is never echoed back.
+ *
+ * @param {Error} error - The refusal the translation service raised.
+ * @param {object} res - The Express response.
+ * @returns {object} The response the route returns.
+ */
+function respondWithUnsupportedLanguage(error, res) {
+  logger.warn(`[TRANSLATION-ROUTES] Rejected request: ${error.message}`);
+  // The status code comes from the error (the refusal is a validation
+  // error); a refusal that crossed a module boundary without one is still a
+  // bad request. The body is the one every refusal is answered with.
+  return res.status(error.statusCode || 400).json(unsupportedLanguageBody(error));
+}
 
 /**
  * @swagger
@@ -64,7 +85,10 @@ module.exports = (translationService) => {
    *                   items:
    *                     type: string
    *       '400':
-   *         description: Bad Request - Missing parameters or unsupported language.
+   *         description: >-
+   *           Bad Request - Missing parameters or unsupported language. A
+   *           language the deployment cannot translate into is refused
+   *           whether or not the request had anything to translate.
    *       '401':
    *         description: Unauthorized - Authentication required.
    *       '500':
@@ -79,6 +103,7 @@ module.exports = (translationService) => {
         '[TRANSLATION-ROUTES] Bad request: Missing or invalid "texts" array, "source_lang", or "target_lang".'
       );
       return res.status(400).json({
+        error: 'MISSING_PARAMETERS',
         message: 'Request body must include a "texts" array, a "source_lang" string, and a "target_lang" string.'
       });
     }
@@ -88,6 +113,13 @@ module.exports = (translationService) => {
       res.json({ translated_texts: translatedTexts });
       logger.info(`[TRANSLATION-ROUTES] Successfully sent ${translatedTexts.length} translated texts to client.`);
     } catch (error) {
+      // An unsupported language is a bad request, not a server error: the
+      // language comes from the request body and the translator refuses the
+      // ones its language map does not know. The response names the refused
+      // side only — the caller's value is never echoed back.
+      if (isUnsupportedLanguage(error)) {
+        return respondWithUnsupportedLanguage(error, res);
+      }
       logger.error(`[TRANSLATION-ROUTES] Error translating content: ${error.message}`, { stack: error.stack });
       next(error); // Pass to the global error handler
     }
@@ -148,6 +180,7 @@ module.exports = (translationService) => {
         '[TRANSLATION-ROUTES] Bad request: Missing or invalid "markdown" string, "source_lang", or "target_lang".'
       );
       return res.status(400).json({
+        error: 'MISSING_PARAMETERS',
         message: 'Request body must include a "markdown" string, a "source_lang" string, and a "target_lang" string.'
       });
     }
@@ -157,6 +190,10 @@ module.exports = (translationService) => {
       res.json({ translated_markdown: translatedMarkdown });
       logger.info('[TRANSLATION-ROUTES] Successfully sent translated markdown to client.');
     } catch (error) {
+      // An unsupported language is a bad request, not a server error.
+      if (isUnsupportedLanguage(error)) {
+        return respondWithUnsupportedLanguage(error, res);
+      }
       logger.error(`[TRANSLATION-ROUTES] Error translating markdown: ${error.message}`, { stack: error.stack });
       next(error); // Pass to the global error handler
     }

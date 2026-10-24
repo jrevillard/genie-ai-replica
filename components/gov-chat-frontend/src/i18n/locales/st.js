@@ -776,6 +776,8 @@ export default {
     relatedDocs: 'Ditokomane tse Amanang',
     noDocuments: 'Ha ho ditokomane tse amanang',
     faq: 'Dipotso tse Botswang Kgafetsa (FAQ)',
+    faqError: 'The FAQ could not be loaded.',
+    faqTranslationUnavailable: 'Translation unavailable — showing the original English.',
     tab: {
       all: 'Meqoqo Yotlhe',
       folders: 'Diphuthedi',
@@ -1249,6 +1251,7 @@ export default {
   },
   chatbot: {
     streamingError: 'Karabo e emisetsoe. Re leke hape.',
+    unsupportedLanguage: 'This language is not available for this deployment.',
     aiGeneratedNoDocs: "E hlahisitsoe ke AI — ha e ea thehoa holim'a litokomane tsa laeborari",
     translationUnavailable: 'Translation unavailable — this answer may contain untranslated text.',
     welcomeMessage: 'Rea u amohela! Nka u thusa joang kajeno?',

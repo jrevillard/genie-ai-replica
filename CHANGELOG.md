@@ -55,9 +55,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that span no longer reads as zero because abstentions went unrecorded.
   **Note on streamed token usage:** `llm.usage.*` on a streamed turn depends on
   `stream_options: {include_usage: true}` surviving the chatqna → textgen → vLLM
-  chain. That has not been verified against a running deployment; on a streamed
-  turn the usage attributes are omitted rather than guessed if the flag does not
-  arrive. The non-streamed path records usage unconditionally.
+  chain. Verified against the shared vLLM 0.29 endpoint on 2026-10-24 (the flag
+  survives; see the Fixed entry below). On a streamed turn the usage attributes
+  are omitted rather than guessed if the flag does not arrive. The non-streamed
+  path records usage unconditionally.
 
 - **Trace-to-query correlation:** the spans on a chat turn carry
   `genie.query_id`, so a trace can be joined to the stored query document. The
@@ -90,6 +91,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Query-instruction prefix for contrastive / instruction-tuned embedding models.** `QueryInstructionEmbeddingsWrapper` prepends the model-specific instruction to `embed_query` only — `embed_documents` (passage encoding during ingestion) passes through verbatim, preserving the query/passage asymmetry. Built-in coverage: `BAAI/bge-{large,base,small}-{en,zh}-v1.5`, `hkunlp/instructor`, `nomic-ai/nomic-embed`. Deployers extend via the `EMBEDDING_QUERY_INSTRUCTIONS` env var (`substring=instruction,substring=instruction`). The shared TEI embedding service stays prefix-free, so dataprep ingestion (passages) and retrieval (queries) coexist on a single microservice. Measured A/B on the live corpus (42 gold queries vs 850 chunks): +1.62% retrieval recall at K=32, +1.85% at K=50. No re-ingest required. **Behavior change for deployments using the local `HuggingFaceBgeEmbeddings` fallback** (no `TEI_EMBEDDING_ENDPOINT` set): langchain's default `query_instruction` (`"Represent this question for searching relevant passages: "`, with **"question"**) is cleared and replaced by the BAAI-canonical English string (`"Represent this sentence for searching relevant passages: "`, with **"sentence"**). The wrapper applies the prefix; langchain no longer does. Deployment paths that bypass the wrapper (direct `HuggingFaceBgeEmbeddings.embed_query()` usage outside the retriever) keep the langchain default. (#1035)
 - **Condense-question rewrite (multi-turn retrieval mode):** a new `MULTI_TURN_MODE=condense` handles follow-up questions — one short LLM call rewrites each follow-up into a standalone retrieval query, so corrections ("forget the beans, tell me about maize planting") and pronoun follow-ups ("what is its yield?") retrieve the right documents instead of carrying the rejected or implicit subject in the query embedding. Retrieval and reranking use the rewritten query; the answer prompt keeps the original question and history. Fail-closed: a failed rewrite fails the turn with HTTP 503 rather than answering on a wrong retrieval. Tunables: `MULTI_TURN_CONDENSE_HISTORY_TURNS` (default 8 segments = 4 exchanges), `MULTI_TURN_CONDENSE_MAX_TOKENS` (256), `MULTI_TURN_CONDENSE_TIMEOUT_SECONDS` (5.0), `MULTI_TURN_CONDENSE_SYSTEM_PROMPT` (override the rewrite prompt — a custom prompt must still demand JSON-only output). The default mode is unchanged (`blend`).
 
+### Changed
+
+- **On iOS and macOS, the trust-all TLS interception of the vendored
+  `flutter_appauth` fork is now scoped to the OIDC provider's host.** The
+  fork registered its `NSURLProtocol` process-globally for the duration of an
+  insecure exchange (`allowInsecureConnections: true` — the `dev` and `e2e`
+  flavors), so every request the app made during that window — API calls,
+  telemetry, image fetches — was intercepted and its certificate check
+  skipped. Registration now arms the provider's host and port (resolved
+  from the request's `serviceConfiguration` endpoints, or its issuer or
+  discovery URL) and the protocol refuses every other one, so unrelated
+  traffic keeps its verification even mid exchange. Production flavors run
+  with the flag off and are unaffected. Structured guards pin the scoping on
+  both platforms.
+
 ### Fixed
 
 - **RAGAS benchmarks scored a different answerer than the chat (8-6):** the run's answer leg used a condensed system prompt plus a bare-JSON "answer the question" instruction, producing terse extractive answers ("101,746") where the deployed chat answers in full grounded sentences. RAGAS `answer_relevancy` reverse-generates questions *from the answer text*, so a bare number — factually perfect, faithfulness/context metrics at 1.0 — measured ~0.42 and was marked failing while the real chat answered the same question well (live-measured on the same question, contexts and judge: terse 0.415 vs chat-shaped 1.00). The answer leg now serves with the **verbatim chatqna contract** (or the deployment's pinned `CHATQNA_SYSTEM_PROMPT`, which docker-compose now forwards to okf-server so a pin shapes the chat and the benchmark identically), and the user message mirrors how chatqna presents relevant content. Existing run results were scored by the old answerer — re-run suites to get chat-representative scores.
@@ -99,6 +115,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The benchmark panel named a judge the run was not using (8-6/8-7).** A generation carried an explicit judge pick while the panel displayed "Deployment default" — a label that resolves to the deployment's *active* configuration, which was a different model entirely (the run was silently scored against a personal low-tier key while the UI implied the production one). The server now resolves the effective judge **before** dispatch and publishes it in the live progress envelope ("Judging with <configuration> (<model>)"); "Deployment default" names the active configuration and its model rather than hiding behind a generic word; and a pick the selector cannot display is dropped rather than sent silently. The panel's judge labels were also reading the wrong i18n namespace (`okf.ragas.judge.*` instead of the locales' `okf.ragas.generate.*`), so they had been falling back to English in **all 14 locales** — fixed and translated.
 - **One dropped connection destroyed 74 minutes of benchmark work (8-6).** The knowledge-graph build died on a single `Server disconnected without sending a response` and took the whole run with it, even though 2,057 judge answers were already cached and reusable. Transport-family failures (connection/timeout/protocol errors) are now retried on the same jittered backoff as a rate limit, and the knowledge-graph phase degrades a dead node to an empty result and **reports it** in the run's `kg_failures` rather than aborting the run. Only a malformed request (HTTP 400) surfaces immediately.
 - **A progress count of zero is "not counted yet", not "nothing happened" (8-6).** During the knowledge-graph build the panel reported "Building the knowledge graph 0/1075" for over 20 minutes while the work was demonstrably running — the count increments per *finished* transform, and a judge-backed transform's nodes finish minutes apart, so a long phase looks permanently stalled. A zero count is no longer printed, the bar animates as indeterminate while it is zero, the sidecar reports a counter of judge calls **as issued** (so a line always advances), and the elapsed clock is recomputed on every poll rather than only when a phase reports something. A number that never moves is worse than no number.
+- **Static-analysis follow-ups on the application code (SAST wave-7).**
+  The translation example's two `requests.post` calls ran without a timeout
+  and could hang on a stalled upstream — the translate call now times out
+  after 30 s and the retriever call after 120 s, and the endpoint returns a
+  fixed error message instead of echoing the upstream exception text. The
+  chatqna `align_outputs` integrity checks used `assert`, which `python -O`
+  strips — they now raise `ValueError` unconditionally. The dataprep
+  ingestion lock file in the shared `/tmp` is opened with `O_NOFOLLOW` and
+  mode `0600`, so a pre-planted symlink cannot redirect it, and a failed
+  ingestion start no longer leaks the lock or leaves the decoded file
+  behind. See `docs/security/cve-triage-2026q3.md` (wave-7) for the full
+  triage, including the findings verified as non-issues. (#1101)
+
+- **A mobile release build made without the `FLAVOR` dart-define now fails at
+  startup instead of silently running the dev configuration.** `getConfig()`
+  resolved the flavor from the `FLAVOR` compile-time define and fell back to
+  `dev` when it was absent — so a release built without the define shipped
+  with every endpoint pointed at `localhost` (the app could not authenticate
+  anywhere) and the trust-all TLS client armed. In release or profile mode the
+  missing define now throws a clear `StateError`; a debug `flutter run`
+  without the define keeps the dev default for convenience. The guard is
+  exercised in CI (`flutter test --dart-define=dart.vm.product=true`) and the
+  documented build commands already set both selectors
+  (`--flavor <name> --dart-define=FLAVOR=<name>`). Deriving the define from
+  the build flavor itself remains open on the same issue. (#1099)
+- **In the vendored `flutter_appauth` fork (Android), an end-session request
+  could reuse the TLS setting of the previous sign-in instead of its own.**
+  The end-session processor read `allowInsecureConnections` into a local
+  variable while the connection builder and the authorization service read
+  the plugin field — a field that only the sign-in and token paths assign.
+  An end-session call therefore ran on whatever the previous call had set:
+  after an insecure sign-in, a logout that asked for certificate verification
+  still used the trust-all client, and on a fresh process the discovery fetch
+  could use the wrong builder too. The flag is now read into the field, and a
+  missing key defaults to `false` instead of throwing. No shipped code path
+  calls the fork's end-session API today — the app's logout talks to Keycloak
+  directly — so this hardens the vendored API surface rather than a user flow.
+  A structural regression test in
+  `test/config/flutter_appauth_insecure_gate_test.dart` fails if a rebased
+  fork reintroduces the local. (#1102)
+- **Streamed chat answers could end with raw transport JSON.** (!595) ChatQnA
+  requests streamed token usage from vLLM (`stream_options.include_usage`,
+  for the `llm.invoke` span); the terminal usage-only frame of that stream was
+  re-emitted by the orchestrator as if it were answer text, so answers
+  displayed in the web UI and mobile app — and scored by the RAGAS judge —
+  ended with a `{"id":"chatcmpl-...","usage":{...}}` tail. The orchestrator now
+  only re-emits lines it could not parse as JSON; any parsed frame that carries
+  no forwardable content (the usage-only frame, a keepalive with
+  `"choices": null`) feeds the tracing span and is skipped instead of leaking
+  its raw JSON. Any deployment of a chatqna build that streams with the
+  `include_usage` opt-in was exposed — the opt-in is sent on every streamed
+  turn whether or not observability is enabled. Answers on
+  `release/el-salvador` were never exposed (that build does not send the
+  opt-in).
 - **Virus scanning could not reach a ClamAV service running beside the
   document repository.** `CLAMSCAN_HOST` was read into the configuration and
   then dropped before it reached the scanner, so the scanner always dialled
@@ -222,6 +292,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Retriever summarizer silently propagated a 500 to chatqna when the summarization prompt exceeded the vLLM context window (`enable_summarizer=True` path in `genie-ai-overlay/retriever/genieai_retriever_arangodb.py::_initialize_llm`'s caller). Now classifies the same overflow markers and SKIPS summarization for that chunk — keeping the original `page_content` rather than crashing the chat — and emits the OTel span attributes `retriever.summarizer.input_too_long=true`, `retriever.summarizer.overflow_count=<N>`, and `retriever.summarizer.overflow_doc_ids=<json list>` once per ingest (cumulative counter + skipped doc ids, not a per-chunk boolean) so operators triage via VictoriaTraces which docs need a chunk-size override.
 - **Abstention path translation overflow no longer returns HTTP 500 for non-EN users** (`genie-ai-overlay/chatqna/genieai_chatqna.py`): when the reranker aborts to the abstention branch with a non-EN `original_language` AND the translation service rejects the abstention text for exceeding the model's context window, the previously-unhandled `TranslationInputTooLongError` escaped the branch and surfaced as HTTP 500 to the user — breaking the documented `HTTP 200 + abstained=True + abstention_reason=reranker_input_too_long` contract. The abstention call to `_finalize_llm_response` now wraps the exception, falls back to the English source text, and stamps `metadata.translation_status="failed"` so the contract holds across the translation failure.
 - **TEI `--auto-truncate` value normalized to lowercase across all 4 entrypoints** (root `docker-compose.yaml` `tei` + `tei_reranker`; GPU `docker-compose.gpu.yaml` `tei-embedding` + `tei-reranker`; `deploy/ansible/templates/docker-compose.gpu.yaml.j2`): operators can now set `TEI_EMBEDDING_AUTO_TRUNCATE=True` / `TEI_RERANKING_AUTO_TRUNCATE=Yes` in `.env` (Python-style booleans) without the TEI CLI rejecting the value at boot with `invalid bool value` (TEI's `text-embeddings-router` only accepts lowercase `true`/`false`). The normalization (`$(printf '%s' "$VAR" | tr '[:upper:]' '[:lower:]')` in compose, `| lower` in the Jinja2 template) is applied at runtime, so the rendered command remains a single inline string and no entrypoint script or volume mount is required. Hardening applies to both the embedding (`bge-large-en-v1.5`) and reranker (`bge-reranker-v2-m3`) containers.
+- **Every markdown translation left an hour-long timer pending.** `translateMarkdown` raced the translation against a one-hour timeout but never cleared the timer, so every translated answer kept an outstanding handle alive for the rest of the hour. The timer is now cleared once the race settles, whatever the outcome.
 
 ### Changed
 
@@ -303,6 +374,7 @@ Shortening any of these converts a slow-but-successful call into a visible failu
 - **Certificate verification is no longer disabled on unrelated calls.** The startup hook that injects the GPU node's `Authorization` header into `requests` calls also forced `verify=False` on all of them, so every deployment that set a `VLLM_API_KEY` — i.e. every remote-GPU deployment — silently lost certificate verification for those calls, whether or not the endpoint needed it. Verification now follows `OPEA_SSL_SKIP_VERIFY`, matching the rest of the hook. The affected surface is `requests` calls inside the OPEA overlay images: the model endpoints (which is exactly the self-signed GPU node the opt-out exists for) and ArangoDB via python-arango — the latter over plain `http://` by default, so `verify` was moot there unless a deployment fronts ArangoDB with TLS. The backend and the document repository were never on this path: they are Node images with no `.pth` hook, and the overlay reaches them over `aiohttp`, which this hook only ever gave an `Authorization` header to. **Deployer impact:** a deployment pointing at a GPU node with a self-signed certificate that relied on the unconditional bypass must now set `OPEA_SSL_SKIP_VERIFY=1` (already documented in `env`); without it, calls to that node fail with a certificate error. **This bites the stock Ansible combination**: `gpu_node_host` set plus the `gpu_self_signed_certs: true` default, which is the documented remote-GPU setup. That deployment now needs `opea_ssl_skip_verify: "1"` in its `group_vars/<env>/vars.yml` — it will otherwise deploy cleanly and fail at its first model call. The value is deliberately NOT derived from `gpu_self_signed_certs`: switching off certificate verification is not a decision a template should make on the operator's behalf.
 - **Known, still open: the GPU node's API key is sent to services that never needed it.** The same startup hook now gates `verify=False`, but it still injects `Authorization: Bearer $VLLM_API_KEY` into *every* `aiohttp` and `requests` call in the process, whatever the destination. The reachable case is dataprep's Keycloak service-account token fetch (`dataprep/keycloak_service_account.py`), which carries its own service-account header and no `Authorization`, so the GPU key goes to Keycloak — landing in its access logs and in anything that logs request headers upstream. Calls that build their own `Authorization` are unaffected (`setdefault` respects them) and py-arango is unaffected (it authenticates after this wrapper runs). This is left as-is here because the fix — scoping the injection to the GPU/TEI/vLLM hosts — changes authentication on the hot path of every model call and needs validation inside the built image, which no local suite can do. Design and routes are written up in `genie-ai-overlay/build-patches/comps_http_budget_debt.py` § "Adjacent finding"; tracked rather than silently shipped.
 - **chatqna rejects unauthenticated requests:** `handle_request` now requires a `Bearer` token in the `Authorization` header and validates it against the Keycloak JWKS before reaching any business logic. Missing, malformed, or invalid tokens raise `HTTPException(status_code=401)`. The Bearer scheme is matched case-insensitively per RFC 7235 §2.1. The validated token is threaded as a function argument through `fetch_file_metadata`, `get_user_profile`, `_assemble_source_documents`, and `_stream_with_metadata`; no token state lives on the service instance or `request.state`, so concurrent requests cannot leak each other's tokens on outbound service-to-service calls. The legacy `tests/testing_genieai_chatqna.py` (a manual end-to-end CLI harness with its own copy of the old `set_token`/`_token` API) is removed.
+- **The requested target language can no longer reach a translation prompt as free text.** The language travels in the request body (`context.language`), so it is caller-controlled: chatqna interpolated it straight into the translation prompt ("Translate the following text to <language>"), and the backend's translation service reached the same prompts through the model-specific language maps, where an inherited key such as `constructor` was handed out as a language name. A caller could therefore put instructions where a language belongs. The language is now resolved against the shipped language map on both sides, and an unknown code is refused rather than translated: the backend answers `400` and names only the refused side (the caller's value is never echoed back), and chatqna returns the English answer and logs the refusal. The name and the code that go into a prompt are taken from the map only, and the map lookups use own properties only, so an inherited key is not a language. The prompt also asks for the script the target language is written in, taken from a shipped table: a translation into a non-Latin language is no longer asked for in the Latin alphabet, and the source language is no longer named in the prompt by a hard-coded list. A source language is refused the same way: `POST /api/translate` and `POST /api/translate/markdown` take a `source_lang` from the request body, and it is now resolved against the language map before it is used. The chat path (`POST /api/queries`, and its streaming form `POST /api/queries/stream`) takes no source language — it detects the conversation's language itself. The backend resolves both languages once per request, before the cache lookup, and the translation cache key now carries the source language as well as the target one — as the codes the model is asked for, so a translation cached for one source language is not served for another, and two languages the model answers alike share one entry. The map is read once and kept in memory; a map that could not be read is remembered as unreadable for one minute and retried after that, so a transient read failure does not disable translation for the life of the process. **Deployer impact:** the backend and chatqna both read their language map at startup — after changing the language map files, restart both services, otherwise the running ones keep the map they read at startup. A refused language no longer steers the answer: chatqna keeps the answer in English and detects the language the question was actually written in, so the conversation history is normalized instead of being embedded untranslated (when the detection itself fails, there is no source language to translate from and the history is embedded as it is, as it was before). The history is normalized to **English** — the language the embeddings are in — and no longer follows the requested language: that target is now a constant of the service, so no request, and no later edit, can point the history at another language. The requested language steers the answer, not the history. An unknown target leaves the history untranslated instead of putting the caller's string into a prompt. A language the translation models do not cover is refused up front: the chat routes answer `400` with `{error: "UNSUPPORTED_LANGUAGE", message}` before anything is generated, so an answer is never produced in a language the caller did not ask for. A translation that fails for another reason — the translator is down, the call times out — is not the caller's mistake: the request goes through, the answer is delivered in English, and the stream reports the failure on the `done` frame (`translationFailed: true`) so the client can say so instead of presenting the English original as a translation. The non-streaming path reports it the same way, in the answer's metadata (`translation_status`: `ok`, `refused` or `failed`), so a client that reads the metadata can tell a translated answer from an untranslated one. chatqna's language map was missing 24 of the languages the backend supports, so the boundary would have refused them; the two lists are now the same 41 languages — the backend maps gained Hindi, Japanese and Korean, which chatqna already sent to the same models but the backend refused — and a parity test fails the build if they drift apart again. (#1097, !589)
 
 ### Added
 
@@ -325,6 +397,7 @@ Shortening any of these converts a slow-but-successful call into a visible failu
 - **`OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` env var.** No longer read; the docker fluentd driver has its own collector address.
 - **`ADMIN_LOGS_SOURCE` env var.** No longer read; VictoriaLogs is the only source. Setting it has no effect.
 - **`VL_FAIL_OPEN` env var.** Replaced by the typed `503 / vl_unreachable` contract — there is no longer a soft-fail mode.
+- **The fallback language of the translation language maps.** Each shipped map named a fallback language: a request for a language the map did not know was answered in the language the map named as its fallback — silently, in a language the caller never asked for. The shipped maps only ever named fallbacks for languages they also supported, so the chain never walked in practice, but the mechanism was one map edit away from answering a French request in Spanish. The fallback is gone from the maps and from the backends: an unknown language is now always refused, never substituted. (#1097)
 - **`LOG_TO_FILE` host bind mounts.** The `${DATA_DIR}/logs/{backend,doc-repo}:/app/logs` bind mounts are removed from `docker-compose.yaml`. The runtime `LOG_TO_FILE` boolean env var still works as an audit-retention escape hatch for operators who want to re-enable local file rotation, but they must now manually re-add the `/app/logs` bind mount if they do so (a comment in `env` documents this).
 
 ### Fixed
@@ -334,6 +407,9 @@ Shortening any of these converts a slow-but-successful call into a visible failu
 - **Python `uvicorn.access` logs correlated with traces.** uvicorn HTTP access logs from OPEA services now include `trace_id` / `span_id` (previously they were plain text and uncorrelatable). (#343)
 - **Log loss under burst ingest.** The docker fluentd driver buffer was saturated at 1 MB during ingest peaks and dropped records before they reached the collector. Bumped to 8 MB / 5 retries / 2 s backoff in the `x-logging` compose anchor. (#343)
 - **Bare-severity rows in the admin logs TYPE column.** Python uvicorn / `logging` module messages no longer surface as `ERROR`, `WARNING`, `INFO` in the admin TYPE column — the leading level prefix is stripped at the collector and the column now shows the actual message head. (#343)
+- **The mobile app answered in English whatever the interface language was.** The mobile chat client never sent the language it wanted the answer in, so the backend had no way to honour it: every answer came back in English. The mobile app now sends the interface language with the query, and — like the web client — says so when the answer could not be translated instead of presenting the English original as a translation. The FAQ sidebar follows the same rule. (#1097, !589)
+- **The web client hid the reason the backend refused a request.** A failed request was reported as `HTTP <status>`, whatever the backend had actually said, so the user never learned why. The backend's message is now shown. (#1097, !589)
+- **The mobile app reported a refused language as a generic failure.** When the backend refuses a language the deployment cannot answer in, the mobile chat client showed only "Error processing your request." The refusal code is now read from the response body and shown as its own message, in the interface language, on both the chat and the FAQ paths. (#1097, !589)
 
 ### Security
 

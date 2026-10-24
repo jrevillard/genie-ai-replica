@@ -303,6 +303,8 @@ const Map<String, dynamic> manLocale = {
     "relatedDocs": "Kaitolu nulu",
     "noDocuments": "Kaitolu nulu te je",
     "faq": "Nyininkarolu (FAQ)",
+    "faqTranslationUnavailable":
+        "Translation unavailable — showing the original English.",
     "tab": {
       "all": "Kumoolu biling",
       "folders": "Folodaalu",
@@ -1000,11 +1002,16 @@ const Map<String, dynamic> manLocale = {
   },
   "chatbot": {
     "aiGeneratedNoDocs": "AI-generated — not based on library documents",
+    "translationUnavailable":
+        "Translation unavailable — this answer may contain untranslated text.",
     "placeholder": "I la nyininka safee jang...",
     "sendButton": "Kii",
     "fileReceived": "Kaito sotota a benta.",
     "fileUploadError": "Kaito wulu manta.",
     "processingError": "I la nyininka sabang manta.",
+    "unsupportedLanguage":
+        'This language is not available for this deployment.',
+    "noResponse": "No response received.",
     "attachFile": "Kaito dii",
     "fileTooLarge": "Kaito baa tiyaata. A ka kanyaming le {maxSize} koto.",
     "saveChat": "Kumoo mara",

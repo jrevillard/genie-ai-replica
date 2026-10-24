@@ -6,7 +6,7 @@ import 'dart:convert';
 /// - chunk: Incremental LLM token
 /// - metadata: Source documents and confidence score
 /// - translation: Translated response replacing streamed content
-/// - done: Stream complete, carries queryId
+/// - done: Stream complete, carries queryId and the translation failure flag
 /// - error: Stream-level error from the backend
 sealed class SseEvent {
   const SseEvent();
@@ -37,7 +37,16 @@ class SseTranslationEvent extends SseEvent {
 
 class SseDoneEvent extends SseEvent {
   final String? queryId;
-  const SseDoneEvent(this.queryId);
+
+  /// Whether the answer could not be translated into the requested language.
+  ///
+  /// The backend translates the answer after the stream ends. When that
+  /// translation fails, the answer the client holds is the English original:
+  /// the flag is what tells the client to say so instead of showing English
+  /// as if it were the requested language.
+  final bool translationFailed;
+
+  const SseDoneEvent(this.queryId, {this.translationFailed = false});
 }
 
 class SseErrorEvent extends SseEvent {
@@ -113,7 +122,10 @@ class SseParser {
         responseTime: json['responseTime'] as int?,
       ),
       'translation' => SseTranslationEvent(json['content'] as String? ?? ''),
-      'done' => SseDoneEvent(json['queryId'] as String?),
+      'done' => SseDoneEvent(
+        json['queryId'] as String?,
+        translationFailed: json['translationFailed'] == true,
+      ),
       'error' => SseErrorEvent(
         json['message'] as String? ?? 'Unknown error',
         code: json['code'] as String?,

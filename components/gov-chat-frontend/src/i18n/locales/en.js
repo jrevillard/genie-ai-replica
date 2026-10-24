@@ -772,6 +772,8 @@ export default {
     relatedDocs: 'Related Documents',
     noDocuments: 'No related documents',
     faq: 'Frequently Asked Questions',
+    faqError: 'The FAQ could not be loaded.',
+    faqTranslationUnavailable: 'Translation unavailable — showing the original English.',
     tab: {
       all: 'All Chats',
       folders: 'Folders',
@@ -1287,6 +1289,7 @@ export default {
     exportSuccess: 'Chat exported successfully',
     exportError: 'Failed to export chat. Please try again.',
     streamingError: 'Response was interrupted. Please try again.',
+    unsupportedLanguage: 'This language is not available for this deployment.',
     removeItem: 'Remove item'
   },
   quickhelp: {

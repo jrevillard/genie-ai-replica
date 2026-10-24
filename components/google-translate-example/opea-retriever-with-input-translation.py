@@ -1,7 +1,13 @@
+# Copyright (C) 2026 International Telecommunication Union (ITU)
+# SPDX-License-Identifier: Apache-2.0
+
+import logging
+
+import requests
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import requests
-import os
+
+logger = logging.getLogger(__name__)
 
 # Initialize FastAPI
 app = FastAPI()
@@ -22,7 +28,7 @@ class QueryRequest(BaseModel):
 def translate_text(text: str, source_language: str, target_language: str) -> str:
     """Calls the OPEA Google Translate Microservice to translate text."""
     payload = {"text": text, "source_language": source_language, "target_language": target_language}
-    response = requests.post(TRANSLATION_SERVICE_URL, json=payload)
+    response = requests.post(TRANSLATION_SERVICE_URL, json=payload, timeout=30)
     
     if response.status_code != 200:
         raise HTTPException(status_code=500, detail="Translation service failed.")
@@ -41,7 +47,7 @@ async def retrieve_data(request: QueryRequest):
 
         # Step 2: Send translated query to OPEA's retrieval system
         opea_payload = {"query": translated_query}
-        response = requests.post(OPEA_RETRIEVER_URL, json=opea_payload)
+        response = requests.post(OPEA_RETRIEVER_URL, json=opea_payload, timeout=120)
 
         if response.status_code != 200:
             raise HTTPException(status_code=500, detail="Failed to retrieve data from OPEA.")
@@ -58,8 +64,13 @@ async def retrieve_data(request: QueryRequest):
             "final_response": final_response,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Log the cause server-side; the client gets a fixed message so
+        # upstream URLs and exception internals are not echoed back.
+        logger.error("Retrieval failed: %s", e)
+        raise HTTPException(status_code=500, detail="Retrieval failed.") from e
 
 # Run the microservice (for local development)
 if __name__ == "__main__":

@@ -17,130 +17,13 @@ const http = require('http');
 const https = require('https');
 const GpuTranslateBackend = require('../../../services/translation/gpu-translate-backend');
 
-describe('GpuTranslateBackend streaming', () => {
+describe('GpuTranslateBackend translation', () => {
   let backend;
   beforeAll(() => {
     backend = new GpuTranslateBackend();
     backend.initialized = true;
   });
   afterEach(() => jest.clearAllMocks());
-
-  describe('callVllmStream', () => {
-    it('parses SSE deltas, yields via onToken, resolves full text', async () => {
-      const res = new EventEmitter();
-      res.setEncoding = () => {};
-      http.request.mockImplementation((opts, cb) => {
-        const req = new EventEmitter();
-        req.write = () => {};
-        req.end = () => {};
-        process.nextTick(() => {
-          cb(res);
-          res.emit('data', 'data: {"choices":[{"delta":{"content":"Hola"}}]}\n\n');
-          res.emit('data', 'data: {"choices":[{"delta":{"content":" mundo"}}]}\n\n');
-          res.emit('data', 'data: [DONE]\n\n');
-          res.emit('end');
-        });
-        return req;
-      });
-
-      const tokens = [];
-      const full = await backend.callVllmStream({ messages: [{ role: 'user', content: 'hi' }] }, (d) => tokens.push(d));
-      expect(tokens).toEqual(['Hola', ' mundo']);
-      expect(full).toBe('Hola mundo');
-    });
-
-    it('ignores non-JSON / keepalive lines without crashing', async () => {
-      const res = new EventEmitter();
-      res.setEncoding = () => {};
-      http.request.mockImplementation((opts, cb) => {
-        const req = new EventEmitter();
-        req.write = () => {};
-        req.end = () => {};
-        process.nextTick(() => {
-          cb(res);
-          res.emit('data', ': keepalive\n\n');
-          res.emit('data', 'data: not-json\n\n');
-          res.emit('data', 'data: {"choices":[{"delta":{"content":"ok"}}]}\n\n');
-          res.emit('end');
-        });
-        return req;
-      });
-      const full = await backend.callVllmStream({ messages: [] }, () => {});
-      expect(full).toBe('ok');
-    });
-
-    it('rejects on non-2xx status', async () => {
-      const res = new EventEmitter();
-      res.setEncoding = () => {};
-      http.request.mockImplementation((opts, cb) => {
-        const req = new EventEmitter();
-        req.write = () => {};
-        req.end = () => {};
-        process.nextTick(() => {
-          res.statusCode = 500;
-          cb(res);
-          res.emit('data', 'boom');
-          res.emit('end');
-        });
-        return req;
-      });
-      await expect(backend.callVllmStream({ messages: [] }, () => {})).rejects.toThrow(/500/);
-    });
-  });
-
-  describe('translateStream', () => {
-    it('returns empty string for empty/whitespace text', async () => {
-      await expect(backend.translateStream('', 'en', 'es')).resolves.toBe('');
-      await expect(backend.translateStream('   ', 'en', 'es')).resolves.toBe('');
-    });
-
-    it('delegates to callVllmStream and injects a context window (prompt-based model)', async () => {
-      const spy = jest.spyOn(backend, 'callVllmStream').mockResolvedValue('Hola');
-      const ctx = [{ source: 'Hi', target: 'Hola' }];
-      const onToken = jest.fn();
-      const result = await backend.translateStream('Bye', 'en', 'es', ctx, onToken);
-      expect(result).toBe('Hola');
-      expect(spy).toHaveBeenCalledTimes(1);
-      const requestBody = spy.mock.calls[0][0];
-      expect(requestBody.messages[0].content).toContain('Prior context');
-      spy.mockRestore();
-    });
-
-    it('omits context block for TranslateGemma (structured payload)', async () => {
-      const spy = jest.spyOn(backend, 'callVllmStream').mockResolvedValue('x');
-      backend.modelId = 'google/translategemma-4b-it';
-      await backend.translateStream('Bye', 'en', 'es', [{ source: 'a', target: 'b' }], () => {});
-      const requestBody = spy.mock.calls[0][0];
-      expect(JSON.stringify(requestBody)).not.toContain('Prior context');
-      backend.modelId = 'google/gemma-3-4b-it';
-      spy.mockRestore();
-    });
-
-    it('dynamically caps max_tokens so input + output never exceeds maxModelLen', async () => {
-      const spy = jest.spyOn(backend, 'callVllmStream').mockResolvedValue('OK');
-      // Large context window (simulates many prior translation units)
-      const bigContext = Array.from({ length: 10 }, (_, i) => ({
-        source: `Previous unit ${i} with some meaningful translation context.`,
-        target: `Unidad previa ${i} con contexto de traducción significativo.`
-      }));
-      await backend.translateStream('Final sentence.', 'en', 'es', bigContext, () => {});
-      const requestBody = spy.mock.calls[0][0];
-      const inputTokens = Math.ceil(JSON.stringify(requestBody.messages).length / 4);
-      // Invariant: input + max_tokens must fit within maxModelLen
-      expect(requestBody.max_tokens + inputTokens).toBeLessThanOrEqual(backend.maxModelLen);
-      spy.mockRestore();
-    });
-
-    it('keeps a budget proportional to the input for short text without context', async () => {
-      const spy = jest.spyOn(backend, 'callVllmStream').mockResolvedValue('OK');
-      await backend.translateStream('Short text.', 'en', 'es', null, () => {});
-      const requestBody = spy.mock.calls[0][0];
-      // Room is plentiful here — the budget tracks what the translation needs
-      // rather than the whole window, and still clears the prompt.
-      expect(requestBody.max_tokens).toBeGreaterThan(256);
-      spy.mockRestore();
-    });
-  });
 
   describe('formatRequest context budget', () => {
     let capped;
@@ -266,52 +149,6 @@ describe('GpuTranslateBackend streaming', () => {
         'Hola'
       );
     });
-
-    it('rejects a stream that stopped at max_tokens', async () => {
-      const res = new EventEmitter();
-      res.statusCode = 200;
-      res.setEncoding = () => {};
-      http.request.mockImplementation((opts, cb) => {
-        const req = new EventEmitter();
-        req.write = () => {};
-        req.end = () => {};
-        process.nextTick(() => {
-          cb(res);
-          res.emit('data', 'data: {"choices":[{"delta":{"content":"Hola"}}]}\n\n');
-          res.emit('data', 'data: {"choices":[{"finish_reason":"length","delta":{}}]}\n\n');
-          res.emit('data', 'data: [DONE]\n\n');
-          res.emit('end');
-        });
-        return req;
-      });
-      await expect(backend.callVllmStream({ model: 'm', messages: [{ role: 'user', content: 'hi' }] })).rejects.toThrow(
-        /truncated/
-      );
-    });
-
-    it('rejects a stream that produced no content', async () => {
-      // A refusal or a moderation block answers 200 with no deltas. Resolving
-      // the empty string would let the markdown path substitute it for the
-      // paragraph, so the stream rejects like the non-streaming path does.
-      const res = new EventEmitter();
-      res.statusCode = 200;
-      res.setEncoding = () => {};
-      http.request.mockImplementation((opts, cb) => {
-        const req = new EventEmitter();
-        req.write = () => {};
-        req.end = () => {};
-        process.nextTick(() => {
-          cb(res);
-          res.emit('data', 'data: {"choices":[{"finish_reason":"content_filter","delta":{}}]}\n\n');
-          res.emit('data', 'data: [DONE]\n\n');
-          res.emit('end');
-        });
-        return req;
-      });
-      await expect(backend.callVllmStream({ model: 'm', messages: [{ role: 'user', content: 'hi' }] })).rejects.toThrow(
-        /no content/
-      );
-    });
   });
 
   describe('pre-existing methods (coverage)', () => {
@@ -328,19 +165,23 @@ describe('GpuTranslateBackend streaming', () => {
       expect(backend.getLanguageCode('xyz')).toBeFalsy();
     });
 
-    it('isLanguageSupported reflects the language map', () => {
-      expect(backend.isLanguageSupported('en')).toBe(true);
-      expect(backend.isLanguageSupported('es')).toBe(true);
-    });
-
     it('formatRequest builds a gemma-3 chat-completions request with translation instructions', () => {
-      const req = backend.formatRequest('google/gemma-3-4b-it', 'English', 'Spanish', 'Hello world');
+      // The request carries the model-specific codes; the prompt names the
+      // languages from the map.
+      const req = backend.formatRequest(
+        'google/gemma-3-4b-it',
+        backend.getLanguageCode('en'),
+        backend.getLanguageCode('es'),
+        'Hello world'
+      );
       expect(req.model).toBe('google/gemma-3-4b-it');
       expect(req.messages).toBeDefined();
       const prompt = JSON.stringify(req.messages);
       expect(prompt).toContain('Hello world');
-      expect(prompt).toMatch(/English|source/i);
-      expect(prompt).toMatch(/Spanish|target/i);
+      // The prompt names the languages, not the codes: the names come from
+      // the map, so a language the model is asked for is one the map knows.
+      expect(prompt).toContain('English');
+      expect(prompt).toContain('Spanish');
     });
 
     it('callVllmService sends a request and returns the translated text (non-streaming)', async () => {

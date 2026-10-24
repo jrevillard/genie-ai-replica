@@ -43,6 +43,14 @@ const _macosPluginPath =
 /// constructor, so this qualified reference is the only way to reach it.
 final _trustAllBuilder = RegExp(r'InsecureConnectionBuilder\s*\.\s*INSTANCE');
 
+/// A collection literal normalized for comparison: whitespace collapsed to
+/// single spaces and a trailing comma before the closing bracket dropped, so
+/// a reformat that only moves the comma stays green.
+String _collapseLiteral(String literal) => literal
+    .replaceAll(RegExp(r'\s+'), ' ')
+    .replaceAll(', ]', ']')
+    .replaceAll(' ]', ']');
+
 /// Any registration of a URL protocol, whichever protocol it is.
 final _protocolRegistration = RegExp(r'\[\s*NSURLProtocol\s+registerClass:');
 
@@ -109,6 +117,104 @@ void main() {
     });
   });
 
+  group('GuardScanner.blockAfter', () {
+    // Synthetic sources: the comment- and string-skipping between a
+    // signature and its body brace is dead code on the current fork layout,
+    // so it is exercised against sources built for it.
+    test('skips comments and strings when locating the body', () {
+      const source = r"""
+          String sig(Map<String, Object> a) /* {"decoy": 1} */ {
+            return "no brace { inside";
+          }
+
+          String other() { return "x"; }
+        """;
+      final scanner = GuardScanner(source);
+      final body = scanner.blockAfter(RegExp(r'sig\('));
+      expect(body, isNotNull);
+      expect(body, contains('no brace'));
+      expect(body, isNot(contains('decoy')));
+      expect(body, isNot(contains('other')));
+    });
+
+    test('returns null when the signature is absent', () {
+      expect(GuardScanner('int x = 3;').blockAfter('nope'), isNull);
+    });
+  });
+
+  group('Android flag plumbing', () {
+    test('no processor keeps the flag in a local', () {
+      // getConnectionBuilder() and getAuthorizationService() both read the
+      // `allowInsecureConnections` field. A local of that name in any
+      // request processor would shadow the field, and that request would
+      // use whatever the previous call had set — an exchange that asked
+      // for TLS verification could still be intercepted.
+      final scanner = GuardScanner(File(_javaPluginPath).readAsStringSync());
+      for (final processor in const [
+        'AuthorizationTokenRequestParameters\\s+'
+            'processAuthorizationTokenRequestArguments',
+        'TokenRequestParameters\\s+processTokenRequestArguments',
+        'EndSessionRequestParameters\\s+processEndSessionRequestArguments',
+      ]) {
+        final signature = RegExp(processor);
+        // A comment that mentions a signature would make it ambiguous
+        // which occurrence blockAfter resolves; the test would then
+        // police the wrong method without saying so.
+        expect(
+          scanner.count(signature),
+          1,
+          reason: 'the signature of $processor is ambiguous',
+        );
+        final body = scanner.blockAfter(signature);
+        expect(body, isNotNull, reason: 'a request processor moved');
+        // The body must process the arguments map — a canary for the
+        // block extraction: if the scanner ever resolves the wrong
+        // block, this is what fails, not a flag assertion below.
+        expect(body, contains('arguments.get('));
+        // Any local declaration shadows the field, whichever way it is
+        // spelled: boolean, boxed Boolean, or var, final or not.
+        expect(
+          body,
+          isNot(
+            contains(
+              RegExp(
+                r'\b(?:final\s+)?(?:Boolean|boolean|var)\s+'
+                r'allowInsecureConnections\b',
+              ),
+            ),
+          ),
+          reason:
+              'a local shadows the field: the request would ignore '
+              'its own flag and reuse the previous call\'s',
+        );
+      }
+    });
+
+    test('end-session reads its flag from the arguments map', () {
+      // The field write must take the value from the request arguments —
+      // a hard-coded right-hand side would silently drop the insecure
+      // option. The check is about the source of the value, not its
+      // spelling: == Boolean.TRUE, a helper, or extra spaces all pass.
+      final scanner = GuardScanner(File(_javaPluginPath).readAsStringSync());
+      final body = scanner.blockAfter(
+        RegExp(
+          r'EndSessionRequestParameters\s+processEndSessionRequestArguments',
+        ),
+      );
+      expect(body, isNotNull, reason: 'the end-session processor moved');
+      expect(
+        body,
+        contains(
+          RegExp(
+            r'allowInsecureConnections\s*=[^;]*'
+            r'arguments\.get\(\s*"allowInsecureConnections"',
+          ),
+        ),
+        reason: 'the flag is not read from the end-session arguments',
+      );
+    });
+  });
+
   group('Apple trust-all protocol', () {
     for (final (label, path) in <(String, String)>[
       ('iOS', _iosPluginPath),
@@ -160,6 +266,214 @@ void main() {
             scanner.count(_protocolRegistration),
           );
         });
+      });
+    }
+  });
+
+  group('Apple protocol host scoping', () {
+    // While registered, the trust-all protocol is consulted by every
+    // NSURLSession in the process. canInitWithRequest must therefore only
+    // intercept the armed provider's host and port — and each registration
+    // must arm that host, or the interception would refuse everything (fail
+    // closed, but the insecure exchange would break).
+    for (final (label, path) in <(String, String)>[
+      ('iOS', _iosPluginPath),
+      ('macOS', _macosPluginPath),
+    ]) {
+      group(label, () {
+        test('canInitWithRequest intercepts only the armed host:port', () {
+          final source = File(path).readAsStringSync();
+          final body = GuardScanner(
+            source,
+          ).blockAfter(RegExp(r'\+\s*\(BOOL\)\s*canInitWithRequest'));
+          expect(body, isNotNull, reason: 'canInitWithRequest moved');
+          expect(
+            body,
+            contains('containsObject:InsecureHostKey'),
+            reason:
+                'the interception is not scoped to the armed providers: '
+                'while registered it would trust unrelated traffic too',
+          );
+          expect(body, contains('request.URL.host'));
+          // The key carries the port: a second TLS service on the provider's
+          // host at another port must not be intercepted.
+          final keyBody = GuardScanner(
+            source,
+          ).blockAfter(RegExp(r'NSString\s*\*?\s*InsecureHostKey\(NSURL'));
+          expect(keyBody, isNotNull, reason: 'InsecureHostKey moved');
+          expect(
+            keyBody,
+            contains('port'),
+            reason:
+                'the interception key ignores the port: every TLS service '
+                'on the provider host would be trusted',
+          );
+          expect(
+            keyBody,
+            contains('url.scheme.lowercaseString'),
+            reason:
+                'the default port is hard-coded regardless of scheme: an '
+                'http provider keyed as host:443 would also trust unrelated '
+                'https traffic to that host',
+          );
+        });
+
+        test('every registration arms the host right before it', () {
+          final source = File(path).readAsStringSync();
+          final registrations = _protocolRegistration.allMatches(source).length;
+          expect(registrations, greaterThan(0));
+          final armed = RegExp(
+            r'armForIssuer:[^;]*;\s*\[\s*NSURLProtocol\s+registerClass:',
+            dotAll: true,
+          ).allMatches(source).length;
+          expect(
+            armed,
+            registrations,
+            reason:
+                'a registration without arming trusts nothing: the exchange '
+                'itself would fail, or a stale host from another exchange '
+                'would be trusted',
+          );
+          // Arming must sit behind the flag like the registration itself.
+          final scanner = GuardScanner(source);
+          final unguarded = scanner.unguarded(
+            RegExp(r'\[\s*InsecureURLProtocol\s+armForIssuer:'),
+            'allowInsecureConnections',
+          );
+          expect(
+            unguarded,
+            isEmpty,
+            reason: 'arming ran without allowInsecureConnections',
+          );
+        });
+
+        test('channel values are type-checked against NSString', () {
+          // AsNSString is the single normalization choke point: EndpointString
+          // and the arming candidates both route through it. Its body pins the
+          // normalization itself; the tests below pin each consumer's
+          // delegation to it.
+          final source = File(path).readAsStringSync();
+          final body = GuardScanner(
+            source,
+          ).blockAfter(RegExp(r'NSString\s*\*?\s*AsNSString\(id'));
+          expect(body, isNotNull, reason: 'AsNSString moved');
+          expect(
+            body,
+            contains('isKindOfClass:[NSString class]'),
+            reason:
+                'the value must be type-checked against NSString, not just '
+                'nil-checked: NSNull is non-nil and a ?: chain would take it',
+          );
+        });
+
+        test('EndpointString routes through the helper', () {
+          final source = File(path).readAsStringSync();
+          final body = GuardScanner(source).blockAfter(
+            RegExp(r'NSString\s*\*?\s*EndpointString\(NSDictionary'),
+          );
+          expect(body, isNotNull, reason: 'EndpointString moved');
+          expect(
+            body,
+            contains('AsNSString(configuration[key]'),
+            reason:
+                'the endpoint lookup dropped the type-check: a raw channel '
+                'value would put an NSNull into the arming collection',
+          );
+        });
+
+        test('end-session configuration routes through the helper', () {
+          // processServiceConfigurationParameters: is the other EndpointString
+          // consumer: a rebase conflict resolved to upstream's raw
+          // objectForKey: form would feed a channel NSNull straight to NSURL.
+          final source = File(path).readAsStringSync();
+          final body = GuardScanner(source).blockAfter(
+            RegExp(
+              r'OIDServiceConfiguration \*\)processServiceConfigurationParameters',
+            ),
+          );
+          expect(
+            body,
+            isNotNull,
+            reason: 'processServiceConfigurationParameters: moved',
+          );
+          expect(
+            body,
+            contains('EndpointString(serviceConfigurationParameters'),
+            reason:
+                'the end-session configuration reads raw channel values: an '
+                'NSNull endpoint would crash NSURL URLWithString: on the '
+                'platform thread',
+          );
+        });
+
+        test(
+          'arming resolves the provider from the serviceConfiguration too',
+          () {
+            // The app passes serviceConfiguration and leaves issuer and
+            // discoveryUrl nil: an arming path that only read those two
+            // would arm nothing, and the insecure exchange itself would
+            // fail its certificate check.
+            final source = File(path).readAsStringSync();
+            final body = GuardScanner(
+              source,
+            ).blockAfter(RegExp(r'armForIssuer:\(NSString \*\)issuer'));
+            expect(body, isNotNull, reason: 'armForIssuer moved');
+            expect(
+              body,
+              contains('tokenEndpoint'),
+              reason:
+                  'arming ignores the serviceConfiguration endpoints: the '
+                  'app passes those, so the host would arm nil',
+            );
+            expect(body, contains('authorizationEndpoint'));
+            expect(body, contains('endSessionEndpoint'));
+            // Dart null arrives over the channel as NSNull, and an ObjC @[]
+            // literal throws on a nil element: the endpoint values must go
+            // through the type-checking helper, and any collection literal
+            // in the body must hold only quoted constants.
+            expect(
+              body,
+              contains('EndpointString(serviceConfigurationParameters'),
+              reason:
+                  'the endpoints bypass the NSNull type-check: the first '
+                  'null field would crash the arming',
+            );
+            // The discovery-flow candidates pass through the same helper: a
+            // rebase that rewrites the type-check back to a plain nil check
+            // would admit a channel NSNull into the collection.
+            expect(
+              body,
+              contains('AsNSString(issuer'),
+              reason: 'the issuer bypasses the NSNull type-check',
+            );
+            expect(
+              body,
+              contains('AsNSString(discoveryUrl'),
+              reason: 'the discoveryUrl bypasses the NSNull type-check',
+            );
+            // The one @[] literal in the body holds the three quoted
+            // endpoint keys. Compared whole (a substring scan can be
+            // truncated by a ']' inside a string constant), normalized by
+            // _collapseLiteral (see its doc).
+            final actualLiterals = RegExp(r'@\[[^\]]*\]')
+                .allMatches(body!)
+                .map((m) => _collapseLiteral(m.group(0)!))
+                .toSet();
+            expect(
+              actualLiterals,
+              {
+                _collapseLiteral(
+                  '@[ @"authorizationEndpoint", @"tokenEndpoint", '
+                  '@"endSessionEndpoint", ]',
+                ),
+              },
+              reason:
+                  'an unrecognized @[] literal: its elements are not pinned, '
+                  'and a nil or NSNull element throws NSInvalidArgumentException '
+                  'on the platform thread',
+            );
+          },
+        );
       });
     }
   });

@@ -23,7 +23,7 @@ overrides:
   - override: core.constants.ServiceType
     disposition: re-graft-to-new-API
     owner: genie-ai
-    justification: TRANSLATOR service type appended at v1.5 tail slot 29 (upstream ends at 28). Required for MegaService translation pipeline routing.
+    justification: TRANSLATOR service type appended at v1.5 tail slot 29 (upstream ends at 28). The slot is kept for the MegaService translation node, but no graph registers one — the chatqna alignment handler for the type was dropped with the language boundary, because it put the requested language into a translation prompt. A graph that registers a translator node has to restore that handler.
     added_in: v1.3
     last_validated: v1.5
   - override: core.genieai_api_protocol.ChatCompletionRequest.k

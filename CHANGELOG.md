@@ -51,6 +51,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Query-instruction prefix for contrastive / instruction-tuned embedding models.** `QueryInstructionEmbeddingsWrapper` prepends the model-specific instruction to `embed_query` only — `embed_documents` (passage encoding during ingestion) passes through verbatim, preserving the query/passage asymmetry. Built-in coverage: `BAAI/bge-{large,base,small}-{en,zh}-v1.5`, `hkunlp/instructor`, `nomic-ai/nomic-embed`. Deployers extend via the `EMBEDDING_QUERY_INSTRUCTIONS` env var (`substring=instruction,substring=instruction`). The shared TEI embedding service stays prefix-free, so dataprep ingestion (passages) and retrieval (queries) coexist on a single microservice. Measured A/B on the live corpus (42 gold queries vs 850 chunks): +1.62% retrieval recall at K=32, +1.85% at K=50. No re-ingest required. **Behavior change for deployments using the local `HuggingFaceBgeEmbeddings` fallback** (no `TEI_EMBEDDING_ENDPOINT` set): langchain's default `query_instruction` (`"Represent this question for searching relevant passages: "`, with **"question"**) is cleared and replaced by the BAAI-canonical English string (`"Represent this sentence for searching relevant passages: "`, with **"sentence"**). The wrapper applies the prefix; langchain no longer does. Deployment paths that bypass the wrapper (direct `HuggingFaceBgeEmbeddings.embed_query()` usage outside the retriever) keep the langchain default. (#1035)
 - **Condense-question rewrite (multi-turn retrieval mode):** a new `MULTI_TURN_MODE=condense` handles follow-up questions — one short LLM call rewrites each follow-up into a standalone retrieval query, so corrections ("forget the beans, tell me about maize planting") and pronoun follow-ups ("what is its yield?") retrieve the right documents instead of carrying the rejected or implicit subject in the query embedding. Retrieval and reranking use the rewritten query; the answer prompt keeps the original question and history. Fail-closed: a failed rewrite fails the turn with HTTP 503 rather than answering on a wrong retrieval. Tunables: `MULTI_TURN_CONDENSE_HISTORY_TURNS` (default 8 segments = 4 exchanges), `MULTI_TURN_CONDENSE_MAX_TOKENS` (256), `MULTI_TURN_CONDENSE_TIMEOUT_SECONDS` (5.0), `MULTI_TURN_CONDENSE_SYSTEM_PROMPT` (override the rewrite prompt — a custom prompt must still demand JSON-only output). The default mode is unchanged (`blend`).
 
+### Changed
+
+- **On iOS and macOS, the trust-all TLS interception of the vendored
+  `flutter_appauth` fork is now scoped to the OIDC provider's host.** The
+  fork registered its `NSURLProtocol` process-globally for the duration of an
+  insecure exchange (`allowInsecureConnections: true` — the `dev` and `e2e`
+  flavors), so every request the app made during that window — API calls,
+  telemetry, image fetches — was intercepted and its certificate check
+  skipped. Registration now arms the provider's host and port (resolved
+  from the request's `serviceConfiguration` endpoints, or its issuer or
+  discovery URL) and the protocol refuses every other one, so unrelated
+  traffic keeps its verification even mid exchange. Production flavors run
+  with the flag off and are unaffected. Structured guards pin the scoping on
+  both platforms.
+
 ### Fixed
 
 - **A mobile release build made without the `FLAVOR` dart-define now fails at

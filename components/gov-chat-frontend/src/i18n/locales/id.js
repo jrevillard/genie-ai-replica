@@ -1366,6 +1366,13 @@ export default {
     }
   },
   chatbot: {
+    justChat: 'Obrolan saja',
+    closeConversation: 'Tutup percakapan',
+    relatedSources: { one: 'Sumber terkait ({n})', other: 'Sumber terkait ({n})', zero: 'Sumber terkait ({n})' },
+    copyAnswer: 'Salin jawaban',
+    confidence: 'Keyakinan',
+    errorUnableToComplete: 'Tidak dapat menyelesaikan jawaban.',
+    retry: 'Coba lagi',
     streamingError: 'Respons terputus. Silakan coba lagi.',
     aiGeneratedNoDocs: 'Dihasilkan oleh AI — tidak berdasarkan dokumen perpustakaan',
     welcomeMessage: 'Welcome! How can I assist you today?',
@@ -1472,6 +1479,8 @@ export default {
   feedback: {
     title: 'Umpan Balik',
     button: 'Umpan Balik',
+    helpful: 'Membantu',
+    notHelpful: 'Tidak membantu',
     positive: 'Umpan balik positif',
     negative: 'Umpan balik negatif',
     promptText: 'Apakah respons ini membantu?',

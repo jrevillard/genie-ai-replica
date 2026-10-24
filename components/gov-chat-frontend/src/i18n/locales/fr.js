@@ -561,6 +561,7 @@ export default {
   analytics: {
     title: 'Analytique des données & Aperçus',
     loading: 'Chargement des données analytiques...',
+    retry: 'Réessayer',
     period: 'Période',
     charts: {
       satisfactionHeatmap: 'Satisfaction par domaine de connaissance',
@@ -638,7 +639,6 @@ export default {
     feedbackSamples: "Exemples de commentaires d'utilisateurs",
     close: 'Fermer',
     chartComingSoon: 'Visualisation graphique interactive bientôt disponible...',
-    retry: 'Réessayer',
     dailyQueries: 'Requêtes quotidiennes',
     export: 'Exporter les données',
     dateRange: 'Plage de dates',
@@ -685,6 +685,7 @@ export default {
   sidebar: {
     chats: 'Discussions',
     governmentServices: 'Domaines de connaissance',
+    retry: 'Réessayer',
     chatHistory: 'Historique des discussions',
     searchPlaceholder: 'Rechercher des domaines de connaissance...',
     createFolder: 'Créer un dossier',
@@ -755,7 +756,6 @@ export default {
     errorLoadingConversations: 'Échec du chargement des discussions. Veuillez réessayer.',
     errorLoadingUser: "Les données de l'utilisateur sont incomplètes. Veuillez recharger la page.",
     errorNoUser: "Les données de l'utilisateur sont manquantes. Veuillez recharger la page.",
-    retry: 'Réessayer',
     message: 'message',
     messages: 'messages',
     created: 'Créé le',
@@ -906,6 +906,7 @@ export default {
   settings: {
     title: 'Paramètres',
     save: 'Enregistrer',
+    retry: 'Réessayer',
     close: 'Fermer',
     saveSettings: 'Enregistrer les paramètres',
     savingSettings: 'Enregistrement de vos paramètres...',
@@ -957,7 +958,6 @@ export default {
     userDataReset: 'Vos données de profil ont été réinitialisées avec succès.',
     failedToResetUserData: 'Échec de la réinitialisation de vos données de profil. Veuillez réessayer plus tard.',
     unableToLoadUser: "Impossible de charger les informations de l'utilisateur. Veuillez réessayer.",
-    retry: 'Réessayer',
     user: 'Utilisateur',
     loadingUserInfo: "Chargement des informations de l'utilisateur...",
     resetUserDataTitle: 'Réinitialiser les données utilisateur',
@@ -1383,6 +1383,13 @@ export default {
     }
   },
   chatbot: {
+    justChat: 'Simple discussion',
+    closeConversation: 'Fermer la conversation',
+    relatedSources: { one: 'Source associée ({n})', other: 'Sources associées ({n})', zero: 'Sources associées ({n})' },
+    retry: 'Réessayer',
+    copyAnswer: 'Copier la réponse',
+    confidence: 'Confiance',
+    errorUnableToComplete: 'Impossible de terminer la réponse.',
     serviceLabelMismatch:
       "Le service « {label} » utilise une étiquette d'interface qui peut ne pas correspondre à la hiérarchie de connaissances",
     noFilterWarning: 'Aucun filtre de contexte actif — la requête sera non filtrée.',
@@ -1491,6 +1498,8 @@ export default {
   feedback: {
     title: 'Commentaires',
     button: 'Commentaires',
+    helpful: 'Utile',
+    notHelpful: 'Pas utile',
     positive: 'Avis positif',
     negative: 'Avis négatif',
     promptText: 'Cette réponse a-t-elle été utile ?',

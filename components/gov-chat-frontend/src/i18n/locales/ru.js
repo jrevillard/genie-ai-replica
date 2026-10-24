@@ -1376,6 +1376,17 @@ export default {
     }
   },
   chatbot: {
+    justChat: 'Просто чат',
+    closeConversation: 'Закрыть беседу',
+    relatedSources: {
+      one: 'Связанный источник ({n})',
+      other: 'Связанные источники ({n})',
+      zero: 'Связанные источники ({n})'
+    },
+    copyAnswer: 'Копировать ответ',
+    confidence: 'Уверенность',
+    errorUnableToComplete: 'Не удалось завершить ответ.',
+    retry: 'Повторить',
     streamingError: 'Ответ был прерван. Повторите попытку.',
     aiGeneratedNoDocs: 'Сгенерировано ИИ — не основано на документах библиотеки',
     welcomeMessage: 'Welcome! How can I assist you today?',
@@ -1483,6 +1494,8 @@ export default {
   feedback: {
     title: 'Отзыв',
     button: 'Отзыв',
+    helpful: 'Полезно',
+    notHelpful: 'Бесполезно',
     positive: 'Положительный отзыв',
     negative: 'Отрицательный отзыв',
     promptText: 'Был ли этот ответ полезен?',

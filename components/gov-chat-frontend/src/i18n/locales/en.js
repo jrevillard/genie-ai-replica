@@ -1369,6 +1369,13 @@ export default {
     }
   },
   chatbot: {
+    justChat: 'Just Chat',
+    closeConversation: 'Close conversation',
+    relatedSources: { one: 'Related source ({n})', other: 'Related sources ({n})', zero: 'Related sources ({n})' },
+    copyAnswer: 'Copy answer',
+    confidence: 'Confidence',
+    errorUnableToComplete: 'Unable to complete the response.',
+    retry: 'Retry',
     welcomeMessage: 'Welcome! How can I assist you today?',
     aiGeneratedNoDocs: 'AI-generated — not based on library documents',
     configMismatchWarning:
@@ -1475,6 +1482,8 @@ export default {
   feedback: {
     title: 'Feedback',
     button: 'Feedback',
+    helpful: 'Helpful',
+    notHelpful: 'Not helpful',
     positive: 'Positive feedback',
     negative: 'Negative feedback',
     promptText: 'Was this response helpful?',

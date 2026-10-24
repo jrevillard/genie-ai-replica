@@ -1379,6 +1379,17 @@ export default {
     }
   },
   chatbot: {
+    justChat: 'Einfacher Chat',
+    closeConversation: 'Konversation schließen',
+    relatedSources: {
+      one: 'Verwandte Quelle ({n})',
+      other: 'Verwandte Quellen ({n})',
+      zero: 'Verwandte Quellen ({n})'
+    },
+    copyAnswer: 'Antwort kopieren',
+    confidence: 'Konfidenz',
+    errorUnableToComplete: 'Die Antwort konnte nicht abgeschlossen werden.',
+    retry: 'Erneut versuchen',
     streamingError: 'Die Antwort wurde unterbrochen. Bitte versuchen Sie es erneut.',
     aiGeneratedNoDocs: 'KI-generiert — nicht auf Bibliotheksdokumenten basierend',
     welcomeMessage: 'Welcome! How can I assist you today?',
@@ -1486,6 +1497,8 @@ export default {
   feedback: {
     title: 'Feedback',
     button: 'Feedback',
+    helpful: 'Hilfreich',
+    notHelpful: 'Nicht hilfreich',
     positive: 'Positives Feedback',
     negative: 'Negatives Feedback',
     promptText: 'War diese Antwort hilfreich?',

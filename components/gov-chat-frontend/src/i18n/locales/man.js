@@ -1320,6 +1320,13 @@ export default {
     }
   },
   chatbot: {
+    justChat: 'Feewre tanngay',
+    closeConversation: 'Uddita haala',
+    relatedSources: { one: 'Hobbe jowtaande ({n})', other: 'Hobbe jowtaande ({n})', zero: 'Hobbe jowtaande ({n})' },
+    copyAnswer: 'Natto jaabol',
+    confidence: 'Hooreytingol',
+    errorUnableToComplete: 'Jaabol timmaani.',
+    retry: 'Fuutito kadi',
     streamingError: 'Jɛɛmɔgɔya labɛnnen na. A ñaa ma ñɔɔrɔ.',
     aiGeneratedNoDocs: 'AI-generated — not based on library documents',
     welcomeMessage: 'Welcome! How can I assist you today?',
@@ -1425,6 +1432,8 @@ export default {
   feedback: {
     title: 'Jaabi',
     button: 'Jaabi',
+    helpful: 'Hariibu',
+    notHelpful: 'Hariibaaki',
     positive: 'Jaabi beto',
     negative: 'Jaabi jaw',
     promptText: 'Nying jaabi beteyata-le?',

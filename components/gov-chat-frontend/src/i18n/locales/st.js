@@ -1373,6 +1373,17 @@ export default {
     }
   },
   chatbot: {
+    justChat: 'Puisano feela',
+    closeConversation: 'Koala puisano',
+    relatedSources: {
+      one: 'Mohlahlobi o amanang ({n})',
+      other: 'MeHLAHLOBI e amanang ({n})',
+      zero: 'MeHLAHLOBI e amanang ({n})'
+    },
+    copyAnswer: 'Kopitsa karabo',
+    confidence: 'Tshepo',
+    errorUnableToComplete: 'Ha e khone ho phethahatsa karabo.',
+    retry: 'Leka hape',
     streamingError: 'Karabo e emisetsoe. Re leke hape.',
     aiGeneratedNoDocs: 'AI-generated — not based on library documents',
     welcomeMessage: 'Welcome! How can I assist you today?',
@@ -1478,6 +1489,8 @@ export default {
   feedback: {
     title: 'Maikutlo',
     button: 'Maikutlo',
+    helpful: 'Thusang',
+    notHelpful: 'E sa thuseng',
     positive: 'Maikutlo a matle',
     negative: 'Maikutlo a mabe',
     promptText: 'Na karabo ena e bile le thuso?',

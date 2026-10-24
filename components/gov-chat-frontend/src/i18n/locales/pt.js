@@ -1380,6 +1380,17 @@ export default {
     }
   },
   chatbot: {
+    justChat: 'Só conversa',
+    closeConversation: 'Fechar a conversa',
+    relatedSources: {
+      one: 'Fonte relacionada ({n})',
+      other: 'Fontes relacionadas ({n})',
+      zero: 'Fontes relacionadas ({n})'
+    },
+    copyAnswer: 'Copiar resposta',
+    confidence: 'Confiança',
+    errorUnableToComplete: 'Não foi possível concluir a resposta.',
+    retry: 'Tentar novamente',
     streamingError: 'A resposta foi interrompida. Tente novamente.',
     aiGeneratedNoDocs: 'Gerado por IA — não baseado nos documentos da biblioteca',
     welcomeMessage: 'Welcome! How can I assist you today?',
@@ -1487,6 +1498,8 @@ export default {
   feedback: {
     title: 'Feedback',
     button: 'Feedback',
+    helpful: 'Útil',
+    notHelpful: 'Não útil',
     positive: 'Feedback positivo',
     negative: 'Feedback negativo',
     promptText: 'Esta resposta foi útil?',

@@ -1359,6 +1359,13 @@ export default {
     }
   },
   chatbot: {
+    justChat: 'دردشة فقط',
+    closeConversation: 'إغلاق المحادثة',
+    relatedSources: { one: 'مصدر ذو صلة ({n})', other: 'مصادر ذات صلة ({n})', zero: 'مصادر ذات صلة ({n})' },
+    copyAnswer: 'نسخ الإجابة',
+    confidence: 'الثقة',
+    errorUnableToComplete: 'تعذر إكمال الإجابة.',
+    retry: 'إعادة المحاولة',
     streamingError: 'تمت مقاطعة الاستجابة. يرجى المحاولة مرة أخرى.',
     aiGeneratedNoDocs: 'مُولّد بواسطة الذكاء الاصطناعي — لا يعتمد على وثائق المكتبة',
     welcomeMessage: 'Welcome! How can I assist you today?',
@@ -1465,6 +1472,8 @@ export default {
   feedback: {
     title: 'التعليق',
     button: 'التعليق',
+    helpful: 'مفيد',
+    notHelpful: 'غير مفيد',
     positive: 'تعليق إيجابي',
     negative: 'تعليق سلبي',
     promptText: 'هل كان هذا الرد مفيدًا؟',

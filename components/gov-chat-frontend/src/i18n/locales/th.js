@@ -1363,6 +1363,17 @@ export default {
     }
   },
   chatbot: {
+    justChat: 'แชทเท่านั้น',
+    closeConversation: 'ปิดการสนทนา',
+    relatedSources: {
+      one: 'แหล่งที่เกี่ยวข้อง ({n})',
+      other: 'แหล่งข้อมูลที่เกี่ยวข้อง ({n})',
+      zero: 'แหล่งข้อมูลที่เกี่ยวข้อง ({n})'
+    },
+    copyAnswer: 'คัดลอกคำตอบ',
+    confidence: 'ความมั่นใจ',
+    errorUnableToComplete: 'ไม่สามารถสรุปคำตอบได้',
+    retry: 'ลองอีกครั้ง',
     streamingError: 'การตอบกลับถูกขัดจังหวะ โปรดลองอีกครั้ง',
     aiGeneratedNoDocs: 'สร้างโดย AI — ไม่อิงจากเอกสารในคลังเอกสาร',
     welcomeMessage: 'Welcome! How can I assist you today?',
@@ -1469,6 +1480,8 @@ export default {
   feedback: {
     title: 'ความคิดเห็น',
     button: 'ความคิดเห็น',
+    helpful: 'มีประโยชน์',
+    notHelpful: 'ไม่มีประโยชน์',
     positive: 'ความคิดเห็นเชิงบวก',
     negative: 'ความคิดเห็นเชิงลบ',
     promptText: 'คำตอบนี้มีประโยชน์หรือไม่?',

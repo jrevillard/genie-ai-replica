@@ -167,7 +167,7 @@
                   :aria-expanded="msg.sourcesOpen ? 'true' : 'false'"
                   @click="msg.sourcesOpen = !msg.sourcesOpen"
                 >
-                  <span>{{ translate('chatbot.relatedSources', { n: msg.sources.length }) }}</span>
+                  <span>{{ $t('chatbot.relatedSources', { n: msg.sources.length }) }}</span>
                   <ChevronUp v-if="msg.sourcesOpen" :size="16" aria-hidden="true" />
                   <ChevronDown v-else :size="16" aria-hidden="true" />
                 </button>
@@ -1000,7 +1000,8 @@ export default {
     formatMessageTime(timestamp) {
       if (!timestamp) return '';
       const date = new Date(timestamp);
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const locale = this.$i18n?.locale || undefined;
+      return date.toLocaleTimeString([locale], { hour: '2-digit', minute: '2-digit' });
     },
 
     /**
@@ -1692,11 +1693,17 @@ export default {
         this.chatMessages = [];
         const messages = conversation.messages || [];
         messages.forEach((msg) => {
+          // Whatever the live path sets on a message (onMetadata), the reload
+          // path sets too — the restored conversation speaks the same states.
           this.chatMessages.push({
             sender: msg.sender === 'user' ? 'user' : 'bot',
             content: msg.content,
             timestamp: msg.timestamp || new Date().toISOString(),
             queryId: msg.queryId || null,
+            confidenceScore: msg.metadata?.confidence_score ?? msg.queryInfo?.confidenceScore ?? null,
+            metadata: msg.metadata || null,
+            isGrounded: msg.metadata?.is_grounded,
+            userFeedback: msg.metadata?.userFeedback || null,
             isSaved: true
           });
         });

@@ -1379,6 +1379,17 @@ export default {
     }
   },
   chatbot: {
+    justChat: 'Solo chat',
+    closeConversation: 'Cerrar la conversación',
+    relatedSources: {
+      one: 'Fuente relacionada ({n})',
+      other: 'Fuentes relacionadas ({n})',
+      zero: 'Fuentes relacionadas ({n})'
+    },
+    copyAnswer: 'Copiar respuesta',
+    confidence: 'Confianza',
+    errorUnableToComplete: 'No se pudo completar la respuesta.',
+    retry: 'Reintentar',
     streamingError: 'Se interrumpió la respuesta. Inténtelo de nuevo.',
     welcomeMessage: 'Welcome! How can I assist you today?',
     aiGeneratedNoDocs: 'Generado por IA — no basado en los documentos de la biblioteca',
@@ -1486,6 +1497,8 @@ export default {
   feedback: {
     title: 'Retroalimentación',
     button: 'Retroalimentación',
+    helpful: 'Útil',
+    notHelpful: 'No útil',
     positive: 'Retroalimentación positiva',
     negative: 'Retroalimentación negativa',
     promptText: '¿Fue útil esta respuesta?',

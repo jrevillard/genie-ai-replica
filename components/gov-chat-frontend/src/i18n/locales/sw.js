@@ -1368,6 +1368,17 @@ export default {
     }
   },
   chatbot: {
+    justChat: 'Mazungumzo tu',
+    closeConversation: 'Funga mazungumzo',
+    relatedSources: {
+      one: 'Chanzo kinachohusiana ({n})',
+      other: 'Vyanzo vinavyohusiana ({n})',
+      zero: 'Vyanzo vinavyohusiana ({n})'
+    },
+    copyAnswer: 'Nakili jibu',
+    confidence: 'Uhakika',
+    errorUnableToComplete: 'Imeshindwa kukamilisha jibu.',
+    retry: 'Jaribu tena',
     streamingError: 'Jibu lilikatika. Tafadhali jaribu tena.',
     aiGeneratedNoDocs: 'Imezalishwa na AI — haizingatii nyaraka za maktaba',
     welcomeMessage: 'Welcome! How can I assist you today?',
@@ -1474,6 +1485,8 @@ export default {
   feedback: {
     title: 'Maoni',
     button: 'Maoni',
+    helpful: 'Saidia',
+    notHelpful: 'Hakisaidii',
     positive: 'Maoni mazuri',
     negative: 'Maoni hasi',
     promptText: 'Je, jibu hili lilikuwa la msaada?',

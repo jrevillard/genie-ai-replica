@@ -1347,6 +1347,13 @@ export default {
     }
   },
   chatbot: {
+    justChat: 'শুধু চ্যাট',
+    closeConversation: 'কথোপকথন বন্ধ করুন',
+    relatedSources: { one: 'সম্পর্কিত উৎস ({n})', other: 'সম্পর্কিত উৎসসমূহ ({n})', zero: 'সম্পর্কিত উৎসসমূহ ({n})' },
+    copyAnswer: 'উত্তর কপি করুন',
+    confidence: 'আত্মবিশ্বাস',
+    errorUnableToComplete: 'উত্তর সম্পূর্ণ করা যায়নি।',
+    retry: 'আবার চেষ্টা করুন',
     streamingError: 'প্রতিক্রিয়া ব্যাহত হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।',
     aiGeneratedNoDocs: 'এআই-উৎপাদিত — লাইব্রেরির নথিপত্রের উপর ভিত্তি করে নয়',
     welcomeMessage: 'Welcome! How can I assist you today?',
@@ -1452,6 +1459,8 @@ export default {
   feedback: {
     title: 'প্রতিক্রিয়া',
     button: 'প্রতিক্রিয়া',
+    helpful: 'সহায়ক',
+    notHelpful: 'অসহায়ক',
     positive: 'ইতিবাচক প্রতিক্রিয়া',
     negative: 'নেতিবাচক প্রতিক্রিয়া',
     promptText: 'এই প্রতিক্রিয়া কি সহায়ক ছিল?',

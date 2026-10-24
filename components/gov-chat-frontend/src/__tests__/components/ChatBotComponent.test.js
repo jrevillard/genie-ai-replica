@@ -417,6 +417,32 @@ describe('ChatBotComponent', () => {
   // -----------------------------------------------------------------------
   // Subtask 3a: SSE streaming behavior
   // -----------------------------------------------------------------------
+  describe('Conversation V1 — reload restores metadata', () => {
+    it('restores per-message metadata (confidence, groundedness, feedback) from the conversation payload', async () => {
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation.mockResolvedValueOnce({
+        messages: [
+          { sender: 'user', content: 'q', timestamp: '2026-10-23T10:00:00Z' },
+          {
+            sender: 'assistant',
+            content: 'answer',
+            timestamp: '2026-10-23T10:00:05Z',
+            queryId: 'q-1',
+            metadata: { confidence_score: 0.87, is_grounded: true, userFeedback: 'up' }
+          }
+        ]
+      });
+      const wrapper = createChatBotWrapper();
+      await flushPromises();
+      await wrapper.vm.loadExistingConversation('conv-1');
+      await flushPromises();
+      const msg = wrapper.vm.chatMessages.find((m) => m.sender === 'bot' && m.content === 'answer');
+      expect(msg.confidenceScore).toBe(0.87);
+      expect(msg.isGrounded).toBe(true);
+      expect(msg.userFeedback).toBe('up');
+    });
+  });
+
   describe('Subtask 3a — SSE streaming', () => {
     it('sets isStreaming state to true when stream starts', async () => {
       const wrapper = createChatBotWrapper();

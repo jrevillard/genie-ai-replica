@@ -1529,6 +1529,56 @@ async function deleteSuite(repoId, suiteKey) {
   return { deleted: suiteKey };
 }
 
+/**
+ * Delete ONE run of a suite (David 2026-10-24: "we need the ability to
+ * delete previous runs in the UI"). Cascades the run's explain docs — an
+ * orphaned ragas_explain would keep advising on a run nobody can open.
+ * A RUNNING run is refused: cancel it first, deleting the doc under a live
+ * worker would leave the run promise writing into a vanished document.
+ */
+async function deleteRun(repoId, suiteKey, runKey) {
+  if (runInFlight.get(suiteKey) === runKey) {
+    const err = new Error('this run is executing — cancel it first');
+    err.code = 'RUN_IN_FLIGHT';
+    err.status = 409;
+    err.details = { run_key: runKey };
+    throw err;
+  }
+  // An explain still advising on this run would save its doc AFTER the cascade
+  // and recreate the orphan this delete exists to remove. Wait for it (same
+  // contract as deleteSuite's RUN_IN_FLIGHT).
+  const inflight = explainInFlight.get(suiteKey);
+  if (inflight && inflight.run_key === runKey) {
+    const err = new Error('an explain is running for this run — wait for it to finish');
+    err.code = 'EXPLAIN_IN_FLIGHT';
+    err.status = 409;
+    err.details = { run_key: runKey, explain_key: inflight.explain_key };
+    throw err;
+  }
+  const db = await dbService.getConnection();
+  await ensureCollection(db);
+  const doc = await loadDoc(db, runKey, 'RUN_NOT_FOUND', `run ${runKey}`);
+  if (doc.repo_id !== repoId || doc.suite_key !== suiteKey || doc.kind !== 'ragas_run') {
+    const err = new Error(`run ${runKey} not found for suite ${suiteKey}`);
+    err.code = 'RUN_NOT_FOUND';
+    err.status = 404;
+    throw err;
+  }
+  // The run doc + every explain doc authored for it, in one statement.
+  const cursor = await db.query(
+    `FOR d IN ${COLLECTION} FILTER d.repo_id == @rid AND d.suite_key == @sk AND (d._key == @rk OR (d.kind == 'ragas_explain' AND d.payload.run_key == @rk)) REMOVE d IN ${COLLECTION}`,
+    { rid: repoId, sk: suiteKey, rk: runKey }
+  );
+  const removed = await cursor.all();
+  logger.info('ragas-suite.run_deleted', {
+    repo_id: repoId,
+    suite_key: suiteKey,
+    run_key: runKey,
+    removed: removed.length
+  });
+  return { deleted: runKey, removed_docs: removed.length };
+}
+
 async function loadSuite(db, repoId, suiteKey) {
   const doc = await loadDoc(db, suiteKey, 'SUITE_NOT_FOUND', `suite ${suiteKey} for repo ${repoId}`);
   if (doc.repo_id !== repoId || doc.kind !== 'ragas_suite') {
@@ -3155,6 +3205,7 @@ module.exports = {
   addQueries,
   renameSuite,
   deleteSuite,
+  deleteRun,
   beginRunSuite,
   cancelSuiteRun,
   runSuite,

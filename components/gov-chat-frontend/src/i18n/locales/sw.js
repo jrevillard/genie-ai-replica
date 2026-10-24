@@ -3421,7 +3421,16 @@ export default {
         run: 'Utekelezaji',
         when: 'Lini',
         status: 'Hali',
-        load: 'Tazama'
+        load: 'Tazama',
+        delete: 'Futa'
+      },
+      runDelete: {
+        title: 'Futa utekelezaji',
+        body: 'Hii huondoa utekelezaji na uchambuzi wake wa makosa kabisa. Suite na maswali yake hubaki.',
+        confirm: 'Futa',
+        inFlight: 'Utekelezaji huu bado unaendelea — ghairi kwanza.',
+        explainInFlight: 'Uchambuzi wa makosa kwa utekelezaji huu bado unaendelea — subiri umalize.',
+        failed: 'Kufuta utekelezaji kumeshindikana.'
       },
       advice: {
         knob: 'kidhibiti',

@@ -3446,7 +3446,16 @@ export default {
         run: 'Exécution',
         when: 'Quand',
         status: 'Statut',
-        load: 'Voir'
+        load: 'Voir',
+        delete: 'Supprimer'
+      },
+      runDelete: {
+        title: 'Supprimer l’exécution',
+        body: 'Cette action supprime définitivement l’exécution et son analyse des échecs. La suite et ses questions sont conservées.',
+        confirm: 'Supprimer',
+        inFlight: 'Cette exécution est encore en cours — annulez-la d’abord.',
+        explainInFlight: 'Une analyse des échecs est encore en cours pour cette exécution — attendez sa fin.',
+        failed: 'La suppression de l’exécution a échoué.'
       },
       advice: {
         knob: 'réglage',

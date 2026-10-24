@@ -3355,7 +3355,16 @@ export default {
         run: '运行',
         when: '时间',
         status: '状态',
-        load: '查看'
+        load: '查看',
+        delete: '删除'
+      },
+      runDelete: {
+        title: '删除运行',
+        body: '此操作将永久删除该运行及其失败分析。测试套件及其问题将保留。',
+        confirm: '删除',
+        inFlight: '该运行仍在执行中——请先取消。',
+        explainInFlight: '该运行的失败分析仍在进行中——请等待其完成。',
+        failed: '删除运行失败。'
       },
       advice: {
         knob: '配置项',

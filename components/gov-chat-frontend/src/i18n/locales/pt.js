@@ -3438,7 +3438,16 @@ export default {
         run: 'Execução',
         when: 'Quando',
         status: 'Status',
-        load: 'Ver'
+        load: 'Ver',
+        delete: 'Excluir'
+      },
+      runDelete: {
+        title: 'Excluir execução',
+        body: 'Isto remove permanentemente a execução e sua explicação de falhas. A suíte e suas perguntas permanecem.',
+        confirm: 'Excluir',
+        inFlight: 'Esta execução ainda está em andamento — cancele-a primeiro.',
+        explainInFlight: 'Uma explicação de falhas ainda está em execução para esta execução — aguarde sua conclusão.',
+        failed: 'Falha ao excluir a execução.'
       },
       advice: {
         knob: 'parâmetro',

@@ -2029,6 +2029,16 @@ async function deleteRagasSuite(req, res, next) {
   }
 }
 
+async function deleteRagasSuiteRun(req, res, next) {
+  try {
+    const ragasSuiteService = require('../services/ragas-suite-service');
+    const out = await ragasSuiteService.deleteRun(req.params.repo_id, req.params.suite_key, req.params.run_key);
+    res.status(200).json(out);
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function runRagasSuite(req, res, next) {
   try {
     const ragasSuiteService = require('../services/ragas-suite-service');
@@ -2194,6 +2204,7 @@ module.exports = {
   addRagasSuiteQueries,
   renameRagasSuite,
   deleteRagasSuite,
+  deleteRagasSuiteRun,
   runRagasSuite,
   getRagasSuiteRun,
   listRagasSuiteRuns,

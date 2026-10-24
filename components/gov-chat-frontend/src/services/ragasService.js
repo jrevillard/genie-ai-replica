@@ -10,6 +10,7 @@
  *   DELETE /okf/repos/:id/ragas-testsuite/:key                  — delete + runs
  *   POST /okf/repos/:id/ragas-testsuite/:key/run                — run (202+poll)
  *   GET  /okf/repos/:id/ragas-testsuite/:key/runs/:runKey       — run poll / load
+ *   DELETE /okf/repos/:id/ragas-testsuite/:key/runs/:runKey     — delete one run + explains
  *   GET  /okf/repos/:id/ragas-testsuite/runs?kind=              — listing
  *   POST /okf/repos/:id/ragas-testsuite/:key/probe              — per-entry probe
  *   POST /okf/repos/:id/ragas-testsuite/:key/explain            — explain (202+poll)
@@ -96,6 +97,16 @@ const ragasService = {
   /** Poll/load one run: keep-waiting envelope, terminal failure, or the doc. */
   async getRun(repoId, suiteKey, runKey) {
     const res = await httpService.get(
+      `/okf/repos/${rid(repoId)}/ragas-testsuite/${sk(suiteKey)}/runs/${encodeURIComponent(runKey)}`
+    );
+    return res && res.data ? res.data : null;
+  },
+
+  /** Delete ONE finished run + its explain docs (David 2026-10-24). A running
+   * run is refused server-side (409 RUN_IN_FLIGHT — cancel it first); an
+   * in-flight explain for the run is refused too (409 EXPLAIN_IN_FLIGHT). */
+  async deleteRun(repoId, suiteKey, runKey) {
+    const res = await httpService.delete(
       `/okf/repos/${rid(repoId)}/ragas-testsuite/${sk(suiteKey)}/runs/${encodeURIComponent(runKey)}`
     );
     return res && res.data ? res.data : null;

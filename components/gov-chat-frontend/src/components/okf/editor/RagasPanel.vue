@@ -651,14 +651,48 @@
               {{ scoreText(h.summary && h.summary.metrics && h.summary.metrics[m]) }}
             </td>
             <td>
-              <DsButton variant="secondary" small :disabled="runBusy" @click="onLoadRun(h._key, h.suite_key)">
-                {{ translate('okf.ragas.history.load', 'View') }}
-              </DsButton>
+              <div class="okf-ragas__row-actions">
+                <DsButton variant="secondary" small :disabled="runBusy" @click="onLoadRun(h._key, h.suite_key)">
+                  {{ translate('okf.ragas.history.load', 'View') }}
+                </DsButton>
+                <DsButton
+                  v-if="!readOnly"
+                  variant="secondary"
+                  small
+                  :disabled="runBusy || runDeleteBusy || h.status === 'running'"
+                  @click="runDeleteAsk = h"
+                >
+                  {{ translate('okf.ragas.history.delete', 'Delete') }}
+                </DsButton>
+              </div>
             </td>
           </tr>
         </tbody>
       </table>
     </div>
+
+    <!-- RUN DELETE (David 2026-10-24): a run leaves the history only on an
+         explicit confirm — the cascade also removes its explain doc. A running
+         run is never deletable (its button is disabled; the server still
+         refuses with 409 as the backstop). -->
+    <DsDialog
+      :visible="runDeleteAsk !== null"
+      :title="translate('okf.ragas.runDelete.title', 'Delete run')"
+      size="sm"
+      :actions="runDeleteActions"
+      @close="runDeleteAsk = null"
+      @action="onRunDeleteAction"
+    >
+      <p>
+        {{
+          translate(
+            'okf.ragas.runDelete.body',
+            'This permanently removes the run and its failure explanation. The suite and its queries stay.'
+          )
+        }}
+        <code v-if="runDeleteAsk">{{ runDeleteAsk._key }}</code>
+      </p>
+    </DsDialog>
   </div>
 </template>
 
@@ -668,6 +702,7 @@ import DsPill from '../../ds/Pill.vue';
 import DsSpinner from '../../ds/Spinner.vue';
 import DsProgress from '../../ds/Progress.vue';
 import DsInfoTip from '../../ds/InfoTip.vue';
+import DsDialog from '../../ds/Dialog.vue';
 import RagasGuideDialog from './RagasGuideDialog.vue';
 import translateMixin from '../../../mixins/translateMixin';
 import { useChartTheme } from '@/composables/useChartTheme';
@@ -713,7 +748,7 @@ const METRIC_NOTE_FALLBACKS = {
 
 export default {
   name: 'OkfRagasPanel',
-  components: { DsButton, DsPill, DsSpinner, DsProgress, DsInfoTip, RagasGuideDialog },
+  components: { DsButton, DsPill, DsSpinner, DsProgress, DsInfoTip, DsDialog, RagasGuideDialog },
   mixins: [translateMixin],
   props: {
     repo: { type: Object, default: null },
@@ -756,6 +791,8 @@ export default {
       runningRunKey: null, // run_key of the in-flight benchmark (Cancel target)
       runCancelBusy: false,
       runBusy: false,
+      runDeleteAsk: null, // the run-history row pending delete-confirm
+      runDeleteBusy: false,
       explainBusy: false,
       explainProgress: null, // {phase, failing, elapsed_s} from the explain job's poll
       importBusy: false,
@@ -773,6 +810,23 @@ export default {
     };
   },
   computed: {
+    /** DsDialog emits the action KEY (RepoEditor's piiBulkAsk discipline). */
+    runDeleteActions() {
+      return [
+        {
+          key: 'cancel',
+          label: this.translate('common.cancel', 'Cancel'),
+          variant: 'secondary',
+          disabled: this.runDeleteBusy
+        },
+        {
+          key: 'confirm',
+          label: this.translate('okf.ragas.runDelete.confirm', 'Delete'),
+          variant: 'danger',
+          disabled: this.runDeleteBusy
+        }
+      ];
+    },
     /** What "Deployment default" RESOLVES to, by name (live 2026-10-21:
      * the dropdown said "default" and the operator believed the active
      * GLM config was in use — it was not. The default is now spelled out
@@ -1707,6 +1761,46 @@ export default {
       });
       if (res.ok) this.runHistory = res.runs.filter((r) => r.kind === 'ragas_run');
     },
+    /** Run-delete confirm handler. The 409 codes get readable text instead of
+     *  the raw store message — the admin should know WHY it refused. */
+    async onRunDeleteAction(key) {
+      if (key === 'cancel') {
+        this.runDeleteAsk = null;
+        return;
+      }
+      if (key !== 'confirm' || !this.runDeleteAsk || this.runDeleteBusy) return;
+      const target = this.runDeleteAsk;
+      this.runDeleteBusy = true;
+      const res = await this.$store.dispatch('okf/ragasDeleteRun', {
+        repoId: this.repo && this.repo.repo_id,
+        suiteKey: target.suite_key,
+        runKey: target._key
+      });
+      this.runDeleteBusy = false;
+      if (!res.ok) {
+        if (res.code === 'RUN_IN_FLIGHT') {
+          this.error = this.translate('okf.ragas.runDelete.inFlight', 'This run is still executing — cancel it first.');
+        } else if (res.code === 'EXPLAIN_IN_FLIGHT') {
+          this.error = this.translate(
+            'okf.ragas.runDelete.explainInFlight',
+            'A failure explanation is still running for this run — wait for it to finish.'
+          );
+        } else {
+          this.error = res.message || this.translate('okf.ragas.runDelete.failed', 'Deleting the run failed.');
+        }
+        return; // dialog stays open — the admin can retry or cancel
+      }
+      this.runDeleteAsk = null;
+      this.error = '';
+      // The run on screen may be the one deleted — drop it (and its explain)
+      // rather than showing results that no longer exist.
+      if (this.runDoc && this.runDoc._key === target._key) {
+        this.runDoc = null;
+        this.explainDoc = null;
+      }
+      await this.refreshHistory();
+      this.$emit('changed');
+    },
     async onLoadRun(runKey, suiteKey, opts = {}) {
       if (suiteKey && (!this.suite || this.suite.suite_key !== suiteKey)) await this.loadSuite(suiteKey);
       const res = await this.$store
@@ -2354,6 +2448,12 @@ export default {
 
 .okf-ragas__row--selected td {
   background: color-mix(in srgb, var(--accent, #1f6feb) 12%, transparent);
+}
+
+.okf-ragas__row-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .okf-ragas__advice-chip {

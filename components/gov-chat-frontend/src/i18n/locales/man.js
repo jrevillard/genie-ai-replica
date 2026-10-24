@@ -3392,7 +3392,16 @@ export default {
         run: 'Run',
         when: 'When',
         status: 'Status',
-        load: 'View'
+        load: 'View',
+        delete: 'Delete'
+      },
+      runDelete: {
+        title: 'Delete run',
+        body: 'This permanently removes the run and its failure explanation. The suite and its queries stay.',
+        confirm: 'Delete',
+        inFlight: 'This run is still executing — cancel it first.',
+        explainInFlight: 'A failure explanation is still running for this run — wait for it to finish.',
+        failed: 'Deleting the run failed.'
       },
       advice: {
         knob: 'knob',

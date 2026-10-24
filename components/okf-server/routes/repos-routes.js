@@ -222,6 +222,13 @@ router.get(
   requireRepoScope('repo_id', 'read'),
   ctrl.getRagasSuiteRun
 );
+// Per-run delete (David 2026-10-24): clean up old runs from the history —
+// cascades the run's explain docs; refuses a running run (cancel first).
+router.delete(
+  '/:repo_id/ragas-testsuite/:suite_key/runs/:run_key',
+  requireRepoScope('repo_id', 'admin'),
+  ctrl.deleteRagasSuiteRun
+);
 router.post(
   '/:repo_id/ragas-testsuite/:suite_key/rows',
   requireRepoScope('repo_id', 'admin'),

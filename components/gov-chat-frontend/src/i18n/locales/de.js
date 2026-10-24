@@ -3448,7 +3448,16 @@ export default {
         run: 'Ausführung',
         when: 'Wann',
         status: 'Status',
-        load: 'Ansehen'
+        load: 'Ansehen',
+        delete: 'Löschen'
+      },
+      runDelete: {
+        title: 'Ausführung löschen',
+        body: 'Dies entfernt die Ausführung und ihre Fehleranalyse endgültig. Die Suite und ihre Fragen bleiben erhalten.',
+        confirm: 'Löschen',
+        inFlight: 'Diese Ausführung läuft noch — brechen Sie sie zuerst ab.',
+        explainInFlight: 'Für diese Ausführung läuft noch eine Fehleranalyse — warten Sie, bis sie abgeschlossen ist.',
+        failed: 'Löschen der Ausführung fehlgeschlagen.'
       },
       advice: {
         knob: 'Stellschraube',

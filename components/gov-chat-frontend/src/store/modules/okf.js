@@ -1458,6 +1458,22 @@ const actions = {
     }
   },
 
+  /** Delete one finished benchmark run + its explain docs. The 409s arrive as
+   * codes (RUN_IN_FLIGHT / EXPLAIN_IN_FLIGHT) so the panel can name them. */
+  async ragasDeleteRun(_ctx, { repoId, suiteKey, runKey } = {}) {
+    try {
+      ensureServices();
+      const result = await ragasService.deleteRun(repoId, suiteKey, runKey);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'DELETE_FAILED',
+        message: err.message
+      };
+    }
+  },
+
   async ragasGetSuite(_ctx, { repoId, suiteKey } = {}) {
     try {
       ensureServices();

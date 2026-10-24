@@ -3435,7 +3435,16 @@ export default {
         run: 'Tsamaello',
         when: 'Neng',
         status: 'Seemo',
-        load: 'Jarisa'
+        load: 'Jarisa',
+        delete: 'Phumula'
+      },
+      runDelete: {
+        title: 'Phumula tsamaello',
+        body: 'Senya se tlosa tsamaello le tlhahlobo ea eona ea likhahle ka ho sa feleng. Suite le lipotso tsa eona li lula.',
+        confirm: 'Phumula',
+        inFlight: 'Tsamaello ena esale e ntse e sebetsa — e khansela pele.',
+        explainInFlight: 'Tlhahlobo ea likhahle ea tsamaello ena esale e ntse e sebetsa — emella ho fela.',
+        failed: 'Ho phumula tsamaello ho hlile.'
       },
       advice: {
         knob: 'taolo',

@@ -187,7 +187,13 @@ beforeEach(() => {
       return { all: async () => corpus };
     }
     if (aql.includes('REMOVE d IN')) {
-      const removed = docs.filter((d) => d.repo_id === bind.rid && d.suite_key === bind.sk);
+      // deleteSuite cascades the whole suite scope; deleteRun (bind.rk set)
+      // narrows to the run doc + its explains — the suite doc survives.
+      const removed = docs.filter((d) => {
+        if (d.repo_id !== bind.rid || d.suite_key !== bind.sk) return false;
+        if (!bind.rk) return true;
+        return d._key === bind.rk || (d.kind === 'ragas_explain' && d.payload && d.payload.run_key === bind.rk);
+      });
       for (const d of removed) delete runs[d._key];
       return { all: async () => removed.map((d) => d._key) };
     }
@@ -1905,5 +1911,114 @@ describe('cancel-race guard (live 2026-10-23)', () => {
     expect(deleted).toContain('j-race');
     // And the judge never scored: no evaluation result was consumed.
     expect(doc.payload && doc.payload.summary).toBeFalsy();
+  });
+});
+
+describe('deleteRun (per-run delete, 2026-10-24)', () => {
+  async function makeSuite() {
+    const begun = await svc.beginSuiteGeneration('me', { testset_size: 2 }, {});
+    await begun.done;
+    return begun.suite_key;
+  }
+
+  it('deletes a finished run AND cascades its explain doc — the suite survives', async () => {
+    const sk = await makeSuite();
+    const begun = await svc.beginRunSuite('me', sk, { mode: 'whatif' }, { actor: { user_id: 'u1' } });
+    await begun.done;
+    const explained = await svc.beginExplainFailures('me', sk, { run_key: begun.run_key }, {});
+    await explained.done;
+    // Both docs exist before the delete.
+    expect(__mockDb._stores.okf_head_test_runs[begun.run_key]).toBeTruthy();
+    const explainKey = Object.keys(__mockDb._stores.okf_head_test_runs).find(
+      (k) => __mockDb._stores.okf_head_test_runs[k].kind === 'ragas_explain'
+    );
+    expect(explainKey).toBeTruthy();
+    const out = await svc.deleteRun('me', sk, begun.run_key);
+    expect(out.deleted).toBe(begun.run_key);
+    expect(out.removed_docs).toBe(2); // the run + its explain
+    expect(__mockDb._stores.okf_head_test_runs[begun.run_key]).toBeUndefined();
+    expect(__mockDb._stores.okf_head_test_runs[explainKey]).toBeUndefined();
+    // The SUITE doc survives.
+    expect(__mockDb._stores.okf_head_test_runs[sk]).toBeTruthy();
+  });
+
+  it('404s for a foreign run key and 409s for a running run', async () => {
+    const sk = await makeSuite();
+    await expect(svc.deleteRun('me', sk, 'rr-nonexistent')).rejects.toMatchObject({
+      code: 'RUN_NOT_FOUND',
+      status: 404
+    });
+    // A running run is refused — cancel first (deleting under a live worker
+    // would leave the run promise writing into a vanished doc). The evaluate
+    // fetch is HELD so the run is provably mid-judge at the delete attempt.
+    let releaseEval;
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/evaluate')) {
+        return new Promise((resolve) => {
+          releaseEval = () => resolve(okJson({ job_id: 'j-eval', status: 'queued' }));
+        });
+      }
+      return baseFetch(url);
+    });
+    const begun = await svc.beginRunSuite('me', sk, { mode: 'whatif' }, {});
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(typeof releaseEval).toBe('function');
+    await expect(svc.deleteRun('me', sk, begun.run_key)).rejects.toMatchObject({
+      code: 'RUN_IN_FLIGHT',
+      status: 409
+    });
+    releaseEval();
+    await begun.done;
+  });
+
+  it('409s while an explain for the run is still advising, then deletes once it lands', async () => {
+    const sk = await makeSuite();
+    // Force failing rows — the advisor call only runs when something failed.
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-prog', status: 'queued' }));
+      if (u.includes('/jobs/j-prog'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-prog',
+            status: 'done',
+            result: {
+              aggregate: {},
+              per_query: GEN_SAMPLES.map(() => ({ context_recall: 0.3, faithfulness: 1.0 })),
+              model: 'm',
+              n: 2
+            }
+          })
+        );
+      return baseFetch(url);
+    });
+    const begun = await svc.beginRunSuite('me', sk, { mode: 'whatif' }, {});
+    await begun.done;
+    global.fetch = baseFetch;
+    // Hold the advisor call open — the explain worker is mid-save-somedoc.
+    let releaseAdvisor;
+    frontmatterService.vllmChatCompletions.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releaseAdvisor = () => resolve({ data: { choices: [{ message: { content: '{}' } }] } });
+        })
+    );
+    const explained = await svc.beginExplainFailures('me', sk, { run_key: begun.run_key }, {});
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    await expect(svc.deleteRun('me', sk, begun.run_key)).rejects.toMatchObject({
+      code: 'EXPLAIN_IN_FLIGHT',
+      status: 409
+    });
+    releaseAdvisor();
+    await explained.done;
+    // Explain landed → the same delete now cascades both docs.
+    const out = await svc.deleteRun('me', sk, begun.run_key);
+    expect(out.removed_docs).toBe(2);
   });
 });

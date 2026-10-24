@@ -3424,7 +3424,16 @@ export default {
         run: 'Eksekusi',
         when: 'Kapan',
         status: 'Status',
-        load: 'Lihat'
+        load: 'Lihat',
+        delete: 'Hapus'
+      },
+      runDelete: {
+        title: 'Hapus eksekusi',
+        body: 'Ini menghapus eksekusi beserta penjelasan kegagalannya secara permanen. Suite dan pertanyaannya tetap ada.',
+        confirm: 'Hapus',
+        inFlight: 'Eksekusi ini masih berjalan — batalkan dulu.',
+        explainInFlight: 'Penjelasan kegagalan untuk eksekusi ini masih berjalan — tunggu sampai selesai.',
+        failed: 'Gagal menghapus eksekusi.'
       },
       advice: {
         knob: 'parameter',

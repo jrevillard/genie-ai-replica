@@ -113,6 +113,9 @@ function mountPanel(props = {}) {
         DsPill: { props: ['variant'], template: '<span class="pill"><slot /></span>' },
         DsSpinner: true,
         DsProgress: true,
+        // Gated on `visible` so a CLOSED dialog renders nothing (the real
+        // DsDialog) while an open one exposes its slot for assertions.
+        DsDialog: { props: ['visible'], template: '<div v-if="visible" class="dialog-stub"><slot /></div>' },
         apexchart: { props: ['options', 'series', 'type', 'height'], template: '<div class="chart-stub" />' }
       }
     }
@@ -929,6 +932,94 @@ describe('RagasPanel', () => {
       await flush();
       await flush();
       expect(w.vm.invalidRunReason).toBe('');
+    });
+  });
+
+  describe('run delete (2026-10-24)', () => {
+    const flush = () => new Promise((r) => setTimeout(r, 0));
+    const rowButtons = (w) => w.findAll('.okf-ragas__row-actions button');
+    const deleteButton = (w) => rowButtons(w).find((b) => /delete/i.test(b.text()));
+
+    it('renders a Delete button per history row and a confirm dialog naming the run', async () => {
+      const w = mountPanel();
+      await flush();
+      expect(deleteButton(w)).toBeTruthy();
+      expect(w.vm.runDeleteActions.map((a) => a.key)).toEqual(['cancel', 'confirm']);
+      expect(w.vm.runDeleteActions[1].variant).toBe('danger');
+      await deleteButton(w).trigger('click');
+      expect(w.vm.runDeleteAsk && w.vm.runDeleteAsk._key).toBe('rr1-run');
+      expect(w.find('.dialog-stub').exists()).toBe(true);
+      expect(w.find('.dialog-stub').text()).toContain('rr1-run');
+      // Dismissing without confirming leaves everything in place.
+      await w.vm.onRunDeleteAction('cancel');
+      expect(w.vm.runDeleteAsk).toBeNull();
+      expect(dispatch).not.toHaveBeenCalledWith('okf/ragasDeleteRun', expect.anything());
+    });
+
+    it('deletes via the store, refreshes history, and drops the on-screen run when it was the one deleted', async () => {
+      const w = mountPanel();
+      await flush();
+      w.vm.runDoc = runFixture(); // the run on screen IS the one being deleted
+      w.vm.runDeleteAsk = w.vm.runHistory[0];
+      dispatch.mockImplementation(async (action) => {
+        if (action === 'okf/ragasDeleteRun') return { ok: true, result: { deleted: 'rr1-run', removed_docs: 2 } };
+        if (action === 'okf/ragasListRuns') return { ok: true, runs: [] }; // post-delete refresh
+        return { ok: true, result: null, runs: [] };
+      });
+      await w.vm.onRunDeleteAction('confirm');
+      expect(dispatch).toHaveBeenCalledWith('okf/ragasDeleteRun', {
+        repoId: 'me',
+        suiteKey: 'rs1-test',
+        runKey: 'rr1-run'
+      });
+      expect(w.vm.runDeleteAsk).toBeNull();
+      expect(w.vm.runHistory).toEqual([]);
+      expect(w.vm.runDoc).toBeNull(); // dropped, not left dangling on screen
+    });
+
+    it('keeps the dialog open and names the refusal when the run is still executing (409)', async () => {
+      const w = mountPanel();
+      await flush();
+      w.vm.runDeleteAsk = w.vm.runHistory[0];
+      dispatch.mockImplementation(async (action) => {
+        if (action === 'okf/ragasDeleteRun') return { ok: false, code: 'RUN_IN_FLIGHT', message: 'raw socket noise' };
+        return { ok: true, result: null, runs: [] };
+      });
+      await w.vm.onRunDeleteAction('confirm');
+      expect(w.vm.runDeleteAsk).not.toBeNull(); // dialog stays open for retry/cancel
+      expect(w.vm.error).toMatch(/cancel/i); // readable, code-derived — not the raw message
+      expect(w.vm.error).not.toContain('socket');
+    });
+
+    it('disables Delete on a RUNNING row (Cancel is that row’s action) and while a run is busy', async () => {
+      const base = dispatch.getMockImplementation();
+      dispatch.mockImplementation(async (action) => {
+        if (action === 'okf/ragasListRuns')
+          return {
+            ok: true,
+            runs: [
+              {
+                kind: 'ragas_run',
+                _key: 'rr-live',
+                suite_key: 'rs1-test',
+                status: 'running',
+                created_at: '2026-10-24T10:00:00.000Z'
+              },
+              { kind: 'ragas_suite', _key: 'rs1-test', suite_key: 'rs1-test', created_at: '2026-10-17T11:00:00.000Z' }
+            ]
+          };
+        return base(action);
+      });
+      const w = mountPanel();
+      await flush();
+      const btn = deleteButton(w);
+      expect(btn).toBeTruthy();
+      expect(btn.attributes('disabled')).toBeDefined(); // running row → Cancel, not Delete
+      // A run in flight anywhere also locks the delete.
+      w.vm.runDeleteAsk = null;
+      w.vm.runBusy = true;
+      await w.vm.$nextTick();
+      expect(deleteButton(w).attributes('disabled')).toBeDefined();
     });
   });
 });

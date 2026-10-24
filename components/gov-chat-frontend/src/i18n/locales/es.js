@@ -3445,7 +3445,16 @@ export default {
         run: 'Ejecución',
         when: 'Cuándo',
         status: 'Estado',
-        load: 'Ver'
+        load: 'Ver',
+        delete: 'Eliminar'
+      },
+      runDelete: {
+        title: 'Eliminar ejecución',
+        body: 'Esto elimina de forma permanente la ejecución y su explicación de fallos. La suite y sus preguntas se conservan.',
+        confirm: 'Eliminar',
+        inFlight: 'Esta ejecución sigue en curso — cancélala primero.',
+        explainInFlight: 'Hay una explicación de fallos en curso para esta ejecución — espera a que termine.',
+        failed: 'No se pudo eliminar la ejecución.'
       },
       advice: {
         knob: 'parámetro',

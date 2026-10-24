@@ -87,7 +87,7 @@ class GuardScanner {
         break;
       }
     }
-    return _stripComments(source.substring(start, open));
+    return stripComments(source.substring(start, open));
   }
 
   /// The text of the statement that contains [offset], without comments.
@@ -108,11 +108,14 @@ class GuardScanner {
         break;
       }
     }
-    return _stripComments(source.substring(start, end));
+    return stripComments(source.substring(start, end));
   }
 
   /// Removes `/* ... */` and `// ...` comments from [text].
-  static String _stripComments(String text) {
+  ///
+  /// Public because the pin tests strip scanned bodies with the same rule —
+  /// one comment-stripping contract for every check on the vendored source.
+  static String stripComments(String text) {
     return text
         .replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), ' ')
         .replaceAll(RegExp(r'//[^\n]*'), ' ');

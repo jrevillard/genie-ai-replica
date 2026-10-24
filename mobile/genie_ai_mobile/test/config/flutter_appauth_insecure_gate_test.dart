@@ -67,9 +67,7 @@ String? _methodBody(String source, Pattern signature) {
       depth--;
       if (depth == 0) {
         final body = source.substring(open + 1, i);
-        return body
-            .replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), ' ')
-            .replaceAll(RegExp(r'//[^\n]*'), ' ');
+        return GuardScanner.stripComments(body);
       }
     }
   }
@@ -386,9 +384,8 @@ void main() {
             );
             // The one @[] literal in the body holds the three quoted
             // endpoint keys. Compared whole (a substring scan can be
-            // truncated by a ']' inside a string constant) after collapsing
-            // whitespace and dropping a trailing comma, so a reformat that
-            // only moves the comma stays green.
+            // truncated by a ']' inside a string constant), normalized by
+            // _collapseLiteral (see its doc).
             final actualLiterals = RegExp(r'@\[[^\]]*\]')
                 .allMatches(body!)
                 .map((m) => _collapseLiteral(m.group(0)!))

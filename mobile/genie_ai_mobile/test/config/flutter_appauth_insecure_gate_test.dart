@@ -327,6 +327,14 @@ void main() {
                 'the interception key ignores the port: every TLS service '
                 'on the provider host would be trusted',
           );
+          expect(
+            keyBody,
+            contains('scheme'),
+            reason:
+                'the default port is hard-coded regardless of scheme: '
+                'an http provider would key as :443 and its own requests '
+                'would keep certificate verification',
+          );
         });
 
         test('every registration arms the host right before it', () {
@@ -344,6 +352,16 @@ void main() {
                 'a registration without arming trusts nothing: the exchange '
                 'itself would fail, or a stale host from another exchange '
                 'would be trusted',
+          );
+          // The issuer/discoveryUrl candidates are filtered through an
+          // empty-string check (they are genuine nils on the app's standard
+          // path and must never enter a collection literal).
+          expect(
+            source,
+            contains("issuer ?: @\"\""),
+            reason:
+                'issuer/discoveryUrl are nil on the standard path: in a '
+                'collection literal they crash the arming',
           );
           // Arming must sit behind the flag like the registration itself.
           final scanner = GuardScanner(source);
@@ -367,10 +385,10 @@ void main() {
           expect(body, isNotNull, reason: 'EndpointString moved');
           expect(
             body,
-            contains('isKindOfClass'),
+            contains('isKindOfClass:[NSString class]'),
             reason:
-                'a null serviceConfiguration field is NSNull, not nil: a '
-                'nil-check chain would crash or arm nothing',
+                'the value must be type-checked against NSString, not just '
+                'nil-checked: NSNull is non-nil and a ?: chain would take it',
           );
         });
 
@@ -407,25 +425,34 @@ void main() {
                   'the endpoints bypass the NSNull type-check: the first '
                   'null field would crash the arming',
             );
-            for (final literalMatch in RegExp(
-              r'@\[[^\]]*\]',
-            ).allMatches(body!)) {
-              for (final element
-                  in literalMatch
+            // Every @[] literal in the body must be one of the two known
+            // safe shapes, compared whole (a substring scan can be truncated
+            // by a ']' inside a string constant): the quoted endpoint keys,
+            // and the nil-safe issuer/discoveryUrl candidates. Anything else
+            // risks a nil element, and an @[] literal throws on nil.
+            const safeLiterals = {
+              '@[ @"authorizationEndpoint", @"tokenEndpoint", '
+                  '@"endSessionEndpoint", ]',
+              '@[ issuer ?: @"", discoveryUrl ?: @""]',
+            };
+            final actualLiterals = RegExp(r'@\[[^\]]*\]')
+                .allMatches(body!)
+                .map(
+                  (m) => m
                       .group(0)!
-                      .substring(2, literalMatch.group(0)!.length - 1)
-                      .split(',')) {
-                final e = element.trim();
-                if (e.isEmpty) continue;
-                expect(
-                  e.startsWith('@'),
-                  isTrue,
-                  reason:
-                      'the @[] literal holds a non-literal element '
-                      '($e): a nil there crashes the arming',
-                );
-              }
-            }
+                      .replaceAll(RegExp(r'\s+'), ' ')
+                      .replaceAll('" ', '"')
+                      .replaceAll(' "', '"'),
+                )
+                .toSet();
+            expect(
+              actualLiterals.difference(safeLiterals),
+              isEmpty,
+              reason:
+                  'an unrecognized @[] literal: its elements are not pinned, '
+                  'and a nil or NSNull element throws NSInvalidArgumentException '
+                  'on the platform thread',
+            );
           },
         );
       });

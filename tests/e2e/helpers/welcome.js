@@ -213,6 +213,7 @@ module.exports = {
   readVisualLayerState,
   capturePixels,
   lum,
+  contrastRatio,
   WCAG_BIND,
   LAYER_STATE_BIND
 };

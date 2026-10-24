@@ -1378,11 +1378,8 @@ export default {
   chatbot: {
     justChat: 'Просто чат',
     closeConversation: 'Закрыть беседу',
-    relatedSources: {
-      one: 'Связанный источник ({n})',
-      other: 'Связанные источники ({n})',
-      zero: 'Связанные источники ({n})'
-    },
+    relatedSourcesOne: 'Связанный источник ({n})',
+    relatedSources: 'Связанные источники ({n})',
     copyAnswer: 'Копировать ответ',
     confidence: 'Уверенность',
     errorUnableToComplete: 'Не удалось завершить ответ.',

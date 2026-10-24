@@ -1370,11 +1370,8 @@ export default {
   chatbot: {
     justChat: 'Mazungumzo tu',
     closeConversation: 'Funga mazungumzo',
-    relatedSources: {
-      one: 'Chanzo kinachohusiana ({n})',
-      other: 'Vyanzo vinavyohusiana ({n})',
-      zero: 'Vyanzo vinavyohusiana ({n})'
-    },
+    relatedSourcesOne: 'Chanzo kinachohusiana ({n})',
+    relatedSources: 'Vyanzo vinavyohusiana ({n})',
     copyAnswer: 'Nakili jibu',
     confidence: 'Uhakika',
     errorUnableToComplete: 'Imeshindwa kukamilisha jibu.',

@@ -1371,7 +1371,8 @@ export default {
   chatbot: {
     justChat: 'Just Chat',
     closeConversation: 'Close conversation',
-    relatedSources: { one: 'Related source ({n})', other: 'Related sources ({n})', zero: 'Related sources ({n})' },
+    relatedSourcesOne: 'Related source ({n})',
+    relatedSources: 'Related sources ({n})',
     copyAnswer: 'Copy answer',
     confidence: 'Confidence',
     errorUnableToComplete: 'Unable to complete the response.',

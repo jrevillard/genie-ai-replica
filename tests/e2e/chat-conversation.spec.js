@@ -3,7 +3,7 @@
 // Each test asserts one invariant the rendered conversation must keep,
 // and each one carries a mutation check recorded beside it.
 const { test, expect } = require('@playwright/test');
-const { openWelcomeScreen } = require('./helpers/welcome');
+const { openWelcomeScreen, contrastRatio } = require('./helpers/welcome');
 
 const BASE_URL = process.env.BASE_URL || 'https://localhost';
 
@@ -88,12 +88,13 @@ test.describe('Conversation V1', () => {
           const b = el.getBoundingClientRect();
           return [b.x, b.y, b.width, b.height].map((v) => Math.round(v));
         };
-        return { input: r('.chat-input'), window: r('.chat-window') };
+        return { header: r('.conversation-header'), input: r('.chat-input'), window: r('.chat-window') };
       });
     const on = await boxes();
     await page.evaluate(() => document.documentElement.setAttribute('data-visual', 'off'));
     await page.waitForTimeout(300);
     const off = await boxes();
+    expect(off.header, 'the header box does not move with the layer off').toEqual(on.header);
     expect(off.input, 'the composer box does not move with the layer off').toEqual(on.input);
     expect(off.window, 'the message window box does not move with the layer off').toEqual(on.window);
     await ctx.close();
@@ -323,6 +324,58 @@ test.describe('Conversation V1 — documents panel', () => {
     expect(s.emptyText.length, 'the empty state explains itself').toBeGreaterThan(0);
     expect(s.hasTitle && s.hasHint, 'title and hint both render').toBe(true);
     expect(s.faqVisible, 'the FAQs stay accessible').toBe(true);
+    await ctx.close();
+  });
+});
+
+test.describe('Conversation V1 — contrast', () => {
+  // Task 12 — the new inks clear WCAG AA for body text (4.5:1): the amber
+  // warning on its ground, the initials on their accent circle.
+  test('the amber warning and the initials clear a 4.5:1 contrast floor', async ({ browser }) => {
+    const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
+    await mockStream(page, ['GENIE.AI answers from its own knowledge when no document supports the point.'], {
+      is_grounded: false,
+      confidence_score: 0.78
+    });
+    await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
+    await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
+    await page.waitForSelector('.chat-message.bot .answer-warning', { timeout: 45000 });
+    // The styles come back as sRGB triples: the tokens are OKLch, and the
+    // page-side canvas resolves any colour format into its painted pixels.
+    const styles = await page.evaluate(() => {
+      const rgb = (v) => {
+        const c = document.createElement('canvas');
+        c.width = c.height = 1;
+        const x = c.getContext('2d');
+        x.fillStyle = v;
+        x.fillRect(0, 0, 1, 1);
+        const d = x.getImageData(0, 0, 1, 1).data;
+        return [d[0], d[1], d[2]];
+      };
+      const cs = (el) => el.style.cssText;
+      const pick = (sel, prop) => {
+        const el = document.querySelector(sel);
+        return el ? getComputedStyle(el)[prop] : null;
+      };
+      // The warning sits on the card's surface, not on the page background.
+      const warn = document.querySelector('.chat-message.bot .answer-warning');
+      const card = warn ? warn.closest('.answer-card') : null;
+      const initials = document.querySelector('.message-avatar__initials');
+      return {
+        warnColor: rgb(pick('.chat-message.bot .answer-warning', 'color')),
+        warnBg: rgb(pick('.chat-message.bot .answer-warning', 'backgroundColor')),
+        initColor: rgb(pick('.message-avatar__initials', 'color')),
+        initBg: rgb(pick('.message-avatar__initials', 'backgroundColor'))
+      };
+    });
+    expect(
+      contrastRatio(styles.warnColor, styles.warnBg),
+      'the amber ink clears 4.5:1 on its own ground'
+    ).toBeGreaterThanOrEqual(4.5);
+    expect(
+      contrastRatio(styles.initColor, styles.initBg),
+      'the initials clear 4.5:1 on their circle'
+    ).toBeGreaterThanOrEqual(4.5);
     await ctx.close();
   });
 });

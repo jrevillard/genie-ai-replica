@@ -167,7 +167,11 @@
                   :aria-expanded="msg.sourcesOpen ? 'true' : 'false'"
                   @click="msg.sourcesOpen = !msg.sourcesOpen"
                 >
-                  <span>{{ $t('chatbot.relatedSources', { n: msg.sources.length }) }}</span>
+                  <span>{{
+                    msg.sources.length === 1
+                      ? $t('chatbot.relatedSourcesOne', { n: msg.sources.length })
+                      : $t('chatbot.relatedSources', { n: msg.sources.length })
+                  }}</span>
                   <ChevronUp v-if="msg.sourcesOpen" :size="16" aria-hidden="true" />
                   <ChevronDown v-else :size="16" aria-hidden="true" />
                 </button>
@@ -246,7 +250,7 @@
               <div class="bot-message-meta">
                 <span v-if="msg.confidenceScore != null && msg.isGrounded !== false" class="confidence-score">
                   <Brain :size="14" aria-hidden="true" />
-                  <span>Confidence: {{ (msg.confidenceScore * 100).toFixed(0) }}%</span>
+                  <span>{{ $t('chatbot.confidence') }}: {{ (msg.confidenceScore * 100).toFixed(0) }}%</span>
                 </span>
               </div>
             </div>
@@ -2615,7 +2619,9 @@ export default {
   padding: var(--space-xs) var(--space-sm);
   border-radius: var(--radius-sm);
   background: var(--warning-bg);
-  color: var(--warning);
+  /* The badge token cannot carry body text on a light ground — the ink is
+     the token darkened, derived, never a raw hex. */
+  color: color-mix(in oklch, var(--warning), black 55%);
   font-size: var(--text-xs);
 }
 
@@ -2626,7 +2632,7 @@ export default {
   padding: var(--space-sm);
   border-radius: var(--radius-sm);
   background: var(--warning-bg);
-  color: var(--warning);
+  color: color-mix(in oklch, var(--warning), black 55%);
   font-size: var(--text-sm);
 }
 
@@ -2634,9 +2640,9 @@ export default {
   display: inline-flex;
   align-items: center;
   gap: var(--space-xs);
-  border: 1px solid var(--warning);
+  border: 1px solid color-mix(in oklch, var(--warning), black 55%);
   background: transparent;
-  color: var(--warning);
+  color: color-mix(in oklch, var(--warning), black 55%);
   padding: 2px var(--space-sm);
   border-radius: var(--radius-sm);
   font-size: var(--text-xs);

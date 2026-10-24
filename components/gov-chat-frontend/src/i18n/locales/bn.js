@@ -1349,7 +1349,8 @@ export default {
   chatbot: {
     justChat: 'শুধু চ্যাট',
     closeConversation: 'কথোপকথন বন্ধ করুন',
-    relatedSources: { one: 'সম্পর্কিত উৎস ({n})', other: 'সম্পর্কিত উৎসসমূহ ({n})', zero: 'সম্পর্কিত উৎসসমূহ ({n})' },
+    relatedSourcesOne: 'সম্পর্কিত উৎস ({n})',
+    relatedSources: 'সম্পর্কিত উৎসসমূহ ({n})',
     copyAnswer: 'উত্তর কপি করুন',
     confidence: 'আত্মবিশ্বাস',
     errorUnableToComplete: 'উত্তর সম্পূর্ণ করা যায়নি।',

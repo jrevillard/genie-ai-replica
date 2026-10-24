@@ -2901,78 +2901,116 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
       };
       if (attributions.length) {
         try {
-          const resp = await frontmatterService.vllmChatCompletions(
-            [
-              {
-                role: 'system',
-                content:
-                  'You are a RAG pipeline tuning advisor. Given benchmark failures with stage attributions, ' +
-                  'propose concrete actions. Respond as JSON: {"knob_changes": ["..."], "repo_tag_changes": ["..."], ' +
-                  '"content_curation": [{"concept": "...", "gap": "..."}], "prompt_tweaks": ["..."]}. ' +
-                  'Every item must name the surface it changes. Do not invent failures. ' +
-                  // The stage is proven against the corpus, and the advisor
-                  // must respect it: a stage of "vector-recall" or "reranker"
-                  // means the content EXISTS and the retrieval pipeline lost
-                  // it — the answer is a knob (candidate pool, top-N), never
-                  // new content. A stage of "corpus" means the expected
-                  // passage is not indexed at all: that row is an unfair
-                  // question (it measures the benchmark, not the assistant),
-                  // so the action is to regenerate the entry, not to author
-                  // content for it. Only propose content_curation for rows
-                  // whose stage is "corpus".
-                  'Propose content_curation ONLY for rows whose stage is "corpus"; ' +
-                  'for "vector-recall" and "reranker" propose a knob change instead. ' +
-                  // David 2026-10-24: the advisor prescribed "tighten
-                  // CHATQNA_SYSTEM_PROMPT grounding" on ~30 rows of a run
-                  // whose answers were already grounded, and never saw that
-                  // the prompt had pushed abstentions up and answers 44%
-                  // shorter. The run-level facts are in the payload below —
-                  // READ them before prescribing anything.
-                  'RULES: ' +
-                  '(1) A row with stage "judge" is a JUDGE-side finding (the answer is grounded and the judge scored it harshly). ' +
-                  'Do NOT propose a prompt tweak, a content change or a knob change for it; say it needs a stronger judge to confirm. ' +
-                  '(2) A row with stage "abstention" means the model declined — the abstention contract may be too strict; that is a COVERAGE argument, not a grounding one. ' +
-                  '(3) Only rows staged "llm" justify a grounding change, and only when their faithfulness actually failed. ' +
-                  '(4) Check run_facts.abstentions against run_facts.rows: if a large share of rows abstained, the prompt is OVER-CONSTRAINING — ' +
-                  'recommend restoring coverage (answer every part the context supports, keep the facts) instead of tightening grounding. ' +
-                  '(5) Check run_facts.mean_answer_chars: if answers are very short, completeness is being lost — recommend coverage, not brevity. ' +
-                  '(6) Every prompt_tweak must name the rows it is based on and the evidence behind them.'
-              },
-              {
-                role: 'user',
-                content: JSON.stringify({
-                  repo: suite.name,
-                  metrics: runDoc.metrics,
-                  summary: runDoc.payload.summary,
-                  // The run-level facts the advisor must read before it
-                  // prescribes anything (David 2026-10-24): how many rows
-                  // abstained and how long the answers are. Without these it
-                  // prescribed "tighten grounding" on a run that was already
-                  // over-constraining the model.
-                  run_facts: {
-                    rows: (runDoc.payload.results || []).length,
-                    abstentions: (runDoc.payload.results || []).filter((r) => r.abstained).length,
-                    mean_answer_chars: Math.round(
-                      (runDoc.payload.results || []).reduce((a, r) => a + String(r.answer || '').length, 0) /
-                        Math.max(1, (runDoc.payload.results || []).length)
-                    ),
-                    abstained_rows: (runDoc.payload.results || [])
-                      .filter((r) => r.abstained)
-                      .map((r) => r.id)
-                      .slice(0, 20),
-                    stage_counts: attributions.reduce((acc, a) => {
-                      acc[a.stage] = (acc[a.stage] || 0) + 1;
-                      return acc;
-                    }, {})
-                  },
-                  attributions: attributions.slice(0, 40)
-                })
-              }
-            ],
-            // The advisor rides the judge's model config (memlog 90: a frontier
-            // judge gives better advice; same service family as scoring).
-            { maxTokens: 1200, temperature: 0.2, service: 'ragas_judge' }
-          );
+          // Resolve the advisor's model ONCE: the run's own judge when it was
+          // picked (so the advice comes from the model that produced the
+          // scores), else the env judge (explicit null). David 2026-10-24:
+          // the advisor silently failed with "advice failed" because it rode
+          // the ACTIVE config — GLM on api.z.ai, rate-limited, three 429s.
+          const runJudge = (runDoc.payload.fidelity && runDoc.payload.fidelity.judge) || null;
+          const runPick = runJudge && runJudge.pick ? runJudge.pick : null;
+          let advisorConfig = null;
+          if (runPick && runPick.config_key) {
+            const resolved = await modelConfigService.resolveModelOverride({
+              config_key: runPick.config_key,
+              model: runPick.model || undefined,
+              service: 'ragas_judge'
+            });
+            if (resolved) advisorConfig = resolved;
+          }
+          const ADVISOR_SYSTEM_PROMPT =
+            'You are a RAG pipeline tuning advisor. Given benchmark failures with stage attributions, ' +
+            'propose concrete actions. Respond as JSON: {"knob_changes": ["..."], "repo_tag_changes": ["..."], ' +
+            '"content_curation": [{"concept": "...", "gap": "..."}], "prompt_tweaks": ["..."]}. ' +
+            'Every item must name the surface it changes. Do not invent failures. ' +
+            // The stage is proven against the corpus, and the advisor
+            // must respect it: a stage of "vector-recall" or "reranker"
+            // means the content EXISTS and the retrieval pipeline lost
+            // it — the answer is a knob (candidate pool, top-N), never
+            // new content. A stage of "corpus" means the expected
+            // passage is not indexed at all: that row is an unfair
+            // question (it measures the benchmark, not the assistant),
+            // so the action is to regenerate the entry, not to author
+            // content for it. Only propose content_curation for rows
+            // whose stage is "corpus".
+            'Propose content_curation ONLY for rows whose stage is "corpus"; ' +
+            'for "vector-recall" and "reranker" propose a knob change instead. ' +
+            // David 2026-10-24: the advisor prescribed "tighten
+            // CHATQNA_SYSTEM_PROMPT grounding" on ~30 rows of a run
+            // whose answers were already grounded, and never saw that
+            // the prompt had pushed abstentions up and answers 44%
+            // shorter. The run-level facts are in the payload below —
+            // READ them before prescribing anything.
+            'RULES: ' +
+            '(1) A row with stage "judge" is a JUDGE-side finding (the answer is grounded and the judge scored it harshly). ' +
+            'Do NOT propose a prompt tweak, a content change or a knob change for it; say it needs a stronger judge to confirm. ' +
+            '(2) A row with stage "abstention" means the model declined — the abstention contract may be too strict; that is a COVERAGE argument, not a grounding one. ' +
+            '(3) Only rows staged "llm" justify a grounding change, and only when their faithfulness actually failed. ' +
+            '(4) Check run_facts.abstentions against run_facts.rows: if a large share of rows abstained, the prompt is OVER-CONSTRAINING — ' +
+            'recommend restoring coverage (answer every part the context supports, keep the facts) instead of tightening grounding. ' +
+            '(5) Check run_facts.mean_answer_chars: if answers are very short, completeness is being lost — recommend coverage, not brevity. ' +
+            '(6) Every prompt_tweak must name the rows it is based on and the evidence behind them.';
+          const advisorUserPayload = JSON.stringify({
+            repo: suite.name,
+            metrics: runDoc.metrics,
+            summary: runDoc.payload.summary,
+            // The run-level facts the advisor must read before it
+            // prescribes anything (David 2026-10-24): how many rows
+            // abstained and how long the answers are. Without these it
+            // prescribed "tighten grounding" on a run that was already
+            // over-constraining the model.
+            run_facts: {
+              rows: (runDoc.payload.results || []).length,
+              abstentions: (runDoc.payload.results || []).filter((r) => r.abstained).length,
+              mean_answer_chars: Math.round(
+                (runDoc.payload.results || []).reduce((a, r) => a + String(r.answer || '').length, 0) /
+                  Math.max(1, (runDoc.payload.results || []).length)
+              ),
+              abstained_rows: (runDoc.payload.results || [])
+                .filter((r) => r.abstained)
+                .map((r) => r.id)
+                .slice(0, 20),
+              stage_counts: attributions.reduce((acc, a) => {
+                acc[a.stage] = (acc[a.stage] || 0) + 1;
+                return acc;
+              }, {})
+            },
+            attributions: attributions.slice(0, 40)
+          });
+          const resp = await frontmatterService
+            .vllmChatCompletions(
+              [
+                {
+                  role: 'system',
+                  content: ADVISOR_SYSTEM_PROMPT
+                },
+                {
+                  role: 'user',
+                  content: advisorUserPayload
+                }
+              ],
+              // The advisor rides the RUN's judge (David 2026-10-24): it must
+              // interpret the scores with the model that produced them — and
+              // that also keeps it off the rate-limited ACTIVE config, which
+              // silently returned "advice failed" after three 429s. An explicit
+              // null means "use the env judge".
+              { maxTokens: 1200, temperature: 0.2, service: 'ragas_judge', config: advisorConfig }
+            )
+            .catch(async (primaryErr) => {
+              // The run's judge is rate-limited or down → fall back to the env
+              // judge so the operator still gets advice.
+              logger.warn('ragas-suite.advisor_judge_fallback', {
+                suite_key: suiteKey,
+                run_key: runKey,
+                error: primaryErr && primaryErr.message
+              });
+              return frontmatterService.vllmChatCompletions(
+                [
+                  { role: 'system', content: ADVISOR_SYSTEM_PROMPT },
+                  { role: 'user', content: advisorUserPayload }
+                ],
+                { maxTokens: 1200, temperature: 0.2, service: 'ragas_judge', config: null }
+              );
+            });
           const content =
             resp && resp.data && resp.data.choices && resp.data.choices[0] && resp.data.choices[0].message
               ? resp.data.choices[0].message.content

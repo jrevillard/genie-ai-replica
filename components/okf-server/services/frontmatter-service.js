@@ -367,9 +367,18 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
   let apiKey = VLLM_LLM_API_KEY;
   let viaOverride = false;
   try {
-    const ovr = await require('./model-config-service').resolveModelOverride({
-      service: opts.service || 'okf_tagging'
-    });
+    // opts.config === null → the caller explicitly wants the ENV judge (the
+    // .env RAGAS_JUDGE_* / VLLM_* pair), bypassing the active model config.
+    // opts.config = {base_url, model, api_key, provider} → an explicit
+    // override the caller already resolved (the advisor rides the RUN's
+    // judge, so its advice comes from the model that produced the scores).
+    const ovr =
+      opts.config === null
+        ? null
+        : opts.config ||
+          (await require('./model-config-service').resolveModelOverride({
+            service: opts.service || 'okf_tagging'
+          }));
     if (ovr && ovr.provider === 'openai') {
       // Version segment (…/v1, …/paas/v4) stays — openAiChatUrl appends only
       // /chat/completions to it (2026-10-21: force-appending /v1/chat/… to a

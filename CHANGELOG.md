@@ -85,11 +85,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for the `llm.invoke` span); the terminal usage-only frame of that stream was
   re-emitted by the orchestrator as if it were answer text, so answers
   displayed in the web UI and mobile app — and scored by the RAGAS judge —
-  ended with a `{"id":"chatcmpl-...","usage":{...}}` tail. The frame now feeds
-  the span and is dropped before it can reach any consumer, both at the
-  orchestrator source and at the streaming HTTP boundary. Only deployments
-  whose chatqna runs this tracing feature are affected; answers on
-  `release/el-salvador` were never exposed.
+  ended with a `{"id":"chatcmpl-...","usage":{...}}` tail. The orchestrator now
+  only re-emits lines it could not parse as JSON; any parsed frame that carries
+  no forwardable content (the usage-only frame, a keepalive with
+  `"choices": null`) feeds the tracing span and is skipped instead of leaking
+  its raw JSON. Only deployments whose chatqna runs this tracing feature are
+  affected; answers on `release/el-salvador` were never exposed.
 
 - **Virus scanning could not reach a ClamAV service running beside the
   document repository.** `CLAMSCAN_HOST` was read into the configuration and

@@ -1550,17 +1550,33 @@ class TestAlignGenerator:
         assert "chat.completion.chunk" not in joined
         assert result[-1] == "data: [DONE]\n\n"
 
-    def test_usage_only_payload_discriminator(self):
-        from chatqna.genieai_chatqna import _is_usage_only_payload
+    def test_parsed_frame_without_content_is_not_forwarded_raw(self):
+        """A frame that PARSES but carries no forwardable content (e.g. a
+        keepalive with "choices": null) must be skipped, not dumped on the
+        user as raw transport JSON — the fallback below json.loads is for
+        UNPARSEABLE lines only."""
+        chunks = [
+            b'data:{"choices":[{"delta":{"content":"Hi"}}]}\n\n',
+            b'data:{"choices": null}\n\n',
+            b'data:{"choices": [{"delta": null}]}\n\n',
+        ]
+        result = self._run_generator(align_generator(None, gen=chunks))
+        joined = "".join(result)
+        assert any(b"Hi" in r.encode() for r in result)
+        assert '"choices": null' not in joined
+        assert '"delta": null' not in joined
+        assert result[-1] == "data: [DONE]\n\n"
 
-        assert _is_usage_only_payload({"usage": {"total_tokens": 2}, "choices": []}) is True
-        assert _is_usage_only_payload({"usage": {"total_tokens": 2}}) is True
-        # Content-bearing frames are NEVER usage-only.
-        assert _is_usage_only_payload({"choices": [{"delta": {"content": "hi"}}]}) is False
-        assert _is_usage_only_payload({"usage": {"total_tokens": 2}, "choices": [{"delta": {}}]}) is False
-        assert _is_usage_only_payload(["not", "a", "dict"]) is False
-        assert _is_usage_only_payload("plain text") is False
-        assert _is_usage_only_payload(None) is False
+    def test_content_frame_carrying_usage_still_forwards_content(self):
+        """Provider variants exist that attach usage to the LAST content chunk:
+        the usage key must not disqualify a frame with non-empty choices."""
+        chunk = (
+            b'data:{"choices":[{"delta":{"content":"tail"},"finish_reason":"stop"}],'
+            b'"usage":{"prompt_tokens":10,"total_tokens":12}}\n\n'
+        )
+        result = self._run_generator(align_generator(None, gen=[chunk]))
+        assert any(b"tail" in r.encode() for r in result)
+        assert result[-1] == "data: [DONE]\n\n"
 
 
 # ===========================================================================
@@ -2606,30 +2622,6 @@ class TestStreamWithMetadata:
         joined = "".join(out)
         assert '"type": "metadata"' in joined
         assert joined.rstrip().endswith("data: [DONE]")
-
-    @pytest.mark.asyncio
-    async def test_usage_only_frame_never_leaks(self):
-        """vLLM's terminal usage-only frame (choices:[] + usage) is transport
-        metadata: any consumer rendering the stream would show raw transport
-        JSON to the user, so it must never ride the forwarded token stream."""
-        svc = create_chatqna_service()
-        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
-        usage_frame = (
-            '{"id":"chatcmpl-x","object":"chat.completion.chunk","created":1,'
-            '"model":"m","choices":[],"usage":{"prompt_tokens":1,"total_tokens":2}}'
-        )
-        body = self._make_body(
-            [
-                "data: b'Real answer text.'\n\n",
-                f"data: b'{usage_frame}'\n\n",
-                "data: [DONE]\n\n",
-            ]
-        )
-        out = await self._drain(svc._stream_with_metadata(body, {}, token="t"))
-        decoded = self._decode_content(out)
-        assert "Real answer text." in decoded
-        assert "chat.completion.chunk" not in decoded
-        assert "usage" not in decoded
 
     # ----------------------------------------------------------------------
     # Conversation-marker stripping in the streaming path (issue #830).

@@ -7,13 +7,10 @@ const { openWelcomeScreen } = require('./helpers/welcome');
 
 const BASE_URL = process.env.BASE_URL || 'https://localhost';
 
-async function mockStream(page, chunks) {
-  const sse = [
-    ...chunks.map((c) => `data: ${JSON.stringify({ type: 'chunk', content: c })}`),
-    '',
-    `data: ${JSON.stringify({ type: 'done', queryId: 'mock-query-1' })}`,
-    ''
-  ].join('\n');
+async function mockStream(page, chunks, metadata) {
+  const frames = chunks.map((c) => `data: ${JSON.stringify({ type: 'chunk', content: c })}`);
+  if (metadata) frames.push(`data: ${JSON.stringify({ type: 'metadata', ...metadata })}`);
+  const sse = [...frames, '', `data: ${JSON.stringify({ type: 'done', queryId: 'mock-query-1' })}`, ''].join('\n');
   // The inline thumbs post their rating to the same backend — answer it so
   // the rated state does not depend on the network.
   await page.route('**/feedback**', async (route) => {
@@ -224,6 +221,65 @@ test.describe('Conversation V1 — actions', () => {
     await page.waitForTimeout(300);
     const clip = await page.evaluate(() => navigator.clipboard.readText());
     expect(clip.length, 'the clipboard holds the answer text').toBeGreaterThan(0);
+    await ctx.close();
+  });
+});
+
+test.describe('Conversation V1 — warning and error', () => {
+  // Task 8 — the ungrounded amber (D4-grounding) and the retryable error
+  // state (D15) live inside the card.
+  test('an ungrounded answer shows the amber warning inside the card and no empty sources', async ({ browser }) => {
+    const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
+    // Deterministic: the ungrounded state comes from the metadata frame, so
+    // the test scripts a stream whose metadata declares is_grounded=false —
+    // never a live RAG answer, which may ground either way.
+    await mockStream(page, ['GENIE.AI answers from its own knowledge when no document supports the point.'], {
+      is_grounded: false,
+      confidence_score: 0.78
+    });
+    await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
+    await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
+    // The warning is itself the signal that the metadata frame has landed.
+    await page.waitForSelector('.chat-message.bot .answer-warning', { timeout: 45000 });
+    const s = await page.evaluate(() => {
+      const cards = document.querySelectorAll('.chat-message.bot .answer-card');
+      const card = cards[cards.length - 1];
+      const warn = card.querySelector('.answer-warning');
+      const probe = document.createElement('div');
+      probe.style.background = 'var(--warning-bg)';
+      document.body.appendChild(probe);
+      const token = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return {
+        warnBg: warn ? getComputedStyle(warn).backgroundColor : null,
+        token,
+        sources: !!card.querySelector('[data-testid="answer-sources"]')
+      };
+    });
+    expect(s.warnBg, 'the amber warning paints (the mocked frame ran)').not.toBeNull();
+    expect(s.warnBg, 'the warning paints the warning token, not red').toBe(s.token);
+    expect(s.sources, 'no empty sources section on an ungrounded answer').toBe(false);
+    await ctx.close();
+  });
+
+  test('a failed turn shows a retry that re-sends the same query', async ({ browser }) => {
+    const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
+    // Sabotage the stream call for the first attempt only.
+    let aborted = false;
+    await page.route('**/queries/stream**', async (route) => {
+      if (route.request().method() === 'POST' && !aborted) {
+        aborted = true;
+        return route.abort();
+      }
+      return route.continue();
+    });
+    await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
+    await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
+    await page.waitForSelector('[data-testid="answer-error"]', { timeout: 30000 });
+    await page.locator('[data-testid="answer-retry"]').click();
+    await page.waitForSelector('.chat-message.bot .message-bubble', { timeout: 45000 });
+    const n = await page.locator('.chat-message.user').count();
+    expect(n, 'the retry does not duplicate the user turn').toBe(1);
     await ctx.close();
   });
 });

@@ -515,7 +515,7 @@ describe('ChatBotComponent', () => {
       const lastBot = vm.chatMessages[vm.chatMessages.length - 1];
       expect(lastBot.isGrounded).toBe(false);
       // Ungrounded responses show the warning flag, not the confidence bar.
-      expect(wrapper.find('.grounding-flag').exists()).toBe(true);
+      expect(wrapper.find('.answer-warning').exists()).toBe(true);
       expect(wrapper.find('.confidence-score').exists()).toBe(false);
     });
 
@@ -538,7 +538,7 @@ describe('ChatBotComponent', () => {
       expect(lastBot.isGrounded).toBe(true);
       expect(lastBot.confidenceScore).toBe(0.92);
       expect(wrapper.find('.confidence-score').exists()).toBe(true);
-      expect(wrapper.find('.grounding-flag').exists()).toBe(false);
+      expect(wrapper.find('.answer-warning').exists()).toBe(false);
     });
   });
 

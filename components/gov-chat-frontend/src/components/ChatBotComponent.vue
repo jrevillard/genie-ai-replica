@@ -139,7 +139,15 @@
                  first streaming frame; sources, actions and the confidence block
                  render inside it below the bubble. -->
             <div v-if="msg.sender === 'bot'" class="answer-card" data-testid="answer-card">
-              <div class="message-bubble">
+              <div v-if="msg.isError" class="answer-error" data-testid="answer-error">
+                <AlertTriangle :size="16" aria-hidden="true" />
+                <span>{{ translate('chatbot.errorUnableToComplete', 'Unable to complete the response.') }}</span>
+                <button type="button" class="answer-retry" data-testid="answer-retry" @click="retryAnswer(index)">
+                  <RotateCcw :size="14" aria-hidden="true" />
+                  <span>{{ translate('chatbot.retry', 'Retry') }}</span>
+                </button>
+              </div>
+              <div v-else class="message-bubble">
                 <div v-if="msg.isStreaming && !msg.content" class="streaming-indicator">
                   <DsSpinner size="sm" />
                   <span>{{ translate('chatbot.thinking', 'Thinking...') }}</span>
@@ -179,6 +187,13 @@
                     <ExternalLink :size="14" class="answer-source-card__open" aria-hidden="true" />
                   </a>
                 </div>
+              </div>
+              <!-- Not grounded: the answer came from the LLM's own knowledge, not library documents -->
+              <div v-if="msg.isGrounded === false" class="answer-warning" role="note">
+                <AlertTriangle :size="15" aria-hidden="true" />
+                <span>{{
+                  translate('chatbot.aiGeneratedNoDocs', 'AI-generated — not based on library documents')
+                }}</span>
               </div>
               <!-- D3: inline actions — thumbs, details, copy — with the
                    confidence percentage at the end of the row. -->
@@ -231,13 +246,6 @@
                   <Brain :size="14" aria-hidden="true" />
                   <span>Confidence: {{ (msg.confidenceScore * 100).toFixed(0) }}%</span>
                 </span>
-              </div>
-              <!-- Not grounded: the answer came from the LLM's own knowledge, not library documents -->
-              <div v-if="msg.isGrounded === false" class="grounding-flag">
-                <Sparkles :size="16" />
-                <span>{{
-                  translate('chatbot.aiGeneratedNoDocs', 'AI-generated — not based on library documents')
-                }}</span>
               </div>
             </div>
             <div v-else class="message-bubble">
@@ -432,6 +440,7 @@
 
 <script>
 import {
+  AlertTriangle,
   Brain,
   ChevronDown,
   ChevronUp,
@@ -442,6 +451,7 @@ import {
   MessageSquareQuote,
   Sparkles,
   SquarePlus,
+  RotateCcw,
   ThumbsDown,
   ThumbsUp,
   User,
@@ -569,6 +579,7 @@ marked.use({ renderer: tightListRenderer });
 export default {
   name: 'ChatBotComponent',
   components: {
+    AlertTriangle,
     Brain,
     ChevronDown,
     ChevronUp,
@@ -578,6 +589,7 @@ export default {
     Sparkles,
     User,
     X,
+    RotateCcw,
     SquarePlus,
     ThumbsUp,
     ThumbsDown,
@@ -1344,10 +1356,17 @@ export default {
     async sendMessage() {
       const content = this.newMessage.trim();
       if (!content) return;
+      await this.sendMessageFromText(content);
+    },
+
+    // The one send pathway: takes the query text (and what the user saw, for
+    // the dual-prompt case) and runs it. The composer and the retry share it.
+    async sendMessageFromText(content, displayOverride) {
+      if (!content) return;
 
       // For dual-prompt mechanism: use hidden prompt for backend, visible text for display
       const messageForBackend = this.hiddenPromptForNextMessage || content;
-      const messageForDisplay = content;
+      const messageForDisplay = displayOverride || content;
 
       this.chatMessages.push({
         sender: 'user',
@@ -1364,10 +1383,13 @@ export default {
 
       const lastMessageIndex = this.chatMessages.length;
 
-      // Push placeholder bot message for streaming content
+      // Push placeholder bot message for streaming content; the outgoing
+      // query text stays on the message so a failed turn can retry itself.
       this.chatMessages.push({
         sender: 'bot',
         content: '',
+        _query: messageForBackend,
+        _queryDisplay: messageForDisplay,
         timestamp: new Date().toISOString(),
         isSaved: false,
         metadata: {},
@@ -1517,6 +1539,7 @@ export default {
             this.isStreaming = false;
             this.streamController = null;
             this.chatMessages[lastMessageIndex].isStreaming = false;
+            this.chatMessages[lastMessageIndex].isError = true;
 
             if (!this.chatMessages[lastMessageIndex].content) {
               this.chatMessages[lastMessageIndex].content = this.translate('chatbot.streamingError');
@@ -1596,6 +1619,18 @@ export default {
       const rating = value === 'up' ? 5 : 1;
       const ok = await this.submitFeedbackPayload(msg, rating, '');
       if (ok) msg.userFeedback = value;
+    },
+
+    retryAnswer(index) {
+      const msg = this.chatMessages[index];
+      const q = msg._query;
+      const display = msg._queryDisplay;
+      // The failed turn is its question plus the failed answer — replaced,
+      // not stacked.
+      const before = this.chatMessages[index - 1];
+      const dropUser = before && before.sender === 'user';
+      this.chatMessages.splice(dropUser ? index - 1 : index, dropUser ? 2 : 1);
+      this.sendMessageFromText(q, display);
     },
 
     async copyAnswer(msg) {
@@ -2587,6 +2622,48 @@ export default {
   border-radius: 0;
 }
 
+/* D4/D15: the ungrounded warning and the retryable error — both amber,
+   never red: an error is a state, not an accusation. */
+.answer-warning {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-size: var(--text-xs);
+}
+
+.answer-error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  border-radius: var(--radius-sm);
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-size: var(--text-sm);
+}
+
+.answer-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  border: 1px solid var(--warning);
+  background: transparent;
+  color: var(--warning);
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.answer-retry:hover {
+  background: var(--warning-bg);
+}
+
 /* D3: the inline actions row — thumbs, details, copy, confidence. */
 .answer-actions {
   display: flex;
@@ -2840,16 +2917,6 @@ export default {
 }
 
 /* Shown when the answer is not backed by retrieved documents (LLM-only). */
-.grounding-flag {
-  font-size: var(--text-sm);
-  color: var(--warning);
-  background: var(--warning-bg);
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-}
 
 .feedback-trigger {
   margin-left: 0;

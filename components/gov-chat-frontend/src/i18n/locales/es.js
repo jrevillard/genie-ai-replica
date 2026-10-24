@@ -3453,6 +3453,7 @@ export default {
         delete: 'Eliminar',
         rescore: 'Reevaluar',
         rescoreOf: 'reevaluado desde {key}',
+        judgeEnv: 'predeterminado del sistema',
         judgeUnknown: 'Juez no registrado'
       },
       rescore: {

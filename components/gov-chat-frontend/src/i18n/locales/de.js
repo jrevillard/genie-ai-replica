@@ -3457,6 +3457,7 @@ export default {
         delete: 'Löschen',
         rescore: 'Neu bewerten',
         rescoreOf: 'neu bewertet aus {key}',
+        judgeEnv: 'Systemstandard',
         judgeUnknown: 'Richter nicht erfasst'
       },
       rescore: {

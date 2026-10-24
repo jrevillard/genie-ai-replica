@@ -3444,6 +3444,7 @@ export default {
         delete: 'Phumula',
         rescore: 'Hahlola hape',
         rescoreOf: 'hahlolwa ho tsa {key}',
+        judgeEnv: 'kokoana ea boemong ba sisteme',
         judgeUnknown: 'Kahlolo ha ho ngeng'
       },
       rescore: {

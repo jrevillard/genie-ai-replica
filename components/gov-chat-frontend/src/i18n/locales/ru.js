@@ -3442,6 +3442,7 @@ export default {
         delete: 'Удалить',
         rescore: 'Переоценить',
         rescoreOf: 'переоценено на основе {key}',
+        judgeEnv: 'системное значение по умолчанию',
         judgeUnknown: 'Судья не записан'
       },
       rescore: {

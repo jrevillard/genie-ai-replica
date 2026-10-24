@@ -1143,6 +1143,23 @@ describe('RagasPanel', () => {
       expect(w.text()).toContain('rr1-run');
     });
 
+    it('says WHERE the env judge came from — a bare model id is not a judge label', async () => {
+      // The env judge carries no config name, so its label used to read as
+      // a bare model id, indistinguishable from a picked config. Two runs
+      // scored by different judges must be told apart at a glance.
+      const w = mountPanel();
+      expect(w.vm.runJudgeLabel({ judge_model: 'ibm-granite/granite-4.1-8b', judge_source: 'env' })).toContain(
+        'ibm-granite/granite-4.1-8b'
+      );
+      expect(w.vm.runJudgeLabel({ judge_model: 'ibm-granite/granite-4.1-8b', judge_source: 'env' })).toContain(
+        'system default'
+      );
+      // A picked config still names the config.
+      expect(w.vm.runJudgeLabel({ judge_model: 'MiniMax-M3.1-Flash', judge_config: 'Minimax David OpenAI' })).toContain(
+        'Minimax David OpenAI'
+      );
+    });
+
     it('re-scores through the store and refreshes the history afterwards', async () => {
       judgeDispatch();
       const w = mountPanel();

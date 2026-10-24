@@ -2089,6 +2089,7 @@ export default {
         delete: 'Delete',
         rescore: 'Re-score',
         rescoreOf: 're-scored from {key}',
+        judgeEnv: 'system default',
         judgeUnknown: 'Judge not recorded'
       },
       rescore: {

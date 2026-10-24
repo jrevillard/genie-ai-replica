@@ -3433,6 +3433,7 @@ export default {
         delete: 'Hapus',
         rescore: 'Nilai ulang',
         rescoreOf: 'dinilai ulang dari {key}',
+        judgeEnv: 'bawaan sistem',
         judgeUnknown: 'Hakim tidak tercatat'
       },
       rescore: {

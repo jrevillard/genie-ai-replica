@@ -3404,6 +3404,7 @@ export default {
         delete: 'ลบ',
         rescore: 'ประเมินซ้ำ',
         rescoreOf: 'ประเมินซ้ำจาก {key}',
+        judgeEnv: 'ค่าเริ่มต้นของระบบ',
         judgeUnknown: 'ไม่ได้บันทึกผู้ตัดสิน'
       },
       rescore: {

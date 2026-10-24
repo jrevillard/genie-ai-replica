@@ -3363,6 +3363,7 @@ export default {
         delete: '删除',
         rescore: '重新评分',
         rescoreOf: '重新评分自 {key}',
+        judgeEnv: '系统默认',
         judgeUnknown: '未记录评判模型'
       },
       rescore: {

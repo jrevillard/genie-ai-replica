@@ -3429,6 +3429,7 @@ export default {
         delete: 'Futa',
         rescore: 'Tathmini upya',
         rescoreOf: 'ilithinishwa kutoka {key}',
+        judgeEnv: 'chaguo-msingi wa mfumo',
         judgeUnknown: 'Hakimu haijasishwa'
       },
       rescore: {

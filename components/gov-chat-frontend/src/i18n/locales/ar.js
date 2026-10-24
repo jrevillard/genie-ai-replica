@@ -3399,6 +3399,7 @@ export default {
         delete: 'حذف',
         rescore: 'إعادة التقييم',
         rescoreOf: 'أُعيد تقييمه من {key}',
+        judgeEnv: 'الافتراضي للنظام',
         judgeUnknown: 'لم يتم تسجيل المحكّم'
       },
       rescore: {

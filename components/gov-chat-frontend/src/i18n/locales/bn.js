@@ -3427,6 +3427,7 @@ export default {
         delete: 'মুছুন',
         rescore: 'পুনরায় মূল্যায়ন',
         rescoreOf: 'পুনরায় মূল্যায়ন {key} থেকে',
+        judgeEnv: 'সিস্টেমের ডিফল্ট',
         judgeUnknown: 'বিচারক নথিভুক্ত নয়'
       },
       rescore: {

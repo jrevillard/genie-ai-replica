@@ -2005,10 +2005,18 @@ export default {
       if (!run) return '';
       const model = run.judge_model || (run.judge_pick && run.judge_pick.model) || null;
       const config = run.judge_config || null;
+      // The ENV judge carries no config name, so the label would read as a
+      // bare model id ("ibm-granite/granite-4.1-8b") — indistinguishable
+      // from a picked config with the same model, and it does not say WHERE
+      // that judge came from. Two runs scored by different judges must be
+      // told apart at a glance: this is the whole point of the column.
+      if (run.judge_source === 'env') {
+        const label = this.translate('okf.ragas.history.judgeEnv', 'system default');
+        return model ? `${model} · ${label}` : label;
+      }
       if (model && config) return `${model} · ${config}`;
       if (model) return model;
       if (config) return config;
-      if (run.judge_source === 'env') return this.envJudgeLabel();
       return this.translate('okf.ragas.history.judgeUnknown', 'Judge not recorded');
     },
     async onRescoreOpen(run) {

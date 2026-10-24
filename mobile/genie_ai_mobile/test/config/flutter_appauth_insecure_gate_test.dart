@@ -358,6 +358,22 @@ void main() {
           );
         });
 
+        test('EndpointString type-checks the channel values', () {
+          final source = File(path).readAsStringSync();
+          final body = _methodBody(
+            source,
+            RegExp(r'NSString\s*\*?\s*EndpointString\(NSDictionary'),
+          );
+          expect(body, isNotNull, reason: 'EndpointString moved');
+          expect(
+            body,
+            contains('isKindOfClass'),
+            reason:
+                'a null serviceConfiguration field is NSNull, not nil: a '
+                'nil-check chain would crash or arm nothing',
+          );
+        });
+
         test(
           'arming resolves the provider from the serviceConfiguration too',
           () {
@@ -380,16 +396,36 @@ void main() {
             );
             expect(body, contains('authorizationEndpoint'));
             expect(body, contains('endSessionEndpoint'));
-            // Dart null arrives over the channel as NSNull: the endpoints
-            // must be type-checked, not nil-checked, or the first null
-            // field poisons the chain and crashes the arming.
+            // Dart null arrives over the channel as NSNull, and an ObjC @[]
+            // literal throws on a nil element: the endpoint values must go
+            // through the type-checking helper, and any collection literal
+            // in the body must hold only quoted constants.
             expect(
               body,
-              contains('isKindOfClass'),
+              contains('EndpointString(serviceConfigurationParameters'),
               reason:
-                  'a null serviceConfiguration field is NSNull, not nil: '
-                  'a nil-check chain would crash or arm nothing',
+                  'the endpoints bypass the NSNull type-check: the first '
+                  'null field would crash the arming',
             );
+            for (final literalMatch in RegExp(
+              r'@\[[^\]]*\]',
+            ).allMatches(body!)) {
+              for (final element
+                  in literalMatch
+                      .group(0)!
+                      .substring(2, literalMatch.group(0)!.length - 1)
+                      .split(',')) {
+                final e = element.trim();
+                if (e.isEmpty) continue;
+                expect(
+                  e.startsWith('@'),
+                  isTrue,
+                  reason:
+                      'the @[] literal holds a non-literal element '
+                      '($e): a nil there crashes the arming',
+                );
+              }
+            }
           },
         );
       });

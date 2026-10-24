@@ -58,23 +58,34 @@ serviceConfigurationParameters:(NSDictionary *)serviceConfigurationParameters {
   // (what the app usually passes, and what the exchange will actually hit),
   // plus the issuer or discovery URL for the discovery flow. A host the
   // exchange needs but that is not armed fails its certificate check.
+  // EndpointString filters the NSNulls the channel sends for absent fields;
+  // the candidates are collected into a mutable array because an @[] literal
+  // throws on a nil element.
+  NSMutableArray<NSString *> *endpoints = [NSMutableArray array];
+  for (NSString *key in @[
+    @"authorizationEndpoint",
+    @"tokenEndpoint",
+    @"endSessionEndpoint",
+  ]) {
+    NSString *endpoint = EndpointString(serviceConfigurationParameters, key);
+    if (endpoint) {
+      [endpoints addObject:endpoint];
+    }
+  }
+  if (issuer) {
+    [endpoints addObject:issuer];
+  }
+  if (discoveryUrl) {
+    [endpoints addObject:discoveryUrl];
+  }
+
   NSMutableSet<NSString *> *allowedHosts = [InsecureURLProtocol allowedHosts];
-  NSArray<NSString *> *endpoints = @[
-    serviceConfigurationParameters[@"authorizationEndpoint"],
-    serviceConfigurationParameters[@"tokenEndpoint"],
-    serviceConfigurationParameters[@"endSessionEndpoint"],
-    issuer,
-    discoveryUrl,
-  ];
-  for (NSString *endpoint in endpoints) {
-    if (![endpoint isKindOfClass:[NSString class]]) {
-      continue;
-    }
-    NSURL *providerUrl = [NSURL URLWithString:endpoint];
-    if (!providerUrl.host) {
-      continue;
-    }
-    @synchronized(allowedHosts) {
+  @synchronized(allowedHosts) {
+    for (NSString *endpoint in endpoints) {
+      NSURL *providerUrl = [NSURL URLWithString:endpoint];
+      if (!providerUrl.host) {
+        continue;
+      }
       [allowedHosts addObject:InsecureHostKey(providerUrl)];
     }
   }

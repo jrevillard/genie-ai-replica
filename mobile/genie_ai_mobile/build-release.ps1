@@ -1,7 +1,7 @@
 param(
   # Build flavor. Both the --flavor flag and the FLAVOR dart-define are set
-  # from it: without the define the app falls back to the dev configuration
-  # (localhost endpoints, trust-all TLS client armed).
+  # from it: in a release or profile build without the define, getConfig()
+  # fails at startup instead of silently running the dev configuration.
   [Parameter(Mandatory = $true, Position = 0)]
   [string]$Flavor
 )

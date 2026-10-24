@@ -52,6 +52,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A mobile release build made without the `FLAVOR` dart-define now fails at
+  startup instead of silently running the dev configuration.** `getConfig()`
+  resolved the flavor from the `FLAVOR` compile-time define and fell back to
+  `dev` when it was absent — so a release built without the define shipped
+  with every endpoint pointed at `localhost` (the app could not authenticate
+  anywhere) and the trust-all TLS client armed. In release or profile mode the
+  missing define now throws a clear `StateError`; a debug `flutter run`
+  without the define keeps the dev default for convenience. The guard is
+  exercised in CI (`flutter test --dart-define=dart.vm.product=true`) and the
+  documented build commands already set both selectors
+  (`--flavor <name> --dart-define=FLAVOR=<name>`). Deriving the define from
+  the build flavor itself remains open on the same issue. (#1099)
 - **In the vendored `flutter_appauth` fork (Android), an end-session request
   could reuse the TLS setting of the previous sign-in instead of its own.**
   The end-session processor read `allowInsecureConnections` into a local

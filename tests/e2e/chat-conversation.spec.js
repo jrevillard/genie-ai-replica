@@ -114,7 +114,7 @@ test.describe('Conversation V1', () => {
       const cs = getComputedStyle(ta);
       return { scrollH: ta.scrollHeight, maxH: parseFloat(cs.maxHeight), overflowY: cs.overflowY };
     });
-    expect(m.maxH, 'the field caps at five lines (27px x 5 + 16px padding)').toBeLessThan(m.scrollH);
+    expect(m.maxH, 'the field caps at five lines (5 line boxes + padding, computed in CSS)').toBeLessThan(m.scrollH);
     expect(m.overflowY, 'beyond five lines the field scrolls internally').toBe('auto');
     await ctx.close();
   });
@@ -293,12 +293,34 @@ test.describe('Conversation V1 — status strip', () => {
     await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
     await page.waitForSelector('.system-status-panel', { timeout: 15000 });
-    const s = await page.evaluate(() => {
-      const p = document.querySelector('.system-status-panel');
-      return { h: p.getBoundingClientRect().height, role: p.getAttribute('data-status') };
+    const read = () =>
+      page.evaluate(() => {
+        const p = document.querySelector('.system-status-panel');
+        return {
+          h: p.getBoundingClientRect().height,
+          status: p.getAttribute('data-status'),
+          role: p.querySelector('.status-left')?.getAttribute('role'),
+          explains: p.querySelector('.status-error-message')?.textContent?.trim().length > 0
+        };
+      });
+    const online = await read();
+    expect(online.h, 'the strip is compact').toBeLessThan(40);
+    expect(online.status, 'the strip reports the online state').toBe('online');
+    // A failed turn flips the strip to its offline explanation, announced.
+    await page.route('**/queries/stream**', async (route) => {
+      try {
+        await route.abort();
+      } catch {
+        /* the context closed before the abort */
+      }
     });
-    expect(s.h, 'the strip is compact').toBeLessThan(40);
-    expect(['online', 'offline'], 'the strip carries its state').toContain(s.role);
+    await page.locator('[data-testid="chat-composer"] textarea').fill('say something');
+    await page.locator('[data-testid="chat-composer"] textarea').press('Enter');
+    await page.waitForSelector('[data-testid="answer-error"]', { timeout: 30000 });
+    const offline = await read();
+    expect(offline.status, 'the strip flips to offline').toBe('offline');
+    expect(offline.role, 'the explanation is announced as a status region').toBe('status');
+    expect(offline.explains, 'the strip explains itself').toBe(true);
     await ctx.close();
   });
 });
@@ -401,14 +423,18 @@ test.describe('Conversation V1 — answer card', () => {
     });
     await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
-    // The card exists immediately (the thinking frame), before the answer text.
-    await page.waitForSelector('[data-testid="answer-card"]', { timeout: 15000 });
+    // The card exists immediately (the thinking frame), before the answer
+    // text — the indicator itself is the arrival signal (the greeting card
+    // would otherwise win the race).
+    await page.waitForSelector('.chat-message.bot .streaming-indicator', { timeout: 15000 });
     const early = await page.evaluate(() => {
-      const card = document.querySelector('[data-testid="answer-card"]');
+      const cards = document.querySelectorAll('[data-testid="answer-card"]');
+      const card = cards[cards.length - 1];
       const cs = getComputedStyle(card);
       return { shadow: cs.boxShadow !== 'none', hasThinking: !!card.querySelector('.streaming-indicator') };
     });
     expect(early.shadow, 'the card is elevated').toBe(true);
+    expect(early.hasThinking, 'the first frame shows the thinking indicator, not a fake progress').toBe(true);
     await page.waitForSelector('.chat-message.bot .message-bubble', { timeout: 30000 });
     const late = await page.evaluate(() => {
       const card = document.querySelector('[data-testid="answer-card"]');

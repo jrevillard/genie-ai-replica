@@ -58,9 +58,10 @@ serviceConfigurationParameters:(NSDictionary *)serviceConfigurationParameters {
   // (what the app usually passes, and what the exchange will actually hit),
   // plus the issuer or discovery URL for the discovery flow. A host the
   // exchange needs but that is not armed fails its certificate check.
-  // EndpointString filters the NSNulls the channel sends for absent fields;
-  // the candidates are collected into a mutable array because an @[] literal
-  // throws on a nil element.
+  // EndpointString filters the NSNulls the channel sends for absent fields —
+  // the same normalization processServiceConfigurationParameters: needs on
+  // its end-session field; the candidates are collected into a mutable
+  // array because an @[] literal throws on a nil element.
   NSMutableArray<NSString *> *endpoints = [NSMutableArray array];
   for (NSString *key in @[
     @"authorizationEndpoint",
@@ -72,22 +73,27 @@ serviceConfigurationParameters:(NSDictionary *)serviceConfigurationParameters {
       [endpoints addObject:endpoint];
     }
   }
-  if (issuer) {
-    [endpoints addObject:issuer];
-  }
-  if (discoveryUrl) {
-    [endpoints addObject:discoveryUrl];
+  // issuer and discoveryUrl are nil (not NSNull) on the app's standard
+  // path: they cannot go through a collection literal.
+  for (NSString *candidate in @[ issuer ?: @"", discoveryUrl ?: @"" ]) {
+    if (candidate.length > 0) {
+      [endpoints addObject:candidate];
+    }
   }
 
+  // Keys are computed before the critical section: the same lock guards
+  // every URL load in the process while the protocol is registered.
   NSMutableSet<NSString *> *allowedHosts = [InsecureURLProtocol allowedHosts];
-  @synchronized(allowedHosts) {
-    for (NSString *endpoint in endpoints) {
-      NSURL *providerUrl = [NSURL URLWithString:endpoint];
-      if (!providerUrl.host) {
-        continue;
-      }
-      [allowedHosts addObject:InsecureHostKey(providerUrl)];
+  NSMutableArray<NSString *> *keys = [NSMutableArray array];
+  for (NSString *endpoint in endpoints) {
+    NSURL *providerUrl = [NSURL URLWithString:endpoint];
+    if (!providerUrl.host) {
+      continue;
     }
+    [keys addObject:InsecureHostKey(providerUrl)];
+  }
+  @synchronized(allowedHosts) {
+    [allowedHosts addObjectsFromArray:keys];
   }
 }
 
@@ -506,20 +512,20 @@ AppAuthAuthorization *authorization;
 
 - (OIDServiceConfiguration *)processServiceConfigurationParameters:
     (NSDictionary *)serviceConfigurationParameters {
-  NSURL *endSessionEndpoint =
-      serviceConfigurationParameters[@"endSessionEndpoint"] == [NSNull null]
-          ? nil
-          : [NSURL URLWithString:serviceConfigurationParameters
-                                     [@"endSessionEndpoint"]];
+  NSURL *endSessionEndpoint = [NSURL
+      URLWithString:EndpointString(serviceConfigurationParameters,
+                                   @"endSessionEndpoint")];
   OIDServiceConfiguration *serviceConfiguration =
       [[OIDServiceConfiguration alloc]
           initWithAuthorizationEndpoint:
-              [NSURL URLWithString:serviceConfigurationParameters
-                                       [@"authorizationEndpoint"]]
+              [NSURL URLWithString:EndpointString(
+                                       serviceConfigurationParameters,
+                                       @"authorizationEndpoint")]
                           tokenEndpoint:
                               [NSURL
-                                  URLWithString:serviceConfigurationParameters
-                                                    [@"tokenEndpoint"]]
+                                  URLWithString:EndpointString(
+                                                    serviceConfigurationParameters,
+                                                    @"tokenEndpoint")]
                                  issuer:nil
                    registrationEndpoint:nil
                      endSessionEndpoint:endSessionEndpoint];

@@ -601,3 +601,25 @@ body.dark-mode {
      brand lightened in dark — the accent is wrong on both bands. */
   color: var(--navbar-fg, var(--accent-fg));
 }
+
+/*
+ * The conversation's wave: the same asset as the welcome screen's,
+ * anchored to the bottom of the centre column — absolute within the
+ * container, which itself never scrolls (only the message window
+ * inside it does), so the band holds its place while the messages
+ * move. Slightly dimmer than the welcome's band to favour the text
+ * over it; it shows behind the composer and rises a little on the
+ * sides only.
+ */
+html[data-visual='on'] .genie-living-intelligence .chatbot-container::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: clamp(120px, 22vh, 260px);
+  background: var(--visual-waves) bottom / 100% auto no-repeat;
+  opacity: 0.72;
+  pointer-events: none;
+  z-index: 0;
+}

@@ -2284,6 +2284,7 @@ export default {
   padding: var(--space-sm);
   background: var(--surface);
   position: relative;
+  z-index: 1;
 }
 
 .chat-message {
@@ -2820,9 +2821,11 @@ export default {
    the panel that hugs the bottom of the chatbot container and
    inherits the existing top border / background. */
 .chat-input {
-  background: var(--bg-tertiary);
-  border-top: 1px solid var(--border);
-  padding: var(--space-sm);
+  background: transparent;
+  border-top: none;
+  padding: var(--space-sm) var(--space-md);
+  position: relative;
+  z-index: 1;
 }
 
 /* Form Styles for Save Dialog */

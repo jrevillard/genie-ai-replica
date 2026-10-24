@@ -80,7 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A structural regression test in
   `test/config/flutter_appauth_insecure_gate_test.dart` fails if a rebased
   fork reintroduces the local. (#1102)
-- **Streamed chat answers could end with raw transport JSON.** ChatQnA
+- **Streamed chat answers could end with raw transport JSON.** (!595) ChatQnA
   requests streamed token usage from vLLM (`stream_options.include_usage`,
   for the `llm.invoke` span); the terminal usage-only frame of that stream was
   re-emitted by the orchestrator as if it were answer text, so answers

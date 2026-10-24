@@ -2510,8 +2510,9 @@ def _align_generator_body(gen, llm_parameters_dict, parent_context):
                     json_data = json.loads(json_str)
                 except Exception:
                     # Unparseable line ("sometimes yield empty chunk"): forward
-                    # it verbatim so an unexpected upstream format never breaks
-                    # the stream.
+                    # it verbatim — this fallback is for framing the
+                    # orchestrator cannot read as JSON at all, never for parsed
+                    # frames (those are handled below without re-emission).
                     yield f"data: {repr(json_str.encode('utf-8'))}\n\n"
                     continue
                 # From here the frame PARSED: it is structured data, not answer
@@ -2519,18 +2520,32 @@ def _align_generator_body(gen, llm_parameters_dict, parent_context):
                 _emit_llm_invoke_record(_llm_span, json_data)
                 try:
                     if "ops" in json_data and "op" in json_data["ops"][0]:
-                        if "value" in json_data["ops"][0] and isinstance(json_data["ops"][0]["value"], str):
-                            yield f"data: {repr(json_data['ops'][0]['value'].encode('utf-8'))}\n\n"
-                    elif "content" in json_data["choices"][0]["delta"]:
-                        yield f"data: {repr(json_data['choices'][0]['delta']['content'].encode('utf-8'))}\n\n"
-                except (IndexError, KeyError, TypeError):
+                        value = json_data["ops"][0].get("value")
+                        if isinstance(value, str):
+                            yield f"data: {repr(value.encode('utf-8'))}\n\n"
+                    else:
+                        # Key-presence alone would route non-string deltas
+                        # ("content": null — the tool-call delta shape) into
+                        # str-only encoding; the positive isinstance check is
+                        # the discriminator.
+                        delta = json_data["choices"][0].get("delta")
+                        content = delta.get("content") if isinstance(delta, dict) else None
+                        if isinstance(content, str):
+                            yield f"data: {repr(content.encode('utf-8'))}\n\n"
+                except (IndexError, KeyError, TypeError, AttributeError, UnicodeEncodeError) as _e:
                     # Parsed but structurally unexpected shape — no ops payload
                     # and no content delta (the terminal usage-only frame the
                     # include_usage opt-in adds, a keepalive with
-                    # "choices": null): recorded on the span above, carries no
+                    # "choices": null, an upstream error object, non-serializable
+                    # content): recorded on the span above, carries no
                     # forwardable content, so skip it rather than leak its raw
-                    # JSON as answer text.
-                    pass
+                    # JSON as answer text. The span event keeps a swallowed
+                    # frame diagnosable (the pre-skip behavior leaked it, which
+                    # at least was visible).
+                    _llm_span.add_event(
+                        "chatqna.stream.frame_skipped",
+                        {"exception.type": type(_e).__name__},
+                    )
         yield "data: [DONE]\n\n"
     finally:
         # Closes even if the upstream generator raises or the consumer abandons

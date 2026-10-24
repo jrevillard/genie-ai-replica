@@ -1578,6 +1578,32 @@ class TestAlignGenerator:
         assert any(b"tail" in r.encode() for r in result)
         assert result[-1] == "data: [DONE]\n\n"
 
+    def test_content_null_frame_does_not_kill_the_stream(self):
+        """The OpenAI tool-call delta shape carries "content": null. Key
+        presence alone would route it into .encode on None — the skip path
+        must degrade, never tear down a live answer mid-stream."""
+        chunks = [
+            b'data:{"choices":[{"delta":{"content":"Hi"}}]}\n\n',
+            b'data:{"choices":[{"delta":{"content": null}}]}\n\n',
+            b'data:{"choices":[{"delta":{"content":"ok"}}]}\n\n',
+        ]
+        result = self._run_generator(align_generator(None, gen=chunks))
+        assert any(b"Hi" in r.encode() for r in result)
+        assert any(b"ok" in r.encode() for r in result)
+        assert '"content": null' not in "".join(result)
+        assert result[-1] == "data: [DONE]\n\n"
+
+    def test_lone_surrogate_content_does_not_kill_the_stream(self):
+        """A JSON \\ud800 escape parses to a lone surrogate that .encode
+        cannot serialize; the frame is skipped, the stream survives."""
+        chunks = [
+            b'data:{"choices":[{"delta":{"content":"\\ud800"}}]}\n\n',
+            b'data:{"choices":[{"delta":{"content":"after"}}]}\n\n',
+        ]
+        result = self._run_generator(align_generator(None, gen=chunks))
+        assert any(b"after" in r.encode() for r in result)
+        assert result[-1] == "data: [DONE]\n\n"
+
 
 # ===========================================================================
 # Task 9: Test ChatQnAService initialization and service graph

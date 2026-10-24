@@ -290,6 +290,10 @@ class TestAlignGeneratorWiring:
         (emitted,) = captured_spans("llm.invoke")
         assert emitted.attributes[A["llm_stream"]] is True
         assert emitted.attributes[A["llm_stream_options_include_usage"]] is True
+        # The usage-only terminal frame is recorded (above) and then skipped:
+        # the skip leaves an event so a swallowed frame stays diagnosable.
+        event_names = [event.name for event in emitted.events]
+        assert "chatqna.stream.frame_skipped" in event_names
         assert emitted.attributes[A["llm_req_max_tokens"]] == 256
         assert emitted.attributes[A["llm_usage_prompt_tokens"]] == 1200
         assert emitted.attributes[A["llm_usage_completion_tokens"]] == 2

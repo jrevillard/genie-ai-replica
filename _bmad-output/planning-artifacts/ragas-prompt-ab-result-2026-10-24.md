@@ -22,11 +22,27 @@ moved is the answer leg. This is a genuine one-variable experiment.
 | context_utilization | 0.9397 | 0.9274 | −0.012 | ~ |
 | answer_correctness | 0.7123 | **0.6950** | **−0.017** | ❌ |
 | answer_relevancy | 0.8566 | **0.8127** | **−0.044** | ❌ |
-| **abstentions** | **4** | **10** | **+6** | ❌ |
 | **answer length (avg)** | **1273 ch** | **717 ch** | **−44%** | ⚠ the mechanism |
 | null-metric rows | 10 | 2 | −8 | side effect (see §5) |
 
 Row-level: **41 rows improved, 37 regressed** on the answer-side metrics.
+
+> **CORRECTION (2026-10-24, later the same day).** This document's first
+> version reported "abstentions 4 → 10" as evidence that the prompt
+> over-constrained the model. **That was an artefact of the benchmark's
+> broken abstention detector** (see
+> `ragas-abstention-false-positive-2026-10-24.md`): the flag fired on any
+> answer containing "does not provide" / "not contain" — and the chat UI
+> answered those same questions in full with a 99% confidence badge and the
+> related documents. After the repair, **both runs record 0 abstentions**
+> (the honest count: the benchmark did not abstain at all).
+>
+> What survives the correction: the answers really did get **44% shorter**
+> (1273 → 717 chars), the fabrication cases are real (new-29 "Migration
+> into Pods", new-86 "the life cycle of this pest is 20 days"), and
+> faithfulness really did rise (+0.052) while relevancy fell (−0.044). The
+> length/completeness trade-off is the real finding; the abstention count
+> was never evidence of anything.
 
 ## 3. The mechanism — the prompt bought precision and paid in recall
 
@@ -37,9 +53,13 @@ explains the whole scoreboard:
 - Less coverage of the reference → **answer_relevancy −0.044**,
   **answer_correctness −0.017**. RAGAS's answer_relevancy generates follow-up
   questions from the answer; a terser answer generates fewer and scores lower.
-- The strict "if not in the context, say it is not available" rule turned 6
-  previously-answered rows into abstentions (new-43, new-53, new-55, new-68,
-  new-72, new-90) — **abstention count went 4 → 10**.
+- ~~The strict "if not in the context, say it is not available" rule turned 6
+  previously-answered rows into abstentions~~ — **RETRACTED: the "abstentions"
+  were a detector bug, not model behaviour. Both runs: 0 real abstentions.**
+  What the rule did do was make the answer SAY "the knowledge base does not
+  provide…" — and (because the detector was broken) that sentence also got the
+  row mislabelled and zeroed. The judge's `answer_relevancy = 0.00` on those
+  rows is its own verdict on a partial answer, and it stands.
 
 **And the terseness induced fabrication** — the most damaging finding:
 - `new-29` (corn earworm): faithfulness **1.00 → 0.09**. The baseline answer

@@ -1882,11 +1882,11 @@ describe('serve mode — the benchmark measures the SERVED system (2026-10-23)',
     expect(doc.payload.summary.n_errors).toBe(1);
   });
 
-  it('detects a served abstention from the refusal text (the normal metadata event carries no abstained key)', async () => {
+  it('detects a served abstention from chatqna metadata (nothing retrieved, not grounded)', async () => {
     // chatqna's normal streaming metadata never emits 'abstained' (only the
-    // reranker-overflow branch does) — the refusal must be recognised from
-    // the answer text exactly like the whatif leg's generateAnswer does,
-    // or every served abstention is recorded as 'answered'.
+    // reranker-overflow branch does). The SERVED authority for "there was
+    // nothing to answer from" is is_grounded=false with no source documents
+    // (and no related documents for the citizen).
     const begun = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
     await begun.done;
     const baseFetch = global.fetch;
@@ -1908,6 +1908,70 @@ describe('serve mode — the benchmark measures the SERVED system (2026-10-23)',
     const doc = await svc.getRunSuite('me', begun.suite_key, run.run_key);
     expect(doc.status).toBe('done');
     expect(doc.payload.results[0].abstained).toBe(true);
+  });
+
+  // David 2026-10-24 (live): the benchmark recorded 10 abstentions that the
+  // chat UI answered IN FULL with a 99% confidence badge. The old detector
+  // fired on 'does not provide' / 'not contain' ANYWHERE in the answer, so a
+  // complete answer that says one part of the question is not covered was
+  // recorded as an abstention — which zeroed the row's answer metrics, routed
+  // the attribution to the "abstention" stage, and made the advisor
+  // recommend tightening the prompt. The citizen path shows such an answer
+  // in full; the benchmark must agree with the citizen path.
+  it('a COMPLETE answer that says part of the question is not covered is NOT an abstention', async () => {
+    const begun = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
+    await begun.done;
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url, opts = {}) => {
+      const u = String(url);
+      if (u.includes('/v1/chatqna')) {
+        return Promise.resolve(
+          sseResponse([
+            "data: b'In the field validations conducted in Chalatenango, the CENTA-CS variety performed significantly better than local varieties: 70 qq/mz versus 45 qq/mz. The knowledge base does not provide specific performance data for CENTA-ASG beyond these points, but it clearly indicates that both varieties outperformed local controls in the region.'\n\n",
+            'data: {"type":"metadata","source_documents":[{"id":"d1","text":"CENTA-CS yielded 70 qq/mz versus 45 qq/mz at Los Naranjos."}],"confidence_score":0.99,"self_confidence":0.99,"is_grounded":true}\n\n',
+            'data: [DONE]\n\n'
+          ])
+        );
+      }
+      return baseFetch(url, opts);
+    });
+    const run = await svc.beginRunSuite('me', begun.suite_key, {}, { actor: { user_id: 'u1' } });
+    await run.done;
+    const doc = await svc.getRunSuite('me', begun.suite_key, run.run_key);
+    expect(doc.status).toBe('done');
+    const row = doc.payload.results[0];
+    expect(row.abstained).toBe(false); // ← the bug: this was true
+    expect(row.answer).toContain('70 qq/mz');
+    // The grounding evidence the citizen saw is recorded on the row.
+    expect(row.confidence).toBe(0.99);
+    expect(row.self_confidence).toBe(0.99);
+    expect(row.is_grounded).toBe(true);
+    expect(row.related_documents).toBe(1);
+    expect(doc.payload.summary.n_abstained).toBe(0);
+  });
+
+  it("chatqna's own abstention flag wins over the answer text", async () => {
+    const begun = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
+    await begun.done;
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url, opts = {}) => {
+      const u = String(url);
+      if (u.includes('/v1/chatqna')) {
+        return Promise.resolve(
+          sseResponse([
+            "data: b'Retrying with a shorter context.'\n\n",
+            'data: {"type":"metadata","source_documents":[],"confidence_score":0.0,"is_grounded":false,"abstained":true,"abstention_reason":"reranker_input_too_long"}\n\n',
+            'data: [DONE]\n\n'
+          ])
+        );
+      }
+      return baseFetch(url, opts);
+    });
+    const run = await svc.beginRunSuite('me', begun.suite_key, {}, { actor: { user_id: 'u1' } });
+    await run.done;
+    const doc = await svc.getRunSuite('me', begun.suite_key, run.run_key);
+    expect(doc.payload.results[0].abstained).toBe(true);
+    expect(doc.payload.results[0].abstention_reason).toBe('reranker_input_too_long');
   });
 });
 

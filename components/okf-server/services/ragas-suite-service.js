@@ -149,30 +149,62 @@ function ANSWER_SYSTEM_PROMPT() {
 // answer was marked abstained, inflating n_abstained and misrouting its
 // failures to the 'abstention contract' stage (2026-10-21 review F11).
 // The abstention now needs the phrase in a NEGATED construction.
-const ABSTENT_PATTERNS = [
-  'cannot find',
-  "can't find",
-  'does not contain',
-  'not contain',
-  'no information',
-  'not provide',
-  "doesn't provide",
-  'do not have',
-  "don't have",
-  'unable to find',
-  'no relevant information',
-  'not available in'
-];
-const ABSTENT_NEGATED_KB = [
-  'not in the knowledge base',
-  'not in this knowledge base',
-  'no knowledge base',
-  'knowledge base does not',
-  'knowledge base contains no',
-  'knowledge base has no',
-  'knowledge base is empty',
-  'not found in the knowledge base'
-];
+// ABSTENTION DETECTION — authoritative, not heuristic (David 2026-10-24,
+// "fix it for ALL abstained queries": the benchmark reported 10 abstentions
+// on rows the chat UI answered with full content and 99% confidence).
+//
+// The old matcher fired on 'not provide' / 'does not contain' / 'cannot find'
+// ANYWHERE in the answer, so a complete answer that merely SAYS part of the
+// question is not covered by the knowledge base ("The knowledge base does not
+// provide additional specific characteristics…") was recorded as an
+// abstention. That flag then (a) zeroed the row's answer metrics in the
+// panel, (b) routed the attribution to the "abstention" stage, and (c) made
+// the advisor recommend tightening the prompt. All three were wrong: the
+// served path had answered.
+//
+// What counts as an abstention now:
+//   - chatqna's own flag (the reranker-overflow branch sets abstained:true),
+//   - an EMPTY answer (nothing was said),
+//   - chatqna's own abstention sentinel, which PREFIXES the whole answer.
+//
+// A sentence about missing information inside an otherwise complete answer is
+// a PARTIAL ANSWER, not an abstention.
+const ABSTENT_SENTINEL = '[no relevant documents found]';
+
+/** True when the SERVED chatqna response is an abstention.
+ *
+ * The authority is chatqna's OWN metadata — the same signals the citizen UI
+ * uses (David 2026-10-24: "the chatqna will tell you when an answer is AI
+ * generated and also the confidence level of the response"):
+ *   - `abstained: true`   → chatqna declined (reranker-overflow branch)
+ *   - `is_grounded:false` + no source documents → nothing was retrieved, so
+ *     there was nothing to answer from
+ *   - an EMPTY answer     → nothing was said
+ *   - chatqna's own "[No Relevant Documents Found]" sentinel prefix
+ *
+ * What is NOT an abstention: a sentence inside a complete answer saying the
+ * knowledge base does not cover one part of the question. The citizen path
+ * shows such an answer in full (with its confidence badge) and so must the
+ * benchmark — mislabelling it made 10 rows "abstentions" that the chat UI
+ * answered with 99% confidence. */
+function servedIsAbstention(meta, answer) {
+  const flag = meta && meta.abstained;
+  if (flag === true || flag === 'true') return true;
+  const text = String(answer || '').trim();
+  if (!text) return true;
+  if (text.toLowerCase().startsWith(ABSTENT_SENTINEL)) return true;
+  const docs = meta && meta.source_documents;
+  if (Array.isArray(docs) && docs.length === 0 && meta && meta.is_grounded === false) return true;
+  return false;
+}
+
+/** True when the whatif leg's guided-JSON answer is an abstention. */
+function matchAbstention(answer, selfReported) {
+  if (selfReported === true) return true;
+  const text = String(answer || '').trim();
+  if (!text) return true;
+  return text.toLowerCase().startsWith(ABSTENT_SENTINEL);
+}
 
 let _collectionEnsured = false;
 
@@ -750,16 +782,28 @@ async function serveAnswer(query, graphs) {
         'chatqna returned source documents without served chunk texts — include_contexts unsupported (chatqna image older than okf-server?)'
       );
     }
-    // chatqna's normal metadata event carries no 'abstained' key (only the
-    // reranker-overflow branch emits one), so detect the refusal text the
-    // same way the whatif leg's generateAnswer does.
-    const abstained = meta.abstained === true || matchAbstention(answer.trim());
+    // chatqna's metadata is the authority on abstention: the normal path
+    // carries no 'abstained' key (the reranker-overflow branch sets it
+    // true), and a real KB-empty refusal is prefixed with chatqna's own
+    // sentinel. A text scan for phrases like "does not provide" is NOT an
+    // abstention signal — it mislabels partial answers (David 2026-10-24).
+    const abstained = servedIsAbstention(meta, answer.trim());
     return {
       answer: answer.trim(),
       abstained,
       abstention_reason: meta.abstention_reason || '',
       confidence: meta.confidence_score !== undefined ? meta.confidence_score : null,
+      // chatqna's own grounding work (David 2026-10-24: "the chatqna will
+      // tell you when an answer is AI generated and also the confidence
+      // level of the response"; the UI renders the same badge from the same
+      // metadata, and lists the related documents). The benchmark records
+      // them so the panel and the advisor reason about the SAME evidence
+      // the citizen saw — not about a text-pattern guess.
+      self_confidence:
+        meta.self_confidence !== undefined && meta.self_confidence !== null ? meta.self_confidence : null,
+      retrieval_confidence: meta.retrieval_confidence_score !== undefined ? meta.retrieval_confidence_score : null,
       is_grounded: Boolean(meta.is_grounded),
+      related_documents: docs.length,
       // The SERVED contexts — the exact chunks the model answered from.
       contexts,
       // chatqna speaks in document ids (file_id == concept_id for OKF chunks),
@@ -868,16 +912,10 @@ async function generateAnswer(query, contexts) {
     /* unparseable answer contract — fall through with parsed null */
   }
   const answer = parsed && typeof parsed.answer === 'string' ? parsed.answer : String(content || '');
-  const abstained = (parsed && parsed.abstained === true) || matchAbstention(answer);
+  // The guided-JSON contract carries the model's own abstained flag; the
+  // text fallback only covers an empty answer or chatqna's sentinel.
+  const abstained = matchAbstention(answer, parsed && parsed.abstained === true);
   return { answer, abstained };
-}
-
-function matchAbstention(answer) {
-  const a = String(answer || '').toLowerCase();
-  if (!a) return true;
-  if (ABSTENT_PATTERNS.some((p) => a.includes(p))) return true;
-  // The knowledge-base phrasing only counts when NEGATED (see F11).
-  return ABSTENT_NEGATED_KB.some((p) => a.includes(p));
 }
 
 /** What the run's fidelity block records about the ANSWER leg — mirrors the
@@ -1768,6 +1806,13 @@ async function runSuite(repoId, suiteKey, opts = {}) {
               abstained: served.abstained,
               abstention_reason: served.abstained ? served.abstention_reason || 'answer contract' : '',
               confidence: served.confidence,
+              // The grounding evidence the citizen UI showed for this answer
+              // (its confidence badge + related documents). The advisor and
+              // the panel read these instead of guessing from the prose.
+              self_confidence: served.self_confidence,
+              retrieval_confidence: served.retrieval_confidence,
+              is_grounded: served.is_grounded,
+              related_documents: served.related_documents,
               error: null
             };
           } else {
@@ -2512,9 +2557,39 @@ function attributeFailures(suite, runDoc, evidence) {
       failed.includes('factual_correctness') ||
       failed.includes('answer_correctness')
     ) {
-      stage = 'llm';
-      recommendation =
-        'the answer drifts from the retrieved context — tighten CHATQNA_SYSTEM_PROMPT grounding or reassess the model minimums';
+      // A GROUNDED answer that loses on claim-matching is not a grounding
+      // defect (David 2026-10-24: the advisor told us to "tighten grounding"
+      // on rows whose answers were verbatim-correct — new-26's "23 mg" was
+      // in the context, in the reference AND in the answer, and still scored
+      // factual_correctness 0.20). Faithfulness is the metric that says
+      // "the answer drifted"; if it PASSED, the answer is grounded and the
+      // gap is the judge's claim matching. Only a faithfulness failure
+      // licenses the grounding advice.
+      const faithPassed =
+        typeof m.faithfulness === 'number' &&
+        m.faithfulness === m.faithfulness &&
+        m.faithfulness >= (thresholds.faithfulness || 0.6);
+      // The SERVED evidence can also contradict the judge: chatqna's LLM
+      // self-grade says the documents support the answer (the confidence
+      // badge the citizen saw) and the related documents came back — while
+      // the judge says the claims drift. That disagreement is a JUDGE
+      // finding, not a prompt defect.
+      const selfHigh =
+        typeof r.self_confidence === 'number' && r.self_confidence === r.self_confidence && r.self_confidence >= 0.8;
+      const servedGrounded = r.is_grounded === true && Number(r.related_documents || 0) > 0;
+      if (faithPassed || (selfHigh && servedGrounded)) {
+        stage = 'judge';
+        recommendation =
+          'the answer IS grounded in the retrieved context (faithfulness ' +
+          `${typeof m.faithfulness === 'number' ? m.faithfulness.toFixed(2) : 'n/a'}` +
+          (selfHigh ? `, chatqna self-grade ${r.self_confidence.toFixed(2)}` : '') +
+          ') — the gap is judge claim-matching, not a prompt defect; ' +
+          'treat as judge noise unless a stronger judge model reproduces it, and do NOT tighten the prompt for this row';
+      } else {
+        stage = 'llm';
+        recommendation =
+          'the answer drifts from the retrieved context — tighten CHATQNA_SYSTEM_PROMPT grounding or reassess the model minimums';
+      }
     } else if (failed.includes('answer_relevancy') && r.abstained) {
       stage = 'abstention';
       recommendation = 'the model abstained on an answerable query — abstention contract too strict for this entry';
@@ -2560,6 +2635,15 @@ function attributeFailures(suite, runDoc, evidence) {
             in_corpus: ladder.inCorpus,
             in_candidates: ladder.inCandidates,
             in_contexts: ladder.inContexts,
+            // The SERVED grounding evidence (chatqna's own work): the
+            // confidence badge the citizen saw, the LLM self-grade, and the
+            // number of related documents that came back with the answer.
+            // A row with a high self-grade and related documents is NOT a
+            // grounding problem, whatever the judge scored.
+            confidence: r.confidence === undefined ? null : r.confidence,
+            self_confidence: r.self_confidence === undefined ? null : r.self_confidence,
+            is_grounded: r.is_grounded === undefined ? null : r.is_grounded,
+            related_documents: r.related_documents === undefined ? null : r.related_documents,
             // Whether the LADDER decided this row's stage. It only does so
             // for a RECALL failure — when recall passed, the passage was
             // effectively found and the metric that failed (precision,
@@ -2837,7 +2921,22 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
                   // content for it. Only propose content_curation for rows
                   // whose stage is "corpus".
                   'Propose content_curation ONLY for rows whose stage is "corpus"; ' +
-                  'for "vector-recall" and "reranker" propose a knob change instead.'
+                  'for "vector-recall" and "reranker" propose a knob change instead. ' +
+                  // David 2026-10-24: the advisor prescribed "tighten
+                  // CHATQNA_SYSTEM_PROMPT grounding" on ~30 rows of a run
+                  // whose answers were already grounded, and never saw that
+                  // the prompt had pushed abstentions up and answers 44%
+                  // shorter. The run-level facts are in the payload below —
+                  // READ them before prescribing anything.
+                  'RULES: ' +
+                  '(1) A row with stage "judge" is a JUDGE-side finding (the answer is grounded and the judge scored it harshly). ' +
+                  'Do NOT propose a prompt tweak, a content change or a knob change for it; say it needs a stronger judge to confirm. ' +
+                  '(2) A row with stage "abstention" means the model declined — the abstention contract may be too strict; that is a COVERAGE argument, not a grounding one. ' +
+                  '(3) Only rows staged "llm" justify a grounding change, and only when their faithfulness actually failed. ' +
+                  '(4) Check run_facts.abstentions against run_facts.rows: if a large share of rows abstained, the prompt is OVER-CONSTRAINING — ' +
+                  'recommend restoring coverage (answer every part the context supports, keep the facts) instead of tightening grounding. ' +
+                  '(5) Check run_facts.mean_answer_chars: if answers are very short, completeness is being lost — recommend coverage, not brevity. ' +
+                  '(6) Every prompt_tweak must name the rows it is based on and the evidence behind them.'
               },
               {
                 role: 'user',
@@ -2845,6 +2944,27 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
                   repo: suite.name,
                   metrics: runDoc.metrics,
                   summary: runDoc.payload.summary,
+                  // The run-level facts the advisor must read before it
+                  // prescribes anything (David 2026-10-24): how many rows
+                  // abstained and how long the answers are. Without these it
+                  // prescribed "tighten grounding" on a run that was already
+                  // over-constraining the model.
+                  run_facts: {
+                    rows: (runDoc.payload.results || []).length,
+                    abstentions: (runDoc.payload.results || []).filter((r) => r.abstained).length,
+                    mean_answer_chars: Math.round(
+                      (runDoc.payload.results || []).reduce((a, r) => a + String(r.answer || '').length, 0) /
+                        Math.max(1, (runDoc.payload.results || []).length)
+                    ),
+                    abstained_rows: (runDoc.payload.results || [])
+                      .filter((r) => r.abstained)
+                      .map((r) => r.id)
+                      .slice(0, 20),
+                    stage_counts: attributions.reduce((acc, a) => {
+                      acc[a.stage] = (acc[a.stage] || 0) + 1;
+                      return acc;
+                    }, {})
+                  },
                   attributions: attributions.slice(0, 40)
                 })
               }

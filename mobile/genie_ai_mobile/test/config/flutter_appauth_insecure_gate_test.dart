@@ -281,6 +281,17 @@ void main() {
                   'app passes those, so the host would arm nil',
             );
             expect(body, contains('authorizationEndpoint'));
+            expect(body, contains('endSessionEndpoint'));
+            // Dart null arrives over the channel as NSNull: the endpoints
+            // must be type-checked, not nil-checked, or the first null
+            // field poisons the chain and crashes the arming.
+            expect(
+              body,
+              contains('isKindOfClass'),
+              reason:
+                  'a null serviceConfiguration field is NSNull, not nil: '
+                  'a nil-check chain would crash or arm nothing',
+            );
           },
         );
       });

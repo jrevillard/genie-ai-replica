@@ -59,10 +59,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   insecure exchange (`allowInsecureConnections: true` — the `dev` and `e2e`
   flavors), so every request the app made during that window — API calls,
   telemetry, image fetches — was intercepted and its certificate check
-  skipped. Registration now arms the provider's host and the protocol refuses
-  every other one, so unrelated traffic keeps its verification even mid
-  exchange. Production flavors run with the flag off and are unaffected.
-  Structured guards pin the scoping on both platforms.
+  skipped. Registration now arms the provider's host and port (resolved
+  from the request's `serviceConfiguration` endpoints, or its issuer or
+  discovery URL) and the protocol refuses every other one, so unrelated
+  traffic keeps its verification even mid exchange. Production flavors run
+  with the flag off and are unaffected. Structured guards pin the scoping on
+  both platforms.
 
 ### Fixed
 

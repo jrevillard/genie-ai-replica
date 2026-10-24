@@ -1604,6 +1604,22 @@ class TestAlignGenerator:
         assert any(b"after" in r.encode() for r in result)
         assert result[-1] == "data: [DONE]\n\n"
 
+    def test_upstream_error_object_frame_is_skipped_not_leaked(self):
+        """A parsed upstream error frame carries no forwardable content: it is
+        skipped (diagnostics, not raw JSON in the answer) and the stream
+        survives to [DONE]."""
+        chunks = [
+            b'data:{"choices":[{"delta":{"content":"Hi"}}]}\n\n',
+            b'data:{"error": {"message": "Model overloaded"}}\n\n',
+            b'data:{"choices":[{"delta":{"content":"ok"}}]}\n\n',
+        ]
+        result = self._run_generator(align_generator(None, gen=chunks))
+        joined = "".join(result)
+        assert any(b"Hi" in r.encode() for r in result)
+        assert any(b"ok" in r.encode() for r in result)
+        assert "Model overloaded" not in joined
+        assert result[-1] == "data: [DONE]\n\n"
+
 
 # ===========================================================================
 # Task 9: Test ChatQnAService initialization and service graph

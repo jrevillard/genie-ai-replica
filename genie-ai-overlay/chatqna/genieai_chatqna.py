@@ -2517,6 +2517,9 @@ def _align_generator_body(gen, llm_parameters_dict, parent_context):
                     continue
                 # From here the frame PARSED: it is structured data, not answer
                 # text gone missing — nothing below may re-emit its raw JSON.
+                # The recorder is defensive by contract (never raises on
+                # malformed frames); it stays outside the skip guard so a
+                # recorder bug surfaces instead of being swallowed.
                 _emit_llm_invoke_record(_llm_span, json_data)
                 try:
                     if "ops" in json_data and "op" in json_data["ops"][0]:
@@ -2532,19 +2535,26 @@ def _align_generator_body(gen, llm_parameters_dict, parent_context):
                         content = delta.get("content") if isinstance(delta, dict) else None
                         if isinstance(content, str):
                             yield f"data: {repr(content.encode('utf-8'))}\n\n"
-                except (IndexError, KeyError, TypeError, AttributeError, UnicodeEncodeError) as _e:
-                    # Parsed but structurally unexpected shape — no ops payload
-                    # and no content delta (the terminal usage-only frame the
-                    # include_usage opt-in adds, a keepalive with
-                    # "choices": null, an upstream error object, non-serializable
-                    # content): recorded on the span above, carries no
-                    # forwardable content, so skip it rather than leak its raw
-                    # JSON as answer text. The span event keeps a swallowed
-                    # frame diagnosable (the pre-skip behavior leaked it, which
-                    # at least was visible).
+                except Exception as _e:
+                    # The policy this block implements: a parsed frame with no
+                    # forwardable content is transport metadata — the terminal
+                    # usage-only frame the include_usage opt-in adds, a
+                    # keepalive with "choices": null, an upstream error object,
+                    # non-serializable content. It was already recorded on the
+                    # span above, and it must be skipped here rather than leak
+                    # its raw JSON as answer text or tear down a live stream:
+                    # no exception out of this block, whatever upstream emits
+                    # next. Span event + warning keep the skip diagnosable (the
+                    # pre-skip behavior leaked the frame, which at least was
+                    # visible).
                     _llm_span.add_event(
                         "chatqna.stream.frame_skipped",
                         {"exception.type": type(_e).__name__},
+                    )
+                    _frame_keys = sorted(json_data) if isinstance(json_data, dict) else type(json_data).__name__
+                    logger.warning(
+                        f"Skipped an LLM stream frame with no forwardable content "
+                        f"(exception={type(_e).__name__}, frame keys={_frame_keys})"
                     )
         yield "data: [DONE]\n\n"
     finally:

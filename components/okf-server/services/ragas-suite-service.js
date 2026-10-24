@@ -2877,6 +2877,14 @@ function attributeFailures(suite, runDoc, evidence) {
             // in_contexts=0 and still be a "reranker" verdict, because the
             // judge credited the content as covered by other chunks.
             ladder_applied: ladderStage != null,
+            // WHERE THE EXPECTED PASSAGE ACTUALLY WENT — always, not only
+            // when the ladder decided the stage. The ladder is computed for
+            // every failing row; without this field its verdict is
+            // discarded whenever context_recall passed, and the only
+            // remaining signal is the context_recall proxy — which measures
+            // whether the reference ANSWER's sentences are attributable to
+            // the contexts, NOT whether the expected passage was delivered.
+            ladder_stage: ladder.stage || null,
             carrier_chunk: ladder.carrierKey || null,
             candidate_rank: ladder.rank || null,
             corpus_matched_chunks: ev.matched_chunks,

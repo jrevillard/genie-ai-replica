@@ -1052,7 +1052,8 @@ export default {
         .filter(([, v]) => typeof v === 'number')
         .map(([key, v]) => {
           const cov = summary.coverage && summary.coverage[key];
-          const partial = cov && typeof cov.scored === 'number' && typeof cov.total === 'number' && cov.scored < cov.total;
+          const partial =
+            cov && typeof cov.scored === 'number' && typeof cov.total === 'number' && cov.scored < cov.total;
           return {
             key,
             label: this.metricLabel(key),

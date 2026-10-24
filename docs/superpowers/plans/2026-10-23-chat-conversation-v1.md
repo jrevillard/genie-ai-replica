@@ -419,6 +419,14 @@ Note: the user row must place the avatar on the right (`.chat-message.user` alre
 ```js
 test('the assistant answer renders inside one elevated card, from the first frame', async ({ browser }) => {
   const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
+  // Throttle the stream so the thinking frame is stable and observable —
+  // otherwise the answer may complete before the first read.
+  await page.route('**/queries/stream**', async (route) => {
+    const resp = await route.fetch();
+    const body = await resp.text();
+    await new Promise((r) => setTimeout(r, 800));
+    await route.fulfill({ response: resp, body });
+  });
   await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
   await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
   // The card exists immediately (the thinking frame), before the answer text.
@@ -658,31 +666,45 @@ Refactor `handleFeedbackSubmit` so its service call becomes the reusable `submit
 ```js
 test('an ungrounded answer shows the amber warning inside the card and no empty sources', async ({ browser }) => {
   const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
-  // A chit-chat prompt the retriever cannot ground; if it grounds, the
-  // test self-skips (the state needs an ungrounded answer to exist).
-  await page.locator('[data-testid="welcome-composer"] textarea').fill('Tell me a joke about clouds');
+  // Deterministic: the ungrounded state comes from the metadata frame,
+  // so the test replays a grounded-looking stream whose metadata frame
+  // declares is_grounded=false — never a live RAG answer, which may
+  // ground either way.
+  let seen = 0;
+  await page.route('**/queries/stream**', async (route) => {
+    const resp = await route.fetch();
+    let body = await resp.text();
+    // Append a metadata SSE frame declaring the answer ungrounded, if
+    // the live stream did not already carry one.
+    if (!body.includes('is_grounded')) {
+      body += `\nevent: metadata\ndata: ${JSON.stringify({ is_grounded: false, confidence_score: 0.78 })}\n\n`;
+    }
+    await route.fulfill({ response: resp, body });
+    seen++;
+  });
+  await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
   await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
   await page.waitForSelector('.chat-message.bot .answer-card', { timeout: 45000 });
   const s = await page.evaluate(() => {
     const card = document.querySelector('.chat-message.bot .answer-card');
     const warn = card.querySelector('.answer-warning');
     return {
-      warn: warn ? getComputedStyle(warn).color : null,
+      warnBg: warn ? getComputedStyle(warn).backgroundColor : null,
       sources: !!card.querySelector('[data-testid="answer-sources"]')
     };
   });
-  if (!s.warn) { test.skip(true, 'the answer grounded — the state needs an ungrounded one'); return; }
+  expect(s.warnBg, 'the amber warning paints (the mocked frame ran)').not.toBeNull();
   expect(s.sources, 'no empty sources section on an ungrounded answer').toBe(false);
   await ctx.close();
 });
 
 test('a failed turn shows a retry that re-sends the same query', async ({ browser }) => {
   const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
-  // Sabotage the backend call for the first attempt only: abort the SSE
-  // route once, then let it through.
+  // Sabotage the submit call for the first attempt only: the chat
+  // endpoint is POST {httpService base}/queries (chatbotService.js:15).
   let aborted = false;
-  await page.route('**/api/chat/**', async (route) => {
-    if (!aborted) { aborted = true; return route.abort(); }
+  await page.route('**/queries', async (route) => {
+    if (route.request().method() === 'POST' && !aborted) { aborted = true; return route.abort(); }
     return route.continue();
   });
   await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
@@ -820,9 +842,8 @@ test('the documents panel shows a neutral empty state and keeps the FAQs', async
   await page.waitForSelector('.chat-message.bot', { timeout: 45000 });
   await page.waitForSelector('[data-testid="documents-empty"]', { timeout: 15000 });
   const s = await page.evaluate(() => {
-    const panel = document.querySelector('.right-sidebar, [class*="right"]');
     const empty = document.querySelector('[data-testid="documents-empty"]');
-    const faq = document.body.querySelector('[class*="faq"], [class*="Faq"]');
+    const faq = document.querySelector('[data-testid="faq-section"]');
     return { emptyText: empty ? empty.textContent : '', faqVisible: !!faq };
   });
   expect(s.emptyText.length, 'the empty state explains itself').toBeGreaterThan(0);
@@ -841,6 +862,8 @@ test('the documents panel shows a neutral empty state and keeps the FAQs', async
   <p class="documents-empty__hint">{{ translate('documents.willAppearHere') }}</p>
 </div>
 ```
+
+and add `data-testid="faq-section"` to the FAQ section's root element (the test asserts on it — a testid, never a class-shaped guess).
 
 (Import `Files` from `@lucide/vue`; the two keys are new — Task 11's batch, with English fallbacks here.) Styles: centred column, `color: var(--muted)`, the icon at `opacity: 0.5`, gaps `var(--space-sm)`. The FAQs render after it unchanged. Also fix the **singular/plural label mismatch** at `RightSideBarComponent.vue:377` while here (read the line; make the label follow `relatedDocuments.length` — the exact fix is a one-line ternary on the existing key pair, and the Task 11 batch adds the missing singular key if absent).
 - [ ] **Step 4: Run — expect PASS.**
@@ -950,7 +973,7 @@ test('the layer-off conversation keeps the same layout boxes', async ({ browser 
 });
 ```
 
-- [ ] **Step 2: The contrast check on the new inks** (the amber warning and the initials circle must clear 4.5:1 — reuse `lum`/`contrastRatio` from the helper over `capturePixels` of the card, the same recipe `welcome-banner.spec.js`'s subtitle assertion uses).
+- [ ] **Step 2: The contrast check on the new inks** (the amber warning and the initials circle must clear 4.5:1 — reuse `lum`/`contrastRatio` over `capturePixels` of the card, the same recipe `welcome-banner.spec.js`'s subtitle assertion uses. `contrastRatio` exists in `tests/e2e/helpers/welcome.js:168` but is **not exported** — first add it to that file's `module.exports` in this task).
 - [ ] **Step 3: The visual fidelity loop.** Capture the full conversation (light + dark, 1440 and 1920) with `tests/e2e/capture-dashboard.js` (it already saves PNG + audit JSON pairs; extend its state list with a "conversation" state if missing — it aborts on a state it claims but did not reach, keep that). Compare against `/tmp/mockups/genie-chat-v1-spec.png`: the wave's position and height band, the card's elevation, the header strip, the composer's float. **The audit JSON wins over the PNG** wherever they disagree. Iterate fix → capture → compare until the sheet and the render agree.
 - [ ] **Step 4: Mutation.** One mutation per invariant group (the layer-off equality, the contrast floor) — break it, watch RED, revert, watch GREEN.
 - [ ] **Step 5: The full local gate** — from the worktree root:

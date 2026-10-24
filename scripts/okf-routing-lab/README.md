@@ -39,8 +39,10 @@ directly, drive a live benchmark, or repair stored state.
 | `ragas-probe.js` | Read-only shape probe — repos, suites, runs and their metrics |
 | `ragas-row-inspector.js` | Read-only: the run-doc fields for named failing rows |
 | `ragas-rescore-judge.js` | Re-score a **stored** run with a **different** judge (needs `x-ragas-secret`) |
+| `ragas-compare-judges.js` | Read-only: compare a **finished** re-score job against the stored scores of the run it re-scored — the mean-per-metric table and the biggest movers |
 | `ragas-abstention-backfill.js` | One-off repair: re-flag every stored run with the authoritative abstention detector |
 | `trigger-explain.js` | Run **inside** the okf-server container: regenerate attribution + advisor advice for one run against the deployed code |
+| `run-judge-baseline.js` | Read-only: the recent runs with their judge, row count and per-metric means |
 | `row-peek.js` / `run-peek.js` / `run-results.js` | Read-only Arango views: rows of a run, newest runs of a suite, full summary of one run |
 | `ropc-verify-revert.js` | One-shot: mint a master token, force ROPC off, verify — the hardening the earlier harness left unchecked |
 

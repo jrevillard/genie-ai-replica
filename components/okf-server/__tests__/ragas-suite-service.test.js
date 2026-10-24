@@ -2193,4 +2193,50 @@ describe('rescoreRun — re-score a finished run with a different judge (2026-10
       status: 404
     });
   });
+
+  it('maps the judge scores back to the row that was ACTUALLY submitted', async () => {
+    // A row with no answer has nothing to judge, so it is EXCLUDED from the
+    // submission — the sidecar answers for the other rows only. The scores
+    // must land on the rows they were scored for. Here the unscorable row is
+    // FIRST, which is exactly the case where a naive index alignment shifts
+    // every score onto the wrong row.
+    const sk = await makeSuite();
+    const first = await svc.beginRunSuite('me', sk, { mode: 'whatif' }, {});
+    await first.done;
+    const source = await svc.getRunSuite('me', sk, first.run_key);
+    const rows = source.payload.results;
+    expect(rows.length).toBe(2);
+    expect(rows[0].answer).toBeTruthy();
+
+    // Row 0 lost its answer (a failed row) — it is not scorable.
+    rows[0].answer = '';
+    const store = __mockDb._stores.okf_head_test_runs;
+    store[first.run_key] = { ...store[first.run_key], payload: { ...source.payload, results: rows } };
+
+    // The sidecar answers for ONE row — the scorable one.
+    global.fetch.mockImplementation(async (url) => {
+      const u = String(url);
+      if (u.includes('/evaluate')) return okJson({ job_id: 'j-eval', status: 'queued' });
+      if (u.includes('/jobs/j-eval'))
+        return okJson({
+          job_id: 'j-eval',
+          kind: 'evaluate',
+          status: 'done',
+          result: { per_query: [{ answer_relevancy: 0.11, faithfulness: 0.22 }], n: 1 }
+        });
+      if (u.includes('/rerank')) return okJson([{ index: 0, score: 0.9 }]);
+      throw new Error(`unexpected fetch ${u}`);
+    });
+
+    const begun = await svc.rescoreRun('me', sk, first.run_key, {}, {});
+    const newDoc = await begun.done;
+    const out = newDoc.payload.results;
+    expect(out.length).toBe(2);
+    // The SUBMITTED row carries the score.
+    expect(out[1].metrics.answer_relevancy).toBe(0.11);
+    expect(out[1].metrics.faithfulness).toBe(0.22);
+    // The row that was never submitted carries none — and, critically, does
+    // not inherit the other row's score.
+    expect(out[0].metrics).toEqual({});
+  });
 });

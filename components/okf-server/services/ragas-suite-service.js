@@ -1684,18 +1684,22 @@ async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
   rescoreInFlight.set(newRunKey, { source_run_key: runKey, progress: { phase: 'judge', done: 0, total: 1 } });
   // A re-score is a JUDGE-only operation: the answers are copied verbatim.
   const results = srcResults.map((r) => ({ ...r, metrics: {} }));
-  const samples = results
-    .filter((r) => !r.error && r.answer)
-    .map((r) => {
-      const e = byId.get(r.id) || {};
-      return {
-        user_input: r.query,
-        retrieved_contexts: r.contexts || [],
-        response: r.answer,
-        reference: e.reference_answer || '',
-        reference_contexts: e.reference_passages || []
-      };
-    });
+  // The sidecar answers in SAMPLE ORDER, and the sample list EXCLUDES rows
+  // with no answer (a failed row has nothing to judge). per_query must
+  // therefore be mapped back through the ORIGINAL row index — index-aligning
+  // it against `results` directly shifts every row after the first dropped
+  // one, which silently scores the wrong answer against the wrong query.
+  const scorable = results.map((r, i) => ({ r, i })).filter(({ r }) => !r.error && r.answer);
+  const samples = scorable.map(({ r }) => {
+    const e = byId.get(r.id) || {};
+    return {
+      user_input: r.query,
+      retrieved_contexts: r.contexts || [],
+      response: r.answer,
+      reference: e.reference_answer || '',
+      reference_contexts: e.reference_passages || []
+    };
+  });
   const done = (async () => {
     try {
       const started = await sidecarSubmitWithRetry(
@@ -1735,15 +1739,23 @@ async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
         }
       );
       const perQuery = Array.isArray(evaluation.per_query) ? evaluation.per_query : [];
-      for (let i = 0; i < results.length; i += 1) {
-        const q = perQuery[i] || {};
+      if (perQuery.length !== scorable.length) {
+        logger.warn('ragas-suite.rescore.row_count_mismatch', {
+          run_key: newRunKey,
+          submitted: scorable.length,
+          returned: perQuery.length
+        });
+      }
+      // Map back through the ORIGINAL row index (see `scorable` above).
+      scorable.forEach(({ i }, k) => {
+        const q = perQuery[k] || {};
         results[i].metrics = q || {};
         delete results[i].metrics.user_input;
         delete results[i].metrics.retrieved_contexts;
         delete results[i].metrics.response;
         delete results[i].metrics.reference;
         results[i].ragas_nan = q.ragas_nan === 'ALL_NAN';
-      }
+      });
       const summary = summarizeRun(suite, results, metrics);
       const judgeFid = modelConfigService.judgeFidelity(effectiveJudge);
       const newDoc = {

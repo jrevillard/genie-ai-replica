@@ -60,9 +60,14 @@ test.describe('Keycloak runtime theme mount', () => {
     // from this request's URL: a wrong hostname setting keeps the endpoint
     // green while silently breaking every OIDC redirect.
     const base = process.env.BASE_URL || 'https://localhost';
+    // A multi-origin dev slot (9444/9445 in front of a shared stack) mints
+    // the stack's canonical issuer for every origin — the backend's issuer
+    // map knows only that one. KEYCLOAK_PUBLIC_ORIGIN names it; unset, the
+    // browser origin IS the canonical origin (single-origin deployments, CI).
+    const kcOrigin = (process.env.KEYCLOAK_PUBLIC_ORIGIN || base).replace(/^https?:\/\//, '');
     const body = await response.json();
     expect(body.issuer, 'issuer must use the public origin the browser reaches').toContain(
-      `${base.replace(/^https?:\/\//, '')}/auth/realms/genie`
+      `${kcOrigin}/auth/realms/genie`
     );
   });
 

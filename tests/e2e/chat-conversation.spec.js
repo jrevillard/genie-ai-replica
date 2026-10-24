@@ -7,6 +7,35 @@ const { openWelcomeScreen } = require('./helpers/welcome');
 
 const BASE_URL = process.env.BASE_URL || 'https://localhost';
 
+async function mockStream(page, chunks) {
+  const sse = [
+    ...chunks.map((c) => `data: ${JSON.stringify({ type: 'chunk', content: c })}`),
+    '',
+    `data: ${JSON.stringify({ type: 'done', queryId: 'mock-query-1' })}`,
+    ''
+  ].join('\n');
+  // The inline thumbs post their rating to the same backend — answer it so
+  // the rated state does not depend on the network.
+  await page.route('**/feedback**', async (route) => {
+    if (route.request().method() === 'POST') {
+      try {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+      } catch {
+        /* the context closed before the fulfillment */
+      }
+      return;
+    }
+    await route.continue();
+  });
+  await page.route('**/queries/stream', async (route) => {
+    try {
+      await route.fulfill({ status: 200, contentType: 'text/event-stream', body: sse });
+    } catch {
+      /* the context closed before the fulfillment */
+    }
+  });
+}
+
 async function askAndAnswer(page, question) {
   await page.locator('[data-testid="welcome-composer"] textarea').fill(question);
   await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
@@ -171,6 +200,30 @@ test.describe('Conversation V1 — sources', () => {
     expect(open.open, 'open by default').toBe(true);
     await page.locator('[data-testid="answer-sources-toggle"]').click();
     expect((await state()).open, 'the section collapses').toBe(false);
+    await ctx.close();
+  });
+});
+
+test.describe('Conversation V1 — actions', () => {
+  // Task 7 — the answer carries thumbs that record a rating and a copy that
+  // fills the clipboard (D3).
+  test('the answer carries thumbs that record a rating and a copy that fills the clipboard', async ({ browser }) => {
+    const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await mockStream(page, ['GENIE.AI is a sovereign generative AI framework for the public sector.']);
+    await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
+    await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
+    await page.waitForSelector('[data-testid="answer-actions"]', { timeout: 45000 });
+    await page.locator('[data-testid="answer-thumb-up"]').click();
+    await page.waitForTimeout(500);
+    const rated = await page.evaluate(() =>
+      document.querySelector('[data-testid="answer-thumb-up"]').getAttribute('data-rated')
+    );
+    expect(rated, 'the thumb shows its selected state').toBe('true');
+    await page.locator('[data-testid="answer-copy"]').click();
+    await page.waitForTimeout(300);
+    const clip = await page.evaluate(() => navigator.clipboard.readText());
+    expect(clip.length, 'the clipboard holds the answer text').toBeGreaterThan(0);
     await ctx.close();
   });
 });

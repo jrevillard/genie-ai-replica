@@ -180,26 +180,60 @@
                   </a>
                 </div>
               </div>
-              <!-- Feedback and confidence score for bot messages -->
-              <div class="bot-message-meta">
-                <div v-if="msg.confidenceScore != null && msg.isGrounded !== false" class="confidence-score">
-                  <Brain :size="16" />
+              <!-- D3: inline actions — thumbs, details, copy — with the
+                   confidence percentage at the end of the row. -->
+              <div v-if="msg.queryId" class="answer-actions" data-testid="answer-actions">
+                <button
+                  type="button"
+                  class="answer-action"
+                  data-testid="answer-thumb-up"
+                  :data-rated="msg.userFeedback === 'up' ? 'true' : 'false'"
+                  :aria-pressed="msg.userFeedback === 'up'"
+                  :title="translate('feedback.helpful')"
+                  @click="rateAnswer(index, 'up')"
+                >
+                  <ThumbsUp :size="15" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  class="answer-action"
+                  data-testid="answer-thumb-down"
+                  :data-rated="msg.userFeedback === 'down' ? 'true' : 'false'"
+                  :aria-pressed="msg.userFeedback === 'down'"
+                  :title="translate('feedback.notHelpful')"
+                  @click="rateAnswer(index, 'down')"
+                >
+                  <ThumbsDown :size="15" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  class="answer-action"
+                  data-testid="answer-details"
+                  :title="translate('feedback.button')"
+                  @click="openFeedbackDialog(index)"
+                >
+                  <MessageSquareQuote :size="15" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  class="answer-action"
+                  data-testid="answer-copy"
+                  :title="translate('chatbot.copyAnswer')"
+                  @click="copyAnswer(msg)"
+                >
+                  <Copy :size="15" aria-hidden="true" />
+                </button>
+                <span v-if="msg.confidenceScore != null && msg.isGrounded !== false" class="confidence-score">
+                  <Brain :size="14" aria-hidden="true" />
                   <span>Confidence: {{ (msg.confidenceScore * 100).toFixed(0) }}%</span>
-                </div>
-                <!-- Not grounded: the answer came from the LLM's own knowledge, not library documents -->
-                <div v-else-if="msg.isGrounded === false" class="grounding-flag">
-                  <Sparkles :size="16" />
-                  <span>{{
-                    translate('chatbot.aiGeneratedNoDocs', 'AI-generated — not based on library documents')
-                  }}</span>
-                </div>
-                <div class="feedback-trigger">
-                  <DsPill>
-                    <DsButton variant="ghost" :small="true" @click="openFeedbackDialog(index)">
-                      {{ translate('feedback.button') }}
-                    </DsButton>
-                  </DsPill>
-                </div>
+                </span>
+              </div>
+              <!-- Not grounded: the answer came from the LLM's own knowledge, not library documents -->
+              <div v-if="msg.isGrounded === false" class="grounding-flag">
+                <Sparkles :size="16" />
+                <span>{{
+                  translate('chatbot.aiGeneratedNoDocs', 'AI-generated — not based on library documents')
+                }}</span>
               </div>
             </div>
             <div v-else class="message-bubble">
@@ -397,11 +431,15 @@ import {
   Brain,
   ChevronDown,
   ChevronUp,
+  Copy,
   ExternalLink,
   FileText,
   Loader2,
+  MessageSquareQuote,
   Sparkles,
   SquarePlus,
+  ThumbsDown,
+  ThumbsUp,
   User,
   X
 } from '@lucide/vue';
@@ -537,6 +575,10 @@ export default {
     User,
     X,
     SquarePlus,
+    ThumbsUp,
+    ThumbsDown,
+    MessageSquareQuote,
+    Copy,
     ChatResponseFeedbackDialog,
     ModalDialog,
     RightSideBarComponent,
@@ -1515,25 +1557,52 @@ export default {
       this.feedbackDialog.visible = false;
     },
 
-    async handleFeedbackSubmit(feedback) {
-      const queryId = feedback.message.queryId;
+    // The one place a rating reaches the service — the feedback dialog and
+    // the inline thumbs share it, so analytics keeps its 1-5 scale.
+    // Resolves true only when the submission succeeded.
+    async submitFeedbackPayload(message, rating, comment) {
+      const queryId = message.queryId;
       if (!queryId) {
         notificationService.error(this.translate('chatbot.feedbackMissingQueryId'));
-        this.closeFeedbackDialog();
-        return;
+        return false;
       }
       try {
         await chatbotService.submitFeedback(queryId, {
-          rating: feedback.rating || (feedback.thumbFeedback === 'up' ? 4 : 2),
-          comment: feedback.text || '',
+          rating,
+          comment: comment || '',
           providedAt: new Date().toISOString()
         });
-        notificationService.success(this.translate('chatbot.feedbackSubmitted'));
+        return true;
       } catch (error) {
         console.error('Error submitting feedback for queryId:', queryId, error);
         notificationService.error(this.translate('chatbot.feedbackError'));
+        return false;
       }
+    },
+
+    async handleFeedbackSubmit(feedback) {
+      const rating = feedback.rating || (feedback.thumbFeedback === 'up' ? 4 : 2);
+      const ok = await this.submitFeedbackPayload(feedback.message, rating, feedback.text || '');
+      if (ok) notificationService.success(this.translate('chatbot.feedbackSubmitted'));
       this.closeFeedbackDialog();
+    },
+
+    async rateAnswer(index, value) {
+      const msg = this.chatMessages[index];
+      const rating = value === 'up' ? 5 : 1;
+      const ok = await this.submitFeedbackPayload(msg, rating, '');
+      if (ok) msg.userFeedback = value;
+    },
+
+    async copyAnswer(msg) {
+      const holder = document.createElement('div');
+      holder.innerHTML = this.renderMarkdown(msg.content);
+      const text = holder.textContent || '';
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        /* clipboard denied — the button simply does nothing */
+      }
     },
 
     scrollToBottom() {
@@ -2512,6 +2581,35 @@ export default {
   border: none;
   padding: 0;
   border-radius: 0;
+}
+
+/* D3: the inline actions row — thumbs, details, copy, confidence. */
+.answer-actions {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border-light);
+}
+
+.answer-action {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+}
+
+.answer-action:hover {
+  color: var(--fg);
+  background: var(--accent-muted);
+}
+
+.answer-action[data-rated='true'] {
+  color: var(--accent);
 }
 
 /* D2: the per-answer collapsible sources. */

@@ -62,6 +62,19 @@ function reqJson(method, url, body) {
   const dropped = rows.filter((r) => r.error || !r.answer);
   const kept = rows.filter((r) => !r.error && r.answer);
 
+  // The failure attribution for this run — the stage per row. The comparison
+  // is only meaningful on the SAME row subset: the question is whether the
+  // rows staged "judge" are real gaps or one harsh judge.
+  const exCursor = await db.query(
+    'FOR d IN okf_head_test_runs FILTER d.kind == "ragas_explain" && d.payload.run_key == @rk ' +
+      'SORT d.created_at DESC LIMIT 1 RETURN d',
+    { rk: runKey }
+  );
+  const explain = (await exCursor.all())[0] || null;
+  const attrs = (explain && explain.payload && explain.payload.attributions) || [];
+  const stageById = new Map(attrs.map((a) => [a.id, a.stage]));
+  const failsById = new Map(attrs.map((a) => [a.id, a.fails || []]));
+
   const job = (await reqJson('GET', `${SIDECAR}/jobs/${jobId}`)).body || {};
   console.log(`stored rows=${rows.length}  scorable(kept)=${kept.length}  dropped=${dropped.length}`);
   if (dropped.length) {
@@ -127,6 +140,54 @@ function reqJson(method, url, body) {
     );
   }
   console.log(`\nrows whose score moved >0.1 on any metric: ${moved}/${pairs.length}`);
+
+  // The question the re-score exists to answer: are the rows staged "judge"
+  // real quality gaps, or one harsh judge? Only answerable per stage.
+  if (attrs.length) {
+    const byStage = new Map();
+    for (const [r, q] of pairs) {
+      const stage = stageById.get(r.id) || 'unattributed';
+      if (!byStage.has(stage)) byStage.set(stage, []);
+      byStage.get(stage).push([r, q]);
+    }
+    const meanOf = (list, m, side) => {
+      const v = list
+        .map(([r, q]) => (side === 'old' ? (r.metrics || {})[m] : q[m]))
+        .filter((x) => typeof x === 'number' && !Number.isNaN(x));
+      return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+    };
+    console.log('\n=== per stage: ORIGINAL judge -> NEW judge ===');
+    const head = ['stage', 'rows'];
+    metrics.forEach((m) => head.push(`${m.slice(0, 12)} old`, `${m.slice(0, 12)} new`, 'delta'));
+    console.log(head.map((h) => h.padEnd(24)).join(''));
+    const order = ['judge', 'llm', 'reranker', 'vector-recall', 'retrieved', 'unattributed'];
+    const stages = [...order.filter((s) => byStage.has(s)), ...[...byStage.keys()].filter((s) => !order.includes(s))];
+    for (const stage of stages) {
+      const list = byStage.get(stage);
+      const cells = [stage.padEnd(24), String(list.length).padEnd(24)];
+      for (const m of metrics) {
+        const om = meanOf(list, m, 'old');
+        const nm = meanOf(list, m, 'new');
+        const d = om != null && nm != null ? nm - om : null;
+        cells.push((om == null ? '-' : om.toFixed(4)).padEnd(24));
+        cells.push((nm == null ? '-' : nm.toFixed(4)).padEnd(24));
+        cells.push((d == null ? '-' : (d >= 0 ? '+' : '') + d.toFixed(4)).padEnd(24));
+      }
+      console.log(cells.join(''));
+    }
+    console.log('\nfailing metric counts by stage (the ORIGINAL attribution):');
+    for (const stage of stages) {
+      const counts = {};
+      byStage
+        .get(stage)
+        .forEach(([r]) => (failsById.get(r.id) || []).forEach((f) => (counts[f] = (counts[f] || 0) + 1)));
+      const top = Object.entries(counts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([k, v]) => `${k}=${v}`)
+        .join(' ');
+      console.log(`  ${stage.padEnd(16)} ${top}`);
+    }
+  }
 
   const fmt = (v) => (v == null ? 'null' : v.toFixed(2));
   const biggest = detail

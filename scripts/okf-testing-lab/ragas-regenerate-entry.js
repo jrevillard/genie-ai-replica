@@ -61,19 +61,30 @@ const dbService = require('/app/shared-lib/db-connection-service');
 // The reference-scoring helper is copied into the container by the operator
 // (it is not shipped in the image). A bare require would print a
 // module-not-found stack trace and bury the actual instruction.
-let scoreEntityRecall;
-let fmt;
-try {
-  ({ scoreEntityRecall, fmt } = require('/tmp/ragas-regenerate-reference.js'));
-} catch (e) {
-  console.error(
-    'ragas-regenerate-entry: /tmp/ragas-regenerate-reference.js is missing.\n' +
-      '  Copy it into the container first:\n' +
-      '  docker cp <path>/ragas-regenerate-reference.js <container>:/tmp/ragas-regenerate-reference.js\n' +
-      `  (${e.message})`
-  );
-  process.exit(2);
+//
+// It is loaded LAZILY, on first use: the module also exports the pure
+// helpers (topic tokens, the chunk score, the normalized question, the
+// passage lookup) that decide what may be rewritten, and those must be
+// usable — and testable — without the operator's copy present. The old
+// module-level require called process.exit(2) on a missing copy, which
+// killed any importer, not just this script.
+let _reference = null;
+function referenceHelper() {
+  if (_reference) return _reference;
+  try {
+    _reference = require('/tmp/ragas-regenerate-reference.js');
+  } catch (e) {
+    throw new Error(
+      'ragas-regenerate-entry: /tmp/ragas-regenerate-reference.js is missing.\n' +
+        '  Copy it into the container first:\n' +
+        '  docker cp <path>/ragas-regenerate-reference.js <container>:/tmp/ragas-regenerate-reference.js\n' +
+        `  (${e.message})`
+    );
+  }
+  return _reference;
 }
+const scoreEntityRecall = (...args) => referenceHelper().scoreEntityRecall(...args);
+const fmt = (...args) => referenceHelper().fmt(...args);
 
 const RAGAS_URL = process.env.OKF_RAGAS_URL || 'http://ragas-service:8090';
 const RAGAS_INTERNAL_SECRET = process.env.RAGAS_INTERNAL_SECRET || process.env.OKF_INTERNAL_SECRET || '';

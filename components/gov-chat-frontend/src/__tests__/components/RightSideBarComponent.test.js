@@ -40,6 +40,10 @@ function createSidebarStore() {
   });
 }
 
+// The component injects the runtime app config (main.js provides it app-wide);
+// the brand block must exist for the template's sidebarLeaf/banner guards.
+const TEST_APP_CONFIG = { app: {} };
+
 function mountSidebar(props = {}) {
   return mount(RightSideBarComponent, {
     propsData: { currentLocale: 'fr', ...props },

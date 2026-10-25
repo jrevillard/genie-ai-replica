@@ -245,6 +245,47 @@ the Models tab lists all seven configurations, and the OKF smoke's
 curator check returns `200 — env judge ibm-granite/granite-4.1-8b, 7 named
 config(s), no key hint`.
 
+## The guide now documents what each error state does to the result (2026-10-25)
+
+David's instruction: *"whatever you decide to do with errors and how they
+are mapped to benchmark results must be documented in the embedded guide
+for users"*.
+
+The panel can report five per-row states, and until now only the
+invalid-run banner explained any of them. The guide gains a sixth
+chapter — `RagasGuideDialog.vue` — with one table row per state: what
+that state means, and what it does to the number being read.
+
+The mapping is the SERVER's behaviour, read off
+`ragas-suite-service.js summarizeRun` (the per-metric means, the
+per-metric `coverage`, `n_errors` / `n_abstained` / `n_evaluable`) and
+`scorable = results.filter(r => !r.error && r.answer)` (an errored row,
+and a row with no answer, never reach the judge):
+
+| state | what it is | what it does to the result |
+|---|---|---|
+| `error` | the pipeline failed on that row — retrieval, upstream service, timeout | no metrics for the row; excluded from every mean; counted in the error column; **makes the run invalid** |
+| `abstained` | the assistant declined to answer | the row is not judged; counted in its own column; **never** a metric failure and **never** an error |
+| `unmeasured` | the judge's answer could not be parsed for that metric | that metric is `null` on that row — excluded from the mean, **never** a zero; partial coverage **makes the run invalid** |
+| `belowThreshold` | the metric scored below its threshold | the row **FAILS** that metric; a row fails if any selected metric fails |
+| `outOfScope` | the question was never answerable — a control | **never** counted as a failure |
+
+Two of these are the ones an operator gets wrong, and the guide says so
+explicitly: an abstention is not a failure, and an unmeasured metric is
+not a zero.
+
+Implementation notes that will bite anyone who touches this again:
+
+- The table **cannot** be an array in the locale file. `translateMixin`
+  resolves leaf values as STRINGS only (`translateMixin.js:60-63`), so an
+  array value falls through to the fallback on every call. Each cell is
+  therefore its own dotted key (`chapters.errors.table.<state>.<cell>`)
+  and the component assembles the rows from a constant list.
+- All 14 locales carry the chapter and the table — translated, not
+  English placeholders. `localeConsistency.test.js` proves the key
+  parity; `ragas-guide.test.js` proves every cell resolves to a
+  non-empty string in every locale, which is the gap parity cannot see.
+
 ## Still open
 
 - The rows the gate refused need their ENTRIES regenerated against the

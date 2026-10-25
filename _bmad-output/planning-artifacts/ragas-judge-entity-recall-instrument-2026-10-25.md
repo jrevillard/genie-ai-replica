@@ -139,17 +139,36 @@ corpus text and writes it **only when `context_entities_recall` on the
 rewrite scores better than on the original**. The gate is the metric
 itself, not a proxy — see the note on the rejected cheaper gate below.
 
-Measured on the 29 judge-stage rows whose recommendation was "regenerate
-the reference answer":
+The tool ran over the judge-stage rows in two passes (the second pass
+re-measured what the first had already rewritten, so the counts overlap).
+**Net effect on the suite: 18 of its 100 entries now carry a regenerated
+reference.** The 18 are the rows that failed entity recall in the stored
+run — their mean score there was `0.212`, against `0.465` for the 82
+untouched rows.
+
+**Measured on the 18 with ONE judge, in ONE run** — the original reference
+and the rewritten one, both scored with the env judge (`granite-4.1-8b`)
+at the same moment, so the comparison is apples-to-apples:
+
+| | mean `context_entities_recall` |
+|---|---|
+| before | **0.505** |
+| after | **0.628** |
 
 | outcome | rows |
 |---|---|
-| rewritten, metric improved | 14 |
-| refused — no rewrite scored better | 15 |
+| improved | **18** |
+| unchanged | 0 |
+| worse | 0 |
 
-Every rewrite moved the metric up. The 14 that landed include the
-biggest movers: new-81 `0.250 → 0.625`, new-13 `0.647 → 0.800`,
-new-10 `0.414 → 0.565`, new-12 `0.375 → 0.500`, new-94 `0.500 → 0.667`.
+Every row that landed moved up, and none moved down. The biggest movers:
+new-81 `0.250 → 0.625`, new-57 `0.235 → 0.417`, new-94 `0.500 → 0.667`,
+new-13 `0.647 → 0.800`, new-89 `0.667 → 0.800`, new-10 `0.414 → 0.565`.
+
+The stored run's own scores are NOT comparable with these: that run was
+judged by MiniMax-M3.1-Flash, which the re-score above showed scores this
+metric wrongly (a row whose passage was delivered verbatim scored 0).
+Both sides of the table above are granite, measured now.
 
 **The cheap gate was wrong, and the metric is why.** The first version
 checked "does every number and proper noun in the answer appear in the
@@ -158,7 +177,7 @@ the entity extractor never treats as entities ("according", "covers"),
 and it passed rewrites whose entity sets still differed. The metric is
 the thing being fixed, so the metric is what decides.
 
-**The 15 refusals are a different population, not failures of the tool.**
+**The refusals are a different population, not failures of the tool.**
 Several are near-misses the same rewrite cannot clear (new-5 stays at
 `0.636` across three attempts; new-80 at `0.526`; new-14 at `0.429`),
 and two had a reference that already scored `1.000` (new-4, new-22) —
@@ -172,9 +191,40 @@ contain the fact the reference claims. Those rows belong with the five
 unfair questions — regenerate the ENTRY against the current corpus, not
 the wording of its answer.
 
+## The judge picker was invisible to anyone without tools-admin (2026-10-25)
+
+David: "you removed the model selection from the RAGAS generation and
+benchmarking ... make sure it INCLUDES the default configured model from
+the .env as an OPTION."
+
+It was invisible, in two compounding ways. The panel renders the judge
+dropdown only when the **named model configuration list** is non-empty
+(`v-if="modelConfigs.length"`), and that list comes from
+`GET /api/okf/model-configs`, which sat behind
+`router.use(requireRole('tools-admin'))`. So for an operator holding an
+okf read scope but not the role, the request 403'd, the list came back
+empty, and **the dropdown disappeared — the "System default
+(environment)" option with it**. The .env judge
+(`RAGAS_JUDGE_BASE_URL` + `RAGAS_JUDGE_MODEL`) was unreachable, and the
+panel could not even say which judge was in use. Both the generation
+form and the benchmark-run form were affected.
+
+Fixed: the read is open to every OKF user (the envelope carries no
+secret, and the provider-key HINT is now admin-only), every write and
+credential-bearing probe stays tools-admin, and the picker renders
+whenever a judge can be chosen — a named configuration **or** the env
+judge — with the env judge always among the options and labelled with
+the model it resolves to.
+
+Verified live against the local build (the OKF smoke now carries the
+check): a curator with an okf read scope and no tools-admin gets
+`200 — env judge ibm-granite/granite-4.1-8b, 7 named config(s), no key
+hint`; the admin read is unchanged (`7 named config(s), 7 with a key
+hint`).
+
 ## Still open
 
-- The 15 rows the gate refused need their ENTRIES regenerated against the
+- The rows the gate refused need their ENTRIES regenerated against the
   current corpus, like the 5 unfair questions — their references name
   facts the corpus does not contain, which is the same defect at a
   different depth.

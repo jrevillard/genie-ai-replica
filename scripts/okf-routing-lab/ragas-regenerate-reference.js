@@ -52,9 +52,17 @@
 // else the server writes.
 //
 // The judge is the PRODUCT's own client (`frontmatter-service`'s
-// vllmChatCompletions with `config: null` — the env judge), so the
-// regenerated reference is written by the SAME model that judged the
-// original, and the key never leaves the container.
+// vllmChatCompletions with `config: null` — the ENV judge), and the key
+// never leaves the container.
+//
+// Note WHAT the env judge is and is not: it is the deployment's default
+// judge and the one the GATE measures with, so the "did this rewrite score
+// better" comparison is apples-to-apples. It is NOT necessarily the judge
+// the stored run used — a suite may have been generated and run with a
+// picked configuration (the run records its judge in its fidelity block).
+// The rewrite is written by the env judge, and the gate compares the
+// original and the rewrite with that SAME judge, so the verdict does not
+// depend on which judge scored the original.
 
 'use strict';
 
@@ -69,7 +77,7 @@ const JUDGE_BASE_URL = process.env.RAGAS_JUDGE_BASE_URL || '(unset)';
 async function judgeChat(messages) {
   const { vllmChatCompletions } = require('/app/services/frontmatter-service');
   const res = await vllmChatCompletions(messages, {
-    config: null, // the env judge — the one that scored the run
+    config: null, // the env judge — the deployment default, and the judge the gate measures with
     maxTokens: 2000,
     temperature: 0,
     service: 'ragas_judge'

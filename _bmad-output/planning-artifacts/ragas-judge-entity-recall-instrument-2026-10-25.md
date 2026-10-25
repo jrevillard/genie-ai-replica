@@ -291,39 +291,58 @@ The two things an operator gets wrong, and the guide says so explicitly:
 an abstention is **not** an error and does not invalidate the run, and an
 unmeasured metric is **not** a zero.
 
-### Two semantics questions this raises — David's call, not mine
+### Two semantics questions this raises — RESOLVED (David 2026-10-25: "Fix it now")
 
-1. **A failed row's zeros stay in the means. This is a BUG, and the
-   intent is pinned by a test in the same file.** The re-score path
-   filters `scorable = results.filter((r) => !r.error && r.answer)` and
-   maps the sidecar's rows back through the original index (`:1692`,
-   `:1750`), and its test says so in as many words — *"A row with no
-   answer has nothing to judge, so it is EXCLUDED from the submission"*
-   — asserting the unsubmitted row carries `{}`
-   (`ragas-suite-service.test.js:2353-2397`). The run path builds the
-   payload with `samples = entries.map(...)` (`:2274`) and no filter, so
-   a failed row IS judged on an empty answer and comes back with zeros
-   that land in the means. The run path's own comment says "Judge only
-   the rows that produced an answer" (`:2166`) — so the code contradicts
-   its comment, its sibling path, and a passing test that encodes the
-   same intent.
-2. **An abstention can be counted as a failure.** `summarizeRun`'s
-   failure loop has no abstained guard, so an abstained row below
-   threshold lands in `summary.failing` (empirically: all 6 abstained
-   rows in `rr1792742789648` are also in the failing list). The panel's
-   stacked bar then computes
-   `answered = n_evaluable - n_abstained - failing_count`
-   (`RagasPanel.vue:1112`), which subtracts the abstentions twice — in
-   the all-abstained runs that arithmetic goes to **-20**.
+**1. A failed row's zeros no longer stay in the means. FIXED.** The re-score
+path filtered `scorable = results.filter((r) => !r.error && r.answer)` and
+mapped the sidecar's rows back through the original index (`:1692`,
+`:1750`), and its test says so in as many words — *"A row with no answer
+has nothing to judge, so it is EXCLUDED from the submission"* — asserting the
+unsubmitted row carries `{}`
+(`ragas-suite-service.test.js:2353-2397`). The run path built the payload
+with `samples = entries.map(...)` (`:2274`) and no filter, so a failed row
+IS judged on an empty answer and comes back with zeros that land in the
+means. The run path's own comment said "Judge only the rows that produced
+an answer" (`:2166`) — the code contradicted its comment, its sibling path,
+and a passing test that encoded the same intent.
 
-Neither was changed here. The run in progress measures the system under
-the current semantics, and changing what a number means mid-benchmark
-would make it incomparable with the runs already on record — the
-2026-10-23 run's `context_recall` is 0.887 over all rows and 0.944 over
-the 94 non-failed ones, so the fix MOVES published numbers by ~0.057 on
-that metric. Fix 1 is a small change (mirror the re-score path's
-`scorable` filter in the run path); fix 2 needs a decision about
-whether an abstention should be judgeable at all.
+**What changed:** the run path now filters `scorable` the same way and maps
+`per_query` back through the ORIGINAL row index (the naive index alignment
+shifts every score onto the wrong row after the first dropped one — see
+below). A row that produced no answer carries `{}`: it is **excluded from
+the means** (never a zero) and counted in the coverage as NOT measured, so
+the coverage reads `99/100` instead of `100/100`. A run where NO row
+produced an answer now FAILS loudly rather than reporting a mean of zeros.
+
+**What it does NOT move — measured on every stored run:** the three runs
+that matter for the current comparison (`rr1792896220523-b71784` MiniMax-M3,
+`rr1792871605303-9ce608` granite, `rr1792843333604-268dad` MiniMax-M3.1-Flash)
+have **0 errored rows and 0 abstentions**. The means before and after the
+fix are IDENTICAL on all ten metrics of all three runs. The fix only touches
+runs where a row actually failed: `rr1792742789648-86637b` (6 failed rows,
+whose `context_recall` was 0.887 over all 100 rows vs 0.944 over the 94 that
+answered — a ~0.057 move), and the three early all-rows-failed runs.
+
+**2. An abstention is still judged, and the panel's bar now partitions.**
+An abstention is a row that DECLINED — it still has an answer, so the judge
+scores it and its context metrics come back 0. Those zeros ARE in the
+averages, and the guide says so. What was wrong was the ARITHMETIC:
+`answered = n_evaluable - n_abstained - failing_count` subtracted the
+abstentions twice (they are in `failing_count` too), and the all-abstained
+runs reached **-20**. The bar now computes
+`failing = max(0, failing_count - n_abstained)` and
+`answered = max(0, n_evaluable - n_errors - n_abstained - failing)`, so the
+four buckets partition the rows. The server also stopped counting a row
+that FAILED as an abstention (`n_abstained` now counts only the rows that
+abstained without an error) — a row with no answer is an error, never an
+abstention.
+
+**The guide was corrected to match.** The errors chapter said "EVERY row in
+the suite is handed to the judge, including a row that failed or declined"
+and "a row with no answer therefore scores 0 … and those zeros ARE counted in
+the averages". That was true of the code until this fix; now the chapter
+says the opposite of the first half and keeps the second half for the
+abstention. All 14 locales, translated.
 
 ### The naive fix for (1) is WORSE than the bug — do not apply it
 

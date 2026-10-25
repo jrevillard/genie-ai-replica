@@ -196,16 +196,38 @@ describe('RagasGuideDialog', () => {
       expect(text).toMatch(/never a zero/i);
     });
 
-    // The counterintuitive one, and the reason this chapter exists: EVERY
-    // row is handed to the judge, so a row that failed or declined still
-    // contributes ZEROS to the context and answer metrics — and those zeros
-    // ARE in the averages. A guide that implied otherwise would let an
-    // operator read a mean that the failures had quietly depressed.
-    it('says that a failed row still reaches the judge, and its zeros are in the averages', () => {
+    // The two states that look alike and are NOT alike (2026-10-25). A row
+    // that produced NO ANSWER has nothing to judge, so it is never handed to
+    // the judge and it never counts as a zero. A row that DECLINED still has
+    // an answer, so it IS judged — and with nothing supporting it, its
+    // context metrics come back 0, and those zeros ARE in the averages.
+    //
+    // The guide used to claim the opposite for the failed row (it said every
+    // row reaches the judge). That was true of the code until the run path
+    // was fixed to judge only the rows that produced an answer.
+    it('says that a failed row is NOT judged, and never counts as a zero', () => {
+      const w = mountGuide();
+      const chapter = w.vm.chapters.find((c) => c.key === 'errors');
+      const errorRow = chapter.table.rows.find((r) => r.state === 'errored');
+      expect(errorRow.effect).toMatch(/NOT handed to the judge/i);
+      expect(errorRow.effect).toMatch(/never counted as a zero/i);
+      // The retracted claim must be gone for the ERRORED row.
+      expect(errorRow.effect).not.toMatch(/still handed to the judge/i);
+    });
+
+    it('says that an abstention IS judged, and its zeros ARE in the averages', () => {
+      const w = mountGuide();
+      const chapter = w.vm.chapters.find((c) => c.key === 'errors');
+      const abstainedRow = chapter.table.rows.find((r) => r.state === 'abstained');
+      expect(abstainedRow.effect).toMatch(/still handed to the judge/i);
+      expect(abstainedRow.effect).toMatch(/zeros ARE counted in the averages/i);
+    });
+
+    it('the chapter says the failed row is excluded and the abstention is not', () => {
       const w = mountGuide();
       const text = w.text();
-      expect(text).toMatch(/still handed to the judge/i);
-      expect(text).toMatch(/zeros ARE counted in the averages/i);
+      expect(text).toMatch(/NO ANSWER is never handed to the judge/i);
+      expect(text).toMatch(/DECLINED still has an answer/i);
     });
   });
 

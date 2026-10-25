@@ -1106,14 +1106,36 @@ export default {
     statusSeries() {
       const s = this.runDoc && this.runDoc.payload && this.runDoc.payload.summary;
       if (!s) return [];
+      // The four buckets must PARTITION the rows — the bar is read as a
+      // whole, and a row counted twice makes the segments sum to more
+      // than the suite.
+      //
+      //   error     — the row produced no answer (n_errors)
+      //   abstained — the row declined; it still has an answer, so the judge
+      //               scored it and its context metrics came back 0, which
+      //               puts it in failing_count as well. It has its own
+      //               column, so it is taken OUT of the failing bucket.
+      //   failing   — the rows that failed a metric and are not abstentions
+      //   answered  — everything else
+      //
+      // The errored rows are NOT in failing_count (they were never judged),
+      // so they are subtracted explicitly. Before the judge-only-the-
+      // answered-rows fix they WERE in failing_count as zeros, and the old
+      // arithmetic (n_evaluable − n_abstained − failing_count) subtracted
+      // the abstentions twice — the all-abstained runs reached −20.
+      const nErrors = s.n_errors || 0;
+      const nAbstained = s.n_abstained || 0;
+      const nFailing = s.failing_count || 0;
+      const nEvaluable = s.n_evaluable || 0;
+      const failingOnly = Math.max(0, nFailing - nAbstained);
       return [
         {
           name: this.translate('okf.ragas.results.answered', 'answered'),
-          data: [(s.n_evaluable || 0) - (s.n_abstained || 0) - (s.failing_count || 0)]
+          data: [Math.max(0, nEvaluable - nErrors - nAbstained - failingOnly)]
         },
-        { name: this.translate('okf.ragas.results.abstained', 'abstained'), data: [s.n_abstained || 0] },
-        { name: this.translate('okf.ragas.results.failingShort', 'failing'), data: [s.failing_count || 0] },
-        { name: this.translate('okf.ragas.results.error', 'error'), data: [s.n_errors || 0] }
+        { name: this.translate('okf.ragas.results.abstained', 'abstained'), data: [nAbstained] },
+        { name: this.translate('okf.ragas.results.failingShort', 'failing'), data: [failingOnly] },
+        { name: this.translate('okf.ragas.results.error', 'error'), data: [nErrors] }
       ];
     },
     explainProgressLabel() {

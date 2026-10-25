@@ -2391,13 +2391,72 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     // fail every judge leg) — the env judge applies, and the run's fidelity
     // records the EFFECTIVE judge, not the unusable pick.
     const effectiveJudge = judgeOverride && judgeOverride.model ? judgeOverride : null;
-    const samples = entries.map((e, i) => ({
-      user_input: e.query,
-      retrieved_contexts: results[i].contexts,
-      response: results[i].answer,
-      reference: e.reference_answer || '',
-      reference_contexts: e.reference_passages || []
-    }));
+    // Judge ONLY the rows that produced an answer. A row with no answer has
+    // nothing to judge: submitting it makes the sidecar score an EMPTY
+    // response, which comes back as ZEROS on the context and answer metrics
+    // — and zeros are numbers, so they land in the means and depress them.
+    // The run path's own comment says "Judge only the rows that produced an
+    // answer" (:2287), its sibling re-score path filters the same way
+    // (:1770), and a passing test encodes the same intent
+    // (ragas-suite-service.test.js:2353-2397). The payload contradicted all
+    // three: it submitted every row.
+    //
+    // The sidecar answers in SAMPLE order, so per_query must be mapped back
+    // through the ORIGINAL row index — aligning it against `results`
+    // directly shifts every row after the first dropped one, which scores the
+    // wrong answer against the wrong query.
+    const scorable = results.map((r, i) => ({ r, i })).filter(({ r }) => !r.error && r.answer);
+    if (!scorable.length) {
+      // Every row is empty — there is nothing to judge. The run fails
+      // loudly (the same shape as the all-rows-failed case above) rather
+      // than submitting an empty dataset and reporting zeros as a result.
+      const emptyError = {
+        code: 'NO_SCORABLE_ROWS',
+        status: null,
+        message: 'no row produced an answer — there is nothing to judge'
+      };
+      const emptyDoc = {
+        _key: opts.runKey,
+        repo_id: repoId,
+        kind: 'ragas_run',
+        status: 'failed',
+        suite_key: suiteKey,
+        created_at: opts.startedAt,
+        created_by: (opts.actor && opts.actor.user_id) || 'system',
+        repo_ids: repoIds,
+        metrics: opts.metrics,
+        error: { ...emptyError, failed_rows: erroredRows, total, aborted: false },
+        payload: {
+          suite_created_at: suite.created_at,
+          entries: entries.map((e) => ({ id: e.id, query: e.query, oos: e.oos })),
+          results,
+          summary: null,
+          error: emptyError,
+          fidelity: { judge: null, answers: await answerFidelity({ serveMode }) }
+        }
+      };
+      await db.collection(COLLECTION).replace(opts.runKey, emptyDoc);
+      logger.error('ragas-suite.run_failed', {
+        repo_id: repoId,
+        suite_key: suiteKey,
+        run_key: opts.runKey,
+        failed_rows: erroredRows,
+        total,
+        aborted: false,
+        cause: emptyError.message
+      });
+      return emptyDoc;
+    }
+    const samples = scorable.map(({ r, i }) => {
+      const e = entries[i];
+      return {
+        user_input: e.query,
+        retrieved_contexts: r.contexts,
+        response: r.answer,
+        reference: e.reference_answer || '',
+        reference_contexts: e.reference_passages || []
+      };
+    });
     const evalStarted = await sidecarSubmitWithRetry(
       '/evaluate',
       {
@@ -2449,15 +2508,28 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       }
     );
     const perQuery = Array.isArray(evaluation.per_query) ? evaluation.per_query : [];
-    // sidecar returns rows in sample order (EvaluationDataset preserves it)
-    for (let i = 0; i < results.length; i += 1) {
-      const q = perQuery[i] || {};
+    // The sidecar returns rows in SAMPLE order (EvaluationDataset preserves
+    // it), and the sample list EXCLUDES the rows with no answer — so
+    // per_query is mapped back through the ORIGINAL row index (see
+    // `scorable` above). Aligning it against `results` directly would shift
+    // every row after the first dropped one.
+    scorable.forEach(({ i }, k) => {
+      const q = perQuery[k] || {};
       results[i].metrics = q || {};
       delete results[i].metrics.user_input;
       delete results[i].metrics.retrieved_contexts;
       delete results[i].metrics.response;
       delete results[i].metrics.reference;
       results[i].ragas_nan = q.ragas_nan === 'ALL_NAN';
+    });
+    // The rows that were NOT submitted carry no score at all — empty
+    // metrics, so the mean excludes them and the coverage counts them as
+    // NOT measured. They are never a zero.
+    const submitted = new Set(scorable.map((s) => s.i));
+    for (let i = 0; i < results.length; i += 1) {
+      if (submitted.has(i)) continue;
+      results[i].metrics = {};
+      results[i].ragas_nan = false;
     }
     // Judge COVERAGE (2026-10-21 sidecar review F2): the sidecar averages the
     // rows that scored and nulls the ones that failed, so a judge that died
@@ -2571,7 +2643,12 @@ function summarizeRun(suite, results, metrics) {
   const failing = [];
   for (const r of results) {
     if (r.error) nErrors += 1;
-    if (r.abstained) nAbstained += 1;
+    // An ABSTENTION is a row that declined — it still has an answer, so it
+    // was judged. A row that FAILED produced no answer at all: it is an
+    // error, never an abstention, and counting it as both made the panel's
+    // outcome bar subtract it twice (the segments summed to more than the
+    // suite, and the all-abstained runs reached −20).
+    if (r.abstained && !r.error) nAbstained += 1;
     const e = byId.get(r.id) || {};
     const fails = [];
     for (const m of metrics) {
@@ -2941,7 +3018,12 @@ function attributeFailures(suite, runDoc, evidence, judgeComparison) {
         return name === 'noise_sensitivity' ? v > t : v < t;
       })
       .map(([name]) => name);
-    if (!failed.length) continue;
+    // A row that produced NO answer is not scored, so it has no failing
+    // metric — but it still needs attribution: it is the row that failed at
+    // retrieval or in the answer leg, and that is the first thing the
+    // operator must know. Only a row with neither an error nor a failing
+    // metric has nothing to say.
+    if (!failed.length && !r.error) continue;
 
     // Where the expected passage went — proven against the corpus, not
     // inferred from the run's truncated candidate texts. The ladder only

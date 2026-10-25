@@ -2726,3 +2726,108 @@ describe('the advisor’s second-judge verdict is computed, not asserted (2026-1
     expect(withSibling[0].recommendation).not.toMatch(/roughly half/i);
   });
 });
+
+// The run path handed EVERY row to the judge — including the rows that
+// produced no answer. The sidecar then scored an EMPTY response, which
+// comes back as ZEROS on the context and answer metrics, and zeros are
+// numbers: they landed in the means and depressed them (measured on
+// rr1792742789648-86637b: context_recall 0.887 over all 100 rows vs
+// 0.944 over the 94 that answered).
+//
+// The run path's own comment said "Judge only the rows that produced an
+// answer" (:2287), its sibling re-score path filtered the same way
+// (:1770), and a passing test encoded the same intent (:2353-2397). The
+// payload contradicted all three.
+describe('the run path judges only the rows that produced an answer (2026-10-25)', () => {
+  it('does not submit a row with no answer, and the scores land on the right rows', async () => {
+    let submittedSamples = null;
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url, opts) => {
+      const u = String(url);
+      if (u.includes('/evaluate')) {
+        submittedSamples = JSON.parse(opts.body).samples;
+        return Promise.resolve(okJson({ job_id: 'j-eval', status: 'queued' }));
+      }
+      if (u.includes('/jobs/j-eval')) {
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-eval',
+            kind: 'evaluate',
+            status: 'done',
+            result: {
+              aggregate: {},
+              // ONE row scored — only the row that produced an answer was
+              // submitted.
+              per_query: [{ faithfulness: 1, context_recall: 0.9 }],
+              model: 'm',
+              n: 1
+            }
+          })
+        );
+      }
+      return baseFetch(url, opts);
+    });
+    const sk = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
+    await sk.done;
+    // Row 0 loses its answer (the embedding call 429s) — nothing to judge.
+    frontmatterService.teiEmbed.mockImplementation(async ([q]) => {
+      if (q === GEN_SAMPLES[0].user_input) throw new Error('Request failed with status code 429');
+      return [[0.1, 0.2, 0.3]];
+    });
+    const run = await svc.beginRunSuite('me', sk.suite_key, { mode: 'whatif' }, { actor: { user_id: 'u1' } });
+    await run.done;
+    const doc = await svc.getRunSuite('me', sk.suite_key, run.run_key);
+
+    // The row with no answer was NOT submitted.
+    expect(submittedSamples).toHaveLength(1);
+    expect(submittedSamples[0].user_input).toBe(GEN_SAMPLES[1].user_input);
+
+    // The score landed on the row it was scored for — index-aligned through
+    // the ORIGINAL row index, not the sample order.
+    const rows = doc.payload.results;
+    const failed = rows.find((r) => r.query === GEN_SAMPLES[0].user_input);
+    const scored = rows.find((r) => r.query === GEN_SAMPLES[1].user_input);
+    expect(failed.error).toBeTruthy();
+    expect(failed.metrics).toEqual({}); // NOT zeros
+    expect(scored.metrics.faithfulness).toBe(1);
+    expect(scored.metrics.context_recall).toBe(0.9);
+
+    // The mean covers only the row that scored, and the coverage says so.
+    const summary = doc.payload.summary;
+    expect(summary.coverage.faithfulness).toEqual({ scored: 1, total: 2 });
+    expect(summary.metrics.faithfulness).toBe(1);
+
+    // And the run is still marked invalid — the failed row is counted.
+    expect(summary.n_errors).toBe(1);
+  });
+
+  it('fails the run loudly when NO row produced an answer — never a mean of zeros', async () => {
+    let evaluateCalled = false;
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/evaluate')) {
+        evaluateCalled = true;
+        throw new Error('the judge must never be called for an empty dataset');
+      }
+      return baseFetch(url);
+    });
+    const sk = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
+    await sk.done;
+    // BOTH rows lose their answer.
+    frontmatterService.teiEmbed.mockImplementation(async () => {
+      throw new Error('Request failed with status code 429');
+    });
+    const run = await svc.beginRunSuite('me', sk.suite_key, { mode: 'whatif' }, { actor: { user_id: 'u1' } });
+    await run.done;
+    const doc = await svc.getRunSuite('me', sk.suite_key, run.run_key);
+    // The judge was never called with an empty dataset.
+    expect(evaluateCalled).toBe(false);
+    // The run FAILED — the read contract strips a failed doc to
+    // {run_key, suite_key, status, error}: there is no summary to read,
+    // which is the point — there is no mean of zeros to misread.
+    expect(doc.status).toBe('failed');
+    expect(doc.error).toBeTruthy();
+    expect(doc.payload).toBeUndefined();
+  });
+});

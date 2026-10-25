@@ -125,7 +125,14 @@ test.describe('the RAGAS guide documents what each error state does to the resul
 
     // The CORRECTED claims. These are the ones that were wrong the first
     // time, and they are the whole point of the chapter.
-    expect(bodyText, 'a failed row still reaches the judge').toContain('still handed to the judge');
+    //
+    // The two states that look alike and are NOT alike (2026-10-25): a row
+    // that produced NO ANSWER is never handed to the judge and never counts
+    // as a zero; a row that DECLINED still has an answer, so it IS judged
+    // and its zeros ARE in the averages.
+    expect(bodyText, 'a failed row is NOT handed to the judge').toContain('NOT handed to the judge');
+    expect(bodyText, 'a failed row is never counted as a zero').toContain('never counted as a zero');
+    expect(bodyText, 'an abstention IS still handed to the judge').toContain('still handed to the judge');
     expect(bodyText, 'and its zeros are in the averages').toContain('zeros ARE counted in the averages');
 
     // The RETRACTED claims must be gone. A guide that says the opposite
@@ -134,6 +141,10 @@ test.describe('the RAGAS guide documents what each error state does to the resul
       /excluded from every mean|no metrics for this row/i
     );
     expect(bodyText, 'an abstention is NOT declared never-a-failure').not.toMatch(/never a metric failure/i);
+    // The claim that EVERY row reaches the judge — the errored row does not.
+    expect(bodyText, 'a failed row is NOT declared as judged').not.toMatch(
+      /The row is still handed to the judge, which scores an empty answer/i
+    );
 
     await page.screenshot({ path: 'test-results/ragas-guide-errors.png', fullPage: false });
     await context.close();

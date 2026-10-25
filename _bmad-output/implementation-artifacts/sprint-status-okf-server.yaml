@@ -579,3 +579,41 @@ development_status:
   #          the deployed build): tests/e2e/okf/ragas-rescore-tracking.spec.js — drives the REAL UI
   #          through Keycloak, starts a re-score with the ENV judge, and asserts the progress bar,
   #          the Cancel button, the history row with its lineage, and the row turning 'cancelled'.
+  # The failed-row defect FIXED (David 2026-10-25: "Fix it now"). MR !598 →
+  #          feat/okf-server; branch fix/ragas-entry-regeneration.
+  #          THE DEFECT: the run path handed EVERY row to the judge, including the rows that
+  #          produced NO answer. The sidecar then scored an EMPTY response, which came back as
+  #          ZEROS on the context and answer metrics — and zeros are numbers, so they landed in
+  #          the means and depressed them (measured on rr1792742789648-86637b: context_recall
+  #          0.887 over all 100 rows vs 0.944 over the 94 that answered). The run path's own
+  #          comment said "Judge only the rows that produced an answer" (:2287), its sibling
+  #          re-score path filtered the same way (:1770), and a passing test encoded the same
+  #          intent (:2353-2397) — the payload contradicted all three.
+  #          THE FIX: the run path filters `scorable` (no error AND an answer) and maps
+  #          `per_query` back through the ORIGINAL row index — the naive index alignment shifts
+  #          every score onto the wrong row after the first dropped one. A row with no answer
+  #          carries `{}`: it is EXCLUDED from the means (never a zero) and counted in the
+  #          coverage as NOT measured, so the coverage reads 99/100 instead of 100/100. A run
+  #          where NO row produced an answer now FAILS loudly instead of reporting a mean of
+  #          zeros, and the judge is never called with an empty dataset.
+  #          MEASURED ON EVERY STORED RUN: the three runs that matter for the current comparison
+  #          (rr1792896220523-b71784 MiniMax-M3, rr1792871605303-9ce608 granite,
+  #          rr1792843333604-268dad MiniMax-M3.1-Flash) have 0 errored rows and 0 abstentions —
+  #          the means before and after the fix are IDENTICAL on all ten metrics of all three.
+  #          The fix touches only the runs where a row actually failed.
+  #          THE ABSTENTION SEMANTICS: an abstention is a row that DECLINED — it still has an
+  #          answer, so the judge scores it and its context metrics come back 0, and those zeros
+  #          ARE in the averages. What was broken was the ARITHMETIC: the panel's bar computed
+  #          `answered = n_evaluable - n_abstained - failing_count`, subtracting the abstentions
+  #          TWICE (they are in failing_count too) — the all-abstained runs reached -20. The bar
+  #          now partitions the rows exactly: failing = max(0, failing_count - n_abstained),
+  #          answered = max(0, n_evaluable - n_errors - n_abstained - failing). The server also
+  #          stopped counting a row that FAILED as an abstention.
+  #          THE GUIDE WAS CORRECTED TO MATCH (14 locales, translated): the errors chapter said
+  #          "EVERY row in the suite is handed to the judge, including a row that failed or
+  #          declined" and "a row with no answer therefore scores 0 … and those zeros ARE counted
+  #          in the averages". The first half was true of the code until this fix and is now the
+  #          opposite; the second half stays true for the ABSTENTION, which still has an answer.
+  #          The guide test now asserts the failed row is NOT judged and never a zero, and that
+  #          an abstention IS judged and its zeros ARE in the averages.
+  #          okf-server 1653/1653 · frontend 2042/2042 · guide test 31/31.

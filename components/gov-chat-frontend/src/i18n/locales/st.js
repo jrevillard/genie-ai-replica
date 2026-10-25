@@ -1512,8 +1512,8 @@ export default {
       groupDataPrep: 'Tsela ya lokiso ya data',
       groupInference: 'Tsela ya ntsho',
       mockNote: 'eahlohileng — ha e ka be ea hlophisa ho fihlela joale',
-      svcAnswers: 'Karabo tsa litekanyo (ho sebedisa puo ya koloi ya deploy)',
-      svcAnswersShort: 'karabo tsa litekanyo',
+      svcAnswers: 'Karabo tsa benchmark — ho phetisa offline feela (Lab e araba ka chat e deployadeng)',
+      svcAnswersShort: 'karabo tsa benchmark (offline feela)',
       mockContextual: 'Phumisho ya mocheng (mocheng wa tokomane)',
       mockChunkLabeling: 'Tlhatlhobo ya dikarolo',
       mockGraphExtraction: 'Ntsho haese ya grafu ya tsebo',
@@ -3292,7 +3292,7 @@ export default {
             title: 'Modeli le tseo o ka lebelelang',
             intro:
               'Modeli tse tharo tse fapaneng e nka karolo mme ha a fihlellane: modeli ea arabang, modeli ea moahloli, le modeli ea embedding. Di fetola sekhatho ka mabaka a tse fapaneng kaofela.',
-            d1: 'Modeli ea karabo ke eo e tekotsoeng. Ho kgetha le ho araba bo phetisoa ka server ea OKF khahlano le makole a tse tšoanang le reranker eo mofusi a e sebetsisang, kahoo ho e fetola ke ho fetola karabo — eseng moqolo oa tekanyo.',
+            d1: 'Modeli ea karabo ke eo e tekotsoeng — empa Lab kapa karabo li tsoka ho modeli ea chat e HILENG (DEPLOYED), ka pipeline e hlileng, kahoo ho fetola modeli ea chat ea ho deploya ho fetola karabo. Karolo e reroleng offline (ho kgetha le ho araba bo phetisoa ka server ea OKF) e teng trial bakeng sa mifumo ea whatif mme ha e ka qalisoa ho tswa Lab kajeno, kahoo seteisho "karabo tsa benchmark" ha se fetole benchmark e o ka bapala mona.',
             d2: 'Moahloli o tlameha ho le matla le ho tshehane. O lekanya khahlano le boitlhisohedi, kahoo moahloli o mokhatho o theohisa ditekanyo tsohle ka nako e le nngwe mme tsamaello e ntse e sheba e felletseng. Dikarabo tsa moahloli di bolokwa ho latheoe mohopolong oo moahloli — ho fetola moahloli kapa modeli ho hlahisa hore boeke bo sa sebetseng mme mula o mong le o mong o hape o lekanywa.',
             d3: 'Modeli ea embedding ke karolo ea tekanyo ea ho kgetha. E e fetotse mme context precision le context recall di fula, ha faithfulness ka tlhakoreng e sa fule. Boiketlo boo bo sa lumellane ke bopaki bo bolelang hore phetoho e fihlile kae, eseng mohumo.',
             d4: 'Rekota modeli le tsamaello. Tsamaello e n’ngwe le e n’ngwe e boloka hore ke pehelo efe le modeli efe tse neng tsa hlahisa dikarabo le dipalo; ditsamaello tse pedi di ka bapaloa feela ha tseo di tlatswana.',
@@ -3306,10 +3306,10 @@ export default {
             title: 'Bala litseo',
             intro:
               'Tekanyo e n’ngwe le e n’ngwe ea RAGAS e tekanya ntho e fapaneng, mme e le nngwe ea tsona e sebetsa ka tsela e tsolehileng. Bala nomo e n’ngwe le e n’ngwe ho e-na le ntho eo e tekanyang ka nnete pele o nka ntho.',
-            d1: 'Bala bane ea tsamaello e sa sebetsheng pele. Tsamaello e neng dikarabo tsa eona di hlolehile, kapa moahloli a lekantseng feela karolo ya sete, ha e na le tekanyo — di-average tse ka tlasa di akaretsa feela mela e neng a lekanywa.',
+            d1: 'Bala bane ea tsamaello e sa sebetsheng pele. Tsamaello e neng dikarabo tsa eona di hlolehile, kapa ho na le metric e sa koaleng linotso tse ka hare ho sepheo, ha e na le tekanyo — di-average tse ka tlasa di akaretsa feela mela e neng a lekanywa.',
             d2: 'Lekola tsela ea tekanyo e n’ngwe le e n’ngwe. Bo bang bo phahameng ke boka bo botle. Noise sensitivity ke khefiso: ha e tlase e le betere, kahoo tsamaello e phathileng ka eona e hlolehela ka tsela e ntle.',
             d3: 'Bala mela e fosahetseng, eseng feela karabo e lekanang. Potso e le nngwe e phoofolong ho feta tse mashome a mantsi e fetosa karabo e lekanang ho feta phetoho o neng o leka ho e lekanya.',
-            d4: 'Sebenzisa Hlalosa tse fosahetseng pele o fetola ntho e le nngwe. E laela mula o mong le o mong o fosahetseng ho kgetha tsela e nngwe le e nngwe e totoetseng ka corpus — retrieved, reranker, vector-recall, corpus, judge kapa answer — mme e bontsha hore karolo e lahlehileng kae le hore e ntle ka morato. Sehlaha sa "corpus" se bol\'a hore karolo e lebelagoa ha ho corpus — potso ena e sa lengo, e lekola benchmark eseng ha mhoabi, \'me e bontsha tselemo hore u khutsetsebenyana ho fana ntlha e nang, eseng ua ngola litsoho tse hape li kholo. Litlhutu tsa eona di sireletsekileng — e fana, o etsa qeto.',
+            d4: 'Sebenzisa Hlalosa tse fosahetseng pele o fetola ntho e le nngwe. E laela mula o mong le o mong o fosahetseng ho kgetha tsela e nngwe le e nngwe e totoetseng ka corpus — retrieved, reranker, vector-recall, corpus, judge, answer kapa unmeasured — mme e bontsha hore karolo e lahlehileng kae le hore e ntle ka morato. Sehlaha sa "corpus" se bol\'a hore karolo e lebelagoa ha ho corpus — potso ena e sa lengo, e lekola benchmark eseng ha mhoabi, \'me e bontsha tselemo hore u khutsetsebenyana ho fana ntlha e nang, eseng ua ngola litsoho tse hape li kholo. Litlhutu tsa eona di sireletsekileng — e fana, o etsa qeto.',
             x1: 'U se ke bapisa dikarabo tse lekanang mahareng ha sete tse fapaneng tsa ditekanyo, baahloli tse fapaneng, kapa sete e lokisitsoeng. Ha ho e neng ea tsona tekanyo e le nngwe, mme phapang o o bonang ha e na le phetoho boleng.',
             x2: 'U se ke hlokomela ho kgetha ho latela nomo e le nngwe. Nepahalo le botlalo di fana ka hare; phetoho e phahamisang e le nngwe ka tlasa e le nngwe e ntle, mme kefiso ea tsona ka tlasa e le nngwe e ntle ka nako e ngata ke karolo e khahlisang.',
             x3: 'U se ke shebe sekhatho se sehleng joalo le sekhatho se tlase. Ho pheta ka mor’a ho fihla ho hlahisa sekhatho se sehleng se neng se sa akaretswa karabong, kahoo nomo e se ho na le tekanyo — phethahatsa mula o mong hape ho e na le ho nahana ka maseo.',
@@ -3323,7 +3323,7 @@ export default {
                 effect: 'Hore u ka etsa ka eona'
               },
               mean: {
-                element: 'Likhato',
+                element: 'Khatollo eo',
                 meaning: 'Khatello ea metrik eo moahlodi a li ferehela moo a li fa bo. Ha e na letho la suite kaofela.',
                 effect:
                   "E bale e le letho le pel'a eona. Khatello moo ho linotso tse ling, e fereha linotso tseo, eseng suite."
@@ -3331,18 +3331,18 @@ export default {
               coverage: {
                 element: 'Karohano (55/100)',
                 meaning:
-                  'Moahlodi o ile a fereha metrik eo moo linotso tse 100 tsa suite li 55. Khatello e koala linotso tseo 55 feela; tse 45 tse ling ha li kaehlohe — ha li balwe zero.',
+                  'Moahlodi o ile a fereha metrik eo moo linotso tse 100 tsa suite tse ka hare ho sepheo li 55. Khatello e koala linotso tseo 55 feela; tse 45 tse ling ha li kaehlohe — ha li balwe zero. Linotso tse ka ntle ho sepheo tse bapisi ha li letho ka ho lekana le tse 100.',
                 effect:
                   'Karohano e nyenyane o bolela hore noma e se behale ka suite. sheba metrik eo e o kgatlha, eseng run kaofela.'
               },
               banner: {
                 element: 'Benera ea run e sa ntle',
                 meaning:
-                  'Run e bile le linotso tse neng li fetile, kapa ho na le metric e sa koaleng linotso tsohle. Nomere ea eona ke metric eo e koalang haholo, kahoo metric e le 21/100 ha e e phahamise.',
+                  'Run e bile le linotso tse neng li fetile, kapa ho na le metric e sa koaleng linotso tse ka hare ho sepheo. Nomere ea eona ke metric eo e koalang haholo, kahoo metric e le 21/100 ha e e phahamise.',
                 effect: 'Bala linotso tsa hae bakeng sa hao. Benera ke tlase, eseng kakaretso.'
               },
               runName: {
-                element: 'Lebitso la run',
+                element: 'Lebitso la run le moahloli oa oona',
                 meaning:
                   'Moahlodi o ile a fereha run eo, le configuration eo e tlang ka ho eona. Key e tlase ke bakeng sa thuso.',
                 effect:
@@ -3351,9 +3351,9 @@ export default {
               rescore: {
                 element: 'Fereha hape',
                 meaning:
-                  'O fereha linye tse tšoanang le moahlodi o mong. Linye le likhaqana li kopana ka se khale — ho sa letho le ho ngola.',
+                  'O fereha linye tse tšoanang le moahlodi o o ketsang — linye le likhaqana li kopana ka se khale, ho sa letho le ho ngola. Lenkopo la bona li ile ka bula moahlodi wa run ya mohloli, kahoo kadi e ncha ka mokhoa o tsengisang ke teko ea STABILITHA (na moahlodi o ka phetoloha?), eseng maqeo a mabeli.',
                 effect:
-                  "Sebedisa ho beha moahlodi tse pel'a linotso tse tšoanang. E theha tse nyenyane ho na le run ncha, mme ke tsela ya ho lekola moahlodi o ncha."
+                  'Ho tseba hore na ho hloleha ke moahlodi o thata kapa ke ho hloleha ha se ho hloleheng, fereha hape ka moahlodi O NGO. Baahloli ba mabeli mo linotso tse tšoanang ke tse nyenyane ho na le run ncha, mme ke tsela ya ho lekola moahlodi o ncha.'
               },
               status: {
                 element: 'Boemo',
@@ -3365,16 +3365,16 @@ export default {
           errors: {
             title: 'Liphoso le tšusumetso haho ho etsa haholo',
             intro:
-              "Haese ho boqoba ha ho sheba letho kaofela kwa bopa ba sehlopha: letho le ka lahlolo ka hore, ho ba bohlokoa ka hore, bao boholo ba ka seka ba lekola ntho e itseng, kapa ntho e itseng e ka fihlela tlase ho bophara. Ha ho letho le na le zero, 'me ha ho letho le tla qobiha. Kena e sebetsa ka lenkopo — hore na le ntho e re bolang, le hore na le tla etsa joalo ka bao e o ng o sebetsa. O tsebe o hore ka thuto ena pele o e bale: letho le ntle le bangwang karolo ha le na le karabo ea ho araba, kahoo ha ho letho le ka thusa ho lekola — kahoo le lekane le feta ka letso la boholo, 'me ha le baloe zero. Ha letho le bangwang ho araba (le na le karabo), le ntse le lekolwa hobane ho na le letsatsi le sebetsa empa ho letho le ha letho le tla thusa, mme metrike ya eona e bohile ho 0, 'me boholo bao ba baloa mooanelong. Ka nako eo, run e na le letho le hloleha e bitsoa \"haba\" ho e na le tshepong ea tsatsi.",
+              "Haese ho boqoba ha ho sheba letho kaofela kwa bopa ba sehlopha: letho le ka lahlolo ka hore, ho ba bohlokoa ka hore, bao boholo ba ka seka ba lekola ntho e itseng, kapa ntho e itseng e ka fihlela tlase ho bophara. Ha ho letho le na le zero, 'me ha ho letho le tla qobiha. Kena e sebetsa ka lenkopo — hore na le ntho e re bolang, le hore na le tla etsa joalo ka bao e o ng o sebetsa. O tsebe o hore ka thuto ena pele o e bale: letho le ntle le bangwang karolo ha le na le karabo ea ho araba, kahoo ha ho letho le ka thusa ho lekola — kahoo le lekane le feta ka letso la boholo, 'me ha le baloe zero, 'me le fokotseha coverage eo e lekantse. HO HANA HO ARABA ha se letho le le leng, empa li mabeli. Ho hana ho araba ho nang le karabo ho ile ha lekoloa, 'me ho na le letsatsi le sebetsa, metrike tsa konteksi tsa eona lia bohile ho 0, 'me boholo bao ba baloa mooanelong. Ho hana ho araba ntle le karabo ha ho na le ho lekoloa mme ho e-na le: ha ho na le sekala, e se eona e ka baloa, 'me e ka se e phutsoe, 'me e fokotseha haholo, 'me e ka etsa run e bitsoa \"haba\". Ka nako eo, run e na le letho le hloleheng kapa letho le sa lekoloeng e bitsoa \"haba\" ho e na le tshepong ea tsatsi.",
             d1: 'Bala benera ya "run e se ntle" pele o bala boholo. E bolela hore lintlha tseo o li bonang ha li khalehang Sisteme, mme benera e bitse lebaka: ho na le liphaseho tse neng li foetse, kapa moahlodi o ile a khala feela ka karolo ya haholo. Lokisa lebaka mme o runise hape.',
             d2: 'Bala coverage ya kotloha e mong le e mong pele o bapisa linotso tse ling. Panel e bontsha hore moahlodi o ile a khala linotso tse ling tse ngang le ho hlala kotloha ena; boholo ba karolo ya haholo bo se boholo ba haholo, mme bo sa tshemaneho le run e ileng a khala linotso tsohle.',
             d3: 'Lokisa ntha e foelang pele o sebetsa — sekema sa ho batla, kapa tšebeleo e hodima ka hodima, kapa nako e se e fela — mme o runise hape. Ho fetola haholo ho tlohosa ntha e foelang ka kakata e bile e ka bo e na le bothata bo benchmark e lebitseng ho e batla.',
-            d4: 'Bata ho hana ho araba e le sephetho, eseng phoso. E bolela hore mohlophi o ile a nahana hore ha corpus e araba potso ena — sena ke tšebalo ya corpus le potso. E bale feela e le phatelo ya tseo basebelisi ba hao tla utloana le bona.',
+            d4: 'Bata ho hana ho araba e le sephetho, eseng phoso. Ho hana ho araba ho nang le karabo ho bolela hore mohlophi o ile a nahana hore ha corpus e araba potso ena — sena ke tšebalo ya corpus le potso. E bale feela e le phatelo ya tseo basebelisi ba hao tla utloana le bona.',
             x1: 'O se o ka akara kotloha e sa lekeng ka zero. Ha moahlodi a ka eona a kgonne ho sekaseka karabo ya kotloha, kotloha ena e ntse ka null moo row eo; null e sa phakela mo boholong, mme e ka bo feela e bile ha e phele e phatlisa ho se phallang.',
-            x2: 'O se o ka baleng ho hana ho araba e le phoso kapa le tsohle. E ntse ka kholo ea e itseng haka hobane ha e se eona e le phoso kapa le tsohle.',
+            x2: "O se o ka baleng ho hana ho araba e le phoso kapa le tsohle. E ntse ka kholo ea e itseng haka hobane ha e se eona e le phoso kapa le tsohle — 'me ho hana ho araba ntle le karabo ha ho ne ho lekoloa mme ho e-na le, kahoo e se ka etsa sezero.",
             x3: 'O se o ka phatliseng noma eo panel e ileng a bitsa "e sa ntle", kapa o se o ka thata ka ho averija linotso tse ling ho e lefa. Run e ile a lekeng ka karolo e na le noma eo ho phatliseng; e na le run eo o lokisang.',
             expect:
-              'Run e hantle ha e na le linotso tse foelang, mme kotloha e mong le e mong e lekeng moo row e mong le e mong — feela ka maemong a mang ho ka ba boholo bo tšena. Tse ling tsohle ke run eo o lokisang, eseng sephetho se o ka nka qeto ka sona.',
+              'Run e hantle ha e na le linotso tse foelang, le linotso tse sa lekoloeng, mme kotloha e mong le e mong e lekeng moo row e mong le e mong o ka hare ho sepheo — feela ka maemong a mang ho ka ba boholo bo tšena. Tse ling tsohle ke run eo o lokisang, eseng sephetho se o ka nka qeto ka sona.',
             table: {
               title: 'Hore na le boemong bo boka bo etsa ntho e itseng',
               col: {
@@ -3392,16 +3392,22 @@ export default {
               abstained: {
                 state: 'Ho hana ho araba',
                 meaning:
-                  'Mohlophi o ile a hana ho araba — chatqna o ile a re, kapa a ka nna a se na letho a re. Pipeline e se ntle.',
+                  'Mohlophi o ile a hana ho araba empa o ile a bana le karabo — chatqna o ile a re, kapa a ile a araba ka ho tshehane. Pipeline e se ntle.',
                 effect:
-                  'Row e sebetsa moahlodi le hoja, kahoo a eketsa sekata: ntle le kontexi e tshegwang, metrike tsa kontexi lia boea ka 0, mme zero tseo bohle li baloa mo boholong. E bala kholong ea e itseng, eseng kholong ea liphoso, mme e se etsa run e sa ntle. Panel e e labela “abstained”, eseng phatello kapa ho hloleha.'
+                  'Row e ile ya romeloa ho moahlodi, kahoo a eketsa sekata: ntle le kontexi e tshegwang, metrike tsa kontexi lia boea ka 0, mme zero tseo bohle li baloa mo boholong. E bala kholong ea e itseng, eseng kholong ea liphoso, mme e itseng feela e se etsa run e sa ntle. Panel e e labela “Ho hana ho araba”, eseng phatello kapa ho hloleha. Ho hana ho araba ho sa ntlhise karabo e nngwe ke boemong bo bohodima — sheba “Ho hana ho araba, ha ho lekoloa”.'
+              },
+              declinedUnjudged: {
+                state: 'Ho hana ho araba, ha ho lekoloa',
+                meaning: 'Mohlophi o ile a hana mme a sa letho — ho na le letho le ka hla. Pipeline e se ntle.',
+                effect:
+                  'Row ena ha e romeloa ho moahloli — e na le letho le ka hla, kahoo ha ho letho le ka thusa ho lekola. E na le sekala seha: e feta ka letso la boholo (ha e baloe zero), e fokotseha haholo, mme e ka etsa run e bitsoa “haba”. Panel e e labela “Ho hana ho araba — ha ho lekoloa” hore o ka e phethola le ho hana ho araba ho lekoloeng.'
               },
               unmeasured: {
                 state: 'Ha e lekeng',
                 meaning:
                   'Moahlodi o ile a nka karabo eo kotloha e sa kgone ho e sekaseka — mohlala o ile a ba lepola ka botopo boo a ka nna a se ka kgone ho hlola.',
                 effect:
-                  'Kotloha ena e ntse ka null moo row ena: ho se ho ekare mo boholong, mme e ka bo feela e bile ha e phele e ba zero. Panel e bontsha linotso tse moahlodi o ile a li lekeng ka nnete, mme ho le letho ka karolo ho etsa run e sa ntle.'
+                  'Kotloha ena e ntse ka null moo row ena: ho se ho ekare mo boholong, mme e ka bo feela e bile ha e phele e ba zero. Panel e bontsha linotso tse moahlodi o ile a li lekeng ka nnete. Metric e le 21/100 ha e etse run e sa ntle — benera e qala feela ha ho na le metric e sa koaleng linotso tse ka hare ho sepheo, kahoo bala linotso tsa hae bakeng sa hao.'
               },
               belowThreshold: {
                 state: 'Ka tlase ho tekanyiso',
@@ -3413,7 +3419,8 @@ export default {
                 state: 'Ntle le sebakeng',
                 meaning:
                   'Potso ena e ne e sa araba ka morato — e boloketse ho haholo bakeng sa bapiso, mme e ka bo feela e bile ha e phele e ba teko.',
-                effect: 'E ka bo phoso feela ha e phele. Ke taolo ya bapiso, eseng sephetho.'
+                effect:
+                  'E ka bo phoso feela ha e phele, mme e se ka boa ka boholo: ke taolo ya bapiso, eseng sephetho. Panel e se e hlomela oa phetho, mme sekala sa eona ha se ka se koaleng boholo bo tsena le karohano ya koatelo.'
               }
             }
           }
@@ -3477,6 +3484,7 @@ export default {
         pass: 'hantshwe',
         fail: 'hlokile',
         abstained: 'ikhethile',
+        declinedUnjudged: 'Ho hana ho araba — ha ho lekoloa',
         rowError: 'phoso',
         cancel: 'Khansela tsamaiso',
         phase: {
@@ -3504,7 +3512,7 @@ export default {
           'Mola o mong le o mong ke karolo ea tekong e nngwe ea RAGAS ka sesebediso, ho tloha hodilo — ⓘ ea sekhomethadiso e nngwe le e nngwe e hlalosa teko eo. Dikarabo tse hlahlojitsoeng di bolokwa; dikopiso tse tšoanang di fapana hoo fela hoo karabo kapa phumullo e fetohe.',
         statusTitle: 'Diphetho ka potso e nngwe le e nngwe',
         statusNote:
-          'Potso e nngwe le e nngwe ea sehlooho sening samong, ka phetho: e phalletse, e hlotse (teko e kgethilweng e tlase ho moelo oa eona), e ile ka thoko, kapa phoso ea moralo.',
+          'Potso e nngwe le e nngwe ea sehlooho sening se ka hare ho sepheo, ka phetho: e arabitse, e hlotse (teko e kgethilweng e tlase ho moelo oa eona), e ile ka thoko, kapa phoso ea moralo. Linotso tse ka ntle ho sepheo tse bapisi ha li bale — ke taolo ya bapiso, eseng sephetho.',
         allPass: 'tsohle li feta',
         invalidTitle: 'Sena ena ha se ne e na e sehang',
         invalidPill: 'sena e se ntlha',
@@ -3517,6 +3525,9 @@ export default {
         state: 'Seemo',
         error: 'phoso',
         abstained: 'e ikgethetse',
+        declinedUnjudged: 'Ho hana ho araba — ha ho lekoloa',
+        declinedUnjudgedTitle:
+          'Mojarabo o ile a hana mme a sa letho, kahoo row ena ha e ne e romeloa ho moahloli. Ha e na le sekala mme e sa bale ho boholong — mme e fokotseha haholo.',
         answered: 'e arabitse',
         noisy: 'karabo e nepahetse — lerata la phumullo',
         noisyTitle:
@@ -3552,8 +3563,8 @@ export default {
         judgeUnknown: 'Kahlolo ha ho ngeng'
       },
       rescore: {
-        title: 'Hahlola hape ka kahlolo ho ling',
-        body: 'Likarabo tse tsebokeng li hahloloa ka kahlolo ho ling — ha li hlahloheng. Sehlaho ke balekila bo bo karolo.',
+        title: 'Hahlola hape ka kahlolo',
+        body: 'Likarabo tse tsebokeng li hahloloa ka kahlolo o o ketsang — ha li hlahloheng. Lenkopo la bona li ile ka bula kahlolo ea run ya mohloli, kahoo kadi e ncha e sebetsa ho hlahloja hore na kahlolo eo e ka phetoloha; kha kahlolo O NGO ho fumana maqeo a mabeli a liphoso. Sehlaho ke balekila bo bo karolo.',
         source: 'Balekila ba pele',
         judge: 'Kopano ya kahlolo',
         confirm: 'Hahlola hape',

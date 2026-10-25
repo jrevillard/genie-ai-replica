@@ -1499,8 +1499,8 @@ export default {
       groupDataPrep: 'Mchiriza wa kuandaa data',
       groupInference: 'Mchiriza wa uainishaji',
       mockNote: 'imepangwa — bado haiwezi kusanidiwa',
-      svcAnswers: 'Majibu ya benchmaki (badala ya soga ya utumaji)',
-      svcAnswersShort: 'majibu ya benchmaki',
+      svcAnswers: 'Majibu ya benchmark — kurudi nyuma nje ya mtandao pekee (Lab inajibu kupitia mazungumzo ya uwekaji)',
+      svcAnswersShort: 'majibu ya benchmark (nje ya mtandao pekee)',
       mockContextual: 'Uchukuzi wa muktadha (muktadha wa hati)',
       mockChunkLabeling: 'Weka lebo za vipande',
       mockGraphExtraction: 'Utoaji wa grafu ya maarifa',
@@ -3277,7 +3277,7 @@ export default {
             title: 'Modeli na unachotarajia',
             intro:
               'Modeli tatu tofauti hushiriki na hazibadilishani: modeli inayojibu, modeli inayohakiki na modeli inayoweka pachiko. Zinabofisha alama kwa sababu kamili tofauti.',
-            d1: 'Modeli inayojibu ndiyo inayokaguliwa. Upatikanaji na kujibu hukaguliwa upya kwenye seva ya OKF dhidi ya makoleksheni haya na reranker ile ile anayotumia msaidizi, kwa hivyo kubadilisha hii hubadilisha jibu — si mchakato wa ukaguzi.',
+            d1: 'Modeli inayojibu ndiyo inayokaguliwa — lakini katika Lab, majibu yanatoka kwa modeli ya mazungumzo iliyowekwa (DEPLOYED), kupitia mfuatano uliowekwa, kwa hivyo kubadilisha modeli ya mazungumzo ya uwekaji hubadilisha jibu. Sehemu ya kurudi nyuma nje ya mtandao (upatikanaji na kujibu ukaguliwa upya ndani ya seva ya OKF) ipo kwa ajili ya mifumo ya whatif na haiwezi kuanzishwa kutoka Lab leo, kwa hivyo mpangilio wa "majibu ya benchmark" haubadilishi benchmark yoyote unayoweza kuendesha hapa.',
             d2: 'Mhukumu lazima awe na nguvu na thabiti. Hupima kulingana na rejea, kwa hivyo mhukumu dhaifu hushusha kila kipimo kwa wakati mmoja na uendeshaji bado unaonekana umekamilika. Majibu ya mhukumu huhifadhiwa kwa utambulisho wa kila mhukumu — kubadilisha mhukumu au modeli kunafutilia uhifadhi huo na kila safu inapimwa upya.',
             d3: 'Modeli ya embedding ni sehemu ya kipimo cha upatikanaji. Ikibadilishwa, context precision na context recall hubadilika, wakati faithfulness kawaida hubaki. Ulinganisho huo wa kutofautiana ni ishara kuhusu mahali mabadiliko ulipofika, si kelele.',
             d4: 'Andika modeli pamoja na uendeshaji. Kila uendeshaji huhifadhi mipangilio gani na modeli gani iliyotengeneza majibu na alama; uendeshaji mawili hulinganiwi tu pale yale yanapotana.',
@@ -3291,10 +3291,10 @@ export default {
             title: 'Soma matokeo',
             intro:
               'Kila kipimo cha RAGAS kinapima jambo tofauti, na kimoja mwao kinaenda kwa njia tofauti. Soma kila namba kwa kile inayopima hasa kabla ya kuiendelea.',
-            d1: 'Soma bango la kimbio batili kwanza. Uendeshaji ambao majibu yake yamekoseka, au ambao mhukumu alipima sehemu tu ya seti, si kipimo — wastani chini yake yanalenga mistari iliyopimwa tu.',
+            d1: 'Soma bango la kimbio batili kwanza. Uendeshaji ambao majibu yake yamekoseka, au ambao hakuna kipimo kilichofunika kila safu iliyo ndani ya wigo, si kipimo — wastani chini yake yanalenga mistari iliyopimwa tu.',
             d2: 'Angalia mwelekeo wa kila kipimo. Mengi yana maana ya juu ni bora. noise sensitivity ndiyo pekee: chini ni bora, kwa hivyo uendeshaji unaofanya vibaya kwenye huo unashindwa kwa njia nzuri.',
             d3: 'Soma mistari iliyoshindwa, si wastani pekee. Swali moja lililoharibika kati ya arobaini hubadilisha wastani zaidi kuliko mabadiliko uliyokuwa unajaribu kupima.',
-            d4: 'Tumia Explain failures kabla ya kubadilisha chochote. Zana hufanya kila kila iliyoshindwa kwa hatua iliyoothibishwa dhidi ya korpus — retrieved, reranker, vector-recall, corpus, judge au answer — na inaonyesha kifungu kilipotea na kama kingekuwa nafasi yake. Amali ya corpus humaanisha kifungu kilichotarajiwa hapatikani korpus: swali hilo ni halali, linapima benchmark badala ya msaidizi, na limewekewa alama ili urejeue mfano badala ya kuandika maudhui yaliyopo tayari. Mapendekezo yake yamelindwa: zana inapendekeza, wewe unachagua.',
+            d4: 'Tumia Explain failures kabla ya kubadilisha chochote. Zana hufanya kila kila iliyoshindwa kwa hatua iliyoothibishwa dhidi ya korpus — retrieved, reranker, vector-recall, corpus, judge, answer au unmeasured — na inaonyesha kifungu kilipotea na kama kingekuwa nafasi yake. Amali ya corpus humaanisha kifungu kilichotarajiwa hapatikani korpus: swali hilo ni halali, linapima benchmark badala ya msaidizi, na limewekewa alama ili urejeue mfano badala ya kuandika maudhui yaliyopo tayari. Mapendekezo yake yamelindwa: zana inapendekeza, wewe unachagua.',
             x1: 'Usilinganishe wastani kati ya seti tofauti za vipimo, mahukumu tofauti, au seti iliyohaririwa. Hakuna yoyote ni kipimo sawa, na tofauti unayoona si mabadiliko ya ubora.',
             x2: 'Usiboreshe upatikanaji kulingana na namba moja tu. context precision na context recall hushindana; mabadiliko yanayoinua moja kwa kawaida hulipa nyingine, na makubaliano hayo ndiyo sehemu ya kuvutia zaidi.',
             x3: 'Usifanye alama ya null kuwa alama ya chini. Marudio yaliyoisha huzalisha null ambayo hubainishwa kwenye wastani, kwa hivyo hakuna alama inamaanisha hakuna kipimo — endesha safu hiyo upya badala ya kudhani hali mbaya.',
@@ -3308,7 +3308,7 @@ export default {
                 effect: 'Unapaswa kufanya nini nacho'
               },
               mean: {
-                element: 'Alama',
+                element: 'Wastani',
                 meaning: 'Wastani wa kipimo hicho kwenye safu ambazo hakika alipima. Si alama ya kundi kizima.',
                 effect:
                   'Isoma pamoja na sehemu iliyo kando. Wastani wa safu chache ni kipimo cha hizo safu, si cha kundi.'
@@ -3316,18 +3316,18 @@ export default {
               coverage: {
                 element: 'Sehemu (55/100)',
                 meaning:
-                  'Hakika alipima kipimo hicho kwenye safu 55 kati ya 100 za kundi. Wastani unahusika safu hizo 55 pekee; nyingine 45 hazihusikani — hazihesabiwi kama sifuri kamwe.',
+                  'Hakika alipima kipimo hicho kwenye safu 55 kati ya 100 za kundi zilizo ndani ya wigo. Wastani unahusika safu hizo 55 pekee; nyingine 45 hazihusikani — hazihesabiwi kama sifuri kamwe. Vitu vya kulinganisha nje ya wigo havina sehemu katika 100 hizo.',
                 effect:
                   'Sehemu ndogo inamaanisha namba haisemi mengi kuhusu kundi. Angalia kipimo unachohitaji, si mzigo mzima.'
               },
               banner: {
                 element: 'Bango la mfuatano batili',
                 meaning:
-                  'Mfuatano ulikuwa na majibu yaliyashindwa, au hakuna kipimo kilichofunika kila safu. Namba yake ya ufikiaji ndiyo kipimo kilichofunikia vizuri, kwa hivyo kipimo kimoja cha 21/100 hakuiinua.',
+                  'Mfuatano ulikuwa na majibu yaliyashindwa, au hakuna kipimo kilichofunika kila safu iliyo ndani ya wigo. Namba yake ya ufikiaji ndiyo kipimo kilichofunikia vizuri, kwa hivyo kipimo kimoja cha 21/100 hakuiinua.',
                 effect: 'Soma sehemu za kila kipimo mwenyewe. Bango ni kizingiti cha chini, si muhtasari.'
               },
               runName: {
-                element: 'Jina la mfuatano',
+                element: 'Jina la mfuatano na mhukumu wake',
                 meaning: 'Hakika aliyepima mfuatano huo, na usanidi uliotoka. Ufunguo chini ni kwa msaada.',
                 effect:
                   'Mifuatano miwili kwa mahakiki tofauti si ukaguzi mmoja. Linganisha zinazofanana, au kadii upya mojawepo.'
@@ -3335,9 +3335,9 @@ export default {
               rescore: {
                 element: 'Kadii upya',
                 meaning:
-                  'Inakadii majibu yale yale kwa hakika mwingine. Majibu na muktadha hukopishwa hasa — hakuna kinachopatikana au kuandikwa upya.',
+                  'Inakadii majibu yale yale kwa hakika unaochagua — majibu na muktadha hukopishwa hasa, hakuna kinachopatikana au kuandikwa upya. Kidialogo kinaweka awali hakika ya mfuatano asilia, kwa hivyo kadi upya chaguo-msingi ni ukaguzi wa STABILITIA (je, hakika hii inaweza kurudiwa?), si maoni ya pili.',
                 effect:
-                  'Tumia ili kuweka mahakiki wawili kwenye safu zilezile. Ni bei nafisi kuliko mfuatano mpya, ndiyo njia ya kujaribu mabadiliko ya hakika.'
+                  'Ili kujua kama kushindwa kunatokana na hakika kuwa mgumu au ni kushindwa halisi, kadi upya kwa hakika TOFAUTI. Wa hakika wawili kwenye mistari ile ile ni bei nafisi kuliko mfuatano mpya, na ndiyo njia ya kujaribu mabadiliko ya hakika.'
               },
               status: {
                 element: 'Hali',
@@ -3349,16 +3349,16 @@ export default {
           errors: {
             title: 'Makosa na jinsi yanavyoathiri matokeo',
             intro:
-              'Kiwango cha ukagwi hakihesabiwi kila safu ya kila seti ya majaribio: safu inaweza kushindwa katika mnyororo, msaidizi anaweza kukataa kujibu, hakimu anaweza kushindwa kupima kipimo, na kipimo kinaweza kushuka chini ya kizingiti chake. Hakuna kitu kati ya hiki ni sifuri, na hakuna kitu kimefichwa. Sura hii ni ramani — maana ya kila hali, na jinsi inavyotendelea kwa nambari unayo isoma. Kitu mmoja unapaswa kujua kabla ya kusoma: safu ambayo haikutoa jibu lolote HAIKUIHUSHIWA na hakimu — kuna kitu cha kuiwasilisha nayo — kwa hiyo haionyeshiwi kwenye wastani na huangeshambuliwa kamwe sifuri. Safu ambayo imekataa kujibu bado ina jibu, kwa hiyo hukatwa: kwa kuwa hakuna kinachoiambatisha, vipimo vyake vya muktadha hurudi nyuma na 0, na hizo sifuri HUSAJILIWA kwenye wastani. Ndiyo maana run yenye safu iliyoshindwa hupambwa kama si sahihi, badala ya kukubaliwa kuwa ya kuaminika.',
+              'Kiwango cha ukagwi hakihesabiwi kila safu ya kila seti ya majaribio: safu inaweza kushindwa katika mnyororo, msaidizi anaweza kukataa kujibu, hakiku anaweza kushindwa kupima kipimo, na kipimo kinaweza kushuka chini ya kizingiti chake. Hakuna kitu kati ya hiki ni sifuri, na hakuna kitu kimefichwa. Sura hii ni ramani — maana ya kila hali, na jinsi inavyotendelea kwa nambari unayo isoma. Kitu mmoja unapaswa kujua kabla ya kusoma: safu ambayo haikutoa jibu lolote HAIKUIHUSHIWA na hakiku — kuna kitu cha kuihukumu — kwa hivyo haionyeshiwi kwenye wastani na huangeshambuliwa kamwe sifuri, na hushusha kiwango kilichopimwa. KUKATAA kujibu si jambo moja bali mawili. Kukataa kujibu kulikuwa na jibu kumehukuliwa, na kwa kuwa hakuna kinachoiambatisha, vipimo vyake vya muktadha hurudi nyuma na 0, na hizo sifuri HUSAJILIWA kwenye wastani. Kukataa kujibu bila jibu hapo kamwe hakukuwa kimehukuliwa: hakubeba alama yoyote, haionyeshiwi kwenye wastani, na hushusha kiwango kilichopimwa kama safu iliyoshindwa inavyofanya. Ndiyo maana run yenye safu iliyoshindwa au safu isiyohukuliwa hupambwa kama si sahihi, badala ya kukubaliwa kuwa ya kuaminika.',
             d1: 'Soma bango la "run si sahihi" kabla ya wastani. Linamaanisha kuwa alama zilizoonyesha haziwai kipimo cha mfumo, na bango linaeleza sababu: majibu yaliashindwa, au kihakiki kikipimaje sehemu tu ya kundi. Tatua sababu kisha uendele tena.',
             d2: 'Angalia kiwango cha kila kipimo kabla ya kulinganisha mbili. Paneli inaonyesha idadi ya mili ambayo kihakiki kiliwepimaje kwa kipimo hicho; wastani wa sehemu ya kundi si alama ya kundi wote, na hailinganiwi na run iliyopimwa mili yote.',
             d3: 'Sahihisha mwili ulioshindwa katika chanzo chake — mfuatano wa kutafuta, huduma ya juu, au muda kumalizika — kisha uendele tena. Kubadilisha kundi ili kuondoa mwili unaoshindwa mara kwa mara huficha hasa hasa iliyopo kagani majaribio yanayopima ili kuipata.',
-            d4: 'Tazama kukataa jibu kama matokeo, si kasoro. Hinasema msaidizi alipotambua kwamba maudhui hayajibu swali hili — hiyo ni tabia ya maudhui na swali. Soma kama kiwango cha kile ambacho watumiaji wako watakikuta.',
+            d4: 'Tazama kukataa jibu kama matokeo, si kasoro. Kukataa kujibu kulikuwa na jibu kunasema msaidizi alipotambua kwamba maudhui hayajibu swali hili — hiyo ni tabia ya maudhui na swali. Soma kama kiwango cha kile ambacho watumiaji wako watakikuta.',
             x1: 'Usisome kipimo kisichopimwa kama sifuri. Kipimo hicho kina null katika mwili huo pale kihakiki kilichoshindwa kuchanganua jibu lake; null hauingishwi kwenye wastani, wala hauhesabiwi kamwe kama kushindwa.',
-            x2: 'Usihesabie kukataa jibu kuwa kasoro, wala kuwa ushindu. Hii inarekodiwa katika safu yake mwenyewe hasa kwa sababu si moja wala wa pili.',
+            x2: 'Usihesabie kukataa jibu kuwa kasoro, wala kuwa ushindu. Hii inarekodiwa katika safu yake mwenyewe hasa kwa sababu si moja wala wa pili — na kukataa kujibu bila jibu hapo kamwe hakukuwa kimehukuliwa, kwa hivyo hakuchangi sifuri pia.',
             x3: 'Usichapaze namba ya run ambayo paneli imeitafuta "si sahihi", wala usifiche kwa kuchukua wastani wa mbili. Run iliyopimwa kwa sehemu haina namba ya kuchapaza; ina run inayohitaji kurekebishwa.',
             expect:
-              'Run safi haina mili yaliyoshindwa, na kila kipimo kimepimwa kwa kila mwili — katika hali hiyo tu wastani ndio benchmark. Kilichosalia ni run inayohitaji kurekebishwa, si matokeo ya kujenga uamuzi.',
+              'Run safi haina mili yaliyoshindwa, haina mili isiyohukuliwa, na kila kipimo kimepimwa kwa kila mwili iliyo ndani ya wigo — katika hali hiyo tu wastani ndio benchmark. Kilichosalia ni run inayohitaji kurekebishwa, si matokeo ya kujenga uamuzi.',
             table: {
               title: 'Jinsi kila hali inavyotumika kwenye matokeo',
               col: {
@@ -3376,16 +3376,23 @@ export default {
               abstained: {
                 state: 'Ameyakataa',
                 meaning:
-                  'Msaidizi alikataa kujibu — chatqna alisema hivyo, au hakuwa na chochote cha kusema. Mfuatano haukushindwa.',
+                  'Msaidizi alikataa kujibu lakini bado alitoa jibu — chatqna alisema hivyo, au alijibu kwa maneno ya mashaka. Mfuatano haukushindwa.',
                 effect:
-                  'Mwili bado huipelekwa kwa kihakiki, kwa hiyo hutoa alama — bila muktadha unaoushikia, vipimo vya muktadha hurudi kwa 0, na sifuri hizo ZAHIBIWI kwenye wastani. Huhesabiwa katika safu yake mwenyewe, si kwenye safu ya makosa kamwe, na hauhitilafu mfuatano kuwa batili. Paneli inaiita “abstained” badala ya imefanikiwa au imeshindwa.'
+                  'Mwili huo HUUPELEKEWA kwa hakiku, kwa hivyo hutoa alama — bila muktadha unaoushikia, vipimo vya muktadha hurudi kwa 0, na sifuri hizo ZAHIBIWI kwenye wastani. Huhesabiwa katika safu yake mwenyewe, si kwenye safu ya makosa kamwe, na peke yake hauhitilafu mfuatano kuwa batili. Paneli inaiita “Ameyakataa” badala ya imefanikiwa au imeshindwa. Kukataa kujibu ambacho hakukutoa jibu lolote ni hali tofauti — angalia “Amekataa, hakijahukuliwa”.'
+              },
+              declinedUnjudged: {
+                state: 'Amekataa, hakijahukuliwa',
+                meaning:
+                  'Msaidizi alikataa na hakusema chochote — hakuna jibu lililotengenezwa. Mfuatano haukushindwa.',
+                effect:
+                  'Mwili huo HAIKUPELEKEWA kwa hakiku — hana jibu, kwa hivyo hakuna kitu cha kuihukumu. Haibeba alama yoyote: haionyeshiwi kwenye wastani (haibalawi kamwe sifuri), hushusha kiwango kilichopimwa, na unaweza kufanya mfuatano upambwe kama batili. Paneli inaiita “Amekataa — hakijahukuliwa” ili uweze kutofautisha na kukataa jibu kilichohukuliwa.'
               },
               unmeasured: {
                 state: 'Haikupimwa',
                 meaning:
                   'Kihakiki kilitoa jibu ambacho kipimo hiki hakuweza kuchanganua — kwa mfano, dai la ukweli kisha kihakiki hakweza kuthibitisha.',
                 effect:
-                  'Kipimo hiki ni null katika mwili huu: kinachukuliwa kutoka wastani, wala si sifuri kamwe. Paneli inaonyesha mili ambayo kihakiki kiliwepimaje kwa kweli, na kiwango sehemu hufanya run isiwe sahihi.'
+                  'Kipimo hiki ni null katika mwili huu: kinachukuliwa kutoka wastani, wala si sifuri kamwe. Paneli inaonyesha mili ambayo hakika kiliwepimaje kwa kweli. Kipimo kimoja cha 21/100 hakihitilafu mfuatano kuwa batili — bango linaloweka linapalumwa pale hakuna kipimo kilichofunika kila safu iliyo ndani ya wigo, kwa hivyo soma sehemu za kila kipimo mwenyewe.'
               },
               belowThreshold: {
                 state: 'Chini ya kizingiti',
@@ -3397,7 +3404,8 @@ export default {
                 state: 'Nje ya upeo',
                 meaning:
                   'Swali hili lilikuwa lisichoweza kujibiwa kwa makusudi — limewekwa kwenye kundi kwa ajili ya kulinganisha, si kama mtihani kamwe.',
-                effect: 'Hahesabiwi kama kushindwa kamwe. Ni kitu kimoja cha kulinganisha, si matokeo.'
+                effect:
+                  'Hahesabiwi kama kushindwa kamwe, na huingiwi ndani ya wastani kamwe: ni kitu kimoja cha kulinganisha, si matokeo. Paneli haiishushii kwenye upaa wa matokeo, na alama yake haingiani ndani ya wastani wala ndini ya sehemu ya kiwango.'
               }
             }
           }
@@ -3461,6 +3469,7 @@ export default {
         pass: 'imefaulu',
         fail: 'imeshindwa',
         abstained: 'imejitoa',
+        declinedUnjudged: 'Amekataa — hakijahukuliwa',
         rowError: 'kosa',
         cancel: 'Ghairi uendeshaji',
         phase: {
@@ -3487,7 +3496,7 @@ export default {
           'Kila mstari ni wastani wa kipimo kimoja cha RAGAS kwa kila uendeshaji, kutoka ya zamani — ⓘ ya kila kipimo inaelezea kipimo hicho. Majibu yaliyohakikiwa yanahifadhiwa; marudio sawa yanatofautiana tu ambapo jibu au upatikanaji ulibadilika.',
         statusTitle: 'Matokeo kwa kila swali',
         statusNote:
-          'Kila swali la suite katika uendeshaji huu, kwa matokeo: limoefaulu, kushindwa (kipimo kuchaguliwa chini ya kikomo chake), kukataa kujibu, au hitilafu ya mnyororo.',
+          'Kila swali la suite katika uendeshaji huu lililo ndani ya wigo, kwa matokeo: limejibiwa, kushindwa (kipimo kuchaguliwa chini ya kikomo chake), imejitoa (mwijibu alikataa), au hitilafu ya mnyororo. Vitu vya kulinganisha nje ya wigo havihesabiwi — ni kitu kimoja cha kulinganisha, si matokeo.',
         allPass: 'zote zimefaulu',
         invalidTitle: 'Kimbio hiki hakitoshi kipimo halali',
         invalidPill: 'kimbio batili',
@@ -3500,6 +3509,9 @@ export default {
         state: 'Hali',
         error: 'hitilafu',
         abstained: 'imejiepusha',
+        declinedUnjudged: 'Amekataa — hakijahukuliwa',
+        declinedUnjudgedTitle:
+          'Mwijibu alikataa na hakusema chochote, kwa hivyo mwili huu haukupewa mwa hakiku. Haubeba alama na hauonyeshwi kwenye wastani — na hushusha kiwango kilichopimwa.',
         answered: 'imejibiwa',
         noisy: 'jibu sawa — kelele za upatikanaji',
         noisyTitle:
@@ -3536,8 +3548,8 @@ export default {
         judgeUnknown: 'Hakimu haijasishwa'
       },
       rescore: {
-        title: 'Tathmini upya kwa hakimu mwingine',
-        body: 'Majibu yaliyohifadhiwa yatathminiwa upya kwa hakimu mwingine — hayajatengenezwa upya. Matokeo ni run tofauti.',
+        title: 'Tathmini upya kwa hakimu',
+        body: 'Majibu yaliyohifadhiwa yatathminiwa upya kwa hakimu unaochagua — hayajatengenezwa upya. Kidialogo kinaweka awali hakiku ya run asilia, kwa hivyo tathmini upya chaguo-msingi inakagua kama hakiko hiyo inaweza kurudiwa; chagua hakimu TOFAUTI ili kupata maoni ya pili kuhusu makosa. Matokeo ni run tofauti.',
         source: 'Run asilia',
         judge: 'Mipangilio ya hakimu',
         confirm: 'Tathmini upya',

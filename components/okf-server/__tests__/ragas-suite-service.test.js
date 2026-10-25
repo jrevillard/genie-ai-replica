@@ -203,6 +203,25 @@ beforeEach(() => {
         .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0];
       return { all: async () => (hit ? [hit] : []) };
     }
+    if (aql.includes('rescore_of == @rk')) {
+      // The sibling-judge lookup: the lineage-linked run that scored the SAME
+      // answers with a different judge. This query fell through to the
+      // default empty result, so it never executed in any test — the
+      // advisor's headline behaviour was unverified end to end.
+      const parent = (bind && bind.parent) || '';
+      const hit = docs
+        .filter(
+          (d) =>
+            d.repo_id === bind.rid &&
+            d.suite_key === bind.sk &&
+            d.kind === 'ragas_run' &&
+            d.status === 'done' &&
+            d._key !== bind.rk &&
+            ((d.payload && d.payload.fidelity && d.payload.fidelity.rescore_of === bind.rk) || d._key === parent)
+        )
+        .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0];
+      return { all: async () => (hit ? [hit] : []) };
+    }
     if (aql.includes('d.kind IN @kinds')) {
       const kinds = bind.kinds || [];
       const sorted = docs
@@ -2891,5 +2910,274 @@ describe('a row with no answer is never silently dropped (2026-10-25)', () => {
     } finally {
       frontmatterService.vllmChatCompletions.mockImplementation(baseLlm);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The code-review fixes (2026-10-25). Four layers reviewed the MR !598 merge
+// diff and raised 62 findings; these are the ones that changed behaviour,
+// each pinned here so it cannot regress.
+// ---------------------------------------------------------------------------
+
+describe('the outcome bar partitions ONE population (2026-10-25)', () => {
+  const suite = {
+    payload: {
+      entries: [{ id: 'in1' }, { id: 'in2' }, { id: 'in3' }, { id: 'oos1', oos: true }],
+      thresholds: {}
+    }
+  };
+
+  it('excludes an out-of-scope control from the means and the coverage', () => {
+    // The control's score is 0 (it is deliberately unanswerable). It was
+    // inside means[m] and inside the coverage denominator, so it depressed
+    // every average the operator reads — while the guide called it "a
+    // control, not a result".
+    const results = [
+      { id: 'in1', answer: 'a', metrics: { faithfulness: 1.0 } },
+      { id: 'in2', answer: 'a', metrics: { faithfulness: 1.0 } },
+      { id: 'in3', answer: 'a', metrics: { faithfulness: 0.0 } },
+      { id: 'oos1', answer: 'a', metrics: { faithfulness: 0.0 } }
+    ];
+    const summary = svc.summarizeRun(suite, results, ['faithfulness']);
+    // The in-scope mean is (1 + 1 + 0) / 3 = 0.667 — NOT 0.5, which is what
+    // the control dragged it down to.
+    expect(summary.metrics.faithfulness).toBeCloseTo(2 / 3, 5);
+    expect(summary.coverage.faithfulness).toEqual({ scored: 3, total: 3 });
+    expect(summary.n_oos).toBe(1);
+    expect(summary.n_evaluable).toBe(3);
+  });
+
+  it('computes the four buckets over the in-scope rows, each row in exactly one', () => {
+    const results = [
+      { id: 'in1', answer: 'a', metrics: { faithfulness: 1.0 } }, // answered
+      { id: 'in2', answer: 'a', metrics: { faithfulness: 0.1 } }, // failing
+      { id: 'in3', error: { code: 'X' }, metrics: {} }, // errored
+      { id: 'oos1', answer: 'a', metrics: { faithfulness: 0.0 } } // control
+    ];
+    const s = svc.summarizeRun(suite, results, ['faithfulness']);
+    expect(s.n_answered).toBe(1);
+    expect(s.n_failed).toBe(1);
+    expect(s.n_errors).toBe(1);
+    expect(s.n_abstained).toBe(0);
+    // The buckets partition the in-scope population exactly.
+    expect(s.n_answered + s.n_failed + s.n_errors + s.n_abstained).toBe(s.n_evaluable);
+    expect(s.failing_count).toBe(s.n_failed);
+  });
+
+  it('counts a decline with NO answer apart from one that was judged', () => {
+    // The measured case: 48 of 48 observed abstention rows carry an empty
+    // answer, so they were never handed to the judge and contribute NO
+    // zeros. The guide claimed the opposite.
+    const results = [
+      { id: 'in1', abstained: true, answer: '', metrics: {} }, // never judged
+      { id: 'in2', abstained: true, answer: 'I cannot answer that', metrics: { faithfulness: 0 } }, // judged
+      { id: 'in3', answer: 'a', metrics: { faithfulness: 1.0 } }
+    ];
+    const s = svc.summarizeRun(suite, results, ['faithfulness']);
+    expect(s.n_abstained).toBe(2);
+    expect(s.n_abstained_unjudged).toBe(1);
+    // The judged decline's zeros ARE in the average; the unjudged one
+    // contributes nothing.
+    expect(s.metrics.faithfulness).toBeCloseTo(0.5, 5);
+    expect(s.coverage.faithfulness).toEqual({ scored: 2, total: 3 });
+    // And the buckets still partition.
+    expect(s.n_answered + s.n_failed + s.n_errors + s.n_abstained).toBe(s.n_evaluable);
+  });
+
+  it('records the thresholds the run was scored under', () => {
+    const s = svc.summarizeRun(suite, [{ id: 'in1', answer: 'a', metrics: {} }], ['faithfulness']);
+    expect(s.thresholds).toBeTruthy();
+    expect(typeof s.thresholds.faithfulness).toBe('number');
+  });
+});
+
+describe('the second-judge verdict is honest about what it compared (2026-10-25)', () => {
+  const SUITE = {
+    payload: { entries: [{ id: 'r1' }, { id: 'r2' }], thresholds: {} }
+  };
+  const runDoc = {
+    _key: 'rr-source',
+    metrics: ['factual_correctness', 'context_entities_recall'],
+    payload: {
+      fidelity: { judge: { model: 'judge-A' } },
+      results: [
+        { id: 'r1', metrics: { factual_correctness: 0.2, context_entities_recall: 0.2 }, answer: 'a' },
+        { id: 'r2', metrics: { factual_correctness: 0.2, context_entities_recall: 0.9 }, answer: 'a' }
+      ]
+    }
+  };
+
+  it('does NOT name a metric whose numbers came from the all-metric total', () => {
+    // The second judge only scored factual_correctness, so the
+    // context_entities_recall bucket does not exist. The old code fell back
+    // to the ALL-metric total and still appended "on
+    // context_entities_recall" — a number about every metric under one
+    // metric's name.
+    const second = {
+      _key: 'rr-second',
+      metrics: ['factual_correctness'],
+      payload: {
+        fidelity: { judge: { model: 'judge-B' } },
+        results: [
+          { id: 'r1', metrics: { factual_correctness: 0.95 } },
+          { id: 'r2', metrics: { factual_correctness: 0.95 } }
+        ]
+      }
+    };
+    const cmp = svc.compareJudges(SUITE, runDoc, second);
+    expect(cmp.per_metric.context_entities_recall).toBeUndefined();
+    const sentence = svc.secondJudgeSentence(cmp, 'context_entities_recall');
+    expect(sentence).not.toMatch(/on context_entities_recall/i);
+    expect(sentence).toMatch(/did not score context_entities_recall at all/i);
+  });
+
+  it('counts ROWS, not (row, metric) pairs', () => {
+    // One row that failed two metrics is ONE row. The metrics are real
+    // ones (a metric with no configured threshold is not judged at all).
+    const one = {
+      _key: 'rr-source',
+      metrics: ['faithfulness', 'context_precision'],
+      payload: {
+        fidelity: { judge: { model: 'judge-A' } },
+        results: [{ id: 'r1', metrics: { faithfulness: 0.1, context_precision: 0.1 }, answer: 'a' }]
+      }
+    };
+    const second = {
+      _key: 'rr-second',
+      metrics: ['faithfulness', 'context_precision'],
+      payload: {
+        fidelity: { judge: { model: 'judge-B' } },
+        results: [{ id: 'r1', metrics: { faithfulness: 0.9, context_precision: 0.9 } }]
+      }
+    };
+    const cmp = svc.compareJudges(SUITE, one, second);
+    expect(cmp.total.failed_here).toBe(1);
+    expect(cmp.total.cleared).toBe(1);
+    // The per-metric buckets still count once per row each.
+    expect(cmp.per_metric.faithfulness.failed_here).toBe(1);
+    expect(cmp.per_metric.context_precision.failed_here).toBe(1);
+  });
+
+  it('recognises a SAME-judge sibling — that is a stability check, not a second opinion', () => {
+    // The re-score dialog pre-fills the source run's own judge, so the
+    // DEFAULT re-score is a same-judge re-score. Reporting "a second judge
+    // cleared 0 of 67" would attribute the judge's agreement with itself to
+    // judge disagreement.
+    const same = {
+      _key: 'rr-same',
+      metrics: ['factual_correctness'],
+      payload: {
+        fidelity: { judge: { model: 'judge-A' } },
+        results: [{ id: 'r1', metrics: { factual_correctness: 0.2 } }]
+      }
+    };
+    const cmp = svc.compareJudges(SUITE, runDoc, same);
+    expect(cmp.source).toBe('same-judge');
+    const sentence = svc.secondJudgeSentence(cmp, 'factual_correctness');
+    expect(sentence).toMatch(/SAME judge/i);
+    expect(sentence).toMatch(/stability/i);
+    expect(sentence).not.toMatch(/cleared \d+ of the \d+/i);
+  });
+
+  it('does NOT call two runs with an unknown judge "the same judge"', () => {
+    const anonymous = {
+      _key: 'rr-anon',
+      metrics: ['factual_correctness'],
+      payload: { results: [{ id: 'r1', metrics: { factual_correctness: 0.2 } }] }
+    };
+    const unknownSource = {
+      _key: 'rr-source',
+      metrics: ['factual_correctness'],
+      payload: { results: [{ id: 'r1', metrics: { factual_correctness: 0.2 } }] }
+    };
+    const cmp = svc.compareJudges(SUITE, unknownSource, anonymous);
+    expect(cmp.source).toBe('sibling');
+  });
+
+  it('judges each run under the thresholds IT was scored under', () => {
+    // The sibling was scored when the bar for factual_correctness was 0.5;
+    // the source run was scored when it was 0.9. Judging the sibling
+    // against today's bar would call a passing row a failure.
+    const source = {
+      _key: 'rr-source',
+      metrics: ['factual_correctness'],
+      payload: {
+        fidelity: { judge: { model: 'judge-A' } },
+        summary: { thresholds: { factual_correctness: 0.9 } },
+        results: [{ id: 'r1', metrics: { factual_correctness: 0.6 }, answer: 'a' }]
+      }
+    };
+    const second = {
+      _key: 'rr-second',
+      metrics: ['factual_correctness'],
+      payload: {
+        fidelity: { judge: { model: 'judge-B' } },
+        summary: { thresholds: { factual_correctness: 0.5 } },
+        results: [{ id: 'r1', metrics: { factual_correctness: 0.6 } }]
+      }
+    };
+    const cmp = svc.compareJudges(SUITE, source, second);
+    // 0.6 fails the SOURCE run's own bar (0.9) and passes the sibling's
+    // (0.5) — so this judge failed the row and the other did not.
+    expect(cmp.total.failed_here).toBe(1);
+    expect(cmp.total.cleared).toBe(1);
+  });
+});
+
+describe('the sibling-judge lookup actually runs (2026-10-25)', () => {
+  it('finds the lineage-linked sibling in the store', async () => {
+    const store = __mockDb._stores.okf_head_test_runs || (__mockDb._stores.okf_head_test_runs = {});
+    store['rr-parent'] = {
+      _key: 'rr-parent',
+      repo_id: 'me',
+      suite_key: 'sk-1',
+      kind: 'ragas_run',
+      status: 'done',
+      created_at: '2026-10-25T10:00:00.000Z',
+      metrics: ['faithfulness'],
+      payload: { fidelity: { judge: { model: 'judge-A' } }, results: [] }
+    };
+    store['rr-child'] = {
+      _key: 'rr-child',
+      repo_id: 'me',
+      suite_key: 'sk-1',
+      kind: 'ragas_run',
+      status: 'done',
+      created_at: '2026-10-25T11:00:00.000Z',
+      metrics: ['faithfulness'],
+      payload: {
+        fidelity: { judge: { model: 'judge-B' }, rescore_of: 'rr-parent' },
+        results: []
+      }
+    };
+    const found = await svc.loadSecondJudgeRun(__mockDb, 'me', 'sk-1', 'rr-parent', store['rr-parent']);
+    expect(found).toBeTruthy();
+    expect(found._key).toBe('rr-child');
+    // And from the other side: the parent's lineage points at the child.
+    const back = await svc.loadSecondJudgeRun(__mockDb, 'me', 'sk-1', 'rr-child', store['rr-child']);
+    expect(back).toBeTruthy();
+    expect(back._key).toBe('rr-parent');
+  });
+});
+
+describe('a row that was judged and measured nothing is attributed (2026-10-25)', () => {
+  it('gives it the unmeasured stage instead of dropping it', () => {
+    const suite = { payload: { entries: [{ id: 'r1' }], thresholds: {} } };
+    const runDoc = {
+      _key: 'rr-1',
+      metrics: ['faithfulness'],
+      payload: {
+        results: [
+          // Judged (submitted), but the judge returned nothing measurable.
+          { id: 'r1', answer: 'a', contexts: ['c'], judged: true, metrics: {} }
+        ]
+      }
+    };
+    const attributions = svc.attributeFailures(suite, runDoc, null, null);
+    expect(attributions).toHaveLength(1);
+    expect(attributions[0].stage).toBe('unmeasured');
+    expect(attributions[0].recommendation).toMatch(/could not measure/i);
+    // It must NOT claim a threshold breach — there is no metric.
+    expect(attributions[0].recommendation).not.toMatch(/metric below threshold/i);
   });
 });

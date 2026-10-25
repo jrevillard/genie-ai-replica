@@ -1490,8 +1490,8 @@ export default {
       groupDataPrep: 'Data Prep Pipeline',
       groupInference: 'Inference Pipeline',
       mockNote: 'planned — not yet configurable',
-      svcAnswers: 'Benchmark answers (instead of the deployment chat)',
-      svcAnswersShort: 'benchmark answers',
+      svcAnswers: 'Benchmark answers — offline replay kelen ye (Lab bɛ na jipa deployment chat la)',
+      svcAnswersShort: 'benchmark answers (offline kelen ye)',
       mockContextual: 'Contextual retrieval (doc context)',
       mockChunkLabeling: 'Chunk labeling',
       mockGraphExtraction: 'Knowledge-graph extraction',
@@ -3192,11 +3192,11 @@ export default {
       // GUIDE (David, 2026-10-23) — the operator playbook behind
       // the "Guide" button. See en.js for the key-shape contract.
       guide: {
-        open: 'Guide',
+        open: 'Mapan',
         title: 'RAGAS benchmark guide',
         intro:
           'Na kobaiki, kojepel̦o̦ke ak mara benchmark suite ko — m̦akan na ke, m̦akan na bɔ, ak m̦akan na sa bɛ step kelen. Help panel min bɛ naanin kafuolu la i yele konɔ kafuolu biniyɛ; nii yele decision biniyɛ.',
-        close: 'Close',
+        close: 'Datugu',
         more: 'A keta kɛlen fɛ ragas.io',
         labels: {
           do: 'A ke nii',
@@ -3250,7 +3250,7 @@ export default {
             title: 'Modelu, ani m̦akan na bɛ',
             intro:
               "Model tɔɔ ye bɛ kɛta, ani n'i ko bɛ interchangeable kɛnata: model min bɛ jipa, model min bɛ judge, ani model min bɛ embed. N'i ko bɛ score yele bwee munun tɔɔ ye wulilen.",
-            d1: 'Answer model ye model min bɛ test la ye. Retrieval ani answering bɛ jerbal kɛ OKF server ilo, collection kelenkita ani reranker kelen ye assistant bɛ jerbal ye ko, ani i yele ni ye jipañ yelema — e ka harness ye.',
+            d1: 'Answer model ye model min bɛ test la ye — walima Lab la, jipañu bɛ na yela model chat min DEPLOYED ye, deployed pipeline min bɛ kɔnɔ, sɔ deployment min chat model bɛ yele i bɛ na yele jipañ yelema. Offline replay la (retrieval ani answering bɛ jerbal kɛ OKF server ilo) ye whatif run bɛɛn ye, ani teke ma Lab bɛ na damina; sɔ «benchmark answers» setinsi a tɛ fɛn bɛ kɛn bɔ benchmark kelen ye bɛ yele i la bɛna fana kɛn ye.',
             d2: 'Judge ko rej strong ani stable. I bɛ score yele references la, ani judge weak ye bɛ metric kelen kelen la bɛ boŋo, ani run bɛ bankun bɛna benta. Judge jipañu bɛ cached judge identity kelen kɛ — judge yelema, model yelema, cache min bɛ sɔrɔ Ejjan̄in wōr, ani ferege kelen kelen bɛ kɔbɔ yele seginna.',
             d3: 'Embedding model ye retrieval measurement la kelen ye. I yele, context precision ani context recall bɛ yele, ani faithfulness ye usual ye bɛ yelen mɔnɲin. Ni asymmetry ye signal ye ko munun min i bede, e ka noise.',
             d4: "A yele model bwee run la. Run kelen kelen bɛ yele configuration munkoo ani model munkoo min jipa ani score wele. Run juon kelen bɛ comparable m̦okta n'i ye kelen ye sundi ye match ye.",
@@ -3264,10 +3264,10 @@ export default {
             title: 'A keta labang',
             intro:
               'RAGAS metric kelen kelen ye measures munun kelen ye, ani kelen ye bɛ run kɛ tupu. A keta number kelen kelen ko munun min i ye measura la, kisa i mara a ye.',
-            d1: 'A keta invalid-run banner yelema nana. Run min jipañu bɛ Filiyata ye, sani judge min tuura ko suite tan kelen la te, e ye measurement ye mana — average min i ye kɛlen ye, ferege min score ye ko kɛlen ko.',
+            d1: 'A keta invalid-run banner yelema nana. Run min jipañu bɛ Filiyata ye, sani metric kelen ma bɛɛn bɛɛma scope la bɛ row bee la te, e ye measurement ye mana — average min i ye kɛlen ye, ferege min score ye ko kɛlen ko.',
             d2: 'A kwal̦o̦k direction min metric kelen kelen ye. Most ko high-is-better ye. noise sensitivity ye exception ye: low ye better ye, ani run min scores ba ko ye, i bɛ failing direction munkoo ye.',
             d3: 'A keta ferege min failing ye la, e ka mean kɛlen kelen. Kajjien juon broken kelen kɔbɔ kujon na among ko, i ye mean yele mɔɔ bwee change min i nyininyin bɔ la ye.',
-            d4: "A jerbal 'Explain failures' kisa i yele dii mana. I bɛ ferege failing kelen kelen bɛ kila stage kelen kelen ye — retrieved, reranker, vector-recall, corpus, judge wallo answer — ani i bɛ yele ko stage kelen kelen bɛ prove corpus la. I bɛ yele passage min bɛ bɔ kisa, ani i bɛ yele min i bɛ se bɛna kɛn mɔnɲin. 'Corpus' verdict bɛ se bɛna passage min bɛ kɛnama ka bɔ corpus la ye — kajjien min bɛ unfair ye, e bɛ benchmark ka measura, assistant ka bɛn ye. I bɛ marka bɛrɛna ko i fana entry seginna, ban a content yele min bɛ kɛn ye te kisa. Suggestion min i la ye guarded ye — i bɛ propose, i di ye decision.",
+            d4: "A jerbal 'Explain failures' kisa i yele dii mana. I bɛ ferege failing kelen kelen bɛ kila stage kelen kelen ye — retrieved, reranker, vector-recall, corpus, judge, answer wallo unmeasured — ani i bɛ yele ko stage kelen kelen bɛ prove corpus la. I bɛ yele passage min bɛ bɔ kisa, ani i bɛ yele min i bɛ se bɛna kɛn mɔnɲin. 'Corpus' verdict bɛ se bɛna passage min bɛ kɛnama ka bɔ corpus la ye — kajjien min bɛ unfair ye, e bɛ benchmark ka measura, assistant ka bɛn ye. I bɛ marka bɛrɛna ko i fana entry seginna, ban a content yele min bɛ kɛn ye te kisa. Suggestion min i la ye guarded ye — i bɛ propose, i di ye decision.",
             x1: "Ban a bēta mean sugu metric set kelen ye ye, judge kelen ye ye, sani suite yelema ye — measurement kelen ye ko mana. N'i kelen ye kɛlen ye mana, ani difference min i kɛn ye e quality change ye mana.",
             x2: 'Ban a yele retrieval tune na number juon ye. Precision ani recall bɛ bɔdi kɛ kɔnata; change min juon ye yelema ye, bar ye bɛ to bɔ ye, ani trade min ye e na bonya na kɔnata.',
             x3: 'Ban a sɔng score null ko score low ye. Retry min bɛ tasalan ko null bɛ kɔbɔ min bɛ kuntu na mean, ani score te ye kɛlan measurement te ye — A run ferege seginna, ban a sula worst.',
@@ -3281,7 +3281,7 @@ export default {
                 effect: 'Bɛn na yɛri bɛ min ka kan a fɛn'
               },
               mean: {
-                element: 'Score',
+                element: 'Mean',
                 meaning: 'Metric bɛɛ ma bɛ mean bɛ rows bɛ judge bɛ na seginna la. A tɛ ye suite kelen yei score ye.',
                 effect:
                   'Ben kaa ben yɛri bɛ min kan bɛ de bɔ a jɔw ma. Mean bɛ rows bɛ kelen ye la bɛ rows minnu di bɔ n’i ye suite ye.'
@@ -3289,29 +3289,29 @@ export default {
               coverage: {
                 element: 'Bɛn ari (55/100)',
                 meaning:
-                  'Judge bɛ metric bɛɛ ma bɛ rows bɛ 100 la bɛ 55 la bɛ seginna. Mean bɛ na fɔli bɛ rows 55 ye la; bɛ 45 minnu bɛ dɔ bɔ fɔ min i — bɛ kaɲi bɛ zero sɔrɔ.',
+                  'Judge bɛ metric bɛɛ ma bɛ rows bɛ 100 la bɛ 55 la bɛ seginna, row minnu scope la bɛ ye. Mean bɛ na fɔli bɛ rows 55 ye la; bɛ 45 minnu bɛ dɔ bɔ fɔ min i — bɛ kaɲi bɛ zero sɔrɔ. Out-of-scope control minnu bɛ rows 100 la kaa ma.',
                 effect:
                   'Bɛn ari sɔrɔ bɛ ye, a bɛ yɛrɛ ko number bɛ suite la kuma. Awone metric bɛ min na bɛ kɔnɔ — o tɛ fɔli bɛ run bɛ min ye.'
               },
               banner: {
                 element: 'Run bɛ ma valid la banner',
                 meaning:
-                  'Run bɛ la a bɛ answers bɛ fɔli, walima metric kelen ye bɛ na fɔli rows kelen ye la seginna. A bɛ coverage number bɛ ye metric bɛ kelen bɛ seginna ye — 21/100 la bɛ metric kelen ye bɛ na a sɔrɔ bɛ fɔli ye.',
+                  'Run bɛ la a bɛ answers bɛ fɔli, walima metric kelen ye bɛ na fɔli scope la bɛ rows kelen ye la seginna. A bɛ coverage number bɛ ye metric bɛ kelen bɛ seginna ye — 21/100 la bɛ metric kelen ye bɛ na a sɔrɔ bɛ fɔli ye.',
                 effect: 'Awone bɛn ari bɛna kelen ye kaa awa. Banner ye bɛ sira bɔ ye, a tɛ fɔli bɛ sammari ye.'
               },
               runName: {
-                element: 'Run bɛ ma yɛri',
+                element: 'Run bɛ ma yɛri ani judge min',
                 meaning:
                   'Judge bɛ na run bɛɛ ma seginna, ani configuration bɛ min a bɔ fɔli bɛ. Key bɛ na bɛɲi bɛ support bɛ ma.',
                 effect:
                   'Run kelen yei bɛ judge bɛ kelen yei ma, a tɛ fɔli bɛ kelen ye measurement ye. Bɛ kelen bɛ kelen bɛ compare, walima bɛ kelen ye re-score.'
               },
               rescore: {
-                element: 'Re-score',
+                element: 'Score bɛ mara fana',
                 meaning:
-                  'Answer bɛ kelen yei bɛ na kaa judge bɛ kelen yei bɛ na seginna. Answers ani contexts bɛ bɛ bɛ kɔpɔ — bɛ dɔ fɔli bɛ walima bɛ kɛn bɔ fɔli bɛ.',
+                  'Answer bɛ kelen yei bɛ na kaa judge min i ceng ye bɛ na seginna. Answers ani contexts bɛ bɛ bɛ kɔpɔ — bɛ dɔ fɔli bɛ walima bɛ kɛn bɔ fɔli bɛ. Dialog bɛ run min jigi judge min i bɛ yele fɔlɔ, sɔ re-score bɛ default ye STABILITY ferege ye (judge bɛ kɛn bɛ phetoloha?), e ka opinion kelen ye mung.',
                 effect:
-                  'Judge kelen yei bɛ rows kelen ye la bɔ a fɔli bɛ a sɔrɔ ye. A bɛ run fɛn ye dɔrɔn fɛn ye — ani judge bɛ bɔn bɛ a sɔrɔ.'
+                  'I nyininyin ko fila bɛ judge ye kaɲi ye wallo fila bɛ fɔli la ye, re-score a kɛ judge kelen ye. Judge kelen yei bɛ rows kelen ye la bɔ a fɔli bɛ a sɔrɔ ye. A bɛ run fɛn ye dɔrɔn fɛn ye — ani judge bɛ bɔn bɛ a sɔrɔ.'
               },
               status: {
                 element: 'Status',
@@ -3323,20 +3323,20 @@ export default {
           errors: {
             title: 'Fili kei di kɛma yɛri a yɔ bɛ min ma',
             intro:
-              "Ta benchmark kei dy varraghagh y-çoa dys daa goll dy ben: ta roie kei-ell dy fail myr'ee ayn ta coat, ta frisyr kei-ell dy no dy eisht dy volley, ta judge kei-ell dy beign dy queigys, as dysa ta queigys kei-ell dy goll myr'ee les dy yaird. Ta nyn kei-ell dy noll, as ta nyn kei-ell dy folt. Ta chaayrt t'e goll y cheet dy lhai, as goll dy ven dy t'ish y ouïre. Ta feaad t'chayrt dy yee kee ayn roie ayn choh nagh daa ayn vennay — nagh t'ee ta goll ayn cleet dy goll ayn — dy ben myr'ee, as y traa dy fer as y t'roo ayn shoh nagh val oo ayn goll ayn noll. Ta roie ayn daa bann ayn vennay t'ish y v'ee daa y goll, dy ben ta judge: nagh t'ee t'raa dy vodjey dy goll y cheet, as ta queigys y chiem dy goll dys 0, as ta noll shoh dy goll myr'ee ayn mean y cheet. Ta shoh dy goll myr'ee rownyr dy rowney 'invalid' dy goll myr'ee, er goll dy jin as dy creddy.",
+              "Benchmark bɛ kelen kelen suite bɛ kelen kelen row bɛɛma ma: row kelen bɛ na fɔli pipeline la, assistant bɛ na bɔ fɔli ansa, judge bɛ na fɔli metric kelen bɛ seginna, ani metric kelen bɛ na fɔlɔ aɲi la bɔ. N'i ko zero ye, ani n'i ko suman ye mung. Bɛn e mapan ye — m̦akan na kelen ye bɛ na kɔnisa, ani m̦akan na kelen ye bɛ na kɛ benna number min i nyininyin na. A kwal̦o̦k kelen ye i nyininyin nana: row min bɛna bɔ ansa i bɛ na kelen — kaɲi ye bɛn na i judge kɛ — sɔ i bɛ dɔ bɔ min mean na, a tɛ fɛn bɛ kɛn bɔ zero ye, ani i bɛ na kɛ coverage min bɛ mesa mɔnɲin. Ansa bɔ fɔli ye kelen ye mana, fa mɔɔ bɛɛ. Ansa bɔ fɔli bɛna bɛn ansa ye, a tɛ judge kɛ, ani kaɲi ye bɛn na i tigɛ aɲi, metrike tsa context min bɛ na sɔrɔ 0, sɔ zero minnu bɛ na kaa mean la. Ansa bɔ fɔli bɛna bɔ ansa ye, a tɛ judge ma mung: a tɛ fɛn bɛ kɛn bɔ score ye, i bɛ dɔ bɔ min mean na, ani i bɛ na kɛ coverage min bɛ mesa mɔnɲin kelen kelen ye fila bɛ fɔli ye. Sɔ sɛbɛn run min bɛna bɛn row bɔ fɔli ye wallo row bɛ judge ma ye, a bɛ marka bɛrɛna «invalid» ye, e ka credd ye mung.",
             d1: 'Lɛntɛn “run bɛ ma valid” banner la, a kɔnɔ mean bɛ yɛrɛ. I yɛri ko score bɛ min bɛ bɛn bɛɛma system bɛ measurement ye, ani banner yɛrɛ saɲi bɛ min saɲi ye: answers bɛ fɔli, walima judge bɛ na suite tan bɛɛma seginna. Saɲi ɲi wuloo, a sɛbɛn fana.',
             d2: "Kono metric kuluw kɔfɛn kɔbɛn tugut di bɛɛrehɔ ban dɔn cili kɛn waati fɔlɔ judge bɛ na row bee la seginna. Bɛɛma bɛ fɛn bɛ kɛn bɔ n'o mɔgɔ n'i na bɔ suit bɛɛma yɔri ye, ani a tɛ fɛn bɛ kɛn bɔ run min bɛ na suun bɛɛma seginna bɛɛ kɛn bɔ fɔlɔw.",
             d3: "Fili bɛ min bɛ fɔli la, sani a wuloo a kɔnɔ la k'a sɔrɔ la, diɲɛ bɛ fɔli ye upstream service ye wallima timeout ye — a kaa sɛbɛn fana. Suite bɛ sɔrɔ n'i fɔli bɛ san bɛ fɔli bɛ kɔnɔ na, o bɛ dɔrɔn min bɛ waati benchmark bɛ sɔrɔ ka min bɛ kijɛraa.",
-            d4: "Bɛ ansa bɔ bɛ fɔli la, a bɛ bɛn dɔɔrɔn ye, ansa bɛ fɔli ye. A yɛrɛ ko assistant y'a sɔn ko corpus bɛ kana fɔli bɛ kelen ye jigi ma — o bɛ corpus la ani question la bɛ ye. A lɛrɛ ko coverage bɛ min user bɛ bɛn na kɛn ye.",
+            d4: "Ansa bɔ fɔli bɛ na mara seginna, e ka fɔli. Ansa bɔ fɔli bɛna bɛn ansa ye, a yɛrɛ ko assistant y'a sɔn ko corpus bɛ kana fɔli question ye jigi ma — o bɛ corpus la ani question la bɛ ye. A lɛrɛ ko coverage bɛ min user bɛ bɛn na kɛn ye.",
             x1: "Metric bɛ min bɛ seginna ma, a fɔlɔ zero sɔrɔ. Judge bɛ min bɛɛn b'ɛd fɔli bɛ na metric man bɛ na parse kɛ, o bɛ na metric o la bɛ na null ɲi a ɲi row la; null bɛ bɔ min mean na, ani a tɛ fɛn bɛ kɛn bɔ failure sɔrɔ.",
-            x2: 'Bɛ ansa bɔ bɛ fɔli la, a tɔnɔ error ye walima success ye. A bɛ column bɛ bɛɛn fɛnɛ min na, a kisa fɛnɛ ye te a fɛnɛ ma ye.',
+            x2: 'Bɛ ansa bɔ bɛ fɔli la, a tɔnɔ error ye walima success ye. A bɛ column bɛ bɛɛn fɛnɛ min na, a kisa fɛnɛ ye te a fɛnɛ ma ye — ani ansa bɔ fɔli bɛna bɔ ansa ye, a tɛ judge ma mung, sɔ a tɛ fɛn bɛ kɛn bɔ zero bɛɛ ye mung.',
             x3: 'Panel bɛ run bɛ min bɛ “invalid” la jurɔ la bɔ san bɛɛn bɔlɔni ye, walima run fila wuloo bɛ a sɛbɛn bɔ ye fana. Run bɛ min bɛɛma sugandi ye, a tɛ fɔli bɛ san bɛ kɛn bɔ bɛɛ min bɛ bɛna bɔn ye; a bɛ run bɛ min bɛ fɔli.',
             expect:
-              'Run ɲuman bɛɛ fɔli row tɛ yen, ani metric bɛ kelɛ kelɛ row la seginna — ni kononi ye kelɛ ye gati min bɛɛn ye mean ye. O minɛ kelen ye bɛ run bɛ min bɛ fɔli la, ansa bɛ fɛn bɛ kɛn bɔ ye.',
+              'Run ɲuman bɛɛ fɔli row tɛ yen, row bɛ judge ma tɛ yen, ani metric bɛ kelɛ kelɛ row la seginna, row minnu scope la bɛ ye — ni kononi ye kelɛ ye gati min bɛɛn ye mean ye. O minɛ kelen ye bɛ run bɛ min bɛ fɔli la, ansa bɛ fɛn bɛ kɛn bɔ ye.',
             table: {
               title: 'Bɛn na state bɛɛ bɔ bɛ min na yɛri a yɔ bɛ min ma',
               col: {
-                state: 'State',
+                state: 'Cokoyaa',
                 meaning: 'A yɛri bɛ min na',
                 effect: 'A yɛri a yɔ bɛ min na yɛri bɛ min ma'
               },
@@ -3345,21 +3345,27 @@ export default {
                 meaning:
                   'Pipeline bɛ fɔli o row la — retrieval, upstream service walima timeout. Answer tɛ yen bɛ kaɲi.',
                 effect:
-                  "Ta roie shoh CHOH NAI shoh daa ayn goll myr'ee — nagh t'ee ta goll ayn cleet dy goll ayn. Ta carree scôr ayn bies: ta fôli bê maan y cheet (ayn noll goll myr'ee) as ta goll ayn column y errôr, as ta rowney 'invalid' dy goll myr'ee — dy ben ta bann dy goll dy nô dy whei dy goll myr'ee y-syss. Côrrect dy coss — ta retrieval stack, ta shoh y-ard, ta timeout — as goll dy arragh. Ta roie dy v'ee ayn vennay ta scôr dy fôl, bot ta rowney dy goll ayn bies nagh ta thô ayn goll dy les — goll dy les dy ayn choh dy yee, no dy gh."
+                  'Row bɛ tɛ judge kɛ: a tɛ yen ansa, ani kaɲi ye bɛn na i judge kɛ. A tɛ fɛn bɛ kɛn bɔ score ye mung: i bɛ dɔ bɔ min mean na (a tɛ fɛn bɛ kɛn bɔ zero ye), ani i bɛ na kaa error column la, ani run bɛ marka bɛrɛna «invalid» ye — banner bɛ yɛrɛ ko score minnu bɛ system bɛ measurement ye mung. A mara saɲi la — retrieval stack, upstream service, timeout — ani o runise fana. Row minnu bɛna ansa bɛ ye bɛ se bɛ seginna, walima run bɛ kelen kelen bɛ seginna ye bɛ run bɛ min bɛ fɔli la, ansa bɛɛn ye bɛ publish bɛn ye mung.'
               },
               abstained: {
                 state: 'ansaa bɔ fɔli',
                 meaning:
-                  'Assistant bɛna bɔ fɔli bɛ ja answers ma — chatqna bɛɛ a dɔ bɛ ye, walima a tɛ fɛn bɛ kaɲi a bin sɛbɛn fana. Pipeline bɛ fɔli ma.',
+                  'Assistant bɛna bɔ fɔli ansa bɛ ja ansa ye — chatqna bɛɛ a dɔ bɛ ye, walima a dɔ ye ansa kama bɛɛ. Pipeline bɛ fɔli ma.',
                 effect:
-                  'Row bɛ na fɔli judge bɛɛ ma sɛn ye, sɛn i bɛ na fɔli score kelen bɛ kaɲi — context tɛ yen i fɔli la, context metrics bɛ na fɔli 0 ye, ani zero minnu bɛ mean la bɛ na kaa. A bɛ column bɛ bɛɛn fɛnɛ ma kaa, error column la ko kɛn bɛ ma, ani a tɛ fɛn bɛ kɛn bɔ run la invalid ye. Panel bɛ row bɛ lɛn «ansaa bɔ fɔli» ye, walima pass walima fail ye.'
+                  'Row bɛ na kaa judge bɛɛ ma sɛn ye, sɛn i bɛ na fɔli score kelen bɛ kaɲi — context tɛ yen i fɔli la, context metrics bɛ na fɔli 0 ye, ani zero minnu bɛ mean la bɛ na kaa. A bɛ column bɛ bɛɛn fɛnɛ ma kaa, error column la ko kɛn bɛ ma, ani e ka e ye a tɛ fɛn bɛ kɛn bɔ run la invalid ye. Panel bɛ row bɛ lɛn «ansaa bɔ fɔli» ye, walima pass walima fail ye. Ansa bɔ fɔli bɛna bɔ ansa ye, e kelen ye state kelen ye — bala «ansaa bɔ fɔli, bɛ judge ma».'
+              },
+              declinedUnjudged: {
+                state: 'ansaa bɔ fɔli, bɛ judge ma',
+                meaning: 'Assistant bɛna bɔ fɔli mung ani a kaɲi — ansa tɛ yen. Pipeline bɛ fɔli ma.',
+                effect:
+                  'Row bɛ tɛ judge kɛ: a tɛ yen ansa, sɔ kaɲi ye bɛn na i judge kɛ. A tɛ fɛn bɛ kɛn bɔ score ye mung: i bɛ dɔ bɔ min mean na (a tɛ fɛn bɛ kɛn bɔ zero ye), i bɛ na kɛ coverage min bɛ mesa mɔnɲin, ani a bɛ kɛ run bɛ marka bɛrɛna «invalid» ye. Panel bɛ a lɛn «ansaa bɔ fɔli — bɛ judge ma» ye, i ng i bɛn fasa ansa bɔ fɔli bɛna judge kɛ.'
               },
               unmeasured: {
                 state: 'bɛ seginna ma',
                 meaning:
                   'Judge bɛna bɛn bɛ na fɔli bɛ na metric man bɛ na parse kɛ — walima claim bɛ fɔli bɛ na judge bɛ na sɔrɔ sɛbɛn.',
                 effect:
-                  'Metric o bɛ null ɲi a ɲi row la: bɛ bɔ min mean na, a tɛ fɛn bɛ kɛn bɔ zero ye. Panel yɛrɛ bɛ row jigɛn judge bɛ na seginna, ani coverage bɛ fɔlɔw ye bɛ na run la invalid.'
+                  'Metric o bɛ null ɲi a ɲi row la: bɛ bɔ min mean na, a tɛ fɛn bɛ kɛn bɔ zero ye. Panel yɛrɛ bɛ row jigɛn judge bɛ na seginna. Metric kelen la 21/100 a tɛ fɛn bɛ kɛn bɔ run la invalid ye — banner bɛ na fɔli sɛbɛn metric kelen ma bɛɛn bɛɛma scope la bɛ row bee la te, sɔ i bɛ nyininyin aala ferege minnu.'
               },
               belowThreshold: {
                 state: 'sira la bɛ bɔ',
@@ -3370,7 +3376,8 @@ export default {
                 state: 'kɔfɛn na bɔ',
                 meaning:
                   "Question bɛ bɛn bɔ fɔli la b'ɛn bɛna fɔ bɛ kana — a bɛ dɔrɔn suite la sɔnifɛ ni ka fɛnɛ bɛ ye.",
-                effect: 'A tɛ fɛn bɛ kɛn bɔ failure sɔrɔ. O bɛ control ye, ansa bɛ fɛn bɛ kɛn bɔ ye.'
+                effect:
+                  'A tɛ fɛn bɛ kɛn bɔ failure sɔrɔ, ani a tɛ fɛn bɛ kɛn bɔ mean ko: o bɛ control ye, ansa bɛ fɛn bɛ kɛn bɔ ye. Panel bɛ a kɛ mana outcome bar la, ani score min a tɛ fɛn bɛ kɛn bɔ average la walima coverage ferege la kɛ.'
               }
             }
           }
@@ -3433,7 +3440,8 @@ export default {
         retrieved: 'retrieved',
         pass: 'pass',
         fail: 'fail',
-        abstained: 'abstained',
+        abstained: 'ansaa bɔ fɔli',
+        declinedUnjudged: 'ansaa bɔ fɔli — bɛ judge ma',
         rowError: 'error',
         cancel: 'Cancel run',
         phase: {
@@ -3460,7 +3468,7 @@ export default {
           'Each line is one RAGAS metric’s suite mean per run, oldest to newest — hover any gauge’s ␘ for what that metric measures. Judged answers are cached, so equal re-runs differ only where answers or retrieval changed.',
         statusTitle: 'Per-question outcomes',
         statusNote:
-          'Every suite question in this run, stacked by outcome: passing, failing (any selected metric below its threshold), abstained (the answerer declined), or errored (the pipeline failed that row).',
+          'Question kelen kelen ye suite la i nyininyin run bɛɛ ma, scope la bɛ ye, ka phetoho: jipañ bɛna ye, jipañ bɛ fɔli ye (metric kelen i ceng ye bɛ la bɔ aɲi min ye), ansaa bɔ fɔli ye (jipañ bɛna bɔ fɔli), wallo fila bɛ fɔli ye (pipeline bɛ na fila bɛ fɔli). Out-of-scope control minnu bɛ kaa ma — ni bɛ control ye, ansa bɛ fɛn bɛ kɛn bɔ ye.',
         allPass: 'all passing',
         invalidTitle: 'eregenere run wencike emu measuring',
         invalidPill: 'run gebu',
@@ -3471,7 +3479,10 @@ export default {
         answer: 'Answer',
         state: 'State',
         error: 'error',
-        abstained: 'abstained',
+        abstained: 'ansaa bɔ fɔli',
+        declinedUnjudged: 'ansaa bɔ fɔli — bɛ judge ma',
+        declinedUnjudgedTitle:
+          'Jipañ bɛna bɔ fɔli mung ani a kaɲi, sɔ row bɛɛ a tɛ judge kɛ. A tɛ fɛn bɛ kɛn bɔ score ye mung: i bɛ dɔ bɔ min mean na — ani i bɛ na kɛ coverage min bɛ mesa mɔnɲin.',
         answered: 'answered',
         noisy: 'answer OK — retrieval noise',
         noisyTitle:
@@ -3507,8 +3518,8 @@ export default {
         judgeUnknown: 'Judge not recorded'
       },
       rescore: {
-        title: 'Re-score with another judge',
-        body: 'The stored answers are re-scored with another judge — they are not regenerated. The result is a separate run.',
+        title: 'Re-score ka judge',
+        body: 'Answer minnu tse bɛ bɛn bɛ re-score ka judge min i ceng ye — ni tɛ fana a generate ye mung. Dialog bɛ run min jigi judge min i bɛ yele fɔlɔ, sɔ re-score bɛ default ye bɛ check ko judge bɛ kɛn bɛ phetoloha; ceng judge kelen ye i fɔ fana a bɛ la opinion kelen ye ko failures la. I bɛ run kelen ye fana.',
         source: 'Source run',
         judge: 'Judge configuration',
         confirm: 'Re-score',
@@ -3571,7 +3582,7 @@ export default {
         status: 'Outcomes',
         n: 'questions',
         evaluable: 'evaluable',
-        abstained: 'abstained',
+        abstained: 'ansaa bɔ fɔli',
         compare: 'Compare across runs (delta vs first)'
       }
     }

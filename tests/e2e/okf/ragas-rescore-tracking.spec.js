@@ -23,6 +23,7 @@
 const { test, expect } = require('@playwright/test');
 const { getAdminToken } = require('../helpers/auth');
 const { createUser, deleteUser } = require('../helpers/keycloak-admin');
+const { pinLocale } = require('../helpers/locale');
 
 const REALM = process.env.KEYCLOAK_REALM || 'genie';
 const REPO_NAME = process.env.OKF_SMOKE_REPO_NAME || 'El Salvador';
@@ -47,10 +48,12 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     if (adminToken && userId) await deleteUser(adminToken, REALM, userId);
   });
 
-  test('the read chapter renders the output table, and a re-score is tracked and cancellable', async ({
-    browser
-  }) => {
+  test('the read chapter renders the output table, and a re-score is tracked and cancellable', async ({ browser }) => {
     const context = await browser.newContext({ ignoreHTTPSErrors: true, bypassCSP: true });
+    // The spec asserts rendered English copy, so the locale must be
+    // PINNED — the app resolves it from navigator.language when
+    // localStorage holds no preference.
+    await pinLocale(context, 'en');
     const page = await context.newPage();
 
     // 1. log in through Keycloak
@@ -94,7 +97,10 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     await expect(guide, 'the guide dialog must open').toBeVisible({ timeout: 20000 });
 
     // ---- A. the READ chapter's output table ----
-    const readTab = guide.locator('.ds-tabs__btn').filter({ hasText: /read the results/i }).first();
+    const readTab = guide
+      .locator('.ds-tabs__btn')
+      .filter({ hasText: /read the results/i })
+      .first();
     await expect(readTab, 'the guide must have a read-the-results chapter').toBeVisible({ timeout: 20000 });
     await readTab.click();
     await page.waitForTimeout(600);
@@ -107,7 +113,7 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
 
     const guideText = await guide.evaluate((el) => el.innerText);
     // The on-screen pieces an operator has to decode.
-    for (const label of ['The score', 'The fraction (55/100)', 'The invalid-run banner', 'Re-score']) {
+    for (const label of ['The mean', 'The fraction (55/100)', 'The invalid-run banner', 'Re-score']) {
       expect(guideText, `the output table must carry "${label}"`).toContain(label);
     }
     // The three misreadings the table exists to prevent.
@@ -120,7 +126,11 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     await guideRows.first().scrollIntoViewIfNeeded();
     await page.waitForTimeout(400);
     await page.screenshot({ path: 'test-results/ragas-guide-read.png', fullPage: false });
-    await guide.getByRole('button', { name: /^Close$/i }).first().click().catch(() => {});
+    await guide
+      .getByRole('button', { name: /^Close$/i })
+      .first()
+      .click()
+      .catch(() => {});
     await page.waitForTimeout(800);
 
     // ---- B. a re-score is TRACKED and CANCELLABLE ----
@@ -149,7 +159,10 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     await expect(judgeSelect, 'the re-score dialog must offer a judge').toBeVisible({ timeout: 20000 });
     await judgeSelect.selectOption('__env__');
 
-    await rescoreDialog.getByRole('button', { name: /^Re-score$/ }).first().click();
+    await rescoreDialog
+      .getByRole('button', { name: /^Re-score$/ })
+      .first()
+      .click();
     await page.waitForTimeout(3000);
 
     // The re-score is a RUN: a progress bar and a Cancel button.

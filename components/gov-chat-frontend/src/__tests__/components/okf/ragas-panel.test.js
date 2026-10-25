@@ -450,15 +450,20 @@ describe('RagasPanel', () => {
   it('the outcome bar partitions the rows — every row counted exactly once', () => {
     const w = mountPanel();
     const doc = runFixture();
-    // 10 in-scope rows: 2 errored (never judged), 1 abstained (judged, and
-    // its context metrics came back 0 so it is also in failing_count), 3
-    // failing, 4 passing.
+    // 10 in-scope rows: 2 errored (never judged), 1 abstained, 3 failing,
+    // 4 answered. The SERVER computes the buckets over ONE population now
+    // (2026-10-25) — the panel used to derive them by subtracting across
+    // two, which relabelled a genuinely failing row as "answered".
     doc.payload.summary = {
       n: 10,
       n_errors: 2,
       n_abstained: 1,
+      n_abstained_unjudged: 0,
       n_evaluable: 10,
-      failing_count: 4, // the abstained row + 3 others
+      n_oos: 0,
+      n_failed: 3,
+      n_answered: 4,
+      failing_count: 3,
       failing: [],
       metrics: {}
     };
@@ -469,10 +474,63 @@ describe('RagasPanel', () => {
     expect(total).toBe(10);
     expect(byName.error).toBe(2);
     expect(byName.abstained).toBe(1);
-    expect(byName.failing).toBe(3); // the abstained row has its own column
+    expect(byName.failing).toBe(3);
     expect(byName.answered).toBe(4);
     // No bucket may go negative — the all-abstained run reached −20 before.
     for (const s of series) expect(s.data[0]).toBeGreaterThanOrEqual(0);
+  });
+
+  // The case the old arithmetic got wrong (2026-10-25): a DECLINE that was
+  // never judged is NOT in failing_count (it carries no metric), so
+  // subtracting the abstentions from failing_count removed a row that was
+  // never there — and relabelled a genuinely failing row as "answered".
+  // Verified against the repo's own Arango mock: truth = answered 0,
+  // abstained 1, failing 2; the old bar read answered 1, abstained 1,
+  // failing 1.
+  it('the bar does not subtract a decline that was never judged', () => {
+    const w = mountPanel();
+    const doc = runFixture();
+    doc.payload.summary = {
+      n: 3,
+      n_errors: 0,
+      n_abstained: 1,
+      n_abstained_unjudged: 1,
+      n_evaluable: 3,
+      n_oos: 0,
+      n_failed: 2,
+      n_answered: 0,
+      failing_count: 2,
+      failing: [],
+      metrics: {}
+    };
+    w.vm.runDoc = doc;
+    const series = w.vm.statusSeries;
+    const byName = Object.fromEntries(series.map((s) => [s.name, s.data[0]]));
+    expect(byName.failing).toBe(2);
+    expect(byName.abstained).toBe(1);
+    expect(byName.answered).toBe(0);
+    expect(series.reduce((a, s) => a + s.data[0], 0)).toBe(3);
+  });
+
+  // A decline that was never judged is a DIFFERENT state from one that was
+  // judged, and the row pill must say so — the guide taught the second as
+  // if it were the only one.
+  it('labels a decline that was never judged apart from one that was', () => {
+    const w = mountPanel();
+    const judged = {
+      id: 'r1',
+      answer: 'I cannot answer that',
+      abstained: true,
+      judged: true,
+      metrics: { faithfulness: 0 }
+    };
+    const unjudged = { id: 'r2', answer: '', abstained: true, judged: false, metrics: {} };
+    expect(w.vm.rowJudged(judged)).toBe(true);
+    expect(w.vm.rowJudged(unjudged)).toBe(false);
+    // A row with no metrics and no flag (an older run) falls back to the
+    // numeric-metric test.
+    expect(w.vm.rowJudged({ id: 'r3', metrics: {} })).toBe(false);
+    expect(w.vm.rowJudged({ id: 'r4', metrics: { faithfulness: 0 } })).toBe(true);
   });
 
   // David 2026-10-19: every result chart carries an ⓘ with the metric's

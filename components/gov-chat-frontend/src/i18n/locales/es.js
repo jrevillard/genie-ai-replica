@@ -1510,8 +1510,9 @@ export default {
       groupDataPrep: 'Pipeline de preparación de datos',
       groupInference: 'Pipeline de inferencia',
       mockNote: 'previsto — aún no configurable',
-      svcAnswers: 'Respuestas de benchmark (en lugar del chat del despliegue)',
-      svcAnswersShort: 'respuestas de benchmark',
+      svcAnswers:
+        'Respuestas de benchmark — solo reproducción sin conexión (el Lab responde a través del chat del despliegue)',
+      svcAnswersShort: 'respuestas de benchmark (solo sin conexión)',
       mockContextual: 'Contextual retrieval (contexto del documento)',
       mockChunkLabeling: 'Etiquetado de fragmentos',
       mockGraphExtraction: 'Extracción del grafo de conocimiento',
@@ -3301,7 +3302,7 @@ export default {
             title: 'Modelos, y qué esperar',
             intro:
               'Participan tres modelos distintos y no son intercambiables: el modelo que responde, el modelo que juzga y el modelo que genera los embeddings. Mueven la puntuación por motivos completamente diferentes.',
-            d1: 'El modelo de respuesta es el que está bajo prueba. La recuperación y la respuesta se reproducen en el servidor OKF contra las mismas colecciones y el mismo reranker que usa el asistente, así que cambiarlo cambia la respuesta, no el arnés de evaluación.',
+            d1: 'El modelo de respuesta es el que está bajo prueba — pero en el Lab las respuestas vienen del modelo de chat DESPLEGADO, a través de la cadena desplegada, así que cambiar el modelo de chat del despliegue cambia la respuesta. La vía de reproducción sin conexión (la recuperación y la respuesta reproducidas dentro del servidor OKF) existe para ejecuciones whatif y hoy no se puede iniciar desde el Lab, de modo que la opción «respuestas de benchmark» no cambia ninguna prueba comparativa que pueda ejecutar aquí.',
             d2: 'El juez debe ser fuerte y estable. Puntúa contra las referencias, de modo que un juez débil deprime todas las métricas a la vez y la ejecución sigue pareciendo completa. Las respuestas del juez se guardan en caché por identidad de juez — cambiar el juez o el modelo invalida esa caché y vuelve a puntuar cada fila.',
             d3: 'El modelo de embeddings forma parte de la medición de la recuperación. Cámbielo y se mueven las métricas context precision y context recall, mientras que la puntuación de faithfulness por lo general no se mueve. Esa asimetría es una señal sobre dónde aterrizó el cambio, no ruido.',
             d4: 'Registre el modelo junto con la ejecución. Cada ejecución guarda qué configuración y qué modelo produjeron las respuestas y las puntuaciones; dos ejecuciones solo son comparables cuando esos elementos coinciden.',
@@ -3315,10 +3316,10 @@ export default {
             title: 'Leer los resultados',
             intro:
               'Cada métrica de RAGAS mide algo distinto, y una de ellas funciona al revés. Lea cada cifra por lo que realmente mide antes de actuar en consecuencia.',
-            d1: 'Lea primero el aviso de ejecución no válida. Una ejecución cuyas respuestas fallaron, o cuyo juez midió solo parte de la suite, no es una medición — las medias de abajo cubren únicamente las filas que sí se puntuaron.',
+            d1: 'Lea primero el aviso de ejecución no válida. Una ejecución cuyas respuestas fallaron, o en la que ninguna métrica cubrió todas las filas dentro del alcance, no es una medición — las medias de abajo cubren únicamente las filas que sí se puntuaron.',
             d2: 'Verifique la dirección de cada métrica. Casi todas son «cuanto más, mejor». La métrica noise sensitivity es la excepción: cuanto más bajo, mejor, así que una ejecución que puntúa mal en ella está fallando por el lado bueno.',
             d3: 'Lea las filas que fallaron, no solo la media. Una pregunta rota entre cuarenta desplaza la media más que el cambio que intentaba medir.',
-            d4: 'Use Explain failures antes de cambiar nada. Atribuye cada fila fallida a una etapa demostrada contra el corpus — retrieved, reranker, vector-recall, corpus, judge o answer — y muestra dónde se perdió el pasaje y en qué puesto habría quedado. Un veredicto corpus significa que el pasaje esperado no está en el corpus: esa pregunta es injusta, mide el benchmark y no al asistente, y se marca así para que regenere la entrada en lugar de escribir contenido que ya existe. Sus sugerencias están protegidas: propone, usted decide.',
+            d4: 'Use Explain failures antes de cambiar nada. Atribuye cada fila fallida a una etapa demostrada contra el corpus — retrieved, reranker, vector-recall, corpus, judge, answer o unmeasured — y muestra dónde se perdió el pasaje y en qué puesto habría quedado. Un veredicto corpus significa que el pasaje esperado no está en el corpus: esa pregunta es injusta, mide el benchmark y no al asistente, y se marca así para que regenere la entrada en lugar de escribir contenido que ya existe. Sus sugerencias están protegidas: propone, usted decide.',
             x1: 'No compare medias entre conjuntos de métricas distintos, jueces distintos o una suite editada. Ninguno de esos casos es la misma medición, y la diferencia que ve no es un cambio de calidad.',
             x2: 'No ajuste la recuperación contra una sola cifra. La precisión y la exhaustividad se compensan entre sí; un cambio que eleva una normalmente cuesta la otra, y el intercambio suele ser la parte interesante.',
             x3: 'No trate una puntuación nula como una puntuación baja. Un reintento agotado produce un nulo que se excluye de la media, así que sin puntuación no hay medición — vuelva a ejecutar la fila en lugar de asumir lo peor.',
@@ -3332,7 +3333,7 @@ export default {
                 effect: 'Qué hacer con ello'
               },
               mean: {
-                element: 'La puntuación',
+                element: 'La media',
                 meaning:
                   'La media de esa métrica sobre las filas que el juez puntuó. No es una puntuación de todo el conjunto.',
                 effect:
@@ -3341,18 +3342,18 @@ export default {
               coverage: {
                 element: 'La fracción (55/100)',
                 meaning:
-                  'El juez midió esa métrica en 55 de las 100 filas del conjunto. La media cubre solo esas 55 filas; las otras 45 quedan fuera — nunca se cuentan como cero.',
+                  'El juez midió esa métrica en 55 de las 100 filas del conjunto dentro del alcance. La media cubre solo esas 55 filas; las otras 45 quedan fuera — nunca se cuentan como cero. Los controles fuera de alcance no forman parte de las 100.',
                 effect:
                   'Una fracción pequeña significa que el número dice poco sobre el conjunto. Revise la métrica que le importa, no el proceso completo.'
               },
               banner: {
                 element: 'El banner de proceso no válido',
                 meaning:
-                  'El proceso tuvo respuestas fallidas, o ninguna métrica cubrió todas las filas. Su cifra de cobertura es la métrica mejor cubierta, así que una métrica en 21/100 no lo activa.',
+                  'La ejecución tuvo respuestas fallidas, o ninguna métrica cubrió todas las filas dentro del alcance. Su cifra de cobertura es la métrica mejor cubierta, así que una métrica en 21/100 no lo activa.',
                 effect: 'Lea usted mismo las fracciones por métrica. El banner es un suelo, no un resumen.'
               },
               runName: {
-                element: 'El nombre del proceso',
+                element: 'El nombre del proceso y su juez',
                 meaning:
                   'El juez que puntuó ese proceso, y la configuración de la que salió. La clave debajo es para soporte.',
                 effect:
@@ -3361,9 +3362,9 @@ export default {
               rescore: {
                 element: 'Volver a puntuar',
                 meaning:
-                  'Vuelve a puntuar las mismas respuestas con otro juez. Las respuestas y los contextos se copian tal cual — no se recupera ni se escribe nada.',
+                  'Vuelve a puntuar las mismas respuestas con el juez que usted elija — las respuestas y los contextos se copian tal cual, no se recupera ni se escribe nada. El diálogo precarga el juez propio de la ejecución de origen, de modo que volver a puntuar por defecto es una comprobación de ESTABILIDAD (¿es reproducible este juez?), no una segunda opinión.',
                 effect:
-                  'Úselo para poner dos jueces sobre las mismas filas. Es mucho más barato que un proceso nuevo, y así se prueba un cambio de juez.'
+                  'Para averiguar si un fallo es la severidad del juez o un fallo real, vuelva a puntuar con un juez DISTINTO. Dos jueces sobre las mismas filas es mucho más barato que una ejecución nueva, y así se prueba un cambio de juez.'
               },
               status: {
                 element: 'El estado',
@@ -3375,16 +3376,16 @@ export default {
           errors: {
             title: 'Errores, y qué le hacen al resultado',
             intro:
-              'Un benchmark nunca mide todas las filas de cada conjunto de pruebas: una fila puede fallar en la cadena, el asistente puede negarse a responder, el juez puede no ser capaz de medir una métrica, y una métrica puede quedar por debajo de su umbral. Nada de eso es un cero y nada de eso está oculto. Este capítulo es el mapa — qué significa cada estado y qué le hace al número que está leyendo. Una cosa que conviene saber antes de leerlo: una fila que NO produjo RESPUESTA nunca se entrega al juez — no hay nada con qué juzgarla — así que queda fuera de las medias y nunca se cuenta como un cero. Una fila que RECHAZÓ responder sí tiene respuesta, así que sí se juzga: sin nada que la respalde, sus métricas de contexto vuelven como 0, y esos ceros SÍ cuentan en las medias. Por eso un run con una fila fallida se marca como inválido en lugar de considerarse fiable.',
+              'Un benchmark nunca mide todas las filas de cada conjunto de pruebas: una fila puede fallar en la cadena, el asistente puede negarse a responder, el juez puede no ser capaz de medir una métrica, y una métrica puede quedar por debajo de su umbral. Nada de eso es un cero y nada de eso está oculto. Este capítulo es el mapa — qué significa cada estado y qué le hace al número que está leyendo. Una cosa que conviene saber antes de leerlo: una fila que NO produjo RESPUESTA nunca se entrega al juez — no hay nada con qué juzgarla — así que queda fuera de las medias, nunca se cuenta como un cero y además reduce la cobertura medida. Un RECHAZO no es una sola cosa, sino dos. Un rechazo que llegó CON respuesta sí se juzgó: sin nada que lo respaldara, sus métricas de contexto volvieron como 0, así que esos ceros SÍ cuentan en las medias. Un rechazo que llegó SIN respuesta no se juzgó en absoluto: no lleva ninguna puntuación, queda fuera de las medias y reduce la cobertura medida igual que una fila con error. Por eso una ejecución con una fila fallida o no juzgada se marca como inválida en lugar de considerarse fiable.',
             d1: 'Lea primero el aviso de ejecución no válida y después las medias. Significa que las puntuaciones de abajo no son una medición del sistema, y el aviso nombra la causa: respuestas que fallaron, o un juez que midió solo una parte de la suite. Corrija la causa y vuelva a ejecutar.',
             d2: 'Revise la cobertura de cada métrica antes de comparar dos ejecuciones. El panel indica cuántas filas midió realmente el juez para esa métrica; una media sobre una fracción de la suite no es la puntuación de la suite, y no es comparable con una ejecución que midió todas.',
             d3: 'Corrija una fila con error en su causa: la cadena de recuperación, el servicio previo, el tiempo de espera agotado; y vuelva a ejecutar. Modificar la suite para quitar la fila que una y otra vez falla oculta precisamente el defecto que la prueba comparativa existe para encontrar.',
-            d4: 'Trate una abstención como un resultado, no como un defecto. Dice que el asistente juzgó que el corpus no responde a la pregunta, que es una propiedad del corpus y de la pregunta. Léala como la cobertura de lo que sus usuarios se van a encontrar.',
+            d4: 'Trate un rechazo como un resultado, no como un defecto. Un rechazo que llegó con respuesta dice que el asistente juzgó que el corpus no responde a la pregunta, lo cual es una propiedad del corpus y de la pregunta. Léala como la cobertura de lo que sus usuarios se van a encontrar.',
             x1: 'No lea una métrica no medida como un cero. Un juez cuya respuesta la métrica no pudo analizar deja esa métrica en null para esa fila; null queda fuera de la media y nunca se promedia como un fallo.',
-            x2: 'No cuente una abstención como un error, ni tampoco como un acierto. Se informa en su propia columna precisamente porque no es ni lo uno ni lo otro.',
+            x2: 'No cuente un rechazo como un error, ni tampoco como un acierto. Se informa en su propia columna precisamente porque no es ni lo uno ni lo otro — y un rechazo que llegó sin respuesta no se juzgó en absoluto, así que tampoco aporta ningún cero.',
             x3: 'No publique una cifra de una ejecución que el panel marcó como no válida, y no promedie dos ejecuciones para disimularlo. Una ejecución medida solo en parte no tiene cifra que publicar: tiene una ejecución que arreglar.',
             expect:
-              'Una ejecución limpia no tiene filas con error y cada métrica está medida en todas las filas; ese es el único estado en el que las medias son la prueba comparativa. Todo lo demás es una ejecución que arreglar, no un resultado sobre el que actuar.',
+              'Una ejecución limpia no tiene filas con error, no tiene filas no juzgadas y cada métrica está medida en todas las filas dentro del alcance; ese es el único estado en el que las medias son la prueba comparativa. Todo lo demás es una ejecución que arreglar, no un resultado sobre el que actuar.',
             table: {
               title: 'Cómo se refleja cada estado en el resultado',
               col: {
@@ -3402,16 +3403,23 @@ export default {
               abstained: {
                 state: 'abstención',
                 meaning:
-                  'El asistente se negó a responder — chatqna lo dijo o no tenía nada que decir. La canalización no falló.',
+                  'El asistente se negó a responder pero aun así produjo una respuesta — chatqna lo dijo, o se mostró cauto. La canalización no falló.',
                 effect:
-                  'La fila se entrega igualmente al juez, así que aporta una puntuación — sin contexto que lo respalde, las métricas de contexto vuelven con 0, y esos ceros SÍ se cuentan en las medias. Cuenta en su propia columna, nunca en la de errores, y no invalida el proceso. El panel la etiqueta como «abstained» en lugar de aprobado o fallido.'
+                  'La fila SÍ se entrega al juez, así que aporta una puntuación — sin nada que la respalde, las métricas de contexto vuelven con 0, y esos ceros SÍ se cuentan en las medias. Cuenta en su propia columna, nunca en la de errores y, por sí sola, no invalida la ejecución. El panel la etiqueta como «abstención» en lugar de aprobado o fallido. Un rechazo que NO produjo respuesta es un estado distinto — vea «rechazado, no juzgado».'
+              },
+              declinedUnjudged: {
+                state: 'rechazado, no juzgado',
+                meaning:
+                  'El asistente se negó a responder y no dijo nada — no se produjo ninguna respuesta. La canalización no falló.',
+                effect:
+                  'La fila NO se entrega al juez — no tiene respuesta, así que no hay nada con qué juzgarla. No lleva ninguna puntuación: queda fuera de las medias (nunca se cuenta como un cero), reduce la cobertura medida y puede marcar la ejecución como inválida. El panel la etiqueta como «rechazado — no juzgado» para que pueda distinguirla de un rechazo que sí se juzgó.'
               },
               unmeasured: {
                 state: 'sin medir',
                 meaning:
                   'El juez produjo una respuesta que esa métrica no pudo analizar, por ejemplo una afirmación de corrección factual que no pudo verificar.',
                 effect:
-                  'Esa métrica queda en null para esa fila: se excluye de la media, nunca es un cero. El panel muestra cuántas filas midió realmente el juez, y una cobertura parcial vuelve no válida la ejecución.'
+                  'Esa métrica queda en null para esa fila: se excluye de la media, nunca es un cero. El panel muestra cuántas filas midió realmente el juez para ella. Una métrica en 21/100 NO invalida una ejecución — el aviso solo aparece cuando NINGUNA métrica cubrió todas las filas dentro del alcance, así que lea usted mismo las fracciones por métrica.'
               },
               belowThreshold: {
                 state: 'por debajo del umbral',
@@ -3423,7 +3431,8 @@ export default {
                 state: 'fuera de alcance',
                 meaning:
                   'La pregunta es deliberadamente sin respuesta: se conserva en la suite como contraste, nunca como prueba.',
-                effect: 'Nunca se cuenta como un fallo. Es un control, no un resultado.'
+                effect:
+                  'Nunca se cuenta como un fallo y nunca entra en una media: es un control, no un resultado. El panel no lo apila en la barra de resultados, y su puntuación no entra ni en un promedio ni en una fracción de cobertura.'
               }
             }
           }
@@ -3487,6 +3496,7 @@ export default {
         pass: 'aprobado',
         fail: 'fallido',
         abstained: 'abstenido',
+        declinedUnjudged: 'rechazado — no juzgado',
         rowError: 'error',
         cancel: 'Cancelar ejecución',
         phase: {
@@ -3513,7 +3523,7 @@ export default {
           'Cada línea es la media de una métrica RAGAS por ejecución, de la más antigua a la más reciente — el ␘ de cada medidor explica la métrica. Las respuestas juzgadas se cachean; repeticiones idénticas solo difieren donde cambió la respuesta o la recuperación.',
         statusTitle: 'Resultados por pregunta',
         statusNote:
-          'Cada pregunta de la suite en esta ejecución, apilada por resultado: aprobada, reprobada (alguna métrica elegida bajo su umbral), abstención o error de pipeline.',
+          'Cada pregunta dentro del alcance de esta ejecución, apilada por resultado: respondida, reprobada (alguna métrica elegida por debajo de su umbral), abstención (quien responde se abstuvo) o error de pipeline (la cadena falló en esa fila). Los controles fuera de alcance no se cuentan — son un control, no un resultado.',
         allPass: 'todas superadas',
         invalidTitle: 'Esta ejecución no es una medición válida',
         invalidPill: 'ejecución no válida',
@@ -3526,6 +3536,9 @@ export default {
         state: 'Estado',
         error: 'error',
         abstained: 'abstenido',
+        declinedUnjudged: 'rechazado — no juzgado',
+        declinedUnjudgedTitle:
+          'Quien responde se negó y no dijo nada, así que esta fila nunca se entregó al juez. No lleva puntuación y queda fuera de las medias — y reduce la cobertura medida.',
         answered: 'respondido',
         noisy: 'respuesta correcta — ruido de recuperación',
         noisyTitle:

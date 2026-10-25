@@ -1498,8 +1498,8 @@ export default {
       groupDataPrep: 'Data Prep Pipeline',
       groupInference: 'Inference Pipeline',
       mockNote: 'planned — not yet configurable',
-      svcAnswers: 'Benchmark answers (instead of the deployment chat)',
-      svcAnswersShort: 'benchmark answers',
+      svcAnswers: 'Benchmark answers — offline replay only (the Lab answers through the deployment chat)',
+      svcAnswersShort: 'benchmark answers (offline only)',
       mockContextual: 'Contextual retrieval (doc context)',
       mockChunkLabeling: 'Chunk labeling',
       mockGraphExtraction: 'Knowledge-graph extraction',
@@ -1935,7 +1935,7 @@ export default {
             title: 'Models, and what to expect',
             intro:
               'Three different models take part and they are not interchangeable: the model that answers, the model that judges, and the model that embeds. They move the score for completely different reasons.',
-            d1: 'The answer model is the one under test. Retrieval and answering are replayed in the OKF server against the same collections and the same reranker the assistant uses, so changing this changes the answer — not the harness.',
+            d1: 'The answer model is the one under test — but in the Lab the answers come from the DEPLOYED chat model, through the deployed pipeline, so changing the deployment’s chat model changes the answer. The offline replay leg (retrieval and answering replayed inside the OKF server) exists for whatif runs and cannot be started from the Lab today, so the "benchmark answers" setting does not change any benchmark you can run here.',
             d2: 'The judge must be strong and stable. It scores against the references, so a weak judge depresses every metric at once and the run still looks complete. Judge answers are cached per judge identity — changing the judge or the model invalidates that cache and every row is re-scored.',
             d3: 'The embedding model is part of the retrieval measurement. Change it and context precision and context recall move, while faithfulness usually does not. That asymmetry is a signal about where the change landed, not noise.',
             d4: 'Record the model with the run. Each run stores which configuration and which model produced the answers and the scores; two runs are comparable only when those match.',
@@ -1949,10 +1949,10 @@ export default {
             title: 'Read the results',
             intro:
               'Each RAGAS metric measures something different, and one of them runs backwards. Read every number for what it actually measures before you act on it.',
-            d1: 'Read the invalid-run banner first. A run whose answers errored, or whose judge measured only part of the suite, is not a measurement — the averages below it cover only the rows that scored.',
+            d1: 'Read the invalid-run banner first. A run whose answers errored, or in which no metric covered every in-scope row, is not a measurement — the averages below it cover only the rows that scored.',
             d2: 'Check the direction of each metric. Most are higher-is-better. Noise sensitivity is the exception: lower is better, so a run that scores badly on it is failing in the good direction.',
             d3: 'Read the failing rows, not only the mean. One broken question among forty moves the mean further than the change you were trying to measure.',
-            d4: 'Use Explain failures before you change anything. It attributes each failing row to a stage proven against the corpus — retrieved, reranker, vector-recall, corpus, judge or answer — and shows where the passage was lost and where it would have ranked. A corpus verdict means the expected passage is not in the corpus at all: that question is unfair, it measures the benchmark rather than the assistant, and it is marked as such so you regenerate the entry instead of writing content that already exists. Its suggestions are guarded — it proposes, you decide.',
+            d4: 'Use Explain failures before you change anything. It attributes each failing row to a stage proven against the corpus — retrieved, reranker, vector-recall, corpus, judge, answer or unmeasured — and shows where the passage was lost and where it would have ranked. A corpus verdict means the expected passage is not in the corpus at all: that question is unfair, it measures the benchmark rather than the assistant, and it is marked as such so you regenerate the entry instead of writing content that already exists. Its suggestions are guarded — it proposes, you decide.',
             x1: 'Do not compare means across different metric sets, different judges, or an edited suite. None of those is the same measurement, and the difference you see is not a change in quality.',
             x2: 'Do not tune retrieval against a single number. Precision and recall trade against each other; a change that lifts one normally costs the other, and the trade is usually the interesting part.',
             x3: 'Do not treat a null score as a low score. An exhausted retry produces a null that is excluded from the mean, so no score means no measurement — re-run the row rather than assuming the worst.',
@@ -1966,7 +1966,7 @@ export default {
                 effect: 'What to do with it'
               },
               mean: {
-                element: 'The score',
+                element: 'The mean',
                 meaning:
                   'The mean of that metric over the rows the judge scored for it. It is not a score for the whole suite.',
                 effect:
@@ -1975,18 +1975,18 @@ export default {
               coverage: {
                 element: 'The fraction (55/100)',
                 meaning:
-                  "The judge measured that metric on 55 of the suite's 100 rows. The mean covers only those 55 rows; the other 45 are left out of it — never counted as zero.",
+                  "The judge measured that metric on 55 of the suite's 100 in-scope rows. The mean covers only those 55 rows; the other 45 are left out of it — never counted as zero. Out-of-scope controls are not part of the 100.",
                 effect:
                   'A small fraction means the number says little about the suite. Check the metric you care about, not the run as a whole.'
               },
               banner: {
                 element: 'The invalid-run banner',
                 meaning:
-                  'The run had failed answers, or no metric covered every row. Its coverage figure is the best-covered metric, so one metric at 21/100 does not raise it.',
+                  'The run had failed answers, or no metric covered every in-scope row. Its coverage figure is the best-covered metric, so one metric at 21/100 does not raise it.',
                 effect: 'Read the per-metric fractions yourself. The banner is a floor, not a summary.'
               },
               runName: {
-                element: 'The run name',
+                element: 'The run name and its judge',
                 meaning:
                   'The judge that scored that run, and the configuration it came from. The key under it is for support.',
                 effect:
@@ -1995,9 +1995,9 @@ export default {
               rescore: {
                 element: 'Re-score',
                 meaning:
-                  'Re-scores the same answers with a different judge. The answers and the contexts are copied verbatim — nothing is retrieved or written again.',
+                  'Re-scores the same answers with the judge you pick — the answers and the contexts are copied verbatim, nothing is retrieved or written again. The dialog pre-fills the source run’s own judge, so the default re-score is a STABILITY check (is this judge reproducible?), not a second opinion.',
                 effect:
-                  'Use it to put two judges on the same rows. It is far cheaper than a new run, and it is how you test a judge change.'
+                  'To find out whether a failure is judge harshness or a real failure, re-score with a DIFFERENT judge. Two judges on the same rows is far cheaper than a new run, and it is how you test a judge change.'
               },
               status: {
                 element: 'The status',
@@ -2009,16 +2009,16 @@ export default {
           errors: {
             title: 'Errors, and what they do to the result',
             intro:
-              'A benchmark never measures every row of every suite: a row can fail in the pipeline, the assistant can decline to answer, the judge can fail to measure a metric, and a metric can fall below its threshold. None of these is a zero and none of them is hidden. This chapter is the map — what each state means, and what it does to the number you are reading. One thing to know before you read it: a row that produced NO ANSWER is never handed to the judge — there is nothing to judge it with — so it is left out of the averages and never counted as a zero. A row that DECLINED still has an answer, so it IS judged: with nothing to support it, its context metrics come back 0, and those zeros ARE counted in the averages. That is why a run with a failed row is banner-marked invalid rather than trusted.',
-            d1: 'Read the invalid-run banner before the averages. It means the scores below it are not a measurement of the system, and it names the cause: answers that failed, or a judge that measured only part of the suite. Fix the cause and run again.',
+              'A benchmark never measures every row of every suite: a row can fail in the pipeline, the assistant can decline to answer, the judge can fail to measure a metric, and a metric can fall below its threshold. None of these is a zero and none of them is hidden. This chapter is the map — what each state means, and what it does to the number you are reading. One thing to know before you read it: a row that produced NO ANSWER is never handed to the judge — there is nothing to judge it with — so it is left out of the averages and never counted as a zero, and it lowers the measured coverage. A DECLINE is not one thing but two. A decline that came WITH an answer was judged, and with nothing to support it its context metrics came back 0, so those zeros ARE counted in the averages. A decline that came with NO answer was never judged at all: it carries no score, it is left out of the averages, and it lowers the measured coverage the same way an errored row does. That is why a run with a failed or an unjudged row is banner-marked invalid rather than trusted.',
+            d1: 'Read the invalid-run banner before the averages. It means the scores below it are not a measurement of the system, and it names the cause: answers that failed, or no metric that covered every in-scope row. Fix the cause and run again.',
             d2: 'Check the coverage on every metric before you compare two runs. The panel prints how many rows the judge actually scored for that metric; a mean over a fraction of the suite is not the suite’s score, and it is not comparable with a run that measured all of it.',
             d3: 'Fix an errored row at its cause — the retrieval stack, the upstream service, the timeout — and then re-run. Editing the suite to remove the row that keeps failing hides the defect the benchmark exists to find.',
-            d4: 'Treat an abstention as a result, not a defect. It says the assistant judged that the corpus does not answer the question, which is a property of the corpus and the question. Read it as coverage of what your users will hit.',
+            d4: 'Treat a decline as a result, not a defect. A decline that came with an answer says the assistant judged that the corpus does not answer the question, which is a property of the corpus and the question. Read it as coverage of what your users will hit.',
             x1: 'Do not read an unmeasured metric as a zero. A judge whose answer the metric could not parse leaves that metric null for that row; null is excluded from the mean, never averaged in as a failure.',
-            x2: 'Do not count an abstention as an error, and do not count it as a pass either. It is reported in its own column precisely because it is neither.',
+            x2: 'Do not count a decline as an error, and do not count it as a pass either. It is reported in its own column precisely because it is neither — and a decline that came with no answer was never judged at all, so it never contributes a zero either.',
             x3: 'Do not publish a number from a run the panel marked invalid, and do not average two runs to hide it. A partially measured run has no score to publish; it has a run to fix.',
             expect:
-              'A clean run has no errored rows and every metric scored on every row — that is the only state in which the means are the benchmark. Everything else is a run to fix, not a result to act on.',
+              'A clean run has no errored rows, no unjudged rows, and every metric scored on every in-scope row — that is the only state in which the means are the benchmark. Everything else is a run to fix, not a result to act on.',
             table: {
               title: 'How each state maps to the result',
               col: {
@@ -2036,16 +2036,22 @@ export default {
               abstained: {
                 state: 'abstained',
                 meaning:
-                  'The assistant declined to answer — chatqna said so, or it had nothing to say. The pipeline did not fail.',
+                  'The assistant declined to answer but still produced an answer — chatqna said so, or it hedged. The pipeline did not fail.',
                 effect:
-                  'The row is still handed to the judge, so it contributes a score — with nothing to support it, the context metrics come back 0, and those zeros ARE counted in the averages. It is counted in its own column, never in the error column, and it does not invalidate the run. The panel labels the row abstained rather than pass or fail.'
+                  'The row WAS handed to the judge, so it contributes a score — with nothing to support it, the context metrics come back 0, and those zeros ARE counted in the averages. It is counted in its own column, never in the error column, and on its own it does not invalidate the run. The panel labels the row abstained rather than pass or fail. A decline that produced NO answer is a different state — see "declined, not judged".'
+              },
+              declinedUnjudged: {
+                state: 'declined, not judged',
+                meaning: 'The assistant declined and said nothing — no answer was produced. The pipeline did not fail.',
+                effect:
+                  'The row was NOT handed to the judge — it has no answer, so there is nothing to judge it with. It carries no score at all: it is left out of the averages (never counted as a zero), it lowers the measured coverage, and it can mark the run invalid. The panel labels it "declined — not judged" so you can tell it apart from a decline that was judged.'
               },
               unmeasured: {
                 state: 'not measured',
                 meaning:
                   'The judge produced an answer that metric could not parse — for example a factual-correctness statement it could not verify.',
                 effect:
-                  'That metric is null for that row: excluded from the mean, never a zero. The panel shows how many rows the judge did score for it, and partial coverage makes the run invalid.'
+                  'That metric is null for that row: excluded from the mean, never a zero. The panel shows how many rows the judge did score for it. One metric at 21/100 does NOT invalidate a run — the banner fires only when NO metric covered every in-scope row, so read the per-metric fractions yourself.'
               },
               belowThreshold: {
                 state: 'below threshold',
@@ -2055,7 +2061,8 @@ export default {
               outOfScope: {
                 state: 'out of scope',
                 meaning: 'The question is deliberately unanswerable — kept in the suite for contrast, never as a test.',
-                effect: 'Never counted as a failure. It is a control, not a result.'
+                effect:
+                  'Never counted as a failure, and never inside a mean: it is a control, not a result. The panel does not stack it into the outcome bar, and its score enters neither an average nor a coverage fraction.'
               }
             }
           }
@@ -2119,6 +2126,7 @@ export default {
         pass: 'pass',
         fail: 'fail',
         abstained: 'abstained',
+        declinedUnjudged: 'declined — not judged',
         rowError: 'error',
         cancel: 'Cancel run',
         phase: {
@@ -2145,7 +2153,7 @@ export default {
           'Each line is one RAGAS metric’s suite mean per run, oldest to newest — hover any gauge’s ␘ for what that metric measures. Judged answers are cached, so equal re-runs differ only where answers or retrieval changed.',
         statusTitle: 'Per-question outcomes',
         statusNote:
-          'Every suite question in this run, stacked by outcome: passing, failing (any selected metric below its threshold), abstained (the answerer declined), or errored (the pipeline failed that row).',
+          'Every in-scope question in this run, stacked by outcome: answered, failing (any selected metric below its threshold), abstained (the answerer declined), or errored (the pipeline failed that row). Out-of-scope controls are not counted — they are a control, not a result.',
         allPass: 'all passing',
         invalidTitle: 'This run is not a valid measurement',
         invalidPill: 'invalid run',
@@ -2158,6 +2166,9 @@ export default {
         state: 'State',
         error: 'error',
         abstained: 'abstained',
+        declinedUnjudged: 'declined — not judged',
+        declinedUnjudgedTitle:
+          'The answerer declined and said nothing, so this row was never handed to the judge. It carries no score and is left out of the averages — and it reduces the measured coverage.',
         answered: 'answered',
         noisy: 'answer OK — retrieval noise',
         noisyTitle:
@@ -2196,8 +2207,8 @@ export default {
         judgeUnknown: 'Judge not recorded'
       },
       rescore: {
-        title: 'Re-score with another judge',
-        body: 'The stored answers are re-scored with another judge — they are not regenerated. The result is a separate run.',
+        title: 'Re-score with a judge',
+        body: 'The stored answers are re-scored with the judge you pick — they are not regenerated. The dialog pre-fills the source run’s own judge, so the default re-score checks whether that judge is reproducible; pick a DIFFERENT judge to get a second opinion on the failures. The result is a separate run.',
         source: 'Source run',
         judge: 'Judge configuration',
         confirm: 'Re-score',

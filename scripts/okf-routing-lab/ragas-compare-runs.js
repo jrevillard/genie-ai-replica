@@ -25,7 +25,15 @@
 
 const dbService = require('/app/shared-lib/db-connection-service');
 
-/** The value of `metric` in a row's metrics, by prefix. */
+/**
+ * The value of `metric` in a row's metrics.
+ *
+ * The PRODUCT looks the metric up EXACTLY (`r.metrics[m]`), and the
+ * sidecar stores the bare key — so the prefix branch below is a fallback
+ * for a document that still carries a parameterized spelling, not the
+ * product's own rule. The comment this replaces claimed the prefix WAS
+ * the product's rule, which is not what the code does.
+ */
 function metricValue(metrics, metric) {
   if (!metrics || typeof metrics !== 'object') return null;
   if (typeof metrics[metric] === 'number') return metrics[metric];
@@ -59,8 +67,21 @@ if (require.main === module) {
   (async () => {
     const db = await dbService.getConnection();
     const c = db.collection('okf_head_test_runs');
-    const baseline = await c.document(baselineKey);
-    const candidate = await c.document(candidateKey);
+    // The driver's document() THROWS on a 404, so the `if (!doc)` guards
+    // never fired and a mistyped run key produced a raw ArangoDB stack
+    // instead of the one line that says which key was wrong.
+    const loadRun = async (key, label) => {
+      try {
+        return await c.document(key);
+      } catch (e) {
+        if (e && (e.code === 404 || e.statusCode === 404)) {
+          throw new Error(`${label} run ${key} not found`);
+        }
+        throw e;
+      }
+    };
+    const baseline = await loadRun(baselineKey, 'baseline');
+    const candidate = await loadRun(candidateKey, 'candidate');
     if (!baseline) throw new Error(`baseline run ${baselineKey} not found`);
     if (!candidate) throw new Error(`candidate run ${candidateKey} not found`);
 
@@ -68,6 +89,22 @@ if (require.main === module) {
     const candRows = candidate.payload.results || [];
     const baseById = new Map(baseRows.map((r) => [r.id, r]));
     const candById = new Map(candRows.map((r) => [r.id, r]));
+
+    // The IN-SCOPE rows only — the same population the panel's means use
+    // (2026-10-25). An out-of-scope row is a control: it is deliberately
+    // unanswerable, so its score is not a result and must not sit inside a
+    // mean. Before this the tool averaged every row and reported a number
+    // the panel did not show.
+    const oosIds = (doc) => new Set(((doc.payload && doc.payload.entries) || []).filter((e) => e.oos).map((e) => e.id));
+    const baseOos = oosIds(baseline);
+    const candOos = oosIds(candidate);
+    const baseInScope = baseRows.filter((r) => !baseOos.has(r.id));
+    const candInScope = candRows.filter((r) => !candOos.has(r.id));
+    if (baseOos.size || candOos.size) {
+      console.log(
+        `out-of-scope controls excluded from the means: baseline ${baseOos.size}, candidate ${candOos.size}\n`
+      );
+    }
 
     const baseJudge = (baseline.payload.fidelity && baseline.payload.fidelity.judge) || null;
     const candJudge = (candidate.payload.fidelity && candidate.payload.fidelity.judge) || null;
@@ -78,14 +115,14 @@ if (require.main === module) {
 
     // 1. per-metric means
     const metricNames = new Set();
-    for (const r of baseRows) Object.keys(r.metrics || {}).forEach((k) => metricNames.add(k));
-    for (const r of candRows) Object.keys(r.metrics || {}).forEach((k) => metricNames.add(k));
+    for (const r of baseInScope) Object.keys(r.metrics || {}).forEach((k) => metricNames.add(k));
+    for (const r of candInScope) Object.keys(r.metrics || {}).forEach((k) => metricNames.add(k));
 
     console.log('=== per-metric means (mean over the rows the judge SCORED) ===');
     console.log('metric                                baseline   candidate     delta   scored');
     for (const name of [...metricNames].sort()) {
-      const baseVals = baseRows.map((r) => metricValue(r.metrics, name)).filter((v) => v !== null);
-      const candVals = candRows.map((r) => metricValue(r.metrics, name)).filter((v) => v !== null);
+      const baseVals = baseInScope.map((r) => metricValue(r.metrics, name)).filter((v) => v !== null);
+      const candVals = candInScope.map((r) => metricValue(r.metrics, name)).filter((v) => v !== null);
       const bm = mean(baseVals);
       const cm = mean(candVals);
       const delta = bm !== null && cm !== null ? cm - bm : null;

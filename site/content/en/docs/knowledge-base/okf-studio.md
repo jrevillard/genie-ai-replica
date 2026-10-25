@@ -193,6 +193,10 @@ cannot offer what no longer exists.
   adjustments through the same guarded machinery as the routing teaching
   loop, and concept-content curation suggestions that name the concept and
   the gap.
+  Two further stages cover the rows that carry **no score**: *answer* (the
+  row produced no answer, so it was never handed to the judge) and
+  *unmeasured* (the judge returned nothing measurable for the row). Neither
+  is a threshold breach, and neither is counted as a zero.
 - **Interchange**: import a benchmark suite authored in the harness's
   `Test Dataset` xlsx format; export your suite so the harness's
   `xlsx_to_gold.py` consumes it unmodified. Results flow one way (export).

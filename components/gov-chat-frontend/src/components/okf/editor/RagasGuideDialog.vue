@@ -112,6 +112,11 @@ const CHAPTER_KEYS = ['generate', 'curate', 'run', 'models', 'read', 'errors'];
 const ERROR_ROWS = [
   { key: 'error', variant: 'danger' },
   { key: 'abstained', variant: 'warning' },
+  // A DECLINE that came with no answer was never handed to the judge — a
+  // different state from a decline that was judged (whose zeros ARE in the
+  // averages). The guide used to describe only the second and implied the
+  // first did not exist; the panel labels them apart.
+  { key: 'declinedUnjudged', variant: 'warning' },
   { key: 'unmeasured', variant: 'info' },
   { key: 'belowThreshold', variant: 'warning' },
   { key: 'outOfScope', variant: 'neutral' }
@@ -188,13 +193,18 @@ export default {
       ];
       const rows = ERROR_ROWS.map((r) => ({
         variant: r.variant,
+        // The STABLE key travels with the row: the displayed state is
+        // translated, so using it as the row key made the row identity
+        // change with the locale — and two states that translated to the
+        // same string would collide.
+        key: r.key,
         state: this.translate(`${base}.${r.key}.state`, r.key),
         meaning: this.translate(`${base}.${r.key}.meaning`, ''),
         effect: this.translate(`${base}.${r.key}.effect`, '')
       }));
       return {
         title: this.translate(`${base}.title`, 'How each state maps to the result'),
-        rowKey: 'state',
+        rowKey: 'key',
         columns,
         rows
       };
@@ -214,13 +224,14 @@ export default {
       ];
       const rows = OUTPUT_ROWS.map((r) => ({
         variant: r.variant,
+        key: r.key,
         element: this.translate(`${base}.${r.key}.element`, r.key),
         meaning: this.translate(`${base}.${r.key}.meaning`, ''),
         effect: this.translate(`${base}.${r.key}.effect`, '')
       }));
       return {
         title: this.translate(`${base}.title`, 'What is on screen, and what it means'),
-        rowKey: 'element',
+        rowKey: 'key',
         columns,
         rows
       };

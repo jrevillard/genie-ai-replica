@@ -617,3 +617,98 @@ development_status:
   #          The guide test now asserts the failed row is NOT judged and never a zero, and that
   #          an abstention IS judged and its zeros ARE in the averages.
   #          okf-server 1653/1653 · frontend 2042/2042 · guide test 31/31.
+  #          CODE REVIEW 2026-10-25 (bmad-code-review, 4 layers: blind-hunter, edge-case-hunter,
+  #          verification-gap, acceptance-auditor; scope = the MR !598 merge diff vs its first
+  #          parent, cc7539c4d^1..cc7539c4d, 28 files / 4756 lines; spec = SPEC-okf-ragas-benchmarking).
+  #          62 findings raised, 39 verified at the source, 9 rejected after checking the code.
+  #          MR !598 MERGED into feat/okf-server as cc7539c4d (pipeline 14394 green) BEFORE the
+  #          review — the review therefore reads as a post-merge audit, and the fixes land on
+  #          feat/okf-server. NOTHING DEPLOYED: the local build still runs the pre-fix code.
+  #          THE HEADLINE DEFECT IS OURS: the guide's abstention row states the OPPOSITE of the
+  #          code, and the guide test PINS the error. The copy says an abstention "is still
+  #          handed to the judge … those zeros ARE counted in the averages" and "DECLINED still
+  #          has an answer". But servedIsAbstention (:190-199) and matchAbstention (:202-207) both
+  #          do `if (!text) return true` — an EMPTY answer IS a decline — and the run path's
+  #          scorable filter (:2395) excludes every no-answer row from the judge, so such a row
+  #          carries NO score and is NOT in the averages. It also leaves measured_rows <
+  #          total_rows, so the invalid-run banner FIRES — the guide's "does not invalidate the
+  #          run" is false for the same row. MEASURED LIVE (local build, 29 stored runs): 48
+  #          abstention rows, ALL 48 with an empty answer, ZERO carrying an answer. The claim
+  #          is false in 100% of observed cases.
+  #          THE OTHER HIGH FINDINGS: (a) the outcome bar does not partition the rows —
+  #          summarizeRun counts n_errors/n_abstained over ALL results (no oos filter) while
+  #          n_evaluable/failing_count exclude out-of-scope rows, and failingOnly =
+  #          failing_count - n_abstained subtracts an abstention that was never judged, so a
+  #          genuinely failing row is relabelled "answered" (worked example run against the
+  #          repo's own Arango mock: truth = answered 0 / abstained 1 / failing 2, bar reads
+  #          answered 1 / abstained 1 / failing 1); our commit message and the panel's own
+  #          comment claiming "every row counted exactly once" are FALSE; (b) out-of-scope rows
+  #          are INSIDE the metric means (means[m] at :2667 has no oos filter) while the guide
+  #          calls them "a control, not a result"; the sibling head suite settles the precedent
+  #          — it computes positive_pass_rate and negative_pass_rate SEPARATELY
+  #          (head-suite-service.js:2138-2143), never mixing flipped rows into the positives'
+  #          rate; (c) the DEFAULT re-score uses the SOURCE run's own judge (onRescoreOpen
+  #          prefills rescoreConfigKey from the run's judge_pick, RagasPanel.vue:2086) while the
+  #          run doc says "with a different judge" and the guide says "Re-scores the same answers
+  #          with a different judge"; (d) loadSecondJudgeRun never checks the sibling used a
+  #          different judge; (e) secondJudgeSentence falls back to the ALL-metric total while
+  #          still naming one metric, and total.failed_here counts (row, metric) PAIRS while the
+  #          sentence says "rows"; (f) a re-score doc carries NO payload.coverage, so the
+  #          invalid-run banner's coverage branch can never fire for a re-score, and the two new
+  #          guide chapters contradict each other on whether partial coverage invalidates a run
+  #          (the code uses the BEST-covered metric, measured_rows = max over metrics at :2542);
+  #          (g) a live re-score is killed by the liveness verdict — getRunSuite (:2695) returns
+  #          running only from the in-memory rescoreInFlight map and otherwise REWRITES the doc
+  #          as failed/RUN_INTERRUPTED (:2706-2719), and sweepInterruptedRuns builds liveKeys
+  #          from runInFlight.values() only (:3952) so the boot sweep does the same after a
+  #          restart — contradicting our own comment that "the doc is the only place that
+  #          survives more than one okf-server process"; (h) the two new E2E specs NEVER RUN IN
+  #          CI — .gitlab-ci.yml:444 invokes Playwright on tests/e2e/chatbot/,
+  #          tests/e2e/documents/ and theme-runtime-config.spec.js only, and the e2e job's
+  #          rules.changes never lists tests/e2e/okf/**/*; (i) the store's ragasRescoreRun poll
+  #          loop has NO test (the panel test mocks the whole dispatch) so the
+  #          cancelled -> RUN_CANCELLED mapping is unprotected; (j) loadSecondJudgeRun is not
+  #          exported and the test mock's AQL dispatcher falls through to `return {all: async
+  #          () => []}`, so the sibling lookup never executes in any test — the headline
+  #          "second judge is computed from the real sibling" behaviour is unproven end to end;
+  #          (k) the guide's i18n is wrong in three locales — man.js's errors intro and
+  #          error.effect are in an INVENTED Latin pseudo-language while the rest of the file is
+  #          real Mandinka (the other 13 locales are fine), and es/id/man ship an English
+  #          `state: 'error'` where en ships 'errored'; (l) the guide's rowKey is the TRANSLATED
+  #          display string, so row identity changes with the locale; (m) mean.element reads
+  #          "The score" while its own text says "It is not a score for the whole suite", and
+  #          runName.element reads "The run name" while its text describes the judge;
+  #          (n) CAP-8's "benchmark answers follow the configuration only when checked" is
+  #          UNREACHABLE from the product — answerFidelity consults the ragas_answers config
+  #          only in whatif mode, serve mode is the only mode the frontend can start (no `mode`
+  #          in the run body at okf.js:1611, zero `whatif` hits in the frontend), so an admin who
+  #          checks "benchmark answers" sees no effect on any benchmark a steward can run.
+  #          REJECTED AFTER CHECKING THE CODE (9): compareJudges conflating "no threshold" with
+  #          "not measured" (one thresholds object serves both judges, so a thresholdless metric
+  #          is excluded entirely); an errored row with an answer getting the false "metric below
+  #          threshold" (the r.error branch at :3054 catches it first); the E2E specs hardcoding
+  #          realm/repo name (both are env-driven; the hardcoded user/pw matches
+  #          ragas-judge-selector.spec.js); "the bar's buckets stop summing to n_evaluable" (they
+  #          always sum — the population is wrong, not the sum); the 24h poll horizon (matches
+  #          the run path and the spec's "nothing ends a healthy long-running job on a timer");
+  #          a no-answer row with no contexts never reaching the 'answer' stage (the earlier
+  #          !r.contexts.length -> routing branch is the more specific attribution); the compare
+  #          script's prefix metric match (the sidecar stores bare keys, so it agrees today —
+  #          only the comment misstates the rule); and the no-cancel-button window before the
+  #          202 (the cancel target does not exist yet).
+  #          THREE DECISIONS FOR DAVID: out-of-scope rows inside the metric means (excluding
+  #          them matches the head suite's precedent but shifts every stored benchmark's
+  #          numbers); the same-judge re-score default; and CAP-8's unreachable benchmark-answer
+  #          configuration. DEFERRED (3, in deferred-work.md): the failure-attribution.md matrix
+  #          sync (fix edits a spec companion), the two untested operator scripts, and the
+  #          find-prd activation workflow's unsubstituted pattern.
+  #          NAMING (David 2026-10-25): "Routing Lab" is retired — the surface now spans head
+  #          and routing tests AND RAGAS benchmarks AND the advisor, so the name describes a
+  #          mechanism that is only one tab of it. Renamed "Testing Lab", THOROUGHLY: the 3
+  #          label strings x 14 locales (42 strings), the dialog title and CTA, the
+  #          okf.headTest.* key namespace (247 references) and the HeadTestDialog.vue
+  #          component name, plus every reference in help text and documentation (the site
+  #          page site/content/en/docs/knowledge-base/okf-studio.md, ADR
+  #          docs/adr/okf-043-ragas-benchmarking-via-python-sidecar.md, the SPEC and its
+  #          architecture-diagrams.md, and the _bmad-output artifacts). To be done AFTER the
+  #          review fixes land.

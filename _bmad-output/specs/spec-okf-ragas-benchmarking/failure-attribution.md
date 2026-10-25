@@ -1,6 +1,8 @@
 # Failure attribution — RAGAS explain/advise (Story 8-6)
 
-The mechanical matrix behind CAP-5, adapted from Jerome's Phase-5 table (`tests/rag-benchmarks/eval/CLAUDE.md` "Semantic path") with routing-aware additions the Lab is uniquely positioned to make. Applied per failing row (any metric below its threshold); every match emits an attribution row `{query, pattern, stage, evidence, fix_surface, recommendation}`.
+The mechanical matrix behind CAP-5, adapted from Jerome's Phase-5 table (`tests/rag-benchmarks/eval/CLAUDE.md` "Semantic path") with routing-aware additions the Lab is uniquely positioned to make. Applied per failing row (any metric below its threshold) **and per row that carries no score at all**; every match emits an attribution row `{query, pattern, stage, evidence, fix_surface, recommendation}`.
+
+The two rows at the end of the matrix were added on 2026-10-25, when the run path was fixed to judge only the rows that produced an answer. A row with no answer is not a failing row — it was never judged, so it has no metric below a threshold — but it is exactly the row the operator must know about, and before these rows existed the advisor either dropped it or claimed it was "metric below threshold", which was false.
 
 ## Thresholds (config-overridable via suite/run settings; applied to every enabled metric)
 
@@ -39,6 +41,8 @@ Extended catalog (per David 2026-10-17 the full single-turn set is selectable; t
 | `context_entities_recall` low | Corpus (entities) | concept content | Key entities of the reference are unretrievable — re-curate the concept or enrich entity mentions |
 | `answer_relevancy` low + `abstained` = yes | Abstention | abstention instructions | Model abstained on an answerable query — abstention threshold too strict for this entry |
 | All four ≈ 0/NaN + judge errors in run log | Judge | judge model / endpoint | Judge failure, not pipeline failure — verify `RAGAS_JUDGE_*` (his known failure modes: reasoning-token budget, non-JSON judge, missing embed model) |
+| No answer at all — the row failed at retrieval, or the answerer declined and said nothing | Answer | the retrieval stack / the answer leg | The row was never handed to the judge: it carries no score, it is left out of the averages, and it lowers the measured coverage |
+| The judge returned nothing measurable for the row (every metric null, no `ALL_NAN`) | Unmeasured | the judge endpoint / the metric set | The row was handed to the judge and came back with no metric: it carries no score and is left out of the averages |
 
 ## Advice generation (guarded, existing pattern)
 

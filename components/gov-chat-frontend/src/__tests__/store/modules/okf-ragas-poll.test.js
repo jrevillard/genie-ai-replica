@@ -14,6 +14,7 @@ const mockGenerateSuite = jest.fn();
 const mockGetSuite = jest.fn();
 const mockRunSuite = jest.fn();
 const mockGetRun = jest.fn();
+const mockRescoreRun = jest.fn();
 
 jest.mock('@/services/ragasService', () => ({
   __esModule: true,
@@ -22,6 +23,7 @@ jest.mock('@/services/ragasService', () => ({
     getSuite: (...a) => mockGetSuite(...a),
     runSuite: (...a) => mockRunSuite(...a),
     getRun: (...a) => mockGetRun(...a),
+    rescoreRun: (...a) => mockRescoreRun(...a),
     cancelSuiteGeneration: jest.fn(),
     cancelRun: jest.fn()
   }
@@ -190,5 +192,107 @@ describe('okf store — ragas poll loops survive transient gateway failures', ()
 
     expect(res.ok).toBe(false);
     expect(res.code).toBe('RAGAS_JOB_CANCELLED');
+  });
+});
+
+// The re-score's poll loop had NO test at all (2026-10-25 review): the
+// panel test mocks the whole dispatch away, and this file covered only the
+// four sibling actions. So the "a cancel is not a failure" behaviour the
+// change set out to deliver — the one David asked for by name — was
+// unprotected: if the store's `cancelled` branch were dropped or its code
+// string changed, the panel would re-open the re-score dialog with an error
+// banner for a run the user deliberately stopped, and no test would fail.
+describe('okf store — ragasRescoreRun maps the terminal state honestly', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('a CANCELLED re-score is RUN_CANCELLED, not a failure', async () => {
+    mockRescoreRun.mockResolvedValue({ run_key: 'rr-new' });
+    mockGetRun.mockResolvedValue({ run_key: 'rr-new', status: 'cancelled' });
+
+    const p = buildStore().dispatch('okf/ragasRescoreRun', {
+      repoId: 'r-1',
+      suiteKey: 'rs-1',
+      runKey: 'rr-old'
+    });
+    await jest.advanceTimersByTimeAsync(2000 * 2);
+    const res = await p;
+
+    expect(res.ok).toBe(false);
+    expect(res.code).toBe('RUN_CANCELLED');
+    // The panel branches on this exact code to suppress the error banner.
+    expect(res.code).not.toBe('RESCORE_FAILED');
+  });
+
+  it("a FAILED re-score carries the server's own error code", async () => {
+    mockRescoreRun.mockResolvedValue({ run_key: 'rr-new' });
+    mockGetRun.mockResolvedValue({
+      run_key: 'rr-new',
+      status: 'failed',
+      error: { code: 'RAGAS_UNAVAILABLE', message: 'the sidecar is down' }
+    });
+
+    const p = buildStore().dispatch('okf/ragasRescoreRun', {
+      repoId: 'r-1',
+      suiteKey: 'rs-1',
+      runKey: 'rr-old'
+    });
+    await jest.advanceTimersByTimeAsync(2000 * 2);
+    const res = await p;
+
+    expect(res.ok).toBe(false);
+    expect(res.code).toBe('RAGAS_UNAVAILABLE');
+  });
+
+  it('a 202 with no run key is a failure, not a silent success', async () => {
+    // The server accepted the request but returned nothing to track. The
+    // old code returned ok:true, so the panel reported a finished re-score
+    // that did not exist and there was no run to cancel.
+    mockRescoreRun.mockResolvedValue({});
+
+    const p = buildStore().dispatch('okf/ragasRescoreRun', {
+      repoId: 'r-1',
+      suiteKey: 'rs-1',
+      runKey: 'rr-old'
+    });
+    await jest.advanceTimersByTimeAsync(2000);
+    const res = await p;
+
+    expect(res.ok).toBe(false);
+    expect(res.code).toBe('RESCORE_NOT_STARTED');
+    expect(mockGetRun).not.toHaveBeenCalled();
+  });
+
+  it('reports the new run key and the live progress', async () => {
+    mockRescoreRun.mockResolvedValue({ run_key: 'rr-new' });
+    mockGetRun
+      .mockResolvedValueOnce({
+        run_key: 'rr-new',
+        status: 'running',
+        progress: { phase: 'judge', done: 3, total: 10 }
+      })
+      .mockResolvedValue({ run_key: 'rr-new', status: 'done', summary: { metrics: {} } });
+
+    const onStarted = jest.fn();
+    const onProgress = jest.fn();
+    const p = buildStore().dispatch('okf/ragasRescoreRun', {
+      repoId: 'r-1',
+      suiteKey: 'rs-1',
+      runKey: 'rr-old',
+      onStarted,
+      onProgress
+    });
+    await jest.advanceTimersByTimeAsync(2000 * 3);
+    const res = await p;
+
+    expect(res.ok).toBe(true);
+    expect(onStarted).toHaveBeenCalledWith('rr-new');
+    expect(onProgress).toHaveBeenCalledWith({ phase: 'judge', done: 3, total: 10 });
   });
 });

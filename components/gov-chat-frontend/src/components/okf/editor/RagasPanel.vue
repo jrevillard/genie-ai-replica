@@ -486,7 +486,7 @@
             :text="
               translate(
                 'okf.ragas.results.statusNote',
-                'Every suite question in this run, stacked by outcome: passing, failing (any selected metric below its threshold), abstained (the answerer declined), or errored (the pipeline failed that row).'
+                'Every in-scope question in this run, stacked by outcome: answered, failing (any selected metric below its threshold), abstained (the answerer declined), or errored (the pipeline failed that row). Out-of-scope controls are not counted — they are a control, not a result.'
               )
             "
           />
@@ -568,6 +568,18 @@
                   "
                 >
                   {{ translate('okf.ragas.results.noisy', 'answer OK — retrieval noise') }}
+                </DsPill>
+                <DsPill
+                  v-else-if="r.abstained && !rowJudged(r)"
+                  variant="warning"
+                  :title="
+                    translate(
+                      'okf.ragas.results.declinedUnjudgedTitle',
+                      'The answerer declined and said nothing, so this row was never handed to the judge. It carries no score and is left out of the averages — and it reduces the measured coverage.'
+                    )
+                  "
+                >
+                  {{ translate('okf.ragas.results.declinedUnjudged', 'declined — not judged') }}
                 </DsPill>
                 <DsPill v-else-if="r.abstained" variant="warning">{{
                   translate('okf.ragas.results.abstained', 'abstained')
@@ -1106,35 +1118,37 @@ export default {
     statusSeries() {
       const s = this.runDoc && this.runDoc.payload && this.runDoc.payload.summary;
       if (!s) return [];
-      // The four buckets must PARTITION the rows — the bar is read as a
-      // whole, and a row counted twice makes the segments sum to more
+      // The four buckets must PARTITION the in-scope rows — the bar is read
+      // as a whole, and a row counted twice makes the segments sum to more
       // than the suite.
       //
-      //   error     — the row produced no answer (n_errors)
-      //   abstained — the row declined; it still has an answer, so the judge
-      //               scored it and its context metrics came back 0, which
-      //               puts it in failing_count as well. It has its own
-      //               column, so it is taken OUT of the failing bucket.
-      //   failing   — the rows that failed a metric and are not abstentions
-      //   answered  — everything else
+      //   error     — the pipeline failed on the row; no answer; never judged
+      //   abstained — the answerer declined; it has its own column
+      //   failing   — judged, a metric below its threshold, not a decline
+      //   answered  — everything else in scope
       //
-      // The errored rows are NOT in failing_count (they were never judged),
-      // so they are subtracted explicitly. Before the judge-only-the-
-      // answered-rows fix they WERE in failing_count as zeros, and the old
-      // arithmetic (n_evaluable − n_abstained − failing_count) subtracted
-      // the abstentions twice — the all-abstained runs reached −20.
+      // The SERVER computes these over ONE population (the in-scope rows —
+      // an out-of-scope control is never a result and never a failure), so
+      // the panel must not subtract across populations itself. It used to:
+      // n_errors and n_abstained counted out-of-scope rows while
+      // n_evaluable and failing_count did not, and the failing bucket was
+      // derived as (failing_count − n_abstained), which subtracted a
+      // DECLINE that was never judged and so was never in failing_count —
+      // relabelling a genuinely failing row as "answered".
       const nErrors = s.n_errors || 0;
       const nAbstained = s.n_abstained || 0;
-      const nFailing = s.failing_count || 0;
-      const nEvaluable = s.n_evaluable || 0;
-      const failingOnly = Math.max(0, nFailing - nAbstained);
+      // Runs stored before the server computed the buckets fall back to the
+      // old arithmetic — the best that can be said about them.
+      const nFailing = s.n_failed != null ? s.n_failed : Math.max(0, (s.failing_count || 0) - nAbstained);
+      const nAnswered =
+        s.n_answered != null ? s.n_answered : Math.max(0, (s.n_evaluable || 0) - nErrors - nAbstained - nFailing);
       return [
         {
           name: this.translate('okf.ragas.results.answered', 'answered'),
-          data: [Math.max(0, nEvaluable - nErrors - nAbstained - failingOnly)]
+          data: [nAnswered]
         },
         { name: this.translate('okf.ragas.results.abstained', 'abstained'), data: [nAbstained] },
-        { name: this.translate('okf.ragas.results.failingShort', 'failing'), data: [failingOnly] },
+        { name: this.translate('okf.ragas.results.failingShort', 'failing'), data: [nFailing] },
         { name: this.translate('okf.ragas.results.error', 'error'), data: [nErrors] }
       ];
     },
@@ -1609,6 +1623,7 @@ export default {
         retrieved: (r.contexts || []).length,
         abstained: !!r.abstained,
         failed: errored,
+        judged: this.rowJudged(r),
         fails,
         ok: !errored && !r.abstained && fails.length === 0
       };
@@ -1617,10 +1632,30 @@ export default {
       const o = this.runOutcome(e);
       if (!o) return '';
       if (o.failed) return this.translate('okf.ragas.run.rowError', 'error');
+      // A decline that carried no answer was never handed to the judge —
+      // a different state from a decline that was judged (whose zeros ARE
+      // in the averages). The guide taught the second as if it were the
+      // only one; the panel now says which one it is.
+      if (o.abstained && !o.judged) {
+        return this.translate('okf.ragas.run.declinedUnjudged', 'declined — not judged');
+      }
       if (o.abstained) return this.translate('okf.ragas.run.abstained', 'abstained');
       return o.ok
         ? this.translate('okf.ragas.run.pass', 'pass')
         : `${this.translate('okf.ragas.run.fail', 'fail')}: ${o.fails.join(', ')}`;
+    },
+    /**
+     * Was this row handed to the judge?
+     *
+     * The server writes the flag at submit time; a row with no numeric
+     * metric was never measured. A DECLINE that carried no answer was
+     * never handed to the judge at all — the case the guide used to
+     * describe as if it were judged.
+     */
+    rowJudged(r) {
+      if (r && typeof r.judged === 'boolean') return r.judged;
+      const m = (r && r.metrics) || {};
+      return Object.keys(m).some((k) => typeof m[k] === 'number' && m[k] === m[k]);
     },
     /**
      * Colour the attribution stage by what it means for the operator:
@@ -1636,6 +1671,9 @@ export default {
       // demands action (re-run), not tuning.
       if (stage === 'retrieval-error') return 'danger';
       if (stage === 'judge' || stage === 'pipeline') return 'neutral';
+      // The judge returned nothing measurable for the row — a judge-side
+      // problem, like the other judge stages, not a knob to turn.
+      if (stage === 'unmeasured') return 'neutral';
       return 'warning';
     },
     /**
@@ -1894,7 +1932,11 @@ export default {
         runKey: this.runningRunKey
       });
       this.runCancelBusy = false;
-      if (!res.ok) this.error = res.message;
+      // The run may have landed between the operator's click and the
+      // request reaching the server — then there is nothing to cancel, and
+      // "no such run is executing" is not a failure the operator can act
+      // on. It must not read as an error.
+      if (!res.ok && res.code !== 'NO_RUN_IN_FLIGHT') this.error = res.message;
       // On ok: the ragasRun poll observes the cancelled run record next tick.
     },
     async onRename(name) {

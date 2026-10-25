@@ -441,7 +441,7 @@ workflow:
       echo "E2E_BASE_URL=${E2E_BASE_URL}" > .e2e-ropc-env
       echo "ADMIN_TOKEN=${ADMIN_TOKEN}" >> .e2e-ropc-env
       echo "CLIENT_UUID=${CLIENT_UUID}" >> .e2e-ropc-env
-    - BASE_URL="${E2E_BASE_URL}" npx playwright test tests/e2e/chatbot/ tests/e2e/documents/ tests/e2e/theme-runtime-config.spec.js --project=chromium
+    - BASE_URL="${E2E_BASE_URL}" npx playwright test tests/e2e/chatbot/ tests/e2e/documents/ tests/e2e/okf/ tests/e2e/theme-runtime-config.spec.js --project=chromium
   after_script:
     - |
       # ROPC cleanup - CRITICAL: always revert, even on test failure
@@ -3018,6 +3018,7 @@ e2e:playwright:
       changes:
         - tests/e2e/chatbot/**/*
         - tests/e2e/documents/**/*
+        - tests/e2e/okf/**/*
         - components/gov-chat-frontend/**/*
         - components/gov-chat-backend/**/*
         - components/document-repository/**/*

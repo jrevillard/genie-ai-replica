@@ -26,6 +26,7 @@
 const { test, expect } = require('@playwright/test');
 const { getAdminToken } = require('../helpers/auth');
 const { createUser, deleteUser } = require('../helpers/keycloak-admin');
+const { pinLocale } = require('../helpers/locale');
 
 const REALM = process.env.KEYCLOAK_REALM || 'genie';
 const REPO_NAME = process.env.OKF_SMOKE_REPO_NAME || 'El Salvador';
@@ -52,6 +53,11 @@ test.describe('the RAGAS guide documents what each error state does to the resul
 
   test('the errors chapter is reachable and its table renders a row per state', async ({ browser }) => {
     const context = await browser.newContext({ ignoreHTTPSErrors: true, bypassCSP: true });
+    // The assertions below read rendered English copy, so the locale must
+    // be PINNED — the app resolves it from navigator.language when
+    // localStorage has no preference, and a runner with another browser
+    // language would render another locale.
+    await pinLocale(context, 'en');
     const page = await context.newPage();
 
     // 1. log in through Keycloak
@@ -112,28 +118,40 @@ test.describe('the RAGAS guide documents what each error state does to the resul
     //    DOM (v-show), and the read chapter's own six-row output table is
     //    still in the document.
     const rows = dialog.locator('.okf-guide__pane:visible table tbody tr');
-    await expect(rows, 'the mapping must be a table, not prose').toHaveCount(5);
+    await expect(rows, 'the mapping must be a table, not prose').toHaveCount(6);
 
     // innerText, not textContent: the other chapters stay in the DOM
     // (v-show), and only the RENDERED text of this chapter must be read.
     const bodyText = await dialog.evaluate((el) => el.innerText);
 
     // The state labels an operator looks for.
-    for (const label of ['errored', 'abstained', 'not measured', 'below threshold', 'out of scope']) {
+    for (const label of [
+      'errored',
+      'abstained',
+      'declined, not judged',
+      'not measured',
+      'below threshold',
+      'out of scope'
+    ]) {
       expect(bodyText, `the table must carry the "${label}" state`).toContain(label);
     }
 
     // The CORRECTED claims. These are the ones that were wrong the first
     // time, and they are the whole point of the chapter.
     //
-    // The two states that look alike and are NOT alike (2026-10-25): a row
-    // that produced NO ANSWER is never handed to the judge and never counts
-    // as a zero; a row that DECLINED still has an answer, so it IS judged
-    // and its zeros ARE in the averages.
+    // A DECLINE is TWO states, not one (2026-10-25). A decline that came
+    // WITH an answer was judged and its zeros ARE in the averages; a
+    // decline that came with NO answer was never judged at all — it
+    // carries no score and it lowers the measured coverage. The guide
+    // taught only the first, and its unit test PINNED the false claim.
+    // Measured live: 48 of 48 observed abstention rows carry an empty
+    // answer, so the second case is the common one.
     expect(bodyText, 'a failed row is NOT handed to the judge').toContain('NOT handed to the judge');
     expect(bodyText, 'a failed row is never counted as a zero').toContain('never counted as a zero');
-    expect(bodyText, 'an abstention IS still handed to the judge').toContain('still handed to the judge');
+    expect(bodyText, 'a judged decline IS handed to the judge').toContain('handed to the judge');
     expect(bodyText, 'and its zeros are in the averages').toContain('zeros ARE counted in the averages');
+    expect(bodyText, 'an unjudged decline was never handed to the judge').toContain('declined — not judged');
+    expect(bodyText, 'the two declines are told apart').toContain('A DECLINE is not one thing but two');
 
     // The RETRACTED claims must be gone. A guide that says the opposite
     // is worse than no guide at all.
@@ -145,6 +163,12 @@ test.describe('the RAGAS guide documents what each error state does to the resul
     expect(bodyText, 'a failed row is NOT declared as judged').not.toMatch(
       /The row is still handed to the judge, which scores an empty answer/i
     );
+    // And the unconditional "a decline still has an answer" — false for the
+    // empty-answer decline.
+    expect(bodyText, 'a decline is NOT declared always judged').not.toMatch(/DECLINED still has an answer/i);
+
+    // An out-of-scope control is outside the means and the bar.
+    expect(bodyText, 'a control is outside the means').toContain('never inside a mean');
 
     await page.screenshot({ path: 'test-results/ragas-guide-errors.png', fullPage: false });
     await context.close();

@@ -3300,3 +3300,12 @@ status: RESOLVED in MR !343 follow-up commit (test file deleted 2026-09-25)
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-retriever-multigraph-fanout-rrf.md`
   summary: `.claude/dora.json` is untracked and not gitignored (DORA tooling config with repo path/host/project id) — decide commit-vs-ignore.
   evidence: Pre-existing before the story 1-1 baseline commit e377016de (present in the conversation-start git status); pollutes every `git status` on the branch; not caused by this change (BH-3, step-04 review loop 0).
+
+---
+
+## Deferred from: code review of SPEC-okf-ragas-benchmarking (2026-10-25)
+
+- **`failure-attribution.md`'s attribution matrix has no `answer` stage** — the code now emits `stage: 'answer'` for a row that produced no answer (`ragas-suite-service.js:3188-3200`), but the companion matrix defines exactly six stages (Routing, Corpus, Reranker, LLM, Judge, Abstention). The code half is the right change — it replaced a false "metric below threshold" claim — so only the companion sync is deferred, and it is worth doing in the same MR. Deferred because the fix edits a spec companion rather than the code under review.
+  **RESOLVED 2026-10-25 in the same MR as the code change** — the matrix now carries the `Answer` and `Unmeasured` stages, so the contract and the code agree. Leaving the spec contradicting the implementation would have been the defect, not the fix, so the deferral was lifted rather than honoured.
+- **The two new operator scripts have no tests and no CI job** — `scripts/okf-routing-lab/ragas-regenerate-entry.js` mutates live suite entries through `updateSuiteRows`, and `ragas-compare-runs.js` is read-only; neither has a test file, and `scripts/` has no CI lane. Operator-only tooling whose failure mode is a wrong benchmark entry, not a product outage. Pre-existing posture for `scripts/okf-routing-lab/`, not caused by this change.
+- **`_bmad/_config/custom/workflows/common/find-prd.yaml` filters worktrees with an unsubstituted pattern** — the FILTER matches `branch matches "feat/{prd_key}/prd"` against the raw config value, so it matches no real branch and the workflow stops with "FILTER no match on where" before it can select a story. Pre-existing in the team's BMAD workflow files (verified 2026-10-25 while running `bmad-code-review`), outside this change's scope. Fix: substitute the resolved `prd_key` into the pattern before the FILTER.

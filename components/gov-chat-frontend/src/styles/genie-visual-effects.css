@@ -638,7 +638,9 @@ html[data-visual='on'] .genie-living-intelligence .chatbot-container::after {
   right: 0;
   bottom: 0;
   height: clamp(120px, 22vh, 260px);
-  background: var(--visual-waves) bottom / 100% auto no-repeat;
+  /* Stretch the artwork to the band exactly: sized to the width alone it
+     outruns the band on wide viewports and its top edge shears off. */
+  background: var(--visual-waves) bottom / 100% 100% no-repeat;
   opacity: 0.72;
   pointer-events: none;
   z-index: -1;

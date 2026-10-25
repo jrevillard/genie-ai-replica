@@ -556,10 +556,15 @@ describe('ChatBotComponent', () => {
       });
       await wrapper.vm.$nextTick();
 
+      // The stream completes so the turn carries its queryId — the score
+      // renders inside the actions row, which the queryId gates.
+      capturedCallbacks.onDone({ queryId: 'q-conf-1' });
+      await wrapper.vm.$nextTick();
+
       const lastBot = vm.chatMessages[vm.chatMessages.length - 1];
       expect(lastBot.isGrounded).toBe(true);
       expect(lastBot.confidenceScore).toBe(0.92);
-      expect(wrapper.find('.confidence-score').exists()).toBe(true);
+      expect(wrapper.find('.answer-actions .confidence-score').exists()).toBe(true);
       expect(wrapper.find('.answer-warning').exists()).toBe(false);
     });
   });

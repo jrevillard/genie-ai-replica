@@ -185,7 +185,9 @@
                     target="_blank"
                     rel="noopener"
                   >
-                    <span class="answer-source-card__icon"><FileText :size="16" aria-hidden="true" /></span>
+                    <span class="answer-source-card__icon">
+                      <component :is="sourceIconName(d)" :size="16" aria-hidden="true" />
+                    </span>
                     <span class="answer-source-card__body">
                       <span class="answer-source-card__title">{{ d.title }}</span>
                       <span class="answer-source-card__meta">{{ docMeta(d) }}</span>
@@ -246,11 +248,14 @@
                   <Check v-if="msg.copied" :size="15" aria-hidden="true" />
                   <Copy v-else :size="15" aria-hidden="true" />
                 </button>
-              </div>
-              <!-- The confidence percentage is a state, not an action —
-                   it renders with the card even when nothing is rateable. -->
-              <div v-if="msg.confidenceScore != null && msg.isGrounded !== false" class="bot-message-meta">
-                <span class="confidence-score">
+                <!-- The confidence percentage is a state, not an action —
+                     parked at the end of the row. It steps aside when the
+                     answer is ungrounded (no score to show). -->
+                <span
+                  v-if="msg.confidenceScore != null && msg.isGrounded !== false"
+                  class="confidence-score"
+                  data-testid="confidence-score"
+                >
                   <Brain :size="14" aria-hidden="true" />
                   <span>{{ $t('chatbot.confidence') }}: {{ (msg.confidenceScore * 100).toFixed(0) }}%</span>
                 </span>
@@ -438,6 +443,9 @@ import {
   Copy,
   ExternalLink,
   FileText,
+  FileCode,
+  File,
+  FileSpreadsheet,
   Loader2,
   MessageSquareQuote,
   Sparkles,
@@ -448,7 +456,7 @@ import {
   User,
   X
 } from '@lucide/vue';
-import { formatFileSize } from '../utils/fileUtils.js';
+import { formatFileSize, fileTypeIcon } from '../utils/fileUtils.js';
 import documentFileService from '../services/documentFileService';
 import { eventBus } from '../eventBus.js';
 import notificationService from '../services/notificationService';
@@ -579,6 +587,9 @@ export default {
     ChevronUp,
     ExternalLink,
     FileText,
+    FileCode,
+    File,
+    FileSpreadsheet,
     Loader2,
     Sparkles,
     User,
@@ -927,6 +938,12 @@ export default {
   },
 
   methods: {
+    // The icon family of a source card, from the file's own extension —
+    // the repository type label when the fetch landed, the name otherwise.
+    sourceIconName(doc) {
+      return fileTypeIcon(doc._type || doc.fileName || doc.title || doc.type);
+    },
+
     // The "TYPE · size" line of a source card. The repository fields are
     // fetched once where the sources arrive (onMetadata) onto the reactive
     // doc objects; this is only the formatter, degrading to the type alone
@@ -1518,7 +1535,7 @@ export default {
                 fileName: doc.file_name,
                 type: doc.url?.split('.').pop().toUpperCase() || 'LINK',
                 size: 0,
-                url: doc.url,
+                url: doc.url || (doc.document_id ? `/api/files/${doc.document_id}/download` : ''),
                 score: doc.score,
                 categoryLabel: doc.categoryLabel,
                 serviceLabels: doc.serviceLabels
@@ -2961,13 +2978,6 @@ export default {
   padding: var(--space-xs) 0;
 }
 
-.bot-message-meta {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-  align-items: flex-start;
-}
-
 .confidence-score {
   font-size: var(--text-sm);
   color: var(--muted-soft);
@@ -2977,6 +2987,9 @@ export default {
   display: flex;
   align-items: center;
   gap: var(--space-xs);
+  /* The score parks at the end of the actions row instead of taking a
+     row of its own. */
+  margin-left: auto;
 }
 
 /* Quick Help Overlay */

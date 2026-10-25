@@ -86,6 +86,12 @@ test.describe('Conversation V1', () => {
       () => getComputedStyle(document.querySelector('.chatbot-container'), '::after').bottom
     );
     expect(after, 'the wave must not scroll with the messages').toBe(before.bottom);
+    // The artwork stretches to its band exactly — sized by width alone it
+    // outruns the band on wide viewports and shears at the top.
+    const waveSize = await page.evaluate(
+      () => getComputedStyle(document.querySelector('.chatbot-container'), '::after').backgroundSize
+    );
+    expect(waveSize, 'the wave fills its band on wide screens').toBe('100% 100%');
     // Layer-off: the paint goes, the layout stays.
     const boxes = () =>
       page.evaluate(() => {
@@ -188,7 +194,6 @@ test.describe('Conversation — sources', () => {
               document_id: 'doc-1',
               document_name: 'National ID Application Guide',
               file_name: 'guide.pdf',
-              url: '/api/files/doc-1/download',
               score: 0.91
             }
           ]
@@ -211,6 +216,12 @@ test.describe('Conversation — sources', () => {
     const open = await state();
     expect(open.n, 'sources render as cards').toBeGreaterThan(0);
     expect(open.open, 'open by default').toBe(true);
+    // The pipeline ships no url — the card builds the repository link from
+    // the document id, so the anchor never opens empty.
+    const href = await page.evaluate(() =>
+      document.querySelector('[data-testid^="answer-source-card-"]')?.getAttribute('href')
+    );
+    expect(href, 'the card links into the repository by id').toBe('/api/files/doc-1/download');
     await page.locator('[data-testid="answer-sources-toggle"]').click();
     expect((await state()).open, 'the section collapses').toBe(false);
     await ctx.close();

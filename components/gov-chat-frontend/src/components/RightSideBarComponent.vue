@@ -102,9 +102,20 @@
 <script>
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { formatFileSize } from '../utils/fileUtils.js';
+import { formatFileSize, fileTypeIcon } from '../utils/fileUtils.js';
 import DsStateDisplay from './ds/StateDisplay.vue';
-import { Files, FileText, HelpCircle, ChevronUp, ChevronDown, Globe, FileSpreadsheet, FileImage } from '@lucide/vue';
+import {
+  Files,
+  FileText,
+  FileCode,
+  File,
+  HelpCircle,
+  ChevronUp,
+  ChevronDown,
+  Globe,
+  FileSpreadsheet,
+  FileImage
+} from '@lucide/vue';
 import DsCard from './ds/Card.vue';
 import SidebarHandle from './SidebarHandle.vue';
 import { SIDEBAR_DEFAULTS, SIDEBAR_MIN_WIDTHS, SIDEBAR_MAX_WIDTHS } from '../composables/sidebarLayout.js';
@@ -116,6 +127,8 @@ export default {
     DsCard,
     SidebarHandle,
     FileText,
+    FileCode,
+    File,
     HelpCircle,
     ChevronUp,
     ChevronDown,
@@ -306,19 +319,10 @@ export default {
       return isHttp && !isPlaceholder;
     },
 
-    // Added missing method to fix runtime error
     documentIconClass(doc) {
       if (!doc) return 'FileText';
       if (this.isExternalUrl(doc.url)) return 'Globe';
-      if (doc.fileName) {
-        const n = doc.fileName.toLowerCase();
-        if (n.endsWith('.pdf')) return 'FileText';
-        if (n.endsWith('.doc') || n.endsWith('.docx')) return 'FileText';
-        if (n.endsWith('.xls') || n.endsWith('.xlsx')) return 'FileSpreadsheet';
-        if (n.endsWith('.ppt') || n.endsWith('.pptx')) return 'FileText';
-        if (n.endsWith('.jpg') || n.endsWith('.png') || n.endsWith('.jpeg')) return 'FileImage';
-      }
-      return 'FileText';
+      return fileTypeIcon(doc.fileName || doc.title);
     },
 
     async openDocument(doc) {

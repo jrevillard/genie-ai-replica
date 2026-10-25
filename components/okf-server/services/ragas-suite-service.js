@@ -448,6 +448,15 @@ async function cancelSuiteJobs(suiteKey, why) {
   await Promise.all(jobIds.map((jid) => cancelSidecarJob(jid, why)));
 }
 
+/** Cancel the sidecar jobs of ONE run (best-effort) — a re-score cancel must
+ * not take down a concurrent generation of the same suite. */
+async function cancelRunJobs(runKey, why) {
+  const jobIds = [...activeSidecarJobs.entries()]
+    .filter(([, meta]) => meta && meta.run_key === runKey)
+    .map(([jid]) => jid);
+  await Promise.all(jobIds.map((jid) => cancelSidecarJob(jid, why)));
+}
+
 /**
  * Poll a sidecar job; on failure, cancel it (we are its only consumer — if
  * we are throwing, nobody is left to collect the result).
@@ -918,10 +927,26 @@ async function generateAnswer(query, contexts) {
   return { answer, abstained };
 }
 
-/** What the run's fidelity block records about the ANSWER leg — mirrors the
- * openai-only guard the answer call itself applies, so the record never
- * claims a config steered answers when it couldn't. */
-async function answerFidelity() {
+/** What the run's fidelity block records about the ANSWER leg.
+ *
+ * SERVE mode answers through the citizen pipeline (chatqna), which serves
+ * the DEPLOYMENT chat model. The `ragas_answers` config is consulted ONLY
+ * by the WHATIF answer leg (`generateAnswer`); the served call carries no
+ * model at all. Recording the config in serve mode therefore claimed a
+ * model that never answered — live 2026-10-25, a serve run recorded
+ * "glm-5.3-flash" while the answers came from the deployment chat model.
+ * The record must say what answered.
+ *
+ * The deployment model is read from the env: the containers carry
+ * VLLM_MODEL_ID, and VLLM_LLM_MODEL_ID is the deployment's other spelling
+ * of the same knob (8-7 found the two names out of step). */
+async function answerFidelity(opts = {}) {
+  const deploymentChat = () => ({
+    source: 'deployment-chat',
+    config: null,
+    model: process.env.VLLM_LLM_MODEL_ID || process.env.VLLM_MODEL_ID || null
+  });
+  if (opts.serveMode) return deploymentChat();
   try {
     const ovr = await modelConfigService.resolveModelOverride({ service: 'ragas_answers' });
     if (ovr && ovr.provider === 'openai') {
@@ -930,7 +955,7 @@ async function answerFidelity() {
   } catch {
     /* resolution failure — the deployment answerer applies */
   }
-  return { source: 'deployment-chat', config: null, model: process.env.VLLM_LLM_MODEL_ID || null };
+  return deploymentChat();
 }
 
 // ---------- suite generation ----------------------------------------------
@@ -941,7 +966,10 @@ function loadDoc(db, key, code, what) {
     .document(key)
     .catch((e) => {
       if (e && (e.code === 404 || e.statusCode === 404 || /not found/i.test(e.message || ''))) {
-        const err = new Error(`${what} ${key} not found`);
+        // `what` already names the key (every call site passes it), so the
+        // key is NOT appended again — the old message read "run rrX for suite
+        // rsY rrX not found" (David saw it in the console, 2026-10-25).
+        const err = new Error(`${what} not found`);
         err.code = code;
         err.status = 404;
         throw err;
@@ -1129,14 +1157,27 @@ const userCancelledRun = new Set(); // run_keys the user asked to stop
  */
 async function cancelSuiteRun(repoId, suiteKey, runKey) {
   const inflight = runInFlight.get(suiteKey);
-  if (!inflight || inflight !== runKey) {
+  const isRun = Boolean(inflight) && inflight === runKey;
+  // A RE-SCORE is a run too — it lives in its own map (the source run is
+  // never touched), so the cancel must look for it there as well. Without
+  // this a re-score was uncancellable: the endpoint answered 409 "no such
+  // run is executing" while the judge leg kept paying the GPU (David
+  // 2026-10-25: "I cannot stop the re-scoring!!!").
+  const isRescore = rescoreInFlight.has(runKey);
+  if (!isRun && !isRescore) {
     const err = new Error('no such run is executing for this suite');
     err.code = 'NO_RUN_IN_FLIGHT';
     err.status = 409;
     throw err;
   }
   userCancelledRun.add(runKey);
-  await cancelSuiteJobs(suiteKey, `run cancelled by user (${runKey})`);
+  if (isRescore) {
+    // Cancel THIS re-score's sidecar job only — a concurrent generation or
+    // run of the same suite must not be killed by a re-score cancel.
+    await cancelRunJobs(runKey, `re-score cancelled by user (${runKey})`);
+  } else {
+    await cancelSuiteJobs(suiteKey, `run cancelled by user (${runKey})`);
+  }
   logger.info('ragas-suite.run_cancelled_by_user', { repo_id: repoId, suite_key: suiteKey, run_key: runKey });
   return { cancelled: true, run_key: runKey };
 }
@@ -1575,7 +1616,9 @@ async function deleteSuite(repoId, suiteKey) {
  * worker would leave the run promise writing into a vanished document.
  */
 async function deleteRun(repoId, suiteKey, runKey) {
-  if (runInFlight.get(suiteKey) === runKey) {
+  // A live RE-SCORE is executing too — deleting its doc mid-flight would
+  // leave the panel polling a key that no longer exists (the 404 spiral).
+  if (runInFlight.get(suiteKey) === runKey || rescoreInFlight.has(runKey)) {
     const err = new Error('this run is executing — cancel it first');
     err.code = 'RUN_IN_FLIGHT';
     err.status = 409;
@@ -1677,9 +1720,44 @@ async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
   const effectiveJudge = judgeOverride && judgeOverride.model ? judgeOverride : null;
   const newRunKey = `rr${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
   const startedAt = new Date().toISOString();
+  // A re-score IS a run: it gets a run doc IMMEDIATELY, with status 'running',
+  // so the panel can list it, watch its progress and cancel it (David
+  // 2026-10-25: "it also cannot be tracked and does not connect to the UI with
+  // a progress bar… I cannot stop the re-scoring"). Before this the doc was
+  // written only at the END of the judge leg, so every poll 404'd on a key
+  // that did not exist yet, and the cancel endpoint could not find the run.
+  const placeholder = {
+    _key: newRunKey,
+    repo_id: repoId,
+    kind: 'ragas_run',
+    status: 'running',
+    suite_key: suiteKey,
+    created_at: startedAt,
+    created_by: (ctx.actor && ctx.actor.user_id) || 'system',
+    metrics,
+    payload: {
+      // The lineage is visible from the FIRST poll, not only once the run
+      // lands: this run re-scored that one.
+      fidelity: {
+        rescore_of: runKey,
+        rescore_note: `re-scoring ${runKey} with a different judge — the answers are identical`
+      }
+    }
+  };
+  await db.collection(COLLECTION).save(placeholder);
+  // The progress is mirrored into the run doc — the panel polls the DOC, not
+  // this process's memory. Throttled, like the run path's progress write.
+  const PROGRESS_WRITE_MIN_MS = 2000;
+  let lastProgressWrite = 0;
   const report = (p) => {
     const inflight = rescoreInFlight.get(newRunKey);
     if (inflight) inflight.progress = p;
+    const now = Date.now();
+    if (now - lastProgressWrite < PROGRESS_WRITE_MIN_MS) return;
+    lastProgressWrite = now;
+    db.collection(COLLECTION)
+      .update(newRunKey, { progress: p, updated_at: new Date().toISOString() })
+      .catch((e) => logger.warn('ragas-suite.rescore.progress_write_failed', { run_key: newRunKey, error: e.message }));
   };
   rescoreInFlight.set(newRunKey, { source_run_key: runKey, progress: { phase: 'judge', done: 0, total: 1 } });
   // A re-score is a JUDGE-only operation: the answers are copied verbatim.
@@ -1719,6 +1797,16 @@ async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
         { repo_id: repoId, suite_key: suiteKey, run_key: newRunKey }
       );
       const body = await started.json();
+      // A cancel that landed while the SUBMIT was still in flight: the sidecar
+      // job is not registered yet, so the cancel endpoint had nothing to
+      // delete. Honour the intent here rather than letting the judge leg run
+      // to the end for a run the user already stopped.
+      if (userCancelledRun.has(newRunKey)) {
+        await cancelSidecarJob(body.job_id, `re-score cancelled by user (${newRunKey})`);
+        const cancelled = new Error('re-score cancelled by user');
+        cancelled.code = 'RAGAS_JOB_CANCELLED';
+        throw cancelled;
+      }
       const evaluation = await pollSidecarJobOwned(
         body.job_id,
         {
@@ -1793,7 +1881,7 @@ async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
           }
         }
       };
-      await db.collection(COLLECTION).save(newDoc);
+      await db.collection(COLLECTION).replace(newRunKey, newDoc);
       logger.info('ragas-suite.run_rescored', {
         repo_id: repoId,
         suite_key: suiteKey,
@@ -1803,18 +1891,50 @@ async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
         metrics: metrics.join(',')
       });
       return newDoc;
+    } catch (e) {
+      // The re-score must LEAVE A DOC behind whatever happened — a run the
+      // panel cannot find is the 404 spiral this whole path was built to
+      // avoid. A user cancel lands as 'cancelled' (never 'failed': the same
+      // rule the run path follows), anything else as 'failed'.
+      const cancelled = e.code === 'RAGAS_JOB_CANCELLED' || userCancelledRun.has(newRunKey);
+      await db
+        .collection(COLLECTION)
+        .replace(newRunKey, {
+          ...placeholder,
+          status: cancelled ? 'cancelled' : 'failed',
+          error: cancelled
+            ? { code: 'RAGAS_JOB_CANCELLED', status: null, message: 're-score cancelled by user' }
+            : { code: e.code || 'RESCORE_FAILED', status: e.status || null, message: e.message }
+        })
+        .catch((persistErr) =>
+          logger.error('ragas-suite.rescore.terminal_persist_failed', {
+            run_key: newRunKey,
+            error: persistErr.message
+          })
+        );
+      throw e;
     } finally {
       rescoreInFlight.delete(newRunKey);
     }
   })();
-  done.catch((e) =>
+  done.catch((e) => {
+    // A cancel is not a failure: it gets its own log line so an operator
+    // reading the log does not read it as a broken re-score.
+    if (e && e.code === 'RAGAS_JOB_CANCELLED') {
+      logger.info('ragas-suite.rescore.cancelled_by_user', {
+        repo_id: repoId,
+        suite_key: suiteKey,
+        run_key: newRunKey
+      });
+      return;
+    }
     logger.error('ragas-suite.rescore.async_failed', {
       repo_id: repoId,
       suite_key: suiteKey,
       run_key: newRunKey,
       error: e.message
-    })
-  );
+    });
+  });
   return { run_key: newRunKey, source_run_key: runKey, status: 'running', done };
 }
 
@@ -2241,7 +2361,7 @@ async function runSuite(repoId, suiteKey, opts = {}) {
                   graphs: graphNames
                 },
             judge: null,
-            answers: await answerFidelity()
+            answers: await answerFidelity({ serveMode })
           }
         }
       };
@@ -2414,7 +2534,7 @@ async function runSuite(repoId, suiteKey, opts = {}) {
           // Which model answered (David 2026-10-20): the deployment's chat
           // by default; a config explicitly checked for benchmark answers
           // takes over — and the benchmark then measures THAT model.
-          answers: await answerFidelity()
+          answers: await answerFidelity({ serveMode })
         }
       }
     };
@@ -2491,7 +2611,10 @@ function summarizeRun(suite, results, metrics) {
 async function getRunSuite(repoId, suiteKey, runKey) {
   const db = await dbService.getConnection();
   await ensureCollection(db);
-  if (runInFlight.get(suiteKey) === runKey) {
+  // A re-score is live in its own map — without this the poll fell through
+  // to the doc branch, found a 'running' doc and declared it INTERRUPTED
+  // (the "the worker died" verdict), which is exactly wrong.
+  if (runInFlight.get(suiteKey) === runKey || rescoreInFlight.has(runKey)) {
     const live = await loadDoc(db, runKey, 'RUN_NOT_FOUND', `run ${runKey}`).catch(() => null);
     return { run_key: runKey, suite_key: suiteKey, status: 'running', progress: (live && live.progress) || null };
   }
@@ -3732,5 +3855,9 @@ module.exports = {
   exportSuiteXlsx,
   importSuiteXlsx,
   exportResultsXlsx,
-  sweepInterruptedRuns
+  sweepInterruptedRuns,
+  // Exported for the unit test that pins WHICH model the run claims
+  // answered (the serve mode recorded a model that never answered —
+  // David, 2026-10-25).
+  answerFidelity
 };

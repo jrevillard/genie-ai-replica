@@ -656,6 +656,8 @@ export default {
   },
   brandName: 'Genie AI: Asisten Digital Pemerintah Anda',
   nav: {
+    statusOnline: 'Daring',
+    statusOffline: 'Luring',
     menu: 'Menu',
     analytics: 'Analitik',
     userProfile: 'Profil Pengguna',

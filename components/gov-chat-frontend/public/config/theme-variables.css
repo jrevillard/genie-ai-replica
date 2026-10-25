@@ -29,6 +29,9 @@
   --accent-hover: oklch(from var(--brand) calc(l - 0.04) c h);
   --accent-muted: oklch(from var(--brand) l c h / 0.12);
   --accent-fg: oklch(from var(--brand) min(calc(l + 0.56), 0.98) calc(c * 0.1) h);
+  /* Same pairing, lifted past the 4.5:1 AA floor for small text
+     (initials on the accent circle). */
+  --accent-fg-strong: color-mix(in oklch, var(--accent-fg) 60%, white);
   --accent-secondary: oklch(from var(--brand) max(calc(l - 0.07), 0.05) c calc(h + 0));
 
   /* --- Navbar (light: a pale wash of the brand, overridable via config) ---
@@ -156,6 +159,7 @@ body[data-theme='dark'],
   --accent-hover: oklch(from var(--brand) calc(l + 0.14) calc(c * 0.9) h);
   --accent-muted: oklch(from var(--brand) calc(l + 0.2) c h / 0.15);
   --accent-fg: oklch(from var(--brand) max(calc(l - 0.32), 0.1) c h);
+  --accent-fg-strong: var(--accent-fg);
   --accent-secondary: oklch(from var(--brand) max(calc(l + 0.1), 0.05) c calc(h + 0));
 
   /* --- Navbar (dark mode) ---
@@ -224,6 +228,7 @@ body[data-theme='dark'],
     --accent-hover: oklch(from var(--brand) calc(l + 0.14) calc(c * 0.9) h);
     --accent-muted: oklch(from var(--brand) calc(l + 0.2) c h / 0.15);
     --accent-fg: oklch(from var(--brand) max(calc(l - 0.32), 0.1) c h);
+  --accent-fg-strong: var(--accent-fg);
     --accent-secondary: oklch(from var(--brand) max(calc(l + 0.1), 0.05) c calc(h + 0));
 
     --navbar-bg: var(--brand);

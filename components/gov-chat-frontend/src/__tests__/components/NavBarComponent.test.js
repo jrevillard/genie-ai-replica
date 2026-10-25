@@ -14,6 +14,7 @@ const { createAuthenticatedState, createUnauthenticatedState } = require('../fix
 // Component import
 // ---------------------------------------------------------------------------
 const NavBarComponent = require('../../components/NavBarComponent.vue').default;
+const statusModule = require('../../store/modules/status.js').default;
 
 // ---------------------------------------------------------------------------
 // Store factories
@@ -77,6 +78,7 @@ function createUnauthenticatedStore() {
 
 function createNavBarWrapper({ store, props = {} } = {}) {
   const defaultStore = store || createAdminStore();
+  defaultStore.registerModule('status', { ...statusModule, state: () => ({ ...statusModule.state }) });
   return mount(NavBarComponent, {
     props: {
       isSidebarOpen: true,

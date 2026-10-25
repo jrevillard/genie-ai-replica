@@ -59,38 +59,52 @@
            unsaved changes; saved history is never removed by closing. -->
       <div class="conversation-header">
         <span class="conversation-header__title" data-testid="conversation-header-title">
-          {{ currentChatTitle || translate('chatbot.justChat', 'Just Chat') }}
+          {{ conversationTitle }}
         </span>
-        <button
-          type="button"
-          class="conversation-header__close"
-          :title="translate('chatbot.closeConversation', 'Close conversation')"
-          :aria-label="translate('chatbot.closeConversation', 'Close conversation')"
-          data-testid="conversation-header-close"
-          @click="startNewChat"
-        >
-          <X :size="16" aria-hidden="true" />
-        </button>
-      </div>
-      <!-- System Status Panel -->
-      <!-- D4: one compact strip; the response time rides the pill's title,
-           and the offline case carries an accessible explanation. -->
-      <div class="system-status-panel" :data-status="systemStatus.online ? 'online' : 'offline'">
-        <div class="status-left" :role="systemStatus.online ? null : 'status'">
-          <DsPill
-            :variant="systemStatus.online ? 'success' : 'danger'"
-            :title="
-              systemStatus.online && systemStatus.lastResponseTime !== null
-                ? `${systemStatus.lastResponseTime}ms`
-                : null
-            "
-            >{{
-              systemStatus.online ? translate('analytics.status.online') : translate('analytics.status.offline')
-            }}</DsPill
+        <div class="conversation-header__actions">
+          <button
+            type="button"
+            class="conversation-header__action"
+            :title="translate('chatbot.newChat')"
+            :aria-label="translate('chatbot.newChat')"
+            data-testid="conversation-header-new-chat"
+            @click="startNewChat"
           >
-          <div v-if="!systemStatus.online && systemStatus.errorMessage" class="status-error-message">
-            {{ systemStatus.errorMessage }}
-          </div>
+            <SquarePlus :size="16" aria-hidden="true" />
+          </button>
+          <button
+            v-if="chatMessages.length > 0"
+            type="button"
+            class="conversation-header__action"
+            :title="translate('chatbot.saveChat')"
+            :aria-label="translate('chatbot.saveChat')"
+            :disabled="isSaving"
+            data-testid="conversation-header-save"
+            @click="saveChatToHistory"
+          >
+            <Save :size="16" aria-hidden="true" />
+          </button>
+          <button
+            v-if="chatMessages.length > 0"
+            type="button"
+            class="conversation-header__action"
+            :title="translate('chatbot.exportChat')"
+            :aria-label="translate('chatbot.exportChat')"
+            data-testid="conversation-header-export"
+            @click="openExportDialog"
+          >
+            <FileDown :size="16" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            class="conversation-header__close"
+            :title="translate('chatbot.closeConversation', 'Close conversation')"
+            :aria-label="translate('chatbot.closeConversation', 'Close conversation')"
+            data-testid="conversation-header-close"
+            @click="startNewChat"
+          >
+            <X :size="16" aria-hidden="true" />
+          </button>
         </div>
       </div>
       <!-- Context Panel for selected tree nodes -->
@@ -158,7 +172,7 @@
                 <!-- eslint-disable-next-line vue/no-v-html -->
                 <div v-else v-html="renderMarkdown(msg.content)"></div>
               </div>
-              <!-- D2: per-answer collapsible sources -->
+              <!-- Per-answer collapsible sources -->
               <div v-if="msg.sources && msg.sources.length" class="answer-sources" data-testid="answer-sources">
                 <button
                   type="button"
@@ -333,32 +347,15 @@
           v-model="newMessage"
           input-id="chat-composer-input"
           :placeholder="translate('chatbot.placeholder')"
-          :show-actions="false"
+          :show-actions="true"
+          :attach-title="translate('chatbot.composerAttachTitle')"
+          :mic-title="translate('chatbot.composerMicTitle')"
           :max-lines="5"
-          :save-title="translate('chatbot.saveChat')"
-          :export-title="translate('chatbot.exportChat')"
           :send-title="translate('chatbot.composerSendTitle')"
-          :show-save="chatMessages.length > 0"
-          :show-export="chatMessages.length > 0"
-          :is-saving="isSaving"
           data-testid="chat-composer"
           @send="sendMessage"
-          @save="saveChatToHistory"
-          @export="openExportDialog"
           @focus="handleTextareaFocus"
         >
-          <template #leading>
-            <button
-              type="button"
-              class="composer-leading-btn"
-              :title="translate('chatbot.newChat')"
-              :aria-label="translate('chatbot.newChat')"
-              data-testid="composer-new-chat-btn"
-              @click="startNewChat"
-            >
-              <SquarePlus :size="20" aria-hidden="true" />
-            </button>
-          </template>
         </ChatComposer>
       </div>
       <!-- Feedback Dialog -->
@@ -442,6 +439,8 @@
 import {
   AlertTriangle,
   Brain,
+  FileDown,
+  Save,
   ChevronDown,
   ChevronUp,
   Copy,
@@ -581,6 +580,8 @@ export default {
   name: 'ChatBotComponent',
   components: {
     AlertTriangle,
+    FileDown,
+    Save,
     Brain,
     ChevronDown,
     ChevronUp,
@@ -636,14 +637,11 @@ export default {
       currentCategoryId: null,
       serviceCategories: [], // This will now hold the transformed tree data
       chatHistoryService: chatHistoryService,
-      systemStatus: {
-        online: true,
-        lastResponseTime: null, // Replaced avgResponseTime
-        errorMessage: '', // Added for error messages
-        lastUpdated: new Date()
-      },
       quickHelpButtons: [],
       showNewChatConfirm: false,
+      unsavedLeaveGuard: null,
+      leaveConfirmed: false,
+      pendingLeave: null,
       newChatDialog: {
         title: '',
         message: '',
@@ -697,6 +695,21 @@ export default {
     userAvatarUrl() {
       return this.authUser.avatarUrl || '';
     },
+    // The assistant's reachability lives app-wide (the navbar pill renders
+    // it on every page); the chat is usually the component that learns it.
+    systemStatus() {
+      return this.$store.getters['status/status'];
+    },
+
+    conversationTitle() {
+      // A saved conversation keeps its title; a QuickHelp-driven chat takes
+      // the option's own name; the plain just-chat surface keeps its label.
+      if (this.currentChatTitle) return this.currentChatTitle;
+      const item = this.selectedContextItems.find((i) => i.source === 'quickHelp');
+      if (item) return item.service;
+      return this.translate('chatbot.justChat', 'Just Chat');
+    },
+
     userName() {
       return this.authUser.name || this.authUser.preferred_username || '';
     },
@@ -709,12 +722,9 @@ export default {
         .join('');
     },
     userAvatarStyle() {
-      // A stable colour per name, drawn from the DS accents — never a raw hex.
-      const n = this.userName;
-      const palette = ['var(--accent)', 'var(--accent-secondary)', 'var(--info)', 'var(--success)'];
-      let h = 0;
-      for (let i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) >>> 0;
-      return { background: palette[h % palette.length] };
+      // One accent ground for everyone — the reference shows the user's
+      // circle in the brand accent, not a per-name hash.
+      return { background: 'var(--accent)' };
     },
 
     // The heading's brand comes from the runtime config through a slot,
@@ -832,6 +842,28 @@ export default {
   },
 
   mounted() {
+    // Leaving the page with an unsaved chat would lose it — the guard
+    // reuses the unsaved-changes dialog; a confirmed leave resumes the
+    // navigation it interrupted.
+    // Test mounts may provide a router stub without guards.
+    if (this.$router?.beforeEach) {
+      this.unsavedLeaveGuard = this.$router.beforeEach((to) => {
+        if (!this.hasUnsavedChanges() || this.leaveConfirmed) {
+          this.leaveConfirmed = false;
+          return true;
+        }
+        this.pendingLeave = to.fullPath;
+        this.showNewChatConfirm = true;
+        this.newChatDialog = {
+          title: this.translate('chatbot.newChatTitle'),
+          message: this.translate('chatbot.unsavedChanges'),
+          confirmText: this.translate('chatbot.saveAndStartNew'),
+          cancelText: this.translate('chatbot.discardAndStartNew'),
+          secondaryText: this.translate('common.cancel')
+        };
+        return false;
+      });
+    }
     // Restore the right sidebar's persisted width and collapsed state.
     // The width is clamped on the way IN, not just on drag: a value
     // saved at 1920 px must not be applied blind at 1400 px, where it
@@ -887,6 +919,7 @@ export default {
   },
 
   beforeUnmount() {
+    if (this.unsavedLeaveGuard) this.unsavedLeaveGuard();
     window.removeEventListener('resize', this.handleResize);
     window.removeEventListener('storage', this.handleStorage);
     eventBus.$off('sidebar-left-width-changed', this.onLeftWidthChanged);
@@ -902,7 +935,7 @@ export default {
   },
 
   methods: {
-    // D2: the "TYPE · size" line of a source card. The repository fields are
+    // The "TYPE · size" line of a source card. The repository fields are
     // fetched once where the sources arrive (onMetadata) onto the reactive
     // doc objects; this is only the formatter, degrading to the type alone
     // when the repository does not answer.
@@ -1269,14 +1302,16 @@ export default {
     handleWelcomeSend() {
       const entry = this.composerEntry;
       this.selectedContextItems = this.selectedContextItems.filter((i) => i.source !== 'quickHelp');
-      if (entry) {
+      // Only a real knowledge-area entry becomes a context chip — the plain
+      // just-chat surface is not a domain, and a chip would promise one.
+      if (entry && entry.category) {
         this.selectedContextItems.push({
           service: entry.service,
           serviceLabels: [],
           serviceKey: entry.serviceKey || entry.id || entry.service,
           source: 'quickHelp',
           id: entry.id,
-          category: null,
+          category: entry.category,
           selected: true
         });
       }
@@ -1479,11 +1514,9 @@ export default {
             // false = generated from the LLM's own knowledge (no document basis).
             this.chatMessages[lastMessageIndex].isGrounded = metadata.is_grounded;
             if (metadata.responseTime) {
-              this.systemStatus.lastResponseTime = metadata.responseTime;
+              this.$store.commit('status/setResponseTime', metadata.responseTime);
             }
-            this.systemStatus.online = true;
-            this.systemStatus.errorMessage = '';
-            this.systemStatus.lastUpdated = new Date();
+            this.$store.commit('status/setOnline');
 
             if (metadata.source_documents && Array.isArray(metadata.source_documents)) {
               const newDocs = metadata.source_documents.map((doc) => ({
@@ -1501,7 +1534,7 @@ export default {
               const existingIds = new Set(this.relatedDocuments.map((d) => d.id));
               const uniqueNewDocs = newDocs.filter((d) => !existingIds.has(d.id));
               this.relatedDocuments.unshift(...uniqueNewDocs);
-              // D2: the sources belong to the answer that cites them — the
+              // The sources belong to the answer that cites them — the
               // sidebar keeps its accumulated view, the card keeps its own.
               this.chatMessages[lastMessageIndex].sources = newDocs;
               this.chatMessages[lastMessageIndex].sourcesOpen = true;
@@ -1550,10 +1583,7 @@ export default {
               this.chatMessages[lastMessageIndex].content = this.translate('chatbot.streamingError');
             }
 
-            this.systemStatus.lastResponseTime = null;
-            this.systemStatus.online = false;
-            this.systemStatus.errorMessage = error.message || this.translate('chatbot.processingError');
-            this.systemStatus.lastUpdated = new Date();
+            this.$store.commit('status/setOffline', error.message || this.translate('chatbot.processingError'));
             notificationService.error(this.translate('chatbot.streamingError'));
           }
         });
@@ -1566,10 +1596,7 @@ export default {
         if (!this.chatMessages[lastMessageIndex].content) {
           this.chatMessages[lastMessageIndex].content = this.translate('chatbot.processingError');
         }
-        this.systemStatus.lastResponseTime = null;
-        this.systemStatus.online = false;
-        this.systemStatus.errorMessage = error.message || this.translate('chatbot.processingError');
-        this.systemStatus.lastUpdated = new Date();
+        this.$store.commit('status/setOffline', error.message || this.translate('chatbot.processingError'));
         notificationService.error(this.translate('chatbot.processingError'));
       }
       this.scrollToBottom();
@@ -1926,6 +1953,15 @@ export default {
         this.saveChatDialog.visible = false;
 
         eventBus.$emit('conversation-saved', conversation._key);
+
+        // The save was the leave-confirm's arm — resume the interrupted
+        // navigation once the chat is safely stored.
+        if (this.pendingLeave) {
+          this.leaveConfirmed = true;
+          const target = this.pendingLeave;
+          this.pendingLeave = null;
+          this.$router.push(target);
+        }
       } catch (error) {
         console.error('Error saving chat:', error);
         notificationService.error('Failed to save chat. Please try again.');
@@ -2045,6 +2081,14 @@ export default {
 
     async saveAndStartNewChat() {
       this.showNewChatConfirm = false;
+      if (this.pendingLeave) {
+        await this.saveCurrentChatBeforeLeave();
+        this.leaveConfirmed = true;
+        const target = this.pendingLeave;
+        this.pendingLeave = null;
+        this.$router.push(target);
+        return;
+      }
       try {
         if (this.conversationId || this.currentChatId) {
           await this.updateExistingChat();
@@ -2072,6 +2116,13 @@ export default {
 
     startNewChatConfirmed() {
       this.showNewChatConfirm = false;
+      if (this.pendingLeave) {
+        this.leaveConfirmed = true;
+        const target = this.pendingLeave;
+        this.pendingLeave = null;
+        this.$router.push(target);
+        return;
+      }
       this.chatMessages.splice(0, this.chatMessages.length, {
         sender: 'bot',
         content: this.getWelcomeMessage(),
@@ -2098,6 +2149,22 @@ export default {
 
     cancelNewChat() {
       this.showNewChatConfirm = false;
+      this.pendingLeave = null;
+    },
+
+    // The leave-confirm "save" arm: an existing conversation updates in
+    // place; a never-saved one opens the naming dialog and the navigation
+    // resumes when the save completes.
+    async saveCurrentChatBeforeLeave() {
+      if (this.conversationId || this.currentChatId) {
+        await this.updateExistingChat();
+        return;
+      }
+      this.saveChatDialog = {
+        visible: true,
+        title: this.generateChatTitle(),
+        folderId: 'default'
+      };
     },
 
     openExportDialog() {
@@ -2438,9 +2505,9 @@ export default {
 }
 
 .message-avatar__initials {
-  font-size: var(--text-xs);
+  font-size: var(--text-md);
   font-weight: 600;
-  color: var(--accent-fg);
+  color: var(--accent-fg-strong);
 }
 
 .message-avatar__silhouette {
@@ -2486,34 +2553,6 @@ export default {
 }
 
 /* System Status Panel */
-.system-status-panel {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border-light);
-  padding: 4px var(--space-md);
-  display: flex;
-  align-items: center;
-  font-size: var(--text-xs);
-}
-
-.status-left {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: var(--space-xs);
-  flex: 1;
-  overflow: hidden;
-}
-
-.status-error-message {
-  font-size: var(--text-sm);
-  color: var(--danger);
-  font-weight: 500;
-  margin-left: 18px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
 
 /* Context Panel Styles */
 .context-panel {
@@ -2608,7 +2647,7 @@ export default {
   border-radius: 0;
 }
 
-/* D4/D15: the ungrounded warning and the retryable error — both amber,
+/* The ungrounded warning and the retryable error — both amber,
    never red: an error is a state, not an accusation. */
 .answer-warning {
   display: flex;
@@ -2679,7 +2718,7 @@ export default {
   color: var(--accent);
 }
 
-/* D2: the per-answer collapsible sources. */
+/* The per-answer collapsible sources. */
 .answer-sources {
   border-top: 1px solid var(--border-light);
   padding-top: var(--space-sm);
@@ -3235,14 +3274,6 @@ export default {
   margin-bottom: var(--space-sm);
   font-weight: 500;
   color: var(--fg);
-}
-
-@media (max-width: 768px) {
-  .system-status-panel {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-sm);
-  }
 }
 
 /* The grid follows its container, not the viewport. The two fixed

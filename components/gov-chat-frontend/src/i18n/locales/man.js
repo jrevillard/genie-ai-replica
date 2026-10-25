@@ -645,6 +645,8 @@ export default {
   },
   brandName: 'Genie AI: I la Gomnati Baaralaa',
   nav: {
+    statusOnline: 'Hefti e ɗo',
+    statusOffline: 'Alaa e ɗo',
     menu: 'Katifol',
     analytics: 'Kibaro Lataramoo',
     userProfile: 'Moo-kibaroo',

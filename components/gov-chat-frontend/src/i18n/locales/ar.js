@@ -656,6 +656,8 @@ export default {
   },
   brandName: 'Genie AI: مساعدك الحكومي الرقمي',
   nav: {
+    statusOnline: 'متصل',
+    statusOffline: 'غير متصل',
     menu: 'القائمة',
     analytics: 'التحليلات',
     userProfile: 'ملف المستخدم',

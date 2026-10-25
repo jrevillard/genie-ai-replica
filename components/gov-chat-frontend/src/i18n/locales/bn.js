@@ -647,6 +647,8 @@ export default {
   },
   brandName: 'Genie AI: আপনার ডিজিটাল সরকারি সহকারী',
   nav: {
+    statusOnline: 'অনলাইন',
+    statusOffline: 'অফলাইন',
     menu: 'মেনু',
     analytics: 'অ্যানালিটিক্স',
     userProfile: 'ব্যবহারকারীর প্রোফাইল',

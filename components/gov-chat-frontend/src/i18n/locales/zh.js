@@ -651,6 +651,8 @@ export default {
   },
   brandName: 'Genie AI：您的数字政府助手',
   nav: {
+    statusOnline: '在线',
+    statusOffline: '离线',
     menu: '菜单',
     analytics: '分析',
     userProfile: '用户资料',

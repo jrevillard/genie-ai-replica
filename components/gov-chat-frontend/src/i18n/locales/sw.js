@@ -654,6 +654,8 @@ export default {
   },
   brandName: 'Genie AI: Msaidizi Wako wa Kiserikali wa Kidijitali',
   nav: {
+    statusOnline: 'Mtandaoni',
+    statusOffline: 'Nje ya mtandao',
     menu: 'Menyu',
     analytics: 'Takwimu',
     userProfile: 'Profaili',

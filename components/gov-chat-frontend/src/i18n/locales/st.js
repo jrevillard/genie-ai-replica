@@ -649,6 +649,8 @@ export default {
   },
   brandName: 'Genie AI: Mothusi wa hao wa Mmuso wa Digital',
   nav: {
+    statusOnline: 'In line',
+    statusOffline: 'Kantle ho line',
     menu: 'Lenane',
     analytics: 'Tshekatsheko',
     userProfile: 'Profaele ya Mosebedisi',

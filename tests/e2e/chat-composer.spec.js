@@ -180,21 +180,13 @@ test.describe('composer send pathway', () => {
     await page.waitForSelector('[data-testid="chat-composer"]', { timeout: 10000 });
     await expect(page.locator('.chat-message.user')).toContainText(probe, { timeout: 10000 });
 
-    // The "no label filter" observable the old "Just Chat" tile produced:
-    // a single pill is shown (the just-chat context item), with category
-    // null so the retriever sees serviceLabels = [] and no category filter.
-    // The pill is how the app surfaces "this query is unfiltered" — a
-    // numbered category pill would mean a filter IS active.
+    // "Just Chat" is not a knowledge domain — no context chip is fabricated
+    // for it. A pill here would present plain free chat as a filtered query.
     const pills = await page.evaluate(() => {
       const items = Array.from(document.querySelectorAll('.context-panel .context-items > *'));
       return items.map((el) => el.textContent.trim());
     });
-    expect(pills.length, `one active-context pill (just-chat) expected (got ${JSON.stringify(pills)})`).toBe(1);
-    // The just-chat item carries category: null, serviceLabels: [] —
-    // equivalent to "unfiltered" downstream. A category-formatted pill
-    // ("Category NN") would mean the filter IS set.
-    const looksLikeCategoryId = /Category\s+\d+/.test(pills[0] || '');
-    expect(looksLikeCategoryId, `pill is not a numbered category (got ${pills[0]})`).toBe(false);
+    expect(pills.length, `no just-chat pill expected (got ${JSON.stringify(pills)})`).toBe(0);
     await ctx.close();
   });
 
@@ -267,8 +259,7 @@ test.describe('grid after placement extraction', () => {
     expect(hasJustChatTile, `tile text never contains "just chat" (got ${JSON.stringify(justChatTexts)})`).toBe(false);
     await ctx.close();
   });
-
-  });
+});
 
 // -------- config + composer identity --------
 
@@ -894,10 +885,7 @@ test.describe('welcome bar measure', () => {
           `${JSON.stringify(composerPlaceholder(locale))} — the runtime locale switch did not take ` +
           `effect, so this locale's width is the previous locale's`
       ).toBe(composerPlaceholder(locale));
-      expect(
-        m1440.lang,
-        `the app is in ${locale} (got ${m1440.lang}) at 1440`
-      ).toBe(locale);
+      expect(m1440.lang, `the app is in ${locale} (got ${m1440.lang}) at 1440`).toBe(locale);
       expect(
         m1440.renderedW <= m1440.contentW,
         `${locale} @ 1440: placeholder rendered ${m1440.renderedW} px in a ${m1440.contentW} px content box ` +
@@ -927,10 +915,7 @@ test.describe('welcome bar measure', () => {
           `${JSON.stringify(composerPlaceholder(locale))} — the runtime locale switch did not take ` +
           `effect, so this locale's width is the previous locale's`
       ).toBe(composerPlaceholder(locale));
-      expect(
-        m1400.lang,
-        `the app is in ${locale} (got ${m1400.lang}) at 1400`
-      ).toBe(locale);
+      expect(m1400.lang, `the app is in ${locale} (got ${m1400.lang}) at 1400`).toBe(locale);
       expect(
         m1400.renderedW <= m1400.contentW * 2,
         `${locale} @ 1400: placeholder rendered ${m1400.renderedW} px in a ${m1400.contentW} px content box ` +

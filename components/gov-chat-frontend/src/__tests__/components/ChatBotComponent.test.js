@@ -118,6 +118,7 @@ jest.mock('@lucide/vue', () => ({
 // Component import (after mocks)
 // ---------------------------------------------------------------------------
 const ChatBotComponent = require('../../components/ChatBotComponent.vue').default;
+const statusModule = require('../../store/modules/status.js').default;
 
 // ---------------------------------------------------------------------------
 // Store factory
@@ -127,19 +128,13 @@ function createChatBotStore(stateOverrides = {}) {
   const state = createAuthenticatedState(stateOverrides);
   return createStore({
     state: () => state,
-    getters: {
-      currentUser: (s) => s.user,
-      isAuthenticated: (s) => s.isAuthenticated
-    },
-    mutations: {
-      SET_USER(s, user) {
-        s.user = user;
-      }
-    },
-    actions: {
-      logout: jest.fn().mockResolvedValue(undefined)
-    },
     modules: {
+      // The component commits reachability to the shared status module;
+      // the real mutations are used so the tests assert state outcomes.
+      status: {
+        ...statusModule,
+        state: () => ({ ...statusModule.state })
+      },
       chatHistory: {
         namespaced: true,
         state: () => state.chatHistory,

@@ -40,7 +40,7 @@ async function askAndAnswer(page, question) {
 }
 
 test.describe('Conversation V1', () => {
-  // Task 1 — the header names the conversation and closes it.
+  // The header names the open conversation and closes it.
   test('the header names the conversation and × returns to the welcome screen, keeping history', async ({
     browser
   }) => {
@@ -59,7 +59,7 @@ test.describe('Conversation V1', () => {
     await ctx.close();
   });
 
-  // Task 2 — the wave is fixed behind the conversation.
+  // The wave is fixed behind the conversation.
   test('the wave is fixed behind the conversation and does not scroll with the messages', async ({ browser }) => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
     await askAndAnswer(page, 'What is GENIE.AI?');
@@ -100,12 +100,13 @@ test.describe('Conversation V1', () => {
     await ctx.close();
   });
 
-  // Task 3 — no dead buttons in the conversation; the field caps at five lines.
-  test('the conversation composer has no attach or mic buttons and grows to five lines', async ({ browser }) => {
+  // The composer matches the dashboard bar: the attach and mic placeholders
+  // are present but disabled everywhere; the field caps at five lines.
+  test('the composer keeps its disabled attach and mic placeholders and grows to five lines', async ({ browser }) => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
     await askAndAnswer(page, 'What is GENIE.AI?');
-    await expect(page.locator('[data-testid="composer-attach-btn"]')).toHaveCount(0);
-    await expect(page.locator('[data-testid="composer-mic-btn"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="composer-attach-btn"]')).toBeDisabled();
+    await expect(page.locator('[data-testid="composer-mic-btn"]')).toBeDisabled();
     const lines = Array(8).fill('line').join('\n');
     await page.locator('[data-testid="chat-composer"] textarea').fill(lines);
     await page.waitForTimeout(300);
@@ -119,7 +120,7 @@ test.describe('Conversation V1', () => {
     await ctx.close();
   });
 
-  // Task 4 — every turn carries its avatar.
+  // Every turn carries its avatar.
   test('each turn carries its avatar: the product tile for the assistant, initials for the user', async ({
     browser
   }) => {
@@ -153,8 +154,8 @@ test.describe('Conversation V1', () => {
   });
 });
 
-test.describe('Conversation V1 — sources', () => {
-  // Task 6 — the answer card carries its own collapsible sources (D2).
+test.describe('Conversation — sources', () => {
+  // The answer card carries its own collapsible sources.
   // The stream is scripted: the local stack holds no ingested corpus, so no
   // real answer here is ever grounded — the UI contract under test is how a
   // grounded metadata frame renders, not the retriever.
@@ -202,8 +203,8 @@ test.describe('Conversation V1 — sources', () => {
   });
 });
 
-test.describe('Conversation V1 — actions', () => {
-  // Task 7 — the answer carries thumbs that record a rating and a copy that
+test.describe('Conversation — actions', () => {
+  // The answer carries thumbs that record a rating and a copy that
   // fills the clipboard (D3).
   test('the answer carries thumbs that record a rating and a copy that fills the clipboard', async ({ browser }) => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
@@ -226,9 +227,8 @@ test.describe('Conversation V1 — actions', () => {
   });
 });
 
-test.describe('Conversation V1 — warning and error', () => {
-  // Task 8 — the ungrounded amber (D4-grounding) and the retryable error
-  // state (D15) live inside the card.
+test.describe('Conversation — warning and error', () => {
+  // The ungrounded amber and the retryable error state live inside the card.
   test('an ungrounded answer shows the amber warning inside the card and no empty sources', async ({ browser }) => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
     // Deterministic: the ungrounded state comes from the metadata frame, so
@@ -285,28 +285,17 @@ test.describe('Conversation V1 — warning and error', () => {
   });
 });
 
-test.describe('Conversation V1 — status strip', () => {
-  // Task 9 — the status indicator is one compact strip; offline carries an
-  // accessible explanation (D4-offline).
-  test('the status indicator is one compact strip; offline carries an accessible explanation', async ({ browser }) => {
+test.describe('Conversation — status pill', () => {
+  // The status indicator lives in the navbar (visible on every page) and
+  // an offline state carries an accessible explanation.
+  test('the navbar pill reports the online state; a failed turn flips it to an explained offline', async ({
+    browser
+  }) => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
-    await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
-    await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
-    await page.waitForSelector('.system-status-panel', { timeout: 15000 });
-    const read = () =>
-      page.evaluate(() => {
-        const p = document.querySelector('.system-status-panel');
-        return {
-          h: p.getBoundingClientRect().height,
-          status: p.getAttribute('data-status'),
-          role: p.querySelector('.status-left')?.getAttribute('role'),
-          explains: p.querySelector('.status-error-message')?.textContent?.trim().length > 0
-        };
-      });
-    const online = await read();
-    expect(online.h, 'the strip is compact').toBeLessThan(40);
-    expect(online.status, 'the strip reports the online state').toBe('online');
-    // A failed turn flips the strip to its offline explanation, announced.
+    const pill = page.locator('[data-testid="nav-status"]');
+    await expect(pill).toHaveAttribute('data-status', 'online');
+    expect(await pill.getAttribute('role'), 'the pill is announced as a status region').toBe('status');
+    // A failed turn flips the pill to its offline explanation.
     await page.route('**/queries/stream**', async (route) => {
       try {
         await route.abort();
@@ -314,19 +303,17 @@ test.describe('Conversation V1 — status strip', () => {
         /* the context closed before the abort */
       }
     });
-    await page.locator('[data-testid="chat-composer"] textarea').fill('say something');
-    await page.locator('[data-testid="chat-composer"] textarea').press('Enter');
+    await page.locator('[data-testid="welcome-composer"] textarea').fill('say something');
+    await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
     await page.waitForSelector('[data-testid="answer-error"]', { timeout: 30000 });
-    const offline = await read();
-    expect(offline.status, 'the strip flips to offline').toBe('offline');
-    expect(offline.role, 'the explanation is announced as a status region').toBe('status');
-    expect(offline.explains, 'the strip explains itself').toBe(true);
+    await expect(pill).toHaveAttribute('data-status', 'offline');
+    expect((await pill.getAttribute('title'))?.length, 'the pill explains itself').toBeGreaterThan(0);
     await ctx.close();
   });
 });
 
-test.describe('Conversation V1 — documents panel', () => {
-  // Task 10 — the empty documents state explains itself, FAQs stay (D16).
+test.describe('Conversation — documents panel', () => {
+  // The empty documents state explains itself, FAQs stay.
   test('the documents panel shows a neutral empty state and keeps the FAQs', async ({ browser }) => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
     await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
@@ -350,8 +337,8 @@ test.describe('Conversation V1 — documents panel', () => {
   });
 });
 
-test.describe('Conversation V1 — contrast', () => {
-  // Task 12 — the new inks clear WCAG AA for body text (4.5:1): the amber
+test.describe('Conversation — contrast', () => {
+  // The inks clear WCAG AA for body text (4.5:1): the amber
   // warning on its ground, the initials on their accent circle.
   test('the amber warning and the initials clear a 4.5:1 contrast floor', async ({ browser }) => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
@@ -402,8 +389,8 @@ test.describe('Conversation V1 — contrast', () => {
   });
 });
 
-test.describe('Conversation V1 — answer card', () => {
-  // Task 5 — the assistant answer renders inside one elevated card, from the
+test.describe('Conversation — answer card', () => {
+  // The assistant answer renders inside one elevated card, from the
   // first frame of the stream (D9 + D14).
   test('the assistant answer renders inside one elevated card, from the first frame', async ({ browser }) => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
@@ -443,6 +430,45 @@ test.describe('Conversation V1 — answer card', () => {
     });
     expect(late.bubbleInside, 'the bubble lives inside the card').toBe(true);
     expect(late.text, 'the answer text arrives in the card').toBeGreaterThan(0);
+    await ctx.close();
+  });
+});
+
+test.describe('Conversation — surface invariants', () => {
+  // Opening Just Chat must not fabricate a knowledge-domain chip: "Just
+  // Chat" is not a context, so none is added.
+  test('a Just Chat turn adds no context chip and the header stays Just Chat', async ({ browser }) => {
+    const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
+    await expect(page.locator('[data-testid="conversation-header-title"]')).toHaveText(/Just Chat/i);
+    await askAndAnswer(page, 'What is GENIE.AI?');
+    await page.waitForSelector('.chat-message.bot .message-bubble', { timeout: 45000 });
+    expect(await page.locator('.context-panel').count(), 'no chip is fabricated for Just Chat').toBe(0);
+    await expect(page.locator('[data-testid="conversation-header-title"]')).toHaveText(/Just Chat/i);
+    await ctx.close();
+  });
+
+  // The header names the QuickHelp option that opened the chat.
+  test('the header title reflects the QuickHelp option that opened the chat', async ({ browser }) => {
+    const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
+    await page.locator('.quick-help-item').filter({ hasText: 'Apply for ID' }).click();
+    await expect(page.locator('[data-testid="conversation-header-title"]')).toHaveText(/Apply for ID/i);
+    // The option is a knowledge domain — its chip is shown as context.
+    expect(await page.locator('.context-panel').count(), 'the domain chip is shown').toBe(1);
+    await ctx.close();
+  });
+
+  // Leaving an unsaved chat prompts instead of silently losing it.
+  test('navigating away from an unsaved chat prompts to save before leaving', async ({ browser }) => {
+    const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
+    await askAndAnswer(page, 'What is GENIE.AI?');
+    await page.waitForSelector('.chat-message.bot .message-bubble', { timeout: 45000 });
+    await page.locator('[aria-label="Settings"]').locator('visible=true').first().click();
+    const dialog = page.locator('[role="dialog"]');
+    await expect(dialog).toBeVisible();
+    // The interrupted navigation resumes only on an explicit choice.
+    await page.locator('[role="dialog"] button:has-text("Cancel")').click();
+    await expect(dialog).toBeHidden();
+    await expect(page.locator('[data-testid="conversation-header-title"]')).toBeVisible();
     await ctx.close();
   });
 });

@@ -157,6 +157,24 @@
 
       <!-- Right section with language and user controls - Only visible on desktop -->
       <div class="nav-right desktop-only">
+        <!-- The assistant's reachability, visible on every page: online is a
+             quiet pill, offline turns danger and carries the explanation. -->
+        <span
+          class="nav-status"
+          data-testid="nav-status"
+          :data-status="systemStatus.online ? 'online' : 'offline'"
+          role="status"
+          :title="
+            systemStatus.online
+              ? systemStatus.lastResponseTime !== null
+                ? `${systemStatus.lastResponseTime}ms`
+                : $t('nav.statusOnline')
+              : systemStatus.errorMessage || $t('nav.statusOffline')
+          "
+        >
+          <span class="nav-status__dot" aria-hidden="true"></span>
+          {{ systemStatus.online ? $t('nav.statusOnline') : $t('nav.statusOffline') }}
+        </span>
         <div class="language-select-container">
           <language-selector />
         </div>
@@ -279,6 +297,7 @@
 <script>
 import LanguageSelector from '@/components/LanguageSelector.vue';
 import DsButton from './ds/Button.vue';
+import { mapGetters } from 'vuex';
 
 export default {
   name: 'NavBarComponent',
@@ -306,6 +325,10 @@ export default {
     return {};
   },
   computed: {
+    ...mapGetters('status', ['status']),
+    systemStatus() {
+      return this.status;
+    },
     // Only the GENIE.AI brand carries the gradient wordmark; the flavour
     // configs ship their own titles and are left as plain text. Comparing
     // the title keeps this off the config schema and off the decoration
@@ -344,6 +367,34 @@ export default {
 </script>
 
 <style scoped>
+/* The reachability pill: a quiet dot+label online; danger with the
+   explanation on hover when the assistant is unreachable. */
+.nav-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--text-xs);
+  color: var(--muted);
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-pill, 999px);
+  white-space: nowrap;
+}
+
+.nav-status__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+.nav-status[data-status='offline'] {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.nav-status[data-status='offline'] .nav-status__dot {
+  background: var(--danger);
+}
 /* Base styles - applied to all themes */
 .nav-container {
   position: relative;

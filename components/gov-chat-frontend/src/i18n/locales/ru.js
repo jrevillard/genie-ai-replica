@@ -655,6 +655,8 @@ export default {
   },
   brandName: 'Genie AI: Ваш цифровой правительственный помощник',
   nav: {
+    statusOnline: 'Онлайн',
+    statusOffline: 'Офлайн',
     menu: 'Меню',
     analytics: 'Аналитика',
     userProfile: 'Профиль пользователя',

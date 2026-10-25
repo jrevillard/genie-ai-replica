@@ -1601,7 +1601,7 @@ export default {
       version: 'v{n}',
       versions: 'Versions',
       deleteLabel: 'Supprimer',
-      headTest: 'Routing Lab'
+      testingLab: 'Testing Lab'
     },
     logs: {
       labeled: 'étiquetés : {n}',
@@ -2902,9 +2902,9 @@ export default {
         keyword: 'Keyword'
       }
     },
-    headTest: {
-      title: 'Routing Lab — head test',
-      cta: 'Routing Lab',
+    testingLab: {
+      title: 'Testing Lab',
+      cta: 'Testing Lab',
       badge: {
         present: 'head ready',
         stale: 'head stale',
@@ -3444,13 +3444,14 @@ export default {
         title: 'Générer une suite de bancs d’essai',
         hint: 'Synthétise des questions avec les sorties attendues à partir des dépôts sélectionnés — un ou plusieurs : le dépôt actuel seul ou avec des dépôts apparentés.',
         size: 'Questions',
-        config: 'Configuration du modèle juge',
-        default: 'Valeur par défaut du déploiement (configuration active / env)',
-        defaultNamed: 'Défaut du déploiement — {name}{model}',
+        config: 'Configuration du modèle de génération',
+        default: 'Valeur par défaut du déploiement (.env)',
+        defaultNamed: 'Configuration active — {name}{model}',
         effective: 'Évaluation avec {name}{model}',
+        effectiveGenerating: 'Génération avec {name}{model}',
         envDefault: 'valeur par défaut de l’environnement',
-        envJudge: 'Défaut système (environnement){model}',
-        envJudgePlain: 'Défaut système (environnement)',
+        envJudge: 'Valeur par défaut du déploiement (.env){model}',
+        envJudgePlain: 'Valeur par défaut du déploiement (.env)',
         model: 'Modèle',
         modelPick: 'Valeur par défaut de la configuration',
         modelDefault: 'valeur par défaut de la configuration',
@@ -3493,6 +3494,7 @@ export default {
       run: {
         button: 'Lancer le banc d’essai',
         working: 'Exécution…',
+        judge: 'Configuration du modèle juge',
         retrieved: 'récupérés',
         pass: 'réussi',
         fail: 'échoué',

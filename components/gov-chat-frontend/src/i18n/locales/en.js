@@ -1532,9 +1532,9 @@ export default {
       empty: 'No model configurations yet — the deployment default (env) model is in use.',
       adminOnly: 'Model configurations require the platform admin role.'
     },
-    headTest: {
-      title: 'Routing Lab — head test',
-      cta: 'Routing Lab',
+    testingLab: {
+      title: 'Testing Lab',
+      cta: 'Testing Lab',
       badge: {
         present: 'head ready',
         stale: 'head stale',
@@ -2073,13 +2073,14 @@ export default {
         title: 'Generate a benchmark suite',
         hint: 'Synthesizes questions with expected outputs from the selected repositories — one or more, the current repo alone or with related repos.',
         size: 'Questions',
-        config: 'Judge model configuration',
-        default: 'Deployment default (active configuration / env)',
-        defaultNamed: 'Deployment default — {name}{model}',
+        config: 'Generation model configuration',
+        default: 'Deployment default (.env)',
+        defaultNamed: 'Active configuration — {name}{model}',
         effective: 'Judging with {name}{model}',
+        effectiveGenerating: 'Generating with {name}{model}',
         envDefault: 'environment default',
-        envJudge: 'System default (environment){model}',
-        envJudgePlain: 'System default (environment)',
+        envJudge: 'Deployment default (.env){model}',
+        envJudgePlain: 'Deployment default (.env)',
         model: 'Model',
         modelPick: 'Configuration default',
         modelDefault: 'configuration default',
@@ -2122,6 +2123,7 @@ export default {
       run: {
         button: 'Run benchmark',
         working: 'Running…',
+        judge: 'Judge model configuration',
         retrieved: 'retrieved',
         pass: 'pass',
         fail: 'fail',
@@ -2326,7 +2328,7 @@ export default {
       },
       version: 'v{n}',
       versions: 'Versions',
-      headTest: 'Routing Lab',
+      testingLab: 'Testing Lab',
       deleteLabel: 'Delete'
     },
     logs: {

@@ -90,11 +90,11 @@
         <DsButton variant="secondary" small :disabled="actionBusy" @click="versionsOpen = true">
           {{ translate('okf.shell.versions', 'Versions') }}
         </DsButton>
-        <!-- Story 1-8 (2026-10-08): the Head Tester / Routing Lab — test the
+        <!-- Story 1-8 (2026-10-08): the Testing Lab — test the
              vectorized head before/after ingest (publish/approve state or a
              head already present; serving repos test read-only). -->
         <DsButton v-if="showHeadTest" variant="secondary" small :disabled="actionBusy" @click="headTestOpen = true">
-          {{ translate('okf.shell.headTest', 'Routing Lab') }}
+          {{ translate('okf.shell.testingLab', 'Testing Lab') }}
         </DsButton>
         <DsButton variant="secondary" small :disabled="logsBusy" @click="logsOpen = true">
           {{ translate('okf.shell.logs', 'Logs') }}
@@ -170,8 +170,8 @@
 
     <OkfLogsDialog :visible="logsOpen" :repo="repo && repo.repo_id ? repo : null" @close="logsOpen = false" />
 
-    <!-- Story 1-8 (2026-10-08): the Head Tester / Routing Lab. -->
-    <OkfHeadTestDialog
+    <!-- Story 1-8 (2026-10-08): the Testing Lab. -->
+    <OkfTestingLabDialog
       :visible="headTestOpen"
       :repo="repo && repo.repo_id ? repo : null"
       @close="headTestOpen = false"
@@ -258,7 +258,7 @@ import DsTabs from '../../ds/Tabs.vue';
 import OkfStudioWizard from '../StudioWizard.vue';
 import OkfRepoEditor from './RepoEditor.vue';
 import OkfVersionsDialog from './VersionsDialog.vue';
-import OkfHeadTestDialog from './HeadTestDialog.vue';
+import OkfTestingLabDialog from './TestingLabDialog.vue';
 import OkfLogsDialog from './LogsDialog.vue';
 import OkfPiiReviewSummary from './PiiReviewSummary.vue';
 import BuildProgressCard from './BuildProgressCard.vue';
@@ -293,7 +293,7 @@ export default {
     OkfStudioWizard,
     OkfRepoEditor,
     OkfVersionsDialog,
-    OkfHeadTestDialog,
+    OkfTestingLabDialog,
     OkfLogsDialog,
     OkfPiiReviewSummary,
     BuildProgressCard
@@ -342,7 +342,7 @@ export default {
     serving() {
       return !!(this.repo.lifecycle_state === 'publish' && this.repo.ingested_at);
     },
-    /** Story 1-8: the Routing Lab opens on publish/approve repos or any
+    /** Story 1-8: the Testing Lab opens on publish/approve repos or any
      * repo with a stored head (serving repos test read-only — legitimate
      * post-ingest verification). */
     showHeadTest() {

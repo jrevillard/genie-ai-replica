@@ -1585,7 +1585,7 @@ export default {
       version: 'v{n}',
       versions: 'Matoleo',
       deleteLabel: 'Futa',
-      headTest: 'Routing Lab'
+      testingLab: 'Testing Lab'
     },
     logs: {
       labeled: 'zilizowekewa lebo: {n}',
@@ -2878,9 +2878,9 @@ export default {
         keyword: 'Keyword'
       }
     },
-    headTest: {
-      title: 'Routing Lab — head test',
-      cta: 'Routing Lab',
+    testingLab: {
+      title: 'Testing Lab',
+      cta: 'Testing Lab',
       badge: {
         present: 'head ready',
         stale: 'head stale',
@@ -3416,13 +3416,14 @@ export default {
         title: 'Tengeneza seti ya vipimo vya kulinganisha',
         hint: 'Huunda maswali yenye majibu yanayotarajiwa kutoka kwenye hazina zilizochaguliwa — moja au zaidi, hazina ya sasa pekee au pamoja na hazina zinazohusiana.',
         size: 'Maswali',
-        config: 'Mipangilio ya modeli mhukumu',
-        default: 'Chaguo-msingi ya utumaji (mipangilio hai / env)',
-        defaultNamed: 'Msimbo wa deployment — {name}{model}',
+        config: 'Mipangilio ya modeli wa uzalishaji',
+        default: 'Chaguo-msingi ya utumaji (.env)',
+        defaultNamed: 'Mipangilio inayotumika — {name}{model}',
         effective: 'Kutathibiri kwa {name}{model}',
+        effectiveGenerating: 'Inatengeneza kwa {name}{model}',
         envDefault: 'msimbo wa mazingira',
-        envJudge: 'Chaguo-msingi cha mfumo (mazingira){model}',
-        envJudgePlain: 'Chaguo-msingi cha mfumo (mazingira)',
+        envJudge: 'Chaguo-msingi ya utumaji (.env){model}',
+        envJudgePlain: 'Chaguo-msingi ya utumaji (.env)',
         model: 'Modeli',
         modelPick: 'Chaguo-msingi ya mipangilio',
         modelDefault: 'chaguo-msingi ya mipangilio',
@@ -3464,6 +3465,7 @@ export default {
       },
       run: {
         button: 'Endesha kipimo',
+        judge: 'Mipangilio ya modeli mhukumu',
         working: 'Inaendesha…',
         retrieved: 'zilizopatikana',
         pass: 'imefaulu',

@@ -1578,7 +1578,7 @@ export default {
       version: 'v{n}',
       versions: 'เวอร์ชัน',
       deleteLabel: 'ลบ',
-      headTest: 'Routing Lab'
+      testingLab: 'Testing Lab'
     },
     logs: {
       labeled: 'ติดป้ายกำกับแล้ว: {n}',
@@ -2861,9 +2861,9 @@ export default {
         keyword: 'Keyword'
       }
     },
-    headTest: {
-      title: 'Routing Lab — head test',
-      cta: 'Routing Lab',
+    testingLab: {
+      title: 'Testing Lab',
+      cta: 'Testing Lab',
       badge: {
         present: 'head ready',
         stale: 'head stale',
@@ -3393,13 +3393,14 @@ export default {
         title: 'สร้างชุดทดสอบเปรียบเทียบ',
         hint: 'สังเคราะห์คำถามพร้อมคำตอบที่คาดหวังจากรีปอซิทอรีที่เลือก — หนึ่งรายการหรือมากกว่า ทั้งรีปอซิทอรีปัจจุบันเพียงลำพังหรือร่วมกับรายการที่เกี่ยวข้อง',
         size: 'คำถาม',
-        config: 'การตั้งค่าโมเดลผู้ตัดสิน',
-        default: 'ค่าเริ่มต้นของระบบ (การตั้งค่าที่ใช้งาน / env)',
-        defaultNamed: 'ค่าเริ่มต้นของการติดตั้ง — {name}{model}',
+        config: 'การตั้งค่าโมเดลผู้สร้าง',
+        default: 'ค่าเริ่มต้นของการติดตั้ง (.env)',
+        defaultNamed: 'การตั้งค่าที่ใช้งาน — {name}{model}',
         effective: 'กำลังประเมินด้วย {name}{model}',
+        effectiveGenerating: 'กำลังสร้างด้วย {name}{model}',
         envDefault: 'ค่าเริ่มต้นของสภาพแวดล้อม',
-        envJudge: 'ค่าเริ่มต้นของระบบ (สภาพแวดล้อม){model}',
-        envJudgePlain: 'ค่าเริ่มต้นของระบบ (สภาพแวดล้อม)',
+        envJudge: 'ค่าเริ่มต้นของการติดตั้ง (.env){model}',
+        envJudgePlain: 'ค่าเริ่มต้นของการติดตั้ง (.env)',
         model: 'โมเดล',
         modelPick: 'ค่าเริ่มต้นของการตั้งค่า',
         modelDefault: 'ค่าเริ่มต้นของการตั้งค่า',
@@ -3442,6 +3443,7 @@ export default {
       run: {
         button: 'เรียกใช้การทดสอบเปรียบเทียบ',
         working: 'กำลังเรียกใช้…',
+        judge: 'การตั้งค่าโมเดลผู้ตัดสิน',
         retrieved: 'ที่ดึงมา',
         pass: 'ผ่าน',
         fail: 'ไม่ผ่าน',

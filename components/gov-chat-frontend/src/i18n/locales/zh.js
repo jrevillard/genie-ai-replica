@@ -1563,7 +1563,7 @@ export default {
       version: 'v{n}',
       versions: '版本',
       deleteLabel: '删除',
-      headTest: 'Routing Lab'
+      testingLab: 'Testing Lab'
     },
     logs: {
       labeled: '已标注：{n}',
@@ -2826,9 +2826,9 @@ export default {
         keyword: 'Keyword'
       }
     },
-    headTest: {
-      title: 'Routing Lab — head test',
-      cta: 'Routing Lab',
+    testingLab: {
+      title: 'Testing Lab',
+      cta: 'Testing Lab',
       badge: {
         present: 'head ready',
         stale: 'head stale',
@@ -3347,13 +3347,14 @@ export default {
         title: '生成基准测试集',
         hint: '从选定的仓库合成带预期答案的问题 — 可选一个或多个：仅当前仓库，或与相关仓库一起。',
         size: '问题数',
-        config: '评判模型配置',
-        default: '部署默认（激活配置 / env）',
-        defaultNamed: '部署默认 — {name}{model}',
+        config: '生成模型配置',
+        default: '部署默认（.env）',
+        defaultNamed: '激活配置 — {name}{model}',
         effective: '使用 {name}{model} 评判',
+        effectiveGenerating: '使用 {name}{model} 生成',
         envDefault: '环境默认值',
-        envJudge: '系统默认（环境）{model}',
-        envJudgePlain: '系统默认（环境）',
+        envJudge: '部署默认（.env）{model}',
+        envJudgePlain: '部署默认（.env）',
         model: '模型',
         modelPick: '配置默认',
         modelDefault: '配置默认',
@@ -3396,6 +3397,7 @@ export default {
       run: {
         button: '运行基准测试',
         working: '正在运行…',
+        judge: '评判模型配置',
         retrieved: '已检索',
         pass: '通过',
         fail: '失败',

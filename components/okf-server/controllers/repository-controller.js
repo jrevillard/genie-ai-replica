@@ -1529,7 +1529,7 @@ async function rebuildRepoHead(req, res, next) {
 
 /**
  * Story 1-8 (2026-10-08) — POST /api/okf/repos/:repo_id/routing-test.
- * The Head Tester / Routing Lab: embeds the query with production
+ * The Testing Lab: embeds the query with production
  * fidelity (TEI + BGE query-instruction prefix), scores the head leg
  * (works PRE-INGEST — graph-less repos compete on signalling), and
  * replays the Story 1.3 chunk-probe routing for repos with graphs.

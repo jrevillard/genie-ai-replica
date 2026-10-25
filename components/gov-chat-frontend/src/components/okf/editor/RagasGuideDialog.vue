@@ -11,7 +11,7 @@
   happens if I get it wrong" — five chapters, each with things to do,
   things to avoid, and a grounded expectation of time and numbers.
 
-  Shape follows HeadTestDialog.vue (the established OKF dialog paradigm):
+  Shape follows TestingLabDialog.vue (the established OKF dialog paradigm):
   DsDialog + DsTabs, one pane per chapter, Options API, translateMixin for
   every string. Content is per-chapter arrays of dotted keys rather than
   real arrays, because translateMixin resolves leaf values as STRINGS only

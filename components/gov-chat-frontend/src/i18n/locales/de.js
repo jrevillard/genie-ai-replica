@@ -1598,7 +1598,7 @@ export default {
       version: 'v{n}',
       versions: 'Versionen',
       deleteLabel: 'Löschen',
-      headTest: 'Routing Lab'
+      testingLab: 'Testing Lab'
     },
     logs: {
       labeled: 'mit Label: {n}',
@@ -2901,9 +2901,9 @@ export default {
         keyword: 'Keyword'
       }
     },
-    headTest: {
-      title: 'Routing Lab — head test',
-      cta: 'Routing Lab',
+    testingLab: {
+      title: 'Testing Lab',
+      cta: 'Testing Lab',
       badge: {
         present: 'head ready',
         stale: 'head stale',
@@ -3446,13 +3446,14 @@ export default {
         title: 'Vergleichstest-Suite generieren',
         hint: 'Erzeugt Fragen mit erwarteten Ausgaben aus den ausgewählten Repositories — eines oder mehrere, das aktuelle Repository allein oder mit verwandten Repositories.',
         size: 'Fragen',
-        config: 'Bewertungsmodell-Konfiguration',
-        default: 'Deployment-Standard (aktive Konfiguration / env)',
-        defaultNamed: 'Deployment-Standard — {name}{model}',
+        config: 'Generierungsmodell-Konfiguration',
+        default: 'Deployment-Standard (.env)',
+        defaultNamed: 'Aktive Konfiguration — {name}{model}',
         effective: 'Bewertung mit {name}{model}',
+        effectiveGenerating: 'Generierung mit {name}{model}',
         envDefault: 'Umgebungs-Standard',
-        envJudge: 'Systemstandard (Umgebung){model}',
-        envJudgePlain: 'Systemstandard (Umgebung)',
+        envJudge: 'Deployment-Standard (.env){model}',
+        envJudgePlain: 'Deployment-Standard (.env)',
         model: 'Modell',
         modelPick: 'Standard der Konfiguration',
         modelDefault: 'Standard der Konfiguration',
@@ -3495,6 +3496,7 @@ export default {
       run: {
         button: 'Vergleichstest ausführen',
         working: 'Wird ausgeführt…',
+        judge: 'Judge-Modell-Konfiguration',
         retrieved: 'abgerufen',
         pass: 'bestanden',
         fail: 'fehlgeschlagen',

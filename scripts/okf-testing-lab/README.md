@@ -1,4 +1,4 @@
-# OKF Routing Lab — probe scripts (salvaged 2026-10-08)
+# OKF Testing Lab — probe scripts (salvaged 2026-10-08)
 
 Reference implementations from the Story 1.3 calibration and the 1.6/1.8
 tag-routing experiments. They lived as untracked scratch in the local

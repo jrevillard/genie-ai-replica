@@ -1591,7 +1591,7 @@ export default {
       version: 'v{n}',
       versions: 'Версии',
       deleteLabel: 'Удалить',
-      headTest: 'Routing Lab'
+      testingLab: 'Testing Lab'
     },
     logs: {
       labeled: 'с метками: {n}',
@@ -2892,9 +2892,9 @@ export default {
         keyword: 'Keyword'
       }
     },
-    headTest: {
-      title: 'Routing Lab — head test',
-      cta: 'Routing Lab',
+    testingLab: {
+      title: 'Testing Lab',
+      cta: 'Testing Lab',
       badge: {
         present: 'head ready',
         stale: 'head stale',
@@ -3429,13 +3429,14 @@ export default {
         title: 'Сгенерировать набор эталонных тестов',
         hint: 'Синтезирует вопросы с ожидаемыми ответами на основе выбранных репозиториев — одного или нескольких: только текущий или вместе со связанными.',
         size: 'Вопросы',
-        config: 'Конфигурация модели-судьи',
-        default: 'По умолчанию (активная конфигурация / env)',
-        defaultNamed: 'По умолчанию развёртывания — {name}{model}',
+        config: 'Конфигурация модели для генерации',
+        default: 'По умолчанию развёртывания (.env)',
+        defaultNamed: 'Активная конфигурация — {name}{model}',
         effective: 'Оценка с {name}{model}',
+        effectiveGenerating: 'Генерация с {name}{model}',
         envDefault: 'значение по умолчанию окружения',
-        envJudge: 'Системный по умолчанию (окружение){model}',
-        envJudgePlain: 'Системный по умолчанию (окружение)',
+        envJudge: 'По умолчанию развёртывания (.env){model}',
+        envJudgePlain: 'По умолчанию развёртывания (.env)',
         model: 'Модель',
         modelPick: 'По умолчанию у конфигурации',
         modelDefault: 'по умолчанию у конфигурации',
@@ -3478,6 +3479,7 @@ export default {
       run: {
         button: 'Запустить тест',
         working: 'Выполняется…',
+        judge: 'Конфигурация модели-судьи',
         retrieved: 'найдено',
         pass: 'успех',
         fail: 'провал',

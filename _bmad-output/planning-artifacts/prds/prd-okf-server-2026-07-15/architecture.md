@@ -389,7 +389,7 @@ MR !474):
 ## Amendment B ADRs (2026-10-17)
 
 - [ADR-okf-043](../../../../docs/adr/okf-043-ragas-benchmarking-via-python-sidecar.md)
-  — RAGAS benchmarking in the Routing Lab (Story 8.6): a stateless Python
+  — RAGAS benchmarking in the Testing Lab (Story 8.6): a stateless Python
   `ragas-service` sidecar (ragas 0.4.3, deps frozen to the
   `tests/rag-benchmarks` runner's versions) owns testset generation,
   `evaluate()`, and all xlsx serialization; Node `ragas-suite-service.js`

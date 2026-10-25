@@ -133,7 +133,7 @@ run cannot silently change the baseline.
 
 ## The reference regeneration — done, and what it did
 
-`scripts/okf-routing-lab/ragas-regenerate-reference.js` (runs inside the
+`scripts/okf-testing-lab/ragas-regenerate-reference.js` (runs inside the
 okf-server container) rewrites a suite entry's reference answer FROM the
 corpus text and writes it **only when `context_entities_recall` on the
 rewrite scores better than on the original**. The gate is the metric

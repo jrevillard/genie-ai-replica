@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // head-suite-service — Story 1-8 MR-B (2026-10-08): test SUITES and
-// run ANALYTICS for the OKF Head Tester / Routing Lab. Sits on top of
+// run ANALYTICS for the OKF Testing Lab. Sits on top of
 // head-test-service.routingTest (the two-leg simulation) and adds:
 //
 //   generateSuite(repoId, {n_positive, n_negative, n_negative_random})

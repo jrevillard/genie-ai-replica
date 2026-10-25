@@ -1592,7 +1592,7 @@ export default {
       version: 'v{n}',
       versions: 'Versi',
       deleteLabel: 'Hapus',
-      headTest: 'Routing Lab'
+      testingLab: 'Testing Lab'
     },
     logs: {
       labeled: 'diberi label: {n}',
@@ -2884,9 +2884,9 @@ export default {
         keyword: 'Keyword'
       }
     },
-    headTest: {
-      title: 'Routing Lab — head test',
-      cta: 'Routing Lab',
+    testingLab: {
+      title: 'Testing Lab',
+      cta: 'Testing Lab',
       badge: {
         present: 'head ready',
         stale: 'head stale',
@@ -3422,13 +3422,14 @@ export default {
         title: 'Buat suite tolok ukur',
         hint: 'Mensintesis pertanyaan dengan jawaban yang diharapkan dari repositori terpilih — satu atau lebih, repositori saat ini saja atau bersama repositori terkait.',
         size: 'Pertanyaan',
-        config: 'Konfigurasi model juri',
-        default: 'Default deployment (konfigurasi aktif / env)',
-        defaultNamed: 'Default deployment — {name}{model}',
+        config: 'Konfigurasi model generasi',
+        default: 'Default deployment (.env)',
+        defaultNamed: 'Konfigurasi aktif — {name}{model}',
         effective: 'Menilai dengan {name}{model}',
+        effectiveGenerating: 'Membangun dengan {name}{model}',
         envDefault: 'default lingkungan',
-        envJudge: 'Default sistem (lingkungan){model}',
-        envJudgePlain: 'Default sistem (lingkungan)',
+        envJudge: 'Default deployment (.env){model}',
+        envJudgePlain: 'Default deployment (.env)',
         model: 'Model',
         modelPick: 'Default konfigurasi',
         modelDefault: 'default konfigurasi',
@@ -3470,6 +3471,7 @@ export default {
       },
       run: {
         button: 'Jalankan tolok ukur',
+        judge: 'Konfigurasi model juri',
         working: 'Menjalankan…',
         retrieved: 'diambil',
         pass: 'lulus',

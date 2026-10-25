@@ -1596,7 +1596,7 @@ export default {
       version: 'v{n}',
       versions: 'Versões',
       deleteLabel: 'Excluir',
-      headTest: 'Routing Lab'
+      testingLab: 'Testing Lab'
     },
     logs: {
       labeled: 'rotulados: {n}',
@@ -2893,9 +2893,9 @@ export default {
         keyword: 'Keyword'
       }
     },
-    headTest: {
-      title: 'Routing Lab — head test',
-      cta: 'Routing Lab',
+    testingLab: {
+      title: 'Testing Lab',
+      cta: 'Testing Lab',
       badge: {
         present: 'head ready',
         stale: 'head stale',
@@ -3434,13 +3434,14 @@ export default {
         title: 'Gerar uma suíte de testes comparativos',
         hint: 'Sintetiza perguntas com respostas esperadas a partir dos repositórios selecionados — um ou mais, o repositório atual sozinho ou com repositórios relacionados.',
         size: 'Perguntas',
-        config: 'Configuração do modelo juiz',
-        default: 'Padrão do deployment (configuração ativa / env)',
-        defaultNamed: 'Padrão da implantação — {name}{model}',
+        config: 'Configuração do modelo de geração',
+        default: 'Padrão do deployment (.env)',
+        defaultNamed: 'Configuração ativa — {name}{model}',
         effective: 'Avaliando com {name}{model}',
+        effectiveGenerating: 'Gerando com {name}{model}',
         envDefault: 'padrão do ambiente',
-        envJudge: 'Padrão do sistema (ambiente){model}',
-        envJudgePlain: 'Padrão do sistema (ambiente)',
+        envJudge: 'Padrão do deployment (.env){model}',
+        envJudgePlain: 'Padrão do deployment (.env)',
         model: 'Modelo',
         modelPick: 'Padrão da configuração',
         modelDefault: 'padrão da configuração',
@@ -3483,6 +3484,7 @@ export default {
       run: {
         button: 'Executar o teste comparativo',
         working: 'Executando…',
+        judge: 'Configuração do modelo juiz',
         retrieved: 'recuperados',
         pass: 'aprovado',
         fail: 'falhou',

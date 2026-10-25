@@ -1586,7 +1586,7 @@ export default {
       version: 'v{n}',
       versions: 'সংস্করণ',
       deleteLabel: 'মুছুন',
-      headTest: 'Routing Lab'
+      testingLab: 'Testing Lab'
     },
     logs: {
       labeled: 'লেবেলযুক্ত: {n}',
@@ -2877,9 +2877,9 @@ export default {
         keyword: 'Keyword'
       }
     },
-    headTest: {
-      title: 'Routing Lab — head test',
-      cta: 'Routing Lab',
+    testingLab: {
+      title: 'Testing Lab',
+      cta: 'Testing Lab',
       badge: {
         present: 'head ready',
         stale: 'head stale',
@@ -3413,13 +3413,14 @@ export default {
         title: 'মানদণ্ড পরীক্ষার একটি স্যুট তৈরি করুন',
         hint: 'নির্বাচিত রিপোজিটরিগুলো থেকে প্রত্যাশিত উত্তরসহ প্রশ্ন তৈরি করে — এক বা একাধিক: শুধু বর্তমান রিপোজিটরি বা সম্পর্কিত রিপোজিটরিসহ।',
         size: 'প্রশ্ন',
-        config: 'বিচারক মডেল কনফিগারেশন',
-        default: 'ডিপ্লয়মেন্ট ডিফল্ট (সক্রিয় কনফিগারেশন / env)',
-        defaultNamed: 'ডিফলয়মেন্টের ডিফল্ট — {name}{model}',
+        config: 'জেনারেশন মডেল কনফিগারেশন',
+        default: 'ডিপ্লয়মেন্ট ডিফল্ট (.env)',
+        defaultNamed: 'সক্রিয় কনফিগারেশন — {name}{model}',
         effective: '{name}{model} দিয়ে মূল্যায়ন',
+        effectiveGenerating: '{name}{model} দিয়ে জেনারেশন',
         envDefault: 'পরিবেশের ডিফল্ট',
-        envJudge: 'সিস্টেম ডিফল্ট (পরিবেশ){model}',
-        envJudgePlain: 'সিস্টেম ডিফল্ট (পরিবেশ)',
+        envJudge: 'ডিপ্লয়মেন্ট ডিফল্ট (.env){model}',
+        envJudgePlain: 'ডিপ্লয়মেন্ট ডিফল্ট (.env)',
         model: 'মডেল',
         modelPick: 'কনফিগারেশনের ডিফল্ট',
         modelDefault: 'কনফিগারেশনের ডিফল্ট',
@@ -3462,6 +3463,7 @@ export default {
       run: {
         button: 'মানদণ্ড পরীক্ষা চালান',
         working: 'চলছে…',
+        judge: 'বিচারক মডেল কনফিগারেশন',
         retrieved: 'উদ্ধৃত',
         pass: 'উত্তীর্ণ',
         fail: 'ব্যর্থ',

@@ -1060,7 +1060,7 @@ const actions = {
     }
   },
 
-  // ─── Story 1-8 (2026-10-08): Head Tester / Routing Lab ─────────────────────
+  // ─── Story 1-8 (2026-10-08): Testing Lab ─────────────────────
   // All wrap headTestService and return {ok, code?, message?, result?} —
   // the dialog renders err.data.error/message (server envelope) like
   // lifecycleTransition does.

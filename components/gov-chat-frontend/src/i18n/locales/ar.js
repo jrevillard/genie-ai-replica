@@ -1579,7 +1579,7 @@ export default {
       version: 'الإصدار {n}',
       versions: 'الإصدارات',
       deleteLabel: 'حذف',
-      headTest: 'Routing Lab'
+      testingLab: 'Testing Lab'
     },
     logs: {
       labeled: 'تمت تسميتها: {n}',
@@ -2855,9 +2855,9 @@ export default {
         keyword: 'Keyword'
       }
     },
-    headTest: {
-      title: 'Routing Lab — head test',
-      cta: 'Routing Lab',
+    testingLab: {
+      title: 'Testing Lab',
+      cta: 'Testing Lab',
       badge: {
         present: 'head ready',
         stale: 'head stale',
@@ -3382,13 +3382,14 @@ export default {
         title: 'إنشاء مجموعة اختبارات مرجعية',
         hint: 'يولّد أسئلة بإجابات متوقعة من المستودعات المحددة — واحد أو أكثر، المستودع الحالي وحده أو مع مستودعات ذات صلة.',
         size: 'الأسئلة',
-        config: 'تكوين نموذج التقييم',
-        default: 'افتراضي النشر (التكوين النشط / env)',
-        defaultNamed: 'الافتراضي للنشر — {name}{model}',
+        config: 'تكوين نموذج التوليد',
+        default: 'افتراضي النشر (.env)',
+        defaultNamed: 'التكوين النشط — {name}{model}',
         effective: 'التقييم باستخدام {name}{model}',
+        effectiveGenerating: 'التوليد باستخدام {name}{model}',
         envDefault: 'الافتراضي للبيئة',
-        envJudge: 'الافتراضي للنظام (البيئة){model}',
-        envJudgePlain: 'الافتراضي للنظام (البيئة)',
+        envJudge: 'افتراضي النشر (.env){model}',
+        envJudgePlain: 'افتراضي النشر (.env)',
         model: 'النموذج',
         modelPick: 'افتراضي التكوين',
         modelDefault: 'افتراضي التكوين',
@@ -3431,6 +3432,7 @@ export default {
       run: {
         button: 'تشغيل الاختبار المرجعي',
         working: 'جارٍ التشغيل…',
+        judge: 'تكوين نموذج التقييم',
         retrieved: 'المسترجع',
         pass: 'ناجح',
         fail: 'فاشل',

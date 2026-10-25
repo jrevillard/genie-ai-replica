@@ -1,13 +1,13 @@
 # Architecture diagrams — RAGAS benchmarking (Story 8-6)
 
-All diagrams are the additive delta on the existing Routing Lab (`head-test-service` + `head-suite-service`). No existing arrow changes.
+All diagrams are the additive delta on the existing Testing Lab (`head-test-service` + `head-suite-service`). No existing arrow changes.
 
 ## Service topology
 
 ```mermaid
 flowchart LR
   subgraph Frontend
-    HTD[HeadTestDialog.vue<br/>4th tab: RAGAS pane]
+    HTD[TestingLabDialog.vue<br/>4th tab: RAGAS pane]
     RP[RagasPanel.vue]
     HTD --> RP
   end
@@ -99,7 +99,7 @@ No results import — results flow one way (export); only benchmark suites impor
 
 ```mermaid
 flowchart LR
-  subgraph HeadTestDialog [HeadTestDialog.vue - 4 entry points unchanged]
+  subgraph TestingLabDialog [TestingLabDialog.vue - 4 entry points unchanged]
     T1[Head] --- T2[Test] --- T3[Suites] --- T4[RAGAS - NEW]
     T3 -->|saved-suites table: both kinds + DsPill RAGAS| SEL{select RAGAS suite}
     SEL -->|switches tab + loads| T4

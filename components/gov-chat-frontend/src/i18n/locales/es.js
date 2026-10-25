@@ -1597,7 +1597,7 @@ export default {
       version: 'v{n}',
       versions: 'Versiones',
       deleteLabel: 'Eliminar',
-      headTest: 'Routing Lab'
+      testingLab: 'Testing Lab'
     },
     logs: {
       labeled: 'etiquetados: {n}',
@@ -2900,9 +2900,9 @@ export default {
         keyword: 'Keyword'
       }
     },
-    headTest: {
-      title: 'Routing Lab — head test',
-      cta: 'Routing Lab',
+    testingLab: {
+      title: 'Testing Lab',
+      cta: 'Testing Lab',
       badge: {
         present: 'head ready',
         stale: 'head stale',
@@ -3443,13 +3443,14 @@ export default {
         title: 'Generar una suite de pruebas comparativas',
         hint: 'Sintetiza preguntas con salidas esperadas a partir de los repositorios seleccionados — uno o más: el actual solo o junto con repositorios relacionados.',
         size: 'Preguntas',
-        config: 'Configuración del modelo juez',
-        default: 'Por defecto del despliegue (configuración activa / env)',
-        defaultNamed: 'Predeterminado del despliegue — {name}{model}',
+        config: 'Configuración del modelo de generación',
+        default: 'Predeterminado del despliegue (.env)',
+        defaultNamed: 'Configuración activa — {name}{model}',
         effective: 'Evaluando con {name}{model}',
+        effectiveGenerating: 'Generando con {name}{model}',
         envDefault: 'valor por defecto del entorno',
-        envJudge: 'Predeterminado del sistema (entorno){model}',
-        envJudgePlain: 'Predeterminado del sistema (entorno)',
+        envJudge: 'Predeterminado del despliegue (.env){model}',
+        envJudgePlain: 'Predeterminado del despliegue (.env)',
         model: 'Modelo',
         modelPick: 'Predeterminado de la configuración',
         modelDefault: 'predeterminado de la configuración',
@@ -3492,6 +3493,7 @@ export default {
       run: {
         button: 'Ejecutar la prueba comparativa',
         working: 'Ejecutando…',
+        judge: 'Configuración del modelo juez',
         retrieved: 'recuperados',
         pass: 'aprobado',
         fail: 'fallido',

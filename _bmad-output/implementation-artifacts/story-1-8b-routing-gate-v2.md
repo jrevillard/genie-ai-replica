@@ -64,7 +64,7 @@ evidence.
    (the frontmatter forbidden list / the score band). Encoded today as
    `head_claim ∈ {floor, veto, margin, claim}` (the FIRST failing
    condition), `tag_veto` carrying the offending tag's name, and the
-   provenance strings (§4). HeadTestDialog surfacing of these fields is
+   provenance strings (§4). TestingLabDialog surfacing of these fields is
    remaining work (§7).
 4. **The suite generator must produce MORE RANDOM adversarial
    negatives.** The deterministic forbidden-derived negatives
@@ -145,7 +145,7 @@ epidemiology. Probe tool: `gate-probe-inner.js` (session-local, 2026-10-09).
 f8ead5de0: v2 unit tests authored (jest `head-test-service.test.js`
 +176; pytest `test_fanout.py` +287 incl. gate parity); suite generator
 randomized (off-domain + meta negative classes with deterministic
-fallbacks); HeadTestDialog teach-the-user live (3-check Floor /
+fallbacks); TestingLabDialog teach-the-user live (3-check Floor /
 Forbidden-tags / Margin breakdown with DsPill pass/fail/na from
 `fidelity.knobs` + veto/floor teach panels, i18n ×14). The validation
 cycle then exposed the ONE gap this story could not close — a
@@ -157,7 +157,7 @@ CLAIM-side failure (§8) — spun into 1-8c.]
   veto) — re-run 2026-10-09.
 - Suite generator: MORE RANDOM adversarial negatives
   (`head-suite-service.js` untouched so far — decision §2.4).
-- Lab UI teach-the-user surfacing (`HeadTestDialog.vue` untouched): a
+- Lab UI teach-the-user surfacing (`TestingLabDialog.vue` untouched): a
   "deciding condition" column from `head_claim` + which-tag copy from
   `tag_veto`/`max_tag_cosine` + what-to-edit hint (frontmatter forbidden
   list). The response contract is already in place (§4).
@@ -452,7 +452,7 @@ the rerank candidates' file_ids), and rerank-ordered top_chunks
 in words — answerable: best chunk vs the 0.5 answer bar with the chunk
 preview; weak/unanswerable: term-overlap analysis of the query vs the
 best candidate ("the corpus mentions X, Y but no chunk answers this";
-"No corpus content matches this question"). HeadTestDialog renders it
+"No corpus content matches this question"). TestingLabDialog renders it
 above the current suite: title + close, query + chunks-scanned +
 elapsed, a Head-verdict leg and a Corpus-coverage leg (DsPills), the
 reason paragraph, Reference-files tags, and the top-chunks table

@@ -2,7 +2,7 @@
 // state: repos, suites, runs and their metrics. Prints the response shapes
 // it finds so the next step is planned from what actually exists.
 //
-// Auth spine copied from scripts/okf-routing-lab/smoke-8-6.js (throwaway
+// Auth spine copied from scripts/okf-testing-lab/smoke-8-6.js (throwaway
 // Keycloak user + tools-admin + temporary ROPC, reverted on exit).
 // Secrets are never printed. Nothing is created or deleted except the
 // throwaway user (reused if a previous round left one).

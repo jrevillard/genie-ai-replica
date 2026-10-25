@@ -1598,7 +1598,7 @@ export default {
       version: 'v{n}',
       versions: 'Liphetolelo',
       deleteLabel: 'Hlakola',
-      headTest: 'Routing Lab'
+      testingLab: 'Testing Lab'
     },
     logs: {
       labeled: 'tse leibotsoeng: {n}',
@@ -2893,9 +2893,9 @@ export default {
         keyword: 'Keyword'
       }
     },
-    headTest: {
-      title: 'Routing Lab — head test',
-      cta: 'Routing Lab',
+    testingLab: {
+      title: 'Testing Lab',
+      cta: 'Testing Lab',
       badge: {
         present: 'head ready',
         stale: 'head stale',
@@ -3431,13 +3431,14 @@ export default {
         title: 'Hlahisa sete ea ditekanyo',
         hint: 'E hlahisa dipotso tse nang le dikarabo tse lebetsweng ho tswa polokelong tse khethiloeng — e le nngwe kapa tse ngata, polokelo ea kajeno feela kapa e nang le tse amanang le eona.',
         size: 'Dipotso',
-        config: 'Pehelo ea modeli ea moahloli',
-        default: 'Ya kamehla ea hatiso (pehelo e sebelisoang / env)',
-        defaultNamed: 'Default ea deployment — {name}{model}',
+        config: 'Pehelo ea modeli ea mofatso',
+        default: 'Default ea deployment (.env)',
+        defaultNamed: 'Pehelo e sebetsang — {name}{model}',
         effective: 'Kutathibiri ka {name}{model}',
+        effectiveGenerating: 'Ho etsa ka {name}{model}',
         envDefault: 'm-simobo wa tikamiso',
-        envJudge: 'Mokhoa oa kamehla ea tsamaiso (tikoloho){model}',
-        envJudgePlain: 'Mokhoa oa kamehla ea tsamaiso (tikoloho)',
+        envJudge: 'Default ea deployment (.env){model}',
+        envJudgePlain: 'Default ea deployment (.env)',
         model: 'Modeli',
         modelPick: 'Ya kamehla ea pehelo',
         modelDefault: 'ya kamehla ea pehelo',
@@ -3479,6 +3480,7 @@ export default {
       },
       run: {
         button: 'Phethahatsa tekanyo',
+        judge: 'Pehelo ea modeli ea moahloli',
         working: 'E phethahatsa…',
         retrieved: 'hlailwe',
         pass: 'hantshwe',

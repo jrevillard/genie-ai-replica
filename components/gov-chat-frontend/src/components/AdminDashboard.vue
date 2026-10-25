@@ -128,7 +128,7 @@
               </li>
               <!-- Story 8-7 (David 2026-10-20): model configurations are a
                    PLATFORM concern — the LAST Admin Dashboard tab, not a tab
-                   buried in the OKF Lab dialog. Rides the OKF flag (its
+                   buried in the Testing Lab dialog. Rides the OKF flag (its
                    storage/API live in okf-server). -->
               <li v-if="okfEnabled" class="nav-item">
                 <a

@@ -106,7 +106,7 @@ export default {
       // STALE-ANSWER GUARD. A tally describes THIS repository at THIS moment.
       // Bumped by: starting a run, the repo changing, the concept changing,
       // and unmount. A poll whose epoch moved while in flight is discarded —
-      // same idiom as HeadTestDialog's suiteEpoch / queryEpoch.
+      // same idiom as TestingLabDialog's suiteEpoch / queryEpoch.
       epoch: 0
     };
   },

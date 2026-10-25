@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * HEAD TEST DIALOG (Story 1-8, 2026-10-08): the Routing Lab. Contract
+ * HEAD TEST DIALOG (Story 1-8, 2026-10-08): the Testing Lab. Contract
  * pinned here: the three tabs, the head badge states (present/stale/
  * missing from repo.head + frontmatter.updated_at), the Test tab verdict
  * (positive vs adversarial expectation), the wizard readOnly mode (no
@@ -29,7 +29,7 @@
 const dispatch = jest.fn();
 
 const { mount } = require('@vue/test-utils');
-const OkfHeadTestDialog = require('@/components/okf/editor/HeadTestDialog.vue').default;
+const OkfTestingLabDialog = require('@/components/okf/editor/TestingLabDialog.vue').default;
 
 const REPO = {
   repo_id: 'r-1',
@@ -60,7 +60,7 @@ function fakeStore() {
 }
 
 function mountDialog(props = {}) {
-  return mount(OkfHeadTestDialog, {
+  return mount(OkfTestingLabDialog, {
     global: {
       mocks: { $store: fakeStore() },
       stubs: {

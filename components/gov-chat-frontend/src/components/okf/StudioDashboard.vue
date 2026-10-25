@@ -141,7 +141,7 @@
                 )
               }}
             </DsButton>
-            <!-- Story 1-8 (2026-10-08): the Head Tester / Routing Lab. Visible
+            <!-- Story 1-8 (2026-10-08): the Testing Lab. Visible
                  on the Published AND Ingested lanes (both are lifecycle_state
                  'publish'; ingested_at splits them) — testing the vectorized
                  head is the pre-ingest accuracy gate and stays available on
@@ -343,8 +343,8 @@
       @changed="onVersionsChanged"
     />
 
-    <!-- Story 1-8 (2026-10-08): the Head Tester / Routing Lab. -->
-    <OkfHeadTestDialog
+    <!-- Story 1-8 (2026-10-08): the Testing Lab. -->
+    <OkfTestingLabDialog
       :visible="headTestRepo !== null"
       :repo="headTestRepo"
       @close="headTestRepo = null"
@@ -387,7 +387,7 @@ import DsSelect from '../ds/Select.vue';
 import DsHealthRing from '../ds/HealthRing.vue';
 import DsSpinner from '../ds/Spinner.vue';
 import OkfVersionsDialog from './editor/VersionsDialog.vue';
-import OkfHeadTestDialog from './editor/HeadTestDialog.vue';
+import OkfTestingLabDialog from './editor/TestingLabDialog.vue';
 import OkfLogsDialog from './editor/LogsDialog.vue';
 import OkfRenameRepoDialog from './editor/RenameRepoDialog.vue';
 import OkfBuildProgressCard from './editor/BuildProgressCard.vue';
@@ -425,7 +425,7 @@ export default {
     DsHealthRing,
     DsSpinner,
     OkfVersionsDialog,
-    OkfHeadTestDialog,
+    OkfTestingLabDialog,
     OkfLogsDialog,
     OkfRenameRepoDialog,
     OkfBuildProgressCard,
@@ -825,7 +825,7 @@ export default {
       this.logsRepo = r;
       this.logsOpen = true;
     },
-    /** Story 1-8: open the Routing Lab. A rebuild inside the dialog
+    /** Story 1-8: open the Testing Lab. A rebuild inside the dialog
      * rewrites okf_repositories.head — refresh the lane card after. */
     onHeadTest(r) {
       this.headTestRepo = r;

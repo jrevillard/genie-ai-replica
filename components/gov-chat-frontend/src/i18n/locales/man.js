@@ -1576,7 +1576,7 @@ export default {
       version: 'v{n}',
       versions: 'Berolu',
       deleteLabel: 'A kuntu',
-      headTest: 'Routing Lab'
+      testingLab: 'Testing Lab'
     },
     logs: {
       labeled: 'kakōl̦l̦eiki: {n}',
@@ -2853,9 +2853,9 @@ export default {
         keyword: 'Keyword'
       }
     },
-    headTest: {
-      title: 'Routing Lab — head test',
-      cta: 'Routing Lab',
+    testingLab: {
+      title: 'Testing Lab',
+      cta: 'Testing Lab',
       badge: {
         present: 'head ready',
         stale: 'head stale',
@@ -3388,13 +3388,14 @@ export default {
         title: 'Generate a benchmark suite',
         hint: 'Synthesizes questions with expected outputs from the selected repositories — one or more, the current repo alone or with related repos.',
         size: 'Questions',
-        config: 'Judge model configuration',
-        default: 'Deployment default (active configuration / env)',
-        defaultNamed: 'Deployment default — {name}{model}',
+        config: 'Generation model configuration',
+        default: 'Deployment default (.env)',
+        defaultNamed: 'Active configuration — {name}{model}',
         effective: 'Judging with {name}{model}',
+        effectiveGenerating: 'Generating with {name}{model}',
         envDefault: 'environment default',
-        envJudge: 'System default (environment){model}',
-        envJudgePlain: 'System default (environment)',
+        envJudge: 'Deployment default (.env){model}',
+        envJudgePlain: 'Deployment default (.env)',
         model: 'Model',
         modelPick: 'Configuration default',
         modelDefault: 'configuration default',
@@ -3436,6 +3437,7 @@ export default {
       },
       run: {
         button: 'Run benchmark',
+        judge: 'Judge model configuration',
         working: 'Running…',
         retrieved: 'retrieved',
         pass: 'pass',

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // ragas-suite-service — Story 8-6 (2026-10-17, ADR-okf-043): RAGAS
-// benchmark suites for the OKF Lab. Clones the head-suite-service skeleton
+// benchmark suites for the Testing Lab. Clones the head-suite-service skeleton
 // (same okf_head_test_runs collection, same 202+poll job pattern, same
 // honest-empty semantics) and adds the RAGAS-specific legs:
 //
@@ -1278,7 +1278,11 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
     const effectiveJudgeFidelity = modelConfigService.judgeFidelity(effectiveJudge);
     genProgress.set(opts.suiteKey, {
       ...(genProgress.get(opts.suiteKey) || {}),
-      judge: effectiveJudgeFidelity
+      judge: effectiveJudgeFidelity,
+      // The pick AS MADE, so the panel can show the RUNNING generation's
+      // model in its picker instead of the one it remembers: the dropdown
+      // and the "actually using" line must never disagree (David 2026-10-25).
+      judge_pick: { config_key: opts.judge_config_key || null, model: opts.judge_model || null }
     });
     // 202 + poll: the sidecar starts a background job and we poll it — no
     // connection is held open for the (potentially hour-long) generation.
@@ -1794,10 +1798,16 @@ async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
   let lastProgressWrite = 0;
   const report = (p) => {
     const now = Date.now();
-    if (now - lastProgressWrite < PROGRESS_WRITE_MIN_MS) return;
+    // The judge's FIRST report is not throttled — the panel must be able to
+    // name the model the re-score is using from the first tick (David
+    // 2026-10-25).
+    const force = Boolean(p && p.force);
+    if (!force && now - lastProgressWrite < PROGRESS_WRITE_MIN_MS) return;
     lastProgressWrite = now;
+    const body = { ...(p || {}) };
+    delete body.force;
     db.collection(COLLECTION)
-      .update(newRunKey, { progress: p, updated_at: new Date().toISOString() })
+      .update(newRunKey, { progress: body, updated_at: new Date().toISOString() })
       .catch((e) => logger.warn('ragas-suite.rescore.progress_write_failed', { run_key: newRunKey, error: e.message }));
   };
   rescoreInFlight.set(newRunKey, { source_run_key: runKey });
@@ -1866,12 +1876,18 @@ async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
         },
         {
           // The sidecar's rows-done/rows-total becomes the re-score's
-          // progress (the panel polls it while the judge leg runs).
+          // progress (the panel polls it while the judge leg runs). The
+          // FIRST tick carries the judge and the pick, so the panel names
+          // the model the re-score is using and its picker adopts it
+          // (David 2026-10-25).
           onProgress: (p) =>
             report({
               phase: 'judge',
               done: Number(p && p.done) || 0,
-              total: Number(p && p.total) || samples.length
+              total: Number(p && p.total) || samples.length,
+              force: true,
+              judge: modelConfigService.judgeFidelity(effectiveJudge),
+              judge_pick: { config_key: opts.judge_config_key || null, model: opts.judge_model || null }
             })
         }
       );
@@ -2072,11 +2088,19 @@ async function beginRunSuite(repoId, suiteKey, payload = {}, opts = {}) {
   let lastProgressWrite = 0;
   const reportProgress = async (progress) => {
     const now = Date.now();
-    if (now - lastProgressWrite < PROGRESS_WRITE_MIN_MS) return;
+    // The judge's FIRST report is not throttled: it is the one the panel
+    // needs to name the model the run is scoring with, and the throttle
+    // would drop it exactly when the retrieval leg was fast (the panel then
+    // showed a picker that disagreed with the running job — David
+    // 2026-10-25).
+    const force = Boolean(progress && progress.force);
+    if (!force && now - lastProgressWrite < PROGRESS_WRITE_MIN_MS) return;
     lastProgressWrite = now;
+    const body = { ...(progress || {}) };
+    delete body.force;
     await db
       .collection(COLLECTION)
-      .update(runKey, { progress, updated_at: new Date().toISOString() })
+      .update(runKey, { progress: body, updated_at: new Date().toISOString() })
       .catch((e) => logger.warn('ragas-suite.run.progress_write_failed', { run_key: runKey, error: e.message }));
   };
   const done = runSuite(repoId, suiteKey, {
@@ -2457,6 +2481,18 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     // fail every judge leg) — the env judge applies, and the run's fidelity
     // records the EFFECTIVE judge, not the unusable pick.
     const effectiveJudge = judgeOverride && judgeOverride.model ? judgeOverride : null;
+    // Name the judge in the progress envelope, with the pick as made: the
+    // panel shows "Judging with <model>" and adopts the pick into its own
+    // picker, so the dropdown and the running job can never disagree
+    // (David 2026-10-25).
+    await report(opts, {
+      phase: 'judge',
+      done: 0,
+      total: 1,
+      force: true,
+      judge: modelConfigService.judgeFidelity(effectiveJudge),
+      judge_pick: { config_key: opts.judge_config_key || null, model: opts.judge_model || null }
+    });
     // Judge ONLY the rows that produced an answer. A row with no answer has
     // nothing to judge: submitting it makes the sidecar score an EMPTY
     // response, which comes back as ZEROS on the context and answer metrics
@@ -2662,6 +2698,9 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       created_by: (opts.actor && opts.actor.user_id) || 'system',
       repo_ids: repoIds,
       metrics: opts.metrics,
+      // The last progress, including the judge it was scored with — the
+      // final write is a full replace, so it has to travel with the doc.
+      progress: opts.lastProgress || null,
       payload: {
         suite_created_at: suite.created_at,
         entries: entries.map((e) => ({
@@ -2735,6 +2774,15 @@ async function runSuite(repoId, suiteKey, opts = {}) {
 }
 
 async function report(opts, progress) {
+  // Keep the last progress on the run's own opts: the final document is a
+  // full REPLACE, so without this the panel's "Judging with <model>" line
+  // and the run's progress envelope vanish when the run lands (David
+  // 2026-10-25).
+  if (opts && typeof opts === 'object') {
+    const body = { ...(progress || {}) };
+    delete body.force;
+    opts.lastProgress = body;
+  }
   if (typeof opts.reportProgress === 'function') await opts.reportProgress(progress);
 }
 

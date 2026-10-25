@@ -740,6 +740,22 @@ describe('run', () => {
     expect(sent.metrics).toEqual(svc.DEFAULT_METRICS);
   });
 
+  // David 2026-10-25: the panel's picker and the RUNNING job must never
+  // disagree — the dropdown said GLM while the job was scoring with granite.
+  // The run's progress therefore names the judge it is using and carries the
+  // pick AS MADE, so the panel can adopt it.
+  it('the run\'s progress names the judge and carries the pick as made', async () => {
+    const sk = await makeSuite();
+    const begun = await svc.beginRunSuite('me', sk, { mode: 'whatif', judge_config_key: '__env__' }, {});
+    await begun.done;
+    const doc = await svc.getRunSuite('me', sk, begun.run_key);
+    expect(doc.progress).toBeTruthy();
+    expect(doc.progress.judge).toBeTruthy();
+    expect(doc.progress.judge_pick).toEqual({ config_key: '__env__', model: null });
+    // and the force flag never leaks into the stored envelope
+    expect(doc.progress.force).toBeUndefined();
+  });
+
   it('respects an extended metric selection (default four always included)', async () => {
     const sk = await makeSuite();
     const begun = await svc.beginRunSuite('me', sk, { mode: 'whatif', metrics: ['factual_correctness'] }, {});

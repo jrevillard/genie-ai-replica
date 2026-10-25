@@ -79,7 +79,7 @@
         "
       />
     </div>
-    <!-- Story 1-8 (2026-10-08): read-only head status + the Routing Lab.
+    <!-- Story 1-8 (2026-10-08): read-only head status + the Testing Lab.
          Publishing builds the vectorized head from the tags; this card tells
          the curator what exists, and the Lab (view/test only here — the
          wizard never mutates, D4) runs the same routing simulation as the
@@ -88,9 +88,9 @@
       <span :class="['okf-step__head-dot', 'okf-step__head-dot--' + headStatus]" />
       <span>{{ headCardText }}</span>
       <DsButton variant="secondary" small @click="headTestOpen = true">
-        {{ translate('okf.headTest.cta', 'Routing Lab') }}
+        {{ translate('okf.testingLab.cta', 'Testing Lab') }}
       </DsButton>
-      <OkfHeadTestDialog
+      <OkfTestingLabDialog
         :visible="headTestOpen"
         :repo="repo"
         :read-only="true"
@@ -124,7 +124,7 @@
 import DsButton from '../../ds/Button.vue';
 import DsInfoTip from '../../ds/InfoTip.vue';
 import DsStatusTag from '../../ds/StatusTag.vue';
-import OkfHeadTestDialog from '../editor/HeadTestDialog.vue';
+import OkfTestingLabDialog from '../editor/TestingLabDialog.vue';
 import OkfAccessPanel from '../editor/AccessPanel.vue';
 import { mapGetters } from 'vuex';
 import translateMixin from '../../../mixins/translateMixin';
@@ -132,7 +132,7 @@ import { getFrontmatter, isFrontmatterPublishReady } from '../../../services/fro
 
 export default {
   name: 'OkfStepPublish',
-  components: { DsButton, DsInfoTip, DsStatusTag, OkfHeadTestDialog, OkfAccessPanel },
+  components: { DsButton, DsInfoTip, DsStatusTag, OkfTestingLabDialog, OkfAccessPanel },
   mixins: [translateMixin],
   props: { draft: { type: Object, default: null }, expert: { type: Boolean, default: false } },
   emits: ['gate', 'dashboard'],
@@ -140,7 +140,7 @@ export default {
     return {
       liveConceptCount: null,
       frontmatterRows: [],
-      // Story 1-8: the read-only Routing Lab mount.
+      // Story 1-8: the read-only Testing Lab mount.
       headTestOpen: false
     };
   },
@@ -171,18 +171,18 @@ export default {
     headCardText() {
       if (this.headStatus === 'present') {
         return this.translate(
-          'okf.headTest.publishCard.present',
+          'okf.testingLab.publishCard.present',
           'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.'
         );
       }
       if (this.headStatus === 'stale') {
         return this.translate(
-          'okf.headTest.publishCard.stale',
+          'okf.testingLab.publishCard.stale',
           'The head is stale (tags changed after it was built) — publishing rebuilds it.'
         );
       }
       return this.translate(
-        'okf.headTest.publishCard.missing',
+        'okf.testingLab.publishCard.missing',
         'No vectorized head yet — publishing builds it from the approved tags.'
       );
     },

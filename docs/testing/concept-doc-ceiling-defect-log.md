@@ -171,7 +171,7 @@ ancestor paints them light in dark mode.
 the suggested-forbidden chips render correctly while the plain surface and text
 elements do not. That is exactly the "sometimes light, sometimes not" report.
 
-**Not affected:** `HeadTestDialog.vue` (the Routing Lab) uses the real vocabulary —
+**Not affected:** `TestingLabDialog.vue` (the Testing Lab) uses the real vocabulary —
 23 token references, zero `--color-*`.
 
 **Fix:** rewrite both files onto the shipped vocabulary —

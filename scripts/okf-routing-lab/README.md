@@ -46,6 +46,7 @@ directly, drive a live benchmark, or repair stored state.
 | `row-peek.js` / `run-peek.js` / `run-results.js` | Read-only Arango views: rows of a run, newest runs of a suite, full summary of one run |
 | `ragas-regenerate-reference.js` | Run **inside** the okf-server container: rewrite a suite entry's reference answer so it is grounded in the corpus VERBATIM, and write it only if `context_entities_recall` on the rewrite scores BETTER than on the original |
 | `ragas-gate-audit.js` | Run inside the okf-server container: read-only — score a suite's ORIGINAL references with the same metric the regeneration gate uses, and list the ones the corpus cannot ground |
+| `ragas-regenerate-entry.js` | Run **inside** the okf-server container: regenerate an ENTRY (question + expected passage + answer) against the published corpus, for the rows whose reference cannot be grounded at all. `--audit` lists which entries need it; `--judge env` picks the env judge (the suite's own judge cannot always drive RAGAS's synthesizer) |
 | `ropc-verify-revert.js` | One-shot: mint a master token, force ROPC off, verify — the hardening the earlier harness left unchecked |
 
 **Sidecar-internal scripts.** `ragas-rescore-judge.js` and `trigger-explain.js`

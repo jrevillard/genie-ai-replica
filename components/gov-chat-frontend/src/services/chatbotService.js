@@ -59,6 +59,25 @@ export default {
     const token = keycloakAuthService.getAccessToken();
     const url = `${baseUrl}/queries/stream`;
 
+    // A silent stream never recovers on its own: when the assistant is
+    // unreachable upstream the connection just stays open. Watch for
+    // frames — any resets the watch; silence past the budget aborts the
+    // stream and reports, so the UI leaves its thinking state.
+    const idleMs = Number(window.APP_CONFIG?.streamIdleTimeoutMs) || 120000;
+    let idleTimer = null;
+    const clearIdleWatch = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = null;
+    };
+    const armIdleWatch = () => {
+      clearIdleWatch();
+      idleTimer = setTimeout(() => {
+        controller.abort();
+        callbacks.onError?.(new Error('The assistant is not responding — the request timed out.'));
+      }, idleMs);
+    };
+    armIdleWatch();
+
     const payload = {
       ...queryData,
       timestamp: new Date().toISOString()
@@ -103,6 +122,7 @@ export default {
 
             try {
               const data = JSON.parse(trimmed.slice(6));
+              armIdleWatch();
               switch (data.type) {
                 case 'chunk':
                   callbacks.onChunk?.(data.content);
@@ -114,9 +134,11 @@ export default {
                   callbacks.onTranslation?.(data.content);
                   break;
                 case 'done':
+                  clearIdleWatch();
                   callbacks.onDone?.(data);
                   return;
                 case 'error':
+                  clearIdleWatch();
                   callbacks.onError?.(new Error(data.message || 'Stream error'));
                   return;
               }
@@ -128,9 +150,10 @@ export default {
           return reader.read().then(processChunk);
         }
 
-        return reader.read().then(processChunk);
+        return reader.read().then(processChunk).finally(clearIdleWatch);
       })
       .catch((error) => {
+        clearIdleWatch();
         if (error.name === 'AbortError') return;
         callbacks.onError?.(error);
       });

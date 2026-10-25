@@ -235,6 +235,77 @@ describe('chatbotService', () => {
       );
     });
 
+    it('aborts and reports an error when the stream stays silent past the idle timeout', async () => {
+      jest.useFakeTimers();
+      try {
+        const neverReader = { read: jest.fn(() => new Promise(() => {})) };
+        global.fetch = jest.fn().mockResolvedValue({ ok: true, body: { getReader: () => neverReader } });
+
+        const onError = jest.fn();
+        const onDone = jest.fn();
+        const controller = chatbotService.submitQueryStream({ query: 'test' }, { onError, onDone });
+
+        jest.advanceTimersByTime(120000);
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(controller.signal.aborted).toBe(true);
+        expect(onError).toHaveBeenCalledTimes(1);
+        expect(onError.mock.calls[0][0].message).toMatch(/timed out/i);
+        expect(onDone).not.toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('keeps the stream alive while frames keep arriving', async () => {
+      jest.useFakeTimers();
+      try {
+        // Frames arrive spaced 30s apart (faked timers), like a slow
+        // generation — the watch must re-arm at each one.
+        const delay = (ms, value) => new Promise((resolve) => setTimeout(() => resolve(value), ms));
+        const payload = () => ({
+          done: false,
+          value: new TextEncoder().encode('data: {"type":"chunk","content":"x"}\n\n')
+        });
+        let frameCount = 0;
+        const reader = {
+          read: jest.fn(() => {
+            frameCount += 1;
+            return frameCount <= 3 ? delay(30000, payload()) : new Promise(() => {});
+          })
+        };
+        global.fetch = jest.fn().mockResolvedValue({ ok: true, body: { getReader: () => reader } });
+
+        const onError = jest.fn();
+        const controller = chatbotService.submitQueryStream({ query: 'test' }, { onError });
+
+        const flush = async () => {
+          for (let i = 0; i < 20; i++) await Promise.resolve();
+        };
+        // Three frames land at t=30/60/90 — inside the budget each time.
+        // advanceTimersByTime is synchronous, so each segment flushes the
+        // frame's microtasks before the next segment runs.
+        jest.advanceTimersByTime(30000);
+        await flush();
+        jest.advanceTimersByTime(30000);
+        await flush();
+        jest.advanceTimersByTime(30000);
+        await flush();
+        jest.advanceTimersByTime(50000);
+        await flush();
+        expect(controller.signal.aborted).toBe(false);
+        expect(onError).not.toHaveBeenCalled();
+        // Silence past one full budget from the last frame fires it.
+        jest.advanceTimersByTime(120000);
+        await flush();
+        expect(controller.signal.aborted).toBe(true);
+        expect(onError).toHaveBeenCalledTimes(1);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it('calls onChunk callback when receiving chunk data', async () => {
       const mockFetch = jest.fn();
       global.fetch = mockFetch;

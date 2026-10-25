@@ -118,6 +118,18 @@ name wins. */ -}}
 {{- /* workingDir: the image ENTRYPOINT runs `python genieai_chatqna.py`
 with a RELATIVE path; the script lives in /app/ChatQnA/. Without it the container starts in /app and
 exits immediately ("can't open file"). */ -}}
+{{- /* Liveness is an EXEC probe, not httpGet: the orchestrator's
+uvicorn event loop is blocked for the whole duration of a query (the
+retrieval, rerank and LLM hops run synchronously in front of it —
+measured 60-90 s on the shared GPU), so a HTTP /health probe with the
+default 1 s timeout reports three consecutive failures every time a
+real query runs and the kubelet kills the pod mid-stream (exit 137,
+observed live: the backend saw "socket hang up" from a pod the liveness
+had just killed). `kill -0 1` probes the PROCESS — it fires only when
+the container is genuinely dead, and never punishes a busy event loop.
+The honest long-term fix is application-side (serve /health from the
+threadpool so it answers while the loop is busy); this probe keeps the
+chart correct until that lands. */ -}}
 {{- $svcVals := dict
     "image" (dict "repository" "genie-ai-chatqna-server" "tag" "main")
     "workingDir" "/app/ChatQnA"
@@ -126,7 +138,7 @@ exits immediately ("can't open file"). */ -}}
     "env" (concat $tuningEnv $promptEnv $gpuSecretEnv $opeaEnvRows)
     "probes" (dict
       "readiness" (dict "httpGet" (dict "path" "/health" "port" "http") "initialDelaySeconds" 120 "periodSeconds" 15)
-      "liveness"  (dict "httpGet" (dict "path" "/health" "port" "http") "initialDelaySeconds" 180 "periodSeconds" 30)
+      "liveness"  (dict "exec" (dict "command" (list "sh" "-c" "kill -0 1")) "initialDelaySeconds" 180 "periodSeconds" 30)
       "startup"   (dict "httpGet" (dict "path" "/health" "port" "http") "failureThreshold" 30 "periodSeconds" 10)
     )
 -}}

@@ -2432,7 +2432,21 @@ async function runSuite(repoId, suiteKey, opts = {}) {
           results,
           summary: null,
           error: emptyError,
-          fidelity: { judge: null, answers: await answerFidelity({ serveMode }) }
+          fidelity: {
+            // The SAME shape as the all-rows-failed doc above — a failed
+            // run's fidelity block is read by the panel and the explain.
+            retrieval: serveMode
+              ? { algorithm: 'SERVED — chatqna /v1/chatqna', mode: 'serve', serve_url: SERVE_URL(), graphs: graphNames }
+              : {
+                  algorithm: 'per-graph APPROX_NEAR_COSINE + unified rerank',
+                  mode: 'whatif',
+                  candidate_k: CANDIDATE_K,
+                  top_n: TOP_N,
+                  graphs: graphNames
+                },
+            judge: null,
+            answers: await answerFidelity({ serveMode })
+          }
         }
       };
       await db.collection(COLLECTION).replace(opts.runKey, emptyDoc);

@@ -368,6 +368,51 @@ Implementation notes that will bite anyone who touches this again:
   its values are double-quoted (which is what prettier keeps, since the
   apostrophes would otherwise need escaping).
 
+## The advisor's second judge is now COMPUTED — and the hardcoded claim was wrong
+
+David 2026-10-25: "If you have hard coded strings then fucking fix it!!!!!".
+The advisor carried two frozen sentences about a second judge:
+
+- "A second judge disagrees on roughly half of these rows" (factual_correctness)
+- "A second judge reproduces this on most of these rows" (context_entities_recall)
+
+Both were measured ONCE, offline, and baked into the string. The verdict is
+now computed from the sibling re-score — the run that scored the SAME answers
+with a different judge. Only a lineage-linked sibling can be compared row by
+row: an unrelated run scored its own answers.
+
+**Measured against the real stored pair** (`rr1792843333604-268dad`
+MiniMax-M3.1-Flash → its re-score `rr1792871605303-9ce608` granite):
+
+| Metric | Failed by MiniMax | Granite CLEARED | Granite KEPT failing | Granite could not measure |
+|---|---|---|---|---|
+| `context_entities_recall` | 67 | 13 | **52** | 2 |
+| `factual_correctness` | 44 | 17 | **25** | 2 |
+| `answer_relevancy` | 6 | 1 | **5** | 0 |
+
+The hardcoded claim said granite "cleared 9 of 21" on factual_correctness and
+"reproduced this on 30 of 39" on entity recall. The computed numbers are
+**17 of 44** and **52 of 67** — the proportions are close (the qualitative
+reading survives), but the absolute numbers were wrong, and they were
+constants: no re-score, no judge change and no edit to the suite could ever
+move them.
+
+**What this changes for the decision.** The advisor told the curator to treat
+the second-judge rows as "unproven rather than judge noise". The measured
+comparison says the opposite for most of them: granite KEPT 52 of the 67
+entity-recall failures and 25 of the 44 factual-correctness failures. Those
+rows are REPRODUCIBLE across two judges — they are real failures, and the
+lever is the reference answer's wording, not the RAG and not the prompt. The
+prompt tweak is justified only by the rows that BOTH judges failed with
+faithfulness actually failing — which is what the 3 remaining judge-stage rows
+(`llm`: new-44, new-46, new-51) are.
+
+A run with NO sibling now says so: "No second judge has scored this run yet:
+re-score it with another judge to find out whether this is judge harshness or
+a real failure." That is the state of `rr1792896220523-b71784` (the MiniMax-M3
+run) until it is re-scored — and it is exactly what the granite re-score
+fixes.
+
 ## The re-score was not a run — it could not be seen or stopped (2026-10-25)
 
 David re-scored `rr1792896220523-b71784` with another judge and the panel

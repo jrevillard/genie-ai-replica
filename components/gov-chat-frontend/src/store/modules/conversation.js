@@ -123,3 +123,49 @@ export default {
   getters,
   mutations
 };
+
+export const STORAGE_KEY = 'genie.conversation.v1';
+
+export function persistConversation(moduleState) {
+  try {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(moduleState));
+  } catch (error) {
+    // A full or blocked storage degrades to navigation-only survival —
+    // the Vuex state still holds the conversation for this page life.
+    console.warn('conversation: could not persist to sessionStorage', error?.name);
+  }
+}
+
+export function rehydrateConversation(moduleState) {
+  let payload;
+  try {
+    payload = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || 'null');
+  } catch {
+    payload = null;
+  }
+  if (!payload || payload.openId !== moduleState.openId || !payload.conversations) return;
+  for (const [id, entry] of Object.entries(payload.conversations)) {
+    if (!entry || !Array.isArray(entry.messages)) return; // shape drift — discard wholesale
+    if (entry.isStreaming) {
+      // The fetch died with the page: the turn renders through the
+      // existing retry affordance.
+      entry.isStreaming = false;
+      entry.streamInterrupted = true;
+      const last = entry.messages.at(-1);
+      if (last && last.sender === 'bot' && last.isStreaming) {
+        last.isStreaming = false;
+        last.isError = true;
+      }
+    }
+    moduleState.conversations[id] = entry;
+  }
+}
+
+export function subscribeConversation(store) {
+  let timer = null;
+  store.subscribe((mutation) => {
+    if (!mutation.type.startsWith('conversation/')) return;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => persistConversation(store.state.conversation), 300);
+  });
+}

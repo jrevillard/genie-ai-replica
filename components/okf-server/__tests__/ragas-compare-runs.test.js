@@ -183,5 +183,56 @@ describe('the operator compare tool', () => {
       );
       expect(cmp.tally).toEqual({ improved: 1, unchanged: 1, regressed: 0 });
     });
+
+    it("a FRESH run's regenerated ANSWERS count as changed rows — not as the control group", () => {
+      // A fresh run re-serves every answer; the suite's references are
+      // untouched. Detecting only a changed REFERENCE made a fresh run
+      // report "0 regenerated rows" and put answer-churned rows into the
+      // control group — a control group that then measured the ANSWERS
+      // changing and said nothing about the judge.
+      const entries = [
+        { id: 'new-1', reference_answer: 'A' },
+        { id: 'new-2', reference_answer: 'B' }
+      ];
+      const cmp = compareRuns(
+        runDoc(
+          [
+            { id: 'new-1', answer: 'the old answer', metrics: { context_recall: 0.2 } },
+            { id: 'new-2', answer: 'the old answer', metrics: { context_recall: 0.5 } }
+          ],
+          entries
+        ),
+        runDoc(
+          [
+            { id: 'new-1', answer: 'a fresh answer', metrics: { context_recall: 0.6 } },
+            { id: 'new-2', answer: 'a fresh answer', metrics: { context_recall: 0.5 } }
+          ],
+          entries
+        ),
+        'context_recall'
+      );
+      expect(cmp.changed).toEqual({ answers: 2, references: 0 });
+      expect(cmp.regenerated.map((r) => r.id)).toEqual(['new-1', 'new-2']);
+      expect(cmp.regenerated[0].answerChanged).toBe(true);
+      expect(cmp.regenerated[0].referenceChanged).toBe(false);
+      expect(cmp.control.count).toBe(0);
+      expect(cmp.tally).toEqual({ improved: 1, unchanged: 1, regressed: 0 });
+    });
+
+    it('a RE-SCORE changes neither the answers nor the references — every row is the control', () => {
+      const entries = [{ id: 'new-1', reference_answer: 'A' }];
+      const cmp = compareRuns(
+        runDoc([{ id: 'new-1', answer: 'the same answer', metrics: { context_recall: 0.4 } }], entries),
+        runDoc([{ id: 'new-1', answer: 'the same answer', metrics: { context_recall: 0.5 } }], entries),
+        'context_recall'
+      );
+      expect(cmp.changed).toEqual({ answers: 0, references: 0 });
+      expect(cmp.regenerated).toHaveLength(0);
+      // the control group is the whole point of a re-score: the same answers,
+      // judged by two judges, over the same rows.
+      expect(cmp.control.count).toBe(1);
+      expect(cmp.control.baselineMean).toBeCloseTo(0.4);
+      expect(cmp.control.candidateMean).toBeCloseTo(0.5);
+    });
   });
 });

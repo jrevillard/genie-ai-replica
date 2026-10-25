@@ -117,21 +117,46 @@ function compareRuns(baseline, candidate, focusMetric = 'context_entities_recall
     };
   });
 
-  // 2. the rows whose reference changed (the regenerated ones)
+  // 2. the rows whose CONTENT changed between the runs — the regenerated
+  //    ones. TWO dimensions, and they mean different things:
+  //      answer   — the served answer differs (a FRESH run regenerates the
+  //                 answers; the references are the suite's, untouched);
+  //      reference— the suite's reference answer differs (a REGENERATED
+  //                 entry; the answers were re-judged, not re-served).
+  //    A re-score changes neither; a fresh run changes the answer; an
+  //    entry regeneration changes the reference. Detecting only the
+  //    reference made a fresh run report "0 regenerated rows" and put
+  //    answer-churned rows into the control group — the control group then
+  //    measured the answers changing, and said nothing about the judge.
   const baseEntries = new Map(((baseline.payload && baseline.payload.entries) || []).map((e) => [e.id, e]));
   const candEntries = new Map(((candidate.payload && candidate.payload.entries) || []).map((e) => [e.id, e]));
-  const regenerated = [];
-  for (const [id, candEntry] of candEntries) {
+  const changedIds = new Set();
+  let answerChangedCount = 0;
+  let referenceChangedCount = 0;
+  for (const [id, row] of candById) {
+    const baseRow = baseById.get(id);
     const baseEntry = baseEntries.get(id);
-    if (!baseEntry) continue;
-    if (baseEntry.reference_answer !== candEntry.reference_answer) regenerated.push(id);
+    const candEntry = candEntries.get(id);
+    const answerChanged = baseRow ? baseRow.answer !== row.answer : false;
+    const referenceChanged = baseEntry && candEntry ? baseEntry.reference_answer !== candEntry.reference_answer : false;
+    if (answerChanged) answerChangedCount += 1;
+    if (referenceChanged) referenceChangedCount += 1;
+    if (answerChanged || referenceChanged) changedIds.add(id);
   }
 
-  const regeneratedRows = regenerated.map((id) => {
-    const b = metricValue((baseById.get(id) || {}).metrics, focusMetric);
-    const k = metricValue((candById.get(id) || {}).metrics, focusMetric);
+  const regeneratedRows = [...changedIds].sort().map((id) => {
+    const baseRow = baseById.get(id) || {};
+    const candRow = candById.get(id) || {};
+    const b = metricValue(baseRow.metrics, focusMetric);
+    const k = metricValue(candRow.metrics, focusMetric);
     return {
       id,
+      answerChanged: baseRow.answer !== candRow.answer,
+      referenceChanged: !!(
+        baseEntries.get(id) &&
+        candEntries.get(id) &&
+        baseEntries.get(id).reference_answer !== candEntries.get(id).reference_answer
+      ),
       baseline: b,
       candidate: k,
       delta: b !== null && k !== null ? k - b : null
@@ -154,7 +179,7 @@ function compareRuns(baseline, candidate, focusMetric = 'context_entities_recall
   const controlBase = [];
   const controlCand = [];
   for (const [id, row] of candById) {
-    if (regenerated.includes(id)) continue;
+    if (changedIds.has(id)) continue;
     if (baseOos.has(id) || candOos.has(id)) continue;
     const b = metricValue((baseById.get(id) || {}).metrics, focusMetric);
     const k = metricValue(row.metrics, focusMetric);
@@ -167,6 +192,7 @@ function compareRuns(baseline, candidate, focusMetric = 'context_entities_recall
   return {
     oos: { baseline: baseOos.size, candidate: candOos.size },
     metrics,
+    changed: { answers: answerChangedCount, references: referenceChangedCount },
     regenerated: regeneratedRows,
     tally,
     control: {
@@ -232,11 +258,17 @@ if (require.main === module) {
       );
     }
 
-    console.log(`\n=== the ${cmp.regenerated.length} regenerated rows — ${focusMetric} ===`);
-    console.log('row            baseline  candidate     delta');
+    console.log(
+      `\n=== content changed between the runs: ${cmp.changed.answers} answer(s), ` +
+        `${cmp.changed.references} reference(s) ===`
+    );
+    console.log('(a fresh run regenerates the ANSWERS; a re-score changes neither)');
+    console.log(`\n=== the ${cmp.regenerated.length} changed rows — ${focusMetric} ===`);
+    console.log('row            answer ref   baseline  candidate     delta');
     for (const r of cmp.regenerated) {
       console.log(
-        `${r.id.padEnd(14)} ${fmt(r.baseline).padStart(8)} ${fmt(r.candidate).padStart(10)} ` +
+        `${r.id.padEnd(14)} ${r.answerChanged ? 'yes' : ' no'}    ${r.referenceChanged ? 'yes' : ' no'}   ` +
+          `${fmt(r.baseline).padStart(8)} ${fmt(r.candidate).padStart(10)} ` +
           `${r.delta === null ? '     -' : (r.delta >= 0 ? '+' : '') + r.delta.toFixed(3).padStart(6)}`
       );
     }

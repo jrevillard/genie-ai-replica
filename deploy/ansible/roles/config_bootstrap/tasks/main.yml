@@ -48,6 +48,19 @@
     label: "{{ item.src }}"
   when: config_bootstrap_sync_enabled | bool
 
+# unarchive requires its dest to exist; a fresh host (or a changed dest_subdir)
+# has neither the scratch root nor the per-pair extraction directory.
+- name: Create the scratch extraction directory for each pair
+  become_user: root
+  ansible.builtin.file:
+    path: "{{ config_bootstrap_tmp_root }}/{{ item.dest_subdir | replace('/', '-') }}"
+    state: directory
+    mode: "0755"
+  loop: "{{ config_bootstrap_pairs }}"
+  loop_control:
+    label: "{{ item.dest_subdir }}"
+  when: config_bootstrap_sync_enabled | bool
+
 - name: Extract theme config archive at {{ repo_branch }}
   ansible.builtin.unarchive:
     src: "{{ config_bootstrap_tmp_root }}-{{ repo_branch | replace('/', '-') }}-{{ item.dest_subdir | replace('/', '-') }}.tar.gz"

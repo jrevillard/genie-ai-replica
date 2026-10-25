@@ -84,17 +84,22 @@ test.describe('the RAGAS model selection is in the UI', () => {
 
     // 5. THE ASSERTION — the judge dropdown, with the env default among its
     // options, in BOTH the generation form and the benchmark-run form.
+    // David 2026-10-25: "put it back for both generation and benchmark, run".
     const judgeSelects = page.locator('select').filter({ has: page.locator('option[value="__env__"]') });
     const count = await judgeSelects.count();
-    expect(count, 'the judge/model selector must be rendered (generation + run)').toBeGreaterThanOrEqual(1);
+    expect(count, 'the judge/model selector must be rendered in BOTH the generation and the run form').toBe(2);
 
-    const options = await judgeSelects
-      .first()
-      .locator('option')
-      .evaluateAll((els) => els.map((e) => ({ value: e.value, label: e.textContent.trim() })));
-    const envOption = options.find((o) => o.value === '__env__');
-    expect(envOption, 'the .env default judge must be one of the options').toBeTruthy();
-    expect(envOption.label, 'the env option must NAME the model it resolves to').toMatch(/\(.+\)/);
+    for (let i = 0; i < count; i += 1) {
+      const options = await judgeSelects
+        .nth(i)
+        .locator('option')
+        .evaluateAll((els) => els.map((e) => ({ value: e.value, label: e.textContent.trim() })));
+      const envOption = options.find((o) => o.value === '__env__');
+      expect(envOption, `the .env default judge must be one of the options (select ${i})`).toBeTruthy();
+      expect(envOption.label, 'the env option must NAME the model it resolves to').toMatch(/\(.+\)/);
+      // The named configurations must be there too — the same envelope.
+      expect(options.length, `the named configurations must be listed (select ${i})`).toBeGreaterThan(1);
+    }
 
     await page.screenshot({ path: 'test-results/ragas-judge-selector.png', fullPage: false });
     await context.close();

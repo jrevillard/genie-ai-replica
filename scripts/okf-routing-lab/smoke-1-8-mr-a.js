@@ -73,6 +73,8 @@ const j = (r) => {
 let ADMIN_TOKEN = '';
 let CLIENT_UUID = '';
 let USER_ID = '';
+let CURATOR_USER_ID = '';
+let SCOPE_ROLE = '';
 let ROPC_WAS = null;
 
 async function cleanup() {
@@ -95,6 +97,24 @@ async function cleanup() {
     }
   } catch (e) {
     errs.push(`user delete: ${e.message}`);
+  }
+  try {
+    if (ADMIN_TOKEN && CURATOR_USER_ID) {
+      await req('DELETE', `${AUTH_BASE}/admin/realms/${REALM}/users/${CURATOR_USER_ID}`, { token: ADMIN_TOKEN });
+      console.log('[cleanup] curator user deleted: ok');
+    }
+  } catch (e) {
+    errs.push(`curator user delete: ${e.message}`);
+  }
+  try {
+    if (ADMIN_TOKEN && SCOPE_ROLE) {
+      const del = await req('DELETE', `${AUTH_BASE}/admin/realms/${REALM}/roles/${encodeURIComponent(SCOPE_ROLE)}`, {
+        token: ADMIN_TOKEN
+      });
+      console.log(`[cleanup] scope role deleted: ${del.status === 204 ? 'ok' : `status ${del.status} (kept)`}`);
+    }
+  } catch (e) {
+    errs.push(`scope role delete: ${e.message}`);
   }
   if (errs.length) console.error('[cleanup] FAILURES:', errs.join('; '));
 }
@@ -165,6 +185,95 @@ process.on('exit', () => {
   }
   console.log(`[3] ROPC enabled (was already on: ${ROPC_WAS})`);
 
+  // 3b. THE CURATOR READ — the judge picker must be reachable by an operator
+  // WITHOUT the tools-admin role.
+  //
+  // David 2026-10-25: "you removed the model selection from the RAGAS
+  // generation and benchmarking ... make sure it INCLUDES the default
+  // configured model from the .env as an OPTION." The list endpoint used to
+  // be tools-admin-only, and the panel renders the judge dropdown only when
+  // the list is non-empty — so for a curator the dropdown (env option
+  // included) was gone. This check mints a token for a user that has an okf
+  // READ scope but NOT tools-admin, and asserts the env judge comes back.
+  //
+  // Two gates are in play and they are DIFFERENT: the OKF scope gate
+  // (default-deny — a caller needs an `okf:…:read` scope) and the ROLE gate
+  // (the defect). An okf scope is carried by a realm role whose NAME is the
+  // scope string (middleware/auth.js source 3), so the curator gets one of
+  // those and no tools-admin.
+  const CURATOR_USER = 'okf-smoke-18-curator';
+  const CURATOR_PW = crypto.randomBytes(18).toString('base64url') + '#aA1!';
+  SCOPE_ROLE = `okf:itu:smoke:read`;
+  const realmRoles = j(await req('GET', `${AUTH_BASE}/admin/realms/${REALM}/roles`, { token: ADMIN_TOKEN }));
+  const scopeRole = (Array.isArray(realmRoles) ? realmRoles : []).find((r) => r.name === SCOPE_ROLE);
+  if (!scopeRole) {
+    const created = await req('POST', `${AUTH_BASE}/admin/realms/${REALM}/roles`, {
+      token: ADMIN_TOKEN,
+      json: { name: SCOPE_ROLE, description: 'OKF smoke harness — read scope for the curator check' }
+    });
+    if (created.status !== 201 && created.status !== 409)
+      throw new Error(`scope role create ${created.status}: ${created.body.slice(0, 200)}`);
+  }
+  const mkCurator = await req('POST', `${AUTH_BASE}/admin/realms/${REALM}/users`, {
+    token: ADMIN_TOKEN,
+    json: {
+      username: CURATOR_USER,
+      email: 'okf-smoke-18-curator@example.invalid',
+      emailVerified: true,
+      firstName: 'Smoke',
+      lastName: 'Curator',
+      enabled: true,
+      credentials: [{ type: 'password', value: CURATOR_PW, temporary: false }]
+    }
+  });
+  if (mkCurator.status !== 201 && mkCurator.status !== 409)
+    throw new Error(`curator create ${mkCurator.status}: ${mkCurator.body.slice(0, 200)}`);
+  const curatorUsers = j(
+    await req('GET', `${AUTH_BASE}/admin/realms/${REALM}/users?username=${CURATOR_USER}&exact=true`, {
+      token: ADMIN_TOKEN
+    })
+  );
+  CURATOR_USER_ID = curatorUsers[0] && curatorUsers[0].id;
+  // The scope comes from a realm role whose NAME is the scope string.
+  const scopeRoleRes = j(
+    await req('GET', `${AUTH_BASE}/admin/realms/${REALM}/roles/${encodeURIComponent(SCOPE_ROLE)}`, {
+      token: ADMIN_TOKEN
+    })
+  );
+  if (!scopeRoleRes.id) throw new Error(`scope role ${SCOPE_ROLE} not found after create`);
+  const assignScope = await req(
+    'POST',
+    `${AUTH_BASE}/admin/realms/${REALM}/users/${CURATOR_USER_ID}/role-mappings/realm`,
+    { token: ADMIN_TOKEN, json: [scopeRoleRes] }
+  );
+  if (assignScope.status !== 204)
+    throw new Error(`scope role assign ${assignScope.status}: ${assignScope.body.slice(0, 200)}`);
+  const ct = j(
+    await req('POST', `${AUTH_BASE}/realms/${REALM}/protocol/openid-connect/token`, {
+      form: {
+        grant_type: 'password',
+        client_id: CLIENT_ID,
+        username: CURATOR_USER,
+        password: CURATOR_PW
+      }
+    })
+  );
+  if (!ct.access_token) throw new Error(`curator token failed: ${JSON.stringify(ct).slice(0, 200)}`);
+  const curatorModels = await req('GET', `${API_BASE}/api/okf/model-configs`, { token: ct.access_token });
+  const curatorBody = j(curatorModels);
+  if (curatorModels.status !== 200)
+    throw new Error(
+      `the judge list is not readable by a curator: ${curatorModels.status} ${curatorModels.body.slice(0, 200)}`
+    );
+  if (!curatorBody.env_judge || !curatorBody.env_judge.model)
+    throw new Error(`the curator read carries no env judge: ${curatorModels.body.slice(0, 200)}`);
+  if (curatorBody.configs && curatorBody.configs.some((c) => c.api_key_hint))
+    throw new Error('the curator read leaked a provider key hint');
+  console.log(
+    `[3b] curator judge list: ${curatorModels.status} — env judge ${curatorBody.env_judge.model}, ` +
+      `${(curatorBody.configs || []).length} named config(s), no key hint`
+  );
+
   // 4. user token via ROPC
   const ut = j(
     await req('POST', `${AUTH_BASE}/realms/${REALM}/protocol/openid-connect/token`, {
@@ -187,6 +296,18 @@ process.on('exit', () => {
     ROPC_WAS = false; // marks "reverted" for the trap
     console.log('[4] ROPC reverted immediately after token mint: ok');
   }
+
+  // 4b. The ADMIN read is unchanged: same list, and the key HINT is still
+  // there for the admin Models tab (it is dropped for everyone else).
+  const adminModels = await req('GET', `${API_BASE}/api/okf/model-configs`, { token: ut.access_token });
+  const adminBody = j(adminModels);
+  if (adminModels.status !== 200)
+    throw new Error(`the admin judge list read failed: ${adminModels.status} ${adminModels.body.slice(0, 200)}`);
+  const hinted = (adminBody.configs || []).filter((c) => c.api_key_hint);
+  console.log(
+    `[4b] admin judge list: ${adminModels.status} — ${(adminBody.configs || []).length} named config(s), ` +
+      `${hinted.length} with a key hint`
+  );
 
   // 5. sanity: repo readable with this token
   const repo = await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}`, { token: ut.access_token });
@@ -218,7 +339,11 @@ process.on('exit', () => {
   const neg = j(rt2);
   console.log(
     JSON.stringify(
-      { head_winner: neg.verdict && neg.verdict.head_routing_winner, under_test_wins: neg.verdict && neg.verdict.under_test_wins_head, margin: neg.verdict && neg.verdict.margin },
+      {
+        head_winner: neg.verdict && neg.verdict.head_routing_winner,
+        under_test_wins: neg.verdict && neg.verdict.under_test_wins_head,
+        margin: neg.verdict && neg.verdict.margin
+      },
       null,
       2
     )

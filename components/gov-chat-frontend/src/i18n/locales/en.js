@@ -1957,7 +1957,107 @@ export default {
             x2: 'Do not tune retrieval against a single number. Precision and recall trade against each other; a change that lifts one normally costs the other, and the trade is usually the interesting part.',
             x3: 'Do not treat a null score as a low score. An exhausted retry produces a null that is excluded from the mean, so no score means no measurement — re-run the row rather than assuming the worst.',
             expect:
-              'A benchmark number is a comparison between runs of the same suite, not a grade for the assistant. Export the xlsx when you need to keep the evidence: the trend line in the panel holds only the runs stored on this repository.'
+              'A benchmark number is a comparison between runs of the same suite, not a grade for the assistant. Export the xlsx when you need to keep the evidence: the trend line in the panel holds only the runs stored on this repository.',
+            table: {
+              title: 'What is on screen, and what it means',
+              col: {
+                element: 'On screen',
+                meaning: 'What it is',
+                effect: 'What to do with it'
+              },
+              mean: {
+                element: 'The score',
+                meaning:
+                  'The mean of that metric over the rows the judge scored for it. It is not a score for the whole suite.',
+                effect:
+                  'Read it together with the fraction beside it. A mean over a few rows measures those rows, not the suite.'
+              },
+              coverage: {
+                element: 'The fraction (55/100)',
+                meaning:
+                  "The judge measured that metric on 55 of the suite's 100 rows. The mean covers only those 55 rows; the other 45 are left out of it — never counted as zero.",
+                effect:
+                  'A small fraction means the number says little about the suite. Check the metric you care about, not the run as a whole.'
+              },
+              banner: {
+                element: 'The invalid-run banner',
+                meaning:
+                  'The run had failed answers, or no metric covered every row. Its coverage figure is the best-covered metric, so one metric at 21/100 does not raise it.',
+                effect: 'Read the per-metric fractions yourself. The banner is a floor, not a summary.'
+              },
+              runName: {
+                element: 'The run name',
+                meaning:
+                  'The judge that scored that run, and the configuration it came from. The key under it is for support.',
+                effect:
+                  'Two runs with different judges are not the same measurement. Compare like with like, or re-score one of them.'
+              },
+              rescore: {
+                element: 'Re-score',
+                meaning:
+                  'Re-scores the same answers with a different judge. The answers and the contexts are copied verbatim — nothing is retrieved or written again.',
+                effect:
+                  'Use it to put two judges on the same rows. It is far cheaper than a new run, and it is how you test a judge change.'
+              },
+              status: {
+                element: 'The status',
+                meaning: "Whether the run has finished. A running run's means are still moving.",
+                effect: 'Wait for it to finish before you read a number.'
+              }
+            }
+          },
+          errors: {
+            title: 'Errors, and what they do to the result',
+            intro:
+              'A benchmark never measures every row of every suite: a row can fail in the pipeline, the assistant can decline to answer, the judge can fail to measure a metric, and a metric can fall below its threshold. None of these is a zero and none of them is hidden. This chapter is the map — what each state means, and what it does to the number you are reading. One thing to know before you read it: a row that produced NO ANSWER is never handed to the judge — there is nothing to judge it with — so it is left out of the averages and never counted as a zero. A row that DECLINED still has an answer, so it IS judged: with nothing to support it, its context metrics come back 0, and those zeros ARE counted in the averages. That is why a run with a failed row is banner-marked invalid rather than trusted.',
+            d1: 'Read the invalid-run banner before the averages. It means the scores below it are not a measurement of the system, and it names the cause: answers that failed, or a judge that measured only part of the suite. Fix the cause and run again.',
+            d2: 'Check the coverage on every metric before you compare two runs. The panel prints how many rows the judge actually scored for that metric; a mean over a fraction of the suite is not the suite’s score, and it is not comparable with a run that measured all of it.',
+            d3: 'Fix an errored row at its cause — the retrieval stack, the upstream service, the timeout — and then re-run. Editing the suite to remove the row that keeps failing hides the defect the benchmark exists to find.',
+            d4: 'Treat an abstention as a result, not a defect. It says the assistant judged that the corpus does not answer the question, which is a property of the corpus and the question. Read it as coverage of what your users will hit.',
+            x1: 'Do not read an unmeasured metric as a zero. A judge whose answer the metric could not parse leaves that metric null for that row; null is excluded from the mean, never averaged in as a failure.',
+            x2: 'Do not count an abstention as an error, and do not count it as a pass either. It is reported in its own column precisely because it is neither.',
+            x3: 'Do not publish a number from a run the panel marked invalid, and do not average two runs to hide it. A partially measured run has no score to publish; it has a run to fix.',
+            expect:
+              'A clean run has no errored rows and every metric scored on every row — that is the only state in which the means are the benchmark. Everything else is a run to fix, not a result to act on.',
+            table: {
+              title: 'How each state maps to the result',
+              col: {
+                state: 'State',
+                meaning: 'What it means',
+                effect: 'What it does to the result'
+              },
+              error: {
+                state: 'errored',
+                meaning:
+                  'The pipeline failed on this row — retrieval, an upstream service, or a timeout. No answer was produced.',
+                effect:
+                  'The row is NOT handed to the judge — it has no answer, and there is nothing to judge it with. It carries no score at all: it is left out of the averages (never counted as a zero) and counted in the error column, and the run is marked invalid — the banner says the scores are not a measurement of the system. Fix the cause — the retrieval stack, the upstream service, the timeout — and run again. The rows that did answer are still scored, but a partially measured run is a run to fix, not a result to publish.'
+              },
+              abstained: {
+                state: 'abstained',
+                meaning:
+                  'The assistant declined to answer — chatqna said so, or it had nothing to say. The pipeline did not fail.',
+                effect:
+                  'The row is still handed to the judge, so it contributes a score — with nothing to support it, the context metrics come back 0, and those zeros ARE counted in the averages. It is counted in its own column, never in the error column, and it does not invalidate the run. The panel labels the row abstained rather than pass or fail.'
+              },
+              unmeasured: {
+                state: 'not measured',
+                meaning:
+                  'The judge produced an answer that metric could not parse — for example a factual-correctness statement it could not verify.',
+                effect:
+                  'That metric is null for that row: excluded from the mean, never a zero. The panel shows how many rows the judge did score for it, and partial coverage makes the run invalid.'
+              },
+              belowThreshold: {
+                state: 'below threshold',
+                meaning: 'The metric was measured and its score is under the bar set for that metric.',
+                effect: 'The row FAILS that metric. A row fails if any of the selected metrics fails.'
+              },
+              outOfScope: {
+                state: 'out of scope',
+                meaning: 'The question is deliberately unanswerable — kept in the suite for contrast, never as a test.',
+                effect: 'Never counted as a failure. It is a control, not a result.'
+              }
+            }
           }
         }
       },

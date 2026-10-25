@@ -3304,7 +3304,108 @@ export default {
             x2: 'Jangan menyetel pengambilan berdasarkan satu angka saja. Presisi dan recall saling mengorbankan satu sama lain; perubahan yang menaikkan satu biasanya mengorbankan yang lain, dan tukar-menukar itulah bagian yang biasanya paling menarik.',
             x3: 'Jangan menganggap skor kosong sebagai skor rendah. Percobaan ulang yang habis menghasilkan nilai kosong yang dikecualikan dari rata-rata, jadi tanpa skor berarti tanpa pengukuran — jalankan ulang baris itu, bukan dengan mengasumsikan hal terburuk.',
             expect:
-              'Angka tolok ukur adalah perbandingan antar eksekusi dari suite yang sama, bukan nilai rapor untuk asisten. Ekspor xlsx bila Anda perlu menyimpan buktinya: garis tren pada panel hanya memuat eksekusi yang tersimpan di repositori ini.'
+              'Angka tolok ukur adalah perbandingan antar eksekusi dari suite yang sama, bukan nilai rapor untuk asisten. Ekspor xlsx bila Anda perlu menyimpan buktinya: garis tren pada panel hanya memuat eksekusi yang tersimpan di repositori ini.',
+            table: {
+              title: 'Yang ada di layar, dan apa artinya',
+              col: {
+                element: 'Di layar',
+                meaning: 'Apa itu',
+                effect: 'Apa yang harus dilakukan'
+              },
+              mean: {
+                element: 'Skornya',
+                meaning: 'Rata-rata metrik itu pada baris-baris yang dinilai juri. Itu bukan skor untuk seluruh suite.',
+                effect:
+                  'Bacalah bersama pecahan di sebelahnya. Rata-rata atas beberapa baris hanya mengukur baris-baris itu, bukan suite-nya.'
+              },
+              coverage: {
+                element: 'Pecahan (55/100)',
+                meaning:
+                  'Juri mengukur metrik itu pada 55 dari 100 baris suite. Rata-ratanya hanya mencakup 55 baris itu; 45 baris lainnya dikeluarkan — tidak pernah dihitung sebagai nol.',
+                effect:
+                  'Pecahan yang kecil berarti angkanya hanya sedikit menggambarkan suite. Periksalah metrik yang Anda pedulikan, bukan keseluruhan proses.'
+              },
+              banner: {
+                element: 'Banner proses tidak valid',
+                meaning:
+                  'Proses itu gagal menjawab, atau tidak ada metrik yang mencakup semua baris. Angka cakupannya adalah metrik yang paling baik tercakup, jadi satu metrik di 21/100 tidak akan menaikkannya.',
+                effect: 'Baca sendiri pecahan per metrik. Banner itu adalah batas bawah, bukan ringkasan.'
+              },
+              runName: {
+                element: 'Nama prosesnya',
+                meaning:
+                  'Juri yang menilai proses itu, dan konfigurasi asalnya. Kunci di bawahnya adalah untuk dukungan.',
+                effect:
+                  'Dua proses dengan juri berbeda bukan pengukuran yang sama. Bandingkan yang setara, atau nilai ulang salah satunya.'
+              },
+              rescore: {
+                element: 'Nilai ulang',
+                meaning:
+                  'Menilai ulang jawaban yang sama dengan juri lain. Jawaban dan konteksnya disalin apa adanya — tidak ada yang diambil ulang atau ditulis ulang.',
+                effect:
+                  'Gunakan untuk menempatkan dua juri pada baris-baris yang sama. Jauh lebih murah daripada proses baru, dan itulah cara menguji perubahan juri.'
+              },
+              status: {
+                element: 'Statusnya',
+                meaning: 'Apakah proses itu selesai. Rata-rata pada proses yang sedang berjalan masih bergerak.',
+                effect: 'Tunggu sampai selesai sebelum Anda membaca sebuah angka.'
+              }
+            }
+          },
+          errors: {
+            title: 'Kesalahan, dan pengaruhnya terhadap hasil',
+            intro:
+              'Benchmark tidak pernah mengukur setiap baris dari setiap rangkaian uji: sebuah baris bisa gagal di dalam rantai, asisten bisa menolak menjawab, hakim bisa gagal mengukur sebuah metrik, dan sebuah metrik bisa jatuh di bawah ambangnya. Tidak satu pun dari ini adalah nol dan tidak ada yang disembunyikan. Bab ini adalah peta — arti setiap keadaan dan apa yang diketahuinya terhadap angka yang sedang Anda baca. Satu hal yang perlu diketahui sebelum membacanya: baris yang TIDAK menghasilkan jawaban tidak pernah diserahkan kepada hakim — tidak ada yang bisa dipakai untuk menilai baris itu — sehingga baris itu dikeluarkan dari rata-rata dan tidak pernah dihitung sebagai nol. Baris yang MENOLAK menjawab tetap punya jawaban, jadi baris itu dinilai: karena tidak ada yang menopang, metrik konteksnya kembali 0, dan nol-nol itu DIHITUNG dalam rata-rata. Itulah sebabnya run dengan baris yang gagal ditandai tidak valid, bukan dianggap tepercaya.',
+            d1: 'Baca dulu spanduk “eksekusi tidak valid”, baru kemudian rata-ratanya. Spanduk itu berarti angka-angka di bawahnya bukan pengukuran atas sistem, dan spanduk itu menyebut penyebabnya: jawaban yang gagal, atau hakim yang hanya mengukur sebagian dari rangkaian uji. Perbaiki penyebabnya, lalu jalankan lagi.',
+            d2: 'Periksa cakupan setiap metrik sebelum membandingkan dua eksekusi. Panel menunjukkan berapa banyak baris yang benar-benar dinilai hakim untuk metrik itu; rata-rata atas sebagian dari rangkaian uji bukanlah skornya, dan tidak sebanding dengan eksekusi yang mengukur semuanya.',
+            d3: 'Perbaiki baris yang error pada penyebabnya — rantai pengambilan, layanan hilir, atau batas waktu — lalu jalankan lagi. Mengubah rangkaian uji untuk membuang baris yang terus gagal justru menyembunyikan cacat yang justru dicari oleh tolok ukur ini.',
+            d4: 'Anggap penolakan menjawab sebagai hasil, bukan cacat. Ini berarti asisten menilai bahwa korpus tidak menjawab pertanyaan itu — sebuah sifat dari korpus dan pertanyaannya. Bacalah sebagai cakupan dari apa yang akan ditemui pengguna Anda.',
+            x1: 'Jangan baca metrik yang tidak terukur sebagai nol. Hakim yang jawabannya tidak dapat diurai oleh metrik itu menyisakan metrik tersebut bernilai null pada baris itu; null dikeluarkan dari rata-rata, dan tidak pernah dirata-ratakan sebagai kegagalan.',
+            x2: 'Jangan hitung penolakan menjawab sebagai kesalahan, dan jangan pula sebagai keberhasilan. Ia dilaporkan pada kolomnya sendiri justru karena ia bukan salah satu maupun.',
+            x3: 'Jangan publikasikan angka dari eksekusi yang ditandai tidak valid oleh panel, dan jangan rata-ratakan dua eksekusi untuk menutupinya. Eksekusi yang hanya terukur sebagian tidak punya angka untuk dipublikasikan; ia punya eksekusi yang perlu diperbaiki.',
+            expect:
+              'Eksekusi yang bersih tidak punya baris error dan setiap metrik dinilai pada setiap baris — hanya dalam keadaan itulah rata-ratanya adalah tolok ukurnya. Selebihnya adalah eksekusi yang perlu diperbaiki, bukan hasil untuk ditindaklanjuti.',
+            table: {
+              title: 'Bagaimana setiap keadaan memengaruhi hasil',
+              col: {
+                state: 'Keadaan',
+                meaning: 'Artinya',
+                effect: 'Apa akibatnya terhadap hasil'
+              },
+              error: {
+                state: 'error',
+                meaning:
+                  'Pipeline gagal pada baris ini — retrieval, layanan di hulu, atau waktu tunggu habis. Tidak ada jawaban yang dihasilkan.',
+                effect:
+                  'Baris itu TIDAK diserahkan kepada hakim — baris itu tidak punya jawaban, dan tidak ada yang bisa dipakai untuk menilai. Baris itu tidak membawa skor apa pun: dikeluarkan dari rata-rata (tidak pernah dihitung sebagai nol) dan dihitung di kolom error, dan run ditandai tidak valid — banner itu mengatakan skor bukan pengukuran sistem. Perbaiki penyebabnya — rantai pengambilan, layanan di hulu, timeout — lalu jalankan lagi. Baris yang menjawab tetap dinilai, tetapi run yang terukur sebagian adalah run yang harus diperbaiki, bukan hasil untuk dipublikasikan.'
+              },
+              abstained: {
+                state: 'menolak menjawab',
+                meaning:
+                  'Asisten menolak menjawab — chatqna mengatakannya, atau ia tidak punya apa-apa untuk dikatakan. Pipeline tidak gagal.',
+                effect:
+                  'Baris ini tetap diserahkan kepada juri, jadi ia menyumbang sebuah skor — tanpa konteks yang menopang, metrik konteks kembali 0, dan nol-nol itu DIHITUNG dalam rata-rata. Baris ini dihitung di kolomnya sendiri, tidak pernah di kolom error, dan tidak membuat proses tidak valid. Panel melabelinya «abstained», bukan lulus atau gagal.'
+              },
+              unmeasured: {
+                state: 'tidak terukur',
+                meaning:
+                  'Hakim menghasilkan jawaban yang tidak dapat diurai metrik tersebut — misalnya pernyataan kebenaran faktual yang tidak dapat diverifikasi.',
+                effect:
+                  'Metrik itu bernilai null pada baris tersebut: dikeluarkan dari rata-rata, tidak pernah nol. Panel menunjukkan berapa banyak baris yang benar-benar dinilai hakim, dan cakupan sebagian membuat eksekusi tidak valid.'
+              },
+              belowThreshold: {
+                state: 'di bawah ambang',
+                meaning: 'Metriknya diukur dan skornya berada di bawah batang yang ditetapkan untuk metrik itu.',
+                effect:
+                  'Baris itu GAGAL pada metrik tersebut. Sebuah baris gagal bila salah satu dari metrik yang dipilih gagal.'
+              },
+              outOfScope: {
+                state: 'di luar lingkup',
+                meaning:
+                  'Pertanyaannya memang sengaja tidak dapat dijawab — disimpan dalam rangkaian uji sebagai pembanding, tidak pernah sebagai pengujian.',
+                effect: 'Tidak pernah dihitung sebagai kegagalan. Ia adalah pembanding, bukan hasil.'
+              }
+            }
           }
         }
       },

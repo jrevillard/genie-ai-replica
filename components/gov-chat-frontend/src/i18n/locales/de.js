@@ -3326,7 +3326,110 @@ export default {
             x2: 'Den Abruf nicht gegen eine einzelne Zahl optimieren. context precision und context recall stehen gegeneinander; eine Änderung, die den einen hebt, kostet normalerweise den anderen, und genau dieser Zielkonflikt ist meist der interessante Teil.',
             x3: 'Einen null-Score nicht als niedrigen Score behandeln. Wenn alle Wiederholungsversuche aufgebraucht sind, entsteht ein null-Wert, der vom Mittelwert ausgenommen wird; kein Score bedeutet also keine Messung — die Zeile erneut ausführen, statt das Schlimmste anzunehmen.',
             expect:
-              'Eine Benchmark-Zahl ist ein Vergleich zwischen Läufen derselben Suite, keine Note für den Assistenten. Das xlsx exportieren, wenn die Belege aufbewahrt werden sollen: die Trendlinie im Panel enthält nur die Läufe, die zu diesem Repository gespeichert sind.'
+              'Eine Benchmark-Zahl ist ein Vergleich zwischen Läufen derselben Suite, keine Note für den Assistenten. Das xlsx exportieren, wenn die Belege aufbewahrt werden sollen: die Trendlinie im Panel enthält nur die Läufe, die zu diesem Repository gespeichert sind.',
+            table: {
+              title: 'Was auf dem Bildschirm steht und was es bedeutet',
+              col: {
+                element: 'Auf dem Bildschirm',
+                meaning: 'Was es ist',
+                effect: 'Was damit zu tun ist'
+              },
+              mean: {
+                element: 'Der Wert',
+                meaning:
+                  'Der Mittelwert dieser Metrik über die Zeilen, die der Judge bewertet hat. Er ist kein Wert für die gesamte Suite.',
+                effect:
+                  'Lesen Sie ihn zusammen mit dem Bruch daneben. Ein Mittelwert über wenige Zeilen misst diese Zeilen, nicht die Suite.'
+              },
+              coverage: {
+                element: 'Der Bruch (55/100)',
+                meaning:
+                  'Der Judge hat diese Metrik an 55 der 100 Zeilen der Suite gemessen. Der Mittelwert deckt nur diese 55 Zeilen ab; die übrigen 45 bleiben draußen — sie werden nie als null gezählt.',
+                effect:
+                  'Ein kleiner Bruch heißt, dass die Zahl wenig über die Suite aussagt. Prüfen Sie die Metrik, die Sie interessiert, nicht den Lauf als Ganzes.'
+              },
+              banner: {
+                element: 'Das Banner für einen ungültigen Lauf',
+                meaning:
+                  'Der Lauf hatte fehlgeschlagene Antworten, oder keine Metrik hat alle Zeilen abgedeckt. Seine Abdeckungszahl ist die am besten abgedeckte Metrik, also löst eine Metrik bei 21/100 es nicht aus.',
+                effect:
+                  'Lesen Sie die Bruchwerte je Metrik selbst. Das Banner ist eine Untergrenze, keine Zusammenfassung.'
+              },
+              runName: {
+                element: 'Der Laufname',
+                meaning:
+                  'Der Judge, der diesen Lauf bewertet hat, und die Konfiguration, aus der er stammt. Der Schlüssel darunter ist für den Support.',
+                effect:
+                  'Zwei Läufe mit verschiedenen Judges sind nicht dieselbe Messung. Vergleichen Sie Gleiches mit Gleichem, oder bewerten Sie einen davon neu.'
+              },
+              rescore: {
+                element: 'Neu bewerten',
+                meaning:
+                  'Bewertet dieselben Antworten mit einem anderen Judge. Die Antworten und die Kontexte werden wörtlich übernommen — nichts wird neu geholt oder geschrieben.',
+                effect:
+                  'Nutzen Sie das, um zwei Judges auf dieselben Zeilen zu setzen. Das ist weit günstiger als ein neuer Lauf und so testet man einen Judge-Wechsel.'
+              },
+              status: {
+                element: 'Der Status',
+                meaning: 'Ob der Lauf fertig ist. Bei einem laufenden Lauf bewegen sich die Mittelwerte noch.',
+                effect: 'Warten Sie das Ende ab, bevor Sie eine Zahl lesen.'
+              }
+            }
+          },
+          errors: {
+            title: 'Fehler – und was sie mit dem Ergebnis machen',
+            intro:
+              'Ein Benchmark misst nie jede Zeile jeder Testsuite: Eine Zeile kann in der Kette scheitern, der Assistent kann eine Antwort verweigern, der Judge kann eine Metrik nicht messen, und eine Metrik kann unter ihre Schwelle fallen. Nichts davon ist eine Null und nichts davon wird verborgen. Dieses Kapitel ist die Karte — was jeder Zustand bedeutet und was er mit der Zahl macht, die Sie lesen. Eine Sache, die Sie vorher wissen sollten: Eine Zeile, die KEINE ANTWORT produziert hat, wird dem Judge nie übergeben — es gibt nichts, womit sie zu bewerten wäre — sie bleibt also aus den Mittelwerten heraus und wird nie als Null gezählt. Eine Zeile, die ABGELEHNT hat, hat immer noch eine Antwort und wird daher bewertet: Da nichts sie stützt, kommen ihre Kontextmetriken mit 0 zurück, und diese Nullen SIND in den Mittelwerten enthalten. Deshalb ist ein Lauf mit einer fehlgeschlagenen Zeile als ungültig markiert und nicht als verlässlich genommen.',
+            d1: 'Lesen Sie zuerst das Banner zum ungültigen Lauf, dann die Mittelwerte. Es bedeutet, dass die darunter stehenden Werte keine Messung des Systems sind, und es nennt die Ursache: fehlgeschlagene Antworten oder ein Judge, der nur einen Teil der Suite gemessen hat. Beheben Sie die Ursache und starten Sie neu.',
+            d2: 'Prüfen Sie die Abdeckung jeder Metrik, bevor Sie zwei Läufe vergleichen. Das Panel zeigt, wie viele Zeilen der Judge für diese Metrik tatsächlich bewertet hat; ein Mittelwert über einen Bruchteil der Suite ist nicht die Punktzahl der Suite und nicht mit einem Lauf vergleichbar, der alle gemessen hat.',
+            d3: 'Beheben Sie eine fehlgeschlagene Zeile an ihrer Ursache – der Retrieval-Kette, dem vorgeschalteten Dienst, dem Zeitlimit – und starten Sie dann neu. Die Suite so zu ändern, dass die immer wieder fehlschlagende Zeile verschwindet, verdeckt genau den Fehler, den der Benchmark finden soll.',
+            d4: 'Betrachten Sie eine Auslassung als Ergebnis, nicht als Fehler. Sie besagt, dass der Assistent meinte, der Korpus beantworte die Frage nicht – eine Eigenschaft des Korpus und der Frage. Lesen Sie sie als die Abdeckung dessen, was Ihre Nutzer vorfinden werden.',
+            x1: 'Lesen Sie eine nicht gemessene Metrik nicht als Null. Ein Judge, dessen Antwort die Metrik nicht auswerten konnte, lässt diese Metrik für diese Zeile null; null wird aus dem Mittelwert ausgeschlossen und nie als Misserfolg hineingerechnet.',
+            x2: 'Zählen Sie eine Auslassung weder als Fehler noch als Erfolg. Sie steht in einer eigenen Spalte, gerade weil sie weder das eine noch das andere ist.',
+            x3: 'Veröffentlichen Sie keine Zahl aus einem Lauf, den das Panel als ungültig markiert hat, und mitteln Sie auch nicht zwei Läufe, um das zu verdecken. Ein teilweise gemessener Lauf hat keine Zahl zu veröffentlichen; er hat einen Lauf, der repariert werden muss.',
+            expect:
+              'Ein sauberer Lauf hat keine fehlgeschlagenen Zeilen und jede Metrik auf jeder Zeile bewertet – nur in diesem Zustand sind die Mittelwerte der Benchmark. Alles andere ist ein Lauf zum Reparieren, kein Ergebnis zum Handeln.',
+            table: {
+              title: 'Wie jeder Status auf das Ergebnis wirkt',
+              col: {
+                state: 'Status',
+                meaning: 'Was er bedeutet',
+                effect: 'Was er mit dem Ergebnis macht'
+              },
+              error: {
+                state: 'Fehler',
+                meaning:
+                  'Die Pipeline ist an dieser Zeile gescheitert — Retrieval, ein vorgelagerter Dienst oder eine Zeitüberschreitung. Es wurde keine Antwort erzeugt.',
+                effect:
+                  'Die Zeile wird dem Judge NICHT übergeben — sie hat keine Antwort, und es gibt nichts, womit sie zu bewerten wäre. Sie trägt gar keinen Score: Sie bleibt aus den Mittelwerten heraus (nie als Null gezählt) und wird in der Fehlerspalte gezählt, und der Lauf wird als ungültig markiert — das Banner sagt, dass die Scores keine Messung des Systems sind. Beheben Sie die Ursache — die Retrieval-Strecke, den vorgelagerten Dienst, das Timeout — und starten Sie erneut. Die Zeilen, die geantwortet haben, werden weiterhin bewertet, aber ein teilweise gemessener Lauf ist ein Lauf zum Reparieren, kein Ergebnis zum Veröffentlichen.'
+              },
+              abstained: {
+                state: 'Auslassung',
+                meaning:
+                  'Der Assistent hat die Antwort verweigert — chatqna hat es gesagt oder er hatte nichts zu sagen. Die Pipeline ist nicht gescheitert.',
+                effect:
+                  'Die Zeile geht trotzdem an den Judge und trägt also zur Bewertung bei — ohne stützenden Kontext liefern die Kontextmetriken 0, und diese Nullen WERDEN in den Mittelwerten mitgezählt. Sie zählt in ihrer eigenen Spalte, nie in der Fehlerspalte, und macht den Lauf nicht ungültig. Das Panel beschriftet die Zeile als „abstained“ statt als bestanden oder gescheitert.'
+              },
+              unmeasured: {
+                state: 'nicht gemessen',
+                meaning:
+                  'Der Judge hat eine Antwort erzeugt, die diese Metrik nicht auswerten konnte – etwa eine Tatsachenbehauptung, die er nicht prüfen konnte.',
+                effect:
+                  'Diese Metrik ist für diese Zeile null: aus dem Mittelwert ausgeschlossen, nie eine Null. Das Panel zeigt, wie viele Zeilen der Judge tatsächlich bewertet hat, und eine teilweise Abdeckung macht den Lauf ungültig.'
+              },
+              belowThreshold: {
+                state: 'unter der Schwelle',
+                meaning: 'Die Metrik wurde gemessen, und ihr Wert liegt unter der für diese Metrik gesetzten Schwelle.',
+                effect:
+                  'Die Zeile SCHEITERT bei dieser Metrik. Eine Zeile scheitert, sobald eine der gewählten Metriken scheitert.'
+              },
+              outOfScope: {
+                state: 'außerhalb des Geltungsbereichs',
+                meaning:
+                  'Die Frage ist absichtlich nicht beantwortbar – als Kontrast in der Suite behalten, niemals als Prüfung.',
+                effect: 'Nie als Misserfolg gezählt. Sie ist eine Kontrolle, kein Ergebnis.'
+              }
+            }
           }
         }
       },

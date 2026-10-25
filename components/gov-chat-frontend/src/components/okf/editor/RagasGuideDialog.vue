@@ -61,6 +61,24 @@
             <DsPill variant="info">{{ translate('okf.ragas.guide.labels.expect', 'What to expect') }}</DsPill>
           </div>
           <p class="okf-guide__expect">{{ ch.expect }}</p>
+
+          <!-- The error→result MAPPING (David 2026-10-25: "whatever you
+               decide to do with errors and how they are mapped to
+               benchmark results must be documented in the embedded guide
+               for users"). A table, because the mapping IS a table: one
+               row per state the panel can report, what that state means,
+               and what it does to the number being read. -->
+          <div v-if="ch.table" class="okf-guide__table-wrap">
+            <h6 class="okf-guide__table-title">{{ ch.table.title }}</h6>
+            <DsTable :columns="ch.table.columns" :rows="ch.table.rows" :row-key="ch.table.rowKey" striped>
+              <template #cell-state="{ row }">
+                <DsPill :variant="row.variant">{{ row.state }}</DsPill>
+              </template>
+              <template #cell-element="{ row }">
+                <DsPill :variant="row.variant">{{ row.element }}</DsPill>
+              </template>
+            </DsTable>
+          </div>
         </DsCard>
       </div>
     </DsTabs>
@@ -76,15 +94,52 @@ import DsDialog from '../../ds/Dialog.vue';
 import DsTabs from '../../ds/Tabs.vue';
 import DsCard from '../../ds/Card.vue';
 import DsPill from '../../ds/Pill.vue';
+import DsTable from '../../ds/Table.vue';
 import translateMixin from '../../../mixins/translateMixin';
 
 // Chapter order is the order an operator actually works in: build the
-// suite, fix the suite, run it, know what you changed, read the number.
-const CHAPTER_KEYS = ['generate', 'curate', 'run', 'models', 'read'];
+// suite, fix the suite, run it, know what you changed, read the number —
+// and then what the states in that number mean.
+const CHAPTER_KEYS = ['generate', 'curate', 'run', 'models', 'read', 'errors'];
+
+// The states the panel can report for a row, and what each one does to
+// the result. The order is the order an operator meets them.
+//
+// These are NOT invented: each row is the behaviour the SERVER implements
+// (ragas-suite-service.js summarizeRun + the run's coverage block) and the
+// panel renders (the invalid-run banner, the stacked outcome bar, the
+// per-metric coverage note).
+const ERROR_ROWS = [
+  { key: 'error', variant: 'danger' },
+  { key: 'abstained', variant: 'warning' },
+  { key: 'unmeasured', variant: 'info' },
+  { key: 'belowThreshold', variant: 'warning' },
+  { key: 'outOfScope', variant: 'neutral' }
+];
+
+// What the RESULTS screen shows, and what each piece of it means.
+//
+// The rows are the OUTPUT, not the metrics: a mean, the coverage fraction
+// printed beside it, the invalid-run banner, the judge that scored the
+// run, the re-score action and the status. The coverage fraction is the
+// one operators misread most — "0.87 55/100" is a mean over 55 rows, not
+// a score for 100 — so it gets its own row.
+//
+// Nothing here names a metric: the metric list is the product's
+// (ALL_METRICS), and a guide that hardcoded them would go stale the day
+// one is added.
+const OUTPUT_ROWS = [
+  { key: 'mean', variant: 'info' },
+  { key: 'coverage', variant: 'warning' },
+  { key: 'banner', variant: 'danger' },
+  { key: 'runName', variant: 'neutral' },
+  { key: 'rescore', variant: 'success' },
+  { key: 'status', variant: 'neutral' }
+];
 
 export default {
   name: 'RagasGuideDialog',
-  components: { DsDialog, DsTabs, DsCard, DsPill },
+  components: { DsDialog, DsTabs, DsCard, DsPill, DsTable },
   mixins: [translateMixin],
   props: {
     visible: { type: Boolean, default: false }
@@ -115,8 +170,60 @@ export default {
         intro: this.translate(`okf.ragas.guide.chapters.${key}.intro`, ''),
         do: pick(key, 'd', 4),
         dont: pick(key, 'x', 3),
-        expect: this.translate(`okf.ragas.guide.chapters.${key}.expect`, '')
+        expect: this.translate(`okf.ragas.guide.chapters.${key}.expect`, ''),
+        table: key === 'errors' ? this.errorTable : key === 'read' ? this.outputTable : null
       }));
+    },
+    /**
+     * The error→result MAPPING. Every cell is a translate() call on its
+     * own key: translateMixin resolves leaf values as STRINGS only, so a
+     * table cannot be carried as an array of objects in the locale file.
+     */
+    errorTable() {
+      const base = 'okf.ragas.guide.chapters.errors.table';
+      const columns = [
+        { key: 'state', label: this.translate(`${base}.col.state`, 'State') },
+        { key: 'meaning', label: this.translate(`${base}.col.meaning`, 'What it means') },
+        { key: 'effect', label: this.translate(`${base}.col.effect`, 'What it does to the result') }
+      ];
+      const rows = ERROR_ROWS.map((r) => ({
+        variant: r.variant,
+        state: this.translate(`${base}.${r.key}.state`, r.key),
+        meaning: this.translate(`${base}.${r.key}.meaning`, ''),
+        effect: this.translate(`${base}.${r.key}.effect`, '')
+      }));
+      return {
+        title: this.translate(`${base}.title`, 'How each state maps to the result'),
+        rowKey: 'state',
+        columns,
+        rows
+      };
+    },
+    /**
+     * The OUTPUT table: what is on the results screen and what it means.
+     * Every cell is a translate() call on its own key — translateMixin
+     * resolves leaf values as STRINGS only, so a table cannot be carried
+     * as an array of objects in the locale file.
+     */
+    outputTable() {
+      const base = 'okf.ragas.guide.chapters.read.table';
+      const columns = [
+        { key: 'element', label: this.translate(`${base}.col.element`, 'On screen') },
+        { key: 'meaning', label: this.translate(`${base}.col.meaning`, 'What it is') },
+        { key: 'effect', label: this.translate(`${base}.col.effect`, 'What to do with it') }
+      ];
+      const rows = OUTPUT_ROWS.map((r) => ({
+        variant: r.variant,
+        element: this.translate(`${base}.${r.key}.element`, r.key),
+        meaning: this.translate(`${base}.${r.key}.meaning`, ''),
+        effect: this.translate(`${base}.${r.key}.effect`, '')
+      }));
+      return {
+        title: this.translate(`${base}.title`, 'What is on screen, and what it means'),
+        rowKey: 'element',
+        columns,
+        rows
+      };
     },
     tabDefs() {
       return this.chapters.map((c) => ({ value: c.key, label: c.title }));
@@ -197,6 +304,15 @@ export default {
 .okf-guide__expect {
   margin: 0;
   color: var(--muted);
+}
+
+.okf-guide__table-wrap {
+  margin-top: var(--space-lg);
+}
+
+.okf-guide__table-title {
+  margin: 0 0 var(--space-xs);
+  font-size: 0.95rem;
 }
 
 .okf-guide__more {

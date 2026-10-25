@@ -3316,7 +3316,108 @@ export default {
             x2: 'Não ajuste a recuperação contra um único número. A context precision e a context recall se compensam entre si; uma mudança que eleva uma normalmente custa a outra, e essa troca costuma ser a parte interessante.',
             x3: 'Não trate uma pontuação nula como uma pontuação baixa. Uma retentativa esgotada produz um nulo que é excluído da média, portanto ausência de pontuação significa ausência de medição — reexecute a linha em vez de supor o pior.',
             expect:
-              'Um número de benchmark é uma comparação entre execuções da mesma suíte, não uma nota para o assistente. Exporte o xlsx quando precisar preservar a evidência: a linha de tendência no painel contém apenas as execuções armazenadas neste repositório.'
+              'Um número de benchmark é uma comparação entre execuções da mesma suíte, não uma nota para o assistente. Exporte o xlsx quando precisar preservar a evidência: a linha de tendência no painel contém apenas as execuções armazenadas neste repositório.',
+            table: {
+              title: 'O que está no ecrã, e o que significa',
+              col: {
+                element: 'No ecrã',
+                meaning: 'O que é',
+                effect: 'O que fazer com isso'
+              },
+              mean: {
+                element: 'A pontuação',
+                meaning:
+                  'A média dessa métrica sobre as linhas que o juiz pontuou. Não é uma pontuação do conjunto inteiro.',
+                effect:
+                  'Leia-a juntamente com a fração ao lado. Uma média sobre poucas linhas mede essas linhas, não o conjunto.'
+              },
+              coverage: {
+                element: 'A fração (55/100)',
+                meaning:
+                  'O juiz mediu essa métrica em 55 das 100 linhas do conjunto. A média cobre apenas essas 55 linhas; as outras 45 ficam de fora — nunca contadas como zero.',
+                effect:
+                  'Uma fração pequena significa que o número diz pouco sobre o conjunto. Verifique a métrica que lhe interessa, não a execução inteira.'
+              },
+              banner: {
+                element: 'O banner de execução inválida',
+                meaning:
+                  'A execução teve respostas falhadas, ou nenhuma métrica cobriu todas as linhas. O seu número de cobertura é a métrica melhor coberta, por isso uma métrica em 21/100 não o levanta.',
+                effect: 'Leia você mesmo as frações por métrica. O banner é um piso, não um resumo.'
+              },
+              runName: {
+                element: 'O nome da execução',
+                meaning:
+                  'O juiz que pontuou essa execução, e a configuração de onde veio. A chave por baixo é para suporte.',
+                effect:
+                  'Duas execuções com Judges diferentes não são a mesma medição. Compare o comparável, ou reponte uma delas.'
+              },
+              rescore: {
+                element: 'Repontuar',
+                meaning:
+                  'Repontua as mesmas respostas com outro juiz. As respostas e os contextos são copiados tal e qual — nada é recuperado nem reescrito.',
+                effect:
+                  'Use-o para pôr dois juízes sobre as mesmas linhas. É muito mais barato do que uma nova execução, e é assim que se testa uma mudança de juiz.'
+              },
+              status: {
+                element: 'O estado',
+                meaning: 'Se a execução terminou. As médias de uma execução em curso ainda estão a mover-se.',
+                effect: 'Espere que termine antes de ler um número.'
+              }
+            }
+          },
+          errors: {
+            title: 'Erros, e o que fazem ao resultado',
+            intro:
+              'Um benchmark nunca mede todas as linhas de cada conjunto de testes: uma linha pode falhar na cadeia, o assistente pode recusar-se a responder, o juiz pode não conseguir medir uma métrica, e uma métrica pode ficar abaixo do seu limiar. Nada disso é um zero e nada disso está escondido. Este capítulo é o mapa — o que cada estado significa e o que faz ao número que está a ler. Uma coisa a saber antes de o ler: uma linha que NÃO produziu RESPOSTA nunca é entregue ao juiz — não há nada com que a julgar — por isso fica de fora das médias e nunca é contada como um zero. Uma linha que RECUSOU tem sempre uma resposta, por isso é julgada: sem nada que a sustente, as suas métricas de contexto voltam a 0, e esses zeros SÃO contados nas médias. É por isso que um run com uma linha falhada é marcado como inválido em vez de ser considerado fiável.',
+            d1: 'Leia primeiro o aviso de execução inválida e só depois as médias. Significa que as pontuações abaixo não são uma medição do sistema, e o aviso indica a causa: respostas que falharam, ou um juiz que mediu apenas parte da suíte. Corrija a causa e volte a executar.',
+            d2: 'Verifique a cobertura de cada métrica antes de comparar duas execuções. O painel indica quantas linhas o juiz efetivamente pontuou para essa métrica; uma média sobre uma fração da suíte não é a pontuação da suíte, e não é comparável com uma execução que as mediu todas.',
+            d3: 'Corrija uma linha com erro na sua causa — a cadeia de recuperação, o serviço a montante, o tempo limite — e depois volte a executar. Alterar a suíte para remover a linha que volta a falhar esconde exatamente o defeito que o benchmark existe para encontrar.',
+            d4: 'Trate uma abstenção como um resultado, não como um defeito. Diz que o assistente juzgou que o corpus não responde à pergunta, o que é uma propriedade do corpus e da pergunta. Leia-a como a cobertura do que os seus utilizadores vão encontrar.',
+            x1: 'Não leia uma métrica não medida como um zero. Um juiz cuja resposta a métrica não conseguiu analisar deixa essa métrica a null nessa linha; null é excluído da média e nunca é somado como uma falha.',
+            x2: 'Não conte uma abstenção como um erro, nem como um acerto. É reportada numa coluna própria precisamente porque não é nem uma coisa nem outra.',
+            x3: 'Não publique um número de uma execução que o painel marcou como inválida, e não faça a média de duas execuções para a esconder. Uma execução medida só em parte não tem número a publicar: tem uma execução para corrigir.',
+            expect:
+              'Uma execução limpa não tem linhas com erro e tem cada métrica pontuada em todas as linhas — é o único estado em que as médias são o benchmark. Tudo o resto é uma execução para corrigir, não um resultado sobre o qual agir.',
+            table: {
+              title: 'Como cada estado se reflete no resultado',
+              col: {
+                state: 'Estado',
+                meaning: 'O que significa',
+                effect: 'O que faz ao resultado'
+              },
+              error: {
+                state: 'erro',
+                meaning:
+                  'A canalização falhou nesta linha — a recuperação, um serviço a montante ou um tempo esgotado. Não foi produzida nenhuma resposta.',
+                effect:
+                  'A linha NÃO é entregue ao juiz — não tem resposta, e não há nada com que a julgar. Não carrega pontuação nenhuma: fica de fora das médias (nunca é contada como um zero) e é contada na coluna de erro, e o run é marcado como inválido — o banner diz que as pontuações não são uma medição do sistema. Corrija a causa — a cadeia de recuperação, o serviço a montante, o tempo esgotado — e volte a correr. As linhas que responderam continuam a ser pontuadas, mas um run medido parcialmente é um run para corrigir, não um resultado a publicar.'
+              },
+              abstained: {
+                state: 'abstenção',
+                meaning:
+                  'O assistente recusou-se a responder — chatqna disse-o ou não tinha nada a dizer. A canalização não falhou.',
+                effect:
+                  'A linha é entregue na mesma ao juiz, por isso contribui com uma pontuação — sem contexto que a sustente, as métricas de contexto voltam com 0, e esses zeros SÃO contados nas médias. Conta na sua própria coluna, nunca na de erros, e não torna a execução inválida. O painel rotula-a como «abstained» em vez de aprovada ou falhada.'
+              },
+              unmeasured: {
+                state: 'não medida',
+                meaning:
+                  'O juiz produziu uma resposta que essa métrica não conseguiu analisar — por exemplo uma afirmação de correção factual que não conseguiu verificar.',
+                effect:
+                  'Essa métrica fica a null nessa linha: excluída da média, nunca um zero. O painel mostra quantas linhas o juiz efetivamente pontuou, e uma cobertura parcial torna a execução inválida.'
+              },
+              belowThreshold: {
+                state: 'abaixo do limiar',
+                meaning: 'A métrica foi medida e a sua pontuação ficou abaixo da barra definida para essa métrica.',
+                effect: 'A linha FALHA nessa métrica. Uma linha falha se falhar qualquer uma das métricas selecionadas.'
+              },
+              outOfScope: {
+                state: 'fora do âmbito',
+                meaning:
+                  'A pergunta é deliberadamente sem resposta — mantida na suíte como contraste, nunca como teste.',
+                effect: 'Nunca é contada como uma falha. É um controlo, não um resultado.'
+              }
+            }
           }
         }
       },

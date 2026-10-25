@@ -1106,14 +1106,36 @@ export default {
     statusSeries() {
       const s = this.runDoc && this.runDoc.payload && this.runDoc.payload.summary;
       if (!s) return [];
+      // The four buckets must PARTITION the rows — the bar is read as a
+      // whole, and a row counted twice makes the segments sum to more
+      // than the suite.
+      //
+      //   error     — the row produced no answer (n_errors)
+      //   abstained — the row declined; it still has an answer, so the judge
+      //               scored it and its context metrics came back 0, which
+      //               puts it in failing_count as well. It has its own
+      //               column, so it is taken OUT of the failing bucket.
+      //   failing   — the rows that failed a metric and are not abstentions
+      //   answered  — everything else
+      //
+      // The errored rows are NOT in failing_count (they were never judged),
+      // so they are subtracted explicitly. Before the judge-only-the-
+      // answered-rows fix they WERE in failing_count as zeros, and the old
+      // arithmetic (n_evaluable − n_abstained − failing_count) subtracted
+      // the abstentions twice — the all-abstained runs reached −20.
+      const nErrors = s.n_errors || 0;
+      const nAbstained = s.n_abstained || 0;
+      const nFailing = s.failing_count || 0;
+      const nEvaluable = s.n_evaluable || 0;
+      const failingOnly = Math.max(0, nFailing - nAbstained);
       return [
         {
           name: this.translate('okf.ragas.results.answered', 'answered'),
-          data: [(s.n_evaluable || 0) - (s.n_abstained || 0) - (s.failing_count || 0)]
+          data: [Math.max(0, nEvaluable - nErrors - nAbstained - failingOnly)]
         },
-        { name: this.translate('okf.ragas.results.abstained', 'abstained'), data: [s.n_abstained || 0] },
-        { name: this.translate('okf.ragas.results.failingShort', 'failing'), data: [s.failing_count || 0] },
-        { name: this.translate('okf.ragas.results.error', 'error'), data: [s.n_errors || 0] }
+        { name: this.translate('okf.ragas.results.abstained', 'abstained'), data: [nAbstained] },
+        { name: this.translate('okf.ragas.results.failingShort', 'failing'), data: [failingOnly] },
+        { name: this.translate('okf.ragas.results.error', 'error'), data: [nErrors] }
       ];
     },
     explainProgressLabel() {
@@ -1966,8 +1988,11 @@ export default {
         });
         if (res.ok) {
           this.runDoc = res.result;
-          await this.refreshHistory();
           this.$emit('changed');
+        } else if (res.code === 'RUN_CANCELLED') {
+          // The user stopped it — not a failure, and it must not read as one.
+          // The finally block refreshes the history, so the row turns
+          // 'cancelled' on its own.
         } else {
           this.error = res.message;
         }
@@ -1976,6 +2001,10 @@ export default {
         this.runProgress = null;
         this.runningRunKey = null;
         this.runCancelBusy = false;
+        // The history must show the TERMINAL state — a cancelled run lands
+        // as 'cancelled' server-side, and its row must say so without a
+        // manual refresh.
+        await this.refreshHistory();
       }
     },
     async refreshHistory() {
@@ -2078,45 +2107,62 @@ export default {
       const source = this.rescoreAsk;
       this.rescoreBusy = true;
       this.error = '';
-      const res = await this.$store.dispatch('okf/ragasRescoreRun', {
-        repoId: this.repo && this.repo.repo_id,
-        suiteKey: source.suite_key,
-        runKey: source._key,
-        payload: {
-          judge_config_key: this.rescoreConfigKey || undefined,
-          judge_model: this.rescoreConfigKey && this.rescoreModel ? this.rescoreModel : undefined
-        }
-      });
-      if (!res.ok) {
-        this.error = res.message || this.translate('okf.ragas.rescore.failed', 'Re-scoring the run failed.');
-        this.rescoreBusy = false;
-        return; // dialog stays open for a retry
-      }
+      // A re-score IS a run: it drives the SAME progress bar and the SAME
+      // Cancel button as the run leg (David 2026-10-25: "it also cannot be
+      // tracked and does not connect to the UI with a progress bar… I cannot
+      // stop the re-scoring"). The re-score's OWN run key is the cancel
+      // target — cancelling the source run would stop the wrong thing.
+      //
+      // The dialog closes NOW: the judge leg runs for minutes to hours and
+      // the operator must not sit behind a modal for it. On failure it comes
+      // back with the error, so the pick can be retried.
       this.rescoreAsk = null;
-      const newKey = res.result && res.result.run_key;
-      // The judge leg is minutes-to-hours: poll the new run until it lands,
-      // then refresh the history so the new row (with its judge) appears.
-      await this.pollRescore(newKey);
-      this.rescoreBusy = false;
-      await this.refreshHistory();
-      this.$emit('changed');
-    },
-    /** Poll the re-scored run until it is terminal. */
-    async pollRescore(runKey) {
-      if (!runKey) return;
-      for (let i = 0; i < 720; i += 1) {
-        const res = await this.$store
-          .dispatch('okf/ragasGetRunQuiet', {
-            repoId: this.repo && this.repo.repo_id,
-            suiteKey: this.rescoreAsk ? this.rescoreAsk.suite_key : this.suite && this.suite.suite_key,
-            runKey
-          })
-          .catch(() => null);
-        const status = res && res.ok && res.result ? res.result.status : null;
-        if (status === 'done' || status === 'failed' || status === 'cancelled') return status;
-        await new Promise((r) => setTimeout(r, 5000));
+      this.runBusy = true;
+      this.runningRunKey = null;
+      this.runProgress = { phase: 'judge', done: 0, total: 0 };
+      try {
+        const res = await this.$store.dispatch('okf/ragasRescoreRun', {
+          repoId: this.repo && this.repo.repo_id,
+          suiteKey: source.suite_key,
+          runKey: source._key,
+          payload: {
+            judge_config_key: this.rescoreConfigKey || undefined,
+            judge_model: this.rescoreConfigKey && this.rescoreModel ? this.rescoreModel : undefined
+          },
+          onStarted: (newKey) => {
+            this.runningRunKey = newKey;
+            // The new row shows up in the history as a running re-score, so
+            // the operator can see it there and not only in this bar.
+            this.refreshHistory();
+          },
+          onProgress: (p) => {
+            this.runProgress = p;
+          }
+        });
+        if (!res.ok) {
+          if (res.code === 'RUN_CANCELLED') {
+            // The user stopped it — that is not a failure and must not read
+            // as one. The history refresh in the finally block shows the row
+            // as cancelled.
+          } else {
+            this.error = res.message || this.translate('okf.ragas.rescore.failed', 'Re-scoring the run failed.');
+            this.rescoreAsk = source; // back for a retry, with the same pick
+          }
+          return;
+        }
+        this.runDoc = res.result;
+        this.$emit('changed');
+      } finally {
+        this.rescoreBusy = false;
+        this.runBusy = false;
+        this.runProgress = null;
+        this.runningRunKey = null;
+        this.runCancelBusy = false;
+        // The history must show the TERMINAL state — a cancelled re-score
+        // lands as 'cancelled', and its row must say so without a manual
+        // refresh (David 2026-10-25: the run had to be stoppable AND visible).
+        await this.refreshHistory();
       }
-      return null;
     },
     async onLoadRun(runKey, suiteKey, opts = {}) {
       if (suiteKey && (!this.suite || this.suite.suite_key !== suiteKey)) await this.loadSuite(suiteKey);

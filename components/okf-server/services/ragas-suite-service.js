@@ -448,6 +448,15 @@ async function cancelSuiteJobs(suiteKey, why) {
   await Promise.all(jobIds.map((jid) => cancelSidecarJob(jid, why)));
 }
 
+/** Cancel the sidecar jobs of ONE run (best-effort) — a re-score cancel must
+ * not take down a concurrent generation of the same suite. */
+async function cancelRunJobs(runKey, why) {
+  const jobIds = [...activeSidecarJobs.entries()]
+    .filter(([, meta]) => meta && meta.run_key === runKey)
+    .map(([jid]) => jid);
+  await Promise.all(jobIds.map((jid) => cancelSidecarJob(jid, why)));
+}
+
 /**
  * Poll a sidecar job; on failure, cancel it (we are its only consumer — if
  * we are throwing, nobody is left to collect the result).
@@ -918,10 +927,26 @@ async function generateAnswer(query, contexts) {
   return { answer, abstained };
 }
 
-/** What the run's fidelity block records about the ANSWER leg — mirrors the
- * openai-only guard the answer call itself applies, so the record never
- * claims a config steered answers when it couldn't. */
-async function answerFidelity() {
+/** What the run's fidelity block records about the ANSWER leg.
+ *
+ * SERVE mode answers through the citizen pipeline (chatqna), which serves
+ * the DEPLOYMENT chat model. The `ragas_answers` config is consulted ONLY
+ * by the WHATIF answer leg (`generateAnswer`); the served call carries no
+ * model at all. Recording the config in serve mode therefore claimed a
+ * model that never answered — live 2026-10-25, a serve run recorded
+ * "glm-5.3-flash" while the answers came from the deployment chat model.
+ * The record must say what answered.
+ *
+ * The deployment model is read from the env: the containers carry
+ * VLLM_MODEL_ID, and VLLM_LLM_MODEL_ID is the deployment's other spelling
+ * of the same knob (8-7 found the two names out of step). */
+async function answerFidelity(opts = {}) {
+  const deploymentChat = () => ({
+    source: 'deployment-chat',
+    config: null,
+    model: process.env.VLLM_LLM_MODEL_ID || process.env.VLLM_MODEL_ID || null
+  });
+  if (opts.serveMode) return deploymentChat();
   try {
     const ovr = await modelConfigService.resolveModelOverride({ service: 'ragas_answers' });
     if (ovr && ovr.provider === 'openai') {
@@ -930,7 +955,7 @@ async function answerFidelity() {
   } catch {
     /* resolution failure — the deployment answerer applies */
   }
-  return { source: 'deployment-chat', config: null, model: process.env.VLLM_LLM_MODEL_ID || null };
+  return deploymentChat();
 }
 
 // ---------- suite generation ----------------------------------------------
@@ -941,7 +966,10 @@ function loadDoc(db, key, code, what) {
     .document(key)
     .catch((e) => {
       if (e && (e.code === 404 || e.statusCode === 404 || /not found/i.test(e.message || ''))) {
-        const err = new Error(`${what} ${key} not found`);
+        // `what` already names the key (every call site passes it), so the
+        // key is NOT appended again — the old message read "run rrX for suite
+        // rsY rrX not found" (David saw it in the console, 2026-10-25).
+        const err = new Error(`${what} not found`);
         err.code = code;
         err.status = 404;
         throw err;
@@ -1129,14 +1157,27 @@ const userCancelledRun = new Set(); // run_keys the user asked to stop
  */
 async function cancelSuiteRun(repoId, suiteKey, runKey) {
   const inflight = runInFlight.get(suiteKey);
-  if (!inflight || inflight !== runKey) {
+  const isRun = Boolean(inflight) && inflight === runKey;
+  // A RE-SCORE is a run too — it lives in its own map (the source run is
+  // never touched), so the cancel must look for it there as well. Without
+  // this a re-score was uncancellable: the endpoint answered 409 "no such
+  // run is executing" while the judge leg kept paying the GPU (David
+  // 2026-10-25: "I cannot stop the re-scoring!!!").
+  const isRescore = rescoreInFlight.has(runKey);
+  if (!isRun && !isRescore) {
     const err = new Error('no such run is executing for this suite');
     err.code = 'NO_RUN_IN_FLIGHT';
     err.status = 409;
     throw err;
   }
   userCancelledRun.add(runKey);
-  await cancelSuiteJobs(suiteKey, `run cancelled by user (${runKey})`);
+  if (isRescore) {
+    // Cancel THIS re-score's sidecar job only — a concurrent generation or
+    // run of the same suite must not be killed by a re-score cancel.
+    await cancelRunJobs(runKey, `re-score cancelled by user (${runKey})`);
+  } else {
+    await cancelSuiteJobs(suiteKey, `run cancelled by user (${runKey})`);
+  }
   logger.info('ragas-suite.run_cancelled_by_user', { repo_id: repoId, suite_key: suiteKey, run_key: runKey });
   return { cancelled: true, run_key: runKey };
 }
@@ -1575,7 +1616,9 @@ async function deleteSuite(repoId, suiteKey) {
  * worker would leave the run promise writing into a vanished document.
  */
 async function deleteRun(repoId, suiteKey, runKey) {
-  if (runInFlight.get(suiteKey) === runKey) {
+  // A live RE-SCORE is executing too — deleting its doc mid-flight would
+  // leave the panel polling a key that no longer exists (the 404 spiral).
+  if (runInFlight.get(suiteKey) === runKey || rescoreInFlight.has(runKey)) {
     const err = new Error('this run is executing — cancel it first');
     err.code = 'RUN_IN_FLIGHT';
     err.status = 409;
@@ -1677,11 +1720,45 @@ async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
   const effectiveJudge = judgeOverride && judgeOverride.model ? judgeOverride : null;
   const newRunKey = `rr${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
   const startedAt = new Date().toISOString();
-  const report = (p) => {
-    const inflight = rescoreInFlight.get(newRunKey);
-    if (inflight) inflight.progress = p;
+  // A re-score IS a run: it gets a run doc IMMEDIATELY, with status 'running',
+  // so the panel can list it, watch its progress and cancel it (David
+  // 2026-10-25: "it also cannot be tracked and does not connect to the UI with
+  // a progress bar… I cannot stop the re-scoring"). Before this the doc was
+  // written only at the END of the judge leg, so every poll 404'd on a key
+  // that did not exist yet, and the cancel endpoint could not find the run.
+  const placeholder = {
+    _key: newRunKey,
+    repo_id: repoId,
+    kind: 'ragas_run',
+    status: 'running',
+    suite_key: suiteKey,
+    created_at: startedAt,
+    created_by: (ctx.actor && ctx.actor.user_id) || 'system',
+    metrics,
+    payload: {
+      // The lineage is visible from the FIRST poll, not only once the run
+      // lands: this run re-scored that one.
+      fidelity: {
+        rescore_of: runKey,
+        rescore_note: `re-scoring ${runKey} with a different judge — the answers are identical`
+      }
+    }
   };
-  rescoreInFlight.set(newRunKey, { source_run_key: runKey, progress: { phase: 'judge', done: 0, total: 1 } });
+  await db.collection(COLLECTION).save(placeholder);
+  // The progress is written into the run DOC — the panel polls the doc, and
+  // the doc is the only place that survives more than one okf-server
+  // process. Throttled, like the run path's progress write.
+  const PROGRESS_WRITE_MIN_MS = 2000;
+  let lastProgressWrite = 0;
+  const report = (p) => {
+    const now = Date.now();
+    if (now - lastProgressWrite < PROGRESS_WRITE_MIN_MS) return;
+    lastProgressWrite = now;
+    db.collection(COLLECTION)
+      .update(newRunKey, { progress: p, updated_at: new Date().toISOString() })
+      .catch((e) => logger.warn('ragas-suite.rescore.progress_write_failed', { run_key: newRunKey, error: e.message }));
+  };
+  rescoreInFlight.set(newRunKey, { source_run_key: runKey });
   // A re-score is a JUDGE-only operation: the answers are copied verbatim.
   const results = srcResults.map((r) => ({ ...r, metrics: {} }));
   // The sidecar answers in SAMPLE ORDER, and the sample list EXCLUDES rows
@@ -1719,6 +1796,16 @@ async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
         { repo_id: repoId, suite_key: suiteKey, run_key: newRunKey }
       );
       const body = await started.json();
+      // A cancel that landed while the SUBMIT was still in flight: the sidecar
+      // job is not registered yet, so the cancel endpoint had nothing to
+      // delete. Honour the intent here rather than letting the judge leg run
+      // to the end for a run the user already stopped.
+      if (userCancelledRun.has(newRunKey)) {
+        await cancelSidecarJob(body.job_id, `re-score cancelled by user (${newRunKey})`);
+        const cancelled = new Error('re-score cancelled by user');
+        cancelled.code = 'RAGAS_JOB_CANCELLED';
+        throw cancelled;
+      }
       const evaluation = await pollSidecarJobOwned(
         body.job_id,
         {
@@ -1793,7 +1880,7 @@ async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
           }
         }
       };
-      await db.collection(COLLECTION).save(newDoc);
+      await db.collection(COLLECTION).replace(newRunKey, newDoc);
       logger.info('ragas-suite.run_rescored', {
         repo_id: repoId,
         suite_key: suiteKey,
@@ -1803,31 +1890,51 @@ async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
         metrics: metrics.join(',')
       });
       return newDoc;
+    } catch (e) {
+      // The re-score must LEAVE A DOC behind whatever happened — a run the
+      // panel cannot find is the 404 spiral this whole path was built to
+      // avoid. A user cancel lands as 'cancelled' (never 'failed': the same
+      // rule the run path follows), anything else as 'failed'.
+      const cancelled = e.code === 'RAGAS_JOB_CANCELLED' || userCancelledRun.has(newRunKey);
+      await db
+        .collection(COLLECTION)
+        .replace(newRunKey, {
+          ...placeholder,
+          status: cancelled ? 'cancelled' : 'failed',
+          error: cancelled
+            ? { code: 'RAGAS_JOB_CANCELLED', status: null, message: 're-score cancelled by user' }
+            : { code: e.code || 'RESCORE_FAILED', status: e.status || null, message: e.message }
+        })
+        .catch((persistErr) =>
+          logger.error('ragas-suite.rescore.terminal_persist_failed', {
+            run_key: newRunKey,
+            error: persistErr.message
+          })
+        );
+      throw e;
     } finally {
       rescoreInFlight.delete(newRunKey);
     }
   })();
-  done.catch((e) =>
+  done.catch((e) => {
+    // A cancel is not a failure: it gets its own log line so an operator
+    // reading the log does not read it as a broken re-score.
+    if (e && e.code === 'RAGAS_JOB_CANCELLED') {
+      logger.info('ragas-suite.rescore.cancelled_by_user', {
+        repo_id: repoId,
+        suite_key: suiteKey,
+        run_key: newRunKey
+      });
+      return;
+    }
     logger.error('ragas-suite.rescore.async_failed', {
       repo_id: repoId,
       suite_key: suiteKey,
       run_key: newRunKey,
       error: e.message
-    })
-  );
+    });
+  });
   return { run_key: newRunKey, source_run_key: runKey, status: 'running', done };
-}
-
-/** The live progress of an in-flight re-score (for the panel's poll). */
-async function getRescoreProgress(runKey) {
-  const inflight = rescoreInFlight.get(runKey);
-  if (!inflight) return null;
-  return {
-    run_key: runKey,
-    status: 'running',
-    progress: inflight.progress || null,
-    source_run_key: inflight.source_run_key
-  };
 }
 
 async function loadSuite(db, repoId, suiteKey) {
@@ -2241,7 +2348,7 @@ async function runSuite(repoId, suiteKey, opts = {}) {
                   graphs: graphNames
                 },
             judge: null,
-            answers: await answerFidelity()
+            answers: await answerFidelity({ serveMode })
           }
         }
       };
@@ -2271,13 +2378,86 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     // fail every judge leg) — the env judge applies, and the run's fidelity
     // records the EFFECTIVE judge, not the unusable pick.
     const effectiveJudge = judgeOverride && judgeOverride.model ? judgeOverride : null;
-    const samples = entries.map((e, i) => ({
-      user_input: e.query,
-      retrieved_contexts: results[i].contexts,
-      response: results[i].answer,
-      reference: e.reference_answer || '',
-      reference_contexts: e.reference_passages || []
-    }));
+    // Judge ONLY the rows that produced an answer. A row with no answer has
+    // nothing to judge: submitting it makes the sidecar score an EMPTY
+    // response, which comes back as ZEROS on the context and answer metrics
+    // — and zeros are numbers, so they land in the means and depress them.
+    // The run path's own comment says "Judge only the rows that produced an
+    // answer" (:2287), its sibling re-score path filters the same way
+    // (:1770), and a passing test encodes the same intent
+    // (ragas-suite-service.test.js:2353-2397). The payload contradicted all
+    // three: it submitted every row.
+    //
+    // The sidecar answers in SAMPLE order, so per_query must be mapped back
+    // through the ORIGINAL row index — aligning it against `results`
+    // directly shifts every row after the first dropped one, which scores the
+    // wrong answer against the wrong query.
+    const scorable = results.map((r, i) => ({ r, i })).filter(({ r }) => !r.error && r.answer);
+    if (!scorable.length) {
+      // Every row is empty — there is nothing to judge. The run fails
+      // loudly (the same shape as the all-rows-failed case above) rather
+      // than submitting an empty dataset and reporting zeros as a result.
+      const emptyError = {
+        code: 'NO_SCORABLE_ROWS',
+        status: null,
+        message: 'no row produced an answer — there is nothing to judge'
+      };
+      const emptyDoc = {
+        _key: opts.runKey,
+        repo_id: repoId,
+        kind: 'ragas_run',
+        status: 'failed',
+        suite_key: suiteKey,
+        created_at: opts.startedAt,
+        created_by: (opts.actor && opts.actor.user_id) || 'system',
+        repo_ids: repoIds,
+        metrics: opts.metrics,
+        error: { ...emptyError, failed_rows: erroredRows, total, aborted: false },
+        payload: {
+          suite_created_at: suite.created_at,
+          entries: entries.map((e) => ({ id: e.id, query: e.query, oos: e.oos })),
+          results,
+          summary: null,
+          error: emptyError,
+          fidelity: {
+            // The SAME shape as the all-rows-failed doc above — a failed
+            // run's fidelity block is read by the panel and the explain.
+            retrieval: serveMode
+              ? { algorithm: 'SERVED — chatqna /v1/chatqna', mode: 'serve', serve_url: SERVE_URL(), graphs: graphNames }
+              : {
+                  algorithm: 'per-graph APPROX_NEAR_COSINE + unified rerank',
+                  mode: 'whatif',
+                  candidate_k: CANDIDATE_K,
+                  top_n: TOP_N,
+                  graphs: graphNames
+                },
+            judge: null,
+            answers: await answerFidelity({ serveMode })
+          }
+        }
+      };
+      await db.collection(COLLECTION).replace(opts.runKey, emptyDoc);
+      logger.error('ragas-suite.run_failed', {
+        repo_id: repoId,
+        suite_key: suiteKey,
+        run_key: opts.runKey,
+        failed_rows: erroredRows,
+        total,
+        aborted: false,
+        cause: emptyError.message
+      });
+      return emptyDoc;
+    }
+    const samples = scorable.map(({ r, i }) => {
+      const e = entries[i];
+      return {
+        user_input: e.query,
+        retrieved_contexts: r.contexts,
+        response: r.answer,
+        reference: e.reference_answer || '',
+        reference_contexts: e.reference_passages || []
+      };
+    });
     const evalStarted = await sidecarSubmitWithRetry(
       '/evaluate',
       {
@@ -2329,15 +2509,28 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       }
     );
     const perQuery = Array.isArray(evaluation.per_query) ? evaluation.per_query : [];
-    // sidecar returns rows in sample order (EvaluationDataset preserves it)
-    for (let i = 0; i < results.length; i += 1) {
-      const q = perQuery[i] || {};
+    // The sidecar returns rows in SAMPLE order (EvaluationDataset preserves
+    // it), and the sample list EXCLUDES the rows with no answer — so
+    // per_query is mapped back through the ORIGINAL row index (see
+    // `scorable` above). Aligning it against `results` directly would shift
+    // every row after the first dropped one.
+    scorable.forEach(({ i }, k) => {
+      const q = perQuery[k] || {};
       results[i].metrics = q || {};
       delete results[i].metrics.user_input;
       delete results[i].metrics.retrieved_contexts;
       delete results[i].metrics.response;
       delete results[i].metrics.reference;
       results[i].ragas_nan = q.ragas_nan === 'ALL_NAN';
+    });
+    // The rows that were NOT submitted carry no score at all — empty
+    // metrics, so the mean excludes them and the coverage counts them as
+    // NOT measured. They are never a zero.
+    const submitted = new Set(scorable.map((s) => s.i));
+    for (let i = 0; i < results.length; i += 1) {
+      if (submitted.has(i)) continue;
+      results[i].metrics = {};
+      results[i].ragas_nan = false;
     }
     // Judge COVERAGE (2026-10-21 sidecar review F2): the sidecar averages the
     // rows that scored and nulls the ones that failed, so a judge that died
@@ -2414,7 +2607,7 @@ async function runSuite(repoId, suiteKey, opts = {}) {
           // Which model answered (David 2026-10-20): the deployment's chat
           // by default; a config explicitly checked for benchmark answers
           // takes over — and the benchmark then measures THAT model.
-          answers: await answerFidelity()
+          answers: await answerFidelity({ serveMode })
         }
       }
     };
@@ -2451,7 +2644,12 @@ function summarizeRun(suite, results, metrics) {
   const failing = [];
   for (const r of results) {
     if (r.error) nErrors += 1;
-    if (r.abstained) nAbstained += 1;
+    // An ABSTENTION is a row that declined — it still has an answer, so it
+    // was judged. A row that FAILED produced no answer at all: it is an
+    // error, never an abstention, and counting it as both made the panel's
+    // outcome bar subtract it twice (the segments summed to more than the
+    // suite, and the all-abstained runs reached −20).
+    if (r.abstained && !r.error) nAbstained += 1;
     const e = byId.get(r.id) || {};
     const fails = [];
     for (const m of metrics) {
@@ -2491,7 +2689,10 @@ function summarizeRun(suite, results, metrics) {
 async function getRunSuite(repoId, suiteKey, runKey) {
   const db = await dbService.getConnection();
   await ensureCollection(db);
-  if (runInFlight.get(suiteKey) === runKey) {
+  // A re-score is live in its own map — without this the poll fell through
+  // to the doc branch, found a 'running' doc and declared it INTERRUPTED
+  // (the "the worker died" verdict), which is exactly wrong.
+  if (runInFlight.get(suiteKey) === runKey || rescoreInFlight.has(runKey)) {
     const live = await loadDoc(db, runKey, 'RUN_NOT_FOUND', `run ${runKey}`).catch(() => null);
     return { run_key: runKey, suite_key: suiteKey, status: 'running', progress: (live && live.progress) || null };
   }
@@ -2696,7 +2897,114 @@ async function getExplainFailures(repoId, suiteKey, runKey) {
  * the one that must be fixed first (a passage the dense stage never
  * surfaced cannot be rescued by a bigger rerank window).
  */
-function attributeFailures(suite, runDoc, evidence) {
+/**
+ * The run that scored the SAME ANSWERS with a DIFFERENT judge: the
+ * re-score of this run, or the run this run re-scored.
+ *
+ * Only a LINEAGE-linked sibling can be compared row by row — an unrelated
+ * run scored its own answers, so its per-row scores say nothing about this
+ * one's. The re-score is the only cheap way to get a second judge's verdict
+ * over identical answers and contexts (no retrieval, no re-generation).
+ */
+async function loadSecondJudgeRun(db, repoId, suiteKey, runKey, runDoc) {
+  const parent = (runDoc.payload && runDoc.payload.fidelity && runDoc.payload.fidelity.rescore_of) || '';
+  const rows = await (
+    await db.query(
+      `FOR d IN ${COLLECTION} FILTER d.repo_id == @rid AND d.suite_key == @sk AND d.kind == "ragas_run" ` +
+        'AND d.status == "done" AND d._key != @rk AND (d.payload.fidelity.rescore_of == @rk OR d._key == @parent) ' +
+        'SORT d.created_at DESC LIMIT 1 RETURN d',
+      { rid: repoId, sk: suiteKey, rk: runKey, parent }
+    )
+  ).all();
+  return rows.length ? rows[0] : null;
+}
+
+/**
+ * How the two judges differ on the rows THIS judge failed.
+ *
+ * The advisor used to ASSERT "a second judge disagrees on roughly half of
+ * these rows" from a hardcoded string. That was true of ONE offline
+ * measurement and silently became a lie for every other run — David
+ * 2026-10-25: "If you have hard coded strings then fucking fix it". The
+ * comparison is now computed from the sibling run's own scores.
+ */
+function compareJudges(suite, runDoc, secondDoc) {
+  const thresholds = { ...FAIL_BELOW_DEFAULTS, ...((suite.payload && suite.payload.thresholds) || {}) };
+  const judgeOf = (doc) => {
+    const f = (doc.payload && doc.payload.fidelity && doc.payload.fidelity.judge) || null;
+    return (f && (f.model || f.config)) || 'an unnamed judge';
+  };
+  if (!secondDoc) {
+    return { source: 'none', second_judge: null, second_run_key: null, per_metric: {}, total: null };
+  }
+  const metrics = (runDoc.metrics || []).filter((m) => (secondDoc.metrics || []).includes(m));
+  const secondById = new Map((secondDoc.payload.results || []).map((r) => [r.id, r]));
+  // null = not measured, true = failed, false = passed.
+  const verdict = (r, m) => {
+    const v = r.metrics ? r.metrics[m] : null;
+    if (typeof v !== 'number' || v !== v) return null;
+    const t = thresholds[m];
+    if (t === undefined) return null;
+    return (m === 'noise_sensitivity' ? v > t : v < t) ? true : false;
+  };
+  const perMetric = {};
+  const total = { failed_here: 0, cleared: 0, kept_failing: 0, not_measured: 0 };
+  for (const r of runDoc.payload.results || []) {
+    const other = secondById.get(r.id);
+    if (!other) continue;
+    for (const m of metrics) {
+      const mine = verdict(r, m);
+      if (mine !== true) continue; // this judge did not fail it
+      const theirs = verdict(other, m);
+      const bucket = (perMetric[m] = perMetric[m] || { failed_here: 0, cleared: 0, kept_failing: 0, not_measured: 0 });
+      bucket.failed_here += 1;
+      total.failed_here += 1;
+      if (theirs === null) {
+        bucket.not_measured += 1;
+        total.not_measured += 1;
+      } else if (theirs === false) {
+        bucket.cleared += 1;
+        total.cleared += 1;
+      } else {
+        bucket.kept_failing += 1;
+        total.kept_failing += 1;
+      }
+    }
+  }
+  return {
+    source: 'sibling',
+    second_judge: judgeOf(secondDoc),
+    second_run_key: secondDoc._key,
+    per_metric: perMetric,
+    total
+  };
+}
+
+/**
+ * The sentence the advisor uses about a second judge — COMPUTED from the
+ * sibling run, never asserted. With no sibling there is nothing to say,
+ * and saying so is the honest answer: the operator can re-score the run
+ * with another judge to find out.
+ */
+function secondJudgeSentence(comparison, metric) {
+  if (!comparison || comparison.source !== 'sibling') {
+    return 'No second judge has scored this run yet: re-score it with another judge to find out whether this is judge harshness or a real failure.';
+  }
+  const judge = comparison.second_judge || 'the other judge';
+  const m = (metric && comparison.per_metric[metric]) || comparison.total;
+  if (!m || !m.failed_here) {
+    return `A second judge (${judge}) scored the same answers but did not fail any of the rows this one failed — treat these rows as unproven, and do NOT tighten the prompt, the corpus or a retrieval knob for them.`;
+  }
+  return (
+    `A second judge (${judge}) scored the same answers: it cleared ${m.cleared} of the ${m.failed_here} rows this judge failed` +
+    (metric ? ` on ${metric}` : '') +
+    `, and ${m.kept_failing} still failed` +
+    (m.not_measured ? ` (${m.not_measured} it could not measure at all)` : '') +
+    '. Treat the cleared rows as unproven judge disagreement rather than as judge noise: check the reference answer against the corpus, and do NOT tighten the prompt, the corpus or a retrieval knob for them.'
+  );
+}
+
+function attributeFailures(suite, runDoc, evidence, judgeComparison) {
   const thresholds = { ...FAIL_BELOW_DEFAULTS, ...((suite.payload && suite.payload.thresholds) || {}) };
   const entriesById = new Map(suite.payload.entries.map((e) => [e.id, e]));
   const attributions = [];
@@ -2711,7 +3019,12 @@ function attributeFailures(suite, runDoc, evidence) {
         return name === 'noise_sensitivity' ? v > t : v < t;
       })
       .map(([name]) => name);
-    if (!failed.length) continue;
+    // A row that produced NO answer is not scored, so it has no failing
+    // metric — but it still needs attribution: it is the row that failed at
+    // retrieval or in the answer leg, and that is the first thing the
+    // operator must know. Only a row that produced an answer and failed
+    // nothing has nothing to say.
+    if (!failed.length && !r.error && r.answer) continue;
 
     // Where the expected passage went — proven against the corpus, not
     // inferred from the run's truncated candidate texts. The ladder only
@@ -2831,12 +3144,11 @@ function attributeFailures(suite, runDoc, evidence) {
           `${typeof m.faithfulness === 'number' ? m.faithfulness.toFixed(2) : 'n/a'}` +
           (selfHigh ? `, chatqna self-grade ${r.self_confidence.toFixed(2)}` : '') +
           ') — the gap is judge claim-matching, not a prompt defect. ' +
-          // "Judge noise" was the wrong conclusion: a second judge (the env
-          // judge, granite) cleared 9 of 21 such rows on factual_correctness
-          // and kept 12 failing, so roughly half are judge variance and half
-          // are real. The row is UNPROVEN, not dismissed.
-          'A second judge disagrees on roughly half of these rows, so treat the row as unproven rather than as judge noise: ' +
-          'check the reference answer against the corpus, and do NOT tighten the prompt, the corpus or a retrieval knob for it';
+          // The second-judge verdict is COMPUTED from the sibling re-score
+          // (same answers, different judge), never asserted. It used to be
+          // a hardcoded "disagrees on roughly half of these rows" — true of
+          // one offline measurement and a lie for every other run.
+          secondJudgeSentence(judgeComparison, 'factual_correctness');
       } else {
         stage = 'llm';
         recommendation =
@@ -2865,17 +3177,27 @@ function attributeFailures(suite, runDoc, evidence) {
       stage = 'judge';
       recommendation =
         'context recall passed and the expected passage WAS delivered — yet the reference answer’s entity strings are absent from the retrieved context. ' +
-        // Not "judge noise": a second judge (granite) REPRODUCED this on 30
-        // of 39 such rows and cleared only 9, so the miss is mostly real.
-        // The lever is the reference answer's wording, not the RAG.
-        'A second judge reproduces this on most of these rows, so it is not judge harshness: the reference answer is worded differently from the corpus. ' +
-        'Regenerate the reference answer against the corpus; do NOT tune the RAG, the corpus or a retrieval knob for this row.';
+        // The second-judge verdict is COMPUTED from the sibling re-score
+        // (same answers, different judge), never asserted — it used to be a
+        // hardcoded "reproduces this on most of these rows".
+        secondJudgeSentence(judgeComparison, 'context_entities_recall') +
+        ' Regenerate the reference answer against the corpus; do NOT tune the RAG, the corpus or a retrieval knob for this row.';
     } else if (failed.includes('context_entities_recall')) {
       stage = 'corpus';
       recommendation = 'key entities of the reference are unretrievable — enrich entity mentions in the concept';
     } else {
-      stage = 'pipeline';
-      recommendation = 'metric below threshold — inspect the row detail';
+      // No metric failed AND no metric could be measured: the row produced
+      // no answer at all, so it was never judged (the run judges only the
+      // rows that produced an answer). Saying "metric below threshold"
+      // would be false — there is no metric and no threshold behind it.
+      if (!r.answer) {
+        stage = 'answer';
+        recommendation =
+          'this row produced no answer, so it was never judged — it carries no score and is left out of the averages; re-run the benchmark, and if it keeps happening look at the answer leg for this entry';
+      } else {
+        stage = 'pipeline';
+        recommendation = 'metric below threshold — inspect the row detail';
+      }
     }
     attributions.push({
       id: r.id,
@@ -3203,7 +3525,13 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
     // already indexed — the advisor's most expensive mistake.
     explainProgress.set(suiteKey, { phase: 'probing', started_ms: Date.now(), failing: 0 });
     const evidence = await collectAttributionEvidence(db, suite, runDoc);
-    const attributions = attributeFailures(suite, runDoc, evidence);
+    // The second judge, if one exists: the re-score of this run (or the run
+    // it re-scored) scored the SAME answers with a different judge, so its
+    // per-row verdicts can be compared row by row. This is what the advisor
+    // used to ASSERT from a hardcoded string.
+    const secondJudgeRun = await loadSecondJudgeRun(db, repoId, suiteKey, runKey, runDoc);
+    const judgeComparison = compareJudges(suite, runDoc, secondJudgeRun);
+    const attributions = attributeFailures(suite, runDoc, evidence, judgeComparison);
     explainProgress.set(suiteKey, { phase: 'advising', started_ms: Date.now(), failing: attributions.length });
     // The run-level facts the advisor must read before it prescribes anything
     // (David 2026-10-24): how many rows abstained and how long the answers
@@ -3226,7 +3554,10 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
       stage_counts: attributions.reduce((acc, a) => {
         acc[a.stage] = (acc[a.stage] || 0) + 1;
         return acc;
-      }, {})
+      }, {}),
+      // The second judge's verdict, COMPUTED — the advisor may cite it, and
+      // the reader can check it against the sibling run.
+      judge_comparison: judgeComparison
     };
     try {
       // ONE guided-JSON advice call; tag suggestions pass the existing guardrail.
@@ -3287,7 +3618,7 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
             // answer, never the RAG.
             '(1) A row with stage "judge" means the answer is grounded in the delivered context and the failure is a metric-side finding. ' +
             'Do NOT propose a prompt tweak, a content change or a knob change for it; say the reference answer must be checked against the corpus. ' +
-            'Do NOT call it judge noise — a second judge disagrees on roughly half of these rows, so they are unproven rather than dismissed. ' +
+            'Do NOT call it judge noise — the second judge (see run_facts.judge_comparison) cleared part of these rows, so they are unproven rather than dismissed. ' +
             '(2) A row with stage "abstention" means the model declined — the abstention contract may be too strict; that is a COVERAGE argument, not a grounding one. ' +
             '(3) Only rows staged "llm" justify a grounding change, and only when their faithfulness actually failed. ' +
             '(4) Check run_facts.abstentions against run_facts.rows: if a large share of rows abstained, the prompt is OVER-CONSTRAINING — ' +
@@ -3303,7 +3634,12 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
             // The advisor named the rows it could not see (46 of 86 on one
             // run) and asked for them to be marked. Say so instead.
             '(8) If attributions_omitted is not empty, say how many failing rows had no stage attribution in the payload and ' +
-            'prescribe nothing for them — their stage is unknown, not benign.';
+            'prescribe nothing for them — their stage is unknown, not benign. ' +
+            // The second judge's verdict is computed from the sibling
+            // re-score — the advisor must not assert one of its own.
+            '(9) Use run_facts.judge_comparison for the second judge: if its source is "none", NO second judge has scored this run, ' +
+            'so say the row is unproven and that re-scoring with another judge would settle it. If its source is "sibling", ' +
+            'quote its cleared/kept_failing counts and never assert a proportion you were not given.';
           const advisorAttributions = packAttributions(attributions);
           const advisorUserPayload = JSON.stringify({
             repo: suite.name,
@@ -3719,7 +4055,6 @@ module.exports = {
   deleteSuite,
   deleteRun,
   rescoreRun,
-  getRescoreProgress,
   beginRunSuite,
   cancelSuiteRun,
   runSuite,
@@ -3732,5 +4067,15 @@ module.exports = {
   exportSuiteXlsx,
   importSuiteXlsx,
   exportResultsXlsx,
-  sweepInterruptedRuns
+  sweepInterruptedRuns,
+  // Exported for the unit test that pins WHICH model the run claims
+  // answered (the serve mode recorded a model that never answered —
+  // David, 2026-10-25).
+  answerFidelity,
+  // Exported for the unit test that pins the COMPUTED second-judge
+  // comparison (the advisor used to assert a second judge's verdict from
+  // a hardcoded string).
+  compareJudges,
+  secondJudgeSentence,
+  attributeFailures
 };

@@ -3272,7 +3272,107 @@ export default {
             x2: 'Ban a yele retrieval tune na number juon ye. Precision ani recall bɛ bɔdi kɛ kɔnata; change min juon ye yelema ye, bar ye bɛ to bɔ ye, ani trade min ye e na bonya na kɔnata.',
             x3: 'Ban a sɔng score null ko score low ye. Retry min bɛ tasalan ko null bɛ kɔbɔ min bɛ kuntu na mean, ani score te ye kɛlan measurement te ye — A run ferege seginna, ban a sula worst.',
             expect:
-              "Benchmark number ye comparison ye run ko suite kelen ye la, e ka assistant la grade ye mana. Export xlsx a i so kɔbɔ na evidence marala, ani i bɛ keta min i mara: trend line min panel la ye bɛ mara run ko repository n'i ye store ye ko kɛlen ko."
+              "Benchmark number ye comparison ye run ko suite kelen ye la, e ka assistant la grade ye mana. Export xlsx a i so kɔbɔ na evidence marala, ani i bɛ keta min i mara: trend line min panel la ye bɛ mara run ko repository n'i ye store ye ko kɛlen ko.",
+            table: {
+              title: 'Wɛr min bɛ na screen kan, ani a yɛri bɛ min ma',
+              col: {
+                element: 'Screen kan',
+                meaning: 'A yɛri bɛ min ma',
+                effect: 'Bɛn na yɛri bɛ min ka kan a fɛn'
+              },
+              mean: {
+                element: 'Score',
+                meaning: 'Metric bɛɛ ma bɛ mean bɛ rows bɛ judge bɛ na seginna la. A tɛ ye suite kelen yei score ye.',
+                effect:
+                  'Ben kaa ben yɛri bɛ min kan bɛ de bɔ a jɔw ma. Mean bɛ rows bɛ kelen ye la bɛ rows minnu di bɔ n’i ye suite ye.'
+              },
+              coverage: {
+                element: 'Bɛn ari (55/100)',
+                meaning:
+                  'Judge bɛ metric bɛɛ ma bɛ rows bɛ 100 la bɛ 55 la bɛ seginna. Mean bɛ na fɔli bɛ rows 55 ye la; bɛ 45 minnu bɛ dɔ bɔ fɔ min i — bɛ kaɲi bɛ zero sɔrɔ.',
+                effect:
+                  'Bɛn ari sɔrɔ bɛ ye, a bɛ yɛrɛ ko number bɛ suite la kuma. Awone metric bɛ min na bɛ kɔnɔ — o tɛ fɔli bɛ run bɛ min ye.'
+              },
+              banner: {
+                element: 'Run bɛ ma valid la banner',
+                meaning:
+                  'Run bɛ la a bɛ answers bɛ fɔli, walima metric kelen ye bɛ na fɔli rows kelen ye la seginna. A bɛ coverage number bɛ ye metric bɛ kelen bɛ seginna ye — 21/100 la bɛ metric kelen ye bɛ na a sɔrɔ bɛ fɔli ye.',
+                effect: 'Awone bɛn ari bɛna kelen ye kaa awa. Banner ye bɛ sira bɔ ye, a tɛ fɔli bɛ sammari ye.'
+              },
+              runName: {
+                element: 'Run bɛ ma yɛri',
+                meaning:
+                  'Judge bɛ na run bɛɛ ma seginna, ani configuration bɛ min a bɔ fɔli bɛ. Key bɛ na bɛɲi bɛ support bɛ ma.',
+                effect:
+                  'Run kelen yei bɛ judge bɛ kelen yei ma, a tɛ fɔli bɛ kelen ye measurement ye. Bɛ kelen bɛ kelen bɛ compare, walima bɛ kelen ye re-score.'
+              },
+              rescore: {
+                element: 'Re-score',
+                meaning:
+                  'Answer bɛ kelen yei bɛ na kaa judge bɛ kelen yei bɛ na seginna. Answers ani contexts bɛ bɛ bɛ kɔpɔ — bɛ dɔ fɔli bɛ walima bɛ kɛn bɔ fɔli bɛ.',
+                effect:
+                  'Judge kelen yei bɛ rows kelen ye la bɔ a fɔli bɛ a sɔrɔ ye. A bɛ run fɛn ye dɔrɔn fɛn ye — ani judge bɛ bɔn bɛ a sɔrɔ.'
+              },
+              status: {
+                element: 'Status',
+                meaning: 'Run bɛ na ban. Run bɛ min bɛ sani na, a bɛ mean bɛ bɛn na bɛ yɛrɛ.',
+                effect: 'Number bɛ iɲɛ walima a bɛ na ban.'
+              }
+            }
+          },
+          errors: {
+            title: 'Fili kei di kɛma yɛri a yɔ bɛ min ma',
+            intro:
+              "Ta benchmark kei dy varraghagh y-çoa dys daa goll dy ben: ta roie kei-ell dy fail myr'ee ayn ta coat, ta frisyr kei-ell dy no dy eisht dy volley, ta judge kei-ell dy beign dy queigys, as dysa ta queigys kei-ell dy goll myr'ee les dy yaird. Ta nyn kei-ell dy noll, as ta nyn kei-ell dy folt. Ta chaayrt t'e goll y cheet dy lhai, as goll dy ven dy t'ish y ouïre. Ta feaad t'chayrt dy yee kee ayn roie ayn choh nagh daa ayn vennay — nagh t'ee ta goll ayn cleet dy goll ayn — dy ben myr'ee, as y traa dy fer as y t'roo ayn shoh nagh val oo ayn goll ayn noll. Ta roie ayn daa bann ayn vennay t'ish y v'ee daa y goll, dy ben ta judge: nagh t'ee t'raa dy vodjey dy goll y cheet, as ta queigys y chiem dy goll dys 0, as ta noll shoh dy goll myr'ee ayn mean y cheet. Ta shoh dy goll myr'ee rownyr dy rowney 'invalid' dy goll myr'ee, er goll dy jin as dy creddy.",
+            d1: 'Lɛntɛn “run bɛ ma valid” banner la, a kɔnɔ mean bɛ yɛrɛ. I yɛri ko score bɛ min bɛ bɛn bɛɛma system bɛ measurement ye, ani banner yɛrɛ saɲi bɛ min saɲi ye: answers bɛ fɔli, walima judge bɛ na suite tan bɛɛma seginna. Saɲi ɲi wuloo, a sɛbɛn fana.',
+            d2: "Kono metric kuluw kɔfɛn kɔbɛn tugut di bɛɛrehɔ ban dɔn cili kɛn waati fɔlɔ judge bɛ na row bee la seginna. Bɛɛma bɛ fɛn bɛ kɛn bɔ n'o mɔgɔ n'i na bɔ suit bɛɛma yɔri ye, ani a tɛ fɛn bɛ kɛn bɔ run min bɛ na suun bɛɛma seginna bɛɛ kɛn bɔ fɔlɔw.",
+            d3: "Fili bɛ min bɛ fɔli la, sani a wuloo a kɔnɔ la k'a sɔrɔ la, diɲɛ bɛ fɔli ye upstream service ye wallima timeout ye — a kaa sɛbɛn fana. Suite bɛ sɔrɔ n'i fɔli bɛ san bɛ fɔli bɛ kɔnɔ na, o bɛ dɔrɔn min bɛ waati benchmark bɛ sɔrɔ ka min bɛ kijɛraa.",
+            d4: "Bɛ ansa bɔ bɛ fɔli la, a bɛ bɛn dɔɔrɔn ye, ansa bɛ fɔli ye. A yɛrɛ ko assistant y'a sɔn ko corpus bɛ kana fɔli bɛ kelen ye jigi ma — o bɛ corpus la ani question la bɛ ye. A lɛrɛ ko coverage bɛ min user bɛ bɛn na kɛn ye.",
+            x1: "Metric bɛ min bɛ seginna ma, a fɔlɔ zero sɔrɔ. Judge bɛ min bɛɛn b'ɛd fɔli bɛ na metric man bɛ na parse kɛ, o bɛ na metric o la bɛ na null ɲi a ɲi row la; null bɛ bɔ min mean na, ani a tɛ fɛn bɛ kɛn bɔ failure sɔrɔ.",
+            x2: 'Bɛ ansa bɔ bɛ fɔli la, a tɔnɔ error ye walima success ye. A bɛ column bɛ bɛɛn fɛnɛ min na, a kisa fɛnɛ ye te a fɛnɛ ma ye.',
+            x3: 'Panel bɛ run bɛ min bɛ “invalid” la jurɔ la bɔ san bɛɛn bɔlɔni ye, walima run fila wuloo bɛ a sɛbɛn bɔ ye fana. Run bɛ min bɛɛma sugandi ye, a tɛ fɔli bɛ san bɛ kɛn bɔ bɛɛ min bɛ bɛna bɔn ye; a bɛ run bɛ min bɛ fɔli.',
+            expect:
+              'Run ɲuman bɛɛ fɔli row tɛ yen, ani metric bɛ kelɛ kelɛ row la seginna — ni kononi ye kelɛ ye gati min bɛɛn ye mean ye. O minɛ kelen ye bɛ run bɛ min bɛ fɔli la, ansa bɛ fɛn bɛ kɛn bɔ ye.',
+            table: {
+              title: 'Bɛn na state bɛɛ bɔ bɛ min na yɛri a yɔ bɛ min ma',
+              col: {
+                state: 'State',
+                meaning: 'A yɛri bɛ min na',
+                effect: 'A yɛri a yɔ bɛ min na yɛri bɛ min ma'
+              },
+              error: {
+                state: 'error',
+                meaning:
+                  'Pipeline bɛ fɔli o row la — retrieval, upstream service walima timeout. Answer tɛ yen bɛ kaɲi.',
+                effect:
+                  "Ta roie shoh CHOH NAI shoh daa ayn goll myr'ee — nagh t'ee ta goll ayn cleet dy goll ayn. Ta carree scôr ayn bies: ta fôli bê maan y cheet (ayn noll goll myr'ee) as ta goll ayn column y errôr, as ta rowney 'invalid' dy goll myr'ee — dy ben ta bann dy goll dy nô dy whei dy goll myr'ee y-syss. Côrrect dy coss — ta retrieval stack, ta shoh y-ard, ta timeout — as goll dy arragh. Ta roie dy v'ee ayn vennay ta scôr dy fôl, bot ta rowney dy goll ayn bies nagh ta thô ayn goll dy les — goll dy les dy ayn choh dy yee, no dy gh."
+              },
+              abstained: {
+                state: 'ansaa bɔ fɔli',
+                meaning:
+                  'Assistant bɛna bɔ fɔli bɛ ja answers ma — chatqna bɛɛ a dɔ bɛ ye, walima a tɛ fɛn bɛ kaɲi a bin sɛbɛn fana. Pipeline bɛ fɔli ma.',
+                effect:
+                  'Row bɛ na fɔli judge bɛɛ ma sɛn ye, sɛn i bɛ na fɔli score kelen bɛ kaɲi — context tɛ yen i fɔli la, context metrics bɛ na fɔli 0 ye, ani zero minnu bɛ mean la bɛ na kaa. A bɛ column bɛ bɛɛn fɛnɛ ma kaa, error column la ko kɛn bɛ ma, ani a tɛ fɛn bɛ kɛn bɔ run la invalid ye. Panel bɛ row bɛ lɛn «ansaa bɔ fɔli» ye, walima pass walima fail ye.'
+              },
+              unmeasured: {
+                state: 'bɛ seginna ma',
+                meaning:
+                  'Judge bɛna bɛn bɛ na fɔli bɛ na metric man bɛ na parse kɛ — walima claim bɛ fɔli bɛ na judge bɛ na sɔrɔ sɛbɛn.',
+                effect:
+                  'Metric o bɛ null ɲi a ɲi row la: bɛ bɔ min mean na, a tɛ fɛn bɛ kɛn bɔ zero ye. Panel yɛrɛ bɛ row jigɛn judge bɛ na seginna, ani coverage bɛ fɔlɔw ye bɛ na run la invalid.'
+              },
+              belowThreshold: {
+                state: 'sira la bɛ bɔ',
+                meaning: 'Metric bɛ seginna, ani score bɛ la bɔ fɔli bɛ min bɛ bɛn ka bɔ aɲi.',
+                effect: 'Row ma bɛ FAIL ɲi a ɲi metric la. Row bɛ fa bɛɛn metric bɛ kelen bɛ fɔli la, o fɔli.'
+              },
+              outOfScope: {
+                state: 'kɔfɛn na bɔ',
+                meaning:
+                  "Question bɛ bɛn bɔ fɔli la b'ɛn bɛna fɔ bɛ kana — a bɛ dɔrɔn suite la sɔnifɛ ni ka fɛnɛ bɛ ye.",
+                effect: 'A tɛ fɛn bɛ kɛn bɔ failure sɔrɔ. O bɛ control ye, ansa bɛ fɛn bɛ kɛn bɔ ye.'
+              }
+            }
           }
         }
       },

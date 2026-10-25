@@ -1475,12 +1475,57 @@ const actions = {
   },
 
   /** Re-score a finished run with a different judge — a NEW run doc, the
-   * source untouched (David 2026-10-24). */
-  async ragasRescoreRun(_ctx, { repoId, suiteKey, runKey, payload } = {}) {
+   * source untouched (David 2026-10-24).
+   *
+   * A re-score IS a run, so it polls like one: the SAME live progress and
+   * the SAME cancel path as ragasRun (David 2026-10-25: "it also cannot be
+   * tracked and does not connect to the UI with a progress bar… I cannot stop
+   * the re-scoring"). opts.onStarted receives the NEW run key — that is the
+   * cancel target, not the source run's key. */
+  async ragasRescoreRun(_ctx, { repoId, suiteKey, runKey, payload, onProgress, onStarted } = {}) {
     try {
       ensureServices();
-      const result = await ragasService.rescoreRun(repoId, suiteKey, runKey, payload || {});
-      return { ok: true, result };
+      const started = await ragasService.rescoreRun(repoId, suiteKey, runKey, payload || {});
+      if (!started || !started.run_key) return { ok: true, result: started };
+      if (typeof onStarted === 'function') onStarted(started.run_key);
+      const POLL_MS = 2000;
+      const DEADLINE_MS = 24 * 60 * 60 * 1000;
+      const deadline = Date.now() + DEADLINE_MS;
+      // Same gateway-blip tolerance as the run poll (~2 min at this cadence).
+      let misses = 0;
+      for (;;) {
+        if (Date.now() > deadline) {
+          return {
+            ok: false,
+            code: 'RUN_TIMEOUT',
+            message: 'The re-score is still executing on the server — reopen the Lab later to see its result.'
+          };
+        }
+        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+        let doc = null;
+        try {
+          doc = await ragasService.getRun(repoId, suiteKey, started.run_key);
+          misses = 0;
+        } catch (err) {
+          if (++misses >= 60) throw err;
+          continue;
+        }
+        if (!doc || doc.status === 'running') {
+          if (typeof onProgress === 'function' && doc && doc.progress) onProgress(doc.progress);
+          continue;
+        }
+        if (doc.status === 'failed') {
+          return {
+            ok: false,
+            code: (doc.error && doc.error.code) || 'RESCORE_FAILED',
+            message: (doc.error && doc.error.message) || 'Re-score failed'
+          };
+        }
+        if (doc.status === 'cancelled') {
+          return { ok: false, code: 'RUN_CANCELLED', message: 'Re-score cancelled by user', result: doc };
+        }
+        return { ok: true, result: doc };
+      }
     } catch (err) {
       return {
         ok: false,

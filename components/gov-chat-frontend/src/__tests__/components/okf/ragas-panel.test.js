@@ -440,6 +440,41 @@ describe('RagasPanel', () => {
     expect(w.vm.barWidth(null)).toBe('0%');
   });
 
+  // The outcome bar's four buckets must PARTITION the rows (2026-10-25).
+  // A row counted twice makes the segments sum to more than the suite, and
+  // the old arithmetic (n_evaluable − n_abstained − failing_count)
+  // subtracted the abstentions twice — the all-abstained runs reached −20.
+  // After the judge-only-the-answered-rows fix the errored rows are NOT in
+  // failing_count (they were never judged), so they are subtracted
+  // explicitly.
+  it('the outcome bar partitions the rows — every row counted exactly once', () => {
+    const w = mountPanel();
+    const doc = runFixture();
+    // 10 in-scope rows: 2 errored (never judged), 1 abstained (judged, and
+    // its context metrics came back 0 so it is also in failing_count), 3
+    // failing, 4 passing.
+    doc.payload.summary = {
+      n: 10,
+      n_errors: 2,
+      n_abstained: 1,
+      n_evaluable: 10,
+      failing_count: 4, // the abstained row + 3 others
+      failing: [],
+      metrics: {}
+    };
+    w.vm.runDoc = doc;
+    const series = w.vm.statusSeries;
+    const byName = Object.fromEntries(series.map((s) => [s.name, s.data[0]]));
+    const total = series.reduce((a, s) => a + s.data[0], 0);
+    expect(total).toBe(10);
+    expect(byName.error).toBe(2);
+    expect(byName.abstained).toBe(1);
+    expect(byName.failing).toBe(3); // the abstained row has its own column
+    expect(byName.answered).toBe(4);
+    // No bucket may go negative — the all-abstained run reached −20 before.
+    for (const s of series) expect(s.data[0]).toBeGreaterThanOrEqual(0);
+  });
+
   // David 2026-10-19: every result chart carries an ⓘ with the metric's
   // plain-language RAGAS meaning — honest about what each metric CANNOT see.
   it('every metric gauge carries its RAGAS note via the info tip', async () => {

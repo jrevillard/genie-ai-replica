@@ -451,3 +451,169 @@ development_status:
   # 6da43f705 Add-concept dialog body now the shared DsOkfMarkdownEditor (David directive 2026-09-14):
   #          Source | Split | Preview modes + format toolbar + async preview; frontmatter machinery off
   #          (store normalizes on create). Frontend 1475/1475. UI smoke plan handed to David (Phase 0-7).
+  # 487501d99 + 8c787dd86 + b0d9d4905 + 306760584 + 42cc61969 RAGAS operator
+  #          tooling + the guide's ERRORS chapter (MR !598 → feat/okf-server; branch
+  #          fix/ragas-entry-regeneration, 5 commits, CI green 14370).
+  #          (a) scripts/okf-routing-lab/ragas-regenerate-entry.js — regenerate an ENTRY against
+  #          the PUBLISHED corpus (the gate refused 11 rows + 5 questions: their references
+  #          name facts the corpus does not contain). Gated on corpus presence of the new
+  #          passages + context_entities_recall floor + no duplicate question; --audit probes
+  #          every entry and reports NEEDS_REGENERATION without writing.
+  #          (b) scripts/okf-routing-lab/ragas-compare-runs.js — READ-ONLY two-run comparison via
+  #          the shared db driver: per-metric means WITH coverage beside each, the rows whose
+  #          reference changed, and the UNCHANGED rows as a control group — so "the regeneration
+  #          moved it" is distinguishable from "the run moved it" (it correctly reports the
+  #          latter when the two runs used different judges).
+  #          (c) RagasGuideDialog gains a SIXTH chapter — the error→result mapping, one table row
+  #          per state (errored / abstained / not measured / below threshold / out of scope) with
+  #          what it means and what it does to the number being read. David 2026-10-25: "whatever
+  #          you decide to do with errors and how they are mapped to benchmark results must be
+  #          documented in the embedded guide for users". i18n ×14 TRANSLATED (not placeholders);
+  #          the table cannot be an array in a locale file (translateMixin resolves leaves as
+  #          strings only) — one dotted key per cell, assembled in the component.
+  #          THE FIRST DRAFT OF THE TABLE WAS WRONG and was corrected before merge: it claimed a
+  #          failed row carries no metrics and drops out of every mean, and that an abstention is
+  #          never judged and never a metric failure. Both were the OPPOSITE of the code — the run
+  #          path builds the judge payload with `samples = entries.map(...)`
+  #          (ragas-suite-service.js:2274, NO filter), so EVERY row reaches the judge and a
+  #          failed/declined row returns ZEROS on the context and answer metrics; those zeros are
+  #          numbers, so means[m] (:2469) includes them and coverage[m] (:2477) counts them as
+  #          scored. MEASURED on rr1792742789648-86637b (100 rows, 6 failed): context_recall 0.8872
+  #          over all rows vs 0.9438 over the 94 non-failed; coverage.per_metric still reports
+  #          context_recall:100, so the "measured N of M" banner does NOT fire. Separately,
+  #          summarizeRun has no abstained guard, so an abstention can land in summary.failing
+  #          (all 6 abstained rows in that run are in the failing list) while the panel's stacked
+  #          bar computes answered = n_evaluable − n_abstained − failing_count
+  #          (RagasPanel.vue:1112) and subtracts them twice (the all-abstained runs reach −20).
+  #          TWO SEMANTICS QUESTIONS LEFT TO DAVID (NOT changed — the run in progress measures the
+  #          system under the current semantics, and changing what a number means mid-benchmark
+  #          would make it incomparable with the runs on record): (1) SHOULD A FAILED ROW CONTRIBUTE
+  #          ZEROS TO THE MEANS? THIS IS A BUG, and the intent is PINNED BY A TEST in the same file:
+  #          the RE-SCORE path filters scorable (:1692,:1750) and its test says "A row with no answer
+  #          has nothing to judge, so it is EXCLUDED from the submission", asserting the unsubmitted
+  #          row carries {} (ragas-suite-service.test.js:2353-2397). The RUN path builds the payload
+  #          with samples = entries.map(...) (:2274, NO filter) and its own comment says "Judge only
+  #          the rows that produced an answer" (:2166) — so it contradicts its comment, its sibling
+  #          path, and a passing test encoding the same intent. Impact: rr1792742789648-86637b
+  #          context_recall is 0.887 over all 100 rows vs 0.944 over the 94 non-failed — the fix
+  #          MOVES published numbers by ~0.057. Small fix: mirror the re-score scorable filter.
+  #          (2) Should an abstention be countable as a failure? Guide now documents the TRUTH.
+  #          Frontend 2035/2035 · localeConsistency 7/7 · guide test 23/23 (asserts the corrected
+  #          claims are present AND the retracted ones are absent). E2E browser proof:
+  #          tests/e2e/okf/ragas-guide-errors.spec.js (new) — the chapter is reachable and its
+  #          table renders 5 rows with the corrected text.
+  # fe18cef95 + 30e92080a + 2250ced71 The guide's OUTPUT table + the re-score
+  #          made a RUN again (MR !598 → feat/okf-server; branch
+  #          fix/ragas-entry-regeneration, 8 commits).
+  #          (a) David 2026-10-25: "You have not updated the guide to explain how to read
+  #          the 55/100 etc. in the output … If you have hard coded strings then fucking
+  #          fix it". The READ chapter gained a SECOND table — one row per piece of the
+  #          OUTPUT (the mean / the coverage fraction / the invalid-run banner / the run
+  #          name / the re-score / the status), each with what it IS and what to do with
+  #          it. The fraction is the number operators misread most: "0.87 55/100" is a mean
+  #          over 55 rows, not a score for 100, and the uncovered rows are NEVER counted
+  #          as zero. The rows name NO metric — the metric list is the product's
+  #          (ALL_METRICS), so a guide that hardcoded them would go stale the day one is
+  #          added; a test asserts the read chapter names none of the four core metrics.
+  #          i18n ×14 TRANSLATED (22 strings each); three copy/paste slips (a Hangul
+  #          fragment in id.js, a Han fragment in ar.js, a Cyrillic 'а' in man.js) were
+  #          caught by a script-contamination check and fixed before the commit.
+  #          (b) THE RE-SCORE WAS BROKEN LIVE. David: "it fails horribly … I cannot stop
+  #          the re-scoring!!!! … it also cannot be tracked and does not connect to the UI
+  #          with a progress bar … I THOUGHT YOU WOULD HAVE LEARNED THAT LESSON BY NOW".
+  #          THREE defects, one cause each: (1) the re-score wrote its run doc only at the
+  #          END of the judge leg, so the panel polled a key that did not exist yet — a 404
+  #          per poll for the whole judge leg; it now writes a 'running' doc the moment it
+  #          starts, and getRunSuite reports an in-flight re-score as running instead of
+  #          the "the worker died" verdict a 'running' doc used to earn. (2) cancelSuiteRun
+  #          only knew about the RUN map, so a re-score answered 409 "no such run is
+  #          executing" while the judge leg kept paying the GPU; it now finds the re-score
+  #          in its own map and cancels ITS sidecar job (not every job of the suite, so a
+  #          concurrent generation survives), and a cancel landing during the submit window
+  #          is honoured too. (3) the UI refreshed the history only on SUCCESS, so a
+  #          cancelled run kept its 'running' pill until a manual reload; and a cancel
+  #          read as an ERROR. The panel now drives a re-score through the SAME progress
+  #          bar and the SAME Cancel button as a run, and the history shows the terminal
+  #          state whatever it is.
+  #          (c) The fidelity block named the `ragas_answers` config in SERVE mode — a
+  #          model the serve path never consults (the served call carries no model at
+  #          all; the answers came from the deployment chat model). answerFidelity is now
+  #          mode-aware: serve mode records the deployment chat model (VLLM_LLM_MODEL_ID
+  #          || VLLM_MODEL_ID), the whatif leg keeps recording the config, and a
+  #          resolution failure degrades to the deployment chat instead of throwing.
+  #          (d) The not-found message named the run key TWICE ("run rrX for suite rsY
+  #          rrX not found") — loadDoc appended the key to a `what` that already had it.
+  #          okf-server 1647/1647 · frontend 2039/2039 · guide test 28/28 (the read table
+  #          AND the error table, per chapter) · localeConsistency 7/7. E2E browser proof:
+  #          tests/e2e/okf/ragas-rescore-tracking.spec.js (new) — drives the REAL UI
+  #          through Keycloak, starts a re-score with the ENV judge, and asserts the
+  #          progress bar, the Cancel button, the history row with its lineage, and the
+  #          row turning 'cancelled'. Both specs PASS against the deployed local build.
+  # 26516467f + 5e30d9ad0 The advisor's second judge is COMPUTED, not asserted
+  #          (David 2026-10-25: "If you have hard coded strings then fucking fix it").
+  #          The advisor carried two FROZEN sentences about a second judge — "a second
+  #          judge disagrees on roughly half of these rows" (factual_correctness) and
+  #          "a second judge reproduces this on most of these rows" (entity recall).
+  #          Both were measured ONCE, offline, and baked into the string: no re-score,
+  #          no judge change and no suite edit could ever move them.
+  #          The verdict is now computed from the SIBLING RE-SCORE — the run that
+  #          scored the SAME answers with a different judge. Only a lineage-linked
+  #          sibling can be compared row by row (an unrelated run scored its own
+  #          answers, so its per-row scores say nothing about this one's). With no
+  #          sibling the advisor says so and points at the re-score as the way to
+  #          settle it — it no longer asserts a proportion it was never given. The
+  #          comparison travels in run_facts.judge_comparison, so the LLM advisor
+  #          quotes the counts it was handed.
+  #          MEASURED against the real stored pair (rr1792843333604-268dad MiniMax-M3.1-Flash
+  #          → its re-score rr1792871605303-9ce608 granite): entity recall — MiniMax failed
+  #          67 rows, granite CLEARED 13 and KEPT 52 failing (2 unmeasurable); factual_correctness
+  #          — 44 failed, 17 cleared, 25 kept failing (2 unmeasurable); answer_relevancy — 6 failed,
+  #          1 cleared, 5 kept. THE HARDCODED CLAIM SAID "cleared 9 of 21" and "reproduced on 30 of
+  #          39" — the proportions survive, the NUMBERS were wrong, and they were constants.
+  #          WHAT THIS CHANGES: the advisor told the curator to treat the second-judge rows as
+  #          "unproven rather than judge noise"; the measured comparison says the second judge
+  #          REPRODUCED most of them (52 of 67; 25 of 44). Those rows are real failures whose lever
+  #          is the reference answer's wording — not the RAG, not the prompt. The prompt tweak is
+  #          justified only by the rows BOTH judges failed with faithfulness actually failing.
+  #          okf-server 1651/1651 · frontend 2039/2039. E2E browser proof (both specs PASS against
+  #          the deployed build): tests/e2e/okf/ragas-rescore-tracking.spec.js — drives the REAL UI
+  #          through Keycloak, starts a re-score with the ENV judge, and asserts the progress bar,
+  #          the Cancel button, the history row with its lineage, and the row turning 'cancelled'.
+  # The failed-row defect FIXED (David 2026-10-25: "Fix it now"). MR !598 →
+  #          feat/okf-server; branch fix/ragas-entry-regeneration.
+  #          THE DEFECT: the run path handed EVERY row to the judge, including the rows that
+  #          produced NO answer. The sidecar then scored an EMPTY response, which came back as
+  #          ZEROS on the context and answer metrics — and zeros are numbers, so they landed in
+  #          the means and depressed them (measured on rr1792742789648-86637b: context_recall
+  #          0.887 over all 100 rows vs 0.944 over the 94 that answered). The run path's own
+  #          comment said "Judge only the rows that produced an answer" (:2287), its sibling
+  #          re-score path filtered the same way (:1770), and a passing test encoded the same
+  #          intent (:2353-2397) — the payload contradicted all three.
+  #          THE FIX: the run path filters `scorable` (no error AND an answer) and maps
+  #          `per_query` back through the ORIGINAL row index — the naive index alignment shifts
+  #          every score onto the wrong row after the first dropped one. A row with no answer
+  #          carries `{}`: it is EXCLUDED from the means (never a zero) and counted in the
+  #          coverage as NOT measured, so the coverage reads 99/100 instead of 100/100. A run
+  #          where NO row produced an answer now FAILS loudly instead of reporting a mean of
+  #          zeros, and the judge is never called with an empty dataset.
+  #          MEASURED ON EVERY STORED RUN: the three runs that matter for the current comparison
+  #          (rr1792896220523-b71784 MiniMax-M3, rr1792871605303-9ce608 granite,
+  #          rr1792843333604-268dad MiniMax-M3.1-Flash) have 0 errored rows and 0 abstentions —
+  #          the means before and after the fix are IDENTICAL on all ten metrics of all three.
+  #          The fix touches only the runs where a row actually failed.
+  #          THE ABSTENTION SEMANTICS: an abstention is a row that DECLINED — it still has an
+  #          answer, so the judge scores it and its context metrics come back 0, and those zeros
+  #          ARE in the averages. What was broken was the ARITHMETIC: the panel's bar computed
+  #          `answered = n_evaluable - n_abstained - failing_count`, subtracting the abstentions
+  #          TWICE (they are in failing_count too) — the all-abstained runs reached -20. The bar
+  #          now partitions the rows exactly: failing = max(0, failing_count - n_abstained),
+  #          answered = max(0, n_evaluable - n_errors - n_abstained - failing). The server also
+  #          stopped counting a row that FAILED as an abstention.
+  #          THE GUIDE WAS CORRECTED TO MATCH (14 locales, translated): the errors chapter said
+  #          "EVERY row in the suite is handed to the judge, including a row that failed or
+  #          declined" and "a row with no answer therefore scores 0 … and those zeros ARE counted
+  #          in the averages". The first half was true of the code until this fix and is now the
+  #          opposite; the second half stays true for the ABSTENTION, which still has an answer.
+  #          The guide test now asserts the failed row is NOT judged and never a zero, and that
+  #          an abstention IS judged and its zeros ARE in the averages.
+  #          okf-server 1653/1653 · frontend 2042/2042 · guide test 31/31.

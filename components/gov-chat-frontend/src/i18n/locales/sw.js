@@ -3299,7 +3299,107 @@ export default {
             x2: 'Usiboreshe upatikanaji kulingana na namba moja tu. context precision na context recall hushindana; mabadiliko yanayoinua moja kwa kawaida hulipa nyingine, na makubaliano hayo ndiyo sehemu ya kuvutia zaidi.',
             x3: 'Usifanye alama ya null kuwa alama ya chini. Marudio yaliyoisha huzalisha null ambayo hubainishwa kwenye wastani, kwa hivyo hakuna alama inamaanisha hakuna kipimo — endesha safu hiyo upya badala ya kudhani hali mbaya.',
             expect:
-              'Namba ya kipimo cha kulinganisha ni ulinganisho kati ya utekelezaji wa seti ile ile, si alama ya daraja kwa msaidizi. Hamisha xlsx unapohitaji kuhifadhi ushahidi: mstari wa mwelekeo katika paneli unaohifadhiwa kwa utekelezaji uliomo kwenye hazina hii pekee.'
+              'Namba ya kipimo cha kulinganisha ni ulinganisho kati ya utekelezaji wa seti ile ile, si alama ya daraja kwa msaidizi. Hamisha xlsx unapohitaji kuhifadhi ushahidi: mstari wa mwelekeo katika paneli unaohifadhiwa kwa utekelezaji uliomo kwenye hazina hii pekee.',
+            table: {
+              title: 'Kilichomo kwenye skrini, na maana yake',
+              col: {
+                element: 'Skrini',
+                meaning: 'Kini ni',
+                effect: 'Unapaswa kufanya nini nacho'
+              },
+              mean: {
+                element: 'Alama',
+                meaning: 'Wastani wa kipimo hicho kwenye safu ambazo hakika alipima. Si alama ya kundi kizima.',
+                effect:
+                  'Isoma pamoja na sehemu iliyo kando. Wastani wa safu chache ni kipimo cha hizo safu, si cha kundi.'
+              },
+              coverage: {
+                element: 'Sehemu (55/100)',
+                meaning:
+                  'Hakika alipima kipimo hicho kwenye safu 55 kati ya 100 za kundi. Wastani unahusika safu hizo 55 pekee; nyingine 45 hazihusikani — hazihesabiwi kama sifuri kamwe.',
+                effect:
+                  'Sehemu ndogo inamaanisha namba haisemi mengi kuhusu kundi. Angalia kipimo unachohitaji, si mzigo mzima.'
+              },
+              banner: {
+                element: 'Bango la mfuatano batili',
+                meaning:
+                  'Mfuatano ulikuwa na majibu yaliyashindwa, au hakuna kipimo kilichofunika kila safu. Namba yake ya ufikiaji ndiyo kipimo kilichofunikia vizuri, kwa hivyo kipimo kimoja cha 21/100 hakuiinua.',
+                effect: 'Soma sehemu za kila kipimo mwenyewe. Bango ni kizingiti cha chini, si muhtasari.'
+              },
+              runName: {
+                element: 'Jina la mfuatano',
+                meaning: 'Hakika aliyepima mfuatano huo, na usanidi uliotoka. Ufunguo chini ni kwa msaada.',
+                effect:
+                  'Mifuatano miwili kwa mahakiki tofauti si ukaguzi mmoja. Linganisha zinazofanana, au kadii upya mojawepo.'
+              },
+              rescore: {
+                element: 'Kadii upya',
+                meaning:
+                  'Inakadii majibu yale yale kwa hakika mwingine. Majibu na muktadha hukopishwa hasa — hakuna kinachopatikana au kuandikwa upya.',
+                effect:
+                  'Tumia ili kuweka mahakiki wawili kwenye safu zilezile. Ni bei nafisi kuliko mfuatano mpya, ndiyo njia ya kujaribu mabadiliko ya hakika.'
+              },
+              status: {
+                element: 'Hali',
+                meaning: 'Kama mfuatano umemaliza. Wastani wa mfuatano unaoendelea bado hubadilika.',
+                effect: 'Subiri umalize kabla ya kusoma namba.'
+              }
+            }
+          },
+          errors: {
+            title: 'Makosa na jinsi yanavyoathiri matokeo',
+            intro:
+              'Kiwango cha ukagwi hakihesabiwi kila safu ya kila seti ya majaribio: safu inaweza kushindwa katika mnyororo, msaidizi anaweza kukataa kujibu, hakimu anaweza kushindwa kupima kipimo, na kipimo kinaweza kushuka chini ya kizingiti chake. Hakuna kitu kati ya hiki ni sifuri, na hakuna kitu kimefichwa. Sura hii ni ramani — maana ya kila hali, na jinsi inavyotendelea kwa nambari unayo isoma. Kitu mmoja unapaswa kujua kabla ya kusoma: safu ambayo haikutoa jibu lolote HAIKUIHUSHIWA na hakimu — kuna kitu cha kuiwasilisha nayo — kwa hiyo haionyeshiwi kwenye wastani na huangeshambuliwa kamwe sifuri. Safu ambayo imekataa kujibu bado ina jibu, kwa hiyo hukatwa: kwa kuwa hakuna kinachoiambatisha, vipimo vyake vya muktadha hurudi nyuma na 0, na hizo sifuri HUSAJILIWA kwenye wastani. Ndiyo maana run yenye safu iliyoshindwa hupambwa kama si sahihi, badala ya kukubaliwa kuwa ya kuaminika.',
+            d1: 'Soma bango la "run si sahihi" kabla ya wastani. Linamaanisha kuwa alama zilizoonyesha haziwai kipimo cha mfumo, na bango linaeleza sababu: majibu yaliashindwa, au kihakiki kikipimaje sehemu tu ya kundi. Tatua sababu kisha uendele tena.',
+            d2: 'Angalia kiwango cha kila kipimo kabla ya kulinganisha mbili. Paneli inaonyesha idadi ya mili ambayo kihakiki kiliwepimaje kwa kipimo hicho; wastani wa sehemu ya kundi si alama ya kundi wote, na hailinganiwi na run iliyopimwa mili yote.',
+            d3: 'Sahihisha mwili ulioshindwa katika chanzo chake — mfuatano wa kutafuta, huduma ya juu, au muda kumalizika — kisha uendele tena. Kubadilisha kundi ili kuondoa mwili unaoshindwa mara kwa mara huficha hasa hasa iliyopo kagani majaribio yanayopima ili kuipata.',
+            d4: 'Tazama kukataa jibu kama matokeo, si kasoro. Hinasema msaidizi alipotambua kwamba maudhui hayajibu swali hili — hiyo ni tabia ya maudhui na swali. Soma kama kiwango cha kile ambacho watumiaji wako watakikuta.',
+            x1: 'Usisome kipimo kisichopimwa kama sifuri. Kipimo hicho kina null katika mwili huo pale kihakiki kilichoshindwa kuchanganua jibu lake; null hauingishwi kwenye wastani, wala hauhesabiwi kamwe kama kushindwa.',
+            x2: 'Usihesabie kukataa jibu kuwa kasoro, wala kuwa ushindu. Hii inarekodiwa katika safu yake mwenyewe hasa kwa sababu si moja wala wa pili.',
+            x3: 'Usichapaze namba ya run ambayo paneli imeitafuta "si sahihi", wala usifiche kwa kuchukua wastani wa mbili. Run iliyopimwa kwa sehemu haina namba ya kuchapaza; ina run inayohitaji kurekebishwa.',
+            expect:
+              'Run safi haina mili yaliyoshindwa, na kila kipimo kimepimwa kwa kila mwili — katika hali hiyo tu wastani ndio benchmark. Kilichosalia ni run inayohitaji kurekebishwa, si matokeo ya kujenga uamuzi.',
+            table: {
+              title: 'Jinsi kila hali inavyotumika kwenye matokeo',
+              col: {
+                state: 'Hali',
+                meaning: 'Inamaanisha',
+                effect: 'Athari kwenye matokeo'
+              },
+              error: {
+                state: 'Kosa',
+                meaning:
+                  'Mfuatano ulishindwa katika mwili huu — utafutaji, huduma ya juu, au muda kumalizika. Hakuna jibu lililotengenezwa.',
+                effect:
+                  'Safu hiyo HAIISHIRIKISHWI kwa hakimu — haina jibu, na hakuna kitu cha kuihukumu. Haibeba alama yoyote: haionyeshiwi kwenye wastani (haibalawi kamwe sifuri) na inahesabiwa katika safu ya makosa, na run imewekwa kuwa si sahihi — banner inasema kwamba alama hazioni kipimo cha mfumo. Tatua sababu — mfumo wa retrieval, huduma ya juu, muda kupewa — kisha endesha tena. Safu zilizojibu bado zinapimwa, lakini run iliyopimwa kwa sehemu ni run inayohitaji matengenezo, si matokeo ya kuchapisha.'
+              },
+              abstained: {
+                state: 'Ameyakataa',
+                meaning:
+                  'Msaidizi alikataa kujibu — chatqna alisema hivyo, au hakuwa na chochote cha kusema. Mfuatano haukushindwa.',
+                effect:
+                  'Mwili bado huipelekwa kwa kihakiki, kwa hiyo hutoa alama — bila muktadha unaoushikia, vipimo vya muktadha hurudi kwa 0, na sifuri hizo ZAHIBIWI kwenye wastani. Huhesabiwa katika safu yake mwenyewe, si kwenye safu ya makosa kamwe, na hauhitilafu mfuatano kuwa batili. Paneli inaiita “abstained” badala ya imefanikiwa au imeshindwa.'
+              },
+              unmeasured: {
+                state: 'Haikupimwa',
+                meaning:
+                  'Kihakiki kilitoa jibu ambacho kipimo hiki hakuweza kuchanganua — kwa mfano, dai la ukweli kisha kihakiki hakweza kuthibitisha.',
+                effect:
+                  'Kipimo hiki ni null katika mwili huu: kinachukuliwa kutoka wastani, wala si sifuri kamwe. Paneli inaonyesha mili ambayo kihakiki kiliwepimaje kwa kweli, na kiwango sehemu hufanya run isiwe sahihi.'
+              },
+              belowThreshold: {
+                state: 'Chini ya kizingiti',
+                meaning: 'Kipimo kilipimwa, na alama yake ilikuwa chini ya kizingiti kilichowekwa kwa kipimo hicho.',
+                effect:
+                  'Mwili huu unashindwa kwa kipimo hiki. Mwili unashindwa kama kipimo chochote kilichochaguliwa kimeshindwa.'
+              },
+              outOfScope: {
+                state: 'Nje ya upeo',
+                meaning:
+                  'Swali hili lilikuwa lisichoweza kujibiwa kwa makusudi — limewekwa kwenye kundi kwa ajili ya kulinganisha, si kama mtihani kamwe.',
+                effect: 'Hahesabiwi kama kushindwa kamwe. Ni kitu kimoja cha kulinganisha, si matokeo.'
+              }
+            }
           }
         }
       },

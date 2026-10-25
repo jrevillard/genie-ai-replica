@@ -2396,3 +2396,500 @@ describe('rescoreRun — re-score a finished run with a different judge (2026-10
     expect(out[0].metrics).toEqual({});
   });
 });
+
+describe('rescoreRun — the re-score is a RUN: tracked, visible and cancellable (2026-10-25)', () => {
+  // David, 2026-10-25: "it also cannot be tracked and does not connect to the
+  // UI with a progress bar… I cannot stop the re-scoring". The cause: the
+  // re-score wrote its run doc only at the END of the judge leg, so the
+  // panel polled a key that did not exist yet (a 404 per poll), the cancel
+  // endpoint could not find the run, and the history showed nothing.
+  async function makeSuite() {
+    const begun = await svc.beginSuiteGeneration('me', { testset_size: 2 }, {});
+    await begun.done;
+    return begun.suite_key;
+  }
+
+  const waitFor = async (fn, ms = 2000) => {
+    const t0 = Date.now();
+    while (Date.now() - t0 < ms) {
+      if (fn()) return true;
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    return false;
+  };
+
+  /** A sidecar whose evaluate job stays RUNNING until the test says so. */
+  function hangTheEvaluateJob() {
+    const state = { polls: 0, cancelled: false, submitted: false };
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url, opts) => {
+      const u = String(url);
+      const method = (opts && opts.method) || 'GET';
+      if (u.includes('/evaluate')) {
+        state.submitted = true;
+        return Promise.resolve(okJson({ job_id: 'j-eval', status: 'queued' }));
+      }
+      if (u.includes('/jobs/j-eval')) {
+        if (method === 'DELETE') {
+          state.cancelled = true;
+          return Promise.resolve(okJson({ job_id: 'j-eval', status: 'cancelled' }));
+        }
+        if (state.cancelled) {
+          return Promise.resolve(okJson({ job_id: 'j-eval', kind: 'evaluate', status: 'cancelled' }));
+        }
+        state.polls += 1;
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-eval',
+            kind: 'evaluate',
+            status: 'running',
+            progress: { phase: 'scoring', done: 1, total: 2 }
+          })
+        );
+      }
+      return baseFetch(url, opts);
+    });
+    return state;
+  }
+
+  it('writes a RUNNING run doc the moment it starts — the panel can track it', async () => {
+    const sk = await makeSuite();
+    const first = await svc.beginRunSuite('me', sk, { mode: 'whatif' }, {});
+    await first.done;
+    const state = hangTheEvaluateJob();
+
+    const begun = await svc.rescoreRun('me', sk, first.run_key, {}, {});
+
+    // The doc EXISTS before the judge leg finishes — this is the key the
+    // panel polls. Before the fix it did not exist until the very end.
+    const store = __mockDb._stores.okf_head_test_runs;
+    expect(store[begun.run_key]).toBeDefined();
+    expect(store[begun.run_key].status).toBe('running');
+    // The lineage is visible from the FIRST poll, not only when it lands.
+    expect(store[begun.run_key].payload.fidelity.rescore_of).toBe(first.run_key);
+
+    // The read endpoint reports it as running — NOT as the "the worker died"
+    // verdict a 'running' doc used to earn, and never a 404.
+    const live = await svc.getRunSuite('me', sk, begun.run_key);
+    expect(live.status).toBe('running');
+    expect(live.run_key).toBe(begun.run_key);
+
+    // The progress reaches the doc, so the panel's bar moves. The phase is
+    // 'judge' — the locale renders it as "scoring".
+    await waitFor(() => state.polls > 0);
+    await waitFor(() => Boolean(store[begun.run_key].progress));
+    expect(store[begun.run_key].progress.phase).toBe('judge');
+    expect(store[begun.run_key].progress.done).toBe(1);
+    expect(store[begun.run_key].progress.total).toBe(2);
+
+    state.cancelled = true;
+    await begun.done.catch(() => {});
+  });
+
+  it('is CANCELLABLE — the cancel endpoint finds the re-score and stops it', async () => {
+    const sk = await makeSuite();
+    const first = await svc.beginRunSuite('me', sk, { mode: 'whatif' }, {});
+    await first.done;
+    const state = hangTheEvaluateJob();
+
+    const begun = await svc.rescoreRun('me', sk, first.run_key, {}, {});
+    // Wait for the sidecar job to be registered — the cancel deletes it.
+    await waitFor(() => state.polls > 0);
+
+    // The cancel must NOT answer 409 "no such run is executing": the
+    // re-score IS an executing run.
+    await expect(svc.cancelSuiteRun('me', sk, begun.run_key)).resolves.toMatchObject({
+      cancelled: true,
+      run_key: begun.run_key
+    });
+    // The sidecar job was actually deleted — the GPU stops.
+    expect(state.cancelled).toBe(true);
+
+    // The doc lands as 'cancelled' — never 'failed', and never vanishes.
+    await expect(begun.done).rejects.toMatchObject({ code: 'RAGAS_JOB_CANCELLED' });
+    const doc = await svc.getRunSuite('me', sk, begun.run_key);
+    expect(doc.status).toBe('cancelled');
+  });
+
+  it('refuses to delete a live re-score — the panel must not lose the run it polls', async () => {
+    const sk = await makeSuite();
+    const first = await svc.beginRunSuite('me', sk, { mode: 'whatif' }, {});
+    await first.done;
+    const state = hangTheEvaluateJob();
+
+    const begun = await svc.rescoreRun('me', sk, first.run_key, {}, {});
+    await waitFor(() => state.polls > 0);
+    await expect(svc.deleteRun('me', sk, begun.run_key)).rejects.toMatchObject({
+      code: 'RUN_IN_FLIGHT',
+      status: 409
+    });
+
+    state.cancelled = true;
+    await begun.done.catch(() => {});
+  });
+
+  it('names the run ONCE in the not-found message', async () => {
+    // The old message read "run rrX for suite rsY rrX not found" — the key
+    // was appended to a `what` string that already contained it.
+    const sk = await makeSuite();
+    await expect(svc.getRunSuite('me', sk, 'rr-missing')).rejects.toMatchObject({
+      code: 'RUN_NOT_FOUND',
+      status: 404,
+      message: expect.stringContaining('rr-missing')
+    });
+    await expect(svc.getRunSuite('me', sk, 'rr-missing')).rejects.toThrow(/^run rr-missing for suite \S+ not found$/);
+  });
+});
+
+describe('answerFidelity — the record must name the model that ACTUALLY answered (2026-10-25)', () => {
+  const modelConfigService = require('../services/model-config-service');
+  const OLD_ENV = { ...process.env };
+
+  afterEach(() => {
+    process.env = { ...OLD_ENV };
+    jest.restoreAllMocks();
+  });
+
+  it('serve mode records the DEPLOYMENT chat model and never consults the answers config', async () => {
+    const spy = jest.spyOn(modelConfigService, 'resolveModelOverride').mockResolvedValue({
+      provider: 'openai',
+      base_url: 'https://answers/v1',
+      model: 'glm-5.3-flash',
+      config_name: 'Answers Config',
+      source: 'active'
+    });
+    process.env.VLLM_MODEL_ID = 'ibm-granite/granite-4.1-8b';
+    delete process.env.VLLM_LLM_MODEL_ID;
+
+    // The SERVE leg answers through chatqna, which serves the deployment
+    // chat model. The served call carries no model at all, so the
+    // `ragas_answers` config was never consulted — recording it claimed a
+    // model that never answered (live 2026-10-25: a serve run recorded
+    // "glm-5.3-flash" while the answers came from the deployment chat
+    // model; David: "why does this have anything to do with glm-5.3-flash?").
+    const serve = await svc.answerFidelity({ serveMode: true });
+    expect(serve.source).toBe('deployment-chat');
+    expect(serve.config).toBeNull();
+    expect(serve.model).toBe('ibm-granite/granite-4.1-8b');
+    // The config was not even asked for.
+    expect(spy).not.toHaveBeenCalled();
+
+    // The WHATIF leg really does answer through that config — the other
+    // half of the fix, and it must still say so.
+    const whatif = await svc.answerFidelity({});
+    expect(whatif.source).toBe('config');
+    expect(whatif.config).toBe('Answers Config');
+    expect(whatif.model).toBe('glm-5.3-flash');
+    expect(spy).toHaveBeenCalledWith({ service: 'ragas_answers' });
+  });
+
+  it('falls back to the deployment chat when the answers config cannot be resolved', async () => {
+    jest.spyOn(modelConfigService, 'resolveModelOverride').mockRejectedValue(new Error('config service down'));
+    process.env.VLLM_LLM_MODEL_ID = 'ibm-granite/granite-4.1-8b';
+    delete process.env.VLLM_MODEL_ID;
+
+    const whatif = await svc.answerFidelity({});
+    expect(whatif.source).toBe('deployment-chat');
+    expect(whatif.model).toBe('ibm-granite/granite-4.1-8b');
+  });
+
+  it('reads VLLM_LLM_MODEL_ID first — the deployment spells the knob two ways', async () => {
+    process.env.VLLM_LLM_MODEL_ID = 'ibm-granite/granite-4.1-8b';
+    process.env.VLLM_MODEL_ID = 'some-other-name';
+    const serve = await svc.answerFidelity({ serveMode: true });
+    expect(serve.model).toBe('ibm-granite/granite-4.1-8b');
+  });
+});
+
+// The advisor used to ASSERT a second judge's verdict from a hardcoded
+// string: "A second judge disagrees on roughly half of these rows" and
+// "A second judge reproduces this on most of these rows". Both were true
+// of ONE offline measurement (the 2026-10-24 granite re-score) and
+// silently became lies for every other run. David 2026-10-25: "If you
+// have hard coded strings then fucking fix it!!!!!"
+//
+// The verdict is now COMPUTED from the sibling re-score — the run that
+// scored the same answers with a different judge.
+describe('the advisor’s second-judge verdict is computed, not asserted (2026-10-25)', () => {
+  const SUITE = {
+    payload: {
+      entries: [{ id: 'r1' }, { id: 'r2' }, { id: 'r3' }, { id: 'r4' }],
+      thresholds: {}
+    }
+  };
+  const runDoc = {
+    _key: 'rr-source',
+    metrics: ['factual_correctness'],
+    payload: {
+      results: [
+        { id: 'r1', metrics: { factual_correctness: 0.2 }, answer: 'a', contexts: ['x'] },
+        { id: 'r2', metrics: { factual_correctness: 0.2 }, answer: 'a', contexts: ['x'] },
+        { id: 'r3', metrics: { factual_correctness: 0.2 }, answer: 'a', contexts: ['x'] },
+        { id: 'r4', metrics: { factual_correctness: 0.9 }, answer: 'a', contexts: ['x'] }
+      ]
+    }
+  };
+
+  it('counts the rows the second judge CLEARED and the rows it KEPT FAILING', () => {
+    // The second judge cleared r1, kept r2 failing, and could not measure r3.
+    const second = {
+      _key: 'rr-second',
+      metrics: ['factual_correctness'],
+      payload: {
+        fidelity: { judge: { model: 'ibm-granite/granite-4.1-8b' } },
+        results: [
+          { id: 'r1', metrics: { factual_correctness: 0.95 } },
+          { id: 'r2', metrics: { factual_correctness: 0.1 } },
+          { id: 'r3', metrics: {} },
+          { id: 'r4', metrics: { factual_correctness: 0.95 } }
+        ]
+      }
+    };
+    const cmp = svc.compareJudges(SUITE, runDoc, second);
+    expect(cmp.source).toBe('sibling');
+    expect(cmp.second_judge).toBe('ibm-granite/granite-4.1-8b');
+    expect(cmp.second_run_key).toBe('rr-second');
+    const m = cmp.per_metric.factual_correctness;
+    // r1, r2, r3 failed here; r4 passed here (not counted).
+    expect(m.failed_here).toBe(3);
+    expect(m.cleared).toBe(1);
+    expect(m.kept_failing).toBe(1);
+    expect(m.not_measured).toBe(1);
+  });
+
+  it('says so when NO second judge has scored the run — it does not assert one', () => {
+    const cmp = svc.compareJudges(SUITE, runDoc, null);
+    expect(cmp.source).toBe('none');
+    const sentence = svc.secondJudgeSentence(cmp, 'factual_correctness');
+    expect(sentence).toMatch(/no second judge has scored this run/i);
+    // And it must NOT claim a proportion it was never given.
+    expect(sentence).not.toMatch(/roughly half|most of these rows/i);
+  });
+
+  it('quotes the computed counts, never a canned proportion', () => {
+    const second = {
+      _key: 'rr-second',
+      metrics: ['factual_correctness'],
+      payload: {
+        fidelity: { judge: { model: 'granite' } },
+        results: [
+          { id: 'r1', metrics: { factual_correctness: 0.95 } },
+          { id: 'r2', metrics: { factual_correctness: 0.1 } },
+          { id: 'r3', metrics: {} }
+        ]
+      }
+    };
+    const cmp = svc.compareJudges(SUITE, runDoc, second);
+    const sentence = svc.secondJudgeSentence(cmp, 'factual_correctness');
+    expect(sentence).toContain('granite');
+    expect(sentence).toContain('cleared 1 of the 3');
+    expect(sentence).toContain('1 still failed');
+    // The retracted canned claims must not reappear.
+    expect(sentence).not.toMatch(/roughly half/i);
+    expect(sentence).not.toMatch(/reproduces this on most of these rows/i);
+  });
+
+  it('the attribution carries the computed sentence, not a hardcoded one', () => {
+    // The judge-stage branch: faithfulness passed while factual_correctness
+    // failed — the branch that used to say "a second judge disagrees on
+    // roughly half of these rows".
+    const suite = {
+      payload: {
+        entries: [{ id: 'r1' }],
+        thresholds: {}
+      }
+    };
+    const doc = {
+      metrics: ['faithfulness', 'factual_correctness'],
+      payload: {
+        fidelity: { retrieval: { mode: 'whatif' } },
+        results: [{ id: 'r1', metrics: { faithfulness: 1.0, factual_correctness: 0.1 }, answer: 'a', contexts: ['x'] }]
+      }
+    };
+    const none = svc.attributeFailures(suite, doc, null, svc.compareJudges(suite, doc, null));
+    expect(none.length).toBe(1);
+    expect(none[0].stage).toBe('judge');
+    expect(none[0].recommendation).toMatch(/no second judge has scored this run/i);
+    expect(none[0].recommendation).not.toMatch(/roughly half/i);
+
+    const second = {
+      _key: 'rr-second',
+      metrics: ['faithfulness', 'factual_correctness'],
+      payload: {
+        fidelity: { judge: { model: 'granite' } },
+        results: [{ id: 'r1', metrics: { faithfulness: 1.0, factual_correctness: 0.95 } }]
+      }
+    };
+    const withSibling = svc.attributeFailures(suite, doc, null, svc.compareJudges(suite, doc, second));
+    expect(withSibling[0].recommendation).toContain('granite');
+    expect(withSibling[0].recommendation).toContain('cleared 1 of the 1');
+    expect(withSibling[0].recommendation).not.toMatch(/roughly half/i);
+  });
+});
+
+// The run path handed EVERY row to the judge — including the rows that
+// produced no answer. The sidecar then scored an EMPTY response, which
+// comes back as ZEROS on the context and answer metrics, and zeros are
+// numbers: they landed in the means and depressed them (measured on
+// rr1792742789648-86637b: context_recall 0.887 over all 100 rows vs
+// 0.944 over the 94 that answered).
+//
+// The run path's own comment said "Judge only the rows that produced an
+// answer" (:2287), its sibling re-score path filtered the same way
+// (:1770), and a passing test encoded the same intent (:2353-2397). The
+// payload contradicted all three.
+describe('the run path judges only the rows that produced an answer (2026-10-25)', () => {
+  it('does not submit a row with no answer, and the scores land on the right rows', async () => {
+    let submittedSamples = null;
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url, opts) => {
+      const u = String(url);
+      if (u.includes('/evaluate')) {
+        submittedSamples = JSON.parse(opts.body).samples;
+        return Promise.resolve(okJson({ job_id: 'j-eval', status: 'queued' }));
+      }
+      if (u.includes('/jobs/j-eval')) {
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-eval',
+            kind: 'evaluate',
+            status: 'done',
+            result: {
+              aggregate: {},
+              // ONE row scored — only the row that produced an answer was
+              // submitted.
+              per_query: [{ faithfulness: 1, context_recall: 0.9 }],
+              model: 'm',
+              n: 1
+            }
+          })
+        );
+      }
+      return baseFetch(url, opts);
+    });
+    const sk = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
+    await sk.done;
+    // Row 0 loses its answer (the embedding call 429s) — nothing to judge.
+    frontmatterService.teiEmbed.mockImplementation(async ([q]) => {
+      if (q === GEN_SAMPLES[0].user_input) throw new Error('Request failed with status code 429');
+      return [[0.1, 0.2, 0.3]];
+    });
+    const run = await svc.beginRunSuite('me', sk.suite_key, { mode: 'whatif' }, { actor: { user_id: 'u1' } });
+    await run.done;
+    const doc = await svc.getRunSuite('me', sk.suite_key, run.run_key);
+
+    // The row with no answer was NOT submitted.
+    expect(submittedSamples).toHaveLength(1);
+    expect(submittedSamples[0].user_input).toBe(GEN_SAMPLES[1].user_input);
+
+    // The score landed on the row it was scored for — index-aligned through
+    // the ORIGINAL row index, not the sample order.
+    const rows = doc.payload.results;
+    const failed = rows.find((r) => r.query === GEN_SAMPLES[0].user_input);
+    const scored = rows.find((r) => r.query === GEN_SAMPLES[1].user_input);
+    expect(failed.error).toBeTruthy();
+    expect(failed.metrics).toEqual({}); // NOT zeros
+    expect(scored.metrics.faithfulness).toBe(1);
+    expect(scored.metrics.context_recall).toBe(0.9);
+
+    // The mean covers only the row that scored, and the coverage says so.
+    const summary = doc.payload.summary;
+    expect(summary.coverage.faithfulness).toEqual({ scored: 1, total: 2 });
+    expect(summary.metrics.faithfulness).toBe(1);
+
+    // And the run is still marked invalid — the failed row is counted.
+    expect(summary.n_errors).toBe(1);
+  });
+
+  it('fails the run loudly when NO row produced an answer — never a mean of zeros', async () => {
+    let evaluateCalled = false;
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/evaluate')) {
+        evaluateCalled = true;
+        throw new Error('the judge must never be called for an empty dataset');
+      }
+      return baseFetch(url);
+    });
+    const sk = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
+    await sk.done;
+    // BOTH rows lose their answer.
+    frontmatterService.teiEmbed.mockImplementation(async () => {
+      throw new Error('Request failed with status code 429');
+    });
+    const run = await svc.beginRunSuite('me', sk.suite_key, { mode: 'whatif' }, { actor: { user_id: 'u1' } });
+    await run.done;
+    const doc = await svc.getRunSuite('me', sk.suite_key, run.run_key);
+    // The judge was never called with an empty dataset.
+    expect(evaluateCalled).toBe(false);
+    // The run FAILED — the read contract strips a failed doc to
+    // {run_key, suite_key, status, error}: there is no summary to read,
+    // which is the point — there is no mean of zeros to misread.
+    expect(doc.status).toBe('failed');
+    expect(doc.error).toBeTruthy();
+    expect(doc.payload).toBeUndefined();
+  });
+});
+
+// A row that produced no answer and did NOT error is still a row the
+// operator must see: it is not scored, so it has no failing metric, but
+// dropping it from the attributions would hide it completely.
+describe('a row with no answer is never silently dropped (2026-10-25)', () => {
+  it('an empty answer with no error still reaches the advisor', async () => {
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-eval', status: 'queued' }));
+      if (u.includes('/jobs/j-eval'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-eval',
+            kind: 'evaluate',
+            status: 'done',
+            result: { aggregate: {}, per_query: [{ faithfulness: 1, context_recall: 1 }], n: 1 }
+          })
+        );
+      return baseFetch(url);
+    });
+    const sk = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
+    await sk.done;
+    // The answer leg returns an EMPTY answer for the FIRST question only —
+    // the second still answers, so the run completes with one judged row.
+    const baseLlm = frontmatterService.vllmChatCompletions;
+    frontmatterService.vllmChatCompletions.mockImplementation(async (messages) => {
+      const text = JSON.stringify(messages);
+      const empty = text.includes(GEN_SAMPLES[0].user_input);
+      return {
+        data: {
+          choices: [
+            { message: { content: JSON.stringify({ answer: empty ? '' : 'A grounded answer.', abstained: false }) } }
+          ]
+        }
+      };
+    });
+    try {
+      const run = await svc.beginRunSuite('me', sk.suite_key, { mode: 'whatif' }, { actor: { user_id: 'u1' } });
+      await run.done;
+      const doc = await svc.getRunSuite('me', sk.suite_key, run.run_key);
+      const empty = doc.payload.results.find((r) => !r.answer);
+      expect(empty).toBeTruthy();
+      // It carries no score — it was never judged.
+      expect(empty.metrics).toEqual({});
+
+      const explained = await svc.beginExplainFailures('me', sk.suite_key, { run_key: run.run_key }, {});
+      await explained.done;
+      const ex = await svc.getExplainFailures('me', sk.suite_key, run.run_key);
+      const attributions = ex.payload.attributions || [];
+      // The row is in the advisor's attention set — a stage is attributed,
+      // so the operator is told about it.
+      expect(attributions.length).toBeGreaterThan(0);
+      for (const a of attributions) {
+        expect(typeof a.stage).toBe('string');
+        expect(a.stage.length).toBeGreaterThan(0);
+      }
+    } finally {
+      frontmatterService.vllmChatCompletions.mockImplementation(baseLlm);
+    }
+  });
+});

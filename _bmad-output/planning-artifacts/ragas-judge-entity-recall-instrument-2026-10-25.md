@@ -245,6 +245,226 @@ the Models tab lists all seven configurations, and the OKF smoke's
 curator check returns `200 — env judge ibm-granite/granite-4.1-8b, 7 named
 config(s), no key hint`.
 
+## The guide now documents what each error state does to the result (2026-10-25)
+
+David's instruction: *"whatever you decide to do with errors and how they
+are mapped to benchmark results must be documented in the embedded guide
+for users"*.
+
+The panel can report five per-row states, and until now only the
+invalid-run banner explained any of them. The guide gains a sixth
+chapter — `RagasGuideDialog.vue` — with one table row per state: what
+that state means, and what it does to the number being read.
+
+The mapping is the SERVER's behaviour. The first draft of the table was
+written from `summarizeRun` alone and was WRONG on two of the five rows;
+the corrections below come from re-reading the whole path and from the
+stored runs.
+
+**The mechanism the first draft missed: EVERY row reaches the judge.**
+The run path builds the judge payload with
+`samples = entries.map((e, i) => ...)` (`ragas-suite-service.js:2274`) —
+no filter. So a row that failed, and a row that was declined, are both
+judged on an empty or unsupported answer and come back with **zeros** on
+the context and answer metrics. Those zeros are numbers, so
+`means[m]` (`:2469-2470`) includes them and the per-metric coverage
+counts them as "scored" (`:2477`).
+
+Measured on the 2026-10-23 run `rr1792742789648-86637b` (100 rows, 6
+failed): `context_recall` over all 100 rows is **0.8872**; over the 94
+non-failed rows it is **0.9438**. The 6 failed rows carry `context_recall
+= 0` and drag the mean down. `coverage.per_metric` reports
+`context_recall: 100` — the panel's "the judge measured 100 of 100 rows"
+banner does **not** fire, because the failed rows counted as scored. The
+run is flagged invalid, but by the `n_errors > 0` branch
+(`RagasPanel.vue:1281`), not by coverage.
+
+| state | what it is | what it does to the result |
+|---|---|---|
+| `error` | the pipeline failed on that row — retrieval, upstream service, timeout; no answer was produced | still handed to the judge, which scores an empty answer → the context and answer metrics come back **0** and those zeros **ARE in the means**; counted in the error column; **makes the run invalid** |
+| `abstained` | the assistant declined to answer — chatqna's own flag, an empty answer, or nothing retrieved | still handed to the judge → the context metrics come back **0** and those zeros **ARE in the means**; counted in its own column, **never** in the error column; does **not** invalidate the run; the panel labels the row `abstained`, not pass/fail |
+| `unmeasured` | the judge's answer could not be parsed for that metric | that metric is `null` on that row — excluded from the mean, **never** a zero; partial coverage **makes the run invalid** |
+| `belowThreshold` | the metric scored below its threshold | the row **FAILS** that metric; a row fails if any selected metric fails (`if (fails.length && !e.oos)`, `:2464`) |
+| `outOfScope` | the question was never answerable — a control | **never** counted as a failure; excluded from `n_evaluable` (`:2483`) |
+
+The two things an operator gets wrong, and the guide says so explicitly:
+an abstention is **not** an error and does not invalidate the run, and an
+unmeasured metric is **not** a zero.
+
+### Two semantics questions this raises — RESOLVED (David 2026-10-25: "Fix it now")
+
+**1. A failed row's zeros no longer stay in the means. FIXED.** The re-score
+path filtered `scorable = results.filter((r) => !r.error && r.answer)` and
+mapped the sidecar's rows back through the original index (`:1692`,
+`:1750`), and its test says so in as many words — *"A row with no answer
+has nothing to judge, so it is EXCLUDED from the submission"* — asserting the
+unsubmitted row carries `{}`
+(`ragas-suite-service.test.js:2353-2397`). The run path built the payload
+with `samples = entries.map(...)` (`:2274`) and no filter, so a failed row
+IS judged on an empty answer and comes back with zeros that land in the
+means. The run path's own comment said "Judge only the rows that produced
+an answer" (`:2166`) — the code contradicted its comment, its sibling path,
+and a passing test that encoded the same intent.
+
+**What changed:** the run path now filters `scorable` the same way and maps
+`per_query` back through the ORIGINAL row index (the naive index alignment
+shifts every score onto the wrong row after the first dropped one — see
+below). A row that produced no answer carries `{}`: it is **excluded from
+the means** (never a zero) and counted in the coverage as NOT measured, so
+the coverage reads `99/100` instead of `100/100`. A run where NO row
+produced an answer now FAILS loudly rather than reporting a mean of zeros.
+
+**What it does NOT move — measured on every stored run:** the three runs
+that matter for the current comparison (`rr1792896220523-b71784` MiniMax-M3,
+`rr1792871605303-9ce608` granite, `rr1792843333604-268dad` MiniMax-M3.1-Flash)
+have **0 errored rows and 0 abstentions**. The means before and after the
+fix are IDENTICAL on all ten metrics of all three runs. The fix only touches
+runs where a row actually failed: `rr1792742789648-86637b` (6 failed rows,
+whose `context_recall` was 0.887 over all 100 rows vs 0.944 over the 94 that
+answered — a ~0.057 move), and the three early all-rows-failed runs.
+
+**2. An abstention is still judged, and the panel's bar now partitions.**
+An abstention is a row that DECLINED — it still has an answer, so the judge
+scores it and its context metrics come back 0. Those zeros ARE in the
+averages, and the guide says so. What was wrong was the ARITHMETIC:
+`answered = n_evaluable - n_abstained - failing_count` subtracted the
+abstentions twice (they are in `failing_count` too), and the all-abstained
+runs reached **-20**. The bar now computes
+`failing = max(0, failing_count - n_abstained)` and
+`answered = max(0, n_evaluable - n_errors - n_abstained - failing)`, so the
+four buckets partition the rows. The server also stopped counting a row
+that FAILED as an abstention (`n_abstained` now counts only the rows that
+abstained without an error) — a row with no answer is an error, never an
+abstention.
+
+**The guide was corrected to match.** The errors chapter said "EVERY row in
+the suite is handed to the judge, including a row that failed or declined"
+and "a row with no answer therefore scores 0 … and those zeros ARE counted in
+the averages". That was true of the code until this fix; now the chapter
+says the opposite of the first half and keeps the second half for the
+abstention. All 14 locales, translated.
+
+### The naive fix for (1) is WORSE than the bug — do not apply it
+
+The run path maps the sidecar's answer back onto the rows by INDEX:
+
+```js
+for (let i = 0; i < results.length; i += 1) {
+  const q = perQuery[i] || {};
+  results[i].metrics = q || {};
+```
+
+That is correct **only because every entry is submitted today**. Filter
+the samples without also changing the mapping and `perQuery` becomes
+shorter than `results` — every row after the first dropped one lands on
+the wrong row, silently scoring one answer against another row's query.
+That is the exact failure the re-score path's own comment warns about
+("index-aligning it against `results` directly shifts every row after
+the first dropped one, which silently scores the wrong answer against
+the wrong query", `:1687-1691`), and the reason it keeps the ORIGINAL
+index alongside each scorable row and maps back through it (`:1749-1756`).
+
+So the fix is NOT a one-line filter: it is the re-score path's pair —
+filter, and map back through the original index. Anyone applying this
+needs both halves, or they will have replaced a visible zero with an
+invisible mis-scoring.
+
+Implementation notes that will bite anyone who touches this again:
+
+- The table **cannot** be an array in the locale file. `translateMixin`
+  resolves leaf values as STRINGS only (`translateMixin.js:60-63`), so an
+  array value falls through to the fallback on every call. Each cell is
+  therefore its own dotted key (`chapters.errors.table.<state>.<cell>`)
+  and the component assembles the rows from a constant list.
+- All 14 locales carry the chapter and the table — translated, not
+  English placeholders. `localeConsistency.test.js` proves the key
+  parity; `ragas-guide.test.js` proves every cell resolves to a
+  non-empty string in every locale, which is the gap parity cannot see.
+- **Locale text must be inserted VERBATIM.** A chapter block assembled in
+  a JS template literal loses its backslashes — the template literal
+  consumes them — so an escaped apostrophe arrives in the locale file
+  bare and breaks the file. The Manding text uses the glottal stop, so
+  its values are double-quoted (which is what prettier keeps, since the
+  apostrophes would otherwise need escaping).
+
+## The advisor's second judge is now COMPUTED — and the hardcoded claim was wrong
+
+David 2026-10-25: "If you have hard coded strings then fucking fix it!!!!!".
+The advisor carried two frozen sentences about a second judge:
+
+- "A second judge disagrees on roughly half of these rows" (factual_correctness)
+- "A second judge reproduces this on most of these rows" (context_entities_recall)
+
+Both were measured ONCE, offline, and baked into the string. The verdict is
+now computed from the sibling re-score — the run that scored the SAME answers
+with a different judge. Only a lineage-linked sibling can be compared row by
+row: an unrelated run scored its own answers.
+
+**Measured against the real stored pair** (`rr1792843333604-268dad`
+MiniMax-M3.1-Flash → its re-score `rr1792871605303-9ce608` granite):
+
+| Metric | Failed by MiniMax | Granite CLEARED | Granite KEPT failing | Granite could not measure |
+|---|---|---|---|---|
+| `context_entities_recall` | 67 | 13 | **52** | 2 |
+| `factual_correctness` | 44 | 17 | **25** | 2 |
+| `answer_relevancy` | 6 | 1 | **5** | 0 |
+
+The hardcoded claim said granite "cleared 9 of 21" on factual_correctness and
+"reproduced this on 30 of 39" on entity recall. The computed numbers are
+**17 of 44** and **52 of 67** — the proportions are close (the qualitative
+reading survives), but the absolute numbers were wrong, and they were
+constants: no re-score, no judge change and no edit to the suite could ever
+move them.
+
+**What this changes for the decision.** The advisor told the curator to treat
+the second-judge rows as "unproven rather than judge noise". The measured
+comparison says the opposite for most of them: granite KEPT 52 of the 67
+entity-recall failures and 25 of the 44 factual-correctness failures. Those
+rows are REPRODUCIBLE across two judges — they are real failures, and the
+lever is the reference answer's wording, not the RAG and not the prompt. The
+prompt tweak is justified only by the rows that BOTH judges failed with
+faithfulness actually failing — which is what the 3 remaining judge-stage rows
+(`llm`: new-44, new-46, new-51) are.
+
+A run with NO sibling now says so: "No second judge has scored this run yet:
+re-score it with another judge to find out whether this is judge harshness or
+a real failure." That is the state of `rr1792896220523-b71784` (the MiniMax-M3
+run) until it is re-scored — and it is exactly what the granite re-score
+fixes.
+
+## The re-score was not a run — it could not be seen or stopped (2026-10-25)
+
+David re-scored `rr1792896220523-b71784` with another judge and the panel
+"failed horribly": a 404 per poll, no progress bar, and no way to stop it.
+The cause was NOT the benchmark — it was the re-score path, and it is worth
+recording because it is the same defect class as the run path's:
+
+| What the operator saw | What the code did |
+|---|---|
+| `GET /runs/<new key>` → 404 for the whole judge leg | The re-score wrote its run doc only at the END of the judge leg (`ragas-suite-service.js:1812`) — the panel polled a key that did not exist yet |
+| no progress bar | The progress lived in an in-memory map, never in the doc the panel reads |
+| "no such run is executing" (409) from Cancel | `cancelSuiteRun` only looked in `runInFlight`; a re-score registers in `rescoreInFlight` |
+| the judge leg kept paying the GPU | nothing could cancel the re-score's sidecar job |
+| the history showed nothing | the row did not exist until the run landed |
+
+Fixed in `2250ced71` + `fe18cef95`: the re-score writes a `running` doc
+immediately, mirrors its progress into it, registers in the cancel path, and
+cancels **its own** sidecar job (not every job of the suite, so a concurrent
+generation survives). The panel drives a re-score through the same progress
+bar and the same Cancel button as a run, and the history shows the terminal
+state — including `cancelled` — without a manual refresh.
+
+Two of the defects were reachable only by running the thing: the unit tests
+could not have found the 404 (the doc is written at the end) or the 409 (the
+cancel map is not the run map). The browser proof in
+`tests/e2e/okf/ragas-rescore-tracking.spec.js` now drives the real UI
+through the whole path.
+
+One orphan was left over from the broken run — `rr1792914371082-016265`,
+whose sidecar job was cancelled directly and whose doc was written as
+`cancelled` by hand. It is in the history with the honest status; it produced
+no scores and was never a measurement.
+
 ## Still open
 
 - The rows the gate refused need their ENTRIES regenerated against the
@@ -257,3 +477,7 @@ config(s), no key hint`.
   currently justify a prompt change.
 - The benchmark must be RE-RUN to measure the regeneration: the stored
   run still carries the old references and the old scores.
+- **The re-score is now usable** — a granite re-score of
+  `rr1792896220523-b71784` is the cheap way to get a second judge's scores
+  over the SAME 100 answers and contexts (no retrieval, no re-generation),
+  and it is now cancellable and visible while it runs.

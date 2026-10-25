@@ -3185,8 +3185,18 @@ function attributeFailures(suite, runDoc, evidence, judgeComparison) {
       stage = 'corpus';
       recommendation = 'key entities of the reference are unretrievable — enrich entity mentions in the concept';
     } else {
-      stage = 'pipeline';
-      recommendation = 'metric below threshold — inspect the row detail';
+      // No metric failed AND no metric could be measured: the row produced
+      // no answer at all, so it was never judged (the run judges only the
+      // rows that produced an answer). Saying "metric below threshold"
+      // would be false — there is no metric and no threshold behind it.
+      if (!r.answer) {
+        stage = 'answer';
+        recommendation =
+          'this row produced no answer, so it was never judged — it carries no score and is left out of the averages; re-run the benchmark, and if it keeps happening look at the answer leg for this entry';
+      } else {
+        stage = 'pipeline';
+        recommendation = 'metric below threshold — inspect the row detail';
+      }
     }
     attributions.push({
       id: r.id,

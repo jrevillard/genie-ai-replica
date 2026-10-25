@@ -135,9 +135,7 @@
           </div>
           <div v-else class="message-avatar message-avatar--user" data-testid="user-avatar">
             <img v-if="userAvatarUrl" :src="userAvatarUrl" alt="" />
-            <span v-else-if="userInitials" class="message-avatar__initials" :style="userAvatarStyle">{{
-              userInitials
-            }}</span>
+            <span v-else-if="userInitials" class="message-avatar__initials">{{ userInitials }}</span>
             <span v-else class="message-avatar__silhouette" aria-hidden="true"><User :size="18" /></span>
           </div>
           <div class="message-wrapper">
@@ -713,11 +711,6 @@ export default {
         .slice(0, 2)
         .map((p) => p[0].toUpperCase())
         .join('');
-    },
-    userAvatarStyle() {
-      // One accent ground for everyone — the reference shows the user's
-      // circle in the brand accent, not a per-name hash.
-      return { background: 'var(--accent)' };
     },
 
     // The heading's brand comes from the runtime config through a slot,
@@ -2533,6 +2526,9 @@ export default {
   font-size: var(--text-md);
   font-weight: 600;
   color: var(--accent-fg-strong);
+  /* One accent ground for everyone — the reference shows the user's
+     circle in the brand accent, not a per-name hash. */
+  background: var(--accent);
 }
 
 .message-avatar__silhouette {
@@ -2816,12 +2812,6 @@ export default {
 
 .answer-source-card:hover {
   border-color: var(--accent);
-}
-
-.answer-source-card__icon {
-  color: var(--accent);
-  display: flex;
-  align-items: center;
 }
 
 .answer-source-card__body {

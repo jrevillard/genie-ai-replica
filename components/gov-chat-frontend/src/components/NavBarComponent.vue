@@ -162,18 +162,18 @@
         <span
           class="nav-status"
           data-testid="nav-status"
-          :data-status="systemStatus.online ? 'online' : 'offline'"
+          :data-status="status.online ? 'online' : 'offline'"
           role="status"
           :title="
-            systemStatus.online
-              ? systemStatus.lastResponseTime !== null
-                ? `${systemStatus.lastResponseTime}ms`
+            status.online
+              ? status.lastResponseTime !== null
+                ? `${status.lastResponseTime}ms`
                 : $t('nav.statusOnline')
-              : systemStatus.errorMessage || $t('nav.statusOffline')
+              : status.errorMessage || $t('nav.statusOffline')
           "
         >
           <span class="nav-status__dot" aria-hidden="true"></span>
-          {{ systemStatus.online ? $t('nav.statusOnline') : $t('nav.statusOffline') }}
+          {{ status.online ? $t('nav.statusOnline') : $t('nav.statusOffline') }}
         </span>
         <div class="language-select-container">
           <language-selector />
@@ -326,9 +326,6 @@ export default {
   },
   computed: {
     ...mapGetters('status', ['status']),
-    systemStatus() {
-      return this.status;
-    },
     // Only the GENIE.AI brand carries the gradient wordmark; the flavour
     // configs ship their own titles and are left as plain text. Comparing
     // the title keeps this off the config schema and off the decoration

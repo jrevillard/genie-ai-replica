@@ -20,6 +20,12 @@
 // is skipped, not counted as zero, and the coverage (rows scored) is
 // reported beside every mean: a mean over 21 of 100 rows is not a
 // whole-run number.
+//
+// THE COMPARISON IS A PURE FUNCTION of the two run documents (`compareRuns`),
+// so the rules that make it honest — the in-scope population, the coverage
+// beside every mean, the absent-metric-is-not-a-zero rule, the regenerated
+// rows, the control group — are pinned by a unit test instead of by a human
+// reading console output.
 
 'use strict';
 
@@ -55,6 +61,122 @@ function fmt(v) {
   return typeof v === 'number' ? v.toFixed(3) : String(v);
 }
 
+/** The out-of-scope entry ids of a run document. */
+function oosIds(doc) {
+  const entries = (doc && doc.payload && doc.payload.entries) || [];
+  return new Set(entries.filter((e) => e.oos).map((e) => e.id));
+}
+
+/**
+ * Compare two run documents. PURE — no I/O, no clock, no randomness.
+ *
+ * Returns:
+ *   {
+ *     oos:            {baseline, candidate}          — controls excluded
+ *     metrics:        [{name, baselineMean, candidateMean, delta,
+ *                       baselineScored, candidateScored}]
+ *     regenerated:    [{id, baseline, candidate, delta}]
+ *     tally:          {improved, unchanged, regressed}
+ *     control:        {count, baselineMean, candidateMean}
+ *   }
+ */
+function compareRuns(baseline, candidate, focusMetric = 'context_entities_recall') {
+  const baseRows = (baseline.payload && baseline.payload.results) || [];
+  const candRows = (candidate.payload && candidate.payload.results) || [];
+  const baseById = new Map(baseRows.map((r) => [r.id, r]));
+  const candById = new Map(candRows.map((r) => [r.id, r]));
+
+  // The IN-SCOPE rows only — the same population the panel's means use
+  // (2026-10-25). An out-of-scope row is a control: it is deliberately
+  // unanswerable, so its score is not a result and must not sit inside a
+  // mean. Before this the tool averaged every row and reported a number
+  // the panel did not show.
+  const baseOos = oosIds(baseline);
+  const candOos = oosIds(candidate);
+  const baseInScope = baseRows.filter((r) => !baseOos.has(r.id));
+  const candInScope = candRows.filter((r) => !candOos.has(r.id));
+
+  // 1. per-metric means — a row that did not score the metric is SKIPPED,
+  //    not counted as zero, and the count of scored rows rides along.
+  const metricNames = new Set();
+  for (const r of baseInScope) Object.keys(r.metrics || {}).forEach((k) => metricNames.add(k));
+  for (const r of candInScope) Object.keys(r.metrics || {}).forEach((k) => metricNames.add(k));
+
+  const metrics = [...metricNames].sort().map((name) => {
+    const baseVals = baseInScope.map((r) => metricValue(r.metrics, name)).filter((v) => v !== null);
+    const candVals = candInScope.map((r) => metricValue(r.metrics, name)).filter((v) => v !== null);
+    const bm = mean(baseVals);
+    const cm = mean(candVals);
+    return {
+      name,
+      baselineMean: bm,
+      candidateMean: cm,
+      delta: bm !== null && cm !== null ? cm - bm : null,
+      baselineScored: baseVals.length,
+      candidateScored: candVals.length
+    };
+  });
+
+  // 2. the rows whose reference changed (the regenerated ones)
+  const baseEntries = new Map(((baseline.payload && baseline.payload.entries) || []).map((e) => [e.id, e]));
+  const candEntries = new Map(((candidate.payload && candidate.payload.entries) || []).map((e) => [e.id, e]));
+  const regenerated = [];
+  for (const [id, candEntry] of candEntries) {
+    const baseEntry = baseEntries.get(id);
+    if (!baseEntry) continue;
+    if (baseEntry.reference_answer !== candEntry.reference_answer) regenerated.push(id);
+  }
+
+  const regeneratedRows = regenerated.map((id) => {
+    const b = metricValue((baseById.get(id) || {}).metrics, focusMetric);
+    const k = metricValue((candById.get(id) || {}).metrics, focusMetric);
+    return {
+      id,
+      baseline: b,
+      candidate: k,
+      delta: b !== null && k !== null ? k - b : null
+    };
+  });
+
+  const tally = { improved: 0, unchanged: 0, regressed: 0 };
+  for (const r of regeneratedRows) {
+    if (r.delta === null) continue;
+    if (r.delta > 0) tally.improved += 1;
+    else if (r.delta < 0) tally.regressed += 1;
+    else tally.unchanged += 1;
+  }
+
+  // 3. the rows that did NOT change — the control group. If the mean moved
+  //    for them too, the movement is the RUN, not the regeneration.
+  //    The SAME population as the means above: a row that is out of scope
+  //    in EITHER run is a control, not a result, and a control group over a
+  //    different population than the means cannot be compared with them.
+  const controlBase = [];
+  const controlCand = [];
+  for (const [id, row] of candById) {
+    if (regenerated.includes(id)) continue;
+    if (baseOos.has(id) || candOos.has(id)) continue;
+    const b = metricValue((baseById.get(id) || {}).metrics, focusMetric);
+    const k = metricValue(row.metrics, focusMetric);
+    if (b !== null && k !== null) {
+      controlBase.push(b);
+      controlCand.push(k);
+    }
+  }
+
+  return {
+    oos: { baseline: baseOos.size, candidate: candOos.size },
+    metrics,
+    regenerated: regeneratedRows,
+    tally,
+    control: {
+      count: controlBase.length,
+      baselineMean: mean(controlBase),
+      candidateMean: mean(controlCand)
+    }
+  };
+}
+
 if (require.main === module) {
   const baselineKey = process.argv[2];
   const candidateKey = process.argv[3];
@@ -85,100 +207,43 @@ if (require.main === module) {
     if (!baseline) throw new Error(`baseline run ${baselineKey} not found`);
     if (!candidate) throw new Error(`candidate run ${candidateKey} not found`);
 
-    const baseRows = baseline.payload.results || [];
-    const candRows = candidate.payload.results || [];
-    const baseById = new Map(baseRows.map((r) => [r.id, r]));
-    const candById = new Map(candRows.map((r) => [r.id, r]));
-
-    // The IN-SCOPE rows only — the same population the panel's means use
-    // (2026-10-25). An out-of-scope row is a control: it is deliberately
-    // unanswerable, so its score is not a result and must not sit inside a
-    // mean. Before this the tool averaged every row and reported a number
-    // the panel did not show.
-    const oosIds = (doc) => new Set(((doc.payload && doc.payload.entries) || []).filter((e) => e.oos).map((e) => e.id));
-    const baseOos = oosIds(baseline);
-    const candOos = oosIds(candidate);
-    const baseInScope = baseRows.filter((r) => !baseOos.has(r.id));
-    const candInScope = candRows.filter((r) => !candOos.has(r.id));
-    if (baseOos.size || candOos.size) {
-      console.log(
-        `out-of-scope controls excluded from the means: baseline ${baseOos.size}, candidate ${candOos.size}\n`
-      );
-    }
-
-    const baseJudge = (baseline.payload.fidelity && baseline.payload.fidelity.judge) || null;
-    const candJudge = (candidate.payload.fidelity && candidate.payload.fidelity.judge) || null;
+    const baseJudge = (baseline.payload && baseline.payload.fidelity && baseline.payload.fidelity.judge) || null;
+    const candJudge = (candidate.payload && candidate.payload.fidelity && candidate.payload.fidelity.judge) || null;
     console.log(`baseline  ${baselineKey}  status=${baseline.status}`);
     console.log(`          judge=${JSON.stringify(baseJudge)}`);
     console.log(`candidate ${candidateKey}  status=${candidate.status}`);
     console.log(`          judge=${JSON.stringify(candJudge)}\n`);
 
-    // 1. per-metric means
-    const metricNames = new Set();
-    for (const r of baseInScope) Object.keys(r.metrics || {}).forEach((k) => metricNames.add(k));
-    for (const r of candInScope) Object.keys(r.metrics || {}).forEach((k) => metricNames.add(k));
+    const cmp = compareRuns(baseline, candidate, focusMetric);
+
+    if (cmp.oos.baseline || cmp.oos.candidate) {
+      console.log(
+        `out-of-scope controls excluded from the means: baseline ${cmp.oos.baseline}, candidate ${cmp.oos.candidate}\n`
+      );
+    }
 
     console.log('=== per-metric means (mean over the rows the judge SCORED) ===');
     console.log('metric                                baseline   candidate     delta   scored');
-    for (const name of [...metricNames].sort()) {
-      const baseVals = baseInScope.map((r) => metricValue(r.metrics, name)).filter((v) => v !== null);
-      const candVals = candInScope.map((r) => metricValue(r.metrics, name)).filter((v) => v !== null);
-      const bm = mean(baseVals);
-      const cm = mean(candVals);
-      const delta = bm !== null && cm !== null ? cm - bm : null;
+    for (const m of cmp.metrics) {
       console.log(
-        `${name.padEnd(38)} ${fmt(bm).padStart(9)} ${fmt(cm).padStart(10)} ` +
-          `${delta === null ? '     -' : (delta >= 0 ? '+' : '') + delta.toFixed(3).padStart(6)} ` +
-          `${String(baseVals.length) + '/' + String(candVals.length)}`
+        `${m.name.padEnd(38)} ${fmt(m.baselineMean).padStart(9)} ${fmt(m.candidateMean).padStart(10)} ` +
+          `${m.delta === null ? '     -' : (m.delta >= 0 ? '+' : '') + m.delta.toFixed(3).padStart(6)} ` +
+          `${String(m.baselineScored) + '/' + String(m.candidateScored)}`
       );
     }
 
-    // 2. the rows whose reference changed (the regenerated ones)
-    const baseEntries = new Map((baseline.payload.entries || []).map((e) => [e.id, e]));
-    const candEntries = new Map((candidate.payload.entries || []).map((e) => [e.id, e]));
-    const regenerated = [];
-    for (const [id, candEntry] of candEntries) {
-      const baseEntry = baseEntries.get(id);
-      if (!baseEntry) continue;
-      if (baseEntry.reference_answer !== candEntry.reference_answer) regenerated.push(id);
-    }
-
-    console.log(`\n=== the ${regenerated.length} regenerated rows — ${focusMetric} ===`);
+    console.log(`\n=== the ${cmp.regenerated.length} regenerated rows — ${focusMetric} ===`);
     console.log('row            baseline  candidate     delta');
-    let improved = 0;
-    let regressed = 0;
-    let unchanged = 0;
-    for (const id of regenerated) {
-      const b = metricValue((baseById.get(id) || {}).metrics, focusMetric);
-      const k = metricValue((candById.get(id) || {}).metrics, focusMetric);
-      const delta = b !== null && k !== null ? k - b : null;
-      if (delta !== null) {
-        if (delta > 0) improved += 1;
-        else if (delta < 0) regressed += 1;
-        else unchanged += 1;
-      }
+    for (const r of cmp.regenerated) {
       console.log(
-        `${id.padEnd(14)} ${fmt(b).padStart(8)} ${fmt(k).padStart(10)} ` +
-          `${delta === null ? '     -' : (delta >= 0 ? '+' : '') + delta.toFixed(3).padStart(6)}`
+        `${r.id.padEnd(14)} ${fmt(r.baseline).padStart(8)} ${fmt(r.candidate).padStart(10)} ` +
+          `${r.delta === null ? '     -' : (r.delta >= 0 ? '+' : '') + r.delta.toFixed(3).padStart(6)}`
       );
     }
-    console.log(`\nimproved ${improved}  unchanged ${unchanged}  regressed ${regressed}`);
+    console.log(`\nimproved ${cmp.tally.improved}  unchanged ${cmp.tally.unchanged}  regressed ${cmp.tally.regressed}`);
 
-    // 3. the rows that did NOT change — the control group. If the mean moved
-    // for them too, the movement is the RUN, not the regeneration.
-    const controlBase = [];
-    const controlCand = [];
-    for (const [id, row] of candById) {
-      if (regenerated.includes(id)) continue;
-      const b = metricValue((baseById.get(id) || {}).metrics, focusMetric);
-      const k = metricValue(row.metrics, focusMetric);
-      if (b !== null && k !== null) {
-        controlBase.push(b);
-        controlCand.push(k);
-      }
-    }
-    console.log(`\n=== control group: the ${controlBase.length} rows that did NOT change ===`);
-    console.log(`baseline mean ${fmt(mean(controlBase))}  candidate mean ${fmt(mean(controlCand))}`);
+    console.log(`\n=== control group: the ${cmp.control.count} rows that did NOT change ===`);
+    console.log(`baseline mean ${fmt(cmp.control.baselineMean)}  candidate mean ${fmt(cmp.control.candidateMean)}`);
     console.log(
       '(if this moved too, the movement is the RUN — a different judge, a different\n' +
         ' day — and not the regeneration)'
@@ -191,4 +256,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { metricValue, mean };
+module.exports = { metricValue, mean, compareRuns };

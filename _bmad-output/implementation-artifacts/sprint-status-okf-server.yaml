@@ -719,4 +719,19 @@ development_status:
   #          OkfTestingLabDialog), the component fallback strings, the okf-server's own
   #          comments, the site page, the ADR, the SPEC + architecture-diagrams.md, the
   #          PRD architecture/epics and the _bmad-output artifacts.
+  #          DONE 2026-10-26 (the hole the first sweep left): the repository card's
+  #          button still read "Head Test" — its key lives in okf.dashboard.card.*, a
+  #          namespace the okf.headTest.* sweep never touched, so it survived the rename
+  #          in all 14 locales. All three RAGAS Playwright specs located that button by
+  #          the OLD name, which means they were passing against a button that no longer
+  #          said it — the suite certified the stale UI instead of catching it. Fixed:
+  #          the key moves to okf.dashboard.card.testingLab with the value "Testing Lab"
+  #          (the product name, as okf.testingLab.title already carries it in every
+  #          locale), and the specs find the button by the name the user sees. Also
+  #          corrected: the saved-suites help text named "the Head test tab", a tab that
+  #          does not exist (Head / Test / Suites & analytics / RAGAS Benchmarks) — and
+  #          loading a head suite does not switch tabs at all; its rows render in the
+  #          Suites tab, where the list already is. Deployed to the local build
+  #          (frontend rebuilt + recreated, verify 47/0); the shipped bundle carries 0
+  #          occurrences of "Head Test" and 0 of "Routing Lab".
 

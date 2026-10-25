@@ -451,3 +451,54 @@ development_status:
   # 6da43f705 Add-concept dialog body now the shared DsOkfMarkdownEditor (David directive 2026-09-14):
   #          Source | Split | Preview modes + format toolbar + async preview; frontmatter machinery off
   #          (store normalizes on create). Frontend 1475/1475. UI smoke plan handed to David (Phase 0-7).
+  # 487501d99 + 8c787dd86 + b0d9d4905 + 306760584 + 42cc61969 RAGAS operator
+  #          tooling + the guide's ERRORS chapter (MR !598 → feat/okf-server; branch
+  #          fix/ragas-entry-regeneration, 5 commits, CI green 14370).
+  #          (a) scripts/okf-routing-lab/ragas-regenerate-entry.js — regenerate an ENTRY against
+  #          the PUBLISHED corpus (the gate refused 11 rows + 5 questions: their references
+  #          name facts the corpus does not contain). Gated on corpus presence of the new
+  #          passages + context_entities_recall floor + no duplicate question; --audit probes
+  #          every entry and reports NEEDS_REGENERATION without writing.
+  #          (b) scripts/okf-routing-lab/ragas-compare-runs.js — READ-ONLY two-run comparison via
+  #          the shared db driver: per-metric means WITH coverage beside each, the rows whose
+  #          reference changed, and the UNCHANGED rows as a control group — so "the regeneration
+  #          moved it" is distinguishable from "the run moved it" (it correctly reports the
+  #          latter when the two runs used different judges).
+  #          (c) RagasGuideDialog gains a SIXTH chapter — the error→result mapping, one table row
+  #          per state (errored / abstained / not measured / below threshold / out of scope) with
+  #          what it means and what it does to the number being read. David 2026-10-25: "whatever
+  #          you decide to do with errors and how they are mapped to benchmark results must be
+  #          documented in the embedded guide for users". i18n ×14 TRANSLATED (not placeholders);
+  #          the table cannot be an array in a locale file (translateMixin resolves leaves as
+  #          strings only) — one dotted key per cell, assembled in the component.
+  #          THE FIRST DRAFT OF THE TABLE WAS WRONG and was corrected before merge: it claimed a
+  #          failed row carries no metrics and drops out of every mean, and that an abstention is
+  #          never judged and never a metric failure. Both were the OPPOSITE of the code — the run
+  #          path builds the judge payload with `samples = entries.map(...)`
+  #          (ragas-suite-service.js:2274, NO filter), so EVERY row reaches the judge and a
+  #          failed/declined row returns ZEROS on the context and answer metrics; those zeros are
+  #          numbers, so means[m] (:2469) includes them and coverage[m] (:2477) counts them as
+  #          scored. MEASURED on rr1792742789648-86637b (100 rows, 6 failed): context_recall 0.8872
+  #          over all rows vs 0.9438 over the 94 non-failed; coverage.per_metric still reports
+  #          context_recall:100, so the "measured N of M" banner does NOT fire. Separately,
+  #          summarizeRun has no abstained guard, so an abstention can land in summary.failing
+  #          (all 6 abstained rows in that run are in the failing list) while the panel's stacked
+  #          bar computes answered = n_evaluable − n_abstained − failing_count
+  #          (RagasPanel.vue:1112) and subtracts them twice (the all-abstained runs reach −20).
+  #          TWO SEMANTICS QUESTIONS LEFT TO DAVID (NOT changed — the run in progress measures the
+  #          system under the current semantics, and changing what a number means mid-benchmark
+  #          would make it incomparable with the runs on record): (1) SHOULD A FAILED ROW CONTRIBUTE
+  #          ZEROS TO THE MEANS? THIS IS A BUG, and the intent is PINNED BY A TEST in the same file:
+  #          the RE-SCORE path filters scorable (:1692,:1750) and its test says "A row with no answer
+  #          has nothing to judge, so it is EXCLUDED from the submission", asserting the unsubmitted
+  #          row carries {} (ragas-suite-service.test.js:2353-2397). The RUN path builds the payload
+  #          with samples = entries.map(...) (:2274, NO filter) and its own comment says "Judge only
+  #          the rows that produced an answer" (:2168) — so it contradicts its comment, its sibling
+  #          path, and a passing test encoding the same intent. Impact: rr1792742789648-86637b
+  #          context_recall is 0.887 over all 100 rows vs 0.944 over the 94 non-failed — the fix
+  #          MOVES published numbers by ~0.057. Small fix: mirror the re-score scorable filter.
+  #          (2) Should an abstention be countable as a failure? Guide now documents the TRUTH.
+  #          Frontend 2035/2035 · localeConsistency 7/7 · guide test 23/23 (asserts the corrected
+  #          claims are present AND the retracted ones are absent). E2E browser proof:
+  #          tests/e2e/okf/ragas-guide-errors.spec.js (new) — the chapter is reachable and its
+  #          table renders 5 rows with the corrected text.

@@ -293,13 +293,20 @@ unmeasured metric is **not** a zero.
 
 ### Two semantics questions this raises — David's call, not mine
 
-1. **A failed row's zeros stay in the means.** The code contradicts its
-   own comment at `:2168` ("Judge only the rows that produced an answer"),
-   and the RESCORE path already does the right thing — it filters
-   `scorable = results.filter((r) => !r.error && r.answer)` and maps the
-   sidecar's rows back through the original index (`:1692`, `:1750`).
-   The run path does not. Applying the same filter there would make a
-   failed row contribute nothing to the means instead of six zeros.
+1. **A failed row's zeros stay in the means. This is a BUG, and the
+   intent is pinned by a test in the same file.** The re-score path
+   filters `scorable = results.filter((r) => !r.error && r.answer)` and
+   maps the sidecar's rows back through the original index (`:1692`,
+   `:1750`), and its test says so in as many words — *"A row with no
+   answer has nothing to judge, so it is EXCLUDED from the submission"*
+   — asserting the unsubmitted row carries `{}`
+   (`ragas-suite-service.test.js:2353-2397`). The run path builds the
+   payload with `samples = entries.map(...)` (`:2274`) and no filter, so
+   a failed row IS judged on an empty answer and comes back with zeros
+   that land in the means. The run path's own comment says "Judge only
+   the rows that produced an answer" (`:2168`) — so the code contradicts
+   its comment, its sibling path, and a passing test that encodes the
+   same intent.
 2. **An abstention can be counted as a failure.** `summarizeRun`'s
    failure loop has no abstained guard, so an abstained row below
    threshold lands in `summary.failing` (empirically: all 6 abstained
@@ -309,9 +316,14 @@ unmeasured metric is **not** a zero.
    (`RagasPanel.vue:1112`), which subtracts the abstentions twice — in
    the all-abstained runs that arithmetic goes to **-20**.
 
-Neither was changed here: the run in progress measures the system under
+Neither was changed here. The run in progress measures the system under
 the current semantics, and changing what a number means mid-benchmark
-would make it incomparable with the runs already on record.
+would make it incomparable with the runs already on record — the
+2026-10-23 run's `context_recall` is 0.887 over all rows and 0.944 over
+the 94 non-failed ones, so the fix MOVES published numbers by ~0.057 on
+that metric. Fix 1 is a small change (mirror the re-score path's
+`scorable` filter in the run path); fix 2 needs a decision about
+whether an abstention should be judgeable at all.
 
 Implementation notes that will bite anyone who touches this again:
 

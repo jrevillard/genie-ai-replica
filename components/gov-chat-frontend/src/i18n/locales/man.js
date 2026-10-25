@@ -1330,6 +1330,7 @@ export default {
     errorUnableToComplete: 'Jaabol timmaani.',
     retry: 'Fuutito kadi',
     streamingError: 'Jɛɛmɔgɔya labɛnnen na. A ñaa ma ñɔɔrɔ.',
+    streamTimeout: 'Dɛmɔgɔ tɛ a jaabi la — sɛbɛnni in ka tuma dan.',
     aiGeneratedNoDocs: 'AI-generated — not based on library documents',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:

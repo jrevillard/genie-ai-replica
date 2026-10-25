@@ -1317,6 +1317,7 @@ export default {
     errorUnableToComplete: '无法完成回答。',
     retry: '重试',
     streamingError: '回复已中断。请重试。',
+    streamTimeout: '助手没有响应——请求已超时。',
     aiGeneratedNoDocs: 'AI 生成 — 不基于文库文档',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning: '配置不匹配：{warnings}。请检查快速帮助和知识层次结构的配置。',

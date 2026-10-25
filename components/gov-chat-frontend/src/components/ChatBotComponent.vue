@@ -811,6 +811,7 @@ export default {
   created() {
     eventBus.$on('chat-deleted', (deletedChatId) => {
       if (this.conversationId === deletedChatId) {
+        this.$store.dispatch('conversation/abortStream');
         this.$store.commit('conversation/setConversationId', null);
         this.currentChatId = null;
         this.$store.commit('conversation/setMessages', [
@@ -1408,12 +1409,41 @@ export default {
       const messageForBackend = this.hiddenPromptForNextMessage || content;
       const messageForDisplay = content;
 
+      const useConversationContext = this.selectedContextItems.length > 0;
+      const contextOption = useConversationContext ? 'conversation-with-labels' : 'single-message';
+      let queryData;
+      const categoryLabel = this.getCategoryLabelById(this.currentCategoryId);
+      // The retriever filter is built from English KB labels: sidebar items
+      // carry a stable English serviceKey (the localized `service` must
+      // never reach the filter); Quick Help items carry an explicit
+      // serviceLabels array — multi-label, or explicitly empty (Just Chat,
+      // which contributes no filter).
+      const serviceLabels = useConversationContext
+        ? this.selectedContextItems.flatMap((item) =>
+            Array.isArray(item.serviceLabels)
+              ? item.serviceLabels.length > 0
+                ? item.serviceLabels
+                : []
+              : [item.serviceKey || item.service]
+          )
+        : [];
+      // checkContextConfig returns false when the query must be blocked
+      // (unresolved category id, or no filter active) — before any turn
+      // is committed, so a blocked send leaves no orphan placeholder.
+      const probeQuery = useConversationContext
+        ? { categoryLabel: categoryLabel, serviceLabels }
+        : { language: this.currentLocale.toUpperCase() };
+      if (this.checkContextConfig(probeQuery) === false) {
+        return;
+      }
+
       this.$store.commit('conversation/appendUserMessage', {
         sender: 'user',
         content: messageForDisplay,
         timestamp: new Date().toISOString(),
         isSaved: false
       });
+
       this.newMessage = '';
       this.showQuickHelp = false;
       this.isLoading = false;
@@ -1432,22 +1462,7 @@ export default {
         isStreaming: true
       });
 
-      const useConversationContext = this.selectedContextItems.length > 0;
-      const contextOption = useConversationContext ? 'conversation-with-labels' : 'single-message';
-      let queryData;
-      const categoryLabel = this.getCategoryLabelById(this.currentCategoryId);
       if (contextOption === 'conversation-with-labels') {
-        // Build the retriever filter from English KB labels:
-        //  - Quick Help items: explicit serviceLabels array (English, may be multi-label)
-        //  - Sidebar items: serviceKey (stable English key; `service` is localized — never use as filter)
-        const serviceLabels = this.selectedContextItems.flatMap(
-          (item) =>
-            Array.isArray(item.serviceLabels)
-              ? item.serviceLabels.length > 0
-                ? item.serviceLabels
-                : [] // explicitly empty (Just Chat) — no filter contribution
-              : [item.serviceKey || item.service] // null/undefined — sidebar fallback
-        );
         // Drop the streaming bot placeholder pushed for the in-flight SSE — it is
         // a UI stub, not part of the conversation.
         const baseMessages = this.openMessages
@@ -1489,12 +1504,6 @@ export default {
           contextOption: contextOption,
           timestamp: new Date().toISOString()
         };
-      }
-
-      // checkContextConfig returns false when the query must be blocked
-      // (unresolved category id, or no filter active). Abort before sending.
-      if (this.checkContextConfig(queryData.context) === false) {
-        return;
       }
 
       // A previous stream still running is replaced by the new one.
@@ -1552,7 +1561,7 @@ export default {
       const rating = THUMB_RATINGS[value];
       const ok = await this.submitFeedbackPayload(msg, rating, '');
       if (ok) {
-        msg.userFeedback = value;
+        this.$store.commit('conversation/setMessageProperty', [index, 'userFeedback', value]);
         notificationService.success(this.translate('chatbot.feedbackSubmitted'));
       }
     },
@@ -1570,7 +1579,7 @@ export default {
       if (display !== q) {
         // The retry re-runs the hidden-prompt query, but shows what the user
         // saw — the display text rides the same mechanism the composer uses.
-        this.openMessages[this.openMessages.length - 2].content = display;
+        this.$store.commit('conversation/setMessageProperty', [this.openMessages.length - 2, 'content', display]);
       }
     },
 
@@ -1601,6 +1610,9 @@ export default {
     },
 
     async loadExistingConversation(conversationId) {
+      // Loading another conversation orphans the open generation — stop
+      // it rather than letting its frames land in the wrong transcript.
+      this.$store.dispatch('conversation/abortStream');
       try {
         const conversation = await this.chatHistoryService.getConversation(conversationId);
 
@@ -1812,12 +1824,11 @@ export default {
         const conversation = await this.chatHistoryService.createConversation(conversationData);
         this.$store.commit('conversation/setConversationId', conversation._key);
 
-        for (const message of this.openMessages) {
+        for (const [messageIndex, message] of this.openMessages.entries()) {
           if (
             (message.sender === 'bot' && !message.queryId) ||
             (message.sender === 'user' && message.content === firstUserMessage && !message.isSaved)
           ) {
-            message.isSaved = true;
             continue;
           }
 
@@ -1830,7 +1841,7 @@ export default {
               metadata: message.metadata || {}
             };
             await this.chatHistoryService.addMessage(messageData);
-            message.isSaved = true;
+            this.$store.commit('conversation/setMessageProperty', [messageIndex, 'isSaved', true]);
           }
         }
 
@@ -1855,8 +1866,7 @@ export default {
 
         this.currentChatId = conversation._key;
         this.$store.commit('conversation/setTitle', conversationData.title);
-        this.lastSavedState.messages = [...this.openMessages];
-        this.lastSavedState.contextItems = [...this.selectedContextItems];
+        this.$store.commit('conversation/setSavedState');
         this.updateChatInHistory();
 
         notificationService.success(this.translate('chatbot.chatSaved'));
@@ -1866,12 +1876,6 @@ export default {
 
         // The save was the leave-confirm's arm — resume the interrupted
         // navigation once the chat is safely stored.
-        if (this.pendingLeave) {
-          this.leaveConfirmed = true;
-          const target = this.pendingLeave;
-          this.pendingLeave = null;
-          this.$router.push(target);
-        }
       } catch (error) {
         console.error('Error saving chat:', error);
         notificationService.error('Failed to save chat. Please try again.');
@@ -1901,7 +1905,7 @@ export default {
         };
         await this.chatHistoryService.updateConversation(this.conversationId, updateData);
 
-        for (const message of this.openMessages) {
+        for (const [messageIndex, message] of this.openMessages.entries()) {
           if (message.isSaved) {
             continue;
           }
@@ -1914,13 +1918,12 @@ export default {
               metadata: message.metadata || {}
             };
             await this.chatHistoryService.addMessage(messageData);
-            message.isSaved = true;
+            this.$store.commit('conversation/setMessageProperty', [messageIndex, 'isSaved', true]);
           }
         }
 
         this.currentChatId = this.conversationId;
-        this.lastSavedState.messages = [...this.openMessages];
-        this.lastSavedState.contextItems = [...this.selectedContextItems];
+        this.$store.commit('conversation/setSavedState');
         this.updateChatInHistory();
 
         notificationService.success(this.translate('chatbot.chatUpdated'));
@@ -1997,6 +2000,7 @@ export default {
 
     startNewChatConfirmed() {
       this.showNewChatConfirm = false;
+      this.$store.dispatch('conversation/abortStream');
       const welcomeTurn = {
         sender: 'bot',
         content: this.getWelcomeMessage(),
@@ -2021,7 +2025,6 @@ export default {
 
     cancelNewChat() {
       this.showNewChatConfirm = false;
-      this.pendingLeave = null;
     },
 
     // The leave-confirm "save" arm: an existing conversation updates in

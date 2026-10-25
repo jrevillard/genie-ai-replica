@@ -1378,6 +1378,7 @@ export default {
     errorUnableToComplete: 'Imeshindwa kukamilisha jibu.',
     retry: 'Jaribu tena',
     streamingError: 'Jibu lilikatika. Tafadhali jaribu tena.',
+    streamTimeout: 'Msaidizi hajibu — omba limeisha muda.',
     aiGeneratedNoDocs: 'Imezalishwa na AI — haizingatii nyaraka za maktaba',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:

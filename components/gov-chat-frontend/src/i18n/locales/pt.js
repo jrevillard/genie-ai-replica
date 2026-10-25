@@ -1390,6 +1390,7 @@ export default {
     errorUnableToComplete: 'Não foi possível concluir a resposta.',
     retry: 'Tentar novamente',
     streamingError: 'A resposta foi interrompida. Tente novamente.',
+    streamTimeout: 'O assistente não está a responder — o pedido expirou.',
     aiGeneratedNoDocs: 'Gerado por IA — não baseado nos documentos da biblioteca',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:

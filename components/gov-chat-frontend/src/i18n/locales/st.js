@@ -1383,6 +1383,7 @@ export default {
     errorUnableToComplete: 'Ha e khone ho phethahatsa karabo.',
     retry: 'Leka hape',
     streamingError: 'Karabo e emisetsoe. Re leke hape.',
+    streamTimeout: 'Mothisi ha a araba — kopo e feta nako.',
     aiGeneratedNoDocs: 'AI-generated — not based on library documents',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:

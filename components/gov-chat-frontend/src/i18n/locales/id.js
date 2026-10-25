@@ -1376,6 +1376,7 @@ export default {
     errorUnableToComplete: 'Tidak dapat menyelesaikan jawaban.',
     retry: 'Coba lagi',
     streamingError: 'Respons terputus. Silakan coba lagi.',
+    streamTimeout: 'Asisten tidak merespons — permintaan kehabisan waktu.',
     aiGeneratedNoDocs: 'Dihasilkan oleh AI — tidak berdasarkan dokumen perpustakaan',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:

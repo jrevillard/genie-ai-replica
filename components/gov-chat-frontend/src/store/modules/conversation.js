@@ -91,7 +91,9 @@ const mutations = {
     if (last && last.sender === 'bot') {
       last.isStreaming = false;
       last.isError = true;
-      last.content = errorMessage;
+      // A partial answer the user was reading is kept; the error text
+      // only fills an empty turn.
+      if (!last.content) last.content = errorMessage;
     }
   },
   markInterrupted(st) {
@@ -113,6 +115,27 @@ const mutations = {
   setRelatedDocuments(st, docs) {
     st.conversations[st.openId].relatedDocuments = docs || [];
   },
+  patchSource(st, [docId, fields]) {
+    // The repository metadata arrives after the sources were committed;
+    // writing it through a mutation keeps the render triggers alive (the
+    // raw closure objects bypass the reactive proxies).
+    const entry = st.conversations[st.openId];
+    const patch = (doc) => {
+      if (doc.id === docId) Object.assign(doc, fields);
+    };
+    entry.relatedDocuments.forEach(patch);
+    const last = entry.messages.at(-1);
+    if (last && Array.isArray(last.sources)) last.sources.forEach(patch);
+  },
+  markAllMessagesSaved(st) {
+    st.conversations[st.openId].messages.forEach((m) => {
+      m.isSaved = true;
+    });
+  },
+  setMessageProperty(st, [index, prop, value]) {
+    const entry = st.conversations[st.openId];
+    if (entry.messages[index]) entry.messages[index][prop] = value;
+  },
   unshiftRelatedDocuments(st, docs) {
     st.conversations[st.openId].relatedDocuments.unshift(...(docs || []));
   },
@@ -133,6 +156,11 @@ const mutations = {
 };
 
 import chatbotService from '../../services/chatbotService';
+import i18n from '../../i18n';
+
+function t(key, fallback) {
+  return i18n.global.te(key) ? i18n.global.t(key) : fallback;
+}
 
 // AbortControllers live here, outside reactive state: they are not
 // serializable and must never enter `conversations` or storage.
@@ -162,6 +190,7 @@ const actions = {
         if (metadata.responseTime) {
           commit('status/setResponseTime', metadata.responseTime, { root: true });
         }
+        commit('setLastBotProperty', ['metadata', metadata]);
         commit('setLastBotProperty', ['confidenceScore', metadata.confidence_score ?? null]);
         commit('setLastBotProperty', ['isGrounded', metadata.is_grounded]);
         const sources = translateSources(metadata.source_documents);
@@ -182,8 +211,10 @@ const actions = {
             documentFileService
               .getFileMetadata(doc.id)
               .then((file) => {
-                doc._size = file?.file_size || 0;
-                doc._type = (file?.file_type || doc.type || 'LINK').toUpperCase();
+                commit('patchSource', [
+                  doc.id,
+                  { _size: file?.file_size || 0, _type: (file?.file_type || doc.type || 'LINK').toUpperCase() }
+                ]);
               })
               .catch(() => {});
           });
@@ -195,8 +226,12 @@ const actions = {
         if (data.queryId) commit('setLastBotProperty', ['queryId', data.queryId]);
       },
       onError: (error) => {
-        commit('status/setOffline', error.message || 'stream unavailable', { root: true });
-        commit('failStream', error.message || 'stream unavailable');
+        const message =
+          error.code === 'STREAM_IDLE_TIMEOUT'
+            ? t('chatbot.streamTimeout', 'The assistant is not responding — the request timed out.')
+            : error.message || t('chatbot.streamingError', 'The stream failed.');
+        commit('status/setOffline', message, { root: true });
+        commit('failStream', message);
       }
     });
     controllers.set(id, controller);

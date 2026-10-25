@@ -1369,6 +1369,7 @@ export default {
     errorUnableToComplete: 'تعذر إكمال الإجابة.',
     retry: 'إعادة المحاولة',
     streamingError: 'تمت مقاطعة الاستجابة. يرجى المحاولة مرة أخرى.',
+    streamTimeout: 'لا يستجيب المساعد — انتهت مهلة الطلب.',
     aiGeneratedNoDocs: 'مُولّد بواسطة الذكاء الاصطناعي — لا يعتمد على وثائق المكتبة',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:

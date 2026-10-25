@@ -1386,6 +1386,7 @@ export default {
     errorUnableToComplete: 'Не удалось завершить ответ.',
     retry: 'Повторить',
     streamingError: 'Ответ был прерван. Повторите попытку.',
+    streamTimeout: 'Ассистент не отвечает — время ожидания запроса истекло.',
     aiGeneratedNoDocs: 'Сгенерировано ИИ — не основано на документах библиотеки',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:

@@ -1357,6 +1357,7 @@ export default {
     errorUnableToComplete: 'উত্তর সম্পূর্ণ করা যায়নি।',
     retry: 'আবার চেষ্টা করুন',
     streamingError: 'প্রতিক্রিয়া ব্যাহত হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।',
+    streamTimeout: 'সহকারী সাড়া দিচ্ছে না — অনুরোধের সময় শেষ হয়েছে।',
     aiGeneratedNoDocs: 'এআই-উৎপাদিত — লাইব্রেরির নথিপত্রের উপর ভিত্তি করে নয়',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:

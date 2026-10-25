@@ -65,6 +65,7 @@ export default {
     // stream and reports, so the UI leaves its thinking state.
     const idleMs = Number(window.APP_CONFIG?.streamIdleTimeoutMs) || 120000;
     let idleTimer = null;
+    let finished = false;
     const clearIdleWatch = () => {
       if (idleTimer) clearTimeout(idleTimer);
       idleTimer = null;
@@ -73,7 +74,9 @@ export default {
       clearIdleWatch();
       idleTimer = setTimeout(() => {
         controller.abort();
-        callbacks.onError?.(new Error('The assistant is not responding — the request timed out.'));
+        const error = new Error('The assistant is not responding — the request timed out.');
+        error.code = 'STREAM_IDLE_TIMEOUT';
+        callbacks.onError?.(error);
       }, idleMs);
     };
     armIdleWatch();
@@ -109,7 +112,16 @@ export default {
         let buffer = '';
 
         function processChunk({ done, value }) {
-          if (done) return;
+          if (done) {
+            // A transport-level close without a done frame is a failure —
+            // otherwise the stream would sit open forever.
+            if (!finished) {
+              const error = new Error('The stream closed before the answer completed.');
+              error.code = 'STREAM_ENDED';
+              callbacks.onError?.(error);
+            }
+            return;
+          }
 
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split('\n');
@@ -134,10 +146,12 @@ export default {
                   callbacks.onTranslation?.(data.content);
                   break;
                 case 'done':
+                  finished = true;
                   clearIdleWatch();
                   callbacks.onDone?.(data);
                   return;
                 case 'error':
+                  finished = true;
                   clearIdleWatch();
                   callbacks.onError?.(new Error(data.message || 'Stream error'));
                   return;

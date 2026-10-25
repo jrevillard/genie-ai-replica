@@ -1399,6 +1399,7 @@ export default {
     configMismatchWarning:
       "Incohérence de configuration : {warnings}. Vérifiez la configuration de l'Aide rapide et la hiérarchie de connaissances.",
     streamingError: 'La réponse a été interrompue. Veuillez réessayer.',
+    streamTimeout: "L'assistant ne répond pas — la requête a expiré.",
     aiGeneratedNoDocs: 'Généré par IA — non basé sur les documents de la bibliothèque',
     placeholder: 'Tapez votre requête ici...',
     composerPlaceholder: 'Posez une question, explorez les savoirs...',

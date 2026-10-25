@@ -1373,6 +1373,7 @@ export default {
     errorUnableToComplete: 'ไม่สามารถสรุปคำตอบได้',
     retry: 'ลองอีกครั้ง',
     streamingError: 'การตอบกลับถูกขัดจังหวะ โปรดลองอีกครั้ง',
+    streamTimeout: 'ผู้ช่วยไม่ตอบสนอง — คำขอหมดเวลาแล้ว',
     aiGeneratedNoDocs: 'สร้างโดย AI — ไม่อิงจากเอกสารในคลังเอกสาร',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:

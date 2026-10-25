@@ -1389,6 +1389,7 @@ export default {
     errorUnableToComplete: 'Die Antwort konnte nicht abgeschlossen werden.',
     retry: 'Erneut versuchen',
     streamingError: 'Die Antwort wurde unterbrochen. Bitte versuchen Sie es erneut.',
+    streamTimeout: 'Der Assistent antwortet nicht – die Anfrage hat das Zeitlimit überschritten.',
     aiGeneratedNoDocs: 'KI-generiert — nicht auf Bibliotheksdokumenten basierend',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:

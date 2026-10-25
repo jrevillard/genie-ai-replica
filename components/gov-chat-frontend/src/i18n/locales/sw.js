@@ -3304,7 +3304,7 @@ export default {
           errors: {
             title: 'Makosa na jinsi yanavyoathiri matokeo',
             intro:
-              'Kiwango cha uthibitishaji hakisemi kila safu kila mwili kila wakati: mwili mmoja unaweza kushindwa katika mfuatano, msaidizi anaweza kukataa kujibu, kihakiki kinaweza kushindwa kupima kipimo fulani, au kipimo kinaweza kukorogea chini ya kizingiti chake. Hakuna kitu chochote ni sifuri, wala hakuna kilichofichwa. Sura hii ni ramani ya kuoanisha — kila hali ina maana yake, na athari yake kwenye namba unayosoma.',
+              'Kiwango cha uthibitishaji hakisemi kila safu kila mwili kila wakati: mwili mmoja unaweza kushindwa katika mfuatano, msaidizi anaweza kukataa kujibu, kihakiki kinaweza kushindwa kupima kipimo fulani, au kipimo kinaweza kukorogea chini ya kizingiti chake. Hakuna kitu chochote ni sifuri, wala hakuna kilichofichwa. Sura hii ni ramani ya kuoanisha — kila hali ina maana yake, na athari yake kwenye namba unayosoma. Jambo moja la kujua kabla ya kusoma: KILA mwili wa kundi huipelekwa kwa kihakiki, hata mwili ulioshindwa au uliokataa. Kwa hiyo mwili bila jibu hupata 0 kwenye vipimo vya muktadha na jibu, na sifuri hizo ZAHIBIWI kwenye wastani. Ndiyo hiyo mfuatano wenye mwili ulioshindwa hukaguliwa kuwa batili badala ya kukubaliwa kama ukaguzi.',
             d1: 'Soma bango la "run si sahihi" kabla ya wastani. Linamaanisha kuwa alama zilizoonyesha haziwai kipimo cha mfumo, na bango linaeleza sababu: majibu yaliashindwa, au kihakiki kikipimaje sehemu tu ya kundi. Tatua sababu kisha uendele tena.',
             d2: 'Angalia kiwango cha kila kipimo kabla ya kulinganisha mbili. Paneli inaonyesha idadi ya mili ambayo kihakiki kiliwepimaje kwa kipimo hicho; wastani wa sehemu ya kundi si alama ya kundi wote, na hailinganiwi na run iliyopimwa mili yote.',
             d3: 'Sahihisha mwili ulioshindwa katika chanzo chake — mfuatano wa kutafuta, huduma ya juu, au muda kumalizika — kisha uendele tena. Kubadilisha kundi ili kuondoa mwili unaoshindwa mara kwa mara huficha hasa hasa iliyopo kagani majaribio yanayopima ili kuipata.',
@@ -3324,16 +3324,16 @@ export default {
               error: {
                 state: 'Kosa',
                 meaning:
-                  'Mfuatano ulishindwa katika mwili huu — utafutaji, huduma ya juu, au muda kumalizika. Mwili huu haukafika kwa kihakiki kamwe.',
+                  'Mfuatano ulishindwa katika mwili huu — utafutaji, huduma ya juu, au muda kumalizika. Hakuna jibu lililotengenezwa.',
                 effect:
-                  'Hakuna vipimo vya mwili huu, kwa hivyo hauingishwi kwenye wastani wowote. Inahesabiwa katika safu ya makosa na inafanya run isiwe sahihi: wastani unahusu mili yaliyobaki.'
+                  'Mwili bado huipelekwa kwa kihakiki, ambacho hupima jibu tupu: vipimo vya muktadha na jibu hurudi kwa 0, na sifuri hizo ZAHIBIWI kwenye wastani. Mwili huhesabiwa katika safu ya makosa, na mfuatano hukaguliwa kuwa batili — bango linasema kuwa alama hazitakiwi kuwa ukaguzi wa mfumo.'
               },
               abstained: {
                 state: 'Ameyakataa',
                 meaning:
-                  'Msaidizi alikataa kujibu — kwa kawaida kwa sababu hakuna kitu maudhui kijibu swali. Mwili huu haukapimwa.',
+                  'Msaidizi alikataa kujibu — chatqna alisema hivyo, au hakuwa na chochote cha kusema. Mfuatano haukushindwa.',
                 effect:
-                  'Inahesabiwa katika safu yake mwenyewe. Si kamwe kushindwa kwa kipimo wala kosa; mwili huu tu haukupimwa.'
+                  'Mwili bado huipelekwa kwa kihakiki, kwa hiyo hutoa alama — bila muktadha unaoushikia, vipimo vya muktadha hurudi kwa 0, na sifuri hizo ZAHIBIWI kwenye wastani. Huhesabiwa katika safu yake mwenyewe, si kwenye safu ya makosa kamwe, na hauhitilafu mfuatano kuwa batili. Paneli inaiita “abstained” badala ya imefanikiwa au imeshindwa.'
               },
               unmeasured: {
                 state: 'Haikupimwa',

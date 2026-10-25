@@ -3321,7 +3321,7 @@ export default {
           errors: {
             title: 'Erros, e o que fazem ao resultado',
             intro:
-              'Um benchmark nunca mede todas as linhas de todas as suítes: uma linha pode falhar no pipeline, o assistente pode recusar-se a responder, o juiz pode não conseguir medir uma métrica, e uma métrica pode simplesmente ficar abaixo do seu limiar. Nada disso é um zero, e nada disso é escondido. Este capítulo é a correspondência: o que significa cada estado e o que ele faz ao número que está a ler.',
+              'Um benchmark nunca mede todas as linhas de todos os conjuntos: uma linha pode falhar na canalização, o assistente pode recusar-se a responder, o juiz pode não conseguir medir uma métrica e uma métrica pode ficar abaixo do seu limiar. Nada disso é zero e nada está oculto. Este capítulo é o mapa — o que cada estado significa e o que faz ao número que está a ler. Uma coisa a saber antes de o ler: TODA linha do conjunto é entregue ao juiz, incluindo uma linha que falhou ou recusou. Uma linha sem resposta obtém por isso 0 nas métricas de contexto e de resposta, e esses zeros SÃO contados nas médias. É por isso que uma execução com uma linha falhada é marcada como inválida em vez de ser tomada por uma medição.',
             d1: 'Leia primeiro o aviso de execução inválida e só depois as médias. Significa que as pontuações abaixo não são uma medição do sistema, e o aviso indica a causa: respostas que falharam, ou um juiz que mediu apenas parte da suíte. Corrija a causa e volte a executar.',
             d2: 'Verifique a cobertura de cada métrica antes de comparar duas execuções. O painel indica quantas linhas o juiz efetivamente pontuou para essa métrica; uma média sobre uma fração da suíte não é a pontuação da suíte, e não é comparável com uma execução que as mediu todas.',
             d3: 'Corrija uma linha com erro na sua causa — a cadeia de recuperação, o serviço a montante, o tempo limite — e depois volte a executar. Alterar a suíte para remover a linha que volta a falhar esconde exatamente o defeito que o benchmark existe para encontrar.',
@@ -3341,16 +3341,16 @@ export default {
               error: {
                 state: 'erro',
                 meaning:
-                  'O pipeline falhou nessa linha: recuperação, um serviço a montante ou um tempo limite. A linha nunca chegou ao juiz.',
+                  'A canalização falhou nesta linha — a recuperação, um serviço a montante ou um tempo esgotado. Não foi produzida nenhuma resposta.',
                 effect:
-                  'Sem métricas para essa linha, pelo que fica excluída de todas as médias. É contada na coluna de erros e torna a execução inválida: as médias cobrem apenas as linhas que sobreviveram.'
+                  'A linha é entregue na mesma ao juiz, que pontua uma resposta vazia: as métricas de contexto e de resposta voltam com 0, e esses zeros SÃO contados nas médias. A linha conta na coluna de erros e a execução é marcada como inválida — o aviso diz que as pontuações não são uma medição do sistema.'
               },
               abstained: {
                 state: 'abstenção',
                 meaning:
-                  'O assistente recusou-se a responder — normalmente porque nada no corpus responde à pergunta. A linha não é pontuada.',
+                  'O assistente recusou-se a responder — chatqna disse-o ou não tinha nada a dizer. A canalização não falhou.',
                 effect:
-                  'Contada na sua própria coluna. Nunca uma falha de métrica nem um erro; a linha simplesmente não é pontuada.'
+                  'A linha é entregue na mesma ao juiz, por isso contribui com uma pontuação — sem contexto que a sustente, as métricas de contexto voltam com 0, e esses zeros SÃO contados nas médias. Conta na sua própria coluna, nunca na de erros, e não torna a execução inválida. O painel rotula-a como «abstained» em vez de aprovada ou falhada.'
               },
               unmeasured: {
                 state: 'não medida',

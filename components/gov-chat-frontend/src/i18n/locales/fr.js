@@ -3330,7 +3330,7 @@ export default {
           errors: {
             title: 'Erreurs, et ce qu’elles font du résultat',
             intro:
-              'Un banc d’essai ne mesure jamais toutes les lignes de toutes les suites : une ligne peut échouer dans le pipeline, l’assistant peut refuser de répondre, le juge peut échouer à mesurer une métrique, et une métrique peut simplement être sous sa barre. Aucun de ces cas n’est un zéro, et aucun n’est caché. Ce chapitre est la correspondance — ce que chaque état signifie, et ce qu’il fait du chiffre que vous lisez.',
+              "Un benchmark ne mesure jamais chaque ligne de chaque suite : une ligne peut échouer dans le pipeline, l'assistant peut refuser de répondre, le juge peut échouer à mesurer une métrique, et une métrique peut passer sous son seuil. Rien de tout cela n'est un zéro, et rien n'est caché. Ce chapitre est la carte — ce que chaque état signifie, et ce qu'il fait du chiffre que vous lisez. Une chose à savoir avant de le lire : TOUTE ligne de la suite est confiée au juge, y compris une ligne qui a échoué ou qui a refusé. Une ligne sans réponse obtient donc 0 sur les métriques de contexte et de réponse, et ces zéros sont COMPTÉS dans les moyennes. C'est pourquoi une suite avec une ligne en échec est marquée invalide au lieu d'être prise pour une mesure.",
             d1: 'Lisez le bandeau d’exécution non valide avant les moyennes. Il signifie que les scores affichés en dessous ne sont pas une mesure du système, et il en nomme la cause : des réponses qui ont échoué, ou un juge qui n’a mesuré qu’une partie de la suite. Corrigez la cause, puis relancez.',
             d2: 'Vérifiez la couverture de chaque métrique avant de comparer deux exécutions. Le panneau indique combien de lignes le juge a effectivement notées pour cette métrique ; une moyenne sur une fraction de la suite n’est pas le score de la suite, et elle n’est pas comparable à une exécution qui les a toutes mesurées.',
             d3: 'Corrigez une ligne en erreur à sa racine — la chaîne de récupération, le service amont, le délai dépassé — puis relancez. Modifier la suite pour retirer la ligne qui échoue sans fin cache le défaut que le banc d’essai existe pour trouver.',
@@ -3350,16 +3350,16 @@ export default {
               error: {
                 state: 'erreur',
                 meaning:
-                  'Le pipeline a échoué sur cette ligne — récupération, service amont ou délai dépassé. La ligne n’a jamais atteint le juge.',
+                  "Le pipeline a échoué sur cette ligne — la récupération, un service amont, ou un délai dépassé. Aucune réponse n'a été produite.",
                 effect:
-                  'Aucune métrique pour cette ligne : elle est exclue de toutes les moyennes. Elle est comptée dans la colonne des erreurs et rend l’exécution non valide : les moyennes ne couvrent que les lignes qui ont survécu.'
+                  'La ligne est quand même confiée au juge, qui note une réponse vide : les métriques de contexte et de réponse reviennent à 0, et ces zéros sont COMPTÉS dans les moyennes. La ligne est comptée dans la colonne des erreurs, et la suite est marquée invalide — le bandeau dit que les scores ne sont pas une mesure du système.'
               },
               abstained: {
                 state: 'abstention',
                 meaning:
-                  'L’assistant a refusé de répondre — le plus souvent parce que rien dans le corpus ne répond à la question. La ligne n’est pas notée.',
+                  "L'assistant a refusé de répondre — chatqna l'a dit, ou il n'avait rien à dire. Le pipeline n'a pas échoué.",
                 effect:
-                  'Comptée dans sa propre colonne. Jamais un échec de métrique, jamais une erreur ; la ligne n’est tout simplement pas notée.'
+                  "La ligne est quand même confiée au juge, donc elle contribue à un score — sans contexte à l'appui, les métriques de contexte reviennent à 0, et ces zéros sont COMPTÉS dans les moyennes. Elle est comptée dans sa propre colonne, jamais dans celle des erreurs, et elle ne rend pas la suite invalide. Le panneau l'étiquette « abstained » plutôt que passe ou échec."
               },
               unmeasured: {
                 state: 'non mesurée',

@@ -3331,7 +3331,7 @@ export default {
           errors: {
             title: 'Fehler – und was sie mit dem Ergebnis machen',
             intro:
-              'Ein Benchmark misst nie jede Zeile jeder Suite: Eine Zeile kann in der Pipeline scheitern, der Assistent kann eine Antwort verweigern, der Judge kann eine Metrik nicht messen, und eine Metrik kann schlicht unter ihrer Schwelle liegen. Nichts davon ist eine Null, und nichts davon wird verschwiegen. Dieses Kapitel ist die Zuordnung – was jeder Status bedeutet und was er mit der Zahl macht, die Sie lesen.',
+              'Ein Benchmark misst nie jede Zeile jeder Suite: Eine Zeile kann in der Pipeline scheitern, der Assistent kann die Antwort verweigern, der Judge kann eine Metrik nicht messen, und eine Metrik kann unter ihre Schwelle fallen. Nichts davon ist eine Null und nichts davon wird verborgen. Dieses Kapitel ist die Landkarte — was jeder Status bedeutet und was er mit der Zahl macht, die Sie lesen. Eine Sache, die Sie vorher wissen sollten: JEDE Zeile der Suite geht an den Judge, auch eine gescheiterte oder verweigerte Zeile. Eine Zeile ohne Antwort erzielt daher 0 bei den Kontext- und Antwortmetriken, und diese Nullen WERDEN in den Mittelwerten mitgezählt. Deshalb wird ein Lauf mit einer gescheiterten Zeile als ungültig gekennzeichnet, statt als eine Messung geglaubt zu werden.',
             d1: 'Lesen Sie zuerst das Banner zum ungültigen Lauf, dann die Mittelwerte. Es bedeutet, dass die darunter stehenden Werte keine Messung des Systems sind, und es nennt die Ursache: fehlgeschlagene Antworten oder ein Judge, der nur einen Teil der Suite gemessen hat. Beheben Sie die Ursache und starten Sie neu.',
             d2: 'Prüfen Sie die Abdeckung jeder Metrik, bevor Sie zwei Läufe vergleichen. Das Panel zeigt, wie viele Zeilen der Judge für diese Metrik tatsächlich bewertet hat; ein Mittelwert über einen Bruchteil der Suite ist nicht die Punktzahl der Suite und nicht mit einem Lauf vergleichbar, der alle gemessen hat.',
             d3: 'Beheben Sie eine fehlgeschlagene Zeile an ihrer Ursache – der Retrieval-Kette, dem vorgeschalteten Dienst, dem Zeitlimit – und starten Sie dann neu. Die Suite so zu ändern, dass die immer wieder fehlschlagende Zeile verschwindet, verdeckt genau den Fehler, den der Benchmark finden soll.',
@@ -3351,16 +3351,16 @@ export default {
               error: {
                 state: 'Fehler',
                 meaning:
-                  'In der Pipeline ist diese Zeile gescheitert – Retrieval, ein vorgeschalteter Dienst oder ein Zeitlimit. Die Zeile hat den Judge nie erreicht.',
+                  'Die Pipeline ist an dieser Zeile gescheitert — Retrieval, ein vorgelagerter Dienst oder eine Zeitüberschreitung. Es wurde keine Antwort erzeugt.',
                 effect:
-                  'Keine Metriken für diese Zeile, also ist sie aus allen Mittelwerten ausgeschlossen. Sie zählt in der Fehlerspalte und macht den Lauf ungültig: die Mittelwerte decken nur die überlebenden Zeilen ab.'
+                  'Die Zeile geht trotzdem an den Judge, der eine leere Antwort bewertet: die Kontext- und Antwortmetriken kommen mit 0 zurück, und diese Nullen WERDEN in den Mittelwerten mitgezählt. Die Zeile zählt in der Fehlerspalte, und der Lauf wird als ungültig markiert — das Banner sagt, dass die Werte keine Messung des Systems sind.'
               },
               abstained: {
                 state: 'Auslassung',
                 meaning:
-                  'Der Assistent hat eine Antwort verweigert – meist weil im Korpus nichts die Frage beantwortet. Die Zeile wird nicht bewertet.',
+                  'Der Assistent hat die Antwort verweigert — chatqna hat es gesagt oder er hatte nichts zu sagen. Die Pipeline ist nicht gescheitert.',
                 effect:
-                  'Zählt in einer eigenen Spalte. Nie ein Metrik-Misserfolg und nie ein Fehler; die Zeile wird schlicht nicht bewertet.'
+                  'Die Zeile geht trotzdem an den Judge und trägt also zur Bewertung bei — ohne stützenden Kontext liefern die Kontextmetriken 0, und diese Nullen WERDEN in den Mittelwerten mitgezählt. Sie zählt in ihrer eigenen Spalte, nie in der Fehlerspalte, und macht den Lauf nicht ungültig. Das Panel beschriftet die Zeile als „abstained“ statt als bestanden oder gescheitert.'
               },
               unmeasured: {
                 state: 'nicht gemessen',

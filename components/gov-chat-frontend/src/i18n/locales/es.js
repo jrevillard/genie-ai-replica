@@ -3328,7 +3328,7 @@ export default {
           errors: {
             title: 'Errores, y qué le hacen al resultado',
             intro:
-              'Una prueba comparativa nunca mide todas las filas de todas las suites: una fila puede fallar en la canalización, el asistente puede negarse a responder, el juez puede no ser capaz de medir una métrica, y una métrica puede simplemente quedar por debajo de su umbral. Nada de eso es un cero, y nada de eso se oculta. Este capítulo es la correspondencia: qué significa cada estado y qué le hace al número que está leyendo.',
+              'Un benchmark nunca mide todas las filas de todos los conjuntos: una fila puede fallar en la canalización, el asistente puede negarse a responder, el juez puede no ser capaz de medir una métrica y una métrica puede quedar por debajo de su umbral. Nada de eso es un cero y nada está oculto. Este capítulo es el mapa: qué significa cada estado y qué le hace al número que está leyendo. Una cosa que conviene saber antes: TODA fila del conjunto se entrega al juez, incluso una que falló o se negó. Una fila sin respuesta obtiene por tanto 0 en las métricas de contexto y de respuesta, y esos ceros SÍ se cuentan en las medias. Por eso un proceso con una fila fallida se marca como no válido en lugar de tomarse por una medición.',
             d1: 'Lea primero el aviso de ejecución no válida y después las medias. Significa que las puntuaciones de abajo no son una medición del sistema, y el aviso nombra la causa: respuestas que fallaron, o un juez que midió solo una parte de la suite. Corrija la causa y vuelva a ejecutar.',
             d2: 'Revise la cobertura de cada métrica antes de comparar dos ejecuciones. El panel indica cuántas filas midió realmente el juez para esa métrica; una media sobre una fracción de la suite no es la puntuación de la suite, y no es comparable con una ejecución que midió todas.',
             d3: 'Corrija una fila con error en su causa: la cadena de recuperación, el servicio previo, el tiempo de espera agotado; y vuelva a ejecutar. Modificar la suite para quitar la fila que una y otra vez falla oculta precisamente el defecto que la prueba comparativa existe para encontrar.',
@@ -3348,16 +3348,16 @@ export default {
               error: {
                 state: 'error',
                 meaning:
-                  'La canalización falló en esa fila: recuperación, un servicio previo o un tiempo de espera agotado. La fila nunca llegó al juez.',
+                  'La canalización falló en esta fila — la recuperación, un servicio previo o un tiempo de espera agotado. No se produjo ninguna respuesta.',
                 effect:
-                  'Sin métricas para esa fila, así que queda excluida de todas las medias. Se cuenta en la columna de errores y vuelve no válida la ejecución: las medias cubren solo las filas que sobrevivieron.'
+                  'La fila se entrega igualmente al juez, que puntúa una respuesta vacía: las métricas de contexto y de respuesta vuelven con 0, y esos ceros SÍ se cuentan en las medias. La fila cuenta en la columna de errores y el proceso se marca como no válido: el aviso dice que las puntuaciones no son una medición del sistema.'
               },
               abstained: {
                 state: 'abstención',
                 meaning:
-                  'El asistente se negó a responder, casi siempre porque nada en el corpus responde a la pregunta. La fila no se puntúa.',
+                  'El asistente se negó a responder — chatqna lo dijo o no tenía nada que decir. La canalización no falló.',
                 effect:
-                  'Se cuenta en su propia columna. Nunca es un fallo de métrica ni un error; sencillamente la fila no se puntúa.'
+                  'La fila se entrega igualmente al juez, así que aporta una puntuación — sin contexto que lo respalde, las métricas de contexto vuelven con 0, y esos ceros SÍ se cuentan en las medias. Cuenta en su propia columna, nunca en la de errores, y no invalida el proceso. El panel la etiqueta como «abstained» en lugar de aprobado o fallido.'
               },
               unmeasured: {
                 state: 'sin medir',

@@ -3319,7 +3319,7 @@ export default {
           errors: {
             title: 'Liphoso le tšusumetso haho ho etsa haholo',
             intro:
-              'Boholo ha bohle ha akeng boholo ka moreng o mong le o mong: e ka ba ea na le phoso ka pipeline, kapa mohlophi o ile a hana ho araba, kapa moahlodi o ile a hana ho khala kotloha e ntle, kapa kotloha e ntle e ile ka tlase ho tekanyiso ya eona. Ha ho letho le le leng le ho se zero, mme ha ho letho le le phatlileng. Karolo ena ke tlhasego e hlalositsoang bophelong bo boka ba morago boo, le hore na le tšusumetso e itseng o ka sebetsa ka eona.',
+              'Boholo ha bohle ha akeng boholo ka moreng o mong le o mong: e ka ba ea na le phoso ka pipeline, mohlophi o ile a hana ho araba, moahlodi o ile a hana ho khala kotloha e ntle, kapa kotloha e ntle e ile ka tlase ho tekanyiso ya eona. Ha ho letho le le leng le ho se zero, mme ha ho letho le le phatlileng. Karolo ena ke tlhasego e hlalolitsoang bophelong bo boka ba morago boo, le hore na le tšusumetso e itseng o ka sebetsa ka eona. Ho na le ntho eo o lokelang ho e tseba pele o bala: boholo bo ka bo row mong le o mong wa suite o sebetsa moahlodi, e bile le row e foetse kapa e neng a hana ho araba. Sesepe row e se ntle karabo e ba 0 mo metrikeng tsa kontexi le tsa karabo, mme zero tseo bohle li baloa mo boholong. Seso run e na le row e foetse e ngotsoha e sa ntle, ho se e tekateo ka tekang ya haholo.',
             d1: 'Bala benera ya "run e se ntle" pele o bala boholo. E bolela hore lintlha tseo o li bonang ha li khalehang Sisteme, mme benera e bitse lebaka: ho na le liphaseho tse neng li foetse, kapa moahlodi o ile a khala feela ka karolo ya haholo. Lokisa lebaka mme o runise hape.',
             d2: 'Bala coverage ya kotloha e mong le e mong pele o bapisa linotso tse ling. Panel e bontsha hore moahlodi o ile a khala linotso tse ling tse ngang le ho hlala kotloha ena; boholo ba karolo ya haholo bo se boholo ba haholo, mme bo sa tshemaneho le run e ileng a khala linotso tsohle.',
             d3: 'Lokisa ntha e foelang pele o sebetsa — sekema sa ho batla, kapa tšebeleo e hodima ka hodima, kapa nako e se e fela — mme o runise hape. Ho fetola haholo ho tlohosa ntha e foelang ka kakata e bile e ka bo e na le bothata bo benchmark e lebitseng ho e batla.',
@@ -3339,16 +3339,16 @@ export default {
               error: {
                 state: 'Phoso',
                 meaning:
-                  'Pipeline e foetse moo row ena — ho batla, tšebeleo e hodima ka hodima, kapa nako e se e fela. Row ena ha e fihlelle moahlodi ka sebele.',
+                  'Pipeline e foetse moo row ena — ho batla, tšebeleo e hodima ka hodima, kapa nako e se e fela. Karabo ho e na le letho ha e a etsahala.',
                 effect:
-                  'Ho na le kotloha e ho letho mosoana row ena, ka morena ho se ha ekare mo boholong bohle. E baleha kholo ea liphoso mme e etsa run e sa ntle: boholo bo na le linotso tse hlokomeng feela.'
+                  'Row e sebetsa moahlodi le hoja, o a lekola karabo e se ntle: metrike tsa kontexi le tsa karabo lia boea ka 0, mme zero tseo bohle li baloa mo boholong. Row e bala kholong ea liphoso, mme run e ngotsoha e sa ntle: benera e bitsa hore lintlha ha li khalehang Sisteme.'
               },
               abstained: {
                 state: 'Ho hana ho araba',
                 meaning:
-                  'Mohlophi o ile a hana ho araba — hangata hobane ha ho na le letho corpus e arabang potso. Row ena ha e lekeng.',
+                  'Mohlophi o ile a hana ho araba — chatqna o ile a re, kapa a ka nna a se na letho a re. Pipeline e se ntle.',
                 effect:
-                  'E baleha kholo ea e itseng. E ka bo phoso ya kotloha kapa phoso; row ena e flehetse ha e lekeng.'
+                  'Row e sebetsa moahlodi le hoja, kahoo a eketsa sekata: ntle le kontexi e tshegwang, metrike tsa kontexi lia boea ka 0, mme zero tseo bohle li baloa mo boholong. E bala kholong ea e itseng, eseng kholong ea liphoso, mme e se etsa run e sa ntle. Panel e e labela “abstained”, eseng phatello kapa ho hloleha.'
               },
               unmeasured: {
                 state: 'Ha e lekeng',

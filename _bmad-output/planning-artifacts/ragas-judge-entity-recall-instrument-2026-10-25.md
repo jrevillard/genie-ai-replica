@@ -256,23 +256,62 @@ invalid-run banner explained any of them. The guide gains a sixth
 chapter — `RagasGuideDialog.vue` — with one table row per state: what
 that state means, and what it does to the number being read.
 
-The mapping is the SERVER's behaviour, read off
-`ragas-suite-service.js summarizeRun` (the per-metric means, the
-per-metric `coverage`, `n_errors` / `n_abstained` / `n_evaluable`) and
-`scorable = results.filter(r => !r.error && r.answer)` (an errored row,
-and a row with no answer, never reach the judge):
+The mapping is the SERVER's behaviour. The first draft of the table was
+written from `summarizeRun` alone and was WRONG on two of the five rows;
+the corrections below come from re-reading the whole path and from the
+stored runs.
+
+**The mechanism the first draft missed: EVERY row reaches the judge.**
+The run path builds the judge payload with
+`samples = entries.map((e, i) => ...)` (`ragas-suite-service.js:2274`) —
+no filter. So a row that failed, and a row that was declined, are both
+judged on an empty or unsupported answer and come back with **zeros** on
+the context and answer metrics. Those zeros are numbers, so
+`means[m]` (`:2469-2470`) includes them and the per-metric coverage
+counts them as "scored" (`:2477`).
+
+Measured on the 2026-10-23 run `rr1792742789648-86637b` (100 rows, 6
+failed): `context_recall` over all 100 rows is **0.8872**; over the 94
+non-failed rows it is **0.9438**. The 6 failed rows carry `context_recall
+= 0` and drag the mean down. `coverage.per_metric` reports
+`context_recall: 100` — the panel's "the judge measured 100 of 100 rows"
+banner does **not** fire, because the failed rows counted as scored. The
+run is flagged invalid, but by the `n_errors > 0` branch
+(`RagasPanel.vue:1281`), not by coverage.
 
 | state | what it is | what it does to the result |
 |---|---|---|
-| `error` | the pipeline failed on that row — retrieval, upstream service, timeout | no metrics for the row; excluded from every mean; counted in the error column; **makes the run invalid** |
-| `abstained` | the assistant declined to answer | the row is not judged; counted in its own column; **never** a metric failure and **never** an error |
+| `error` | the pipeline failed on that row — retrieval, upstream service, timeout; no answer was produced | still handed to the judge, which scores an empty answer → the context and answer metrics come back **0** and those zeros **ARE in the means**; counted in the error column; **makes the run invalid** |
+| `abstained` | the assistant declined to answer — chatqna's own flag, an empty answer, or nothing retrieved | still handed to the judge → the context metrics come back **0** and those zeros **ARE in the means**; counted in its own column, **never** in the error column; does **not** invalidate the run; the panel labels the row `abstained`, not pass/fail |
 | `unmeasured` | the judge's answer could not be parsed for that metric | that metric is `null` on that row — excluded from the mean, **never** a zero; partial coverage **makes the run invalid** |
-| `belowThreshold` | the metric scored below its threshold | the row **FAILS** that metric; a row fails if any selected metric fails |
-| `outOfScope` | the question was never answerable — a control | **never** counted as a failure |
+| `belowThreshold` | the metric scored below its threshold | the row **FAILS** that metric; a row fails if any selected metric fails (`if (fails.length && !e.oos)`, `:2464`) |
+| `outOfScope` | the question was never answerable — a control | **never** counted as a failure; excluded from `n_evaluable` (`:2483`) |
 
-Two of these are the ones an operator gets wrong, and the guide says so
-explicitly: an abstention is not a failure, and an unmeasured metric is
-not a zero.
+The two things an operator gets wrong, and the guide says so explicitly:
+an abstention is **not** an error and does not invalidate the run, and an
+unmeasured metric is **not** a zero.
+
+### Two semantics questions this raises — David's call, not mine
+
+1. **A failed row's zeros stay in the means.** The code contradicts its
+   own comment at `:2168` ("Judge only the rows that produced an answer"),
+   and the RESCORE path already does the right thing — it filters
+   `scorable = results.filter((r) => !r.error && r.answer)` and maps the
+   sidecar's rows back through the original index (`:1692`, `:1750`).
+   The run path does not. Applying the same filter there would make a
+   failed row contribute nothing to the means instead of six zeros.
+2. **An abstention can be counted as a failure.** `summarizeRun`'s
+   failure loop has no abstained guard, so an abstained row below
+   threshold lands in `summary.failing` (empirically: all 6 abstained
+   rows in `rr1792742789648` are also in the failing list). The panel's
+   stacked bar then computes
+   `answered = n_evaluable - n_abstained - failing_count`
+   (`RagasPanel.vue:1112`), which subtracts the abstentions twice — in
+   the all-abstained runs that arithmetic goes to **-20**.
+
+Neither was changed here: the run in progress measures the system under
+the current semantics, and changing what a number means mid-benchmark
+would make it incomparable with the runs already on record.
 
 Implementation notes that will bite anyone who touches this again:
 
@@ -285,6 +324,12 @@ Implementation notes that will bite anyone who touches this again:
   English placeholders. `localeConsistency.test.js` proves the key
   parity; `ragas-guide.test.js` proves every cell resolves to a
   non-empty string in every locale, which is the gap parity cannot see.
+- **Locale text must be inserted VERBATIM.** A chapter block assembled in
+  a JS template literal loses its backslashes — the template literal
+  consumes them — so an escaped apostrophe arrives in the locale file
+  bare and breaks the file. The Manding text uses the glottal stop, so
+  its values are double-quoted (which is what prettier keeps, since the
+  apostrophes would otherwise need escaping).
 
 ## Still open
 

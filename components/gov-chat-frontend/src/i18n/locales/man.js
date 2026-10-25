@@ -3277,7 +3277,7 @@ export default {
           errors: {
             title: 'Fili kei di kɛma yɛri a yɔ bɛ min ma',
             intro:
-              "Benchmark bɛ kelen ke kelen ye kelen yei row bɛ seginna: row bɛ na fɔli pipeline la, assistant bɛ na bɔ fɔli bɛ ja answers ma, judge bɛ na fɔli se metric kelen seginna, ani metric bɛ na fɔli dɔ bɛ min bɛ a fɔli bɛ bɛn. N'i ben n'o dɔ ben ka fɔli nɔ ye zero ye, ani fɔli minnu bɛ bɛn ye minɛ waati bɛ na wele. Chapter minɛ ye mapping ye — bɛn na state bɛɛ bɔ bɛ min na, ani bɛ n'i bɛ min a yɛ di bɔ bɛ min na yɛri y'a jɔw ma.",
+              'Benchmark bɛ kelen ke kelen ye kelen yei row bɛ seginna: row bɛ na fɔli pipeline la, assistant bɛ na bɔ fɔli bɛ ja answers ma, judge bɛ na fɔli se metric kelen seginna, ani metric bɛ na fɔli dɔ bɛ min bɛ a fɔli bɛ bɛn. N’i ben n’o dɔ ben ka fɔli nɔ ye zero ye, ani fɔli minnu bɛ bɛn ye minɛ waati bɛ na wele. Chapter minɛ ye mapping ye — bɛn na state bɛɛ bɔ bɛ min na, ani bɛ n’i bɛ min a yɛ di bɔ bɛ min na yɛri y’a jɔw ma. I bɛ min na fɔli bɛ minɛ yɛri: row kelen yei bɛ suite la bɛ na fɔli judge bɛɛ ma, row min bɛ fɔli la walima bɛna bɔ fɔli bɛ ja answers ma. Sɛn i bɛ ansa ma, row bɛɛ ma bɛ context metrics la ani answer metrics la bɛ 0 ye, ani zero minnu bɛ mean la bɛ na kaa. Sɛn i ye, run bɛ min bɛ fɔli row bɛ na bɛ run la invalid kaɲi ye, a tɛ fɔli bɛ san bɛ kɛn bɔ bɛɛ min bɛ bɛn ye measurement ye.',
             d1: 'Lɛntɛn “run bɛ ma valid” banner la, a kɔnɔ mean bɛ yɛrɛ. I yɛri ko score bɛ min bɛ bɛn bɛɛma system bɛ measurement ye, ani banner yɛrɛ saɲi bɛ min saɲi ye: answers bɛ fɔli, walima judge bɛ na suite tan bɛɛma seginna. Saɲi ɲi wuloo, a sɛbɛn fana.',
             d2: "Kono metric kuluw kɔfɛn kɔbɛn tugut di bɛɛrehɔ ban dɔn cili kɛn waati fɔlɔ judge bɛ na row bee la seginna. Bɛɛma bɛ fɛn bɛ kɛn bɔ n'o mɔgɔ n'i na bɔ suit bɛɛma yɔri ye, ani a tɛ fɛn bɛ kɛn bɔ run min bɛ na suun bɛɛma seginna bɛɛ kɛn bɔ fɔlɔw.",
             d3: "Fili bɛ min bɛ fɔli la, sani a wuloo a kɔnɔ la k'a sɔrɔ la, diɲɛ bɛ fɔli ye upstream service ye wallima timeout ye — a kaa sɛbɛn fana. Suite bɛ sɔrɔ n'i fɔli bɛ san bɛ fɔli bɛ kɔnɔ na, o bɛ dɔrɔn min bɛ waati benchmark bɛ sɔrɔ ka min bɛ kijɛraa.",
@@ -3297,16 +3297,16 @@ export default {
               error: {
                 state: 'error',
                 meaning:
-                  'Pipeline bɛ fɔli o row la — retrieval, upstream service walima timeout. Row ma bɛ judge bɛɛ kaɲi.',
+                  'Pipeline bɛ fɔli o row la — retrieval, upstream service walima timeout. Answer tɛ yen bɛ kaɲi.',
                 effect:
-                  'Metric tɛ yen o row la, o de fɔ min i mean bɛ bɔ. A bɛ error column na kaa, ani a bɛ na run la invalid: mean bɛɛ min bɛ min i bɛ kɛn aɲi la kɔnɔ.'
+                  'Row bɛ na fɔli judge bɛɛ ma sɛn ye, a bɛ na fɔli empty answer bɛ seginna: context metrics ani answer metrics bɛ na fɔli 0 ye, ani zero minnu bɛ mean la bɛ na kaa. A bɛ error column na kaa, ani a bɛ na run la invalid: banner bɛ yɛrɛ ko score minnu bɛɛma system bɛ measurement ye.'
               },
               abstained: {
                 state: 'ansaa bɔ fɔli',
                 meaning:
-                  'Assistant bɛna bɔ fɔli bɛ ja answers ma — sabab u bɛn ko corpus bɛɛma fɔli bɛ kelen tɛ yen. Row ma bɛ seginna.',
+                  'Assistant bɛna bɔ fɔli bɛ ja answers ma — chatqna bɛɛ a dɔ bɛ ye, walima a tɛ fɛn bɛ kaɲi a bin sɛbɛn fana. Pipeline bɛ fɔli ma.',
                 effect:
-                  'A bɛ column bɛ bɛɛn fɛnɛ ma kaa. A tɛ fɛn bɛ kɛn bɔ metric failure ye walima error ye; row ma fɔli bɛ seginna si.'
+                  'Row bɛ na fɔli judge bɛɛ ma sɛn ye, sɛn i bɛ na fɔli score kelen bɛ kaɲi — context tɛ yen i fɔli la, context metrics bɛ na fɔli 0 ye, ani zero minnu bɛ mean la bɛ na kaa. A bɛ column bɛ bɛɛn fɛnɛ ma kaa, error column la ko kɛn bɛ ma, ani a tɛ fɛn bɛ kɛn bɔ run la invalid ye. Panel bɛ row bɛ lɛn «ansaa bɔ fɔli» ye, walima pass walima fail ye.'
               },
               unmeasured: {
                 state: 'bɛ seginna ma',

@@ -3309,7 +3309,7 @@ export default {
           errors: {
             title: 'Kesalahan, dan pengaruhnya terhadap hasil',
             intro:
-              'Tolok ukur tidak pernah mengukur setiap baris dari setiap rangkaian uji: sebuah baris bisa gagal di dalam pipeline, asisten bisa menolak menjawab, hakim bisa tidak mampu mengukur suatu metrik, dan suatu metrik bisa saja berada di bawah ambangnya. Tidak satu pun dari itu adalah nol, dan tidak satu pun disembunyikan. Bab ini adalah pemetaannya — arti setiap keadaan dan apa akibatnya terhadap angka yang sedang Anda baca.',
+              'Benchmark tidak pernah mengukur setiap baris di setiap suite: sebuah baris bisa gagal di dalam pipeline, asisten bisa menolak menjawab, juri bisa gagal mengukur sebuah metrik, dan sebuah metrik bisa turun di bawah ambangnya. Tidak satu pun dari ini adalah nol, dan tidak ada yang disembunyikan. Bab ini adalah peta — apa arti setiap status, dan apa yang dil lakukan terhadap angka yang sedang Anda baca. Satu hal yang perlu diketahui sebelum membacanya: SETIAP baris di suite diserahkan kepada juri, termasuk baris yang gagal atau menolak. Maka baris tanpa jawaban akan bernilai 0 pada metrik konteks dan jawaban, dan nol-nol itu DIHITUNG dalam rata-rata. Itulah sebabnya sebuah proses dengan baris yang gagal ditandai tidak valid, bukan dipercaya sebagai pengukuran.',
             d1: 'Baca dulu spanduk “eksekusi tidak valid”, baru kemudian rata-ratanya. Spanduk itu berarti angka-angka di bawahnya bukan pengukuran atas sistem, dan spanduk itu menyebut penyebabnya: jawaban yang gagal, atau hakim yang hanya mengukur sebagian dari rangkaian uji. Perbaiki penyebabnya, lalu jalankan lagi.',
             d2: 'Periksa cakupan setiap metrik sebelum membandingkan dua eksekusi. Panel menunjukkan berapa banyak baris yang benar-benar dinilai hakim untuk metrik itu; rata-rata atas sebagian dari rangkaian uji bukanlah skornya, dan tidak sebanding dengan eksekusi yang mengukur semuanya.',
             d3: 'Perbaiki baris yang error pada penyebabnya — rantai pengambilan, layanan hilir, atau batas waktu — lalu jalankan lagi. Mengubah rangkaian uji untuk membuang baris yang terus gagal justru menyembunyikan cacat yang justru dicari oleh tolok ukur ini.',
@@ -3329,16 +3329,16 @@ export default {
               error: {
                 state: 'error',
                 meaning:
-                  'Pipeline gagal pada baris itu — pengambilan, layanan hilir, atau batas waktu. Baris itu tidak pernah sampai kepada hakim.',
+                  'Pipeline gagal pada baris ini — retrieval, layanan di hulu, atau waktu tunggu habis. Tidak ada jawaban yang dihasilkan.',
                 effect:
-                  'Tidak ada metrik untuk baris itu, sehingga dikeluarkan dari semua rata-rata. Baris itu dihitung pada kolom error dan membuat eksekusi tidak valid: rata-rata hanya mencakup baris yang selamat.'
+                  'Baris ini tetap diserahkan kepada juri, yang menilai jawaban kosong: metrik konteks dan jawaban kembali 0, dan nol-nol itu DIHITUNG dalam rata-rata. Baris ini dihitung di kolom error, dan proses ditandai tidak valid — spanduk itu mengatakan bahwa skor-skornya bukan pengukuran sistem.'
               },
               abstained: {
                 state: 'menolak menjawab',
                 meaning:
-                  'Asisten menolak menjawab — biasanya karena tidak ada isi korpus yang menjawab pertanyaan itu. Baris itu tidak dinilai.',
+                  'Asisten menolak menjawab — chatqna mengatakannya, atau ia tidak punya apa-apa untuk dikatakan. Pipeline tidak gagal.',
                 effect:
-                  'Dihitung pada kolomnya sendiri. Tidak pernah kegagalan metrik dan tidak pernah kesalahan; baris itu просто tidak dinilai.'
+                  'Baris ini tetap diserahkan kepada juri, jadi ia menyumbang sebuah skor — tanpa konteks yang menopang, metrik konteks kembali 0, dan nol-nol itu DIHITUNG dalam rata-rata. Baris ini dihitung di kolomnya sendiri, tidak pernah di kolom error, dan tidak membuat proses tidak valid. Panel melabelinya «abstained», bukan lulus atau gagal.'
               },
               unmeasured: {
                 state: 'tidak terukur',

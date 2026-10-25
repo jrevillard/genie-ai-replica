@@ -1962,7 +1962,7 @@ export default {
           errors: {
             title: 'Errors, and what they do to the result',
             intro:
-              'A benchmark never measures every row of every suite: a row can fail in the pipeline, the assistant can decline to answer, the judge can fail to measure one metric, and a metric can simply score below its bar. None of these is a zero, and none of them is hidden. This chapter is the mapping — what each state means, and what it does to the number you are reading.',
+              'A benchmark never measures every row of every suite: a row can fail in the pipeline, the assistant can decline to answer, the judge can fail to measure a metric, and a metric can fall below its threshold. None of these is a zero and none of them is hidden. This chapter is the map — what each state means, and what it does to the number you are reading. One thing to know before you read it: EVERY row in the suite is handed to the judge, including a row that failed or declined. A row with no answer therefore scores 0 on the context and answer metrics, and those zeros ARE counted in the averages. That is why a run with a failed row is banner-marked invalid rather than trusted.',
             d1: 'Read the invalid-run banner before the averages. It means the scores below it are not a measurement of the system, and it names the cause: answers that failed, or a judge that measured only part of the suite. Fix the cause and run again.',
             d2: 'Check the coverage on every metric before you compare two runs. The panel prints how many rows the judge actually scored for that metric; a mean over a fraction of the suite is not the suite’s score, and it is not comparable with a run that measured all of it.',
             d3: 'Fix an errored row at its cause — the retrieval stack, the upstream service, the timeout — and then re-run. Editing the suite to remove the row that keeps failing hides the defect the benchmark exists to find.',
@@ -1982,16 +1982,16 @@ export default {
               error: {
                 state: 'errored',
                 meaning:
-                  'The pipeline failed on that row — retrieval, an upstream service, or a timeout. The row never reached the judge.',
+                  'The pipeline failed on this row — retrieval, an upstream service, or a timeout. No answer was produced.',
                 effect:
-                  'No metrics for that row, so it is excluded from every mean. It is counted in the error column, and it makes the run invalid: the averages cover only the rows that survived.'
+                  'The row is still handed to the judge, which scores an empty answer: the context and answer metrics come back 0, and those zeros ARE counted in the averages. The row is counted in the error column, and the run is marked invalid — the banner says the scores are not a measurement of the system.'
               },
               abstained: {
                 state: 'abstained',
                 meaning:
-                  'The assistant declined to answer — usually because nothing in the corpus answers the question. The row is not judged.',
+                  'The assistant declined to answer — chatqna said so, or it had nothing to say. The pipeline did not fail.',
                 effect:
-                  'Counted in its own column. Never a metric failure and never an error; the row is simply not scored.'
+                  'The row is still handed to the judge, so it contributes a score — with nothing to support it, the context metrics come back 0, and those zeros ARE counted in the averages. It is counted in its own column, never in the error column, and it does not invalidate the run. The panel labels the row abstained rather than pass or fail.'
               },
               unmeasured: {
                 state: 'not measured',

@@ -170,11 +170,24 @@ describe('RagasGuideDialog', () => {
       expect(text).toContain('out of scope');
     });
 
-    it('says the two things that are easy to get wrong: abstention is not a failure, and an unmeasured metric is not a zero', () => {
+    it('says the two things that are easy to get wrong: an abstention is not an error, and an unmeasured metric is not a zero', () => {
       const w = mountGuide();
       const text = w.text();
-      expect(text).toMatch(/never a metric failure/i);
+      expect(text).toMatch(/never in the error column/i);
+      expect(text).toMatch(/does not invalidate the run/i);
       expect(text).toMatch(/never a zero/i);
+    });
+
+    // The counterintuitive one, and the reason this chapter exists: EVERY
+    // row is handed to the judge, so a row that failed or declined still
+    // contributes ZEROS to the context and answer metrics — and those zeros
+    // ARE in the averages. A guide that implied otherwise would let an
+    // operator read a mean that the failures had quietly depressed.
+    it('says that a failed row still reaches the judge, and its zeros are in the averages', () => {
+      const w = mountGuide();
+      const text = w.text();
+      expect(text).toMatch(/still handed to the judge/i);
+      expect(text).toMatch(/zeros ARE counted in the averages/i);
     });
   });
 });

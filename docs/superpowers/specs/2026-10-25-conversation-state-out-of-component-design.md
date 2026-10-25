@@ -48,25 +48,31 @@ state: {
       title: '',
       isStreaming: false,
       streamingQueryId: null,
-      streamInterrupted: false   // page reloaded mid-generation
+      streamInterrupted: false,  // page reloaded mid-generation
+      relatedDocuments: []       // the right sidebar's source list
     }
   }
 }
 ```
 
 Getters: `openConversation` (`conversations[openId]`) — the component
-maps this and nothing else. Actions address their entry by `openId`
+maps this and nothing else. `relatedDocuments` moves into the entry
+(the background stream fills the sidebar while the chat view is
+unmounted, so it must survive with the conversation). Actions address their entry by `openId`
 (today always `'open'`); a future parallel-conversation feature passes
 its own id and gets its own stream per entry, with no store changes.
 
 Actions own the side effects that belong to the conversation, not to
 the view:
 
-- `sendStream` — holds the AbortController **per conversation entry**,
-  calls `chatbotService.submitQueryStream`, writes frames via mutations
-  (`appendChunk`, `setMetadata`, `setTranslation`, `finishStream`,
-  `failStream`) addressed to that entry. The component dispatches and
-  renders.
+- `sendStream` — calls `chatbotService.submitQueryStream` and writes
+  frames via mutations (`appendChunk`, `setMetadata`, `setTranslation`,
+  `finishStream`, `failStream`) addressed to that entry. The component
+  dispatches and renders. The stream callbacks also update the shared
+  `status` module (online/offline/response time) exactly as the
+  component does today. The AbortControllers live in a **module-local
+  Map, outside reactive state**: they are not serializable and must not
+  enter `conversations` or the persisted payload.
 - `loadConversation(id)` / `resetForNewConversation()` / `saveToHistory()`
   mirror the component's current methods, minus the local state.
 

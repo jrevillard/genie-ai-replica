@@ -549,3 +549,33 @@ development_status:
   #          through Keycloak, starts a re-score with the ENV judge, and asserts the
   #          progress bar, the Cancel button, the history row with its lineage, and the
   #          row turning 'cancelled'. Both specs PASS against the deployed local build.
+  # 26516467f + 5e30d9ad0 The advisor's second judge is COMPUTED, not asserted
+  #          (David 2026-10-25: "If you have hard coded strings then fucking fix it").
+  #          The advisor carried two FROZEN sentences about a second judge — "a second
+  #          judge disagrees on roughly half of these rows" (factual_correctness) and
+  #          "a second judge reproduces this on most of these rows" (entity recall).
+  #          Both were measured ONCE, offline, and baked into the string: no re-score,
+  #          no judge change and no suite edit could ever move them.
+  #          The verdict is now computed from the SIBLING RE-SCORE — the run that
+  #          scored the SAME answers with a different judge. Only a lineage-linked
+  #          sibling can be compared row by row (an unrelated run scored its own
+  #          answers, so its per-row scores say nothing about this one's). With no
+  #          sibling the advisor says so and points at the re-score as the way to
+  #          settle it — it no longer asserts a proportion it was never given. The
+  #          comparison travels in run_facts.judge_comparison, so the LLM advisor
+  #          quotes the counts it was handed.
+  #          MEASURED against the real stored pair (rr1792843333604-268dad MiniMax-M3.1-Flash
+  #          → its re-score rr1792871605303-9ce608 granite): entity recall — MiniMax failed
+  #          67 rows, granite CLEARED 13 and KEPT 52 failing (2 unmeasurable); factual_correctness
+  #          — 44 failed, 17 cleared, 25 kept failing (2 unmeasurable); answer_relevancy — 6 failed,
+  #          1 cleared, 5 kept. THE HARDCODED CLAIM SAID "cleared 9 of 21" and "reproduced on 30 of
+  #          39" — the proportions survive, the NUMBERS were wrong, and they were constants.
+  #          WHAT THIS CHANGES: the advisor told the curator to treat the second-judge rows as
+  #          "unproven rather than judge noise"; the measured comparison says the second judge
+  #          REPRODUCED most of them (52 of 67; 25 of 44). Those rows are real failures whose lever
+  #          is the reference answer's wording — not the RAG, not the prompt. The prompt tweak is
+  #          justified only by the rows BOTH judges failed with faithfulness actually failing.
+  #          okf-server 1651/1651 · frontend 2039/2039. E2E browser proof (both specs PASS against
+  #          the deployed build): tests/e2e/okf/ragas-rescore-tracking.spec.js — drives the REAL UI
+  #          through Keycloak, starts a re-score with the ENV judge, and asserts the progress bar,
+  #          the Cancel button, the history row with its lineage, and the row turning 'cancelled'.

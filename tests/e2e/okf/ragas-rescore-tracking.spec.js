@@ -115,6 +115,10 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     expect(guideText, 'the banner is a floor, not a summary').toContain('floor, not a summary');
     expect(guideText, 'a running run is still moving').toContain('still moving');
 
+    // Scroll the table into view — the dialog opens at the top of the
+    // chapter, and the table is the point of the screenshot.
+    await guideRows.first().scrollIntoViewIfNeeded();
+    await page.waitForTimeout(400);
     await page.screenshot({ path: 'test-results/ragas-guide-read.png', fullPage: false });
     await guide.getByRole('button', { name: /^Close$/i }).first().click().catch(() => {});
     await page.waitForTimeout(800);

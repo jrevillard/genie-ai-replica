@@ -10,7 +10,8 @@ export default createStore({
   modules: {
     chatHistory: chatHistoryStore,
     auth,
-    status
+    status,
+    conversation
   },
 
   plugins: [

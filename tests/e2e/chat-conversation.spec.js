@@ -522,21 +522,47 @@ test.describe('Conversation — surface invariants', () => {
   });
 
   // Leaving an unsaved chat prompts instead of silently losing it.
-  test('navigating away from an unsaved chat prompts to save before leaving', async ({ browser }) => {
+  test('navigating away never prompts and never loses the conversation', async ({ browser }) => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
-    await askAndAnswer(page, 'What is GENIE.AI?');
-    await page.waitForSelector('.chat-message.bot .message-bubble', { timeout: 45000 });
+    await mockStream(page, ['The answer completes in the background.'], { confidence_score: 0.9, is_grounded: true });
+    await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
+    await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
+    // Leave while the answer is still streaming.
+    await page.waitForSelector('.chat-message.bot .streaming-indicator', { timeout: 15000 });
     await page.locator('[aria-label="Settings"]').locator('visible=true').first().click();
-    const dialog = page.locator('[role="dialog"]');
-    await expect(dialog).toBeVisible();
-    // The dialog is about leaving the page, not about starting a new chat —
-    // its actions must say so.
-    const dialogText = await dialog.textContent();
-    expect(dialogText, 'the leave dialog speaks of leaving').toContain('Leave');
-    // The interrupted navigation resumes only on an explicit choice.
-    await page.locator('[role="dialog"] button:has-text("Cancel")').click();
-    await expect(dialog).toBeHidden();
-    await expect(page.locator('[data-testid="conversation-header-title"]')).toBeVisible();
+    await page.waitForTimeout(500);
+    expect(await page.locator('[role="dialog"]').count(), 'navigation is never blocked').toBe(0);
+    // Back to the chat view — the conversation is intact and the answer
+    // completed in the background.
+    await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
+    await page.waitForSelector('.chat-message.bot .message-bubble', { timeout: 30000 });
+    await expect(page.locator('.chat-message.user').last()).toContainText('What is GENIE.AI?');
+    await expect(page.locator('.chat-message.bot .message-bubble').last()).toContainText(
+      'The answer completes in the background.'
+    );
+    await ctx.close();
+  });
+
+  test('a reload keeps the turns; an interrupted generation offers a retry', async ({ browser }) => {
+    const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
+    // A stream whose response never arrives: the reload kills the fetch.
+    await page.route('**/queries/stream**', async (route) => {
+      if (route.request().method() === 'POST') {
+        try {
+          await route.fulfill({ status: 200, contentType: 'text/event-stream', body: '' });
+        } catch {
+          /* the page closed first */
+        }
+        return;
+      }
+      await route.continue();
+    });
+    await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
+    await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
+    await page.waitForTimeout(800);
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector('.chat-message.user', { timeout: 30000 });
+    await expect(page.locator('.chat-message.user').last()).toContainText('What is GENIE.AI?');
     await ctx.close();
   });
 });

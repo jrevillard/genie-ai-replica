@@ -1425,6 +1425,11 @@ export default {
     saveAndLoad: 'Save and Load',
     saveAndStartNew: 'Save and Start New',
     discardAndStartNew: 'Discard and Start New',
+    saveAndLeave: 'Save and Leave',
+    discardAndLeave: 'Discard and Leave',
+    unsavedChangesLeave: 'You have unsaved changes. Save them before leaving?',
+    copyFailed: 'Could not copy',
+
     newChatTitle: 'Start New Chat',
     exportChat: 'Export Chat',
     exportFilename: 'File Name',

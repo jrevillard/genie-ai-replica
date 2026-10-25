@@ -1420,6 +1420,11 @@ export default {
     saveAndLoad: 'บันทึกและโหลด',
     saveAndStartNew: 'บันทึกและเริ่มใหม่',
     discardAndStartNew: 'ยกเลิกและเริ่มใหม่',
+    saveAndLeave: 'บันทึกและออก',
+    discardAndLeave: 'ยกเลิกและออก',
+    unsavedChangesLeave: 'คุณมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก บันทึกก่อนออกหรือไม่?',
+    copyFailed: 'คัดลอกไม่สำเร็จ',
+
     newChatTitle: 'เริ่มแชทใหม่',
     exportChat: 'ส่งออกแชท',
     exportFilename: 'ชื่อไฟล์',

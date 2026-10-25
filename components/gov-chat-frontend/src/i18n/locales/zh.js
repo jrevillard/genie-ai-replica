@@ -1362,6 +1362,11 @@ export default {
     saveAndLoad: '保存并加载',
     saveAndStartNew: '保存并开始新',
     discardAndStartNew: '丢弃并开始新',
+    saveAndLeave: '保存并离开',
+    discardAndLeave: '放弃并离开',
+    unsavedChangesLeave: '您有未保存的更改。离开前保存吗？',
+    copyFailed: '复制失败',
+
     newChatTitle: '开始新聊天',
     exportChat: '导出聊天',
     exportFilename: '文件名',

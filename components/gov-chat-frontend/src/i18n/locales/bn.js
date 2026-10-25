@@ -1404,6 +1404,11 @@ export default {
     saveAndLoad: 'সেভ করুন এবং লোড করুন',
     saveAndStartNew: 'সেভ করুন এবং নতুন শুরু করুন',
     discardAndStartNew: 'বাতিল করুন এবং নতুন শুরু করুন',
+    saveAndLeave: 'সংরক্ষণ করে ছেড়ে যান',
+    discardAndLeave: 'বাতিল করে ছেড়ে যান',
+    unsavedChangesLeave: 'আপনার অসংরক্ষিত পরিবর্তন রয়েছে। যাওয়ার আগে সেগুলি সংরক্ষণ করবেন?',
+    copyFailed: 'কপি করা যায়নি',
+
     newChatTitle: 'নতুন চ্যাট শুরু করুন',
     exportChat: 'চ্যাট এক্সপোর্ট করুন',
     exportFilename: 'ফাইলের নাম',

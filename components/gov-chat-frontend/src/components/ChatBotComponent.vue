@@ -63,16 +63,6 @@
         </span>
         <div class="conversation-header__actions">
           <button
-            type="button"
-            class="conversation-header__action"
-            :title="translate('chatbot.newChat')"
-            :aria-label="translate('chatbot.newChat')"
-            data-testid="conversation-header-new-chat"
-            @click="startNewChat"
-          >
-            <SquarePlus :size="16" aria-hidden="true" />
-          </button>
-          <button
             v-if="chatMessages.length > 0"
             type="button"
             class="conversation-header__action"
@@ -248,11 +238,13 @@
                 <button
                   type="button"
                   class="answer-action"
+                  :class="{ 'answer-action--done': msg.copied }"
                   data-testid="answer-copy"
                   :title="translate('chatbot.copyAnswer')"
                   @click="copyAnswer(msg)"
                 >
-                  <Copy :size="15" aria-hidden="true" />
+                  <Check v-if="msg.copied" :size="15" aria-hidden="true" />
+                  <Copy v-else :size="15" aria-hidden="true" />
                 </button>
               </div>
               <!-- The confidence percentage is a state, not an action —
@@ -449,7 +441,7 @@ import {
   Loader2,
   MessageSquareQuote,
   Sparkles,
-  SquarePlus,
+  Check,
   RotateCcw,
   ThumbsDown,
   ThumbsUp,
@@ -592,7 +584,7 @@ export default {
     User,
     X,
     RotateCcw,
-    SquarePlus,
+    Check,
     ThumbsUp,
     ThumbsDown,
     MessageSquareQuote,
@@ -856,9 +848,9 @@ export default {
         this.showNewChatConfirm = true;
         this.newChatDialog = {
           title: this.translate('chatbot.newChatTitle'),
-          message: this.translate('chatbot.unsavedChanges'),
-          confirmText: this.translate('chatbot.saveAndStartNew'),
-          cancelText: this.translate('chatbot.discardAndStartNew'),
+          message: this.translate('chatbot.unsavedChangesLeave'),
+          confirmText: this.translate('chatbot.saveAndLeave'),
+          cancelText: this.translate('chatbot.discardAndLeave'),
           secondaryText: this.translate('common.cancel')
         };
         return false;
@@ -1650,7 +1642,10 @@ export default {
       const msg = this.chatMessages[index];
       const rating = THUMB_RATINGS[value];
       const ok = await this.submitFeedbackPayload(msg, rating, '');
-      if (ok) msg.userFeedback = value;
+      if (ok) {
+        msg.userFeedback = value;
+        notificationService.success(this.translate('chatbot.feedbackSubmitted'));
+      }
     },
 
     retryAnswer(index) {
@@ -1676,8 +1671,14 @@ export default {
       const text = holder.textContent || '';
       try {
         await navigator.clipboard.writeText(text);
+        // The clipboard gives no feedback of its own — the check mark is
+        // the acknowledgement, reverted after a beat.
+        msg.copied = true;
+        setTimeout(() => {
+          msg.copied = false;
+        }, 1500);
       } catch {
-        /* clipboard denied — the button simply does nothing */
+        notificationService.error(this.translate('chatbot.copyFailed', 'Could not copy'));
       }
     },
 

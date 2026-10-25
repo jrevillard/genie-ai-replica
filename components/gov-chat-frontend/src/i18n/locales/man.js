@@ -1377,6 +1377,11 @@ export default {
     saveAndLoad: 'Mara ani Looti',
     saveAndStartNew: 'Mara ani Damina Kura',
     discardAndStartNew: 'Fiti ani Damina Kura',
+    saveAndLeave: 'Sauail as faag',
+    discardAndLeave: 'Treigeil as faag',
+    unsavedChangesLeave: 'Tacregyn?',
+    copyFailed: 'Cha dooie coipey',
+
     newChatTitle: 'Kuma Kura Damina',
     exportChat: 'Kuma Kii Banta',
     exportFilename: 'Fayil Toh',

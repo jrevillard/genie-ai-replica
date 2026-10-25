@@ -1430,6 +1430,11 @@ export default {
     saveAndLoad: 'Boloka mme o Kenye',
     saveAndStartNew: 'Boloka mme o Qale e Ntjha',
     discardAndStartNew: 'Lahla mme o Qale e Ntjha',
+    saveAndLeave: 'Boloka u tsoa',
+    discardAndLeave: 'Lahla u tsoa',
+    unsavedChangesLeave: 'O na le liphetoho tse sa bolokehang. U di boloke pele u tsoa?',
+    copyFailed: 'Ho hlolehile ho kopitsa',
+
     newChatTitle: 'Qala Moqoqo o Motjha',
     exportChat: 'Ntshetsa Moqoqo Kantle',
     exportFilename: 'Lebitso la Faele',

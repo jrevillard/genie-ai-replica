@@ -238,10 +238,21 @@ test.describe('Conversation — actions', () => {
     });
     expect(rated.attr, 'the thumb shows its selected state').toBe('true');
     expect(rated.bg, 'the selected state paints, it does not only tint the icon').not.toBe('rgba(0, 0, 0, 0)');
+    await expect(page.locator('.notification.success'), 'the rating confirms itself').toBeVisible();
     await page.locator('[data-testid="answer-copy"]').click();
     await page.waitForTimeout(300);
     const clip = await page.evaluate(() => navigator.clipboard.readText());
     expect(clip.length, 'the clipboard holds the answer text').toBeGreaterThan(0);
+    // The button acknowledges the copy with a check mark, then reverts.
+    const copiedIcon = await page.evaluate(
+      () => document.querySelector('[data-testid="answer-copy"] svg')?.getAttribute('class') || ''
+    );
+    expect(copiedIcon, 'the copy button shows a check while copied').toContain('check');
+    await page.waitForTimeout(1600);
+    const revertedIcon = await page.evaluate(
+      () => document.querySelector('[data-testid="answer-copy"] svg')?.getAttribute('class') || ''
+    );
+    expect(revertedIcon, 'the copy button reverts to the copy icon').toContain('copy');
     await ctx.close();
   });
 });
@@ -498,6 +509,10 @@ test.describe('Conversation — surface invariants', () => {
     await page.locator('[aria-label="Settings"]').locator('visible=true').first().click();
     const dialog = page.locator('[role="dialog"]');
     await expect(dialog).toBeVisible();
+    // The dialog is about leaving the page, not about starting a new chat —
+    // its actions must say so.
+    const dialogText = await dialog.textContent();
+    expect(dialogText, 'the leave dialog speaks of leaving').toContain('Leave');
     // The interrupted navigation resumes only on an explicit choice.
     await page.locator('[role="dialog"] button:has-text("Cancel")').click();
     await expect(dialog).toBeHidden();

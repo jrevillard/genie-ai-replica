@@ -1416,6 +1416,11 @@ export default {
     saveAndLoad: 'حفظ وتحميل',
     saveAndStartNew: 'حفظ وبدء جديد',
     discardAndStartNew: 'التخلص وبدء جديد',
+    saveAndLeave: 'حفظ والخروج',
+    discardAndLeave: 'تجاهل والخروج',
+    unsavedChangesLeave: 'لديك تغييرات غير محفوظة. هل تريد حفظها قبل المغادرة؟',
+    copyFailed: 'تعذر النسخ',
+
     newChatTitle: 'بدء محادثة جديدة',
     exportChat: 'تصدير المحادثة',
     exportFilename: 'اسم الملف',

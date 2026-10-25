@@ -1437,6 +1437,11 @@ export default {
     saveAndLoad: 'Guardar y Cargar',
     saveAndStartNew: 'Guardar e Iniciar Nuevo',
     discardAndStartNew: 'Descartar e Iniciar Nuevo',
+    saveAndLeave: 'Guardar y salir',
+    discardAndLeave: 'Descartar y salir',
+    unsavedChangesLeave: 'Tienes cambios sin guardar. ¿Guardarlos antes de salir?',
+    copyFailed: 'No se pudo copiar',
+
     newChatTitle: 'Iniciar Nuevo Chat',
     exportChat: 'Exportar Chat',
     exportFilename: 'Nombre de Archivo',

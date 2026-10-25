@@ -29,34 +29,51 @@ background while the user is on another page.
 
 ### New Vuex module `src/store/modules/conversation.js`
 
-Single owner of the open conversation:
+Single owner of the open conversation, shaped as a keyed collection
+from day one so several conversations can live (and generate) in
+parallel later without re-architecting the store:
 
 ```js
 state: {
-  messages: [],              // the open conversation's turns
-  selectedContextItems: [],  // QuickHelp / tree context
-  lastSavedState: { messages: [], contextItems: [] },
-  conversationId: null,      // set once saved to history
-  title: '',
-  isStreaming: false,
-  streamingQueryId: null,
-  streamInterrupted: false   // page reloaded mid-generation
+  // The conversation the chat view renders. The UI opens exactly one
+  // today; the map exists so a second pane later is new UI, not a new
+  // store shape.
+  openId: 'open',
+  conversations: {
+    open: {
+      messages: [],              // this conversation's turns
+      selectedContextItems: [],  // QuickHelp / tree context
+      lastSavedState: { messages: [], contextItems: [] },
+      conversationId: null,      // set once saved to history
+      title: '',
+      isStreaming: false,
+      streamingQueryId: null,
+      streamInterrupted: false   // page reloaded mid-generation
+    }
+  }
 }
 ```
+
+Getters: `openConversation` (`conversations[openId]`) — the component
+maps this and nothing else. Actions address their entry by `openId`
+(today always `'open'`); a future parallel-conversation feature passes
+its own id and gets its own stream per entry, with no store changes.
 
 Actions own the side effects that belong to the conversation, not to
 the view:
 
-- `sendStream` — holds the AbortController, calls
-  `chatbotService.submitQueryStream`, writes frames via mutations
+- `sendStream` — holds the AbortController **per conversation entry**,
+  calls `chatbotService.submitQueryStream`, writes frames via mutations
   (`appendChunk`, `setMetadata`, `setTranslation`, `finishStream`,
-  `failStream`). The component dispatches and renders.
+  `failStream`) addressed to that entry. The component dispatches and
+  renders.
 - `loadConversation(id)` / `resetForNewConversation()` / `saveToHistory()`
   mirror the component's current methods, minus the local state.
 
-Persistence: a module-level `store.subscribe` writes the module's state
-to sessionStorage (`genie.conversation`) debounced (~300 ms); the store
-bootstrap rehydrates it before the app mounts. If `isStreaming` was
+Persistence: a module-level `store.subscribe` writes the whole module
+state (the map) to sessionStorage (`genie.conversation.v1`) debounced
+(~300 ms); the store bootstrap rehydrates it before the app mounts —
+including any entry still `isStreaming`. If `isStreaming` was
 true at rehydration, the fetch died with the page: the module sets
 `streamInterrupted` on the last bot message, which renders through the
 existing retry affordance.
@@ -64,9 +81,9 @@ existing retry affordance.
 ### Component changes (`ChatBotComponent.vue`)
 
 - `chatMessages`, `selectedContextItems`, `lastSavedState`,
-  `isStreaming`, `streamingQueryId` become mapped store state. The
-  render code (markdown, avatars, sources, actions, dialogs) is
-  untouched — it reads the same shapes.
+  `isStreaming`, `streamingQueryId` become mapped store state through
+  the `openConversation` getter. The render code (markdown, avatars,
+  sources, actions, dialogs) is untouched — it reads the same shapes.
 - `sendMessage` dispatches `conversation/sendStream`; local
   `streamController` bookkeeping moves into the action.
 - `beforeUnmount` no longer aborts the stream (it now belongs to the
@@ -104,13 +121,14 @@ existing retry affordance.
   navigation-only survival (Vuex still holds state); a console warning,
   no user-facing error.
 - Store rehydration shape mismatch (schema drift) → discard stored
-  state, start clean (version key `genie.conversation.v1`).
+  state, start clean (the `v1` storage key).
 
 ## Testing
 
 - Unit (store): mutations, `sendStream` frame writing (mocked service),
-  abort semantics, debounce persistence, rehydration including the
-  interrupted-stream flag, version-mismatch discard.
+  abort semantics, per-entry addressing, debounce persistence,
+  rehydration including the interrupted-stream flag, version-mismatch
+  discard.
 - Unit (component): existing ChatBotComponent suite adjusted to the
   mapped state; behavior contracts unchanged.
 - E2E (`chat-conversation.spec.js`):

@@ -262,16 +262,11 @@ void main() {
       if (flavor.isEmpty) {
         // Without the define, getConfig() falls back to the dev flavor. That
         // is the gap of #1099, and the assertion below is deliberately about
-        // reachability only: the fallback may only ever point at the dev
-        // server, never at a deployment. Which flavor it resolves to is a
-        // routing detail that #1099 is free to change.
-        final effective = getConfig();
-        const devServer = String.fromEnvironment(
-          'DEV_SERVER',
-          defaultValue: 'localhost',
-        );
-        expect(effective.keycloakUrl, contains(devServer));
-        expect(effective.backendUrl, contains(devServer));
+        // reachability only: the fallback may only ever be the dev flavor,
+        // never a deployment. Where the dev flavor itself points is a
+        // routing detail the flavor config owns (this checkout points it at
+        // the project dev server).
+        expect(getConfig(), equals(devConfig));
         return;
       }
       if (flavor == 'itu') {

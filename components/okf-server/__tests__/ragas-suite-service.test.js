@@ -744,7 +744,7 @@ describe('run', () => {
   // disagree — the dropdown said GLM while the job was scoring with granite.
   // The run's progress therefore names the judge it is using and carries the
   // pick AS MADE, so the panel can adopt it.
-  it('the run\'s progress names the judge and carries the pick as made', async () => {
+  it("the run's progress names the judge and carries the pick as made", async () => {
     const sk = await makeSuite();
     const begun = await svc.beginRunSuite('me', sk, { mode: 'whatif', judge_config_key: '__env__' }, {});
     await begun.done;

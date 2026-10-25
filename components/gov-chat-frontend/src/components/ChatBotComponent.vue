@@ -63,7 +63,7 @@
         </span>
         <div class="conversation-header__actions">
           <button
-            v-if="chatMessages.length > 0"
+            v-if="openMessages.length > 0"
             type="button"
             class="conversation-header__action"
             :title="translate('chatbot.saveChat')"
@@ -75,7 +75,7 @@
             <Save :size="16" aria-hidden="true" />
           </button>
           <button
-            v-if="chatMessages.length > 0"
+            v-if="openMessages.length > 0"
             type="button"
             class="conversation-header__action"
             :title="translate('chatbot.exportChat')"
@@ -119,7 +119,7 @@
       <!-- The scrollable chat window -->
       <div ref="chatWindow" class="chat-window" aria-live="polite">
         <div
-          v-for="(msg, index) in chatMessages"
+          v-for="(msg, index) in openMessages"
           :key="`${msg.sender}-${msg.timestamp || ''}-${index}`"
           class="chat-message"
           :class="msg.sender"
@@ -449,7 +449,6 @@ import {
 } from '@lucide/vue';
 import { formatFileSize } from '../utils/fileUtils.js';
 import { isExternalUrl, openRepositoryDocument, fileTypeBadge } from '../utils/document-opener.js';
-import documentFileService from '../services/documentFileService';
 import { eventBus } from '../eventBus.js';
 import notificationService from '../services/notificationService';
 import { mapGetters, mapActions } from 'vuex';
@@ -603,10 +602,7 @@ export default {
 
   data() {
     return {
-      conversationId: null,
-      chatMessages: [],
       newMessage: '',
-      selectedContextItems: [],
       feedbackDialog: {
         visible: false,
         message: null
@@ -621,7 +617,6 @@ export default {
         filename: ''
       },
       currentChatId: null,
-      currentChatTitle: '',
       cachedConfig: null,
       currentLocale: (navigator.language || 'en').split('-')[0],
       showQuickHelp: true,
@@ -630,18 +625,11 @@ export default {
       chatHistoryService: chatHistoryService,
       quickHelpButtons: [],
       showNewChatConfirm: false,
-      unsavedLeaveGuard: null,
-      leaveConfirmed: false,
-      pendingLeave: null,
       newChatDialog: {
         title: '',
         message: '',
         confirmText: '',
         cancelText: ''
-      },
-      lastSavedState: {
-        messages: [],
-        contextItems: []
       },
       showLoadConfirm: false,
       loadConfirmDialog: {
@@ -654,10 +642,6 @@ export default {
       pendingConversationId: null,
       isLoading: false, // Loading state for spinner
       isSaving: false, // Loading state for save operation to prevent double-save
-      isStreaming: false, // SSE streaming state
-      streamingQueryId: null, // Query ID of the current streaming response
-      streamController: null, // AbortController for cancelling active streams
-      relatedDocuments: [], // Holds documents for the right sidebar
       hiddenPromptForNextMessage: null, // Stores hidden prompt for dual-prompt mechanism
       // Right sidebar width / collapsed state, both persisted in
       // localStorage and restored clamped against the current viewport.
@@ -672,6 +656,31 @@ export default {
   },
 
   computed: {
+    ...mapGetters('conversation', ['openConversation']),
+    openMessages() {
+      return this.openConversation.messages;
+    },
+    selectedContextItems() {
+      return this.openConversation.selectedContextItems;
+    },
+    relatedDocuments() {
+      return this.openConversation.relatedDocuments;
+    },
+    lastSavedState() {
+      return this.openConversation.lastSavedState;
+    },
+    isStreaming() {
+      return this.openConversation.isStreaming;
+    },
+    streamingQueryId() {
+      return this.openConversation.streamingQueryId;
+    },
+    conversationId() {
+      return this.openConversation.conversationId;
+    },
+    currentChatTitle() {
+      return this.openConversation.conversationId ? this.openConversation.title : '';
+    },
     ...mapGetters('chatHistory', ['getAllFolders', 'getChatById']),
     assistantIcon() {
       // The product icon, the same one the navbar renders; the default is
@@ -730,7 +739,7 @@ export default {
     },
 
     chatPreview() {
-      const userMessage = this.chatMessages.find((msg) => msg.sender === 'user');
+      const userMessage = this.openMessages.find((msg) => msg.sender === 'user');
       if (userMessage) {
         return userMessage.content.length > 50 ? userMessage.content.substring(0, 47) + '...' : userMessage.content;
       }
@@ -777,6 +786,19 @@ export default {
   },
 
   watch: {
+    // The stream writes from the store while this view may not even be
+    // mounted; the watcher keeps the autoscroll and surfaces failures.
+    openConversation: {
+      deep: true,
+      handler() {
+        if (this.isStreaming) this.scrollToBottom();
+        const last = this.openMessages.at(-1);
+        if (last && last.sender === 'bot' && last.isError && last.timestamp !== this._lastErrorKey) {
+          this._lastErrorKey = last.timestamp;
+          notificationService.error(this.translate('chatbot.streamingError'));
+        }
+      }
+    },
     currentLocale: function () {
       this.updateDialogTexts();
     },
@@ -789,23 +811,20 @@ export default {
   created() {
     eventBus.$on('chat-deleted', (deletedChatId) => {
       if (this.conversationId === deletedChatId) {
-        this.conversationId = null;
+        this.$store.commit('conversation/setConversationId', null);
         this.currentChatId = null;
-        this.chatMessages = [
+        this.$store.commit('conversation/setMessages', [
           {
             sender: 'bot',
             content: this.getWelcomeMessage(),
             timestamp: new Date().toISOString(),
             isSaved: true
           }
-        ];
+        ]);
         this.newMessage = '';
-        this.selectedContextItems = [];
-        this.relatedDocuments = [];
-        this.lastSavedState = {
-          messages: JSON.parse(JSON.stringify(this.chatMessages)),
-          contextItems: []
-        };
+        this.$store.commit('conversation/setContextItems', []);
+        this.$store.commit('conversation/setRelatedDocuments', []);
+        this.$store.commit('conversation/setSavedState');
       }
     });
 
@@ -818,38 +837,16 @@ export default {
         this.pendingConversationId = conversationId;
         this.showLoadConfirm = true;
       } else {
-        this.chatMessages = []; // Clear previous messages
-        this.selectedContextItems = [];
-        this.relatedDocuments = [];
-        this.lastSavedState = { messages: [], contextItems: [] }; // Reset state
+        this.$store.commit('conversation/setMessages', []); // Clear previous messages
+        this.$store.commit('conversation/setContextItems', []);
+        this.$store.commit('conversation/setRelatedDocuments', []);
+        this.$store.commit('conversation/setSavedState'); // Reset state
         this.loadExistingConversation(conversationId);
       }
     });
   },
 
   mounted() {
-    // Leaving the page with an unsaved chat would lose it — the guard
-    // reuses the unsaved-changes dialog; a confirmed leave resumes the
-    // navigation it interrupted.
-    // Test mounts may provide a router stub without guards.
-    if (this.$router?.beforeEach) {
-      this.unsavedLeaveGuard = this.$router.beforeEach((to) => {
-        if (!this.hasUnsavedChanges() || this.leaveConfirmed) {
-          this.leaveConfirmed = false;
-          return true;
-        }
-        this.pendingLeave = to.fullPath;
-        this.showNewChatConfirm = true;
-        this.newChatDialog = {
-          title: this.translate('chatbot.newChatTitle'),
-          message: this.translate('chatbot.unsavedChangesLeave'),
-          confirmText: this.translate('chatbot.saveAndLeave'),
-          cancelText: this.translate('chatbot.discardAndLeave'),
-          secondaryText: this.translate('common.cancel')
-        };
-        return false;
-      });
-    }
     // Restore the right sidebar's persisted width and collapsed state.
     // The width is clamped on the way IN, not just on drag: a value
     // saved at 1920 px must not be applied blind at 1400 px, where it
@@ -871,8 +868,8 @@ export default {
     // it may never be able to use at this viewport.
     eventBus.$emit('sidebar-right-width-changed', this.rightSidebarWidth);
 
-    if (this.chatMessages.length === 0) {
-      this.chatMessages.push({
+    if (this.openMessages.length === 0) {
+      this.$store.commit('conversation/appendUserMessage', {
         sender: 'bot',
         content: this.getWelcomeMessage()
       });
@@ -885,10 +882,13 @@ export default {
         (newLocale) => {
           this.currentLocale = newLocale;
           // Update context labels when locale changes
-          this.selectedContextItems = this.selectedContextItems.map((item) => ({
-            ...item,
-            service: this.safeTranslate(item.serviceKey || item.service)
-          }));
+          this.$store.commit(
+            'conversation/setContextItems',
+            this.selectedContextItems.map((item) => ({
+              ...item,
+              service: this.safeTranslate(item.serviceKey || item.service)
+            }))
+          );
           this.loadServiceCategories(); // Reload categories for the new locale
         }
       );
@@ -905,7 +905,6 @@ export default {
   },
 
   beforeUnmount() {
-    if (this.unsavedLeaveGuard) this.unsavedLeaveGuard();
     window.removeEventListener('resize', this.handleResize);
     window.removeEventListener('storage', this.handleStorage);
     eventBus.$off('sidebar-left-width-changed', this.onLeftWidthChanged);
@@ -915,9 +914,6 @@ export default {
     // Removed clearInterval
     eventBus.$off('load-conversation');
     // Abort active SSE stream on component unmount
-    if (this.streamController) {
-      this.streamController.abort();
-    }
   },
 
   methods: {
@@ -1258,8 +1254,11 @@ export default {
         // "Just Chat" clears all label filters so the retriever searches
         // across all documents without restriction. Keeps the Quick Help item
         // in context so conversation history is preserved for follow-up queries.
-        this.selectedContextItems = this.selectedContextItems.filter((item) => item.source !== 'quickHelp');
-        this.selectedContextItems.push({
+        this.$store.commit(
+          'conversation/setContextItems',
+          this.selectedContextItems.filter((item) => item.source !== 'quickHelp')
+        );
+        this.$store.commit('conversation/addContextItem', {
           service: rawOption.service,
           serviceLabels: [], // empty — no label filter
           serviceKey: rawOption.serviceKey || rawOption.id || rawOption.service,
@@ -1270,8 +1269,11 @@ export default {
         });
         this.currentCategoryId = null;
       } else {
-        this.selectedContextItems = this.selectedContextItems.filter((item) => item.source !== 'quickHelp');
-        this.selectedContextItems.push({
+        this.$store.commit(
+          'conversation/setContextItems',
+          this.selectedContextItems.filter((item) => item.source !== 'quickHelp')
+        );
+        this.$store.commit('conversation/addContextItem', {
           service: rawOption.service,
           serviceLabels: rawOption.serviceLabels || null,
           serviceKey: rawOption.serviceKey || rawOption.id || rawOption.service,
@@ -1308,7 +1310,10 @@ export default {
     // tile behaviour.
     handleWelcomeSend() {
       const entry = this.composerEntry;
-      this.selectedContextItems = this.selectedContextItems.filter((i) => i.source !== 'quickHelp');
+      this.$store.commit(
+        'conversation/setContextItems',
+        this.selectedContextItems.filter((i) => i.source !== 'quickHelp')
+      );
       // Only a real knowledge-area entry becomes a context chip — the plain
       // just-chat surface is not a domain, and a chip would promise one.
       if (entry && entry.category) {
@@ -1337,7 +1342,7 @@ export default {
           (existing) => existing.service === this.safeTranslate(item.service) && existing.category === item.category
         );
         if (!exists) {
-          this.selectedContextItems.push({
+          this.$store.commit('conversation/addContextItem', {
             service: this.safeTranslate(item.service),
             serviceKey: item.service,
             category: item.category || 'general',
@@ -1353,7 +1358,8 @@ export default {
           (existing) => existing.service === this.safeTranslate(item.service) && existing.category === item.category
         );
         if (index !== -1) {
-          const removedItem = this.selectedContextItems.splice(index, 1)[0];
+          const removedItem = this.selectedContextItems[index];
+          this.$store.commit('conversation/removeContextItem', index);
           notificationService.info(this.translate('chatbot.contextRemoved'), 1500);
           eventBus.$emit('contextItemRemoved', removedItem);
           if (this.selectedContextItems.length === 0) {
@@ -1365,12 +1371,12 @@ export default {
 
     removeContextItem(index) {
       if (this.selectedContextItems.length > index) {
-        this.selectedContextItems.splice(index, 1)[0];
+        this.$store.commit('conversation/removeContextItem', index);
       }
       if (this.selectedContextItems.length === 0 && this.currentCategoryId) {
         const quickHelpOption = this.quickHelpButtons.find((option) => option.category === this.currentCategoryId);
         if (quickHelpOption) {
-          this.selectedContextItems = [
+          this.$store.commit('conversation/setContextItems', [
             {
               service: quickHelpOption.service,
               serviceLabels: quickHelpOption.serviceLabels || null,
@@ -1380,7 +1386,7 @@ export default {
               category: this.currentCategoryId,
               selected: true
             }
-          ];
+          ]);
         } else {
           this.currentCategoryId = null;
         }
@@ -1402,7 +1408,7 @@ export default {
       const messageForBackend = this.hiddenPromptForNextMessage || content;
       const messageForDisplay = content;
 
-      this.chatMessages.push({
+      this.$store.commit('conversation/appendUserMessage', {
         sender: 'user',
         content: messageForDisplay,
         timestamp: new Date().toISOString(),
@@ -1411,15 +1417,12 @@ export default {
       this.newMessage = '';
       this.showQuickHelp = false;
       this.isLoading = false;
-      this.isStreaming = true;
       // Clear hidden prompt after use
       this.hiddenPromptForNextMessage = null;
 
-      const lastMessageIndex = this.chatMessages.length;
-
-      // Push placeholder bot message for streaming content; the outgoing
-      // query text stays on the message so a failed turn can retry itself.
-      this.chatMessages.push({
+      // Placeholder bot message for streaming content; the outgoing query
+      // text stays on the message so a failed turn can retry itself.
+      this.$store.commit('conversation/appendBotMessage', {
         sender: 'bot',
         content: '',
         _query: messageForBackend,
@@ -1429,183 +1432,74 @@ export default {
         isStreaming: true
       });
 
-      try {
-        const useConversationContext = this.selectedContextItems.length > 0;
-        const contextOption = useConversationContext ? 'conversation-with-labels' : 'single-message';
-        let queryData;
-        const categoryLabel = this.getCategoryLabelById(this.currentCategoryId);
-        if (contextOption === 'conversation-with-labels') {
-          // Build the retriever filter from English KB labels:
-          //  - Quick Help items: explicit serviceLabels array (English, may be multi-label)
-          //  - Sidebar items: serviceKey (stable English key; `service` is localized — never use as filter)
-          const serviceLabels = this.selectedContextItems.flatMap(
-            (item) =>
-              Array.isArray(item.serviceLabels)
-                ? item.serviceLabels.length > 0
-                  ? item.serviceLabels
-                  : [] // explicitly empty (Just Chat) — no filter contribution
-                : [item.serviceKey || item.service] // null/undefined — sidebar fallback
-          );
-          // Drop the streaming bot placeholder pushed for the in-flight SSE — it is
-          // a UI stub, not part of the conversation. Without this filter, the
-          // empty placeholder becomes the tail of the messages array, and the
-          // backend's `text = messages[messages.length-1].content` derivation
-          // stores an empty string in queries.text for Quick Help queries.
-          // The `msg &&` guard tolerates corrupted-cache null entries (localStorage
-          // round-trip can introduce them); the inner access would otherwise throw.
-          const baseMessages = this.chatMessages
-            .filter((msg) => msg && !msg.isStreaming)
-            .map((msg) => ({
-              role: msg.sender === 'user' ? 'user' : 'assistant',
-              content: msg.content
-            }));
+      const useConversationContext = this.selectedContextItems.length > 0;
+      const contextOption = useConversationContext ? 'conversation-with-labels' : 'single-message';
+      let queryData;
+      const categoryLabel = this.getCategoryLabelById(this.currentCategoryId);
+      if (contextOption === 'conversation-with-labels') {
+        // Build the retriever filter from English KB labels:
+        //  - Quick Help items: explicit serviceLabels array (English, may be multi-label)
+        //  - Sidebar items: serviceKey (stable English key; `service` is localized — never use as filter)
+        const serviceLabels = this.selectedContextItems.flatMap(
+          (item) =>
+            Array.isArray(item.serviceLabels)
+              ? item.serviceLabels.length > 0
+                ? item.serviceLabels
+                : [] // explicitly empty (Just Chat) — no filter contribution
+              : [item.serviceKey || item.service] // null/undefined — sidebar fallback
+        );
+        // Drop the streaming bot placeholder pushed for the in-flight SSE — it is
+        // a UI stub, not part of the conversation.
+        const baseMessages = this.openMessages
+          .filter((msg) => msg && !msg.isStreaming)
+          .map((msg) => ({
+            role: msg.sender === 'user' ? 'user' : 'assistant',
+            content: msg.content
+          }));
 
-          const lastUserMsgIndex = baseMessages.map((m) => m.role).lastIndexOf('user');
-          // Dual-prompt swap: send the hidden prompt to OPEA as the last user
-          // message so the LLM gets the persona + domain context, while
-          // `messageForDisplay` (the visibleText) is what the user actually
-          // clicked/typed. `userQuestion` below carries the visible text to
-          // the analytics layer so the Query Inspector shows it.
-          if (lastUserMsgIndex !== -1 && messageForBackend !== messageForDisplay) {
-            baseMessages[lastUserMsgIndex].content = messageForBackend;
-          }
-
-          queryData = {
-            conversationId: this.conversationId,
-            sessionId: this.currentSessionId || 'new-session',
-            messages: baseMessages,
-            userQuestion: messageForDisplay,
-            context: {
-              categoryLabel: categoryLabel,
-              serviceLabels: serviceLabels,
-              language: this.currentLocale.toUpperCase()
-            },
-            contextOption: 'conversation-with-context-labels',
-            timestamp: new Date().toISOString()
-          };
-        } else {
-          queryData = {
-            sessionId: this.currentSessionId || 'new-session',
-            text: messageForBackend,
-            userQuestion: messageForDisplay,
-            context: {
-              language: this.currentLocale.toUpperCase()
-            },
-            contextOption: contextOption,
-            timestamp: new Date().toISOString()
-          };
+        const lastUserMsgIndex = baseMessages.map((m) => m.role).lastIndexOf('user');
+        // Dual-prompt swap: send the hidden prompt to OPEA as the last user
+        // message so the LLM gets the persona + domain context, while
+        // `messageForDisplay` is what the user actually clicked/typed.
+        if (lastUserMsgIndex !== -1 && messageForBackend !== messageForDisplay) {
+          baseMessages[lastUserMsgIndex].content = messageForBackend;
         }
 
-        // checkContextConfig returns false when the query must be blocked
-        // (unresolved category id, or no filter active). Abort before sending.
-        if (this.checkContextConfig(queryData.context) === false) {
-          return;
-        }
-
-        // Cancel any previous stream
-        if (this.streamController) {
-          this.streamController.abort();
-        }
-
-        this.streamController = chatbotService.submitQueryStream(queryData, {
-          onChunk: (content) => {
-            this.chatMessages[lastMessageIndex].content += content;
-            this.scrollToBottom();
+        queryData = {
+          conversationId: this.conversationId,
+          sessionId: this.currentSessionId || 'new-session',
+          messages: baseMessages,
+          userQuestion: messageForDisplay,
+          context: {
+            categoryLabel: categoryLabel,
+            serviceLabels: serviceLabels,
+            language: this.currentLocale.toUpperCase()
           },
-          onMetadata: (metadata) => {
-            this.chatMessages[lastMessageIndex].metadata = metadata;
-            if (metadata.confidence_score != null) {
-              this.chatMessages[lastMessageIndex].confidenceScore = metadata.confidence_score;
-            }
-            // is_grounded: true = answer backed by retrieved document chunks;
-            // false = generated from the LLM's own knowledge (no document basis).
-            this.chatMessages[lastMessageIndex].isGrounded = metadata.is_grounded;
-            if (metadata.responseTime) {
-              this.$store.commit('status/setResponseTime', metadata.responseTime);
-            }
-            this.$store.commit('status/setOnline');
-
-            if (metadata.source_documents && Array.isArray(metadata.source_documents)) {
-              const newDocs = metadata.source_documents.map((doc) => ({
-                id: doc.document_id,
-                title: doc.document_name || doc.file_name || `Source ${(doc.document_id || '').slice(0, 4)}`,
-                documentName: doc.document_name,
-                fileName: doc.file_name,
-                type: doc.url?.split('.').pop().toUpperCase() || 'LINK',
-                size: 0,
-                url: doc.url || (doc.document_id ? `/api/files/${doc.document_id}/download` : ''),
-                score: doc.score,
-                categoryLabel: doc.categoryLabel,
-                serviceLabels: doc.serviceLabels
-              }));
-              const existingIds = new Set(this.relatedDocuments.map((d) => d.id));
-              const uniqueNewDocs = newDocs.filter((d) => !existingIds.has(d.id));
-              this.relatedDocuments.unshift(...uniqueNewDocs);
-              // The sources belong to the answer that cites them — the
-              // sidebar keeps its accumulated view, the card keeps its own.
-              this.chatMessages[lastMessageIndex].sources = newDocs;
-              this.chatMessages[lastMessageIndex].sourcesOpen = true;
-              // Fetch the repository fields through the reactive proxies —
-              // writing the raw objects would bypass the render triggers.
-              this.chatMessages[lastMessageIndex].sources.forEach((doc) => {
-                if (!doc.id) return;
-                documentFileService
-                  .getFileMetadata(doc.id)
-                  .then((file) => {
-                    doc._size = file?.file_size || 0;
-                    doc._type = (file?.file_type || doc.type || 'LINK').toUpperCase();
-                  })
-                  .catch(() => {
-                    /* the meta line degrades to the extension type alone */
-                  });
-              });
-            }
+          contextOption: 'conversation-with-context-labels',
+          timestamp: new Date().toISOString()
+        };
+      } else {
+        queryData = {
+          sessionId: this.currentSessionId || 'new-session',
+          text: messageForBackend,
+          userQuestion: messageForDisplay,
+          context: {
+            language: this.currentLocale.toUpperCase()
           },
-          onTranslation: (translatedContent) => {
-            this.chatMessages[lastMessageIndex].content = translatedContent;
-            this.scrollToBottom();
-          },
-          onDone: (data) => {
-            this.isStreaming = false;
-            this.streamController = null;
-            this.streamingQueryId = data.queryId;
-            this.chatMessages[lastMessageIndex].isStreaming = false;
-            this.chatMessages[lastMessageIndex].isSaved = false;
-            if (data.queryId) {
-              this.chatMessages[lastMessageIndex].queryId = data.queryId;
-            }
-            this.scrollToBottom();
-            if (this.currentChatId) {
-              this.updateChatInHistory();
-            }
-          },
-          onError: (error) => {
-            console.error('Stream error:', error);
-            this.isStreaming = false;
-            this.streamController = null;
-            this.chatMessages[lastMessageIndex].isStreaming = false;
-            this.chatMessages[lastMessageIndex].isError = true;
-
-            if (!this.chatMessages[lastMessageIndex].content) {
-              this.chatMessages[lastMessageIndex].content = this.translate('chatbot.streamingError');
-            }
-
-            this.$store.commit('status/setOffline', error.message || this.translate('chatbot.processingError'));
-            notificationService.error(this.translate('chatbot.streamingError'));
-          }
-        });
-      } catch (error) {
-        this.isStreaming = false;
-        this.streamController = null;
-        this.chatMessages[lastMessageIndex].isStreaming = false;
-
-        console.error('Error sending query:', error);
-        if (!this.chatMessages[lastMessageIndex].content) {
-          this.chatMessages[lastMessageIndex].content = this.translate('chatbot.processingError');
-        }
-        this.$store.commit('status/setOffline', error.message || this.translate('chatbot.processingError'));
-        notificationService.error(this.translate('chatbot.processingError'));
+          contextOption: contextOption,
+          timestamp: new Date().toISOString()
+        };
       }
+
+      // checkContextConfig returns false when the query must be blocked
+      // (unresolved category id, or no filter active). Abort before sending.
+      if (this.checkContextConfig(queryData.context) === false) {
+        return;
+      }
+
+      // A previous stream still running is replaced by the new one.
+      this.$store.dispatch('conversation/abortStream');
+      this.$store.dispatch('conversation/sendStream', queryData);
       this.scrollToBottom();
       if (this.currentChatId) {
         this.updateChatInHistory();
@@ -1615,7 +1509,7 @@ export default {
     openFeedbackDialog(index) {
       this.feedbackDialog = {
         visible: true,
-        message: this.chatMessages[index]
+        message: this.openMessages[index]
       };
     },
 
@@ -1654,7 +1548,7 @@ export default {
     },
 
     async rateAnswer(index, value) {
-      const msg = this.chatMessages[index];
+      const msg = this.openMessages[index];
       const rating = THUMB_RATINGS[value];
       const ok = await this.submitFeedbackPayload(msg, rating, '');
       if (ok) {
@@ -1664,19 +1558,19 @@ export default {
     },
 
     retryAnswer(index) {
-      const msg = this.chatMessages[index];
+      const msg = this.openMessages[index];
       const q = msg._query;
       // The failed turn is its question plus the failed answer — replaced,
       // not stacked. The visible text lives on the user turn being dropped.
-      const before = this.chatMessages[index - 1];
+      const before = this.openMessages[index - 1];
       const dropUser = before && before.sender === 'user';
       const display = dropUser ? before.content : q;
-      this.chatMessages.splice(dropUser ? index - 1 : index, dropUser ? 2 : 1);
+      this.$store.commit('conversation/spliceMessages', [dropUser ? index - 1 : index, dropUser ? 2 : 1]);
       this.sendMessageFromText(q);
       if (display !== q) {
         // The retry re-runs the hidden-prompt query, but shows what the user
         // saw — the display text rides the same mechanism the composer uses.
-        this.chatMessages[this.chatMessages.length - 2].content = display;
+        this.openMessages[this.openMessages.length - 2].content = display;
       }
     },
 
@@ -1714,38 +1608,41 @@ export default {
           throw new Error('Conversation not found');
         }
 
-        this.conversationId = conversation._key;
+        this.$store.commit('conversation/setConversationId', conversation._key);
         this.currentChatId = conversation._key;
-        this.currentChatTitle = conversation.title || this.generateChatTitle();
+        this.$store.commit('conversation/setTitle', conversation.title || this.generateChatTitle());
         this.currentCategoryId = conversation.categoryId || null;
 
         // NEW: Populate related documents from history (files property from backend)
         if (conversation.files && Array.isArray(conversation.files)) {
-          this.relatedDocuments = conversation.files.map((file) => {
-            const mapped = {
-              id: file.id,
-              title: file.documentName || file.fileName || `Source ${file.id}`,
-              documentName: file.documentName,
-              fileName: file.fileName,
-              type: file.url?.split('.').pop().toUpperCase() || 'LINK',
-              size: 0,
-              url: file.url,
-              score: file.score,
-              categoryLabel: file.categoryLabel,
-              serviceLabels: file.labels || []
-            };
-            return mapped;
-          });
+          this.$store.commit(
+            'conversation/setRelatedDocuments',
+            conversation.files.map((file) => {
+              const mapped = {
+                id: file.id,
+                title: file.documentName || file.fileName || `Source ${file.id}`,
+                documentName: file.documentName,
+                fileName: file.fileName,
+                type: file.url?.split('.').pop().toUpperCase() || 'LINK',
+                size: 0,
+                url: file.url,
+                score: file.score,
+                categoryLabel: file.categoryLabel,
+                serviceLabels: file.labels || []
+              };
+              return mapped;
+            })
+          );
         } else {
-          this.relatedDocuments = [];
+          this.$store.commit('conversation/setRelatedDocuments', []);
         }
 
-        this.chatMessages = [];
+        this.$store.commit('conversation/setMessages', []);
         const messages = conversation.messages || [];
         messages.forEach((msg) => {
           // Whatever the live path sets on a message (onMetadata), the reload
           // path sets too — the restored conversation speaks the same states.
-          this.chatMessages.push({
+          this.$store.commit('conversation/appendUserMessage', {
             sender: msg.sender === 'user' ? 'user' : 'bot',
             content: msg.content,
             timestamp: msg.timestamp || new Date().toISOString(),
@@ -1758,8 +1655,8 @@ export default {
           });
         });
 
-        if (this.chatMessages.length === 0) {
-          this.chatMessages.push({
+        if (this.openMessages.length === 0) {
+          this.$store.commit('conversation/appendBotMessage', {
             sender: 'bot',
             content: this.getWelcomeMessage(),
             timestamp: new Date().toISOString(),
@@ -1768,10 +1665,10 @@ export default {
           });
         }
 
-        this.selectedContextItems = [];
+        this.$store.commit('conversation/setContextItems', []);
         if (conversation.tags && Array.isArray(conversation.tags)) {
           conversation.tags.forEach((tag) => {
-            this.selectedContextItems.push({
+            this.$store.commit('conversation/addContextItem', {
               service: this.safeTranslate(tag || `category.${this.currentCategoryId || 'general'}`),
               serviceKey: tag || `category.${this.currentCategoryId || 'general'}`,
               category: this.currentCategoryId || 'general',
@@ -1779,7 +1676,7 @@ export default {
             });
           });
         } else if (this.currentCategoryId) {
-          this.selectedContextItems.push({
+          this.$store.commit('conversation/addContextItem', {
             service: this.getCategoryLabelById(this.currentCategoryId),
             serviceKey: `category.${this.currentCategoryId}`,
             category: this.currentCategoryId,
@@ -1787,10 +1684,7 @@ export default {
           });
         }
 
-        this.lastSavedState = {
-          messages: JSON.parse(JSON.stringify(this.chatMessages)),
-          contextItems: JSON.parse(JSON.stringify(this.selectedContextItems))
-        };
+        this.$store.commit('conversation/setSavedState');
 
         this.newMessage = '';
         this.showQuickHelp = false;
@@ -1807,12 +1701,12 @@ export default {
 
     hasUnsavedChanges() {
       if (!this.conversationId && !this.currentChatId) {
-        const hasUserMessages = this.chatMessages.some((msg) => msg.sender === 'user');
+        const hasUserMessages = this.openMessages.some((msg) => msg.sender === 'user');
         const hasContextItems = this.selectedContextItems.length > 0;
         return hasUserMessages || hasContextItems;
       }
 
-      const hasNewMessages = this.chatMessages.some(
+      const hasNewMessages = this.openMessages.some(
         (msg) => !msg.isSaved && (msg.sender === 'user' || (msg.sender === 'bot' && msg.queryId))
       );
       if (hasNewMessages) {
@@ -1902,7 +1796,7 @@ export default {
           throw new Error('User not authenticated');
         }
 
-        const firstUserMessage = this.chatMessages.find((msg) => msg.sender === 'user')?.content || '';
+        const firstUserMessage = this.openMessages.find((msg) => msg.sender === 'user')?.content || '';
 
         const conversationData = {
           title: this.saveChatDialog.title || this.generateChatTitle(),
@@ -1916,9 +1810,9 @@ export default {
         }
 
         const conversation = await this.chatHistoryService.createConversation(conversationData);
-        this.conversationId = conversation._key;
+        this.$store.commit('conversation/setConversationId', conversation._key);
 
-        for (const message of this.chatMessages) {
+        for (const message of this.openMessages) {
           if (
             (message.sender === 'bot' && !message.queryId) ||
             (message.sender === 'user' && message.content === firstUserMessage && !message.isSaved)
@@ -1945,7 +1839,7 @@ export default {
           title: conversationData.title,
           preview: this.chatPreview,
           folderId: this.saveChatDialog.folderId || 'default',
-          messageCount: this.chatMessages.filter(
+          messageCount: this.openMessages.filter(
             (msg) => msg.sender === 'user' || (msg.sender === 'bot' && msg.queryId)
           ).length
         };
@@ -1960,8 +1854,8 @@ export default {
         }
 
         this.currentChatId = conversation._key;
-        this.currentChatTitle = conversationData.title;
-        this.lastSavedState.messages = [...this.chatMessages];
+        this.$store.commit('conversation/setTitle', conversationData.title);
+        this.lastSavedState.messages = [...this.openMessages];
         this.lastSavedState.contextItems = [...this.selectedContextItems];
         this.updateChatInHistory();
 
@@ -2007,7 +1901,7 @@ export default {
         };
         await this.chatHistoryService.updateConversation(this.conversationId, updateData);
 
-        for (const message of this.chatMessages) {
+        for (const message of this.openMessages) {
           if (message.isSaved) {
             continue;
           }
@@ -2025,7 +1919,7 @@ export default {
         }
 
         this.currentChatId = this.conversationId;
-        this.lastSavedState.messages = [...this.chatMessages];
+        this.lastSavedState.messages = [...this.openMessages];
         this.lastSavedState.contextItems = [...this.selectedContextItems];
         this.updateChatInHistory();
 
@@ -2042,7 +1936,7 @@ export default {
         this.updateChat({
           chatId: this.currentChatId,
           preview: this.chatPreview,
-          fullChatData: JSON.stringify(this.chatMessages)
+          fullChatData: JSON.stringify(this.openMessages)
         });
       }
     },
@@ -2053,14 +1947,14 @@ export default {
       try {
         const storedChatData = localStorage.getItem(`chat_data_${chatId}`);
         if (storedChatData) {
-          this.chatMessages = JSON.parse(storedChatData);
+          this.$store.commit('conversation/setMessages', JSON.parse(storedChatData));
         } else {
-          this.chatMessages = [
+          this.$store.commit('conversation/setMessages', [
             {
               sender: 'bot',
               content: this.getWelcomeMessage()
             }
-          ];
+          ]);
         }
         this.currentChatId = chatId;
         this.showQuickHelp = false;
@@ -2072,7 +1966,7 @@ export default {
     },
 
     generateChatTitle() {
-      const userMessage = this.chatMessages.find((msg) => msg.sender === 'user');
+      const userMessage = this.openMessages.find((msg) => msg.sender === 'user');
       if (userMessage) {
         return userMessage.content.length > 20 ? userMessage.content.substring(0, 17) + '...' : userMessage.content;
       }
@@ -2097,66 +1991,28 @@ export default {
 
     async saveAndStartNewChat() {
       this.showNewChatConfirm = false;
-      if (this.pendingLeave) {
-        await this.saveCurrentChatBeforeLeave();
-        this.leaveConfirmed = true;
-        const target = this.pendingLeave;
-        this.pendingLeave = null;
-        this.$router.push(target);
-        return;
-      }
-      try {
-        if (this.conversationId || this.currentChatId) {
-          await this.updateExistingChat();
-        } else {
-          this.saveChatDialog = {
-            visible: true,
-            title: this.generateChatTitle(),
-            folderId: 'default'
-          };
-          await new Promise((resolve) => {
-            const unwatch = this.$watch('saveChatDialog.visible', (newVal) => {
-              if (!newVal) {
-                unwatch();
-                resolve();
-              }
-            });
-          });
-        }
-        this.startNewChatConfirmed();
-      } catch (error) {
-        console.error('Error saving before starting new chat:', error);
-        notificationService.error('Failed to save changes. Please try again.');
-      }
+      await this.saveCurrentChatBeforeLeave();
+      this.startNewChatConfirmed();
     },
 
     startNewChatConfirmed() {
       this.showNewChatConfirm = false;
-      if (this.pendingLeave) {
-        this.leaveConfirmed = true;
-        const target = this.pendingLeave;
-        this.pendingLeave = null;
-        this.$router.push(target);
-        return;
-      }
-      this.chatMessages.splice(0, this.chatMessages.length, {
+      const welcomeTurn = {
         sender: 'bot',
         content: this.getWelcomeMessage(),
         timestamp: new Date().toISOString(),
         isSaved: true
-      });
+      };
+      this.$store.commit('conversation/setMessages', [welcomeTurn]);
       this.currentChatId = null;
-      this.conversationId = null;
-      this.selectedContextItems = [];
+      this.$store.commit('conversation/setConversationId', null);
+      this.$store.commit('conversation/setContextItems', []);
       this.newMessage = '';
       this.currentCategoryId = null;
-      this.currentChatTitle = '';
+      this.$store.commit('conversation/setTitle', '');
       this.showQuickHelp = true;
-      this.relatedDocuments = [];
-      this.lastSavedState = {
-        messages: JSON.parse(JSON.stringify(this.chatMessages)),
-        contextItems: []
-      };
+      this.$store.commit('conversation/setRelatedDocuments', []);
+      this.$store.commit('conversation/setSavedState');
       this.$nextTick(() => {
         this.scrollToBottom();
       });
@@ -2332,7 +2188,7 @@ export default {
         doc.text(this.currentChatTitle || this.generateChatTitle(), leftMargin, yOffset);
         yOffset += 15;
 
-        this.chatMessages.forEach((msg) => {
+        this.openMessages.forEach((msg) => {
           checkPageBreak(20);
           yOffset += 5;
 

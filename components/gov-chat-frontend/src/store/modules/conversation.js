@@ -43,6 +43,12 @@ const mutations = {
   setConversationId(st, id) {
     st.conversations[st.openId].conversationId = id;
   },
+  setSavedStateTo(st, saved) {
+    st.conversations[st.openId].lastSavedState = {
+      messages: saved?.messages || [],
+      contextItems: saved?.contextItems || []
+    };
+  },
   setSavedState(st) {
     const entry = st.conversations[st.openId];
     entry.lastSavedState = {
@@ -110,6 +116,15 @@ const mutations = {
   unshiftRelatedDocuments(st, docs) {
     st.conversations[st.openId].relatedDocuments.unshift(...(docs || []));
   },
+  setMessages(st, messages) {
+    st.conversations[st.openId].messages = messages || [];
+  },
+  spliceMessages(st, [index, count]) {
+    st.conversations[st.openId].messages.splice(index, count);
+  },
+  setContextItems(st, items) {
+    st.conversations[st.openId].selectedContextItems = items || [];
+  },
   setStreaming(st, { isStreaming, streamingQueryId }) {
     const entry = st.conversations[st.openId];
     entry.isStreaming = isStreaming;
@@ -137,26 +152,28 @@ function translateSources(sourceDocuments = []) {
 }
 
 const actions = {
-  sendStream({ commit, rootState }, { queryData, hiddenPrompt, displayText }) {
+  sendStream({ commit, state, rootState }, queryData) {
     const id = rootState.conversation.openId;
     commit('setStreaming', { isStreaming: true, streamingQueryId: null });
-    commit('appendUserMessage', {
-      sender: 'user',
-      content: displayText ?? queryData.query,
-      hiddenPrompt: hiddenPrompt ?? queryData.query,
-      timestamp: Date.now()
-    });
-    commit('appendBotMessage', { sender: 'bot', content: '', isStreaming: true });
     const controller = chatbotService.submitQueryStream(queryData, {
       onChunk: (content) => commit('appendChunk', content),
       onMetadata: (metadata) => {
         commit('status/setOnline', null, { root: true });
+        if (metadata.responseTime) {
+          commit('status/setResponseTime', metadata.responseTime, { root: true });
+        }
         commit('setLastBotProperty', ['confidenceScore', metadata.confidence_score ?? null]);
         commit('setLastBotProperty', ['isGrounded', metadata.is_grounded]);
         const sources = translateSources(metadata.source_documents);
         commit('setLastBotProperty', ['sources', sources]);
         commit('setLastBotProperty', ['sourcesOpen', Boolean(sources.length)]);
-        commit('unshiftRelatedDocuments', sources);
+        // The sidebar keeps its accumulated view; a source already cited
+        // by an earlier turn is not added twice.
+        const knownIds = new Set(state.conversations[state.openId].relatedDocuments.map((d) => d.id));
+        commit(
+          'unshiftRelatedDocuments',
+          sources.filter((d) => !knownIds.has(d.id))
+        );
         // The repository TYPE · size fields degrade to the extension type
         // when the metadata fetch fails — same as the component did.
         import('../../services/documentFileService').then(({ default: documentFileService }) => {
@@ -178,8 +195,8 @@ const actions = {
         if (data.queryId) commit('setLastBotProperty', ['queryId', data.queryId]);
       },
       onError: (error) => {
-        commit('status/setOffline', error.message || 'Stream failed', { root: true });
-        commit('failStream', error.message || 'Stream failed');
+        commit('status/setOffline', error.message || 'stream unavailable', { root: true });
+        commit('failStream', error.message || 'stream unavailable');
       }
     });
     controllers.set(id, controller);

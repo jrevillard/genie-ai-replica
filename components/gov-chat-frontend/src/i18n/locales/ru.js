@@ -1434,9 +1434,6 @@ export default {
     saveAndLoad: 'Сохранить и загрузить',
     saveAndStartNew: 'Сохранить и начать новый',
     discardAndStartNew: 'Отменить и начать новый',
-    saveAndLeave: 'Сохранить и выйти',
-    discardAndLeave: 'Отменить и выйти',
-    unsavedChangesLeave: 'Есть несохранённые изменения. Сохранить их перед выходом?',
     copyFailed: 'Не удалось скопировать',
 
     documentOpenError: 'Не удалось открыть документ',

@@ -119,6 +119,7 @@ jest.mock('@lucide/vue', () => ({
 // ---------------------------------------------------------------------------
 const ChatBotComponent = require('../../components/ChatBotComponent.vue').default;
 const statusModule = require('../../store/modules/status.js').default;
+const conversationModule = require('../../store/modules/conversation.js').default;
 
 // ---------------------------------------------------------------------------
 // Store factory
@@ -134,6 +135,11 @@ function createChatBotStore(stateOverrides = {}) {
       status: {
         ...statusModule,
         state: () => ({ ...statusModule.state })
+      },
+      // The component renders from the store-owned conversation.
+      conversation: {
+        ...conversationModule,
+        state: () => conversationModule.state()
       },
       chatHistory: {
         namespaced: true,
@@ -214,7 +220,7 @@ describe('ChatBotComponent', () => {
     it('displays the welcome message in chatMessages', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
-      const botMsgs = vm.chatMessages.filter((m) => m.sender === 'bot');
+      const botMsgs = vm.openMessages.filter((m) => m.sender === 'bot');
       expect(botMsgs.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -278,7 +284,7 @@ describe('ChatBotComponent', () => {
       await vm.sendMessage();
       await wrapper.vm.$nextTick();
 
-      const userMsg = vm.chatMessages.find((m) => m.sender === 'user' && m.content === 'Hello, can you help me?');
+      const userMsg = vm.openMessages.find((m) => m.sender === 'user' && m.content === 'Hello, can you help me?');
       expect(userMsg).toBeDefined();
     });
 
@@ -290,7 +296,7 @@ describe('ChatBotComponent', () => {
       await vm.sendMessage();
       await wrapper.vm.$nextTick();
 
-      const botMsg = vm.chatMessages.filter((m) => m.sender === 'bot');
+      const botMsg = vm.openMessages.filter((m) => m.sender === 'bot');
       // Welcome msg + streaming placeholder
       expect(botMsg.length).toBeGreaterThanOrEqual(2);
     });
@@ -367,7 +373,7 @@ describe('ChatBotComponent', () => {
       expect(vm.systemStatus.online).toBe(false);
       expect(vm.systemStatus.errorMessage).toBe('Stream failed');
       // Bot message should have error content
-      const streamingMsg = vm.chatMessages[vm.chatMessages.length - 1];
+      const streamingMsg = vm.openMessages[vm.openMessages.length - 1];
       expect(streamingMsg.content).toMatch(/error|failed|unavailable/i);
     });
 
@@ -432,7 +438,7 @@ describe('ChatBotComponent', () => {
       await flushPromises();
       await wrapper.vm.loadExistingConversation('conv-1');
       await flushPromises();
-      const msg = wrapper.vm.chatMessages.find((m) => m.sender === 'bot' && m.content === 'answer');
+      const msg = wrapper.vm.openMessages.find((m) => m.sender === 'bot' && m.content === 'answer');
       expect(msg.confidenceScore).toBe(0.87);
       expect(msg.isGrounded).toBe(true);
       expect(msg.userFeedback).toBe('up');
@@ -452,7 +458,7 @@ describe('ChatBotComponent', () => {
       expect(mockSubmitQueryStream).toHaveBeenCalled();
     });
 
-    it('stores streamController reference when stream starts', async () => {
+    it('the store holds an open stream when a message is sent', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
@@ -460,8 +466,8 @@ describe('ChatBotComponent', () => {
       await vm.sendMessage();
       await wrapper.vm.$nextTick();
 
-      expect(vm.streamController).toBeDefined();
-      expect(typeof vm.streamController.abort).toBe('function');
+      expect(mockSubmitQueryStream).toHaveBeenCalled();
+      expect(vm.isStreaming).toBe(true);
     });
 
     it('resets isStreaming and streamController when stream completes', async () => {
@@ -477,7 +483,6 @@ describe('ChatBotComponent', () => {
       await wrapper.vm.$nextTick();
 
       expect(vm.isStreaming).toBe(false);
-      expect(vm.streamController).toBeNull();
       expect(vm.streamingQueryId).toBe('q-123');
     });
 
@@ -488,7 +493,7 @@ describe('ChatBotComponent', () => {
       // First stream
       vm.newMessage = 'First message';
       await vm.sendMessage();
-      const firstController = vm.streamController;
+      const firstController = mockSubmitQueryStream.mock.results[0].value;
       await wrapper.vm.$nextTick();
 
       // Second stream (should abort first)
@@ -497,7 +502,6 @@ describe('ChatBotComponent', () => {
       await wrapper.vm.$nextTick();
 
       expect(firstController.abort).toHaveBeenCalled();
-      expect(vm.streamController).not.toBe(firstController);
     });
 
     it('sets streamingQueryId on successful stream completion', async () => {
@@ -534,7 +538,7 @@ describe('ChatBotComponent', () => {
       });
       await wrapper.vm.$nextTick();
 
-      const lastBot = vm.chatMessages[vm.chatMessages.length - 1];
+      const lastBot = vm.openMessages[vm.openMessages.length - 1];
       expect(lastBot.isGrounded).toBe(false);
       // Ungrounded responses show the warning flag, not the confidence bar.
       expect(wrapper.find('.answer-warning').exists()).toBe(true);
@@ -561,7 +565,7 @@ describe('ChatBotComponent', () => {
       capturedCallbacks.onDone({ queryId: 'q-conf-1' });
       await wrapper.vm.$nextTick();
 
-      const lastBot = vm.chatMessages[vm.chatMessages.length - 1];
+      const lastBot = vm.openMessages[vm.openMessages.length - 1];
       expect(lastBot.isGrounded).toBe(true);
       expect(lastBot.confidenceScore).toBe(0.92);
       expect(wrapper.find('.answer-actions .confidence-score').exists()).toBe(true);
@@ -601,9 +605,9 @@ describe('ChatBotComponent', () => {
       capturedCallbacks.onError(new Error('Stream connection lost'));
       await wrapper.vm.$nextTick();
 
-      const lastBotMessage = vm.chatMessages[vm.chatMessages.length - 1];
+      const lastBotMessage = vm.openMessages[vm.openMessages.length - 1];
       expect(lastBotMessage.sender).toBe('bot');
-      expect(lastBotMessage.content).toMatch(/error|unavailable|failed/i);
+      expect(lastBotMessage.content).toBe('Stream connection lost');
     });
 
     it('resets isStreaming on stream error', async () => {
@@ -620,7 +624,6 @@ describe('ChatBotComponent', () => {
       await wrapper.vm.$nextTick();
 
       expect(vm.isStreaming).toBe(false);
-      expect(vm.streamController).toBeNull();
     });
 
     it('shows notification on streaming error', async () => {
@@ -1222,9 +1225,9 @@ describe('ChatBotComponent', () => {
       const vm = wrapper.vm;
 
       // Misconfig symptom: a context item exists but resolved to no labels
-      vm.selectedContextItems = [
+      vm.$store.commit('conversation/setContextItems', [
         { service: 'Broken', serviceKey: 'Broken', serviceLabels: null, source: 'quickHelp', selected: true }
-      ];
+      ]);
 
       const result = vm.checkContextConfig({
         categoryLabel: null,
@@ -1239,7 +1242,7 @@ describe('ChatBotComponent', () => {
       const vm = wrapper.vm;
 
       // No context items selected — unfiltered query is legitimate
-      vm.selectedContextItems = [];
+      vm.$store.commit('conversation/setContextItems', []);
       const result = vm.checkContextConfig({
         categoryLabel: null,
         serviceLabels: []
@@ -1255,9 +1258,9 @@ describe('ChatBotComponent', () => {
       // Make the user an admin (default user has roles: ['user'])
       wrapper.vm.$store.commit('SET_USER', { ...vm.$store.getters.currentUser, roles: ['admin'] });
 
-      vm.selectedContextItems = [
+      vm.$store.commit('conversation/setContextItems', [
         { service: 'Tomato', serviceKey: 'Tomato', serviceLabels: ['Tomato'], source: 'quickHelp' }
-      ];
+      ]);
 
       const result = vm.checkContextConfig({
         categoryLabel: null,
@@ -1272,7 +1275,7 @@ describe('ChatBotComponent', () => {
       const vm = wrapper.vm;
 
       // Quick Help item (has serviceLabels) + sidebar item (no serviceLabels, uses serviceKey)
-      vm.selectedContextItems = [
+      vm.$store.commit('conversation/setContextItems', [
         {
           service: 'Grow',
           serviceKey: 'Tomato',
@@ -1281,7 +1284,7 @@ describe('ChatBotComponent', () => {
           selected: true
         },
         { service: 'Tomate', serviceKey: 'Tomato', serviceLabels: null, source: 'sidebar', selected: true }
-      ];
+      ]);
 
       // Build the query payload via the public sendMessage path would require mocking
       // the service; instead, exercise the flatMap logic directly by inspecting the
@@ -1305,13 +1308,13 @@ describe('ChatBotComponent', () => {
       const vm = wrapper.vm;
 
       // Add a test message
-      vm.chatMessages.push({
+      vm.openMessages.push({
         sender: 'bot',
         content: 'Test bot message',
         queryId: 'test-q-123'
       });
 
-      vm.openFeedbackDialog(vm.chatMessages.length - 1);
+      vm.openFeedbackDialog(vm.openMessages.length - 1);
 
       expect(vm.feedbackDialog.visible).toBe(true);
       expect(vm.feedbackDialog.message).toBeDefined();
@@ -1374,7 +1377,7 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.chatMessages.push({
+      vm.openMessages.push({
         sender: 'user',
         content: 'Test user message',
         timestamp: new Date().toISOString()
@@ -1390,7 +1393,7 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.chatMessages.push({
+      vm.openMessages.push({
         sender: 'user',
         content: 'Export test message',
         timestamp: new Date().toISOString()
@@ -1407,10 +1410,10 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.chatMessages = [
+      vm.$store.commit('conversation/setMessages', [
         { sender: 'user', content: 'User message', timestamp: new Date().toISOString() },
         { sender: 'bot', content: 'Bot response', timestamp: new Date().toISOString() }
-      ];
+      ]);
 
       vm.exportDialog.filename = 'test-export';
 
@@ -1431,7 +1434,7 @@ describe('ChatBotComponent', () => {
         throw new Error('PDF generation failed');
       });
 
-      vm.chatMessages = [{ sender: 'bot', content: 'Test' }];
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Test' }]);
       vm.exportDialog.filename = 'error-test';
 
       vm.exportChatToPDF();
@@ -1453,7 +1456,7 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.chatMessages = [{ sender: 'bot', content: 'Test' }];
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Test' }]);
       vm.exportDialog.filename = 'test-without-extension';
 
       vm.exportChatToPDF();
@@ -1472,10 +1475,10 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.conversationId = null;
+      vm.$store.commit('conversation/setConversationId', null);
       vm.currentChatId = null;
-      vm.chatMessages = [{ sender: 'bot', content: 'Welcome', isSaved: true }];
-      vm.selectedContextItems = [];
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Welcome', isSaved: true }]);
+      vm.$store.commit('conversation/setContextItems', []);
 
       expect(vm.hasUnsavedChanges()).toBe(false);
     });
@@ -1484,12 +1487,12 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.conversationId = null;
+      vm.$store.commit('conversation/setConversationId', null);
       vm.currentChatId = null;
-      vm.chatMessages = [
+      vm.$store.commit('conversation/setMessages', [
         { sender: 'bot', content: 'Welcome', isSaved: true },
         { sender: 'user', content: 'User message', isSaved: false }
-      ];
+      ]);
 
       expect(vm.hasUnsavedChanges()).toBe(true);
     });
@@ -1498,10 +1501,10 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.conversationId = null;
+      vm.$store.commit('conversation/setConversationId', null);
       vm.currentChatId = null;
-      vm.chatMessages = [{ sender: 'bot', content: 'Welcome', isSaved: true }];
-      vm.selectedContextItems = [{ service: 'Test Service', category: 'general' }];
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Welcome', isSaved: true }]);
+      vm.$store.commit('conversation/setContextItems', [{ service: 'Test Service', category: 'general' }]);
 
       expect(vm.hasUnsavedChanges()).toBe(true);
     });
@@ -1510,17 +1513,17 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.conversationId = 'existing-conv-123';
+      vm.$store.commit('conversation/setConversationId', 'existing-conv-123');
       vm.currentChatId = 'existing-conv-123';
-      vm.lastSavedState = {
+      vm.$store.commit('conversation/setSavedStateTo', {
         messages: [{ sender: 'bot', content: 'Saved bot message', isSaved: true }],
         contextItems: []
-      };
+      });
 
-      vm.chatMessages = [
+      vm.$store.commit('conversation/setMessages', [
         { sender: 'bot', content: 'Saved bot message', isSaved: true },
         { sender: 'user', content: 'New user message', isSaved: false }
-      ];
+      ]);
 
       expect(vm.hasUnsavedChanges()).toBe(true);
     });
@@ -1529,15 +1532,15 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.conversationId = 'conv-456';
+      vm.$store.commit('conversation/setConversationId', 'conv-456');
       vm.currentChatId = 'conv-456';
-      vm.lastSavedState = {
+      vm.$store.commit('conversation/setSavedStateTo', {
         messages: [{ sender: 'bot', content: 'Saved', isSaved: true }],
         contextItems: [{ service: 'Old Service', category: 'general' }]
-      };
+      });
 
-      vm.chatMessages = [{ sender: 'bot', content: 'Saved', isSaved: true }];
-      vm.selectedContextItems = [{ service: 'New Service', category: 'general' }];
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Saved', isSaved: true }]);
+      vm.$store.commit('conversation/setContextItems', [{ service: 'New Service', category: 'general' }]);
 
       expect(vm.hasUnsavedChanges()).toBe(true);
     });
@@ -1546,18 +1549,18 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.conversationId = 'conv-789';
+      vm.$store.commit('conversation/setConversationId', 'conv-789');
       vm.currentChatId = 'conv-789';
-      vm.lastSavedState = {
+      vm.$store.commit('conversation/setSavedStateTo', {
         messages: [{ sender: 'bot', content: 'Saved', isSaved: true }],
         contextItems: [
           { service: 'Service 1', category: 'general' },
           { service: 'Service 2', category: 'general' }
         ]
-      };
+      });
 
-      vm.chatMessages = [{ sender: 'bot', content: 'Saved', isSaved: true }];
-      vm.selectedContextItems = [{ service: 'Service 1', category: 'general' }];
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Saved', isSaved: true }]);
+      vm.$store.commit('conversation/setContextItems', [{ service: 'Service 1', category: 'general' }]);
 
       expect(vm.hasUnsavedChanges()).toBe(true);
     });
@@ -1566,21 +1569,21 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.conversationId = 'conv-saved-123';
+      vm.$store.commit('conversation/setConversationId', 'conv-saved-123');
       vm.currentChatId = 'conv-saved-123';
-      vm.lastSavedState = {
+      vm.$store.commit('conversation/setSavedStateTo', {
         messages: [
           { sender: 'bot', content: 'Saved bot', isSaved: true },
           { sender: 'user', content: 'Saved user', isSaved: true }
         ],
         contextItems: [{ service: 'Saved Service', category: 'saved' }]
-      };
+      });
 
-      vm.chatMessages = [
+      vm.$store.commit('conversation/setMessages', [
         { sender: 'bot', content: 'Saved bot', isSaved: true },
         { sender: 'user', content: 'Saved user', isSaved: true }
-      ];
-      vm.selectedContextItems = [{ service: 'Saved Service', category: 'saved' }];
+      ]);
+      vm.$store.commit('conversation/setContextItems', [{ service: 'Saved Service', category: 'saved' }]);
 
       expect(vm.hasUnsavedChanges()).toBe(false);
     });
@@ -1589,14 +1592,16 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.conversationId = 'conv-bot-123';
+      vm.$store.commit('conversation/setConversationId', 'conv-bot-123');
       vm.currentChatId = 'conv-bot-123';
-      vm.lastSavedState = {
+      vm.$store.commit('conversation/setSavedStateTo', {
         messages: [{ sender: 'bot', content: 'Old bot', isSaved: true }],
         contextItems: []
-      };
+      });
 
-      vm.chatMessages = [{ sender: 'bot', content: 'New bot response', isSaved: false, queryId: 'new-query' }];
+      vm.$store.commit('conversation/setMessages', [
+        { sender: 'bot', content: 'New bot response', isSaved: false, queryId: 'new-query' }
+      ]);
 
       expect(vm.hasUnsavedChanges()).toBe(true);
     });
@@ -1605,15 +1610,15 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.conversationId = 'conv-empty-123';
+      vm.$store.commit('conversation/setConversationId', 'conv-empty-123');
       vm.currentChatId = 'conv-empty-123';
-      vm.lastSavedState = {
+      vm.$store.commit('conversation/setSavedStateTo', {
         messages: [{ sender: 'bot', content: 'Saved', isSaved: true }],
         contextItems: []
-      };
+      });
 
-      vm.chatMessages = [{ sender: 'bot', content: 'Saved', isSaved: true }];
-      vm.selectedContextItems = [];
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Saved', isSaved: true }]);
+      vm.$store.commit('conversation/setContextItems', []);
 
       expect(vm.hasUnsavedChanges()).toBe(false);
     });
@@ -1622,15 +1627,15 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.conversationId = 'conv-prop-123';
+      vm.$store.commit('conversation/setConversationId', 'conv-prop-123');
       vm.currentChatId = 'conv-prop-123';
-      vm.lastSavedState = {
+      vm.$store.commit('conversation/setSavedStateTo', {
         messages: [{ sender: 'bot', content: 'Saved', isSaved: true }],
         contextItems: [{ service: 'Service Name', category: 'old-category' }]
-      };
+      });
 
-      vm.chatMessages = [{ sender: 'bot', content: 'Saved', isSaved: true }];
-      vm.selectedContextItems = [{ service: 'Service Name', category: 'new-category' }];
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Saved', isSaved: true }]);
+      vm.$store.commit('conversation/setContextItems', [{ service: 'Service Name', category: 'new-category' }]);
 
       expect(vm.hasUnsavedChanges()).toBe(true);
     });
@@ -1648,11 +1653,11 @@ describe('ChatBotComponent', () => {
       await vm.sendMessage();
       await wrapper.vm.$nextTick();
 
-      const botMsgIndex = vm.chatMessages.length - 1;
+      const botMsgIndex = vm.openMessages.length - 1;
       capturedCallbacks.onChunk('Hello ');
       capturedCallbacks.onChunk('World');
 
-      expect(vm.chatMessages[botMsgIndex].content).toContain('Hello World');
+      expect(vm.openMessages[botMsgIndex].content).toContain('Hello World');
     });
 
     it('processes metadata with confidence score and response time', async () => {
@@ -1663,13 +1668,13 @@ describe('ChatBotComponent', () => {
       await vm.sendMessage();
       await wrapper.vm.$nextTick();
 
-      const botMsgIndex = vm.chatMessages.length - 1;
+      const botMsgIndex = vm.openMessages.length - 1;
       capturedCallbacks.onMetadata({
         confidence_score: 0.95,
         responseTime: 250
       });
 
-      expect(vm.chatMessages[botMsgIndex].confidenceScore).toBe(0.95);
+      expect(vm.openMessages[botMsgIndex].confidenceScore).toBe(0.95);
       expect(vm.systemStatus.lastResponseTime).toBe(250);
       expect(vm.systemStatus.online).toBe(true);
     });
@@ -1720,11 +1725,11 @@ describe('ChatBotComponent', () => {
       await vm.sendMessage();
       await wrapper.vm.$nextTick();
 
-      const botMsgIndex = vm.chatMessages.length - 1;
+      const botMsgIndex = vm.openMessages.length - 1;
       capturedCallbacks.onChunk('Original');
       capturedCallbacks.onTranslation('Traduction');
 
-      expect(vm.chatMessages[botMsgIndex].content).toBe('Traduction');
+      expect(vm.openMessages[botMsgIndex].content).toBe('Traduction');
     });
   });
 
@@ -1736,10 +1741,10 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.selectedContextItems = [
+      vm.$store.commit('conversation/setContextItems', [
         { service: 'Service A', category: 'cat-1' },
         { service: 'Service B', category: 'cat-2' }
-      ];
+      ]);
 
       vm.removeContextItem(0);
 
@@ -1752,7 +1757,7 @@ describe('ChatBotComponent', () => {
       const vm = wrapper.vm;
 
       vm.currentCategoryId = 'cat-1';
-      vm.selectedContextItems = [{ service: 'Service A', category: 'cat-1' }];
+      vm.$store.commit('conversation/setContextItems', [{ service: 'Service A', category: 'cat-1' }]);
 
       vm.removeContextItem(0);
 

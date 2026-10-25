@@ -1425,9 +1425,6 @@ export default {
     saveAndLoad: 'Hifadhi na Pakia',
     saveAndStartNew: 'Hifadhi na Anza Mazungumzo Mapya',
     discardAndStartNew: 'Tupa na Anza Mazungumzo Mapya',
-    saveAndLeave: 'Hifadhi uondoke',
-    discardAndLeave: 'Futa uondoke',
-    unsavedChangesLeave: 'Una mabadiliko ambayo hayajahifadhiwa. Uyahifadhi kabla ya kuondoka?',
     copyFailed: 'Imeshindwa kunakili',
 
     documentOpenError: 'Imeshindwa kufungua hati',

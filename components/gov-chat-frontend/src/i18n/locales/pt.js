@@ -1438,9 +1438,6 @@ export default {
     saveAndLoad: 'Salvar e Carregar',
     saveAndStartNew: 'Salvar e Iniciar Novo',
     discardAndStartNew: 'Descartar e Iniciar Novo',
-    saveAndLeave: 'Salvar e sair',
-    discardAndLeave: 'Descartar e sair',
-    unsavedChangesLeave: 'Você tem alterações não salvas. Salvá-las antes de sair?',
     copyFailed: 'Não foi possível copiar',
 
     documentOpenError: 'Não foi possível abrir o documento',

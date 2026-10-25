@@ -1437,9 +1437,6 @@ export default {
     saveAndLoad: 'Speichern und Laden',
     saveAndStartNew: 'Speichern und Neu starten',
     discardAndStartNew: 'Verwerfen und Neu starten',
-    saveAndLeave: 'Speichern und verlassen',
-    discardAndLeave: 'Verwerfen und verlassen',
-    unsavedChangesLeave: 'Du hast ungespeicherte Änderungen. Vor dem Verlassen speichern?',
     copyFailed: 'Kopieren fehlgeschlagen',
 
     documentOpenError: 'Dokument konnte nicht geöffnet werden',

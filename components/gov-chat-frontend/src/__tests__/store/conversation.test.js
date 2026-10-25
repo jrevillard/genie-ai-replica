@@ -181,6 +181,7 @@ describe('conversation sendStream action', () => {
       captured = callbacks;
       return new AbortController();
     });
+    store.commit('conversation/appendBotMessage', { sender: 'bot', content: '', isStreaming: true });
     store.dispatch('conversation/sendStream', { queryData: { query: 'q' } });
     await Promise.resolve();
     expect(store.getters['conversation/openConversation'].isStreaming).toBe(true);
@@ -207,6 +208,7 @@ describe('conversation sendStream action', () => {
       captured = cb;
       return new AbortController();
     });
+    store.commit('conversation/appendBotMessage', { sender: 'bot', content: '', isStreaming: true });
     store.dispatch('conversation/sendStream', { queryData: { query: 'q' } });
     return Promise.resolve().then(() => {
       captured.onMetadata({
@@ -228,6 +230,7 @@ describe('conversation sendStream action', () => {
       return new AbortController();
     });
     store.commit('status/setOnline');
+    store.commit('conversation/appendBotMessage', { sender: 'bot', content: '', isStreaming: true });
     store.dispatch('conversation/sendStream', { queryData: { query: 'q' } });
     await Promise.resolve();
     captured.onError(new Error('Stream failed'));
@@ -240,6 +243,7 @@ describe('conversation sendStream action', () => {
     const controller = new AbortController();
     const abortSpy = jest.spyOn(controller, 'abort');
     const store = storeWithService(() => controller);
+    store.commit('conversation/appendBotMessage', { sender: 'bot', content: '', isStreaming: true });
     store.dispatch('conversation/sendStream', { queryData: { query: 'q' } });
     store.dispatch('conversation/abortStream');
     expect(abortSpy).toHaveBeenCalled();
@@ -253,10 +257,26 @@ describe('conversation sendStream action', () => {
       captured = cb;
       return new AbortController();
     });
+    store.commit('conversation/appendBotMessage', { sender: 'bot', content: '', isStreaming: true });
     store.dispatch('conversation/sendStream', { queryData: { query: 'q' } });
     await Promise.resolve();
     captured.onChunk('EN text');
     captured.onTranslation('FR texte');
     expect(store.getters['conversation/openConversation'].messages.at(-1).content).toBe('FR texte');
   });
+});
+it('spliceMessages drops turns from a position', () => {
+  const store = freshStore();
+  for (let i = 0; i < 4; i++) {
+    store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' + i });
+  }
+  store.commit('conversation/spliceMessages', [1, 2]);
+  const msgs = store.getters['conversation/openConversation'].messages;
+  expect(msgs.map((m) => m.content)).toEqual(['q0', 'q3']);
+});
+
+it('setContextItems replaces the context list', () => {
+  const store = freshStore();
+  store.commit('conversation/setContextItems', [{ service: 'A', category: 1 }]);
+  expect(store.getters['conversation/openConversation'].selectedContextItems.length).toBe(1);
 });

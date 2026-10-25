@@ -1442,9 +1442,6 @@ export default {
     saveAndLoad: 'Enregistrer et charger',
     saveAndStartNew: 'Enregistrer et commencer une nouvelle',
     discardAndStartNew: 'Ignorer et commencer une nouvelle',
-    saveAndLeave: 'Enregistrer et quitter',
-    discardAndLeave: 'Abandonner et quitter',
-    unsavedChangesLeave: 'Vous avez des modifications non enregistrées. Les enregistrer avant de quitter ?',
     copyFailed: 'Impossible de copier',
 
     documentOpenError: 'Impossible de consulter le document',

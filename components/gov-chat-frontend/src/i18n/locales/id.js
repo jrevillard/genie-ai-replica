@@ -1423,9 +1423,6 @@ export default {
     saveAndLoad: 'Simpan dan Muat',
     saveAndStartNew: 'Simpan dan Mulai Baru',
     discardAndStartNew: 'Buang dan Mulai Baru',
-    saveAndLeave: 'Simpan dan keluar',
-    discardAndLeave: 'Buang dan keluar',
-    unsavedChangesLeave: 'Anda memiliki perubahan yang belum disimpan. Simpan sebelum keluar?',
     copyFailed: 'Gagal menyalin',
 
     documentOpenError: 'Gagal membuka dokumen',

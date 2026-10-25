@@ -734,4 +734,27 @@ development_status:
   #          Suites tab, where the list already is. Deployed to the local build
   #          (frontend rebuilt + recreated, verify 47/0); the shipped bundle carries 0
   #          occurrences of "Head Test" and 0 of "Routing Lab".
+  #          LIVE VALIDATION 2026-10-26 (the second benchmark + the smoke):
+  #          (1) the granite re-score of rr1792896220523-b71784 landed as
+  #          rr1792942006568-976c3f — coverage 21/100 -> 98/100 on
+  #          context_entities_recall, 0 regenerated rows (the SAME answers, re-judged),
+  #          and the control group agrees (.433 -> .449): the low coverage was the
+  #          JUDGE, not the corpus. (2) the SECOND benchmark landed as
+  #          rr1792957108840-bb0b9a — a fresh end-to-end run, 100 answers re-served
+  #          through chatqna (serve mode), granite judge, 100/100 rows, 0 abstentions.
+  #          Its per-metric means sit within 0.0098 of the re-score's (two are
+  #          byte-identical): the benchmark is REPRODUCIBLE under answer regeneration.
+  #          Both control groups agree the two judges do. (3) the smoke harness PASSES
+  #          live on its right-sized corpus ("SMOKE 8-6: ALL CHECKS PASSED", cleanup
+  #          included: suite deleted, ROPC reverted, user deleted). (4) all 4 RAGAS
+  #          Playwright specs pass against the deployed build.
+  #          TOOLING 2026-10-26: the two operator scripts' DECISION rules are now
+  #          pinned by tests in the okf-server CI lane (ragas-compare-runs 13,
+  #          ragas-regenerate-entry 14). The tests FOUND two defects: the compare
+  #          tool's control group counted out-of-scope control rows (different
+  #          population from the means it is compared against), and it detected
+  #          "regenerated" rows only by a changed REFERENCE — which made a fresh run
+  #          report "0 regenerated rows" and drop answer-churned rows into the control
+  #          group. Both fixed; the answer/reference split is what the second
+  #          benchmark's comparison rests on.
 

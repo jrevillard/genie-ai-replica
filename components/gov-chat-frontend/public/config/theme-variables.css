@@ -32,6 +32,13 @@
   /* Same pairing, lifted past the 4.5:1 AA floor for small text
      (initials on the accent circle). */
   --accent-fg-strong: color-mix(in oklch, var(--accent-fg) 60%, white);
+  /* One step above the panel ground — the answer cards read by fill,
+     not only by shadow. The same relative lift works in both modes:
+     each theme's surface starts where its own ramp does. */
+  --surface-raised: oklch(from var(--surface) min(calc(l + 0.025), 0.995) c h);
+  /* The message timestamps float over the wave band; plain muted ink
+     drowns there, so they carry a stronger mix of the body ink. */
+  --time-ink: color-mix(in oklch, var(--fg) 55%, var(--muted));
   --accent-secondary: oklch(from var(--brand) max(calc(l - 0.07), 0.05) c calc(h + 0));
 
   /* --- Navbar (light: a pale wash of the brand, overridable via config) ---
@@ -160,6 +167,8 @@ body[data-theme='dark'],
   --accent-muted: oklch(from var(--brand) calc(l + 0.2) c h / 0.15);
   --accent-fg: oklch(from var(--brand) max(calc(l - 0.32), 0.1) c h);
   --accent-fg-strong: var(--accent-fg);
+  --surface-raised: oklch(from var(--surface) min(calc(l + 0.025), 0.995) c h);
+  --time-ink: color-mix(in oklch, var(--fg) 65%, var(--muted));
   --accent-secondary: oklch(from var(--brand) max(calc(l + 0.1), 0.05) c calc(h + 0));
 
   /* --- Navbar (dark mode) ---
@@ -229,6 +238,8 @@ body[data-theme='dark'],
     --accent-muted: oklch(from var(--brand) calc(l + 0.2) c h / 0.15);
     --accent-fg: oklch(from var(--brand) max(calc(l - 0.32), 0.1) c h);
   --accent-fg-strong: var(--accent-fg);
+  --surface-raised: oklch(from var(--surface) min(calc(l + 0.025), 0.995) c h);
+  --time-ink: color-mix(in oklch, var(--fg) 65%, var(--muted));
     --accent-secondary: oklch(from var(--brand) max(calc(l + 0.1), 0.05) c calc(h + 0));
 
     --navbar-bg: var(--brand);

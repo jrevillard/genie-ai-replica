@@ -373,9 +373,10 @@ export default {
   display: inline-flex;
   align-items: center;
   gap: var(--space-xs);
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
+  font-weight: 500;
   color: var(--muted);
-  padding: 2px var(--space-sm);
+  padding: 3px var(--space-sm);
   border-radius: var(--radius-pill, 999px);
   white-space: nowrap;
 }

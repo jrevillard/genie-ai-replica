@@ -49,6 +49,13 @@ test.describe('Conversation V1', () => {
     const title = page.locator('[data-testid="conversation-header-title"]');
     await expect(title).toBeVisible();
     await expect(title).not.toBeEmpty();
+    // The close cross stands apart from the save/export cluster — it is a
+    // different action, not a fourth member of the row.
+    const closeOutside = await page.evaluate(
+      () =>
+        !document.querySelector('[data-testid="conversation-header-close"]').closest('.conversation-header__actions')
+    );
+    expect(closeOutside, 'the close cross sits outside the save/export cluster').toBe(true);
     await page.locator('[data-testid="conversation-header-close"]').click();
     // The unsaved-changes confirm may appear — accept its default action.
     const confirm = page.locator('[role="dialog"]');
@@ -136,6 +143,7 @@ test.describe('Conversation V1', () => {
     expect(a, 'the assistant tile renders').not.toBeNull();
     expect(a.w, 'the assistant tile is 36px wide').toBe(36);
     expect(a.h, 'the assistant tile is 36px tall').toBe(36);
+    expect(a.radius, 'the assistant tile is a circle, like the mockup').toBe('999px');
     const u = await page.evaluate(() => {
       const el = document.querySelector('.message-avatar--user');
       const initials = el ? el.querySelector('.message-avatar__initials') : null;
@@ -143,13 +151,19 @@ test.describe('Conversation V1', () => {
         ? {
             text: el.textContent.trim(),
             hasPhoto: !!el.querySelector('img'),
-            color: initials ? getComputedStyle(initials).backgroundColor : null
+            color: initials ? getComputedStyle(initials).backgroundColor : null,
+            initialsRadius: initials ? getComputedStyle(initials).borderRadius : null,
+            fillsTile: initials
+              ? Math.abs(initials.getBoundingClientRect().width - el.getBoundingClientRect().width) < 1
+              : false
           }
         : null;
     });
     expect(u, 'the user avatar renders').not.toBeNull();
     expect(u.text.length > 0 || u.hasPhoto, 'initials or a photo, never empty').toBe(true);
     expect(u.color, 'the initials circle is painted from a token, not transparent').not.toBe('rgba(0, 0, 0, 0)');
+    expect(u.initialsRadius, 'the initials ground is a circle matching the tile').toBe('999px');
+    expect(u.fillsTile, 'the initials ground fills the tile, not a smaller square inside it').toBe(true);
     await ctx.close();
   });
 });
@@ -205,7 +219,7 @@ test.describe('Conversation — sources', () => {
 
 test.describe('Conversation — actions', () => {
   // The answer carries thumbs that record a rating and a copy that
-  // fills the clipboard (D3).
+  // fills the clipboard.
   test('the answer carries thumbs that record a rating and a copy that fills the clipboard', async ({ browser }) => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -214,11 +228,16 @@ test.describe('Conversation — actions', () => {
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
     await page.waitForSelector('[data-testid="answer-actions"]', { timeout: 45000 });
     await page.locator('[data-testid="answer-thumb-up"]').click();
+    // The pointer rests on the thumb after the click — its hover paint would
+    // mask the rated state. Move away so only the rated paint is read.
+    await page.mouse.move(10, 10);
     await page.waitForTimeout(500);
-    const rated = await page.evaluate(() =>
-      document.querySelector('[data-testid="answer-thumb-up"]').getAttribute('data-rated')
-    );
-    expect(rated, 'the thumb shows its selected state').toBe('true');
+    const rated = await page.evaluate(() => {
+      const el = document.querySelector('[data-testid="answer-thumb-up"]');
+      return { attr: el.getAttribute('data-rated'), bg: getComputedStyle(el).backgroundColor };
+    });
+    expect(rated.attr, 'the thumb shows its selected state').toBe('true');
+    expect(rated.bg, 'the selected state paints, it does not only tint the icon').not.toBe('rgba(0, 0, 0, 0)');
     await page.locator('[data-testid="answer-copy"]').click();
     await page.waitForTimeout(300);
     const clip = await page.evaluate(() => navigator.clipboard.readText());
@@ -295,6 +314,8 @@ test.describe('Conversation — status pill', () => {
     const pill = page.locator('[data-testid="nav-status"]');
     await expect(pill).toHaveAttribute('data-status', 'online');
     expect(await pill.getAttribute('role'), 'the pill is announced as a status region').toBe('status');
+    const pillFont = await pill.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    expect(pillFont, 'the pill label is body-legible, not a footnote').toBeGreaterThanOrEqual(12);
     // A failed turn flips the pill to its offline explanation.
     await page.route('**/queries/stream**', async (route) => {
       try {
@@ -374,7 +395,9 @@ test.describe('Conversation — contrast', () => {
         warnColor: rgb(pick('.chat-message.bot .answer-warning', 'color')),
         warnBg: rgb(pick('.chat-message.bot .answer-warning', 'backgroundColor')),
         initColor: rgb(pick('.message-avatar__initials', 'color')),
-        initBg: rgb(pick('.message-avatar__initials', 'backgroundColor'))
+        initBg: rgb(pick('.message-avatar__initials', 'backgroundColor')),
+        timeColor: rgb(pick('.message-time', 'color')),
+        timeBg: rgb(pick('.message-time', 'backgroundColor'))
       };
     });
     expect(
@@ -385,13 +408,17 @@ test.describe('Conversation — contrast', () => {
       contrastRatio(styles.initColor, styles.initBg),
       'the initials clear 4.5:1 on their circle'
     ).toBeGreaterThanOrEqual(4.5);
+    expect(
+      contrastRatio(styles.timeColor, styles.timeBg),
+      'the timestamp clears 4.5:1 on its pill, wave band included'
+    ).toBeGreaterThanOrEqual(4.5);
     await ctx.close();
   });
 });
 
 test.describe('Conversation — answer card', () => {
   // The assistant answer renders inside one elevated card, from the
-  // first frame of the stream (D9 + D14).
+  // first frame of the stream.
   test('the assistant answer renders inside one elevated card, from the first frame', async ({ browser }) => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
     // Throttle the stream so the thinking frame is stable and observable —
@@ -418,9 +445,15 @@ test.describe('Conversation — answer card', () => {
       const cards = document.querySelectorAll('[data-testid="answer-card"]');
       const card = cards[cards.length - 1];
       const cs = getComputedStyle(card);
-      return { shadow: cs.boxShadow !== 'none', hasThinking: !!card.querySelector('.streaming-indicator') };
+      const ground = getComputedStyle(card.closest('.chatbot-container')).backgroundColor;
+      return {
+        shadow: cs.boxShadow !== 'none',
+        hasThinking: !!card.querySelector('.streaming-indicator'),
+        distinctFromGround: cs.backgroundColor !== ground
+      };
     });
     expect(early.shadow, 'the card is elevated').toBe(true);
+    expect(early.distinctFromGround, 'the card fills one step above the unified ground, not the same paint').toBe(true);
     expect(early.hasThinking, 'the first frame shows the thinking indicator, not a fake progress').toBe(true);
     await page.waitForSelector('.chat-message.bot .message-bubble', { timeout: 30000 });
     const late = await page.evaluate(() => {

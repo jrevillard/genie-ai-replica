@@ -95,17 +95,17 @@
           >
             <FileDown :size="16" aria-hidden="true" />
           </button>
-          <button
-            type="button"
-            class="conversation-header__close"
-            :title="translate('chatbot.closeConversation', 'Close conversation')"
-            :aria-label="translate('chatbot.closeConversation', 'Close conversation')"
-            data-testid="conversation-header-close"
-            @click="startNewChat"
-          >
-            <X :size="16" aria-hidden="true" />
-          </button>
         </div>
+        <button
+          type="button"
+          class="conversation-header__close"
+          :title="translate('chatbot.closeConversation', 'Close conversation')"
+          :aria-label="translate('chatbot.closeConversation', 'Close conversation')"
+          data-testid="conversation-header-close"
+          @click="startNewChat"
+        >
+          <X :size="16" aria-hidden="true" />
+        </button>
       </div>
       <!-- Context Panel for selected tree nodes -->
       <div v-if="selectedContextItems.length > 0" class="context-panel">
@@ -151,7 +151,7 @@
             <span v-else class="message-avatar__silhouette" aria-hidden="true"><User :size="18" /></span>
           </div>
           <div class="message-wrapper">
-            <!-- D9/D14: the assistant answer lives in one elevated card from the
+            <!-- The assistant answer lives in one elevated card from the
                  first streaming frame; sources, actions and the confidence block
                  render inside it below the bubble. -->
             <div v-if="msg.sender === 'bot'" class="answer-card" data-testid="answer-card">
@@ -211,7 +211,7 @@
                   translate('chatbot.aiGeneratedNoDocs', 'AI-generated — not based on library documents')
                 }}</span>
               </div>
-              <!-- D3: inline actions — thumbs, details, copy — with the
+              <!-- Inline actions — thumbs, details, copy — with the
                    confidence percentage at the end of the row. -->
               <div v-if="msg.queryId" class="answer-actions" data-testid="answer-actions">
                 <button
@@ -255,7 +255,7 @@
                   <Copy :size="15" aria-hidden="true" />
                 </button>
               </div>
-              <!-- D1: the confidence percentage is a state, not an action —
+              <!-- The confidence percentage is a state, not an action —
                    it renders with the card even when nothing is rateable. -->
               <div v-if="msg.confidenceScore != null && msg.isGrounded !== false" class="bot-message-meta">
                 <span class="confidence-score">
@@ -2475,14 +2475,14 @@ export default {
   overflow: hidden;
 }
 
-/* The per-turn avatars (D11): the assistant carries the product icon in a
+/* The per-turn avatars: the assistant carries the product icon in a
    36px rounded tile, the user a photo, initials in an accent circle, or a
    silhouette when even the name is absent. */
 .message-avatar {
   flex: 0 0 auto;
   width: 36px;
   height: 36px;
-  border-radius: var(--radius-md);
+  border-radius: 999px;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -2494,10 +2494,6 @@ export default {
   background: var(--surface);
 }
 
-.message-avatar--user {
-  border-radius: var(--radius-pill, 999px);
-}
-
 .message-avatar img {
   width: 100%;
   height: 100%;
@@ -2505,6 +2501,12 @@ export default {
 }
 
 .message-avatar__initials {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
   font-size: var(--text-md);
   font-weight: 600;
   color: var(--accent-fg-strong);
@@ -2514,7 +2516,7 @@ export default {
   color: var(--muted);
 }
 
-/* The conversation header strip (D13). */
+/* The conversation header strip. */
 .conversation-header {
   display: flex;
   align-items: center;
@@ -2525,6 +2527,7 @@ export default {
 }
 
 .conversation-header__title {
+  flex: 1 1 auto;
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--fg);
@@ -2533,7 +2536,38 @@ export default {
   white-space: nowrap;
 }
 
+.conversation-header__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3xs, 4px);
+}
+
+.conversation-header__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.conversation-header__action:hover:not(:disabled) {
+  background: var(--accent-muted);
+  color: var(--fg);
+}
+
+.conversation-header__action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .conversation-header__close {
+  margin-left: var(--space-xs);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2627,9 +2661,9 @@ export default {
   border-bottom-left-radius: var(--radius-sm);
 }
 
-/* D9: one elevated card per answer; the bubble loses its own chrome inside it. */
+/* One elevated card per answer; the bubble loses its own chrome inside it. */
 .answer-card {
-  background: var(--surface);
+  background: var(--surface-raised);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
@@ -2689,7 +2723,7 @@ export default {
   background: var(--warning-bg);
 }
 
-/* D3: the inline actions row — thumbs, details, copy, confidence. */
+/* The inline actions row — thumbs, details, copy, confidence. */
 .answer-actions {
   display: flex;
   gap: var(--space-sm);
@@ -2716,6 +2750,7 @@ export default {
 
 .answer-action[data-rated='true'] {
   color: var(--accent);
+  background: var(--accent-muted);
 }
 
 /* The per-answer collapsible sources. */
@@ -2804,9 +2839,11 @@ export default {
 
 .message-time {
   font-size: var(--text-xs);
-  color: var(--muted);
+  color: var(--time-ink);
   white-space: nowrap;
-  padding-bottom: 2px;
+  padding: 1px var(--space-sm);
+  border-radius: 999px;
+  background: var(--surface);
 }
 
 /* Markdown Styles within Message Bubble */

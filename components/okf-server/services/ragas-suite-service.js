@@ -1745,13 +1745,12 @@ async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
     }
   };
   await db.collection(COLLECTION).save(placeholder);
-  // The progress is mirrored into the run doc — the panel polls the DOC, not
-  // this process's memory. Throttled, like the run path's progress write.
+  // The progress is written into the run DOC — the panel polls the doc, and
+  // the doc is the only place that survives more than one okf-server
+  // process. Throttled, like the run path's progress write.
   const PROGRESS_WRITE_MIN_MS = 2000;
   let lastProgressWrite = 0;
   const report = (p) => {
-    const inflight = rescoreInFlight.get(newRunKey);
-    if (inflight) inflight.progress = p;
     const now = Date.now();
     if (now - lastProgressWrite < PROGRESS_WRITE_MIN_MS) return;
     lastProgressWrite = now;
@@ -1759,7 +1758,7 @@ async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
       .update(newRunKey, { progress: p, updated_at: new Date().toISOString() })
       .catch((e) => logger.warn('ragas-suite.rescore.progress_write_failed', { run_key: newRunKey, error: e.message }));
   };
-  rescoreInFlight.set(newRunKey, { source_run_key: runKey, progress: { phase: 'judge', done: 0, total: 1 } });
+  rescoreInFlight.set(newRunKey, { source_run_key: runKey });
   // A re-score is a JUDGE-only operation: the answers are copied verbatim.
   const results = srcResults.map((r) => ({ ...r, metrics: {} }));
   // The sidecar answers in SAMPLE ORDER, and the sample list EXCLUDES rows
@@ -1936,18 +1935,6 @@ async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
     });
   });
   return { run_key: newRunKey, source_run_key: runKey, status: 'running', done };
-}
-
-/** The live progress of an in-flight re-score (for the panel's poll). */
-async function getRescoreProgress(runKey) {
-  const inflight = rescoreInFlight.get(runKey);
-  if (!inflight) return null;
-  return {
-    run_key: runKey,
-    status: 'running',
-    progress: inflight.progress || null,
-    source_run_key: inflight.source_run_key
-  };
 }
 
 async function loadSuite(db, repoId, suiteKey) {
@@ -4068,7 +4055,6 @@ module.exports = {
   deleteSuite,
   deleteRun,
   rescoreRun,
-  getRescoreProgress,
   beginRunSuite,
   cancelSuiteRun,
   runSuite,

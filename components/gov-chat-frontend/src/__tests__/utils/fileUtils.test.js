@@ -1,6 +1,6 @@
 'use strict';
 
-const { formatFileSize, isImage, isDocument, getFileExtension, fileTypeIcon } = require('@/utils/fileUtils');
+const { formatFileSize, isImage, isDocument, getFileExtension } = require('@/utils/fileUtils');
 
 describe('fileUtils', () => {
   describe('formatFileSize', () => {

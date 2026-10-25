@@ -1430,6 +1430,7 @@ export default {
     unsavedChangesLeave: 'Una mabadiliko ambayo hayajahifadhiwa. Uyahifadhi kabla ya kuondoka?',
     copyFailed: 'Imeshindwa kunakili',
 
+    documentOpenError: 'Imeshindwa kufungua hati',
     feedbackSubmitted: 'Mrejesho umehifadhiwa',
     feedbackError: 'Imeshindwa kuhifadhi mrejesho',
     feedbackMissingQueryId: 'Jibu hili halijawezi kupewa alama bado',

@@ -1367,6 +1367,7 @@ export default {
     unsavedChangesLeave: '您有未保存的更改。离开前保存吗？',
     copyFailed: '复制失败',
 
+    documentOpenError: '无法打开文档',
     feedbackSubmitted: '反馈已保存',
     feedbackError: '反馈保存失败',
     feedbackMissingQueryId: '该回答尚无法评分',

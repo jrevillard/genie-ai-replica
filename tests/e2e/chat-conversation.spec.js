@@ -86,12 +86,15 @@ test.describe('Conversation V1', () => {
       () => getComputedStyle(document.querySelector('.chatbot-container'), '::after').bottom
     );
     expect(after, 'the wave must not scroll with the messages').toBe(before.bottom);
-    // The artwork stretches to its band exactly — sized by width alone it
-    // outruns the band on wide viewports and shears at the top.
-    const waveSize = await page.evaluate(
-      () => getComputedStyle(document.querySelector('.chatbot-container'), '::after').backgroundSize
-    );
-    expect(waveSize, 'the wave fills its band on wide screens').toBe('100% 100%');
+    // The band shares the welcome banner's mechanics: its height derives
+    // from the artwork's own aspect ratio, so nothing squashes or shears
+    // at any viewport width.
+    const band = await page.evaluate(() => {
+      const cs = getComputedStyle(document.querySelector('.chatbot-container'), '::after');
+      return { ratio: cs.aspectRatio, size: cs.backgroundSize };
+    });
+    expect(band.ratio, 'the band tracks the artwork ratio, like the banner').toBe('1800 / 356');
+    expect(band.size.startsWith('100%'), 'the artwork keeps its own ratio in the band').toBe(true);
     // Layer-off: the paint goes, the layout stays.
     const boxes = () =>
       page.evaluate(() => {
@@ -216,12 +219,18 @@ test.describe('Conversation — sources', () => {
     const open = await state();
     expect(open.n, 'sources render as cards').toBeGreaterThan(0);
     expect(open.open, 'open by default').toBe(true);
-    // The pipeline ships no url — the card builds the repository link from
-    // the document id, so the anchor never opens empty.
-    const href = await page.evaluate(() =>
-      document.querySelector('[data-testid^="answer-source-card-"]')?.getAttribute('href')
-    );
-    expect(href, 'the card links into the repository by id').toBe('/api/files/doc-1/download');
+    // The pipeline ships no url, and the repository serves files behind
+    // Bearer auth — the card must open through the authenticated
+    // viewbrowser flow, not a bare anchor.
+    let viewFetch = null;
+    await page.route('**/api/files/doc-1/viewbrowser', async (route) => {
+      viewFetch = { auth: route.request().headers()['authorization'] };
+      return route.fulfill({ status: 200, contentType: 'application/pdf', body: '%PDF-fake' });
+    });
+    await page.locator('[data-testid^="answer-source-card-"]').click();
+    await page.waitForTimeout(800);
+    expect(viewFetch, 'opening the card fetches the document').not.toBeNull();
+    expect(viewFetch.auth, 'the fetch carries the session token').toMatch(/^Bearer /);
     await page.locator('[data-testid="answer-sources-toggle"]').click();
     expect((await state()).open, 'the section collapses').toBe(false);
     await ctx.close();

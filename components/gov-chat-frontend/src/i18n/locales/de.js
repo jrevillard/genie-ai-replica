@@ -1442,6 +1442,7 @@ export default {
     unsavedChangesLeave: 'Du hast ungespeicherte Änderungen. Vor dem Verlassen speichern?',
     copyFailed: 'Kopieren fehlgeschlagen',
 
+    documentOpenError: 'Dokument konnte nicht geöffnet werden',
     feedbackSubmitted: 'Feedback gespeichert',
     feedbackError: 'Feedback konnte nicht gespeichert werden',
     feedbackMissingQueryId: 'Diese Antwort kann noch nicht bewertet werden',

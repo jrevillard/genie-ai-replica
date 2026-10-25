@@ -1430,6 +1430,7 @@ export default {
     unsavedChangesLeave: 'You have unsaved changes. Save them before leaving?',
     copyFailed: 'Could not copy',
 
+    documentOpenError: 'Could not open the document',
     feedbackSubmitted: 'Feedback saved',
     feedbackError: 'Feedback could not be saved',
     feedbackMissingQueryId: 'This answer cannot be rated yet',

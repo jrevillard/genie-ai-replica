@@ -1435,6 +1435,7 @@ export default {
     unsavedChangesLeave: 'O na le liphetoho tse sa bolokehang. U di boloke pele u tsoa?',
     copyFailed: 'Ho hlolehile ho kopitsa',
 
+    documentOpenError: 'Ho hlolehile ho bula tokomane',
     feedbackSubmitted: 'Karabo e bolokiloe',
     feedbackError: 'Ho hlolehile ho boloka karabo',
     feedbackMissingQueryId: 'Karabo ena e ke ke ea fumanwa maemo a teng',

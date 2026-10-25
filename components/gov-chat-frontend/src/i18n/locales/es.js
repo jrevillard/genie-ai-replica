@@ -1442,6 +1442,7 @@ export default {
     unsavedChangesLeave: 'Tienes cambios sin guardar. ¿Guardarlos antes de salir?',
     copyFailed: 'No se pudo copiar',
 
+    documentOpenError: 'No se pudo abrir el documento',
     feedbackSubmitted: 'Feedback guardado',
     feedbackError: 'No se pudo guardar el feedback',
     feedbackMissingQueryId: 'Esta respuesta aún no se puede valorar',

@@ -35,7 +35,9 @@
             <DsCard v-for="doc in relatedDocuments" :key="doc.id" variant="flat" padding="md" class="document-item">
               <div class="document-header" @click="openDocument(doc)">
                 <div class="document-icon">
-                  <component :is="documentIconClass(doc)" :size="20" />
+                  <span class="file-type-badge" :data-tone="documentBadge(doc).tone">{{
+                    documentBadge(doc).label
+                  }}</span>
                 </div>
                 <div class="document-info">
                   <div class="document-title">{{ doc.title }}</div>
@@ -102,20 +104,10 @@
 <script>
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { formatFileSize, fileTypeIcon } from '../utils/fileUtils.js';
+import { formatFileSize } from '../utils/fileUtils.js';
+import { isExternalUrl as isExternalHref, openRepositoryDocument, fileTypeBadge } from '../utils/document-opener.js';
 import DsStateDisplay from './ds/StateDisplay.vue';
-import {
-  Files,
-  FileText,
-  FileCode,
-  File,
-  HelpCircle,
-  ChevronUp,
-  ChevronDown,
-  Globe,
-  FileSpreadsheet,
-  FileImage
-} from '@lucide/vue';
+import { Files, FileText, HelpCircle, ChevronUp, ChevronDown } from '@lucide/vue';
 import DsCard from './ds/Card.vue';
 import SidebarHandle from './SidebarHandle.vue';
 import { SIDEBAR_DEFAULTS, SIDEBAR_MIN_WIDTHS, SIDEBAR_MAX_WIDTHS } from '../composables/sidebarLayout.js';
@@ -127,14 +119,9 @@ export default {
     DsCard,
     SidebarHandle,
     FileText,
-    FileCode,
-    File,
     HelpCircle,
     ChevronUp,
     ChevronDown,
-    Globe,
-    FileSpreadsheet,
-    FileImage,
     Files,
     DsStateDisplay
   },
@@ -312,51 +299,22 @@ export default {
     },
 
     isExternalUrl(url) {
-      if (!url) return false;
-      const isHttp = url.startsWith('http://') || url.startsWith('https://');
-      const isPlaceholder = url.includes('<HOST>') || url.includes('<PORT>');
-      // A URL is considered external only if it's a valid HTTP link AND not a placeholder.
-      return isHttp && !isPlaceholder;
+      return isExternalHref(url);
     },
 
-    documentIconClass(doc) {
-      if (!doc) return 'FileText';
-      if (this.isExternalUrl(doc.url)) return 'Globe';
-      return fileTypeIcon(doc.fileName || doc.title);
+    documentBadge(doc) {
+      return fileTypeBadge(doc.fileName || doc.title);
     },
 
     async openDocument(doc) {
-      if (this.isExternalUrl(doc.url)) {
+      if (isExternalHref(doc.url)) {
         window.open(doc.url, '_blank');
         this.$emit('open-document', doc);
         return;
       }
 
-      const authToken = this.getAuthToken();
-      if (!authToken) {
-        console.error('Authentication token not found. Unable to open internal document.');
-        return;
-      }
-
-      const fileUrl = `${window.location.origin}/api/files/${doc.id}/viewbrowser`;
-
       try {
-        const response = await fetch(fileUrl, {
-          headers: {
-            Authorization: `Bearer ${authToken}`
-          }
-        });
-
-        if (!response.ok) {
-          throw new Error(`Network response was not ok: ${response.statusText}`);
-        }
-
-        const fileBlob = await response.blob();
-        const blobUrl = URL.createObjectURL(fileBlob);
-        window.open(blobUrl, '_blank');
-
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
-
+        await openRepositoryDocument(doc.id, this.getAuthToken());
         this.$emit('open-document', doc);
       } catch (error) {
         console.error('There was a problem fetching the internal document:', error);

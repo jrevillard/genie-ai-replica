@@ -1421,6 +1421,7 @@ export default {
     unsavedChangesLeave: 'لديك تغييرات غير محفوظة. هل تريد حفظها قبل المغادرة؟',
     copyFailed: 'تعذر النسخ',
 
+    documentOpenError: 'تعذر فتح المستند',
     feedbackSubmitted: 'تم حفظ الملاحظات',
     feedbackError: 'تعذر حفظ الملاحظات',
     feedbackMissingQueryId: 'لا يمكن تقييم هذه الإجابة بعد',

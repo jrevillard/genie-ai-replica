@@ -240,7 +240,8 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-banner {
   }
 }
 
-html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::after {
+html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::after,
+html[data-visual='on'] .genie-living-intelligence .chatbot-container::after {
   content: '';
   position: absolute;
   /* The width has to be definite. With `inset: auto 0 0` and
@@ -248,23 +249,32 @@ html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::after {
      insets — and `max-height: 320px` then re-transfers the aspect
      ratio from the height to the width: the band resolves to 320 ×
      1800/356 ≈ 1617.97 px and stops there, whatever the panel's width.
-     Holding `width: 100%` of the overlay's padding box (= the panel's
-     width) keeps the width definite; aspect-ratio still sets height =
-     width * 356/1800, and max-height clamps the height without
-     re-deriving the width. The band therefore tracks the panel's width
-     at every size — width independent — and is at most 320 px tall. */
+     Holding `width: 100%` keeps the width definite; aspect-ratio still
+     sets height = width * 356/1800, and max-height clamps the height
+     without re-deriving the width. The band therefore tracks the
+     surface's width at every size — width independent — and is at most
+     320 px tall. The artwork itself is sized 100% auto, so its crests
+     keep their own ratio everywhere. */
   inset: auto auto 0 0;
   width: 100%;
   aspect-ratio: 1800 / 356;
   max-height: calc(var(--visual-waves-set, 0) * 320px);
   background: var(--visual-waves) bottom / 100% auto no-repeat;
+  pointer-events: none;
+}
+
+html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::after {
   opacity: var(--gli-deco-strength);
   /* Multiply sinks the light-blue strokes into the white surface (light
      mode). In dark mode the strokes need to *lighten* the dark surface,
      so we switch to screen — same blend-mode mechanism, opposite effect. */
   mix-blend-mode: multiply;
-  pointer-events: none;
   z-index: 0;
+}
+
+html[data-visual='on'] .genie-living-intelligence .chatbot-container::after {
+  opacity: 0.72;
+  z-index: -1;
 }
 
 html[data-theme='dark'][data-visual='on'] .genie-living-intelligence .quick-help-overlay::after,
@@ -631,17 +641,4 @@ html[data-visual='on'] .genie-living-intelligence .chatbot-container .chat-windo
   background: transparent;
 }
 
-html[data-visual='on'] .genie-living-intelligence .chatbot-container::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: clamp(120px, 22vh, 260px);
-  /* Stretch the artwork to the band exactly: sized to the width alone it
-     outruns the band on wide viewports and its top edge shears off. */
-  background: var(--visual-waves) bottom / 100% 100% no-repeat;
-  opacity: 0.72;
-  pointer-events: none;
-  z-index: -1;
-}
+

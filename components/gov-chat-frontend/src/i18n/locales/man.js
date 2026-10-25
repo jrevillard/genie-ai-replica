@@ -1382,6 +1382,7 @@ export default {
     unsavedChangesLeave: 'Tacregyn?',
     copyFailed: 'Cha dooie coipey',
 
+    documentOpenError: 'Cha dooarsh yn docamad',
     feedbackSubmitted: 'Sauailit ynnsyn',
     feedbackError: 'Cha dooarsh yn sauail',
     feedbackMissingQueryId: 'Cha nel y rere shoh ry-gholl rabbyt',

@@ -1443,6 +1443,7 @@ export default {
     unsavedChangesLeave: 'Você tem alterações não salvas. Salvá-las antes de sair?',
     copyFailed: 'Não foi possível copiar',
 
+    documentOpenError: 'Não foi possível abrir o documento',
     feedbackSubmitted: 'Feedback salvo',
     feedbackError: 'Não foi possível salvar o feedback',
     feedbackMissingQueryId: 'Esta resposta ainda não pode ser avaliada',

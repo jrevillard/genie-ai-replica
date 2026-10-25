@@ -176,24 +176,21 @@
                   <ChevronDown v-else :size="16" aria-hidden="true" />
                 </button>
                 <div v-show="msg.sourcesOpen" class="answer-sources__list">
-                  <a
+                  <button
                     v-for="(d, di) in msg.sources"
                     :key="d.id"
+                    type="button"
                     class="answer-source-card"
                     :data-testid="`answer-source-card-${di}`"
-                    :href="d.url"
-                    target="_blank"
-                    rel="noopener"
+                    @click="openSourceDocument(d)"
                   >
-                    <span class="answer-source-card__icon">
-                      <component :is="sourceIconName(d)" :size="16" aria-hidden="true" />
-                    </span>
+                    <span class="file-type-badge" :data-tone="fileBadge(d).tone">{{ fileBadge(d).label }}</span>
                     <span class="answer-source-card__body">
                       <span class="answer-source-card__title">{{ d.title }}</span>
                       <span class="answer-source-card__meta">{{ docMeta(d) }}</span>
                     </span>
                     <ExternalLink :size="14" class="answer-source-card__open" aria-hidden="true" />
-                  </a>
+                  </button>
                 </div>
               </div>
               <!-- Not grounded: the answer came from the LLM's own knowledge, not library documents -->
@@ -442,10 +439,6 @@ import {
   ChevronUp,
   Copy,
   ExternalLink,
-  FileText,
-  FileCode,
-  File,
-  FileSpreadsheet,
   Loader2,
   MessageSquareQuote,
   Sparkles,
@@ -456,7 +449,8 @@ import {
   User,
   X
 } from '@lucide/vue';
-import { formatFileSize, fileTypeIcon } from '../utils/fileUtils.js';
+import { formatFileSize } from '../utils/fileUtils.js';
+import { isExternalUrl, openRepositoryDocument, fileTypeBadge } from '../utils/document-opener.js';
 import documentFileService from '../services/documentFileService';
 import { eventBus } from '../eventBus.js';
 import notificationService from '../services/notificationService';
@@ -586,10 +580,6 @@ export default {
     ChevronDown,
     ChevronUp,
     ExternalLink,
-    FileText,
-    FileCode,
-    File,
-    FileSpreadsheet,
     Loader2,
     Sparkles,
     User,
@@ -938,10 +928,25 @@ export default {
   },
 
   methods: {
-    // The icon family of a source card, from the file's own extension —
-    // the repository type label when the fetch landed, the name otherwise.
-    sourceIconName(doc) {
-      return fileTypeIcon(doc._type || doc.fileName || doc.title || doc.type);
+    // The badge of a source card, from the file's own extension — the
+    // repository type label when the fetch landed, the name otherwise.
+    fileBadge(doc) {
+      return fileTypeBadge(doc.fileName || doc.title || doc._type || doc.type);
+    },
+
+    // The repository serves files behind Bearer auth, so a plain link
+    // cannot carry the session — internal sources open through the same
+    // fetch-blob flow the related-documents sidebar uses.
+    async openSourceDocument(doc) {
+      if (isExternalUrl(doc.url)) {
+        window.open(doc.url, '_blank', 'noopener');
+        return;
+      }
+      try {
+        await openRepositoryDocument(doc.id, this.$store.getters.accessToken || null);
+      } catch {
+        notificationService.error(this.translate('chatbot.documentOpenError', 'Could not open the document'));
+      }
     },
 
     // The "TYPE · size" line of a source card. The repository fields are

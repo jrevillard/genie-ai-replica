@@ -1439,6 +1439,7 @@ export default {
     unsavedChangesLeave: 'Есть несохранённые изменения. Сохранить их перед выходом?',
     copyFailed: 'Не удалось скопировать',
 
+    documentOpenError: 'Не удалось открыть документ',
     feedbackSubmitted: 'Отзыв сохранён',
     feedbackError: 'Не удалось сохранить отзыв',
     feedbackMissingQueryId: 'Этот ответ пока нельзя оценить',

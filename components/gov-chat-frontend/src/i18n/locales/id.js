@@ -1428,6 +1428,7 @@ export default {
     unsavedChangesLeave: 'Anda memiliki perubahan yang belum disimpan. Simpan sebelum keluar?',
     copyFailed: 'Gagal menyalin',
 
+    documentOpenError: 'Gagal membuka dokumen',
     feedbackSubmitted: 'Umpan balik tersimpan',
     feedbackError: 'Gagal menyimpan umpan balik',
     feedbackMissingQueryId: 'Jawaban ini belum bisa dinilai',

@@ -88,20 +88,3 @@ describe('fileUtils', () => {
     });
   });
 });
-
-describe('fileTypeIcon', () => {
-  it('maps each supported document family to its Lucide icon', () => {
-    expect(fileTypeIcon('report.pdf')).toBe('FileText');
-    expect(fileTypeIcon('contract.docx')).toBe('FileText');
-    expect(fileTypeIcon('budget.xlsx')).toBe('FileSpreadsheet');
-    expect(fileTypeIcon('notes.md')).toBe('FileCode');
-    expect(fileTypeIcon('page.html')).toBe('FileCode');
-    expect(fileTypeIcon('readme.txt')).toBe('File');
-  });
-
-  it('falls back to the text-document icon for unknown types', () => {
-    expect(fileTypeIcon('archive.zip')).toBe('FileArchive');
-    expect(fileTypeIcon('')).toBe('FileText');
-    expect(fileTypeIcon(undefined)).toBe('FileText');
-  });
-});

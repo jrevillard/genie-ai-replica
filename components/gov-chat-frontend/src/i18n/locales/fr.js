@@ -1447,6 +1447,7 @@ export default {
     unsavedChangesLeave: 'Vous avez des modifications non enregistrées. Les enregistrer avant de quitter ?',
     copyFailed: 'Impossible de copier',
 
+    documentOpenError: 'Impossible de consulter le document',
     feedbackSubmitted: 'Feedback enregistré',
     feedbackError: 'Feedback non enregistré',
     feedbackMissingQueryId: 'Cette réponse ne peut pas encore être notée',

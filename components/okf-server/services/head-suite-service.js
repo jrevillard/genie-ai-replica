@@ -129,7 +129,7 @@ const OFF_DOMAIN_TEMPLATES = [
 // Meta/noise fallbacks — queries about the retrieval system itself.
 const META_TEMPLATES = [
   'What is the forbidden noise gate?',
-  'How does the routing lab work?',
+  'How does the testing lab work?',
   'What does the head tester measure?'
 ];
 const META_QUERY_COUNT = 3;
@@ -229,7 +229,7 @@ Generate:
   it must NEVER be routed here:
   ${topics.join(', ')}
 - ${nMeta} META/noise queries about the retrieval
-  system itself (the routing lab, the head tester, the forbidden
+  system itself (the testing lab, the head tester, the forbidden
   tags) — users probing the machinery rather than the content.
   Example: "${META_TEMPLATES[0]}"
 - 5-8 KEYWORDS: single-domain terms strongly identifying THIS repository.

@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * HEAD TEST DIALOG (Story 1-8, 2026-10-08): the Testing Lab. Contract
+ * TESTING LAB DIALOG (Story 1-8, 2026-10-08): the Testing Lab. Contract
  * pinned here: the three tabs, the head badge states (present/stale/
  * missing from repo.head + frontmatter.updated_at), the Test tab verdict
  * (positive vs adversarial expectation), the wizard readOnly mode (no

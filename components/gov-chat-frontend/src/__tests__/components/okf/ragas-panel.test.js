@@ -914,6 +914,28 @@ describe('RagasPanel', () => {
       expect(html).toContain('Deployment default (.env) (ibm-granite/granite-4.1-8b)');
     });
 
+    it('offers the .env option in the RE-SCORE dialog too — everywhere means everywhere', async () => {
+      // The re-score dialog carries its OWN judge picker (David, 2026-10-25:
+      // "RESCORING MUST ALSO ALLOW MODEL SELECTION AGAIN"), and the .env
+      // default has to be reachable from it too — it is the judge that
+      // actually works on a deployment whose active configuration is
+      // rate-limited. The two dropdowns above are counted with the dialog
+      // CLOSED; this one opens it.
+      dispatch.mockImplementation(envDispatch());
+      const w = mountPanel();
+      await flush();
+      await flush();
+      w.vm.rescoreAsk = runFixture();
+      await flush();
+      const withEnv = w.findAll('select').filter((s) => s.findAll('option').some((o) => o.element.value === '__env__'));
+      // generation + benchmark run + the re-score dialog's own picker
+      expect(withEnv.length).toBe(3);
+      // and the dialog's picker offers it under the same honest label
+      const dialogSelect = withEnv[2];
+      const envOption = dialogSelect.findAll('option').find((o) => o.element.value === '__env__');
+      expect(envOption.text()).toContain('ibm-granite/granite-4.1-8b');
+    });
+
     it('picking it submits the sentinel and fetches NO per-config model list', async () => {
       dispatch.mockImplementation(envDispatch());
       const w = mountPanel();

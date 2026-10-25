@@ -3,6 +3,7 @@ import { createStore } from 'vuex';
 import chatHistoryStore from './chatHistoryStore';
 import auth from './modules/auth';
 import status from './modules/status';
+import conversation from './modules/conversation';
 
 // Create and export the store
 export default createStore({

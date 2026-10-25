@@ -150,7 +150,7 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
 
     const rescoreDialog = page
       .locator('.ds-modal')
-      .filter({ has: page.getByRole('heading', { name: /re-score with another judge/i }) })
+      .filter({ has: page.getByRole('heading', { name: /re-score with a judge/i }) })
       .first();
     await expect(rescoreDialog, 'the re-score dialog must open').toBeVisible({ timeout: 20000 });
 

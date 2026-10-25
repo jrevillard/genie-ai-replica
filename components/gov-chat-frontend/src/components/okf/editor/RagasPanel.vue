@@ -761,7 +761,7 @@
          row that names its judge. -->
     <DsDialog
       :visible="rescoreAsk !== null"
-      :title="translate('okf.ragas.rescore.title', 'Re-score with another judge')"
+      :title="translate('okf.ragas.rescore.title', 'Re-score with a judge')"
       size="sm"
       :actions="rescoreActions"
       @close="onRescoreClose"

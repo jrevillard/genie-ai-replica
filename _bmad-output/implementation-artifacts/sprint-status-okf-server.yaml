@@ -493,7 +493,7 @@ development_status:
   #          has nothing to judge, so it is EXCLUDED from the submission", asserting the unsubmitted
   #          row carries {} (ragas-suite-service.test.js:2353-2397). The RUN path builds the payload
   #          with samples = entries.map(...) (:2274, NO filter) and its own comment says "Judge only
-  #          the rows that produced an answer" (:2168) — so it contradicts its comment, its sibling
+  #          the rows that produced an answer" (:2166) — so it contradicts its comment, its sibling
   #          path, and a passing test encoding the same intent. Impact: rr1792742789648-86637b
   #          context_recall is 0.887 over all 100 rows vs 0.944 over the 94 non-failed — the fix
   #          MOVES published numbers by ~0.057. Small fix: mirror the re-score scorable filter.

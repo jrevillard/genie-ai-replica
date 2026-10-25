@@ -304,7 +304,7 @@ unmeasured metric is **not** a zero.
    payload with `samples = entries.map(...)` (`:2274`) and no filter, so
    a failed row IS judged on an empty answer and comes back with zeros
    that land in the means. The run path's own comment says "Judge only
-   the rows that produced an answer" (`:2168`) — so the code contradicts
+   the rows that produced an answer" (`:2166`) — so the code contradicts
    its comment, its sibling path, and a passing test that encodes the
    same intent.
 2. **An abstention can be counted as a failure.** `summarizeRun`'s
@@ -324,6 +324,31 @@ the 94 non-failed ones, so the fix MOVES published numbers by ~0.057 on
 that metric. Fix 1 is a small change (mirror the re-score path's
 `scorable` filter in the run path); fix 2 needs a decision about
 whether an abstention should be judgeable at all.
+
+### The naive fix for (1) is WORSE than the bug — do not apply it
+
+The run path maps the sidecar's answer back onto the rows by INDEX:
+
+```js
+for (let i = 0; i < results.length; i += 1) {
+  const q = perQuery[i] || {};
+  results[i].metrics = q || {};
+```
+
+That is correct **only because every entry is submitted today**. Filter
+the samples without also changing the mapping and `perQuery` becomes
+shorter than `results` — every row after the first dropped one lands on
+the wrong row, silently scoring one answer against another row's query.
+That is the exact failure the re-score path's own comment warns about
+("index-aligning it against `results` directly shifts every row after
+the first dropped one, which silently scores the wrong answer against
+the wrong query", `:1687-1691`), and the reason it keeps the ORIGINAL
+index alongside each scorable row and maps back through it (`:1749-1756`).
+
+So the fix is NOT a one-line filter: it is the re-score path's pair —
+filter, and map back through the original index. Anyone applying this
+needs both halves, or they will have replaced a visible zero with an
+invisible mis-scoring.
 
 Implementation notes that will bite anyone who touches this again:
 

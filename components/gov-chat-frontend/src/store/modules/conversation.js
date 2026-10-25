@@ -117,11 +117,87 @@ const mutations = {
   }
 };
 
+import chatbotService from '../../services/chatbotService';
+
+// AbortControllers live here, outside reactive state: they are not
+// serializable and must never enter `conversations` or storage.
+const controllers = new Map();
+
+function translateSources(sourceDocuments = []) {
+  return (sourceDocuments || []).map((doc) => ({
+    id: doc.document_id,
+    title: doc.document_name || doc.file_name || `Source ${(doc.document_id || '').slice(0, 4)}`,
+    documentName: doc.document_name,
+    fileName: doc.file_name,
+    type: doc.url?.split('.').pop().toUpperCase() || 'LINK',
+    size: 0,
+    url: doc.url || (doc.document_id ? `/api/files/${doc.document_id}/download` : ''),
+    score: doc.score
+  }));
+}
+
+const actions = {
+  sendStream({ commit, rootState }, { queryData, hiddenPrompt, displayText }) {
+    const id = rootState.conversation.openId;
+    commit('setStreaming', { isStreaming: true, streamingQueryId: null });
+    commit('appendUserMessage', {
+      sender: 'user',
+      content: displayText ?? queryData.query,
+      hiddenPrompt: hiddenPrompt ?? queryData.query,
+      timestamp: Date.now()
+    });
+    commit('appendBotMessage', { sender: 'bot', content: '', isStreaming: true });
+    const controller = chatbotService.submitQueryStream(queryData, {
+      onChunk: (content) => commit('appendChunk', content),
+      onMetadata: (metadata) => {
+        commit('status/setOnline', null, { root: true });
+        commit('setLastBotProperty', ['confidenceScore', metadata.confidence_score ?? null]);
+        commit('setLastBotProperty', ['isGrounded', metadata.is_grounded]);
+        const sources = translateSources(metadata.source_documents);
+        commit('setLastBotProperty', ['sources', sources]);
+        commit('setLastBotProperty', ['sourcesOpen', Boolean(sources.length)]);
+        commit('unshiftRelatedDocuments', sources);
+        // The repository TYPE · size fields degrade to the extension type
+        // when the metadata fetch fails — same as the component did.
+        import('../../services/documentFileService').then(({ default: documentFileService }) => {
+          sources.forEach((doc) => {
+            if (!doc.id) return;
+            documentFileService
+              .getFileMetadata(doc.id)
+              .then((file) => {
+                doc._size = file?.file_size || 0;
+                doc._type = (file?.file_type || doc.type || 'LINK').toUpperCase();
+              })
+              .catch(() => {});
+          });
+        });
+      },
+      onTranslation: (text) => commit('setTranslation', text),
+      onDone: (data) => {
+        commit('finishStream', data.queryId);
+        if (data.queryId) commit('setLastBotProperty', ['queryId', data.queryId]);
+      },
+      onError: (error) => {
+        commit('status/setOffline', error.message || 'Stream failed', { root: true });
+        commit('failStream', error.message || 'Stream failed');
+      }
+    });
+    controllers.set(id, controller);
+  },
+  abortStream({ commit, rootState }) {
+    const controller = controllers.get(rootState.conversation.openId);
+    if (controller) controller.abort();
+    controllers.delete(rootState.conversation.openId);
+    commit('setStreaming', { isStreaming: false, streamingQueryId: null });
+  }
+};
+
 export default {
   namespaced: true,
   state,
   getters,
-  mutations
+  mutations,
+  actions
 };
 
 export const STORAGE_KEY = 'genie.conversation.v1';

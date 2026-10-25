@@ -778,6 +778,78 @@ describe('RagasPanel', () => {
     });
   });
 
+  // David 2026-10-25: "you removed the model selection from the RAGAS
+  // generation and benchmarking ... make sure it INCLUDES the default
+  // configured model from the .env as an option".
+  //
+  // The judge dropdown was rendered only when the NAMED configuration list
+  // was non-empty, and that list 403'd for anyone without tools-admin — so
+  // for a curator the picker (env option included) was gone entirely. The
+  // env judge alone is a selectable judge: the server resolves the ENV
+  // sentinel to the .env-configured judge.
+  describe('the model selection exists for a curator, not only for an admin (David 2026-10-25)', () => {
+    const flush = () => new Promise((r) => setTimeout(r, 0));
+    const ENV_JUDGE = {
+      base_url: 'https://ai.assembly.govstack.global:444/llm/v1',
+      model: 'ibm-granite/granite-4.1-8b'
+    };
+
+    function dispatchWith(envelope) {
+      const suiteRow = {
+        kind: 'ragas_suite',
+        _key: 'rs1-test',
+        suite_key: 'rs1-test',
+        created_at: '2026-10-17T11:00:00.000Z'
+      };
+      return async (action) => {
+        if (action === 'okf/modelConfigList') return envelope;
+        if (action === 'okf/ragasListRuns') return { ok: true, runs: [suiteRow] };
+        if (action === 'okf/ragasGetSuite') return { ok: true, result: suiteFixture() };
+        if (action === 'okf/ragasGetRunQuiet') return { ok: true, result: runFixture() };
+        if (action === 'okf/fetchRepos') return { ok: true, repos: [] };
+        return { ok: true, result: null, runs: [] };
+      };
+    }
+
+    it('renders the picker in BOTH places with ONLY the env judge — no named configurations', async () => {
+      dispatch.mockImplementation(dispatchWith({ ok: true, configs: [], env_judge: ENV_JUDGE, env_pick: '__env__' }));
+      const w = mountPanel();
+      await flush();
+      await flush();
+      const judgeSelects = w
+        .findAll('select')
+        .filter((s) => s.findAll('option').some((o) => o.element.value === '__env__'));
+      expect(judgeSelects.length).toBe(2); // generation + benchmark run
+      expect(w.html()).toContain('System default (environment) (ibm-granite/granite-4.1-8b)');
+    });
+
+    it('still offers the env judge when the configuration list cannot be read at all', async () => {
+      dispatch.mockImplementation(dispatchWith({ ok: false, code: 'MODEL_CONFIG_LIST_FAILED', message: 'boom' }));
+      const w = mountPanel();
+      await flush();
+      await flush();
+      const judgeSelects = w
+        .findAll('select')
+        .filter((s) => s.findAll('option').some((o) => o.element.value === '__env__'));
+      expect(judgeSelects.length).toBe(2);
+      // No model name is claimed — the server could not tell us which one.
+      expect(w.html()).toContain('System default (environment)');
+      expect(w.html()).not.toContain('ibm-granite/granite-4.1-8b');
+    });
+
+    it('the env pick still reaches the server as the sentinel', async () => {
+      dispatch.mockImplementation(dispatchWith({ ok: true, configs: [], env_judge: ENV_JUDGE, env_pick: '__env__' }));
+      const w = mountPanel();
+      await flush();
+      await flush();
+      w.vm.judgeConfigKey = '__env__';
+      await w.vm.onJudgeConfigChange();
+      await w.vm.onRun();
+      const runCall = dispatch.mock.calls.find((c) => c[0] === 'okf/ragasRun');
+      expect(runCall[1].judge_config_key).toBe('__env__');
+    });
+  });
+
   describe('judge pick memory', () => {
     const flush = () => new Promise((r) => setTimeout(r, 0));
 

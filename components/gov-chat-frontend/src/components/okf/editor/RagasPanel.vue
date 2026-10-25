@@ -93,8 +93,13 @@
         </label>
       </div>
       <!-- 8-7 model configs: the judge this generation runs with — an explicit
-           pick beats the deployment's active configuration; default = env. -->
-      <div v-if="modelConfigs.length" class="okf-ragas__judge-row">
+           pick beats the deployment's active configuration; default = env.
+           David 2026-10-25: this row used to be rendered ONLY when the named
+           configuration list was non-empty, and the list 403'd for anyone
+           without tools-admin — so for a curator the model selection was
+           GONE, including the .env default. It renders whenever there is a
+           judge to pick, and the env judge is always one of the options. -->
+      <div v-if="hasJudgeChoice" class="okf-ragas__judge-row">
         <label class="okf-ragas__dim">
           <span>{{ translate('okf.ragas.generate.config', 'Judge model configuration') }}</span>
           <select v-model="judgeConfigKey" :disabled="generateBusy" @change="onJudgeConfigChange">
@@ -228,8 +233,11 @@
           />
           <span>{{ m.label }}</span>
         </label>
-        <!-- 8-7: the run's scoring judge — same shared pick as generation -->
-        <label v-if="modelConfigs.length" class="okf-ragas__metric okf-ragas__judge-inline">
+        <!-- 8-7: the run's scoring judge — same shared pick as generation.
+             Same rule as the generation row (David 2026-10-25): the picker
+             must exist whenever a judge can be chosen, not only when the
+             named-configuration list happens to be non-empty. -->
+        <label v-if="hasJudgeChoice" class="okf-ragas__metric okf-ragas__judge-inline">
           <select v-model="judgeConfigKey" :disabled="runBusy" @change="onJudgeConfigChange">
             <option value="">
               {{ defaultJudgeLabel }}
@@ -908,6 +916,7 @@ export default {
       modelConfigs: [], // 8-7: named judge configurations (admin-managed)
       judgeConfigKey: '', // '' = deployment default (active config / env)
       envJudge: null, // {base_url, model} the env/system default resolves to
+      judgeLoadFailed: false, // the judge list could not be read (still offer the env pick)
       envPickKey: '__env__', // sentinel: explicit System default (environment) pick
       judgeModel: '', // '' = the configuration's default model
       judgeModels: [],
@@ -931,6 +940,17 @@ export default {
           disabled: this.runDeleteBusy
         }
       ];
+    },
+    /** Is there a judge to choose?
+     *
+     * David 2026-10-25: the model selection must exist whenever a judge can
+     * be picked. The old rule was "only when the named-configuration list is
+     * non-empty", and the list 403'd for anyone without tools-admin — so for
+     * a curator the whole dropdown (env option included) disappeared. The
+     * env judge alone is enough to make the picker meaningful: the .env
+     * default is a selectable judge on its own. */
+    hasJudgeChoice() {
+      return this.modelConfigs.length > 0 || !!this.envJudge || this.judgeLoadFailed;
     },
     /** What "Deployment default" RESOLVES to, by name (live 2026-10-21:
      * the dropdown said "default" and the operator believed the active
@@ -1373,14 +1393,24 @@ export default {
         .replace('{h}', String(h))
         .replace('{m}', String(m % 60));
     },
-    /** 8-7: the judge-config dropdown — a 403 (non-admin) or an empty list
-     *  simply hides the selector; the deployment default keeps applying. */
+    /** 8-7: the judge-config dropdown.
+     *
+     * David 2026-10-25: a failed read must NOT take the model selection
+     * away. The env judge is a valid pick on its own (the server resolves
+     * the ENV sentinel to the .env-configured judge), so when the list
+     * cannot be read the picker still renders with the env option — without
+     * a model name, because the server could not tell us which one it is.
+     * The list endpoint is readable by every OKF user, so a failure here
+     * means something is genuinely broken, not that the caller lacks a role. */
     async loadJudgeConfigs() {
       const res = await this.$store.dispatch('okf/modelConfigList').catch(() => null);
       if (res && res.ok) {
         this.modelConfigs = res.configs || [];
         this.envJudge = res.env_judge || null;
+        this.judgeLoadFailed = false;
         if (res.env_pick) this.envPickKey = res.env_pick;
+      } else {
+        this.judgeLoadFailed = true;
       }
       // pre-select the ACTIVE configuration's model choices? No — the active
       // config applies server-side automatically; the pick here is an
@@ -1408,7 +1438,7 @@ export default {
       // Mount race: loadJudgeConfigs may still be in flight when a suite
       // loads — without the list we cannot tell "deleted" from "not yet
       // loaded" and would wrongly reset to default.
-      if (!this.modelConfigs.length) await this.loadJudgeConfigs();
+      if (!this.modelConfigs.length && !this.envJudge) await this.loadJudgeConfigs();
       let pick = null;
       if (preferred && preferred.config_key) {
         pick = preferred;

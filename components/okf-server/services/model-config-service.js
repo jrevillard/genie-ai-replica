@@ -68,8 +68,13 @@ function httpErr(code, status, message, details) {
   return err;
 }
 
-/** Strip the key for ANY read path — the UI sees a hint, never the secret. */
-function mask(doc) {
+/** Strip the key for ANY read path — the UI sees a hint, never the secret.
+ *
+ * The HINT (the last four characters) is admin-only: the list is readable
+ * by every OKF user (the RAGAS judge picker needs it — David 2026-10-25),
+ * and a fragment of a deployment-wide provider credential has no business
+ * in a curator's session. `includeKeyHint: false` drops it entirely. */
+function mask(doc, { includeKeyHint = true } = {}) {
   const key = String(doc.api_key || '');
   return {
     _key: doc._key,
@@ -80,7 +85,7 @@ function mask(doc) {
     services: Array.isArray(doc.services) ? doc.services : [],
     active: doc.active === true,
     has_api_key: !!key,
-    api_key_hint: key ? `••••${key.slice(-4)}` : null,
+    api_key_hint: key && includeKeyHint ? `••••${key.slice(-4)}` : null,
     created_at: doc.created_at,
     updated_at: doc.updated_at,
     created_by: doc.created_by || null,
@@ -153,7 +158,7 @@ function audit(action, doc, opts, description) {
   });
 }
 
-async function listConfigs() {
+async function listConfigs(opts = {}) {
   return withSpan('okf.model_config.list', async () => {
     const db = await dbService.getConnection();
     await ensureCollection(db);
@@ -166,7 +171,10 @@ async function listConfigs() {
     const envJudge = process.env.RAGAS_JUDGE_BASE_URL
       ? { base_url: process.env.RAGAS_JUDGE_BASE_URL, model: process.env.RAGAS_JUDGE_MODEL || null }
       : null;
-    return { configs: rows.map(mask), env_judge: envJudge, env_pick: ENV_PICK };
+    // The list is readable by every OKF user (the RAGAS judge picker needs
+    // it); `opts.includeKeyHint` is false for a caller without tools-admin,
+    // so a fragment of a provider credential never reaches a curator.
+    return { configs: rows.map((d) => mask(d, opts)), env_judge: envJudge, env_pick: ENV_PICK };
   });
 }
 

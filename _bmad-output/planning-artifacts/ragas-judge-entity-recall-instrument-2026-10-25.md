@@ -191,36 +191,59 @@ contain the fact the reference claims. Those rows belong with the five
 unfair questions — regenerate the ENTRY against the current corpus, not
 the wording of its answer.
 
-## The judge picker was invisible to anyone without tools-admin (2026-10-25)
+## The model selection was NOT in the UI (2026-10-25)
 
 David: "you removed the model selection from the RAGAS generation and
 benchmarking ... make sure it INCLUDES the default configured model from
-the .env as an OPTION."
+the .env as an OPTION." Then, after the first fix: "i just refresh the user
+interface, and it's not there."
 
-It was invisible, in two compounding ways. The panel renders the judge
-dropdown only when the **named model configuration list** is non-empty
-(`v-if="modelConfigs.length"`), and that list comes from
-`GET /api/okf/model-configs`, which sat behind
-`router.use(requireRole('tools-admin'))`. So for an operator holding an
-okf read scope but not the role, the request 403'd, the list came back
-empty, and **the dropdown disappeared — the "System default
-(environment)" option with it**. The .env judge
-(`RAGAS_JUDGE_BASE_URL` + `RAGAS_JUDGE_MODEL`) was unreachable, and the
-panel could not even say which judge was in use. Both the generation
-form and the benchmark-run form were affected.
+**Root cause: the list service dropped the envelope.**
 
-Fixed: the read is open to every OKF user (the envelope carries no
-secret, and the provider-key HINT is now admin-only), every write and
-credential-bearing probe stays tools-admin, and the picker renders
-whenever a judge can be chosen — a named configuration **or** the env
-judge — with the env judge always among the options and labelled with
-the model it resolves to.
+`modelConfigService.list()` returned `body.configs` — the ARRAY alone —
+dropping `env_judge` and `env_pick`. The store action spread that array
+into an object:
 
-Verified live against the local build (the OKF smoke now carries the
-check): a curator with an okf read scope and no tools-admin gets
-`200 — env judge ibm-granite/granite-4.1-8b, 7 named config(s), no key
-hint`; the admin read is unchanged (`7 named config(s), 7 with a key
-hint`).
+```
+{ ok: true, ...['cfgA', 'cfgB'] }   ->   { ok: true, 0: 'cfgA', 1: 'cfgB' }
+```
+
+so the result carried **neither `configs` nor `env_judge`**. The RAGAS
+panel read `res.configs` (undefined → `[]`) and `res.env_judge`
+(undefined → `null`), so it had no judge to choose and rendered **no
+picker at all** — for the admin too. The Admin Dashboard's **Models tab**
+reads `res.configs` from the same action and was **blank for the same
+reason**: the whole named-model-configuration feature had never been
+visible in the UI.
+
+Fixed at both layers: the service returns the envelope
+`{configs, env_judge, env_pick}`, and the store action names the three
+fields instead of spreading them.
+
+**A second, independent defect on the same surface**: the list endpoint
+sat behind `router.use(requireRole('tools-admin'))`, so an operator
+holding an okf read scope but not the role got a 403 and no list at all.
+The read is now open to every OKF user (the envelope carries no secret
+and the provider-key HINT is now admin-only); every write and
+credential-bearing probe stays tools-admin.
+
+**Why the unit tests did not see it.** The panel tests mock the STORE
+with the full envelope — so they asserted against a shape the real
+service never produced. The seam is now pinned where the defect was (a
+service test that the envelope survives the round trip) **and** in a
+browser (`tests/e2e/okf/ragas-judge-selector.spec.js`), which walks the
+real path an operator walks: `/admin` → OKF Studio → the repo card's
+*Head Test* → the *RAGAS Benchmarks* tab → the judge dropdown. It
+asserts the dropdown is on screen in **both** the generation form and the
+benchmark-run form, that the `.env` default is among the options and
+names the model it resolves to, and that the admin Models tab lists the
+configured models.
+
+Live against the local build: the generation form shows *"Judge model
+configuration — System default (environment) (ibm-granite/granite-4.1-8b)"*,
+the Models tab lists all seven configurations, and the OKF smoke's
+curator check returns `200 — env judge ibm-granite/granite-4.1-8b, 7 named
+config(s), no key hint`.
 
 ## Still open
 

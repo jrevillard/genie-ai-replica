@@ -502,3 +502,50 @@ development_status:
   #          claims are present AND the retracted ones are absent). E2E browser proof:
   #          tests/e2e/okf/ragas-guide-errors.spec.js (new) — the chapter is reachable and its
   #          table renders 5 rows with the corrected text.
+  # fe18cef95 + 30e92080a + 2250ced71 The guide's OUTPUT table + the re-score
+  #          made a RUN again (MR !598 → feat/okf-server; branch
+  #          fix/ragas-entry-regeneration, 8 commits).
+  #          (a) David 2026-10-25: "You have not updated the guide to explain how to read
+  #          the 55/100 etc. in the output … If you have hard coded strings then fucking
+  #          fix it". The READ chapter gained a SECOND table — one row per piece of the
+  #          OUTPUT (the mean / the coverage fraction / the invalid-run banner / the run
+  #          name / the re-score / the status), each with what it IS and what to do with
+  #          it. The fraction is the number operators misread most: "0.87 55/100" is a mean
+  #          over 55 rows, not a score for 100, and the uncovered rows are NEVER counted
+  #          as zero. The rows name NO metric — the metric list is the product's
+  #          (ALL_METRICS), so a guide that hardcoded them would go stale the day one is
+  #          added; a test asserts the read chapter names none of the four core metrics.
+  #          i18n ×14 TRANSLATED (22 strings each); three copy/paste slips (a Hangul
+  #          fragment in id.js, a Han fragment in ar.js, a Cyrillic 'а' in man.js) were
+  #          caught by a script-contamination check and fixed before the commit.
+  #          (b) THE RE-SCORE WAS BROKEN LIVE. David: "it fails horribly … I cannot stop
+  #          the re-scoring!!!! … it also cannot be tracked and does not connect to the UI
+  #          with a progress bar … I THOUGHT YOU WOULD HAVE LEARNED THAT LESSON BY NOW".
+  #          THREE defects, one cause each: (1) the re-score wrote its run doc only at the
+  #          END of the judge leg, so the panel polled a key that did not exist yet — a 404
+  #          per poll for the whole judge leg; it now writes a 'running' doc the moment it
+  #          starts, and getRunSuite reports an in-flight re-score as running instead of
+  #          the "the worker died" verdict a 'running' doc used to earn. (2) cancelSuiteRun
+  #          only knew about the RUN map, so a re-score answered 409 "no such run is
+  #          executing" while the judge leg kept paying the GPU; it now finds the re-score
+  #          in its own map and cancels ITS sidecar job (not every job of the suite, so a
+  #          concurrent generation survives), and a cancel landing during the submit window
+  #          is honoured too. (3) the UI refreshed the history only on SUCCESS, so a
+  #          cancelled run kept its 'running' pill until a manual reload; and a cancel
+  #          read as an ERROR. The panel now drives a re-score through the SAME progress
+  #          bar and the SAME Cancel button as a run, and the history shows the terminal
+  #          state whatever it is.
+  #          (c) The fidelity block named the `ragas_answers` config in SERVE mode — a
+  #          model the serve path never consults (the served call carries no model at
+  #          all; the answers came from the deployment chat model). answerFidelity is now
+  #          mode-aware: serve mode records the deployment chat model (VLLM_LLM_MODEL_ID
+  #          || VLLM_MODEL_ID), the whatif leg keeps recording the config, and a
+  #          resolution failure degrades to the deployment chat instead of throwing.
+  #          (d) The not-found message named the run key TWICE ("run rrX for suite rsY
+  #          rrX not found") — loadDoc appended the key to a `what` that already had it.
+  #          okf-server 1647/1647 · frontend 2039/2039 · guide test 28/28 (the read table
+  #          AND the error table, per chapter) · localeConsistency 7/7. E2E browser proof:
+  #          tests/e2e/okf/ragas-rescore-tracking.spec.js (new) — drives the REAL UI
+  #          through Keycloak, starts a re-score with the ENV judge, and asserts the
+  #          progress bar, the Cancel button, the history row with its lineage, and the
+  #          row turning 'cancelled'. Both specs PASS against the deployed local build.

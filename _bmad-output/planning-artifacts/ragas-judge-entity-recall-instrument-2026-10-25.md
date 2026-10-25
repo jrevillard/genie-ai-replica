@@ -368,6 +368,39 @@ Implementation notes that will bite anyone who touches this again:
   its values are double-quoted (which is what prettier keeps, since the
   apostrophes would otherwise need escaping).
 
+## The re-score was not a run — it could not be seen or stopped (2026-10-25)
+
+David re-scored `rr1792896220523-b71784` with another judge and the panel
+"failed horribly": a 404 per poll, no progress bar, and no way to stop it.
+The cause was NOT the benchmark — it was the re-score path, and it is worth
+recording because it is the same defect class as the run path's:
+
+| What the operator saw | What the code did |
+|---|---|
+| `GET /runs/<new key>` → 404 for the whole judge leg | The re-score wrote its run doc only at the END of the judge leg (`ragas-suite-service.js:1812`) — the panel polled a key that did not exist yet |
+| no progress bar | The progress lived in an in-memory map, never in the doc the panel reads |
+| "no such run is executing" (409) from Cancel | `cancelSuiteRun` only looked in `runInFlight`; a re-score registers in `rescoreInFlight` |
+| the judge leg kept paying the GPU | nothing could cancel the re-score's sidecar job |
+| the history showed nothing | the row did not exist until the run landed |
+
+Fixed in `2250ced71` + `fe18cef95`: the re-score writes a `running` doc
+immediately, mirrors its progress into it, registers in the cancel path, and
+cancels **its own** sidecar job (not every job of the suite, so a concurrent
+generation survives). The panel drives a re-score through the same progress
+bar and the same Cancel button as a run, and the history shows the terminal
+state — including `cancelled` — without a manual refresh.
+
+Two of the defects were reachable only by running the thing: the unit tests
+could not have found the 404 (the doc is written at the end) or the 409 (the
+cancel map is not the run map). The browser proof in
+`tests/e2e/okf/ragas-rescore-tracking.spec.js` now drives the real UI
+through the whole path.
+
+One orphan was left over from the broken run — `rr1792914371082-016265`,
+whose sidecar job was cancelled directly and whose doc was written as
+`cancelled` by hand. It is in the history with the honest status; it produced
+no scores and was never a measurement.
+
 ## Still open
 
 - The rows the gate refused need their ENTRIES regenerated against the
@@ -380,3 +413,7 @@ Implementation notes that will bite anyone who touches this again:
   currently justify a prompt change.
 - The benchmark must be RE-RUN to measure the regeneration: the stored
   run still carries the old references and the old scores.
+- **The re-score is now usable** — a granite re-score of
+  `rr1792896220523-b71784` is the cheap way to get a second judge's scores
+  over the SAME 100 answers and contexts (no retrieval, no re-generation),
+  and it is now cancellable and visible while it runs.

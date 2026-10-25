@@ -17,7 +17,23 @@ const https = require('https');
 const fs = require('fs');
 const crypto = require('crypto');
 
-const REPO_ID = process.argv[2] || 'f9e08ce2-ddb4-4654-b59e-a27fdabfcb70';
+// The repo the smoke benchmarks.
+//
+// CORPUS SIZE IS THE HARNESS'S RUNTIME, NOT THE PRODUCT'S BEHAVIOUR. The
+// generation leg builds a knowledge graph over the WHOLE corpus before it
+// synthesizes anything, so its cost scales with the graph, not with the
+// 2-question testset: Solar System (3,011 chunks → capped to the
+// OKF_RAGAS_MAX_CORPUS_CHUNKS budget of 1,600) took 3,792 granite calls and
+// was STILL generating when the 65-minute deadline expired (live 2026-10-25).
+//
+// The default is therefore the smallest corpus that still exercises every
+// surface — a real drained graph, a synthesized testset, retrieval, the
+// served answer, the judge, the export, the explain — and fits the deadline
+// with room to spare. Pass another repo id as argv[2] to benchmark a bigger
+// one on purpose; raise OKF_SMOKE_GEN_DEADLINE_MIN when you do.
+const REPO_ID = process.argv[2] || '42b2f2df-880c-4ed5-9208-7b36f05a8029'; // Alphabet Company Information (114 chunks)
+// The generation leg's deadline, in minutes. The run leg gets the same.
+const DEADLINE_MIN = Number(process.env.OKF_SMOKE_GEN_DEADLINE_MIN || 65);
 // The judge the smoke asks for.
 //
 // A smoke must not follow the ACTIVE model configuration: that is a user
@@ -224,7 +240,7 @@ async function main() {
   };
 
   // --- 1. generate (202 + poll) ---
-  console.log('generate: 2 questions, single repo…');
+  console.log(`generate: 2 questions, single repo ${REPO_ID}…`);
   const gen = j(
     await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite`, {
       token,
@@ -238,7 +254,7 @@ async function main() {
   );
   SUITE_KEY = gen.suite_key;
   let suite = null;
-  const genDeadline = Date.now() + 65 * 60 * 1000; // matches OKF_RAGAS_LONG_TIMEOUT_MS (60 min) + margin
+  const genDeadline = Date.now() + DEADLINE_MIN * 60 * 1000; // OKF_RAGAS_LONG_TIMEOUT_MS (60 min) + margin
   for (;;) {
     if (Date.now() > genDeadline) break;
     await sleep(4000);
@@ -269,7 +285,7 @@ async function main() {
   check('run answers 202 + run_key', run.run_key && run.status === 'running', JSON.stringify(run).slice(0, 120));
   let runDoc = null;
   let lastProgress = null;
-  const runDeadline = Date.now() + 65 * 60 * 1000; // matches OKF_RAGAS_LONG_TIMEOUT_MS (60 min) + margin
+  const runDeadline = Date.now() + DEADLINE_MIN * 60 * 1000; // OKF_RAGAS_LONG_TIMEOUT_MS (60 min) + margin
   for (;;) {
     if (Date.now() > runDeadline) break;
     await sleep(3000);

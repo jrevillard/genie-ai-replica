@@ -1781,7 +1781,20 @@ const actions = {
       ensureServices();
       // Envelope: {configs, env_judge, env_pick} — env_judge names the model
       // the "System default (environment)" option resolves to.
-      return { ok: true, ...(await modelConfigService.list()) };
+      //
+      // Field by field, NOT a spread: this action used to spread whatever
+      // the service returned, and the service returned the ARRAY — so the
+      // result carried neither `configs` nor `env_judge`, and both the
+      // RAGAS judge picker and the admin Models tab went blank
+      // (David 2026-10-25). The contract is written out so the shape
+      // cannot change by accident again.
+      const envelope = await modelConfigService.list();
+      return {
+        ok: true,
+        configs: Array.isArray(envelope && envelope.configs) ? envelope.configs : [],
+        env_judge: (envelope && envelope.env_judge) || null,
+        env_pick: (envelope && envelope.env_pick) || null
+      };
     } catch (err) {
       return { ok: false, code: (err && err.code) || 'MODEL_CONFIG_LIST_FAILED', message: err.message };
     }

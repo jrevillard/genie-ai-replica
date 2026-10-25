@@ -17,10 +17,35 @@
 import httpService from './httpService';
 
 export default {
+  /**
+   * The list ENVELOPE — {configs, env_judge, env_pick} — not just the array.
+   *
+   * David 2026-10-25: "you removed the model selection from the RAGAS
+   * generation and benchmarking ... make sure it INCLUDES the default
+   * configured model from the .env as an OPTION."
+   *
+   * This used to return `body.configs` — the array alone — which dropped
+   * `env_judge` and `env_pick`. The store action spread the array into an
+   * object, so the result had NEITHER `configs` NOR `env_judge`:
+   *
+   *   { ok: true, ...['cfgA', 'cfgB'] }  ->  { ok: true, 0: 'cfgA', 1: 'cfgB' }
+   *
+   * The RAGAS panel then saw an empty configuration list AND no env judge,
+   * so it rendered NO judge dropdown at all — for the admin too, and with
+   * the .env default unreachable. The Admin Dashboard's Models tab read
+   * `res.configs` from the same action and was blank for the same reason.
+   *
+   * The envelope is the contract: the named configurations AND the env
+   * judge (base_url + model — never the key) travel together.
+   */
   async list() {
     const res = await httpService.get('/okf/model-configs');
-    const body = res && res.data;
-    return body && Array.isArray(body.configs) ? body.configs : [];
+    const body = (res && res.data) || {};
+    return {
+      configs: Array.isArray(body.configs) ? body.configs : [],
+      env_judge: body.env_judge || null,
+      env_pick: body.env_pick || null
+    };
   },
   async create(payload) {
     const res = await httpService.post('/okf/model-configs', payload);

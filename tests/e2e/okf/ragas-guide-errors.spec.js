@@ -107,7 +107,11 @@ test.describe('the RAGAS guide documents what each error state does to the resul
     await page.waitForTimeout(600);
 
     // 5. THE TABLE — one row per state, with a meaning and an effect.
-    const rows = dialog.locator('table tbody tr');
+    //
+    //    Scoped to the VISIBLE pane: the guide keeps every chapter in the
+    //    DOM (v-show), and the read chapter's own six-row output table is
+    //    still in the document.
+    const rows = dialog.locator('.okf-guide__pane:visible table tbody tr');
     await expect(rows, 'the mapping must be a table, not prose').toHaveCount(5);
 
     // innerText, not textContent: the other chapters stay in the DOM

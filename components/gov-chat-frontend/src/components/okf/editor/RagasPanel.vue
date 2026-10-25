@@ -1966,8 +1966,11 @@ export default {
         });
         if (res.ok) {
           this.runDoc = res.result;
-          await this.refreshHistory();
           this.$emit('changed');
+        } else if (res.code === 'RUN_CANCELLED') {
+          // The user stopped it — not a failure, and it must not read as one.
+          // The finally block refreshes the history, so the row turns
+          // 'cancelled' on its own.
         } else {
           this.error = res.message;
         }
@@ -1976,6 +1979,10 @@ export default {
         this.runProgress = null;
         this.runningRunKey = null;
         this.runCancelBusy = false;
+        // The history must show the TERMINAL state — a cancelled run lands
+        // as 'cancelled' server-side, and its row must say so without a
+        // manual refresh.
+        await this.refreshHistory();
       }
     },
     async refreshHistory() {
@@ -2111,12 +2118,17 @@ export default {
           }
         });
         if (!res.ok) {
-          this.error = res.message || this.translate('okf.ragas.rescore.failed', 'Re-scoring the run failed.');
-          this.rescoreAsk = source; // back for a retry, with the same pick
+          if (res.code === 'RUN_CANCELLED') {
+            // The user stopped it — that is not a failure and must not read
+            // as one. The history refresh in the finally block shows the row
+            // as cancelled.
+          } else {
+            this.error = res.message || this.translate('okf.ragas.rescore.failed', 'Re-scoring the run failed.');
+            this.rescoreAsk = source; // back for a retry, with the same pick
+          }
           return;
         }
         this.runDoc = res.result;
-        await this.refreshHistory();
         this.$emit('changed');
       } finally {
         this.rescoreBusy = false;
@@ -2124,6 +2136,10 @@ export default {
         this.runProgress = null;
         this.runningRunKey = null;
         this.runCancelBusy = false;
+        // The history must show the TERMINAL state — a cancelled re-score
+        // lands as 'cancelled', and its row must say so without a manual
+        // refresh (David 2026-10-25: the run had to be stoppable AND visible).
+        await this.refreshHistory();
       }
     },
     async onLoadRun(runKey, suiteKey, opts = {}) {

@@ -2831,3 +2831,65 @@ describe('the run path judges only the rows that produced an answer (2026-10-25)
     expect(doc.payload).toBeUndefined();
   });
 });
+
+// A row that produced no answer and did NOT error is still a row the
+// operator must see: it is not scored, so it has no failing metric, but
+// dropping it from the attributions would hide it completely.
+describe('a row with no answer is never silently dropped (2026-10-25)', () => {
+  it('an empty answer with no error still reaches the advisor', async () => {
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-eval', status: 'queued' }));
+      if (u.includes('/jobs/j-eval'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-eval',
+            kind: 'evaluate',
+            status: 'done',
+            result: { aggregate: {}, per_query: [{ faithfulness: 1, context_recall: 1 }], n: 1 }
+          })
+        );
+      return baseFetch(url);
+    });
+    const sk = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
+    await sk.done;
+    // The answer leg returns an EMPTY answer for the FIRST question only —
+    // the second still answers, so the run completes with one judged row.
+    const baseLlm = frontmatterService.vllmChatCompletions;
+    frontmatterService.vllmChatCompletions.mockImplementation(async (messages) => {
+      const text = JSON.stringify(messages);
+      const empty = text.includes(GEN_SAMPLES[0].user_input);
+      return {
+        data: {
+          choices: [
+            { message: { content: JSON.stringify({ answer: empty ? '' : 'A grounded answer.', abstained: false }) } }
+          ]
+        }
+      };
+    });
+    try {
+      const run = await svc.beginRunSuite('me', sk.suite_key, { mode: 'whatif' }, { actor: { user_id: 'u1' } });
+      await run.done;
+      const doc = await svc.getRunSuite('me', sk.suite_key, run.run_key);
+      const empty = doc.payload.results.find((r) => !r.answer);
+      expect(empty).toBeTruthy();
+      // It carries no score — it was never judged.
+      expect(empty.metrics).toEqual({});
+
+      const explained = await svc.beginExplainFailures('me', sk.suite_key, { run_key: run.run_key }, {});
+      await explained.done;
+      const ex = await svc.getExplainFailures('me', sk.suite_key, run.run_key);
+      const attributions = ex.payload.attributions || [];
+      // The row is in the advisor's attention set — a stage is attributed,
+      // so the operator is told about it.
+      expect(attributions.length).toBeGreaterThan(0);
+      for (const a of attributions) {
+        expect(typeof a.stage).toBe('string');
+        expect(a.stage.length).toBeGreaterThan(0);
+      }
+    } finally {
+      frontmatterService.vllmChatCompletions.mockImplementation(baseLlm);
+    }
+  });
+});

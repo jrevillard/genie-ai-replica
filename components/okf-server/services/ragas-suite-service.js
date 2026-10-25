@@ -3021,9 +3021,9 @@ function attributeFailures(suite, runDoc, evidence, judgeComparison) {
     // A row that produced NO answer is not scored, so it has no failing
     // metric — but it still needs attribution: it is the row that failed at
     // retrieval or in the answer leg, and that is the first thing the
-    // operator must know. Only a row with neither an error nor a failing
-    // metric has nothing to say.
-    if (!failed.length && !r.error) continue;
+    // operator must know. Only a row that produced an answer and failed
+    // nothing has nothing to say.
+    if (!failed.length && !r.error && r.answer) continue;
 
     // Where the expected passage went — proven against the corpus, not
     // inferred from the run's truncated candidate texts. The ladder only

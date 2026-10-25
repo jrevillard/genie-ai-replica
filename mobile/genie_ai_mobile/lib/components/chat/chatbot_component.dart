@@ -853,15 +853,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       _updateQuickHelpVisibility();
     } catch (e) {
       setState(() => _isLoading = false);
-<<<<<<< HEAD
-      NotificationService.error(_failureMessage(e));
-=======
       // Same reset on failure: an errored non-streaming request still
       // counts as the request having been made, so leaving the filter
       // active would leak the same way.
       clearQuickHelpContext();
-      NotificationService.error(tr('chatbot.processingError'));
->>>>>>> 281183889 (fix(mobile): rollup of all M25/M28/M30/M31/M32/M33 + ApiService retry fixes)
+      NotificationService.error(_failureMessage(e));
       debugPrint("[CHATBOT] Send error: $e");
     }
   }

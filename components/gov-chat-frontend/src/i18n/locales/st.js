@@ -1905,7 +1905,7 @@ export default {
         logs: 'Litlaleho',
         rename: 'Nchafatsa lebitso',
         versions: 'Liphetolelo',
-        headTest: 'Head Test'
+        testingLab: 'Testing Lab'
       },
       delete: {
         body: 'Sena se tlosa polokelo, mehopolo ea eona, litaba tse indexiloeng, kerafo le lintho tsa ngata ruri. Ha se khone ho etsolloa.',
@@ -3061,7 +3061,7 @@ export default {
         tagsetTip: 'Litag tse thibetsoeng tsa tsamaello ena',
         savedTitle: 'Liteko tse bolokiloeng',
         savedTip:
-          'Sete e ngotsweng kapa e romoletsoeng e bolokwa mona, ka reporisari. Mefuta e mengata e arolelana lenaneong lena: di-suite tsa hlooho (di-query tse tsoang dithekeneng le frontmatter, ka palo ea positive/negative) le di-suite tsa benchmark tsa RAGAS (di-query ka likarabo tse lebellwang, ka letshao la RAGAS le palo ea li-entry). Ho bula ho bula suite ea hlooho letlapeng la Head test le suite ea RAGAS letlapeng la RAGAS Benchmarks, moo e ka phethisoang le haoloa khahlanong le corpus ea phelang. Ho hlakola ho ntsha suite ka ho sa feleng; hobitsoa ho ka fetoa ka ho toba lebitsoeng.',
+          'Sete e ngotsweng kapa e romoletsoeng e bolokwa mona, ka reporisari. Mefuta e mengata e arolelana lenaneong lena: di-suite tsa hlooho (di-query tse tsoang dithekeneng le frontmatter, ka palo ea positive/negative) le di-suite tsa benchmark tsa RAGAS (di-query ka likarabo tse lebellwang, ka letshao la RAGAS le palo ea li-entry). Ho bula ho bula suite ea hlooho tabeng ena le suite ea RAGAS letlapeng la RAGAS Benchmarks, moo e ka phethisoang le haoloa khahlanong le corpus ea phelang. Ho hlakola ho ntsha suite ka ho sa feleng; hobitsoa ho ka fetoa ka ho toba lebitsoeng.',
         load: 'Jarisa',
         flipTip: 'Fetola lokisa ho khetha / se khethe',
         deleteTip: 'Tlosa mola ona seteng',

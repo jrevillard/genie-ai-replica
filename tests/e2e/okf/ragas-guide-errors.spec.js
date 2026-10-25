@@ -68,7 +68,7 @@ test.describe('the RAGAS guide documents what each error state does to the resul
     await page.click('#kc-login');
     await page.waitForURL('https://localhost/**', { timeout: 30000 });
 
-    // 2. the admin dashboard -> OKF Studio -> the repo card's "Head Test"
+    // 2. the admin dashboard -> OKF Studio -> the repo card's "Testing Lab"
     await page.goto('https://localhost/admin', { waitUntil: 'networkidle', timeout: 30000 });
     const studioTab = page.getByRole('button', { name: /OKF Studio/i }).first();
     await expect(studioTab, 'the OKF Studio tab must be reachable').toBeVisible({ timeout: 20000 });
@@ -77,9 +77,9 @@ test.describe('the RAGAS guide documents what each error state does to the resul
 
     const card = page.locator('.okf-dashboard__card-wrap', { hasText: REPO_NAME }).first();
     await expect(card, `the ${REPO_NAME} repo card must be listed`).toBeVisible({ timeout: 20000 });
-    const headTest = card.getByRole('button', { name: /Head Test/i }).first();
-    await expect(headTest, 'the Head Test button must be on the card').toBeVisible({ timeout: 20000 });
-    await headTest.click();
+    const testingLab = card.getByRole('button', { name: /Testing Lab/i }).first();
+    await expect(testingLab, 'the Testing Lab button must be on the card').toBeVisible({ timeout: 20000 });
+    await testingLab.click();
 
     // 3. the dialog's "RAGAS Benchmarks" tab, then the guide
     const ragasTab = page.getByRole('button', { name: /RAGAS Benchmarks/i }).first();
@@ -94,7 +94,7 @@ test.describe('the RAGAS guide documents what each error state does to the resul
     // 4. the errors chapter is the SIXTH tab — one per documented state
     //    family, after the five operator chapters.
     //
-    //    Scope to the GUIDE dialog by its title: the Head Test dialog is
+    //    Scope to the GUIDE dialog by its title: the Testing Lab dialog is
     //    still open behind it and is ALSO a role="dialog" — and it carries
     //    its own tables (the entries parity table), so an unscoped
     //    `table tbody tr` would count the wrong rows.

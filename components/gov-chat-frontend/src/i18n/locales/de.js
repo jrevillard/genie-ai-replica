@@ -1907,7 +1907,7 @@ export default {
         logs: 'Protokolle',
         rename: 'Umbenennen',
         versions: 'Versionen',
-        headTest: 'Head Test'
+        testingLab: 'Testing Lab'
       },
       delete: {
         body: 'Dies entfernt das Repository, seine Konzepte, indexierten Inhalte, Graphen und Bundle-Artefakte dauerhaft. Dieser Vorgang kann nicht rückgängig gemacht werden.',
@@ -3071,7 +3071,7 @@ export default {
         tagsetTip: 'Sperr-Tags dieses Laufs',
         savedTitle: 'Gespeicherte Suiten',
         savedTip:
-          'Jede erstellte oder importierte Suite wird hier gespeichert, je Repository. Zwei Arten teilen sich diese Liste: Head-Suiten (aus Tags und Frontmatter abgeleitete Fragensätze, mit Positiv/Negativ-Zählern) und RAGAS-Benchmark-Suiten (Fragensätze mit erwarteten Antworten, mit RAGAS-Badge und Anzahl der Einträge). Laden öffnet eine Head-Suite im Tab Head-Test und eine RAGAS-Suite im Tab RAGAS-Benchmarks, wo sie gegen den Live-Korpus ausgeführt und bewertet werden kann. Löschen entfernt die Suite endgültig; Umbenennen erfolgt direkt im Namen.',
+          'Jede erstellte oder importierte Suite wird hier gespeichert, je Repository. Zwei Arten teilen sich diese Liste: Head-Suiten (aus Tags und Frontmatter abgeleitete Fragensätze, mit Positiv/Negativ-Zählern) und RAGAS-Benchmark-Suiten (Fragensätze mit erwarteten Antworten, mit RAGAS-Badge und Anzahl der Einträge). Laden zeigt eine Head-Suite in diesem Tab und eine RAGAS-Suite im Tab RAGAS-Benchmarks, wo sie gegen den Live-Korpus ausgeführt und bewertet werden kann. Löschen entfernt die Suite endgültig; Umbenennen erfolgt direkt im Namen.',
         load: 'Laden',
         flipTip: 'Wechseln zwischen soll-selektieren / nicht-selektieren',
         deleteTip: 'Diese Zeile aus der Suite entfernen',

@@ -1891,7 +1891,7 @@ export default {
         logs: 'Kumbukumbu',
         rename: 'Badilisha jina',
         versions: 'Matoleo',
-        headTest: 'Head Test'
+        testingLab: 'Testing Lab'
       },
       delete: {
         body: 'Hii inaondoa kabisa ghala, dhana zake, maudhui yaliyoorodheshwa, grafu na vifurushi vyake. Hatua hii haiwezi kutenduliwa.',
@@ -3045,7 +3045,7 @@ export default {
         tagsetTip: 'Tag zilizozuiwa za ukimbiaji huu',
         savedTitle: 'Vipima vilivyohifadhiwa',
         savedTip:
-          'Kila suite iliyoundwa au kuingizwa hifadhiwa hapa, kwa kila hifadhidata. Aina mbili zinashiriki orodha hii: suites za kichwa (seti za maswali kutoka tagi na frontmatter, kwa hesabu za chanya/hasi) na suites za kipimo cha RAGAS (seti za maswali zenye majibu yanayotarajiwa, kwa beji ya RAGAS na idadi ya entries). Kupakia inafungua suite ya kichwa kwenye kichupo cha Head test na suite ya RAGAS kwenye kichupo cha RAGAS Benchmarks, ambapo inaweza kuendeshwa na kupimwa dhidi ya korupasi hai. Kufuta huondoa suite kabisa; kubadilisha jina hufanywa moja kwa moja kwenye jina.',
+          'Kila suite iliyoundwa au kuingizwa hifadhiwa hapa, kwa kila hifadhidata. Aina mbili zinashiriki orodha hii: suites za kichwa (seti za maswali kutoka tagi na frontmatter, kwa hesabu za chanya/hasi) na suites za kipimo cha RAGAS (seti za maswali zenye majibu yanayotarajiwa, kwa beji ya RAGAS na idadi ya entries). Kupakia inaonyesha suite ya kichwa kwenye kichupo hiki na suite ya RAGAS kwenye kichupo cha RAGAS Benchmarks, ambapo inaweza kuendeshwa na kupimwa dhidi ya korupasi hai. Kufuta huondoa suite kabisa; kubadilisha jina hufanywa moja kwa moja kwenye jina.',
         load: 'Pakia',
         flipTip: 'Badilisha iwe-chaguliwe / isiwe-chaguliwe',
         deleteTip: 'Ondoa mstari huu kwenye kipima',

@@ -1857,7 +1857,7 @@ export default {
         logs: '日志',
         rename: '重命名',
         versions: '版本',
-        headTest: 'Head Test'
+        testingLab: 'Testing Lab'
       },
       delete: {
         body: '此操作将永久移除该知识库、其概念、已索引内容、图谱及资产包构件。此操作无法撤销。',
@@ -2989,7 +2989,7 @@ export default {
         tagsetTip: '本次运行的禁止标签',
         savedTitle: '已保存的测试集',
         savedTip:
-          '每个生成或导入的套件都保存在这里（按存储库）。此列表包含两种类型：头部套件（源自标签和 frontmatter 的查询集，显示正/负计数）和 RAGAS 基准套件（带预期答案的问题集，带 RAGAS 徽章和条目数）。加载会在 Head 测试标签页打开头部套件，在 RAGAS Benchmarks 标签页打开 RAGAS 套件，并可在其中针对实时光谱运行和评分。删除会永久移除套件；重命名可直接在名称上进行。',
+          '每个生成或导入的套件都保存在这里（按存储库）。此列表包含两种类型：头部套件（源自标签和 frontmatter 的查询集，显示正/负计数）和 RAGAS 基准套件（带预期答案的问题集，带 RAGAS 徽章和条目数）。加载会在此标签页显示头部套件，在 RAGAS Benchmarks 标签页打开 RAGAS 套件，并可在其中针对实时光谱运行和评分。删除会永久移除套件；重命名可直接在名称上进行。',
         load: '加载',
         flipTip: '切换 应选择 / 不应选择',
         deleteTip: '从测试集中移除此行',

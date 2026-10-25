@@ -1898,7 +1898,7 @@ export default {
         logs: 'Log',
         rename: 'Ganti Nama',
         versions: 'Versi',
-        headTest: 'Head Test'
+        testingLab: 'Testing Lab'
       },
       delete: {
         body: 'Tindakan ini menghapus repositori, konsepnya, konten terindeks, grafik, dan artefak bundel secara permanen. Tindakan ini tidak dapat dibatalkan.',
@@ -3052,7 +3052,7 @@ export default {
         tagsetTip: 'Tag terlarang untuk eksekusi ini',
         savedTitle: 'Suite tersimpan',
         savedTip:
-          'Setiap suite yang dibuat atau diimpor disimpan di sini, per repositori. Dua jenis berbagi daftar ini: suite head (kumpulan kueri dari tag dan frontmatter, dengan jumlah positif/negatif) dan suite tolok ukur RAGAS (kumpulan pertanyaan dengan jawaban yang diharapkan, dengan lencana RAGAS dan jumlah entri). Muat membuka suite head di tab Uji head dan suite RAGAS di tab RAGAS Benchmarks, tempat ia dapat dijalankan dan dinilai terhadap korpus langsung. Hapus menghapus suite secara permanen; ganti nama dilakukan langsung pada nama.',
+          'Setiap suite yang dibuat atau diimpor disimpan di sini, per repositori. Dua jenis berbagi daftar ini: suite head (kumpulan kueri dari tag dan frontmatter, dengan jumlah positif/negatif) dan suite tolok ukur RAGAS (kumpulan pertanyaan dengan jawaban yang diharapkan, dengan lencana RAGAS dan jumlah entri). Muat menampilkan suite head di tab ini dan suite RAGAS di tab RAGAS Benchmarks, tempat ia dapat dijalankan dan dinilai terhadap korpus langsung. Hapus menghapus suite secara permanen; ganti nama dilakukan langsung pada nama.',
         load: 'Muat',
         flipTip: 'Balikkan harus-dipilih / tidak-harus-dipilih',
         deleteTip: 'Hapus baris ini dari suite',

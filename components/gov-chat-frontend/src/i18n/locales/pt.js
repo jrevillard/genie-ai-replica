@@ -1905,7 +1905,7 @@ export default {
         logs: 'Logs',
         rename: 'Renomear',
         versions: 'Versões',
-        headTest: 'Head Test'
+        testingLab: 'Testing Lab'
       },
       delete: {
         body: 'Isso remove permanentemente o repositório, seus conceitos, conteúdo indexado, grafo e artefatos de pacote. Esta ação não pode ser desfeita.',
@@ -3063,7 +3063,7 @@ export default {
         tagsetTip: 'Tags proibidas desta execução',
         savedTitle: 'Suítes salvas',
         savedTip:
-          'Cada suíte gerada ou importada é salva aqui, por repositório. Dois tipos compartilham esta lista: suítes de cabeçalho (conjuntos de consultas derivados de tags e frontmatter, com contagens de positivos/negativos) e suítes de benchmark RAGAS (conjuntos de perguntas com respostas esperadas, com selo RAGAS e contagem de entradas). Carregar abre uma suíte de cabeçalho na aba Teste de cabeçalho e uma suíte RAGAS na aba RAGAS Benchmarks, onde pode ser executada e pontuada contra o corpus ativo. Excluir remove a suíte permanentemente; renomear é feito diretamente no nome.',
+          'Cada suíte gerada ou importada é salva aqui, por repositório. Dois tipos compartilham esta lista: suítes de cabeçalho (conjuntos de consultas derivados de tags e frontmatter, com contagens de positivos/negativos) e suítes de benchmark RAGAS (conjuntos de perguntas com respostas esperadas, com selo RAGAS e contagem de entradas). Carregar mostra uma suíte de cabeçalho nesta aba e uma suíte RAGAS na aba RAGAS Benchmarks, onde pode ser executada e pontuada contra o corpus ativo. Excluir remove a suíte permanentemente; renomear é feito diretamente no nome.',
         load: 'Carregar',
         flipTip: 'Alternar deve-selecionar / não-deve-selecionar',
         deleteTip: 'Remover esta linha da suíte',

@@ -153,7 +153,7 @@
               :disabled="actionBusy"
               @click.stop="onHeadTest(r)"
             >
-              {{ translate('okf.dashboard.card.headTest', 'Head Test') }}
+              {{ translate('okf.dashboard.card.testingLab', 'Testing Lab') }}
             </DsButton>
             <DsButton variant="ghost" small :disabled="actionBusy" @click.stop="onVersions(r)">
               {{ translate('okf.dashboard.card.versions', 'Versions') }}

@@ -1698,7 +1698,7 @@ export default {
         tagsetTip: 'Forbidden tags for this run',
         savedTitle: 'Saved suites',
         savedTip:
-          'Every generated or imported suite is saved here, per repository. Two kinds share this list: head suites (tag- and frontmatter-derived query sets, shown with Positives/Negatives counts) and RAGAS benchmark suites (question sets with expected answers, badged with a RAGAS pill and an entries count). Load opens a head suite into the Head test tab and a RAGAS suite into the RAGAS Benchmarks tab, where it can be run and scored against the live corpus. Delete removes the suite permanently; rename is inline on the name.',
+          'Every generated or imported suite is saved here, per repository. Two kinds share this list: head suites (tag- and frontmatter-derived query sets, shown with Positives/Negatives counts) and RAGAS benchmark suites (question sets with expected answers, badged with a RAGAS pill and an entries count). Load shows a head suite in this tab and a RAGAS suite into the RAGAS Benchmarks tab, where it can be run and scored against the live corpus. Delete removes the suite permanently; rename is inline on the name.',
         load: 'Load',
         flipTip: 'Flip should-select / should-NOT-select',
         deleteTip: 'Remove this row from the suite',
@@ -2700,7 +2700,7 @@ export default {
         buildingAria: 'Building — the source file is still being processed',
         delete: 'Delete',
         export: 'Export',
-        headTest: 'Head Test',
+        testingLab: 'Testing Lab',
         ingesting: 'Ingesting…',
         logs: 'Logs',
         rename: 'Rename',

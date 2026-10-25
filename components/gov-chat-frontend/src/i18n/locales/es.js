@@ -1907,7 +1907,7 @@ export default {
         logs: 'Registros',
         rename: 'Renombrar',
         versions: 'Versiones',
-        headTest: 'Head Test'
+        testingLab: 'Testing Lab'
       },
       delete: {
         body: 'Esto elimina permanentemente el repositorio, sus conceptos, contenido indexado, grafo y artefactos de paquete. No se puede deshacer.',
@@ -3070,7 +3070,7 @@ export default {
         tagsetTip: 'Etiquetas prohibidas de esta ejecución',
         savedTitle: 'Suites guardadas',
         savedTip:
-          'Cada suite generada o importada se guarda aquí, por repositorio. Dos tipos comparten esta lista: suites de cabecera (conjuntos de consultas derivados de etiquetas y frontmatter, con recuentos de positivos/negativos) y suites de referencia RAGAS (conjuntos de preguntas con respuestas esperadas, con distintivo RAGAS y recuento de entradas). Cargar abre una suite de cabecera en la pestaña Prueba de cabecera y una suite RAGAS en la pestaña RAGAS Benchmarks, donde puede ejecutarse y puntuarse contra el corpus activo. Eliminar borra la suite permanentemente; el renombrado es directo sobre el nombre.',
+          'Cada suite generada o importada se guarda aquí, por repositorio. Dos tipos comparten esta lista: suites de cabecera (conjuntos de consultas derivados de etiquetas y frontmatter, con recuentos de positivos/negativos) y suites de referencia RAGAS (conjuntos de preguntas con respuestas esperadas, con distintivo RAGAS y recuento de entradas). Cargar muestra una suite de cabecera en esta pestaña y una suite RAGAS en la pestaña RAGAS Benchmarks, donde puede ejecutarse y puntuarse contra el corpus activo. Eliminar borra la suite permanentemente; el renombrado es directo sobre el nombre.',
         load: 'Cargar',
         flipTip: 'Cambiar debe-seleccionar / no-debe-seleccionar',
         deleteTip: 'Quitar esta fila de la suite',

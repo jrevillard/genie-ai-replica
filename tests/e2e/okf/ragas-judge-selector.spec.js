@@ -14,7 +14,7 @@
 // ARRIVES in a real browser session and the dropdown is on the screen.
 //
 // It walks the real path an operator walks:
-//   /admin -> OKF Studio -> the repo card's "Head Test" ->
+//   /admin -> OKF Studio -> the repo card's "Testing Lab" ->
 //   the dialog's "RAGAS Benchmarks" tab -> the judge dropdown.
 //
 // Run against the local build:
@@ -69,12 +69,12 @@ test.describe('the RAGAS model selection is in the UI', () => {
     await studioTab.click();
     await page.waitForTimeout(1500);
 
-    // 3. the repo card -> Head Test (the dialog that carries the Benchmarks tab)
+    // 3. the repo card -> Testing Lab (the dialog that carries the Benchmarks tab)
     const card = page.locator('.okf-dashboard__card-wrap', { hasText: REPO_NAME }).first();
     await expect(card, `the ${REPO_NAME} repo card must be listed`).toBeVisible({ timeout: 20000 });
-    const headTest = card.getByRole('button', { name: /Head Test/i }).first();
-    await expect(headTest, 'the Head Test button must be on the card').toBeVisible({ timeout: 20000 });
-    await headTest.click();
+    const testingLab = card.getByRole('button', { name: /Testing Lab/i }).first();
+    await expect(testingLab, 'the Testing Lab button must be on the card').toBeVisible({ timeout: 20000 });
+    await testingLab.click();
 
     // 4. the dialog's "RAGAS Benchmarks" tab
     const ragasTab = page.getByRole('button', { name: /RAGAS Benchmarks/i }).first();

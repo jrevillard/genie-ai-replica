@@ -111,11 +111,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The OKF Lab is now the "Testing Lab" (8-6/8-7).** "Routing Lab" named a
   mechanism — routing — that is only one of the surface's four tabs (Head,
   Test, Suites & analytics, RAGAS Benchmarks) plus the advisor, so the name
-  described a part and was retired. Renamed throughout: the three label
-  strings in all 14 locales, the dialog title and CTA, the
+  described a part and was retired. Renamed throughout: every label string in
+  all 14 locales — the dialog title and CTA, the editor and wizard entries,
+  **and the repository card's button**, which still read "Head Test" — the
   `okf.headTest.*` key namespace, the `HeadTestDialog.vue` component, the
   operator scripts directory, the help text, the OKF Studio documentation
-  page and ADR okf-043.
+  page and ADR okf-043. The saved-suites help text also stopped naming "the
+  Head test tab", a tab that does not exist: loading a head suite does not
+  switch tabs at all — its rows render in the Suites tab, where the list
+  already is.
 
 - **On iOS and macOS, the trust-all TLS interception of the vendored
   `flutter_appauth` fork is now scoped to the OIDC provider's host.** The

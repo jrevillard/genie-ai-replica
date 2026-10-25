@@ -3326,7 +3326,55 @@ export default {
             x2: 'Den Abruf nicht gegen eine einzelne Zahl optimieren. context precision und context recall stehen gegeneinander; eine Änderung, die den einen hebt, kostet normalerweise den anderen, und genau dieser Zielkonflikt ist meist der interessante Teil.',
             x3: 'Einen null-Score nicht als niedrigen Score behandeln. Wenn alle Wiederholungsversuche aufgebraucht sind, entsteht ein null-Wert, der vom Mittelwert ausgenommen wird; kein Score bedeutet also keine Messung — die Zeile erneut ausführen, statt das Schlimmste anzunehmen.',
             expect:
-              'Eine Benchmark-Zahl ist ein Vergleich zwischen Läufen derselben Suite, keine Note für den Assistenten. Das xlsx exportieren, wenn die Belege aufbewahrt werden sollen: die Trendlinie im Panel enthält nur die Läufe, die zu diesem Repository gespeichert sind.'
+              'Eine Benchmark-Zahl ist ein Vergleich zwischen Läufen derselben Suite, keine Note für den Assistenten. Das xlsx exportieren, wenn die Belege aufbewahrt werden sollen: die Trendlinie im Panel enthält nur die Läufe, die zu diesem Repository gespeichert sind.',
+            table: {
+              title: 'Was auf dem Bildschirm steht und was es bedeutet',
+              col: {
+                element: 'Auf dem Bildschirm',
+                meaning: 'Was es ist',
+                effect: 'Was damit zu tun ist'
+              },
+              mean: {
+                element: 'Der Wert',
+                meaning:
+                  'Der Mittelwert dieser Metrik über die Zeilen, die der Judge bewertet hat. Er ist kein Wert für die gesamte Suite.',
+                effect:
+                  'Lesen Sie ihn zusammen mit dem Bruch daneben. Ein Mittelwert über wenige Zeilen misst diese Zeilen, nicht die Suite.'
+              },
+              coverage: {
+                element: 'Der Bruch (55/100)',
+                meaning:
+                  'Der Judge hat diese Metrik an 55 der 100 Zeilen der Suite gemessen. Der Mittelwert deckt nur diese 55 Zeilen ab; die übrigen 45 bleiben draußen — sie werden nie als null gezählt.',
+                effect:
+                  'Ein kleiner Bruch heißt, dass die Zahl wenig über die Suite aussagt. Prüfen Sie die Metrik, die Sie interessiert, nicht den Lauf als Ganzes.'
+              },
+              banner: {
+                element: 'Das Banner für einen ungültigen Lauf',
+                meaning:
+                  'Der Lauf hatte fehlgeschlagene Antworten, oder keine Metrik hat alle Zeilen abgedeckt. Seine Abdeckungszahl ist die am besten abgedeckte Metrik, also löst eine Metrik bei 21/100 es nicht aus.',
+                effect:
+                  'Lesen Sie die Bruchwerte je Metrik selbst. Das Banner ist eine Untergrenze, keine Zusammenfassung.'
+              },
+              runName: {
+                element: 'Der Laufname',
+                meaning:
+                  'Der Judge, der diesen Lauf bewertet hat, und die Konfiguration, aus der er stammt. Der Schlüssel darunter ist für den Support.',
+                effect:
+                  'Zwei Läufe mit verschiedenen Judges sind nicht dieselbe Messung. Vergleichen Sie Gleiches mit Gleichem, oder bewerten Sie einen davon neu.'
+              },
+              rescore: {
+                element: 'Neu bewerten',
+                meaning:
+                  'Bewertet dieselben Antworten mit einem anderen Judge. Die Antworten und die Kontexte werden wörtlich übernommen — nichts wird neu geholt oder geschrieben.',
+                effect:
+                  'Nutzen Sie das, um zwei Judges auf dieselben Zeilen zu setzen. Das ist weit günstiger als ein neuer Lauf und so testet man einen Judge-Wechsel.'
+              },
+              status: {
+                element: 'Der Status',
+                meaning: 'Ob der Lauf fertig ist. Bei einem laufenden Lauf bewegen sich die Mittelwerte noch.',
+                effect: 'Warten Sie das Ende ab, bevor Sie eine Zahl lesen.'
+              }
+            }
           },
           errors: {
             title: 'Fehler – und was sie mit dem Ergebnis machen',

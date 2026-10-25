@@ -3304,7 +3304,53 @@ export default {
             x2: 'Jangan menyetel pengambilan berdasarkan satu angka saja. Presisi dan recall saling mengorbankan satu sama lain; perubahan yang menaikkan satu biasanya mengorbankan yang lain, dan tukar-menukar itulah bagian yang biasanya paling menarik.',
             x3: 'Jangan menganggap skor kosong sebagai skor rendah. Percobaan ulang yang habis menghasilkan nilai kosong yang dikecualikan dari rata-rata, jadi tanpa skor berarti tanpa pengukuran — jalankan ulang baris itu, bukan dengan mengasumsikan hal terburuk.',
             expect:
-              'Angka tolok ukur adalah perbandingan antar eksekusi dari suite yang sama, bukan nilai rapor untuk asisten. Ekspor xlsx bila Anda perlu menyimpan buktinya: garis tren pada panel hanya memuat eksekusi yang tersimpan di repositori ini.'
+              'Angka tolok ukur adalah perbandingan antar eksekusi dari suite yang sama, bukan nilai rapor untuk asisten. Ekspor xlsx bila Anda perlu menyimpan buktinya: garis tren pada panel hanya memuat eksekusi yang tersimpan di repositori ini.',
+            table: {
+              title: 'Yang ada di layar, dan apa artinya',
+              col: {
+                element: 'Di layar',
+                meaning: 'Apa itu',
+                effect: 'Apa yang harus dilakukan'
+              },
+              mean: {
+                element: 'Skornya',
+                meaning: 'Rata-rata metrik itu pada baris-baris yang dinilai juri. Itu bukan skor untuk seluruh suite.',
+                effect:
+                  'Bacalah bersama pecahan di sebelahnya. Rata-rata atas beberapa baris hanya mengukur baris-baris itu, bukan suite-nya.'
+              },
+              coverage: {
+                element: 'Pecahan (55/100)',
+                meaning:
+                  'Juri mengukur metrik itu pada 55 dari 100 baris suite. Rata-ratanya hanya mencakup 55 baris itu; 45 baris lainnya dikeluarkan — tidak pernah dihitung sebagai nol.',
+                effect:
+                  'Pecahan yang kecil berarti angkanya hanya sedikit menggambarkan suite. Periksalah metrik yang Anda pedulikan, bukan keseluruhan proses.'
+              },
+              banner: {
+                element: 'Banner proses tidak valid',
+                meaning:
+                  'Proses itu gagal menjawab, atau tidak ada metrik yang mencakup semua baris. Angka cakupannya adalah metrik yang paling baik tercakup, jadi satu metrik di 21/100 tidak akan menaikkannya.',
+                effect: 'Baca sendiri pecahan per metrik. Banner itu adalah batas bawah, bukan ringkasan.'
+              },
+              runName: {
+                element: 'Nama prosesnya',
+                meaning:
+                  'Juri yang menilai proses itu, dan konfigurasi asalnya. Kunci di bawahnya adalah untuk dukungan.',
+                effect:
+                  'Dua proses dengan juri berbeda bukan pengukuran yang sama. Bandingkan yang setara, atau nilai ulang salah satunya.'
+              },
+              rescore: {
+                element: 'Nilai ulang',
+                meaning:
+                  'Menilai ulang jawaban yang sama dengan juri lain. Jawaban dan konteksnya disalin apa adanya — tidak ada yang diambil ulang atau ditulis ulang.',
+                effect:
+                  'Gunakan untuk menempatkan dua juri pada baris-baris yang sama. Jauh lebih murah daripada proses baru, dan itulah cara menguji perubahan juri.'
+              },
+              status: {
+                element: 'Statusnya',
+                meaning: 'Apakah proses itu selesai. Rata-rata pada proses yang sedang berjalan masih bergerak.',
+                effect: 'Tunggu sampai selesai sebelum Anda membaca sebuah angka.'
+              }
+            }
           },
           errors: {
             title: 'Kesalahan, dan pengaruhnya terhadap hasil',

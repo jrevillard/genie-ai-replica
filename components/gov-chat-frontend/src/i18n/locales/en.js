@@ -1957,7 +1957,54 @@ export default {
             x2: 'Do not tune retrieval against a single number. Precision and recall trade against each other; a change that lifts one normally costs the other, and the trade is usually the interesting part.',
             x3: 'Do not treat a null score as a low score. An exhausted retry produces a null that is excluded from the mean, so no score means no measurement — re-run the row rather than assuming the worst.',
             expect:
-              'A benchmark number is a comparison between runs of the same suite, not a grade for the assistant. Export the xlsx when you need to keep the evidence: the trend line in the panel holds only the runs stored on this repository.'
+              'A benchmark number is a comparison between runs of the same suite, not a grade for the assistant. Export the xlsx when you need to keep the evidence: the trend line in the panel holds only the runs stored on this repository.',
+            table: {
+              title: 'What is on screen, and what it means',
+              col: {
+                element: 'On screen',
+                meaning: 'What it is',
+                effect: 'What to do with it'
+              },
+              mean: {
+                element: 'The score',
+                meaning:
+                  'The mean of that metric over the rows the judge scored for it. It is not a score for the whole suite.',
+                effect:
+                  'Read it together with the fraction beside it. A mean over a few rows measures those rows, not the suite.'
+              },
+              coverage: {
+                element: 'The fraction (55/100)',
+                meaning:
+                  "The judge measured that metric on 55 of the suite's 100 rows. The mean covers only those 55 rows; the other 45 are left out of it — never counted as zero.",
+                effect:
+                  'A small fraction means the number says little about the suite. Check the metric you care about, not the run as a whole.'
+              },
+              banner: {
+                element: 'The invalid-run banner',
+                meaning:
+                  'The run had failed answers, or no metric covered every row. Its coverage figure is the best-covered metric, so one metric at 21/100 does not raise it.',
+                effect: 'Read the per-metric fractions yourself. The banner is a floor, not a summary.'
+              },
+              runName: {
+                element: 'The run name',
+                meaning:
+                  'The judge that scored that run, and the configuration it came from. The key under it is for support.',
+                effect:
+                  'Two runs with different judges are not the same measurement. Compare like with like, or re-score one of them.'
+              },
+              rescore: {
+                element: 'Re-score',
+                meaning:
+                  'Re-scores the same answers with a different judge. The answers and the contexts are copied verbatim — nothing is retrieved or written again.',
+                effect:
+                  'Use it to put two judges on the same rows. It is far cheaper than a new run, and it is how you test a judge change.'
+              },
+              status: {
+                element: 'The status',
+                meaning: "Whether the run has finished. A running run's means are still moving.",
+                effect: 'Wait for it to finish before you read a number.'
+              }
+            }
           },
           errors: {
             title: 'Errors, and what they do to the result',

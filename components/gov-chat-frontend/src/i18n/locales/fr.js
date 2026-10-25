@@ -3325,7 +3325,54 @@ export default {
             x2: 'N’ajustez pas la récupération sur la base d’un seul chiffre. La précision et le rappel s’opposent ; un changement qui fait monter l’un fait généralement baisser l’autre, et c’est cet arbitrage qui est le plus instructif.',
             x3: 'Ne confondez pas un score nul avec un score faible. Une reprise épuisée produit un score nul qui est exclu de la moyenne : pas de score signifie pas de mesure — relancez la ligne plutôt que de supposer le pire.',
             expect:
-              'Un chiffre de banc d’essai est une comparaison entre des exécutions d’une même suite, pas une note attribuée à l’assistant. Exportez le xlsx lorsque vous devez conserver les preuves : la courbe de tendance du panneau ne contient que les exécutions enregistrées sur ce dépôt.'
+              'Un chiffre de banc d’essai est une comparaison entre des exécutions d’une même suite, pas une note attribuée à l’assistant. Exportez le xlsx lorsque vous devez conserver les preuves : la courbe de tendance du panneau ne contient que les exécutions enregistrées sur ce dépôt.',
+            table: {
+              title: "Ce qui est à l'écran, et ce que cela signifie",
+              col: {
+                element: "À l'écran",
+                meaning: "Ce que c'est",
+                effect: "Qu'en faire"
+              },
+              mean: {
+                element: 'Le score',
+                meaning:
+                  "La moyenne de cette métrique sur les lignes que le juge a notées. Ce n'est pas un score de l'ensemble du jeu de test.",
+                effect:
+                  'Lisez-le avec la fraction affichée à côté. Une moyenne sur quelques lignes ne mesure que ces lignes, pas le jeu de test.'
+              },
+              coverage: {
+                element: 'La fraction (55/100)',
+                meaning:
+                  'Le juge a mesuré cette métrique sur 55 des 100 lignes du jeu de test. La moyenne ne couvre que ces 55 lignes ; les 45 autres en sont exclues — jamais comptées comme zéro.',
+                effect:
+                  'Une petite fraction signifie que le nombre parle peu du jeu de test. Vérifiez la métrique qui vous intéresse, pas le run dans son ensemble.'
+              },
+              banner: {
+                element: 'La bannière de run invalide',
+                meaning:
+                  "Le run a eu des réponses en échec, ou aucune métrique n'a couvert toutes les lignes. Son chiffre de couverture est la métrique la mieux couverte, donc une métrique à 21/100 ne le déclenche pas.",
+                effect: 'Lisez vous-même les fractions par métrique. La bannière est un plancher, pas un résumé.'
+              },
+              runName: {
+                element: 'Le nom du run',
+                meaning:
+                  'Le juge qui a noté ce run, et la configuration dont il vient. La clé en dessous est pour le support.',
+                effect:
+                  "Deux runs avec des juges différents ne sont pas la même mesure. Comparez ce qui est comparable, ou re-notez l'un des deux."
+              },
+              rescore: {
+                element: 'Re-noter',
+                meaning:
+                  "Re-note les mêmes réponses avec un autre juge. Les réponses et les contextes sont copiés tels quels — rien n'est récupéré ni réécrit.",
+                effect:
+                  "Utilisez-le pour mettre deux juges sur les mêmes lignes. C'est bien moins cher qu'un nouveau run, et c'est ainsi qu'on teste un changement de juge."
+              },
+              status: {
+                element: 'Le statut',
+                meaning: "Si le run est terminé. Les moyennes d'un run en cours bougent encore.",
+                effect: 'Attendez la fin avant de lire un nombre.'
+              }
+            }
           },
           errors: {
             title: 'Erreurs, et ce qu’elles font du résultat',

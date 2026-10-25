@@ -3299,7 +3299,52 @@ export default {
             x2: 'Usiboreshe upatikanaji kulingana na namba moja tu. context precision na context recall hushindana; mabadiliko yanayoinua moja kwa kawaida hulipa nyingine, na makubaliano hayo ndiyo sehemu ya kuvutia zaidi.',
             x3: 'Usifanye alama ya null kuwa alama ya chini. Marudio yaliyoisha huzalisha null ambayo hubainishwa kwenye wastani, kwa hivyo hakuna alama inamaanisha hakuna kipimo — endesha safu hiyo upya badala ya kudhani hali mbaya.',
             expect:
-              'Namba ya kipimo cha kulinganisha ni ulinganisho kati ya utekelezaji wa seti ile ile, si alama ya daraja kwa msaidizi. Hamisha xlsx unapohitaji kuhifadhi ushahidi: mstari wa mwelekeo katika paneli unaohifadhiwa kwa utekelezaji uliomo kwenye hazina hii pekee.'
+              'Namba ya kipimo cha kulinganisha ni ulinganisho kati ya utekelezaji wa seti ile ile, si alama ya daraja kwa msaidizi. Hamisha xlsx unapohitaji kuhifadhi ushahidi: mstari wa mwelekeo katika paneli unaohifadhiwa kwa utekelezaji uliomo kwenye hazina hii pekee.',
+            table: {
+              title: 'Kilichomo kwenye skrini, na maana yake',
+              col: {
+                element: 'Skrini',
+                meaning: 'Kini ni',
+                effect: 'Unapaswa kufanya nini nacho'
+              },
+              mean: {
+                element: 'Alama',
+                meaning: 'Wastani wa kipimo hicho kwenye safu ambazo hakika alipima. Si alama ya kundi kizima.',
+                effect:
+                  'Isoma pamoja na sehemu iliyo kando. Wastani wa safu chache ni kipimo cha hizo safu, si cha kundi.'
+              },
+              coverage: {
+                element: 'Sehemu (55/100)',
+                meaning:
+                  'Hakika alipima kipimo hicho kwenye safu 55 kati ya 100 za kundi. Wastani unahusika safu hizo 55 pekee; nyingine 45 hazihusikani — hazihesabiwi kama sifuri kamwe.',
+                effect:
+                  'Sehemu ndogo inamaanisha namba haisemi mengi kuhusu kundi. Angalia kipimo unachohitaji, si mzigo mzima.'
+              },
+              banner: {
+                element: 'Bango la mfuatano batili',
+                meaning:
+                  'Mfuatano ulikuwa na majibu yaliyashindwa, au hakuna kipimo kilichofunika kila safu. Namba yake ya ufikiaji ndiyo kipimo kilichofunikia vizuri, kwa hivyo kipimo kimoja cha 21/100 hakuiinua.',
+                effect: 'Soma sehemu za kila kipimo mwenyewe. Bango ni kizingiti cha chini, si muhtasari.'
+              },
+              runName: {
+                element: 'Jina la mfuatano',
+                meaning: 'Hakika aliyepima mfuatano huo, na usanidi uliotoka. Ufunguo chini ni kwa msaada.',
+                effect:
+                  'Mifuatano miwili kwa mahakiki tofauti si ukaguzi mmoja. Linganisha zinazofanana, au kadii upya mojawepo.'
+              },
+              rescore: {
+                element: 'Kadii upya',
+                meaning:
+                  'Inakadii majibu yale yale kwa hakika mwingine. Majibu na muktadha hukopishwa hasa — hakuna kinachopatikana au kuandikwa upya.',
+                effect:
+                  'Tumia ili kuweka mahakiki wawili kwenye safu zilezile. Ni bei nafisi kuliko mfuatano mpya, ndiyo njia ya kujaribu mabadiliko ya hakika.'
+              },
+              status: {
+                element: 'Hali',
+                meaning: 'Kama mfuatano umemaliza. Wastani wa mfuatano unaoendelea bado hubadilika.',
+                effect: 'Subiri umalize kabla ya kusoma namba.'
+              }
+            }
           },
           errors: {
             title: 'Makosa na jinsi yanavyoathiri matokeo',

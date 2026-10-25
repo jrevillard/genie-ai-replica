@@ -3314,7 +3314,53 @@ export default {
             x2: 'U se ke hlokomela ho kgetha ho latela nomo e le nngwe. Nepahalo le botlalo di fana ka hare; phetoho e phahamisang e le nngwe ka tlasa e le nngwe e ntle, mme kefiso ea tsona ka tlasa e le nngwe e ntle ka nako e ngata ke karolo e khahlisang.',
             x3: 'U se ke shebe sekhatho se sehleng joalo le sekhatho se tlase. Ho pheta ka mor’a ho fihla ho hlahisa sekhatho se sehleng se neng se sa akaretswa karabong, kahoo nomo e se ho na le tekanyo — phethahatsa mula o mong hape ho e na le ho nahana ka maseo.',
             expect:
-              'Nomo ea tekanyo ke papiso mahlare a ditsamaello tsa sete e le nngwe, eseng haholo ea mofusi. Romela xlsx ha o hloka ho boloka bopaki: mohlaka oa tsoelo-pele ka pane o na le ditsamaello tse bolokileng feela polokelong ena.'
+              'Nomo ea tekanyo ke papiso mahlare a ditsamaello tsa sete e le nngwe, eseng haholo ea mofusi. Romela xlsx ha o hloka ho boloka bopaki: mohlaka oa tsoelo-pele ka pane o na le ditsamaello tse bolokileng feela polokelong ena.',
+            table: {
+              title: 'Seo ho letho skrine, le bolelo hore na le hore',
+              col: {
+                element: 'Skrine',
+                meaning: 'Hore na le hore',
+                effect: 'Hore u ka etsa ka eona'
+              },
+              mean: {
+                element: 'Likhato',
+                meaning: 'Khatello ea metrik eo moahlodi a li ferehela moo a li fa bo. Ha e na letho la suite kaofela.',
+                effect:
+                  "E bale e le letho le pel'a eona. Khatello moo ho linotso tse ling, e fereha linotso tseo, eseng suite."
+              },
+              coverage: {
+                element: 'Karohano (55/100)',
+                meaning:
+                  'Moahlodi o ile a fereha metrik eo moo linotso tse 100 tsa suite li 55. Khatello e koala linotso tseo 55 feela; tse 45 tse ling ha li kaehlohe — ha li balwe zero.',
+                effect:
+                  'Karohano e nyenyane o bolela hore noma e se behale ka suite. sheba metrik eo e o kgatlha, eseng run kaofela.'
+              },
+              banner: {
+                element: 'Benera ea run e sa ntle',
+                meaning:
+                  'Run e bile le linotso tse neng li fetile, kapa ho na le metric e sa koaleng linotso tsohle. Nomere ea eona ke metric eo e koalang haholo, kahoo metric e le 21/100 ha e e phahamise.',
+                effect: 'Bala linotso tsa hae bakeng sa hao. Benera ke tlase, eseng kakaretso.'
+              },
+              runName: {
+                element: 'Lebitso la run',
+                meaning:
+                  'Moahlodi o ile a fereha run eo, le configuration eo e tlang ka ho eona. Key e tlase ke bakeng sa thuso.',
+                effect:
+                  "Run tse pel'a ho na le moahlodi o fana ha se tšoantsohe. Bophela tse tšoanang, kapa o fereha e nthong."
+              },
+              rescore: {
+                element: 'Fereha hape',
+                meaning:
+                  'O fereha linye tse tšoanang le moahlodi o mong. Linye le likhaqana li kopana ka se khale — ho sa letho le ho ngola.',
+                effect:
+                  "Sebedisa ho beha moahlodi tse pel'a linotso tse tšoanang. E theha tse nyenyane ho na le run ncha, mme ke tsela ya ho lekola moahlodi o ncha."
+              },
+              status: {
+                element: 'Boemo',
+                meaning: 'Na run o qetile. Linotso tsa run e sa qeteng li ntse li bona.',
+                effect: 'Waita hore e qetele pele u bala noma.'
+              }
+            }
           },
           errors: {
             title: 'Liphoso le tšusumetso haho ho etsa haholo',

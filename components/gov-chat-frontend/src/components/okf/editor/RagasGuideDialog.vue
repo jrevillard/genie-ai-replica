@@ -70,9 +70,12 @@
                and what it does to the number being read. -->
           <div v-if="ch.table" class="okf-guide__table-wrap">
             <h6 class="okf-guide__table-title">{{ ch.table.title }}</h6>
-            <DsTable :columns="ch.table.columns" :rows="ch.table.rows" row-key="state" striped>
+            <DsTable :columns="ch.table.columns" :rows="ch.table.rows" :row-key="ch.table.rowKey" striped>
               <template #cell-state="{ row }">
                 <DsPill :variant="row.variant">{{ row.state }}</DsPill>
+              </template>
+              <template #cell-element="{ row }">
+                <DsPill :variant="row.variant">{{ row.element }}</DsPill>
               </template>
             </DsTable>
           </div>
@@ -114,6 +117,26 @@ const ERROR_ROWS = [
   { key: 'outOfScope', variant: 'neutral' }
 ];
 
+// What the RESULTS screen shows, and what each piece of it means.
+//
+// The rows are the OUTPUT, not the metrics: a mean, the coverage fraction
+// printed beside it, the invalid-run banner, the judge that scored the
+// run, the re-score action and the status. The coverage fraction is the
+// one operators misread most — "0.87 55/100" is a mean over 55 rows, not
+// a score for 100 — so it gets its own row.
+//
+// Nothing here names a metric: the metric list is the product's
+// (ALL_METRICS), and a guide that hardcoded them would go stale the day
+// one is added.
+const OUTPUT_ROWS = [
+  { key: 'mean', variant: 'info' },
+  { key: 'coverage', variant: 'warning' },
+  { key: 'banner', variant: 'danger' },
+  { key: 'runName', variant: 'neutral' },
+  { key: 'rescore', variant: 'success' },
+  { key: 'status', variant: 'neutral' }
+];
+
 export default {
   name: 'RagasGuideDialog',
   components: { DsDialog, DsTabs, DsCard, DsPill, DsTable },
@@ -148,7 +171,7 @@ export default {
         do: pick(key, 'd', 4),
         dont: pick(key, 'x', 3),
         expect: this.translate(`okf.ragas.guide.chapters.${key}.expect`, ''),
-        table: key === 'errors' ? this.errorTable : null
+        table: key === 'errors' ? this.errorTable : key === 'read' ? this.outputTable : null
       }));
     },
     /**
@@ -171,6 +194,33 @@ export default {
       }));
       return {
         title: this.translate(`${base}.title`, 'How each state maps to the result'),
+        rowKey: 'state',
+        columns,
+        rows
+      };
+    },
+    /**
+     * The OUTPUT table: what is on the results screen and what it means.
+     * Every cell is a translate() call on its own key — translateMixin
+     * resolves leaf values as STRINGS only, so a table cannot be carried
+     * as an array of objects in the locale file.
+     */
+    outputTable() {
+      const base = 'okf.ragas.guide.chapters.read.table';
+      const columns = [
+        { key: 'element', label: this.translate(`${base}.col.element`, 'On screen') },
+        { key: 'meaning', label: this.translate(`${base}.col.meaning`, 'What it is') },
+        { key: 'effect', label: this.translate(`${base}.col.effect`, 'What to do with it') }
+      ];
+      const rows = OUTPUT_ROWS.map((r) => ({
+        variant: r.variant,
+        element: this.translate(`${base}.${r.key}.element`, r.key),
+        meaning: this.translate(`${base}.${r.key}.meaning`, ''),
+        effect: this.translate(`${base}.${r.key}.effect`, '')
+      }));
+      return {
+        title: this.translate(`${base}.title`, 'What is on screen, and what it means'),
+        rowKey: 'element',
         columns,
         rows
       };

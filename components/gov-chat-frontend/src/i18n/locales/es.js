@@ -3323,7 +3323,54 @@ export default {
             x2: 'No ajuste la recuperación contra una sola cifra. La precisión y la exhaustividad se compensan entre sí; un cambio que eleva una normalmente cuesta la otra, y el intercambio suele ser la parte interesante.',
             x3: 'No trate una puntuación nula como una puntuación baja. Un reintento agotado produce un nulo que se excluye de la media, así que sin puntuación no hay medición — vuelva a ejecutar la fila en lugar de asumir lo peor.',
             expect:
-              'Una cifra de prueba comparativa es una comparación entre ejecuciones de la misma suite, no una calificación para el asistente. Exporte el xlsx cuando necesite conservar la evidencia: la línea de tendencia del panel solo conserva las ejecuciones guardadas en este repositorio.'
+              'Una cifra de prueba comparativa es una comparación entre ejecuciones de la misma suite, no una calificación para el asistente. Exporte el xlsx cuando necesite conservar la evidencia: la línea de tendencia del panel solo conserva las ejecuciones guardadas en este repositorio.',
+            table: {
+              title: 'Lo que hay en pantalla, y qué significa',
+              col: {
+                element: 'En pantalla',
+                meaning: 'Qué es',
+                effect: 'Qué hacer con ello'
+              },
+              mean: {
+                element: 'La puntuación',
+                meaning:
+                  'La media de esa métrica sobre las filas que el juez puntuó. No es una puntuación de todo el conjunto.',
+                effect:
+                  'Léala junto a la fracción que tiene al lado. Una media sobre unas pocas filas mide esas filas, no el conjunto.'
+              },
+              coverage: {
+                element: 'La fracción (55/100)',
+                meaning:
+                  'El juez midió esa métrica en 55 de las 100 filas del conjunto. La media cubre solo esas 55 filas; las otras 45 quedan fuera — nunca se cuentan como cero.',
+                effect:
+                  'Una fracción pequeña significa que el número dice poco sobre el conjunto. Revise la métrica que le importa, no el proceso completo.'
+              },
+              banner: {
+                element: 'El banner de proceso no válido',
+                meaning:
+                  'El proceso tuvo respuestas fallidas, o ninguna métrica cubrió todas las filas. Su cifra de cobertura es la métrica mejor cubierta, así que una métrica en 21/100 no lo activa.',
+                effect: 'Lea usted mismo las fracciones por métrica. El banner es un suelo, no un resumen.'
+              },
+              runName: {
+                element: 'El nombre del proceso',
+                meaning:
+                  'El juez que puntuó ese proceso, y la configuración de la que salió. La clave debajo es para soporte.',
+                effect:
+                  'Dos procesos con jueces distintos no son la misma medición. Compare cosas equivalentes, o vuelva a puntuar uno de ellos.'
+              },
+              rescore: {
+                element: 'Volver a puntuar',
+                meaning:
+                  'Vuelve a puntuar las mismas respuestas con otro juez. Las respuestas y los contextos se copian tal cual — no se recupera ni se escribe nada.',
+                effect:
+                  'Úselo para poner dos jueces sobre las mismas filas. Es mucho más barato que un proceso nuevo, y así se prueba un cambio de juez.'
+              },
+              status: {
+                element: 'El estado',
+                meaning: 'Si el proceso ha terminado. Las medias de un proceso en curso todavía se mueven.',
+                effect: 'Espere a que termine antes de leer un número.'
+              }
+            }
           },
           errors: {
             title: 'Errores, y qué le hacen al resultado',

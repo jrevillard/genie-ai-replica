@@ -3272,7 +3272,53 @@ export default {
             x2: 'Ban a yele retrieval tune na number juon ye. Precision ani recall bɛ bɔdi kɛ kɔnata; change min juon ye yelema ye, bar ye bɛ to bɔ ye, ani trade min ye e na bonya na kɔnata.',
             x3: 'Ban a sɔng score null ko score low ye. Retry min bɛ tasalan ko null bɛ kɔbɔ min bɛ kuntu na mean, ani score te ye kɛlan measurement te ye — A run ferege seginna, ban a sula worst.',
             expect:
-              "Benchmark number ye comparison ye run ko suite kelen ye la, e ka assistant la grade ye mana. Export xlsx a i so kɔbɔ na evidence marala, ani i bɛ keta min i mara: trend line min panel la ye bɛ mara run ko repository n'i ye store ye ko kɛlen ko."
+              "Benchmark number ye comparison ye run ko suite kelen ye la, e ka assistant la grade ye mana. Export xlsx a i so kɔbɔ na evidence marala, ani i bɛ keta min i mara: trend line min panel la ye bɛ mara run ko repository n'i ye store ye ko kɛlen ko.",
+            table: {
+              title: 'Wɛr min bɛ na screen kan, ani a yɛri bɛ min ma',
+              col: {
+                element: 'Screen kan',
+                meaning: 'A yɛri bɛ min ma',
+                effect: 'Bɛn na yɛri bɛ min ka kan a fɛn'
+              },
+              mean: {
+                element: 'Score',
+                meaning: 'Metric bɛɛ ma bɛ mean bɛ rows bɛ judge bɛ na seginna la. A tɛ ye suite kelen yei score ye.',
+                effect:
+                  'Ben kaa ben yɛri bɛ min kan bɛ de bɔ a jɔw ma. Mean bɛ rows bɛ kelen ye la bɛ rows minnu di bɔ n’i ye suite ye.'
+              },
+              coverage: {
+                element: 'Bɛn ari (55/100)',
+                meaning:
+                  'Judge bɛ metric bɛɛ ma bɛ rows bɛ 100 la bɛ 55 la bɛ seginna. Mean bɛ na fɔli bɛ rows 55 ye la; bɛ 45 minnu bɛ dɔ bɔ fɔ min i — bɛ kaɲi bɛ zero sɔrɔ.',
+                effect:
+                  'Bɛn ari sɔrɔ bɛ ye, a bɛ yɛrɛ ko number bɛ suite la kuma. Awone metric bɛ min na bɛ kɔnɔ — o tɛ fɔli bɛ run bɛ min ye.'
+              },
+              banner: {
+                element: 'Run bɛ ma valid la banner',
+                meaning:
+                  'Run bɛ la a bɛ answers bɛ fɔli, walima metric kelen ye bɛ na fɔli rows kelen ye la seginna. A bɛ coverage number bɛ ye metric bɛ kelen bɛ seginna ye — 21/100 la bɛ metric kelen ye bɛ na a sɔrɔ bɛ fɔli ye.',
+                effect: 'Awone bɛn ari bɛna kelen ye kaa awa. Banner ye bɛ sira bɔ ye, a tɛ fɔli bɛ sammari ye.'
+              },
+              runName: {
+                element: 'Run bɛ ma yɛri',
+                meaning:
+                  'Judge bɛ na run bɛɛ ma seginna, ani configuration bɛ min a bɔ fɔli bɛ. Key bɛ na bɛɲi bɛ support bɛ ma.',
+                effect:
+                  'Run kelen yei bɛ judge bɛ kelen yei ma, a tɛ fɔli bɛ kelen ye measurement ye. Bɛ kelen bɛ kelen bɛ compare, walima bɛ kelen ye re-score.'
+              },
+              rescore: {
+                element: 'Re-score',
+                meaning:
+                  'Answer bɛ kelen yei bɛ na kaa judge bɛ kelen yei bɛ na seginna. Answers ani contexts bɛ bɛ bɛ kɔpɔ — bɛ dɔ fɔli bɛ walima bɛ kɛn bɔ fɔli bɛ.',
+                effect:
+                  'Judge kelen yei bɛ rows kelen ye la bɔ a fɔli bɛ a sɔrɔ ye. A bɛ run fɛn ye dɔrɔn fɛn ye — ani judge bɛ bɔn bɛ a sɔrɔ.'
+              },
+              status: {
+                element: 'Status',
+                meaning: 'Run bɛ na ban. Run bɛ min bɛ sani na, a bɛ mean bɛ bɛn na bɛ yɛrɛ.',
+                effect: 'Number bɛ iɲɛ walima a bɛ na ban.'
+              }
+            }
           },
           errors: {
             title: 'Fili kei di kɛma yɛri a yɔ bɛ min ma',

@@ -32,6 +32,15 @@ const CHAPTERS = ['generate', 'curate', 'run', 'models', 'read', 'errors'];
 const ERROR_STATES = ['error', 'abstained', 'unmeasured', 'belowThreshold', 'outOfScope'];
 const ERROR_COLUMNS = ['state', 'meaning', 'effect'];
 
+// The OUTPUT reading table (David 2026-10-25: "You have not updated the
+// guide to explain how to read the 55/100 etc. in the output"). The rows are
+// the ON-SCREEN pieces — the mean, the coverage fraction, the invalid-run
+// banner, the run name, the re-score and the status — never the metrics
+// themselves: the metric list is the product's, and a guide that hardcoded
+// them would go stale the day one is added.
+const OUTPUT_ELEMENTS = ['mean', 'coverage', 'banner', 'runName', 'rescore', 'status'];
+const OUTPUT_COLUMNS = ['element', 'meaning', 'effect'];
+
 const guideKeyPaths = () => {
   const paths = ['open', 'title', 'intro', 'close', 'more', 'labels.do', 'labels.dont', 'labels.expect'];
   for (const ch of CHAPTERS) {
@@ -43,6 +52,11 @@ const guideKeyPaths = () => {
   for (const c of ERROR_COLUMNS) paths.push(`chapters.errors.table.col.${c}`);
   for (const s of ERROR_STATES) {
     for (const c of ERROR_COLUMNS) paths.push(`chapters.errors.table.${s}.${c}`);
+  }
+  paths.push('chapters.read.table.title');
+  for (const c of OUTPUT_COLUMNS) paths.push(`chapters.read.table.col.${c}`);
+  for (const e of OUTPUT_ELEMENTS) {
+    for (const c of OUTPUT_COLUMNS) paths.push(`chapters.read.table.${e}.${c}`);
   }
   return paths;
 };
@@ -58,11 +72,11 @@ function mountGuide(props = {}) {
         DsCard: { template: '<div class="card-stub"><slot /></div>' },
         DsPill: { template: '<span class="pill-stub"><slot /></span>' },
         DsTable: {
-          props: ['columns', 'rows'],
+          props: ['columns', 'rows', 'rowKey'],
           template: `
             <div class="table-stub">
               <div v-for="c in columns" :key="'col-' + c.key" class="table-stub__head">{{ c.label }}</div>
-              <div v-for="r in rows" :key="'row-' + r.state" class="table-stub__row">
+              <div v-for="r in rows" :key="'row-' + r[rowKey]" class="table-stub__row">
                 <span v-for="c in columns" :key="'cell-' + c.key" class="table-stub__cell">
                   <slot :name="'cell-' + c.key" :row="r" :column="c" :value="r[c.key]">{{ r[c.key] }}</slot>
                 </span>
@@ -74,6 +88,10 @@ function mountGuide(props = {}) {
     }
   });
 }
+
+/** The guide renders EVERY chapter (v-show), so a table assertion has to be
+ * scoped to its own chapter. The panes are in CHAPTERS order. */
+const paneFor = (w, key) => w.findAll('.okf-guide__pane')[CHAPTERS.indexOf(key)];
 
 describe('RagasGuideDialog', () => {
   it('exposes all six chapters in the order an operator works in', () => {
@@ -163,7 +181,7 @@ describe('RagasGuideDialog', () => {
     it('renders the mapping as a table, so a state is findable by its label', () => {
       const w = mountGuide();
       const text = w.text();
-      expect(w.findAll('.table-stub__row')).toHaveLength(ERROR_STATES.length);
+      expect(paneFor(w, 'errors').findAll('.table-stub__row')).toHaveLength(ERROR_STATES.length);
       // the labels an operator will actually see
       expect(text).toContain('error');
       expect(text).toContain('not measured');
@@ -188,6 +206,59 @@ describe('RagasGuideDialog', () => {
       const text = w.text();
       expect(text).toMatch(/still handed to the judge/i);
       expect(text).toMatch(/zeros ARE counted in the averages/i);
+    });
+  });
+
+  // The OUTPUT reading table (David 2026-10-25: "You have not updated the
+  // guide to explain how to read the 55/100 etc. in the output"). The
+  // coverage fraction is the number operators misread most: "0.87 55/100" is
+  // a mean over 55 rows, not a score for 100 — so it gets its own row.
+  describe('the output reading table', () => {
+    it('gives every on-screen piece a row, with a meaning and an effect', () => {
+      const w = mountGuide();
+      const chapter = w.vm.chapters.find((c) => c.key === 'read');
+      expect(chapter.table).not.toBeNull();
+      expect(chapter.table.columns.map((c) => c.key)).toEqual(OUTPUT_COLUMNS);
+      expect(chapter.table.rows).toHaveLength(OUTPUT_ELEMENTS.length);
+      for (const row of chapter.table.rows) {
+        for (const c of OUTPUT_COLUMNS) {
+          expect(row[c]).toEqual(expect.any(String));
+          expect(row[c].trim()).not.toBe('');
+        }
+      }
+    });
+
+    it('renders as a table in the read chapter, so an element is findable by its label', () => {
+      const w = mountGuide();
+      const pane = paneFor(w, 'read');
+      expect(pane.findAll('.table-stub__row')).toHaveLength(OUTPUT_ELEMENTS.length);
+      const text = pane.text();
+      expect(text).toContain('The fraction (55/100)');
+      expect(text).toContain('The invalid-run banner');
+      expect(text).toContain('Re-score');
+    });
+
+    // The three misreadings this table exists to prevent.
+    it('says the fraction is not the score, the banner is a floor, and a running run is still moving', () => {
+      const w = mountGuide();
+      const text = paneFor(w, 'read').text();
+      // the fraction: the mean covers only the rows the judge scored
+      expect(text).toMatch(/never counted as zero/i);
+      // the banner: one weak metric does not raise it
+      expect(text).toMatch(/21\/100/);
+      expect(text).toMatch(/floor, not a summary/i);
+      // the status: a running run's numbers are still moving
+      expect(text).toMatch(/still moving/i);
+    });
+
+    // The table must not name a metric: the metric list is the product's
+    // (ALL_METRICS), and a guide that hardcoded them would go stale.
+    it('does not hardcode a metric name — the metric list is the product’s', () => {
+      const w = mountGuide();
+      const text = paneFor(w, 'read').text();
+      for (const m of ['faithfulness', 'context_precision', 'context_recall', 'answer_relevancy']) {
+        expect(text).not.toContain(m);
+      }
     });
   });
 });

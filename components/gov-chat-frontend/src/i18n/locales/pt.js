@@ -3316,7 +3316,54 @@ export default {
             x2: 'Não ajuste a recuperação contra um único número. A context precision e a context recall se compensam entre si; uma mudança que eleva uma normalmente custa a outra, e essa troca costuma ser a parte interessante.',
             x3: 'Não trate uma pontuação nula como uma pontuação baixa. Uma retentativa esgotada produz um nulo que é excluído da média, portanto ausência de pontuação significa ausência de medição — reexecute a linha em vez de supor o pior.',
             expect:
-              'Um número de benchmark é uma comparação entre execuções da mesma suíte, não uma nota para o assistente. Exporte o xlsx quando precisar preservar a evidência: a linha de tendência no painel contém apenas as execuções armazenadas neste repositório.'
+              'Um número de benchmark é uma comparação entre execuções da mesma suíte, não uma nota para o assistente. Exporte o xlsx quando precisar preservar a evidência: a linha de tendência no painel contém apenas as execuções armazenadas neste repositório.',
+            table: {
+              title: 'O que está no ecrã, e o que significa',
+              col: {
+                element: 'No ecrã',
+                meaning: 'O que é',
+                effect: 'O que fazer com isso'
+              },
+              mean: {
+                element: 'A pontuação',
+                meaning:
+                  'A média dessa métrica sobre as linhas que o juiz pontuou. Não é uma pontuação do conjunto inteiro.',
+                effect:
+                  'Leia-a juntamente com a fração ao lado. Uma média sobre poucas linhas mede essas linhas, não o conjunto.'
+              },
+              coverage: {
+                element: 'A fração (55/100)',
+                meaning:
+                  'O juiz mediu essa métrica em 55 das 100 linhas do conjunto. A média cobre apenas essas 55 linhas; as outras 45 ficam de fora — nunca contadas como zero.',
+                effect:
+                  'Uma fração pequena significa que o número diz pouco sobre o conjunto. Verifique a métrica que lhe interessa, não a execução inteira.'
+              },
+              banner: {
+                element: 'O banner de execução inválida',
+                meaning:
+                  'A execução teve respostas falhadas, ou nenhuma métrica cobriu todas as linhas. O seu número de cobertura é a métrica melhor coberta, por isso uma métrica em 21/100 não o levanta.',
+                effect: 'Leia você mesmo as frações por métrica. O banner é um piso, não um resumo.'
+              },
+              runName: {
+                element: 'O nome da execução',
+                meaning:
+                  'O juiz que pontuou essa execução, e a configuração de onde veio. A chave por baixo é para suporte.',
+                effect:
+                  'Duas execuções com Judges diferentes não são a mesma medição. Compare o comparável, ou reponte uma delas.'
+              },
+              rescore: {
+                element: 'Repontuar',
+                meaning:
+                  'Repontua as mesmas respostas com outro juiz. As respostas e os contextos são copiados tal e qual — nada é recuperado nem reescrito.',
+                effect:
+                  'Use-o para pôr dois juízes sobre as mesmas linhas. É muito mais barato do que uma nova execução, e é assim que se testa uma mudança de juiz.'
+              },
+              status: {
+                element: 'O estado',
+                meaning: 'Se a execução terminou. As médias de uma execução em curso ainda estão a mover-se.',
+                effect: 'Espere que termine antes de ler um número.'
+              }
+            }
           },
           errors: {
             title: 'Erros, e o que fazem ao resultado',

@@ -52,26 +52,33 @@ sequenceDiagram
   end
 ```
 
-## Run flow (CAP-3) — Lab-internal replay, never chatqna-over-HTTP
+## Run flow (CAP-3) — the answer leg answers through the served pipeline by default
 
 ```mermaid
 sequenceDiagram
   participant UI as RagasPanel
   participant API as okf-server (202)
   participant DB as ArangoDB
+  participant CQ as chatqna (served)
   participant RS as ragas-service
   UI->>API: POST /ragas-testsuite/:suite_key/run
   API->>DB: save ragas_run placeholder (running, progress)
   API-->>UI: 202 {run_key}
   loop each entry (bounded concurrency)
-    API->>DB: AQL APPROX_NEAR_COSINE per selected repo _SOURCE (head-weighted merge)
-    API->>API: rerankTexts (existing rerank seam) -> contexts
-    API->>API: vllmChatCompletions (CHATQNA_SYSTEM_PROMPT-shaped) -> answer
+    alt serve mode (DEFAULT, 2026-10-23)
+      API->>CQ: POST chatqna {messages, include_contexts, context:{mode:okf_only, authorized_graph_names}}
+      CQ->>CQ: the citizen's own retrieval + answer
+      CQ-->>API: served answer + the served contexts
+    else whatif mode (opt-in)
+      API->>DB: AQL APPROX_NEAR_COSINE per selected repo _SOURCE (head-weighted merge)
+      API->>API: rerankTexts (existing rerank seam) -> contexts
+      API->>API: vllmChatCompletions (CHATQNA_SYSTEM_PROMPT-shaped) -> answer
+    end
   end
   API->>RS: POST /evaluate {samples: user_input/retrieved_contexts/response/reference}
-  RS-->>API: {aggregate, per_query: 4 metrics}
-  API->>DB: replace run (done, results + summary + fidelity knobs)
-  loop poll with progress {phase: retrieval|judge, done, total}
+  RS-->>API: {aggregate, per_query: metrics}
+  API->>DB: replace run (done, results + summary + fidelity knobs + judge name)
+  loop poll with progress {phase: retrieval|judge, done, total, judge}
     UI->>API: GET .../runs/:run_key
   end
 ```

@@ -25,20 +25,36 @@ Extended catalog (per David 2026-10-17 the full single-turn set is selectable; t
 | `context_utilization` (precision w/o reference) | < 0.5 |
 | `noise_sensitivity` | > 0.4 (lower is better) |
 
+## The retrieval ladder — where the expected passage was lost
+
+The evidence layer probes the indexed corpus directly (multi-offset containment needles plus a token-coverage threshold over the chunks that contribute, so a passage spanning several chunks is still found) and places the row on a ladder. Each rung is a place the passage can be lost, and **the deepest loss wins** — the deepest loss is the one that must be fixed first (a passage the dense stage never surfaced cannot be rescued by a bigger rerank window).
+
+| Ladder stage | What the probe found | Meaning | Fix surface |
+|---|---|---|---|
+| `retrieved` | the passage reached the selected contexts | the pipeline found it; whatever failed is downstream (answer, judge) | not a retrieval fix — read the LLM / judge rows |
+| `reranker` | it was in the candidate pool but the reranker cut it | the ranking dropped it | `RERANKER_TOP_N`, reranking strategy |
+| `vector-recall` | it is in the corpus but the dense top-K never surfaced it | the embedding/ranking never proposed it | `OKF_RAGAS_CANDIDATE_K` (the rank probe reports where it would have placed, e.g. "rank #28 of 1000"), or the embedding |
+| `corpus` | it is NOT in the corpus | the question is **unanswerable as asked** — the benchmark row expects content the system was never given. It measures the benchmark, not the assistant | flagged as an **unfair question**; the entry is regenerated, never turned into content-curation work |
+| `unproven` | the passage could not be probed at all | **unproven is not proven absent** — it must never be reported as a corpus gap | re-probe; treat as unmeasured |
+
+In serve mode the served pipeline's only visible pool IS the delivered set, so the `reranker` rung is not observable from outside chatqna and never fires there — a passage that did not arrive is a serving-retrieval miss, and the rank probe says where it sat.
+
 ## Attribution matrix
 
 | Pattern (metric signature + run evidence) | Stage | Fix surface | Recommendation text (i18n key basis) |
 |---|---|---|---|
-| `context_recall` low + reference passage absent from contexts (per-repo probe found it in another repo) | Routing | repo frontmatter tags / head | Suggest tag additions via the existing teaching-loop seam (`guardSuggestions`); name the repo that held the passage |
-| `context_recall` low + passage absent everywhere (not in any selected repo's `_SOURCE`) | Corpus | concept content / chunking | The expected output is not retrievable — re-curate the concept or regenerate the suite entry |
-| `context_recall` low + passage in candidates but not in top-N | Reranker | `RERANKER_TOP_N`, reranking strategy | Raise top-N or consult the calibrator; link the existing Suites anchor path for deterministic verification |
+| `context_recall` low + the reference passage was found in another selected repo's corpus | Routing | repo frontmatter tags / head | Suggest tag additions via the existing teaching-loop seam (`guardSuggestions`); name the repo that held the passage |
+| `context_recall` low + ladder stage `corpus` | Corpus | the benchmark entry | The expected output is not in the corpus at all — the entry is an unfair question; regenerate it, do not curate content |
+| `context_recall` low + ladder stage `vector-recall` | Vector recall | `OKF_RAGAS_CANDIDATE_K`, the embedding | The passage is indexed but the dense top-K never proposed it — raise the candidate K to at least the probed rank, or improve the retrieval query |
+| `context_recall` low + ladder stage `reranker` | Reranker | `RERANKER_TOP_N`, reranking strategy | The candidate pool held it and the reranker cut it — raise top-N or change the strategy |
+| `context_recall` low + ladder stage `retrieved` | Reranker / downstream | the answer and judge rows | The passage WAS delivered — whatever failed is downstream |
 | `context_precision` low + recall ok | Reranker (ranking) | rerank weights / strategy | Noise ranked above signal — same reranker surfaces as above |
 | `faithfulness` low + contexts scored good | LLM | `CHATQNA_SYSTEM_PROMPT`, temperature, model | Answer drifts from context — tighten prompt grounding; note judge verdict quotes |
 | `answer_relevancy` low + contexts good | LLM / language | prompt or language mismatch | Check answer language vs suite entry language; prompt specificity |
 | `answer_correctness` / `factual_correctness` low + faithfulness ok | LLM (answer quality) | prompt, model | Answer is grounded but wrong vs the reference — tighten accuracy prompting or assess model minimums |
 | `answer_similarity` low + correctness ok | LLM (wording) | prompt / language | Right facts, wrong shape — phrasing, completeness, or language mismatch vs the reference |
 | `noise_sensitivity` high | Reranker (noise) | rerank knobs | Noisy selection flips answers between runs — same surfaces as precision losses |
-| `context_entities_recall` low | Corpus (entities) | concept content | Key entities of the reference are unretrievable — re-curate the concept or enrich entity mentions |
+| `context_entities_recall` low + the reference chunk was delivered verbatim (context recall 1.0) | Judge (entities) | the judge model | The judge's two entity-extraction calls disagree with each other — this is judge sensitivity, not a corpus gap |
 | `answer_relevancy` low + `abstained` = yes | Abstention | abstention instructions | Model abstained on an answerable query — abstention threshold too strict for this entry |
 | All four ≈ 0/NaN + judge errors in run log | Judge | judge model / endpoint | Judge failure, not pipeline failure — verify `RAGAS_JUDGE_*` (his known failure modes: reasoning-token budget, non-JSON judge, missing embed model) |
 | No answer at all — the row failed at retrieval, or the answerer declined and said nothing | Answer | the retrieval stack / the answer leg | The row was never handed to the judge: it carries no score, it is left out of the averages, and it lowers the measured coverage |
@@ -53,3 +69,4 @@ Extended catalog (per David 2026-10-17 the full single-turn set is selectable; t
    - **Prompt tweaks** — text only, human-applied.
 3. Everything not auto-applicable renders as a chip with reason — identical UI contract to the head Lab's teach/explain loop (`okf-headtest__suggestion` + add/reject chips).
 4. Mechanical rows are always shown even when the LLM adds nothing (`source: 'mechanical'` fallback; never fabricate advice).
+5. **The advisor proposes knobs, not writing.** A `vector-recall` or `reranker` row means the content demonstrably exists — the advisor is told to propose a knob change for those rows. **Concept-content curation is blocked unless at least one row was PROVEN to have a corpus gap** (ladder stage `corpus` AND flagged `unfair_question`), and a proposal that names a row whose stage is not `corpus` is dropped: proposing content for a retrieval failure would ask a curator to write what is already there.

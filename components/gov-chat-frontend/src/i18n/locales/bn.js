@@ -1409,6 +1409,12 @@ export default {
     unsavedChangesLeave: 'আপনার অসংরক্ষিত পরিবর্তন রয়েছে। যাওয়ার আগে সেগুলি সংরক্ষণ করবেন?',
     copyFailed: 'কপি করা যায়নি',
 
+    feedbackSubmitted: 'ফিডব্যাক সংরক্ষিত হয়েছে',
+    feedbackError: 'ফিডব্যাক সংরক্ষণ করা যায়নি',
+    feedbackMissingQueryId: 'এই উত্তরটি এখনও রেট করা যাবে না',
+    chatUpdated: 'কথোপকথন আপডেট হয়েছে',
+    savingConversation: 'সংরক্ষণ হচ্ছে…',
+    thinking: 'ভাবছে…',
     newChatTitle: 'নতুন চ্যাট শুরু করুন',
     exportChat: 'চ্যাট এক্সপোর্ট করুন',
     exportFilename: 'ফাইলের নাম',

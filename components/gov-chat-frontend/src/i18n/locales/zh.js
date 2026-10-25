@@ -1367,6 +1367,12 @@ export default {
     unsavedChangesLeave: '您有未保存的更改。离开前保存吗？',
     copyFailed: '复制失败',
 
+    feedbackSubmitted: '反馈已保存',
+    feedbackError: '反馈保存失败',
+    feedbackMissingQueryId: '该回答尚无法评分',
+    chatUpdated: '对话已更新',
+    savingConversation: '保存中…',
+    thinking: '思考中…',
     newChatTitle: '开始新聊天',
     exportChat: '导出聊天',
     exportFilename: '文件名',

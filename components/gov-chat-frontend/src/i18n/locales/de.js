@@ -1442,6 +1442,12 @@ export default {
     unsavedChangesLeave: 'Du hast ungespeicherte Änderungen. Vor dem Verlassen speichern?',
     copyFailed: 'Kopieren fehlgeschlagen',
 
+    feedbackSubmitted: 'Feedback gespeichert',
+    feedbackError: 'Feedback konnte nicht gespeichert werden',
+    feedbackMissingQueryId: 'Diese Antwort kann noch nicht bewertet werden',
+    chatUpdated: 'Unterhaltung aktualisiert',
+    savingConversation: 'Speichern…',
+    thinking: 'Denkt nach…',
     newChatTitle: 'Neuen Chat starten',
     exportChat: 'Chat exportieren',
     exportFilename: 'Dateiname',

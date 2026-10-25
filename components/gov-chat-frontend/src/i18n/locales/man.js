@@ -1382,6 +1382,12 @@ export default {
     unsavedChangesLeave: 'Tacregyn?',
     copyFailed: 'Cha dooie coipey',
 
+    feedbackSubmitted: 'Sauailit ynnsyn',
+    feedbackError: 'Cha dooarsh yn sauail',
+    feedbackMissingQueryId: 'Cha nel y rere shoh ry-gholl rabbyt',
+    chatUpdated: 'Ynsyn cagliait',
+    savingConversation: 'Sauail…',
+    thinking: 'Smooht…',
     newChatTitle: 'Kuma Kura Damina',
     exportChat: 'Kuma Kii Banta',
     exportFilename: 'Fayil Toh',

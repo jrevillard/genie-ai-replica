@@ -1430,6 +1430,12 @@ export default {
     unsavedChangesLeave: 'Una mabadiliko ambayo hayajahifadhiwa. Uyahifadhi kabla ya kuondoka?',
     copyFailed: 'Imeshindwa kunakili',
 
+    feedbackSubmitted: 'Mrejesho umehifadhiwa',
+    feedbackError: 'Imeshindwa kuhifadhi mrejesho',
+    feedbackMissingQueryId: 'Jibu hili halijawezi kupewa alama bado',
+    chatUpdated: 'Mazungumzo yamesasishwa',
+    savingConversation: 'Inahifadhi…',
+    thinking: 'Inafikiri…',
     newChatTitle: 'Anza Mazungumzo Mapya',
     exportChat: 'Hamisha Mazungumzo',
     exportFilename: 'Jina la Faili',

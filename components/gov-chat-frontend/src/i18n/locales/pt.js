@@ -1443,6 +1443,12 @@ export default {
     unsavedChangesLeave: 'Você tem alterações não salvas. Salvá-las antes de sair?',
     copyFailed: 'Não foi possível copiar',
 
+    feedbackSubmitted: 'Feedback salvo',
+    feedbackError: 'Não foi possível salvar o feedback',
+    feedbackMissingQueryId: 'Esta resposta ainda não pode ser avaliada',
+    chatUpdated: 'Conversa atualizada',
+    savingConversation: 'Salvando…',
+    thinking: 'Pensando…',
     newChatTitle: 'Iniciar Novo Chat',
     exportChat: 'Exportar Chat',
     exportFilename: 'Nome do Arquivo',

@@ -1439,6 +1439,12 @@ export default {
     unsavedChangesLeave: 'Есть несохранённые изменения. Сохранить их перед выходом?',
     copyFailed: 'Не удалось скопировать',
 
+    feedbackSubmitted: 'Отзыв сохранён',
+    feedbackError: 'Не удалось сохранить отзыв',
+    feedbackMissingQueryId: 'Этот ответ пока нельзя оценить',
+    chatUpdated: 'Беседа обновлена',
+    savingConversation: 'Сохранение…',
+    thinking: 'Думаю…',
     newChatTitle: 'Начать новый чат',
     exportChat: 'Экспортировать чат',
     exportFilename: 'Имя файла',

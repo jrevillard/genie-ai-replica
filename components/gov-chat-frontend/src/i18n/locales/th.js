@@ -1425,6 +1425,12 @@ export default {
     unsavedChangesLeave: 'คุณมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก บันทึกก่อนออกหรือไม่?',
     copyFailed: 'คัดลอกไม่สำเร็จ',
 
+    feedbackSubmitted: 'บันทึกฟีดแบ็กแล้ว',
+    feedbackError: 'บันทึกฟีดแบ็กไม่สำเร็จ',
+    feedbackMissingQueryId: 'ยังไม่สามารถให้คะแนนคำตอบนี้ได้',
+    chatUpdated: 'อัปเดตการสนทนาแล้ว',
+    savingConversation: 'กำลังบันทึก…',
+    thinking: 'กำลังคิด…',
     newChatTitle: 'เริ่มแชทใหม่',
     exportChat: 'ส่งออกแชท',
     exportFilename: 'ชื่อไฟล์',

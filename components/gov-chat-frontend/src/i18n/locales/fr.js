@@ -1447,6 +1447,12 @@ export default {
     unsavedChangesLeave: 'Vous avez des modifications non enregistrées. Les enregistrer avant de quitter ?',
     copyFailed: 'Impossible de copier',
 
+    feedbackSubmitted: 'Feedback enregistré',
+    feedbackError: 'Feedback non enregistré',
+    feedbackMissingQueryId: 'Cette réponse ne peut pas encore être notée',
+    chatUpdated: 'Conversation mise à jour',
+    savingConversation: 'Enregistrement…',
+    thinking: 'Réflexion…',
     newChatTitle: 'Commencer une nouvelle discussion',
     exportChat: 'Exporter la discussion',
     exportFilename: 'Nom du fichier',

@@ -1421,6 +1421,12 @@ export default {
     unsavedChangesLeave: 'لديك تغييرات غير محفوظة. هل تريد حفظها قبل المغادرة؟',
     copyFailed: 'تعذر النسخ',
 
+    feedbackSubmitted: 'تم حفظ الملاحظات',
+    feedbackError: 'تعذر حفظ الملاحظات',
+    feedbackMissingQueryId: 'لا يمكن تقييم هذه الإجابة بعد',
+    chatUpdated: 'تم تحديث المحادثة',
+    savingConversation: 'جارٍ الحفظ…',
+    thinking: 'جارٍ التفكير…',
     newChatTitle: 'بدء محادثة جديدة',
     exportChat: 'تصدير المحادثة',
     exportFilename: 'اسم الملف',

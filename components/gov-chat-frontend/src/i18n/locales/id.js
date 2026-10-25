@@ -1428,6 +1428,12 @@ export default {
     unsavedChangesLeave: 'Anda memiliki perubahan yang belum disimpan. Simpan sebelum keluar?',
     copyFailed: 'Gagal menyalin',
 
+    feedbackSubmitted: 'Umpan balik tersimpan',
+    feedbackError: 'Gagal menyimpan umpan balik',
+    feedbackMissingQueryId: 'Jawaban ini belum bisa dinilai',
+    chatUpdated: 'Percakapan diperbarui',
+    savingConversation: 'Menyimpan…',
+    thinking: 'Berpikir…',
     newChatTitle: 'Mulai Obrolan Baru',
     exportChat: 'Ekspor Obrolan',
     exportFilename: 'Nama File',

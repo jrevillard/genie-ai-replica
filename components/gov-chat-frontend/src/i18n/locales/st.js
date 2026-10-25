@@ -1435,6 +1435,12 @@ export default {
     unsavedChangesLeave: 'O na le liphetoho tse sa bolokehang. U di boloke pele u tsoa?',
     copyFailed: 'Ho hlolehile ho kopitsa',
 
+    feedbackSubmitted: 'Karabo e bolokiloe',
+    feedbackError: 'Ho hlolehile ho boloka karabo',
+    feedbackMissingQueryId: 'Karabo ena e ke ke ea fumanwa maemo a teng',
+    chatUpdated: 'Puisano e ntlafalitsoe',
+    savingConversation: 'E boloka…',
+    thinking: 'E nahana…',
     newChatTitle: 'Qala Moqoqo o Motjha',
     exportChat: 'Ntshetsa Moqoqo Kantle',
     exportFilename: 'Lebitso la Faele',

@@ -1430,6 +1430,12 @@ export default {
     unsavedChangesLeave: 'You have unsaved changes. Save them before leaving?',
     copyFailed: 'Could not copy',
 
+    feedbackSubmitted: 'Feedback saved',
+    feedbackError: 'Feedback could not be saved',
+    feedbackMissingQueryId: 'This answer cannot be rated yet',
+    chatUpdated: 'Conversation updated',
+    savingConversation: 'Saving…',
+    thinking: 'Thinking…',
     newChatTitle: 'Start New Chat',
     exportChat: 'Export Chat',
     exportFilename: 'File Name',

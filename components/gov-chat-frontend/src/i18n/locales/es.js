@@ -3324,6 +3324,61 @@ export default {
             x3: 'No trate una puntuación nula como una puntuación baja. Un reintento agotado produce un nulo que se excluye de la media, así que sin puntuación no hay medición — vuelva a ejecutar la fila en lugar de asumir lo peor.',
             expect:
               'Una cifra de prueba comparativa es una comparación entre ejecuciones de la misma suite, no una calificación para el asistente. Exporte el xlsx cuando necesite conservar la evidencia: la línea de tendencia del panel solo conserva las ejecuciones guardadas en este repositorio.'
+          },
+          errors: {
+            title: 'Errores, y qué le hacen al resultado',
+            intro:
+              'Una prueba comparativa nunca mide todas las filas de todas las suites: una fila puede fallar en la canalización, el asistente puede negarse a responder, el juez puede no ser capaz de medir una métrica, y una métrica puede simplemente quedar por debajo de su umbral. Nada de eso es un cero, y nada de eso se oculta. Este capítulo es la correspondencia: qué significa cada estado y qué le hace al número que está leyendo.',
+            d1: 'Lea primero el aviso de ejecución no válida y después las medias. Significa que las puntuaciones de abajo no son una medición del sistema, y el aviso nombra la causa: respuestas que fallaron, o un juez que midió solo una parte de la suite. Corrija la causa y vuelva a ejecutar.',
+            d2: 'Revise la cobertura de cada métrica antes de comparar dos ejecuciones. El panel indica cuántas filas midió realmente el juez para esa métrica; una media sobre una fracción de la suite no es la puntuación de la suite, y no es comparable con una ejecución que midió todas.',
+            d3: 'Corrija una fila con error en su causa: la cadena de recuperación, el servicio previo, el tiempo de espera agotado; y vuelva a ejecutar. Modificar la suite para quitar la fila que una y otra vez falla oculta precisamente el defecto que la prueba comparativa existe para encontrar.',
+            d4: 'Trate una abstención como un resultado, no como un defecto. Dice que el asistente juzgó que el corpus no responde a la pregunta, que es una propiedad del corpus y de la pregunta. Léala como la cobertura de lo que sus usuarios se van a encontrar.',
+            x1: 'No lea una métrica no medida como un cero. Un juez cuya respuesta la métrica no pudo analizar deja esa métrica en null para esa fila; null queda fuera de la media y nunca se promedia como un fallo.',
+            x2: 'No cuente una abstención como un error, ni tampoco como un acierto. Se informa en su propia columna precisamente porque no es ni lo uno ni lo otro.',
+            x3: 'No publique una cifra de una ejecución que el panel marcó como no válida, y no promedie dos ejecuciones para disimularlo. Una ejecución medida solo en parte no tiene cifra que publicar: tiene una ejecución que arreglar.',
+            expect:
+              'Una ejecución limpia no tiene filas con error y cada métrica está medida en todas las filas; ese es el único estado en el que las medias son la prueba comparativa. Todo lo demás es una ejecución que arreglar, no un resultado sobre el que actuar.',
+            table: {
+              title: 'Cómo se refleja cada estado en el resultado',
+              col: {
+                state: 'Estado',
+                meaning: 'Qué significa',
+                effect: 'Qué le hace al resultado'
+              },
+              error: {
+                state: 'error',
+                meaning:
+                  'La canalización falló en esa fila: recuperación, un servicio previo o un tiempo de espera agotado. La fila nunca llegó al juez.',
+                effect:
+                  'Sin métricas para esa fila, así que queda excluida de todas las medias. Se cuenta en la columna de errores y vuelve no válida la ejecución: las medias cubren solo las filas que sobrevivieron.'
+              },
+              abstained: {
+                state: 'abstención',
+                meaning:
+                  'El asistente se negó a responder, casi siempre porque nada en el corpus responde a la pregunta. La fila no se puntúa.',
+                effect:
+                  'Se cuenta en su propia columna. Nunca es un fallo de métrica ni un error; sencillamente la fila no se puntúa.'
+              },
+              unmeasured: {
+                state: 'sin medir',
+                meaning:
+                  'El juez produjo una respuesta que esa métrica no pudo analizar, por ejemplo una afirmación de corrección factual que no pudo verificar.',
+                effect:
+                  'Esa métrica queda en null para esa fila: se excluye de la media, nunca es un cero. El panel muestra cuántas filas midió realmente el juez, y una cobertura parcial vuelve no válida la ejecución.'
+              },
+              belowThreshold: {
+                state: 'por debajo del umbral',
+                meaning: 'La métrica se midió y su puntuación queda por debajo de la barra fijada para ella.',
+                effect:
+                  'La fila FALLA en esa métrica. Una fila falla si falla cualquiera de las métricas seleccionadas.'
+              },
+              outOfScope: {
+                state: 'fuera de alcance',
+                meaning:
+                  'La pregunta es deliberadamente sin respuesta: se conserva en la suite como contraste, nunca como prueba.',
+                effect: 'Nunca se cuenta como un fallo. Es un control, no un resultado.'
+              }
+            }
           }
         }
       },

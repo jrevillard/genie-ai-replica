@@ -3315,6 +3315,61 @@ export default {
             x3: 'U se ke shebe sekhatho se sehleng joalo le sekhatho se tlase. Ho pheta ka mor’a ho fihla ho hlahisa sekhatho se sehleng se neng se sa akaretswa karabong, kahoo nomo e se ho na le tekanyo — phethahatsa mula o mong hape ho e na le ho nahana ka maseo.',
             expect:
               'Nomo ea tekanyo ke papiso mahlare a ditsamaello tsa sete e le nngwe, eseng haholo ea mofusi. Romela xlsx ha o hloka ho boloka bopaki: mohlaka oa tsoelo-pele ka pane o na le ditsamaello tse bolokileng feela polokelong ena.'
+          },
+          errors: {
+            title: 'Liphoso le tšusumetso haho ho etsa haholo',
+            intro:
+              'Boholo ha bohle ha akeng boholo ka moreng o mong le o mong: e ka ba ea na le phoso ka pipeline, kapa mohlophi o ile a hana ho araba, kapa moahlodi o ile a hana ho khala kotloha e ntle, kapa kotloha e ntle e ile ka tlase ho tekanyiso ya eona. Ha ho letho le le leng le ho se zero, mme ha ho letho le le phatlileng. Karolo ena ke tlhasego e hlalositsoang bophelong bo boka ba morago boo, le hore na le tšusumetso e itseng o ka sebetsa ka eona.',
+            d1: 'Bala benera ya "run e se ntle" pele o bala boholo. E bolela hore lintlha tseo o li bonang ha li khalehang Sisteme, mme benera e bitse lebaka: ho na le liphaseho tse neng li foetse, kapa moahlodi o ile a khala feela ka karolo ya haholo. Lokisa lebaka mme o runise hape.',
+            d2: 'Bala coverage ya kotloha e mong le e mong pele o bapisa linotso tse ling. Panel e bontsha hore moahlodi o ile a khala linotso tse ling tse ngang le ho hlala kotloha ena; boholo ba karolo ya haholo bo se boholo ba haholo, mme bo sa tshemaneho le run e ileng a khala linotso tsohle.',
+            d3: 'Lokisa ntha e foelang pele o sebetsa — sekema sa ho batla, kapa tšebeleo e hodima ka hodima, kapa nako e se e fela — mme o runise hape. Ho fetola haholo ho tlohosa ntha e foelang ka kakata e bile e ka bo e na le bothata bo benchmark e lebitseng ho e batla.',
+            d4: 'Bata ho hana ho araba e le sephetho, eseng phoso. E bolela hore mohlophi o ile a nahana hore ha corpus e araba potso ena — sena ke tšebalo ya corpus le potso. E bale feela e le phatelo ya tseo basebelisi ba hao tla utloana le bona.',
+            x1: 'O se o ka akara kotloha e sa lekeng ka zero. Ha moahlodi a ka eona a kgonne ho sekaseka karabo ya kotloha, kotloha ena e ntse ka null moo row eo; null e sa phakela mo boholong, mme e ka bo feela e bile ha e phele e phatlisa ho se phallang.',
+            x2: 'O se o ka baleng ho hana ho araba e le phoso kapa le tsohle. E ntse ka kholo ea e itseng haka hobane ha e se eona e le phoso kapa le tsohle.',
+            x3: 'O se o ka phatliseng noma eo panel e ileng a bitsa "e sa ntle", kapa o se o ka thata ka ho averija linotso tse ling ho e lefa. Run e ile a lekeng ka karolo e na le noma eo ho phatliseng; e na le run eo o lokisang.',
+            expect:
+              'Run e hantle ha e na le linotso tse foelang, mme kotloha e mong le e mong e lekeng moo row e mong le e mong — feela ka maemong a mang ho ka ba boholo bo tšena. Tse ling tsohle ke run eo o lokisang, eseng sephetho se o ka nka qeto ka sona.',
+            table: {
+              title: 'Hore na le boemong bo boka bo etsa ntho e itseng',
+              col: {
+                state: 'Boemong',
+                meaning: 'Bo re bolang',
+                effect: 'Tšusumetso eo e etsang'
+              },
+              error: {
+                state: 'Phoso',
+                meaning:
+                  'Pipeline e foetse moo row ena — ho batla, tšebeleo e hodima ka hodima, kapa nako e se e fela. Row ena ha e fihlelle moahlodi ka sebele.',
+                effect:
+                  'Ho na le kotloha e ho letho mosoana row ena, ka morena ho se ha ekare mo boholong bohle. E baleha kholo ea liphoso mme e etsa run e sa ntle: boholo bo na le linotso tse hlokomeng feela.'
+              },
+              abstained: {
+                state: 'Ho hana ho araba',
+                meaning:
+                  'Mohlophi o ile a hana ho araba — hangata hobane ha ho na le letho corpus e arabang potso. Row ena ha e lekeng.',
+                effect:
+                  'E baleha kholo ea e itseng. E ka bo phoso ya kotloha kapa phoso; row ena e flehetse ha e lekeng.'
+              },
+              unmeasured: {
+                state: 'Ha e lekeng',
+                meaning:
+                  'Moahlodi o ile a nka karabo eo kotloha e sa kgone ho e sekaseka — mohlala o ile a ba lepola ka botopo boo a ka nna a se ka kgone ho hlola.',
+                effect:
+                  'Kotloha ena e ntse ka null moo row ena: ho se ho ekare mo boholong, mme e ka bo feela e bile ha e phele e ba zero. Panel e bontsha linotso tse moahlodi o ile a li lekeng ka nnete, mme ho le letho ka karolo ho etsa run e sa ntle.'
+              },
+              belowThreshold: {
+                state: 'Ka tlase ho tekanyiso',
+                meaning: 'Kotloha e ile a lekeng, mme ha e qetile pontso e tlase ho tekanyiso eo e rereng ho eona.',
+                effect:
+                  'Row ena e hloleha kotloha ena. Row e hloleha ha e na le kotloha e ntle e le hobaneng e hlolehile.'
+              },
+              outOfScope: {
+                state: 'Ntle le sebakeng',
+                meaning:
+                  'Potso ena e ne e sa araba ka morato — e boloketse ho haholo bakeng sa bapiso, mme e ka bo feela e bile ha e phele e ba teko.',
+                effect: 'E ka bo phoso feela ha e phele. Ke taolo ya bapiso, eseng sephetho.'
+              }
+            }
           }
         }
       },

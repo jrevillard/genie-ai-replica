@@ -3305,6 +3305,61 @@ export default {
             x3: 'Jangan menganggap skor kosong sebagai skor rendah. Percobaan ulang yang habis menghasilkan nilai kosong yang dikecualikan dari rata-rata, jadi tanpa skor berarti tanpa pengukuran — jalankan ulang baris itu, bukan dengan mengasumsikan hal terburuk.',
             expect:
               'Angka tolok ukur adalah perbandingan antar eksekusi dari suite yang sama, bukan nilai rapor untuk asisten. Ekspor xlsx bila Anda perlu menyimpan buktinya: garis tren pada panel hanya memuat eksekusi yang tersimpan di repositori ini.'
+          },
+          errors: {
+            title: 'Kesalahan, dan pengaruhnya terhadap hasil',
+            intro:
+              'Tolok ukur tidak pernah mengukur setiap baris dari setiap rangkaian uji: sebuah baris bisa gagal di dalam pipeline, asisten bisa menolak menjawab, hakim bisa tidak mampu mengukur suatu metrik, dan suatu metrik bisa saja berada di bawah ambangnya. Tidak satu pun dari itu adalah nol, dan tidak satu pun disembunyikan. Bab ini adalah pemetaannya — arti setiap keadaan dan apa akibatnya terhadap angka yang sedang Anda baca.',
+            d1: 'Baca dulu spanduk “eksekusi tidak valid”, baru kemudian rata-ratanya. Spanduk itu berarti angka-angka di bawahnya bukan pengukuran atas sistem, dan spanduk itu menyebut penyebabnya: jawaban yang gagal, atau hakim yang hanya mengukur sebagian dari rangkaian uji. Perbaiki penyebabnya, lalu jalankan lagi.',
+            d2: 'Periksa cakupan setiap metrik sebelum membandingkan dua eksekusi. Panel menunjukkan berapa banyak baris yang benar-benar dinilai hakim untuk metrik itu; rata-rata atas sebagian dari rangkaian uji bukanlah skornya, dan tidak sebanding dengan eksekusi yang mengukur semuanya.',
+            d3: 'Perbaiki baris yang error pada penyebabnya — rantai pengambilan, layanan hilir, atau batas waktu — lalu jalankan lagi. Mengubah rangkaian uji untuk membuang baris yang terus gagal justru menyembunyikan cacat yang justru dicari oleh tolok ukur ini.',
+            d4: 'Anggap penolakan menjawab sebagai hasil, bukan cacat. Ini berarti asisten menilai bahwa korpus tidak menjawab pertanyaan itu — sebuah sifat dari korpus dan pertanyaannya. Bacalah sebagai cakupan dari apa yang akan ditemui pengguna Anda.',
+            x1: 'Jangan baca metrik yang tidak terukur sebagai nol. Hakim yang jawabannya tidak dapat diurai oleh metrik itu menyisakan metrik tersebut bernilai null pada baris itu; null dikeluarkan dari rata-rata, dan tidak pernah dirata-ratakan sebagai kegagalan.',
+            x2: 'Jangan hitung penolakan menjawab sebagai kesalahan, dan jangan pula sebagai keberhasilan. Ia dilaporkan pada kolomnya sendiri justru karena ia bukan salah satu maupun.',
+            x3: 'Jangan publikasikan angka dari eksekusi yang ditandai tidak valid oleh panel, dan jangan rata-ratakan dua eksekusi untuk menutupinya. Eksekusi yang hanya terukur sebagian tidak punya angka untuk dipublikasikan; ia punya eksekusi yang perlu diperbaiki.',
+            expect:
+              'Eksekusi yang bersih tidak punya baris error dan setiap metrik dinilai pada setiap baris — hanya dalam keadaan itulah rata-ratanya adalah tolok ukurnya. Selebihnya adalah eksekusi yang perlu diperbaiki, bukan hasil untuk ditindaklanjuti.',
+            table: {
+              title: 'Bagaimana setiap keadaan memengaruhi hasil',
+              col: {
+                state: 'Keadaan',
+                meaning: 'Artinya',
+                effect: 'Apa akibatnya terhadap hasil'
+              },
+              error: {
+                state: 'error',
+                meaning:
+                  'Pipeline gagal pada baris itu — pengambilan, layanan hilir, atau batas waktu. Baris itu tidak pernah sampai kepada hakim.',
+                effect:
+                  'Tidak ada metrik untuk baris itu, sehingga dikeluarkan dari semua rata-rata. Baris itu dihitung pada kolom error dan membuat eksekusi tidak valid: rata-rata hanya mencakup baris yang selamat.'
+              },
+              abstained: {
+                state: 'menolak menjawab',
+                meaning:
+                  'Asisten menolak menjawab — biasanya karena tidak ada isi korpus yang menjawab pertanyaan itu. Baris itu tidak dinilai.',
+                effect:
+                  'Dihitung pada kolomnya sendiri. Tidak pernah kegagalan metrik dan tidak pernah kesalahan; baris itu просто tidak dinilai.'
+              },
+              unmeasured: {
+                state: 'tidak terukur',
+                meaning:
+                  'Hakim menghasilkan jawaban yang tidak dapat diurai metrik tersebut — misalnya pernyataan kebenaran faktual yang tidak dapat diverifikasi.',
+                effect:
+                  'Metrik itu bernilai null pada baris tersebut: dikeluarkan dari rata-rata, tidak pernah nol. Panel menunjukkan berapa banyak baris yang benar-benar dinilai hakim, dan cakupan sebagian membuat eksekusi tidak valid.'
+              },
+              belowThreshold: {
+                state: 'di bawah ambang',
+                meaning: 'Metriknya diukur dan skornya berada di bawah batang yang ditetapkan untuk metrik itu.',
+                effect:
+                  'Baris itu GAGAL pada metrik tersebut. Sebuah baris gagal bila salah satu dari metrik yang dipilih gagal.'
+              },
+              outOfScope: {
+                state: 'di luar lingkup',
+                meaning:
+                  'Pertanyaannya memang sengaja tidak dapat dijawab — disimpan dalam rangkaian uji sebagai pembanding, tidak pernah sebagai pengujian.',
+                effect: 'Tidak pernah dihitung sebagai kegagalan. Ia adalah pembanding, bukan hasil.'
+              }
+            }
           }
         }
       },

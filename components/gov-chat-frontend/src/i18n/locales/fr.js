@@ -3326,6 +3326,61 @@ export default {
             x3: 'Ne confondez pas un score nul avec un score faible. Une reprise épuisée produit un score nul qui est exclu de la moyenne : pas de score signifie pas de mesure — relancez la ligne plutôt que de supposer le pire.',
             expect:
               'Un chiffre de banc d’essai est une comparaison entre des exécutions d’une même suite, pas une note attribuée à l’assistant. Exportez le xlsx lorsque vous devez conserver les preuves : la courbe de tendance du panneau ne contient que les exécutions enregistrées sur ce dépôt.'
+          },
+          errors: {
+            title: 'Erreurs, et ce qu’elles font du résultat',
+            intro:
+              'Un banc d’essai ne mesure jamais toutes les lignes de toutes les suites : une ligne peut échouer dans le pipeline, l’assistant peut refuser de répondre, le juge peut échouer à mesurer une métrique, et une métrique peut simplement être sous sa barre. Aucun de ces cas n’est un zéro, et aucun n’est caché. Ce chapitre est la correspondance — ce que chaque état signifie, et ce qu’il fait du chiffre que vous lisez.',
+            d1: 'Lisez le bandeau d’exécution non valide avant les moyennes. Il signifie que les scores affichés en dessous ne sont pas une mesure du système, et il en nomme la cause : des réponses qui ont échoué, ou un juge qui n’a mesuré qu’une partie de la suite. Corrigez la cause, puis relancez.',
+            d2: 'Vérifiez la couverture de chaque métrique avant de comparer deux exécutions. Le panneau indique combien de lignes le juge a effectivement notées pour cette métrique ; une moyenne sur une fraction de la suite n’est pas le score de la suite, et elle n’est pas comparable à une exécution qui les a toutes mesurées.',
+            d3: 'Corrigez une ligne en erreur à sa racine — la chaîne de récupération, le service amont, le délai dépassé — puis relancez. Modifier la suite pour retirer la ligne qui échoue sans fin cache le défaut que le banc d’essai existe pour trouver.',
+            d4: 'Considérez une abstention comme un résultat, pas comme un défaut. Elle dit que l’assistant a jugé que le corpus ne répond pas à la question : c’est une propriété du corpus et de la question. Lisez-la comme la couverture de ce que vos utilisateurs rencontreront.',
+            x1: 'Ne lisez pas une métrique non mesurée comme un zéro. Un juge dont la réponse n’a pas pu être analysée laisse cette métrique à null pour cette ligne ; null est exclu de la moyenne, jamais moyenné comme un échec.',
+            x2: 'Ne comptez pas une abstention comme une erreur, et ne la comptez pas non plus comme une réussite. Elle est rapportée dans sa propre colonne précisément parce qu’elle n’est ni l’un ni l’autre.',
+            x3: 'Ne publiez pas un chiffre provenant d’une exécution que le panneau a marquée non valide, et ne moyenez pas deux exécutions pour la masquer. Une exécution mesurée partiellement n’a pas de score à publier ; elle a une exécution à corriger.',
+            expect:
+              'Une exécution propre n’a aucune ligne en erreur et chaque métrique notée sur chaque ligne — c’est le seul état dans lequel les moyennes sont le banc d’essai. Tout le reste est une exécution à corriger, pas un résultat sur lequel agir.',
+            table: {
+              title: 'Comment chaque état se répercute sur le résultat',
+              col: {
+                state: 'État',
+                meaning: 'Ce que cela signifie',
+                effect: 'Ce que cela fait du résultat'
+              },
+              error: {
+                state: 'erreur',
+                meaning:
+                  'Le pipeline a échoué sur cette ligne — récupération, service amont ou délai dépassé. La ligne n’a jamais atteint le juge.',
+                effect:
+                  'Aucune métrique pour cette ligne : elle est exclue de toutes les moyennes. Elle est comptée dans la colonne des erreurs et rend l’exécution non valide : les moyennes ne couvrent que les lignes qui ont survécu.'
+              },
+              abstained: {
+                state: 'abstention',
+                meaning:
+                  'L’assistant a refusé de répondre — le plus souvent parce que rien dans le corpus ne répond à la question. La ligne n’est pas notée.',
+                effect:
+                  'Comptée dans sa propre colonne. Jamais un échec de métrique, jamais une erreur ; la ligne n’est tout simplement pas notée.'
+              },
+              unmeasured: {
+                state: 'non mesurée',
+                meaning:
+                  'Le juge a produit une réponse que cette métrique n’a pas pu analyser — par exemple une affirmation de correction factuelle qu’il n’a pas pu vérifier.',
+                effect:
+                  'Cette métrique vaut null pour cette ligne : exclue de la moyenne, jamais un zéro. Le panneau indique combien de lignes le juge a bel et bien notées, et une couverture partielle rend l’exécution non valide.'
+              },
+              belowThreshold: {
+                state: 'sous le seuil',
+                meaning: 'La métrique a été mesurée et son score est inférieur à la barre fixée pour cette métrique.',
+                effect:
+                  'La ligne ÉCHOUE sur cette métrique. Une ligne échoue dès qu’une des métriques sélectionnées échoue.'
+              },
+              outOfScope: {
+                state: 'hors périmètre',
+                meaning:
+                  'La question est délibérément sans réponse — conservée dans la suite pour servir de contraste, jamais comme un test.',
+                effect: 'Jamais comptée comme un échec. C’est un témoin, pas un résultat.'
+              }
+            }
           }
         }
       },

@@ -23,13 +23,26 @@ import en from '@/i18n/locales/en.js';
 const LOCALES = ['ar', 'bn', 'de', 'en', 'es', 'fr', 'id', 'man', 'pt', 'ru', 'st', 'sw', 'th', 'zh'];
 
 // The shape every locale must reproduce.
-const CHAPTERS = ['generate', 'curate', 'run', 'models', 'read'];
+const CHAPTERS = ['generate', 'curate', 'run', 'models', 'read', 'errors'];
+
+// The error→result mapping (David 2026-10-25: "whatever you decide to do
+// with errors and how they are mapped to benchmark results must be
+// documented in the embedded guide for users"). The table is a chapter
+// like any other — it has its own keys, and they must resolve too.
+const ERROR_STATES = ['error', 'abstained', 'unmeasured', 'belowThreshold', 'outOfScope'];
+const ERROR_COLUMNS = ['state', 'meaning', 'effect'];
+
 const guideKeyPaths = () => {
   const paths = ['open', 'title', 'intro', 'close', 'more', 'labels.do', 'labels.dont', 'labels.expect'];
   for (const ch of CHAPTERS) {
     paths.push(`chapters.${ch}.title`, `chapters.${ch}.intro`, `chapters.${ch}.expect`);
     for (let i = 1; i <= 4; i += 1) paths.push(`chapters.${ch}.d${i}`);
     for (let i = 1; i <= 3; i += 1) paths.push(`chapters.${ch}.x${i}`);
+  }
+  paths.push('chapters.errors.table.title');
+  for (const c of ERROR_COLUMNS) paths.push(`chapters.errors.table.col.${c}`);
+  for (const s of ERROR_STATES) {
+    for (const c of ERROR_COLUMNS) paths.push(`chapters.errors.table.${s}.${c}`);
   }
   return paths;
 };
@@ -43,14 +56,27 @@ function mountGuide(props = {}) {
         DsDialog: { template: '<div class="dialog-stub"><slot /></div>' },
         DsTabs: { template: '<div class="tabs-stub"><slot /></div>' },
         DsCard: { template: '<div class="card-stub"><slot /></div>' },
-        DsPill: { template: '<span class="pill-stub"><slot /></span>' }
+        DsPill: { template: '<span class="pill-stub"><slot /></span>' },
+        DsTable: {
+          props: ['columns', 'rows'],
+          template: `
+            <div class="table-stub">
+              <div v-for="c in columns" :key="'col-' + c.key" class="table-stub__head">{{ c.label }}</div>
+              <div v-for="r in rows" :key="'row-' + r.state" class="table-stub__row">
+                <span v-for="c in columns" :key="'cell-' + c.key" class="table-stub__cell">
+                  <slot :name="'cell-' + c.key" :row="r" :column="c" :value="r[c.key]">{{ r[c.key] }}</slot>
+                </span>
+              </div>
+            </div>
+          `
+        }
       }
     }
   });
 }
 
 describe('RagasGuideDialog', () => {
-  it('exposes all five chapters in the order an operator works in', () => {
+  it('exposes all six chapters in the order an operator works in', () => {
     const w = mountGuide();
     expect(w.vm.chapters.map((c) => c.key)).toEqual(CHAPTERS);
     expect(w.vm.tabDefs.map((t) => t.label)).toEqual(w.vm.chapters.map((c) => c.title));
@@ -114,5 +140,41 @@ describe('RagasGuideDialog', () => {
       if (typeof v !== 'string' || v.trim() === '') empty.push(path);
     }
     expect(empty).toEqual([]);
+  });
+
+  // The error→result mapping is the part an operator reads when a number
+  // looks wrong, so it has to be a real table with a row per state — not a
+  // paragraph that mentions the states.
+  describe('the error→result mapping', () => {
+    it('gives every documented state a row, with a meaning and an effect', () => {
+      const w = mountGuide();
+      const chapter = w.vm.chapters.find((c) => c.key === 'errors');
+      expect(chapter.table).not.toBeNull();
+      expect(chapter.table.columns.map((c) => c.key)).toEqual(ERROR_COLUMNS);
+      expect(chapter.table.rows).toHaveLength(ERROR_STATES.length);
+      for (const row of chapter.table.rows) {
+        for (const c of ERROR_COLUMNS) {
+          expect(row[c]).toEqual(expect.any(String));
+          expect(row[c].trim()).not.toBe('');
+        }
+      }
+    });
+
+    it('renders the mapping as a table, so a state is findable by its label', () => {
+      const w = mountGuide();
+      const text = w.text();
+      expect(w.findAll('.table-stub__row')).toHaveLength(ERROR_STATES.length);
+      // the labels an operator will actually see
+      expect(text).toContain('error');
+      expect(text).toContain('not measured');
+      expect(text).toContain('out of scope');
+    });
+
+    it('says the two things that are easy to get wrong: abstention is not a failure, and an unmeasured metric is not a zero', () => {
+      const w = mountGuide();
+      const text = w.text();
+      expect(text).toMatch(/never a metric failure/i);
+      expect(text).toMatch(/never a zero/i);
+    });
   });
 });

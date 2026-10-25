@@ -3273,6 +3273,60 @@ export default {
             x3: 'Ban a sɔng score null ko score low ye. Retry min bɛ tasalan ko null bɛ kɔbɔ min bɛ kuntu na mean, ani score te ye kɛlan measurement te ye — A run ferege seginna, ban a sula worst.',
             expect:
               "Benchmark number ye comparison ye run ko suite kelen ye la, e ka assistant la grade ye mana. Export xlsx a i so kɔbɔ na evidence marala, ani i bɛ keta min i mara: trend line min panel la ye bɛ mara run ko repository n'i ye store ye ko kɛlen ko."
+          },
+          errors: {
+            title: 'Fili kei di kɛma yɛri a yɔ bɛ min ma',
+            intro:
+              "Benchmark bɛ kelen ke kelen ye kelen yei row bɛ seginna: row bɛ na fɔli pipeline la, assistant bɛ na bɔ fɔli bɛ ja answers ma, judge bɛ na fɔli se metric kelen seginna, ani metric bɛ na fɔli dɔ bɛ min bɛ a fɔli bɛ bɛn. N'i ben n'o dɔ ben ka fɔli nɔ ye zero ye, ani fɔli minnu bɛ bɛn ye minɛ waati bɛ na wele. Chapter minɛ ye mapping ye — bɛn na state bɛɛ bɔ bɛ min na, ani bɛ n'i bɛ min a yɛ di bɔ bɛ min na yɛri y'a jɔw ma.",
+            d1: 'Lɛntɛn “run bɛ ma valid” banner la, a kɔnɔ mean bɛ yɛrɛ. I yɛri ko score bɛ min bɛ bɛn bɛɛma system bɛ measurement ye, ani banner yɛrɛ saɲi bɛ min saɲi ye: answers bɛ fɔli, walima judge bɛ na suite tan bɛɛma seginna. Saɲi ɲi wuloo, a sɛbɛn fana.',
+            d2: "Kono metric kuluw kɔfɛn kɔbɛn tugut di bɛɛrehɔ ban dɔn cili kɛn waati fɔlɔ judge bɛ na row bee la seginna. Bɛɛma bɛ fɛn bɛ kɛn bɔ n'o mɔgɔ n'i na bɔ suit bɛɛma yɔri ye, ani a tɛ fɛn bɛ kɛn bɔ run min bɛ na suun bɛɛma seginna bɛɛ kɛn bɔ fɔlɔw.",
+            d3: "Fili bɛ min bɛ fɔli la, sani a wuloo a kɔnɔ la k'a sɔrɔ la, diɲɛ bɛ fɔli ye upstream service ye wallima timeout ye — a kaa sɛbɛn fana. Suite bɛ sɔrɔ n'i fɔli bɛ san bɛ fɔli bɛ kɔnɔ na, o bɛ dɔrɔn min bɛ waati benchmark bɛ sɔrɔ ka min bɛ kijɛraa.",
+            d4: "Bɛ ansa bɔ bɛ fɔli la, a bɛ bɛn dɔɔrɔn ye, ansa bɛ fɔli ye. A yɛrɛ ko assistant y'a sɔn ko corpus bɛ kana fɔli bɛ kelen ye jigi ma — o bɛ corpus la ani question la bɛ ye. A lɛrɛ ko coverage bɛ min user bɛ bɛn na kɛn ye.",
+            x1: "Metric bɛ min bɛ seginna ma, a fɔlɔ zero sɔrɔ. Judge bɛ min bɛɛn b'ɛd fɔli bɛ na metric man bɛ na parse kɛ, o bɛ na metric o la bɛ na null ɲi a ɲi row la; null bɛ bɔ min mean na, ani a tɛ fɛn bɛ kɛn bɔ failure sɔrɔ.",
+            x2: 'Bɛ ansa bɔ bɛ fɔli la, a tɔnɔ error ye walima success ye. A bɛ column bɛ bɛɛn fɛnɛ min na, a kisa fɛnɛ ye te a fɛnɛ ma ye.',
+            x3: 'Panel bɛ run bɛ min bɛ “invalid” la jurɔ la bɔ san bɛɛn bɔlɔni ye, walima run fila wuloo bɛ a sɛbɛn bɔ ye fana. Run bɛ min bɛɛma sugandi ye, a tɛ fɔli bɛ san bɛ kɛn bɔ bɛɛ min bɛ bɛna bɔn ye; a bɛ run bɛ min bɛ fɔli.',
+            expect:
+              'Run ɲuman bɛɛ fɔli row tɛ yen, ani metric bɛ kelɛ kelɛ row la seginna — ni kononi ye kelɛ ye gati min bɛɛn ye mean ye. O minɛ kelen ye bɛ run bɛ min bɛ fɔli la, ansa bɛ fɛn bɛ kɛn bɔ ye.',
+            table: {
+              title: 'Bɛn na state bɛɛ bɔ bɛ min na yɛri a yɔ bɛ min ma',
+              col: {
+                state: 'State',
+                meaning: 'A yɛri bɛ min na',
+                effect: 'A yɛri a yɔ bɛ min na yɛri bɛ min ma'
+              },
+              error: {
+                state: 'error',
+                meaning:
+                  'Pipeline bɛ fɔli o row la — retrieval, upstream service walima timeout. Row ma bɛ judge bɛɛ kaɲi.',
+                effect:
+                  'Metric tɛ yen o row la, o de fɔ min i mean bɛ bɔ. A bɛ error column na kaa, ani a bɛ na run la invalid: mean bɛɛ min bɛ min i bɛ kɛn aɲi la kɔnɔ.'
+              },
+              abstained: {
+                state: 'ansaa bɔ fɔli',
+                meaning:
+                  'Assistant bɛna bɔ fɔli bɛ ja answers ma — sabab u bɛn ko corpus bɛɛma fɔli bɛ kelen tɛ yen. Row ma bɛ seginna.',
+                effect:
+                  'A bɛ column bɛ bɛɛn fɛnɛ ma kaa. A tɛ fɛn bɛ kɛn bɔ metric failure ye walima error ye; row ma fɔli bɛ seginna si.'
+              },
+              unmeasured: {
+                state: 'bɛ seginna ma',
+                meaning:
+                  'Judge bɛna bɛn bɛ na fɔli bɛ na metric man bɛ na parse kɛ — walima claim bɛ fɔli bɛ na judge bɛ na sɔrɔ sɛbɛn.',
+                effect:
+                  'Metric o bɛ null ɲi a ɲi row la: bɛ bɔ min mean na, a tɛ fɛn bɛ kɛn bɔ zero ye. Panel yɛrɛ bɛ row jigɛn judge bɛ na seginna, ani coverage bɛ fɔlɔw ye bɛ na run la invalid.'
+              },
+              belowThreshold: {
+                state: 'sira la bɛ bɔ',
+                meaning: 'Metric bɛ seginna, ani score bɛ la bɔ fɔli bɛ min bɛ bɛn ka bɔ aɲi.',
+                effect: 'Row ma bɛ FAIL ɲi a ɲi metric la. Row bɛ fa bɛɛn metric bɛ kelen bɛ fɔli la, o fɔli.'
+              },
+              outOfScope: {
+                state: 'kɔfɛn na bɔ',
+                meaning:
+                  "Question bɛ bɛn bɔ fɔli la b'ɛn bɛna fɔ bɛ kana — a bɛ dɔrɔn suite la sɔnifɛ ni ka fɛnɛ bɛ ye.",
+                effect: 'A tɛ fɛn bɛ kɛn bɔ failure sɔrɔ. O bɛ control ye, ansa bɛ fɛn bɛ kɛn bɔ ye.'
+              }
+            }
           }
         }
       },

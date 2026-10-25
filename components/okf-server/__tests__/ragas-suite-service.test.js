@@ -2600,3 +2600,129 @@ describe('answerFidelity — the record must name the model that ACTUALLY answer
     expect(serve.model).toBe('ibm-granite/granite-4.1-8b');
   });
 });
+
+// The advisor used to ASSERT a second judge's verdict from a hardcoded
+// string: "A second judge disagrees on roughly half of these rows" and
+// "A second judge reproduces this on most of these rows". Both were true
+// of ONE offline measurement (the 2026-10-24 granite re-score) and
+// silently became lies for every other run. David 2026-10-25: "If you
+// have hard coded strings then fucking fix it!!!!!"
+//
+// The verdict is now COMPUTED from the sibling re-score — the run that
+// scored the same answers with a different judge.
+describe('the advisor’s second-judge verdict is computed, not asserted (2026-10-25)', () => {
+  const SUITE = {
+    payload: {
+      entries: [{ id: 'r1' }, { id: 'r2' }, { id: 'r3' }, { id: 'r4' }],
+      thresholds: {}
+    }
+  };
+  const runDoc = {
+    _key: 'rr-source',
+    metrics: ['factual_correctness'],
+    payload: {
+      results: [
+        { id: 'r1', metrics: { factual_correctness: 0.2 }, answer: 'a', contexts: ['x'] },
+        { id: 'r2', metrics: { factual_correctness: 0.2 }, answer: 'a', contexts: ['x'] },
+        { id: 'r3', metrics: { factual_correctness: 0.2 }, answer: 'a', contexts: ['x'] },
+        { id: 'r4', metrics: { factual_correctness: 0.9 }, answer: 'a', contexts: ['x'] }
+      ]
+    }
+  };
+
+  it('counts the rows the second judge CLEARED and the rows it KEPT FAILING', () => {
+    // The second judge cleared r1, kept r2 failing, and could not measure r3.
+    const second = {
+      _key: 'rr-second',
+      metrics: ['factual_correctness'],
+      payload: {
+        fidelity: { judge: { model: 'ibm-granite/granite-4.1-8b' } },
+        results: [
+          { id: 'r1', metrics: { factual_correctness: 0.95 } },
+          { id: 'r2', metrics: { factual_correctness: 0.1 } },
+          { id: 'r3', metrics: {} },
+          { id: 'r4', metrics: { factual_correctness: 0.95 } }
+        ]
+      }
+    };
+    const cmp = svc.compareJudges(SUITE, runDoc, second);
+    expect(cmp.source).toBe('sibling');
+    expect(cmp.second_judge).toBe('ibm-granite/granite-4.1-8b');
+    expect(cmp.second_run_key).toBe('rr-second');
+    const m = cmp.per_metric.factual_correctness;
+    // r1, r2, r3 failed here; r4 passed here (not counted).
+    expect(m.failed_here).toBe(3);
+    expect(m.cleared).toBe(1);
+    expect(m.kept_failing).toBe(1);
+    expect(m.not_measured).toBe(1);
+  });
+
+  it('says so when NO second judge has scored the run — it does not assert one', () => {
+    const cmp = svc.compareJudges(SUITE, runDoc, null);
+    expect(cmp.source).toBe('none');
+    const sentence = svc.secondJudgeSentence(cmp, 'factual_correctness');
+    expect(sentence).toMatch(/no second judge has scored this run/i);
+    // And it must NOT claim a proportion it was never given.
+    expect(sentence).not.toMatch(/roughly half|most of these rows/i);
+  });
+
+  it('quotes the computed counts, never a canned proportion', () => {
+    const second = {
+      _key: 'rr-second',
+      metrics: ['factual_correctness'],
+      payload: {
+        fidelity: { judge: { model: 'granite' } },
+        results: [
+          { id: 'r1', metrics: { factual_correctness: 0.95 } },
+          { id: 'r2', metrics: { factual_correctness: 0.1 } },
+          { id: 'r3', metrics: {} }
+        ]
+      }
+    };
+    const cmp = svc.compareJudges(SUITE, runDoc, second);
+    const sentence = svc.secondJudgeSentence(cmp, 'factual_correctness');
+    expect(sentence).toContain('granite');
+    expect(sentence).toContain('cleared 1 of the 3');
+    expect(sentence).toContain('1 still failed');
+    // The retracted canned claims must not reappear.
+    expect(sentence).not.toMatch(/roughly half/i);
+    expect(sentence).not.toMatch(/reproduces this on most of these rows/i);
+  });
+
+  it('the attribution carries the computed sentence, not a hardcoded one', () => {
+    // The judge-stage branch: faithfulness passed while factual_correctness
+    // failed — the branch that used to say "a second judge disagrees on
+    // roughly half of these rows".
+    const suite = {
+      payload: {
+        entries: [{ id: 'r1' }],
+        thresholds: {}
+      }
+    };
+    const doc = {
+      metrics: ['faithfulness', 'factual_correctness'],
+      payload: {
+        fidelity: { retrieval: { mode: 'whatif' } },
+        results: [{ id: 'r1', metrics: { faithfulness: 1.0, factual_correctness: 0.1 }, answer: 'a', contexts: ['x'] }]
+      }
+    };
+    const none = svc.attributeFailures(suite, doc, null, svc.compareJudges(suite, doc, null));
+    expect(none.length).toBe(1);
+    expect(none[0].stage).toBe('judge');
+    expect(none[0].recommendation).toMatch(/no second judge has scored this run/i);
+    expect(none[0].recommendation).not.toMatch(/roughly half/i);
+
+    const second = {
+      _key: 'rr-second',
+      metrics: ['faithfulness', 'factual_correctness'],
+      payload: {
+        fidelity: { judge: { model: 'granite' } },
+        results: [{ id: 'r1', metrics: { faithfulness: 1.0, factual_correctness: 0.95 } }]
+      }
+    };
+    const withSibling = svc.attributeFailures(suite, doc, null, svc.compareJudges(suite, doc, second));
+    expect(withSibling[0].recommendation).toContain('granite');
+    expect(withSibling[0].recommendation).toContain('cleared 1 of the 1');
+    expect(withSibling[0].recommendation).not.toMatch(/roughly half/i);
+  });
+});

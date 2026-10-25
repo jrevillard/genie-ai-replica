@@ -2819,7 +2819,114 @@ async function getExplainFailures(repoId, suiteKey, runKey) {
  * the one that must be fixed first (a passage the dense stage never
  * surfaced cannot be rescued by a bigger rerank window).
  */
-function attributeFailures(suite, runDoc, evidence) {
+/**
+ * The run that scored the SAME ANSWERS with a DIFFERENT judge: the
+ * re-score of this run, or the run this run re-scored.
+ *
+ * Only a LINEAGE-linked sibling can be compared row by row — an unrelated
+ * run scored its own answers, so its per-row scores say nothing about this
+ * one's. The re-score is the only cheap way to get a second judge's verdict
+ * over identical answers and contexts (no retrieval, no re-generation).
+ */
+async function loadSecondJudgeRun(db, repoId, suiteKey, runKey, runDoc) {
+  const parent = (runDoc.payload && runDoc.payload.fidelity && runDoc.payload.fidelity.rescore_of) || '';
+  const rows = await (
+    await db.query(
+      `FOR d IN ${COLLECTION} FILTER d.repo_id == @rid AND d.suite_key == @sk AND d.kind == "ragas_run" ` +
+        'AND d.status == "done" AND d._key != @rk AND (d.payload.fidelity.rescore_of == @rk OR d._key == @parent) ' +
+        'SORT d.created_at DESC LIMIT 1 RETURN d',
+      { rid: repoId, sk: suiteKey, rk: runKey, parent }
+    )
+  ).all();
+  return rows.length ? rows[0] : null;
+}
+
+/**
+ * How the two judges differ on the rows THIS judge failed.
+ *
+ * The advisor used to ASSERT "a second judge disagrees on roughly half of
+ * these rows" from a hardcoded string. That was true of ONE offline
+ * measurement and silently became a lie for every other run — David
+ * 2026-10-25: "If you have hard coded strings then fucking fix it". The
+ * comparison is now computed from the sibling run's own scores.
+ */
+function compareJudges(suite, runDoc, secondDoc) {
+  const thresholds = { ...FAIL_BELOW_DEFAULTS, ...((suite.payload && suite.payload.thresholds) || {}) };
+  const judgeOf = (doc) => {
+    const f = (doc.payload && doc.payload.fidelity && doc.payload.fidelity.judge) || null;
+    return (f && (f.model || f.config)) || 'an unnamed judge';
+  };
+  if (!secondDoc) {
+    return { source: 'none', second_judge: null, second_run_key: null, per_metric: {}, total: null };
+  }
+  const metrics = (runDoc.metrics || []).filter((m) => (secondDoc.metrics || []).includes(m));
+  const secondById = new Map((secondDoc.payload.results || []).map((r) => [r.id, r]));
+  // null = not measured, true = failed, false = passed.
+  const verdict = (r, m) => {
+    const v = r.metrics ? r.metrics[m] : null;
+    if (typeof v !== 'number' || v !== v) return null;
+    const t = thresholds[m];
+    if (t === undefined) return null;
+    return (m === 'noise_sensitivity' ? v > t : v < t) ? true : false;
+  };
+  const perMetric = {};
+  const total = { failed_here: 0, cleared: 0, kept_failing: 0, not_measured: 0 };
+  for (const r of runDoc.payload.results || []) {
+    const other = secondById.get(r.id);
+    if (!other) continue;
+    for (const m of metrics) {
+      const mine = verdict(r, m);
+      if (mine !== true) continue; // this judge did not fail it
+      const theirs = verdict(other, m);
+      const bucket = (perMetric[m] = perMetric[m] || { failed_here: 0, cleared: 0, kept_failing: 0, not_measured: 0 });
+      bucket.failed_here += 1;
+      total.failed_here += 1;
+      if (theirs === null) {
+        bucket.not_measured += 1;
+        total.not_measured += 1;
+      } else if (theirs === false) {
+        bucket.cleared += 1;
+        total.cleared += 1;
+      } else {
+        bucket.kept_failing += 1;
+        total.kept_failing += 1;
+      }
+    }
+  }
+  return {
+    source: 'sibling',
+    second_judge: judgeOf(secondDoc),
+    second_run_key: secondDoc._key,
+    per_metric: perMetric,
+    total
+  };
+}
+
+/**
+ * The sentence the advisor uses about a second judge — COMPUTED from the
+ * sibling run, never asserted. With no sibling there is nothing to say,
+ * and saying so is the honest answer: the operator can re-score the run
+ * with another judge to find out.
+ */
+function secondJudgeSentence(comparison, metric) {
+  if (!comparison || comparison.source !== 'sibling') {
+    return 'No second judge has scored this run yet: re-score it with another judge to find out whether this is judge harshness or a real failure.';
+  }
+  const judge = comparison.second_judge || 'the other judge';
+  const m = (metric && comparison.per_metric[metric]) || comparison.total;
+  if (!m || !m.failed_here) {
+    return `A second judge (${judge}) scored the same answers but did not fail any of the rows this one failed — treat these rows as unproven, and do NOT tighten the prompt, the corpus or a retrieval knob for them.`;
+  }
+  return (
+    `A second judge (${judge}) scored the same answers: it cleared ${m.cleared} of the ${m.failed_here} rows this judge failed` +
+    (metric ? ` on ${metric}` : '') +
+    `, and ${m.kept_failing} still failed` +
+    (m.not_measured ? ` (${m.not_measured} it could not measure at all)` : '') +
+    '. Treat the cleared rows as unproven judge disagreement rather than as judge noise: check the reference answer against the corpus, and do NOT tighten the prompt, the corpus or a retrieval knob for them.'
+  );
+}
+
+function attributeFailures(suite, runDoc, evidence, judgeComparison) {
   const thresholds = { ...FAIL_BELOW_DEFAULTS, ...((suite.payload && suite.payload.thresholds) || {}) };
   const entriesById = new Map(suite.payload.entries.map((e) => [e.id, e]));
   const attributions = [];
@@ -2954,12 +3061,11 @@ function attributeFailures(suite, runDoc, evidence) {
           `${typeof m.faithfulness === 'number' ? m.faithfulness.toFixed(2) : 'n/a'}` +
           (selfHigh ? `, chatqna self-grade ${r.self_confidence.toFixed(2)}` : '') +
           ') — the gap is judge claim-matching, not a prompt defect. ' +
-          // "Judge noise" was the wrong conclusion: a second judge (the env
-          // judge, granite) cleared 9 of 21 such rows on factual_correctness
-          // and kept 12 failing, so roughly half are judge variance and half
-          // are real. The row is UNPROVEN, not dismissed.
-          'A second judge disagrees on roughly half of these rows, so treat the row as unproven rather than as judge noise: ' +
-          'check the reference answer against the corpus, and do NOT tighten the prompt, the corpus or a retrieval knob for it';
+          // The second-judge verdict is COMPUTED from the sibling re-score
+          // (same answers, different judge), never asserted. It used to be
+          // a hardcoded "disagrees on roughly half of these rows" — true of
+          // one offline measurement and a lie for every other run.
+          secondJudgeSentence(judgeComparison, 'factual_correctness');
       } else {
         stage = 'llm';
         recommendation =
@@ -2988,11 +3094,11 @@ function attributeFailures(suite, runDoc, evidence) {
       stage = 'judge';
       recommendation =
         'context recall passed and the expected passage WAS delivered — yet the reference answer’s entity strings are absent from the retrieved context. ' +
-        // Not "judge noise": a second judge (granite) REPRODUCED this on 30
-        // of 39 such rows and cleared only 9, so the miss is mostly real.
-        // The lever is the reference answer's wording, not the RAG.
-        'A second judge reproduces this on most of these rows, so it is not judge harshness: the reference answer is worded differently from the corpus. ' +
-        'Regenerate the reference answer against the corpus; do NOT tune the RAG, the corpus or a retrieval knob for this row.';
+        // The second-judge verdict is COMPUTED from the sibling re-score
+        // (same answers, different judge), never asserted — it used to be a
+        // hardcoded "reproduces this on most of these rows".
+        secondJudgeSentence(judgeComparison, 'context_entities_recall') +
+        ' Regenerate the reference answer against the corpus; do NOT tune the RAG, the corpus or a retrieval knob for this row.';
     } else if (failed.includes('context_entities_recall')) {
       stage = 'corpus';
       recommendation = 'key entities of the reference are unretrievable — enrich entity mentions in the concept';
@@ -3326,7 +3432,13 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
     // already indexed — the advisor's most expensive mistake.
     explainProgress.set(suiteKey, { phase: 'probing', started_ms: Date.now(), failing: 0 });
     const evidence = await collectAttributionEvidence(db, suite, runDoc);
-    const attributions = attributeFailures(suite, runDoc, evidence);
+    // The second judge, if one exists: the re-score of this run (or the run
+    // it re-scored) scored the SAME answers with a different judge, so its
+    // per-row verdicts can be compared row by row. This is what the advisor
+    // used to ASSERT from a hardcoded string.
+    const secondJudgeRun = await loadSecondJudgeRun(db, repoId, suiteKey, runKey, runDoc);
+    const judgeComparison = compareJudges(suite, runDoc, secondJudgeRun);
+    const attributions = attributeFailures(suite, runDoc, evidence, judgeComparison);
     explainProgress.set(suiteKey, { phase: 'advising', started_ms: Date.now(), failing: attributions.length });
     // The run-level facts the advisor must read before it prescribes anything
     // (David 2026-10-24): how many rows abstained and how long the answers
@@ -3349,7 +3461,10 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
       stage_counts: attributions.reduce((acc, a) => {
         acc[a.stage] = (acc[a.stage] || 0) + 1;
         return acc;
-      }, {})
+      }, {}),
+      // The second judge's verdict, COMPUTED — the advisor may cite it, and
+      // the reader can check it against the sibling run.
+      judge_comparison: judgeComparison
     };
     try {
       // ONE guided-JSON advice call; tag suggestions pass the existing guardrail.
@@ -3410,7 +3525,7 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
             // answer, never the RAG.
             '(1) A row with stage "judge" means the answer is grounded in the delivered context and the failure is a metric-side finding. ' +
             'Do NOT propose a prompt tweak, a content change or a knob change for it; say the reference answer must be checked against the corpus. ' +
-            'Do NOT call it judge noise — a second judge disagrees on roughly half of these rows, so they are unproven rather than dismissed. ' +
+            'Do NOT call it judge noise — the second judge (see run_facts.judge_comparison) cleared part of these rows, so they are unproven rather than dismissed. ' +
             '(2) A row with stage "abstention" means the model declined — the abstention contract may be too strict; that is a COVERAGE argument, not a grounding one. ' +
             '(3) Only rows staged "llm" justify a grounding change, and only when their faithfulness actually failed. ' +
             '(4) Check run_facts.abstentions against run_facts.rows: if a large share of rows abstained, the prompt is OVER-CONSTRAINING — ' +
@@ -3426,7 +3541,12 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
             // The advisor named the rows it could not see (46 of 86 on one
             // run) and asked for them to be marked. Say so instead.
             '(8) If attributions_omitted is not empty, say how many failing rows had no stage attribution in the payload and ' +
-            'prescribe nothing for them — their stage is unknown, not benign.';
+            'prescribe nothing for them — their stage is unknown, not benign. ' +
+            // The second judge's verdict is computed from the sibling
+            // re-score — the advisor must not assert one of its own.
+            '(9) Use run_facts.judge_comparison for the second judge: if its source is "none", NO second judge has scored this run, ' +
+            'so say the row is unproven and that re-scoring with another judge would settle it. If its source is "sibling", ' +
+            'quote its cleared/kept_failing counts and never assert a proportion you were not given.';
           const advisorAttributions = packAttributions(attributions);
           const advisorUserPayload = JSON.stringify({
             repo: suite.name,
@@ -3859,5 +3979,11 @@ module.exports = {
   // Exported for the unit test that pins WHICH model the run claims
   // answered (the serve mode recorded a model that never answered —
   // David, 2026-10-25).
-  answerFidelity
+  answerFidelity,
+  // Exported for the unit test that pins the COMPUTED second-judge
+  // comparison (the advisor used to assert a second judge's verdict from
+  // a hardcoded string).
+  compareJudges,
+  secondJudgeSentence,
+  attributeFailures
 };

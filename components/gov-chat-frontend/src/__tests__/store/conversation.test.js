@@ -241,6 +241,17 @@ describe('conversation persistence', () => {
     unsubscribe();
   });
 
+  it('pagehide with an empty debounce writes nothing (the debounced write is already current)', () => {
+    // The skip relies on the invariant that every conversation write is
+    // a conversation/ mutation — nothing can change the state without
+    // arming the timer. Pin the branch: no mutation, no write, no error.
+    const store = freshStore();
+    const unsubscribe = subscribeConversation(store);
+    document.dispatchEvent(new Event('pagehide'));
+    expect(sessionStorage.getItem(STORAGE_KEY)).toBeNull();
+    unsubscribe();
+  });
+
   it('survives a full storage (quota error is degraded, not thrown)', () => {
     jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new DOMException('quota', 'QuotaExceededError');
@@ -363,6 +374,9 @@ describe('conversation sendStream action', () => {
     captured.onTranslation('FR texte');
     expect(store.getters['conversation/openConversation'].messages.at(-1).content).toBe('FR texte');
   });
+});
+
+describe('conversation misc mutations', () => {
   it('spliceMessages drops turns from a position', () => {
     const store = freshStore();
     for (let i = 0; i < 4; i++) {

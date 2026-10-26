@@ -33,6 +33,8 @@ function markTriggeringQuestion(entry) {
   }
 }
 
+// Closes the streaming turn and surfaces the retry affordance through
+// isError.
 function markEntryInterrupted(entry) {
   entry.isStreaming = false;
   const last = entry.messages.at(-1);
@@ -88,11 +90,10 @@ const mutations = {
     const last = entry.messages.at(-1);
     if (last) last[prop] = value;
   },
-  setLastBotMetadata(st, metadata) {
+  setLastBotMetadata(st, { metadata, sources }) {
     const entry = st.conversations[st.openId];
     const last = entry.messages.at(-1);
     if (!last) return;
-    const sources = translateSources(metadata.source_documents);
     last.metadata = metadata;
     last.confidenceScore = metadata.confidence_score ?? null;
     last.isGrounded = metadata.is_grounded;
@@ -231,10 +232,13 @@ const actions = {
         if (metadata.responseTime) {
           commit('status/setResponseTime', metadata.responseTime, { root: true });
         }
-        commit('setLastBotMetadata', metadata);
+        // One array instance for the answer card and the sidebar: the
+        // repository metadata patch later lands in both through the same
+        // objects.
+        const sources = translateSources(metadata.source_documents);
+        commit('setLastBotMetadata', { metadata, sources });
         // The sidebar keeps its accumulated view; a source already cited
         // by an earlier turn is not added twice.
-        const sources = translateSources(metadata.source_documents);
         const knownIds = new Set(state.conversations[state.openId].relatedDocuments.map((d) => d.id));
         commit(
           'unshiftRelatedDocuments',
@@ -365,7 +369,9 @@ export function subscribeConversation(store) {
   const onPageHide = () => {
     // A null timer means the last debounced write already captured the
     // exact current state — skip the redundant synchronous write on the
-    // unload path.
+    // unload path. Invariant: every write to the conversation state goes
+    // through a conversation/-prefixed mutation (the only direct writer,
+    // rehydrateConversation, runs before this subscription exists).
     if (!timer) return;
     clearTimeout(timer);
     timer = null;

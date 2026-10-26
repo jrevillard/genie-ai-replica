@@ -1379,6 +1379,7 @@ export default {
     retry: 'Jaribu tena',
     streamingError: 'Jibu lilikatika. Tafadhali jaribu tena.',
     streamTimeout: 'Msaidizi hajibu — omba limeisha muda.',
+    nothingToSave: 'Hakuna kitu cha kuhifadhi bado — majibu yote yameshindikana. Jaribu mazungumzo tena kwanza.',
     aiGeneratedNoDocs: 'Imezalishwa na AI — haizingatii nyaraka za maktaba',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:

@@ -1390,6 +1390,8 @@ export default {
     retry: 'Erneut versuchen',
     streamingError: 'Die Antwort wurde unterbrochen. Bitte versuchen Sie es erneut.',
     streamTimeout: 'Der Assistent antwortet nicht – die Anfrage hat das Zeitlimit überschritten.',
+    nothingToSave:
+      'Noch nichts zu speichern – alle Antworten sind fehlgeschlagen. Versuchen Sie zuerst die Konversation erneut.',
     aiGeneratedNoDocs: 'KI-generiert — nicht auf Bibliotheksdokumenten basierend',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:

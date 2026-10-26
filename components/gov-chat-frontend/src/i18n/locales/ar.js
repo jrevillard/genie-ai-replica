@@ -1370,6 +1370,7 @@ export default {
     retry: 'إعادة المحاولة',
     streamingError: 'تمت مقاطعة الاستجابة. يرجى المحاولة مرة أخرى.',
     streamTimeout: 'لا يستجيب المساعد — انتهت مهلة الطلب.',
+    nothingToSave: 'لا شيء للحفظ بعد — فشلت جميع الإجابات. أعد محاولة المحادثة أولاً.',
     aiGeneratedNoDocs: 'مُولّد بواسطة الذكاء الاصطناعي — لا يعتمد على وثائق المكتبة',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:

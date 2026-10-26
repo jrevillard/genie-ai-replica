@@ -1384,6 +1384,7 @@ export default {
     retry: 'Leka hape',
     streamingError: 'Karabo e emisetsoe. Re leke hape.',
     streamTimeout: 'Mothisi ha a araba — kopo e feta nako.',
+    nothingToSave: 'Ha ho se letho le ka bolokang — likarabo tsohle li fsane. Leka qoetsano ea lipuiso pele.',
     aiGeneratedNoDocs: 'AI-generated — not based on library documents',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:

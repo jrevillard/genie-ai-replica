@@ -1390,6 +1390,7 @@ export default {
     retry: 'Reintentar',
     streamingError: 'Se interrumpió la respuesta. Inténtelo de nuevo.',
     streamTimeout: 'El asistente no responde: la solicitud ha expirado.',
+    nothingToSave: 'Nada que guardar todavía: todas las respuestas fallaron. Reintente primero la conversación.',
     welcomeMessage: 'Welcome! How can I assist you today?',
     aiGeneratedNoDocs: 'Generado por IA — no basado en los documentos de la biblioteca',
     configMismatchWarning:

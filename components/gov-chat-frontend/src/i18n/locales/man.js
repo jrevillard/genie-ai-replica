@@ -1331,6 +1331,7 @@ export default {
     retry: 'Fuutito kadi',
     streamingError: 'Jɛɛmɔgɔya labɛnnen na. A ñaa ma ñɔɔrɔ.',
     streamTimeout: 'Dɛmɔgɔ tɛ a jaabi la — sɛbɛnni in ka tuma dan.',
+    nothingToSave: 'Tɛmɛnnin tɛ mɔgɔw ka ɛrɛ — jaabiw bɛɛ bɛnnen. A ñaa ma Ɛrɛ kɔfɛ.',
     aiGeneratedNoDocs: 'AI-generated — not based on library documents',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:

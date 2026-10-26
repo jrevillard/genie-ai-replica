@@ -1358,6 +1358,7 @@ export default {
     retry: 'আবার চেষ্টা করুন',
     streamingError: 'প্রতিক্রিয়া ব্যাহত হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।',
     streamTimeout: 'সহকারী সাড়া দিচ্ছে না — অনুরোধের সময় শেষ হয়েছে।',
+    nothingToSave: 'এখনও সংরক্ষণ করার কিছু নেই — সব উত্তর ব্যর্থ হয়েছে। প্রথমে কথোপকথনটি আবার চেষ্টা করুন।',
     aiGeneratedNoDocs: 'এআই-উৎপাদিত — লাইব্রেরির নথিপত্রের উপর ভিত্তি করে নয়',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:

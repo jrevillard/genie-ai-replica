@@ -739,7 +739,8 @@ export default {
     },
 
     chatPreview() {
-      const userMessage = this.openMessages.find((msg) => msg.sender === 'user');
+      // A failed exchange is never stored, so it is never the preview.
+      const userMessage = this.openMessages.find((msg) => msg.sender === 'user' && !msg.isError);
       if (userMessage) {
         return userMessage.content.length > 50 ? userMessage.content.substring(0, 47) + '...' : userMessage.content;
       }
@@ -1895,6 +1896,18 @@ export default {
           throw new Error('handleSaveChat should not be called for existing conversations');
         }
 
+        // Every turn is a failed exchange: creating the conversation
+        // would store an empty chat that previews content it does not
+        // hold.
+        const hasPersistableTurn = this.openMessages.some(
+          (message) => !message.isError && (message.sender === 'user' || (message.sender === 'bot' && message.queryId))
+        );
+        if (!hasPersistableTurn) {
+          notificationService.info(this.translate('chatbot.nothingToSave'));
+          this.saveChatDialog.visible = false;
+          return false;
+        }
+
         const conversation = await this.chatHistoryService.createConversation(conversationData);
         // A fresh conversation replaces whatever load was in flight.
         this.loadSeq++;
@@ -1913,14 +1926,6 @@ export default {
             if (message.sender === 'user') {
               this.$store.commit('conversation/setMessageProperty', [messageIndex, 'isSaved', true]);
             }
-            continue;
-          }
-
-          // A failed question is deliberately unpersisted (its dead
-          // exchange leaves as a unit) — mark it settled, or it would
-          // hold hasUnsavedChanges() open forever.
-          if (message.sender === 'user' && message.isError && !message.isSaved) {
-            this.$store.commit('conversation/setMessageProperty', [messageIndex, 'isSaved', true]);
             continue;
           }
 
@@ -1949,7 +1954,7 @@ export default {
           preview: this.chatPreview,
           folderId: this.saveChatDialog.folderId || 'default',
           messageCount: this.openMessages.filter(
-            (msg) => msg.sender === 'user' || (msg.sender === 'bot' && msg.queryId)
+            (msg) => !msg.isError && (msg.sender === 'user' || (msg.sender === 'bot' && msg.queryId))
           ).length
         };
         await this.$store.dispatch('chatHistory/createChat', chatData);
@@ -2051,7 +2056,8 @@ export default {
     },
 
     generateChatTitle() {
-      const userMessage = this.openMessages.find((msg) => msg.sender === 'user');
+      // Consistent with the preview: failed exchanges are not metadata.
+      const userMessage = this.openMessages.find((msg) => msg.sender === 'user' && !msg.isError);
       if (userMessage) {
         return userMessage.content.length > 20 ? userMessage.content.substring(0, 17) + '...' : userMessage.content;
       }

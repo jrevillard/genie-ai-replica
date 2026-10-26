@@ -1374,6 +1374,7 @@ export default {
     retry: 'ลองอีกครั้ง',
     streamingError: 'การตอบกลับถูกขัดจังหวะ โปรดลองอีกครั้ง',
     streamTimeout: 'ผู้ช่วยไม่ตอบสนอง — คำขอหมดเวลาแล้ว',
+    nothingToSave: 'ยังไม่มีอะไรให้บันทึก — คำตอบทั้งหมดล้มเหลว โปรดลองบทสนทนาอีกครั้งก่อน',
     aiGeneratedNoDocs: 'สร้างโดย AI — ไม่อิงจากเอกสารในคลังเอกสาร',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:

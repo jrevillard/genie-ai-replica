@@ -1387,6 +1387,7 @@ export default {
     retry: 'Повторить',
     streamingError: 'Ответ был прерван. Повторите попытку.',
     streamTimeout: 'Ассистент не отвечает — время ожидания запроса истекло.',
+    nothingToSave: 'Пока нечего сохранять — все ответы завершились ошибкой. Сначала повторите запрос.',
     aiGeneratedNoDocs: 'Сгенерировано ИИ — не основано на документах библиотеки',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:

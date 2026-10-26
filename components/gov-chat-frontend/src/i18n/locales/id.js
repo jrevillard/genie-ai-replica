@@ -1377,6 +1377,7 @@ export default {
     retry: 'Coba lagi',
     streamingError: 'Respons terputus. Silakan coba lagi.',
     streamTimeout: 'Asisten tidak merespons — permintaan kehabisan waktu.',
+    nothingToSave: 'Belum ada yang bisa disimpan — semua jawaban gagal. Coba percakapan tersebut lagi dulu.',
     aiGeneratedNoDocs: 'Dihasilkan oleh AI — tidak berdasarkan dokumen perpustakaan',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:

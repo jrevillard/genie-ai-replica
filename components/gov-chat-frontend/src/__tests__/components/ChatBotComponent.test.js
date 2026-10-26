@@ -2228,7 +2228,8 @@ describe('ChatBotComponent', () => {
         isError: true,
         isSaved: false
       });
-      vm.$store.commit('conversation/setMessageProperty', [2, 'isError', true]);
+      const failedQuestionIndex = vm.openMessages.findIndex((m) => m.content === 'timed out q');
+      vm.$store.commit('conversation/setMessageProperty', [failedQuestionIndex, 'isError', true]);
       vm.$store.commit('conversation/setSavedState');
 
       await vm.updateExistingChat();
@@ -2237,6 +2238,36 @@ describe('ChatBotComponent', () => {
       // nowhere and cannot hold the unsaved-changes confirm open.
       expect(chatHistoryService.addMessage).not.toHaveBeenCalled();
       expect(vm.hasUnsavedChanges()).toBe(false);
+    });
+
+    it('saving a failed-only transcript creates nothing', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.createConversation.mockClear();
+
+      vm.$store.commit('conversation/appendUserMessage', {
+        sender: 'user',
+        content: 'doomed question',
+        isSaved: false
+      });
+      vm.$store.commit('conversation/appendBotMessage', {
+        sender: 'bot',
+        content: '',
+        isStreaming: false,
+        isError: true,
+        isSaved: false
+      });
+      const doomedIndex = vm.openMessages.findIndex((m) => m.content === 'doomed question');
+      vm.$store.commit('conversation/setMessageProperty', [doomedIndex, 'isError', true]);
+
+      vm.saveChatDialog = { visible: true, title: 'Empty', folderId: 'default' };
+      await vm.handleSaveChat();
+
+      expect(chatHistoryService.createConversation).not.toHaveBeenCalled();
+      expect(vm.saveChatDialog.visible).toBe(false);
+      // The metadata agrees: no preview text or count from the dead turn.
+      expect(vm.chatPreview).toBe('New conversation');
     });
 
     it('a failed-only transcript is not an unsaved change', () => {
@@ -2255,7 +2286,8 @@ describe('ChatBotComponent', () => {
         isError: true,
         isSaved: false
       });
-      vm.$store.commit('conversation/setMessageProperty', [1, 'isError', true]);
+      const doomedIndex = vm.openMessages.findIndex((m) => m.content === 'doomed question');
+      vm.$store.commit('conversation/setMessageProperty', [doomedIndex, 'isError', true]);
 
       // Saving it would persist an empty conversation — the prompt is
       // for content a save would keep.

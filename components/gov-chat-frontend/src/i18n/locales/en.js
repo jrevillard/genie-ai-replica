@@ -1443,6 +1443,7 @@ export default {
     exportError: 'Failed to export chat. Please try again.',
     streamingError: 'Response was interrupted. Please try again.',
     streamTimeout: 'The assistant is not responding — the request timed out.',
+    nothingToSave: 'Nothing can be saved yet — every answer failed. Retry the conversation first.',
     removeItem: 'Remove item'
   },
   quickhelp: {

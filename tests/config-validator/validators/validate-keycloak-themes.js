@@ -518,9 +518,7 @@ function collectThemeIssues(root) {
       }
 
       const report = (kind, reference, detail) => {
-        issues.push(
-          detail === undefined ? { theme, type, kind, reference } : { theme, type, kind, reference, detail }
-        );
+        issues.push(detail === undefined ? { theme, type, kind, reference } : { theme, type, kind, reference, detail });
       };
 
       const resolution = themeChain(themesDir, theme, type);
@@ -537,10 +535,7 @@ function collectThemeIssues(root) {
           report('themeImport', entry.properties.import, 'the import names no theme type');
         } else if (!THEME_TYPES.includes(imported.type)) {
           report('themeImport', entry.properties.import, `the theme type ${imported.type} is not one Keycloak serves`);
-        } else if (
-          !isDirectory(path.join(themesDir, imported.name, imported.type)) &&
-          !isBuiltinTheme(imported.name)
-        ) {
+        } else if (!isDirectory(path.join(themesDir, imported.name, imported.type)) && !isBuiltinTheme(imported.name)) {
           report('themeImport', entry.properties.import, 'the imported theme does not exist');
         }
       }

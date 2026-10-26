@@ -44,6 +44,11 @@ const DEADLINE_MIN = Number(process.env.OKF_SMOKE_GEN_DEADLINE_MIN || 65);
 // nothing. '__env__' is the deployment's own default judge
 // (RAGAS_JUDGE_MODEL) — the neutral choice for a harness.
 const JUDGE_PICK = process.env.OKF_SMOKE_JUDGE || '__env__';
+// OKF_SMOKE_KEEP_SUITE=1 keeps the generated suite (and the throwaway user)
+// instead of deleting them. A generation over a big corpus is hours of GPU:
+// the suite IS the artifact, so throwing it away makes the run pointless
+// (2026-10-26).
+const KEEP_SUITE = (process.env.OKF_SMOKE_KEEP_SUITE || '0').trim() === '1';
 const SMOKE_USER = 'okf-smoke-86';
 const SMOKE_PW = crypto.randomBytes(18).toString('base64url') + '#aA1!';
 
@@ -423,12 +428,20 @@ async function main() {
     }
     try {
       if (SUITE_KEY && ROPC_ON) {
-        // the suite delete needs a user token, so it must run while ROPC is ON
-        const t = await userToken();
-        const del = await req('DELETE', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}`, {
-          token: t
-        });
-        check('suite deleted (cleanup)', del.status === 200 || del.status === 404, `HTTP ${del.status}`);
+        if (KEEP_SUITE) {
+          // OKF_SMOKE_KEEP_SUITE=1: the generated suite IS the artifact the
+          // operator wants (2026-10-26 — a generation over a big corpus is
+          // hours of GPU; throwing it away makes the run pointless). The
+          // throwaway user is kept too, so the suite keeps a live creator.
+          console.log(`  suite KEPT: ${SUITE_KEY} (OKF_SMOKE_KEEP_SUITE=1)`);
+        } else {
+          // the suite delete needs a user token, so it must run while ROPC is ON
+          const t = await userToken();
+          const del = await req('DELETE', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}`, {
+            token: t
+          });
+          check('suite deleted (cleanup)', del.status === 200 || del.status === 404, `HTTP ${del.status}`);
+        }
       }
     } catch (e) {
       console.error('cleanup (suite) failed:', e.message);
@@ -441,7 +454,7 @@ async function main() {
       failures += 1;
     }
     try {
-      if (ADMIN_TOKEN) {
+      if (ADMIN_TOKEN && !KEEP_SUITE) {
         if (!USER_ID) USER_ID = await resolveUserId(); // resolve even if main() died before its own lookup
         if (USER_ID) {
           const du = await req('DELETE', `${AUTH_BASE}/admin/realms/${REALM}/users/${USER_ID}`, { token: ADMIN_TOKEN });

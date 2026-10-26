@@ -44,6 +44,11 @@ const DEADLINE_MIN = Number(process.env.OKF_SMOKE_GEN_DEADLINE_MIN || 65);
 // nothing. '__env__' is the deployment's own default judge
 // (RAGAS_JUDGE_MODEL) — the neutral choice for a harness.
 const JUDGE_PICK = process.env.OKF_SMOKE_JUDGE || '__env__';
+// OKF_SMOKE_KEEP_SUITE=1 keeps the generated suite (and the throwaway user)
+// instead of deleting them. A generation over a big corpus is hours of GPU:
+// the suite IS the artifact, so throwing it away makes the run pointless
+// (2026-10-26).
+const KEEP_SUITE = (process.env.OKF_SMOKE_KEEP_SUITE || '0').trim() === '1';
 const SMOKE_USER = 'okf-smoke-86';
 const SMOKE_PW = crypto.randomBytes(18).toString('base64url') + '#aA1!';
 
@@ -254,12 +259,31 @@ async function main() {
   );
   SUITE_KEY = gen.suite_key;
   let suite = null;
+  // The generation's live progress envelope (2026-10-26). It carries the
+  // calls that REACHED the model and, separately, the REPLAYS the sidecar's
+  // on-disk cache answered — a replay is not an LLM call, and the panel
+  // must never read it as one (live: the panel read "673 LLM calls" while
+  // the remote GPU sat at 0 % and the remote's own request counters moved
+  // by zero requests).
+  let genProgress = null;
+  let genProgressSig = '';
   const genDeadline = Date.now() + DEADLINE_MIN * 60 * 1000; // OKF_RAGAS_LONG_TIMEOUT_MS (60 min) + margin
   for (;;) {
     if (Date.now() > genDeadline) break;
     await sleep(4000);
     const doc = j(await call('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}`));
-    if (doc.status === 'generating') continue;
+    if (doc.status === 'generating') {
+      const p = doc.progress;
+      if (p) {
+        const sig = `${p.phase} ${p.done}/${p.total} calls=${p.calls} replays=${p.replays}`;
+        if (sig !== genProgressSig) {
+          genProgressSig = sig;
+          genProgress = p;
+          console.log(`  progress: ${sig}`);
+        }
+      }
+      continue;
+    }
     if (doc.status === 'failed') {
       console.log('  generation failed:', JSON.stringify(doc.error).slice(0, 300));
       break;
@@ -267,12 +291,34 @@ async function main() {
     suite = doc;
     break;
   }
+  if (!suite) {
+    // The harness's deadline can expire while the sidecar job is still
+    // running — a big corpus simply takes longer than the budget. That is not
+    // a failure OF THE GENERATION: the job keeps going and the suite lands
+    // on its own. Say so, and hand over the suite_key so the run is still
+    // reachable (2026-10-26 — a Solar System run over 1,600 chunks).
+    let now = { status: 'unknown' };
+    try {
+      now = j(await call('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}`));
+    } catch (e) {
+      now = { status: `unreachable (${e.message})` };
+    }
+    console.log(
+      `  the generation is still ${now.status} after ${DEADLINE_MIN} min — it finishes on its own;` +
+        ` suite_key=${SUITE_KEY}`
+    );
+  }
   check('suite generated', !!(suite && suite.kind === 'ragas_suite'));
   if (!suite) throw new Error('no suite — aborting remaining checks');
   check(
     'entries carry query + expected outputs',
     suite.payload.entries.length >= 1 &&
       suite.payload.entries.every((e) => e.query && typeof e.reference_answer === 'string')
+  );
+  check(
+    'the generation progress envelope separates the model calls from the cache replays',
+    !!(genProgress && typeof genProgress.calls === 'number' && typeof genProgress.replays === 'number'),
+    genProgress ? JSON.stringify(genProgress).slice(0, 160) : 'no progress envelope observed'
   );
 
   // --- 2. run (202 + poll) ---
@@ -399,12 +445,20 @@ async function main() {
     }
     try {
       if (SUITE_KEY && ROPC_ON) {
-        // the suite delete needs a user token, so it must run while ROPC is ON
-        const t = await userToken();
-        const del = await req('DELETE', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}`, {
-          token: t
-        });
-        check('suite deleted (cleanup)', del.status === 200 || del.status === 404, `HTTP ${del.status}`);
+        if (KEEP_SUITE) {
+          // OKF_SMOKE_KEEP_SUITE=1: the generated suite IS the artifact the
+          // operator wants (2026-10-26 — a generation over a big corpus is
+          // hours of GPU; throwing it away makes the run pointless). The
+          // throwaway user is kept too, so the suite keeps a live creator.
+          console.log(`  suite KEPT: ${SUITE_KEY} (OKF_SMOKE_KEEP_SUITE=1)`);
+        } else {
+          // the suite delete needs a user token, so it must run while ROPC is ON
+          const t = await userToken();
+          const del = await req('DELETE', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}`, {
+            token: t
+          });
+          check('suite deleted (cleanup)', del.status === 200 || del.status === 404, `HTTP ${del.status}`);
+        }
       }
     } catch (e) {
       console.error('cleanup (suite) failed:', e.message);
@@ -417,7 +471,7 @@ async function main() {
       failures += 1;
     }
     try {
-      if (ADMIN_TOKEN) {
+      if (ADMIN_TOKEN && !KEEP_SUITE) {
         if (!USER_ID) USER_ID = await resolveUserId(); // resolve even if main() died before its own lookup
         if (USER_ID) {
           const du = await req('DELETE', `${AUTH_BASE}/admin/realms/${REALM}/users/${USER_ID}`, { token: ADMIN_TOKEN });

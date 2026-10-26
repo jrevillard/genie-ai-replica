@@ -286,6 +286,34 @@ describe('RagasPanel', () => {
     expect(w.vm.genProgressDetail).toContain('1');
   });
 
+  it('reports the REPLAYS apart from the LLM calls (2026-10-26)', async () => {
+    // David: "if it is replaying it should report replays not LLM calls" —
+    // on a corpus generated before, the sidecar's on-disk cache answered 673
+    // "LLM calls" while the remote GPU never moved. The panel must say what
+    // reached the model and what the cache answered.
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    w.vm.generateBusy = true;
+    w.vm.genProgress = {
+      phase: 'building-knowledge-graph',
+      step: 'Applying CustomNodeFilter',
+      calls: 184,
+      replays: 1392,
+      elapsed_s: 1830
+    };
+    const detail = w.vm.genProgressDetail;
+    expect(detail).toContain('184 LLM calls');
+    expect(detail).toContain('1392 replayed from cache');
+    // a FULLY replayed generation really did reach the model zero times —
+    // the line says so, rather than hiding the calls segment
+    w.vm.genProgress = { phase: 'building-knowledge-graph', calls: 0, replays: 1392, elapsed_s: 60 };
+    expect(w.vm.genProgressDetail).toContain('0 LLM calls');
+    expect(w.vm.genProgressDetail).toContain('1392 replayed from cache');
+    // no replays → no replay segment (nothing to say)
+    w.vm.genProgress = { phase: 'building-knowledge-graph', calls: 184, elapsed_s: 60 };
+    expect(w.vm.genProgressDetail).not.toContain('replayed');
+  });
+
   it('renders explain attributions and guarded advice chips', async () => {
     const w = mountPanel();
     await new Promise((r) => setTimeout(r, 0));

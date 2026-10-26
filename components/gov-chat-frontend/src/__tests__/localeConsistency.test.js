@@ -170,6 +170,10 @@ describe('Locale consistency', () => {
     // RAGAS generation progress (2026-10-21): the LLM-call counter that
     // moves even when the transform bar does not.
     'okf.ragas.gen.calls',
+    // RAGAS generation progress (2026-10-26): the REPLAY counter — the
+    // calls the sidecar's cache answered, consumed the same way as the
+    // call count. A scripted escape in one locale would render a raw {n}.
+    'okf.ragas.gen.replays',
     // RAGAS dropped questions (2026-10-21): the note that says how many
     // questions the generation LOST and why — consumed via .replace().
     'okf.ragas.dropped.note',

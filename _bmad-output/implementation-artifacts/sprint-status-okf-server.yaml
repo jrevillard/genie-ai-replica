@@ -757,4 +757,90 @@ development_status:
   #          report "0 regenerated rows" and drop answer-churned rows into the control
   #          group. Both fixed; the answer/reference split is what the second
   #          benchmark's comparison rests on.
+  #          COUNTER HONESTY 2026-10-26 (MR !602, branch fix/ragas-replay-counter):
+  #          the generation's progress line counted every ATTEMPT as an LLM call —
+  #          the counter is incremented at the top of the sidecar's LLM wrapper,
+  #          BEFORE the disk-cache lookup, so a call the cache answered (no request,
+  #          no GPU) was reported as work the model did. Live on the Solar System
+  #          generation: the panel read "673 LLM calls" while the remote GPU sat at
+  #          0 %; over a 31-second window the sidecar counted +45 calls while the
+  #          remote vLLM's own counters moved by ZERO requests
+  #          (vllm:request_success_total, vllm:prompt_tokens_total and
+  #          vllm:e2e_request_latency_seconds_count all flat), no cache file was
+  #          written (a miss always writes one) and no node was degraded (nothing
+  #          failed). The corpus had been generated before, so the knowledge-graph
+  #          summaries were replayed from the cache. Fixed: the counter moved AFTER
+  #          the cache lookup, so a hit is a REPLAY and never an LLM call; the
+  #          envelope publishes both (calls + replays) on the same live refresh as
+  #          the call count; the panel shows both as separate segments. New spec
+  #          constraint ("a progress number reports work, not attempts", memlog 117).
+  #          Tests: ragas-service 74 (4 new), frontend 62 (1 new), locale parity
+  #          across the 14 locales.
+  #          THE LIVE GENERATION DIED (2026-10-26): the Solar System run stopped at
+  #          137 minutes, chunk 1599 of 1600 in the NER phase, after 5,989 model
+  #          calls. The chain, read off the installed ragas 0.4.3: the chunk's NER
+  #          answer was invalid JSON (18 entities plus a // comment block) and
+  #          NEROutput rejected it; ragas then called the fix-output-format
+  #          retry, whose output_model is StringIO; asked to fix the format, the
+  #          model ECHOED the entities JSON, so the StringIO validation is what
+  #          failed ("1 validation error for StringIO"); the fix prompt retried
+  #          with the same input, the cache served the same bad answer again, and
+  #          the exception escaped apply_transforms and took the whole job with
+  #          it. An unparseable answer is the same class of event as a
+  #          dead node, and a dead node has always been tolerated: the node now
+  #          degrades (it keeps its other properties, the failure is COUNTED and
+  #          reported with the suite, the other nodes keep their work). The seam
+  #          is generate_execution_plan (one coroutine per node); wrapping each
+  #          coroutine catches every node-level failure without knowing which
+  #          method the transform uses, and the transform keeps its CLASS so
+  #          ragas's isinstance dispatch still holds (a proxy object would have
+  #          been silently ignored).
+  #          PROVEN LIVE ON THE SAME CORPUS (2026-10-26): the re-run reached the
+  #          same chunk, the sidecar logged "node degraded (NERExtractor:
+  #          OutputParserException)" and THE PHASE CONTINUED — the previous run
+  #          died at exactly that point. One node degraded; the corpus loses that
+  #          chunk's entities and keeps everything else.
+  #          AND THE TOLERANCE WAS INCOMPLETE — it MOVED the failure instead of
+  #          removing it (found live, same day): the re-run degraded the node and
+  #          then died in the phase RIGHT AFTER it with "Node X or Y has no
+  #          entities". A degraded node is left MISSING the property it failed to
+  #          produce, and ragas's relationship builders RAISE on a missing
+  #          property instead of skipping the node (traditional.py:37 / :144).
+  #          Fixed: the builders' FILTERS — which decide which nodes take part in
+  #          the relationship computation — exclude a node with no entities or no
+  #          embedding; it has no relationship to contribute, and excluding it
+  #          keeps the phase alive. Behaviour-preserving in the normal case
+  #          (every node then HAS the property), so the filters differ only for
+  #          a degraded node. The DEGRADED-NODE COUNT was also still the
+  #          process-global sibling of the counters the review had already
+  #          fixed — it travels with the job's stats dict now, because it is
+  #          REPORTED with the suite and a wrong number there is a wrong number
+  #          in front of the operator. Both landed in MR !602 (consolidated with
+  #          the counter fix — with only the counter fix the generation dies one
+  #          phase later, so they cannot land apart). Sidecar suite 90 green.
+  #          CORRECTED 2026-10-26: the claim that the sidecar's pytest suite has
+  #          no CI lane was WRONG — `test:ragas-service` has run ruff + the whole
+  #          suite against the pinned stack since 2026-10-17 (a66aa4659) and
+  #          passed on this MR's own pipeline.
+  #          THE REVIEW (independent adversarial review of the diff) found the
+  #          counters were PROCESS-GLOBAL: a second job's reset dropped the first
+  #          job's published number to zero mid-generation (the KG ticker
+  #          republishes once a second) and then counted the second job's calls
+  #          as the first's — and the scoring leg shared the same globals, so a
+  #          concurrent scoring run's calls were published as the generation's.
+  #          Each job now owns its counters (the app hands the engine a per-job
+  #          stats dict). The review also found: the fully-replayed case never
+  #          said "0 requests reached the model" (fixed — the panel now renders
+  #          "0 LLM calls · N replayed from cache"), and the new i18n key was
+  #          missing from the placeholder-shape guard (fixed — it joins
+  #          okf.ragas.gen.calls in replaceConsumedPlain).
+  #          DEPLOYED + PROVEN LIVE (the local build, the warm cache volume
+  #          survived): the smoke harness's generation leg reads
+  #          "building-knowledge-graph 0/114 calls=0 replays=350" rising to
+  #          "replays=414", then "synthesizing-questions calls=3 replays=417"
+  #          — the scenario that used to read "673 LLM calls" on a warm corpus
+  #          now reads honestly: ZERO model calls, 414 cache replays, then the
+  #          7 real calls for the new questions. 'SMOKE 8-6: ALL CHECKS PASSED'
+  #          with the new check "the generation progress envelope separates the
+  #          model calls from the cache replays".
 

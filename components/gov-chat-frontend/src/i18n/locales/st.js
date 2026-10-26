@@ -3161,6 +3161,7 @@ export default {
         eta: '~{t} e tengile',
         elapsed: 'e sebetsa {t}',
         calls: '{n} mealo ea LLM',
+        replays: '{n} mealo e boetolong ho kache',
         underMin: 'ka tlase ho motsotso',
         minutes: '{m} metsotso',
         hours: '{h} lihora {m} metsotso'

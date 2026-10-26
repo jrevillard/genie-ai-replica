@@ -1798,6 +1798,7 @@ export default {
         eta: '~{t} left',
         elapsed: 'running {t}',
         calls: '{n} LLM calls',
+        replays: '{n} replayed from cache',
         underMin: 'under a minute',
         minutes: '{m} min',
         hours: '{h} h {m} min'

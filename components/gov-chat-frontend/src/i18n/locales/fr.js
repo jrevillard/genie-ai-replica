@@ -3172,6 +3172,7 @@ export default {
         eta: '~{t} restantes',
         elapsed: 'en cours depuis {t}',
         calls: '{n} appels au LLM',
+        replays: '{n} appels rejoués depuis le cache',
         underMin: 'moins d’une minute',
         minutes: '{m} min',
         hours: '{h} h {m} min'

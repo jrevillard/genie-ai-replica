@@ -153,6 +153,7 @@ def test_generate_is_202_plus_poll_with_result(client, monkeypatch):
         cancel_event=None,
         judge=None,
         embed=None,
+        stats=None,
     ):
         seen_kwargs.update({"testset_size": testset_size, "num_personas": num_personas})
         if progress:
@@ -195,7 +196,9 @@ def test_generate_job_failure_surfaces_the_error(client, monkeypatch):
 
 
 def test_evaluate_is_202_plus_poll_with_result(client, monkeypatch):
-    async def fake_evaluate(samples, metrics, timeout_s=600, progress=None, cancel_event=None, judge=None, embed=None):
+    async def fake_evaluate(
+        samples, metrics, timeout_s=600, progress=None, cancel_event=None, judge=None, embed=None, stats=None
+    ):
         if progress:
             progress("scoring")
         return {"aggregate": {"faithfulness": 1.0}, "per_query": [], "n": 0, "dropped": []}
@@ -329,7 +332,7 @@ def test_snapshot_refreshes_the_elapsed_clock_without_a_progress_call():
         app_module.JOBS.pop("t-clock", None)
 
 
-def test_snapshot_refreshes_the_call_counter_without_a_progress_call(monkeypatch):
+def test_snapshot_refreshes_the_call_counter_without_a_progress_call():
     """2026-10-22 (live): the call counter froze for 40 minutes.
 
     The engine counts judge calls as they are ISSUED, but the progress
@@ -337,14 +340,17 @@ def test_snapshot_refreshes_the_call_counter_without_a_progress_call(monkeypatch
     the synthesis phase that is every RESOLVED SAMPLE. During scenario
     generation the panel therefore showed a static "4207 LLM calls" while
     the judge was being called continuously. The number the operator reads
-    must be a READ-time derivation, like the clock."""
-    monkeypatch.setattr(app_module.ragas_engine, "llm_calls", lambda: 5123)
+    must be a READ-time derivation, like the clock.
+
+    2026-10-26: the derivation reads THIS JOB's counters, not the
+    process's — a concurrent job's calls are not this job's."""
     app_module.JOBS["t-calls"] = {
         "job_id": "t-calls",
         "kind": "generate",
         "status": "running",
         "phase": "synthesizing-questions",
         "started_at": time.time() - 30,
+        "stats": {"calls": 5123, "replays": 0},
         "progress": {"phase": "synthesizing-questions", "done": 0, "calls": 4207},
     }
     try:
@@ -356,17 +362,17 @@ def test_snapshot_refreshes_the_call_counter_without_a_progress_call(monkeypatch
         app_module.JOBS.pop("t-calls", None)
 
 
-def test_snapshot_never_lowers_the_published_call_count(monkeypatch):
+def test_snapshot_never_lowers_the_published_call_count():
     """A second job resets the shared counter to zero. The first job's
     number must not jump backwards — a counter that goes down reads as a
     job that lost its work."""
-    monkeypatch.setattr(app_module.ragas_engine, "llm_calls", lambda: 0)
     app_module.JOBS["t-calls2"] = {
         "job_id": "t-calls2",
         "kind": "generate",
         "status": "running",
         "phase": "synthesizing-questions",
         "started_at": time.time() - 30,
+        "stats": {"calls": 0, "replays": 0},
         "progress": {"phase": "synthesizing-questions", "done": 0, "calls": 4207},
     }
     try:
@@ -374,6 +380,81 @@ def test_snapshot_never_lowers_the_published_call_count(monkeypatch):
         assert snap["progress"]["calls"] == 4207
     finally:
         app_module.JOBS.pop("t-calls2", None)
+
+
+def test_snapshot_publishes_the_replay_count():
+    """2026-10-26 (live): a corpus generated before replays from the
+    sidecar's on-disk cache — no request, no GPU. The panel must be able to
+    say so, so the replay count rides the same live refresh as the call
+    count."""
+    app_module.JOBS["t-replays"] = {
+        "job_id": "t-replays",
+        "kind": "generate",
+        "status": "running",
+        "phase": "building-knowledge-graph",
+        "started_at": time.time() - 30,
+        "stats": {"calls": 184, "replays": 1392},
+        "progress": {"phase": "building-knowledge-graph", "done": 0, "calls": 12},
+    }
+    try:
+        snap = app_module._snapshot(app_module.JOBS["t-replays"])
+        assert snap["progress"]["calls"] == 184
+        assert snap["progress"]["replays"] == 1392
+    finally:
+        app_module.JOBS.pop("t-replays", None)
+
+
+def test_snapshot_never_lowers_the_published_replay_count():
+    """Same guard as the call count: a published number must not go
+    backwards."""
+    app_module.JOBS["t-replays2"] = {
+        "job_id": "t-replays2",
+        "kind": "generate",
+        "status": "running",
+        "phase": "building-knowledge-graph",
+        "started_at": time.time() - 30,
+        "stats": {"calls": 0, "replays": 0},
+        "progress": {"phase": "building-knowledge-graph", "done": 0, "calls": 7, "replays": 900},
+    }
+    try:
+        snap = app_module._snapshot(app_module.JOBS["t-replays2"])
+        assert snap["progress"]["replays"] == 900
+    finally:
+        app_module.JOBS.pop("t-replays2", None)
+
+
+def test_two_jobs_publish_their_own_counts():
+    """2026-10-26 (review): the counters were process-global, so a second
+    job's numbers were published as the FIRST job's — the KG ticker
+    republishes once a second, so the first job's number dropped to zero
+    mid-generation and then counted the second job's calls. Each job
+    publishes its own."""
+    app_module.JOBS["t-a"] = {
+        "job_id": "t-a",
+        "kind": "generate",
+        "status": "running",
+        "phase": "building-knowledge-graph",
+        "started_at": time.time() - 30,
+        "stats": {"calls": 673, "replays": 1392},
+        "progress": {"phase": "building-knowledge-graph", "done": 0},
+    }
+    app_module.JOBS["t-b"] = {
+        "job_id": "t-b",
+        "kind": "evaluate",
+        "status": "running",
+        "phase": "scoring",
+        "started_at": time.time() - 30,
+        "stats": {"calls": 4, "replays": 0},
+        "progress": {"phase": "scoring", "done": 0},
+    }
+    try:
+        a = app_module._snapshot(app_module.JOBS["t-a"])
+        b = app_module._snapshot(app_module.JOBS["t-b"])
+        assert (a["progress"]["calls"], a["progress"]["replays"]) == (673, 1392)
+        assert (b["progress"]["calls"], b["progress"]["replays"]) == (4, 0)
+    finally:
+        app_module.JOBS.pop("t-a", None)
+        app_module.JOBS.pop("t-b", None)
 
 
 def test_phase_tracker_keeps_working_for_plain_phase_calls():

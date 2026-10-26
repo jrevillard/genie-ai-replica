@@ -341,12 +341,28 @@ _KG_FAILURES: dict = {}
 _KG_FAILURES_LOCK = threading.Lock()
 
 
-def _record_kg_failure(reason: str) -> None:
+def _record_kg_failure(reason: str, stats: dict | None = None) -> None:
+    """Count one degraded knowledge-graph node.
+
+    stats (2026-10-26): THIS JOB's dict, when there is one. The process
+    global is the same bug the call counters had — a second job's reset
+    dropped the first job's published count to zero and then published the
+    second's as the first's — so the degraded-node COUNT must belong to the
+    job that produced it, exactly like the call count. The count is REPORTED
+    with the suite, so a wrong number there is a wrong number in front of
+    the operator.
+    """
+    if stats is not None:
+        failures = stats.setdefault("failures", {})
+        failures[reason] = failures.get(reason, 0) + 1
+        return
     with _KG_FAILURES_LOCK:
         _KG_FAILURES[reason] = _KG_FAILURES.get(reason, 0) + 1
 
 
-def _kg_failures() -> dict:
+def _kg_failures(stats: dict | None = None) -> dict:
+    if stats is not None:
+        return dict(stats.get("failures") or {})
     with _KG_FAILURES_LOCK:
         return dict(_KG_FAILURES)
 
@@ -354,6 +370,55 @@ def _kg_failures() -> dict:
 def _reset_kg_failures() -> None:
     with _KG_FAILURES_LOCK:
         _KG_FAILURES.clear()
+
+
+async def _guarded_node(coro, transform, stats: dict | None = None):
+    """Await one node's transform coroutine; a failure degrades THAT node.
+
+    The node keeps its other properties, the failure is COUNTED (and
+    reported with the suite as kg_failures), and the phase continues."""
+    try:
+        return await coro
+    except Exception as err:  # noqa: BLE001 — one node must not kill the phase
+        reason = f"{type(transform).__name__}: {type(err).__name__}"
+        _record_kg_failure(reason, stats)
+        logger.warning("knowledge-graph node degraded (%s) — the run continues", reason)
+        return None
+
+
+def _tolerate_node_failures(transform, stats: dict | None = None):
+    """Make ONE node's failure degrade that node instead of the phase.
+
+    Live 2026-10-26: the Solar System generation died at 137 minutes on one
+    chunk. The chain, read off the installed ragas 0.4.3: the chunk's NER
+    answer was invalid JSON (18 entities plus a `//` comment block), so
+    NEROutput rejected it, and ragas then called its fix-output-format
+    retry — whose output_model is StringIO — and the model answered THAT
+    prompt by echoing the entities JSON, so the StringIO validation is what
+    failed ("1 validation error for StringIO"). The fix prompt retries with
+    the same input, so the cache served the same bad answer again, and the
+    exception escaped `apply_transforms` and took the whole job with it.
+    The KG already tolerates a DEAD node (a failed call — see the caching
+    wrapper's `_degrade`); an UNPARSEABLE answer is the same class of
+    event, and a 2-hour generation must not die on one chunk.
+
+    The seam is `generate_execution_plan`, which yields one coroutine per
+    node. Wrapping each coroutine catches every node-level failure
+    without having to know which method the transform uses (extract,
+    filter, ...) — and the transform keeps its CLASS, so ragas's
+    isinstance checks (Parallel, BaseGraphTransformation) still hold. A
+    proxy object would have failed those checks and been silently ignored.
+
+    stats (2026-10-26): THIS JOB's counters — the degraded-node count is
+    reported with the suite, so it must belong to the job that produced it.
+    """
+    plan = transform.generate_execution_plan
+
+    def generate_execution_plan(kg):
+        return [_guarded_node(c, transform, stats) for c in plan(kg)]
+
+    transform.generate_execution_plan = generate_execution_plan
+    return transform
 
 
 def _llm_max_concurrency() -> int:
@@ -518,7 +583,7 @@ async def _async_call_with_retry(call):
 
 
 def _make_caching_wrapper(  # noqa: N802 — factory, like _make_fanout_class
-    LangchainLLMWrapper, model_tag=None, cancel_event=None, tolerate_failures=False
+    LangchainLLMWrapper, model_tag=None, cancel_event=None, tolerate_failures=False, stats=None
 ):
     """Disk-backed response cache around the judge client (2026-10-18).
 
@@ -581,6 +646,9 @@ def _make_caching_wrapper(  # noqa: N802 — factory, like _make_fanout_class
             # verdict). Every LLM call now checks the event, so a cancel
             # drains the phase within ONE in-flight call.
             self._cancel = cancel_event
+            # The per-job counters (2026-10-26): None means the process
+            # totals, a dict means THIS job's counts.
+            self._stats = stats
             # The KG phase tolerates a dead node (2026-10-22): one server-
             # dropped connection killed a 74-minute generation at its last
             # node. With tolerance, the node's extraction yields an empty
@@ -692,17 +760,21 @@ def _make_caching_wrapper(  # noqa: N802 — factory, like _make_fanout_class
             continues. 1,074 nodes keep their work; the suite reports how
             many were degraded."""
             reason = _classify_failure(err)
-            _record_kg_failure(reason)
+            _record_kg_failure(reason, self._stats)
             logger.warning("knowledge-graph node degraded (%s) — the run continues", reason)
             return self._rebuild([""], {})
 
         def generate_text(self, prompt, n=1, temperature=0.01, stop=None, callbacks=None):
             self._check_cancel()
-            _count_llm_call()
             key = self._key(prompt, n, temperature, stop)
             hit = self._read(key, prompt, n, temperature, stop)
             if hit is not None:
+                # A REPLAY, not a call: the answer was on disk, nothing left
+                # the machine. Counted separately so the panel can say what
+                # actually happened (2026-10-26).
+                _bump(self._stats, "replays")
                 return self._rebuild(*hit)
+            _bump(self._stats, "calls")
             try:
                 result = _sync_call_with_retry(
                     lambda: super(_CachingLlmWrapper, self).generate_text(
@@ -720,11 +792,12 @@ def _make_caching_wrapper(  # noqa: N802 — factory, like _make_fanout_class
 
         async def agenerate_text(self, prompt, n=1, temperature=0.01, stop=None, callbacks=None):
             self._check_cancel()
-            _count_llm_call()
             key = self._key(prompt, n, temperature, stop)
             hit = self._read(key, prompt, n, temperature, stop)
             if hit is not None:
+                _bump(self._stats, "replays")
                 return self._rebuild(*hit)
+            _bump(self._stats, "calls")
             sem = _async_semaphore()
             try:
                 if sem is None:
@@ -757,6 +830,7 @@ def build_llm(
     judge: dict | None = None,
     cancel_event: threading.Event | None = None,
     tolerate_failures: bool = False,
+    stats: dict | None = None,
 ):
     """Wrap the judge endpoint as a ragas LLM. Deferred-imported so /health
     never pays the langchain import cost and tests can stub this module.
@@ -768,7 +842,12 @@ def build_llm(
     direct, a LiteLLM gateway, vLLM, Gemini-compat, Ollama); 'anthropic'
     is the native Messages API via langchain-anthropic (lazy import —
     optional dependency, honest error when absent). Without an override
-    the env contract (RAGAS_JUDGE_*) applies unchanged."""
+    the env contract (RAGAS_JUDGE_*) applies unchanged.
+
+    stats (2026-10-26): this JOB's counter dict — {'calls': n,
+    'replays': n}. The sidecar serves several jobs in one interpreter and
+    the counters must not leak between them (see _bump). None means the
+    process totals."""
     import httpx
     from langchain_openai import ChatOpenAI
 
@@ -842,7 +921,7 @@ def build_llm(
         timeout=300,
         **kwargs,
     )
-    return _make_caching_wrapper(LangchainLLMWrapper, model_tag, cancel_event, tolerate_failures)(inner)
+    return _make_caching_wrapper(LangchainLLMWrapper, model_tag, cancel_event, tolerate_failures, stats)(inner)
 
 
 class _TeiEmbeddings:
@@ -1065,7 +1144,7 @@ def _make_headlines_seeder():
     return _HeadlinesSeeder()
 
 
-def _build_testset_transforms(documents, llm, embedding_model):
+def _build_testset_transforms(documents, llm, embedding_model, stats=None):
     """Explicit mirror of ragas 0.4.3 default_transforms()
     (.venv/Lib/site-packages/ragas/testset/transforms/default.py:34-167)
     with ONE change: a headlines-seeding step (_make_headlines_seeder)
@@ -1103,6 +1182,24 @@ def _build_testset_transforms(documents, llm, embedding_model):
     def filter_chunks(node):
         return node.type == NodeType.CHUNK
 
+    # A node whose extraction DEGRADED (2026-10-26 — the live Solar System run
+    # degraded two NER nodes, and the phase after them raised "Node X or Y has
+    # no entities" and killed the job) has no property to compare. The
+    # relationship builders cannot compare a node they know nothing about,
+    # and they RAISE on the missing property rather than skipping it. So the
+    # node is excluded from the relationship computation instead: it has no
+    # relationships to contribute, and excluding it keeps the phase alive.
+    # In the normal case every node HAS the property, so these filters are
+    # behaviour-preserving — they only differ for a degraded node.
+    def filter_chunks_with_entities(node):
+        return filter_chunks(node) and node.get_property("entities") is not None
+
+    def filter_nodes_with_entities(node):
+        return node.get_property("entities") is not None
+
+    def filter_docs_with_embedding(node, min_num_tokens=500):
+        return filter_doc_with_num_tokens(node, min_num_tokens) and node.get_property("summary_embedding") is not None
+
     # token-length bins pick the branch (default.py:80-82, 86, 131, 162-165)
     bin_ranges = [(0, 100), (101, 500), (501, float("inf"))]
     counts = [num_tokens_from_string(doc.page_content) for doc in documents]
@@ -1116,55 +1213,69 @@ def _build_testset_transforms(documents, llm, embedding_model):
 
     if fractions["501-inf"] >= 0.25:
         # long-doc branch (default.py:86-130) + seeder after HeadlinesExtractor
+        # Every MODEL-SHAPED transform is wrapped: one node's unparseable
+        # answer degrades that node instead of killing the phase (2026-10-26
+        # — the live Solar System generation died at 137 minutes on exactly
+        # one unparseable NER chunk). The CPU transforms (the splitter, the
+        # similarity builders) are NOT wrapped: a failure there is a code
+        # bug, and it must fail loudly.
         return [
-            HeadlinesExtractor(llm=llm, filter_nodes=filter_doc_with_num_tokens),
+            _tolerate_node_failures(HeadlinesExtractor(llm=llm, filter_nodes=filter_doc_with_num_tokens), stats),
             _make_headlines_seeder(),
             HeadlineSplitter(min_tokens=500),
-            SummaryExtractor(llm=llm, filter_nodes=filter_doc_with_num_tokens),
-            CustomNodeFilter(llm=llm, filter_nodes=filter_chunks),
+            _tolerate_node_failures(SummaryExtractor(llm=llm, filter_nodes=filter_doc_with_num_tokens), stats),
+            _tolerate_node_failures(CustomNodeFilter(llm=llm, filter_nodes=filter_chunks), stats),
             Parallel(
-                EmbeddingExtractor(
-                    embedding_model=embedding_model,
-                    property_name="summary_embedding",
-                    embed_property_name="summary",
-                    filter_nodes=filter_doc_with_num_tokens,
+                _tolerate_node_failures(
+                    EmbeddingExtractor(
+                        embedding_model=embedding_model,
+                        property_name="summary_embedding",
+                        embed_property_name="summary",
+                        filter_nodes=filter_doc_with_num_tokens,
+                    ),
+                    stats,
                 ),
-                ThemesExtractor(llm=llm, filter_nodes=filter_chunks),
-                NERExtractor(llm=llm, filter_nodes=filter_chunks),
+                _tolerate_node_failures(ThemesExtractor(llm=llm, filter_nodes=filter_chunks), stats),
+                _tolerate_node_failures(NERExtractor(llm=llm, filter_nodes=filter_chunks), stats),
             ),
             Parallel(
                 CosineSimilarityBuilder(
                     property_name="summary_embedding",
                     new_property_name="summary_similarity",
                     threshold=0.7,
-                    filter_nodes=filter_doc_with_num_tokens,
+                    filter_nodes=filter_docs_with_embedding,
                 ),
-                OverlapScoreBuilder(threshold=0.01, filter_nodes=filter_chunks),
+                OverlapScoreBuilder(threshold=0.01, filter_nodes=filter_chunks_with_entities),
             ),
         ]
     if fractions["101-500"] >= 0.25:
         # medium-doc branch (default.py:131-161) — verbatim, no splitter here
         return [
-            SummaryExtractor(llm=llm, filter_nodes=lambda node: filter_doc_with_num_tokens(node, 100)),
-            CustomNodeFilter(llm=llm),
+            _tolerate_node_failures(
+                SummaryExtractor(llm=llm, filter_nodes=lambda node: filter_doc_with_num_tokens(node, 100)), stats
+            ),
+            _tolerate_node_failures(CustomNodeFilter(llm=llm), stats),
             Parallel(
-                EmbeddingExtractor(
-                    embedding_model=embedding_model,
-                    property_name="summary_embedding",
-                    embed_property_name="summary",
-                    filter_nodes=lambda node: filter_doc_with_num_tokens(node, 100),
+                _tolerate_node_failures(
+                    EmbeddingExtractor(
+                        embedding_model=embedding_model,
+                        property_name="summary_embedding",
+                        embed_property_name="summary",
+                        filter_nodes=lambda node: filter_doc_with_num_tokens(node, 100),
+                    ),
+                    stats,
                 ),
-                ThemesExtractor(llm=llm, filter_nodes=filter_docs),
-                NERExtractor(llm=llm),
+                _tolerate_node_failures(ThemesExtractor(llm=llm, filter_nodes=filter_docs), stats),
+                _tolerate_node_failures(NERExtractor(llm=llm), stats),
             ),
             Parallel(
                 CosineSimilarityBuilder(
                     property_name="summary_embedding",
                     new_property_name="summary_similarity",
                     threshold=0.5,
-                    filter_nodes=lambda node: filter_doc_with_num_tokens(node, 100),
+                    filter_nodes=lambda node: filter_docs_with_embedding(node, 100),
                 ),
-                OverlapScoreBuilder(threshold=0.01),
+                OverlapScoreBuilder(threshold=0.01, filter_nodes=filter_nodes_with_entities),
             ),
         ]
     raise ValueError("Documents appears to be too short (ie 100 tokens or less). Please provide longer documents.")
@@ -1206,13 +1317,27 @@ _TQDM_BARS: list = []  # [weakref(bar)] — newest last
 # it reads as a broken benchmark. The LLM wrapper is OURS, so it counts its
 # own calls — a counter that always advances with the work, reported next to
 # the transform name and the elapsed clock.
+#
+# TWO counters, not one (2026-10-26, live): the count above was incremented
+# BEFORE the cache lookup, so a call served from the on-disk cache — no
+# request, no GPU, no network — was reported as an "LLM call". On a corpus
+# generated before (the Solar System run, 2026-10-26) the panel climbed to
+# "673 LLM calls" while the remote GPU sat at 0 % and the remote's own
+# request counters did not move by a single request. The number was honest
+# about ATTEMPTS and dishonest about WORK. A replay is counted as a replay.
 _LLM_CALLS = 0
+_CACHE_REPLAYS = 0
 _LLM_CALLS_LOCK = threading.Lock()
 
 
 def _llm_calls() -> int:
     with _LLM_CALLS_LOCK:
         return _LLM_CALLS
+
+
+def _cache_replays() -> int:
+    with _LLM_CALLS_LOCK:
+        return _CACHE_REPLAYS
 
 
 def llm_calls() -> int:
@@ -1229,19 +1354,73 @@ def llm_calls() -> int:
     return _llm_calls()
 
 
+def llm_call_stats() -> dict:
+    """Both counters in one read: `calls` reached the model, `replays` were
+    served from the on-disk cache. The HTTP layer publishes both so the
+    panel can say what actually happened."""
+    with _LLM_CALLS_LOCK:
+        return {"calls": _LLM_CALLS, "replays": _CACHE_REPLAYS}
+
+
+def cache_replays() -> int:
+    """The live count of calls answered from the on-disk LLM cache — work
+    that did NOT reach the model. Published next to `llm_calls()` so the
+    panel can separate "the model was called" from "the cache answered"."""
+    return _cache_replays()
+
+
 def _count_llm_call(n: int = 1) -> None:
     global _LLM_CALLS
     with _LLM_CALLS_LOCK:
         _LLM_CALLS += n
 
 
+def _count_cache_replay(n: int = 1) -> None:
+    """A cache HIT — the answer was on disk, no request left the machine."""
+    global _CACHE_REPLAYS
+    with _LLM_CALLS_LOCK:
+        _CACHE_REPLAYS += n
+
+
+def _bump(stats: dict | None, key: str) -> None:
+    """Count one event for THIS job.
+
+    The counters are per JOB, not per process (2026-10-26, review): the
+    sidecar serves up to RAGAS_MAX_CONCURRENT_JOBS=2 jobs in ONE
+    interpreter, and a process-global counter publishes one job's work as
+    another's. The KG ticker republishes once a second, so a second job's
+    reset dropped the FIRST job's published number to zero mid-generation
+    (and then counted the second job's calls instead) — the same class of
+    lie the call/replay split was introduced to end. A job that supplies its
+    own `stats` dict owns its counters; without one the module-level
+    totals are used (the tests, and any caller that wants the process
+    view).
+    """
+    if stats is None:
+        if key == "calls":
+            _count_llm_call()
+        else:
+            _count_cache_replay()
+        return
+    stats[key] = stats.get(key, 0) + 1
+
+
+def _counts(stats: dict | None = None) -> tuple[int, int]:
+    """(calls, replays) for THIS job — the per-job counters when the job
+    owns them, the process totals otherwise."""
+    if stats is None:
+        return _llm_calls(), _cache_replays()
+    return stats.get("calls", 0), stats.get("replays", 0)
+
+
 def _reset_llm_calls() -> None:
-    """Zero the counter at the start of a phase — the number must describe
+    """Zero the counters at the start of a phase — the numbers must describe
     THIS job, not the process (the sidecar serves many jobs in one
     interpreter, and a cumulative count reads as a jump)."""
-    global _LLM_CALLS
+    global _LLM_CALLS, _CACHE_REPLAYS
     with _LLM_CALLS_LOCK:
         _LLM_CALLS = 0
+        _CACHE_REPLAYS = 0
 
 
 def _hook_tqdm() -> None:
@@ -1408,6 +1587,7 @@ async def generate_testset(
     cancel_event: threading.Event | None = None,
     judge: dict | None = None,
     embed: dict | None = None,
+    stats: dict | None = None,
 ) -> dict:
     """Generate benchmark-suite samples from concept documents.
 
@@ -1422,6 +1602,9 @@ async def generate_testset(
     _TolerantSynthesizer).
     judge / embed (8-7 model configs): optional per-request model overrides
     resolved by okf-server (build_llm / build_embeddings carry the shapes).
+    stats (optional): this job's counter dict — the calls that reached the
+    model and the replays the cache answered. The job owns them, so a
+    concurrent job cannot publish this one's numbers (2026-10-26).
     """
     _patch_persona_lookup()
     _reset_synth_failures()  # the reasons describe THIS generation
@@ -1438,7 +1621,7 @@ async def generate_testset(
     # node yields an empty extraction, the failure is counted and reported
     # with the suite, and the other nodes keep their work.
     llm = build_llm(
-        temperature=0.3, judge=judge, cancel_event=cancel_event, tolerate_failures=True
+        temperature=0.3, judge=judge, cancel_event=cancel_event, tolerate_failures=True, stats=stats
     )  # generation benefits from mild creativity
     embeddings = build_embeddings(embed=embed)
     if embeddings is None:
@@ -1485,7 +1668,7 @@ async def generate_testset(
     # The same confinement keeps the uvicorn loop free for health checks.
     if progress:
         progress("building-knowledge-graph")
-    transforms = _build_testset_transforms(documents=docs, llm=llm, embedding_model=embeddings)
+    transforms = _build_testset_transforms(documents=docs, llm=llm, embedding_model=embeddings, stats=stats)
     nodes = [
         Node(
             type=NodeType.DOCUMENT,
@@ -1520,13 +1703,17 @@ async def generate_testset(
                         # The LLM-call count ALWAYS advances with the work —
                         # the fallback when the transform bar itself does not
                         # move (2026-10-21: a frozen "0/1075" for 20 minutes).
-                        calls=_llm_calls(),
+                        # TWO numbers: the calls that reached the model and
+                        # the ones the on-disk cache answered (2026-10-26),
+                        # and they are THIS JOB's (see _bump).
+                        calls=_counts(stats)[0],
+                        replays=_counts(stats)[1],
                     )
                 except Exception:  # noqa: BLE001
                     pass
 
     _hook_tqdm()
-    _reset_llm_calls()  # the count describes THIS phase, not the process
+    _reset_llm_calls()  # the process totals describe THIS phase, not the process
     ticker = threading.Thread(target=_kg_ticker, daemon=True, name="kg-progress")
     ticker.start()
     try:
@@ -1559,7 +1746,13 @@ async def generate_testset(
             # moves when a sample RESOLVES, and the first one waits on the
             # persona/scenario calls (2026-10-21: the count must always
             # advance, whatever the phase).
-            progress("synthesizing-questions", synth_done[0], None, calls=_llm_calls())
+            progress(
+                "synthesizing-questions",
+                synth_done[0],
+                None,
+                calls=_counts(stats)[0],
+                replays=_counts(stats)[1],
+            )
 
     dist = _resolve_distribution(query_distribution, llm, kg=kg, cancel_event=cancel_event, on_sample=_bump)
     if progress is not None and dist:
@@ -1569,7 +1762,8 @@ async def generate_testset(
             "synthesizing-questions",
             synth_done[0],
             max(expected, int(testset_size)),
-            calls=_llm_calls(),
+            calls=_counts(stats)[0],
+            replays=_counts(stats)[1],
         )
     testset = await asyncio.to_thread(
         generator.generate,
@@ -1631,7 +1825,7 @@ async def generate_testset(
         # (2026-10-22: a server-dropped connection at node 1074/1075 ended a
         # 74-minute run). The run CONTINUES on a degraded node; the count
         # travels with the suite so the degradation is never silent.
-        "kg_failures": _kg_failures(),
+        "kg_failures": _kg_failures(stats),
         "generator": {"model": generator_model, "embed_model": generator_embed},
     }
 
@@ -1711,6 +1905,7 @@ async def evaluate_samples(
     cancel_event=None,
     judge: dict | None = None,
     embed: dict | None = None,
+    stats: dict | None = None,
 ) -> dict:
     """Score samples with the selected metrics. Sample keys are his exact
     mapping (user_input / retrieved_contexts / response / reference) plus
@@ -1720,7 +1915,9 @@ async def evaluate_samples(
     cancel_event (optional): checked between batches — a cancelled run
     reports cancelled rather than shipping scores the user abandoned.
     judge / embed (8-7 model configs): optional per-request model overrides
-    resolved by okf-server (build_llm / build_embeddings carry the shapes)."""
+    resolved by okf-server (build_llm / build_embeddings carry the shapes).
+    stats (optional): this job's counter dict — a SCORING job's judge calls
+    are its own, never a generation's (2026-10-26)."""
     # 0 = "not specified by the caller" -> the environment decides
     # (RAGAS_EVAL_TIMEOUT_SECONDS), falling back to 10 minutes. An explicit
     # per-request value always wins.
@@ -1734,7 +1931,7 @@ async def evaluate_samples(
     if not metric_instances:
         raise RuntimeError("no metrics available (embedder unconfigured and only embedding metrics requested?)")
 
-    llm = build_llm(temperature=0.0, judge=judge, cancel_event=cancel_event)
+    llm = build_llm(temperature=0.0, judge=judge, cancel_event=cancel_event, stats=stats)
     embeddings = build_embeddings(embed=embed)
 
     rows = []

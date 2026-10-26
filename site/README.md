@@ -22,6 +22,23 @@ sh scripts/sync-docs.sh      # copy curated docs/*.md -> content/en/docs/
 hugo server -D               # http://127.0.0.1:1313  (-D includes drafts)
 ```
 
+## Link check
+
+Internal links are checked by a dependency-free script that runs in CI
+(`config:docs-links`, stage `config`):
+
+```bash
+cd site
+node scripts/check-links.mjs            # report broken / redirect-only links
+node scripts/check-links.mjs --fix      # rewrite the links that can be repaired
+node --test scripts/check-links.test.mjs
+```
+
+It fails on a link whose target does not exist, on a link that only resolves
+through a redirect, on a raw-HTML `href` that Hugo cannot rewrite, and on a
+section that declares a `slug:` — a section slug makes the published URL
+family depend on the Hugo version, and CI builds from a floating Hugo image.
+
 ## How docs are sourced
 
 Doc content is **copied, not committed**, into `content/en/docs/` by

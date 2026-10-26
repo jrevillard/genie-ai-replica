@@ -1786,13 +1786,8 @@ export default {
 
     async loadConversationConfirmed() {
       this.showLoadConfirm = false;
+      // The discard arm performs no save — by definition it always loads.
       if (this.pendingConversationId) {
-        // A canceled naming dialog keeps the draft: the pending load is
-        // abandoned with it, mirroring the start-new arm.
-        if (!this.lastSaveSucceeded) {
-          this.pendingConversationId = null;
-          return;
-        }
         await this.loadExistingConversation(this.pendingConversationId);
         this.pendingConversationId = null;
       }
@@ -1805,10 +1800,20 @@ export default {
 
     async saveAndLoadConversation() {
       this.showLoadConfirm = false;
+      // The verdict must describe THIS flow: a success from an earlier
+      // save must never answer this arm's question.
+      this.lastSaveSucceeded = false;
       // Only the persisted id decides update-vs-create — an in-flight
       // load target is not saved anywhere yet.
       if (this.conversationId) {
-        await this.updateExistingChat();
+        try {
+          await this.updateExistingChat();
+          this.lastSaveSucceeded = true;
+        } catch {
+          // The pending load is abandoned with the failed save.
+          this.pendingConversationId = null;
+          return;
+        }
       } else {
         this.saveChatDialog = {
           visible: true,
@@ -1855,9 +1860,9 @@ export default {
     },
 
     async handleSaveChat() {
-      // Prevent double-save
+      // Prevent double-save; report the swallowed click as not-saved.
       if (this.isSaving) {
-        return;
+        return false;
       }
 
       this.isSaving = true;
@@ -1965,6 +1970,7 @@ export default {
         this.saveChatDialog.visible = false;
 
         eventBus.$emit('conversation-saved', conversation._key);
+        return true;
 
         // The save was the leave-confirm's arm — resume the interrupted
         // navigation once the chat is safely stored.
@@ -2110,11 +2116,19 @@ export default {
     // place; a never-saved one opens the naming dialog and the navigation
     // resumes when the save completes.
     async saveCurrentChatBeforeLeave() {
+      // The verdict must describe THIS flow: a success from an earlier
+      // save must never answer this arm's question.
+      this.lastSaveSucceeded = false;
       // Only the persisted id decides update-vs-create — an in-flight
       // load target is not saved anywhere yet.
       if (this.conversationId) {
-        await this.updateExistingChat();
-        return true;
+        try {
+          await this.updateExistingChat();
+          this.lastSaveSucceeded = true;
+          return true;
+        } catch {
+          return false;
+        }
       }
       this.saveChatDialog = {
         visible: true,

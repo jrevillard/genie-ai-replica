@@ -2100,6 +2100,69 @@ describe('ChatBotComponent', () => {
       expect(vm.pendingConversationId).toBeNull();
       expect(chatHistoryService.getConversation).not.toHaveBeenCalled();
     });
+
+    it('the discard arm always loads, whatever an earlier save decided', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation.mockResolvedValue({
+        _key: 'conv-target',
+        title: 'Target',
+        messages: []
+      });
+
+      // An earlier successful save left the verdict true; the discard
+      // arm performs no save and must not read it.
+      vm.lastSaveSucceeded = true;
+      vm.pendingConversationId = 'conv-target';
+
+      await vm.loadConversationConfirmed();
+
+      expect(chatHistoryService.getConversation).toHaveBeenCalledWith('conv-target');
+      expect(vm.conversationId).toBe('conv-target');
+      expect(vm.pendingConversationId).toBeNull();
+
+      // And with no save at all before it (the flag false) — the discard
+      // arm is the no-save arm; it must not read the flag either way.
+      chatHistoryService.getConversation.mockClear();
+      vm.lastSaveSucceeded = false;
+      vm.pendingConversationId = 'conv-target';
+      await vm.loadConversationConfirmed();
+      expect(chatHistoryService.getConversation).toHaveBeenCalledWith('conv-target');
+    });
+
+    it('canceling the save-and-load dialog does not inherit an earlier save verdict', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation.mockClear();
+
+      // A prior save left the flag true — the arm resets it for its own
+      // flow, so a cancel cannot read as a success.
+      vm.lastSaveSucceeded = true;
+      vm.conversationId = null;
+      vm.pendingConversationId = 'conv-pending';
+
+      const saving = vm.saveAndLoadConversation();
+      await wrapper.vm.$nextTick();
+      vm.saveChatDialog.visible = false; // the user cancels
+      await saving;
+
+      expect(chatHistoryService.getConversation).not.toHaveBeenCalled();
+      expect(vm.pendingConversationId).toBeNull();
+    });
+
+    it('deleting the open chat clears its category for the next save', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const deleteHandler = mockEventBusOn.mock.calls.find((c) => c[0] === 'chat-deleted')[1];
+
+      vm.currentCategoryId = 'cat-42';
+      vm.$store.commit('conversation/setConversationId', 'conv-cat');
+      deleteHandler('conv-cat');
+
+      expect(vm.currentCategoryId).toBeNull();
+    });
   });
 
   // -----------------------------------------------------------------------

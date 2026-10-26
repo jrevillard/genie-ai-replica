@@ -2208,6 +2208,60 @@ describe('ChatBotComponent', () => {
       expect(vm.currentChatId).toBe('conv-current');
     });
 
+    it('an update never persists the failed exchange and does not prompt', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.updateConversation.mockResolvedValueOnce({});
+      chatHistoryService.addMessage.mockClear();
+
+      vm.$store.commit('conversation/setConversationId', 'conv-saved');
+      vm.currentChatId = 'conv-saved';
+      // The saved conversation reopened: answered turn + a follow-up that
+      // timed out (failStream's shape).
+      vm.$store.commit('conversation/appendUserMessage', { sender: 'user', content: 'answered q', isSaved: true });
+      vm.$store.commit('conversation/appendUserMessage', { sender: 'user', content: 'timed out q', isSaved: false });
+      vm.$store.commit('conversation/appendBotMessage', {
+        sender: 'bot',
+        content: '',
+        isStreaming: false,
+        isError: true,
+        isSaved: false
+      });
+      vm.$store.commit('conversation/setMessageProperty', [2, 'isError', true]);
+      vm.$store.commit('conversation/setSavedState');
+
+      await vm.updateExistingChat();
+
+      // Nothing persistable was left: the failed exchange is stored
+      // nowhere and cannot hold the unsaved-changes confirm open.
+      expect(chatHistoryService.addMessage).not.toHaveBeenCalled();
+      expect(vm.hasUnsavedChanges()).toBe(false);
+    });
+
+    it('a failed-only transcript is not an unsaved change', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.$store.commit('conversation/appendUserMessage', {
+        sender: 'user',
+        content: 'doomed question',
+        isSaved: false
+      });
+      vm.$store.commit('conversation/appendBotMessage', {
+        sender: 'bot',
+        content: '',
+        isStreaming: false,
+        isError: true,
+        isSaved: false
+      });
+      vm.$store.commit('conversation/setMessageProperty', [1, 'isError', true]);
+
+      // Saving it would persist an empty conversation — the prompt is
+      // for content a save would keep.
+      expect(vm.hasUnsavedChanges()).toBe(false);
+    });
+
     it('deleting the open chat clears its category for the next save', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;

@@ -1756,14 +1756,16 @@ export default {
     },
 
     hasUnsavedChanges() {
+      // A failed exchange is deliberately never persisted, so it is not
+      // a pending change either.
       if (!this.conversationId && !this.currentChatId) {
-        const hasUserMessages = this.openMessages.some((msg) => msg.sender === 'user');
+        const hasUserMessages = this.openMessages.some((msg) => msg.sender === 'user' && !msg.isError);
         const hasContextItems = this.selectedContextItems.length > 0;
         return hasUserMessages || hasContextItems;
       }
 
       const hasNewMessages = this.openMessages.some(
-        (msg) => !msg.isSaved && (msg.sender === 'user' || (msg.sender === 'bot' && msg.queryId))
+        (msg) => !msg.isSaved && !msg.isError && (msg.sender === 'user' || (msg.sender === 'bot' && msg.queryId))
       );
       if (hasNewMessages) {
         return true;
@@ -2006,8 +2008,9 @@ export default {
           if (message.isSaved) {
             continue;
           }
-          // A failed exchange is never persisted: its question would
-          // reopen later looking answered, with no dead answer beside it.
+          // A failed exchange is never persisted (and is not a pending
+          // change either): its question would reopen later looking
+          // answered, with no dead answer beside it.
           if (
             (message.sender === 'user' || (message.sender === 'bot' && message.queryId)) &&
             message.content &&

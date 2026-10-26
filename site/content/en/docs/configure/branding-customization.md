@@ -194,6 +194,20 @@ The `genie` theme is a child of the Keycloak `keycloak.v2` (login/admin) / `keyc
 
 The default login screen is the Living Intelligence look: the brand artwork (`login/resources/img/logo.png`) in the brand column, which sits beside the form on wide viewports and above it on narrow ones; the wave band (`login/resources/img/genie-bottom-waves.svg`) along the bottom of the page on wide viewports; and the form card with an accent edge and rounded corners. Both the ground and the wave belong to the base theme only — the login template marks its own pages, so a child theme such as `genie-el-salvador` keeps the look it defines for itself.
 
+### The console and email surfaces
+
+The account console, the admin console and the email carry the same identity as the login screen:
+
+| Surface | What it shows |
+|---|---|
+| Account console | A pale wash of the brand across the masthead, with the brand darkened as its ink; the pale ground behind the form; the wave band closing the sidebar; the selected navigation item as a pale wash of the brand. |
+| Admin console | The same masthead, ground and wave, plus the brand artwork on the welcome page (`admin/resources/img/genie-artwork.png`) and the accent edge along the top of each data table. |
+| Email | A pale brand header with the mark, the content on a white card over the pale ground, and the wave band (`email/resources/img/genie-bottom-waves.png`) closing the card. |
+
+Each console surface ships its own copy of the wave band (`admin/resources/img/genie-bottom-waves.svg`, `account/resources/img/genie-bottom-waves.svg`): a Keycloak theme's stylesheets resolve their images inside that theme's own `resources/`, so a child theme cannot borrow its parent's assets.
+
+The masthead is a pale wash of the brand rather than a solid brand slab. On the slab the console's own label sits at 1.5:1 against the brand; on the wash it reads at 16:1.
+
 ### Multiple themes and theme selection
 
 The runtime mount delivers **the whole `themes/` directory** to Keycloak (`/opt/keycloak/themes`), not a single theme. This matters in two ways:
@@ -228,13 +242,15 @@ Replace four PNG files (one per surface) and (optionally) tweak the CSS:
    - `configs/keycloak/themes/genie/account/resources/img/logo.png`
    - `configs/keycloak/themes/genie/admin/resources/img/logo.png`
    - `configs/keycloak/themes/genie/email/resources/img/logo.png`
-2. Keep the filename `logo.png` — every template references it directly:
+2. Keep the filename `logo.png` — the login template references it directly, and the console and email surfaces point at it by name:
    - `configs/keycloak/themes/genie/login/template.ftl`: `<img src="${url.resourcesPath}/img/logo.png" alt="GENIE.AI" ...>`
+   - `configs/keycloak/themes/genie/{admin,account}/theme.properties`: `logo=img/logo.png`
+   - `configs/keycloak/themes/genie/email/html/template.ftl`: `${url.resourcesUrl}/img/logo.png`
 3. Replace the `alt` text in each template.ftl if your brand name changed (search for `alt="GENIE.AI"`).
 4. (Optional) Tweak the brand color in `configs/keycloak/themes/genie/{login,account,admin}/resources/css/genie.css` — the admin theme especially uses several brand-tinted backgrounds.
 5. Force a Keycloak container restart: `docker service update --force <stack>_keycloak` (Compose: `docker compose up -d --force-recreate keycloak`). Keycloak caches themes in memory; **always restart** the Keycloak container after a theme file change — and clear the compressed-resource cache described in [Troubleshooting](#troubleshooting), otherwise the stylesheet you just edited never reaches the browser.
 
-> **Logo image specs:** Keycloak renders the login logo at `width: 420px` (height auto, scales with aspect ratio) per `configs/keycloak/themes/genie/login/resources/css/genie.css`; it is the brand artwork of the login screen, so use a transparent PNG at least 840px wide (2× for retina) so it stays sharp on high-DPI screens. The admin logo is constrained to `height: 32px` in `configs/keycloak/themes/genie/admin/resources/css/genie.css`. For the email surface, the logo is embedded as a CID attachment and capped at `max-width:120px; max-height:40px` in `template.ftl` — keep the file's natural dimensions in that range to avoid downscaling artifacts.
+> **Logo image specs:** Keycloak renders the login logo at `width: 420px` (height auto, scales with aspect ratio) per `configs/keycloak/themes/genie/login/resources/css/genie.css`; it is the brand artwork of the login screen, so use a transparent PNG at least 840px wide (2× for retina) so it stays sharp on high-DPI screens. The console masthead mark is constrained to `height: 32px` in `configs/keycloak/themes/genie/admin/resources/css/genie.css`, and the admin welcome page shows the artwork at 280px (`admin/resources/img/genie-artwork.png` — a separate file from the masthead mark). For the email surface, the mark is capped at `max-width:72px; max-height:72px` in `template.ftl` — keep the file's natural dimensions in that range to avoid downscaling artifacts.
 
 ## Keycloak email branding
 
@@ -242,16 +258,23 @@ GENIE.AI-themed Keycloak emails (verification, password reset, etc.) use a singl
 
 - `configs/keycloak/themes/genie/email/html/template.ftl`
 
-The logo is embedded via a CID attachment (`<img src="cid:logo.png" alt="GENIE.AI">` on line 17), with the image file at `configs/keycloak/themes/genie/email/resources/img/logo.png`. Keycloak auto-attaches any file under `resources/img/` as a CID; do not change the `src="cid:logo.png"` reference unless you also rename the file.
+**Keycloak attaches nothing to an email.** A `cid:` reference resolves to a broken image in every mail client, because there is no attachment behind it. The template therefore fetches its images from the theme's own resources over HTTP:
+
+```html
+<img src="${url.resourcesUrl}/img/logo.png" alt="GENIE.AI" …>
+<img src="${url.resourcesUrl}/img/genie-bottom-waves.png" alt="" …>
+```
+
+`${url.resourcesUrl}` is the deployment's own origin, so the images resolve wherever the deployment is reachable. The files live at `configs/keycloak/themes/genie/email/resources/img/`. The `url` bean is absent when Keycloak sends a mail outside a request context (a scheduled task, for instance) — the template guards both images with `<#if url??>` and still renders without them.
 
 To rebrand the emails:
 
-1. Replace `configs/keycloak/themes/genie/email/resources/img/logo.png` with your logo (keep the filename).
+1. Replace `configs/keycloak/themes/genie/email/resources/img/logo.png` with your mark (keep the filename).
 2. Edit the two visible strings in `template.ftl`:
-   - Line 8: `<title>${subject!"GENIE.AI"}</title>` — the email's `<title>` fallback (used by the subject only when no subject is set; most clients show the actual subject).
-   - Line 18: `<div ...>GENIE.AI</div>` — the visible brand text rendered next to the logo.
-3. The footer at lines 27–30 hardcodes "International Telecommunication Union (ITU)" and the Geneva address. Replace with your institution's footer text if rebranding.
-4. The header gradient (line 16) uses a hardcoded ITU-blue: `background:linear-gradient(135deg,#2b4acb 0%,#1e3a8a 100%);`. Replace with your brand colors.
+   - `<title>${subject!"GENIE.AI"}</title>` — the email's `<title>` fallback (used by the subject only when no subject is set; most clients show the actual subject).
+   - `<div …>GENIE.AI</div>` — the visible brand text rendered under the mark.
+3. The footer hardcodes "International Telecommunication Union (ITU)" and the Geneva address. Replace with your institution's footer text if rebranding.
+4. The header band uses the pale brand wash `#ddecff` with the brand darkened as its ink (`#000d64`); the ground is `#f4f7fd` and the card white. Replace with your brand colors.
 
 Restart Keycloak after the change (see [Troubleshooting](#troubleshooting)).
 
@@ -291,6 +314,20 @@ After a redeploy, verify each surface end-to-end before announcing the rebrand:
 3. **Favicon**: confirm your favicon appears in the browser tab.
 4. **Theme colors**: confirm the brand-tinted accents (button background, focus rings) reflect your CSS changes — assuming you edited the CSS.
 5. **Email**: trigger a verification or password-reset email → confirm the embedded logo and footer text render correctly. (Most clients cache email images; test from a fresh email address.)
+
+### Keycloak consoles
+
+1. Open the admin console (`/auth/admin/<realm>/console/`) and the account console (`/auth/realms/<realm>/account/`).
+2. **Masthead**: the bar is a pale wash of the brand and its label is readable — on the stock console the same label sits on a solid brand slab at 1.5:1.
+3. **Ground and wave**: the pale ground shows behind the content panels, and the wave band closes the sidebar.
+4. **Admin welcome page**: the brand artwork renders above "Welcome to …".
+5. **Dark mode**: switch the browser or the OS to dark — the masthead, the ground and the wave follow (the wave lightens the ground instead of darkening it).
+
+### Keycloak email
+
+1. Trigger a verification or password-reset email.
+2. **Images**: the mark and the wave band must render — they are fetched from the theme's resources by URL, so a broken image means the URL does not resolve from the mail client's network.
+3. The card is white on the pale ground, the header is the pale brand wash.
 
 ### Common verification gotchas
 

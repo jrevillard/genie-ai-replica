@@ -140,7 +140,14 @@
     </script>
 </head>
 
-<body id="keycloak-bg" class="${properties.kcBodyClass!}" data-page-id="login-${pageId}">
+<#--
+  The base theme marks its own pages. A child theme (genie-el-salvador)
+  resolves its resources under its own path, so the marker is absent there
+  and the base theme's Living Intelligence ground and wave stay out of the
+  child's login page.
+-->
+<#assign isBaseTheme = url.resourcesPath?ends_with('/login/genie')>
+<body id="keycloak-bg" class="${properties.kcBodyClass!} ${isBaseTheme?then('kc-theme-genie', '')}" data-page-id="login-${pageId}">
 <div class="${properties.kcLogin!}">
   <div class="${properties.kcLoginContainer!}">
     <header id="kc-header" class="pf-v5-c-login__header">

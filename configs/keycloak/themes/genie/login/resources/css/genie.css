@@ -64,18 +64,74 @@
   --pf-v5-c-page--BackgroundColor: #f9fbfd;
 }
 
-/* Header brand */
+/* Page ground — the login sits on the Living Intelligence wash instead of
+   the bare canvas. The PatternFly page token is dead here: the body carries
+   no page class, so the ground is painted on the body itself.
+   The ground and the wave are scoped to the base theme (the template marks
+   it); a child theme keeps the bare canvas it has today. */
+body#keycloak-bg {
+  background-color: #f4f7fd;
+}
+
+/* The ground and the wave band are painted on the body's pseudo-elements:
+   the wave has to sit between the ground and the form card, and a
+   background layer on the body cannot be ordered that way. */
+body.kc-theme-genie#keycloak-bg::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background-image:
+    radial-gradient(70% 60% at 76% 38%, rgba(64, 113, 203, 0.18), rgba(64, 113, 203, 0) 70%),
+    radial-gradient(55% 50% at 10% 90%, rgba(120, 92, 214, 0.12), rgba(120, 92, 214, 0) 70%),
+    linear-gradient(180deg, #f9fbfd 0%, #eef2fb 100%);
+}
+
+/* The wave band — the crest of the Living Intelligence artwork, in the
+   same 1800:356 ratio the web theme uses. Multiply sinks its light blue
+   into the light ground; the strokes carry their own low alpha and would
+   otherwise vanish. */
+body.kc-theme-genie#keycloak-bg::after {
+  content: '';
+  position: fixed;
+  inset: auto 0 0 0;
+  aspect-ratio: 1800 / 356;
+  z-index: -1;
+  background: url('../img/genie-bottom-waves.svg') bottom / 100% auto no-repeat;
+  opacity: 0.45;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+/* Header brand — the artwork carries the GENIE.AI wordmark, so the realm
+   name rendered right after it read as a second, weaker brand line.
+   font-size:0 collapses that text node (a bare text node cannot be
+   selected away) without touching the image size. */
 #kc-header-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   color: #4071cb;
-  font-size: 1.5rem;
+  font-size: 0;
   font-weight: 600;
 }
 
 #kc-header-wrapper img {
   display: block;
-  width: 120px;
+  width: 420px;
+  max-width: 100%;
   height: auto;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0;
+}
+
+/* Form card — the DS surface treatment: accent edge on top, rounded
+   corners, one soft shadow. overflow:hidden clips the inner bands to the
+   radius. */
+.pf-v5-c-login__main {
+  border-top: 4px solid #4071cb;
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgba(20, 30, 60, 0.14);
+  overflow: hidden;
 }
 
 /* Footer */

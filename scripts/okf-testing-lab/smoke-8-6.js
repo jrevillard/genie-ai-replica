@@ -291,6 +291,23 @@ async function main() {
     suite = doc;
     break;
   }
+  if (!suite) {
+    // The harness's deadline can expire while the sidecar job is still
+    // running — a big corpus simply takes longer than the budget. That is not
+    // a failure OF THE GENERATION: the job keeps going and the suite lands
+    // on its own. Say so, and hand over the suite_key so the run is still
+    // reachable (2026-10-26 — a Solar System run over 1,600 chunks).
+    let now = { status: 'unknown' };
+    try {
+      now = j(await call('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}`));
+    } catch (e) {
+      now = { status: `unreachable (${e.message})` };
+    }
+    console.log(
+      `  the generation is still ${now.status} after ${DEADLINE_MIN} min — it finishes on its own;` +
+        ` suite_key=${SUITE_KEY}`
+    );
+  }
   check('suite generated', !!(suite && suite.kind === 'ragas_suite'));
   if (!suite) throw new Error('no suite — aborting remaining checks');
   check(

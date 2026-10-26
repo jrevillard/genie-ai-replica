@@ -203,3 +203,24 @@ test('accepts a link to the project on the self-hosted GitLab', () => {
   const r = run(root)
   assert.equal(r.code, 0, r.out)
 })
+
+test('treats a link with an uppercase scheme as an absolute URL', () => {
+  const root = fixture()
+  writeFileSync(
+    join(root, 'docs/operate/page.md'),
+    '---\ntitle: "Page"\n---\n\n# Page\n\n[ext](HTTPS://example.com/a)\n'
+  )
+  const r = run(root)
+  assert.equal(r.code, 0, r.out)
+})
+
+test('rejects the wrong GitLab host whatever the case of the host', () => {
+  const root = fixture()
+  writeFileSync(
+    join(root, 'docs/operate/page.md'),
+    '---\ntitle: "Page"\n---\n\n# Page\n\n[src](https://GitLab.com/un/itu/genie-ai/-/blob/main/x.js)\n'
+  )
+  const r = run(root)
+  assert.equal(r.code, 1)
+  assert.match(r.out, /wrong GitLab host/)
+})

@@ -197,7 +197,35 @@ const wrongHost = []
 let rewritten = 0
 
 // The repository is self-hosted: a link to it on gitlab.com answers 403.
-const WRONG_HOST = /^https?:\/\/gitlab\.com\/un\/itu\//
+const WRONG_HOST_PREFIXES = ['http://gitlab.com/un/itu/', 'https://gitlab.com/un/itu/']
+
+function isWrongHost(target) {
+  const lower = target.toLowerCase()
+  return WRONG_HOST_PREFIXES.some((prefix) => lower.startsWith(prefix))
+}
+
+// The characters a URI scheme may contain after its first letter.
+const SCHEME_TAIL_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789+.-'
+
+/** True when the target starts with a URI scheme (`https:`, `mailto:`, `tel:`). */
+function hasScheme(target) {
+  const colon = target.indexOf(':')
+  if (colon < 1) return false
+  const scheme = target.slice(0, colon).toLowerCase()
+  const first = scheme[0]
+  if (first < 'a' || first > 'z') return false
+  for (let i = 1; i < scheme.length; i++) {
+    if (!SCHEME_TAIL_CHARS.includes(scheme[i])) return false
+  }
+  return true
+}
+
+// A link written as a placeholder in prose, not as a real target.
+const PLACEHOLDER_CHARS = ['…', '{', '}', '<', '>']
+
+function hasPlaceholder(target) {
+  return PLACEHOLDER_CHARS.some((char) => target.includes(char))
+}
 
 /** Resolve an internal target to its canonical published URL. */
 function canonical(target) {
@@ -234,15 +262,15 @@ for (const file of files) {
 
     const handle = (target, kind) => {
       if (!target) return target
-      if (/^[a-z][a-z0-9+.-]*:/i.test(target)) {
+      if (hasScheme(target)) {
         // absolute URL, mailto:, tel:
-        if (WRONG_HOST.test(target)) {
+        if (isWrongHost(target)) {
           wrongHost.push({ file: rel(file), line: i + 1, kind, target })
         }
         return target
       }
       if (target.startsWith('#')) return target // same-page anchor
-      if (/[…{}<>]/.test(target)) return target // placeholder in prose
+      if (hasPlaceholder(target)) return target // placeholder in prose
 
       if (target.startsWith('/')) {
         const path = target.split('#')[0]

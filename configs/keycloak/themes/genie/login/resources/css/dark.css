@@ -95,7 +95,9 @@
   }
 
   #kc-header-wrapper {
-    color: #537feb;
+    /* The realm name is a caption under the artwork now, not a brand
+       line: it keeps the muted tone the light theme gives it. */
+    color: #a0a9b0;
   }
 
   #kc-page-title {

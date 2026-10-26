@@ -1317,6 +1317,13 @@ export default {
           this.translate('okf.ragas.gen.replays', '{n} replayed from cache').replace('{n}', String(p.replays))
         );
       }
+      // A fully-replayed generation really did reach the model ZERO times
+      // (2026-10-26) — and saying so is the point. The zero-is-"not counted
+      // yet" rule above applies to a count that was never taken, not to a
+      // count that is genuinely zero.
+      if (typeof p.replays === 'number' && p.replays > 0 && p.calls === 0) {
+        parts.push(this.translate('okf.ragas.gen.calls', '{n} LLM calls').replace('{n}', '0'));
+      }
       const eta = this.fmtDuration(p.eta_s);
       if (eta) {
         parts.push(this.translate('okf.ragas.gen.eta', '~{t} left').replace('{t}', eta));

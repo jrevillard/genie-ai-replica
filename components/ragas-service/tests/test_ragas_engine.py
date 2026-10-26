@@ -1019,6 +1019,94 @@ def test_llm_call_stats_reports_both_counters():
     assert stats == {"calls": 2, "replays": 7}
 
 
+def test_two_jobs_never_share_their_counters(monkeypatch, tmp_path):
+    """2026-10-26 (review): the counters were process-global, so a second
+    job's reset dropped the FIRST job's published number to zero
+    mid-generation (the KG ticker republishes once a second) and then
+    counted the second job's calls as the first's. Each job owns its
+    counters."""
+    calls = {"n": 0}
+
+    class _Gen:
+        def __init__(self, text):
+            self.text = text
+
+    class _Res:
+        def __init__(self, text):
+            self.generations = [[_Gen(text)]]
+            self.llm_output = None
+
+    class _FakeBase:
+        def __init__(self, *a, **k):
+            pass
+
+        def generate_text(self, prompt, n=1, temperature=0.01, stop=None, callbacks=None):
+            calls["n"] += 1
+            return _Res("answer")
+
+    class _Prompt:
+        def to_string(self):
+            return "p"
+
+    monkeypatch.setenv("RAGAS_LLM_CACHE_DIR", str(tmp_path / "cache"))
+    stats_a = {"calls": 0, "replays": 0}
+    stats_b = {"calls": 0, "replays": 0}
+    wrapper_cls = ragas_engine._make_caching_wrapper(_FakeBase, stats=stats_a)
+    wrapper_cls_b = ragas_engine._make_caching_wrapper(_FakeBase, stats=stats_b)
+
+    a = wrapper_cls(object())
+    b = wrapper_cls_b(object())
+
+    a.generate_text(_Prompt(), n=1, temperature=0.2)  # a miss -> a real call
+    b.generate_text(_Prompt(), n=1, temperature=0.3)  # b's miss -> b's call
+    a.generate_text(_Prompt(), n=1, temperature=0.2)  # a HIT -> a's replay
+
+    assert stats_a == {"calls": 1, "replays": 1}
+    assert stats_b == {"calls": 1, "replays": 0}
+    # the model was called twice in total — once per job
+    assert calls["n"] == 2
+
+
+def test_a_node_that_cannot_be_parsed_does_not_kill_the_phase():
+    """Live 2026-10-26: one chunk's NER answer came back as a JSON object
+    where ragas's parser expects a plain string; the format-fix retry failed
+    too, and the exception escaped apply_transforms and took a 137-minute
+    generation with it. One node degrades; the phase continues."""
+    import asyncio
+
+    class _Boom:
+        def generate_execution_plan(self, kg):
+            async def boom():
+                raise ValueError("Failed to parse StringIO from completion")
+
+            return [boom()]
+
+    ragas_engine._reset_kg_failures()
+    t = ragas_engine._tolerate_node_failures(_Boom())
+    coros = t.generate_execution_plan(None)
+
+    async def _run():
+        for c in coros:
+            await c  # must NOT raise
+
+    asyncio.run(_run())  # the exception is swallowed, not propagated
+    failures = ragas_engine._kg_failures()
+    assert failures, "the degraded node was not counted"
+    assert any("_Boom" in reason for reason in failures), failures
+
+
+def test_the_tolerance_wrapper_keeps_the_transforms_class():
+    """ragas's apply_transforms dispatches on isinstance (Parallel,
+    BaseGraphTransformation) — a proxy object would have been silently
+    ignored, so the wrapper patches the INSTANCE and keeps its class."""
+    from ragas.testset.transforms.extractors.llm_based import NERExtractor
+
+    t = NERExtractor(llm=object())
+    wrapped = ragas_engine._tolerate_node_failures(t)
+    assert isinstance(wrapped, NERExtractor)
+    assert wrapped is t
+
+
 def test_progress_reader_aggregates_parallel_worker_bars(monkeypatch):
     """2026-10-21: with a 16-worker pool there is one bar PER WORKER, so
     "the newest open bar" is almost always a bar at n=0. The reader must

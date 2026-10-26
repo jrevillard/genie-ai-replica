@@ -134,22 +134,22 @@ def _snapshot(job: dict) -> dict:
         # a gap of minutes during scenario generation, in which the panel
         # showed a frozen "4207 LLM calls" while the judge was being called
         # continuously (live 2026-10-22). A stale number is worse than none:
-        # it reads as a stopped job. The `max` guard keeps the count
-        # monotonic per job when a second job resets the shared counter.
-        # The REPLAY counter rides along (2026-10-26): a call served from
-        # the on-disk cache never reached the model, and reporting it as an
-        # "LLM call" is what made a 0 % GPU look like a broken benchmark.
+        # it reads as a stopped job.
+        #
+        # The counts come from THIS JOB's own counters (2026-10-26): the
+        # process-global ones would publish a concurrent job's work as
+        # this job's, and the `max` guard could not stop it — the tracker
+        # republishes the live value once a second, so the other job's
+        # reset dropped this job's number to zero mid-generation. The
+        # REPLAY counter rides along: a call served from the on-disk cache
+        # never reached the model, and reporting it as an "LLM call" is what
+        # made a 0 % GPU look like a broken benchmark.
         if job.get("status") == "running":
-            try:
-                live_calls = ragas_engine.llm_calls()
-            except Exception:  # noqa: BLE001 — a counter read can never fail a poll
-                live_calls = None
+            stats = job.get("stats") or {}
+            live_calls = stats.get("calls")
+            live_replays = stats.get("replays")
             if isinstance(live_calls, int) and live_calls >= (prog.get("calls") or 0):
                 prog["calls"] = live_calls
-            try:
-                live_replays = ragas_engine.cache_replays()
-            except Exception:  # noqa: BLE001 — a counter read can never fail a poll
-                live_replays = None
             if isinstance(live_replays, int) and live_replays >= (prog.get("replays") or 0):
                 prog["replays"] = live_replays
         out["progress"] = prog
@@ -178,6 +178,13 @@ async def _start_job(kind: str) -> str:
             "status": "queued",
             "phase": "",
             "started_at": now,
+            # THIS job's counters (2026-10-26): the calls that reached the
+            # model and the replays the on-disk cache answered. The
+            # sidecar serves several jobs in one interpreter, so the
+            # counters must not be process-global — a concurrent job's
+            # numbers published as this job's is the same lie the
+            # call/replay split was introduced to end.
+            "stats": {"calls": 0, "replays": 0},
             # the cooperative-stop signal: engine phases and synthesizer
             # wrappers poll it, so a cancelled job stops paying the GPU
             # within one in-flight LLM batch even though the worker thread
@@ -353,6 +360,7 @@ async def generate_testset(req: GenerateRequest):
             cancel_event=JOBS[job_id]["cancel_event"],
             judge=req.judge.model_dump() if req.judge else None,
             embed=req.embed.model_dump() if req.embed else None,
+            stats=JOBS[job_id]["stats"],
         ),
     )
     return {"job_id": job_id, "status": "queued", "poll": f"/jobs/{job_id}"}
@@ -391,6 +399,7 @@ async def evaluate(req: EvaluateRequest):
             cancel_event=JOBS[job_id]["cancel_event"],
             judge=req.judge.model_dump() if req.judge else None,
             embed=req.embed.model_dump() if req.embed else None,
+            stats=JOBS[job_id]["stats"],
         ),
     )
     return {"job_id": job_id, "status": "queued", "poll": f"/jobs/{job_id}"}

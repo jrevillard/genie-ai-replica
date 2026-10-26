@@ -304,6 +304,11 @@ describe('RagasPanel', () => {
     const detail = w.vm.genProgressDetail;
     expect(detail).toContain('184 LLM calls');
     expect(detail).toContain('1392 replayed from cache');
+    // a FULLY replayed generation really did reach the model zero times —
+    // the line says so, rather than hiding the calls segment
+    w.vm.genProgress = { phase: 'building-knowledge-graph', calls: 0, replays: 1392, elapsed_s: 60 };
+    expect(w.vm.genProgressDetail).toContain('0 LLM calls');
+    expect(w.vm.genProgressDetail).toContain('1392 replayed from cache');
     // no replays → no replay segment (nothing to say)
     w.vm.genProgress = { phase: 'building-knowledge-graph', calls: 184, elapsed_s: 60 };
     expect(w.vm.genProgressDetail).not.toContain('replayed');

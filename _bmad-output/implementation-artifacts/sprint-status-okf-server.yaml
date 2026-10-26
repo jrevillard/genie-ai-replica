@@ -757,4 +757,23 @@ development_status:
   #          report "0 regenerated rows" and drop answer-churned rows into the control
   #          group. Both fixed; the answer/reference split is what the second
   #          benchmark's comparison rests on.
+  #          COUNTER HONESTY 2026-10-26 (MR !602, branch fix/ragas-replay-counter):
+  #          the generation's progress line counted every ATTEMPT as an LLM call —
+  #          the counter is incremented at the top of the sidecar's LLM wrapper,
+  #          BEFORE the disk-cache lookup, so a call the cache answered (no request,
+  #          no GPU) was reported as work the model did. Live on the Solar System
+  #          generation: the panel read "673 LLM calls" while the remote GPU sat at
+  #          0 %; over a 31-second window the sidecar counted +45 calls while the
+  #          remote vLLM's own counters moved by ZERO requests
+  #          (vllm:request_success_total, vllm:prompt_tokens_total and
+  #          vllm:e2e_request_latency_seconds_count all flat), no cache file was
+  #          written (a miss always writes one) and no node was degraded (nothing
+  #          failed). The corpus had been generated before, so the knowledge-graph
+  #          summaries were replayed from the cache. Fixed: the counter moved AFTER
+  #          the cache lookup, so a hit is a REPLAY and never an LLM call; the
+  #          envelope publishes both (calls + replays) on the same live refresh as
+  #          the call count; the panel shows both as separate segments. New spec
+  #          constraint ("a progress number reports work, not attempts", memlog 117).
+  #          Tests: ragas-service 74 (4 new), frontend 62 (1 new), locale parity
+  #          across the 14 locales.
 

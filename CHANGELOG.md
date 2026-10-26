@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The benchmark's progress line counted cache replays as LLM calls (8-6/8-7).** The generation's call counter was incremented before the sidecar's on-disk judge cache was consulted, so a call the cache answered — no request, no GPU — was reported as work the model did. On a corpus that had been generated before, the panel climbed to "673 LLM calls" while the remote GPU sat at 0 % and the remote's own request counters did not move by a single request: the run was never stuck and the model was never wrong, only the number was. The counter now counts the requests that reached the model, and the replays the cache answered are reported beside them, so a replay is never read as an LLM call.
+
 - **The benchmark model picker said "Deployment default" and meant something else
   (8-6/8-7).** The first option of every model picker — Generate, Run and
   Re-score — resolved to the **active model configuration** but was labelled

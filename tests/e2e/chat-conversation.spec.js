@@ -585,6 +585,10 @@ test.describe('Conversation — surface invariants', () => {
     await expect(page.locator('.chat-message.bot .message-bubble').last()).toContainText(
       'The answer completes in the background.'
     );
+    // The transcript must be the VIEW, not merely present in the DOM
+    // behind the welcome overlay: the overlay covers the conversation.
+    await expect(page.locator('.quick-help-overlay')).toHaveCount(0);
+    await expect(page.locator('.chat-input')).toBeVisible();
     await ctx.close();
   });
 

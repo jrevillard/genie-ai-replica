@@ -266,7 +266,10 @@
         <div ref="messagesEnd"></div>
       </div>
       <!-- Quick Help Overlay -->
-      <div v-if="showQuickHelp && selectedContextItems.length === 0" class="quick-help-overlay">
+      <div
+        v-if="showQuickHelp && selectedContextItems.length === 0 && !conversationStarted"
+        class="quick-help-overlay"
+      >
         <!-- The banner is a real element so its height can grow with the
              heading + subtitle inside it (a content-aware box), and the
              heading reads as sitting inside the artwork instead of below
@@ -746,6 +749,14 @@ export default {
         return userMessage.content.length > 50 ? userMessage.content.substring(0, 47) + '...' : userMessage.content;
       }
       return 'New conversation';
+    },
+
+    // A conversation in progress owns the view: the welcome overlay must
+    // not cover it. The transcript lives in the store, so this survives
+    // the remount a navigation causes — the overlay's own flag does not
+    // (it is component state, and comes back true on every mount).
+    conversationStarted() {
+      return this.openMessages.some((msg) => msg.sender === 'user');
     },
 
     // The dynamic max the right handle clamps against. The left sidebar's

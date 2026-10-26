@@ -225,6 +225,26 @@ describe('ChatBotComponent', () => {
       expect(wrapper.find('[data-test-id="chatbot-container"]').exists()).toBe(true);
     });
 
+    it('the welcome overlay does not cover a conversation in progress', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // Fresh mount: no question asked yet — the welcome overlay is the view.
+      expect(wrapper.find('.quick-help-overlay').exists()).toBe(true);
+
+      // A question in the store (the conversation survived a navigation):
+      // the overlay must get out of the way.
+      vm.$store.commit('conversation/appendUserMessage', {
+        sender: 'user',
+        content: 'asked something',
+        isSaved: false
+      });
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.find('.quick-help-overlay').exists()).toBe(false); // the overlay must not cover the conversation
+      expect(wrapper.find('.chat-input').exists()).toBe(true); // the conversation composer is the view
+    });
+
     it('opens on the welcome message in the conversation transcript', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;

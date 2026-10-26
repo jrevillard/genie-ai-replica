@@ -192,6 +192,78 @@ def test_generation_progress_calls_match_the_app_tracker_contract(monkeypatch, e
     synthesis = [c for c in calls if c[0] == "synthesizing-questions"]
     assert synthesis, "the synthesis phase reported nothing"
     assert any("calls" in c[3] for c in synthesis), "the synthesis phase carries no call count"
+    # the replay count rides the same contract (2026-10-26): a phase that
+    # reports work must also report how much of it the cache answered.
+    assert any("replays" in c[3] for c in synthesis), "the synthesis phase carries no replay count"
+
+
+def test_the_knowledge_graph_ticker_reports_both_counts(monkeypatch, engine_env):
+    """2026-10-26: the KG ticker's progress call is wrapped in a bare
+    `except Exception: pass` — an unknown kwarg would be swallowed and the
+    phase would report NOTHING (the frozen-progress bug of 2026-10-21)
+    instead of failing loudly. This drives the ticker for real and pins
+    that the call it makes carries the call count AND the replay count, and
+    that the app's tracker accepts them."""
+
+    import asyncio
+    import contextlib
+    import io
+    import time
+
+    from ragas.testset import TestsetGenerator
+
+    monkeypatch.setattr(ragas_engine, "build_llm", lambda **kwargs: object())
+    monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: object())
+    monkeypatch.setattr(ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model: [])
+
+    def fake_generate(self, **kwargs):
+        return _testset_with(_StubTS())
+
+    monkeypatch.setattr(TestsetGenerator, "generate", fake_generate)
+    import ragas.testset.transforms as transforms_module
+
+    # the ticker only reports while a transform bar is open, and it ticks
+    # once a second — the transform must therefore outlive one tick.
+    def slow_transforms(kg, transforms, run_config=None):
+        time.sleep(2.0)
+
+    monkeypatch.setattr(transforms_module, "apply_transforms", slow_transforms)
+    _stub_default_distribution(monkeypatch)
+
+    ragas_engine._hook_tqdm()
+    from tqdm import tqdm
+
+    calls = []
+
+    def progress(phase, done=None, total=None, **kwargs):
+        calls.append((phase, done, total, kwargs))
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+        bars = [tqdm(total=100, desc="Applying TestAggregate", disable=False)]
+        bars[0].update(1)
+        try:
+            asyncio.run(
+                ragas_engine.generate_testset(
+                    [{"page_content": "body", "metadata": {"repo_id": "r"}}],
+                    testset_size=2,
+                    progress=progress,
+                )
+            )
+        finally:
+            for b in bars:
+                b.close()
+
+    kg = [c for c in calls if c[0] == "building-knowledge-graph"]
+    assert kg, "the knowledge-graph phase reported nothing — the ticker never fired"
+    assert any("calls" in c[3] for c in kg), "the KG ticker carries no call count"
+    assert any("replays" in c[3] for c in kg), "the KG ticker carries no replay count"
+
+    import app as app_module
+
+    tracker = app_module._phase_tracker("job-kg-ticker")
+    for phase, done, total, kwargs in calls:
+        tracker(phase, done, total, **kwargs)  # the tracker must survive it
 
 
 def test_generate_testset_caps_concept_text_for_the_kg(monkeypatch, engine_env):

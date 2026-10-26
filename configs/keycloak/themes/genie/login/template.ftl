@@ -155,10 +155,12 @@
 </head>
 
 <#--
-  The base theme marks its own pages. The marker follows the theme
+  The base theme marks its own pages. The check follows the theme
   directory name — the resources path ends with it — so a child theme
   (genie-el-salvador) does not get it and keeps its own ground and wave.
-  Renaming the base theme directory means renaming the marker with it.
+  Renaming the base theme directory means updating the path literal in
+  the check below; the class name itself is arbitrary, the stylesheets
+  key on it unchanged.
 -->
 <#assign isBaseTheme = url.resourcesPath?ends_with('/genie')>
 <body id="keycloak-bg" class="<#if isBaseTheme>kc-theme-genie </#if>${properties.kcBodyClass!}" data-page-id="login-${pageId}">

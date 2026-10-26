@@ -2032,6 +2032,9 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
+      // A prior save left the verdict true — this flow's entry reset
+      // must not answer its own cancel with that stale success.
+      vm.lastSaveSucceeded = true;
       vm.$store.commit('conversation/appendUserMessage', { sender: 'user', content: 'KEPT DRAFT', isSaved: false });
 
       const leaving = vm.saveAndStartNewChat();
@@ -2105,11 +2108,9 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
       const chatHistoryService = require('../../services/chatHistoryService');
-      chatHistoryService.getConversation.mockResolvedValue({
-        _key: 'conv-target',
-        title: 'Target',
-        messages: []
-      });
+      chatHistoryService.getConversation
+        .mockResolvedValueOnce({ _key: 'conv-target', title: 'Target', messages: [] })
+        .mockResolvedValueOnce({ _key: 'conv-target', title: 'Target', messages: [] });
 
       // An earlier successful save left the verdict true; the discard
       // arm performs no save and must not read it.
@@ -2140,7 +2141,7 @@ describe('ChatBotComponent', () => {
       // A prior save left the flag true — the arm resets it for its own
       // flow, so a cancel cannot read as a success.
       vm.lastSaveSucceeded = true;
-      vm.conversationId = null;
+      vm.$store.commit('conversation/setConversationId', null);
       vm.pendingConversationId = 'conv-pending';
 
       const saving = vm.saveAndLoadConversation();
@@ -2150,6 +2151,61 @@ describe('ChatBotComponent', () => {
 
       expect(chatHistoryService.getConversation).not.toHaveBeenCalled();
       expect(vm.pendingConversationId).toBeNull();
+    });
+
+    it('the save-and-load update branch records its own verdict', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.updateConversation.mockResolvedValueOnce({});
+      chatHistoryService.getConversation.mockResolvedValueOnce({
+        _key: 'conv-pending',
+        title: 'Pending',
+        messages: []
+      });
+
+      vm.$store.commit('conversation/setConversationId', 'conv-current');
+      vm.pendingConversationId = 'conv-pending';
+
+      await vm.saveAndLoadConversation();
+
+      expect(chatHistoryService.updateConversation).toHaveBeenCalledWith('conv-current', expect.anything());
+      expect(chatHistoryService.getConversation).toHaveBeenCalledWith('conv-pending');
+      expect(vm.conversationId).toBe('conv-pending');
+      expect(vm.pendingConversationId).toBeNull();
+    });
+
+    it('a failed update abandons the pending load and keeps the transcript', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.updateConversation.mockRejectedValueOnce(new Error('network down'));
+
+      vm.$store.commit('conversation/setConversationId', 'conv-current');
+      vm.$store.commit('conversation/appendUserMessage', { sender: 'user', content: 'UNSAVED TURN', isSaved: false });
+      vm.pendingConversationId = 'conv-pending';
+
+      await vm.saveAndLoadConversation();
+
+      expect(chatHistoryService.getConversation).not.toHaveBeenCalled();
+      expect(vm.pendingConversationId).toBeNull();
+      expect(vm.openMessages.some((m) => m.content === 'UNSAVED TURN')).toBe(true);
+    });
+
+    it('a failed leave-arm update keeps the draft and stays on the chat', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.updateConversation.mockRejectedValueOnce(new Error('network down'));
+
+      vm.$store.commit('conversation/setConversationId', 'conv-current');
+      vm.currentChatId = 'conv-current';
+      vm.$store.commit('conversation/appendUserMessage', { sender: 'user', content: 'ARM DRAFT', isSaved: false });
+
+      await vm.saveAndStartNewChat();
+
+      expect(vm.openMessages.some((m) => m.content === 'ARM DRAFT')).toBe(true);
+      expect(vm.currentChatId).toBe('conv-current');
     });
 
     it('deleting the open chat clears its category for the next save', () => {

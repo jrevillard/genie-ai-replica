@@ -1860,9 +1860,9 @@ export default {
     },
 
     async handleSaveChat() {
-      // Prevent double-save; report the swallowed click as not-saved.
+      // Prevent double-save; lastSaveSucceeded carries the verdict.
       if (this.isSaving) {
-        return false;
+        return;
       }
 
       this.isSaving = true;
@@ -1970,17 +1970,13 @@ export default {
         this.saveChatDialog.visible = false;
 
         eventBus.$emit('conversation-saved', conversation._key);
-        return true;
-
-        // The save was the leave-confirm's arm — resume the interrupted
-        // navigation once the chat is safely stored.
       } catch (error) {
         console.error('Error saving chat:', error);
         notificationService.error('Failed to save chat. Please try again.');
         // The dialog stays open so the save can be retried; the failure
-        // is a value for the leave arm, not an escaping exception (the
-        // dialog's Save button calls this directly).
-        return false;
+        // never escapes as an exception (the dialog's Save button calls
+        // this directly), and the flag carries the verdict.
+        this.lastSaveSucceeded = false;
       } finally {
         this.isSaving = false;
       }

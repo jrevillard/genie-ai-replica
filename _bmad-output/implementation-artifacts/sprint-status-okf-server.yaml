@@ -776,4 +776,39 @@ development_status:
   #          constraint ("a progress number reports work, not attempts", memlog 117).
   #          Tests: ragas-service 74 (4 new), frontend 62 (1 new), locale parity
   #          across the 14 locales.
+  #          THE LIVE GENERATION DIED (2026-10-26): the Solar System run stopped at
+  #          137 minutes, chunk 1599 of 1600 in the NER phase, after 5,989 model
+  #          calls — one chunk's NER answer came back as a JSON object where
+  #          ragas's parser expects a plain string, the format-fix retry failed
+  #          too, and the exception escaped apply_transforms and took the whole
+  #          job with it. An unparseable answer is the same class of event as a
+  #          dead node, and a dead node has always been tolerated: the node now
+  #          degrades (it keeps its other properties, the failure is COUNTED and
+  #          reported with the suite, the other nodes keep their work). The seam
+  #          is generate_execution_plan (one coroutine per node); wrapping each
+  #          coroutine catches every node-level failure without knowing which
+  #          method the transform uses, and the transform keeps its CLASS so
+  #          ragas's isinstance dispatch still holds (a proxy object would have
+  #          been silently ignored).
+  #          THE REVIEW (independent adversarial review of the diff) found the
+  #          counters were PROCESS-GLOBAL: a second job's reset dropped the first
+  #          job's published number to zero mid-generation (the KG ticker
+  #          republishes once a second) and then counted the second job's calls
+  #          as the first's — and the scoring leg shared the same globals, so a
+  #          concurrent scoring run's calls were published as the generation's.
+  #          Each job now owns its counters (the app hands the engine a per-job
+  #          stats dict). The review also found: the fully-replayed case never
+  #          said "0 requests reached the model" (fixed — the panel now renders
+  #          "0 LLM calls · N replayed from cache"), and the new i18n key was
+  #          missing from the placeholder-shape guard (fixed — it joins
+  #          okf.ragas.gen.calls in replaceConsumedPlain).
+  #          DEPLOYED + PROVEN LIVE (the local build, the warm cache volume
+  #          survived): the smoke harness's generation leg reads
+  #          "building-knowledge-graph 0/114 calls=0 replays=350" rising to
+  #          "replays=414", then "synthesizing-questions calls=3 replays=417"
+  #          — the scenario that used to read "673 LLM calls" on a warm corpus
+  #          now reads honestly: ZERO model calls, 414 cache replays, then the
+  #          7 real calls for the new questions. 'SMOKE 8-6: ALL CHECKS PASSED'
+  #          with the new check "the generation progress envelope separates the
+  #          model calls from the cache replays".
 

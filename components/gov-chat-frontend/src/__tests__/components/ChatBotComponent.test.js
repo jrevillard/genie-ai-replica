@@ -1942,6 +1942,91 @@ describe('ChatBotComponent', () => {
       expect(vm.conversationId).toBeNull();
       expect(vm.currentChatId).toBeNull();
     });
+
+    it('deleting the chat being loaded prevents the load from landing', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      let resolveLoad;
+      chatHistoryService.getConversation.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveLoad = resolve;
+          })
+      );
+      const loadHandler = mockEventBusOn.mock.calls.find((c) => c[0] === 'load-conversation')[1];
+      const deleteHandler = mockEventBusOn.mock.calls.find((c) => c[0] === 'chat-deleted')[1];
+      const loading = loadHandler('conv-9');
+      await wrapper.vm.$nextTick();
+
+      // The chat is deleted from its menu while its load is in flight —
+      // the fetch window has conversationId nulled, so the guard must
+      // recognise the target through currentChatId.
+      deleteHandler('conv-9');
+      resolveLoad({ _key: 'conv-9', title: 'Ghost', messages: [{ sender: 'user', content: 'x', queryId: 'q1' }] });
+      await loading;
+
+      // The deleted conversation is not resurrected.
+      expect(vm.conversationId).toBeNull();
+      expect(vm.currentChatId).toBeNull();
+      expect(vm.openMessages.some((m) => m.content === 'x')).toBe(false);
+    });
+
+    it('a failed load aborts the generation the window opened and restores the welcome', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      let rejectLoad;
+      chatHistoryService.getConversation.mockImplementation(
+        () =>
+          new Promise((_, reject) => {
+            rejectLoad = reject;
+          })
+      );
+      const loadHandler = mockEventBusOn.mock.calls.find((c) => c[0] === 'load-conversation')[1];
+      const loading = loadHandler('conv-9');
+      await wrapper.vm.$nextTick();
+
+      await vm.sendMessageFromText('mid-load question');
+      rejectLoad(new Error('network down'));
+      await loading;
+
+      // No chunk of that generation lands in the welcome turn, and no
+      // placeholder spins forever.
+      expect(vm.isStreaming).toBe(false);
+      const open = vm.openMessages;
+      expect(open).toHaveLength(1);
+      expect(open[0].sender).toBe('bot');
+      expect(vm.hasUnsavedChanges()).toBe(false);
+    });
+
+    it('the leave arm saves before resetting, and a canceled dialog keeps the draft', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.createConversation.mockClear();
+
+      vm.$store.commit('conversation/appendUserMessage', {
+        sender: 'user',
+        content: 'MY IMPORTANT DRAFT',
+        isSaved: false
+      });
+
+      const leaving = vm.saveAndStartNewChat();
+      // Yield the microtasks: the un-awaited mutation resets the
+      // transcript right here — the correct code keeps the draft until
+      // the dialog completes.
+      await wrapper.vm.$nextTick();
+      expect(vm.saveChatDialog.visible).toBe(true);
+      expect(vm.openMessages.some((m) => m.content === 'MY IMPORTANT DRAFT')).toBe(true);
+
+      // Completing the dialog saves through the normal path, and only
+      // then does the welcome screen replace the transcript.
+      await vm.handleSaveChat();
+      await leaving;
+      expect(chatHistoryService.createConversation.mock.calls[0][0].initialMessage).toBe('MY IMPORTANT DRAFT');
+      expect(vm.openMessages.some((m) => m.content === 'MY IMPORTANT DRAFT')).toBe(false);
+    });
   });
 
   // -----------------------------------------------------------------------

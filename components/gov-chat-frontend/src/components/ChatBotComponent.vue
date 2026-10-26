@@ -809,7 +809,9 @@ export default {
 
   created() {
     eventBus.$on('chat-deleted', (deletedChatId) => {
-      if (this.conversationId === deletedChatId) {
+      // The in-flight window has conversationId nulled and the target in
+      // currentChatId — the deleted chat must be recognised in both.
+      if (this.conversationId === deletedChatId || this.currentChatId === deletedChatId) {
         this.$store.dispatch('conversation/abortStream');
         // The conversation is gone: an in-flight load must not land.
         this.loadSeq++;
@@ -1733,12 +1735,19 @@ export default {
         // newer load already owns the screen.
         if (token === this.loadSeq) {
           this.currentChatId = null;
-          this.$store.commit('conversation/appendBotMessage', {
-            sender: 'bot',
-            content: this.getWelcomeMessage(),
-            timestamp: new Date().toISOString(),
-            isSaved: true
-          });
+          // The fetch window may have opened a generation into the
+          // cleared transcript: it dies here, together with the
+          // transcript it was writing into.
+          this.$store.dispatch('conversation/abortStream');
+          this.$store.commit('conversation/setMessages', [
+            {
+              sender: 'bot',
+              content: this.getWelcomeMessage(),
+              timestamp: new Date().toISOString(),
+              isSaved: true
+            }
+          ]);
+          this.$store.commit('conversation/setSavedState');
           notificationService.error(this.translate('chatbot.loadError'));
         }
       }
@@ -2041,8 +2050,11 @@ export default {
 
     async saveAndStartNewChat() {
       this.showNewChatConfirm = false;
-      await this.saveCurrentChatBeforeLeave();
-      this.startNewChatConfirmed();
+      const saved = await this.saveCurrentChatBeforeLeave();
+      // A canceled naming dialog keeps the draft on screen.
+      if (saved) {
+        this.startNewChatConfirmed();
+      }
     },
 
     startNewChatConfirmed() {
@@ -2081,13 +2093,25 @@ export default {
       // load target is not saved anywhere yet.
       if (this.conversationId) {
         await this.updateExistingChat();
-        return;
+        return true;
       }
       this.saveChatDialog = {
         visible: true,
         title: this.generateChatTitle(),
         folderId: 'default'
       };
+      // The navigation must wait for the naming dialog: resetting the
+      // transcript before the save completes would persist an empty
+      // chat. A canceled dialog resolves too — with nothing saved.
+      await new Promise((resolve) => {
+        const unwatch = this.$watch('saveChatDialog.visible', (newVal) => {
+          if (!newVal) {
+            unwatch();
+            resolve();
+          }
+        });
+      });
+      return Boolean(this.conversationId);
     },
 
     openExportDialog() {

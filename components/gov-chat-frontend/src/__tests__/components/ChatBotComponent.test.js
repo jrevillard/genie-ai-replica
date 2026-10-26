@@ -225,7 +225,7 @@ describe('ChatBotComponent', () => {
       expect(wrapper.find('[data-test-id="chatbot-container"]').exists()).toBe(true);
     });
 
-    it('displays the welcome message in chatMessages', () => {
+    it('opens on the welcome message in the conversation transcript', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
       const botMsgs = vm.openMessages.filter((m) => m.sender === 'bot');
@@ -345,7 +345,7 @@ describe('ChatBotComponent', () => {
       expect(vm.isStreaming).toBe(true);
     });
 
-    it('resets isStreaming when onDone is called', async () => {
+    it('resets isStreaming and stamps the query id when the stream completes', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
@@ -455,46 +455,6 @@ describe('ChatBotComponent', () => {
   });
 
   describe('Subtask 3a — SSE streaming', () => {
-    it('sets isStreaming state to true when stream starts', async () => {
-      const wrapper = createChatBotWrapper();
-      const vm = wrapper.vm;
-
-      vm.newMessage = 'Start streaming test';
-      await vm.sendMessage();
-      await wrapper.vm.$nextTick();
-
-      expect(vm.isStreaming).toBe(true);
-      expect(mockSubmitQueryStream).toHaveBeenCalled();
-    });
-
-    it('the store holds an open stream when a message is sent', async () => {
-      const wrapper = createChatBotWrapper();
-      const vm = wrapper.vm;
-
-      vm.newMessage = 'Controller test';
-      await vm.sendMessage();
-      await wrapper.vm.$nextTick();
-
-      expect(mockSubmitQueryStream).toHaveBeenCalled();
-      expect(vm.isStreaming).toBe(true);
-    });
-
-    it('resets isStreaming and streamController when stream completes', async () => {
-      const wrapper = createChatBotWrapper();
-      const vm = wrapper.vm;
-
-      vm.newMessage = 'Completion test';
-      await vm.sendMessage();
-      await wrapper.vm.$nextTick();
-
-      // Simulate stream completion
-      capturedCallbacks.onDone({ queryId: 'q-123' });
-      await wrapper.vm.$nextTick();
-
-      expect(vm.isStreaming).toBe(false);
-      expect(vm.streamingQueryId).toBe('q-123');
-    });
-
     it('aborts previous stream when new message is sent', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
@@ -511,20 +471,6 @@ describe('ChatBotComponent', () => {
       await wrapper.vm.$nextTick();
 
       expect(firstController.abort).toHaveBeenCalled();
-    });
-
-    it('sets streamingQueryId on successful stream completion', async () => {
-      const wrapper = createChatBotWrapper();
-      const vm = wrapper.vm;
-
-      vm.newMessage = 'Query ID test';
-      await vm.sendMessage();
-      await wrapper.vm.$nextTick();
-
-      capturedCallbacks.onDone({ queryId: 'test-query-456' });
-      await wrapper.vm.$nextTick();
-
-      expect(vm.streamingQueryId).toBe('test-query-456');
     });
   });
 

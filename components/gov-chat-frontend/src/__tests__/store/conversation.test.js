@@ -363,19 +363,19 @@ describe('conversation sendStream action', () => {
     captured.onTranslation('FR texte');
     expect(store.getters['conversation/openConversation'].messages.at(-1).content).toBe('FR texte');
   });
-});
-it('spliceMessages drops turns from a position', () => {
-  const store = freshStore();
-  for (let i = 0; i < 4; i++) {
-    store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' + i });
-  }
-  store.commit('conversation/spliceMessages', [1, 2]);
-  const msgs = store.getters['conversation/openConversation'].messages;
-  expect(msgs.map((m) => m.content)).toEqual(['q0', 'q3']);
-});
+  it('spliceMessages drops turns from a position', () => {
+    const store = freshStore();
+    for (let i = 0; i < 4; i++) {
+      store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' + i });
+    }
+    store.commit('conversation/spliceMessages', [1, 2]);
+    const msgs = store.getters['conversation/openConversation'].messages;
+    expect(msgs.map((m) => m.content)).toEqual(['q0', 'q3']);
+  });
 
-it('setContextItems replaces the context list', () => {
-  const store = freshStore();
-  store.commit('conversation/setContextItems', [{ service: 'A', category: 1 }]);
-  expect(store.getters['conversation/openConversation'].selectedContextItems.length).toBe(1);
+  it('setContextItems replaces the context list', () => {
+    const store = freshStore();
+    store.commit('conversation/setContextItems', [{ service: 'A', category: 1 }]);
+    expect(store.getters['conversation/openConversation'].selectedContextItems.length).toBe(1);
+  });
 });

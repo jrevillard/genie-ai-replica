@@ -23,9 +23,18 @@
 </#macro>
 
 <#--
-  GENIE.AI login template.
-  Based on upstream keycloak.v2 template (Keycloak 26.5.6).
-  Only difference from upstream: logo added in #kc-header-wrapper.
+  GENIE.AI login template, based on the upstream keycloak.v2 login template.
+
+  Differences from upstream:
+    - the brand header carries the theme's artwork instead of the realm's
+      display name; the realm's name is in the page title instead;
+    - the body carries the kc-theme-genie marker, which scopes the ground
+      and the wave band to the base theme (see the marker below);
+    - the stylesheets, the favicon and the scripts are read from the
+      theme's properties rather than from the themeResources bean, which
+      Keycloak 26.7 introduced for themes that declare resources with an
+      integrity or a crossorigin attribute. This theme declares plain
+      resource paths.
 -->
 <#macro registrationLayout bodyClass="" displayInfo=false displayMessage=true displayRequiredFields=false>
 <!DOCTYPE html>
@@ -152,7 +161,7 @@
   <div class="${properties.kcLoginContainer!}">
     <header id="kc-header" class="pf-v5-c-login__header">
       <div id="kc-header-wrapper"
-              class="pf-v5-c-brand"><img src="${url.resourcesPath}/img/logo.png" alt="GENIE.AI"></div>
+              class="pf-v5-c-brand"><picture><source srcset="${url.resourcesPath}/img/logo.webp" type="image/webp"><img src="${url.resourcesPath}/img/logo.png" alt="GENIE.AI"></picture></div>
     </header>
     <main class="${properties.kcLoginMain!}">
       <div class="${properties.kcLoginMainHeader!}">

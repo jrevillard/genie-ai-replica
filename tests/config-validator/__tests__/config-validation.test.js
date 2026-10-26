@@ -25,7 +25,7 @@ const {
   GPU_REQUIRED_SERVICES,
   GPU_SHARED_COMPOSE_VARS
 } = require('../validators/validate-gpu-node');
-const { readLoginThemeNames } = require('../validators/validate-keycloak-theme');
+const { readLoginThemeNames, splitCompounds } = require('../validators/validate-keycloak-theme');
 
 const ROOT = path.resolve(__dirname, '../../..');
 const ENV_FILE = path.join(ROOT, 'env');
@@ -448,11 +448,19 @@ describe('Configuration Validation Suite', () => {
       expect(names.emittedConditionally).toBe(true);
     });
 
+    test('the body keeps the id the stylesheets select on', () => {
+      expect(names.bodyId).toBe('keycloak-bg');
+    });
+
     test('the ground and the wave are scoped to the marker class', () => {
-      // The class is matched as a token: a selector carrying
-      // `.kc-theme-genie-2` does not carry `.kc-theme-genie`.
+      // The marker has to sit in the compound that selects the body, as
+      // a class token: `.kc-theme-genie-2` is not `.kc-theme-genie`, and
+      // `body.kc-theme-genie #keycloak-bg` selects another element.
       const marker = new RegExp(`\\.${names.emittedClass}(?![\\w-])`);
-      const unscoped = names.paintedSelectors.filter((selector) => !marker.test(selector));
+      const unscoped = names.paintedSelectors.filter((selector) => {
+        const compound = splitCompounds(selector).find((part) => part.includes('#keycloak-bg'));
+        return !compound || !marker.test(compound);
+      });
       expect(unscoped).toEqual([]);
     });
 
@@ -462,7 +470,7 @@ describe('Configuration Validation Suite', () => {
       expect(painted).toMatch(/#keycloak-bg::after/);
     });
 
-    test('every stylesheet that paints one of them paints both', () => {
+    test('every stylesheet that mentions the body paints both', () => {
       // A stylesheet that drops the wave but keeps the ground leaves the
       // page half-decorated in one colour scheme only; one that drops
       // both leaves the other scheme's ground and blend in place.

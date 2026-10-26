@@ -42,6 +42,19 @@ function splitSelectorList(list) {
 }
 
 /**
+ * The compound selectors of a selector — the simple selectors joined by
+ * no combinator. The compound that carries `#keycloak-bg` is the one
+ * that has to carry the marker: `body.kc-theme-genie #keycloak-bg`
+ * selects a body that is not its own descendant.
+ *
+ * @param {string} selector one selector
+ * @returns {string[]} its compounds
+ */
+function splitCompounds(selector) {
+  return selector.split(/\s*[>+~]\s*|\s+/).filter(Boolean);
+}
+
+/**
  * Every selector of a stylesheet, one per comma-separated part, with the
  * rules nested in at-rules (@media) included.
  *
@@ -91,12 +104,21 @@ function readLoginThemeNames(root, themeName) {
   // The resource path the template tests — it ends with the theme name.
   const pathTest = /ends_with\('\/login\/([^']+)'\)/.exec(templateBody);
 
-  // The class attribute of the body tag, with the guarded part split out.
+  // The body tag carries the id the CSS selects on and the class the
+  // marker is emitted from.
   const bodyStart = templateBody.indexOf('<body');
-  const classValue = bodyStart < 0 ? '' : /class="([^"]*)"/.exec(templateBody.slice(bodyStart))?.[1] || '';
-  const guard = /<#if\s+isBaseTheme\b[^>]*>([\s\S]*?)<\/#if>/.exec(classValue);
-  const guarded = guard ? /kc-theme-[A-Za-z0-9_-]+/.exec(guard[1]) : null;
-  const unguarded = classValue.replace(guard ? guard[0] : '', '');
+  const bodyTag = bodyStart < 0 ? '' : templateBody.slice(bodyStart);
+  const bodyId = /id="([^"]*)"/.exec(bodyTag)?.[1] || '';
+  const classValue = /class="([^"]*)"/.exec(bodyTag)?.[1] || '';
+  // Every guarded block, and what the class carries outside of them.
+  const guards = [...classValue.matchAll(/<#if\s+isBaseTheme\b[^>]*>([\s\S]*?)<\/#if>/g)];
+  // An `<#else>` branch runs when the guard is false — the child theme's
+  // case — so the marker there counts as unguarded.
+  const guardedText = guards.map((guard) => guard[1].split(/<#else\b/)[0]).join(' ');
+  const elseText = guards.map((guard) => guard[1].split(/<#else\b/)[1] || '').join(' ');
+  const unguardedText = `${classValue.replace(guards.map((guard) => guard[0]).join(''), '')} ${elseText}`;
+  const guarded = /kc-theme-[A-Za-z0-9_-]+/.exec(guardedText);
+  const unguarded = /kc-theme-[A-Za-z0-9_-]+/.exec(unguardedText);
 
   // The stylesheets the theme declares are the ones the page loads, so
   // the ground and the wave are looked for in all of them.
@@ -109,7 +131,7 @@ function readLoginThemeNames(root, themeName) {
     paintedSelectors.push(...selectors);
     paintedByStyle.push({
       style,
-      mentionsBody: css.includes('#keycloak-bg'),
+      mentionsBody: css.replace(/\/\*[\s\S]*?\*\//g, '').includes('#keycloak-bg'),
       pseudoElements: [...new Set(selectors.map((selector) => selector.match(/::(before|after)/)[1]))]
     });
   }
@@ -117,13 +139,14 @@ function readLoginThemeNames(root, themeName) {
   return {
     themeName,
     testedPath: pathTest ? pathTest[1] : null,
+    bodyId,
     // The class the page carries is the one inside the guard; a class
     // outside it would reach every theme, the guarded one only the base.
     emittedClass: guarded ? guarded[0] : null,
-    emittedConditionally: Boolean(guarded) && !/kc-theme-[A-Za-z0-9_-]+/.test(unguarded),
+    emittedConditionally: Boolean(guarded) && !unguarded,
     paintedSelectors,
     paintedByStyle
   };
 }
 
-module.exports = { readLoginThemeNames };
+module.exports = { readLoginThemeNames, splitCompounds };

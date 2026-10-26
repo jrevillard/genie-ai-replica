@@ -26,7 +26,7 @@ search-backed country dropdown, and the backend surface.
   by the chat — see [Auth Flow](/docs/frontend/auth-flow/)).
 - The `userProfileService` configured on the backend (default `true`
   in `ROUTE_CONFIGS`). Mounted at `/api/me` per
-  [`components/gov-chat-backend/index.js:471`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/index.js#L471).
+  [`components/gov-chat-backend/index.js:471`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/index.js#L471).
 - The Vuex `currentUser` getter populated (the form is gated on this
   via `v-if="!isLoading && isAuthenticated && currentUser"` in
   `App.vue`).
@@ -34,7 +34,7 @@ search-backed country dropdown, and the backend surface.
 ## Tab inventory
 
 The 8 tabs are declared as a single static array in
-[`components/gov-chat-frontend/src/components/UserProfileComponent.vue:403-411`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-frontend/src/components/UserProfileComponent.vue#L403):
+[`components/gov-chat-frontend/src/components/UserProfileComponent.vue:403-411`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-frontend/src/components/UserProfileComponent.vue#L403):
 
 ```javascript
 tabs: [
@@ -95,7 +95,7 @@ countries, so a plain `<select>` would be unusable; a
   `UserProfileComponent.vue:520-544`), not by the dropdown itself.
 
 The dropdown is in
-[`components/gov-chat-frontend/src/components/SearchableCountryDropdown.vue`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-frontend/src/components/SearchableCountryDropdown.vue).
+[`components/gov-chat-frontend/src/components/SearchableCountryDropdown.vue`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-frontend/src/components/SearchableCountryDropdown.vue).
 
 ## Profile icon (Personal Identification tab)
 
@@ -128,11 +128,11 @@ All endpoints live under `/api/me` and require a Keycloak JWT (the
 
 | Method | Path | Behaviour | Source |
 |--------|------|-----------|--------|
-| `GET` | `/api/me` | Fetch the current user's profile (including all 8 tabs). | [`user-routes.js:67`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/user-routes.js#L67) |
-| `GET` | `/api/me/context` | Convenience endpoint for the chat service — selected fields only (e.g. `language`, `country`, `labels`). | [`user-routes.js:99`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/user-routes.js#L99) |
-| `PUT` | `/api/me` | Replace the profile. Accepts `multipart/form-data` (so a future avatar upload works). | [`user-routes.js:241`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/user-routes.js#L241) |
-| `POST` | `/api/me/reset-data` | GDPR **data reset** — wipes the profile data but keeps the account. | [`user-routes.js:144`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/user-routes.js#L144) |
-| `POST` | `/api/me/delete` | GDPR **account deletion** — deletes the account and all associated data (ArangoDB `users`, chat history, feedback). | [`user-routes.js:184`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/user-routes.js#L184) |
+| `GET` | `/api/me` | Fetch the current user's profile (including all 8 tabs). | [`user-routes.js:67`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/user-routes.js#L67) |
+| `GET` | `/api/me/context` | Convenience endpoint for the chat service — selected fields only (e.g. `language`, `country`, `labels`). | [`user-routes.js:99`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/user-routes.js#L99) |
+| `PUT` | `/api/me` | Replace the profile. Accepts `multipart/form-data` (so a future avatar upload works). | [`user-routes.js:241`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/user-routes.js#L241) |
+| `POST` | `/api/me/reset-data` | GDPR **data reset** — wipes the profile data but keeps the account. | [`user-routes.js:144`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/user-routes.js#L144) |
+| `POST` | `/api/me/delete` | GDPR **account deletion** — deletes the account and all associated data (ArangoDB `users`, chat history, feedback). | [`user-routes.js:184`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/user-routes.js#L184) |
 
 ### `PUT /api/me` payload shape
 

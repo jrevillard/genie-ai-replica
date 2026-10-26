@@ -476,7 +476,7 @@ async function authenticate(req, res, next) {
 }
 ```
 
-The backend validates the JWT signature against Keycloak's [JWKS](https://oauth.net/2/jwk/)
+The backend validates the JWT signature against Keycloak's [JWKS](https://datatracker.ietf.org/doc/html/rfc7517)
 endpoint (`services/keycloak-auth-service.js`) and checks signature, expiry,
 issuer, and audience.
 

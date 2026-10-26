@@ -49,7 +49,7 @@ infrastructure, and how to interpret the results.
 | **Use for** | Liveness probe, dependency-free heartbeat | Readiness probe, post-deploy smoke, admin dashboard |
 | **Speed** | < 50 ms (in-memory) | 100–500 ms (queries ArangoDB) |
 | **Failure body** | `500 {"message": "Health check failed"}` | `401` (no token), `403` (wrong role), `500 {"message":"An unexpected error occurred"}` (service crash) |
-| **Defined at** | [`components/gov-chat-backend/index.js:711`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/index.js#L711) | [`components/gov-chat-backend/routes/admin-routes.js:65`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/admin-routes.js#L65) |
+| **Defined at** | [`components/gov-chat-backend/index.js:711`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/index.js#L711) | [`components/gov-chat-backend/routes/admin-routes.js:65`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/admin-routes.js#L65) |
 
 ```mermaid
 flowchart TD
@@ -67,9 +67,9 @@ flowchart TD
 ## `/api/health` — public liveness probe
 
 The simplest endpoint, defined in
-[`components/gov-chat-backend/index.js:711`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/index.js#L711).
+[`components/gov-chat-backend/index.js:711`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/index.js#L711).
 It is registered in the public-paths list
-([`middleware/keycloak-auth-middleware.js:10`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/middleware/keycloak-auth-middleware.js#L10))
+([`middleware/keycloak-auth-middleware.js:10`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/middleware/keycloak-auth-middleware.js#L10))
 so Keycloak authentication is skipped.
 
 ### Request
@@ -118,7 +118,7 @@ docker exec <stack>_backend wget -qO- http://localhost:3000/api/health
   outage.
 - **Reverse-proxy upstream checks** — Kong/Nginx `health_check` blocks. Kong
   routes `/api/*` to the backend (see
-  [`api-gateway-solution/new-config/kong_config.json:82`](https://gitlab.com/un/itu/genie-ai/-/blob/main/api-gateway-solution/new-config/kong_config.json#L82)).
+  [`api-gateway-solution/new-config/kong_config.json:82`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/api-gateway-solution/new-config/kong_config.json#L82)).
 
 ### When NOT to use it
 
@@ -133,7 +133,7 @@ docker exec <stack>_backend wget -qO- http://localhost:3000/api/health
 
 A richer endpoint that probes the actual dependencies the backend talks to.
 Defined in
-[`components/gov-chat-backend/routes/admin-routes.js:65`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/admin-routes.js#L65).
+[`components/gov-chat-backend/routes/admin-routes.js:65`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/admin-routes.js#L65).
 Registered for `/api/admin` in the `ROUTE_CONFIGS` table at
 `index.js:495` (entry `{ file: 'admin-routes', paths: ['/api/admin'] }`),
 mounted at runtime by `registerRoutes()` called at `index.js:766`, then
@@ -161,7 +161,7 @@ curl -sk -H "Authorization: Bearer $ADMIN_TOKEN" \
 ### Response shape
 
 `AdminDashboardService.getSystemHealth()`
-([`services/admin-dashboard-service.js:52`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/services/admin-dashboard-service.js#L52))
+([`services/admin-dashboard-service.js:52`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/services/admin-dashboard-service.js#L52))
 returns:
 
 ```json
@@ -205,12 +205,12 @@ returns:
 
 - **401 `{"error":"TOKEN_INVALID","message":"Missing or malformed Authorization header","details":{}}`** —
   no `Authorization: Bearer` header. Returned by the auth middleware at
-  [`middleware/keycloak-auth-middleware.js:78`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/middleware/keycloak-auth-middleware.js#L78)
+  [`middleware/keycloak-auth-middleware.js:78`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/middleware/keycloak-auth-middleware.js#L78)
   (the `__tests__/routes/admin.test.js:140` test mocks this middleware to a
   shorter body, so its assertion body does not match the production shape).
 - **403 `{"error":"FORBIDDEN","message":"Admin access required","details":{}}`** —
   JWT is valid but lacks the `admin` realm role (test:
-  [`__tests__/routes/admin.test.js:149`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/__tests__/routes/admin.test.js#L149)).
+  [`__tests__/routes/admin.test.js:149`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/__tests__/routes/admin.test.js#L149)).
 - **500 `{"message":"An unexpected error occurred","error":"<NODE_ENV-only>"}`** —
   `getSystemHealth()` threw (ArangoDB unreachable, malformed config). Handled
   by the error middleware at `index.js:789`.
@@ -340,7 +340,7 @@ proxy does not expose, or the `admin` role missing from the service account).
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | `/api/health` returns **500** | The Express app crashed mid-request or a downstream import broke | Check `docker service logs <stack>_backend --since 5m` for stack traces. The endpoint itself is dependency-free. |
-| `/api/health` hangs forever | Kong / Nginx is not routing `/api/health` | Verify Kong's route for the backend exposes `/api/health` (config: [`kong_config.json:82`](https://gitlab.com/un/itu/genie-ai/-/blob/main/api-gateway-solution/new-config/kong_config.json#L82)). Direct `curl http://backend:3000/api/health` from inside the overlay network should succeed. |
+| `/api/health` hangs forever | Kong / Nginx is not routing `/api/health` | Verify Kong's route for the backend exposes `/api/health` (config: [`kong_config.json:82`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/api-gateway-solution/new-config/kong_config.json#L82)). Direct `curl http://backend:3000/api/health` from inside the overlay network should succeed. |
 | `/api/admin/system-health` shows `database` with `status: 'error'` | ArangoDB is unreachable from the backend container | Check the network: `docker exec <stack>_backend wget -qO- http://arango-vector-db:8529/_api/version`. Confirm `ARANGO_URL` matches the deployed service name (`http://arango-vector-db:8529` by default — service name in `docker-compose.yaml` is `arango-vector-db`, **not** `arangodb`). |
 | Admin endpoint returns **401** with a valid admin token | The JWT was minted against the wrong realm, or the `admin` role was not assigned | The admin endpoint validates against the **same realm** the user logs into, not `master`. Check `KEYCLOAK_URL` and `KEYCLOAK_REALM` (default `genie`) point at the user realm. |
 | Admin endpoint returns **403** with a valid token | JWT is valid but lacks the `admin` realm role | Assign the role in Keycloak Admin Console → Users → Role mapping → Realm roles, or use a service account whose role mapping includes `admin`. See [Configure &rarr; Keycloak Admin Guide](/docs/configure/keycloak-admin-guide/). |

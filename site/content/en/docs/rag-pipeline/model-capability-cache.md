@@ -30,7 +30,7 @@ and how to clear the cache for testing.
   if non-empty).
 - Python 3.9+ for the module's `dict[str, dict]` syntax (PEP 585); the rest of the OPEA overlay requires Python 3.11+.
 - Read access to
-  [`genie-ai-overlay/core/model_cache.py`](https://gitlab.com/un/itu/genie-ai/-/blob/main/genie-ai-overlay/core/model_cache.py).
+  [`genie-ai-overlay/core/model_cache.py`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/genie-ai-overlay/core/model_cache.py).
 
 ## Why the cache exists
 
@@ -84,7 +84,7 @@ from core.model_cache import get_model_id, clear_cache
 
 `get_model_id(endpoint_url, ttl_seconds=None)` is the main entry
 point. The logic, line by line
-([`model_cache.py:69-105`](https://gitlab.com/un/itu/genie-ai/-/blob/main/genie-ai-overlay/core/model_cache.py#L69)):
+([`model_cache.py:69-105`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/genie-ai-overlay/core/model_cache.py#L69)):
 
 ```python
 def get_model_id(endpoint_url, ttl_seconds=None):
@@ -116,7 +116,7 @@ keeps them roughly in sync.
 
 ## Probe behaviour
 
-`_probe(endpoint_url)` ([`model_cache.py:46`](https://gitlab.com/un/itu/genie-ai/-/blob/main/genie-ai-overlay/core/model_cache.py#L46))
+`_probe(endpoint_url)` ([`model_cache.py:46`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/genie-ai-overlay/core/model_cache.py#L46))
 makes one HTTPS call:
 
 ```python

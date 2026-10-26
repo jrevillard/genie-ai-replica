@@ -57,16 +57,16 @@ the backend emits internally; for what reaches the browser, read
 | Header | Helmet (backend) | Nginx (gateway — what the browser sees) | Source |
 |---|---|---|---|
 | `X-Content-Type-Options` | `nosniff` | `nosniff` | both agree |
-| `X-Frame-Options` | `SAMEORIGIN` (Helmet default) | `DENY` (per-location) | [`security-headers.inc:7`](https://gitlab.com/un/itu/genie-ai/-/blob/main/api-gateway-solution/nginx/conf/security-headers.inc) |
-| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | `max-age=31536000; includeSubDomains; preload` | [`security-headers.inc:11`](https://gitlab.com/un/itu/genie-ai/-/blob/main/api-gateway-solution/nginx/conf/security-headers.inc) |
-| `Referrer-Policy` | `no-referrer` (Helmet default) | `no-referrer-when-downgrade` | [`security-headers.inc:14`](https://gitlab.com/un/itu/genie-ai/-/blob/main/api-gateway-solution/nginx/conf/security-headers.inc) |
-| `Content-Security-Policy` | from `cspOptions` (see below) | `/` and `@frontend_spa` use `${CSP_CONNECT_SRC}`; `/api/`, `/api/queries/stream`, `/api-docs`, and `/grafana/` define their own CSPs (mostly `connect-src 'self'`) | [`default.conf.template:268`](https://gitlab.com/un/itu/genie-ai/-/blob/main/api-gateway-solution/nginx/conf/default.conf.template#L268) for `/`, `:185` for `/api/`, `:132` for `/api/queries/stream`, `:210` for `/api-docs`, `:247` for `/grafana/` |
-| `X-Powered-By` | **stripped** by `app.disable('x-powered-by')` | also `proxy_hide_header` | [`index.js:521`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/index.js#L521) + [`default.conf.template:44`](https://gitlab.com/un/itu/genie-ai/-/blob/main/api-gateway-solution/nginx/conf/default.conf.template#L44) |
+| `X-Frame-Options` | `SAMEORIGIN` (Helmet default) | `DENY` (per-location) | [`security-headers.inc:7`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/api-gateway-solution/nginx/conf/security-headers.inc) |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | `max-age=31536000; includeSubDomains; preload` | [`security-headers.inc:11`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/api-gateway-solution/nginx/conf/security-headers.inc) |
+| `Referrer-Policy` | `no-referrer` (Helmet default) | `no-referrer-when-downgrade` | [`security-headers.inc:14`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/api-gateway-solution/nginx/conf/security-headers.inc) |
+| `Content-Security-Policy` | from `cspOptions` (see below) | `/` and `@frontend_spa` use `${CSP_CONNECT_SRC}`; `/api/`, `/api/queries/stream`, `/api-docs`, and `/grafana/` define their own CSPs (mostly `connect-src 'self'`) | [`default.conf.template:268`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/api-gateway-solution/nginx/conf/default.conf.template#L268) for `/`, `:185` for `/api/`, `:132` for `/api/queries/stream`, `:210` for `/api-docs`, `:247` for `/grafana/` |
+| `X-Powered-By` | **stripped** by `app.disable('x-powered-by')` | also `proxy_hide_header` | [`index.js:521`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/index.js#L521) + [`default.conf.template:44`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/api-gateway-solution/nginx/conf/default.conf.template#L44) |
 
 ## The sensitive-path blocker
 
 Mounted very early in the Express middleware chain
-([`components/gov-chat-backend/index.js:553`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/index.js#L553))
+([`components/gov-chat-backend/index.js:553`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/index.js#L553))
 — **before** the router, **before** Helmet, **before** body parsers — so a
 blocked request costs almost nothing:
 
@@ -109,7 +109,7 @@ What it does **not** block (by design):
 - `/api/health` — not matched by the patterns (`/api/health` starts with `/a`, not `/.`); this is what allows load balancer probes through. The frontend container separately exposes `/health` on its own port (8090) for K8s/Swarm healthchecks; see [Health Checks](/docs/operate/health-checks/).
 
 > **Top-level dotfiles are blocked at Nginx, not the backend.** The
-> stock [`default.conf.template:65-74`](https://gitlab.com/un/itu/genie-ai/-/blob/main/api-gateway-solution/nginx/conf/default.conf.template#L65)
+> stock [`default.conf.template:65-74`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/api-gateway-solution/nginx/conf/default.conf.template#L65)
 > already includes two `deny all; return 404;` regex locations covering
 > `/.env`, `/.git`, `/.svn`, `/.hg`, `/.ssh`, `/.aws`, `/.docker`, and
 > `/BitKeeper/` (negative lookahead `(?\!well-known)` keeps the ACME
@@ -132,7 +132,7 @@ docker service logs genieai_backend --since 1h 2>&1 | grep "SECURITY: Blocked"
 ## Helmet security headers + CSP
 
 The backend applies Helmet
-([`components/gov-chat-backend/index.js:591`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/index.js#L591))
+([`components/gov-chat-backend/index.js:591`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/index.js#L591))
 with three custom knobs:
 
 ```javascript
@@ -149,7 +149,7 @@ app.use(
 ```
 
 `cspOptions` is built mostly from hardcoded defaults in
-[`components/gov-chat-backend/index.js:386-401`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/index.js#L386):
+[`components/gov-chat-backend/index.js:386-401`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/index.js#L386):
 
 ```javascript
 const connectSrcUrls = (
@@ -188,7 +188,7 @@ for the full reference.
 ## `robots.txt` policy
 
 The backend serves a minimal `robots.txt`
-([`components/gov-chat-backend/index.js:732`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/index.js#L732)):
+([`components/gov-chat-backend/index.js:732`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/index.js#L732)):
 
 ```text
 User-agent: *
@@ -209,13 +209,13 @@ frontend (`/`, `/about`, etc.) and any public pages outside `/api/` and
 ## Static file serving
 
 The backend serves two static surfaces
-([`components/gov-chat-backend/index.js:667`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/index.js#L667)
+([`components/gov-chat-backend/index.js:667`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/index.js#L667)
 and
-[`components/gov-chat-backend/index.js:689`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/index.js#L689)):
+[`components/gov-chat-backend/index.js:689`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/index.js#L689)):
 
 | Surface | Path | What it actually serves | Auth |
 |---|---|---|---|
-| User profile files | `/Uploads` | Avatars / per-user uploads written by `user-profile-service.js` (imported at [`index.js:1065`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/index.js#L1065)) — backed by the `backend_uploads` Docker named volume | none (no JWT middleware on this mount) |
+| User profile files | `/Uploads` | Avatars / per-user uploads written by `user-profile-service.js` (imported at [`index.js:1065`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/index.js#L1065)) — backed by the `backend_uploads` Docker named volume | none (no JWT middleware on this mount) |
 | Frontend bundle (legacy) | `/dist` | `express.static('dist')` — **no-op in the deployed image**: the backend Dockerfile does not COPY any `dist/` directory. This is a dead-code fallback; production traffic is served by the dedicated `frontend` container on port 8090 behind Nginx. | none |
 
 ### `/Uploads` — defense-in-depth
@@ -236,7 +236,7 @@ on three paths:
    with that name happens to exist in the Nginx document root (it does
    not — there is no `root` directive for that location).
 3. Through the Kong `api-fallback` route (`paths: ["/api"]`,
-   [`kong_config.json`](https://gitlab.com/un/itu/genie-ai/-/blob/main/api-gateway-solution/new-config/kong_config.json)) —
+   [`kong_config.json`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/api-gateway-solution/new-config/kong_config.json)) —
    `strip_path` is **false**, so the full `/api/Uploads/foo` URI is
    forwarded to the backend unchanged. There is no `/api/Uploads`
    mount in the backend (only `/Uploads`), and no Kong route
@@ -259,7 +259,7 @@ that:
 ### `/dist` — dead-code in the deployed image
 
 The backend's `express.static('dist')` mount has no `dist/` directory in
-the runtime image (the [Dockerfile](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/Dockerfile)
+the runtime image (the [Dockerfile](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/Dockerfile)
 does not COPY one; it only ships `/app/Uploads`). Production traffic for
 the SPA is served by the dedicated `frontend` container on port 8090
 behind Nginx. The `/dist` mount is a fallback kept for legacy paths
@@ -289,9 +289,9 @@ The relevant code paths:
 | Layer | What it does |
 |---|---|
 | Nginx | `/api/` proxied to Kong (no path manipulation). |
-| Kong | Route `/api/files` → service `document-repository` (port 3001). Strip path: false, preserve host: true. ([`kong_config.json`](https://gitlab.com/un/itu/genie-ai/-/blob/main/api-gateway-solution/new-config/kong_config.json)) |
-| document-repository | `router.use(authenticateToken)` on every route. The `downloadFile` controller ([`fileController.js:501`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/document-repository/src/controllers/fileController.js#L501)) calls `res.sendFile(filePath)` after auth. |
-| JWT validation | Verifies signature, issuer, expiration via JWKS (`jose.jwtVerify` in [`keycloak-auth-middleware.js:110`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/document-repository/src/middlewares/keycloak-auth-middleware.js#L110)). |
+| Kong | Route `/api/files` → service `document-repository` (port 3001). Strip path: false, preserve host: true. ([`kong_config.json`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/api-gateway-solution/new-config/kong_config.json)) |
+| document-repository | `router.use(authenticateToken)` on every route. The `downloadFile` controller ([`fileController.js:501`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/document-repository/src/controllers/fileController.js#L501)) calls `res.sendFile(filePath)` after auth. |
+| JWT validation | Verifies signature, issuer, expiration via JWKS (`jose.jwtVerify` in [`keycloak-auth-middleware.js:110`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/document-repository/src/middlewares/keycloak-auth-middleware.js#L110)). |
 
 There is no URL-signing layer. If a deployer wants short-lived or
 single-use URLs, that is a future enhancement, not a current
@@ -306,7 +306,7 @@ configuration (see [Configure &rarr; Keycloak admin guide](/docs/configure/keycl
 - **Keycloak realm hardening** — covered in
   [Configure &rarr; Keycloak admin guide](/docs/configure/keycloak-admin-guide/).
 - **Container CVE remediation** — covered in the security triage playbook
-  ([docs/security/cve-triage-2026q3.md](https://gitlab.com/un/itu/genie-ai/-/blob/main/docs/security/cve-triage-2026q3.md)).
+  ([docs/security/cve-triage-2026q3.md](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/docs/security/cve-triage-2026q3.md)).
 - **GDPR / data-residency** — covered in the user-profile routes and
   the Keycloak realm configuration.
 
@@ -376,7 +376,7 @@ deliberately — `proxy_hide_header` in `default.conf.template`) or
 | `/.env` returns `200 OK` at the gateway | An operator has removed or weakened the `location ~ /\.(?!well-known)` / `location ~ /(BitKeeper|\.git|\.svn|\.hg|CVS)` deny blocks in `default.conf.template` (lines 65-74) | Restore the stock deny blocks: `location ~ /\.(?!well-known) { deny all; return 404; }` and `location ~ /(BitKeeper|\.git|\.svn|\.hg|CVS) { deny all; return 404; }`. Re-test with check #2 above. |
 | Scanner gets `200` from `/api/.env` instead of `404` | The Kong `/api` route does not include the path, OR a custom reverse proxy is short-circuiting before Kong | Confirm the route entry in `kong_config.json` has `"paths": ["/api"]` with `"strip_path": false`. Test directly against Kong with curl. |
 | CSP errors in the browser console after deployment | `CSP_CONNECT_SRC` is too restrictive for the deployed UI dependencies | Inspect the browser console `Content Security Policy: ...` directive. Add the missing source to `CSP_CONNECT_SRC` in `.env` (XHR/fetch sources — typically `wss://<gateway-node-fqdn>` and `https://<gateway-node-fqdn>`). |
-| `curl -I` shows Helmet defaults (`X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: no-referrer`, HSTS without `; preload`) | Nginx is being bypassed (you are hitting the backend port 3000 directly) or a custom reverse proxy is forwarding Helmet headers instead of replacing them | All end-user traffic must go through Nginx (port 80/443 → Kong → backend). Never expose `:3000` outside the overlay network. If running a custom gateway, copy the `proxy_hide_header` and `add_header` block from [`default.conf.template`](https://gitlab.com/un/itu/genie-ai/-/blob/main/api-gateway-solution/nginx/conf/default.conf.template). |
+| `curl -I` shows Helmet defaults (`X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: no-referrer`, HSTS without `; preload`) | Nginx is being bypassed (you are hitting the backend port 3000 directly) or a custom reverse proxy is forwarding Helmet headers instead of replacing them | All end-user traffic must go through Nginx (port 80/443 → Kong → backend). Never expose `:3000` outside the overlay network. If running a custom gateway, copy the `proxy_hide_header` and `add_header` block from [`default.conf.template`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/api-gateway-solution/nginx/conf/default.conf.template). |
 | Helmet is not setting HSTS | The browser is hitting the backend over HTTP, not HTTPS | HSTS only fires on HTTPS — verify Nginx terminates TLS and that the backend is reached via the HTTPS port. HSTS also requires the response status to be a `2xx` or `3xx` (it is not set on `404`). |
 | `X-Powered-By: Express` appears in the response headers | A reverse proxy is re-injecting the header | Disable `proxy_pass_header X-Powered-By` in Nginx or strip it with `proxy_hide_header X-Powered-By;` (this is already in the stock template — line 44). |
 | Anonymous request to `/api/files/<id>/download` returns `200` instead of `401` | `authenticateToken` middleware has been removed or `isPublicRoute` lists `/api/files` | Re-check `keycloak-auth-middleware.js`: `router.use(authenticateToken)` should be the first middleware on the doc-repo router. The test suite (`__tests__/keycloak-auth-middleware.test.js`) asserts `/api/files` is NOT public. |

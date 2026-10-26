@@ -79,7 +79,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now stay the same whichever version of Hugo builds the site, and a new
   check in the CI pipeline fails when a link is broken, when it only works
   through a redirect, or when a section address would depend on the Hugo
-  version. (#607)
+  version. The links to the source code pointed at gitlab.com, where the
+  project does not exist, and now point at the self-hosted instance; the
+  links to the NVIDIA container toolkit, to the vLLM documentation and to
+  the JWKS specification pointed at pages that no longer exist. (#607)
 
 - **Static-analysis follow-ups on the application code (SAST wave-7).**
   The translation example's two `requests.post` calls ran without a timeout

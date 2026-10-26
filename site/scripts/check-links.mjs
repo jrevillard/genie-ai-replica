@@ -22,6 +22,9 @@
  * section slug, the published URL of a page is simply its content path, and
  * the URL family cannot move.
  *
+ * Finally it rejects a link to the project on the wrong GitLab host: the
+ * repository is self-hosted, and a `gitlab.com` link to it answers 403.
+ *
  * Usage:  node scripts/check-links.mjs [--fix] [contentDir]
  * Exit code 0 = all links resolve to a published URL, 1 = problems found.
  *
@@ -190,7 +193,11 @@ const HTML_LINK = /href="([^"]*)"/g
 
 const broken = []
 const redirected = []
+const wrongHost = []
 let rewritten = 0
+
+// The repository is self-hosted: a link to it on gitlab.com answers 403.
+const WRONG_HOST = /^https?:\/\/gitlab\.com\/un\/itu\//
 
 /** Resolve an internal target to its canonical published URL. */
 function canonical(target) {
@@ -227,7 +234,13 @@ for (const file of files) {
 
     const handle = (target, kind) => {
       if (!target) return target
-      if (/^[a-z][a-z0-9+.-]*:/i.test(target)) return target // absolute URL, mailto:, tel:
+      if (/^[a-z][a-z0-9+.-]*:/i.test(target)) {
+        // absolute URL, mailto:, tel:
+        if (WRONG_HOST.test(target)) {
+          wrongHost.push({ file: rel(file), line: i + 1, kind, target })
+        }
+        return target
+      }
       if (target.startsWith('#')) return target // same-page anchor
       if (/[…{}<>]/.test(target)) return target // placeholder in prose
 
@@ -285,7 +298,7 @@ for (const file of files) {
 
 // ---------------------------------------------------------------------- report
 
-const problems = broken.length + redirected.length + slugViolations.length
+const problems = broken.length + redirected.length + slugViolations.length + wrongHost.length
 
 if (problems === 0) {
   console.log(
@@ -298,6 +311,14 @@ if (slugViolations.length) {
   console.error(`check-links: ${slugViolations.length} section(s) declare a slug — the published URL family would depend on the Hugo version:\n`)
   for (const s of slugViolations) {
     console.error(`  ${s.file}: slug: ${s.slug} — drop it and declare the old URL as an alias instead`)
+  }
+  console.error('')
+}
+
+if (wrongHost.length) {
+  console.error(`check-links: ${wrongHost.length} link(s) point at the project on the wrong GitLab host:\n`)
+  for (const w of wrongHost) {
+    console.error(`  ${w.file}:${w.line}  [${w.kind}]  ${w.target}  ->  use https://opensource.unicc.org/un/itu/genie-ai`)
   }
   console.error('')
 }

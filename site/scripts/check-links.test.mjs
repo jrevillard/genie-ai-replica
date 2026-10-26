@@ -181,3 +181,25 @@ test('ignores a relative link to a file', () => {
   const r = run(root)
   assert.equal(r.code, 0, r.out)
 })
+
+test('rejects a link to the project on the wrong GitLab host', () => {
+  const root = fixture()
+  writeFileSync(
+    join(root, 'docs/operate/page.md'),
+    '---\ntitle: "Page"\n---\n\n# Page\n\n[src](https://gitlab.com/un/itu/genie-ai/-/blob/main/x.js)\n'
+  )
+  const r = run(root)
+  assert.equal(r.code, 1)
+  assert.match(r.out, /wrong GitLab host/)
+  assert.match(r.out, /gitlab\.com\/un\/itu\/genie-ai/)
+})
+
+test('accepts a link to the project on the self-hosted GitLab', () => {
+  const root = fixture()
+  writeFileSync(
+    join(root, 'docs/operate/page.md'),
+    '---\ntitle: "Page"\n---\n\n# Page\n\n[src](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/x.js)\n'
+  )
+  const r = run(root)
+  assert.equal(r.code, 0, r.out)
+})

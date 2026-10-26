@@ -1301,8 +1301,21 @@ export default {
       // move during a 20-minute KG phase — the UI showed "0/1075" the whole
       // time while the work was demonstrably running. This counter advances
       // with every model call, so the line always shows MOVEMENT.
+      // The count is the calls that REACHED the model (2026-10-26) — the
+      // replays the sidecar's on-disk cache answered are counted apart and
+      // reported below, because a replay is not an LLM call: on a corpus
+      // generated before, the panel climbed to "673 LLM calls" while the
+      // remote GPU sat at 0 %.
       if (typeof p.calls === 'number' && p.calls > 0) {
         parts.push(this.translate('okf.ragas.gen.calls', '{n} LLM calls').replace('{n}', String(p.calls)));
+      }
+      // The REPLAYS — answered from the sidecar's cache, no request, no GPU.
+      // Without this number the line reads as if the model did work it did
+      // not do.
+      if (typeof p.replays === 'number' && p.replays > 0) {
+        parts.push(
+          this.translate('okf.ragas.gen.replays', '{n} replayed from cache').replace('{n}', String(p.replays))
+        );
       }
       const eta = this.fmtDuration(p.eta_s);
       if (eta) {

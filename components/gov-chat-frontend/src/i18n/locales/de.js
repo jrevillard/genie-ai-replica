@@ -3173,6 +3173,7 @@ export default {
         eta: '~{t} verbleibend',
         elapsed: 'läuft seit {t}',
         calls: '{n} LLM-Aufrufe',
+        replays: '{n} Aufrufe aus dem Cache beantwortet',
         underMin: 'unter einer Minute',
         minutes: '{m} Min.',
         hours: '{h} Std. {m} Min.'

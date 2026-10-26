@@ -376,6 +376,49 @@ def test_snapshot_never_lowers_the_published_call_count(monkeypatch):
         app_module.JOBS.pop("t-calls2", None)
 
 
+def test_snapshot_publishes_the_replay_count(monkeypatch):
+    """2026-10-26 (live): a corpus generated before replays from the
+    sidecar's on-disk cache — no request, no GPU. The panel must be able to
+    say so, so the replay count rides the same live refresh as the call
+    count."""
+    monkeypatch.setattr(app_module.ragas_engine, "llm_calls", lambda: 184)
+    monkeypatch.setattr(app_module.ragas_engine, "cache_replays", lambda: 1392)
+    app_module.JOBS["t-replays"] = {
+        "job_id": "t-replays",
+        "kind": "generate",
+        "status": "running",
+        "phase": "building-knowledge-graph",
+        "started_at": time.time() - 30,
+        "progress": {"phase": "building-knowledge-graph", "done": 0, "calls": 12},
+    }
+    try:
+        snap = app_module._snapshot(app_module.JOBS["t-replays"])
+        assert snap["progress"]["calls"] == 184
+        assert snap["progress"]["replays"] == 1392
+    finally:
+        app_module.JOBS.pop("t-replays", None)
+
+
+def test_snapshot_never_lowers_the_published_replay_count(monkeypatch):
+    """Same guard as the call count: a second job resets the shared
+    counter, and a published number must not go backwards."""
+    monkeypatch.setattr(app_module.ragas_engine, "llm_calls", lambda: 0)
+    monkeypatch.setattr(app_module.ragas_engine, "cache_replays", lambda: 0)
+    app_module.JOBS["t-replays2"] = {
+        "job_id": "t-replays2",
+        "kind": "generate",
+        "status": "running",
+        "phase": "building-knowledge-graph",
+        "started_at": time.time() - 30,
+        "progress": {"phase": "building-knowledge-graph", "done": 0, "calls": 7, "replays": 900},
+    }
+    try:
+        snap = app_module._snapshot(app_module.JOBS["t-replays2"])
+        assert snap["progress"]["replays"] == 900
+    finally:
+        app_module.JOBS.pop("t-replays2", None)
+
+
 def test_phase_tracker_keeps_working_for_plain_phase_calls():
     """The old call shape (phase only, or phase+counts) must still produce a
     valid progress payload — synthesis bumps positions, not kwargs."""

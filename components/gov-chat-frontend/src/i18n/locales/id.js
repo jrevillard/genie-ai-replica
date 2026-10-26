@@ -3151,6 +3151,7 @@ export default {
         eta: '~{t} tersisa',
         elapsed: 'berjalan {t}',
         calls: '{n} panggilan LLM',
+        replays: '{n} panggilan diputar ulang dari cache',
         underMin: 'kurang dari satu menit',
         minutes: '{m} mnt',
         hours: '{h} jam {m} mnt'

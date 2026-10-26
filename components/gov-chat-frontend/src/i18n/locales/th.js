@@ -3125,6 +3125,7 @@ export default {
         eta: 'เหลืออีก ~{t}',
         elapsed: 'กำลังทำงาน {t}',
         calls: '{n} ครั้งที่เรียก LLM',
+        replays: '{n} ครั้งที่ดึงจากแคช',
         underMin: 'ไม่ถึงหนึ่งนาที',
         minutes: '{m} นาที',
         hours: '{h} ชม. {m} นาที'

@@ -3146,6 +3146,7 @@ export default {
         eta: '~{t} zimebaki',
         elapsed: 'inaendelea {t}',
         calls: '{n} miito ya LLM',
+        replays: '{n} miito iliyotokana kutoka kache',
         underMin: 'chini ya dakika moja',
         minutes: 'dakika {m}',
         hours: 'saa {h} dakika {m}'

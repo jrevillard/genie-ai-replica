@@ -136,6 +136,9 @@ def _snapshot(job: dict) -> dict:
         # continuously (live 2026-10-22). A stale number is worse than none:
         # it reads as a stopped job. The `max` guard keeps the count
         # monotonic per job when a second job resets the shared counter.
+        # The REPLAY counter rides along (2026-10-26): a call served from
+        # the on-disk cache never reached the model, and reporting it as an
+        # "LLM call" is what made a 0 % GPU look like a broken benchmark.
         if job.get("status") == "running":
             try:
                 live_calls = ragas_engine.llm_calls()
@@ -143,6 +146,12 @@ def _snapshot(job: dict) -> dict:
                 live_calls = None
             if isinstance(live_calls, int) and live_calls >= (prog.get("calls") or 0):
                 prog["calls"] = live_calls
+            try:
+                live_replays = ragas_engine.cache_replays()
+            except Exception:  # noqa: BLE001 — a counter read can never fail a poll
+                live_replays = None
+            if isinstance(live_replays, int) and live_replays >= (prog.get("replays") or 0):
+                prog["replays"] = live_replays
         out["progress"] = prog
     if job.get("status") == "done":
         out["result"] = job.get("result")
@@ -184,7 +193,9 @@ def _phase_tracker(job_id: str):
     David: "the user needs more feedback than this") and the job's elapsed
     time, so the UI can show WHAT is running and HOW LONG it has run."""
 
-    def _update(phase: str, done=None, total=None, step=None, rate_s=None, eta_s=None, calls=None) -> None:
+    def _update(
+        phase: str, done=None, total=None, step=None, rate_s=None, eta_s=None, calls=None, replays=None
+    ) -> None:
         job = JOBS.get(job_id)
         if job is not None and job.get("status") == "running":
             job["phase"] = phase
@@ -204,6 +215,11 @@ def _phase_tracker(job_id: str):
             # (2026-10-21: a frozen "0/1075" for 20 minutes).
             if calls is not None:
                 prog["calls"] = calls
+            # The replays — calls the on-disk cache answered, so NO request
+            # reached the model (2026-10-26). Reported beside the call
+            # count so the panel can tell work from replay.
+            if replays is not None:
+                prog["replays"] = replays
             prog["elapsed_s"] = round(time.time() - job.get("started_at", time.time()), 1)
             job["progress"] = prog
 

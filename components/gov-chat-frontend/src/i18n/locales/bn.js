@@ -3144,6 +3144,7 @@ export default {
         eta: '~{t} বাকি',
         elapsed: '{t} ধরে চলছে',
         calls: '{n}টি LLM কল',
+        replays: '{n}টি কল ক্যাশ থেকে পুনরায় চালানো হয়েছে',
         underMin: 'এক মিনিটেরও কম',
         minutes: '{m} মিনিট',
         hours: '{h} ঘণ্টা {m} মিনিট'

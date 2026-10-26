@@ -879,6 +879,74 @@ def test_llm_call_counter_resets_per_phase():
     assert ragas_engine._llm_calls() == 0
 
 
+def test_cache_hit_is_counted_as_a_replay_not_an_llm_call(monkeypatch, tmp_path):
+    """2026-10-26 (live): the panel climbed to "673 LLM calls" while the
+    remote GPU sat at 0 % — every one of those calls was answered from the
+    on-disk cache. A replay is not an LLM call: it never reached the model.
+    The two counts must be separate numbers."""
+    hits = {"n": 0}
+
+    class _Gen:
+        def __init__(self, text):
+            self.text = text
+
+    class _Res:
+        def __init__(self, text):
+            self.generations = [[_Gen(text)]]
+            self.llm_output = None
+
+    class _FakeBase:
+        def __init__(self, *a, **k):
+            pass
+
+        def generate_text(self, prompt, n=1, temperature=0.01, stop=None, callbacks=None):
+            hits["n"] += 1
+            return _Res("answer")
+
+    class _Prompt:
+        def to_string(self):
+            return "p"
+
+    monkeypatch.setenv("RAGAS_LLM_CACHE_DIR", str(tmp_path / "cache"))
+    calls_before = ragas_engine._llm_calls()
+    replays_before = ragas_engine._cache_replays()
+    wrapper_cls = ragas_engine._make_caching_wrapper(_FakeBase)
+    w = wrapper_cls(object())
+
+    # FIRST call — a miss: the model is called.
+    w.generate_text(_Prompt(), n=1, temperature=0.2)
+    assert ragas_engine._llm_calls() == calls_before + 1
+    assert ragas_engine._cache_replays() == replays_before
+
+    # SECOND call, same prompt — a HIT: the answer is on disk, the model is
+    # NOT called. Counting it as an LLM call is what made a 0 % GPU look
+    # like a broken benchmark.
+    w.generate_text(_Prompt(), n=1, temperature=0.2)
+    assert ragas_engine._llm_calls() == calls_before + 1  # unchanged
+    assert ragas_engine._cache_replays() == replays_before + 1
+    assert hits["n"] == 1  # the model was called ONCE
+
+
+def test_the_replay_counter_resets_with_the_call_counter():
+    """The replay count describes THIS phase, like the call count — a
+    process-cumulative replay count reads as a jump when a new job starts."""
+    ragas_engine._count_llm_call(3)
+    ragas_engine._count_cache_replay(5)
+    ragas_engine._reset_llm_calls()
+    assert ragas_engine._llm_calls() == 0
+    assert ragas_engine._cache_replays() == 0
+
+
+def test_llm_call_stats_reports_both_counters():
+    """The HTTP layer publishes both numbers so the panel can separate the
+    calls that reached the model from the ones the cache answered."""
+    ragas_engine._reset_llm_calls()
+    ragas_engine._count_llm_call(2)
+    ragas_engine._count_cache_replay(7)
+    stats = ragas_engine.llm_call_stats()
+    assert stats == {"calls": 2, "replays": 7}
+
+
 def test_progress_reader_aggregates_parallel_worker_bars(monkeypatch):
     """2026-10-21: with a 16-worker pool there is one bar PER WORKER, so
     "the newest open bar" is almost always a bar at n=0. The reader must

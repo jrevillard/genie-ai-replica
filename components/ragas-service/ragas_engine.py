@@ -698,11 +698,15 @@ def _make_caching_wrapper(  # noqa: N802 — factory, like _make_fanout_class
 
         def generate_text(self, prompt, n=1, temperature=0.01, stop=None, callbacks=None):
             self._check_cancel()
-            _count_llm_call()
             key = self._key(prompt, n, temperature, stop)
             hit = self._read(key, prompt, n, temperature, stop)
             if hit is not None:
+                # A REPLAY, not a call: the answer was on disk, nothing left
+                # the machine. Counted separately so the panel can say what
+                # actually happened (2026-10-26).
+                _count_cache_replay()
                 return self._rebuild(*hit)
+            _count_llm_call()
             try:
                 result = _sync_call_with_retry(
                     lambda: super(_CachingLlmWrapper, self).generate_text(
@@ -720,11 +724,12 @@ def _make_caching_wrapper(  # noqa: N802 — factory, like _make_fanout_class
 
         async def agenerate_text(self, prompt, n=1, temperature=0.01, stop=None, callbacks=None):
             self._check_cancel()
-            _count_llm_call()
             key = self._key(prompt, n, temperature, stop)
             hit = self._read(key, prompt, n, temperature, stop)
             if hit is not None:
+                _count_cache_replay()
                 return self._rebuild(*hit)
+            _count_llm_call()
             sem = _async_semaphore()
             try:
                 if sem is None:
@@ -1206,13 +1211,27 @@ _TQDM_BARS: list = []  # [weakref(bar)] — newest last
 # it reads as a broken benchmark. The LLM wrapper is OURS, so it counts its
 # own calls — a counter that always advances with the work, reported next to
 # the transform name and the elapsed clock.
+#
+# TWO counters, not one (2026-10-26, live): the count above was incremented
+# BEFORE the cache lookup, so a call served from the on-disk cache — no
+# request, no GPU, no network — was reported as an "LLM call". On a corpus
+# generated before (the Solar System run, 2026-10-26) the panel climbed to
+# "673 LLM calls" while the remote GPU sat at 0 % and the remote's own
+# request counters did not move by a single request. The number was honest
+# about ATTEMPTS and dishonest about WORK. A replay is counted as a replay.
 _LLM_CALLS = 0
+_CACHE_REPLAYS = 0
 _LLM_CALLS_LOCK = threading.Lock()
 
 
 def _llm_calls() -> int:
     with _LLM_CALLS_LOCK:
         return _LLM_CALLS
+
+
+def _cache_replays() -> int:
+    with _LLM_CALLS_LOCK:
+        return _CACHE_REPLAYS
 
 
 def llm_calls() -> int:
@@ -1229,19 +1248,42 @@ def llm_calls() -> int:
     return _llm_calls()
 
 
+def llm_call_stats() -> dict:
+    """Both counters in one read: `calls` reached the model, `replays` were
+    served from the on-disk cache. The HTTP layer publishes both so the
+    panel can say what actually happened."""
+    with _LLM_CALLS_LOCK:
+        return {"calls": _LLM_CALLS, "replays": _CACHE_REPLAYS}
+
+
+def cache_replays() -> int:
+    """The live count of calls answered from the on-disk LLM cache — work
+    that did NOT reach the model. Published next to `llm_calls()` so the
+    panel can separate "the model was called" from "the cache answered"."""
+    return _cache_replays()
+
+
 def _count_llm_call(n: int = 1) -> None:
     global _LLM_CALLS
     with _LLM_CALLS_LOCK:
         _LLM_CALLS += n
 
 
+def _count_cache_replay(n: int = 1) -> None:
+    """A cache HIT — the answer was on disk, no request left the machine."""
+    global _CACHE_REPLAYS
+    with _LLM_CALLS_LOCK:
+        _CACHE_REPLAYS += n
+
+
 def _reset_llm_calls() -> None:
-    """Zero the counter at the start of a phase — the number must describe
+    """Zero the counters at the start of a phase — the numbers must describe
     THIS job, not the process (the sidecar serves many jobs in one
     interpreter, and a cumulative count reads as a jump)."""
-    global _LLM_CALLS
+    global _LLM_CALLS, _CACHE_REPLAYS
     with _LLM_CALLS_LOCK:
         _LLM_CALLS = 0
+        _CACHE_REPLAYS = 0
 
 
 def _hook_tqdm() -> None:
@@ -1520,7 +1562,10 @@ async def generate_testset(
                         # The LLM-call count ALWAYS advances with the work —
                         # the fallback when the transform bar itself does not
                         # move (2026-10-21: a frozen "0/1075" for 20 minutes).
+                        # TWO numbers: the calls that reached the model and
+                        # the ones the on-disk cache answered (2026-10-26).
                         calls=_llm_calls(),
+                        replays=_cache_replays(),
                     )
                 except Exception:  # noqa: BLE001
                     pass
@@ -1559,7 +1604,13 @@ async def generate_testset(
             # moves when a sample RESOLVES, and the first one waits on the
             # persona/scenario calls (2026-10-21: the count must always
             # advance, whatever the phase).
-            progress("synthesizing-questions", synth_done[0], None, calls=_llm_calls())
+            progress(
+                "synthesizing-questions",
+                synth_done[0],
+                None,
+                calls=_llm_calls(),
+                replays=_cache_replays(),
+            )
 
     dist = _resolve_distribution(query_distribution, llm, kg=kg, cancel_event=cancel_event, on_sample=_bump)
     if progress is not None and dist:
@@ -1570,6 +1621,7 @@ async def generate_testset(
             synth_done[0],
             max(expected, int(testset_size)),
             calls=_llm_calls(),
+            replays=_cache_replays(),
         )
     testset = await asyncio.to_thread(
         generator.generate,

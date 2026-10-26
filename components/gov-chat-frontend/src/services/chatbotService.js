@@ -62,8 +62,10 @@ export default {
     // A silent stream never recovers on its own: when the assistant is
     // unreachable upstream the connection just stays open. Watch for
     // frames — any resets the watch; silence past the budget aborts the
-    // stream and reports, so the UI leaves its thinking state.
-    const idleMs = Number(window.APP_CONFIG?.streamIdleTimeoutMs) || 120000;
+    // stream and reports, so the UI leaves its thinking state. The
+    // budget must outlast the backend's own LLM timeout (180 s) plus
+    // retrieval, or a slow-but-healthy answer gets abandoned here.
+    const idleMs = Number(window.APP_CONFIG?.streamIdleTimeoutMs) || 300000;
     let idleTimer = null;
     let finished = false;
     const clearIdleWatch = () => {
@@ -129,8 +131,9 @@ export default {
 
           for (const line of lines) {
             const trimmed = line.trim();
-            if (!trimmed || !trimmed.startsWith('data: ')) continue;
-            if (trimmed.startsWith(': ')) continue; // SSE comment/keepalive
+            // Not a data line — SSE comments (the backend's keepalives)
+            // fall through here too, and must not reset the idle watch.
+            if (!trimmed.startsWith('data: ')) continue;
 
             try {
               const data = JSON.parse(trimmed.slice(6));
@@ -150,11 +153,14 @@ export default {
                   clearIdleWatch();
                   callbacks.onDone?.(data);
                   return;
-                case 'error':
+                case 'error': {
                   finished = true;
                   clearIdleWatch();
-                  callbacks.onError?.(new Error(data.message || 'Stream error'));
+                  const error = new Error(data.message || 'Stream error');
+                  error.fromServer = true;
+                  callbacks.onError?.(error);
                   return;
+                }
               }
             } catch {
               // Ignore JSON parse errors for non-data lines

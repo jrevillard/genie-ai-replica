@@ -371,10 +371,13 @@ describe('ChatBotComponent', () => {
 
       expect(vm.isStreaming).toBe(false);
       expect(vm.systemStatus.online).toBe(false);
-      expect(vm.systemStatus.errorMessage).toBe('Stream failed');
+      // A transport error carries no user-facing text of its own — the
+      // turn shows the localized interruption message (the i18n stub
+      // resolves the caller-supplied fallback).
+      expect(vm.systemStatus.errorMessage).toBe('Response was interrupted. Please try again.');
       // Bot message should have error content
       const streamingMsg = vm.openMessages[vm.openMessages.length - 1];
-      expect(streamingMsg.content).toMatch(/error|failed|unavailable/i);
+      expect(streamingMsg.content).toMatch(/interrupted|error|failed/i);
     });
 
     it('calls notificationService.error with message on stream error', async () => {
@@ -591,7 +594,7 @@ describe('ChatBotComponent', () => {
 
       expect(vm.isStreaming).toBe(false);
       expect(vm.systemStatus.online).toBe(false);
-      expect(vm.systemStatus.errorMessage).toBe('Network request failed');
+      expect(vm.systemStatus.errorMessage).toBe('Response was interrupted. Please try again.');
     });
 
     it('displays error message in bot message on stream failure', async () => {
@@ -602,7 +605,10 @@ describe('ChatBotComponent', () => {
       await vm.sendMessage();
       await wrapper.vm.$nextTick();
 
-      capturedCallbacks.onError(new Error('Stream connection lost'));
+      // Server error frames carry their own message — shown verbatim.
+      const serverError = new Error('Stream connection lost');
+      serverError.fromServer = true;
+      capturedCallbacks.onError(serverError);
       await wrapper.vm.$nextTick();
 
       const lastBotMessage = vm.openMessages[vm.openMessages.length - 1];
@@ -1515,10 +1521,10 @@ describe('ChatBotComponent', () => {
 
       vm.$store.commit('conversation/setConversationId', 'existing-conv-123');
       vm.currentChatId = 'existing-conv-123';
-      vm.$store.commit('conversation/setSavedStateTo', {
-        messages: [{ sender: 'bot', content: 'Saved bot message', isSaved: true }],
-        contextItems: []
-      });
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Saved bot message', isSaved: true }]);
+      vm.$store.commit('conversation/setContextItems', []);
+      // Snapshot: the saved state IS this state; the writes below move the live one.
+      vm.$store.commit('conversation/setSavedState');
 
       vm.$store.commit('conversation/setMessages', [
         { sender: 'bot', content: 'Saved bot message', isSaved: true },
@@ -1534,10 +1540,10 @@ describe('ChatBotComponent', () => {
 
       vm.$store.commit('conversation/setConversationId', 'conv-456');
       vm.currentChatId = 'conv-456';
-      vm.$store.commit('conversation/setSavedStateTo', {
-        messages: [{ sender: 'bot', content: 'Saved', isSaved: true }],
-        contextItems: [{ service: 'Old Service', category: 'general' }]
-      });
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Saved', isSaved: true }]);
+      vm.$store.commit('conversation/setContextItems', [{ service: 'Old Service', category: 'general' }]);
+      // Snapshot: the saved state IS this state; the writes below move the live one.
+      vm.$store.commit('conversation/setSavedState');
 
       vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Saved', isSaved: true }]);
       vm.$store.commit('conversation/setContextItems', [{ service: 'New Service', category: 'general' }]);
@@ -1551,13 +1557,13 @@ describe('ChatBotComponent', () => {
 
       vm.$store.commit('conversation/setConversationId', 'conv-789');
       vm.currentChatId = 'conv-789';
-      vm.$store.commit('conversation/setSavedStateTo', {
-        messages: [{ sender: 'bot', content: 'Saved', isSaved: true }],
-        contextItems: [
-          { service: 'Service 1', category: 'general' },
-          { service: 'Service 2', category: 'general' }
-        ]
-      });
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Saved', isSaved: true }]);
+      vm.$store.commit('conversation/setContextItems', [
+        { service: 'Service 1', category: 'general' },
+        { service: 'Service 2', category: 'general' }
+      ]);
+      // Snapshot: the saved state IS this state; the writes below move the live one.
+      vm.$store.commit('conversation/setSavedState');
 
       vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Saved', isSaved: true }]);
       vm.$store.commit('conversation/setContextItems', [{ service: 'Service 1', category: 'general' }]);
@@ -1571,13 +1577,13 @@ describe('ChatBotComponent', () => {
 
       vm.$store.commit('conversation/setConversationId', 'conv-saved-123');
       vm.currentChatId = 'conv-saved-123';
-      vm.$store.commit('conversation/setSavedStateTo', {
-        messages: [
-          { sender: 'bot', content: 'Saved bot', isSaved: true },
-          { sender: 'user', content: 'Saved user', isSaved: true }
-        ],
-        contextItems: [{ service: 'Saved Service', category: 'saved' }]
-      });
+      vm.$store.commit('conversation/setMessages', [
+        { sender: 'bot', content: 'Saved bot', isSaved: true },
+        { sender: 'user', content: 'Saved user', isSaved: true }
+      ]);
+      vm.$store.commit('conversation/setContextItems', [{ service: 'Saved Service', category: 'saved' }]);
+      // Snapshot: the saved state IS this state; the writes below move the live one.
+      vm.$store.commit('conversation/setSavedState');
 
       vm.$store.commit('conversation/setMessages', [
         { sender: 'bot', content: 'Saved bot', isSaved: true },
@@ -1594,10 +1600,10 @@ describe('ChatBotComponent', () => {
 
       vm.$store.commit('conversation/setConversationId', 'conv-bot-123');
       vm.currentChatId = 'conv-bot-123';
-      vm.$store.commit('conversation/setSavedStateTo', {
-        messages: [{ sender: 'bot', content: 'Old bot', isSaved: true }],
-        contextItems: []
-      });
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Old bot', isSaved: true }]);
+      vm.$store.commit('conversation/setContextItems', []);
+      // Snapshot: the saved state IS this state; the writes below move the live one.
+      vm.$store.commit('conversation/setSavedState');
 
       vm.$store.commit('conversation/setMessages', [
         { sender: 'bot', content: 'New bot response', isSaved: false, queryId: 'new-query' }
@@ -1612,10 +1618,10 @@ describe('ChatBotComponent', () => {
 
       vm.$store.commit('conversation/setConversationId', 'conv-empty-123');
       vm.currentChatId = 'conv-empty-123';
-      vm.$store.commit('conversation/setSavedStateTo', {
-        messages: [{ sender: 'bot', content: 'Saved', isSaved: true }],
-        contextItems: []
-      });
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Saved', isSaved: true }]);
+      vm.$store.commit('conversation/setContextItems', []);
+      // Snapshot: the saved state IS this state; the writes below move the live one.
+      vm.$store.commit('conversation/setSavedState');
 
       vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Saved', isSaved: true }]);
       vm.$store.commit('conversation/setContextItems', []);
@@ -1629,10 +1635,10 @@ describe('ChatBotComponent', () => {
 
       vm.$store.commit('conversation/setConversationId', 'conv-prop-123');
       vm.currentChatId = 'conv-prop-123';
-      vm.$store.commit('conversation/setSavedStateTo', {
-        messages: [{ sender: 'bot', content: 'Saved', isSaved: true }],
-        contextItems: [{ service: 'Service Name', category: 'old-category' }]
-      });
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Saved', isSaved: true }]);
+      vm.$store.commit('conversation/setContextItems', [{ service: 'Service Name', category: 'old-category' }]);
+      // Snapshot: the saved state IS this state; the writes below move the live one.
+      vm.$store.commit('conversation/setSavedState');
 
       vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Saved', isSaved: true }]);
       vm.$store.commit('conversation/setContextItems', [{ service: 'Service Name', category: 'new-category' }]);

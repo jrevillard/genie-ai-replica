@@ -12,9 +12,19 @@ function emptyConversation() {
     title: '',
     isStreaming: false,
     streamingQueryId: null,
-    streamInterrupted: false,
     relatedDocuments: []
   };
+}
+
+// Shared by the abort path and rehydration: close the streaming turn
+// and surface the retry affordance through isError.
+function markEntryInterrupted(entry) {
+  entry.isStreaming = false;
+  const last = entry.messages.at(-1);
+  if (last && last.sender === 'bot' && last.isStreaming) {
+    last.isStreaming = false;
+    last.isError = true;
+  }
 }
 
 const state = () => ({
@@ -27,13 +37,6 @@ const getters = {
 };
 
 const mutations = {
-  replaceConversation(st, { messages, title, conversationId, selectedContextItems }) {
-    const entry = st.conversations[st.openId];
-    entry.messages = messages || [];
-    entry.title = title || '';
-    entry.conversationId = conversationId || null;
-    entry.selectedContextItems = selectedContextItems || [];
-  },
   resetForNewConversation(st) {
     st.conversations[st.openId] = emptyConversation();
   },
@@ -42,12 +45,6 @@ const mutations = {
   },
   setConversationId(st, id) {
     st.conversations[st.openId].conversationId = id;
-  },
-  setSavedStateTo(st, saved) {
-    st.conversations[st.openId].lastSavedState = {
-      messages: saved?.messages || [],
-      contextItems: saved?.contextItems || []
-    };
   },
   setSavedState(st) {
     const entry = st.conversations[st.openId];
@@ -97,14 +94,7 @@ const mutations = {
     }
   },
   markInterrupted(st) {
-    const entry = st.conversations[st.openId];
-    entry.isStreaming = false;
-    entry.streamInterrupted = true;
-    const last = entry.messages.at(-1);
-    if (last && last.sender === 'bot' && last.isStreaming) {
-      last.isStreaming = false;
-      last.isError = true;
-    }
+    markEntryInterrupted(st.conversations[st.openId]);
   },
   addContextItem(st, item) {
     st.conversations[st.openId].selectedContextItems.push(item);
@@ -126,11 +116,6 @@ const mutations = {
     entry.relatedDocuments.forEach(patch);
     const last = entry.messages.at(-1);
     if (last && Array.isArray(last.sources)) last.sources.forEach(patch);
-  },
-  markAllMessagesSaved(st) {
-    st.conversations[st.openId].messages.forEach((m) => {
-      m.isSaved = true;
-    });
   },
   setMessageProperty(st, [index, prop, value]) {
     const entry = st.conversations[st.openId];
@@ -226,10 +211,17 @@ const actions = {
         if (data.queryId) commit('setLastBotProperty', ['queryId', data.queryId]);
       },
       onError: (error) => {
-        const message =
-          error.code === 'STREAM_IDLE_TIMEOUT'
-            ? t('chatbot.streamTimeout', 'The assistant is not responding — the request timed out.')
-            : error.message || t('chatbot.streamingError', 'The stream failed.');
+        // Server error frames carry their own user-facing message;
+        // transport-level failures (timeout, premature close, network)
+        // render localized — a raw fetch message is developer text.
+        let message;
+        if (error.fromServer) {
+          message = error.message || t('chatbot.streamingError', 'Response was interrupted. Please try again.');
+        } else if (error.code === 'STREAM_IDLE_TIMEOUT') {
+          message = t('chatbot.streamTimeout', 'The assistant is not responding — the request timed out.');
+        } else {
+          message = t('chatbot.streamingError', 'Response was interrupted. Please try again.');
+        }
         commit('status/setOffline', message, { root: true });
         commit('failStream', message);
       }
@@ -237,9 +229,15 @@ const actions = {
     controllers.set(id, controller);
   },
   abortStream({ commit, rootState }) {
-    const controller = controllers.get(rootState.conversation.openId);
-    if (controller) controller.abort();
-    controllers.delete(rootState.conversation.openId);
+    const id = rootState.conversation.openId;
+    const controller = controllers.get(id);
+    if (!controller) return;
+    controllers.delete(id);
+    controller.abort();
+    // The aborted fetch rejects with an AbortError the service swallows,
+    // so nothing else closes the turn it was writing — mark it here, and
+    // the retry affordance replaces the eternal spinner.
+    commit('markInterrupted');
     commit('setStreaming', { isStreaming: false, streamingQueryId: null });
   }
 };
@@ -272,28 +270,57 @@ export function rehydrateConversation(moduleState) {
     payload = null;
   }
   if (!payload || payload.openId !== moduleState.openId || !payload.conversations) return;
+  const restored = {};
   for (const [id, entry] of Object.entries(payload.conversations)) {
-    if (!entry || !Array.isArray(entry.messages)) return; // shape drift — discard wholesale
-    if (entry.isStreaming) {
+    // A stored entry is only trusted when every field the chat view
+    // reads is present and well-typed — a partial object would crash
+    // the first render, so drift discards the whole stored state.
+    if (!entry || !Array.isArray(entry.messages)) {
+      moduleState.conversations[moduleState.openId] = emptyConversation();
+      return;
+    }
+    const clean = emptyConversation();
+    clean.messages = entry.messages.filter((m) => m && typeof m === 'object');
+    clean.selectedContextItems = Array.isArray(entry.selectedContextItems) ? entry.selectedContextItems : [];
+    clean.lastSavedState =
+      entry.lastSavedState && typeof entry.lastSavedState === 'object'
+        ? {
+            messages: Array.isArray(entry.lastSavedState.messages) ? entry.lastSavedState.messages : [],
+            contextItems: Array.isArray(entry.lastSavedState.contextItems) ? entry.lastSavedState.contextItems : []
+          }
+        : { messages: [], contextItems: [] };
+    clean.conversationId = entry.conversationId || null;
+    clean.title = typeof entry.title === 'string' ? entry.title : '';
+    clean.isStreaming = Boolean(entry.isStreaming);
+    if (clean.isStreaming) {
       // The fetch died with the page: the turn renders through the
       // existing retry affordance.
-      entry.isStreaming = false;
-      entry.streamInterrupted = true;
-      const last = entry.messages.at(-1);
-      if (last && last.sender === 'bot' && last.isStreaming) {
-        last.isStreaming = false;
-        last.isError = true;
-      }
+      markEntryInterrupted(clean);
     }
-    moduleState.conversations[id] = entry;
+    restored[id] = clean;
   }
+  moduleState.conversations = restored;
 }
+
+const PERSIST_DEBOUNCE_MS = 300;
+const PERSIST_MAX_WAIT_MS = 2000;
 
 export function subscribeConversation(store) {
   let timer = null;
+  let firstChangeAt = 0;
   store.subscribe((mutation) => {
     if (!mutation.type.startsWith('conversation/')) return;
+    const now = Date.now();
+    if (!timer) firstChangeAt = now;
     if (timer) clearTimeout(timer);
-    timer = setTimeout(() => persistConversation(store.state.conversation), 300);
+    // A trailing debounce alone never fires during a continuous
+    // generation — every chunk re-arms it. A wall on the first change
+    // caps the wait, so a reload mid-stream still finds the partial
+    // answer.
+    const delay = Math.min(PERSIST_DEBOUNCE_MS, Math.max(0, PERSIST_MAX_WAIT_MS - (now - firstChangeAt)));
+    timer = setTimeout(() => {
+      timer = null;
+      persistConversation(store.state.conversation);
+    }, delay);
   });
 }

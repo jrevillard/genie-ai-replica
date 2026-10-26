@@ -512,6 +512,12 @@ HUGGING_FACE_HUB_TOKEN=
 # Locale source files are never deleted — this only filters which are exposed.
 # VUE_APP_AVAILABLE_LOCALES=
 
+# Frontend SSE idle budget in milliseconds: a stream silent past it is
+# aborted and reported as timed out. Must stay above the backend's LLM
+# timeout (MODEL_LLM_TIMEOUT_SECONDS, default 180 s) plus retrieval.
+# Default: unset (300000 in the app)
+# VUE_APP_STREAM_IDLE_TIMEOUT_MS=
+
 # =============================================================================
 # SECTION 6: BACKEND SERVICE CONFIGURATION
 # =============================================================================

@@ -237,6 +237,9 @@ describe('chatbotService', () => {
 
     it('aborts and reports an error when the stream stays silent past the idle timeout', async () => {
       jest.useFakeTimers();
+      // The budget is pinned, not the default: this test owns the
+      // watchdog mechanism, and the default is a config value.
+      window.APP_CONFIG = { ...(window.APP_CONFIG || {}), streamIdleTimeoutMs: 120000 };
       try {
         const neverReader = { read: jest.fn(() => new Promise(() => {})) };
         global.fetch = jest.fn().mockResolvedValue({ ok: true, body: { getReader: () => neverReader } });
@@ -254,12 +257,14 @@ describe('chatbotService', () => {
         expect(onError.mock.calls[0][0].message).toMatch(/timed out/i);
         expect(onDone).not.toHaveBeenCalled();
       } finally {
+        delete window.APP_CONFIG.streamIdleTimeoutMs;
         jest.useRealTimers();
       }
     });
 
     it('keeps the stream alive while frames keep arriving', async () => {
       jest.useFakeTimers();
+      window.APP_CONFIG = { ...(window.APP_CONFIG || {}), streamIdleTimeoutMs: 120000 };
       try {
         // Frames arrive spaced 30s apart (faked timers), like a slow
         // generation — the watch must re-arm at each one.
@@ -302,6 +307,7 @@ describe('chatbotService', () => {
         expect(controller.signal.aborted).toBe(true);
         expect(onError).toHaveBeenCalledTimes(1);
       } finally {
+        delete window.APP_CONFIG.streamIdleTimeoutMs;
         jest.useRealTimers();
       }
     });

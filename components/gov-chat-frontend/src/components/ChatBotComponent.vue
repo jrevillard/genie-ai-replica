@@ -1318,7 +1318,7 @@ export default {
       // Only a real knowledge-area entry becomes a context chip — the plain
       // just-chat surface is not a domain, and a chip would promise one.
       if (entry && entry.category) {
-        this.selectedContextItems.push({
+        this.$store.commit('conversation/addContextItem', {
           service: entry.service,
           serviceLabels: [],
           serviceKey: entry.serviceKey || entry.id || entry.service,
@@ -1437,6 +1437,11 @@ export default {
         return;
       }
 
+      // A previous stream still running is replaced by the new one —
+      // aborted BEFORE the new turns are pushed, so the interruption
+      // marks the turn the old fetch was writing, not the new one.
+      this.$store.dispatch('conversation/abortStream');
+
       this.$store.commit('conversation/appendUserMessage', {
         sender: 'user',
         content: messageForDisplay,
@@ -1506,8 +1511,6 @@ export default {
         };
       }
 
-      // A previous stream still running is replaced by the new one.
-      this.$store.dispatch('conversation/abortStream');
       this.$store.dispatch('conversation/sendStream', queryData);
       this.scrollToBottom();
       if (this.currentChatId) {
@@ -1829,6 +1832,14 @@ export default {
             (message.sender === 'bot' && !message.queryId) ||
             (message.sender === 'user' && message.content === firstUserMessage && !message.isSaved)
           ) {
+            // The first user question is already stored as the
+            // conversation's initialMessage — mark it saved so
+            // hasUnsavedChanges() settles and the next save pass skips
+            // it instead of adding it a second time. The streaming
+            // placeholder stays unsaved: it is not storable yet.
+            if (message.sender === 'user') {
+              this.$store.commit('conversation/setMessageProperty', [messageIndex, 'isSaved', true]);
+            }
             continue;
           }
 
@@ -2001,21 +2012,17 @@ export default {
     startNewChatConfirmed() {
       this.showNewChatConfirm = false;
       this.$store.dispatch('conversation/abortStream');
-      const welcomeTurn = {
+      this.$store.commit('conversation/resetForNewConversation');
+      this.$store.commit('conversation/appendBotMessage', {
         sender: 'bot',
         content: this.getWelcomeMessage(),
         timestamp: new Date().toISOString(),
         isSaved: true
-      };
-      this.$store.commit('conversation/setMessages', [welcomeTurn]);
+      });
       this.currentChatId = null;
-      this.$store.commit('conversation/setConversationId', null);
-      this.$store.commit('conversation/setContextItems', []);
       this.newMessage = '';
       this.currentCategoryId = null;
-      this.$store.commit('conversation/setTitle', '');
       this.showQuickHelp = true;
-      this.$store.commit('conversation/setRelatedDocuments', []);
       this.$store.commit('conversation/setSavedState');
       this.$nextTick(() => {
         this.scrollToBottom();

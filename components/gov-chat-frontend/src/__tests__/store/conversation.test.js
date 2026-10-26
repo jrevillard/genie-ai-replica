@@ -28,7 +28,6 @@ describe('conversation module', () => {
     expect(open.messages).toEqual([]);
     expect(open.selectedContextItems).toEqual([]);
     expect(open.isStreaming).toBe(false);
-    expect(open.streamInterrupted).toBe(false);
   });
 
   it('appendChunk appends to the last bot message', () => {
@@ -83,19 +82,6 @@ describe('conversation module', () => {
     expect(open.conversationId).toBeNull();
     expect(open.relatedDocuments).toEqual([]);
   });
-
-  it('replaceConversation installs a loaded history conversation', () => {
-    const store = freshStore();
-    store.commit('conversation/replaceConversation', {
-      messages: [{ sender: 'user', content: 'old' }],
-      title: 'Old chat',
-      conversationId: 'conv-1'
-    });
-    const open = store.getters['conversation/openConversation'];
-    expect(open.messages.length).toBe(1);
-    expect(open.title).toBe('Old chat');
-    expect(open.conversationId).toBe('conv-1');
-  });
 });
 
 describe('conversation persistence', () => {
@@ -118,6 +104,35 @@ describe('conversation persistence', () => {
     expect(raw.conversations.open.title).toBe('Persisted');
   });
 
+  it('persists mid-stream: a chunk storm cannot defer the write past the wall', () => {
+    // A trailing debounce alone never fires while frames keep landing —
+    // every chunk re-arms it, and a reload mid-generation would find an
+    // empty answer. The wall on the first change caps the deferral.
+    // Mutation check: revert subscribeConversation to a pure trailing
+    // debounce and the stored content stays empty at the end of the storm.
+    jest.useFakeTimers();
+    try {
+      const store = freshStore();
+      subscribeConversation(store);
+      store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' });
+      store.commit('conversation/appendBotMessage', { sender: 'bot', content: '', isStreaming: true });
+      for (let i = 0; i < 25; i++) {
+        jest.advanceTimersByTime(100);
+        store.commit('conversation/appendChunk', 'x');
+      }
+      // Mid-storm: the wall has already fired while frames keep landing —
+      // storage holds a partial answer (a pure trailing debounce holds none).
+      const midStream = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
+      expect(midStream.conversations.open.messages.at(-1).content.length).toBeGreaterThan(0);
+      // And once the frames stop, the trailing write completes the answer.
+      jest.advanceTimersByTime(300);
+      const final = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
+      expect(final.conversations.open.messages.at(-1).content).toBe('x'.repeat(25));
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('rehydrates a stored conversation and marks an interrupted stream', () => {
     sessionStorage.setItem(
       STORAGE_KEY,
@@ -132,7 +147,6 @@ describe('conversation persistence', () => {
             title: '',
             isStreaming: true,
             streamingQueryId: null,
-            streamInterrupted: false,
             relatedDocuments: []
           }
         }
@@ -143,7 +157,6 @@ describe('conversation persistence', () => {
     const open = store.getters['conversation/openConversation'];
     expect(open.messages.at(-1).content).toBe('partial');
     expect(open.isStreaming).toBe(false);
-    expect(open.streamInterrupted).toBe(true);
     expect(open.messages.at(-1).isError).toBe(true);
   });
 
@@ -152,6 +165,28 @@ describe('conversation persistence', () => {
     const store = freshStore();
     rehydrateConversation(store.state.conversation);
     expect(store.getters['conversation/openConversation'].messages).toEqual([]);
+  });
+
+  it('fills defaults for a stored entry missing fields the view reads', () => {
+    // A payload with messages but no context/saved-state would crash the
+    // chat view's first render if restored verbatim.
+    sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        openId: 'open',
+        conversations: {
+          open: { messages: [{ sender: 'user', content: 'q' }] }
+        }
+      })
+    );
+    const store = freshStore();
+    rehydrateConversation(store.state.conversation);
+    const open = store.getters['conversation/openConversation'];
+    expect(open.messages).toEqual([{ sender: 'user', content: 'q' }]);
+    expect(open.selectedContextItems).toEqual([]);
+    expect(open.lastSavedState).toEqual({ messages: [], contextItems: [] });
+    expect(open.relatedDocuments).toEqual([]);
+    expect(open.isStreaming).toBe(false);
   });
 
   it('survives a full storage (quota error is degraded, not thrown)', () => {
@@ -239,7 +274,7 @@ describe('conversation sendStream action', () => {
     expect(store.state.status.online).toBe(false);
   });
 
-  it('abortStream aborts the controller without marking an error', () => {
+  it('abortStream aborts the controller and marks the abandoned turn for retry', () => {
     const controller = new AbortController();
     const abortSpy = jest.spyOn(controller, 'abort');
     const store = storeWithService(() => controller);
@@ -247,8 +282,20 @@ describe('conversation sendStream action', () => {
     store.dispatch('conversation/sendStream', { queryData: { query: 'q' } });
     store.dispatch('conversation/abortStream');
     expect(abortSpy).toHaveBeenCalled();
-    expect(store.getters['conversation/openConversation'].isStreaming).toBe(false);
-    expect(store.getters['conversation/openConversation'].messages.at(-1)?.isError).toBeFalsy();
+    const open = store.getters['conversation/openConversation'];
+    expect(open.isStreaming).toBe(false);
+    // The service swallows the AbortError, so the abort itself must
+    // close the turn — the retry affordance replaces the spinner.
+    expect(open.messages.at(-1)?.isError).toBe(true);
+    expect(open.messages.at(-1)?.isStreaming).toBe(false);
+  });
+
+  it('abortStream is a no-op when no stream is running', () => {
+    const store = storeWithService(() => new AbortController());
+    store.commit('conversation/appendBotMessage', { sender: 'bot', content: 'done', isSaved: true });
+    store.dispatch('conversation/abortStream');
+    const open = store.getters['conversation/openConversation'];
+    expect(open.messages.at(-1)?.isError).toBeFalsy();
   });
 
   it('translation replaces the streaming content', async () => {

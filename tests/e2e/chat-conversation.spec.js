@@ -524,7 +524,46 @@ test.describe('Conversation — surface invariants', () => {
   // Leaving an unsaved chat prompts instead of silently losing it.
   test('navigating away never prompts and never loses the conversation', async ({ browser }) => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
-    await mockStream(page, ['The answer completes in the background.'], { confidence_score: 0.9, is_grounded: true });
+    // The stream stays pending until we release it, so the generation is
+    // genuinely in flight while the user leaves — an instant mock would
+    // finish before the navigation and prove nothing about the abort
+    // path. (Mutation check: re-adding a beforeUnmount abort makes the
+    // answer never arrive and this test go red.)
+    let releaseStream;
+    const streamReleased = new Promise((resolve) => {
+      releaseStream = resolve;
+    });
+    await page.route('**/feedback**', async (route) => {
+      if (route.request().method() === 'POST') {
+        try {
+          await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+        } catch {
+          /* the context closed before the fulfillment */
+        }
+        return;
+      }
+      await route.continue();
+    });
+    await page.route('**/queries/stream', async (route) => {
+      if (route.request().method() !== 'POST') {
+        await route.continue();
+        return;
+      }
+      await streamReleased;
+      try {
+        await route.fulfill({
+          status: 200,
+          contentType: 'text/event-stream',
+          body: [
+            `data: ${JSON.stringify({ type: 'chunk', content: 'The answer completes in the background.' })}`,
+            `data: ${JSON.stringify({ type: 'done', queryId: 'mock-query-1' })}`,
+            ''
+          ].join('\n')
+        });
+      } catch {
+        /* the context closed before the fulfillment */
+      }
+    });
     await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
     // Leave while the answer is still streaming.
@@ -532,9 +571,15 @@ test.describe('Conversation — surface invariants', () => {
     await page.locator('[aria-label="Settings"]').locator('visible=true').first().click();
     await page.waitForTimeout(500);
     expect(await page.locator('[role="dialog"]').count(), 'navigation is never blocked').toBe(0);
-    // Back to the chat view — the conversation is intact and the answer
-    // completed in the background.
-    await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
+    // Release the stream while the chat view is unmounted: the store
+    // must keep consuming it.
+    releaseStream();
+    await page.waitForResponse((r) => r.url().includes('/queries/stream') && r.status() === 200, { timeout: 15000 });
+    await page.waitForTimeout(1000); // frame processing + persistence debounce
+    // Back through the router (history back is an in-app navigation, not
+    // a reload): the conversation is intact and the answer completed in
+    // the background.
+    await page.goBack();
     await page.waitForSelector('.chat-message.bot .message-bubble', { timeout: 30000 });
     await expect(page.locator('.chat-message.user').last()).toContainText('What is GENIE.AI?');
     await expect(page.locator('.chat-message.bot .message-bubble').last()).toContainText(
@@ -545,24 +590,24 @@ test.describe('Conversation — surface invariants', () => {
 
   test('a reload keeps the turns; an interrupted generation offers a retry', async ({ browser }) => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
-    // A stream whose response never arrives: the reload kills the fetch.
+    // A stream that never responds: the reload kills the pending fetch,
+    // and rehydration must render the interrupted turn through the
+    // retry affordance — not as a spinner, not as a missing turn.
     await page.route('**/queries/stream**', async (route) => {
       if (route.request().method() === 'POST') {
-        try {
-          await route.fulfill({ status: 200, contentType: 'text/event-stream', body: '' });
-        } catch {
-          /* the page closed first */
-        }
-        return;
+        // Hang the request on purpose; the context close cleans it up.
+        await new Promise(() => {});
       }
       await route.continue();
     });
     await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
-    await page.waitForTimeout(800);
+    await page.waitForSelector('.chat-message.bot .streaming-indicator', { timeout: 15000 });
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForSelector('.chat-message.user', { timeout: 30000 });
     await expect(page.locator('.chat-message.user').last()).toContainText('What is GENIE.AI?');
+    await expect(page.locator('[data-testid="answer-retry"]'), 'the interrupted turn offers a retry').toBeVisible();
+    await expect(page.locator('.chat-message.bot .streaming-indicator')).toHaveCount(0);
     await ctx.close();
   });
 });

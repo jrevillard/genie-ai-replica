@@ -412,7 +412,6 @@
          on-panel edge replaces the old inline chevron button, but
          the gesture (collapse / expand) reads the same. -->
     <right-side-bar-component
-      :current-chat-id="currentChatId"
       :current-locale="currentLocale"
       :related-documents="relatedDocuments"
       :width="rightSidebarWidth"
@@ -641,6 +640,7 @@ export default {
       pendingConversationId: null,
       isLoading: false, // Loading state for spinner
       isSaving: false, // Loading state for save operation to prevent double-save
+      loadSeq: 0, // Incremented per conversation load; stale responses are dropped
       hiddenPromptForNextMessage: null, // Stores hidden prompt for dual-prompt mechanism
       // Right sidebar width / collapsed state, both persisted in
       // localStorage and restored clamped against the current viewport.
@@ -829,18 +829,16 @@ export default {
     });
 
     eventBus.$on('load-conversation', (conversationId) => {
-      if (conversationId === this.conversationId) {
-        // Same conversation, no need to load
+      // Same conversation, already on or loading it — no need to load
+      // again (this also swallows a double-click while a load is in
+      // flight: the target id is set before the fetch).
+      if (conversationId === this.currentChatId || conversationId === this.conversationId) {
         return;
       }
       if (this.hasUnsavedChanges()) {
         this.pendingConversationId = conversationId;
         this.showLoadConfirm = true;
       } else {
-        this.$store.commit('conversation/setMessages', []); // Clear previous messages
-        this.$store.commit('conversation/setContextItems', []);
-        this.$store.commit('conversation/setRelatedDocuments', []);
-        this.$store.commit('conversation/setSavedState'); // Reset state
         this.loadExistingConversation(conversationId);
       }
     });
@@ -1617,15 +1615,24 @@ export default {
       // The loaded chat replaces the open one wholesale — and the
       // replacement starts NOW, before the fetch: if the load fails, the
       // next question must not carry the previous conversation's id, its
-      // context chip or its sources.
+      // context chip, its sources or its transcript.
       this.$store.commit('conversation/setConversationId', null);
       this.$store.commit('conversation/setContextItems', []);
       this.$store.commit('conversation/setRelatedDocuments', []);
+      this.$store.commit('conversation/setMessages', []);
+      this.$store.commit('conversation/setSavedState');
+      this.currentChatId = conversationId;
+      this.currentCategoryId = null;
+      // A slower load must never overwrite a newer one.
+      const token = ++this.loadSeq;
       try {
         const conversation = await this.chatHistoryService.getConversation(conversationId);
 
         if (!conversation) {
           throw new Error('Conversation not found');
+        }
+        if (token !== this.loadSeq) {
+          return; // a newer load superseded this one
         }
 
         this.$store.commit('conversation/setConversationId', conversation._key);
@@ -1715,6 +1722,11 @@ export default {
         notificationService.success(this.translate('chatbot.conversationLoaded'));
       } catch (error) {
         console.error('Error loading conversation:', error);
+        // Only the newest load owns the view's target: a stale failure
+        // must not clear a newer load's id.
+        if (token === this.loadSeq) {
+          this.currentChatId = null;
+        }
         notificationService.error(this.translate('chatbot.loadError'));
       }
     },
@@ -1816,7 +1828,11 @@ export default {
           throw new Error('User not authenticated');
         }
 
-        const firstUserMessage = this.openMessages.find((msg) => msg.sender === 'user')?.content || '';
+        // The first user question that ever got an answer rides as the
+        // conversation's initialMessage — a failed first exchange is
+        // left out entirely, so it cannot reopen looking answered.
+        const firstUserIndex = this.openMessages.findIndex((m) => m.sender === 'user' && !m.isError);
+        const firstUserMessage = firstUserIndex >= 0 ? this.openMessages[firstUserIndex].content : '';
 
         const conversationData = {
           title: this.saveChatDialog.title || this.generateChatTitle(),
@@ -1832,10 +1848,8 @@ export default {
         const conversation = await this.chatHistoryService.createConversation(conversationData);
         this.$store.commit('conversation/setConversationId', conversation._key);
 
-        // The first user question is already stored as the conversation's
-        // initialMessage — matched by position, not content, so a later
-        // message that repeats the same text is still stored normally.
-        const firstUserIndex = this.openMessages.findIndex((m) => m.sender === 'user');
+        // Matched by position, not content, so a later message that
+        // repeats the same text is still stored normally.
         for (const [messageIndex, message] of this.openMessages.entries()) {
           if (
             (message.sender === 'bot' && !message.queryId) ||

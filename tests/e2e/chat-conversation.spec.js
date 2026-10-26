@@ -615,6 +615,8 @@ test.describe('Conversation — surface invariants', () => {
         }
       },
       null,
+      // The write lands within ~2.3 s (2 s wall + 300 ms trailing edge);
+      // the budget is 10× that for a loaded CI agent.
       { timeout: 30000 }
     );
     await page.reload({ waitUntil: 'networkidle' });

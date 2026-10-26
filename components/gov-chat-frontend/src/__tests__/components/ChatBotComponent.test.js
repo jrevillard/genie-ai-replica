@@ -1705,23 +1705,24 @@ describe('ChatBotComponent', () => {
         content: 'failed question',
         isSaved: false
       });
+      // The failed exchange exactly as failStream leaves it: the dead
+      // answer never earned a queryId, and its question carries the
+      // marker too — the pair leaves as a unit.
       vm.$store.commit('conversation/appendBotMessage', {
         sender: 'bot',
-        content: 'Good answer',
-        queryId: 'q2',
+        content: '',
+        isStreaming: false,
+        isError: true,
         isSaved: false
       });
-      // The second exchange died: its answer never arrives, so its
-      // question carries the marker too (the pair leaves as a unit).
       vm.$store.commit('conversation/setMessageProperty', [2, 'isError', true]);
 
       vm.saveChatDialog = { visible: true, title: 'F', folderId: 'default' };
       await vm.handleSaveChat();
 
-      // The first question rides as initialMessage; the failed question
-      // must not reopen later looking answered — only the live answer
-      // is stored.
-      expect(chatHistoryService.addMessage.mock.calls.map((c) => c[0].content)).toEqual(['Good answer']);
+      // The first question rides as initialMessage; the failed exchange —
+      // question and dead answer — is stored nowhere.
+      expect(chatHistoryService.addMessage).not.toHaveBeenCalled();
     });
   });
 
@@ -1753,6 +1754,62 @@ describe('ChatBotComponent', () => {
       expect(capturedQueryData.messages.map((m) => `${m.role}:${m.content}`)).toEqual(['user:Second question']);
     });
 
+    it('the sidebar event routes through the handler; a re-click of the loading chat is swallowed', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      // The first load hangs until the test releases it: the re-click
+      // lands while the fetch is still in flight, the exact window the
+      // guard must close.
+      let resolveFirst;
+      chatHistoryService.getConversation.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve;
+          })
+      );
+      // The handler registered on the mocked eventBus in created() —
+      // drive it the way ChatFolders' emit does.
+      const loadHandler = mockEventBusOn.mock.calls.find((c) => c[0] === 'load-conversation')[1];
+
+      const first = loadHandler('conv-9');
+      await wrapper.vm.$nextTick();
+      expect(chatHistoryService.getConversation).toHaveBeenCalledTimes(1);
+
+      await loadHandler('conv-9');
+      expect(chatHistoryService.getConversation).toHaveBeenCalledTimes(1);
+
+      resolveFirst({ _key: 'conv-9', title: 'Loaded chat', messages: [] });
+      await first;
+      expect(vm.conversationId).toBe('conv-9');
+    });
+
+    it('a slower earlier load never overwrites a newer one', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      let resolveA;
+      chatHistoryService.getConversation.mockImplementation((id) => {
+        if (id === 'conv-A') {
+          return new Promise((resolve) => {
+            resolveA = resolve;
+          });
+        }
+        return Promise.resolve({ _key: 'conv-B', title: 'B', messages: [] });
+      });
+      const loadHandler = mockEventBusOn.mock.calls.find((c) => c[0] === 'load-conversation')[1];
+
+      const first = loadHandler('conv-A');
+      await loadHandler('conv-B');
+      expect(vm.conversationId).toBe('conv-B');
+      resolveA({ _key: 'conv-A', title: 'A', messages: [] });
+      await first;
+      // The stale response is dropped: the last click wins, not the
+      // last response.
+      expect(vm.conversationId).toBe('conv-B');
+      expect(vm.currentChatId).toBe('conv-B');
+    });
+
     it('loading a conversation drops the previous one first — even when the fetch fails', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
@@ -1771,6 +1828,9 @@ describe('ChatBotComponent', () => {
       expect(vm.selectedContextItems).toEqual([]);
       expect(vm.relatedDocuments).toEqual([]);
       expect(vm.conversationId).toBeNull();
+      // No split brain: the view's own target id is released with the
+      // store's, or saves would route into the previous conversation.
+      expect(vm.currentChatId).toBeNull();
     });
   });
 

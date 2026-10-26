@@ -77,7 +77,7 @@
                 </DsButton>
               </div>
 
-              <chat-folders :active-tab="activeSubTab" @open-chat="openChat" @locale-changed="handleLocaleChange" />
+              <chat-folders :active-tab="activeSubTab" @locale-changed="handleLocaleChange" />
             </div>
           </div>
 
@@ -160,7 +160,7 @@ export default {
       default: true
     }
   },
-  emits: ['open-chat', 'close-sidebar', 'update:width', 'update:collapsed'],
+  emits: ['close-sidebar', 'update:width', 'update:collapsed'],
   data() {
     return {
       activeTab: 'services',
@@ -289,9 +289,6 @@ export default {
         }
       }
       return tabKey.charAt(0).toUpperCase() + tabKey.slice(1);
-    },
-    openChat(chatId) {
-      this.$emit('open-chat', chatId);
     },
     closeOverlay() {
       this.$emit('close-sidebar');

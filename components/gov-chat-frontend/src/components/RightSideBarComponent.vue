@@ -127,10 +127,6 @@ export default {
   },
 
   props: {
-    currentChatId: {
-      type: String,
-      default: null
-    },
     currentLocale: {
       type: String,
       default: 'en'

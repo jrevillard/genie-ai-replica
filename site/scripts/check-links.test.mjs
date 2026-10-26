@@ -137,6 +137,7 @@ test('rejects a relative Markdown link whose target page does not exist', () => 
   writeFileSync(join(root, 'docs/operate/page.md'), '---\ntitle: "Page"\n---\n\n# Page\n\n[missing](./nowhere/)\n');
   const r = run(root);
   assert.equal(r.code, 1);
+  assert.match(r.out, /broken internal link/);
   assert.match(r.out, /\.\/nowhere\//);
 });
 

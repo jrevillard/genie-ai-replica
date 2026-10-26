@@ -843,4 +843,32 @@ development_status:
   #          7 real calls for the new questions. 'SMOKE 8-6: ALL CHECKS PASSED'
   #          with the new check "the generation progress envelope separates the
   #          model calls from the cache replays".
+  #          THE FULL VERIFICATION (2026-10-26, the local build, three legs —
+  #          the answer to "does a NEW run finish cleanly?"):
+  #          LEG 1 — Solar System, WARM cache, the corpus that killed the
+  #          previous run: the generation COMPLETED. The persisted suite
+  #          rs1792997981392-2b027a carries kg_failures {"NERExtractor:
+  #          OutputParserException": 2} (the two poisoned nodes degraded, the
+  #          phase continued), and the benchmark run rr1793003603224-a8acb1
+  #          landed with 2/2 answered, 0 errors, 0 abstentions, failing_count 0,
+  #          faithfulness 0.775 / context_precision 1.000 / context_recall 1.000
+  #          / answer_relevancy 0.945 on the granite __env__ judge — a suite
+  #          whose generation had already lost two nodes still produced a
+  #          complete, fully scored run.
+  #          LEG 2 — Alphabet, WARM cache: 6.5 min, 8 real calls + 417
+  #          replays, kg_failures {} (not one node degraded), and
+  #          "SMOKE 8-6: ALL CHECKS PASSED" (exit 0).
+  #          LEG 3 — Alphabet, COLD cache: the sidecar recreated with
+  #          RAGAS_LLM_CACHE=0, which disables the cache read AND the write, so
+  #          every knowledge-graph node asks the model for real. 424 real calls,
+  #          0 replays, 782 s, kg_failures {} (again not one node degraded), 2
+  #          questions synthesized. The cache volume proves the coldness: 46,406
+  #          entries, newest write 08:43:02, the cold run started 08:44:33 and
+  #          wrote NOTHING (a miss always writes). "SMOKE 8-6: ALL CHECKS
+  #          PASSED" (exit 0), suite kept as rs1793004262276-355ca4. The run
+  #          leg rr1793005047691-aa20ac completed with 0 errors and 0
+  #          abstentions; one of the two rows scored 0 on answer_relevancy (the
+  #          served answer addressed the question's premise instead of the
+  #          question), so it carries n_failed: 1 — a QUALITY result the
+  #          benchmark exists to surface, not a completion failure.
 

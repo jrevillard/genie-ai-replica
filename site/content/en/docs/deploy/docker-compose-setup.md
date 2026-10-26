@@ -534,8 +534,12 @@ See also:
 
 You now have GENIE.AI running on `https://localhost/`. Continue with:
 
-- [Post-deploy checklist](/docs/operate/health-checks/) for user
-  creation and knowledge hierarchy setup
+- [Post-deploy checklist](/docs/operate/health-checks/) to verify every
+  service is healthy
+- [Configure → Keycloak admin guide](/docs/configure/keycloak-admin-guide/)
+  for user creation
+- [Frontend → Admin Dashboard](/docs/frontend/admin-dashboard/) for the
+  knowledge hierarchy
 - [Docker Swarm Setup](/docs/deploy/docker-swarm-setup/) for
   multi-node production deployment
 - [Observability Overview](/docs/observe/overview/) for the

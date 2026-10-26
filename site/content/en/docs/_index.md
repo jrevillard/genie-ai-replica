@@ -49,11 +49,11 @@ links to a 10-minute quickstart and a curated set of follow-on docs.
     <a class="card h-100 text-decoration-none border-primary" href="/docs/get-started/quickstart-developer/">
       <div class="card-body">
         <h5 class="card-title">Developer</h5>
-        <p class="card-text">Extend the backend or the RAG pipeline — local dev loop in 10 minutes.</p>
+        <p class="card-text">Extend the backend or the RAG pipeline — ship a service change in 30 minutes.</p>
         <ol class="small mb-0">
-          <li>Run <code>npm install</code> in <code>components/gov-chat-backend</code></li>
-          <li>Spin up dependencies with <code>docker compose up -d</code></li>
-          <li>Run <code>npm run dev</code> and hit <code>localhost:3000/api/health</code></li>
+          <li>Start the stack with <code>docker compose up -d</code> — no host toolchain</li>
+          <li>Edit one service, rebuild only that image</li>
+          <li>Hit the change through NGINX and run the service's tests</li>
         </ol>
       </div>
     </a>

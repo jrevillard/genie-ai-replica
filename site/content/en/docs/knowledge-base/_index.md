@@ -27,9 +27,9 @@ organise and maintain them, and what makes content retrieve well.
 - [Content guidance]({{< relref "content-guidance" >}}) — what makes knowledge-base
   content retrieve well: document structure, chunking, and the effect of
   contextual retrieval.
-- [Ingestion log reference]({{< relref "ingestion-log" >}}) — per-chunk progress
-  log written by dataprep: schema, endpoints, canonical message strings, and a
-  debugging playbook.
+- [Ingestion log reference]({{< relref "ingestion-log" >}}) — pointer to the
+  canonical Operations → Ingestion log page: schema, endpoints, canonical
+  message strings, and the debugging playbook.
 
 ## How documents flow through the system
 

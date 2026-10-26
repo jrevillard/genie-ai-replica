@@ -17,7 +17,7 @@ ends with a verifiable artifact you can show someone else.
 - **A deployer** installing GENIE.AI for the first time →
   [Quickstart: Deployer](/docs/get-started/quickstart-deployer/) (15 min)
 - **A developer** extending the backend or RAG pipeline →
-  [Quickstart: Developer](/docs/get-started/quickstart-developer/) (10 min)
+  [Quickstart: Developer](/docs/get-started/quickstart-developer/) (30 min)
 - **A contributor** opening your first merge request →
   [Quickstart: Contributor](/docs/get-started/quickstart-contributor/) (10 min)
 

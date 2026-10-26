@@ -247,8 +247,8 @@ curl -sk https://localhost/<your-endpoint> | jq .
 curl -sk https://localhost/<your-endpoint> -H "Authorization: Bearer $GENIE_TOKEN"
 ```
 
-Mint a realm token first if your route is gated (see [Contribute →
-Dev workflow](/docs/contribute/dev-workflow/) or `.claude/rules/SERVER-TESTING.md`).
+Mint a realm token first if your route is gated (see [Reference →
+API contracts](/docs/reference/api-contracts/#how-to-call-these-endpoints)).
 
 **Frontend changes** — reload the browser (`Cmd-R` / `Ctrl-R`). NGINX serves
 the rebuilt SPA on `https://localhost/`.

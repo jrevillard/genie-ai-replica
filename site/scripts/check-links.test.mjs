@@ -116,6 +116,16 @@ test('--fix rewrites an alias link to the published URL and leaves dead links al
   assert.match(body, /\[dead\]\(\/docs\/nowhere\/\)/)
 })
 
+test('ignores a link to a file — there is no content page to resolve it to', () => {
+  const root = fixture()
+  writeFileSync(
+    join(root, 'docs/operate/page.md'),
+    '---\ntitle: "Page"\n---\n\n# Page\n\n![diagram](/docs/assets/diagram.png)\n'
+  )
+  const r = run(root)
+  assert.equal(r.code, 0, r.out)
+})
+
 test('ignores links inside fenced code blocks', () => {
   const root = fixture()
   writeFileSync(

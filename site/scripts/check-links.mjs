@@ -190,6 +190,9 @@ for (const file of files) {
       if (!target.startsWith('/')) return target
       const path = target.split('#')[0]
       if (!path) return target
+      // A link to a file (an image, a PDF) is not a page link: Hugo serves it
+      // from the static tree, and there is no content page to resolve it to.
+      if (/\.[a-z0-9]{2,5}$/i.test(path)) return target
       const resolved = canonical(target)
       if (!resolved) {
         broken.push({ file: rel(file), line: i + 1, kind, target })

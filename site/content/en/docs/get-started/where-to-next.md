@@ -40,9 +40,12 @@ You have the backend running locally. The next pages are:
 - **[Reference → API contracts](/docs/reference/api-contracts/)** — every public
   HTTP endpoint.
 - **[RAG Pipeline → Pipeline architecture](/docs/rag-pipeline/pipeline/)** —
-  every OPEA microservice and its contract.
+  the end-to-end request lifecycle, from query to grounded answer.
 - **[Architecture → OPEA microservices](/docs/architecture/opea-microservices/)** —
-  the service registry and protocol extensions.
+  every OPEA microservice and its contract.
+- **[Reference → OPEA protocol](/docs/reference/opea-protocol/)** and
+  **[service registry](/docs/reference/service-registry/)** — the service
+  registry and protocol extensions.
 
 For test / lint / CI:
 

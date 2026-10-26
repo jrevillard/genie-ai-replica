@@ -2833,7 +2833,6 @@ config:docs-links:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
 
-
 # Validate CHANGELOG.md has an entry for the version being released
 config:changelog:
   stage: config

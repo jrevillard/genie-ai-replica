@@ -161,7 +161,7 @@ After the three operations return, the router pushes the unauthenticated route (
 
 ## 8. Programmatic verification
 
-For automated tests, the canonical E2E login flow lives at `mobile/genie_ai_mobile/CLAUDE.md#Verify OIDC Login Flow` and uses Patrol to drive a real device through the OIDC redirect. For backend-side auth checks (token validation, JWKS rotation), see [API Contracts (backend)](/docs/reference/api-contracts/).
+For automated tests, the canonical E2E login flow lives at `mobile/genie_ai_mobile/CLAUDE.md#Verify OIDC Login Flow` and uses Patrol to drive a real device through the OIDC redirect. For backend-side auth checks, see [API Contracts (backend)](/docs/reference/api-contracts/) for token validation, and [Trust Boundaries](/docs/architecture/trust-boundaries/) for JWKS caching and key rotation.
 
 ## Related
 

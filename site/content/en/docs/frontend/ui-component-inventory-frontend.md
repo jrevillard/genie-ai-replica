@@ -209,7 +209,7 @@ The full file map with descriptions is in the tables above.
 - **State**: Vuex 4. See [State Management](/docs/frontend/state-management-frontend/).
 - **Charts**: ApexCharts via [`vue3-apexcharts`](https://apexcharts.com/) (Vue 3 wrapper). Internal usage is via the per-chart components above — call them, do not import ApexCharts directly.
 - **Routing**: Vue Router. Routes in `src/router/`; views live in `src/views/`.
-- **i18n**: [`vue-i18n`](https://vue-i18n.intlify.dev/) with translations in `src/i18n/locales/`. Whitelist is config-driven — see `VUE_APP_AVAILABLE_LOCALES` in [Configuration](/docs/configure/external-idp-integration-guide/) and the i18n system overview.
+- **i18n**: [`vue-i18n`](https://vue-i18n.intlify.dev/) with translations in `src/i18n/locales/`. Whitelist is config-driven — see `VUE_APP_AVAILABLE_LOCALES` in [Locale whitelist](/docs/configure/locale-whitelist/) and the i18n system overview.
 - **Icons**: [Lucide](https://lucide.dev/) — `<LucideIcon name="chevron-right" />` style. The styling system and color tokens are defined in `public/config/theme-variables.css` and described in [Theme System](/docs/frontend/theme-system/).
 
 ## Related

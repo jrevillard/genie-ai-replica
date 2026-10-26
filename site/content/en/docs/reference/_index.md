@@ -40,4 +40,4 @@ narrative.
   references.
 - **[Configure](/docs/configure/)** — runtime tunables that map onto the
   env-vars page.
-- **[API contracts](/docs/reference/api-contracts/)** — narrative version of every HTTP endpoint.
+- **[Core → Integration Architecture](/docs/core/integration-architecture/)** — narrative view of how the components integrate and the inter-service contract surface.

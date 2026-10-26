@@ -1274,7 +1274,7 @@ logging keeps `docker logs` working too.
 |---|---|
 | Deploy the stack (Compose / Swarm / Ansible) | [Deployment](/docs/deploy/) |
 | Trace a request through the RAG pipeline | [Observability](/docs/observe/) |
-| Look up an environment variable | [Configuration](/docs/configure/) |
+| Look up an environment variable | [Environment variables](/docs/reference/env-vars/) |
 | Find where a route or service lives in code | [Source Tree Analysis](/docs/reference/source-tree-analysis/) |
 | Set up a local dev environment | [Build and run locally](/docs/contribute/build-and-run/) |
-| Understand the high-level system diagram | [Architecture](/docs/architecture/) |
+| Understand the high-level system diagram | [Architecture Overview](/docs/architecture/architecture/) |

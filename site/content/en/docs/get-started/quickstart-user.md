@@ -307,7 +307,8 @@ tablets; the navbar collapses into a hamburger menu below 768 px.
   — what the documents your assistant reads look like.
 - [Architecture overview](/docs/architecture/architecture/) — the system map
   behind the chat screen.
-- [Privacy & data handling](/docs/operate/security-hardening/) — what is stored,
+- [Privacy & data handling](/docs/frontend/user-profile/#privacy-surface) —
+  what is stored,
   where, and for how long.
-- [Report a problem with these docs](/docs/contribute/how-to-mr/) — spotted a
+- [Report a problem with these docs](/docs/#report-a-problem) — spotted a
   typo or a UI label that has drifted? Open an issue or MR.

@@ -135,3 +135,49 @@ test('ignores links inside fenced code blocks', () => {
   const r = run(root)
   assert.equal(r.code, 0, r.out)
 })
+
+test('accepts a relative Markdown link to a sibling page', () => {
+  const root = fixture()
+  writeFileSync(
+    join(root, 'docs/operate/other.md'),
+    '---\ntitle: "Other"\n---\n\n# Other\n'
+  )
+  writeFileSync(
+    join(root, 'docs/operate/page.md'),
+    '---\ntitle: "Page"\n---\n\n# Page\n\n[sibling](./other/)\n'
+  )
+  const r = run(root)
+  assert.equal(r.code, 0, r.out)
+})
+
+test('rejects a relative Markdown link whose target page does not exist', () => {
+  const root = fixture()
+  writeFileSync(
+    join(root, 'docs/operate/page.md'),
+    '---\ntitle: "Page"\n---\n\n# Page\n\n[missing](./nowhere/)\n'
+  )
+  const r = run(root)
+  assert.equal(r.code, 1)
+  assert.match(r.out, /\.\/nowhere\//)
+})
+
+test('accepts a relative link that climbs out of the section', () => {
+  const root = fixture()
+  mkdirSync(join(root, 'docs/observe'), { recursive: true })
+  writeFileSync(
+    join(root, 'docs/observe/note.md'),
+    '---\ntitle: "Note"\n---\n\n# Note\n\n[up](../operate/page/)\n'
+  )
+  const r = run(root)
+  assert.equal(r.code, 0, r.out)
+})
+
+test('ignores a relative link to a file', () => {
+  const root = fixture()
+  writeFileSync(
+    join(root, 'docs/operate/page.md'),
+    '---\ntitle: "Page"\n---\n\n# Page\n\n![diagram](./diagram.png)\n'
+  )
+  const r = run(root)
+  assert.equal(r.code, 0, r.out)
+})

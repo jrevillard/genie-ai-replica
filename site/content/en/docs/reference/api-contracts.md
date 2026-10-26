@@ -611,8 +611,7 @@ required**: **Yes** on every endpoint.
 `GET /services/:serviceId/translations`) return translation records
 keyed `${sourceKey}_${languageCode}` (e.g. `name_en`, `name_fr`). The
 translation schema is documented in the i18n section of `CHANGELOG.md`
-and on the frontend inventory page (see
-[UI Component Inventory](/docs/frontend/ui-component-inventory-frontend/)).
+and in [ArangoDB collections](/docs/reference/arangodb-collections/).
 
 ### 8. Service routes (`/api/services`)
 
@@ -1190,4 +1189,6 @@ contract.
   realm setup, client credentials, admin user creation, ROPC
   enable/revert.
 - [Troubleshooting](/docs/operate/troubleshooting/) — `docker service
-  logs`, debug-yesterday, security-blocker diagnostics.
+  logs`, security-blocker diagnostics.
+- [Operate → Admin Logs](/docs/operate/admin-logs/) — the Logs tab endpoints,
+  including `debug-yesterday` and the LogSQL query endpoint.

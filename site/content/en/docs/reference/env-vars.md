@@ -128,7 +128,7 @@ source first** (the file in the repo), then regenerate.
 
 ## Service ports (with defaults baked in)
 
-See [Configure → CORS / CSP / public-domain](/docs/configure/cors-csp/) for
+See [Core → Project Overview](/docs/core/project-overview/) for
 the `nginx` / `kong` / `keycloak` port map.
 
 ## Variables with code-side defaults (not in `env`)

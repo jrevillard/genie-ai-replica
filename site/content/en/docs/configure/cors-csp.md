@@ -87,7 +87,7 @@ NGINX_PUBLIC_DOMAIN=genie.example.gov
 - **No scheme, no path, no port.** nginx prepends `https://`; do not include it.
 - For self-signed dev stacks, use the IP or hostname clients reach the
   container on (e.g. `10.0.0.102`) — see
-  [Mobile Deployment Guide → El Salvador test topology](/docs/mobile/mobile-deployment-guide/)
+  [Local development with self-signed certificates](/docs/configure/local-dev-self-signed/)
   for the WireGuard-tunnel + self-signed-cert gotchas.
 
 ## `CORS_ALLOWED_ORIGINS`
@@ -233,6 +233,7 @@ curl -skI 'https://genie.example.gov/auth/realms/genie/protocol/openid-connect/a
 - [Reference → Environment variables](/docs/reference/env-vars/) — the canonical list
 - [Reference → Routes](/docs/reference/routes/) — which paths the CORS middleware protects
 - [Deployment → Install guide](/docs/deploy/install-guide/) — first-deploy wiring walkthrough
-- [Mobile → Deployment Guide](/docs/mobile/mobile-deployment-guide/) — El Salvador-style
-  phone↔server trust chain (WireGuard tunnel, private IP, self-signed cert, Keycloak
-  `/auth` prefix) where `NGINX_PUBLIC_DOMAIN` is a private IP
+- [Configure → Local development with self-signed certificates](/docs/configure/local-dev-self-signed/) —
+  El Salvador-style phone↔server trust chain (WireGuard tunnel, private IP,
+  self-signed cert, Keycloak `/auth` prefix) where `NGINX_PUBLIC_DOMAIN` is a
+  private IP

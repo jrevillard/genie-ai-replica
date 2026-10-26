@@ -144,6 +144,45 @@ for (const file of files) {
   if (url !== plain) aliasMap.set(plain, url)
 }
 
+function normaliseSegments(segments) {
+  const out = []
+  for (const s of segments) {
+    if (s === '' || s === '.') continue
+    if (s === '..') out.pop()
+    else out.push(s)
+  }
+  return out.join('/')
+}
+
+/**
+ * Resolve a RELATIVE link.
+ *
+ * Markdown links are resolved by Hugo against the content path of the
+ * referring page; raw-HTML href attributes are resolved by the browser
+ * against the published URL of that page.  With no section slug the two
+ * spaces are the same, so one resolution serves both.
+ */
+function canonicalRelative(target, file, kind) {
+  const [path, anchor] = target.split('#')
+  if (!path) return null
+  const suffix = anchor ? '#' + anchor : ''
+
+  if (kind === 'md') {
+    const dir = rel(file).split('/').slice(0, -1)
+    const candidate = normalise('/' + normaliseSegments([...dir, ...path.split('/')]))
+    const viaContent = contentPath.get(candidate)
+    if (viaContent) return viaContent + suffix
+  }
+
+  const base = pages.get(file).url
+  const resolved = normaliseSegments([...base.split('/'), ...path.split('/')])
+  const url = '/' + resolved.replace(/\/$/, '') + '/'
+  if (published.has(url)) return url + suffix
+  const byAlias = aliasMap.get(url)
+  if (byAlias) return byAlias + suffix
+  return null
+}
+
 // ------------------------------------------------------------------- link scan
 
 const MD_LINK = /\]\(([^)\s]+)(\s+"[^"]*")?\)/g
@@ -187,33 +226,51 @@ for (const file of files) {
     if (inFence) continue
 
     const handle = (target, kind) => {
-      if (!target.startsWith('/')) return target
+      if (!target) return target
+      if (/^[a-z][a-z0-9+.-]*:/i.test(target)) return target // absolute URL, mailto:, tel:
+      if (target.startsWith('#')) return target // same-page anchor
+      if (/[…{}<>]/.test(target)) return target // placeholder in prose
+
+      if (target.startsWith('/')) {
+        const path = target.split('#')[0]
+        if (!path) return target
+        // A link to a file (an image, a PDF) is not a page link: Hugo serves it
+        // from the static tree, and there is no content page to resolve it to.
+        if (/\.[a-z0-9]{2,5}$/i.test(path)) return target
+        const resolved = canonical(target)
+        if (!resolved) {
+          broken.push({ file: rel(file), line: i + 1, kind, target })
+          return target
+        }
+        const wanted = normalise(path)
+        // A link that resolves through an alias still works, but the reader
+        // lands on a redirect.  Point the link at the published URL instead.
+        if (!published.has(wanted) && aliasMap.has(wanted)) {
+          redirected.push({ file: rel(file), line: i + 1, kind, target, canonical: resolved })
+        }
+        // Hugo rewrites Markdown links that point at a content path, but never
+        // rewrites raw-HTML href attributes — so for HTML only a published URL
+        // or an alias actually works.
+        const direct = published.has(wanted) || aliasMap.has(wanted)
+        if (!FIX && !direct && kind === 'html') {
+          broken.push({ file: rel(file), line: i + 1, kind, target })
+          return target
+        }
+        if (resolved !== target) rewritten++
+        return resolved
+      }
+
+      // A relative link: resolve it, but leave it relative — the site has no
+      // section slug, so the content path and the published URL agree.
       const path = target.split('#')[0]
       if (!path) return target
-      // A link to a file (an image, a PDF) is not a page link: Hugo serves it
-      // from the static tree, and there is no content page to resolve it to.
       if (/\.[a-z0-9]{2,5}$/i.test(path)) return target
-      const resolved = canonical(target)
+      const resolved = canonicalRelative(target, file, kind)
       if (!resolved) {
         broken.push({ file: rel(file), line: i + 1, kind, target })
         return target
       }
-      const wanted = normalise(path)
-      // A link that resolves through an alias still works, but the reader
-      // lands on a redirect.  Point the link at the published URL instead.
-      if (!published.has(wanted) && aliasMap.has(wanted)) {
-        redirected.push({ file: rel(file), line: i + 1, kind, target, canonical: resolved })
-      }
-      // Hugo rewrites Markdown links that point at a content path, but never
-      // rewrites raw-HTML href attributes — so for HTML only a published URL
-      // or an alias actually works.
-      const direct = published.has(wanted) || aliasMap.has(wanted)
-      if (!FIX && !direct && kind === 'html') {
-        broken.push({ file: rel(file), line: i + 1, kind, target })
-        return target
-      }
-      if (resolved !== target) rewritten++
-      return resolved
+      return target
     }
 
     line = line.replace(MD_LINK, (match, target, title) => '](' + handle(target, 'md') + (title ?? '') + ')')

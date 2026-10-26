@@ -256,5 +256,5 @@ Most admin operations dispatch through dedicated services (`adminService`, `docu
 - [State Management](/docs/frontend/state-management-frontend/) — non-namespaced `auth` module that owns `currentUser.roles`.
 - [Backend API Contracts](/docs/reference/api-contracts/) — admin REST surface.
 - [Observability](/docs/observe/) — Logs tab and Query Inspector both read from VictoriaLogs / VictoriaTraces.
-- [Knowledge Base: Ingestion](/docs/knowledge-base/ingestion/) — Documents tab and the dataprep status mapping.
+- [Knowledge Base: Document Lifecycle](/docs/knowledge-base/document-lifecycle/) — Documents tab and the dataprep status mapping.
 - [Knowledge Base: Labelling Taxonomy](/docs/knowledge-base/labelling-taxonomy/) — Knowledge Hierarchy tab shapes the chat context filter.

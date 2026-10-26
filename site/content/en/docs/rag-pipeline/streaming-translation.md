@@ -300,7 +300,7 @@ skipped once the streaming translation failed.
   temperature settings that affect English-stream quality.
 - [Frontend → Chat UX](/docs/frontend/chat-ux/) — how the browser
   injects `context.language` from `currentLocale`.
-- [Architecture → RAG pipeline](/docs/architecture/architecture/) — the
+- [RAG pipeline → Pipeline architecture](/docs/rag-pipeline/pipeline/) — the
   end-to-end flow including translation.
 - [Translation service reference](/docs/reference/api-contracts/#9-translation-routes-apitranslate)
   — the `POST /api/translate` endpoint used for the post-stream fallback.

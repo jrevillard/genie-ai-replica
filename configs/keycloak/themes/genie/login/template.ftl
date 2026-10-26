@@ -24,8 +24,7 @@
 
 <#--
   GENIE.AI login template, based on the upstream keycloak.v2 login template.
-
-  Differences from upstream:
+  The differences from upstream, among others:
     - the brand header carries the theme's artwork instead of the realm's
       display name; the realm's name is in the page title instead;
     - the body carries the kc-theme-genie marker, which scopes the ground
@@ -35,6 +34,10 @@
       Keycloak 26.7 introduced for themes that declare resources with an
       integrity or a crossorigin attribute. This theme declares plain
       resource paths.
+
+  Keep the template in step with the upstream one when Keycloak is
+  upgraded: a form or an escape the upstream template gains does not
+  appear here by itself.
 -->
 <#macro registrationLayout bodyClass="" displayInfo=false displayMessage=true displayRequiredFields=false>
 <!DOCTYPE html>
@@ -72,7 +75,9 @@
     </script>
     <#if darkMode>
       <script type="module" async blocking="render">
-          const DARK_MODE_CLASS = "${properties.kcDarkModeClass}";
+          <#outputformat "JavaScript">
+          const DARK_MODE_CLASS = ${properties.kcDarkModeClass?c};
+          </#outputformat>
           const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
 
           updateDarkMode(mediaQuery.matches);
@@ -102,7 +107,7 @@
     <script type="module" src="${url.resourcesPath}/js/passwordVisibility.js"></script>
     <script type="module">
         <#outputformat "JavaScript">
-        import { startSessionPolling } from "${url.resourcesPath}/js/authChecker.js";
+        import { startSessionPolling } from ${(url.resourcesPath + "/js/authChecker.js")?c};
 
         startSessionPolling(
             ${url.ssoLoginInOtherTabsUrl?c}
@@ -135,7 +140,7 @@
     <#if authenticationSession??>
         <script type="module">
              <#outputformat "JavaScript">
-            import { checkAuthSession } from "${url.resourcesPath}/js/authChecker.js";
+            import { checkAuthSession } from ${(url.resourcesPath + "/js/authChecker.js")?c};
 
             checkAuthSession(
                 ${authenticationSession.authSessionIdHash?c}
@@ -266,6 +271,16 @@
               <a id="try-another-way" href="javascript:document.forms['kc-select-try-another-way-form'].requestSubmit()"
                   class="${properties.kcButtonSecondaryClass} ${properties.kcButtonBlockClass} ${properties.kcMarginTopClass}">
                     ${msg("doTryAnotherWay")}
+              </a>
+          </form>
+        </#if>
+
+        <#if switchOrganizationEnabled?? && switchOrganizationEnabled>
+          <form id="kc-switch-organization-form" action="${url.loginAction}" method="post" novalidate="novalidate">
+              <input type="hidden" name="switchOrganization" value="true"/>
+              <a id="switch-organization" href="javascript:document.forms['kc-switch-organization-form'].requestSubmit()"
+                  class="${properties.kcButtonSecondaryClass} ${properties.kcButtonBlockClass} ${properties.kcMarginTopClass}">
+                    ${msg("doSwitchOrganization")}
               </a>
           </form>
         </#if>

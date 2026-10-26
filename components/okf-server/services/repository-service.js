@@ -625,7 +625,7 @@ async function update(repo_id, patch, actor) {
     // SERVING MAINTENANCE (1-8g-q, David 2026-10-11: "I see it as a
     // maintenance operation, similar to indexing a database"): a serving
     // repo accepts HEAD/METADATA patches — `frontmatter`, the tag-set the
-    // vectorized head is built from; the Routing Lab + advisor exist to
+    // vectorized head is built from; the Testing Lab + advisor exist to
     // tune exactly this, and the old blanket lock (2026-08-30) froze the
     // whole editor on every ingested repo, making the tuning loop
     // read-only for the only repos that are actually serving. Still

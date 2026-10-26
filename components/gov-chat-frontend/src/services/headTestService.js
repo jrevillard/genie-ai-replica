@@ -1,6 +1,5 @@
 /**
- * headTestService — Story 1-8 (2026-10-08): the OKF Head Tester / Routing
- * Lab client. Thin wrapper over the okf-server endpoints:
+ * headTestService — Story 1-8 (2026-10-08): the OKF Testing Lab client. Thin wrapper over the okf-server endpoints:
  *
  *   POST /okf/repos/:id/head/rebuild            — re-run the vectorized head
  *   POST /okf/repos/:id/routing-test            — two-leg single-query test

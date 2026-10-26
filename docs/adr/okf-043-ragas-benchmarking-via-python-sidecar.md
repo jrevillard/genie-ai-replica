@@ -1,4 +1,4 @@
-# ADR okf-043: Run RAGAS benchmarking in a Python sidecar orchestrated by the OKF Lab
+# ADR okf-043: Run RAGAS benchmarking in a Python sidecar orchestrated by the Testing Lab
 
 **Status**: Accepted (David directive, 2026-10-17 — spec `okf-ragas-benchmarking`)
 **Date**: 2026-10-17
@@ -7,7 +7,7 @@
 
 ## Context
 
-The Routing Lab (Story 1-8 series) proves *routing* — which repository should answer — via
+The Testing Lab (Story 1-8 series) proves *routing* — which repository should answer — via
 `head-test-service`/`head-suite-service` in Node.js, replaying retrieval directly against
 ArangoDB/TEI/rerank and never calling chatqna over HTTP. Jerome's `tests/rag-benchmarks`
 harness proves *answer quality* via RAGAS (faithfulness, context_precision, context_recall,

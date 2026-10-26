@@ -29,9 +29,9 @@
  *   R9  no self-loops and no dangling targets per check-okf-repo.js's rules
  *
  * Usage (from the build tree, which holds .env):
- *   node scripts/okf-routing-lab/smoke-1-8g-p.js <repo_id> [--write]
+ *   node scripts/okf-testing-lab/smoke-1-8g-p.js <repo_id> [--write]
  * or from inside the network (no .env in the container — pass what it needs):
- *   docker cp scripts/okf-routing-lab/smoke-1-8g-p.js main-backend-1:/tmp/
+ *   docker cp scripts/okf-testing-lab/smoke-1-8g-p.js main-backend-1:/tmp/
  *   docker exec -e SMOKE_API=http://nginx:80 -e SMOKE_AUTH=http://keycloak:8080 \
  *     -e KEYCLOAK_ADMIN_PASSWORD=... main-backend-1 \
  *     node /tmp/smoke-1-8g-p.js <repo_id> [--write]

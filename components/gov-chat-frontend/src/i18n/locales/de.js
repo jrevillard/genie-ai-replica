@@ -1512,8 +1512,8 @@ export default {
       groupDataPrep: 'Data-Prep-Pipeline',
       groupInference: 'Inferenz-Pipeline',
       mockNote: 'geplant — noch nicht konfigurierbar',
-      svcAnswers: 'Benchmark-Antworten (statt dem Deployment-Chat)',
-      svcAnswersShort: 'Benchmark-Antworten',
+      svcAnswers: 'Benchmark-Antworten — nur Offline-Replay (das Lab antwortet über den Deployment-Chat)',
+      svcAnswersShort: 'Benchmark-Antworten (nur offline)',
       mockContextual: 'Contextual Retrieval (Dokumentkontext)',
       mockChunkLabeling: 'Chunk-Labeling',
       mockGraphExtraction: 'Wissensgraph-Extraktion',
@@ -1598,7 +1598,7 @@ export default {
       version: 'v{n}',
       versions: 'Versionen',
       deleteLabel: 'Löschen',
-      headTest: 'Routing Lab'
+      testingLab: 'Testing Lab'
     },
     logs: {
       labeled: 'mit Label: {n}',
@@ -1907,7 +1907,7 @@ export default {
         logs: 'Protokolle',
         rename: 'Umbenennen',
         versions: 'Versionen',
-        headTest: 'Head Test'
+        testingLab: 'Testing Lab'
       },
       delete: {
         body: 'Dies entfernt das Repository, seine Konzepte, indexierten Inhalte, Graphen und Bundle-Artefakte dauerhaft. Dieser Vorgang kann nicht rückgängig gemacht werden.',
@@ -2901,9 +2901,9 @@ export default {
         keyword: 'Keyword'
       }
     },
-    headTest: {
-      title: 'Routing Lab — head test',
-      cta: 'Routing Lab',
+    testingLab: {
+      title: 'Testing Lab',
+      cta: 'Testing Lab',
       badge: {
         present: 'head ready',
         stale: 'head stale',
@@ -3071,7 +3071,7 @@ export default {
         tagsetTip: 'Sperr-Tags dieses Laufs',
         savedTitle: 'Gespeicherte Suiten',
         savedTip:
-          'Jede erstellte oder importierte Suite wird hier gespeichert, je Repository. Zwei Arten teilen sich diese Liste: Head-Suiten (aus Tags und Frontmatter abgeleitete Fragensätze, mit Positiv/Negativ-Zählern) und RAGAS-Benchmark-Suiten (Fragensätze mit erwarteten Antworten, mit RAGAS-Badge und Anzahl der Einträge). Laden öffnet eine Head-Suite im Tab Head-Test und eine RAGAS-Suite im Tab RAGAS-Benchmarks, wo sie gegen den Live-Korpus ausgeführt und bewertet werden kann. Löschen entfernt die Suite endgültig; Umbenennen erfolgt direkt im Namen.',
+          'Jede erstellte oder importierte Suite wird hier gespeichert, je Repository. Zwei Arten teilen sich diese Liste: Head-Suiten (aus Tags und Frontmatter abgeleitete Fragensätze, mit Positiv/Negativ-Zählern) und RAGAS-Benchmark-Suiten (Fragensätze mit erwarteten Antworten, mit RAGAS-Badge und Anzahl der Einträge). Laden zeigt eine Head-Suite in diesem Tab und eine RAGAS-Suite im Tab RAGAS-Benchmarks, wo sie gegen den Live-Korpus ausgeführt und bewertet werden kann. Löschen entfernt die Suite endgültig; Umbenennen erfolgt direkt im Namen.',
         load: 'Laden',
         flipTip: 'Wechseln zwischen soll-selektieren / nicht-selektieren',
         deleteTip: 'Diese Zeile aus der Suite entfernen',
@@ -3304,7 +3304,7 @@ export default {
             title: 'Die Modelle und was zu erwarten ist',
             intro:
               'Drei verschiedene Modelle sind beteiligt, und sie sind nicht austauschbar: das Antwortmodell, das Judge-Modell und das Embedding-Modell. Sie verschieben den Score aus völlig unterschiedlichen Gründen.',
-            d1: 'Das Antwortmodell ist das getestete. Abruf und Antworten werden im OKF-Server gegen dieselben Collections und denselben Reranker wiederholt, den auch der Assistent nutzt; ein Wechsel ändert also die Antwort, nicht die Messvorrichtung.',
+            d1: 'Das Antwortmodell ist das getestete — aber im Lab kommen die Antworten vom DEPLOYMENT-Chatmodell, über die deployte Pipeline: ein Wechsel des Chatmodells im Deployment ändert also die Antwort. Der Offline-Replay-Zweig (Abruf und Antworten, im OKF-Server nachgespielt) ist für whatif-Läufe gedacht und lässt sich heute nicht aus dem Lab starten, die Einstellung „Benchmark-Antworten“ ändert also keinen Benchmark, den Sie hier ausführen können.',
             d2: 'Das Judge-Modell muss stark und stabil sein. Es bewertet anhand der Referenzen; ein schwaches Judge-Modell drückt daher alle Metriken gleichzeitig nach unten, und der Lauf sieht trotzdem vollständig aus. Judge-Antworten werden je Judge-Identität zwischengespeichert — ein Wechsel des Judge-Modells oder des Modells macht diesen Cache ungültig, und jede Zeile wird neu bewertet.',
             d3: 'Das Embedding-Modell gehört zur Messung des Abrufs. Wird es gewechselt, verschieben sich context precision und context recall, faithfulness üblicherweise nicht. Diese Asymmetrie ist ein Signal darüber, wo die Änderung wirkt, kein Rauschen.',
             d4: 'Das Modell mit dem Lauf festhalten. Jeder Lauf speichert, welche Konfiguration und welches Modell die Antworten und die Scores erzeugt hat; zwei Läufe sind nur vergleichbar, wenn diese übereinstimmen.',
@@ -3318,10 +3318,10 @@ export default {
             title: 'Die Ergebnisse lesen',
             intro:
               'Jede RAGAS-Metrik misst etwas anderes, und eine davon läuft umgekehrt. Jede Zahl ist danach zu lesen, was sie tatsächlich misst, bevor darauf gehandelt wird.',
-            d1: 'Zuerst das Banner zum ungültigen Lauf lesen. Ein Lauf, dessen Antworten fehlschlugen oder dessen Judge nur einen Teil der Suite bewertet hat, ist keine Messung — die darunter stehenden Mittelwerte decken nur die bewerteten Zeilen ab.',
+            d1: 'Zuerst das Banner zum ungültigen Lauf lesen. Ein Lauf, dessen Antworten fehlschlugen oder in dem keine Metrik alle Zeilen im Geltungsbereich abgedeckt hat, ist keine Messung — die darunter stehenden Mittelwerte decken nur die bewerteten Zeilen ab.',
             d2: 'Die Richtung jeder Metrik prüfen. Die meisten sind höher-ist-besser. Die Ausnahme ist noise sensitivity: niedriger ist besser — ein Lauf, der dabei schlecht abschneidet, scheitert also in die gute Richtung.',
             d3: 'Die fehlgeschlagenen Zeilen lesen, nicht nur den Mittelwert. Eine defekte Frage unter vierzig verschiebt den Mittelwert stärker als die Änderung, die gemessen werden sollte.',
-            d4: 'Nutzen Sie Explain failures, bevor Sie etwas ändern. Das Werkzeug schreibt jeder fehlgeschlagenen Zeile eine Stufe zu, die am Korpus belegt ist — retrieved, reranker, vector-recall, corpus, judge oder answer — und zeigt, wo der Passage verloren ging und auf welchem Rang er gelandet wäre. Ein Corpus-Votum bedeutet, dass die erwartete Passage gar nicht im Korpus ist: Diese Frage ist unfair, sie misst den Benchmark statt des Assistenten, und sie wird als solche markiert, damit Sie den Eintrag neu erzeugen, statt Inhalt zu schreiben, den es bereits gibt. Die Vorschläge sind abgesichert: das Werkzeug schlägt vor, Sie entscheiden.',
+            d4: 'Nutzen Sie Explain failures, bevor Sie etwas ändern. Das Werkzeug schreibt jeder fehlgeschlagenen Zeile eine Stufe zu, die am Korpus belegt ist — retrieved, reranker, vector-recall, corpus, judge, answer oder unmeasured — und zeigt, wo der Passage verloren ging und auf welchem Rang er gelandet wäre. Ein Corpus-Votum bedeutet, dass die erwartete Passage gar nicht im Korpus ist: Diese Frage ist unfair, sie misst den Benchmark statt des Assistenten, und sie wird als solche markiert, damit Sie den Eintrag neu erzeugen, statt Inhalt zu schreiben, den es bereits gibt. Die Vorschläge sind abgesichert: das Werkzeug schlägt vor, Sie entscheiden.',
             x1: 'Mittelwerte über verschiedene Metriksätze, verschiedene Judge-Modelle oder eine bearbeitete Suite hinweg nicht vergleichen. Keines davon ist dieselbe Messung, und der sichtbare Unterschied ist keine Änderung der Qualität.',
             x2: 'Den Abruf nicht gegen eine einzelne Zahl optimieren. context precision und context recall stehen gegeneinander; eine Änderung, die den einen hebt, kostet normalerweise den anderen, und genau dieser Zielkonflikt ist meist der interessante Teil.',
             x3: 'Einen null-Score nicht als niedrigen Score behandeln. Wenn alle Wiederholungsversuche aufgebraucht sind, entsteht ein null-Wert, der vom Mittelwert ausgenommen wird; kein Score bedeutet also keine Messung — die Zeile erneut ausführen, statt das Schlimmste anzunehmen.',
@@ -3335,7 +3335,7 @@ export default {
                 effect: 'Was damit zu tun ist'
               },
               mean: {
-                element: 'Der Wert',
+                element: 'Der Mittelwert',
                 meaning:
                   'Der Mittelwert dieser Metrik über die Zeilen, die der Judge bewertet hat. Er ist kein Wert für die gesamte Suite.',
                 effect:
@@ -3344,19 +3344,19 @@ export default {
               coverage: {
                 element: 'Der Bruch (55/100)',
                 meaning:
-                  'Der Judge hat diese Metrik an 55 der 100 Zeilen der Suite gemessen. Der Mittelwert deckt nur diese 55 Zeilen ab; die übrigen 45 bleiben draußen — sie werden nie als null gezählt.',
+                  'Der Judge hat diese Metrik an 55 der 100 Zeilen im Geltungsbereich der Suite gemessen. Der Mittelwert deckt nur diese 55 Zeilen ab; die übrigen 45 bleiben draußen — sie werden nie als null gezählt. Kontrollen außerhalb des Geltungsbereichs sind nicht Teil der 100.',
                 effect:
                   'Ein kleiner Bruch heißt, dass die Zahl wenig über die Suite aussagt. Prüfen Sie die Metrik, die Sie interessiert, nicht den Lauf als Ganzes.'
               },
               banner: {
                 element: 'Das Banner für einen ungültigen Lauf',
                 meaning:
-                  'Der Lauf hatte fehlgeschlagene Antworten, oder keine Metrik hat alle Zeilen abgedeckt. Seine Abdeckungszahl ist die am besten abgedeckte Metrik, also löst eine Metrik bei 21/100 es nicht aus.',
+                  'Der Lauf hatte fehlgeschlagene Antworten, oder keine Metrik hat alle Zeilen im Geltungsbereich abgedeckt. Seine Abdeckungszahl ist die am besten abgedeckte Metrik, also löst eine Metrik bei 21/100 es nicht aus.',
                 effect:
                   'Lesen Sie die Bruchwerte je Metrik selbst. Das Banner ist eine Untergrenze, keine Zusammenfassung.'
               },
               runName: {
-                element: 'Der Laufname',
+                element: 'Der Laufname und sein Judge',
                 meaning:
                   'Der Judge, der diesen Lauf bewertet hat, und die Konfiguration, aus der er stammt. Der Schlüssel darunter ist für den Support.',
                 effect:
@@ -3365,9 +3365,9 @@ export default {
               rescore: {
                 element: 'Neu bewerten',
                 meaning:
-                  'Bewertet dieselben Antworten mit einem anderen Judge. Die Antworten und die Kontexte werden wörtlich übernommen — nichts wird neu geholt oder geschrieben.',
+                  'Bewertet dieselben Antworten mit dem Judge, den Sie wählen — die Antworten und die Kontexte werden wörtlich übernommen, nichts wird neu geholt oder geschrieben. Der Dialog füllt den Judge des Ausgangslaufs vor, die erneute Bewertung ist also standardmäßig eine STABILITÄTSprüfung (ist dieser Judge reproduzierbar?), nicht eine zweite Meinung.',
                 effect:
-                  'Nutzen Sie das, um zwei Judges auf dieselben Zeilen zu setzen. Das ist weit günstiger als ein neuer Lauf und so testet man einen Judge-Wechsel.'
+                  'Um herauszufinden, ob ein Fehlschlag auf die Strenge des Judges oder auf einen echten Fehlschlag zurückgeht, bewerten Sie mit einem ANDEREN Judge neu. Zwei Judges auf denselben Zeilen kosten weit weniger als ein neuer Lauf, und so testet man einen Judge-Wechsel.'
               },
               status: {
                 element: 'Der Status',
@@ -3379,16 +3379,16 @@ export default {
           errors: {
             title: 'Fehler – und was sie mit dem Ergebnis machen',
             intro:
-              'Ein Benchmark misst nie jede Zeile jeder Testsuite: Eine Zeile kann in der Kette scheitern, der Assistent kann eine Antwort verweigern, der Judge kann eine Metrik nicht messen, und eine Metrik kann unter ihre Schwelle fallen. Nichts davon ist eine Null und nichts davon wird verborgen. Dieses Kapitel ist die Karte — was jeder Zustand bedeutet und was er mit der Zahl macht, die Sie lesen. Eine Sache, die Sie vorher wissen sollten: Eine Zeile, die KEINE ANTWORT produziert hat, wird dem Judge nie übergeben — es gibt nichts, womit sie zu bewerten wäre — sie bleibt also aus den Mittelwerten heraus und wird nie als Null gezählt. Eine Zeile, die ABGELEHNT hat, hat immer noch eine Antwort und wird daher bewertet: Da nichts sie stützt, kommen ihre Kontextmetriken mit 0 zurück, und diese Nullen SIND in den Mittelwerten enthalten. Deshalb ist ein Lauf mit einer fehlgeschlagenen Zeile als ungültig markiert und nicht als verlässlich genommen.',
+              'Ein Benchmark misst nie jede Zeile jeder Testsuite: Eine Zeile kann in der Kette scheitern, der Assistent kann eine Antwort verweigern, der Judge kann eine Metrik nicht messen, und eine Metrik kann unter ihre Schwelle fallen. Nichts davon ist eine Null und nichts davon wird verborgen. Dieses Kapitel ist die Karte — was jeder Zustand bedeutet und was er mit der Zahl macht, die Sie lesen. Eine Sache, die Sie vorher wissen sollten: Eine Zeile, die KEINE ANTWORT produziert hat, wird dem Judge nie übergeben — es gibt nichts, womit sie zu bewerten wäre — sie bleibt also aus den Mittelwerten heraus, wird nie als Null gezählt und senkt die gemessene Abdeckung. Eine VERWEIGERUNG ist nicht eine Sache, sondern zwei. Eine Verweigerung, die MIT einer Antwort kam, wurde bewertet: Da nichts sie stützt, kamen ihre Kontextmetriken mit 0 zurück, und diese Nullen SIND in den Mittelwerten enthalten. Eine Verweigerung, die OHNE Antwort kam, wurde überhaupt nicht bewertet: Sie trägt gar keinen Score, bleibt aus den Mittelwerten heraus und senkt die gemessene Abdeckung genauso wie eine fehlgeschlagene Zeile. Deshalb ist ein Lauf mit einer fehlgeschlagenen oder einer nicht bewerteten Zeile als ungültig markiert und nicht als verlässlich genommen.',
             d1: 'Lesen Sie zuerst das Banner zum ungültigen Lauf, dann die Mittelwerte. Es bedeutet, dass die darunter stehenden Werte keine Messung des Systems sind, und es nennt die Ursache: fehlgeschlagene Antworten oder ein Judge, der nur einen Teil der Suite gemessen hat. Beheben Sie die Ursache und starten Sie neu.',
             d2: 'Prüfen Sie die Abdeckung jeder Metrik, bevor Sie zwei Läufe vergleichen. Das Panel zeigt, wie viele Zeilen der Judge für diese Metrik tatsächlich bewertet hat; ein Mittelwert über einen Bruchteil der Suite ist nicht die Punktzahl der Suite und nicht mit einem Lauf vergleichbar, der alle gemessen hat.',
             d3: 'Beheben Sie eine fehlgeschlagene Zeile an ihrer Ursache – der Retrieval-Kette, dem vorgeschalteten Dienst, dem Zeitlimit – und starten Sie dann neu. Die Suite so zu ändern, dass die immer wieder fehlschlagende Zeile verschwindet, verdeckt genau den Fehler, den der Benchmark finden soll.',
-            d4: 'Betrachten Sie eine Auslassung als Ergebnis, nicht als Fehler. Sie besagt, dass der Assistent meinte, der Korpus beantworte die Frage nicht – eine Eigenschaft des Korpus und der Frage. Lesen Sie sie als die Abdeckung dessen, was Ihre Nutzer vorfinden werden.',
+            d4: 'Betrachten Sie eine Verweigerung als Ergebnis, nicht als Fehler. Eine Verweigerung, die mit einer Antwort kam, besagt, dass der Assistent meinte, der Korpus beantworte die Frage nicht – eine Eigenschaft des Korpus und der Frage. Lesen Sie sie als die Abdeckung dessen, was Ihre Nutzer vorfinden werden.',
             x1: 'Lesen Sie eine nicht gemessene Metrik nicht als Null. Ein Judge, dessen Antwort die Metrik nicht auswerten konnte, lässt diese Metrik für diese Zeile null; null wird aus dem Mittelwert ausgeschlossen und nie als Misserfolg hineingerechnet.',
-            x2: 'Zählen Sie eine Auslassung weder als Fehler noch als Erfolg. Sie steht in einer eigenen Spalte, gerade weil sie weder das eine noch das andere ist.',
+            x2: 'Zählen Sie eine Verweigerung weder als Fehler noch als Erfolg. Sie steht in einer eigenen Spalte, gerade weil sie weder das eine noch das andere ist – und eine Verweigerung, die ohne Antwort kam, wurde überhaupt nicht bewertet, also trägt sie erst recht keinen Nullwert bei.',
             x3: 'Veröffentlichen Sie keine Zahl aus einem Lauf, den das Panel als ungültig markiert hat, und mitteln Sie auch nicht zwei Läufe, um das zu verdecken. Ein teilweise gemessener Lauf hat keine Zahl zu veröffentlichen; er hat einen Lauf, der repariert werden muss.',
             expect:
-              'Ein sauberer Lauf hat keine fehlgeschlagenen Zeilen und jede Metrik auf jeder Zeile bewertet – nur in diesem Zustand sind die Mittelwerte der Benchmark. Alles andere ist ein Lauf zum Reparieren, kein Ergebnis zum Handeln.',
+              'Ein sauberer Lauf hat keine fehlgeschlagenen Zeilen, keine nicht bewerteten Zeilen und jede Metrik auf jeder Zeile im Geltungsbereich bewertet – nur in diesem Zustand sind die Mittelwerte der Benchmark. Alles andere ist ein Lauf zum Reparieren, kein Ergebnis zum Handeln.',
             table: {
               title: 'Wie jeder Status auf das Ergebnis wirkt',
               col: {
@@ -3406,16 +3406,23 @@ export default {
               abstained: {
                 state: 'Auslassung',
                 meaning:
-                  'Der Assistent hat die Antwort verweigert — chatqna hat es gesagt oder er hatte nichts zu sagen. Die Pipeline ist nicht gescheitert.',
+                  'Der Assistent hat die Antwort verweigert, aber trotzdem eine Antwort erzeugt – chatqna hat es gesagt oder er hat sich zurückgehalten. Die Pipeline ist nicht gescheitert.',
                 effect:
-                  'Die Zeile geht trotzdem an den Judge und trägt also zur Bewertung bei — ohne stützenden Kontext liefern die Kontextmetriken 0, und diese Nullen WERDEN in den Mittelwerten mitgezählt. Sie zählt in ihrer eigenen Spalte, nie in der Fehlerspalte, und macht den Lauf nicht ungültig. Das Panel beschriftet die Zeile als „abstained“ statt als bestanden oder gescheitert.'
+                  'Die Zeile IST an den Judge übergeben worden, trägt also zur Bewertung bei – ohne stützenden Kontext liefern die Kontextmetriken 0, und diese Nullen WERDEN in den Mittelwerten mitgezählt. Sie zählt in ihrer eigenen Spalte, nie in der Fehlerspalte, und macht den Lauf für sich allein nicht ungültig. Das Panel beschriftet die Zeile als „Auslassung“ statt als bestanden oder gescheitert. Eine Verweigerung, die KEINE Antwort produziert hat, ist ein anderer Zustand – siehe „verweigert, nicht bewertet“.'
+              },
+              declinedUnjudged: {
+                state: 'verweigert, nicht bewertet',
+                meaning:
+                  'Der Assistent hat die Antwort verweigert und nichts gesagt – es wurde keine Antwort erzeugt. Die Pipeline ist nicht gescheitert.',
+                effect:
+                  'Die Zeile wurde dem Judge NICHT übergeben – sie hat keine Antwort, es gibt also nichts, womit sie zu bewerten wäre. Sie trägt gar keinen Score: Sie bleibt aus den Mittelwerten heraus (nie als Null gezählt), sie senkt die gemessene Abdeckung, und sie kann den Lauf als ungültig markieren. Das Panel beschriftet sie als „verweigert — nicht bewertet“, damit sie von einer bewerteten Verweigerung zu unterscheiden ist.'
               },
               unmeasured: {
                 state: 'nicht gemessen',
                 meaning:
                   'Der Judge hat eine Antwort erzeugt, die diese Metrik nicht auswerten konnte – etwa eine Tatsachenbehauptung, die er nicht prüfen konnte.',
                 effect:
-                  'Diese Metrik ist für diese Zeile null: aus dem Mittelwert ausgeschlossen, nie eine Null. Das Panel zeigt, wie viele Zeilen der Judge tatsächlich bewertet hat, und eine teilweise Abdeckung macht den Lauf ungültig.'
+                  'Diese Metrik ist für diese Zeile null: aus dem Mittelwert ausgeschlossen, nie eine Null. Das Panel zeigt, wie viele Zeilen der Judge dafür tatsächlich bewertet hat. Eine Metrik bei 21/100 macht einen Lauf NICHT ungültig – das Banner erscheint erst, wenn KEINE Metrik alle Zeilen im Geltungsbereich abgedeckt hat, lesen Sie die Bruchwerte je Metrik also selbst.'
               },
               belowThreshold: {
                 state: 'unter der Schwelle',
@@ -3427,7 +3434,8 @@ export default {
                 state: 'außerhalb des Geltungsbereichs',
                 meaning:
                   'Die Frage ist absichtlich nicht beantwortbar – als Kontrast in der Suite behalten, niemals als Prüfung.',
-                effect: 'Nie als Misserfolg gezählt. Sie ist eine Kontrolle, kein Ergebnis.'
+                effect:
+                  'Nie als Misserfolg gezählt und nie in einem Mittelwert: Sie ist eine Kontrolle, kein Ergebnis. Das Panel stapelt sie nicht in die Ergebnisleiste, und ihr Wert geht weder in einen Durchschnitt noch in einen Abdeckungsanteil ein.'
               }
             }
           }
@@ -3438,13 +3446,14 @@ export default {
         title: 'Vergleichstest-Suite generieren',
         hint: 'Erzeugt Fragen mit erwarteten Ausgaben aus den ausgewählten Repositories — eines oder mehrere, das aktuelle Repository allein oder mit verwandten Repositories.',
         size: 'Fragen',
-        config: 'Bewertungsmodell-Konfiguration',
-        default: 'Deployment-Standard (aktive Konfiguration / env)',
-        defaultNamed: 'Deployment-Standard — {name}{model}',
+        config: 'Generierungsmodell-Konfiguration',
+        default: 'Deployment-Standard (.env)',
+        defaultNamed: 'Aktive Konfiguration — {name}{model}',
         effective: 'Bewertung mit {name}{model}',
+        effectiveGenerating: 'Generierung mit {name}{model}',
         envDefault: 'Umgebungs-Standard',
-        envJudge: 'Systemstandard (Umgebung){model}',
-        envJudgePlain: 'Systemstandard (Umgebung)',
+        envJudge: 'Deployment-Standard (.env){model}',
+        envJudgePlain: 'Deployment-Standard (.env)',
         model: 'Modell',
         modelPick: 'Standard der Konfiguration',
         modelDefault: 'Standard der Konfiguration',
@@ -3487,10 +3496,12 @@ export default {
       run: {
         button: 'Vergleichstest ausführen',
         working: 'Wird ausgeführt…',
+        judge: 'Judge-Modell-Konfiguration',
         retrieved: 'abgerufen',
         pass: 'bestanden',
         fail: 'fehlgeschlagen',
         abstained: 'abgelehnt',
+        declinedUnjudged: 'verweigert — nicht bewertet',
         rowError: 'Fehler',
         cancel: 'Lauf abbrechen',
         phase: {
@@ -3518,7 +3529,7 @@ export default {
           'Jede Linie ist der Suite-Mittelwert einer RAGAS-Metrik pro Lauf, ältester zuerst — das ␘ an jedem Tacho erklärt die Metrik. Bewertete Antworten werden gecacht; gleiche Wiederholungen unterscheiden sich nur, wo Antworten oder Abruf sich änderten.',
         statusTitle: 'Ergebnisse pro Frage',
         statusNote:
-          'Jede Suite-Frage dieses Laufs, gestapelt nach Ausgang: bestanden, durchgefallen (eine gewählte Metrik unter ihrer Schwelle), enthalten (Antwort verweigert) oder Fehler (Pipeline fehlgeschlagen).',
+          'Jede Frage im Geltungsbereich dieses Laufs, gestapelt nach Ausgang: beantwortet, durchgefallen (eine gewählte Metrik unter ihrer Schwelle), enthalten (der Antwortende hat verweigert) oder Fehler (die Pipeline ist an dieser Zeile gescheitert). Kontrollen außerhalb des Geltungsbereichs werden nicht gezählt — sie sind eine Kontrolle, kein Ergebnis.',
         allPass: 'alle bestanden',
         invalidTitle: 'Dieser Lauf ist keine gültige Messung',
         invalidPill: 'ungültiger Lauf',
@@ -3531,6 +3542,9 @@ export default {
         state: 'Status',
         error: 'Fehler',
         abstained: 'enthalten',
+        declinedUnjudged: 'verweigert — nicht bewertet',
+        declinedUnjudgedTitle:
+          'Der Antwortende hat verweigert und nichts gesagt, daher wurde diese Zeile dem Judge nie übergeben. Sie trägt keinen Score und bleibt aus den Mittelwerten heraus — und sie reduziert die gemessene Abdeckung.',
         answered: 'beantwortet',
         noisy: 'Antwort in Ordnung — Retrieval-Rauschen',
         noisyTitle:
@@ -3567,8 +3581,8 @@ export default {
         judgeUnknown: 'Richter nicht erfasst'
       },
       rescore: {
-        title: 'Mit einem anderen Richter neu bewerten',
-        body: 'Die gespeicherten Antworten werden mit einem anderen Richter neu bewertet – sie werden nicht neu erzeugt. Das Ergebnis ist ein eigener Lauf.',
+        title: 'Mit einem Richter neu bewerten',
+        body: 'Die gespeicherten Antworten werden mit dem Richter neu bewertet, den Sie wählen – sie werden nicht neu erzeugt. Der Dialog füllt den Richter des Ausgangslaufs vor, die Standard-Neuwertung prüft also, ob dieser Richter reproduzierbar ist; wählen Sie einen ANDEREN Richter für eine zweite Meinung zu den Fehlschlägen. Das Ergebnis ist ein eigener Lauf.',
         source: 'Quelllauf',
         judge: 'Richter-Konfiguration',
         confirm: 'Neu bewerten',

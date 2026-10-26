@@ -1060,7 +1060,7 @@ const actions = {
     }
   },
 
-  // ─── Story 1-8 (2026-10-08): Head Tester / Routing Lab ─────────────────────
+  // ─── Story 1-8 (2026-10-08): Testing Lab ─────────────────────
   // All wrap headTestService and return {ok, code?, message?, result?} —
   // the dialog renders err.data.error/message (server envelope) like
   // lifecycleTransition does.
@@ -1486,7 +1486,16 @@ const actions = {
     try {
       ensureServices();
       const started = await ragasService.rescoreRun(repoId, suiteKey, runKey, payload || {});
-      if (!started || !started.run_key) return { ok: true, result: started };
+      // A 202 without a run key means the re-score never started. Reporting
+      // SUCCESS there left the panel showing "done" with nothing running and
+      // no run to cancel — the operator's re-score silently did nothing.
+      if (!started || !started.run_key) {
+        return {
+          ok: false,
+          code: 'RESCORE_NOT_STARTED',
+          message: 'The re-score did not start — the server accepted the request but returned no run to track.'
+        };
+      }
       if (typeof onStarted === 'function') onStarted(started.run_key);
       const POLL_MS = 2000;
       const DEADLINE_MS = 24 * 60 * 60 * 1000;
@@ -1617,7 +1626,15 @@ const actions = {
         if (judge_model) body.judge_model = judge_model;
       }
       const started = await ragasService.runSuite(repoId, suiteKey, body);
-      if (!started || !started.run_key) return { ok: true, result: started };
+      // A 202 without a run key means the run never started — reporting
+      // SUCCESS left the panel showing a finished run that does not exist.
+      if (!started || !started.run_key) {
+        return {
+          ok: false,
+          code: 'RUN_NOT_STARTED',
+          message: 'The run did not start — the server accepted the request but returned no run to track.'
+        };
+      }
       if (typeof onStarted === 'function') onStarted(started.run_key);
       const POLL_MS = 2000;
       // Judge-bound run — the server never times out a live job (see

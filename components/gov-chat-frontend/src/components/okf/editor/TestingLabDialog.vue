@@ -1,5 +1,4 @@
-<!-- HeadTestDialog.vue — Story 1-8 (2026-10-08): the OKF Head Tester /
-  Routing Lab. One dialog, three tabs (David: "test the tagging/head after
+<!-- TestingLabDialog.vue — Story 1-8 (2026-10-08): the OKF Testing Lab. One dialog, three tabs (David: "test the tagging/head after
   publishing and before ingesting, then revert to review, modify, publish,
   test again — cycle until the desired accuracy, THEN ingest"):
     Head    — the stored vectorized head: text as per-field tag chips,
@@ -42,7 +41,7 @@
 <template>
   <DsDialog
     :visible="visible"
-    :title="translate('okf.headTest.title', 'Routing Lab — head test')"
+    :title="translate('okf.testingLab.title', 'Testing Lab')"
     size="auto"
     :actions="dialogActions"
     @close="$emit('close')"
@@ -55,13 +54,13 @@
           {{ repo.lifecycle_state }}
         </DsPill>
         <DsPill v-if="headStatus === 'present'" variant="success">
-          {{ translate('okf.headTest.badge.present', 'head ready') }}
+          {{ translate('okf.testingLab.badge.present', 'head ready') }}
         </DsPill>
         <DsPill v-else-if="headStatus === 'stale'" variant="warning">
-          {{ translate('okf.headTest.badge.stale', 'head stale') }}
+          {{ translate('okf.testingLab.badge.stale', 'head stale') }}
         </DsPill>
         <DsPill v-else variant="danger">
-          {{ translate('okf.headTest.badge.missing', 'no head') }}
+          {{ translate('okf.testingLab.badge.missing', 'no head') }}
         </DsPill>
       </span>
     </p>
@@ -79,19 +78,21 @@
           </div>
           <div class="okf-headtest__head-meta">
             <span
-              >{{ translate('okf.headTest.head.dim', 'Dimensions') }}: <code>{{ head.dim }}</code></span
+              >{{ translate('okf.testingLab.head.dim', 'Dimensions') }}: <code>{{ head.dim }}</code></span
             >
             <span
-              >{{ translate('okf.headTest.head.model', 'Model') }}: <code>{{ head.model || '—' }}</code></span
+              >{{ translate('okf.testingLab.head.model', 'Model') }}: <code>{{ head.model || '—' }}</code></span
             >
             <span
-              >{{ translate('okf.headTest.head.version', 'Head version') }}: <code>{{ head.version }}</code></span
+              >{{ translate('okf.testingLab.head.version', 'Head version') }}: <code>{{ head.version }}</code></span
             >
-            <span>{{ translate('okf.headTest.head.computedAt', 'Computed') }}: {{ shortDate(head.computed_at) }}</span>
+            <span
+              >{{ translate('okf.testingLab.head.computedAt', 'Computed') }}: {{ shortDate(head.computed_at) }}</span
+            >
             <span v-if="headStatus === 'stale'" class="okf-headtest__stale-note">
               {{
                 translate(
-                  'okf.headTest.head.staleNote',
+                  'okf.testingLab.head.staleNote',
                   'Tags changed after this head was built — rebuild before trusting the tests.'
                 )
               }}
@@ -101,26 +102,26 @@
         <p v-else class="okf-headtest__empty-pane">
           {{
             translate(
-              'okf.headTest.head.missingNote',
+              'okf.testingLab.head.missingNote',
               'No vectorized head yet. It is built at publish; if the embed service was unavailable then, rebuild it now from the stored tags.'
             )
           }}
         </p>
         <div v-if="!readOnly" class="okf-headtest__pane-actions">
           <DsButton variant="secondary" small :disabled="busy" @click="onRebuild">
-            {{ translate('okf.headTest.head.rebuild', 'Rebuild head') }}
+            {{ translate('okf.testingLab.head.rebuild', 'Rebuild head') }}
           </DsButton>
           <DsInfoTip
             :text="
               translate(
-                'okf.headTest.head.rebuildTip',
+                'okf.testingLab.head.rebuildTip',
                 'Re-embeds the stored tags into a fresh head vector. One embed call per tag field.'
               )
             "
           />
         </div>
         <DsSpinner v-if="busy === 'rebuild'" size="sm" class="okf-headtest__busy">
-          {{ translate('okf.headTest.head.rebuildBusy', 'Rebuilding — embedding the tag fields…') }}
+          {{ translate('okf.testingLab.head.rebuildBusy', 'Rebuilding — embedding the tag fields…') }}
         </DsSpinner>
         <p v-if="error" class="okf-headtest__error">{{ error }}</p>
       </div>
@@ -131,31 +132,31 @@
           <DsInput
             v-model="query"
             type="text"
-            :placeholder="translate('okf.headTest.test.placeholder', 'e.g. cancer screening guidelines')"
+            :placeholder="translate('okf.testingLab.test.placeholder', 'e.g. cancer screening guidelines')"
             class="okf-headtest__query-input"
             @keyup.enter="onRunTest"
           />
           <DsButton variant="primary" small :disabled="busy !== null || !query.trim()" @click="onRunTest">
-            {{ translate('okf.headTest.test.run', 'Run test') }}
+            {{ translate('okf.testingLab.test.run', 'Run test') }}
           </DsButton>
         </div>
         <label class="okf-headtest__adversarial">
           <input v-model="adversarial" type="checkbox" />
           {{
             translate(
-              'okf.headTest.test.adversarial',
+              'okf.testingLab.test.adversarial',
               'Adversarial — this query should NOT select this repository (a forbidden/adjacent topic)'
             )
           }}
         </label>
 
         <DsSpinner v-if="busy === 'test'" size="sm" class="okf-headtest__busy">
-          {{ translate('okf.headTest.test.running', 'Embedding the query and scoring the heads…') }}
+          {{ translate('okf.testingLab.test.running', 'Embedding the query and scoring the heads…') }}
         </DsSpinner>
 
         <template v-if="lastResult">
           <p class="okf-headtest__embedded">
-            {{ translate('okf.headTest.test.embeddedWith', 'Embedded with') }}:
+            {{ translate('okf.testingLab.test.embeddedWith', 'Embedded with') }}:
             <code>{{ lastResult.embedded_with }}</code>
           </p>
           <div class="okf-headtest__verdict" :class="verdictClass">
@@ -164,11 +165,11 @@
           <table class="okf-headtest__scores">
             <thead>
               <tr>
-                <th>{{ translate('okf.headTest.test.col.repo', 'Repository') }}</th>
-                <th>{{ translate('okf.headTest.test.col.state', 'State') }}</th>
-                <th>{{ translate('okf.headTest.test.col.headScore', 'Head score') }}</th>
-                <th>{{ translate('okf.headTest.test.col.rank', 'Rank') }}</th>
-                <th>{{ translate('okf.headTest.test.col.claimed', 'Claims query') }}</th>
+                <th>{{ translate('okf.testingLab.test.col.repo', 'Repository') }}</th>
+                <th>{{ translate('okf.testingLab.test.col.state', 'State') }}</th>
+                <th>{{ translate('okf.testingLab.test.col.headScore', 'Head score') }}</th>
+                <th>{{ translate('okf.testingLab.test.col.rank', 'Rank') }}</th>
+                <th>{{ translate('okf.testingLab.test.col.claimed', 'Claims query') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -193,11 +194,11 @@
                        when it is suppressed, name the condition that
                        decided (under-test rows carry head_claim). -->
                   <DsPill v-if="row.claimed === true" variant="success">
-                    {{ translate('okf.headTest.test.claimed', 'claims') }}
+                    {{ translate('okf.testingLab.test.claimed', 'claims') }}
                   </DsPill>
                   <template v-else-if="row.claimed === false">
                     <DsPill variant="warning">
-                      {{ translate('okf.headTest.test.suppressed', 'suppressed') }}
+                      {{ translate('okf.testingLab.test.suppressed', 'suppressed') }}
                     </DsPill>
                     <span v-if="row.claim" class="okf-headtest__claim-why">{{ claimLabel(row.claim) }}</span>
                   </template>
@@ -211,7 +212,7 @@
                (centroid clearance). Thresholds come from the response's
                fidelity.knobs so the display never drifts from the config. -->
           <div v-if="gateChecks.length" class="okf-headtest__gate">
-            <span class="okf-headtest__gate-title">{{ translate('okf.headTest.gate.title', 'Gate') }}</span>
+            <span class="okf-headtest__gate-title">{{ translate('okf.testingLab.gate.title', 'Gate') }}</span>
             <span v-for="check in gateChecks" :key="check.key" class="okf-headtest__gate-check">
               <span class="okf-headtest__gate-name">{{ check.name }}</span>
               <code v-if="check.value">{{ check.value }}</code>
@@ -219,10 +220,10 @@
               <DsPill :variant="check.state === 'pass' ? 'success' : check.state === 'fail' ? 'danger' : 'neutral'">
                 {{
                   check.state === 'pass'
-                    ? translate('okf.headTest.gate.pass', 'pass')
+                    ? translate('okf.testingLab.gate.pass', 'pass')
                     : check.state === 'fail'
-                      ? translate('okf.headTest.gate.fail', 'fail')
-                      : translate('okf.headTest.gate.na', 'n/a')
+                      ? translate('okf.testingLab.gate.fail', 'fail')
+                      : translate('okf.testingLab.gate.na', 'n/a')
                 }}
               </DsPill>
             </span>
@@ -232,7 +233,7 @@
                behavior, not a defect; a plain claim needs no guidance. -->
           <div v-if="teachNote" class="okf-headtest__teach" :class="'okf-headtest__teach--' + teachNote.kind">
             <span class="okf-headtest__teach-title">{{
-              translate('okf.headTest.teach.title', 'What this means')
+              translate('okf.testingLab.teach.title', 'What this means')
             }}</span>
             <p class="okf-headtest__teach-text">{{ teachNote.text }}</p>
           </div>
@@ -244,12 +245,12 @@
                (readOnly — no repo mutations from the wizard, D4). -->
           <div v-if="claimTeachable" class="okf-headtest__suggestion">
             <span class="okf-headtest__teach-title">{{
-              translate('okf.headTest.teach.title', 'What this means')
+              translate('okf.testingLab.teach.title', 'What this means')
             }}</span>
             <p class="okf-headtest__teach-text">
               {{
                 translate(
-                  'okf.headTest.teach.claim',
+                  'okf.testingLab.teach.claim',
                   'The head CLAIMS this query — it passed all three gates. If it should NOT route here, ask for forbidden tags that exclude its subject, add them, then rebuild the head.'
                 )
               }}
@@ -262,10 +263,12 @@
                    busy claim used to provide — it still does not block on
                    UNRELATED work. -->
               <DsButton variant="secondary" small :disabled="busy !== null || explainLoading" @click="onExplainClaim">
-                {{ translate('okf.headTest.teach.explain', 'Explain & suggest') }}
+                {{ translate('okf.testingLab.teach.explain', 'Explain & suggest') }}
               </DsButton>
               <DsSpinner v-if="explainLoading" size="sm" class="okf-headtest__busy">
-                {{ translate('okf.headTest.teach.explainBusy', 'Explaining — the model is proposing forbidden tags…') }}
+                {{
+                  translate('okf.testingLab.teach.explainBusy', 'Explaining — the model is proposing forbidden tags…')
+                }}
               </DsSpinner>
             </div>
             <template v-if="explanation && explanation.suggestion">
@@ -276,7 +279,7 @@
                   :variant="isTaught(t) ? 'success' : 'accent'"
                   class="okf-headtest__add-chip"
                   role="button"
-                  :title="translate('okf.headTest.teach.addTag', 'Add to forbidden tags')"
+                  :title="translate('okf.testingLab.teach.addTag', 'Add to forbidden tags')"
                   @click="onTeachTag(t)"
                 >
                   {{ isTaught(t) ? '✓' : '+' }} {{ t }}
@@ -285,7 +288,7 @@
               <p v-else-if="!suggestedRejected.length" class="okf-headtest__teach-text okf-headtest__empty">
                 {{
                   translate(
-                    'okf.headTest.teach.suggestNone',
+                    'okf.testingLab.teach.suggestNone',
                     'No forbidden tag was suggested — review the query against the declared scope manually.'
                   )
                 }}
@@ -298,7 +301,7 @@
                 <p class="okf-headtest__teach-text okf-headtest__empty">
                   {{
                     translate(
-                      'okf.headTest.teach.rejected',
+                      'okf.testingLab.teach.rejected',
                       'Screened out by the guardrail — a forbidden tag must not match this repository’s own subject.'
                     )
                   }}
@@ -320,14 +323,14 @@
                 <p class="okf-headtest__teach-text">
                   {{
                     translate(
-                      'okf.headTest.teach.added',
+                      'okf.testingLab.teach.added',
                       'Added to the forbidden tags — rebuild the head to apply them.'
                     )
                   }}
                 </p>
                 <div class="okf-headtest__pane-actions">
                   <DsButton variant="primary" small :disabled="busy !== null" @click="onRebuildRerun">
-                    {{ translate('okf.headTest.teach.rebuildRerun', 'Rebuild head & re-run') }}
+                    {{ translate('okf.testingLab.teach.rebuildRerun', 'Rebuild head & re-run') }}
                   </DsButton>
                   <DsSpinner
                     v-if="busy === 'save-tag' || busy === 'rebuild-rerun' || busy === 'advisor-apply'"
@@ -349,21 +352,21 @@
             <p v-else-if="explanationLoaded" class="okf-headtest__teach-text okf-headtest__empty" role="status">
               {{
                 translate(
-                  'okf.headTest.teach.explainNone',
+                  'okf.testingLab.teach.explainNone',
                   'The explain ran and proposed no forbidden tags for this query.'
                 )
               }}
             </p>
           </div>
           <p v-if="lastResult.verdict && lastResult.verdict.provenance" class="okf-headtest__provenance">
-            {{ translate('okf.headTest.test.provenance', 'Routing provenance') }}:
+            {{ translate('okf.testingLab.test.provenance', 'Routing provenance') }}:
             <code>{{ lastResult.verdict.provenance }}</code>
           </p>
         </template>
         <p v-else-if="busy !== 'test'" class="okf-headtest__empty-pane">
           {{
             translate(
-              'okf.headTest.test.empty',
+              'okf.testingLab.test.empty',
               'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.'
             )
           }}
@@ -378,10 +381,10 @@
           :class="{ 'okf-headtest__revert--highlight': revertHighlight }"
         >
           <span class="okf-headtest__teach-title">
-            {{ translate('okf.headTest.suites.revertTitle', 'Revert tags') }}
+            {{ translate('okf.testingLab.suites.revertTitle', 'Revert tags') }}
           </span>
           <DsSpinner v-if="historyLoading" size="sm" class="okf-headtest__busy">
-            {{ translate('okf.headTest.suites.revertBusy', 'Loading save history…') }}
+            {{ translate('okf.testingLab.suites.revertBusy', 'Loading save history…') }}
           </DsSpinner>
           <template v-else>
             <ul v-if="revertEntries.length" class="okf-headtest__revert-list">
@@ -390,36 +393,36 @@
                 <span class="okf-headtest__revert-actor">{{ e.actor }}</span>
                 <span v-if="e.forbidden_count !== null" class="okf-headtest__revert-actor">
                   {{
-                    translate('okf.headTest.suites.revertForbiddenCount', '{n} forbidden tags').replace(
+                    translate('okf.testingLab.suites.revertForbiddenCount', '{n} forbidden tags').replace(
                       '{n}',
                       String(e.forbidden_count)
                     )
                   }}
                 </span>
                 <DsButton variant="secondary" small :disabled="busy !== null" @click="onRevertTo(e)">
-                  {{ translate('okf.headTest.suites.revertAction', 'Revert') }}
+                  {{ translate('okf.testingLab.suites.revertAction', 'Revert') }}
                 </DsButton>
               </li>
             </ul>
             <p v-else class="okf-headtest__teach-text okf-headtest__empty">
-              {{ translate('okf.headTest.suites.revertEmpty', 'No frontmatter saves recorded yet.') }}
+              {{ translate('okf.testingLab.suites.revertEmpty', 'No frontmatter saves recorded yet.') }}
             </p>
           </template>
           <DsSpinner v-if="busy === 'revert'" size="sm" class="okf-headtest__busy">
-            {{ translate('okf.headTest.suites.revertSaving', 'Restoring the frontmatter…') }}
+            {{ translate('okf.testingLab.suites.revertSaving', 'Restoring the frontmatter…') }}
           </DsSpinner>
           <template v-if="reverted && query.trim()">
             <p class="okf-headtest__teach-text">
               {{
                 translate(
-                  'okf.headTest.suites.revertDone',
+                  'okf.testingLab.suites.revertDone',
                   'Frontmatter restored — rebuild the head and re-run to apply it.'
                 )
               }}
             </p>
             <div class="okf-headtest__pane-actions">
               <DsButton variant="primary" small :disabled="busy !== null" @click="onRebuildRerun">
-                {{ translate('okf.headTest.teach.rebuildRerun', 'Rebuild head & re-run') }}
+                {{ translate('okf.testingLab.teach.rebuildRerun', 'Rebuild head & re-run') }}
               </DsButton>
             </div>
           </template>
@@ -436,19 +439,19 @@
             class="okf-headtest__name-input"
             type="text"
             :placeholder="
-              translate('okf.headTest.suites.namePlaceholder', 'Suite name (optional) — e.g. NCD regression set')
+              translate('okf.testingLab.suites.namePlaceholder', 'Suite name (optional) — e.g. NCD regression set')
             "
             :maxlength="80"
           />
         </div>
         <div class="okf-headtest__pane-actions">
           <DsButton variant="primary" small :disabled="busy !== null" @click="onGenerateSuite">
-            {{ translate('okf.headTest.suites.generate', 'Generate test suite') }}
+            {{ translate('okf.testingLab.suites.generate', 'Generate test suite') }}
           </DsButton>
           <DsInfoTip
             :text="
               translate(
-                'okf.headTest.suites.generateTip',
+                'okf.testingLab.suites.generateTip',
                 'The LLM writes should-route-here queries plus confusable near-miss queries from the competing repositories; the forbidden tags add must-NOT-route queries. Takes 5-15 seconds.'
               )
             "
@@ -474,16 +477,16 @@
         <p class="okf-headtest__counts-hint">
           {{
             translate(
-              'okf.headTest.counts.hint',
+              'okf.testingLab.counts.hint',
               'Forbidden-derived rows scale with the repository’s forbidden tag count — they cannot be set here.'
             )
           }}
         </p>
         <DsSpinner v-if="busy === 'generate'" size="sm" class="okf-headtest__busy">
-          {{ translate('okf.headTest.suites.generating', 'Generating — the LLM is writing the queries…') }}
+          {{ translate('okf.testingLab.suites.generating', 'Generating — the LLM is writing the queries…') }}
         </DsSpinner>
         <DsSpinner v-if="busy === 'run'" size="sm" class="okf-headtest__busy">
-          {{ translate('okf.headTest.suites.running', 'Running every suite query…') }}
+          {{ translate('okf.testingLab.suites.running', 'Running every suite query…') }}
         </DsSpinner>
         <!-- 1-8g-x: a REAL progress bar for the run (David: "the UI should
              show a progress bar for the run"). The server reports
@@ -510,12 +513,12 @@
           <div v-if="probePanel" ref="probePanel" class="okf-headtest__probe-panel">
             <div class="okf-headtest__probe-head">
               <h4 class="okf-headtest__pane-title">
-                {{ translate('okf.headTest.probe.title', 'Corpus test — summary') }}
+                {{ translate('okf.testingLab.probe.title', 'Corpus test — summary') }}
               </h4>
               <button
                 type="button"
                 class="okf-headtest__row-btn"
-                :title="translate('okf.headTest.probe.close', 'Close the summary')"
+                :title="translate('okf.testingLab.probe.close', 'Close the summary')"
                 @click="probePanel = null"
               >
                 ×
@@ -524,48 +527,48 @@
             <p class="okf-headtest__probe-query">
               <code>{{ probePanel.query }}</code>
               <span class="okf-headtest__probe-meta">
-                {{ probePanel.docs }} {{ translate('okf.headTest.probe.chunksScanned', 'corpus chunks scanned') }} ·
+                {{ probePanel.docs }} {{ translate('okf.testingLab.probe.chunksScanned', 'corpus chunks scanned') }} ·
                 {{ probePanel.elapsed_ms }}ms
               </span>
             </p>
             <div class="okf-headtest__probe-legs">
               <div class="okf-headtest__probe-leg">
-                <strong>{{ translate('okf.headTest.probe.headLeg', 'Head verdict') }}</strong>
+                <strong>{{ translate('okf.testingLab.probe.headLeg', 'Head verdict') }}</strong>
                 <DsPill v-if="probePanel.head && probePanel.head.claimed" variant="info">
                   {{ probePanel.head.claim || 'claim' }}
                   <template v-if="probePanel.head.score != null"> · {{ probePanel.head.score }}</template>
                 </DsPill>
                 <DsPill v-else variant="secondary">
-                  {{ translate('okf.headTest.probe.headNotClaimed', 'does not claim') }}
+                  {{ translate('okf.testingLab.probe.headNotClaimed', 'does not claim') }}
                 </DsPill>
               </div>
               <div class="okf-headtest__probe-leg">
-                <strong>{{ translate('okf.headTest.probe.corpusLeg', 'Corpus coverage') }}</strong>
+                <strong>{{ translate('okf.testingLab.probe.corpusLeg', 'Corpus coverage') }}</strong>
                 <DsPill v-if="probePanel.verdict === 'answerable'" variant="success">
-                  {{ translate('okf.headTest.probe.answerable', 'answerable') }} · {{ probePanel.top_score }}
+                  {{ translate('okf.testingLab.probe.answerable', 'answerable') }} · {{ probePanel.top_score }}
                 </DsPill>
                 <DsPill v-else-if="probePanel.verdict === 'weak'" variant="warning">
-                  {{ translate('okf.headTest.probe.weak', 'weak match') }} · {{ probePanel.top_score }}
+                  {{ translate('okf.testingLab.probe.weak', 'weak match') }} · {{ probePanel.top_score }}
                 </DsPill>
                 <DsPill v-else-if="probePanel.verdict === 'unanswerable'" variant="danger">
-                  {{ translate('okf.headTest.probe.unanswerable', 'not in corpus') }} · {{ probePanel.top_score }}
+                  {{ translate('okf.testingLab.probe.unanswerable', 'not in corpus') }} · {{ probePanel.top_score }}
                 </DsPill>
                 <DsPill v-else variant="secondary">
-                  {{ translate('okf.headTest.probe.unknown', 'unknown') }}
+                  {{ translate('okf.testingLab.probe.unknown', 'unknown') }}
                 </DsPill>
               </div>
             </div>
             <p v-if="probePanel.reason" class="okf-headtest__probe-reason">{{ probePanel.reason }}</p>
             <div v-if="probePanel.files && probePanel.files.length" class="okf-headtest__probe-files">
-              <strong>{{ translate('okf.headTest.probe.files', 'Reference files') }}</strong>
+              <strong>{{ translate('okf.testingLab.probe.files', 'Reference files') }}</strong>
               <DsTag v-for="f in probePanel.files" :key="f.id"> {{ f.name }} ({{ f.chunks }}) </DsTag>
             </div>
             <table v-if="probePanel.top_chunks && probePanel.top_chunks.length" class="okf-headtest__scores">
               <thead>
                 <tr>
-                  <th>{{ translate('okf.headTest.probe.colScore', 'Rerank score') }}</th>
-                  <th>{{ translate('okf.headTest.probe.colFile', 'File') }}</th>
-                  <th>{{ translate('okf.headTest.probe.colContent', 'Chunk content') }}</th>
+                  <th>{{ translate('okf.testingLab.probe.colScore', 'Rerank score') }}</th>
+                  <th>{{ translate('okf.testingLab.probe.colFile', 'File') }}</th>
+                  <th>{{ translate('okf.testingLab.probe.colContent', 'Chunk content') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -578,12 +581,12 @@
             </table>
           </div>
           <h4 class="okf-headtest__suite-title">
-            {{ translate('okf.headTest.suites.current', 'Current suite') }}
+            {{ translate('okf.testingLab.suites.current', 'Current suite') }}
             <code>{{ suite.suite_key }}</code>
           </h4>
           <div class="okf-headtest__pane-actions">
             <DsButton variant="secondary" small :disabled="busy !== null" @click="onRunSuite">
-              {{ translate('okf.headTest.suites.run', 'Run all queries') }}
+              {{ translate('okf.testingLab.suites.run', 'Run all queries') }}
             </DsButton>
             <!-- 1-8d: the suite's forbidden rows were derived from the
                  forbidden list AT GENERATION TIME — after any tag change
@@ -591,7 +594,7 @@
             <span v-if="suiteForbiddenStale" class="okf-headtest__stale-suite">
               {{
                 translate(
-                  'okf.headTest.suites.staleSnapshot',
+                  'okf.testingLab.suites.staleSnapshot',
                   'Tags changed since this suite was generated — regenerate for fresh forbidden rows.'
                 )
               }}
@@ -601,7 +604,7 @@
             <span v-if="!corpusAvailable" class="okf-headtest__stale-suite">
               {{
                 translate(
-                  'okf.headTest.suites.corpusNeedsIngest',
+                  'okf.testingLab.suites.corpusNeedsIngest',
                   'Ingest the repository first — the corpus test searches the ingested corpus'
                 )
               }}
@@ -610,13 +613,13 @@
           <table class="okf-headtest__scores">
             <thead>
               <tr>
-                <th>{{ translate('okf.headTest.suites.col.query', 'Query') }}</th>
-                <th>{{ translate('okf.headTest.suites.col.kind', 'Kind') }}</th>
-                <th>{{ translate('okf.headTest.suites.col.outcome', 'Outcome') }}</th>
+                <th>{{ translate('okf.testingLab.suites.col.query', 'Query') }}</th>
+                <th>{{ translate('okf.testingLab.suites.col.kind', 'Kind') }}</th>
+                <th>{{ translate('okf.testingLab.suites.col.outcome', 'Outcome') }}</th>
                 <!-- 1-8g: the click-test's corpus-coverage verdict (in-domain
                      is NOT answerable — the asthma/colorectal lesson). -->
-                <th v-if="!readOnly">{{ translate('okf.headTest.suites.col.corpus', 'Corpus') }}</th>
-                <th v-if="!readOnly">{{ translate('okf.headTest.suites.col.actions', 'Edit') }}</th>
+                <th v-if="!readOnly">{{ translate('okf.testingLab.suites.col.corpus', 'Corpus') }}</th>
+                <th v-if="!readOnly">{{ translate('okf.testingLab.suites.col.actions', 'Edit') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -640,13 +643,13 @@
                 <td>
                   <DsPill v-if="row.error" variant="danger">{{ row.error }}</DsPill>
                   <DsPill v-else-if="row.pass === true" variant="success">
-                    {{ translate('okf.headTest.suites.pass', 'pass') }}
+                    {{ translate('okf.testingLab.suites.pass', 'pass') }}
                   </DsPill>
                   <DsPill v-else-if="row.pass === false" variant="danger">
                     {{ row.failLabel }}
                   </DsPill>
                   <DsPill v-else-if="lastRunSummary" variant="info">
-                    {{ translate('okf.headTest.suites.notEvaluatable', 'not evaluatable (no competitors)') }}
+                    {{ translate('okf.testingLab.suites.notEvaluatable', 'not evaluatable (no competitors)') }}
                   </DsPill>
                   <span v-else>—</span>
                 </td>
@@ -659,24 +662,24 @@
                     variant="success"
                     :title="probeTip(row.lastProbe)"
                   >
-                    {{ translate('okf.headTest.probe.answerable', 'answerable') }}
+                    {{ translate('okf.testingLab.probe.answerable', 'answerable') }}
                   </DsPill>
                   <DsPill
                     v-else-if="row.lastProbe && row.lastProbe.verdict === 'weak'"
                     variant="warning"
                     :title="probeTip(row.lastProbe)"
                   >
-                    {{ translate('okf.headTest.probe.weak', 'weak match') }}
+                    {{ translate('okf.testingLab.probe.weak', 'weak match') }}
                   </DsPill>
                   <DsPill
                     v-else-if="row.lastProbe && row.lastProbe.verdict === 'unanswerable'"
                     variant="danger"
                     :title="probeTip(row.lastProbe)"
                   >
-                    {{ translate('okf.headTest.probe.unanswerable', 'not in corpus') }}
+                    {{ translate('okf.testingLab.probe.unanswerable', 'not in corpus') }}
                   </DsPill>
                   <span v-else-if="row.lastProbe" :title="probeTip(row.lastProbe)">
-                    {{ translate('okf.headTest.probe.unknown', 'unknown') }}
+                    {{ translate('okf.testingLab.probe.unknown', 'unknown') }}
                   </span>
                   <span v-else>—</span>
                 </td>
@@ -691,9 +694,9 @@
                     :disabled="busy !== null || !corpusAvailable"
                     :title="
                       corpusAvailable
-                        ? translate('okf.headTest.suites.probeTip', 'Test this query against the live corpus')
+                        ? translate('okf.testingLab.suites.probeTip', 'Test this query against the live corpus')
                         : translate(
-                            'okf.headTest.suites.corpusNeedsIngest',
+                            'okf.testingLab.suites.corpusNeedsIngest',
                             'Ingest the repository first — the corpus test searches the ingested corpus'
                           )
                     "
@@ -705,7 +708,7 @@
                     type="button"
                     class="okf-headtest__row-btn"
                     :disabled="busy !== null"
-                    :title="translate('okf.headTest.suites.flipTip', 'Flip should-select / should-NOT-select')"
+                    :title="translate('okf.testingLab.suites.flipTip', 'Flip should-select / should-NOT-select')"
                     @click="onFlipRow(row)"
                   >
                     ⇄
@@ -714,7 +717,7 @@
                     type="button"
                     class="okf-headtest__row-btn okf-headtest__row-btn--danger"
                     :disabled="busy !== null"
-                    :title="translate('okf.headTest.suites.deleteTip', 'Remove this row from the suite')"
+                    :title="translate('okf.testingLab.suites.deleteTip', 'Remove this row from the suite')"
                     @click="onDeleteRow(row)"
                   >
                     ×
@@ -725,24 +728,24 @@
           </table>
           <div v-if="lastRunSummary" class="okf-headtest__summary">
             <span>
-              {{ translate('okf.headTest.suites.passRate', 'Pass rate') }}:
+              {{ translate('okf.testingLab.suites.passRate', 'Pass rate') }}:
               <strong>{{ pct(lastRunSummary.pass_rate) }}</strong>
             </span>
             <span>
-              {{ translate('okf.headTest.suites.positives', 'Positives') }}:
+              {{ translate('okf.testingLab.suites.positives', 'Positives') }}:
               <strong>{{ lastRunSummary.positive_passed }}/{{ lastRunSummary.positive_total }}</strong>
             </span>
             <span>
-              {{ translate('okf.headTest.suites.negatives', 'Negatives') }}:
+              {{ translate('okf.testingLab.suites.negatives', 'Negatives') }}:
               <strong>{{ negLabel }}</strong>
             </span>
             <span v-if="lastRunSummary.avg_margin !== null">
-              {{ translate('okf.headTest.suites.avgMargin', 'Avg margin') }}:
+              {{ translate('okf.testingLab.suites.avgMargin', 'Avg margin') }}:
               <strong>{{ (lastRunSummary.avg_margin || 0).toFixed(3) }}</strong>
             </span>
             <span v-for="steal in lastRunSummary.steals" :key="steal.by_repo" class="okf-headtest__steal">
               {{
-                translate('okf.headTest.suites.steal', '{repo} stole {n} queries')
+                translate('okf.testingLab.suites.steal', '{repo} stole {n} queries')
                   .replace('{repo}', steal.by_repo)
                   .replace('{n}', String(steal.count))
               }}
@@ -756,7 +759,7 @@
           <div v-if="tripwire" class="okf-headtest__tripwire">
             <span>{{ tripwireText }}</span>
             <DsButton variant="secondary" small :disabled="busy !== null" @click="showRevertPanel">
-              {{ translate('okf.headTest.suites.tripwireRevert', 'View revert options') }}
+              {{ translate('okf.testingLab.suites.tripwireRevert', 'View revert options') }}
             </DsButton>
           </div>
           <!-- 1-8c: BATCH advice — the anti-treadmill (David: this must
@@ -773,12 +776,12 @@
               :disabled="busy !== null || explainFailuresLoading"
               @click="onExplainFailures"
             >
-              {{ translate('okf.headTest.suites.explainFailures', 'Explain failures') }}
+              {{ translate('okf.testingLab.suites.explainFailures', 'Explain failures') }}
             </DsButton>
             <DsSpinner v-if="explainFailuresLoading" size="sm" class="okf-headtest__busy">
               {{
                 translate(
-                  'okf.headTest.suites.explainBusy',
+                  'okf.testingLab.suites.explainBusy',
                   'Explaining the failures — one model call for every failing negative…'
                 )
               }}
@@ -789,15 +792,15 @@
                recommended. Independent of the per-run batch advice. -->
           <div v-if="!readOnly" class="okf-headtest__pane-actions">
             <DsButton variant="secondary" small :disabled="busy !== null || advisorLoading" @click="onRecommend">
-              {{ translate('okf.headTest.advisor.run', 'Advisor: recommend tag changes') }}
+              {{ translate('okf.testingLab.advisor.run', 'Advisor: recommend tag changes') }}
             </DsButton>
             <DsSpinner v-if="advisorLoading" size="sm" class="okf-headtest__busy">
-              {{ translate('okf.headTest.advisor.busy', 'Simulating tag changes across recent runs…') }}
+              {{ translate('okf.testingLab.advisor.busy', 'Simulating tag changes across recent runs…') }}
             </DsSpinner>
           </div>
           <div v-if="advisor" class="okf-headtest__suggestion">
             <span class="okf-headtest__teach-title">{{
-              translate('okf.headTest.advisor.title', 'Tag-set recommendation (simulated across recent runs)')
+              translate('okf.testingLab.advisor.title', 'Tag-set recommendation (simulated across recent runs)')
             }}</span>
             <p class="okf-headtest__teach-text">{{ advisorScoreText }}</p>
             <p v-if="advisor.note" class="okf-headtest__teach-text okf-headtest__empty">{{ advisor.note }}</p>
@@ -808,7 +811,7 @@
                 variant="accent"
                 class="okf-headtest__add-chip"
                 role="button"
-                :title="translate('okf.headTest.teach.addTag', 'Add to forbidden tags')"
+                :title="translate('okf.testingLab.teach.addTag', 'Add to forbidden tags')"
                 @click="onTeachTag(t)"
               >
                 {{ isTaught(t) ? '✓' : '+' }} {{ t }}
@@ -821,7 +824,7 @@
                 variant="danger"
                 class="okf-headtest__remove-chip"
                 role="button"
-                :title="translate('okf.headTest.suites.removeTag', 'Remove from forbidden tags')"
+                :title="translate('okf.testingLab.suites.removeTag', 'Remove from forbidden tags')"
                 @click="onRemoveTag(r.tag)"
               >
                 − {{ r.tag }}
@@ -833,7 +836,7 @@
                  them. Not in the predicted scorecard. -->
             <template v-if="advisorBlockedRemovals.length">
               <p class="okf-headtest__teach-text okf-headtest__blocked-title">
-                {{ translate('okf.headTest.advisor.blockedTitle', 'Blocked removals — click to include in Apply') }}
+                {{ translate('okf.testingLab.advisor.blockedTitle', 'Blocked removals — click to include in Apply') }}
               </p>
               <div class="okf-headtest__chips">
                 <DsTag
@@ -846,7 +849,7 @@
                   @click="toggleExtraRemove(b.tag)"
                 >
                   {{ advisorExtraRemove.includes(b.tag) ? '✓' : '+' }} − {{ b.tag }} ({{
-                    translate('okf.headTest.advisor.blockedGain', 'recovers {n} positive(s)').replace(
+                    translate('okf.testingLab.advisor.blockedGain', 'recovers {n} positive(s)').replace(
                       '{n}',
                       String(b.predicted_positive_gain)
                     )
@@ -858,7 +861,7 @@
               <p class="okf-headtest__teach-text okf-headtest__blocked-title">
                 {{
                   translate(
-                    'okf.headTest.advisor.narrowTitle',
+                    'okf.testingLab.advisor.narrowTitle',
                     'Narrower replacements — recover positives without re-admitting negatives'
                   )
                 }}
@@ -872,7 +875,7 @@
                   "
                   class="okf-headtest__add-chip"
                   role="button"
-                  :title="translate('okf.headTest.advisor.narrowChip', 'Remove the broad tag, add the narrow one')"
+                  :title="translate('okf.testingLab.advisor.narrowChip', 'Remove the broad tag, add the narrow one')"
                   @click="toggleNarrowPair(p)"
                 >
                   {{ advisorNarrowPairs.some((x) => x.remove === p.remove && x.add === p.add) ? '✓' : '+' }}
@@ -888,7 +891,7 @@
               <p class="okf-headtest__teach-text okf-headtest__blocked-title">
                 {{
                   translate(
-                    'okf.headTest.advisor.rowActionsTitle',
+                    'okf.testingLab.advisor.rowActionsTitle',
                     'Corpus-grounded flips — the corpus answers these "negatives": flip them to positives'
                   )
                 }}
@@ -898,7 +901,7 @@
                   <span>{{ ra.query }}</span>
                   <span class="okf-headtest__empty">{{ ra.verdict }} · {{ ra.top_score }}</span>
                   <DsButton variant="secondary" small :disabled="busy !== null" @click="onAdvisorFlip(ra)">
-                    {{ translate('okf.headTest.advisor.flipToPositive', 'Flip to positive') }}
+                    {{ translate('okf.testingLab.advisor.flipToPositive', 'Flip to positive') }}
                   </DsButton>
                 </li>
               </ul>
@@ -909,7 +912,7 @@
             >
               {{
                 translate(
-                  'okf.headTest.advisor.ungroundedNote',
+                  'okf.testingLab.advisor.ungroundedNote',
                   '{n} failing negative(s) have no corpus grounding and no safe tag lever — the competing repository must win them.'
                 ).replace('{n}', String(advisorUngroundedCount))
               }}
@@ -932,7 +935,7 @@
                 :disabled="busy !== null"
                 @click="onAdvisorApply"
               >
-                {{ translate('okf.headTest.advisor.apply', 'Apply changes & rebuild & re-run suite') }}
+                {{ translate('okf.testingLab.advisor.apply', 'Apply changes & rebuild & re-run suite') }}
               </DsButton>
             </div>
           </div>
@@ -943,7 +946,7 @@
           <p v-else-if="advisorLoaded" class="okf-headtest__teach-text okf-headtest__empty" role="status">
             {{
               translate(
-                'okf.headTest.advisor.none',
+                'okf.testingLab.advisor.none',
                 'The advisor ran and recommended no tag changes for the recent runs.'
               )
             }}
@@ -958,7 +961,7 @@
               <p class="okf-headtest__teach-text">
                 {{
                   translate(
-                    'okf.headTest.suites.positiveFailures',
+                    'okf.testingLab.suites.positiveFailures',
                     '{n} positive test(s) were suppressed this run — the forbidden tags over-match the repository scope.'
                   ).replace('{n}', String(positiveFailures.count))
                 }}
@@ -967,7 +970,7 @@
               <p v-if="positiveFailures.margin_killed > 0" class="okf-headtest__teach-text okf-headtest__empty">
                 {{
                   translate(
-                    'okf.headTest.suites.marginKilled',
+                    'okf.testingLab.suites.marginKilled',
                     '{n} positive test(s) lost on margin (no single veto tag).'
                   ).replace('{n}', String(positiveFailures.margin_killed))
                 }}
@@ -987,7 +990,7 @@
                   :variant="isTaught(t) ? 'success' : 'accent'"
                   class="okf-headtest__add-chip"
                   role="button"
-                  :title="translate('okf.headTest.teach.addTag', 'Add to forbidden tags')"
+                  :title="translate('okf.testingLab.teach.addTag', 'Add to forbidden tags')"
                   @click="onTeachTag(t)"
                 >
                   {{ isTaught(t) ? '✓' : '+' }} {{ t }}
@@ -995,7 +998,7 @@
               </div>
               <div class="okf-headtest__pane-actions">
                 <DsButton variant="secondary" small :disabled="busy !== null" @click="onTeachAllTags">
-                  {{ translate('okf.headTest.suites.addAll', 'Add all') }}
+                  {{ translate('okf.testingLab.suites.addAll', 'Add all') }}
                 </DsButton>
                 <DsButton
                   v-if="taughtTags.length || removedTags.length"
@@ -1004,7 +1007,7 @@
                   :disabled="busy !== null"
                   @click="onRebuildSuiteRerun"
                 >
-                  {{ translate('okf.headTest.suites.rebuildRerun', 'Rebuild head & re-run suite') }}
+                  {{ translate('okf.testingLab.suites.rebuildRerun', 'Rebuild head & re-run suite') }}
                 </DsButton>
                 <DsSpinner
                   v-if="busy === 'save-tag' || busy === 'rebuild-rerun' || busy === 'advisor-apply'"
@@ -1023,7 +1026,7 @@
               <p class="okf-headtest__teach-text okf-headtest__empty">
                 {{
                   translate(
-                    'okf.headTest.teach.rejected',
+                    'okf.testingLab.teach.rejected',
                     'Screened out by the guardrail — a forbidden tag must not match this repository’s own subject.'
                   )
                 }}
@@ -1047,7 +1050,7 @@
               <p class="okf-headtest__teach-text okf-headtest__empty">
                 {{
                   translate(
-                    'okf.headTest.suites.removals',
+                    'okf.testingLab.suites.removals',
                     'Tags to remove (they veto this repository’s own positives)'
                   )
                 }}
@@ -1067,7 +1070,7 @@
               </div>
               <div v-if="removedTags.length && !batchTags.length" class="okf-headtest__pane-actions">
                 <DsButton variant="primary" small :disabled="busy !== null" @click="onRebuildSuiteRerun">
-                  {{ translate('okf.headTest.suites.rebuildRerun', 'Rebuild head & re-run suite') }}
+                  {{ translate('okf.testingLab.suites.rebuildRerun', 'Rebuild head & re-run suite') }}
                 </DsButton>
               </div>
             </div>
@@ -1077,7 +1080,7 @@
             >
               {{
                 translate(
-                  'okf.headTest.suites.batchNone',
+                  'okf.testingLab.suites.batchNone',
                   'No fix was suggested — review the failing queries against the declared scope manually.'
                 )
               }}
@@ -1092,7 +1095,10 @@
                that was dropped or failed. -->
           <p v-else-if="batchAdviceLoaded" class="okf-headtest__teach-text okf-headtest__empty" role="status">
             {{
-              translate('okf.headTest.suites.batchEmpty', 'The explain ran and returned no advice for this suite run.')
+              translate(
+                'okf.testingLab.suites.batchEmpty',
+                'The explain ran and returned no advice for this suite run.'
+              )
             }}
           </p>
         </div>
@@ -1101,7 +1107,7 @@
           <DsInput
             v-model="manualQuery"
             type="text"
-            :placeholder="translate('okf.headTest.suites.addPlaceholder', 'Your own probe query…')"
+            :placeholder="translate('okf.testingLab.suites.addPlaceholder', 'Your own probe query…')"
             class="okf-headtest__query-input"
           />
           <DsSelect v-model="manualKind" :options="manualKindOptions" class="okf-headtest__kind-select" />
@@ -1111,7 +1117,7 @@
             :disabled="!suite || busy !== null || !manualQuery.trim()"
             @click="onAddQuery"
           >
-            {{ translate('okf.headTest.suites.add', 'Add to suite') }}
+            {{ translate('okf.testingLab.suites.add', 'Add to suite') }}
           </DsButton>
         </div>
 
@@ -1125,10 +1131,10 @@
           :class="{ 'okf-headtest__revert--highlight': revertHighlight }"
         >
           <span class="okf-headtest__teach-title">
-            {{ translate('okf.headTest.suites.revertTitle', 'Revert tags') }}
+            {{ translate('okf.testingLab.suites.revertTitle', 'Revert tags') }}
           </span>
           <DsSpinner v-if="historyLoading" size="sm" class="okf-headtest__busy">
-            {{ translate('okf.headTest.suites.revertBusy', 'Loading save history…') }}
+            {{ translate('okf.testingLab.suites.revertBusy', 'Loading save history…') }}
           </DsSpinner>
           <template v-else>
             <ul v-if="revertEntries.length" class="okf-headtest__revert-list">
@@ -1137,52 +1143,52 @@
                 <span class="okf-headtest__revert-actor">{{ e.actor }}</span>
                 <span v-if="e.forbidden_count !== null" class="okf-headtest__revert-actor">
                   {{
-                    translate('okf.headTest.suites.revertForbiddenCount', '{n} forbidden tags').replace(
+                    translate('okf.testingLab.suites.revertForbiddenCount', '{n} forbidden tags').replace(
                       '{n}',
                       String(e.forbidden_count)
                     )
                   }}
                 </span>
                 <DsButton variant="secondary" small :disabled="busy !== null" @click="onRevertTo(e)">
-                  {{ translate('okf.headTest.suites.revertAction', 'Revert') }}
+                  {{ translate('okf.testingLab.suites.revertAction', 'Revert') }}
                 </DsButton>
               </li>
             </ul>
             <p v-else class="okf-headtest__teach-text okf-headtest__empty">
-              {{ translate('okf.headTest.suites.revertEmpty', 'No frontmatter saves recorded yet.') }}
+              {{ translate('okf.testingLab.suites.revertEmpty', 'No frontmatter saves recorded yet.') }}
             </p>
           </template>
           <DsSpinner v-if="busy === 'revert'" size="sm" class="okf-headtest__busy">
-            {{ translate('okf.headTest.suites.revertSaving', 'Restoring the frontmatter…') }}
+            {{ translate('okf.testingLab.suites.revertSaving', 'Restoring the frontmatter…') }}
           </DsSpinner>
           <template v-if="reverted && suite">
             <p class="okf-headtest__teach-text">
               {{
                 translate(
-                  'okf.headTest.suites.revertDone',
+                  'okf.testingLab.suites.revertDone',
                   'Frontmatter restored — rebuild the head and re-run to apply it.'
                 )
               }}
             </p>
             <div class="okf-headtest__pane-actions">
               <DsButton variant="primary" small :disabled="busy !== null" @click="onRebuildSuiteRerun">
-                {{ translate('okf.headTest.suites.rebuildRerun', 'Rebuild head & re-run suite') }}
+                {{ translate('okf.testingLab.suites.rebuildRerun', 'Rebuild head & re-run suite') }}
               </DsButton>
             </div>
           </template>
         </div>
 
         <h4 class="okf-headtest__suite-title">
-          {{ translate('okf.headTest.suites.history', 'Run history') }}
+          {{ translate('okf.testingLab.suites.history', 'Run history') }}
         </h4>
         <table v-if="runs.length" class="okf-headtest__scores">
           <thead>
             <tr>
-              <th>{{ translate('okf.headTest.suites.col.run', 'Run') }}</th>
-              <th>{{ translate('okf.headTest.suites.col.when', 'When') }}</th>
-              <th>{{ translate('okf.headTest.suites.col.passRate', 'Pass rate') }}</th>
-              <th>{{ translate('okf.headTest.suites.col.headVersion', 'Head') }}</th>
-              <th>{{ translate('okf.headTest.suites.col.tags', 'Tags') }}</th>
+              <th>{{ translate('okf.testingLab.suites.col.run', 'Run') }}</th>
+              <th>{{ translate('okf.testingLab.suites.col.when', 'When') }}</th>
+              <th>{{ translate('okf.testingLab.suites.col.passRate', 'Pass rate') }}</th>
+              <th>{{ translate('okf.testingLab.suites.col.headVersion', 'Head') }}</th>
+              <th>{{ translate('okf.testingLab.suites.col.tags', 'Tags') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -1201,7 +1207,7 @@
                 <code
                   v-if="r.tagset && r.tagset.hash"
                   :title="
-                    translate('okf.headTest.suites.tagsetTip', 'Forbidden tags for this run') +
+                    translate('okf.testingLab.suites.tagsetTip', 'Forbidden tags for this run') +
                     ': ' +
                     (r.tagset.forbidden || []).join(', ')
                   "
@@ -1213,19 +1219,19 @@
           </tbody>
         </table>
         <p v-else class="okf-headtest__empty-pane">
-          {{ translate('okf.headTest.suites.noRuns', 'No runs yet — generate a suite and run it.') }}
+          {{ translate('okf.testingLab.suites.noRuns', 'No runs yet — generate a suite and run it.') }}
         </p>
         <!-- 1-8f: SAVED SUITES — the load targets for "saved, modified and
              rerun". Every generated suite persists; Load pulls its full
              rows back as the editable current suite. -->
         <div v-if="allSavedSuites.length" class="okf-headtest__saved-suites">
           <h4 class="okf-headtest__pane-title">
-            {{ translate('okf.headTest.suites.savedTitle', 'Saved suites') }}
+            {{ translate('okf.testingLab.suites.savedTitle', 'Saved suites') }}
             <DsInfoTip
               :text="
                 translate(
-                  'okf.headTest.suites.savedTip',
-                  'Every generated or imported suite is saved here, per repository. Two kinds share this list: head suites (tag- and frontmatter-derived query sets, shown with Positives/Negatives counts) and RAGAS benchmark suites (question sets with expected answers, badged with a RAGAS pill and an entries count). Load opens a head suite into the Head test tab and a RAGAS suite into the RAGAS Benchmarks tab, where it can be run and scored against the live corpus. Delete removes the suite permanently; rename is inline on the name.'
+                  'okf.testingLab.suites.savedTip',
+                  'Every generated or imported suite is saved here, per repository. Two kinds share this list: head suites (tag- and frontmatter-derived query sets, shown with Positives/Negatives counts) and RAGAS benchmark suites (question sets with expected answers, badged with a RAGAS pill and an entries count). Load shows a head suite in this tab and a RAGAS suite in the RAGAS Benchmarks tab, where it can be run and scored against the live corpus. Delete removes the suite permanently; rename is inline on the name.'
                 )
               "
             />
@@ -1236,16 +1242,16 @@
                distinguishes "still loading" from "loaded, and this suite
                genuinely has no runs" — the two used to look identical. -->
           <DsSpinner v-if="suiteLoading" size="sm" class="okf-headtest__busy">
-            {{ translate('okf.headTest.suites.loading', 'Loading the suite…') }}
+            {{ translate('okf.testingLab.suites.loading', 'Loading the suite…') }}
           </DsSpinner>
           <table class="okf-headtest__scores">
             <thead>
               <tr>
-                <th>{{ translate('okf.headTest.suites.col.name', 'Name') }}</th>
-                <th>{{ translate('okf.headTest.suites.col.run', 'Run') }}</th>
-                <th>{{ translate('okf.headTest.suites.col.when', 'When') }}</th>
-                <th>{{ translate('okf.headTest.suites.positives', 'Positives') }}</th>
-                <th>{{ translate('okf.headTest.suites.negatives', 'Negatives') }}</th>
+                <th>{{ translate('okf.testingLab.suites.col.name', 'Name') }}</th>
+                <th>{{ translate('okf.testingLab.suites.col.run', 'Run') }}</th>
+                <th>{{ translate('okf.testingLab.suites.col.when', 'When') }}</th>
+                <th>{{ translate('okf.testingLab.suites.positives', 'Positives') }}</th>
+                <th>{{ translate('okf.testingLab.suites.negatives', 'Negatives') }}</th>
                 <th v-if="!readOnly"></th>
               </tr>
             </thead>
@@ -1262,7 +1268,7 @@
                     class="okf-headtest__name-input okf-headtest__name-input--compact"
                     type="text"
                     :value="s.name || ''"
-                    :placeholder="translate('okf.headTest.suites.namePlaceholder', 'Suite name (optional)')"
+                    :placeholder="translate('okf.testingLab.suites.namePlaceholder', 'Suite name (optional)')"
                     :maxlength="80"
                     :disabled="busy !== null"
                     @change="onRenameSuite(s, $event.target.value)"
@@ -1286,13 +1292,13 @@
                     :disabled="busy !== null || suiteLoading || (suite && suite.suite_key === s._key)"
                     @click="s.__ragas ? onLoadRagasSuite(s) : onLoadSuite(s._key)"
                   >
-                    {{ translate('okf.headTest.suites.load', 'Load') }}
+                    {{ translate('okf.testingLab.suites.load', 'Load') }}
                   </DsButton>
                   <button
                     type="button"
                     class="okf-headtest__row-btn okf-headtest__row-btn--danger"
                     :disabled="busy !== null"
-                    :title="translate('okf.headTest.suites.deleteSuiteTip', 'Delete this suite and its run history')"
+                    :title="translate('okf.testingLab.suites.deleteSuiteTip', 'Delete this suite and its run history')"
                     @click="onDeleteSuite(s)"
                   >
                     ×
@@ -1316,13 +1322,13 @@
            from the dialog's Confirm. Names the suite + the consequence. -->
       <DsDialog
         :visible="deleteConfirm !== null"
-        :title="translate('okf.headTest.suites.deleteConfirmTitle', 'Delete this suite?')"
+        :title="translate('okf.testingLab.suites.deleteConfirmTitle', 'Delete this suite?')"
         size="sm"
         :actions="[
-          { key: 'cancel', label: translate('okf.headTest.suites.deleteCancel', 'Cancel'), variant: 'secondary' },
+          { key: 'cancel', label: translate('okf.testingLab.suites.deleteCancel', 'Cancel'), variant: 'secondary' },
           {
             key: 'confirm',
-            label: translate('okf.headTest.suites.deleteConfirm', 'Delete suite'),
+            label: translate('okf.testingLab.suites.deleteConfirm', 'Delete suite'),
             variant: 'primary',
             disabled: busy !== null
           }
@@ -1333,14 +1339,14 @@
         <p class="okf-headtest__teach-text">
           {{
             translate(
-              'okf.headTest.suites.deleteConfirmBody',
+              'okf.testingLab.suites.deleteConfirmBody',
               'This permanently removes the suite and its run history. This cannot be undone.'
             )
           }}
         </p>
         <p v-if="deleteConfirm" class="okf-headtest__teach-text okf-headtest__empty">
           <code>{{ deleteConfirm._key }}</code>
-          — {{ deleteConfirm.name || translate('okf.headTest.suites.unnamedFallback', 'unnamed suite') }}
+          — {{ deleteConfirm.name || translate('okf.testingLab.suites.unnamedFallback', 'unnamed suite') }}
         </p>
       </DsDialog>
     </DsTabs>
@@ -1373,7 +1379,7 @@ const HEAD_FIELDS = [
 ];
 
 export default {
-  name: 'OkfHeadTestDialog',
+  name: 'OkfTestingLabDialog',
   components: {
     DsDialog,
     DsTabs,
@@ -1505,16 +1511,16 @@ export default {
     runProgressLabel() {
       const p = this.runProgress;
       if (!p || !p.total) {
-        return this.translate('okf.headTest.run.progressStarting', 'Starting the run…');
+        return this.translate('okf.testingLab.run.progressStarting', 'Starting the run…');
       }
       const pct = Math.min(100, Math.round((p.done / p.total) * 100));
       const phase = p.phase
         ? this.translate(
-            `okf.headTest.run.phase.${p.phase}`,
+            `okf.testingLab.run.phase.${p.phase}`,
             p.phase === 'corpus' ? 'Checking the corpus' : 'Scoring routes'
           )
         : '';
-      const base = this.translate('okf.headTest.run.progress', '{done} of {total} queries ({pct}%)')
+      const base = this.translate('okf.testingLab.run.progress', '{done} of {total} queries ({pct}%)')
         .replace('{done}', String(p.done))
         .replace('{total}', String(p.total))
         .replace('{pct}', String(pct));
@@ -1534,10 +1540,10 @@ export default {
     },
     tabDefs() {
       return [
-        { value: 'head', label: this.translate('okf.headTest.tab.head', 'Head') },
-        { value: 'test', label: this.translate('okf.headTest.tab.test', 'Test') },
-        { value: 'suites', label: this.translate('okf.headTest.tab.suites', 'Suites & analytics') },
-        { value: 'ragas', label: this.translate('okf.headTest.tab.ragas', 'RAGAS Benchmarks') }
+        { value: 'head', label: this.translate('okf.testingLab.tab.head', 'Head') },
+        { value: 'test', label: this.translate('okf.testingLab.tab.test', 'Test') },
+        { value: 'suites', label: this.translate('okf.testingLab.tab.suites', 'Suites & analytics') },
+        { value: 'ragas', label: this.translate('okf.testingLab.tab.ragas', 'RAGAS Benchmarks') }
       ];
     },
     /** Story 8-6: the unified saved-suites list — head suites and RAGAS
@@ -1669,7 +1675,7 @@ export default {
         return {
           kind: 'veto',
           text: this.translate(
-            'okf.headTest.teach.veto',
+            'okf.testingLab.teach.veto',
             'This query strongly matches the forbidden tag "{tag}". If it SHOULD belong to this repository, remove "{tag}" from the forbidden tags in Frontmatter, then republish to rebuild the head.'
           ).replace(/\{tag\}/g, this.vetoTag)
         };
@@ -1678,7 +1684,7 @@ export default {
         return {
           kind: 'floor',
           text: this.translate(
-            'okf.headTest.teach.floor',
+            'okf.testingLab.teach.floor',
             'The query is unrelated to the subject matter of this repository (score below the domain floor) — no tag change fixes this; it is correct suppression.'
           )
         };
@@ -1709,27 +1715,27 @@ export default {
       if (this.adversarial) {
         return wins
           ? this.translate(
-              'okf.headTest.test.failAdversarial',
+              'okf.testingLab.test.failAdversarial',
               'FAIL — this query routed HERE but it should not: the head claimed it'
             ) + this.gateDetail
           : this.headSuppressed
             ? this.translate(
-                'okf.headTest.test.passSuppressed',
+                'okf.testingLab.test.passSuppressed',
                 'PASS — suppressed by the forbidden/noise gate: the head does not claim this query'
               ) + this.gateDetail
             : this.translate(
-                'okf.headTest.test.passAdversarial',
+                'okf.testingLab.test.passAdversarial',
                 'PASS — correctly not selected (winner: {repo}).'
               ).replace('{repo}', winner);
       }
       return wins
-        ? this.translate('okf.headTest.test.pass', 'PASS — this repository wins the head routing.') + this.gateDetail
+        ? this.translate('okf.testingLab.test.pass', 'PASS — this repository wins the head routing.') + this.gateDetail
         : this.headSuppressed
           ? this.translate(
-              'okf.headTest.test.notSelectedSuppressed',
+              'okf.testingLab.test.notSelectedSuppressed',
               'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise'
             ) + this.gateDetail
-          : this.translate('okf.headTest.test.fail', 'FAIL — {repo} wins the head routing for this query.').replace(
+          : this.translate('okf.testingLab.test.fail', 'FAIL — {repo} wins the head routing for this query.').replace(
               '{repo}',
               winner
             );
@@ -1784,14 +1790,14 @@ export default {
       const s = this.lastRunSummary;
       if (!s) return '—';
       if (s.negative_evaluatable === 0) {
-        return this.translate('okf.headTest.suites.noCompetitors', 'n/a — no competing heads yet');
+        return this.translate('okf.testingLab.suites.noCompetitors', 'n/a — no competing heads yet');
       }
       return `${s.negative_passed}/${s.negative_evaluatable}`;
     },
     manualKindOptions() {
       return [
-        { value: 'positive', label: this.translate('okf.headTest.suites.kindPositive', 'should select') },
-        { value: 'negative', label: this.translate('okf.headTest.suites.kindNegative', 'should NOT select') }
+        { value: 'positive', label: this.translate('okf.testingLab.suites.kindPositive', 'should select') },
+        { value: 'negative', label: this.translate('okf.testingLab.suites.kindNegative', 'should NOT select') }
       ];
     },
     /** 1-8c: the five class-count controls (defaults mirror the server's
@@ -1802,16 +1808,16 @@ export default {
       // silently ate David's n_positive=100). The LLM ask is batched
       // server-side, so large numbers no longer truncate.
       return [
-        { key: 'n_positive', min: 0, max: 1000, label: this.translate('okf.headTest.counts.positive', 'Positives') },
-        { key: 'n_negative', min: 0, max: 500, label: this.translate('okf.headTest.counts.negative', 'Confusable') },
+        { key: 'n_positive', min: 0, max: 1000, label: this.translate('okf.testingLab.counts.positive', 'Positives') },
+        { key: 'n_negative', min: 0, max: 500, label: this.translate('okf.testingLab.counts.negative', 'Confusable') },
         {
           key: 'n_negative_random',
           min: 0,
           max: 500,
-          label: this.translate('okf.headTest.counts.negativeRandom', 'Off-domain')
+          label: this.translate('okf.testingLab.counts.negativeRandom', 'Off-domain')
         },
-        { key: 'n_meta', min: 0, max: 500, label: this.translate('okf.headTest.counts.meta', 'Meta') },
-        { key: 'n_near_miss', min: 0, max: 500, label: this.translate('okf.headTest.counts.nearMiss', 'Near miss') }
+        { key: 'n_meta', min: 0, max: 500, label: this.translate('okf.testingLab.counts.meta', 'Meta') },
+        { key: 'n_near_miss', min: 0, max: 500, label: this.translate('okf.testingLab.counts.nearMiss', 'Near miss') }
       ];
     },
     /** 1-8c: the claim-side teach block shows when the under-test head
@@ -1885,16 +1891,16 @@ export default {
       if (!pf || !pf.veto_counts || typeof pf.veto_counts !== 'object') return '';
       const parts = Object.entries(pf.veto_counts).map(([tag, n]) => `${tag} ×${n}`);
       if (!parts.length) return '';
-      return this.translate('okf.headTest.suites.vetoedBy', 'Vetoed by') + ': ' + parts.join(', ');
+      return this.translate('okf.testingLab.suites.vetoedBy', 'Vetoed by') + ': ' + parts.join(', ');
     },
     /** 1-8d: batch panel title — negatives failing get the 1-8c title; a
      * positive-only collapse gets its own (the "why the failing negatives
      * routed here" heading reads absurd with an empty negative list). */
     batchTitleText() {
       if (this.batchAdvice && this.batchAdvice.failing_count > 0) {
-        return this.translate('okf.headTest.suites.batchTitle', 'Why the failing negatives routed here');
+        return this.translate('okf.testingLab.suites.batchTitle', 'Why the failing negatives routed here');
       }
-      return this.translate('okf.headTest.suites.positiveFailuresTitle', 'Why positives stopped passing');
+      return this.translate('okf.testingLab.suites.positiveFailuresTitle', 'Why positives stopped passing');
     },
     /** 1-8d: the advisor's recommended additions (not yet applied). */
     advisorAddTags() {
@@ -1954,24 +1960,24 @@ export default {
       const cur = a.current_scorecard;
       const rec = a.recommended_scorecard;
       const fmt = (s) =>
-        this.translate('okf.headTest.advisor.scorecard', 'positives {p}/{pt} claimed · negatives {n}/{nt} suppressed')
+        this.translate('okf.testingLab.advisor.scorecard', 'positives {p}/{pt} claimed · negatives {n}/{nt} suppressed')
           .replace('{p}', String(s.positive_claimed))
           .replace('{pt}', String(s.positive_total))
           .replace('{n}', String(s.negative_suppressed))
           .replace('{nt}', String(s.negative_total));
       return (
-        `${this.translate('okf.headTest.advisor.now', 'Now')}: ${fmt(cur)} → ${this.translate(
-          'okf.headTest.advisor.predicted',
+        `${this.translate('okf.testingLab.advisor.now', 'Now')}: ${fmt(cur)} → ${this.translate(
+          'okf.testingLab.advisor.predicted',
           'predicted'
         )}: ${fmt(rec)}` +
-        this.translate('okf.headTest.advisor.scope', ' (across {q} queries from the last {r} runs)')
+        this.translate('okf.testingLab.advisor.scope', ' (across {q} queries from the last {r} runs)')
           .replace('{q}', String(a.queries_considered))
           .replace('{r}', String(a.runs_considered)) +
         // 1-8g-b: name the aggregated scope so "which suite / which tag
         // set" is never a guess (older advisor docs carry no scope).
         (a.scope && Array.isArray(a.scope.suites)
           ? ' ' +
-            this.translate('okf.headTest.advisor.scopeDetail', 'suites: {s} · tag sets: {t}')
+            this.translate('okf.testingLab.advisor.scopeDetail', 'suites: {s} · tag sets: {t}')
               .replace('{s}', a.scope.suites.join(', ') || '—')
               .replace(
                 '{t}',
@@ -2003,7 +2009,7 @@ export default {
     tripwireText() {
       const n = this.tripwire ? this.tripwire.dropped : 0;
       return this.translate(
-        'okf.headTest.suites.tripwire',
+        'okf.testingLab.suites.tripwire',
         'This cycle broke {n} positive tests — the added tags over-suppress. Revert?'
       ).replace('{n}', String(n));
     },
@@ -2011,14 +2017,14 @@ export default {
      * re-run) — the same busy-strip pattern as the tabs' own spinners. */
     teachBusyLabel() {
       if (this.busy === 'save-tag') {
-        return this.translate('okf.headTest.teach.savingTag', 'Saving the forbidden tag…');
+        return this.translate('okf.testingLab.teach.savingTag', 'Saving the forbidden tag…');
       }
       if (this.busy === 'rebuild-rerun') {
-        return this.translate('okf.headTest.teach.rebuildBusy', 'Rebuilding the head and re-running…');
+        return this.translate('okf.testingLab.teach.rebuildBusy', 'Rebuilding the head and re-running…');
       }
       if (this.busy === 'advisor-apply') {
         return this.translate(
-          'okf.headTest.advisor.applying',
+          'okf.testingLab.advisor.applying',
           'Applying: saving tags, rebuilding the head, re-running the suite…'
         );
       }
@@ -2029,7 +2035,7 @@ export default {
       if (!this.readOnly && this.repo && this.repo.lifecycle_state === 'publish' && !this.serving) {
         actions.push({
           key: 'unpublish',
-          label: this.translate('okf.headTest.footer.unpublish', 'Unpublish to review'),
+          label: this.translate('okf.testingLab.footer.unpublish', 'Unpublish to review'),
           variant: 'secondary',
           disabled: this.busy !== null
         });
@@ -2075,10 +2081,10 @@ export default {
      * the gate breakdown. */
     claimLabel(claim) {
       const keys = {
-        floor: ['okf.headTest.gate.floor', 'Floor'],
-        veto: ['okf.headTest.gate.veto', 'Forbidden tags'],
-        margin: ['okf.headTest.gate.margin', 'Margin'],
-        claim: ['okf.headTest.gate.claim', 'Claim']
+        floor: ['okf.testingLab.gate.floor', 'Floor'],
+        veto: ['okf.testingLab.gate.veto', 'Forbidden tags'],
+        margin: ['okf.testingLab.gate.margin', 'Margin'],
+        claim: ['okf.testingLab.gate.claim', 'Claim']
       };
       const hit = keys[claim];
       return hit ? this.translate(hit[0], hit[1]) : claim;
@@ -2109,7 +2115,7 @@ export default {
       const res = await this.$store.dispatch('okf/headRebuild', { repoId: this.repo.repo_id });
       this.busy = null;
       if (!res.ok) {
-        this.error = res.message || this.translate('okf.headTest.error.rebuild', 'Head rebuild failed');
+        this.error = res.message || this.translate('okf.testingLab.error.rebuild', 'Head rebuild failed');
         return;
       }
       this.$emit('changed', { head: res.result });
@@ -2132,7 +2138,7 @@ export default {
       });
       this.busy = null;
       if (!res.ok) {
-        this.error = res.message || this.translate('okf.headTest.error.test', 'Routing test failed');
+        this.error = res.message || this.translate('okf.testingLab.error.test', 'Routing test failed');
         return;
       }
       this.lastResult = res.result;
@@ -2173,7 +2179,7 @@ export default {
         return;
       }
       if (!res.ok) {
-        this.error = res.message || this.translate('okf.headTest.error.explain', 'Explain failed');
+        this.error = res.message || this.translate('okf.testingLab.error.explain', 'Explain failed');
         return;
       }
       this.explanation = res.result;
@@ -2232,7 +2238,7 @@ export default {
     /** 1-8d: the removal chip's tooltip — the attribution ("- tag (killed
      * N positives)"), so the curator sees WHY before clicking. */
     removalTip(rm) {
-      return this.translate('okf.headTest.suites.removeTip', 'Remove "{tag}" — it vetoed {n} positive test(s)')
+      return this.translate('okf.testingLab.suites.removeTip', 'Remove "{tag}" — it vetoed {n} positive test(s)')
         .replace('{tag}', rm.tag)
         .replace('{n}', String(rm.killed));
     },
@@ -2250,7 +2256,7 @@ export default {
       this.busy = null;
       if (!res || !res.ok) {
         this.error =
-          (res && res.message) || this.translate('okf.headTest.error.saveTag', 'Could not save the forbidden tag');
+          (res && res.message) || this.translate('okf.testingLab.error.saveTag', 'Could not save the forbidden tag');
         return;
       }
       if (!this.removedTags.includes(tag)) this.removedTags.push(tag);
@@ -2292,7 +2298,7 @@ export default {
       const res = await this.$store.dispatch('okf/frontmatterHistory', { repoId: this.repo.repo_id });
       this.historyLoading = false;
       if (!res.ok) {
-        this.error = res.message || this.translate('okf.headTest.error.history', 'Could not load the save history');
+        this.error = res.message || this.translate('okf.testingLab.error.history', 'Could not load the save history');
         return;
       }
       this.fmHistory = res.entries || [];
@@ -2319,7 +2325,7 @@ export default {
       });
       this.busy = null;
       if (!res.ok) {
-        this.error = res.message || this.translate('okf.headTest.error.revert', 'Could not revert the frontmatter');
+        this.error = res.message || this.translate('okf.testingLab.error.revert', 'Could not revert the frontmatter');
         return;
       }
       this.reverted = true;
@@ -2342,7 +2348,7 @@ export default {
       this.busy = null;
       if (!res || !res.ok) {
         this.error =
-          (res && res.message) || this.translate('okf.headTest.error.saveTag', 'Could not save the forbidden tag');
+          (res && res.message) || this.translate('okf.testingLab.error.saveTag', 'Could not save the forbidden tag');
         return;
       }
       if (!this.taughtTags.includes(tag)) this.taughtTags.push(tag);
@@ -2361,7 +2367,7 @@ export default {
       this.busy = null;
       if (!res || !res.ok) {
         this.error =
-          (res && res.message) || this.translate('okf.headTest.error.saveTag', 'Could not save the forbidden tag');
+          (res && res.message) || this.translate('okf.testingLab.error.saveTag', 'Could not save the forbidden tag');
         return;
       }
       for (const t of pending) if (!this.taughtTags.includes(t)) this.taughtTags.push(t);
@@ -2396,7 +2402,7 @@ export default {
         return;
       }
       if (!res.ok) {
-        this.error = res.message || this.translate('okf.headTest.error.advisor', 'Advisor failed');
+        this.error = res.message || this.translate('okf.testingLab.error.advisor', 'Advisor failed');
         return;
       }
       this.advisor = res.result;
@@ -2422,13 +2428,13 @@ export default {
     blockedReasonText(reason) {
       if (reason === 'curator_original') {
         return this.translate(
-          'okf.headTest.advisor.reasonCurator',
+          'okf.testingLab.advisor.reasonCurator',
           'you declared this tag originally — confirm before removing'
         );
       }
       if (reason === 'history_rotated') {
         return this.translate(
-          'okf.headTest.advisor.reasonRotated',
+          'okf.testingLab.advisor.reasonRotated',
           'the edit history has rotated past the baseline — confirm before removing'
         );
       }
@@ -2466,7 +2472,7 @@ export default {
       if (!save || !save.ok) {
         this.busy = null;
         this.error =
-          (save && save.message) || this.translate('okf.headTest.error.saveTag', 'Could not save the forbidden tags');
+          (save && save.message) || this.translate('okf.testingLab.error.saveTag', 'Could not save the forbidden tags');
         return;
       }
       for (const t of addTags) if (!this.taughtTags.includes(t)) this.taughtTags.push(t);
@@ -2481,7 +2487,7 @@ export default {
         this.error =
           (reb && reb.message) ||
           this.translate(
-            'okf.headTest.error.rebuild',
+            'okf.testingLab.error.rebuild',
             'Head rebuild failed — the tags are saved; rebuild from the Head tab.'
           );
         return;
@@ -2490,7 +2496,7 @@ export default {
       if (!this.suite) {
         this.busy = null;
         this.error = this.translate(
-          'okf.headTest.error.applyNoSuite',
+          'okf.testingLab.error.applyNoSuite',
           'Tags saved and the head rebuilt — generate a suite, then Run all to see the effect.'
         );
         return;
@@ -2504,7 +2510,7 @@ export default {
         this.error =
           (res && res.message) ||
           this.translate(
-            'okf.headTest.error.run',
+            'okf.testingLab.error.run',
             'Suite run failed — the tags are saved; re-run from the Suites tab.'
           );
         return;
@@ -2540,7 +2546,7 @@ export default {
       const reb = await this.$store.dispatch('okf/headRebuild', { repoId: this.repo.repo_id });
       if (!reb.ok) {
         this.busy = null;
-        this.error = reb.message || this.translate('okf.headTest.error.rebuild', 'Head rebuild failed');
+        this.error = reb.message || this.translate('okf.testingLab.error.rebuild', 'Head rebuild failed');
         return;
       }
       this.$emit('changed', { head: reb.result });
@@ -2550,7 +2556,7 @@ export default {
       });
       this.busy = null;
       if (!res.ok) {
-        this.error = res.message || this.translate('okf.headTest.error.test', 'Routing test failed');
+        this.error = res.message || this.translate('okf.testingLab.error.test', 'Routing test failed');
         return;
       }
       this.lastResult = res.result;
@@ -2584,10 +2590,10 @@ export default {
         this.error =
           res.code === 'NO_FRONTMATTER'
             ? this.translate(
-                'okf.headTest.error.noFrontmatter',
+                'okf.testingLab.error.noFrontmatter',
                 'This repository has no head tags yet — create tags in the Frontmatter panel (or use Suggest tags), then generate a suite.'
               )
-            : res.message || this.translate('okf.headTest.error.generate', 'Suite generation failed');
+            : res.message || this.translate('okf.testingLab.error.generate', 'Suite generation failed');
         return;
       }
       let suite = null;
@@ -2598,7 +2604,7 @@ export default {
           this.busy = null;
           this.error =
             (suite.error && suite.error.message) ||
-            this.translate('okf.headTest.error.generate', 'Suite generation failed');
+            this.translate('okf.testingLab.error.generate', 'Suite generation failed');
           this.refreshRuns();
           return;
         }
@@ -2608,7 +2614,7 @@ export default {
       this.busy = null;
       if (!suite) {
         this.error = this.translate(
-          'okf.headTest.error.generateTimeout',
+          'okf.testingLab.error.generateTimeout',
           'The suite is taking unusually long — it may still land in Saved suites; check there in a minute.'
         );
         this.refreshRuns();
@@ -2664,7 +2670,7 @@ export default {
       });
       if (!res.ok) {
         this.busy = null;
-        this.error = res.message || this.translate('okf.headTest.error.run', 'Suite run failed');
+        this.error = res.message || this.translate('okf.testingLab.error.run', 'Suite run failed');
         return;
       }
       // 1-8g-v: the run is ASYNC (202 + poll) — large suites outlive the
@@ -2677,7 +2683,7 @@ export default {
         if (runDoc && runDoc.status === 'failed') {
           this.busy = null;
           this.error =
-            (runDoc.error && runDoc.error.message) || this.translate('okf.headTest.error.run', 'Suite run failed');
+            (runDoc.error && runDoc.error.message) || this.translate('okf.testingLab.error.run', 'Suite run failed');
           this.refreshRuns();
           return;
         }
@@ -2687,7 +2693,7 @@ export default {
       this.busy = null;
       if (!runDoc || !runDoc.payload || !runDoc.payload.summary) {
         this.error = this.translate(
-          'okf.headTest.error.runTimeout',
+          'okf.testingLab.error.runTimeout',
           'The run is taking unusually long — it keeps going server-side and will appear in the runs history; reopen this suite in a minute.'
         );
         this.refreshRuns();
@@ -2801,7 +2807,7 @@ export default {
         return;
       }
       if (!res.ok) {
-        this.error = res.message || this.translate('okf.headTest.error.explain', 'Explain failed');
+        this.error = res.message || this.translate('okf.testingLab.error.explain', 'Explain failed');
         return;
       }
       this.batchAdvice = res.result;
@@ -2814,7 +2820,7 @@ export default {
     async onRebuildSuiteRerun() {
       if (this.busy !== null) return;
       if (!this.suite) {
-        this.error = this.translate('okf.headTest.error.noSuite', 'Generate a suite first, then rebuild + re-run.');
+        this.error = this.translate('okf.testingLab.error.noSuite', 'Generate a suite first, then rebuild + re-run.');
         return;
       }
       this.busy = 'rebuild-rerun';
@@ -2822,7 +2828,7 @@ export default {
       const reb = await this.$store.dispatch('okf/headRebuild', { repoId: this.repo.repo_id });
       this.busy = null;
       if (!reb.ok) {
-        this.error = reb.message || this.translate('okf.headTest.error.rebuild', 'Head rebuild failed');
+        this.error = reb.message || this.translate('okf.testingLab.error.rebuild', 'Head rebuild failed');
         return;
       }
       this.$emit('changed', { head: reb.result });
@@ -2840,11 +2846,11 @@ export default {
      * confusable | forbidden | off-domain | meta). */
     classLabel(cls) {
       const keys = {
-        'near-miss': ['okf.headTest.cls.nearMiss', 'Near miss'],
-        confusable: ['okf.headTest.cls.confusable', 'Confusable'],
-        forbidden: ['okf.headTest.cls.forbidden', 'Forbidden'],
-        'off-domain': ['okf.headTest.cls.offDomain', 'Off-domain'],
-        meta: ['okf.headTest.cls.meta', 'Meta']
+        'near-miss': ['okf.testingLab.cls.nearMiss', 'Near miss'],
+        confusable: ['okf.testingLab.cls.confusable', 'Confusable'],
+        forbidden: ['okf.testingLab.cls.forbidden', 'Forbidden'],
+        'off-domain': ['okf.testingLab.cls.offDomain', 'Off-domain'],
+        meta: ['okf.testingLab.cls.meta', 'Meta']
       };
       const hit = keys[cls];
       return hit ? this.translate(hit[0], hit[1]) : cls;
@@ -2877,7 +2883,7 @@ export default {
     },
     failLabelOf(r) {
       if (r.error) return r.error;
-      return this.translate('okf.headTest.suites.fail', 'fail');
+      return this.translate('okf.testingLab.suites.fail', 'fail');
     },
     async onAddQuery() {
       if (!this.suite || !this.manualQuery.trim()) return;
@@ -2890,7 +2896,7 @@ export default {
       });
       this.busy = null;
       if (!res.ok) {
-        this.error = res.message || this.translate('okf.headTest.error.add', 'Could not add the query');
+        this.error = res.message || this.translate('okf.testingLab.error.add', 'Could not add the query');
         return;
       }
       this.suite = res.result;
@@ -2930,7 +2936,7 @@ export default {
       this.busy = null;
       if (!res || !res.ok) {
         this.error =
-          (res && res.message) || this.translate('okf.headTest.error.suiteRename', 'Could not rename the suite');
+          (res && res.message) || this.translate('okf.testingLab.error.suiteRename', 'Could not rename the suite');
         return;
       }
       // Adopt the returned doc and refresh the saved list (order can shift
@@ -2969,7 +2975,7 @@ export default {
       this.deleteConfirm = null;
       if (!res || !res.ok) {
         this.error =
-          (res && res.message) || this.translate('okf.headTest.error.suiteDelete', 'Could not delete the suite');
+          (res && res.message) || this.translate('okf.testingLab.error.suiteDelete', 'Could not delete the suite');
         return;
       }
       if (s.__ragas) this.savedRagasSuites = this.savedRagasSuites.filter((x) => x._key !== s._key);
@@ -3001,7 +3007,7 @@ export default {
       });
       this.busy = null;
       if (!res || !res.ok) {
-        this.error = (res && res.message) || this.translate('okf.headTest.error.probe', 'Corpus test failed');
+        this.error = (res && res.message) || this.translate('okf.testingLab.error.probe', 'Corpus test failed');
         return;
       }
       const probe = {
@@ -3046,7 +3052,8 @@ export default {
       const res = await this.$store.dispatch('okf/headSuiteGet', { repoId: this.repo.repo_id, suiteKey });
       this.suiteLoading = false;
       if (!res || !res.ok || !res.result) {
-        this.error = (res && res.message) || this.translate('okf.headTest.error.suiteLoad', 'Could not load the suite');
+        this.error =
+          (res && res.message) || this.translate('okf.testingLab.error.suiteLoad', 'Could not load the suite');
         return;
       }
       this.suite = res.result;
@@ -3090,7 +3097,7 @@ export default {
       this.busy = null;
       if (!res || !res.ok) {
         this.error =
-          (res && res.message) || this.translate('okf.headTest.error.suiteUpdate', 'Could not update the suite');
+          (res && res.message) || this.translate('okf.testingLab.error.suiteUpdate', 'Could not update the suite');
         return;
       }
       this.suite = res.result;
@@ -3110,7 +3117,7 @@ export default {
       this.busy = null;
       if (!res || !res.ok) {
         this.error =
-          (res && res.message) || this.translate('okf.headTest.error.suiteUpdate', 'Could not update the suite');
+          (res && res.message) || this.translate('okf.testingLab.error.suiteUpdate', 'Could not update the suite');
         return;
       }
       this.suite = res.result;
@@ -3132,7 +3139,7 @@ export default {
       this.busy = null;
       if (!res || !res.ok) {
         this.error =
-          (res && res.message) || this.translate('okf.headTest.error.suiteUpdate', 'Could not update the suite');
+          (res && res.message) || this.translate('okf.testingLab.error.suiteUpdate', 'Could not update the suite');
         return;
       }
       this.suite = res.result;

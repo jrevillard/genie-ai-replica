@@ -2,7 +2,7 @@
 // per-metric means, straight from Arango. Used to line a re-score up against
 // the run it re-scored.
 //
-// Usage: node scripts/okf-routing-lab/run-judge-baseline.js [limit]
+// Usage: node scripts/okf-testing-lab/run-judge-baseline.js [limit]
 // Reads the local build's ArangoDB on localhost:8529, db genie-ai.
 const http = require('http');
 

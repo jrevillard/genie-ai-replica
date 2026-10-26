@@ -424,7 +424,7 @@ export default {
       piiRescanKey: null,
       // STALE-ANSWER GUARD: a tally describes THIS repo at THIS moment. If a
       // refresh (or a concept re-scan) supersedes it, rendering the older
-      // numbers would misreport the gate. Same idiom as HeadTestDialog's
+      // numbers would misreport the gate. Same idiom as TestingLabDialog's
       // suiteEpoch / queryEpoch.
       piiRescanEpoch: 0,
       loading: false,

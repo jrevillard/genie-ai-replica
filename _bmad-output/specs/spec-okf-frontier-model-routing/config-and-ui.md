@@ -55,7 +55,7 @@ API surface (okf-routes.js):
 
 Placement: a new **AdminDashboard tab** titled **"Model Routing"** (decided David
 2026-10-18 — "Remote GPU Config" was considered and set aside) — system-level config is
-repo-independent; NOT inside RepoEditor/HeadTestDialog (repo-scoped). Visibility follows
+repo-independent; NOT inside RepoEditor/TestingLabDialog (repo-scoped). Visibility follows
 the `isAdmin` NavBar pattern; enforcement is the server-side `requireRole`.
 
 Layout (DS components only):

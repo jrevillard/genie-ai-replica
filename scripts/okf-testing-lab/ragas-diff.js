@@ -1,5 +1,5 @@
 // ragas-diff.js — read-only: compare two RAGAS runs row-by-row.
-// Usage: node scripts/okf-routing-lab/ragas-diff.js <baselineRunKey> <candidateRunKey>
+// Usage: node scripts/okf-testing-lab/ragas-diff.js <baselineRunKey> <candidateRunKey>
 // Prints: per-metric means (both runs, delta), the set of rows whose ANSWER
 // changed, per-row metric deltas on the answer-side metrics, and the status
 // of the known proof rows (new-26 / new-98 / new-9 / new-3).

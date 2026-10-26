@@ -79,7 +79,7 @@ export default {
       // STALE-ANSWER GUARD: a read describes ONE repository at ONE moment.
       // Bumped by every new read and by a repoId change; a read whose epoch
       // moved while in flight is discarded rather than rendered against the
-      // wrong repository. Same idiom as HeadTestDialog's suiteEpoch/queryEpoch.
+      // wrong repository. Same idiom as TestingLabDialog's suiteEpoch/queryEpoch.
       loadEpoch: 0
     };
   },

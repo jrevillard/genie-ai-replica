@@ -370,7 +370,7 @@ design where 'retracted' was THE edit state):**
    frontmatter save.
 
 Result: every published+ingested repo — the only repos actually serving —
-had a read-only editor; the Routing Lab's tune loop could not act on them.
+had a read-only editor; the Testing Lab's tune loop could not act on them.
 
 **Fix (scoped, not blanket-removed):**
 - `update()`: serving repos accept `frontmatter`-only patches (audited as

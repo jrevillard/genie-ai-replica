@@ -92,17 +92,25 @@
           <input v-model.number="genPersonas" type="number" min="1" max="10" :disabled="generateBusy" />
         </label>
       </div>
-      <!-- 8-7 model configs: the judge this generation runs with — an explicit
+      <!-- 8-7 model configs: the model this GENERATION runs with — an explicit
            pick beats the deployment's active configuration; default = env.
            David 2026-10-25: this row used to be rendered ONLY when the named
            configuration list was non-empty, and the list 403'd for anyone
            without tools-admin — so for a curator the model selection was
            GONE, including the .env default. It renders whenever there is a
-           judge to pick, and the env judge is always one of the options. -->
+           judge to pick, and the env judge is always one of the options.
+
+           David 2026-10-25 (later, live): generating a suite and SCORING it
+           are SEPARATE operations with separate models — the generation
+           synthesizes questions, the judge scores answers. They shared ONE
+           v-model, so the panel could not express "generate with A, score
+           with B", and a pick made for one silently governed the other.
+           This picker is now the GENERATION model; the run's judge has its
+           own picker below, with its own memory. -->
       <div v-if="hasJudgeChoice" class="okf-ragas__judge-row">
         <label class="okf-ragas__dim">
-          <span>{{ translate('okf.ragas.generate.config', 'Judge model configuration') }}</span>
-          <select v-model="judgeConfigKey" :disabled="generateBusy" @change="onJudgeConfigChange">
+          <span>{{ translate('okf.ragas.generate.config', 'Generation model configuration') }}</span>
+          <select v-model="genConfigKey" :disabled="generateBusy" @change="onGenConfigChange">
             <option value="">
               {{ defaultJudgeLabel }}
             </option>
@@ -112,26 +120,26 @@
             </option>
           </select>
         </label>
-        <label v-if="judgeConfigKey && judgeConfigKey !== envPickKey" class="okf-ragas__dim">
+        <label v-if="genConfigKey !== envPickKey" class="okf-ragas__dim">
           <span>{{ translate('okf.ragas.generate.model', 'Model') }}</span>
-          <select v-if="judgeModels.length" v-model="judgeModel" :disabled="generateBusy">
+          <select v-if="genModels.length" v-model="genModel" :disabled="generateBusy">
             <option value="">{{ translate('okf.ragas.generate.modelPick', 'Configuration default') }}</option>
-            <option v-for="m in judgeModels" :key="m" :value="m">{{ m }}</option>
+            <option v-for="m in genModels" :key="m" :value="m">{{ m }}</option>
           </select>
           <input
             v-else
-            v-model="judgeModel"
+            v-model="genModel"
             type="text"
             :placeholder="translate('okf.ragas.generate.modelDefault', 'configuration default')"
             :disabled="generateBusy"
           />
         </label>
         <DsInfoTip
-          :label="translate('okf.ragas.generate.config', 'Judge model configuration')"
+          :label="translate('okf.ragas.generate.config', 'Generation model configuration')"
           :text="
             translate(
               'okf.ragas.generate.note',
-              'The model that synthesizes questions and scores answers. An active configuration (★, Models tab) applies automatically; picking one here overrides it for this operation only. Stronger judges make entity-recall and advice quality markedly better on small local models.'
+              'The model that synthesizes the suite — it builds the knowledge graph and writes the questions. It does NOT score the benchmark: that is the separate judge picker in the Run section. An active configuration (★, Models tab) applies automatically; picking one here overrides it for this operation only.'
             )
           "
         />
@@ -186,8 +194,8 @@
              the run went to a personal MiniMax key while the panel said
              "deployment default" — the active GLM config. The dropdown is
              the selection; this is the truth. -->
-        <span v-if="effectiveJudgeLabel" class="okf-ragas__muted okf-ragas__progress-detail">
-          {{ effectiveJudgeLabel }}
+        <span v-if="effectiveGenerationLabel" class="okf-ragas__muted okf-ragas__progress-detail">
+          {{ effectiveGenerationLabel }}
         </span>
       </div>
     </div>
@@ -238,6 +246,7 @@
              must exist whenever a judge can be chosen, not only when the
              named-configuration list happens to be non-empty. -->
         <label v-if="hasJudgeChoice" class="okf-ragas__metric okf-ragas__judge-inline">
+          <span class="okf-ragas__dim">{{ translate('okf.ragas.run.judge', 'Judge model configuration') }}</span>
           <select v-model="judgeConfigKey" :disabled="runBusy" @change="onJudgeConfigChange">
             <option value="">
               {{ defaultJudgeLabel }}
@@ -248,7 +257,7 @@
             </option>
           </select>
           <select
-            v-if="judgeConfigKey && judgeConfigKey !== envPickKey && judgeModels.length"
+            v-if="judgeConfigKey !== envPickKey && judgeModels.length"
             v-model="judgeModel"
             :disabled="runBusy"
             class="okf-ragas__judge-model"
@@ -284,6 +293,12 @@
       </div>
       <div v-if="runProgress" class="okf-ragas__progress">
         <DsProgress :value="progressPct" />
+        <!-- The judge this run is ACTUALLY scoring with — the picker shows the
+             selection, this is the truth (David, 2026-10-25: the two must
+             never disagree). -->
+        <span v-if="effectiveJudgeLabel" class="okf-ragas__muted okf-ragas__progress-detail">
+          {{ effectiveJudgeLabel }}
+        </span>
       </div>
 
       <!-- ENTRIES TABLE (management parity) -->
@@ -486,7 +501,7 @@
             :text="
               translate(
                 'okf.ragas.results.statusNote',
-                'Every suite question in this run, stacked by outcome: passing, failing (any selected metric below its threshold), abstained (the answerer declined), or errored (the pipeline failed that row).'
+                'Every in-scope question in this run, stacked by outcome: answered, failing (any selected metric below its threshold), abstained (the answerer declined), or errored (the pipeline failed that row). Out-of-scope controls are not counted — they are a control, not a result.'
               )
             "
           />
@@ -568,6 +583,18 @@
                   "
                 >
                   {{ translate('okf.ragas.results.noisy', 'answer OK — retrieval noise') }}
+                </DsPill>
+                <DsPill
+                  v-else-if="r.abstained && !rowJudged(r)"
+                  variant="warning"
+                  :title="
+                    translate(
+                      'okf.ragas.results.declinedUnjudgedTitle',
+                      'The answerer declined and said nothing, so this row was never handed to the judge. It carries no score and is left out of the averages — and it reduces the measured coverage.'
+                    )
+                  "
+                >
+                  {{ translate('okf.ragas.results.declinedUnjudged', 'declined — not judged') }}
                 </DsPill>
                 <DsPill v-else-if="r.abstained" variant="warning">{{
                   translate('okf.ragas.results.abstained', 'abstained')
@@ -749,7 +776,7 @@
          row that names its judge. -->
     <DsDialog
       :visible="rescoreAsk !== null"
-      :title="translate('okf.ragas.rescore.title', 'Re-score with another judge')"
+      :title="translate('okf.ragas.rescore.title', 'Re-score with a judge')"
       size="sm"
       :actions="rescoreActions"
       @close="onRescoreClose"
@@ -780,7 +807,7 @@
           </option>
         </select>
       </label>
-      <label v-if="rescoreConfigKey && rescoreConfigKey !== envPickKey" class="okf-ragas__dim">
+      <label v-if="rescoreConfigKey !== envPickKey" class="okf-ragas__dim">
         <span>{{ translate('okf.ragas.generate.model', 'Model') }}</span>
         <select v-if="rescoreModels.length" v-model="rescoreModel" :disabled="rescoreBusy">
           <option value="">{{ translate('okf.ragas.generate.modelPick', 'Configuration default') }}</option>
@@ -914,6 +941,14 @@ export default {
       colWidths: {}, // per-column px widths for the results table (drag-resize)
       copiedId: '', // row whose answer was just copied (transient ✓)
       modelConfigs: [], // 8-7: named judge configurations (admin-managed)
+      // The GENERATION model — the one that synthesizes the suite. SEPARATE
+      // from the judge below: generating a suite and scoring it are two
+      // operations with two models, and one v-model for both meant a pick for
+      // one silently governed the other (David, 2026-10-25).
+      genConfigKey: '', // '' = deployment default (active config / env)
+      genModel: '', // '' = the configuration's default model
+      genModels: [],
+      // The JUDGE model — the one that SCORES a run.
       judgeConfigKey: '', // '' = deployment default (active config / env)
       envJudge: null, // {base_url, model} the env/system default resolves to
       judgeLoadFailed: false, // the judge list could not be read (still offer the env pick)
@@ -958,10 +993,9 @@ export default {
      * so the choice is never a guess. */
     defaultJudgeLabel() {
       const active = this.modelConfigs.find((c) => c.active);
-      if (!active)
-        return this.translate('okf.ragas.generate.default', 'Deployment default (active configuration / env)');
+      if (!active) return this.translate('okf.ragas.generate.default', 'Deployment default (.env)');
       const model = active.default_model ? ` (${active.default_model})` : '';
-      return this.translate('okf.ragas.generate.defaultNamed', 'Deployment default — {name}{model}')
+      return this.translate('okf.ragas.generate.defaultNamed', 'Active configuration — {name}{model}')
         .replace('{name}', active.name)
         .replace('{model}', model);
     },
@@ -970,9 +1004,9 @@ export default {
      * default control is never the only statement of what is in use.
      */
     envJudgeLabel() {
-      if (!this.envJudge) return this.translate('okf.ragas.generate.envJudgePlain', 'System default (environment)');
+      if (!this.envJudge) return this.translate('okf.ragas.generate.envJudgePlain', 'Deployment default (.env)');
       const model = this.envJudge.model ? ` (${this.envJudge.model})` : '';
-      return this.translate('okf.ragas.generate.envJudge', 'System default (environment){model}').replace(
+      return this.translate('okf.ragas.generate.envJudge', 'Deployment default (.env){model}').replace(
         '{model}',
         model
       );
@@ -1008,13 +1042,33 @@ export default {
         }
       ];
     },
+    /** The ACTIVE model configuration — what the EMPTY pick resolves to.
+     * Its models are choosable: the model select must not be hidden for the
+     * default (David, 2026-10-25). */
+    activeModelConfig() {
+      return this.modelConfigs.find((c) => c.active) || null;
+    },
     /** The model the RUNNING generation is actually using, by name. The
      * dropdown shows the SELECTION; for an in-flight generation that
      * selection is reset to "default" (the suite doc does not exist yet),
      * so this is the only honest answer to "which model is this?".
-     */
-    effectiveJudgeLabel() {
+     *
+     * It says GENERATING, not judging: a generation synthesizes the suite,
+     * it does not score anything (David, 2026-10-25). */
+    effectiveGenerationLabel() {
       const j = this.genProgress && this.genProgress.judge;
+      if (!j) return '';
+      const name =
+        j.config || (j.source === 'env' ? this.translate('okf.ragas.generate.envDefault', 'environment default') : '');
+      const model = j.model ? ` (${j.model})` : '';
+      if (!name && !model) return '';
+      return this.translate('okf.ragas.generate.effectiveGenerating', 'Generating with {name}{model}')
+        .replace('{name}', name)
+        .replace('{model}', model);
+    },
+    /** The model the RUNNING run is actually scoring with. */
+    effectiveJudgeLabel() {
+      const j = this.runProgress && this.runProgress.judge;
       if (!j) return '';
       const name =
         j.config || (j.source === 'env' ? this.translate('okf.ragas.generate.envDefault', 'environment default') : '');
@@ -1106,35 +1160,37 @@ export default {
     statusSeries() {
       const s = this.runDoc && this.runDoc.payload && this.runDoc.payload.summary;
       if (!s) return [];
-      // The four buckets must PARTITION the rows — the bar is read as a
-      // whole, and a row counted twice makes the segments sum to more
+      // The four buckets must PARTITION the in-scope rows — the bar is read
+      // as a whole, and a row counted twice makes the segments sum to more
       // than the suite.
       //
-      //   error     — the row produced no answer (n_errors)
-      //   abstained — the row declined; it still has an answer, so the judge
-      //               scored it and its context metrics came back 0, which
-      //               puts it in failing_count as well. It has its own
-      //               column, so it is taken OUT of the failing bucket.
-      //   failing   — the rows that failed a metric and are not abstentions
-      //   answered  — everything else
+      //   error     — the pipeline failed on the row; no answer; never judged
+      //   abstained — the answerer declined; it has its own column
+      //   failing   — judged, a metric below its threshold, not a decline
+      //   answered  — everything else in scope
       //
-      // The errored rows are NOT in failing_count (they were never judged),
-      // so they are subtracted explicitly. Before the judge-only-the-
-      // answered-rows fix they WERE in failing_count as zeros, and the old
-      // arithmetic (n_evaluable − n_abstained − failing_count) subtracted
-      // the abstentions twice — the all-abstained runs reached −20.
+      // The SERVER computes these over ONE population (the in-scope rows —
+      // an out-of-scope control is never a result and never a failure), so
+      // the panel must not subtract across populations itself. It used to:
+      // n_errors and n_abstained counted out-of-scope rows while
+      // n_evaluable and failing_count did not, and the failing bucket was
+      // derived as (failing_count − n_abstained), which subtracted a
+      // DECLINE that was never judged and so was never in failing_count —
+      // relabelling a genuinely failing row as "answered".
       const nErrors = s.n_errors || 0;
       const nAbstained = s.n_abstained || 0;
-      const nFailing = s.failing_count || 0;
-      const nEvaluable = s.n_evaluable || 0;
-      const failingOnly = Math.max(0, nFailing - nAbstained);
+      // Runs stored before the server computed the buckets fall back to the
+      // old arithmetic — the best that can be said about them.
+      const nFailing = s.n_failed != null ? s.n_failed : Math.max(0, (s.failing_count || 0) - nAbstained);
+      const nAnswered =
+        s.n_answered != null ? s.n_answered : Math.max(0, (s.n_evaluable || 0) - nErrors - nAbstained - nFailing);
       return [
         {
           name: this.translate('okf.ragas.results.answered', 'answered'),
-          data: [Math.max(0, nEvaluable - nErrors - nAbstained - failingOnly)]
+          data: [nAnswered]
         },
         { name: this.translate('okf.ragas.results.abstained', 'abstained'), data: [nAbstained] },
-        { name: this.translate('okf.ragas.results.failingShort', 'failing'), data: [failingOnly] },
+        { name: this.translate('okf.ragas.results.failingShort', 'failing'), data: [nFailing] },
         { name: this.translate('okf.ragas.results.error', 'error'), data: [nErrors] }
       ];
     },
@@ -1392,6 +1448,28 @@ export default {
         this.judgeModel = '';
         this.judgeModels = [];
       }
+      // The same for the GENERATION pick — it is its own control now.
+      if (this.genConfigKey && this.genConfigKey !== ENV_PICK && !list.some((c) => c._key === this.genConfigKey)) {
+        this.genConfigKey = '';
+        this.genModel = '';
+        this.genModels = [];
+      }
+    },
+    /** A RUNNING job's pick is what the job is using — the picker must show
+     * it, not the one the panel remembers (David, 2026-10-25: the dropdown
+     * said GLM while the job was on granite). The server sends the pick as
+     * made in the progress envelope. */
+    genProgress(p) {
+      if (!p || !p.judge_pick) return;
+      const key = p.judge_pick.config_key || '';
+      if (key !== this.genConfigKey) this.genConfigKey = key;
+      if (p.judge_pick.model) this.genModel = p.judge_pick.model;
+    },
+    runProgress(p) {
+      if (!p || !p.judge_pick) return;
+      const key = p.judge_pick.config_key || '';
+      if (key !== this.judgeConfigKey) this.judgeConfigKey = key;
+      if (p.judge_pick.model) this.judgeModel = p.judge_pick.model;
     }
   },
   mounted() {
@@ -1443,18 +1521,60 @@ export default {
       this.judgeModels = [];
       // ENV_PICK is not a config _key — no model list to fetch; the env judge
       // carries its own model, named by the run's fidelity/progress envelope.
-      if (!this.judgeConfigKey || this.judgeConfigKey === ENV_PICK) return;
-      const res = await this.$store.dispatch('okf/modelConfigModels', { key: this.judgeConfigKey }).catch(() => null);
+      if (this.judgeConfigKey === ENV_PICK) return;
+      // The EMPTY pick is the ACTIVE configuration, and it has models of its
+      // own: an operator must be able to choose one (David, 2026-10-25).
+      const key = this.judgeConfigKey || (this.activeModelConfig && this.activeModelConfig._key);
+      if (!key) return;
+      const res = await this.$store.dispatch('okf/modelConfigModels', { key }).catch(() => null);
       if (res && res.ok) this.judgeModels = res.models || [];
       // listing failure leaves the free-text input — honest fallback
     },
+    /** The GENERATION pick: the model that synthesizes the suite. Separate
+     * from the judge pick (David, 2026-10-25) — generating a suite and
+     * scoring it are two operations with two models. */
+    async onGenConfigChange() {
+      this.genModel = '';
+      this.genModels = [];
+      if (this.genConfigKey === ENV_PICK) return;
+      const key = this.genConfigKey || (this.activeModelConfig && this.activeModelConfig._key);
+      if (!key) return;
+      const res = await this.$store.dispatch('okf/modelConfigModels', { key }).catch(() => null);
+      if (res && res.ok) this.genModels = res.models || [];
+    },
+    /** Restore the GENERATION pick: the model this suite was synthesized with
+     * (`suite.payload.judge_pick`). The judge pick has its own memory (the
+     * latest run's pick) — they are not the same thing. */
+    async restoreGenerationPick() {
+      if (!this.suite) return;
+      if (!this.modelConfigs.length && !this.envJudge) await this.loadJudgeConfigs();
+      const pick = (this.suite.payload && this.suite.payload.judge_pick) || null;
+      const key = pick && pick.config_key;
+      if (key === ENV_PICK) {
+        this.genConfigKey = ENV_PICK;
+        this.genModel = '';
+        this.genModels = [];
+        return;
+      }
+      if (key) {
+        this.genConfigKey = key;
+        await this.onGenConfigChange();
+        if (pick.model && this.genModels.includes(pick.model)) this.genModel = pick.model;
+        return;
+      }
+      this.genConfigKey = '';
+      this.genModel = '';
+      this.genModels = [];
+    },
     /** 8-7 judge memory (David 2026-10-21: the model selection must not fall
      *  back to the deployment default whenever the dialog is left and
-     *  re-entered). Restore the pick this suite was last used with: the
-     *  viewed run's pick when loading that run, else the suite's latest
-     *  run's pick, else the generation pick. A config deleted since then
-     *  falls back to default — the dropdown cannot offer what no longer
-     *  exists. */
+     *  re-entered). Restore the JUDGE pick: the viewed run's pick when
+     *  loading that run, else the suite's latest run's pick, else the
+     *  generation pick (a suite that has never run was scored with whatever
+     *  the operator had selected, and there is no run to read it from). A
+     *  config deleted since then falls back to default — the dropdown cannot
+     *  offer what no longer exists. The GENERATION pick has its own memory
+     *  (`restoreGenerationPick`) — the two are separate controls. */
     async restoreJudgePick(preferred) {
       if (!this.suite) return;
       // Mount race: loadJudgeConfigs may still be in flight when a suite
@@ -1609,6 +1729,7 @@ export default {
         retrieved: (r.contexts || []).length,
         abstained: !!r.abstained,
         failed: errored,
+        judged: this.rowJudged(r),
         fails,
         ok: !errored && !r.abstained && fails.length === 0
       };
@@ -1617,10 +1738,30 @@ export default {
       const o = this.runOutcome(e);
       if (!o) return '';
       if (o.failed) return this.translate('okf.ragas.run.rowError', 'error');
+      // A decline that carried no answer was never handed to the judge —
+      // a different state from a decline that was judged (whose zeros ARE
+      // in the averages). The guide taught the second as if it were the
+      // only one; the panel now says which one it is.
+      if (o.abstained && !o.judged) {
+        return this.translate('okf.ragas.run.declinedUnjudged', 'declined — not judged');
+      }
       if (o.abstained) return this.translate('okf.ragas.run.abstained', 'abstained');
       return o.ok
         ? this.translate('okf.ragas.run.pass', 'pass')
         : `${this.translate('okf.ragas.run.fail', 'fail')}: ${o.fails.join(', ')}`;
+    },
+    /**
+     * Was this row handed to the judge?
+     *
+     * The server writes the flag at submit time; a row with no numeric
+     * metric was never measured. A DECLINE that carried no answer was
+     * never handed to the judge at all — the case the guide used to
+     * describe as if it were judged.
+     */
+    rowJudged(r) {
+      if (r && typeof r.judged === 'boolean') return r.judged;
+      const m = (r && r.metrics) || {};
+      return Object.keys(m).some((k) => typeof m[k] === 'number' && m[k] === m[k]);
     },
     /**
      * Colour the attribution stage by what it means for the operator:
@@ -1636,6 +1777,9 @@ export default {
       // demands action (re-run), not tuning.
       if (stage === 'retrieval-error') return 'danger';
       if (stage === 'judge' || stage === 'pipeline') return 'neutral';
+      // The judge returned nothing measurable for the row — a judge-side
+      // problem, like the other judge stages, not a knob to turn.
+      if (stage === 'unmeasured') return 'neutral';
       return 'warning';
     },
     /**
@@ -1734,7 +1878,9 @@ export default {
         await this.adoptInFlight(suiteKey);
         // Judge memory: reopen/refresh restores the pick this suite was last
         // used with, not the deployment default. Awaited so a run-specific
-        // restore (onLoadRun) always runs after and wins.
+        // restore (onLoadRun) always runs after and wins. The GENERATION
+        // pick has its own memory (the model the suite was synthesized with).
+        await this.restoreGenerationPick();
         await this.restoreJudgePick();
       }
     },
@@ -1823,9 +1969,11 @@ export default {
             testset_size: this.genSize,
             query_distribution: dist,
             num_personas: this.genPersonas,
-            // 8-7: explicit judge pick ('' fields simply omit the override)
-            judge_config_key: this.judgeConfigKey || undefined,
-            judge_model: this.judgeConfigKey ? this.judgeModel || undefined : undefined
+            // 8-7: explicit GENERATION model pick ('' fields simply omit the
+            // override). The generation's model and the run's judge are
+            // separate operations with separate picks (David, 2026-10-25).
+            judge_config_key: this.genConfigKey || undefined,
+            judge_model: this.genConfigKey ? this.genModel || undefined : undefined
           },
           onStarted: (suiteKey) => {
             this.generatingKey = suiteKey;
@@ -1894,7 +2042,11 @@ export default {
         runKey: this.runningRunKey
       });
       this.runCancelBusy = false;
-      if (!res.ok) this.error = res.message;
+      // The run may have landed between the operator's click and the
+      // request reaching the server — then there is nothing to cancel, and
+      // "no such run is executing" is not a failure the operator can act
+      // on. It must not read as an error.
+      if (!res.ok && res.code !== 'NO_RUN_IN_FLIGHT') this.error = res.message;
       // On ok: the ragasRun poll observes the cancelled run record next tick.
     },
     async onRename(name) {
@@ -2089,8 +2241,12 @@ export default {
     async onRescoreConfigChange() {
       this.rescoreModel = '';
       this.rescoreModels = [];
-      if (!this.rescoreConfigKey || this.rescoreConfigKey === ENV_PICK) return;
-      const res = await this.$store.dispatch('okf/modelConfigModels', { key: this.rescoreConfigKey }).catch(() => null);
+      if (this.rescoreConfigKey === ENV_PICK) return;
+      // The EMPTY pick is the ACTIVE configuration — its models are choosable
+      // too, so a re-score can name the model it re-scores with.
+      const key = this.rescoreConfigKey || (this.activeModelConfig && this.activeModelConfig._key);
+      if (!key) return;
+      const res = await this.$store.dispatch('okf/modelConfigModels', { key }).catch(() => null);
       if (res && res.ok) this.rescoreModels = res.models || [];
     },
     onRescoreClose() {

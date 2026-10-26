@@ -6,8 +6,8 @@
 // attribution asks for. It does NOT generate a suite and it does NOT delete
 // anything: the suite and its runs are the operator's.
 //
-//   node scripts/okf-routing-lab/ragas-compare.js <repo_id> [suite_key]
-//   node scripts/okf-routing-lab/ragas-compare.js <repo_id> --attach <run_key> [suite_key]
+//   node scripts/okf-testing-lab/ragas-compare.js <repo_id> [suite_key]
+//   node scripts/okf-testing-lab/ragas-compare.js <repo_id> --attach <run_key> [suite_key]
 //
 // What it prints: per-metric means (before vs after), the failing-row
 // count, and the stage distribution of the failures — so the question

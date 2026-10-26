@@ -76,7 +76,7 @@ the UI renders instead of guessing from prose.
 
 ## Data repair
 
-`scripts/okf-routing-lab/ragas-abstention-backfill.js` recomputed every
+`scripts/okf-testing-lab/ragas-abstention-backfill.js` recomputed every
 stored run's `abstained` flag and summary with the authoritative rule:
 
 | Run | Before | After |

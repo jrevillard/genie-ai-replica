@@ -57,7 +57,34 @@
 'use strict';
 
 const dbService = require('/app/shared-lib/db-connection-service');
-const { scoreEntityRecall, fmt } = require('/tmp/ragas-regenerate-reference.js');
+
+// The reference-scoring helper is copied into the container by the operator
+// (it is not shipped in the image). A bare require would print a
+// module-not-found stack trace and bury the actual instruction.
+//
+// It is loaded LAZILY, on first use: the module also exports the pure
+// helpers (topic tokens, the chunk score, the normalized question, the
+// passage lookup) that decide what may be rewritten, and those must be
+// usable — and testable — without the operator's copy present. The old
+// module-level require called process.exit(2) on a missing copy, which
+// killed any importer, not just this script.
+let _reference = null;
+function referenceHelper() {
+  if (_reference) return _reference;
+  try {
+    _reference = require('/tmp/ragas-regenerate-reference.js');
+  } catch (e) {
+    throw new Error(
+      'ragas-regenerate-entry: /tmp/ragas-regenerate-reference.js is missing.\n' +
+        '  Copy it into the container first:\n' +
+        '  docker cp <path>/ragas-regenerate-reference.js <container>:/tmp/ragas-regenerate-reference.js\n' +
+        `  (${e.message})`
+    );
+  }
+  return _reference;
+}
+const scoreEntityRecall = (...args) => referenceHelper().scoreEntityRecall(...args);
+const fmt = (...args) => referenceHelper().fmt(...args);
 
 const RAGAS_URL = process.env.OKF_RAGAS_URL || 'http://ragas-service:8090';
 const RAGAS_INTERNAL_SECRET = process.env.RAGAS_INTERNAL_SECRET || process.env.OKF_INTERNAL_SECRET || '';
@@ -162,6 +189,13 @@ async function generateEntry(documents, judge) {
     if (!jobRes.ok) throw new Error(`sidecar job read failed: ${jobRes.status}`);
     const job = await jobRes.json();
     if (job.status === 'failed') throw new Error(`sidecar job failed: ${String(job.error || 'unknown').slice(0, 300)}`);
+    // A cancelled job is a TERMINAL state, not a slow one: the old loop
+    // only checked for 'failed' and 'done', so a cancellation was reported
+    // ten minutes later as "the generation timed out" — which sends the
+    // operator looking at the wrong thing entirely.
+    if (job.status === 'cancelled') {
+      throw new Error('the sidecar generation was CANCELLED — nothing was regenerated');
+    }
     if (job.status === 'done' || job.status === 'completed') {
       const samples = (job.result && job.result.samples) || [];
       if (!samples.length) throw new Error('the generator produced no sample');
@@ -208,11 +242,29 @@ if (require.main === module) {
   const suiteKey = process.argv[3];
   const rest = process.argv.slice(4);
   const dryRun = rest.includes('--dry-run');
-  const entryIds = rest.filter((a) => !a.startsWith('--'));
+  // The token AFTER a flag is that flag's VALUE, not an entry id. Without
+  // this, `--floor 0.6` put "0.6" into the entry-id list — so the tool
+  // targeted a non-existent entry, regenerated nothing, printed "0
+  // regenerated" and exited 0. A silent no-op is the worst possible
+  // outcome for a tool that writes to a live suite.
+  const FLAGS_WITH_VALUE = new Set(['--floor', '--judge']);
+  const entryIds = [];
+  for (let i = 0; i < rest.length; i += 1) {
+    const tok = rest[i];
+    if (tok.startsWith('--')) {
+      if (FLAGS_WITH_VALUE.has(tok)) i += 1; // skip the flag's value
+      continue;
+    }
+    entryIds.push(tok);
+  }
   const floorIdx = rest.indexOf('--floor');
-  const floor = floorIdx === -1 ? 0.5 : Number(rest[floorIdx + 1]) || 0.5;
+  // `Number(x) || 0.5` turned a floor of 0 into 0.5 — so an operator asking
+  // for "regenerate everything below zero" got the default instead, with
+  // no warning.
+  const rawFloor = floorIdx === -1 ? 0.5 : Number(rest[floorIdx + 1]);
+  const floor = Number.isFinite(rawFloor) ? rawFloor : 0.5;
   const judgeIdx = rest.indexOf('--judge');
-  const judgeForce = judgeIdx === -1 ? null : rest[judgeIdx + 1]; // 'env' | 'suite'
+  const judgeForce = judgeIdx === -1 || !rest[judgeIdx + 1] ? null : rest[judgeIdx + 1]; // 'env' | 'suite'
 
   if (!repoId || !suiteKey) {
     console.error('usage: node ragas-regenerate-entry.js <repo_id> <suite_key> [entry_id ...] [--dry-run] [--floor N]');
@@ -222,7 +274,18 @@ if (require.main === module) {
   (async () => {
     const svc = require('/app/services/ragas-suite-service');
     const db = await dbService.getConnection();
-    const suiteDoc = await db.collection('okf_head_test_runs').document(suiteKey);
+    // The driver's document() THROWS on a 404, so `if (!suiteDoc)` never
+    // fired and the operator got a raw ArangoDB stack instead of "suite
+    // not found" — the one line that tells them what to do.
+    let suiteDoc;
+    try {
+      suiteDoc = await db.collection('okf_head_test_runs').document(suiteKey);
+    } catch (e) {
+      if (e && (e.code === 404 || e.statusCode === 404)) {
+        throw new Error(`suite ${suiteKey} not found — check the suite key (list them with ragas-compare-runs.js)`);
+      }
+      throw e;
+    }
     if (!suiteDoc) throw new Error(`suite ${suiteKey} not found`);
     const entries = suiteDoc.payload.entries || [];
     const { docs, graph } = await loadCorpus(db, repoId);

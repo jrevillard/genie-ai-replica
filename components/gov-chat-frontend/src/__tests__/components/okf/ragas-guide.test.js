@@ -29,7 +29,7 @@ const CHAPTERS = ['generate', 'curate', 'run', 'models', 'read', 'errors'];
 // with errors and how they are mapped to benchmark results must be
 // documented in the embedded guide for users"). The table is a chapter
 // like any other — it has its own keys, and they must resolve too.
-const ERROR_STATES = ['error', 'abstained', 'unmeasured', 'belowThreshold', 'outOfScope'];
+const ERROR_STATES = ['error', 'abstained', 'declinedUnjudged', 'unmeasured', 'belowThreshold', 'outOfScope'];
 const ERROR_COLUMNS = ['state', 'meaning', 'effect'];
 
 // The OUTPUT reading table (David 2026-10-25: "You have not updated the
@@ -160,6 +160,90 @@ describe('RagasGuideDialog', () => {
     expect(empty).toEqual([]);
   });
 
+  // The review's finding: the guide's "it cannot lie" assertions guarded the
+  // ENGLISH copy only, so the other 13 locales could drift back into
+  // contradicting the code with nothing catching it — and three of them DID
+  // (man.js carried an invented Latin pseudo-language, es/id/man shipped
+  // English cells). These checks are locale-INDEPENDENT, so they hold for
+  // languages this file cannot read.
+  const localeData = (locale) => require(`@/i18n/locales/${locale}.js`).default;
+  const guideValue = (data, path) =>
+    path.split('.').reduce((o, k) => (o && typeof o === 'object' ? o[k] : undefined), data);
+
+  // Each locale's own script(s), plus Latin — which every locale needs for
+  // product names (RAGAS, chatqna, OKF).
+  const SCRIPTS = {
+    ar: ['Arabic'],
+    bn: ['Bengali'],
+    ru: ['Cyrillic'],
+    th: ['Thai'],
+    zh: ['Han'],
+    de: [],
+    en: [],
+    es: [],
+    fr: [],
+    id: [],
+    man: [],
+    pt: [],
+    st: [],
+    sw: []
+  };
+
+  it.each(LOCALES.filter((l) => l !== 'en'))(
+    '%s writes the guide in its own script — no copy-paste from another locale',
+    (locale) => {
+      const data = localeData(locale);
+      const allowed = ['Latin', ...(SCRIPTS[locale] || [])];
+      // Each script is its OWN \p{Script=…} escape. Joining the NAMES with
+      // a literal "\p{Script=" produced `[\p{Script=Latin\p{Script=Cyrillic}]`
+      // — a SyntaxError, so the check threw for every locale that has a
+      // non-Latin script and could never pass for them (2026-10-25).
+      const allowedRe = new RegExp(`[${allowed.map((s) => `\\p{Script=${s}}`).join('')}]`, 'u');
+      const foreign = [];
+      for (const path of guideKeyPaths()) {
+        const v = guideValue(data, `okf.ragas.guide.${path}`);
+        if (typeof v !== 'string') continue;
+        // Strip the characters every locale uses: digits, punctuation,
+        // spaces, symbols.
+        const letters = v.replace(/[0-9\s\p{P}\p{S}]/gu, '');
+        if (letters && !allowedRe.test(letters)) foreign.push(path);
+      }
+      expect(foreign).toEqual([]);
+    }
+  );
+
+  it.each(LOCALES.filter((l) => l !== 'en'))(
+    '%s translates the guide — it is not a copy of the English text',
+    (locale) => {
+      const data = localeData(locale);
+      const en = localeData('en');
+      const identical = [];
+      for (const path of guideKeyPaths()) {
+        const v = guideValue(data, `okf.ragas.guide.${path}`);
+        const e = guideValue(en, `okf.ragas.guide.${path}`);
+        if (typeof v === 'string' && typeof e === 'string' && v.trim() === e.trim()) identical.push(path);
+      }
+      // A handful of identical values is normal (a product name, a shared
+      // label); a wholesale English copy is not. Three locales shipped
+      // English cells this way.
+      expect(identical.length).toBeLessThanOrEqual(3);
+    }
+  );
+
+  // The two kinds of decline are DIFFERENT states. If a locale describes
+  // them with the same sentence, that locale did not translate the
+  // distinction — and the distinction is the whole point of the row.
+  it.each(LOCALES)('%s describes a judged decline and an unjudged decline differently', (locale) => {
+    const data = localeData(locale);
+    const get = (p) => guideValue(data, `okf.ragas.guide.${p}`);
+    const abstained = get('chapters.errors.table.abstained.effect');
+    const unjudged = get('chapters.errors.table.declinedUnjudged.effect');
+    expect(typeof abstained).toBe('string');
+    expect(typeof unjudged).toBe('string');
+    expect(unjudged.trim()).not.toBe('');
+    expect(unjudged.trim()).not.toBe(abstained.trim());
+  });
+
   // The error→result mapping is the part an operator reads when a number
   // looks wrong, so it has to be a real table with a row per state — not a
   // paragraph that mentions the states.
@@ -188,23 +272,33 @@ describe('RagasGuideDialog', () => {
       expect(text).toContain('out of scope');
     });
 
-    it('says the two things that are easy to get wrong: an abstention is not an error, and an unmeasured metric is not a zero', () => {
+    it('says the two things that are easy to get wrong: a decline is not an error, and an unmeasured metric is not a zero', () => {
       const w = mountGuide();
       const text = w.text();
       expect(text).toMatch(/never in the error column/i);
-      expect(text).toMatch(/does not invalidate the run/i);
       expect(text).toMatch(/never a zero/i);
     });
 
-    // The two states that look alike and are NOT alike (2026-10-25). A row
-    // that produced NO ANSWER has nothing to judge, so it is never handed to
-    // the judge and it never counts as a zero. A row that DECLINED still has
-    // an answer, so it IS judged — and with nothing supporting it, its
-    // context metrics come back 0, and those zeros ARE in the averages.
+    // The states that look alike and are NOT alike (2026-10-25, twice).
     //
-    // The guide used to claim the opposite for the failed row (it said every
-    // row reaches the judge). That was true of the code until the run path
-    // was fixed to judge only the rows that produced an answer.
+    // A row that produced NO ANSWER has nothing to judge, so it is never
+    // handed to the judge and it never counts as a zero.
+    //
+    // A row that DECLINED is NOT one state but two. A decline that came WITH
+    // an answer was judged, and with nothing supporting it its context
+    // metrics came back 0 — those zeros ARE in the averages. A decline that
+    // came with NO answer was never handed to the judge at all: it carries no
+    // score, it is left out of the averages, and it lowers the measured
+    // coverage.
+    //
+    // The guide claimed only the first half of the decline ("DECLINED still
+    // has an answer", "still handed to the judge") and its TEST pinned that
+    // claim — so the guide could not be corrected without rewriting the test
+    // that enforced the error. The server's own code says both:
+    // servedIsAbstention/matchAbstention treat an EMPTY answer as a decline
+    // (`if (!text) return true`), and the run path excludes every no-answer
+    // row from the judge. Measured live: 48 of 48 observed abstention rows
+    // carry an empty answer.
     it('says that a failed row is NOT judged, and never counts as a zero', () => {
       const w = mountGuide();
       const chapter = w.vm.chapters.find((c) => c.key === 'errors');
@@ -215,19 +309,59 @@ describe('RagasGuideDialog', () => {
       expect(errorRow.effect).not.toMatch(/still handed to the judge/i);
     });
 
-    it('says that an abstention IS judged, and its zeros ARE in the averages', () => {
+    it('says that a decline WITH an answer was judged, and its zeros ARE in the averages', () => {
       const w = mountGuide();
       const chapter = w.vm.chapters.find((c) => c.key === 'errors');
       const abstainedRow = chapter.table.rows.find((r) => r.state === 'abstained');
-      expect(abstainedRow.effect).toMatch(/still handed to the judge/i);
+      expect(abstainedRow.effect).toMatch(/handed to the judge/i);
       expect(abstainedRow.effect).toMatch(/zeros ARE counted in the averages/i);
     });
 
-    it('the chapter says the failed row is excluded and the abstention is not', () => {
+    it('says that a decline with NO answer was never judged, and carries no score', () => {
+      const w = mountGuide();
+      const chapter = w.vm.chapters.find((c) => c.key === 'errors');
+      const row = chapter.table.rows.find((r) => r.key === 'declinedUnjudged');
+      expect(row).toBeTruthy();
+      expect(row.effect).toMatch(/NOT handed to the judge/i);
+      expect(row.effect).toMatch(/no score at all/i);
+      expect(row.effect).toMatch(/never counted as a zero/i);
+      // and it lowers the measured coverage — which is what can invalidate
+      // the run, so the guide must not say it does not
+      expect(row.effect).toMatch(/coverage/i);
+    });
+
+    it('the chapter says the failed row is excluded and names BOTH kinds of decline', () => {
       const w = mountGuide();
       const text = w.text();
       expect(text).toMatch(/NO ANSWER is never handed to the judge/i);
-      expect(text).toMatch(/DECLINED still has an answer/i);
+      // The old unconditional claim is gone — a decline is not always
+      // judged.
+      expect(text).not.toMatch(/DECLINED still has an answer/i);
+      expect(text).toMatch(/A DECLINE is not one thing but two/i);
+    });
+
+    // The banner fires only when NO metric covered every in-scope row (the
+    // code takes the BEST-covered metric). The errors chapter used to say
+    // the opposite ("partial coverage makes the run invalid") while the read
+    // chapter said the right thing — two chapters of the same guide
+    // contradicting each other in the same file.
+    it('does not claim that one partial metric invalidates the run', () => {
+      const w = mountGuide();
+      const chapter = w.vm.chapters.find((c) => c.key === 'errors');
+      const row = chapter.table.rows.find((r) => r.key === 'unmeasured');
+      expect(row.effect).not.toMatch(/partial coverage makes the run invalid/i);
+      expect(row.effect).toMatch(/NO metric covered every in-scope row/i);
+    });
+
+    // An out-of-scope row is a control: it is not a failure and it is not
+    // inside a mean. The guide said the first half; the server now enforces
+    // the second (means and coverage are computed over the in-scope rows).
+    it('says an out-of-scope control is outside the means and the bar', () => {
+      const w = mountGuide();
+      const chapter = w.vm.chapters.find((c) => c.key === 'errors');
+      const row = chapter.table.rows.find((r) => r.key === 'outOfScope');
+      expect(row.effect).toMatch(/never inside a mean/i);
+      expect(row.effect).toMatch(/control, not a result/i);
     });
   });
 

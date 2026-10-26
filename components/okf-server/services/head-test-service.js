@@ -1,8 +1,8 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
 //
-// head-test-service — Story 1-8 (2026-10-08): the OKF Head Tester &
-// Routing Lab backend. Three surfaces:
+// head-test-service — Story 1-8 (2026-10-08): the OKF Testing Lab
+// Testing Lab backend. Three surfaces:
 //
 //   rebuildHead(repoId)      — re-run buildVectorizedHead from the
 //                              CURRENT stored frontmatter (fixes a

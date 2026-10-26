@@ -450,15 +450,20 @@ describe('RagasPanel', () => {
   it('the outcome bar partitions the rows — every row counted exactly once', () => {
     const w = mountPanel();
     const doc = runFixture();
-    // 10 in-scope rows: 2 errored (never judged), 1 abstained (judged, and
-    // its context metrics came back 0 so it is also in failing_count), 3
-    // failing, 4 passing.
+    // 10 in-scope rows: 2 errored (never judged), 1 abstained, 3 failing,
+    // 4 answered. The SERVER computes the buckets over ONE population now
+    // (2026-10-25) — the panel used to derive them by subtracting across
+    // two, which relabelled a genuinely failing row as "answered".
     doc.payload.summary = {
       n: 10,
       n_errors: 2,
       n_abstained: 1,
+      n_abstained_unjudged: 0,
       n_evaluable: 10,
-      failing_count: 4, // the abstained row + 3 others
+      n_oos: 0,
+      n_failed: 3,
+      n_answered: 4,
+      failing_count: 3,
       failing: [],
       metrics: {}
     };
@@ -469,10 +474,63 @@ describe('RagasPanel', () => {
     expect(total).toBe(10);
     expect(byName.error).toBe(2);
     expect(byName.abstained).toBe(1);
-    expect(byName.failing).toBe(3); // the abstained row has its own column
+    expect(byName.failing).toBe(3);
     expect(byName.answered).toBe(4);
     // No bucket may go negative — the all-abstained run reached −20 before.
     for (const s of series) expect(s.data[0]).toBeGreaterThanOrEqual(0);
+  });
+
+  // The case the old arithmetic got wrong (2026-10-25): a DECLINE that was
+  // never judged is NOT in failing_count (it carries no metric), so
+  // subtracting the abstentions from failing_count removed a row that was
+  // never there — and relabelled a genuinely failing row as "answered".
+  // Verified against the repo's own Arango mock: truth = answered 0,
+  // abstained 1, failing 2; the old bar read answered 1, abstained 1,
+  // failing 1.
+  it('the bar does not subtract a decline that was never judged', () => {
+    const w = mountPanel();
+    const doc = runFixture();
+    doc.payload.summary = {
+      n: 3,
+      n_errors: 0,
+      n_abstained: 1,
+      n_abstained_unjudged: 1,
+      n_evaluable: 3,
+      n_oos: 0,
+      n_failed: 2,
+      n_answered: 0,
+      failing_count: 2,
+      failing: [],
+      metrics: {}
+    };
+    w.vm.runDoc = doc;
+    const series = w.vm.statusSeries;
+    const byName = Object.fromEntries(series.map((s) => [s.name, s.data[0]]));
+    expect(byName.failing).toBe(2);
+    expect(byName.abstained).toBe(1);
+    expect(byName.answered).toBe(0);
+    expect(series.reduce((a, s) => a + s.data[0], 0)).toBe(3);
+  });
+
+  // A decline that was never judged is a DIFFERENT state from one that was
+  // judged, and the row pill must say so — the guide taught the second as
+  // if it were the only one.
+  it('labels a decline that was never judged apart from one that was', () => {
+    const w = mountPanel();
+    const judged = {
+      id: 'r1',
+      answer: 'I cannot answer that',
+      abstained: true,
+      judged: true,
+      metrics: { faithfulness: 0 }
+    };
+    const unjudged = { id: 'r2', answer: '', abstained: true, judged: false, metrics: {} };
+    expect(w.vm.rowJudged(judged)).toBe(true);
+    expect(w.vm.rowJudged(unjudged)).toBe(false);
+    // A row with no metrics and no flag (an older run) falls back to the
+    // numeric-metric test.
+    expect(w.vm.rowJudged({ id: 'r3', metrics: {} })).toBe(false);
+    expect(w.vm.rowJudged({ id: 'r4', metrics: { faithfulness: 0 } })).toBe(true);
   });
 
   // David 2026-10-19: every result chart carries an ⓘ with the metric's
@@ -706,7 +764,7 @@ describe('RagasPanel', () => {
         total: 1075,
         judge: { source: 'picked', config: 'Minimax David OpenAI', model: 'MiniMax-M3.1-Flash' }
       };
-      const label = w.vm.effectiveJudgeLabel;
+      const label = w.vm.effectiveGenerationLabel;
       expect(label).toContain('Minimax David OpenAI');
       expect(label).toContain('MiniMax-M3.1-Flash');
       // and it is RENDERED, not just computed
@@ -726,6 +784,88 @@ describe('RagasPanel', () => {
       await w.setData({ modelConfigs: [{ _key: 'glm', name: 'GLM-5.3 ITU - OpenAI', active: true }] });
       expect(w.vm.judgeConfigKey).toBe('');
       expect(w.vm.judgeModel).toBe('');
+    });
+
+    // David 2026-10-25: "DO NOT CONFUSE GENERATION WITH JUDGING/BENCHMARKING".
+    // Generating a suite and scoring it are two operations with two models.
+    // They shared ONE v-model, so the panel could not express "generate with
+    // A, score with B" — and a pick made for one silently governed the other.
+    it('the GENERATION pick and the JUDGE pick are independent controls', async () => {
+      const w = mountPanel();
+      await flush();
+      w.vm.modelConfigs = [
+        { _key: 'mm', name: 'Minimax David OpenAI', active: false, default_model: 'MiniMax-M3.1-Flash' },
+        { _key: 'glm', name: 'GLM-5.3 ITU - OpenAI', active: true, default_model: 'glm-5.3' }
+      ];
+      w.vm.genConfigKey = 'mm';
+      w.vm.genModel = 'MiniMax-M3.1-Flash';
+      w.vm.judgeConfigKey = '__env__';
+      w.vm.judgeModel = '';
+      // neither pick disturbs the other
+      expect(w.vm.genConfigKey).toBe('mm');
+      expect(w.vm.genModel).toBe('MiniMax-M3.1-Flash');
+      expect(w.vm.judgeConfigKey).toBe('__env__');
+      expect(w.vm.judgeModel).toBe('');
+    });
+
+    // The dropdown said GLM while the job was on granite (David, live
+    // 2026-10-25). A RUNNING job's pick is what the job is using, so the
+    // picker adopts it — the two can never disagree.
+    it('a RUNNING generation adopts its own pick into the picker', async () => {
+      const w = mountPanel();
+      await flush();
+      w.vm.genProgress = {
+        phase: 'building-knowledge-graph',
+        done: 0,
+        total: 1075,
+        judge: { source: 'env', config: null, model: 'ibm-granite/granite-4.1-8b' },
+        judge_pick: { config_key: '__env__', model: null }
+      };
+      await w.vm.$nextTick();
+      expect(w.vm.genConfigKey).toBe('__env__');
+    });
+
+    it('a RUNNING run adopts its own judge pick into the picker', async () => {
+      const w = mountPanel();
+      await flush();
+      w.vm.runProgress = {
+        phase: 'judge',
+        done: 3,
+        total: 100,
+        judge: { source: 'picked', config: 'Minimax David OpenAI', model: 'MiniMax-M3.1-Flash' },
+        judge_pick: { config_key: 'mm', model: 'MiniMax-M3.1-Flash' }
+      };
+      await w.vm.$nextTick();
+      expect(w.vm.judgeConfigKey).toBe('mm');
+      expect(w.vm.judgeModel).toBe('MiniMax-M3.1-Flash');
+    });
+
+    // The model select used to appear ONLY for a NAMED configuration, so
+    // the models of the ACTIVE configuration (the empty pick) were not
+    // choosable — and the re-score could not name the model it re-scored
+    // with (David, 2026-10-25).
+    it("the ACTIVE configuration's models are choosable — the model select is not hidden", async () => {
+      const w = mountPanel();
+      await flush();
+      dispatch.mockImplementation((action) => {
+        if (action === 'okf/modelConfigModels') {
+          return Promise.resolve({ ok: true, models: ['glm-5.3', 'glm-5.3-flash'] });
+        }
+        return Promise.resolve({ ok: true });
+      });
+      w.vm.modelConfigs = [{ _key: 'glm', name: 'GLM-5.3 ITU - OpenAI', active: true, default_model: 'glm-5.3' }];
+      w.vm.judgeConfigKey = ''; // the empty pick = the active configuration
+      await w.vm.onJudgeConfigChange();
+      expect(w.vm.judgeModels.length).toBeGreaterThan(0);
+      // the generation pick behaves the same way
+      w.vm.genConfigKey = '';
+      await w.vm.onGenConfigChange();
+      expect(w.vm.genModels.length).toBeGreaterThan(0);
+      // and so does the re-score pick
+      w.vm.rescoreConfigKey = '';
+      await w.vm.onRescoreConfigChange();
+      expect(w.vm.rescoreModels.length).toBeGreaterThan(0);
+      dispatch.mockReset();
     });
   });
 
@@ -771,7 +911,29 @@ describe('RagasPanel', () => {
         .filter((s) => s.findAll('option').some((o) => o.element.value === '__env__'));
       expect(judgeSelects.length).toBe(2); // generation + benchmark run
       const html = w.html();
-      expect(html).toContain('System default (environment) (ibm-granite/granite-4.1-8b)');
+      expect(html).toContain('Deployment default (.env) (ibm-granite/granite-4.1-8b)');
+    });
+
+    it('offers the .env option in the RE-SCORE dialog too — everywhere means everywhere', async () => {
+      // The re-score dialog carries its OWN judge picker (David, 2026-10-25:
+      // "RESCORING MUST ALSO ALLOW MODEL SELECTION AGAIN"), and the .env
+      // default has to be reachable from it too — it is the judge that
+      // actually works on a deployment whose active configuration is
+      // rate-limited. The two dropdowns above are counted with the dialog
+      // CLOSED; this one opens it.
+      dispatch.mockImplementation(envDispatch());
+      const w = mountPanel();
+      await flush();
+      await flush();
+      w.vm.rescoreAsk = runFixture();
+      await flush();
+      const withEnv = w.findAll('select').filter((s) => s.findAll('option').some((o) => o.element.value === '__env__'));
+      // generation + benchmark run + the re-score dialog's own picker
+      expect(withEnv.length).toBe(3);
+      // and the dialog's picker offers it under the same honest label
+      const dialogSelect = withEnv[2];
+      const envOption = dialogSelect.findAll('option').find((o) => o.element.value === '__env__');
+      expect(envOption.text()).toContain('ibm-granite/granite-4.1-8b');
     });
 
     it('picking it submits the sentinel and fetches NO per-config model list', async () => {
@@ -855,7 +1017,7 @@ describe('RagasPanel', () => {
         .findAll('select')
         .filter((s) => s.findAll('option').some((o) => o.element.value === '__env__'));
       expect(judgeSelects.length).toBe(2); // generation + benchmark run
-      expect(w.html()).toContain('System default (environment) (ibm-granite/granite-4.1-8b)');
+      expect(w.html()).toContain('Deployment default (.env) (ibm-granite/granite-4.1-8b)');
     });
 
     it('still offers the env judge when the configuration list cannot be read at all', async () => {
@@ -868,7 +1030,7 @@ describe('RagasPanel', () => {
         .filter((s) => s.findAll('option').some((o) => o.element.value === '__env__'));
       expect(judgeSelects.length).toBe(2);
       // No model name is claimed — the server could not tell us which one.
-      expect(w.html()).toContain('System default (environment)');
+      expect(w.html()).toContain('Deployment default (.env)');
       expect(w.html()).not.toContain('ibm-granite/granite-4.1-8b');
     });
 

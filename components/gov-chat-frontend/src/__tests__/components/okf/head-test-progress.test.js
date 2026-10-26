@@ -25,7 +25,7 @@ jest.mock('@/services/headTestService', () => ({
 }));
 jest.mock('oidc-client-ts', () => ({ UserManager: jest.fn() }));
 
-const OkfHeadTestDialog = require('@/components/okf/editor/HeadTestDialog.vue').default;
+const OkfTestingLabDialog = require('@/components/okf/editor/TestingLabDialog.vue').default;
 
 const REPO = {
   repo_id: 'r-1',
@@ -47,7 +47,7 @@ function fakeStore() {
 }
 
 function mountDialog(props = {}) {
-  return mount(OkfHeadTestDialog, {
+  return mount(OkfTestingLabDialog, {
     global: {
       mocks: { $store: fakeStore() },
       stubs: {
@@ -72,7 +72,7 @@ const summary = {
   steals: []
 };
 
-describe('HeadTestDialog — 1-8g-x run progress bar', () => {
+describe('TestingLabDialog — 1-8g-x run progress bar', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     dispatch.mockReset();

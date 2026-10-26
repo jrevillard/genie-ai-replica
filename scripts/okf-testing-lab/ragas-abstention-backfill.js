@@ -55,9 +55,7 @@ function authoritativeAbstained(row) {
 (async () => {
   const db = await dbService.getConnection();
   const col = db.collection(COLLECTION);
-  const cursor = await db.query(
-    `FOR d IN ${COLLECTION} FILTER d.kind == "ragas_run" SORT d.created_at DESC RETURN d`
-  );
+  const cursor = await db.query(`FOR d IN ${COLLECTION} FILTER d.kind == "ragas_run" SORT d.created_at DESC RETURN d`);
   const runs = await cursor.all();
   console.log(`ragas_run docs found: ${runs.length}`);
 
@@ -70,9 +68,7 @@ function authoritativeAbstained(row) {
     for (const r of results) {
       const next = authoritativeAbstained(r);
       if (next !== !!r.abstained) {
-        changes.push(
-          `${r.id}: abstained ${!!r.abstained} → ${next} (reason was "${r.abstention_reason || 'none'}")`
-        );
+        changes.push(`${r.id}: abstained ${!!r.abstained} → ${next} (reason was "${r.abstention_reason || 'none'}")`);
         r.abstained = next;
         r.abstention_reason = next ? r.abstention_reason || 'answer contract' : '';
       }
@@ -85,13 +81,22 @@ function authoritativeAbstained(row) {
     runsChanged += 1;
     const payload = { ...run.payload, results };
     payload.summary = { ...(run.payload.summary || {}) };
-    payload.summary.n_abstained = results.filter((r) => r.abstained).length;
+    // The same rule the server uses (2026-10-25): the IN-SCOPE rows only,
+    // and a row that ALSO errored is an error, not a decline. The old rule
+    // counted every row with the flag, including the errored ones, so the
+    // backfilled summary disagreed with the server's own.
+    const byId = new Map((run.payload.entries || []).map((e) => [e.id, e]));
+    const inScope = results.filter((r) => !(byId.get(r.id) || {}).oos);
+    payload.summary.n_abstained = inScope.filter((r) => r.abstained && !r.error).length;
+    payload.summary.n_abstained_unjudged = inScope.filter((r) => r.abstained && !r.error && !r.answer).length;
     // update() merges the patch into the stored doc.
     await col.update(run._key, { payload });
     // Read back — a silent no-op here is how the first attempt failed.
     const check = await col.document(run._key);
     const persisted = (check.payload.results || []).filter((r) => r.abstained).length;
-    console.log(`\n${run._key}: ${changes.length} row(s) reclassified → n_abstained ${payload.summary.n_abstained} (persisted: ${persisted})`);
+    console.log(
+      `\n${run._key}: ${changes.length} row(s) reclassified → n_abstained ${payload.summary.n_abstained} (persisted: ${persisted})`
+    );
     changes.forEach((c) => console.log('   ' + c));
   }
   console.log(`\nTOTAL: ${totalChanged} row(s) reclassified across ${runsChanged} run(s)`);

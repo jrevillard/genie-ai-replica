@@ -23,6 +23,7 @@
 const { test, expect } = require('@playwright/test');
 const { getAdminToken } = require('../helpers/auth');
 const { createUser, deleteUser } = require('../helpers/keycloak-admin');
+const { pinLocale } = require('../helpers/locale');
 
 const REALM = process.env.KEYCLOAK_REALM || 'genie';
 const REPO_NAME = process.env.OKF_SMOKE_REPO_NAME || 'El Salvador';
@@ -47,10 +48,12 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     if (adminToken && userId) await deleteUser(adminToken, REALM, userId);
   });
 
-  test('the read chapter renders the output table, and a re-score is tracked and cancellable', async ({
-    browser
-  }) => {
+  test('the read chapter renders the output table, and a re-score is tracked and cancellable', async ({ browser }) => {
     const context = await browser.newContext({ ignoreHTTPSErrors: true, bypassCSP: true });
+    // The spec asserts rendered English copy, so the locale must be
+    // PINNED — the app resolves it from navigator.language when
+    // localStorage holds no preference.
+    await pinLocale(context, 'en');
     const page = await context.newPage();
 
     // 1. log in through Keycloak
@@ -61,7 +64,7 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     await page.click('#kc-login');
     await page.waitForURL('https://localhost/**', { timeout: 30000 });
 
-    // 2. admin -> OKF Studio -> the repo card's "Head Test"
+    // 2. admin -> OKF Studio -> the repo card's "Testing Lab"
     await page.goto('https://localhost/admin', { waitUntil: 'networkidle', timeout: 30000 });
     const studioTab = page.getByRole('button', { name: /OKF Studio/i }).first();
     await expect(studioTab, 'the OKF Studio tab must be reachable').toBeVisible({ timeout: 20000 });
@@ -70,9 +73,9 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
 
     const card = page.locator('.okf-dashboard__card-wrap', { hasText: REPO_NAME }).first();
     await expect(card, `the ${REPO_NAME} repo card must be listed`).toBeVisible({ timeout: 20000 });
-    const headTest = card.getByRole('button', { name: /Head Test/i }).first();
-    await expect(headTest, 'the Head Test button must be on the card').toBeVisible({ timeout: 20000 });
-    await headTest.click();
+    const testingLab = card.getByRole('button', { name: /Testing Lab/i }).first();
+    await expect(testingLab, 'the Testing Lab button must be on the card').toBeVisible({ timeout: 20000 });
+    await testingLab.click();
 
     // 3. the dialog's "RAGAS Benchmarks" tab
     const ragasTab = page.getByRole('button', { name: /RAGAS Benchmarks/i }).first();
@@ -84,7 +87,7 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     await expect(guideButton, 'the Guide button must be in the RAGAS panel').toBeVisible({ timeout: 20000 });
     await guideButton.click();
 
-    // Scope to the GUIDE dialog by its heading: the Head Test dialog is
+    // Scope to the GUIDE dialog by its heading: the Testing Lab dialog is
     // still open behind it and is ALSO a role="dialog" — and it carries
     // its own tables, so an unscoped `table tbody tr` counts the wrong rows.
     const guide = page
@@ -94,7 +97,10 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     await expect(guide, 'the guide dialog must open').toBeVisible({ timeout: 20000 });
 
     // ---- A. the READ chapter's output table ----
-    const readTab = guide.locator('.ds-tabs__btn').filter({ hasText: /read the results/i }).first();
+    const readTab = guide
+      .locator('.ds-tabs__btn')
+      .filter({ hasText: /read the results/i })
+      .first();
     await expect(readTab, 'the guide must have a read-the-results chapter').toBeVisible({ timeout: 20000 });
     await readTab.click();
     await page.waitForTimeout(600);
@@ -107,7 +113,7 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
 
     const guideText = await guide.evaluate((el) => el.innerText);
     // The on-screen pieces an operator has to decode.
-    for (const label of ['The score', 'The fraction (55/100)', 'The invalid-run banner', 'Re-score']) {
+    for (const label of ['The mean', 'The fraction (55/100)', 'The invalid-run banner', 'Re-score']) {
       expect(guideText, `the output table must carry "${label}"`).toContain(label);
     }
     // The three misreadings the table exists to prevent.
@@ -120,7 +126,11 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     await guideRows.first().scrollIntoViewIfNeeded();
     await page.waitForTimeout(400);
     await page.screenshot({ path: 'test-results/ragas-guide-read.png', fullPage: false });
-    await guide.getByRole('button', { name: /^Close$/i }).first().click().catch(() => {});
+    await guide
+      .getByRole('button', { name: /^Close$/i })
+      .first()
+      .click()
+      .catch(() => {});
     await page.waitForTimeout(800);
 
     // ---- B. a re-score is TRACKED and CANCELLABLE ----
@@ -140,7 +150,7 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
 
     const rescoreDialog = page
       .locator('.ds-modal')
-      .filter({ has: page.getByRole('heading', { name: /re-score with another judge/i }) })
+      .filter({ has: page.getByRole('heading', { name: /re-score with a judge/i }) })
       .first();
     await expect(rescoreDialog, 'the re-score dialog must open').toBeVisible({ timeout: 20000 });
 
@@ -149,7 +159,10 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     await expect(judgeSelect, 'the re-score dialog must offer a judge').toBeVisible({ timeout: 20000 });
     await judgeSelect.selectOption('__env__');
 
-    await rescoreDialog.getByRole('button', { name: /^Re-score$/ }).first().click();
+    await rescoreDialog
+      .getByRole('button', { name: /^Re-score$/ })
+      .first()
+      .click();
     await page.waitForTimeout(3000);
 
     // The re-score is a RUN: a progress bar and a Cancel button.

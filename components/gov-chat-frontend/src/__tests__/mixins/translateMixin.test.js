@@ -19,7 +19,7 @@ const TREE = {
   en: {
     okf: {
       studio: { title: 'OKF Studio' },
-      headTest: {
+      testingLab: {
         advisor: { scorecard: 'positives {p}/{pt} claimed · negatives {n}/{nt} suppressed' },
         suites: { tripwire: 'This cycle broke {n} positive tests' }
       }
@@ -44,7 +44,7 @@ function makeHarness(i18nMock) {
 describe('translateMixin', () => {
   it('returns the RAW string from the active locale — placeholders intact (the scorecard regression)', () => {
     const harness = makeHarness({ locale: 'en', messages: TREE });
-    expect(harness.translate('okf.headTest.advisor.scorecard', 'x')).toBe(
+    expect(harness.translate('okf.testingLab.advisor.scorecard', 'x')).toBe(
       'positives {p}/{pt} claimed · negatives {n}/{nt} suppressed'
     );
   });
@@ -56,7 +56,7 @@ describe('translateMixin', () => {
 
   it('falls back to the en tree when the active locale lacks the key', () => {
     const harness = makeHarness({ locale: 'fr', messages: TREE });
-    expect(harness.translate('okf.headTest.advisor.scorecard', 'x')).toBe(
+    expect(harness.translate('okf.testingLab.advisor.scorecard', 'x')).toBe(
       'positives {p}/{pt} claimed · negatives {n}/{nt} suppressed'
     );
   });

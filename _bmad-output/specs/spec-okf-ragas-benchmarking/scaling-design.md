@@ -88,6 +88,16 @@ sampling strategy (configurable K multiplier; sampling report stored on the
 suite doc: concepts considered vs sampled, per repo). Per-concept text still
 window-capped (`RAGAS_DOC_CHAR_CAP=auto` — unchanged).
 
+**PARTLY SUPERSEDED (2026-10-21, shipped in v1):** the corpus budget is now
+`OKF_RAGAS_MAX_CORPUS_CHUNKS` (default 1600) and its unit is the published
+`<graph>_SOURCE` CHUNK, not the concept; over the budget the selection is an
+EVEN SPREAD across the chunk-key space (not a first-N prefix, not a
+theme/community stratification), and the suite records `{total, used}` per
+graph as coverage. What D3 still adds over what shipped is the
+theme/community stratification and the `K = max(60, 3 × testset_size)` sizing
+per repo — the shipped budget is a flat ceiling, not a function of the
+requested suite size.
+
 ### D4 — Synthesis concurrency + judge routing (requirements 2, 3, 4)
 
 - ragas `RunConfig.max_workers` raised for synthesis and judging (I/O-bound

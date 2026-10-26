@@ -192,7 +192,7 @@ docs/  site/  scripts/
   screenshots without saying the flag is off.
 - CHANGELOG `[Unreleased]` entry was carried by MR1; if the flip timing is
   known by MR3, title the entry there.
-- `scripts/okf-routing-lab/` diagnostics travel here; prune session-local
+- `scripts/okf-testing-lab/` diagnostics travel here; prune session-local
   one-offs before committing (the plan's author prunes at build time).
 - **Flip runbook section** (the deliverable that "completes" the train):
   how an operator enables OKF per environment — `OKF_ENABLED=1` in `.env`
@@ -279,6 +279,6 @@ reaches main via normal small MRs — the umbrella era ends.
 ## 10. Open decisions (not blocking the train)
 
 1. Does the org want BMAD skills shared on main? (Default: no — N1 stays out.)
-2. Which `scripts/okf-routing-lab/*` tools are keeper-grade for main? (Pruned
+2. Which `scripts/okf-testing-lab/*` tools are keeper-grade for main? (Pruned
    at MR3 build time; anything cut stays on the branch.)
 3. Timing of the first real flip (el-salvador vs cloud vs a fresh pilot).

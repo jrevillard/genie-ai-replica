@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // ragas-suite-service — Story 8-6 (2026-10-17, ADR-okf-043): RAGAS
-// benchmark suites for the OKF Lab. Clones the head-suite-service skeleton
+// benchmark suites for the Testing Lab. Clones the head-suite-service skeleton
 // (same okf_head_test_runs collection, same 202+poll job pattern, same
 // honest-empty semantics) and adds the RAGAS-specific legs:
 //
@@ -437,6 +437,31 @@ async function cancelSidecarJob(jobId, why) {
       return;
     }
     logger.warn('ragas-suite.sidecar_job_cancel_failed', { job_id: jobId, why, error: e.message });
+  }
+}
+
+/**
+ * Is this sidecar job still running?
+ *
+ * The liveness of a run was decided by an IN-MEMORY map, so a second
+ * okf-server replica (or a restart) declared a live run dead — and
+ * REWROTE its doc as failed while its judge leg kept paying the GPU. The
+ * sidecar is the authority on whether the work is still happening: ask it.
+ */
+async function sidecarJobIsLive(jobId) {
+  if (!jobId) return false;
+  try {
+    // A liveness PROBE must be quick: it runs inside the panel's poll and
+    // inside the boot sweep, and neither may block on an unreachable
+    // sidecar.
+    const resp = await sidecar(`/jobs/${jobId}`, { method: 'GET', timeoutMs: 2000 });
+    const job = await resp.json();
+    return Boolean(job && (job.status === 'running' || job.status === 'pending'));
+  } catch {
+    // Unreachable sidecar, unknown job, evicted job — none of them prove
+    // the work stopped, but none of them prove it is alive either. The
+    // caller decides what to do with "unknown".
+    return false;
   }
 }
 
@@ -1176,7 +1201,11 @@ async function cancelSuiteRun(repoId, suiteKey, runKey) {
     // run of the same suite must not be killed by a re-score cancel.
     await cancelRunJobs(runKey, `re-score cancelled by user (${runKey})`);
   } else {
-    await cancelSuiteJobs(suiteKey, `run cancelled by user (${runKey})`);
+    // Cancel THIS run's sidecar job only. Cancelling by SUITE also killed a
+    // concurrent RE-SCORE of the same suite (its judge job is registered
+    // against the same suite key) — so cancelling one run silently killed
+    // the other, and the re-score landed as cancelled.
+    await cancelRunJobs(runKey, `run cancelled by user (${runKey})`);
   }
   logger.info('ragas-suite.run_cancelled_by_user', { repo_id: repoId, suite_key: suiteKey, run_key: runKey });
   return { cancelled: true, run_key: runKey };
@@ -1249,7 +1278,11 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
     const effectiveJudgeFidelity = modelConfigService.judgeFidelity(effectiveJudge);
     genProgress.set(opts.suiteKey, {
       ...(genProgress.get(opts.suiteKey) || {}),
-      judge: effectiveJudgeFidelity
+      judge: effectiveJudgeFidelity,
+      // The pick AS MADE, so the panel can show the RUNNING generation's
+      // model in its picker instead of the one it remembers: the dropdown
+      // and the "actually using" line must never disagree (David 2026-10-25).
+      judge_pick: { config_key: opts.judge_config_key || null, model: opts.judge_model || null }
     });
     // 202 + poll: the sidecar starts a background job and we poll it — no
     // connection is held open for the (potentially hour-long) generation.
@@ -1740,7 +1773,20 @@ async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
       // lands: this run re-scored that one.
       fidelity: {
         rescore_of: runKey,
-        rescore_note: `re-scoring ${runKey} with a different judge — the answers are identical`
+        // The judge that is scoring it, from the FIRST poll. The panel's
+        // history row reads the judge from payload.fidelity.judge, so
+        // without it the operator watches a blank judge for the whole
+        // (hours-long) judge leg — right after choosing one.
+        judge: {
+          ...modelConfigService.judgeFidelity(effectiveJudge),
+          pick: { config_key: opts.judge_config_key || null, model: opts.judge_model || null }
+        },
+        // The note says "the selected judge", NOT "a different judge": the
+        // re-score dialog prefills the source run's own judge, so the
+        // default re-score is a SAME-judge re-score (a reproducibility
+        // check). Claiming "different" was false, and the advisor's
+        // second-judge verdict is built on it.
+        rescore_note: `re-scoring ${runKey} with the selected judge — the answers are identical`
       }
     }
   };
@@ -1752,10 +1798,16 @@ async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
   let lastProgressWrite = 0;
   const report = (p) => {
     const now = Date.now();
-    if (now - lastProgressWrite < PROGRESS_WRITE_MIN_MS) return;
+    // The judge's FIRST report is not throttled — the panel must be able to
+    // name the model the re-score is using from the first tick (David
+    // 2026-10-25).
+    const force = Boolean(p && p.force);
+    if (!force && now - lastProgressWrite < PROGRESS_WRITE_MIN_MS) return;
     lastProgressWrite = now;
+    const body = { ...(p || {}) };
+    delete body.force;
     db.collection(COLLECTION)
-      .update(newRunKey, { progress: p, updated_at: new Date().toISOString() })
+      .update(newRunKey, { progress: body, updated_at: new Date().toISOString() })
       .catch((e) => logger.warn('ragas-suite.rescore.progress_write_failed', { run_key: newRunKey, error: e.message }));
   };
   rescoreInFlight.set(newRunKey, { source_run_key: runKey });
@@ -1796,6 +1848,14 @@ async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
         { repo_id: repoId, suite_key: suiteKey, run_key: newRunKey }
       );
       const body = await started.json();
+      // The sidecar job id goes into the DOC (not only into memory): it is
+      // how a second replica — or a restarted server — can tell that this
+      // re-score is still being judged instead of declaring it interrupted
+      // and rewriting its doc as failed.
+      await db
+        .collection(COLLECTION)
+        .update(newRunKey, { sidecar_job_id: body.job_id })
+        .catch((e) => logger.warn('ragas-suite.rescore.job_id_write_failed', { run_key: newRunKey, error: e.message }));
       // A cancel that landed while the SUBMIT was still in flight: the sidecar
       // job is not registered yet, so the cancel endpoint had nothing to
       // delete. Honour the intent here rather than letting the judge leg run
@@ -1816,12 +1876,18 @@ async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
         },
         {
           // The sidecar's rows-done/rows-total becomes the re-score's
-          // progress (the panel polls it while the judge leg runs).
+          // progress (the panel polls it while the judge leg runs). The
+          // FIRST tick carries the judge and the pick, so the panel names
+          // the model the re-score is using and its picker adopts it
+          // (David 2026-10-25).
           onProgress: (p) =>
             report({
               phase: 'judge',
               done: Number(p && p.done) || 0,
-              total: Number(p && p.total) || samples.length
+              total: Number(p && p.total) || samples.length,
+              force: true,
+              judge: modelConfigService.judgeFidelity(effectiveJudge),
+              judge_pick: { config_key: opts.judge_config_key || null, model: opts.judge_model || null }
             })
         }
       );
@@ -1842,8 +1908,23 @@ async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
         delete results[i].metrics.response;
         delete results[i].metrics.reference;
         results[i].ragas_nan = q.ragas_nan === 'ALL_NAN';
+        results[i].judged = true;
       });
+      // The rows the re-score did NOT hand to the judge carry no score.
+      const resubmitted = new Set(scorable.map((s) => s.i));
+      for (let i = 0; i < results.length; i += 1) {
+        if (resubmitted.has(i)) continue;
+        results[i].metrics = {};
+        results[i].judged = false;
+      }
       const summary = summarizeRun(suite, results, metrics);
+      // The banner's coverage figure, computed over the IN-SCOPE population
+      // (the same rule the run path uses) — without this block a re-score
+      // could never raise the invalid-run banner, because the banner reads
+      // payload.coverage.
+      const measuredRows = Object.keys(summary.coverage || {}).length
+        ? Math.max(0, ...Object.values(summary.coverage).map((c) => Number(c && c.scored) || 0))
+        : 0;
       const judgeFid = modelConfigService.judgeFidelity(effectiveJudge);
       const newDoc = {
         _key: newRunKey,
@@ -1866,6 +1947,16 @@ async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
           })),
           results,
           summary,
+          // The same coverage block the run path writes. Without it the
+          // invalid-run banner's coverage branch can never fire for a
+          // re-score — and a re-score that measured only part of the suite
+          // is exactly the case the banner exists for (a second judge that
+          // scores fewer rows).
+          coverage: {
+            measured_rows: measuredRows,
+            total_rows: summary.n_evaluable,
+            per_metric: summary.coverage
+          },
           fidelity: {
             // The SAME retrieval as the source run — the answers were not
             // regenerated, only re-judged.
@@ -1876,7 +1967,7 @@ async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
             },
             // The lineage: this run re-scored that one.
             rescore_of: runKey,
-            rescore_note: `re-scored ${runKey} with a different judge — the answers are identical`
+            rescore_note: `re-scored ${runKey} with the selected judge — the answers are identical`
           }
         }
       };
@@ -1914,6 +2005,10 @@ async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
       throw e;
     } finally {
       rescoreInFlight.delete(newRunKey);
+      // The cancel flag is a process-lifetime Set, and the re-score path
+      // added to it (the shared cancel route adds the key it was given)
+      // without ever removing it — one leaked entry per cancelled re-score.
+      userCancelledRun.delete(newRunKey);
     }
   })();
   done.catch((e) => {
@@ -1993,11 +2088,19 @@ async function beginRunSuite(repoId, suiteKey, payload = {}, opts = {}) {
   let lastProgressWrite = 0;
   const reportProgress = async (progress) => {
     const now = Date.now();
-    if (now - lastProgressWrite < PROGRESS_WRITE_MIN_MS) return;
+    // The judge's FIRST report is not throttled: it is the one the panel
+    // needs to name the model the run is scoring with, and the throttle
+    // would drop it exactly when the retrieval leg was fast (the panel then
+    // showed a picker that disagreed with the running job — David
+    // 2026-10-25).
+    const force = Boolean(progress && progress.force);
+    if (!force && now - lastProgressWrite < PROGRESS_WRITE_MIN_MS) return;
     lastProgressWrite = now;
+    const body = { ...(progress || {}) };
+    delete body.force;
     await db
       .collection(COLLECTION)
-      .update(runKey, { progress, updated_at: new Date().toISOString() })
+      .update(runKey, { progress: body, updated_at: new Date().toISOString() })
       .catch((e) => logger.warn('ragas-suite.run.progress_write_failed', { run_key: runKey, error: e.message }));
   };
   const done = runSuite(repoId, suiteKey, {
@@ -2378,6 +2481,18 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     // fail every judge leg) — the env judge applies, and the run's fidelity
     // records the EFFECTIVE judge, not the unusable pick.
     const effectiveJudge = judgeOverride && judgeOverride.model ? judgeOverride : null;
+    // Name the judge in the progress envelope, with the pick as made: the
+    // panel shows "Judging with <model>" and adopts the pick into its own
+    // picker, so the dropdown and the running job can never disagree
+    // (David 2026-10-25).
+    await report(opts, {
+      phase: 'judge',
+      done: 0,
+      total: 1,
+      force: true,
+      judge: modelConfigService.judgeFidelity(effectiveJudge),
+      judge_pick: { config_key: opts.judge_config_key || null, model: opts.judge_model || null }
+    });
     // Judge ONLY the rows that produced an answer. A row with no answer has
     // nothing to judge: submitting it makes the sidecar score an EMPTY
     // response, which comes back as ZEROS on the context and answer metrics
@@ -2397,10 +2512,18 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       // Every row is empty — there is nothing to judge. The run fails
       // loudly (the same shape as the all-rows-failed case above) rather
       // than submitting an empty dataset and reporting zeros as a result.
+      //
+      // The message says WHICH of the two things happened. "no row produced
+      // an answer" hid the case where every row ERRORED at the pipeline
+      // level, and sent the operator to re-run instead of to fix the
+      // retrieval stack.
+      const allErrored = erroredRows >= total;
       const emptyError = {
         code: 'NO_SCORABLE_ROWS',
         status: null,
-        message: 'no row produced an answer — there is nothing to judge'
+        message: allErrored
+          ? `every row failed at the pipeline level (${erroredRows} of ${total}) — there is nothing to judge; fix the retrieval stack or the upstream service and run again`
+          : `no row produced an answer (${erroredRows} of ${total} errored at the pipeline level, the rest produced no answer) — there is nothing to judge; fix the errors and run again`
       };
       const emptyDoc = {
         _key: opts.runKey,
@@ -2476,6 +2599,13 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       { repo_id: repoId, suite_key: suiteKey, run_key: opts.runKey }
     );
     const evalStartedBody = await evalStarted.json();
+    // The sidecar job id goes into the DOC: it is how a second replica — or
+    // a restarted server — can tell that this run is still being judged
+    // instead of declaring it interrupted and rewriting its doc as failed.
+    await db
+      .collection(COLLECTION)
+      .update(opts.runKey, { sidecar_job_id: evalStartedBody.job_id })
+      .catch((e) => logger.warn('ragas-suite.run.job_id_write_failed', { run_key: opts.runKey, error: e.message }));
     // Cancel-race guard (live 2026-10-23): a cancel that lands between the
     // pre-judge check above and this submission finds NOTHING in
     // activeSidecarJobs to cancel (the job is not registered until
@@ -2522,6 +2652,11 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       delete results[i].metrics.response;
       delete results[i].metrics.reference;
       results[i].ragas_nan = q.ragas_nan === 'ALL_NAN';
+      // Handed to the judge — so this row WAS judged. The flag separates
+      // "judged and the judge could not measure it" (metrics all null) from
+      // "never handed to the judge" (no answer): two states the panel and
+      // the guide must not conflate.
+      results[i].judged = true;
     });
     // The rows that were NOT submitted carry no score at all — empty
     // metrics, so the mean excludes them and the coverage counts them as
@@ -2530,6 +2665,7 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     for (let i = 0; i < results.length; i += 1) {
       if (submitted.has(i)) continue;
       results[i].metrics = {};
+      results[i].judged = false;
       results[i].ragas_nan = false;
     }
     // Judge COVERAGE (2026-10-21 sidecar review F2): the sidecar averages the
@@ -2539,10 +2675,19 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     // panel can say "12 of 20 rows measured" instead of presenting a partial
     // average as the benchmark.
     const judgeCoverage = evaluation.coverage && typeof evaluation.coverage === 'object' ? evaluation.coverage : null;
-    const measuredRows = judgeCoverage
-      ? Math.max(0, ...Object.values(judgeCoverage).map((v) => Number(v) || 0))
-      : perQuery.filter((q) => q && q.ragas_nan !== 'ALL_NAN').length;
     const summary = summarizeRun(suite, results, opts.metrics);
+    // The banner's coverage figure: how many rows the BEST-covered metric
+    // measured. It is computed over the IN-SCOPE population — the sidecar's
+    // own coverage counts every row it was handed, including the
+    // out-of-scope controls, so using it directly would make a fully
+    // measured metric look partial whenever the suite holds a control.
+    // One metric at 21/100 does NOT raise the banner; only a suite where NO
+    // metric covered every row does.
+    const measuredRows = Object.keys(summary.coverage || {}).length
+      ? Math.max(0, ...Object.values(summary.coverage).map((c) => Number(c && c.scored) || 0))
+      : judgeCoverage
+        ? Math.max(0, ...Object.values(judgeCoverage).map((v) => Number(v) || 0))
+        : perQuery.filter((q) => q && q.ragas_nan !== 'ALL_NAN').length;
     const runDoc = {
       _key: opts.runKey,
       repo_id: repoId,
@@ -2553,6 +2698,9 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       created_by: (opts.actor && opts.actor.user_id) || 'system',
       repo_ids: repoIds,
       metrics: opts.metrics,
+      // The last progress, including the judge it was scored with — the
+      // final write is a full replace, so it has to travel with the doc.
+      progress: opts.lastProgress || null,
       payload: {
         suite_created_at: suite.created_at,
         entries: entries.map((e) => ({
@@ -2565,10 +2713,12 @@ async function runSuite(repoId, suiteKey, opts = {}) {
         results,
         summary,
         // How much of the suite the judge actually measured — a partial
-        // average is not a benchmark result (sidecar review F2).
+        // average is not a benchmark result (sidecar review F2). The
+        // denominator is the IN-SCOPE row count, so an out-of-scope control
+        // cannot make a fully measured run look partial.
         coverage: {
           measured_rows: measuredRows,
-          total_rows: results.length,
+          total_rows: summary.n_evaluable,
           per_metric: judgeCoverage
         },
         fidelity: {
@@ -2624,6 +2774,15 @@ async function runSuite(repoId, suiteKey, opts = {}) {
 }
 
 async function report(opts, progress) {
+  // Keep the last progress on the run's own opts: the final document is a
+  // full REPLACE, so without this the panel's "Judging with <model>" line
+  // and the run's progress envelope vanish when the run lands (David
+  // 2026-10-25).
+  if (opts && typeof opts === 'object') {
+    const body = { ...(progress || {}) };
+    delete body.force;
+    opts.lastProgress = body;
+  }
   if (typeof opts.reportProgress === 'function') await opts.reportProgress(progress);
 }
 
@@ -2634,37 +2793,93 @@ function sha256(s) {
     .slice(0, 16);
 }
 
+/**
+ * Was this row handed to the judge?
+ *
+ * A row the run path never submitted was NEVER JUDGED — it carries no score,
+ * so it is left out of the averages and never counted as a zero. The flag is
+ * written at submit time; the numeric-metric test is the fallback for runs
+ * stored before the flag existed.
+ */
+function rowWasJudged(r) {
+  if (r && typeof r.judged === 'boolean') return r.judged;
+  const m = (r && r.metrics) || {};
+  return Object.keys(m).some((k) => typeof m[k] === 'number' && m[k] === m[k]);
+}
+
+/**
+ * The run's summary — computed over ONE population.
+ *
+ * The population is the IN-SCOPE rows. An out-of-scope row is a control:
+ * deliberately unanswerable, kept for contrast, "never counted as a failure,
+ * a control and not a result" (the guide). It must therefore sit in NONE of
+ * the four buckets, in NONE of the means, and in NONE of the coverage
+ * denominators. Mixing the two populations is what made the panel's outcome
+ * bar misreport which rows failed: n_errors and n_abstained counted
+ * out-of-scope rows while n_evaluable and failing_count did not, and the
+ * panel's client-side subtraction (failing_count − n_abstained) subtracted
+ * a decline that was never judged in the first place.
+ *
+ * The four buckets now partition the in-scope rows exactly, each row in
+ * exactly one:
+ *   error     — the pipeline failed; no answer; never judged
+ *   abstained — the answerer declined (judged or not — it has its own column)
+ *   failing   — judged, a metric below its threshold, not a decline
+ *   answered  — judged (or answerable), no metric below its threshold
+ */
 function summarizeRun(suite, results, metrics) {
   const thresholds = { ...FAIL_BELOW_DEFAULTS, ...((suite.payload && suite.payload.thresholds) || {}) };
   const entries = suite.payload.entries;
   const byId = new Map(entries.map((e) => [e.id, e]));
   const n = results.length;
+  const inScope = results.filter((r) => !(byId.get(r.id) || {}).oos);
+  const nOos = results.length - inScope.length;
   let nErrors = 0;
   let nAbstained = 0;
+  // A decline that arrived with NO answer was never judged: it carries no
+  // score, it is left out of the averages, AND it reduces the measured
+  // coverage — so it can mark the run invalid. A decline that arrived WITH
+  // an answer was judged, and its context metrics come back 0 — those zeros
+  // ARE in the averages. The two are different states and the guide must
+  // not conflate them (it did, and the guide test pinned the error).
+  let nAbstainedUnjudged = 0;
+  let nFailing = 0;
+  let nAnswered = 0;
   const failing = [];
-  for (const r of results) {
-    if (r.error) nErrors += 1;
-    // An ABSTENTION is a row that declined — it still has an answer, so it
-    // was judged. A row that FAILED produced no answer at all: it is an
-    // error, never an abstention, and counting it as both made the panel's
-    // outcome bar subtract it twice (the segments summed to more than the
-    // suite, and the all-abstained runs reached −20).
-    if (r.abstained && !r.error) nAbstained += 1;
-    const e = byId.get(r.id) || {};
+  for (const r of inScope) {
+    const m = r.metrics || {};
     const fails = [];
-    for (const m of metrics) {
-      const v = r.metrics ? r.metrics[m] : null;
+    for (const metric of metrics) {
+      const v = m[metric];
       if (v === null || v === undefined || v !== v) continue;
-      const t = thresholds[m];
+      const t = thresholds[metric];
       if (t === undefined) continue;
-      if (m === 'noise_sensitivity' ? v > t : v < t) fails.push(m);
+      if (metric === 'noise_sensitivity' ? v > t : v < t) fails.push(metric);
     }
-    if (fails.length && !e.oos) failing.push({ id: r.id, query: r.query, fails });
+    const judged = rowWasJudged(r);
+    if (r.error) {
+      nErrors += 1;
+      continue;
+    }
+    if (r.abstained) {
+      nAbstained += 1;
+      if (!judged) nAbstainedUnjudged += 1;
+      // A decline has its own column: it is neither a pass nor an error.
+      // Even when it was judged and its context metrics came back 0, it is
+      // NOT in the failing bucket.
+      continue;
+    }
+    if (fails.length) {
+      nFailing += 1;
+      failing.push({ id: r.id, query: r.query, fails });
+      continue;
+    }
+    nAnswered += 1;
   }
   const means = {};
   const coverage = {};
   for (const m of metrics) {
-    const vals = results.map((r) => (r.metrics ? r.metrics[m] : null)).filter((v) => typeof v === 'number' && v === v);
+    const vals = inScope.map((r) => (r.metrics ? r.metrics[m] : null)).filter((v) => typeof v === 'number' && v === v);
     means[m] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
     // HOW MANY ROWS the judge actually scored for this metric. A mean over
     // a fifth of the rows is not this run's score for that metric, and the
@@ -2672,16 +2887,31 @@ function summarizeRun(suite, results, metrics) {
     // context_entities_recall for 21 of 100 rows (the metric's entity
     // extraction does not survive that model family) and the comparison
     // read as a like-for-like delta over the whole run.
-    coverage[m] = { scored: vals.length, total: results.length };
+    // The denominator is the IN-SCOPE population, so an out-of-scope control
+    // cannot make a fully measured metric look partial.
+    coverage[m] = { scored: vals.length, total: inScope.length };
   }
   return {
     n,
     n_errors: nErrors,
     n_abstained: nAbstained,
-    n_evaluable: results.filter((r) => !(byId.get(r.id) || {}).oos).length,
+    n_abstained_unjudged: nAbstainedUnjudged,
+    n_evaluable: inScope.length,
+    n_oos: nOos,
+    // The four buckets, computed here so the panel never has to subtract
+    // across populations.
+    n_failed: nFailing,
+    n_answered: nAnswered,
     metrics: means,
     coverage,
-    failing_count: failing.length,
+    // The thresholds THIS run was scored under. A later comparison must
+    // judge this run against the bar it was actually measured against —
+    // the suite's thresholds may have been edited since.
+    thresholds,
+    failing_count: nFailing,
+    // The list is capped (the advisor reads it); the COUNT is not, and the
+    // panel reads the count. The cap is why failing_count and failing.length
+    // can disagree past 100 failing rows.
     failing: failing.slice(0, 100)
   };
 }
@@ -2704,6 +2934,14 @@ async function getRunSuite(repoId, suiteKey, runKey) {
     throw err;
   }
   if (doc.status === 'running') {
+    // This process does not have it in flight — but the SIDECAR may still
+    // be judging it (another replica owns it, or this server restarted
+    // mid-leg). Ask the sidecar before declaring the work dead: the old
+    // behaviour rewrote a LIVE run's doc as failed while its judge leg kept
+    // paying the GPU.
+    if (await sidecarJobIsLive(doc.sidecar_job_id)) {
+      return { run_key: runKey, suite_key: suiteKey, status: 'running', progress: doc.progress || null };
+    }
     const failDoc = {
       ...doc,
       status: 'failed',
@@ -2783,7 +3021,7 @@ async function listRuns(repoId, payload = {}) {
 // ---------- explain / advise ----------------------------------------------
 
 const explainInFlight = new Map(); // suite_key -> explain_key
-const rescoreInFlight = new Map(); // new run_key -> {source_run_key, progress} (re-score legs)
+const rescoreInFlight = new Map(); // new run_key -> {source_run_key} (re-score legs)
 // Explain progress (David 2026-10-21: "clicked explain… the UX is terrible as
 // it does not show a progress bar"). The explain is ONE advisor LLM call that
 // a reasoning judge can legitimately think over for minutes (live: MiniMax
@@ -2929,18 +3167,57 @@ async function loadSecondJudgeRun(db, repoId, suiteKey, runKey, runDoc) {
  * comparison is now computed from the sibling run's own scores.
  */
 function compareJudges(suite, runDoc, secondDoc) {
-  const thresholds = { ...FAIL_BELOW_DEFAULTS, ...((suite.payload && suite.payload.thresholds) || {}) };
   const judgeOf = (doc) => {
     const f = (doc.payload && doc.payload.fidelity && doc.payload.fidelity.judge) || null;
     return (f && (f.model || f.config)) || 'an unnamed judge';
   };
+  // The judge's IDENTITY, or null when the run did not record one. Two runs
+  // whose judge is UNKNOWN are not the same judge — the comparison must not
+  // claim they are.
+  const judgeIdentity = (doc) => {
+    const f = (doc.payload && doc.payload.fidelity && doc.payload.fidelity.judge) || null;
+    if (!f) return null;
+    return f.model || f.config || f.source || null;
+  };
   if (!secondDoc) {
-    return { source: 'none', second_judge: null, second_run_key: null, per_metric: {}, total: null };
+    return { source: 'none', second_judge: null, second_run_key: null, per_metric: {}, total: null, metrics: [] };
   }
+  const thisJudgeId = judgeIdentity(runDoc);
+  const otherJudgeId = judgeIdentity(secondDoc);
+  const otherJudge = judgeOf(secondDoc);
+  // The SAME judge scored both runs. That is a REPRODUCIBILITY check, not a
+  // second opinion — the re-score dialog prefills the source run's own
+  // judge, so this is the DEFAULT re-score. Reporting "a second judge
+  // cleared 0 of 67" would attribute the judge's agreement with itself to
+  // judge disagreement.
+  if (thisJudgeId && otherJudgeId && thisJudgeId === otherJudgeId) {
+    return {
+      source: 'same-judge',
+      second_judge: otherJudge,
+      second_run_key: secondDoc._key,
+      per_metric: {},
+      total: null,
+      metrics: []
+    };
+  }
+  // EACH run is judged under the thresholds IT was scored under. The
+  // re-score reads the suite's current thresholds; the source run was
+  // scored under the thresholds of its day. Applying today's bar to both
+  // would judge the sibling against a threshold it never saw. Runs stored
+  // before the thresholds were recorded fall back to the suite's.
+  const thresholdsOf = (doc) => ({
+    ...FAIL_BELOW_DEFAULTS,
+    ...((doc.payload && doc.payload.summary && doc.payload.summary.thresholds) ||
+      (doc.payload && doc.payload.thresholds) ||
+      (suite.payload && suite.payload.thresholds) ||
+      {})
+  });
+  const mineThresholds = thresholdsOf(runDoc);
+  const theirsThresholds = thresholdsOf(secondDoc);
   const metrics = (runDoc.metrics || []).filter((m) => (secondDoc.metrics || []).includes(m));
   const secondById = new Map((secondDoc.payload.results || []).map((r) => [r.id, r]));
   // null = not measured, true = failed, false = passed.
-  const verdict = (r, m) => {
+  const verdict = (r, m, thresholds) => {
     const v = r.metrics ? r.metrics[m] : null;
     if (typeof v !== 'number' || v !== v) return null;
     const t = thresholds[m];
@@ -2948,35 +3225,42 @@ function compareJudges(suite, runDoc, secondDoc) {
     return (m === 'noise_sensitivity' ? v > t : v < t) ? true : false;
   };
   const perMetric = {};
+  // The TOTAL counts ROWS, not (row, metric) pairs: a row that failed two
+  // metrics is ONE row, and the sentence says "rows".
   const total = { failed_here: 0, cleared: 0, kept_failing: 0, not_measured: 0 };
   for (const r of runDoc.payload.results || []) {
     const other = secondById.get(r.id);
     if (!other) continue;
-    for (const m of metrics) {
-      const mine = verdict(r, m);
-      if (mine !== true) continue; // this judge did not fail it
-      const theirs = verdict(other, m);
+    // The metrics THIS judge failed this row on.
+    const failedHere = metrics.filter((m) => verdict(r, m, mineThresholds) === true);
+    if (!failedHere.length) continue;
+    total.failed_here += 1;
+    // The sibling's verdict on the same metrics.
+    const theirs = failedHere.map((m) => verdict(other, m, theirsThresholds));
+    // The row is cleared only if the sibling passed EVERY metric this
+    // judge failed it on; it kept failing if the sibling failed any of
+    // them; otherwise the sibling could not measure the rest.
+    let rowState;
+    if (theirs.some((t) => t === true)) rowState = 'kept_failing';
+    else if (theirs.every((t) => t === false)) rowState = 'cleared';
+    else rowState = 'not_measured';
+    total[rowState] += 1;
+    for (const m of failedHere) {
       const bucket = (perMetric[m] = perMetric[m] || { failed_here: 0, cleared: 0, kept_failing: 0, not_measured: 0 });
       bucket.failed_here += 1;
-      total.failed_here += 1;
-      if (theirs === null) {
-        bucket.not_measured += 1;
-        total.not_measured += 1;
-      } else if (theirs === false) {
-        bucket.cleared += 1;
-        total.cleared += 1;
-      } else {
-        bucket.kept_failing += 1;
-        total.kept_failing += 1;
-      }
+      const t = verdict(other, m, theirsThresholds);
+      if (t === null) bucket.not_measured += 1;
+      else if (t === false) bucket.cleared += 1;
+      else bucket.kept_failing += 1;
     }
   }
   return {
     source: 'sibling',
-    second_judge: judgeOf(secondDoc),
+    second_judge: otherJudge,
     second_run_key: secondDoc._key,
     per_metric: perMetric,
-    total
+    total,
+    metrics
   };
 }
 
@@ -2987,19 +3271,44 @@ function compareJudges(suite, runDoc, secondDoc) {
  * with another judge to find out.
  */
 function secondJudgeSentence(comparison, metric) {
-  if (!comparison || comparison.source !== 'sibling') {
+  if (!comparison || comparison.source === 'none') {
     return 'No second judge has scored this run yet: re-score it with another judge to find out whether this is judge harshness or a real failure.';
   }
+  if (comparison.source === 'same-judge') {
+    return (
+      `The SAME judge (${comparison.second_judge}) re-scored this run's answers, so this measures judge STABILITY, not a second opinion — ` +
+      'it cannot tell judge harshness from a real failure. Re-score it with a DIFFERENT judge to answer that question.'
+    );
+  }
   const judge = comparison.second_judge || 'the other judge';
-  const m = (metric && comparison.per_metric[metric]) || comparison.total;
-  if (!m || !m.failed_here) {
+  if (metric) {
+    // Never fall back to the ALL-metric total under a metric's name: the
+    // numbers would be about every metric while the sentence named one.
+    const m = comparison.per_metric[metric];
+    if (!m) {
+      const measured = (comparison.metrics || []).includes(metric);
+      return measured
+        ? `This judge failed no ${metric} rows, so there is nothing for the other judge to disagree about.`
+        : `The second judge (${judge}) did not score ${metric} at all, so there is nothing to compare on that metric.`;
+    }
+    if (!m.failed_here) {
+      return `A second judge (${judge}) scored the same answers but did not fail any of the ${metric} rows this one failed — treat these rows as unproven, and do NOT tighten the prompt, the corpus or a retrieval knob for them.`;
+    }
+    return (
+      `A second judge (${judge}) scored the same answers: it cleared ${m.cleared} of the ${m.failed_here} rows this judge failed on ${metric}` +
+      `, and ${m.kept_failing} still failed` +
+      (m.not_measured ? ` (${m.not_measured} it could not measure at all)` : '') +
+      '. Treat the cleared rows as unproven judge disagreement rather than as judge noise: check the reference answer against the corpus, and do NOT tighten the prompt, the corpus or a retrieval knob for them.'
+    );
+  }
+  const t = comparison.total;
+  if (!t || !t.failed_here) {
     return `A second judge (${judge}) scored the same answers but did not fail any of the rows this one failed — treat these rows as unproven, and do NOT tighten the prompt, the corpus or a retrieval knob for them.`;
   }
   return (
-    `A second judge (${judge}) scored the same answers: it cleared ${m.cleared} of the ${m.failed_here} rows this judge failed` +
-    (metric ? ` on ${metric}` : '') +
-    `, and ${m.kept_failing} still failed` +
-    (m.not_measured ? ` (${m.not_measured} it could not measure at all)` : '') +
+    `A second judge (${judge}) scored the same answers: it cleared ${t.cleared} of the ${t.failed_here} rows this judge failed` +
+    `, and ${t.kept_failing} still failed` +
+    (t.not_measured ? ` (${t.not_measured} it could not measure at all)` : '') +
     '. Treat the cleared rows as unproven judge disagreement rather than as judge noise: check the reference answer against the corpus, and do NOT tighten the prompt, the corpus or a retrieval knob for them.'
   );
 }
@@ -3022,9 +3331,15 @@ function attributeFailures(suite, runDoc, evidence, judgeComparison) {
     // A row that produced NO answer is not scored, so it has no failing
     // metric — but it still needs attribution: it is the row that failed at
     // retrieval or in the answer leg, and that is the first thing the
-    // operator must know. Only a row that produced an answer and failed
-    // nothing has nothing to say.
-    if (!failed.length && !r.error && r.answer) continue;
+    // operator must know.
+    //
+    // A row that produced an answer and was JUDGED and MEASURED and failed
+    // nothing has nothing to say. A row that was handed to the judge and
+    // came back with NO metric at all is a different thing — the judge could
+    // not measure it — and it was previously dropped here, so the advisor
+    // never mentioned it while the coverage said it was unmeasured.
+    const measurable = Object.keys(m).some((k) => typeof m[k] === 'number' && m[k] === m[k]);
+    if (!failed.length && !r.error && r.answer && measurable) continue;
 
     // Where the expected passage went — proven against the corpus, not
     // inferred from the run's truncated candidate texts. The ladder only
@@ -3194,6 +3509,13 @@ function attributeFailures(suite, runDoc, evidence, judgeComparison) {
         stage = 'answer';
         recommendation =
           'this row produced no answer, so it was never judged — it carries no score and is left out of the averages; re-run the benchmark, and if it keeps happening look at the answer leg for this entry';
+      } else if (!measurable) {
+        // The row WAS handed to the judge and the judge returned nothing
+        // measurable for it. It is not a failure of the pipeline and not a
+        // threshold breach — the judge could not measure this row.
+        stage = 'unmeasured';
+        recommendation =
+          'the judge could not measure this row — it came back with no metric at all, so the row carries no score and is left out of the averages. Check the judge endpoint and the metric set; if it keeps happening on the same rows, the judge cannot handle that shape of answer';
       } else {
         stage = 'pipeline';
         recommendation = 'metric below threshold — inspect the row detail';
@@ -3950,13 +4272,19 @@ async function sweepInterruptedRuns() {
     const db = await dbService.getConnection();
     await ensureCollection(db);
     const liveKeys = new Set([...runInFlight.values()]);
+    // A RE-SCORE lives in its own map (rescoreInFlight), so a sweep that
+    // only knew about runInFlight declared every live re-score interrupted
+    // at boot — while its judge leg kept paying the GPU. The sidecar is the
+    // authority: a job it still reports as running is NOT interrupted.
+    const rescoreKeys = new Set(rescoreInFlight.keys());
     const cursor = await db.query(
-      `FOR d IN ${COLLECTION} FILTER d.kind == "ragas_run" AND d.status == "running" RETURN KEEP(d, ["_key", "suite_key"])`
+      `FOR d IN ${COLLECTION} FILTER d.kind == "ragas_run" AND d.status == "running" RETURN KEEP(d, ["_key", "suite_key", "sidecar_job_id"])`
     );
     const rows = await cursor.all();
     let swept = 0;
     for (const r of rows) {
-      if (liveKeys.has(r._key)) continue;
+      if (liveKeys.has(r._key) || rescoreKeys.has(r._key)) continue;
+      if (await sidecarJobIsLive(r.sidecar_job_id)) continue;
       await db
         .collection(COLLECTION)
         .replace(r._key, {
@@ -4076,6 +4404,15 @@ module.exports = {
   // comparison (the advisor used to assert a second judge's verdict from
   // a hardcoded string).
   compareJudges,
+  // Exported so the lookup can be exercised against a store: the mock's AQL
+  // dispatcher used to fall through to an empty result for this query, so
+  // the advisor's headline behaviour (a second judge's verdict computed from
+  // the real sibling re-score) was never proven end to end.
+  loadSecondJudgeRun,
   secondJudgeSentence,
-  attributeFailures
+  attributeFailures,
+  // Exported so the summary's population rule (in-scope rows only) and its
+  // four buckets can be pinned by a test: the panel used to derive them
+  // itself, across two populations, and misreported which rows failed.
+  summarizeRun
 };

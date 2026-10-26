@@ -145,7 +145,7 @@
            chip panel. -->
       <!-- 1-8g-q (David: "a maintenance operation, similar to indexing a
            database"): the head tag-set stays EDITABLE on a serving repo —
-           the whole point of the Routing Lab loop. readOnly is false
+           the whole point of the Testing Lab loop. readOnly is false
            unconditionally; content (concepts) below keeps the lock. -->
       <FrontmatterPanel
         v-if="repoId"
@@ -158,15 +158,15 @@
       />
       <!-- Story 1-8 (2026-10-08): compact head status under the tag panel —
            the vectorized head is what the tags become at publish; the CTA
-           opens the Routing Lab to test it against competing repositories. -->
+           opens the Testing Lab to test it against competing repositories. -->
       <div v-if="repoId" class="okf-re__head-badge">
         <button type="button" class="okf-re__head-badge-btn" @click="headTestOpen = true">
           <span :class="['okf-re__head-dot', 'okf-re__head-dot--' + headStatus]" />
           {{ headBadgeText }}
-          <span class="okf-re__head-cta">{{ translate('okf.headTest.cta', 'Routing Lab') }} →</span>
+          <span class="okf-re__head-cta">{{ translate('okf.testingLab.cta', 'Testing Lab') }} →</span>
         </button>
       </div>
-      <OkfHeadTestDialog
+      <OkfTestingLabDialog
         :visible="headTestOpen"
         :repo="headTestRepo"
         :initial-tab="'test'"
@@ -401,7 +401,7 @@ import FrontmatterPanel from '../FrontmatterPanel.vue';
 import DsDialog from '../../ds/Dialog.vue';
 import okfRepoOps from '../../../services/okfRepoOps';
 import OkfAutocorrectPanel from './AutocorrectPanel.vue';
-import OkfHeadTestDialog from './HeadTestDialog.vue';
+import OkfTestingLabDialog from './TestingLabDialog.vue';
 import OkfAccessPanel from './AccessPanel.vue';
 import OkfPiiRepoRescan from './PiiRepoRescan.vue';
 
@@ -425,7 +425,7 @@ export default {
     OkfRepoGraphView,
     FrontmatterPanel,
     OkfAutocorrectPanel,
-    OkfHeadTestDialog,
+    OkfTestingLabDialog,
     OkfAccessPanel,
     OkfPiiRepoRescan
   },
@@ -457,7 +457,7 @@ export default {
       // editorReloadKey — without it the pane showed STALE frontmatter
       // until the editor was closed and reopened, David 2026-10-09).
       conceptReloadKey: 0,
-      // Story 1-8: the right-rail head badge opens the Routing Lab here.
+      // Story 1-8: the right-rail head badge opens the Testing Lab here.
       headTestOpen: false,
       typeOptions: TYPE_OPTIONS,
       labelOptions: [],
@@ -541,9 +541,9 @@ export default {
       return 'present';
     },
     headBadgeText() {
-      if (this.headStatus === 'present') return this.translate('okf.headTest.badge.present', 'head ready');
-      if (this.headStatus === 'stale') return this.translate('okf.headTest.badge.stale', 'head stale');
-      return this.translate('okf.headTest.badge.missing', 'no head');
+      if (this.headStatus === 'present') return this.translate('okf.testingLab.badge.present', 'head ready');
+      if (this.headStatus === 'stale') return this.translate('okf.testingLab.badge.stale', 'head stale');
+      return this.translate('okf.testingLab.badge.missing', 'no head');
     },
     headTestRepo() {
       return this.repo && this.repo.repo_id ? this.repo : null;
@@ -709,7 +709,7 @@ export default {
     onAccessChanged() {
       this.$store.dispatch('okf/fetchRepos');
     },
-    // Story 1-8: a head rebuild inside the Routing Lab rewrites the repo
+    // Story 1-8: a head rebuild inside the Testing Lab rewrites the repo
     // doc — refresh the cached repo so the badge + gates re-evaluate.
     onHeadTestChanged() {
       this.$store.dispatch('okf/fetchRepos');

@@ -1,13 +1,13 @@
 # Architecture diagrams — RAGAS benchmarking (Story 8-6)
 
-All diagrams are the additive delta on the existing Routing Lab (`head-test-service` + `head-suite-service`). No existing arrow changes.
+All diagrams are the additive delta on the existing Testing Lab (`head-test-service` + `head-suite-service`). No existing arrow changes.
 
 ## Service topology
 
 ```mermaid
 flowchart LR
   subgraph Frontend
-    HTD[HeadTestDialog.vue<br/>4th tab: RAGAS pane]
+    HTD[TestingLabDialog.vue<br/>4th tab: RAGAS pane]
     RP[RagasPanel.vue]
     HTD --> RP
   end
@@ -52,26 +52,33 @@ sequenceDiagram
   end
 ```
 
-## Run flow (CAP-3) — Lab-internal replay, never chatqna-over-HTTP
+## Run flow (CAP-3) — the answer leg answers through the served pipeline by default
 
 ```mermaid
 sequenceDiagram
   participant UI as RagasPanel
   participant API as okf-server (202)
   participant DB as ArangoDB
+  participant CQ as chatqna (served)
   participant RS as ragas-service
   UI->>API: POST /ragas-testsuite/:suite_key/run
   API->>DB: save ragas_run placeholder (running, progress)
   API-->>UI: 202 {run_key}
   loop each entry (bounded concurrency)
-    API->>DB: AQL APPROX_NEAR_COSINE per selected repo _SOURCE (head-weighted merge)
-    API->>API: rerankTexts (existing rerank seam) -> contexts
-    API->>API: vllmChatCompletions (CHATQNA_SYSTEM_PROMPT-shaped) -> answer
+    alt serve mode (DEFAULT, 2026-10-23)
+      API->>CQ: POST chatqna {messages, include_contexts, context:{mode:okf_only, authorized_graph_names}}
+      CQ->>CQ: the citizen's own retrieval + answer
+      CQ-->>API: served answer + the served contexts
+    else whatif mode (opt-in)
+      API->>DB: AQL APPROX_NEAR_COSINE per selected repo _SOURCE (head-weighted merge)
+      API->>API: rerankTexts (existing rerank seam) -> contexts
+      API->>API: vllmChatCompletions (CHATQNA_SYSTEM_PROMPT-shaped) -> answer
+    end
   end
   API->>RS: POST /evaluate {samples: user_input/retrieved_contexts/response/reference}
-  RS-->>API: {aggregate, per_query: 4 metrics}
-  API->>DB: replace run (done, results + summary + fidelity knobs)
-  loop poll with progress {phase: retrieval|judge, done, total}
+  RS-->>API: {aggregate, per_query: metrics}
+  API->>DB: replace run (done, results + summary + fidelity knobs + judge name)
+  loop poll with progress {phase: retrieval|judge, done, total, judge}
     UI->>API: GET .../runs/:run_key
   end
 ```
@@ -99,7 +106,7 @@ No results import — results flow one way (export); only benchmark suites impor
 
 ```mermaid
 flowchart LR
-  subgraph HeadTestDialog [HeadTestDialog.vue - 4 entry points unchanged]
+  subgraph TestingLabDialog [TestingLabDialog.vue - 4 entry points unchanged]
     T1[Head] --- T2[Test] --- T3[Suites] --- T4[RAGAS - NEW]
     T3 -->|saved-suites table: both kinds + DsPill RAGAS| SEL{select RAGAS suite}
     SEL -->|switches tab + loads| T4

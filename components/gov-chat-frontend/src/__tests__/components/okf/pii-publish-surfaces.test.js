@@ -163,7 +163,7 @@ describe('The publish dialog shows the PII verdict BEFORE the publish click', ()
 const EDITOR_STUBS = {
   OkfConceptEditor: true,
   FrontmatterPanel: true,
-  OkfHeadTestDialog: true,
+  OkfTestingLabDialog: true,
   DsOkfMarkdownEditor: true
 };
 

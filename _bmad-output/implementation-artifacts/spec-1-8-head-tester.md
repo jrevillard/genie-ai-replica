@@ -1,4 +1,4 @@
-# Story 1-8 — OKF Head Tester & Routing Lab (spec, ready-for-review)
+# Story 1-8 — OKF Testing Lab (spec, ready-for-review)
 
 Author: Claude (GLM-5.3 session), 2026-10-08. Research basis: 4-agent
 workflow over the live codebase (routing algorithm, head storage,
@@ -128,12 +128,12 @@ queries) and labeled `sticky-unsupported`.
    head.computed_at` (computed client-side from the repo doc).
 3. **Salvage the probe scripts**: move probe1.3.py, routing_probe.js,
    routing_probe2.js, tag_dryrun.py from the build root into
-   `scripts/okf-routing-lab/` (reference implementations; they
+   `scripts/okf-testing-lab/` (reference implementations; they
    currently exist nowhere in the repo and die on the next sync).
 
 ## 6. Frontend
 
-- **`HeadTestDialog.vue`** (new, `components/okf/editor/`) — a
+- **`TestingLabDialog.vue`** (new, `components/okf/editor/`) — a
   DsDialog with three DsTabs:
   1. **Head** — head.text rendered as tag chips per field, dim/model/
      version/computed_at/staleness badge, per-field weight legend,
@@ -154,9 +154,9 @@ queries) and labeled `sticky-unsupported`.
   ingest is legitimate verification).
 - **Right-rail compact status** under FrontmatterPanel
   (RepoEditor.vue:134-142 area): head present/stale/missing badge +
-  "Open Routing Lab" CTA.
+  "Open Testing Lab" CTA.
 - **Wizard Publish step**: read-only head card + handoff button
-  ("Open the Routing Lab in the Editor") — NO mutations in the
+  ("Open the Testing Lab in the Editor") — NO mutations in the
   wizard (D4 rule, Publish.vue:3-4).
 - `services/headTestService.js` wrapper (httpService, `/okf/...`
   paths); store actions in `okf.js` returning `{ok, code, message}`;
@@ -171,7 +171,7 @@ queries) and labeled `sticky-unsupported`.
 
 ```
 Curate tags (chip UI/dialog) → approve → publish
-   → head built (vN) ── open Routing Lab
+   → head built (vN) ── open Testing Lab
    → generate suite (LLM) → run → pass rate/margins
    → bad? → Unpublish (publish→review, lifecycle-service.js:90)
         → fix tags → approve → publish (vN+1, fresh head)
@@ -241,7 +241,7 @@ serving repo), then the standard Path-1 MR flow.
    confusable-sibling negatives, forbidden-derived negatives),
    curator free-text additions, run-all, okf_head_test_runs, list
    endpoint, summary metrics.
-3. **MR-C frontend** — headTestService + HeadTestDialog (Head / Test
+3. **MR-C frontend** — headTestService + TestingLabDialog (Head / Test
    / Suites tabs) + rail badge + Publish card + i18n ×14 + store.
 4. **MR-D retriever head wiring (IN-STORY)** — head-affinity in
    `_route_graphs` for carrier graphs behind
@@ -297,7 +297,7 @@ provenance "head-suppressed (forbidden/noise)"); `okf-server/services/head-suite
 (suite rows carry the gate fields; `summarizeRun` evaluates negatives
 solo via `head_claimed === false`); `genie-ai-overlay/retriever/{config.py,
 genieai_retriever_arangodb.py}` (drop-in-the-pool filter); frontend
-`HeadTestDialog.vue` (new "Claims query" column; verdict distinguishes
+`TestingLabDialog.vue` (new "Claims query" column; verdict distinguishes
 rank-fail from gate-suppressed; adversarial text updated); i18n ×14
 (5 new keys). Tests: okf-server 777/777 (+3); frontend 1640/1640 (+3);
 retriever 8/8 (existing pool tests cover the change).
@@ -311,7 +311,7 @@ into feat/okf-server.]
 (§14.2). Everything §13.7 lists as not-yet-done shipped in that commit:
 the v2 unit tests (jest +176; pytest +287 gate parity in
 test_fanout.py), the randomized suite negative classes, and the
-HeadTestDialog 3-check gate breakdown + veto/floor teach panels
+TestingLabDialog 3-check gate breakdown + veto/floor teach panels
 (i18n ×14). Status chain continues in §14.]
 
 Status: the v2 core is IMPLEMENTED on `fix/story-1-8b-routing-gate-v2`
@@ -616,7 +616,7 @@ the data they need is now in the payload.
 
 ### 15.6 Remaining (frontend) for 1-8d
 
-- Guardrail reporting in HeadTestDialog: render `rejected` reasons,
+- Guardrail reporting in TestingLabDialog: render `rejected` reasons,
   `source: 'guardrail'` states, remove chips from
   `removal_suggestions`.
 - Revert-tags panel from `frontmatter_history` + rebuild offer.

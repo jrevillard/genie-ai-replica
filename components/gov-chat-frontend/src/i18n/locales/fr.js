@@ -1515,8 +1515,8 @@ export default {
       groupDataPrep: 'Pipeline de préparation des données',
       groupInference: 'Pipeline d’inférence',
       mockNote: 'prévu — pas encore configurable',
-      svcAnswers: 'Réponses de benchmark (à la place du chat du déploiement)',
-      svcAnswersShort: 'réponses de benchmark',
+      svcAnswers: 'Réponses de benchmark — rejeu hors ligne uniquement (le Lab répond via le chat du déploiement)',
+      svcAnswersShort: 'réponses de benchmark (hors ligne uniquement)',
       mockContextual: 'Contextual retrieval (contexte du document)',
       mockChunkLabeling: 'Étiquetage des fragments',
       mockGraphExtraction: 'Extraction du graphe de connaissances',
@@ -1601,7 +1601,7 @@ export default {
       version: 'v{n}',
       versions: 'Versions',
       deleteLabel: 'Supprimer',
-      headTest: 'Routing Lab'
+      testingLab: 'Testing Lab'
     },
     logs: {
       labeled: 'étiquetés : {n}',
@@ -1910,7 +1910,7 @@ export default {
         logs: 'Journaux',
         rename: 'Renommer',
         versions: 'Versions',
-        headTest: 'Head Test'
+        testingLab: 'Testing Lab'
       },
       delete: {
         body: "Cette action supprime définitivement le référentiel, ses concepts, le contenu indexé, le graphe et les artefacts de l'archive. Cette action est irréversible.",
@@ -2902,9 +2902,9 @@ export default {
         keyword: 'Keyword'
       }
     },
-    headTest: {
-      title: 'Routing Lab — head test',
-      cta: 'Routing Lab',
+    testingLab: {
+      title: 'Testing Lab',
+      cta: 'Testing Lab',
       badge: {
         present: 'head ready',
         stale: 'head stale',
@@ -3071,7 +3071,7 @@ export default {
         tagsetTip: 'Tags interdits pour cette exécution',
         savedTitle: 'Suites enregistrées',
         savedTip:
-          'Chaque suite générée ou importée est enregistrée ici, par dépôt. Deux types partagent cette liste : les suites de tête (jeux de requêtes issus des tags et du frontmatter, avec compteurs positifs/négatifs) et les suites de référence RAGAS (jeux de questions avec réponses attendues, avec badge RAGAS et nombre d entrées). Charger ouvre une suite de tête dans l onglet Test de tête et une suite RAGAS dans l onglet RAGAS Benchmarks, où elle peut être exécutée et notée contre le corpus en direct. Supprimer retire la suite définitivement ; le renommage se fait directement sur le nom.',
+          'Chaque suite générée ou importée est enregistrée ici, par dépôt. Deux types partagent cette liste : les suites de tête (jeux de requêtes issus des tags et du frontmatter, avec compteurs positifs/négatifs) et les suites de référence RAGAS (jeux de questions avec réponses attendues, avec badge RAGAS et nombre d entrées). Charger affiche une suite de tête dans cet onglet et une suite RAGAS dans l onglet RAGAS Benchmarks, où elle peut être exécutée et notée contre le corpus en direct. Supprimer retire la suite définitivement ; le renommage se fait directement sur le nom.',
         load: 'Charger',
         flipTip: 'Basculer doit-sélectionner / ne-doit-pas-sélectionner',
         deleteTip: 'Retirer cette ligne de la suite',
@@ -3303,7 +3303,7 @@ export default {
             title: 'Les modèles, et à quoi s’attendre',
             intro:
               'Trois modèles différents participent à l’exercice et ils ne sont pas interchangeables : le modèle qui répond, le modèle qui juge et le modèle qui produit les embeddings. Ils font varier le score pour des raisons entièrement différentes.',
-            d1: 'Le modèle de réponse est celui qui est mis à l’épreuve. La récupération et la réponse sont rejouées dans le serveur OKF avec les mêmes collections et le même reranker que ceux utilisés par l’assistant : changer ce modèle change donc la réponse, pas le protocole de test.',
+            d1: 'Le modèle de réponse est celui qui est mis à l’épreuve — mais dans le Lab, les réponses viennent du modèle de chat DÉPLOYÉ, via la chaîne déployée : changer le modèle de chat du déploiement change donc la réponse. Le volet de rejeu hors ligne (la récupération et la réponse rejouées dans le serveur OKF) existe pour les runs whatif et ne peut pas être lancé depuis le Lab aujourd’hui : le réglage « réponses de benchmark » ne change donc aucun banc d’essai que vous puissiez lancer ici.',
             d2: 'Le juge doit être puissant et stable. Il note par rapport aux références : un juge faible dégrade toutes les métriques d’un coup, et l’exécution paraît pourtant complète. Les réponses du juge sont mises en cache par identité de juge — changer de juge ou de modèle invalide ce cache et chaque ligne est notée à nouveau.',
             d3: 'Le modèle d’embedding fait partie de la mesure de la récupération. Changez-le et les scores de context precision et de context recall bougent, tandis que le score de faithfulness reste généralement stable. Cette asymétrie est un indice sur l’endroit où le changement a porté, pas du bruit.',
             d4: 'Consignez le modèle avec l’exécution. Chaque exécution enregistre quelle configuration et quel modèle ont produit les réponses et les scores ; deux exécutions ne sont comparables que si ces éléments coïncident.',
@@ -3317,10 +3317,10 @@ export default {
             title: 'Lire les résultats',
             intro:
               'Chaque métrique RAGAS mesure quelque chose de différent, et l’une d’elles fonctionne à l’inverse. Lisez chaque chiffre pour ce qu’il mesure réellement avant d’agir en fonction de lui.',
-            d1: 'Lisez d’abord le bandeau d’exécution non valide. Une exécution dont les réponses ont échoué, ou dont le juge n’a mesuré qu’une partie de la suite, n’est pas une mesure — les moyennes affichées en dessous ne couvrent que les lignes notées.',
+            d1: 'Lisez d’abord le bandeau d’exécution non valide. Une exécution dont les réponses ont échoué, ou dans laquelle aucune métrique n’a couvert toutes les lignes dans le périmètre, n’est pas une mesure — les moyennes affichées en dessous ne couvrent que les lignes notées.',
             d2: 'Vérifiez le sens de chaque métrique. La plupart sont d’autant plus meilleures qu’elles sont élevées. La métrique noise sensitivity fait exception : plus bas est meilleur, si bien qu’une exécution qui y obtient un mauvais score échoue dans le bon sens.',
             d3: 'Lisez les lignes en échec, pas seulement la moyenne. Une question défectueuse sur quarante déplace la moyenne davantage que le changement que vous cherchiez à mesurer.',
-            d4: "Utilisez Explain failures avant de changer quoi que ce soit. L'outil attribue chaque ligne en échec à une étape prouvée sur le corpus — retrieved, reranker, vector-recall, corpus, judge ou answer — et montre où le passage a été perdu et à quel rang il serait arrivé. Un verdict corpus signifie que le passage attendu n'est pas du tout dans le corpus : cette question est injuste, elle évalue le benchmark plutôt que l'assistant, et elle est signalée comme telle afin que vous régénériez l'entrée au lieu d'écrire un contenu qui existe déjà. Ses suggestions sont filtrées : il propose, vous décidez.",
+            d4: "Utilisez Explain failures avant de changer quoi que ce soit. L'outil attribue chaque ligne en échec à une étape prouvée sur le corpus — retrieved, reranker, vector-recall, corpus, judge, answer ou unmeasured — et montre où le passage a été perdu et à quel rang il serait arrivé. Un verdict corpus signifie que le passage attendu n'est pas du tout dans le corpus : cette question est injuste, elle évalue le benchmark plutôt que l'assistant, et elle est signalée comme telle afin que vous régénériez l'entrée au lieu d'écrire un contenu qui existe déjà. Ses suggestions sont filtrées : il propose, vous décidez.",
             x1: 'Ne comparez pas des moyennes issues d’ensembles de métriques différents, de juges différents ou d’une suite modifiée. Aucune de ces comparaisons n’est la même mesure, et l’écart que vous observez ne traduit pas un changement de qualité.',
             x2: 'N’ajustez pas la récupération sur la base d’un seul chiffre. La précision et le rappel s’opposent ; un changement qui fait monter l’un fait généralement baisser l’autre, et c’est cet arbitrage qui est le plus instructif.',
             x3: 'Ne confondez pas un score nul avec un score faible. Une reprise épuisée produit un score nul qui est exclu de la moyenne : pas de score signifie pas de mesure — relancez la ligne plutôt que de supposer le pire.',
@@ -3334,7 +3334,7 @@ export default {
                 effect: "Qu'en faire"
               },
               mean: {
-                element: 'Le score',
+                element: 'La moyenne',
                 meaning:
                   "La moyenne de cette métrique sur les lignes que le juge a notées. Ce n'est pas un score de l'ensemble du jeu de test.",
                 effect:
@@ -3343,18 +3343,18 @@ export default {
               coverage: {
                 element: 'La fraction (55/100)',
                 meaning:
-                  'Le juge a mesuré cette métrique sur 55 des 100 lignes du jeu de test. La moyenne ne couvre que ces 55 lignes ; les 45 autres en sont exclues — jamais comptées comme zéro.',
+                  'Le juge a mesuré cette métrique sur 55 des 100 lignes dans le périmètre du jeu de test. La moyenne ne couvre que ces 55 lignes ; les 45 autres en sont exclues — jamais comptées comme zéro. Les témoins hors périmètre ne font pas partie des 100.',
                 effect:
                   'Une petite fraction signifie que le nombre parle peu du jeu de test. Vérifiez la métrique qui vous intéresse, pas le run dans son ensemble.'
               },
               banner: {
                 element: 'La bannière de run invalide',
                 meaning:
-                  "Le run a eu des réponses en échec, ou aucune métrique n'a couvert toutes les lignes. Son chiffre de couverture est la métrique la mieux couverte, donc une métrique à 21/100 ne le déclenche pas.",
+                  'Le run a eu des réponses en échec, ou aucune métrique n’a couvert toutes les lignes dans le périmètre. Son chiffre de couverture est la métrique la mieux couverte, donc une métrique à 21/100 ne le déclenche pas.',
                 effect: 'Lisez vous-même les fractions par métrique. La bannière est un plancher, pas un résumé.'
               },
               runName: {
-                element: 'Le nom du run',
+                element: 'Le nom du run et son juge',
                 meaning:
                   'Le juge qui a noté ce run, et la configuration dont il vient. La clé en dessous est pour le support.',
                 effect:
@@ -3363,9 +3363,9 @@ export default {
               rescore: {
                 element: 'Re-noter',
                 meaning:
-                  "Re-note les mêmes réponses avec un autre juge. Les réponses et les contextes sont copiés tels quels — rien n'est récupéré ni réécrit.",
+                  'Re-note les mêmes réponses avec le juge que vous choisissez — les réponses et les contextes sont copiés tels quels, rien n’est récupéré ni réécrit. La boîte de dialogue pré-remplit le juge de l’exécution d’origine, si bien que la re-note par défaut est un contrôle de STABILITÉ (ce juge est-il reproductible ?), et non un second avis.',
                 effect:
-                  "Utilisez-le pour mettre deux juges sur les mêmes lignes. C'est bien moins cher qu'un nouveau run, et c'est ainsi qu'on teste un changement de juge."
+                  'Pour savoir si un échec est la sévérité du juge ou un véritable échec, re-notez avec un juge DIFFÉRENT. Deux juges sur les mêmes lignes coûtent bien moins cher qu’une nouvelle exécution, et c’est ainsi qu’on teste un changement de juge.'
               },
               status: {
                 element: 'Le statut',
@@ -3377,16 +3377,16 @@ export default {
           errors: {
             title: 'Erreurs, et ce qu’elles font du résultat',
             intro:
-              "Un benchmark ne mesure jamais chaque ligne de chaque jeu de test : une ligne peut échouer dans la chaîne, l'assistant peut refuser de répondre, le juge peut échouer à mesurer une métrique, et une métrique peut passer sous son seuil. Rien de tout cela n'est un zéro et rien n'est caché. Ce chapitre est la carte — ce que chaque état signifie, et ce qu'il fait du nombre que vous lisez. Une chose à savoir avant de le lire : une ligne qui n'a produit AUCUNE RÉPONSE n'est jamais confiée au juge — il n'y a rien avec quoi la juger — elle est donc exclue des moyennes et jamais comptée comme un zéro. Une ligne qui a REFUSÉ a toujours une réponse, elle est donc jugée : n'ayant rien pour l'appuyer, ses métriques de contexte remontent à 0, et ces zéros SONT comptés dans les moyennes. C'est pourquoi un run avec une ligne en échec est marqué invalide plutôt que considéré comme fiable.",
+              'Un benchmark ne mesure jamais chaque ligne de chaque jeu de test : une ligne peut échouer dans la chaîne, l’assistant peut refuser de répondre, le juge peut échouer à mesurer une métrique, et une métrique peut passer sous son seuil. Rien de tout cela n’est un zéro et rien n’est caché. Ce chapitre est la carte — ce que chaque état signifie, et ce qu’il fait du nombre que vous lisez. Une chose à savoir avant de le lire : une ligne qui n’a produit AUCUNE RÉPONSE n’est jamais confiée au juge — il n’y a rien avec quoi la juger — elle est donc exclue des moyennes, jamais comptée comme un zéro, et elle abaisse la couverture mesurée. Un REFUS n’est pas une seule chose, mais deux. Un refus survenu AVEC une réponse a été jugé : n’ayant rien pour l’appuyer, ses métriques de contexte sont remontées à 0, et ces zéros SONT comptés dans les moyennes. Un refus survenu SANS réponse n’a jamais été jugé du tout : il ne porte aucun score, il est exclu des moyennes, et il abaisse la couverture mesurée exactement comme une ligne en erreur. C’est pourquoi un run avec une ligne en échec ou non jugée est marqué invalide plutôt que considéré comme fiable.',
             d1: 'Lisez le bandeau d’exécution non valide avant les moyennes. Il signifie que les scores affichés en dessous ne sont pas une mesure du système, et il en nomme la cause : des réponses qui ont échoué, ou un juge qui n’a mesuré qu’une partie de la suite. Corrigez la cause, puis relancez.',
             d2: 'Vérifiez la couverture de chaque métrique avant de comparer deux exécutions. Le panneau indique combien de lignes le juge a effectivement notées pour cette métrique ; une moyenne sur une fraction de la suite n’est pas le score de la suite, et elle n’est pas comparable à une exécution qui les a toutes mesurées.',
             d3: 'Corrigez une ligne en erreur à sa racine — la chaîne de récupération, le service amont, le délai dépassé — puis relancez. Modifier la suite pour retirer la ligne qui échoue sans fin cache le défaut que le banc d’essai existe pour trouver.',
-            d4: 'Considérez une abstention comme un résultat, pas comme un défaut. Elle dit que l’assistant a jugé que le corpus ne répond pas à la question : c’est une propriété du corpus et de la question. Lisez-la comme la couverture de ce que vos utilisateurs rencontreront.',
+            d4: 'Considérez un refus comme un résultat, pas comme un défaut. Un refus survenu avec une réponse dit que l’assistant a jugé que le corpus ne répond pas à la question : c’est une propriété du corpus et de la question. Lisez-le comme la couverture de ce que vos utilisateurs rencontreront.',
             x1: 'Ne lisez pas une métrique non mesurée comme un zéro. Un juge dont la réponse n’a pas pu être analysée laisse cette métrique à null pour cette ligne ; null est exclu de la moyenne, jamais moyenné comme un échec.',
-            x2: 'Ne comptez pas une abstention comme une erreur, et ne la comptez pas non plus comme une réussite. Elle est rapportée dans sa propre colonne précisément parce qu’elle n’est ni l’un ni l’autre.',
+            x2: 'Ne comptez pas un refus comme une erreur, et ne le comptez pas non plus comme une réussite. Il est rapporté dans sa propre colonne précisément parce qu’il n’est ni l’un ni l’autre — et un refus survenu sans réponse n’a jamais été jugé du tout, donc il n’apporte pas non plus de zéro.',
             x3: 'Ne publiez pas un chiffre provenant d’une exécution que le panneau a marquée non valide, et ne moyenez pas deux exécutions pour la masquer. Une exécution mesurée partiellement n’a pas de score à publier ; elle a une exécution à corriger.',
             expect:
-              'Une exécution propre n’a aucune ligne en erreur et chaque métrique notée sur chaque ligne — c’est le seul état dans lequel les moyennes sont le banc d’essai. Tout le reste est une exécution à corriger, pas un résultat sur lequel agir.',
+              'Une exécution propre n’a aucune ligne en erreur, aucune ligne non jugée, et chaque métrique notée sur chaque ligne dans le périmètre — c’est le seul état dans lequel les moyennes sont le banc d’essai. Tout le reste est une exécution à corriger, pas un résultat sur lequel agir.',
             table: {
               title: 'Comment chaque état se répercute sur le résultat',
               col: {
@@ -3404,16 +3404,23 @@ export default {
               abstained: {
                 state: 'abstention',
                 meaning:
-                  "L'assistant a refusé de répondre — chatqna l'a dit, ou il n'avait rien à dire. Le pipeline n'a pas échoué.",
+                  'L’assistant a refusé de répondre mais a tout de même produit une réponse — chatqna l’a dit, ou il a nuancé. Le pipeline n’a pas échoué.',
                 effect:
-                  "La ligne est quand même confiée au juge, donc elle contribue à un score — sans contexte à l'appui, les métriques de contexte reviennent à 0, et ces zéros sont COMPTÉS dans les moyennes. Elle est comptée dans sa propre colonne, jamais dans celle des erreurs, et elle ne rend pas la suite invalide. Le panneau l'étiquette « abstained » plutôt que passe ou échec."
+                  'La ligne a été confiée au juge, donc elle contribue à un score — sans rien à l’appui, les métriques de contexte reviennent à 0, et ces zéros sont COMPTÉS dans les moyennes. Elle est comptée dans sa propre colonne, jamais dans celle des erreurs, et à elle seule elle ne rend pas le run invalide. Le panneau l’étiquette « abstention » plutôt que passe ou échec. Un refus qui n’a produit AUCUNE réponse est un état différent — voir « refusé, non noté ».'
+              },
+              declinedUnjudged: {
+                state: 'refusé, non noté',
+                meaning:
+                  'L’assistant a refusé de répondre et n’a rien dit — aucune réponse n’a été produite. Le pipeline n’a pas échoué.',
+                effect:
+                  'La ligne n’a PAS été confiée au juge — elle n’a pas de réponse, il n’y a donc rien avec quoi la juger. Elle ne porte aucun score : elle est exclue des moyennes (jamais comptée comme un zéro), elle abaisse la couverture mesurée, et elle peut rendre le run invalide. Le panneau l’étiquette « refusé — non noté » afin que vous la distinguiez d’un refus qui a été jugé.'
               },
               unmeasured: {
                 state: 'non mesurée',
                 meaning:
                   'Le juge a produit une réponse que cette métrique n’a pas pu analyser — par exemple une affirmation de correction factuelle qu’il n’a pas pu vérifier.',
                 effect:
-                  'Cette métrique vaut null pour cette ligne : exclue de la moyenne, jamais un zéro. Le panneau indique combien de lignes le juge a bel et bien notées, et une couverture partielle rend l’exécution non valide.'
+                  'Cette métrique vaut null pour cette ligne : exclue de la moyenne, jamais un zéro. Le panneau indique combien de lignes le juge a bel et bien notées pour elle. Une métrique à 21/100 ne rend PAS un run invalide — le bandeau n’apparaît que lorsqu’AUCUNE métrique n’a couvert toutes les lignes dans le périmètre, lisez donc vous-même les fractions par métrique.'
               },
               belowThreshold: {
                 state: 'sous le seuil',
@@ -3425,7 +3432,8 @@ export default {
                 state: 'hors périmètre',
                 meaning:
                   'La question est délibérément sans réponse — conservée dans la suite pour servir de contraste, jamais comme un test.',
-                effect: 'Jamais comptée comme un échec. C’est un témoin, pas un résultat.'
+                effect:
+                  'Jamais comptée comme un échec, et jamais dans une moyenne : c’est un témoin, pas un résultat. Le panneau ne l’empile pas dans la barre de résultats, et son score n’entre ni dans une moyenne ni dans une fraction de couverture.'
               }
             }
           }
@@ -3436,13 +3444,14 @@ export default {
         title: 'Générer une suite de bancs d’essai',
         hint: 'Synthétise des questions avec les sorties attendues à partir des dépôts sélectionnés — un ou plusieurs : le dépôt actuel seul ou avec des dépôts apparentés.',
         size: 'Questions',
-        config: 'Configuration du modèle juge',
-        default: 'Valeur par défaut du déploiement (configuration active / env)',
-        defaultNamed: 'Défaut du déploiement — {name}{model}',
+        config: 'Configuration du modèle de génération',
+        default: 'Valeur par défaut du déploiement (.env)',
+        defaultNamed: 'Configuration active — {name}{model}',
         effective: 'Évaluation avec {name}{model}',
+        effectiveGenerating: 'Génération avec {name}{model}',
         envDefault: 'valeur par défaut de l’environnement',
-        envJudge: 'Défaut système (environnement){model}',
-        envJudgePlain: 'Défaut système (environnement)',
+        envJudge: 'Valeur par défaut du déploiement (.env){model}',
+        envJudgePlain: 'Valeur par défaut du déploiement (.env)',
         model: 'Modèle',
         modelPick: 'Valeur par défaut de la configuration',
         modelDefault: 'valeur par défaut de la configuration',
@@ -3485,10 +3494,12 @@ export default {
       run: {
         button: 'Lancer le banc d’essai',
         working: 'Exécution…',
+        judge: 'Configuration du modèle juge',
         retrieved: 'récupérés',
         pass: 'réussi',
         fail: 'échoué',
         abstained: 'abstenu',
+        declinedUnjudged: 'refusé — non noté',
         rowError: 'erreur',
         cancel: 'Annuler l’exécution',
         phase: {
@@ -3515,7 +3526,7 @@ export default {
           'Chaque ligne est la moyenne d’une métrique RAGAS par exécution, de la plus ancienne à la plus récente — le ␘ de chaque jauge explique la métrique. Les réponses jugées sont en cache ; des re-exécutions identiques ne diffèrent que si réponses ou récupération changent.',
         statusTitle: 'Résultats par question',
         statusNote:
-          'Chaque question de la suite dans cette exécution, empilée par issue : réussie, échouée (une métrique choisie sous son seuil), abstention ou erreur de pipeline.',
+          'Chaque question dans le périmètre de cette exécution, empilée par issue : répondue, échouée (une métrique choisie sous son seuil), abstention (celui qui a répondu s’est abstenu) ou erreur de pipeline (la chaîne a échoué sur cette ligne). Les témoins hors périmètre ne sont pas comptés — ce sont des témoins, pas des résultats.',
         allPass: 'toutes réussies',
         invalidTitle: "Cette exécution n'est pas une mesure valide",
         invalidPill: 'exécution non valide',
@@ -3527,6 +3538,9 @@ export default {
         state: 'État',
         error: 'erreur',
         abstained: 'abstention',
+        declinedUnjudged: 'refusé — non noté',
+        declinedUnjudgedTitle:
+          'Celui qui a répondu a refusé et n’a rien dit, cette ligne n’a donc jamais été confiée au juge. Elle ne porte aucun score et est exclue des moyennes — et elle réduit la couverture mesurée.',
         answered: 'répondu',
         noisy: 'réponse correcte — bruit de récupération',
         noisyTitle:
@@ -3563,8 +3577,8 @@ export default {
         judgeUnknown: 'Juge non enregistré'
       },
       rescore: {
-        title: 'Ré-évaluer avec un autre juge',
-        body: 'Les réponses enregistrées sont ré-évaluées avec un autre juge — elles ne sont pas régénérées. Le résultat est une exécution distincte.',
+        title: 'Ré-évaluer avec un juge',
+        body: 'Les réponses enregistrées sont ré-évaluées avec le juge que vous choisissez — elles ne sont pas régénérées. La boîte de dialogue pré-remplit le juge de l’exécution d’origine, si bien que la ré-évaluation par défaut vérifie si ce juge est reproductible ; choisissez un juge DIFFÉRENT pour obtenir un second avis sur les échecs. Le résultat est une exécution distincte.',
         source: 'Exécution source',
         judge: 'Configuration du juge',
         confirm: 'Ré-évaluer',

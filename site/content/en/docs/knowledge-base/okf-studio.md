@@ -59,7 +59,7 @@ Three panes: the **concept list** (filter, add, per-concept actions —
 re-split, re-ingest, PII review, delete), the **concept editor** (source and
 rendered view with debounced save; the graph view shows the repository's
 link structure), and the metadata rail (per-concept type/title/label, the
-repository's frontmatter tag chips, the Routing Lab entry).
+repository's frontmatter tag chips, the Testing Lab entry).
 
 Two panels live under the concept list in the left sidebar:
 
@@ -74,12 +74,12 @@ concept (mode B, streamed in batches for large crawls), with per-page
 provenance kept on the concept. The conversion is one-per-repository at a
 time; progress is visible on the repository's record.
 
-## The Routing Lab
+## The Testing Lab
 
 Every published repository carries a **vectorized head** — the embedding of
 its frontmatter tags. At query time the retriever fans out across the
 caller's authorized repositories, weighting each by how well the query
-matches its head. The **Routing Lab** (from the dashboard card, the editor,
+matches its head. The **Testing Lab** (from the dashboard card, the editor,
 or wizard step 10) tests that routing against the live corpus:
 
 - **One-off tests** — see which repository wins a query and why.
@@ -96,20 +96,33 @@ or wizard step 10) tests that routing against the live corpus:
 The Lab's fourth tab — **Benchmarks** — measures what routing tests cannot:
 *answer quality*. It runs [RAGAS](https://ragas.io) evaluation (the same
 framework as the offline `tests/rag-benchmarks` harness) inside the Studio,
-with suites interchangeable with that harness's xlsx formats. A **judge
-model** selector rides the Generate and Run controls: the deployment's
-**active model configuration** applies automatically, and picking a
-configuration (and optionally a specific model from its live dropdown)
-overrides it for that operation only — the run's fidelity block records
-which judge scored it. **The selection is remembered per suite**: reopening
-the Lab restores the judge the suite was last used with — the generation
-pick on a suite that has never run, the latest run's pick once it has runs
-(so repeat runs stay comparable), and viewing a run restores *that* run's
-judge — instead of falling back to the deployment default. The suite
-records the judge it was generated with, and each run records both the
-pick as made and the resolved judge that scored it; a configuration
-deleted in the meantime falls back to the default, since the dropdown
-cannot offer what no longer exists.
+with suites interchangeable with that harness's xlsx formats.
+
+**Two model pickers, because two operations.** *Generating* a suite
+synthesizes questions; *scoring* a run judges answers. They are separate
+operations with separate models, so the Lab offers a **generation model**
+selector in the Generate section and a **judge model** selector in the Run
+section (and a third in the Re-score dialog, which is a judge). Each
+picker lists the deployment's **active model configuration** (marked ★),
+the **deployment default from `.env`**, and every named configuration — and
+picking one (and optionally a specific model from its live dropdown)
+overrides it for that operation only.
+
+The two options are named for what they actually resolve to: the empty
+choice is the **active configuration**, and the **`.env` deployment
+default** is the deployment's own configured model, chosen explicitly and
+bypassing the active configuration. While a job runs, the picker adopts
+that job's pick and the panel names the model it is really using, so the
+two can never disagree.
+
+**Each selection is remembered per suite**: reopening the Lab restores the
+generation pick of the suite and the judge of its latest run (so repeat runs
+stay comparable), and viewing a run restores *that* run's judge — instead
+of falling back to the deployment default. The suite records the model it
+was generated with, and each run records both the pick as made and the
+resolved judge that scored it; a configuration deleted in the meantime
+falls back to the default, since the dropdown cannot offer what no longer
+exists.
 
 - **Generate** a benchmark suite from one or more repositories (the current
   one alone, or with any number of related repositories — multi-hop
@@ -193,6 +206,10 @@ cannot offer what no longer exists.
   adjustments through the same guarded machinery as the routing teaching
   loop, and concept-content curation suggestions that name the concept and
   the gap.
+  Two further stages cover the rows that carry **no score**: *answer* (the
+  row produced no answer, so it was never handed to the judge) and
+  *unmeasured* (the judge returned nothing measurable for the row). Neither
+  is a threshold breach, and neither is counted as a zero.
 - **Interchange**: import a benchmark suite authored in the harness's
   `Test Dataset` xlsx format; export your suite so the harness's
   `xlsx_to_gold.py` consumes it unmodified. Results flow one way (export).

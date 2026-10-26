@@ -1506,8 +1506,8 @@ export default {
       groupDataPrep: 'Pipeline persiapan data',
       groupInference: 'Pipeline inferensi',
       mockNote: 'direncanakan — belum dapat dikonfigurasi',
-      svcAnswers: 'Jawaban benchmark (menggantikan chat deployment)',
-      svcAnswersShort: 'jawaban benchmark',
+      svcAnswers: 'Jawaban benchmark — hanya pemutaran ulang luring (Lab menjawab melalui chat deployment)',
+      svcAnswersShort: 'jawaban benchmark (luring saja)',
       mockContextual: 'Contextual retrieval (konteks dokumen)',
       mockChunkLabeling: 'Pelabelan potongan data',
       mockGraphExtraction: 'Ekstraksi graf pengetahuan',
@@ -1592,7 +1592,7 @@ export default {
       version: 'v{n}',
       versions: 'Versi',
       deleteLabel: 'Hapus',
-      headTest: 'Routing Lab'
+      testingLab: 'Testing Lab'
     },
     logs: {
       labeled: 'diberi label: {n}',
@@ -1898,7 +1898,7 @@ export default {
         logs: 'Log',
         rename: 'Ganti Nama',
         versions: 'Versi',
-        headTest: 'Head Test'
+        testingLab: 'Testing Lab'
       },
       delete: {
         body: 'Tindakan ini menghapus repositori, konsepnya, konten terindeks, grafik, dan artefak bundel secara permanen. Tindakan ini tidak dapat dibatalkan.',
@@ -2884,9 +2884,9 @@ export default {
         keyword: 'Keyword'
       }
     },
-    headTest: {
-      title: 'Routing Lab — head test',
-      cta: 'Routing Lab',
+    testingLab: {
+      title: 'Testing Lab',
+      cta: 'Testing Lab',
       badge: {
         present: 'head ready',
         stale: 'head stale',
@@ -3052,7 +3052,7 @@ export default {
         tagsetTip: 'Tag terlarang untuk eksekusi ini',
         savedTitle: 'Suite tersimpan',
         savedTip:
-          'Setiap suite yang dibuat atau diimpor disimpan di sini, per repositori. Dua jenis berbagi daftar ini: suite head (kumpulan kueri dari tag dan frontmatter, dengan jumlah positif/negatif) dan suite tolok ukur RAGAS (kumpulan pertanyaan dengan jawaban yang diharapkan, dengan lencana RAGAS dan jumlah entri). Muat membuka suite head di tab Uji head dan suite RAGAS di tab RAGAS Benchmarks, tempat ia dapat dijalankan dan dinilai terhadap korpus langsung. Hapus menghapus suite secara permanen; ganti nama dilakukan langsung pada nama.',
+          'Setiap suite yang dibuat atau diimpor disimpan di sini, per repositori. Dua jenis berbagi daftar ini: suite head (kumpulan kueri dari tag dan frontmatter, dengan jumlah positif/negatif) dan suite tolok ukur RAGAS (kumpulan pertanyaan dengan jawaban yang diharapkan, dengan lencana RAGAS dan jumlah entri). Muat menampilkan suite head di tab ini dan suite RAGAS di tab RAGAS Benchmarks, tempat ia dapat dijalankan dan dinilai terhadap korpus langsung. Hapus menghapus suite secara permanen; ganti nama dilakukan langsung pada nama.',
         load: 'Muat',
         flipTip: 'Balikkan harus-dipilih / tidak-harus-dipilih',
         deleteTip: 'Hapus baris ini dari suite',
@@ -3282,7 +3282,7 @@ export default {
             title: 'Model, dan apa yang diharapkan',
             intro:
               'Tiga model berbeda berperan dan tidak dapat saling menggantikan: model yang menjawab, model yang menilai, dan model yang menghasilkan embedding. Ketiganya menggerakkan skor dengan alasan yang sama sekali berbeda.',
-            d1: 'Model jawaban adalah model yang sedang diuji. Pengambilan dan pemberian jawaban diputar ulang di server OKF terhadap koleksi dan reranker yang sama dengan yang dipakai asisten, sehingga mengubah model ini mengubah jawabannya — bukan alat ujinya.',
+            d1: 'Model jawaban adalah model yang sedang diuji — tetapi di Lab, jawaban berasal dari model chat yang sudah DITERAPKAN, melalui pipeline yang sudah diterapkan, sehingga mengubah model chat deployment akan mengubah jawabannya. Cabang pemutaran ulang luring (pengambilan dan pemberian jawaban diputar ulang di dalam server OKF) memang ada untuk eksekusi whatif dan belum bisa dijalankan dari Lab saat ini, sehingga pengaturan "jawaban benchmark" tidak mengubah tolok ukur apa pun yang bisa Anda jalankan di sini.',
             d2: 'Model juri harus kuat dan stabil. Ia menilai terhadap referensi, sehingga juri yang lemah menekan semua metrik sekaligus dan eksekusi tetap terlihat lengkap. Jawaban juri di-cache per identitas juri — mengganti juri atau modelnya membatalkan cache tersebut dan setiap baris dinilai ulang.',
             d3: 'Model embedding adalah bagian dari pengukuran pengambilan. Ganti model itu dan context precision serta context recall bergerak, sedangkan faithfulness biasanya tidak. Ketimpangan itu adalah sinyal tentang di mana perubahan mendarat, bukan derau.',
             d4: 'Catat modelnya bersama eksekusi. Setiap eksekusi menyimpan konfigurasi dan model mana yang menghasilkan jawaban serta skornya; dua eksekusi hanya sebanding bila semuanya cocok.',
@@ -3296,10 +3296,10 @@ export default {
             title: 'Baca hasilnya',
             intro:
               'Setiap metrik RAGAS mengukur hal yang berbeda, dan salah satunya berjalan terbalik. Bacalah setiap angka menurut apa yang sebenarnya diukurnya, baru bertindak.',
-            d1: 'Bacalah dulu spanduk peringatan eksekusi tidak valid. Eksekusi yang jawabannya error, atau yang hanya diukur juri pada sebagian suite, bukanlah sebuah pengukuran — rata-rata di bawahnya hanya mencakup baris yang benar-benar dinilai.',
+            d1: 'Bacalah dulu spanduk peringatan eksekusi tidak valid. Eksekusi yang jawabannya error, atau yang tidak ada metrik pun yang mencakup setiap baris yang berada dalam cakupan, bukanlah sebuah pengukuran — rata-rata di bawahnya hanya mencakup baris yang benar-benar dinilai.',
             d2: 'Periksa arah setiap metrik. Sebagian besar makin tinggi makin baik. Noise sensitivity adalah pengecualian: makin rendah makin baik, sehingga eksekusi yang skornya buruk pada metrik ini justru gagal pada arah yang benar.',
             d3: 'Bacalah baris yang gagal, bukan hanya rata-ratanya. Satu pertanyaan rusak di antara empat puluh menggerakkan rata-rata lebih jauh daripada perubahan yang sedang Anda ukur.',
-            d4: 'Gunakan Explain failures sebelum mengubah apa pun. Alat ini menetapkan setiap baris yang gagal ke tahap yang terbukti terhadap korpus — retrieved, reranker, vector-recall, corpus, judge, atau answer — dan menunjukkan di mana bagian itu hilang dan di peringkat berapa ia akan berada. Putusan corpus berarti bagian yang diharapkan tidak ada sama sekali di korpus: pertanyaan itu tidak adil, ia mengukur benchmark, bukan asisten, dan ditandai demikian agar Anda membuat ulang entri alih-alih menulis konten yang sudah ada. Sarannya dijaga: alat mengusulkan, Anda memutuskan.',
+            d4: 'Gunakan Explain failures sebelum mengubah apa pun. Alat ini menetapkan setiap baris yang gagal ke tahap yang terbukti terhadap korpus — retrieved, reranker, vector-recall, corpus, judge, answer atau unmeasured — dan menunjukkan di mana bagian itu hilang dan di peringkat berapa ia akan berada. Putusan corpus berarti bagian yang diharapkan tidak ada sama sekali di korpus: pertanyaan itu tidak adil, ia mengukur benchmark, bukan asisten, dan ditandai demikian agar Anda membuat ulang entri alih-alih menulis konten yang sudah ada. Sarannya dijaga: alat mengusulkan, Anda memutuskan.',
             x1: 'Jangan membandingkan rata-rata dari himpunan metrik berbeda, juri berbeda, atau suite yang telah diedit. Tidak satu pun merupakan pengukuran yang sama, dan selisih yang Anda lihat bukan perubahan kualitas.',
             x2: 'Jangan menyetel pengambilan berdasarkan satu angka saja. Presisi dan recall saling mengorbankan satu sama lain; perubahan yang menaikkan satu biasanya mengorbankan yang lain, dan tukar-menukar itulah bagian yang biasanya paling menarik.',
             x3: 'Jangan menganggap skor kosong sebagai skor rendah. Percobaan ulang yang habis menghasilkan nilai kosong yang dikecualikan dari rata-rata, jadi tanpa skor berarti tanpa pengukuran — jalankan ulang baris itu, bukan dengan mengasumsikan hal terburuk.',
@@ -3313,7 +3313,7 @@ export default {
                 effect: 'Apa yang harus dilakukan'
               },
               mean: {
-                element: 'Skornya',
+                element: 'Rata-ratanya',
                 meaning: 'Rata-rata metrik itu pada baris-baris yang dinilai juri. Itu bukan skor untuk seluruh suite.',
                 effect:
                   'Bacalah bersama pecahan di sebelahnya. Rata-rata atas beberapa baris hanya mengukur baris-baris itu, bukan suite-nya.'
@@ -3321,18 +3321,18 @@ export default {
               coverage: {
                 element: 'Pecahan (55/100)',
                 meaning:
-                  'Juri mengukur metrik itu pada 55 dari 100 baris suite. Rata-ratanya hanya mencakup 55 baris itu; 45 baris lainnya dikeluarkan — tidak pernah dihitung sebagai nol.',
+                  'Juri mengukur metrik itu pada 55 dari 100 baris suite yang berada dalam cakupan. Rata-ratanya hanya mencakup 55 baris itu; 45 baris lainnya dikeluarkan — tidak pernah dihitung sebagai nol. Pembanding di luar cakupan bukan bagian dari 100 baris itu.',
                 effect:
                   'Pecahan yang kecil berarti angkanya hanya sedikit menggambarkan suite. Periksalah metrik yang Anda pedulikan, bukan keseluruhan proses.'
               },
               banner: {
                 element: 'Banner proses tidak valid',
                 meaning:
-                  'Proses itu gagal menjawab, atau tidak ada metrik yang mencakup semua baris. Angka cakupannya adalah metrik yang paling baik tercakup, jadi satu metrik di 21/100 tidak akan menaikkannya.',
+                  'Proses itu gagal menjawab, atau tidak ada metrik yang mencakup setiap baris yang berada dalam cakupan. Angka cakupannya adalah metrik yang paling baik tercakup, jadi satu metrik di 21/100 tidak akan menaikkannya.',
                 effect: 'Baca sendiri pecahan per metrik. Banner itu adalah batas bawah, bukan ringkasan.'
               },
               runName: {
-                element: 'Nama prosesnya',
+                element: 'Nama prosesnya dan hakimnya',
                 meaning:
                   'Juri yang menilai proses itu, dan konfigurasi asalnya. Kunci di bawahnya adalah untuk dukungan.',
                 effect:
@@ -3341,9 +3341,9 @@ export default {
               rescore: {
                 element: 'Nilai ulang',
                 meaning:
-                  'Menilai ulang jawaban yang sama dengan juri lain. Jawaban dan konteksnya disalin apa adanya — tidak ada yang diambil ulang atau ditulis ulang.',
+                  'Menilai ulang jawaban yang sama dengan hakim yang Anda pilih — jawaban dan konteksnya disalin apa adanya, tidak ada yang diambil ulang atau ditulis ulang. Dialog itu sudah terisi dengan hakim milik eksekusi asal, sehingga penilaian ulang bawaan adalah pemeriksaan STABILITAS (apakah hakim ini dapat direproduksi?), bukan pendapat kedua.',
                 effect:
-                  'Gunakan untuk menempatkan dua juri pada baris-baris yang sama. Jauh lebih murah daripada proses baru, dan itulah cara menguji perubahan juri.'
+                  'Untuk mengetahui apakah sebuah kegagalan berasal dari hakim yang terlalu keras atau memang kegagalan yang nyata, nilai ulang dengan hakim yang BERBEDA. Dua hakim pada baris-baris yang sama jauh lebih murah daripada eksekusi baru, dan itulah cara menguji perubahan hakim.'
               },
               status: {
                 element: 'Statusnya',
@@ -3355,16 +3355,16 @@ export default {
           errors: {
             title: 'Kesalahan, dan pengaruhnya terhadap hasil',
             intro:
-              'Benchmark tidak pernah mengukur setiap baris dari setiap rangkaian uji: sebuah baris bisa gagal di dalam rantai, asisten bisa menolak menjawab, hakim bisa gagal mengukur sebuah metrik, dan sebuah metrik bisa jatuh di bawah ambangnya. Tidak satu pun dari ini adalah nol dan tidak ada yang disembunyikan. Bab ini adalah peta — arti setiap keadaan dan apa yang diketahuinya terhadap angka yang sedang Anda baca. Satu hal yang perlu diketahui sebelum membacanya: baris yang TIDAK menghasilkan jawaban tidak pernah diserahkan kepada hakim — tidak ada yang bisa dipakai untuk menilai baris itu — sehingga baris itu dikeluarkan dari rata-rata dan tidak pernah dihitung sebagai nol. Baris yang MENOLAK menjawab tetap punya jawaban, jadi baris itu dinilai: karena tidak ada yang menopang, metrik konteksnya kembali 0, dan nol-nol itu DIHITUNG dalam rata-rata. Itulah sebabnya run dengan baris yang gagal ditandai tidak valid, bukan dianggap tepercaya.',
+              'Benchmark tidak pernah mengukur setiap baris dari setiap rangkaian uji: sebuah baris bisa gagal di dalam rantai, asisten bisa menolak menjawab, hakim bisa gagal mengukur sebuah metrik, dan sebuah metrik bisa jatuh di bawah ambangnya. Tidak satu pun dari ini adalah nol dan tidak ada yang disembunyikan. Bab ini adalah peta — arti setiap keadaan dan apa yang diketahuinya terhadap angka yang sedang Anda baca. Satu hal yang perlu diketahui sebelum membacanya: baris yang TIDAK menghasilkan jawaban tidak pernah diserahkan kepada hakim — tidak ada yang bisa dipakai untuk menilai baris itu — sehingga baris itu dikeluarkan dari rata-rata, tidak pernah dihitung sebagai nol, dan menurunkan cakupan yang terukur. MENOLAK menjawab bukan satu keadaan, melainkan dua. Penolakan yang disertai jawaban dinilai, dan karena tidak ada yang menopang, metrik konteksnya kembali 0, sehingga nol-nol itu DIHITUNG dalam rata-rata. Penolakan yang tanpa jawaban tidak pernah dinilai sama sekali: baris itu tidak membawa skor apa pun, dikeluarkan dari rata-rata, dan menurunkan cakupan yang terukur sama seperti baris yang error. Itulah sebabnya run dengan baris yang gagal atau baris yang tidak dinilai ditandai tidak valid, bukan dianggap tepercaya.',
             d1: 'Baca dulu spanduk “eksekusi tidak valid”, baru kemudian rata-ratanya. Spanduk itu berarti angka-angka di bawahnya bukan pengukuran atas sistem, dan spanduk itu menyebut penyebabnya: jawaban yang gagal, atau hakim yang hanya mengukur sebagian dari rangkaian uji. Perbaiki penyebabnya, lalu jalankan lagi.',
             d2: 'Periksa cakupan setiap metrik sebelum membandingkan dua eksekusi. Panel menunjukkan berapa banyak baris yang benar-benar dinilai hakim untuk metrik itu; rata-rata atas sebagian dari rangkaian uji bukanlah skornya, dan tidak sebanding dengan eksekusi yang mengukur semuanya.',
             d3: 'Perbaiki baris yang error pada penyebabnya — rantai pengambilan, layanan hilir, atau batas waktu — lalu jalankan lagi. Mengubah rangkaian uji untuk membuang baris yang terus gagal justru menyembunyikan cacat yang justru dicari oleh tolok ukur ini.',
-            d4: 'Anggap penolakan menjawab sebagai hasil, bukan cacat. Ini berarti asisten menilai bahwa korpus tidak menjawab pertanyaan itu — sebuah sifat dari korpus dan pertanyaannya. Bacalah sebagai cakupan dari apa yang akan ditemui pengguna Anda.',
+            d4: 'Anggap penolakan menjawab sebagai hasil, bukan cacat. Penolakan yang disertai jawaban berarti asisten menilai bahwa korpus tidak menjawab pertanyaan itu — sebuah sifat dari korpus dan pertanyaannya. Bacalah sebagai cakupan dari apa yang akan ditemui pengguna Anda.',
             x1: 'Jangan baca metrik yang tidak terukur sebagai nol. Hakim yang jawabannya tidak dapat diurai oleh metrik itu menyisakan metrik tersebut bernilai null pada baris itu; null dikeluarkan dari rata-rata, dan tidak pernah dirata-ratakan sebagai kegagalan.',
-            x2: 'Jangan hitung penolakan menjawab sebagai kesalahan, dan jangan pula sebagai keberhasilan. Ia dilaporkan pada kolomnya sendiri justru karena ia bukan salah satu maupun.',
+            x2: 'Jangan hitung penolakan menjawab sebagai kesalahan, dan jangan pula sebagai keberhasilan. Ia dilaporkan pada kolomnya sendiri justru karena ia bukan salah satu maupun — dan penolakan yang tanpa jawaban tidak pernah dinilai sama sekali, sehingga tidak pernah menyumbang nol pula.',
             x3: 'Jangan publikasikan angka dari eksekusi yang ditandai tidak valid oleh panel, dan jangan rata-ratakan dua eksekusi untuk menutupinya. Eksekusi yang hanya terukur sebagian tidak punya angka untuk dipublikasikan; ia punya eksekusi yang perlu diperbaiki.',
             expect:
-              'Eksekusi yang bersih tidak punya baris error dan setiap metrik dinilai pada setiap baris — hanya dalam keadaan itulah rata-ratanya adalah tolok ukurnya. Selebihnya adalah eksekusi yang perlu diperbaiki, bukan hasil untuk ditindaklanjuti.',
+              'Eksekusi yang bersih tidak punya baris error, tidak punya baris yang tidak dinilai, dan setiap metrik dinilai pada setiap baris yang berada dalam cakupan — hanya dalam keadaan itulah rata-ratanya adalah tolok ukurnya. Selebihnya adalah eksekusi yang perlu diperbaiki, bukan hasil untuk ditindaklanjuti.',
             table: {
               title: 'Bagaimana setiap keadaan memengaruhi hasil',
               col: {
@@ -3382,16 +3382,23 @@ export default {
               abstained: {
                 state: 'menolak menjawab',
                 meaning:
-                  'Asisten menolak menjawab — chatqna mengatakannya, atau ia tidak punya apa-apa untuk dikatakan. Pipeline tidak gagal.',
+                  'Asisten menolak menjawab tetapi tetap menghasilkan jawaban — chatqna mengatakannya, atau ia menjawab dengan jawaban yang menggantung. Pipeline tidak gagal.',
                 effect:
-                  'Baris ini tetap diserahkan kepada juri, jadi ia menyumbang sebuah skor — tanpa konteks yang menopang, metrik konteks kembali 0, dan nol-nol itu DIHITUNG dalam rata-rata. Baris ini dihitung di kolomnya sendiri, tidak pernah di kolom error, dan tidak membuat proses tidak valid. Panel melabelinya «abstained», bukan lulus atau gagal.'
+                  'Baris ini memang diserahkan kepada hakim, jadi ia menyumbang sebuah skor — tanpa konteks yang menopang, metrik konteks kembali 0, dan nol-nol itu DIHITUNG dalam rata-rata. Baris ini dihitung di kolomnya sendiri, tidak pernah di kolom error, dan sendiri saja tidak membuat eksekusi menjadi tidak valid. Panel melabelinya «menolak menjawab», bukan lulus atau gagal. Penolakan yang TIDAK menghasilkan jawaban adalah keadaan yang lain — lihat «menolak, tidak dinilai».'
+              },
+              declinedUnjudged: {
+                state: 'menolak, tidak dinilai',
+                meaning:
+                  'Asisten menolak dan tidak berkata apa-apa — tidak ada jawaban yang dihasilkan. Pipeline tidak gagal.',
+                effect:
+                  'Baris itu TIDAK diserahkan kepada hakim — baris itu tidak punya jawaban, jadi tidak ada yang bisa dipakai untuk menilai baris itu. Baris itu tidak membawa skor apa pun: dikeluarkan dari rata-rata (tidak pernah dihitung sebagai nol), menurunkan cakupan yang terukur, dan dapat membuat eksekusi ditandai tidak valid. Panel melabelinya «menolak — tidak dinilai» agar Anda bisa membedakannya dari penolakan yang dinilai.'
               },
               unmeasured: {
                 state: 'tidak terukur',
                 meaning:
                   'Hakim menghasilkan jawaban yang tidak dapat diurai metrik tersebut — misalnya pernyataan kebenaran faktual yang tidak dapat diverifikasi.',
                 effect:
-                  'Metrik itu bernilai null pada baris tersebut: dikeluarkan dari rata-rata, tidak pernah nol. Panel menunjukkan berapa banyak baris yang benar-benar dinilai hakim, dan cakupan sebagian membuat eksekusi tidak valid.'
+                  'Metrik itu bernilai null pada baris tersebut: dikeluarkan dari rata-rata, tidak pernah nol. Panel menunjukkan berapa banyak baris yang benar-benar dinilai hakim untuk metrik itu. Satu metrik di 21/100 TIDAK membuat eksekusi menjadi tidak valid — spanduk itu hanya muncul ketika TIDAK ADA metrik yang mencakup setiap baris yang berada dalam cakupan, jadi bacalah sendiri pecahan per metrik.'
               },
               belowThreshold: {
                 state: 'di bawah ambang',
@@ -3403,7 +3410,8 @@ export default {
                 state: 'di luar lingkup',
                 meaning:
                   'Pertanyaannya memang sengaja tidak dapat dijawab — disimpan dalam rangkaian uji sebagai pembanding, tidak pernah sebagai pengujian.',
-                effect: 'Tidak pernah dihitung sebagai kegagalan. Ia adalah pembanding, bukan hasil.'
+                effect:
+                  'Tidak pernah dihitung sebagai kegagalan, dan tidak pernah masuk ke dalam rata-rata: ia adalah pembanding, bukan hasil. Panel tidak menumpuknya ke dalam bilah hasil, dan skornya tidak masuk ke dalam rata-rata maupun ke dalam pecahan cakupan.'
               }
             }
           }
@@ -3414,13 +3422,14 @@ export default {
         title: 'Buat suite tolok ukur',
         hint: 'Mensintesis pertanyaan dengan jawaban yang diharapkan dari repositori terpilih — satu atau lebih, repositori saat ini saja atau bersama repositori terkait.',
         size: 'Pertanyaan',
-        config: 'Konfigurasi model juri',
-        default: 'Default deployment (konfigurasi aktif / env)',
-        defaultNamed: 'Default deployment — {name}{model}',
+        config: 'Konfigurasi model generasi',
+        default: 'Default deployment (.env)',
+        defaultNamed: 'Konfigurasi aktif — {name}{model}',
         effective: 'Menilai dengan {name}{model}',
+        effectiveGenerating: 'Membangun dengan {name}{model}',
         envDefault: 'default lingkungan',
-        envJudge: 'Default sistem (lingkungan){model}',
-        envJudgePlain: 'Default sistem (lingkungan)',
+        envJudge: 'Default deployment (.env){model}',
+        envJudgePlain: 'Default deployment (.env)',
         model: 'Model',
         modelPick: 'Default konfigurasi',
         modelDefault: 'default konfigurasi',
@@ -3462,11 +3471,13 @@ export default {
       },
       run: {
         button: 'Jalankan tolok ukur',
+        judge: 'Konfigurasi model juri',
         working: 'Menjalankan…',
         retrieved: 'diambil',
         pass: 'lulus',
         fail: 'gagal',
         abstained: 'menolak',
+        declinedUnjudged: 'menolak, tidak dinilai',
         rowError: 'galat',
         cancel: 'Batalkan proses',
         phase: {
@@ -3494,7 +3505,7 @@ export default {
           'Setiap garis adalah rata-rata satu metrik RAGAS per run, dari terlama — ␘ pada tiap meteran menjelaskan metriknya. Jawaban yang dinilai di-cache; run ulang identik hanya berbeda bila jawaban atau pengambilan berubah.',
         statusTitle: 'Hasil per pertanyaan',
         statusNote:
-          'Setiap pertanyaan suite pada run ini, ditumpuk per hasil: lulus, gagal (metrik terpilih di bawah ambangnya), menolak jawab, atau error pipeline.',
+          'Setiap pertanyaan suite pada run ini yang berada dalam cakupan, ditumpuk per hasil: terjawab, gagal (metrik terpilih di bawah ambangnya), menahan diri (penjawab menolak), atau error pipeline. Pembanding di luar cakupan tidak dihitung — ia adalah pembanding, bukan hasil.',
         allPass: 'semua lulus',
         invalidTitle: 'Run ini bukan pengukuran yang valid',
         invalidPill: 'run tidak valid',
@@ -3506,6 +3517,9 @@ export default {
         state: 'Status',
         error: 'galat',
         abstained: 'menahan diri',
+        declinedUnjudged: 'menolak, tidak dinilai',
+        declinedUnjudgedTitle:
+          'Penjawab menolak dan tidak berkata apa-apa, sehingga baris ini tidak pernah diserahkan kepada hakim. Baris itu tidak membawa skor dan dikeluarkan dari rata-rata — dan baris itu menurunkan cakupan yang terukur.',
         answered: 'terjawab',
         noisy: 'jawaban baik — derau retrieval',
         noisyTitle:
@@ -3541,8 +3555,8 @@ export default {
         judgeUnknown: 'Hakim tidak tercatat'
       },
       rescore: {
-        title: 'Nilai ulang dengan hakim lain',
-        body: 'Jawaban yang tersimpan dinilai ulang dengan hakim lain — jawaban tidak dibuat ulang. Hasilnya adalah run terpisah.',
+        title: 'Nilai ulang dengan hakim',
+        body: 'Jawaban yang tersimpan dinilai ulang dengan hakim yang Anda pilih — jawaban tidak dibuat ulang. Dialog itu sudah terisi dengan hakim milik run asal, sehingga penilaian ulang bawaan memeriksa apakah hakim itu dapat direproduksi; pilih hakim yang BERBEDA untuk memperoleh pendapat kedua mengenai kegagalan. Hasilnya adalah run terpisah.',
         source: 'Run sumber',
         judge: 'Konfigurasi hakim',
         confirm: 'Nilai ulang',

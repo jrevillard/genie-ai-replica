@@ -181,7 +181,7 @@ export default {
 }
 /* Content-sized: grows with the dialog's content (a wide table, a grid of
  * charts) up to the shared 90% viewport cap, and never below the lg width
- * so narrow content keeps today's layout. 2026-10-19: the Routing Lab's
+ * so narrow content keeps today's layout. 2026-10-19: the Testing Lab's
  * benchmark table with every metric selected pushed past the fixed 800px. */
 .ds-modal--auto {
   width: fit-content;

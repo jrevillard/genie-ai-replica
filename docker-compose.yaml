@@ -1014,6 +1014,15 @@ services:
       # now caps its own concurrency and retries a 429 with jitter.
       - RAGAS_LLM_MAX_CONCURRENCY=${RAGAS_LLM_MAX_CONCURRENCY:-8}
       - RAGAS_LLM_MAX_RETRIES=${RAGAS_LLM_MAX_RETRIES:-5}
+      # ragas's usage telemetry (2026-10-26). ragas 0.4.3 POSTs every prompt's
+      # usage event to https://t.explodinggradients.com from INSIDE the async
+      # prompt path, with a 1 s timeout — so it blocks the event loop and the
+      # configured concurrency never overlaps. Measured here: a warm CACHE HIT
+      # (no model call at all) cost 0.79 s, and 0.008 s with this off — the
+      # tax alone was ~50 min of Solar System's ~3,800-prompt graph build. It
+      # is also a sovereignty leak: a public-sector deployment must not ship
+      # per-call usage telemetry to a third-party endpoint outside it.
+      - RAGAS_DO_NOT_TRACK=${RAGAS_DO_NOT_TRACK:-true}
       # Scoring-leg throughput (2026-10-22). The leg used to be hardcoded to
       # ragas's max_workers=8 with one row per evaluate(), so a row's ~13
       # judge calls could never fill the pool: 5.4 min per row, ~8 h for 100.

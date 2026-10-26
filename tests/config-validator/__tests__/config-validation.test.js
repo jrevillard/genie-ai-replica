@@ -449,7 +449,10 @@ describe('Configuration Validation Suite', () => {
     });
 
     test('the ground and the wave are scoped to the marker class', () => {
-      const unscoped = names.paintedSelectors.filter((selector) => !selector.includes(`.${names.emittedClass}`));
+      // The class is matched as a token: a selector carrying
+      // `.kc-theme-genie-2` does not carry `.kc-theme-genie`.
+      const marker = new RegExp(`\\.${names.emittedClass}(?![\\w-])`);
+      const unscoped = names.paintedSelectors.filter((selector) => !marker.test(selector));
       expect(unscoped).toEqual([]);
     });
 
@@ -461,9 +464,10 @@ describe('Configuration Validation Suite', () => {
 
     test('every stylesheet that paints one of them paints both', () => {
       // A stylesheet that drops the wave but keeps the ground leaves the
-      // page half-decorated in one colour scheme only.
+      // page half-decorated in one colour scheme only; one that drops
+      // both leaves the other scheme's ground and blend in place.
       const halfPainted = names.paintedByStyle.filter(
-        (entry) => entry.pseudoElements.length > 0 && entry.pseudoElements.length < 2
+        (entry) => entry.mentionsBody && entry.pseudoElements.length !== 2
       );
       expect(halfPainted).toEqual([]);
     });

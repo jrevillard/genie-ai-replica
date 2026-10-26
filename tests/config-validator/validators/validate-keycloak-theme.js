@@ -16,6 +16,32 @@ const path = require('path');
 const THEMES_DIR = path.join('configs', 'keycloak', 'themes');
 
 /**
+ * Split a comma-separated selector list at the commas that separate
+ * selectors — the ones outside parentheses and brackets, so a `:is(a, b)`
+ * or an `[title="a,b"]` stays in one piece.
+ *
+ * @param {string} list selector list
+ * @returns {string[]} the selectors
+ */
+function splitSelectorList(list) {
+  const parts = [];
+  let depth = 0;
+  let current = '';
+  for (const char of list) {
+    if (char === '(' || char === '[') depth += 1;
+    else if (char === ')' || char === ']') depth -= 1;
+    if (char === ',' && depth === 0) {
+      parts.push(current);
+      current = '';
+      continue;
+    }
+    current += char;
+  }
+  parts.push(current);
+  return parts.map((part) => part.trim()).filter(Boolean);
+}
+
+/**
  * Every selector of a stylesheet, one per comma-separated part, with the
  * rules nested in at-rules (@media) included.
  *
@@ -40,7 +66,7 @@ function parseSelectors(css) {
     }
     buffer += char;
   }
-  return selectors.flatMap((selector) => selector.split(',').map((part) => part.trim())).filter(Boolean);
+  return selectors.flatMap(splitSelectorList);
 }
 
 /**
@@ -50,7 +76,7 @@ function parseSelectors(css) {
  * @param {string} themeName theme directory name, e.g. 'genie'
  * @returns {{themeName: string, testedPath: string|null, emittedClass: string|null,
  *            emittedConditionally: boolean, paintedSelectors: string[],
- *            paintedByStyle: {style: string, pseudoElements: string[]}[]}}
+ *            paintedByStyle: {style: string, mentionsBody: boolean, pseudoElements: string[]}[]}}
  *            the parsed names, and every selector of every stylesheet the
  *            theme declares that paints the ground or the wave
  */
@@ -64,13 +90,13 @@ function readLoginThemeNames(root, themeName) {
 
   // The resource path the template tests — it ends with the theme name.
   const pathTest = /ends_with\('\/login\/([^']+)'\)/.exec(templateBody);
-  // The marker the body tag emits. Anchored to the tag, so a marker that
-  // only survives elsewhere in the file does not pass for one that is
-  // rendered.
-  const emitted = /<body[^>]*\bclass="[^"]*\b(kc-theme-[A-Za-z0-9_-]+)\b/.exec(templateBody);
-  // The marker has to be conditional on the theme's own resource path, or
-  // a child theme inherits it and with it the base ground and wave.
-  const conditional = /<#if\s+isBaseTheme\b[^>]*>[^<]*\bkc-theme-[A-Za-z0-9_-]+/.test(templateBody);
+
+  // The class attribute of the body tag, with the guarded part split out.
+  const bodyStart = templateBody.indexOf('<body');
+  const classValue = bodyStart < 0 ? '' : /class="([^"]*)"/.exec(templateBody.slice(bodyStart))?.[1] || '';
+  const guard = /<#if\s+isBaseTheme\b[^>]*>([\s\S]*?)<\/#if>/.exec(classValue);
+  const guarded = guard ? /kc-theme-[A-Za-z0-9_-]+/.exec(guard[1]) : null;
+  const unguarded = classValue.replace(guard ? guard[0] : '', '');
 
   // The stylesheets the theme declares are the ones the page loads, so
   // the ground and the wave are looked for in all of them.
@@ -83,6 +109,7 @@ function readLoginThemeNames(root, themeName) {
     paintedSelectors.push(...selectors);
     paintedByStyle.push({
       style,
+      mentionsBody: css.includes('#keycloak-bg'),
       pseudoElements: [...new Set(selectors.map((selector) => selector.match(/::(before|after)/)[1]))]
     });
   }
@@ -90,11 +117,13 @@ function readLoginThemeNames(root, themeName) {
   return {
     themeName,
     testedPath: pathTest ? pathTest[1] : null,
-    emittedClass: emitted ? emitted[1] : null,
-    emittedConditionally: conditional,
+    // The class the page carries is the one inside the guard; a class
+    // outside it would reach every theme, the guarded one only the base.
+    emittedClass: guarded ? guarded[0] : null,
+    emittedConditionally: Boolean(guarded) && !/kc-theme-[A-Za-z0-9_-]+/.test(unguarded),
     paintedSelectors,
     paintedByStyle
   };
 }
 
-module.exports = { readLoginThemeNames, parseSelectors };
+module.exports = { readLoginThemeNames };

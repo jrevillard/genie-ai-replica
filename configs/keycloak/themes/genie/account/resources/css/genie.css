@@ -113,17 +113,77 @@
   --pf-v5-global--palette--black-900: #282d32;
   --pf-v5-global--palette--black-1000: #282d32;
 
-  /* ── Page layout (DS accent for header, bg for body) ── */
-  --pf-v5-c-page__header--BackgroundColor: #4071cb;
-  --pf-v5-c-page__header-brand-link--c-brand--Color: #f9fbfd;
+  /* ── Page layout ──
+     The masthead is a pale wash of the brand — the same plane the web
+     app's navbar is (--navbar-bg) — and the ground the panels sit on
+     is the pale page wash. */
+  --pf-v5-c-page__header--BackgroundColor: #ddecff;
+  --pf-v5-c-page__header-brand-link--c-brand--Color: #000d64;
   --pf-v5-c-page__sidebar--BackgroundColor: #ffffff;
   --pf-v5-c-page__sidebar--m-light--BackgroundColor: #ffffff;
   --pf-v5-c-page__sidebar--m-light--BorderRightColor: #bdc5cb;
-  --pf-v5-c-page--BackgroundColor: #f9fbfd;
+  --pf-v5-c-page--BackgroundColor: #f4f7fd;
 }
 
-/* ── Nav: selected item — light text on accent background ── */
+/* ── Living Intelligence surfaces ─────────────────────────────────── */
+
+/* The masthead is a pale wash of the brand — the same plane the web
+   app's navbar is (--navbar-bg). The component owns the property, so
+   the override belongs on the component, not on :root.
+   Its ink is the brand darkened (--navbar-fg): on the stock console
+   the same label sits on a solid brand slab at 1.5:1, on the pale
+   wash it reads at 16:1. */
+.pf-v5-c-masthead {
+  --pf-v5-c-masthead--BackgroundColor: #ddecff;
+  color: #000d64;
+}
+
+.pf-v5-c-masthead .pf-v5-c-button.pf-m-plain,
+.pf-v5-c-masthead .pf-v5-c-menu-toggle {
+  color: #000d64;
+}
+
+/* The ground the content sits on — the same washes the login page
+   shows, behind the white panels. */
+.pf-v5-c-page {
+  background-color: #f4f7fd;
+  background-image:
+    radial-gradient(70% 60% at 76% 38%, rgba(64, 113, 203, 0.18), rgba(64, 113, 203, 0) 70%),
+    radial-gradient(55% 50% at 10% 90%, rgba(120, 92, 214, 0.12), rgba(120, 92, 214, 0) 70%),
+    linear-gradient(180deg, #f9fbfd 0%, #eef2fb 100%);
+}
+
+/* The wave band — the crest of the Living Intelligence artwork, in the
+   same 1800:356 ratio the web theme uses. It closes the sidebar, the
+   one plane the console keeps free on every page. */
+.pf-v5-c-page__sidebar-body {
+  position: relative;
+}
+
+.pf-v5-c-page__sidebar-body::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 110px;
+  background: url('../img/genie-bottom-waves.svg') right bottom / auto 110px no-repeat;
+  opacity: 0.5;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+/* The panels let the ground through: the console's surface is the pale
+   page wash, and the tables and cards keep their own white. */
+.pf-v5-c-page__main-section.pf-m-light,
+.pf-v5-c-page__main-breadcrumb {
+  background-color: transparent;
+}
+
+/* ── Nav: selected item — a pale wash of the brand, its ink the brand
+   darkened. The stock console paints it as a solid brand slab. ── */
 .pf-v5-c-nav__link.pf-m-current,
 .pf-v5-c-nav__item.pf-m-current:not(.pf-m-expanded) .pf-v5-c-nav__link {
-  color: #f9fbfd !important;
+  color: #000d64 !important;
+  background-color: #ddecff;
 }
+
+

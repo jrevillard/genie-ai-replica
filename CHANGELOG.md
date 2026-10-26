@@ -56,8 +56,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The Keycloak theme now covers every surface, not only the login page.**
   The admin console, the account console and the Keycloak emails carry the
   Living Intelligence look: the masthead is a pale wash of the brand instead of
-  a solid brand slab (the console's own label sat on that slab at 2.25:1 and
-  now reads at 14.1:1), the pale ground shows behind the content panels, the wave
+  a solid brand slab (the console's own label sat on that `#4071cb` slab at
+  2.25:1 and now reads at 14.1:1 — `#000d64` on the `#ddecff` wash), the pale
+  ground shows behind the content panels, the wave
   band closes the sidebar, the admin welcome page shows the brand artwork, and
   the admin console's data tables carry the accent edge. The email template
   follows the same rules, and its images are fetched from the theme's own
@@ -66,8 +67,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   A deployment that ships its own child theme (`genie-el-salvador`) keeps its
   own stylesheets: it declares `styles` for every surface, so the base theme's
-  stylesheets do not reach it. It does inherit the base theme's templates, so
-  its consoles pick up the new markup and need stylesheets of their own.
+  stylesheets do not reach it. It does inherit the base theme's templates — the
+  login one, with its `<picture>` element — but the base theme ships no console
+  template, so its consoles keep Keycloak's stock markup and its own
+  stylesheets: the new console look, which is CSS only, does not reach them.
 
 - **The gateway revalidates the Keycloak theme resources.** Keycloak serves
   every theme resource with a 30-day `Cache-Control` and, unless the theme
@@ -99,8 +102,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   header was declared once, at the server level, and nginx does not inherit an
   `add_header` into a location that declares one of its own — so the web app,
   the API and the Grafana route were served without it. The value now lives in
-  one place and every location reads it, so a deployment's own policy applies
-  everywhere.
+  one place and every location that includes the shared headers reads it, so a
+  deployment's own policy applies everywhere — except the two `.well-known`
+  static-file locations, which declare their own `Cache-Control`.
 
 - **On iOS and macOS, the trust-all TLS interception of the vendored
   `flutter_appauth` fork is now scoped to the OIDC provider's host.** The

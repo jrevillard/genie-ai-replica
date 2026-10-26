@@ -196,6 +196,8 @@ The default login screen is the Living Intelligence look: the brand artwork (`lo
 
 The brand artwork is offered in two formats. The template wraps it in a `<picture>` element: the `<source>` points at `login/resources/img/logo.webp` (96 KB) and the `<img>` at `login/resources/img/logo.png` (115 KB), so a browser that supports WebP fetches the smaller one and the others fall back to the PNG. Keycloak does not know the WebP media type — it serves the file as `application/octet-stream` — which does not matter here: the browser picks the source by the `type` attribute of the `<source>` and decodes the bytes itself. Only the login screen takes the `<picture>` treatment; the console mastheads and the email point at a single file, and mail clients do not read `<picture>` at all.
 
+A child theme that inherits this template inherits the `<picture>` element, and its own `img/logo.png` — the one the `<img>` points at — is still the file the browser falls back to. Ship a `logo.webp` next to it: without one, the `<source>` answers a 404 on every login page load before the browser falls back to the PNG.
+
 ### The console and email surfaces
 
 The account console, the admin console and the email carry the same identity as the login screen:
@@ -208,7 +210,7 @@ The account console, the admin console and the email carry the same identity as 
 
 Each console surface ships its own copy of the wave band (`admin/resources/img/genie-bottom-waves.svg`, `account/resources/img/genie-bottom-waves.svg`): a Keycloak theme resolves the images its stylesheets reference inside the resources directory **of the same type**. The admin surface cannot reach the login surface's `img/` — the request 404s — and the account surface cannot reach the admin one's. A child theme *does* inherit its parent's resources of its own type (a child admin theme can reference the parent's `admin/resources/img/`), but it never sees another type's directory.
 
-The masthead is a pale wash of the brand rather than a solid brand slab, and the console's own label reads at 14.1:1 against it.
+The masthead is a pale wash of the brand rather than a solid brand slab, and the console's own label reads at 14.1:1 against it — `#000d64` on the `#ddecff` wash, where it sat on a `#4071cb` slab at 2.25:1 before.
 
 ### Theme caching: the server and the browser
 
@@ -216,32 +218,31 @@ Two independent caches sit between an edited theme file and the browser.
 
 **On the server**, Keycloak keeps the parsed themes and the FreeMarker templates in memory (`--spi-theme-cache-themes`, `--spi-theme-cache-templates`), so an edit to a `theme.properties` or a `.ftl` is invisible until that cache expires or Keycloak restarts — **restart the container after any theme file change**. Separately, Keycloak stores a compressed copy of every theme resource under `/opt/keycloak/data/tmp/kc-gzip-cache/` inside the container and never invalidates it. Browsers ask for gzip, so they are served the old bytes until that cache is cleared (see [Troubleshooting](#troubleshooting)).
 
-**On the browser**, Keycloak serves theme resources with `Cache-Control: max-age=2592000` — 30 days, with no `ETag` and no `Last-Modified`. A returning browser therefore keeps the previous stylesheet for a month after a theme change, however often the server is restarted. The value comes from one server-wide setting — `CacheControlUtil` reads `Config.scope("theme").getInt("staticMaxAge", 2592000)` — so it applies to every theme resource at once, including the shared vendor bundle the console ships with Keycloak itself. No `theme.properties` key can change it: the properties a theme may declare are fixed (`parent`, `import`, `styles`, `stylesCommon`, `scripts`, `scriptsCommon`, `logo`, `favicon`, `darkMode`, `contentHashPattern`, …), and none of them is a cache setting.
+**On the browser**, Keycloak serves theme resources with `Cache-Control: max-age=2592000` — 30 days. A resource whose theme names a content hash also carries an `ETag` (the resources version) and answers a conditional request with a `304`; every other resource carries no validator and no `Last-Modified`. A returning browser therefore keeps the previous stylesheet for a month after a theme change, however often the server is restarted. The value comes from one server-wide setting — `CacheControlUtil` reads `Config.scope("theme").getInt("staticMaxAge", 2592000)` — so it applies to every theme resource at once, including the shared vendor bundle the console ships with Keycloak itself. No `theme.properties` key can change it: the properties a theme may declare are fixed (`parent`, `import`, `styles`, `stylesCommon`, `scripts`, `favicons`, `logo`, `favicon`, `darkMode`, `contentHashPattern`, …), and none of them is a cache setting.
 
 GENIE.AI's gateway therefore overrides the header at the nginx edge: `api-gateway-solution/nginx/conf/default.conf.template` matches `/auth/resources/<version>/<type>/<theme>/<path>` — the resources of **every** installed theme, not one theme name — and replaces the upstream `Cache-Control` with `no-cache, must-revalidate`. Two families keep their long cache, and both are safe to keep:
 
 - `assets/` — the bundles whose file name carries a content hash, so a changed file is a new URL. Keycloak also answers their revalidation with a `304` (its `ETag` is the resources version).
-- `vendor/` — the bundles shipped with Keycloak itself (`common/keycloak/vendor/…`). They change with the Keycloak version, and the version is the resources tag in the URL, so an upgrade changes their URL too.
+- `vendor/` — the bundles shipped with Keycloak itself (`common/keycloak/vendor/…`). They change with the Keycloak version, and the resources tag in the URL is regenerated on every upgrade, so their URL changes too.
 
 The web app already splits the same way: hashed assets get `immutable`, the runtime-injected theme files get `no-cache, must-revalidate`.
 
-**One catch: the resources version in the URL does not change when a theme changes.** Keycloak's resource URL is `/auth/resources/<version>/<type>/<theme>/<path>`, and `<version>` is a single tag stored in the database (`migration_model.id`) — it is bumped when Keycloak itself is upgraded, not when a theme file is edited. So a browser that fetched a stylesheet *before* a theme change still holds the copy it was given under the old `Cache-Control`, and the gateway's `no-cache` only applies to the copies fetched *after* the change. The first redeploy of a changed theme therefore needs the browsers to be told, once; every later change lands on the next page load. Two levers do that, and both are outside the theme's own files:
+**One catch: the resources version in the URL does not change when a theme changes.** Keycloak's resource URL is `/auth/resources/<version>/<type>/<theme>/<path>`, and `<version>` is a five-character tag stored in the database (`migration_model.id`) — Keycloak mints a new one when it is upgraded, not when a theme file is edited. So a browser that fetched a stylesheet *before* a theme change still holds the copy it was given under the old `Cache-Control`, and the gateway's `no-cache` only applies to the copies fetched *after* the change. The first redeploy of a changed theme therefore needs the browsers to be told, once; every later change lands on the next page load. Two levers do that:
 
-- **Rename the theme directory** and point `KEYCLOAK_THEME` at the new name. The theme name is part of the resource URL, so every resource moves. A child theme that inherits from it (`parent=<theme>`) has to follow, and the child's own `styles` keep overriding the parent's — so a child that declares its own stylesheets keeps its own look.
-- **Bump the resources tag in the database** (`migration_model.id`) and restart Keycloak. Every resource URL moves, for every theme at once, and the bundles a browser already holds are simply never requested again. The tag is regenerated by Keycloak on its own when the server is upgraded, which is why an upgrade already invalidates them.
+- **Rename the theme directory** and point `KEYCLOAK_THEME` at the new name — and rename the marker with it. The login template derives the `kc-theme-genie` class from the theme directory name (`url.resourcesPath?ends_with('/login/genie')` in `configs/keycloak/themes/genie/login/template.ftl`), so a renamed theme that keeps the old marker loses the ground and the wave band. The theme name is part of the resource URL, so every resource moves. A child theme that inherits from it (`parent=<theme>`) has to follow, and the child's own `styles` keep overriding the parent's — so a child that declares its own stylesheets keeps its own look. On a realm that is already imported, repoint its four theme settings (`loginTheme`, `accountTheme`, `adminTheme`, `emailTheme`) too: `KEYCLOAK_THEME` only applies at import time.
+- **Bump the resources tag in the database** (`migration_model.id`) and restart Keycloak. Every resource URL moves, for every theme at once, and the bundles a browser already holds are simply never requested again. Keycloak mints a new tag by itself when the server is upgraded, which is why an upgrade already invalidates them.
 
   ```sql
   -- The tag is the primary key of Keycloak's migration_model table, a five
-  -- character string of lower-case letters and digits. Pick a new one and
-  -- restart Keycloak: it reads the tag at startup.
-  UPDATE migration_model SET id = 'k7q2m' WHERE id = 'vgfoj';
+  -- character string of lower-case letters and digits. Pick a new one, replace
+  -- the current value below, and restart Keycloak: it reads the tag at startup.
+  UPDATE migration_model SET id = '<new-tag>' WHERE id = '<current-tag>';
   ```
 
-  Every resource URL moves, for every theme at once, on every deployment that
-  carries it. A browser that holds a stylesheet never asks for it again — the
-  login page it fetches names the new URL — so this is the way to invalidate a
-  browser's stored copy without touching the theme's files. The bundles Keycloak
-  ships itself are re-fetched too, once: the vendor bundle is 143 KB compressed.
+  A browser that holds a stylesheet never asks for it again — the login page it
+  fetches names the new URL — so this is the way to invalidate a browser's stored
+  copy without touching the theme's files. The bundles Keycloak ships itself are
+  re-fetched too, once: the vendor bundle is 143 KB compressed.
 
 
 ### Multiple themes and theme selection
@@ -317,12 +318,11 @@ Restart Keycloak after the change (see [Troubleshooting](#troubleshooting)).
 
 ## Favicon
 
-The Keycloak login and admin surfaces each ship their own favicon file:
+The Keycloak login surface ships its own favicon file:
 
 - `configs/keycloak/themes/genie/login/resources/img/favicon.ico`
-- `configs/keycloak/themes/genie/admin/resources/img/favicon.ico`
 
-Replace each `.ico` with your institution's favicon. Use the same file in both locations — they are served independently by Keycloak per theme. For the account surface, no explicit favicon is configured; Keycloak falls back to the realm default.
+Replace it with your institution's favicon — the login template references it by name. The admin console does **not** use a file of the theme's `img/` directory: it serves the theme's `favIcon` property, and this theme declares none, so the console falls back to the built-in `favicon.svg`. To brand the admin console, declare `favicon=img/favicon.ico` in `configs/keycloak/themes/genie/admin/theme.properties` and keep that file. The account surface has no explicit favicon either; Keycloak falls back to the realm default.
 
 The web app's favicon is controlled separately (see [Per-institution logo](#per-institution-logo)) via the `<link rel="icon">` tags in `components/gov-chat-frontend/public/index.html`, which are re-pointed at runtime by `config-loader.js` (`loadConfig()`) from `app.icon.value`.
 
@@ -355,7 +355,7 @@ After a redeploy, verify each surface end-to-end before announcing the rebrand:
 ### Keycloak consoles
 
 1. Open the admin console (`/auth/admin/<realm>/console/`) and the account console (`/auth/realms/<realm>/account/`).
-2. **Masthead**: the bar is a pale wash of the brand and its label reads at 14.1:1 against it.
+2. **Masthead**: the bar is a pale wash of the brand and its label reads at 14.1:1 against it (`#000d64` on `#ddecff`).
 3. **Ground and wave**: the pale ground shows behind the content panels, and the wave band closes the sidebar.
 4. **Admin welcome page**: the brand artwork renders above "Welcome to …".
 5. **Dark mode**: switch the browser or the OS to dark — the masthead, the ground and the wave follow (the wave lightens the ground instead of darkening it).

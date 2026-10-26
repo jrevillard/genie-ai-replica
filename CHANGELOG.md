@@ -68,7 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A deployment that ships its own child theme keeps its own look: a child
   declares `styles` for every surface, so the base theme's stylesheets do not
   reach it, and the new console look — CSS only — does not either. See
-  [Branding customization](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/site/content/en/docs/configure/branding-customization.md)
+  [Branding customization](https://opensource.unicc.org/genie-ai/docs/configure/branding-customization/)
   for how the theme resolution works.
 
 - **The gateway revalidates the Keycloak theme resources.** Keycloak serves

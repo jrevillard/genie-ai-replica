@@ -220,12 +220,14 @@ Two independent caches sit between an edited theme file and the browser.
 
 **On the browser**, Keycloak serves theme resources with `Cache-Control: max-age=2592000` — 30 days. A resource whose theme names a content hash also carries an `ETag` (the resources version) and answers a conditional request with a `304`; every other resource carries no validator and no `Last-Modified`. A returning browser therefore keeps the previous stylesheet for a month after a theme change, however often the server is restarted.
 
-The value comes from one server-wide setting — `CacheControlUtil` reads `Config.scope("theme").getInt("staticMaxAge", 2592000)`, and Keycloak documents the `--spi-theme-static-max-age` SPI option for it. It is all-or-nothing: a value of `0` turns every theme resource into `no-cache`, including the shared vendor bundle the console ships with Keycloak itself — which carries no `ETag`, so the browser would re-download the PatternFly CSS in full on every page load. No `theme.properties` key can change the value per theme: the properties a theme may declare are fixed (`parent`, `import`, `styles`, `stylesCommon`, `scripts`, `favicons`, `logo`, `favicon`, `darkMode`, `contentHashPattern`, …), and none of them is a cache setting. That is why the override lives at the gateway, where the rule can tell the bundles apart.
+The value comes from one server-wide setting — `CacheControlUtil` reads `Config.scope("theme").getInt("staticMaxAge", 2592000)`, and Keycloak documents the `--spi-theme-static-max-age` SPI option for it. It is all-or-nothing: a value of `0` turns every theme resource into `no-cache`, including the shared vendor bundle the console ships with Keycloak itself — which carries no `ETag`, so the browser would re-download the PatternFly CSS in full on every page load. No `theme.properties` key can change the value per theme: the properties a theme may declare are fixed (`parent`, `import`, `styles`, `stylesCommon`, `scripts`, `favicons`, `logo`, `favIcon`, `darkMode`, `contentHashPattern`, …), and none of them is a cache setting. That is why the override lives at the gateway, where the rule can tell the bundles apart.
 
 GENIE.AI's gateway therefore overrides the header at the nginx edge: `api-gateway-solution/nginx/conf/default.conf.template` matches `/auth/resources/<version>/<type>/<theme>/<path>` — the resources of **every** installed theme, not one theme name — and replaces the upstream `Cache-Control` with `no-cache, must-revalidate`. Two families keep their long cache, and both are safe to keep:
 
 - `assets/` — the bundles whose file name carries a content hash, so a changed file is a new URL. Keycloak also answers their revalidation with a `304` (its `ETag` is the resources version).
 - `vendor/` — the bundles shipped with Keycloak itself (`common/keycloak/vendor/…`). They change with the Keycloak version, and the resources tag in the URL is regenerated on every upgrade, so their URL changes too.
+
+The exclusion keys on the directory, not on who owns it: a custom theme that ships a file under `assets/` or `vendor/` keeps the long cache too, so such a file must carry a content hash in its name to be revalidated at all.
 
 The web app already splits the same way: hashed assets get `immutable`, the runtime-injected theme files get `no-cache, must-revalidate`.
 
@@ -324,7 +326,7 @@ The Keycloak login surface ships its own favicon file:
 
 - `configs/keycloak/themes/genie/login/resources/img/favicon.ico`
 
-Replace it with your institution's favicon — the login template references it by name. The admin console does **not** use a file of the theme's `img/` directory: it serves the theme's `favIcon` property, and this theme declares none, so the console falls back to the built-in `favicon.svg`. To brand the admin console, declare `favicon=img/favicon.ico` in `configs/keycloak/themes/genie/admin/theme.properties` and keep that file. The account surface has no explicit favicon either; Keycloak falls back to the realm default.
+Replace it with your institution's favicon — the login template references it by name. The admin console does **not** use a file of the theme's `img/` directory: it serves the theme's `favIcon` property, and this theme declares none, so the console falls back to the built-in `favicon.svg`. To brand the admin console, declare `favIcon=img/favicon.ico` in `configs/keycloak/themes/genie/admin/theme.properties` and keep that file. The account surface has no explicit favicon either; Keycloak falls back to the realm default.
 
 The web app's favicon is controlled separately (see [Per-institution logo](#per-institution-logo)) via the `<link rel="icon">` tags in `components/gov-chat-frontend/public/index.html`, which are re-pointed at runtime by `config-loader.js` (`loadConfig()`) from `app.icon.value`.
 

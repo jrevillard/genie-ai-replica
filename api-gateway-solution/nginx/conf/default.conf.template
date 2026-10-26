@@ -40,26 +40,13 @@ server {
     # Permissions Policy (deployment-specific)
     add_header Permissions-Policy "${NGINX_PERMISSIONS_POLICY}" always;
 
-    # Hide server info (server context — not allowed inside if blocks)
-    proxy_hide_header X-Powered-By;
-    proxy_hide_header Server;
-
     # Strip ALL upstream security/CORS headers — nginx is the single authority
-    proxy_hide_header X-Content-Type-Options;
-    proxy_hide_header X-Frame-Options;
-    proxy_hide_header X-XSS-Protection;
-    proxy_hide_header Strict-Transport-Security;
-    proxy_hide_header Referrer-Policy;
-    proxy_hide_header Content-Security-Policy;
-    proxy_hide_header Permissions-Policy;
-    proxy_hide_header Feature-Policy;
-    proxy_hide_header Access-Control-Allow-Origin;
-    proxy_hide_header Access-Control-Allow-Methods;
-    proxy_hide_header Access-Control-Allow-Headers;
-    proxy_hide_header Access-Control-Allow-Credentials;
-    proxy_hide_header Access-Control-Max-Age;
-    proxy_hide_header Access-Control-Expose-Headers;
-    proxy_hide_header X-Kong-Proxy-Latency;
+    # (X-Powered-By and Server included — server context, not allowed inside if blocks)
+    include conf.d/hide-upstream-headers.inc;
+
+    # Kong upstream address. The variable is resolved at request time, so
+    # nginx starts even when the Kong container is not up yet.
+    set $kong_addr ${KONG_PROXY_HOST}:8000;
 
     # Block access to dotfiles (e.g., .git, .env), but allow .well-known (OIDC discovery)
     location ~ /\.(?!well-known) {
@@ -71,6 +58,32 @@ server {
     location ~ /(BitKeeper|\.git|\.svn|\.hg|CVS) {
         deny all;
         return 404;
+    }
+
+    # Keycloak theme resources of our own theme — the login page's and the
+    # consoles' stylesheets, images and scripts.
+    #
+    # Keycloak serves them with a 30-day max-age and no validators, so a
+    # returning browser keeps the previous stylesheet for a month after a
+    # theme change. The theme's own files are the ones that change; the
+    # shared vendor bundle (common/keycloak) and the versioned bundles
+    # (assets/, whose name carries their content hash) keep their long
+    # cache. So the override is scoped to the theme's own resources, and
+    # the versioned bundles are excluded.
+    #
+    # It sits before the .txt/.xml rule so that a theme file of either
+    # extension is proxied instead of answered from the filesystem.
+    location ~ ^/auth/resources/[^/]+/[^/]+/genie[^/]*/(?!assets/) {
+        include conf.d/keycloak-headers.inc;
+        add_header Cache-Control "no-cache, must-revalidate" always;
+
+        # Replace the upstream's 30-day cache, do not add to it. The
+        # include repeats the server's hide list, because a location
+        # that hides a header of its own stops inheriting that list.
+        include conf.d/hide-upstream-headers.inc;
+        proxy_hide_header Cache-Control;
+
+        include conf.d/keycloak-proxy.inc;
     }
 
     # For robots.txt, sitemap.xml and other specific text files
@@ -87,30 +100,9 @@ server {
     }
 
     # Keycloak Identity Provider proxied to Kong
-    # Note: when proxy_pass uses a variable, nginx does NOT perform
-    # path prefix substitution — the full request URI is forwarded as-is.
-    set $kong_addr ${KONG_PROXY_HOST}:8000;
     location /auth/ {
-        # Security headers — SAMEORIGIN instead of DENY for Keycloak admin console iframes
-        add_header X-Content-Type-Options "nosniff" always;
-        add_header X-Frame-Options "SAMEORIGIN" always;
-        add_header X-XSS-Protection "1; mode=block" always;
-        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
-        add_header Referrer-Policy "no-referrer-when-downgrade" always;
-        add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
-
-        # Proxy settings to Kong
-        proxy_pass http://$kong_addr;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Host $host;
-        proxy_set_header X-Forwarded-Port ${NGINX_HTTPS_PORT};
-        proxy_connect_timeout 300s;
-        proxy_read_timeout 300s;
-        proxy_send_timeout 300s;
+        include conf.d/keycloak-headers.inc;
+        include conf.d/keycloak-proxy.inc;
     }
 
     # Backend API traffic proxied to Kong

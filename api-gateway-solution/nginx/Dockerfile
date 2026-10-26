@@ -5,6 +5,9 @@ RUN apk add --no-cache openssl gettext
 # Copy nginx configuration
 COPY conf/default.conf.template /etc/nginx/conf.d/default.conf.template
 COPY conf/security-headers.inc /etc/nginx/conf.d/security-headers.inc
+COPY conf/hide-upstream-headers.inc /etc/nginx/conf.d/hide-upstream-headers.inc
+COPY conf/keycloak-headers.inc /etc/nginx/conf.d/keycloak-headers.inc
+COPY conf/keycloak-proxy.inc.template /etc/nginx/conf.d/keycloak-proxy.inc.template
 COPY conf/apple-app-site-association /etc/nginx/conf.d/apple-app-site-association
 COPY conf/assetlinks.json /etc/nginx/conf.d/assetlinks.json
 

@@ -79,6 +79,13 @@ envsubst '${NGINX_PUBLIC_DOMAIN} ${CSP_CONNECT_SRC} ${KONG_PROXY_HOST} ${NGINX_F
     < /etc/nginx/conf.d/default.conf.template \
     > /etc/nginx/conf.d/default.conf
 
+# Render the Keycloak proxy settings — the forwarded port is a deployment
+# value. The Kong address stays an nginx variable ($kong_addr), so it is
+# not substituted here.
+envsubst '${NGINX_HTTPS_PORT}' \
+    < /etc/nginx/conf.d/keycloak-proxy.inc.template \
+    > /etc/nginx/conf.d/keycloak-proxy.inc
+
 # Validate rendered config
 echo "Validating nginx configuration..."
 nginx -t

@@ -254,12 +254,31 @@ async function main() {
   );
   SUITE_KEY = gen.suite_key;
   let suite = null;
+  // The generation's live progress envelope (2026-10-26). It carries the
+  // calls that REACHED the model and, separately, the REPLAYS the sidecar's
+  // on-disk cache answered — a replay is not an LLM call, and the panel
+  // must never read it as one (live: the panel read "673 LLM calls" while
+  // the remote GPU sat at 0 % and the remote's own request counters moved
+  // by zero requests).
+  let genProgress = null;
+  let genProgressSig = '';
   const genDeadline = Date.now() + DEADLINE_MIN * 60 * 1000; // OKF_RAGAS_LONG_TIMEOUT_MS (60 min) + margin
   for (;;) {
     if (Date.now() > genDeadline) break;
     await sleep(4000);
     const doc = j(await call('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}`));
-    if (doc.status === 'generating') continue;
+    if (doc.status === 'generating') {
+      const p = doc.progress;
+      if (p) {
+        const sig = `${p.phase} ${p.done}/${p.total} calls=${p.calls} replays=${p.replays}`;
+        if (sig !== genProgressSig) {
+          genProgressSig = sig;
+          genProgress = p;
+          console.log(`  progress: ${sig}`);
+        }
+      }
+      continue;
+    }
     if (doc.status === 'failed') {
       console.log('  generation failed:', JSON.stringify(doc.error).slice(0, 300));
       break;
@@ -273,6 +292,11 @@ async function main() {
     'entries carry query + expected outputs',
     suite.payload.entries.length >= 1 &&
       suite.payload.entries.every((e) => e.query && typeof e.reference_answer === 'string')
+  );
+  check(
+    'the generation progress envelope separates the model calls from the cache replays',
+    !!(genProgress && typeof genProgress.calls === 'number' && typeof genProgress.replays === 'number'),
+    genProgress ? JSON.stringify(genProgress).slice(0, 160) : 'no progress envelope observed'
   );
 
   // --- 2. run (202 + poll) ---

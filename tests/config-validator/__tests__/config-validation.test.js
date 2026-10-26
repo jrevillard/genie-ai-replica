@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const { parseEnvTemplate, getRequiredSecrets } = require('../validators/parse-env');
 const {
   parseComposeEnvVars,
@@ -26,6 +27,7 @@ const {
   GPU_SHARED_COMPOSE_VARS
 } = require('../validators/validate-gpu-node');
 const { readLoginThemeNames, splitCompounds } = require('../validators/validate-keycloak-theme');
+const { collectThemeIssues } = require('../validators/validate-keycloak-themes');
 
 const ROOT = path.resolve(__dirname, '../../..');
 const ENV_FILE = path.join(ROOT, 'env');
@@ -478,6 +480,95 @@ describe('Configuration Validation Suite', () => {
         (entry) => entry.mentionsBody && entry.pseudoElements.length !== 2
       );
       expect(halfPainted).toEqual([]);
+    });
+  });
+  describe('Keycloak theme assets', () => {
+    test('every file the themes point at exists', () => {
+      // A theme that names a stylesheet, a logo or an image that is not
+      // there loads anyway: the page comes up, the masthead shows a
+      // broken image, the band under the form never appears.
+      expect(collectThemeIssues(ROOT)).toEqual([]);
+    });
+
+    describe('a broken reference is reported', () => {
+      let root;
+
+      beforeEach(() => {
+        root = fs.mkdtempSync(path.join(os.tmpdir(), 'kc-theme-'));
+      });
+
+      afterEach(() => {
+        fs.rmSync(root, { recursive: true, force: true });
+      });
+
+      // A minimal theme: the checks read the tree, so the tree is what
+      // has to be right, not a copy of the repository's themes.
+      // `resources` are the theme's assets; `templates` are the files
+      // Keycloak renders (an email template lives outside `resources`).
+      const writeTheme = (type, properties, { resources = {}, templates = {} } = {}) => {
+        const dir = path.join(root, 'configs', 'keycloak', 'themes', 'demo', type);
+        fs.mkdirSync(path.join(dir, 'resources'), { recursive: true });
+        fs.writeFileSync(path.join(dir, 'theme.properties'), properties);
+        const write = (base, files) => {
+          for (const [name, content] of Object.entries(files)) {
+            const file = path.join(base, name);
+            fs.mkdirSync(path.dirname(file), { recursive: true });
+            fs.writeFileSync(file, content);
+          }
+        };
+        write(path.join(dir, 'resources'), resources);
+        write(dir, templates);
+      };
+
+      test('a stylesheet the theme does not have', () => {
+        writeTheme('admin', 'styles=css/genie.css\n');
+        expect(collectThemeIssues(root)).toEqual([
+          { theme: 'demo', type: 'admin', kind: 'styles', reference: 'css/genie.css' }
+        ]);
+      });
+
+      test('an image a stylesheet names', () => {
+        writeTheme('admin', 'styles=css/genie.css\n', {
+          resources: { 'css/genie.css': '.a { background: url(../img/wave.svg); }' }
+        });
+        expect(collectThemeIssues(root)).toEqual([
+          { theme: 'demo', type: 'admin', kind: 'asset', reference: '../img/wave.svg' }
+        ]);
+      });
+
+      test('a logo the theme does not have', () => {
+        writeTheme('admin', 'logo=/img/logo.png\n');
+        expect(collectThemeIssues(root)).toEqual([
+          { theme: 'demo', type: 'admin', kind: 'logo', reference: '/img/logo.png' }
+        ]);
+      });
+
+      test('a `cid:` image in an email template', () => {
+        // Keycloak attaches nothing to an email: a `cid:` reference is
+        // a broken image in every mail client.
+        writeTheme('email', 'parent=keycloak\n', {
+          templates: { 'html/template.ftl': '<img src="cid:logo.png" alt="GENIE.AI">' }
+        });
+        expect(collectThemeIssues(root)).toEqual([
+          { theme: 'demo', type: 'email', kind: 'cid', reference: 'logo.png' }
+        ]);
+      });
+
+      test('an image an email template names by URL', () => {
+        writeTheme('email', 'parent=keycloak\n', {
+          templates: { 'html/template.ftl': '<img src="${url.resourcesUrl}/img/logo.png" alt="GENIE.AI">' }
+        });
+        expect(collectThemeIssues(root)).toEqual([
+          { theme: 'demo', type: 'email', kind: 'asset', reference: 'img/logo.png' }
+        ]);
+      });
+
+      test('a `cid:` in a comment is not a `cid:` in the mail', () => {
+        writeTheme('email', 'parent=keycloak\n', {
+          templates: { 'html/template.ftl': '<#-- a `cid:` reference would break --><p>hello</p>' }
+        });
+        expect(collectThemeIssues(root)).toEqual([]);
+      });
     });
   });
 });

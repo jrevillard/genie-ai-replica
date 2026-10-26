@@ -54,6 +54,12 @@ Two files are deliberately **outside** the mount and must not be hand-edited:
    docker service update --force <stack>_keycloak
    ```
    In Compose mode use `docker compose up -d --force-recreate keycloak` instead.
+
+   A restart alone is **not enough for the stylesheets**. Keycloak also writes a compressed copy of every theme resource to `/opt/keycloak/data/tmp/kc-gzip-cache/` inside the container, keyed by resource path, and never invalidates it when the file changes. Browsers ask for gzip, so they keep the *previous* CSS while a plain `curl` of the same URL shows the new one. Clear the cache along with the restart:
+   ```bash
+   docker exec <keycloak-container> sh -c 'rm -rf /opt/keycloak/data/tmp/kc-gzip-cache/*'
+   ```
+   In Compose mode, `docker compose up -d --force-recreate keycloak` replaces the container and drops that directory with it — no extra step.
 3. **Reload the browser.** The first time you do this after upgrading from an older deployment, do a **hard reload** (Ctrl+Shift+R, or Cmd+Shift+R). Browsers that visited the site before the upgrade may still hold a one-year immutable copy of these paths from the previous cache headers, and a normal reload will happily reuse it. After that first hard reload, `/config/` and `/runtime/config.js` are served `Cache-Control: no-cache, must-revalidate`, so ordinary reloads are enough.
 
 Keycloak caches themes in memory, so the forced restart is not optional for Keycloak — see [Troubleshooting](#troubleshooting).
@@ -186,6 +192,8 @@ The Keycloak login, account, admin, and email screens are themed by the `genie` 
 
 The `genie` theme is a child of the Keycloak `keycloak.v2` (login/admin) / `keycloak.v3` (account) / `keycloak` (email) base themes — defined by the `parent=` line in each `theme.properties`.
 
+The default login screen is the Living Intelligence look: the brand artwork (`login/resources/img/logo.png`) in the right-hand column, the wave band (`login/resources/img/genie-bottom-waves.svg`) along the bottom of the page, and the form card with an accent edge and rounded corners. Both the ground and the wave belong to the base theme only — the login template marks its own pages, so a child theme such as `genie-el-salvador` keeps the look it defines for itself.
+
 ### Multiple themes and theme selection
 
 The runtime mount delivers **the whole `themes/` directory** to Keycloak (`/opt/keycloak/themes`), not a single theme. This matters in two ways:
@@ -205,7 +213,7 @@ curl -sk -X PUT "https://<host>/auth/admin/realms/genie" \
   -d '{"loginTheme":"genie-el-salvador"}'
 ```
 
-Then restart the Keycloak container — it caches themes in memory.
+Then restart the Keycloak container — it caches themes in memory — and clear its compressed-resource cache, or the new stylesheet never reaches the browser (see [Troubleshooting](#troubleshooting)).
 
 **Adding a new theme in three steps:** (1) create `configs/keycloak/themes/<your-theme>/` with `login/` (and optionally `account/`, `admin/`, `email/`) subdirectories, each with a `theme.properties` — `parent=genie` reuses the GENIE.AI layout and only overrides your files; (2) deploy — the `config_bootstrap` role seeds the whole `themes/` tree; (3) set `KEYCLOAK_THEME` (or the realm setting) to `<your-theme>`. On an already-deployed node, dropping the theme directory into `/opt/genieai/config/keycloak/themes/` and restarting Keycloak is enough — the bind mount serves it live.
 
@@ -224,9 +232,9 @@ Replace four PNG files (one per surface) and (optionally) tweak the CSS:
    - `configs/keycloak/themes/genie/login/template.ftl`: `<img src="${url.resourcesPath}/img/logo.png" alt="GENIE.AI" ...>`
 3. Replace the `alt` text in each template.ftl if your brand name changed (search for `alt="GENIE.AI"`).
 4. (Optional) Tweak the brand color in `configs/keycloak/themes/genie/{login,account,admin}/resources/css/genie.css` — the admin theme especially uses several brand-tinted backgrounds.
-5. Force a Keycloak container restart: `docker service update --force <stack>_keycloak` (Compose: `docker compose up -d --force-recreate keycloak`). Keycloak caches themes in memory; **always restart** the Keycloak container after a theme file change — see [Troubleshooting](#troubleshooting).
+5. Force a Keycloak container restart: `docker service update --force <stack>_keycloak` (Compose: `docker compose up -d --force-recreate keycloak`). Keycloak caches themes in memory; **always restart** the Keycloak container after a theme file change — and clear the compressed-resource cache described in [Troubleshooting](#troubleshooting), otherwise the stylesheet you just edited never reaches the browser.
 
-> **Logo image specs:** Keycloak renders the login logo at `width: 120px` (height auto, scales with aspect ratio) per `configs/keycloak/themes/genie/login/resources/css/genie.css`. Use a transparent PNG at least 240px wide (2× for retina) so it stays sharp on high-DPI screens. The admin logo is constrained to `height: 32px` in `configs/keycloak/themes/genie/admin/resources/css/genie.css`. For the email surface, the logo is embedded as a CID attachment and capped at `max-width:120px; max-height:40px` in `template.ftl` — keep the file's natural dimensions in that range to avoid downscaling artifacts.
+> **Logo image specs:** Keycloak renders the login logo at `width: 420px` (height auto, scales with aspect ratio) per `configs/keycloak/themes/genie/login/resources/css/genie.css`; it is the brand artwork of the login screen, so use a transparent PNG at least 840px wide (2× for retina) so it stays sharp on high-DPI screens. The admin logo is constrained to `height: 32px` in `configs/keycloak/themes/genie/admin/resources/css/genie.css`. For the email surface, the logo is embedded as a CID attachment and capped at `max-width:120px; max-height:40px` in `template.ftl` — keep the file's natural dimensions in that range to avoid downscaling artifacts.
 
 ## Keycloak email branding
 
@@ -304,7 +312,7 @@ After a redeploy, verify each surface end-to-end before announcing the rebrand:
 - **Wrong `parent=` line.** The `parent=` in each `theme.properties` must match a theme Keycloak ships — `keycloak.v2` (login/admin), `keycloak.v3` (account), `keycloak` (email). A typo silently fails to inherit the parent styles, leaving the theme unstyled.
 - **Theme not registered.** Keycloak must be told the theme exists. In GENIE.AI deployments this is handled by the realm-import JSON under `configs/keycloak/`; verify the theme is listed. See [Multiple themes and theme selection](#multiple-themes-and-theme-selection) for the registration flow.
 - **CSS specificity.** Keycloak's base `keycloak.v2` styles are aggressive. Use higher-specificity selectors or `!important` (Keycloak-acceptable in theme CSS, unlike the web app where `!important` is forbidden).
-- **Stale infinispan cache.** After a theme file change, restart Keycloak twice if the first restart still shows old styles — infinispan can survive a single restart in some versions.
+- **Stale compressed theme cache.** After a theme file change the stylesheet can stay visibly old even though the file on disk is correct. Keycloak keeps a compressed copy of every theme resource under `/opt/keycloak/data/tmp/kc-gzip-cache/` inside the container and never invalidates it; browsers request gzip, so they are served the old bytes. A plain `curl` of the same URL (no `Accept-Encoding: gzip`) returns the new file, which is the quickest way to confirm the cache is the culprit. Clear it with `docker exec <keycloak-container> sh -c 'rm -rf /opt/keycloak/data/tmp/kc-gzip-cache/*'`, or replace the container (`docker compose up -d --force-recreate keycloak`) — the directory lives in the container's writable layer, so a plain restart keeps it.
 
 ### CSS not applying (frontend)
 

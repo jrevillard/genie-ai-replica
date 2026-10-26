@@ -336,7 +336,7 @@ export function subscribeConversation(store) {
     persistConversation(store.state.conversation);
   };
   document.addEventListener('pagehide', onPageHide);
-  store.subscribe((mutation) => {
+  const unsubscribeStore = store.subscribe((mutation) => {
     if (!mutation.type.startsWith('conversation/')) return;
     const now = Date.now();
     if (!timer) firstChangeAt = now;
@@ -352,6 +352,7 @@ export function subscribeConversation(store) {
     }, delay);
   });
   return () => {
+    unsubscribeStore();
     document.removeEventListener('pagehide', onPageHide);
     if (timer) clearTimeout(timer);
     timer = null;

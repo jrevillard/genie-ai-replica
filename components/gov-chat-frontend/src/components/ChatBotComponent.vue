@@ -419,7 +419,6 @@
       :max-width="rightSidebarMaxWidth"
       :collapsed="rightSidebarCollapsed"
       :show-handle="showRightHandle"
-      @load-chat="loadChatFromHistory"
       @open-document="handleOpenDocument"
       @update:width="onRightWidthChange"
       @update:collapsed="onRightCollapsedChange"
@@ -896,7 +895,6 @@ export default {
     }
 
     eventBus.$on('treeNodeSelected', this.handleTreeNodeSelected);
-    eventBus.$on('open-chat', this.loadChatFromHistory);
     this.scrollToBottom();
     this.loadQuickHelpButtons();
     this.loadServiceCategories(); // Fetch categories on mount
@@ -910,7 +908,6 @@ export default {
     window.removeEventListener('storage', this.handleStorage);
     eventBus.$off('sidebar-left-width-changed', this.onLeftWidthChanged);
     eventBus.$off('treeNodeSelected', this.handleTreeNodeSelected);
-    eventBus.$off('open-chat', this.loadChatFromHistory);
     eventBus.$off('chat-deleted'); // Clean up the chat-deleted listener
     // Removed clearInterval
     eventBus.$off('load-conversation');
@@ -1617,6 +1614,13 @@ export default {
       // Loading another conversation orphans the open generation — stop
       // it rather than letting its frames land in the wrong transcript.
       this.$store.dispatch('conversation/abortStream');
+      // The loaded chat replaces the open one wholesale — and the
+      // replacement starts NOW, before the fetch: if the load fails, the
+      // next question must not carry the previous conversation's id, its
+      // context chip or its sources.
+      this.$store.commit('conversation/setConversationId', null);
+      this.$store.commit('conversation/setContextItems', []);
+      this.$store.commit('conversation/setRelatedDocuments', []);
       try {
         const conversation = await this.chatHistoryService.getConversation(conversationId);
 
@@ -1846,7 +1850,13 @@ export default {
             continue;
           }
 
-          if ((message.sender === 'user' || (message.sender === 'bot' && message.queryId)) && message.content) {
+          // A failed exchange is never persisted: its question would
+          // reopen later looking answered, with no dead answer beside it.
+          if (
+            (message.sender === 'user' || (message.sender === 'bot' && message.queryId)) &&
+            message.content &&
+            !message.isError
+          ) {
             const messageData = {
               conversationId: conversation._key,
               content: message.content,
@@ -1923,7 +1933,13 @@ export default {
           if (message.isSaved) {
             continue;
           }
-          if ((message.sender === 'user' || (message.sender === 'bot' && message.queryId)) && message.content) {
+          // A failed exchange is never persisted: its question would
+          // reopen later looking answered, with no dead answer beside it.
+          if (
+            (message.sender === 'user' || (message.sender === 'bot' && message.queryId)) &&
+            message.content &&
+            !message.isError
+          ) {
             const messageData = {
               conversationId: this.conversationId,
               content: message.content,
@@ -1955,39 +1971,6 @@ export default {
           preview: this.chatPreview,
           fullChatData: JSON.stringify(this.openMessages)
         });
-      }
-    },
-
-    loadChatFromHistory(chatId) {
-      const chat = this.getChatById(chatId);
-      if (!chat) return;
-      // Loading another transcript orphans the open generation — stop it
-      // rather than letting its frames land in the wrong conversation.
-      this.$store.dispatch('conversation/abortStream');
-      // The loaded chat replaces the open one wholesale: the previous
-      // conversation's context chip, sources and id must not bleed into
-      // the next question.
-      this.$store.commit('conversation/setContextItems', []);
-      this.$store.commit('conversation/setRelatedDocuments', []);
-      this.$store.commit('conversation/setConversationId', null);
-      try {
-        const storedChatData = localStorage.getItem(`chat_data_${chatId}`);
-        if (storedChatData) {
-          this.$store.commit('conversation/setMessages', JSON.parse(storedChatData));
-        } else {
-          this.$store.commit('conversation/setMessages', [
-            {
-              sender: 'bot',
-              content: this.getWelcomeMessage()
-            }
-          ]);
-        }
-        this.currentChatId = chatId;
-        this.showQuickHelp = false;
-        this.scrollToBottom();
-      } catch (error) {
-        console.error('Error loading chat:', error);
-        notificationService.error(this.translate('chatbot.loadError'));
       }
     },
 

@@ -142,7 +142,10 @@ describe('conversation persistence', () => {
         openId: 'open',
         conversations: {
           open: {
-            messages: [{ sender: 'bot', content: 'partial', isStreaming: true }],
+            messages: [
+              { sender: 'user', content: 'the interrupted question' },
+              { sender: 'bot', content: 'partial', isStreaming: true }
+            ],
             selectedContextItems: [],
             lastSavedState: { messages: [], contextItems: [] },
             conversationId: null,
@@ -160,6 +163,22 @@ describe('conversation persistence', () => {
     expect(open.messages.at(-1).content).toBe('partial');
     expect(open.isStreaming).toBe(false);
     expect(open.messages.at(-1).isError).toBe(true);
+    // The question leaves with its dead answer, as one unit.
+    expect(open.messages[0].isError).toBe(true);
+  });
+
+  it('markInterrupted marks the aborted question together with its answer', () => {
+    // Mutation check: dropping the backward walk from
+    // markEntryInterrupted leaves this test green — it is the only
+    // coverage of the abort-path pairing.
+    const store = freshStore();
+    store.commit('conversation/appendUserMessage', { sender: 'user', content: 'the question' });
+    store.commit('conversation/appendBotMessage', { sender: 'bot', content: '', isStreaming: true });
+    store.commit('conversation/markInterrupted');
+    const open = store.getters['conversation/openConversation'];
+    expect(open.messages[0].isError).toBe(true);
+    expect(open.messages[1].isError).toBe(true);
+    expect(open.messages[1].isStreaming).toBe(false);
   });
 
   it('discards a shape-mismatched payload and starts clean', () => {

@@ -413,7 +413,6 @@ describe('ChatBotComponent', () => {
       expect(events).toContain('chat-deleted');
       expect(events).toContain('load-conversation');
       expect(events).toContain('treeNodeSelected');
-      expect(events).toContain('open-chat');
     });
 
     it('unsubscribes from specific eventBus events in beforeUnmount', () => {
@@ -423,7 +422,6 @@ describe('ChatBotComponent', () => {
       expect(unsubscribedEvents).toContain('chat-deleted');
       expect(unsubscribedEvents).toContain('load-conversation');
       expect(unsubscribedEvents).toContain('treeNodeSelected');
-      expect(unsubscribedEvents).toContain('open-chat');
     });
   });
 
@@ -1689,6 +1687,42 @@ describe('ChatBotComponent', () => {
       expect(open[1].isSaved).toBe(true);
       expect(open[3].isSaved).toBe(true);
     });
+
+    it('does not persist a failed exchange', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.createConversation.mockResolvedValue({ _key: 'conv-fail' });
+      chatHistoryService.addMessage.mockClear();
+
+      vm.$store.commit('conversation/appendUserMessage', {
+        sender: 'user',
+        content: 'first ok question',
+        isSaved: false
+      });
+      vm.$store.commit('conversation/appendUserMessage', {
+        sender: 'user',
+        content: 'failed question',
+        isSaved: false
+      });
+      vm.$store.commit('conversation/appendBotMessage', {
+        sender: 'bot',
+        content: 'Good answer',
+        queryId: 'q2',
+        isSaved: false
+      });
+      // The second exchange died: its answer never arrives, so its
+      // question carries the marker too (the pair leaves as a unit).
+      vm.$store.commit('conversation/setMessageProperty', [2, 'isError', true]);
+
+      vm.saveChatDialog = { visible: true, title: 'F', folderId: 'default' };
+      await vm.handleSaveChat();
+
+      // The first question rides as initialMessage; the failed question
+      // must not reopen later looking answered — only the live answer
+      // is stored.
+      expect(chatHistoryService.addMessage.mock.calls.map((c) => c[0].content)).toEqual(['Good answer']);
+    });
   });
 
   // -----------------------------------------------------------------------
@@ -1719,17 +1753,19 @@ describe('ChatBotComponent', () => {
       expect(capturedQueryData.messages.map((m) => `${m.role}:${m.content}`)).toEqual(['user:Second question']);
     });
 
-    it('loading a chat from the sidebar aborts the stream and drops the previous conversation state', () => {
+    it('loading a conversation drops the previous one first — even when the fetch fails', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
       const dispatchSpy = jest.spyOn(vm.$store, 'dispatch');
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation.mockRejectedValueOnce(new Error('network down'));
 
       vm.$store.commit('conversation/setConversationId', 'conv-old');
       vm.$store.commit('conversation/addContextItem', { service: 'Old', serviceKey: 'old', source: 'quickHelp' });
       vm.$store.commit('conversation/setRelatedDocuments', [{ id: 'doc-1', title: 'Old doc' }]);
-      vm.$store.state.chatHistory.chats.push({ id: 'chat-9', title: 'Saved chat' });
 
-      vm.loadChatFromHistory('chat-9');
+      // The real sidebar path: ChatFolders emits load-conversation.
+      await vm.loadExistingConversation('conv-9');
 
       expect(dispatchSpy).toHaveBeenCalledWith('conversation/abortStream');
       expect(vm.selectedContextItems).toEqual([]);

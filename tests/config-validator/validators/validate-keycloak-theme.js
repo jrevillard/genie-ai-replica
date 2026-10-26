@@ -12,7 +12,7 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { readProperties } = require('./validate-keycloak-themes');
+const { readProperties, PropertiesError } = require('./validate-keycloak-themes');
 
 const THEMES_DIR = path.join('configs', 'keycloak', 'themes');
 
@@ -29,6 +29,70 @@ function readFileOrEmpty(file) {
   } catch {
     return '';
   }
+}
+
+/**
+ * A quote character, the one an attribute may be delimited with.
+ */
+const QUOTE = /["']/;
+
+/**
+ * The attributes of an element's start tag: the text between `<name`
+ * and the `>` that closes it.
+ *
+ * A FreeMarker directive inside the tag may hold a `>` of its own, and
+ * an attribute value may hold one too, so the tag is read with the
+ * quotes and the directives taken into account.
+ *
+ * @param {string} source the file's content
+ * @param {string} name the element name
+ * @returns {string|null} the attributes of the start tag, or null when
+ *          there is no such tag
+ */
+function readStartTag(source, name) {
+  const start = new RegExp(`<${name}(?=[\\s/>])`).exec(source);
+  if (!start) return null;
+  let index = start.index + name.length + 1;
+  let quote = null;
+  while (index < source.length) {
+    const char = source[index];
+    if (quote) {
+      if (char === quote) quote = null;
+      index += 1;
+      continue;
+    }
+    if (QUOTE.test(char)) {
+      quote = char;
+      index += 1;
+      continue;
+    }
+    if (char === '<') {
+      // A FreeMarker directive: it may hold a `>` of its own.
+      const close = source.indexOf('>', index);
+      if (close < 0) return null;
+      index = close + 1;
+      continue;
+    }
+    if (char === '>') return source.slice(start.index + name.length + 1, index);
+    index += 1;
+  }
+  return null;
+}
+
+/**
+ * The value of an attribute of a start tag.
+ *
+ * The attribute has to stand on its own: the `id` of `data-page-id` is
+ * not an `id`.
+ *
+ * @param {string} tag the attributes of the start tag
+ * @param {string} name the attribute name
+ * @returns {string} the value, or an empty string when the tag does not
+ *          carry the attribute
+ */
+function readAttribute(tag, name) {
+  const match = new RegExp(`(?:^|\\s)${name}="([^"]*)"`).exec(tag);
+  return match ? match[1] : '';
 }
 
 /**
@@ -112,7 +176,16 @@ function parseSelectors(css) {
 function readLoginThemeNames(root, themeName) {
   const loginDir = path.join(root, THEMES_DIR, themeName, 'login');
   const propertiesFile = path.join(loginDir, 'theme.properties');
-  const properties = fs.existsSync(propertiesFile) ? readProperties(propertiesFile) : {};
+  let properties = {};
+  if (fs.existsSync(propertiesFile)) {
+    try {
+      properties = readProperties(propertiesFile);
+    } catch (error) {
+      // A theme.properties the themes guard cannot read either: the
+      // marker checks have nothing to work with.
+      if (!(error instanceof PropertiesError)) throw error;
+    }
+  }
   const template = readFileOrEmpty(path.join(loginDir, 'template.ftl'));
   // FreeMarker comments are not output: a marker that survives only in a
   // comment is not a marker the page carries.
@@ -122,11 +195,11 @@ function readLoginThemeNames(root, themeName) {
   const pathTest = /ends_with\('\/login\/([^']+)'\)/.exec(templateBody);
 
   // The body tag carries the id the CSS selects on and the class the
-  // marker is emitted from.
-  const bodyStart = templateBody.indexOf('<body');
-  const bodyTag = bodyStart < 0 ? '' : templateBody.slice(bodyStart);
-  const bodyId = /id="([^"]*)"/.exec(bodyTag)?.[1] || '';
-  const classValue = /class="([^"]*)"/.exec(bodyTag)?.[1] || '';
+  // marker is emitted from. Only the start tag counts: an id that
+  // moved to an inner element is not the body's id.
+  const bodyTag = readStartTag(templateBody, 'body') || '';
+  const bodyId = readAttribute(bodyTag, 'id') || readAttribute(bodyTag, 'data-page-id');
+  const classValue = readAttribute(bodyTag, 'class');
   // Every guarded block, and what the class carries outside of them.
   const guards = [...classValue.matchAll(/<#if\s+isBaseTheme\b[^>]*>([\s\S]*?)<\/#if>/g)];
   // An `<#else>` branch runs when the guard is false — the child theme's
@@ -161,9 +234,10 @@ function readLoginThemeNames(root, themeName) {
     // outside it would reach every theme, the guarded one only the base.
     emittedClass: guarded ? guarded[0] : null,
     emittedConditionally: Boolean(guarded) && !unguarded,
+    styles,
     paintedSelectors,
     paintedByStyle
   };
 }
 
-module.exports = { readLoginThemeNames, splitCompounds };
+module.exports = { readLoginThemeNames, readStartTag, readAttribute, splitCompounds };

@@ -139,15 +139,40 @@ function splitSelectorList(list) {
 
 /**
  * The compound selectors of a selector — the simple selectors joined by
- * no combinator. The compound that carries `#keycloak-bg` is the one
- * that has to carry the marker: `body.kc-theme-genie #keycloak-bg`
- * selects a body that is not its own descendant.
+ * no combinator.
  *
  * @param {string} selector one selector
  * @returns {string[]} its compounds
  */
 function splitCompounds(selector) {
   return selector.split(/\s*[>+~]\s*|\s+/).filter(Boolean);
+}
+
+/**
+ * The selectors that paint the ground or the wave and are not scoped to
+ * the marker class.
+ *
+ * The compound that carries `#keycloak-bg` is the one that has to carry
+ * the marker: `body.kc-theme-genie #keycloak-bg` selects another
+ * element, and `.kc-theme-genie-2` is not `.kc-theme-genie`. A selector
+ * that paints without the marker paints for every child theme too.
+ *
+ * @param {string[]} selectors the selectors that paint the ground or the wave
+ * @param {string|null} markerClass the class the template emits
+ * @returns {string[]} the selectors that are not scoped to the marker
+ */
+function unscopedSelectors(selectors, markerClass) {
+  // The marker is a class token: the class the template emits holds
+  // letters, digits, underscores and dashes, so it needs no escaping
+  // here.
+  const marker = markerClass ? new RegExp(`\\.${markerClass}(?![\\w-])`) : null;
+  return selectors.filter((selector) => {
+    const compound = splitCompounds(selector).find((part) => part.includes('#keycloak-bg'));
+    // A selector that paints without naming the ground at all cannot be
+    // scoped, and a theme that emits no marker scopes nothing.
+    if (!compound || !marker) return true;
+    return !marker.test(compound);
+  });
 }
 
 /**
@@ -186,9 +211,11 @@ function parseSelectors(css) {
  * @returns {{themeName: string, testedPath: string|null,
  *            emittedClass: string|null, emittedConditionally: boolean, styles: string[],
  *            paintedSelectors: string[],
- *            paintedByStyle: {style: string, pseudoElements: string[]}[]}}
- *            the parsed names, and every selector of every stylesheet the
- *            theme declares that paints the ground or the wave
+ *            paintedByStyle: {style: string, pseudoElements: string[]}[],
+ *            unscopedSelectors: string[]}}
+ *            the parsed names, every selector of every stylesheet the
+ *            theme declares that paints the ground or the wave, and the
+ *            ones that are not scoped to the marker class
  */
 function readLoginThemeNames(root, themeName) {
   const loginDir = path.join(root, THEMES_DIR, themeName, 'login');
@@ -232,6 +259,9 @@ function readLoginThemeNames(root, themeName) {
   const unguardedText = `${classValue.replace(guards.map((guard) => guard[0]).join(''), '')} ${elseText}`;
   const guarded = /kc-theme-[A-Za-z0-9_-]+/.exec(guardedText);
   const unguarded = /kc-theme-[A-Za-z0-9_-]+/.exec(unguardedText);
+  // The class the page carries is the one inside the guard; a class
+  // outside it would reach every theme, the guarded one only the base.
+  const emittedClass = guarded ? guarded[0] : null;
 
   // The stylesheets the theme declares are the ones the page loads, so
   // the ground and the wave are looked for in all of them.
@@ -252,14 +282,15 @@ function readLoginThemeNames(root, themeName) {
     themeName,
     testedPath: pathTest ? pathTest[1] : null,
     bodyId,
-    // The class the page carries is the one inside the guard; a class
-    // outside it would reach every theme, the guarded one only the base.
-    emittedClass: guarded ? guarded[0] : null,
+    emittedClass,
     emittedConditionally: Boolean(guarded) && !unguarded,
     styles,
     paintedSelectors,
-    paintedByStyle
+    paintedByStyle,
+    // The selectors that paint for every theme and not only for this
+    // one: the rule the marker exists for.
+    unscopedSelectors: unscopedSelectors(paintedSelectors, emittedClass)
   };
 }
 
-module.exports = { readLoginThemeNames, readStartTag, readAttribute, splitCompounds };
+module.exports = { readLoginThemeNames };

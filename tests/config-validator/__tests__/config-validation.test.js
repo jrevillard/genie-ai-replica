@@ -26,8 +26,8 @@ const {
   GPU_REQUIRED_SERVICES,
   GPU_SHARED_COMPOSE_VARS
 } = require('../validators/validate-gpu-node');
-const { readLoginThemeNames, splitCompounds } = require('../validators/validate-keycloak-theme');
-const { collectThemeIssues } = require('../validators/validate-keycloak-themes');
+const { readLoginThemeNames } = require('../validators/validate-keycloak-theme');
+const { collectThemeIssues, inspectThemes } = require('../validators/validate-keycloak-themes');
 
 const ROOT = path.resolve(__dirname, '../../..');
 const ENV_FILE = path.join(ROOT, 'env');
@@ -494,29 +494,13 @@ describe('Configuration Validation Suite', () => {
       expect(names.bodyId).toBe('keycloak-bg');
     });
 
-    test('a selector is split into its compounds', () => {
-      // The scoping assertion trusts the split: a split that does not
-      // split would let a marker that is not in the compound pass.
-      expect(splitCompounds('body.kc-theme-genie #keycloak-bg::before')).toEqual([
-        'body.kc-theme-genie',
-        '#keycloak-bg::before'
-      ]);
-      expect(splitCompounds('body.kc-theme-genie > #keycloak-bg::after')).toEqual([
-        'body.kc-theme-genie',
-        '#keycloak-bg::after'
-      ]);
-    });
-
     test('the ground and the wave are scoped to the marker class', () => {
       // The marker has to sit in the compound that selects the body, as
       // a class token: `.kc-theme-genie-2` is not `.kc-theme-genie`, and
-      // `body.kc-theme-genie #keycloak-bg` selects another element.
-      const marker = new RegExp(`\\.${names.emittedClass}(?![\\w-])`);
-      const unscoped = names.paintedSelectors.filter((selector) => {
-        const compound = splitCompounds(selector).find((part) => part.includes('#keycloak-bg'));
-        return !compound || !marker.test(compound);
-      });
-      expect(unscoped).toEqual([]);
+      // `body.kc-theme-genie #keycloak-bg` selects another element. The
+      // guard owns the rule: it reports the selectors that are not
+      // scoped, and there are none.
+      expect(names.unscopedSelectors).toEqual([]);
     });
 
     test('the theme paints the ground and the wave', () => {
@@ -525,12 +509,13 @@ describe('Configuration Validation Suite', () => {
       expect(painted).toMatch(/#keycloak-bg::after/);
     });
 
-    test('every stylesheet the theme declares is painted', () => {
+    test('every stylesheet the theme declares is on disk', () => {
       // The theme holds two stylesheets — the light one and the dark
       // one — and declares two. A drop of either leaves a colour
       // scheme undecorated. The declared set is checked against the
       // files on disk: the helper's own reading of the property would
-      // hold whatever the theme declares.
+      // hold whatever the theme declares. What the stylesheets paint is
+      // the claim of the two tests that follow.
       const declared = [...names.styles].sort();
       const onDisk = stylesheetsOnDisk(path.join(ROOT, 'configs', 'keycloak', 'themes', 'genie', 'login', 'resources'));
       expect(declared).toEqual(onDisk);
@@ -616,6 +601,18 @@ describe('Configuration Validation Suite', () => {
         writeStylesheet('body.kc-theme-demo#keycloak-bg::before { content: ""; }');
         expect(halfPainted(readLoginThemeNames(root, 'demo').paintedByStyle)).toEqual(['css/genie.css']);
       });
+
+      test('a stylesheet that paints the ground outside the marker is reported', () => {
+        // The marker has to sit in the compound that carries
+        // `#keycloak-bg`: `body.kc-theme-demo #keycloak-bg` selects
+        // another element, so the ground would be painted for the child
+        // themes as well.
+        writeLoginTemplate(root, '<body id="keycloak-bg" class="<#if isBaseTheme>kc-theme-demo </#if>"></body>');
+        writeStylesheet('body.kc-theme-demo #keycloak-bg::before { content: ""; }');
+        expect(readLoginThemeNames(root, 'demo').unscopedSelectors).toEqual([
+          'body.kc-theme-demo #keycloak-bg::before'
+        ]);
+      });
     });
 
     describe('the body id', () => {
@@ -682,6 +679,14 @@ describe('Configuration Validation Suite', () => {
       // there loads anyway: the page comes up, the masthead shows a
       // broken image, the band under the form never appears.
       expect(collectThemeIssues(ROOT)).toEqual([]);
+    });
+
+    test('the guard walks the themes of the repository', () => {
+      // An empty list of issues means "clean" only if the guard looked
+      // at the theme that ships: the guard reports the themes and the
+      // types it walked, and the theme of the repository is one of
+      // them.
+      expect(inspectThemes(ROOT).inspected).toContainEqual({ theme: 'genie', type: 'login' });
     });
 
     describe('a broken reference is reported', () => {
@@ -854,6 +859,27 @@ describe('Configuration Validation Suite', () => {
         writeTheme('login', 'parent=base \n');
         expect(collectThemeIssues(root)).toEqual([
           { theme: 'demo', type: 'login', kind: 'parent', reference: 'base ' }
+        ]);
+      });
+
+      test('a non-breaking space after the separator is part of the value', () => {
+        // java.util.Properties skips a space, a tab and a form feed
+        // after the separator; a non-breaking space is an ordinary
+        // character there. The parent is `keycloak.v2` with that space
+        // in front of it, and no theme carries that name.
+        writeTheme('login', 'parent=\u00a0keycloak.v2\n');
+        expect(collectThemeIssues(root)).toEqual([
+          { theme: 'demo', type: 'login', kind: 'parent', reference: '\u00a0keycloak.v2' }
+        ]);
+      });
+
+      test('the trailing non-breaking space of a value is kept', () => {
+        // The value is `keycloak.v2` with a non-breaking space at the
+        // end of it: Keycloak reads the value with the space, and no
+        // theme carries that name.
+        writeTheme('login', 'parent=keycloak.v2\u00a0\n');
+        expect(collectThemeIssues(root)).toEqual([
+          { theme: 'demo', type: 'login', kind: 'parent', reference: 'keycloak.v2\u00a0' }
         ]);
       });
 
@@ -1136,15 +1162,35 @@ describe('Configuration Validation Suite', () => {
       });
 
       test('a file a template names in a directory the parent provides is not reported', () => {
-        // The child theme inherits the template of its parent, and the
-        // file the template names is the parent's: the page shows it.
-        writeTheme('login', 'parent=base\n', { theme: 'child' });
-        writeTheme('login', 'parent=keycloak\n', {
-          theme: 'base',
-          resources: { 'img/logo.png': 'binary' },
+        // The child theme serves the resources of its parent: the file
+        // the child's template names lives in the parent's resources,
+        // so the page shows it.
+        writeTheme('login', 'parent=base\n', {
+          theme: 'child',
           templates: { 'template.ftl': '<img src="${url.resourcesPath}/img/logo.png" alt="GENIE.AI">' }
         });
+        writeTheme('login', 'parent=keycloak\n', {
+          theme: 'base',
+          resources: { 'img/logo.png': 'binary' }
+        });
         expect(collectThemeIssues(root)).toEqual([]);
+      });
+
+      test('a file a template names in a directory the parent provides is reported when the parent does not have it', () => {
+        // The parent provides the directory, so the file the child's
+        // template names has to be there: a child theme inherits the
+        // resources of its parent, not the files it does not hold.
+        writeTheme('login', 'parent=base\n', {
+          theme: 'child',
+          templates: { 'template.ftl': '<img src="${url.resourcesPath}/img/logo.png" alt="GENIE.AI">' }
+        });
+        writeTheme('login', 'parent=keycloak\n', {
+          theme: 'base',
+          resources: { 'img/keep.png': 'binary' }
+        });
+        expect(collectThemeIssues(root)).toEqual([
+          { theme: 'child', type: 'login', kind: 'asset', reference: 'img/logo.png' }
+        ]);
       });
     });
 
@@ -1170,6 +1216,61 @@ describe('Configuration Validation Suite', () => {
           }
         });
         expect(collectThemeIssues(root)).toEqual([]);
+      });
+    });
+
+    // --- the styles a theme inherits -------------------------------------
+    describe('the styles a theme inherits', () => {
+      test('a stylesheet the inherited declaration covers is not reported', () => {
+        // The theme declares no styles of its own: it serves the
+        // nearest ancestor's, the way Keycloak inherits them. The
+        // stylesheet it ships is the one that declaration names.
+        writeTheme('login', 'parent=middle\n', {
+          theme: 'child',
+          resources: { 'css/base.css': '.a { color: red; }' }
+        });
+        writeTheme('login', 'parent=keycloak\nstyles=css/base.css\n', {
+          theme: 'middle',
+          resources: { 'css/base.css': '.a { color: red; }' }
+        });
+        expect(collectThemeIssues(root)).toEqual([]);
+      });
+
+      test('a stylesheet the inherited declaration does not cover is reported', () => {
+        // The inherited declaration names one stylesheet; the other one
+        // the theme ships is a file nobody loads.
+        writeTheme('login', 'parent=middle\n', {
+          theme: 'child',
+          resources: { 'css/extra.css': '.b { color: blue; }' }
+        });
+        writeTheme('login', 'parent=keycloak\nstyles=css/base.css\n', {
+          theme: 'middle',
+          resources: { 'css/base.css': '.a { color: red; }' }
+        });
+        expect(collectThemeIssues(root)).toEqual([
+          { theme: 'child', type: 'login', kind: 'stylesheet', reference: 'css/extra.css' }
+        ]);
+      });
+
+      test('the declaration of the grandparent does not cover the styles of the theme', () => {
+        // The nearest ancestor wins: the parent's declaration is the
+        // one the theme serves, and the grandparent's does not add to
+        // it.
+        writeTheme('login', 'parent=middle\n', {
+          theme: 'child',
+          resources: { 'css/grandparent.css': '.c { color: green; }' }
+        });
+        writeTheme('login', 'parent=base\nstyles=css/parent.css\n', {
+          theme: 'middle',
+          resources: { 'css/parent.css': '.b { color: blue; }' }
+        });
+        writeTheme('login', 'parent=keycloak\nstyles=css/grandparent.css\n', {
+          theme: 'base',
+          resources: { 'css/grandparent.css': '.c { color: green; }' }
+        });
+        expect(collectThemeIssues(root)).toEqual([
+          { theme: 'child', type: 'login', kind: 'stylesheet', reference: 'css/grandparent.css' }
+        ]);
       });
     });
 

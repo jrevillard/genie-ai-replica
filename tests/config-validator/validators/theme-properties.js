@@ -15,6 +15,11 @@
  * The reading lives in its own module: it is a reading of the Java
  * format, not a rule of the theme guard, and the differential harness
  * checks it against the JVM on its own.
+ *
+ * The hand-written cases of the suite are this reader's whole CI
+ * surface by design: the four rules left unpinned (the `\t` escape, the
+ * `!` comment, the CRLF line ending and the trailing backslash at EOF)
+ * fail towards a false positive, never towards a silent ship.
  */
 const fs = require('fs');
 
@@ -212,4 +217,4 @@ function readProperties(file) {
   return parseProperties(fs.readFileSync(file, 'utf8'), file);
 }
 
-module.exports = { parseProperties, readProperties, PropertiesError };
+module.exports = { readProperties, PropertiesError };

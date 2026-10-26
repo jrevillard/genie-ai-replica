@@ -481,14 +481,20 @@ function providedDirectories(roots) {
 /**
  * Check every theme in the repository.
  *
+ * The themes and the types the scan walked are reported next to the
+ * issues: an empty list of issues means "clean" only if the scan
+ * looked at the themes that ship.
+ *
  * @param {string} root repository root
- * @returns {{theme: string, type: string, kind: string, reference: string}[]}
- *          one entry per broken reference
+ * @returns {{issues: {theme: string, type: string, kind: string, reference: string}[],
+ *            inspected: {theme: string, type: string}[]}}
+ *          the broken references and the themes and types that were walked
  */
-function collectThemeIssues(root) {
+function inspectThemes(root) {
   const issues = [];
+  const inspected = [];
   const themesDir = path.join(root, THEMES_DIR);
-  if (!isDirectory(themesDir)) return issues;
+  if (!isDirectory(themesDir)) return { issues, inspected };
 
   for (const theme of fs.readdirSync(themesDir).sort()) {
     const themeDir = path.join(themesDir, theme);
@@ -501,6 +507,8 @@ function collectThemeIssues(root) {
       if (!isDirectory(typeDir)) continue;
       const propertiesFile = path.join(typeDir, 'theme.properties');
       if (!isFile(propertiesFile)) continue;
+
+      inspected.push({ theme, type });
 
       let properties;
       try {
@@ -663,9 +671,21 @@ function collectThemeIssues(root) {
       }
     }
   }
-  return issues;
+  return { issues, inspected };
+}
+
+/**
+ * The broken references of every theme in the repository.
+ *
+ * @param {string} root repository root
+ * @returns {{theme: string, type: string, kind: string, reference: string}[]}
+ *          one entry per broken reference
+ */
+function collectThemeIssues(root) {
+  return inspectThemes(root).issues;
 }
 
 module.exports = {
-  collectThemeIssues
+  collectThemeIssues,
+  inspectThemes
 };

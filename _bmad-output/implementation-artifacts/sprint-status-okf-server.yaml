@@ -871,6 +871,41 @@ development_status:
   #          served answer addressed the question's premise instead of the
   #          question), so it carries n_failed: 1 — a QUALITY result the
   #          benchmark exists to surface, not a completion failure.
+  #          THE TAX THAT MADE IT AN HOUR — FOUND AND FIXED (2026-10-26, MR
+  #          !605, branch fix/ragas-analytics-telemetry): ragas 0.4.3 wraps
+  #          EVERY prompt generation (ragas/_analytics.py:60) and POSTs the
+  #          usage event to https://t.explodinggradients.com from INSIDE the
+  #          async prompt path, with a 1 s timeout. The POST is SYNCHRONOUS,
+  #          so it blocks the event loop: ragas's own 16 workers and
+  #          RAGAS_LLM_MAX_CONCURRENCY never overlapped. Measured in the
+  #          sidecar image: a warm CACHE HIT — no model call at all — cost
+  #          0.79 s, and 0.008 s with the flag off (100x). Solar System's
+  #          graph is ~3,800 prompts, so the tax alone was ~50 min of a
+  #          generation, charged again on every judge call of every scored
+  #          row. TWO independent reasons it is off: performance, and
+  #          SOVEREIGNTY — a public-sector deployment must not ship per-call
+  #          usage telemetry to a third-party endpoint outside the
+  #          deployment. RAGAS_DO_NOT_TRACK lands in all four sites (compose,
+  #          env, env.j2, config-validator) and the engine sets it at import
+  #          time with setdefault, so a missed env plumbing cannot silently
+  #          re-enable the POST. Sidecar suite 91 green (one new), the
+  #          config-validator 82 green (one new).
+  #          THE REAL 50-QUESTION BENCHMARK ON THE SAME CORPUS (2026-10-26,
+  #          the fixed sidecar): suite rs1793010419829-90e663 — 50 questions,
+  #          corpus 1600 of 3011 chunks, generator ragas:ibm-granite/granite-4.1
+  #          -8b, and kg_failures {"NERExtractor: OutputParserException": 2}:
+  #          the SAME two poisoned nodes degraded and the phase CONTINUED —
+  #          the generation-survival fix working at scale on the corpus that
+  #          originally killed the run. Wall clock 7 min 24 s for the whole
+  #          graph build plus the synthesis (POST /generate-testset 10:27:06
+  #          UTC, suite created 10:34:30 UTC), against over an hour before
+  #          the telemetry fix on the same corpus and the same 1,600-chunk
+  #          graph. Run rr1793016096281-c9fe4b in serve mode, .env granite
+  #          judge.
+  #          STILL OPEN (David's call): the corpus is sized independently of
+  #          the suite size — buildCorpusDocuments never sees testset_size, so
+  #          a 2-question suite and a 50-question suite build the SAME graph.
+  #          Recorded in deferred-work.md.
 
   #          FOUR-JUDGE EXPERIMENT + ENV ADVICE 2026-10-27 (branch
   #          fix/ragas-env-advice, in review): four judges scored the SAME 50

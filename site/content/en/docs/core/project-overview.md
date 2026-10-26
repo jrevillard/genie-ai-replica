@@ -29,7 +29,7 @@ content manager, sovereign reviewer) start here.
 - **Hybrid retrieval** — dense-vector search plus lexical search
   ([BM25](https://en.wikipedia.org/wiki/Okapi_BM25), keyword scoring) combined
   with reciprocal-rank fusion, plus optional knowledge-graph traversal. See
-  [RAG Pipeline](/docs/rag-pipeline/).
+  [RAG Pipeline](/docs/rag/).
 - **Sovereign by design** — embedding, reranking, generation, and translation
   models all run on your infrastructure (OPEA / vLLM / TEI). No third-party
   model API is required for the core path.
@@ -39,7 +39,7 @@ content manager, sovereign reviewer) start here.
   [Restrict active locales](/docs/configure/locale-whitelist/)).
 - **Observable** — OpenTelemetry-native metrics, logs, and traces across the
   RAG pipeline (when `ENABLE_OBSERVABILITY=1`). See
-  [Observability](/docs/observe/).
+  [Observability](/docs/observability/).
 - **Secure** — Keycloak OIDC identity, document antivirus scanning (ClamAV),
   PII-filtered telemetry (`shared/lib/tracing-pii.js`).
 
@@ -90,7 +90,7 @@ GENIE.AI is organised as a multi-component monorepo with seven logical parts:
 | Deployment & ops | `deploy/`, `docker-compose.yaml`, `configs/` |
 
 For the full source-tree walk-through, see
-[Source tree analysis](/docs/core/source-tree-analysis/).
+[Source tree analysis](/docs/reference/source-tree-analysis/).
 
 ## Design principles
 
@@ -110,8 +110,8 @@ For the full source-tree walk-through, see
 
 | Want to know about… | Read |
 |---|---|
-| The RAG pipeline end-to-end | [RAG Pipeline](/docs/rag-pipeline/) |
-| Tracing, metrics, logs, dashboards | [Observability](/docs/observe/) |
+| The RAG pipeline end-to-end | [RAG Pipeline](/docs/rag/) |
+| Tracing, metrics, logs, dashboards | [Observability](/docs/observability/) |
 | C4 diagrams, auth flows, service matrix | [Architecture](/docs/architecture/) |
 | Deploying (Compose / Swarm / Ansible) | [Deployment](/docs/deploy/) |
 | Identity, Keycloak, external IdPs | [Configuration](/docs/configure/) |

@@ -294,7 +294,7 @@ skipped once the streaming translation failed.
 
 ## Related
 
-- [Generation](/docs/rag-pipeline/generation/) — the prompt and
+- [Generation](/docs/rag/generation/) — the prompt and
   temperature settings that affect English-stream quality.
 - [Frontend → Chat UX](/docs/frontend/chat-ux/) — how the browser
   injects `context.language` from `currentLocale`.

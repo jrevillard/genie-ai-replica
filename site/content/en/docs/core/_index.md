@@ -1,6 +1,6 @@
 ---
 title: "Core & Project Overview"
-description: "Top-level project context for GENIE.AI: scope, source-tree map, integration architecture, and contributor onboarding."
+description: "Top-level project context for GENIE.AI: scope, integration architecture, and pointers to the source-tree map and the contributor onboarding guide."
 weight: 10
 section: "core"
 ---
@@ -8,6 +8,11 @@ section: "core"
 ## Documents in this section
 
 1. [Project Overview](/docs/core/project-overview/)
-2. [Source Tree Analysis](/docs/core/source-tree-analysis/)
-3. [Integration Architecture](/docs/core/integration-architecture/)
-4. [Development Guide](/docs/core/development-guide/)
+2. [Integration Architecture](/docs/core/integration-architecture/)
+
+## Elsewhere
+
+- [Source Tree Analysis](/docs/reference/source-tree-analysis/) — per-directory
+  layout of the repository and what each component depends on.
+- [Build and run locally](/docs/contribute/build-and-run/) — set up a working
+  local environment across every component.

@@ -32,7 +32,7 @@ narrative.
   `genie-ai-overlay/core/constants.py`; service names are string
   literals set per service via `setup_tracing(...)`).
 - [Glossary](/docs/reference/glossary/) — full glossary, same as
-  [Get started → Glossary](/docs/get-started/glossary/).
+  [Get started → Glossary](/docs/reference/glossary/).
 
 ## Related sections
 

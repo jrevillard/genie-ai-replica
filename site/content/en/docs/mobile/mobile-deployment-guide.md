@@ -988,6 +988,6 @@ The fork does not affect production builds (production uses CA-signed certs and 
 - Password reset (Step 7.6) opens the Keycloak reset page in the system browser.
 - Asset-link verification (`assetlinks.json` / `apple-app-site-association`) is reachable and valid at `https://<keycloak-domain>/.well-known/`.
 
-**Next:** wire the mobile app's traces and logs into your observability stack — see [Observability](/docs/observe/) for Grafana dashboards and VictoriaLogs queries.
+**Next:** wire the mobile app's traces and logs into your observability stack — see [Observability](/docs/observability/) for Grafana dashboards and VictoriaLogs queries.
 
 For per-flavor locale restriction (active set, dart-define wiring, CI rebuild pass), see [Restrict active locales](/docs/configure/locale-whitelist/).

@@ -493,7 +493,7 @@ defaults.
 | `RETRIEVER_SUMMARIZER_ENABLED` | bool | no | `false` | LLM-summarize retrieved chunks (latency-heavy) |
 
 For tuning guidance see
-[RAG → Retriever Configuration](/docs/rag-pipeline/retrieval/) and the
+[RAG → Retriever Configuration](/docs/rag/retrieval/) and the
 [Retriever overview in the source code](https://opensource.unicc.org/un/itu/genie-ai/-/tree/main/genie-ai-overlay/retriever).
 
 #### Network & external services
@@ -674,7 +674,7 @@ The framework is empty until you ingest documents. The pipeline is:
    stores everything in ArangoDB. Progress and failures land in the
    `ingestion_log` collection — visible in the Admin Dashboard.
 4. Track per-chunk progress with the
-   [Ingestion Log](/docs/operate/ingestion-log/) (see also
+   [Ingestion Log](/docs/operations/ingestion-log/) (see also
    [Ingestion pipeline](/docs/knowledge-base/ingestion/)).
 
 ## Step 10: First-time user accounts
@@ -714,7 +714,7 @@ For custom TLS certificates (production / non-Let's-Encrypt), drop the cert +
 key into the `nginx_secrets` Docker volume and restart `genieai_nginx`. The
 entrypoint detects the mounted files at startup and falls back to a
 self-signed cert only if none are mounted. See
-[Security Hardening](/docs/operate/security-hardening/).
+[Security Hardening](/docs/operations/security-hardening/).
 
 ### 11b. Kong
 
@@ -790,10 +790,10 @@ Common first-deploy failures (deployer-oriented, not environment-specific):
 
 You now have GENIE.AI running. Continue with:
 
-- [Post-deploy checklist](/docs/operate/health-checks/) — first
+- [Post-deploy checklist](/docs/operations/health-checks/) — first
   user, first knowledge base
 - [Knowledge Base](/docs/knowledge-base/) — content design, labelling,
   ingestion
-- [Operations](/docs/operate/) — backup, troubleshooting, monitoring
+- [Operations](/docs/operations/) — backup, troubleshooting, monitoring
 - [Mobile Deployment Guide](/docs/mobile/mobile-deployment-guide/) —
   building and distributing the mobile app

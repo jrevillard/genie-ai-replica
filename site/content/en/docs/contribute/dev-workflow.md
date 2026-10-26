@@ -114,7 +114,7 @@ npm test            # every required env var is documented in the site
 
 - **Trace a request end-to-end** → enable the observability profile and
   query VictoriaTraces via Grafana. See
-  [Observe → Tracing](/docs/observe/tracing/).
+  [Observe → Tracing](/docs/operations/tracing-howto/).
 - **Inspect a per-chunk ingestion log** → the `ingestion_log` collection in
   ArangoDB. See [Debugging with Tracing & Logs](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/.claude/rules/DEBUGGING-TRACING.md).
 - **Reset the dependency stack** → `docker compose down -v && docker compose up -d`.

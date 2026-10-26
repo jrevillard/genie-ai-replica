@@ -74,7 +74,7 @@ RAM**. The observability stack adds **~1 GB RAM per Victoria* node and
 
 ### 8. How do I update to a new release?
 
-See [Operate → Updates](/docs/operate/updates/). The short version:
+See [Operate → Updates](/docs/operations/updates/). The short version:
 `git pull && docker compose pull && docker compose up -d`. Changing the
 embedding model (`EMBEDDING_MODEL_ID`) requires a full re-ingest because
 existing chunk vectors live in the old model's space; LLM, reranker, and
@@ -83,13 +83,13 @@ translation model changes are query-time and only need a service restart.
 ### 9. How do I back up?
 
 `arangodump` against the running ArangoDB container, then copy the dump off
-host. See [Operate → Backup & restore](/docs/operate/backup-restore/).
+host. See [Operate → Backup & restore](/docs/operations/backup-restore/).
 
 ### 10. How do I see logs?
 
 The admin UI's **Logs** tab (VictoriaLogs-backed) is the operator surface.
 Direct Grafana access: `https://<host>/grafana/` → Explore → VictoriaLogs
-datasource. See [Operate → Admin logs](/docs/operate/admin-logs/).
+datasource. See [Operate → Admin logs](/docs/operations/admin-logs/).
 
 ### 11. How do I add my own documents?
 
@@ -117,4 +117,4 @@ are covered in
 
 - [Concepts in 5 minutes](/docs/get-started/concepts/)
 - [Deploy → Choose your deployment mode](/docs/deploy/install-guide/)
-- [Operate → Troubleshooting](/docs/operate/troubleshooting/)
+- [Operate → Troubleshooting](/docs/operations/troubleshooting/)

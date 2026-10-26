@@ -238,7 +238,7 @@ Navigate to `https://localhost/api/admin/system-health` (requires the
 `admin` realm role — the bootstrap admin has it via
 `configs/keycloak/genie-realm.yaml`). Expect every dependency (ArangoDB,
 Keycloak, OPEA when enabled) green. For probe semantics, see
-[Health Checks](/docs/operate/health-checks/).
+[Health Checks](/docs/operations/health-checks/).
 
 ## Step 6 — Enable observability (optional)
 
@@ -267,7 +267,7 @@ Keycloak — the bootstrap admin has the **Admin** role, mapped via the
 `realm_access.roles[*] == admin` rule in `docker-compose.yaml`). Pre-built
 dashboards cover service health, traces, logs, RAG pipeline waterfall, and
 infrastructure. For the full feature list see
-[Observability](/docs/observe/overview/).
+[Observability](/docs/observability/overview/).
 
 > **Always-on substrate** — VictoriaLogs and OTel Collector are in the
 > default profile (`replicas: 1` hardcoded for VictoriaLogs, `mode: global`
@@ -340,7 +340,7 @@ docker compose exec chatqna-xeon-backend-server curl -sf http://${GPU_NODE_HOST}
 | Search service logs | **Admin → Logs** in the web UI (VictoriaLogs-backed, always-on) |
 | Health probes | `/api/health` (public), `/api/admin/system-health` (admin Keycloak `admin` role) |
 | Grafana dashboards | `https://localhost/grafana/` (SSO via Keycloak) |
-| Daily ArangoDB backup | [Backup & Restore → ArangoDB](/docs/operate/backup-restore/) (default backup dir: `./data/database_backups` — override with `BACKUP_DIR`) |
+| Daily ArangoDB backup | [Backup & Restore → ArangoDB](/docs/operations/backup-restore/) (default backup dir: `./data/database_backups` — override with `BACKUP_DIR`) |
 | Apply schema migrations | `docker compose up -d db-migrations` (runs once on first start; `restart: "no"`) |
 | Rotate a secret | Update `.env`, then `docker compose up -d <service>` — Compose recreates only the dependent containers |
 | Tail a single service | `docker compose logs -f --tail=200 <service>` |
@@ -348,16 +348,16 @@ docker compose exec chatqna-xeon-backend-server curl -sf http://${GPU_NODE_HOST}
 
 For monitoring and alerting wiring (Prometheus scrape, OTel collector
 config, retention tuning) see
-[Observability](/docs/observe/overview/),
-[Observability → Configuration](/docs/observe/configuration/),
-[Observability → Alerting](/docs/observe/alerting/), and
-[Scaling](/docs/operate/scaling/).
+[Observability](/docs/observability/overview/),
+[Observability → Configuration](/docs/observability/configuration/),
+[Observability → Alerting](/docs/observability/alerting/), and
+[Scaling](/docs/operations/scaling/).
 
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `arango-vector-db` exits with `database is locked` | Stale data from a previous test (volume not cleared) | `docker compose down -v && docker compose up -d` — **deletes the volume**, back up first via [Backup & Restore](/docs/operate/backup-restore/) |
+| `arango-vector-db` exits with `database is locked` | Stale data from a previous test (volume not cleared) | `docker compose down -v && docker compose up -d` — **deletes the volume**, back up first via [Backup & Restore](/docs/operations/backup-restore/) |
 | `keycloak` stays in `starting` indefinitely | `KEYCLOAK_ADMIN_PASSWORD` not set, or contains unescaped special chars (`+`, `#`, `!`) | Quote the password in `.env` (e.g. `KEYCLOAK_ADMIN_PASSWORD='MyP@ss+word!'`); `docker compose restart keycloak` |
 | `keycloak-config` fails: "user exists" | Realm already imported (re-running after partial failure) | `docker compose down -v keycloak-config postgres` then `docker compose up -d` — the realm import is idempotent only on a fresh DB |
 | `nginx` returns 502 | Backend not yet healthy, or ArangoDB still migrating | `sleep 30 && curl -sk https://localhost/api/health`; check `docker compose logs backend` |
@@ -386,7 +386,7 @@ config, retention tuning) see
 - **Tune the RAG pipeline** (labeling, retrieval, prompts) →
   [Configuration reference](/docs/reference/env-vars/).
 - **Harden for production** (TLS, secrets, image CVE scan) →
-  [Security hardening](/docs/operate/security-hardening/).
+  [Security hardening](/docs/operations/security-hardening/).
 
 ## Related
 
@@ -394,9 +394,9 @@ config, retention tuning) see
 - [Install: Docker Swarm](/docs/deploy/docker-swarm-setup/) — production multi-node
 - [GPU Deployment](/docs/deploy/gpu/) — T4 / RTX 6000 / A40 profiles
 - [Configuration reference](/docs/reference/env-vars/) — every env var
-- [Operate → Health Checks](/docs/operate/health-checks/) — `/api/health` semantics
-- [Operate → Admin Logs](/docs/operate/admin-logs/) — the in-app Logs tab
-- [Operate → Troubleshooting](/docs/operate/troubleshooting/) — deeper playbook
+- [Operate → Health Checks](/docs/operations/health-checks/) — `/api/health` semantics
+- [Operate → Admin Logs](/docs/operations/admin-logs/) — the in-app Logs tab
+- [Operate → Troubleshooting](/docs/operations/troubleshooting/) — deeper playbook
 - **Customize branding & dashboard** —
   [Branding Customization](/docs/configure/branding-customization/),
   [Admin dashboard customization](/docs/configure/dashboard-customization/)

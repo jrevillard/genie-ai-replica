@@ -51,7 +51,7 @@ open in a tab.
 
 - **[Deploy](/docs/deploy/)** — when your MR changes an env var or a Docker
   compose profile.
-- **[Operate](/docs/operate/)** — when your MR changes an operational
+- **[Operate](/docs/operations/)** — when your MR changes an operational
   procedure.
 - **[Reference](/docs/reference/)** — the canonical tables your docs must
   match.

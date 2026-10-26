@@ -89,7 +89,7 @@ non-streaming branch around the metadata assembly) includes
 
 The backend forwards `retriever_parameters` and `reranker_parameters` from
 the request body. See
-[RAG pipeline → Per-request overrides](/docs/rag-pipeline/per-request-overrides/).
+[RAG pipeline → Per-request overrides](/docs/rag/per-request-overrides/).
 
 ### Streaming translation events
 
@@ -139,6 +139,6 @@ See [Reference → Service registry enum](/docs/reference/service-registry/).
 ## Related
 
 - [Architecture → OPEA microservices](/docs/architecture/opea-microservices/)
-- [RAG pipeline → Pipeline architecture](/docs/rag-pipeline/pipeline/)
-- [RAG pipeline → Streaming & metadata events](/docs/rag-pipeline/streaming-sse/)
-- [Observe → Tracing](/docs/observe/tracing/)
+- [RAG pipeline → Pipeline architecture](/docs/rag/pipeline/)
+- [RAG pipeline → Streaming & metadata events](/docs/rag/streaming-sse/)
+- [Observe → Tracing](/docs/operations/tracing-howto/)

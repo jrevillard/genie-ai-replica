@@ -500,5 +500,5 @@ Replace the URL with your IdP's discovery endpoint. If this fails:
 - **Map IdP attributes to realm roles** — see [Keycloak Admin Guide → §6 External IdP attribute → role mapping](/docs/configure/keycloak-admin-guide/#6-external-idp-attribute--role-mapping).
 - **Understand the full authentication architecture** — see [Architecture Overview → Authentication](/docs/architecture/architecture/).
 - **Manage users, roles, and disable / delete accounts** — see [Keycloak Admin Guide](/docs/configure/keycloak-admin-guide/).
-- **Configure Grafana SSO** — see [Observability → Grafana access](/docs/observe/configuration/#grafana-access) (Grafana also uses Keycloak via its own confidential client).
+- **Configure Grafana SSO** — see [Observability → Grafana access](/docs/observability/configuration/#grafana-access) (Grafana also uses Keycloak via its own confidential client).
 - **Deploy a mobile client** that signs in via Keycloak — see [Mobile Deployment Guide](/docs/mobile/mobile-deployment-guide/).

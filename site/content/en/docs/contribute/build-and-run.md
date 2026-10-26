@@ -5,6 +5,7 @@ weight: 4
 section: "contribute"
 aliases:
   - /docs/contribute/build-and-run/
+  - /docs/core/development-guide/
 audience: "developer"
 mode: how-to
 persona: developer
@@ -779,8 +780,8 @@ Tracing is a no-op when `ENABLE_OBSERVABILITY` is not `1`, so adding
 `withSpan` calls in production code is safe.
 
 For full architecture (collector config, dashboards, alert rules, RAG
-debugging recipes), see [Observability](/docs/observe/) and
-[Debugging with Tracing & Logs](/docs/operate/tracing-howto/).
+debugging recipes), see [Observability](/docs/observability/) and
+[Debugging with Tracing & Logs](/docs/operations/tracing-howto/).
 
 ---
 
@@ -931,8 +932,8 @@ interrupted, or VRAM exhaustion (drop model size or run with
 | You want to… | Read |
 |---|---|
 | Deploy to a real environment | [Deployment](/docs/deploy/) (Ansible recommended) |
-| Add observability (OTel, Grafana, dashboards) | [Observability](/docs/observe/) |
-| Debug a slow chat / failing ingest | [Debugging with Tracing & Logs](/docs/operate/tracing-howto/) |
+| Add observability (OTel, Grafana, dashboards) | [Observability](/docs/observability/) |
+| Debug a slow chat / failing ingest | [Debugging with Tracing & Logs](/docs/operations/tracing-howto/) |
 | Find the CI/CD pipeline structure | [CI/CD](/docs/contribute/build-and-run/) |
 | Look up an environment variable | [Configuration](/docs/configure/) |
 | Understand the C4 architecture | [Architecture](/docs/architecture/) |

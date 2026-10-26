@@ -244,7 +244,7 @@ process has never probed successfully), not an exception.
   request/response models that travel with each service call.
 - [Service Registry](/docs/reference/service-registry/) — the
   `ServiceType` enum that names each microservice.
-- [Choosing Models](/docs/rag-pipeline/choosing-models/) — which models
+- [Choosing Models](/docs/rag/choosing-models/) — which models
   the vLLM endpoint should serve for embedding, reranking, and chat.
 - [Deploy → Remote GPU node](/docs/deploy/gpu/) — the deployment
   topology where the cache matters most.

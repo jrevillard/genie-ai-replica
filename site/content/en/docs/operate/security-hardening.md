@@ -104,7 +104,7 @@ What it blocks (request must reach the backend for any of these to fire):
 What it does **not** block (by design):
 
 - `/api/*`, `/admin`, normal application routes — these are routed normally.
-- `/api/health` — not matched by the patterns (`/api/health` starts with `/a`, not `/.`); this is what allows load balancer probes through. The frontend container separately exposes `/health` on its own port (8090) for K8s/Swarm healthchecks; see [Health Checks](/docs/operate/health-checks/).
+- `/api/health` — not matched by the patterns (`/api/health` starts with `/a`, not `/.`); this is what allows load balancer probes through. The frontend container separately exposes `/health` on its own port (8090) for K8s/Swarm healthchecks; see [Health Checks](/docs/operations/health-checks/).
 
 > **Top-level dotfiles are blocked at Nginx, not the backend.** The
 > stock [`default.conf.template:65-74`](https://gitlab.com/un/itu/genie-ai/-/blob/main/api-gateway-solution/nginx/conf/default.conf.template#L65)
@@ -382,10 +382,10 @@ deliberately — `proxy_hide_header` in `default.conf.template`) or
 
 ## Related
 
-- [Health Checks](/docs/operate/health-checks/) — the `/api/health` endpoint
+- [Health Checks](/docs/operations/health-checks/) — the `/api/health` endpoint
   is intentionally not matched by the sensitive-path blocker; the
   frontend container separately exposes `/health` on port 8090.
-- [Troubleshooting](/docs/operate/troubleshooting/) — scanner activity and
+- [Troubleshooting](/docs/operations/troubleshooting/) — scanner activity and
   CSP errors are both covered in the diagnostic playbook.
 - [Configure &rarr; CORS / CSP](/docs/configure/cors-csp/) — the
   `CORS_ALLOWED_ORIGINS` and `CSP_CONNECT_SRC` env vars that drive the

@@ -165,7 +165,7 @@ Caveats:
 - **GPU memory contention**: concurrent requests share the KV cache.
 - **Sub-linear throughput past ~70% GPU utilization** is a rule of thumb,
   not a measured threshold — verify with the
-  [RAG pipeline trace dashboard](/docs/operate/troubleshooting/).
+  [RAG pipeline trace dashboard](/docs/operations/troubleshooting/).
 - **Watch the queue**:
   ```bash
   # vLLM Prometheus metrics on port 8000 (network-internal)
@@ -342,7 +342,7 @@ curl -fsS https://${NGINX_PUBLIC_DOMAIN}/api/health || echo "API down"
 - [GPU deployment](/docs/deploy/gpu/) — GPU sizing and profiles
 - [Topologies](/docs/deploy/topologies/) — multi-node, remote-GPU, observability topologies
 - [NVIDIA A40 install](/docs/deploy/a40-install/) — A40 worked example
-- [Backup & restore](/docs/operate/backup-restore/) — stateful backup
-- [Health checks](/docs/operate/health-checks/) — service health verification
-- [Troubleshooting](/docs/operate/troubleshooting/) — common issues
-- [Updates](/docs/operate/updates/) — version upgrades
+- [Backup & restore](/docs/operations/backup-restore/) — stateful backup
+- [Health checks](/docs/operations/health-checks/) — service health verification
+- [Troubleshooting](/docs/operations/troubleshooting/) — common issues
+- [Updates](/docs/operations/updates/) — version upgrades

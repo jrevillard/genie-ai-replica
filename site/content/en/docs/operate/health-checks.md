@@ -125,7 +125,7 @@ docker exec <stack>_backend wget -qO- http://localhost:3000/api/health
   (or a custom dependency-aware probe).
 - For **liveness of the whole stack** (frontend, OPEA, document repository),
   `/api/health` is backend-only. Probe each service's own port or rely on
-  the [Application Metrics dashboard](/docs/observe/dashboards/).
+  the [Application Metrics dashboard](/docs/observability/dashboards/).
 
 ## `/api/admin/system-health` — admin diagnostic
 
@@ -348,11 +348,11 @@ proxy does not expose, or the `admin` role missing from the service account).
 
 ## Related
 
-- [Troubleshooting](/docs/operate/troubleshooting/) — broader diagnostic
+- [Troubleshooting](/docs/operations/troubleshooting/) — broader diagnostic
   methodology (trace-first, logs-second).
-- [Admin Logs](/docs/operate/admin-logs/) — when health is green but a
+- [Admin Logs](/docs/operations/admin-logs/) — when health is green but a
   service is silently degraded, the Logs tab shows you why.
-- [Observe &rarr; Dashboards](/docs/observe/dashboards/) — the Service
+- [Observe &rarr; Dashboards](/docs/observability/dashboards/) — the Service
   Health Overview dashboard is the human-facing complement to these
   endpoints.
 - [Configure &rarr; Keycloak Admin Guide](/docs/configure/keycloak-admin-guide/) —

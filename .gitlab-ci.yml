@@ -2807,6 +2807,27 @@ config:validate:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
 
+# Validate internal links in the documentation site content.
+# Hugo rewrites Markdown links that point at a content path, but never
+# rewrites raw-HTML href attributes — so a raw-HTML link to a section whose
+# published URL differs from its directory name 404s without any build error.
+# This job models Hugo's URL rules and fails on any link that resolves to
+# neither a published URL nor an alias.
+config:docs-links:
+  extends: .node_base
+  stage: config
+  script:
+    - cd ${CI_PROJECT_DIR}/site && node scripts/check-links.mjs
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "site/content/**/*"
+        - "site/scripts/check-links.mjs"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
 # Validate CHANGELOG.md has an entry for the version being released
 config:changelog:
   stage: config

@@ -81,7 +81,7 @@ match the codes declared in the Keycloak theme.
 > cycle, if the env-var on the new host differs from what was active
 > when the dump was taken, the restored realm shows the *old* set. Re-apply
 > the env var to match. See
-> [Backup & restore](/docs/operate/backup-restore/).
+> [Backup & restore](/docs/operations/backup-restore/).
 
 ## Flutter mobile: `KeycloakConfig.supportedLocaleCodes`
 
@@ -155,7 +155,7 @@ time (default = all 14 locales).
   — realm-level locale configuration beyond the env var.
 - [Frontend → Settings page](/docs/frontend/settings-page/) — where the
   `<LanguageSelector>` component reads the whitelist.
-- [Operate → Backup & restore](/docs/operate/backup-restore/)
+- [Operate → Backup & restore](/docs/operations/backup-restore/)
   — restore gotcha for `KEYCLOAK_SUPPORTED_LOCALES`.
 - [Reference → env-vars](/docs/reference/env-vars/) — full env-var
   reference.

@@ -196,7 +196,7 @@ Edge collection — `chunk A` → `file B` (chunk belongs to file).
 ### `${GRAPH_NAME}_FILE_LABELS` *(planned — not implemented)*
 
 This collection is referenced by the labeling-strategy design doc
-([RAG pipeline → Data labelling strategy](/docs/rag-pipeline/data-labeling/))
+([RAG pipeline → Data labelling strategy](/docs/rag/data-labeling/))
 but is **not yet implemented** — `grep -r FILE_LABELS` across
 `genie-ai-overlay/` returns zero hits. Per-file aggregated labels are
 currently held in-memory by the dataprep pipeline; the dedicated
@@ -251,4 +251,4 @@ the retriever/dataprep Python code, not by the migration script.
 
 - [Reference → Service registry enum](/docs/reference/service-registry/)
 - [Knowledge base → Document lifecycle](/docs/knowledge-base/document-lifecycle/)
-- [Operate → Ingestion log](/docs/operate/ingestion-log/) — AQL recipes
+- [Operate → Ingestion log](/docs/operations/ingestion-log/) — AQL recipes

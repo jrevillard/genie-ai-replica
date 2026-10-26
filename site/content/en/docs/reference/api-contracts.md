@@ -926,7 +926,7 @@ public (on the auth allowlist) and have no business logic.
 
 Always returns 200 unless the process itself is broken. Use this for Docker
 Swarm/Kubernetes/Ansible liveness probes; it is a constant-time handler
-(no DB calls). See [Operate → Health checks](/docs/operate/health-checks/)
+(no DB calls). See [Operate → Health checks](/docs/operations/health-checks/)
 for the runtime contract.
 
 ### `GET /`
@@ -1172,22 +1172,22 @@ counts; the broader stack still works through
 `GET /api/health` returns
 `{ "status": "ok", "serverTime": "<iso>", "uptime": "<n> seconds" }` when
 the process is alive and dependencies are reachable. See
-[Operate → Health checks](/docs/operate/health-checks/) for the runtime
+[Operate → Health checks](/docs/operations/health-checks/) for the runtime
 contract.
 
 ## Related
 
 - [Reference → OPEA protocol](/docs/reference/opea-protocol/) — backend
   ↔ ChatQnA
-- [Operate → Health checks](/docs/operate/health-checks/)
-- [Operate → Security hardening](/docs/operate/security-hardening/)
+- [Operate → Health checks](/docs/operations/health-checks/)
+- [Operate → Security hardening](/docs/operations/security-hardening/)
 - [Architecture Overview](/docs/architecture/architecture/) — service
   topology and the BFF's role in the request path.
-- [Observability Configuration](/docs/observe/configuration/) —
+- [Observability Configuration](/docs/observability/configuration/) —
   `OTEL_EXPORTER_OTLP_ENDPOINT`, VictoriaLogs routing, Grafana
   dashboards.
 - [Keycloak Admin Guide](/docs/configure/keycloak-admin-guide/) —
   realm setup, client credentials, admin user creation, ROPC
   enable/revert.
-- [Troubleshooting](/docs/operate/troubleshooting/) — `docker service
+- [Troubleshooting](/docs/operations/troubleshooting/) — `docker service
   logs`, debug-yesterday, security-blocker diagnostics.

@@ -127,7 +127,7 @@ The chip is informational, not actionable. The user can always click the feedbac
 - The skin-tone selector (`thumbFeedback === 'up' ? skinToneColor : 'none'`) draws from a small palette stored on the component. Selection is NOT persisted across sessions — it lives on the dialog instance only.
 - Comments are sanitised before submission (no HTML, length capped server-side).
 - On submit: `chatbotService.submitFeedback(queryId, { thumb, rating, comment })` — `POST /api/queries/{queryId}/feedback`. On success, the dialog closes and a toast appears. On failure, an inline error stays in the dialog.
-- Ratings aggregate into the admin analytics satisfaction tiles — see [Dashboards](/docs/observe/dashboards/).
+- Ratings aggregate into the admin analytics satisfaction tiles — see [Dashboards](/docs/observability/dashboards/).
 
 ## Save / export / new-chat flows
 
@@ -225,4 +225,4 @@ The skin-tone selector on the feedback dialog is keyboard-operable via click; ea
 - [UI Component Inventory](/docs/frontend/ui-component-inventory-frontend/) — full list of chat-related components.
 - [Sidebar & Navigation](/docs/frontend/sidebar-and-navigation/) — left-side conversation list, right-side related documents.
 - [Backend API Contracts](/docs/reference/api-contracts/) — `/api/queries/stream` and `/api/queries/{id}/feedback` payloads.
-- [RAG Generation](/docs/rag-pipeline/generation/) — how the backend produces `confidence_score` and `is_grounded`.
+- [RAG Generation](/docs/rag/generation/) — how the backend produces `confidence_score` and `is_grounded`.

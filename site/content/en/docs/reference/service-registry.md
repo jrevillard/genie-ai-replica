@@ -79,5 +79,5 @@ relying on it.
 ## Related
 
 - [Reference → OPEA protocol](/docs/reference/opea-protocol/)
-- [Observe → Logs](/docs/operate/admin-logs/)
+- [Observe → Logs](/docs/operations/admin-logs/)
 - [Architecture → OPEA microservices](/docs/architecture/opea-microservices/)

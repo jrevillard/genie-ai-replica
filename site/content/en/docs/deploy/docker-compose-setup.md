@@ -69,7 +69,7 @@ only host-published port (80/443); everything else stays on the internal network
 > via the `fluentd` logging driver and power the admin log endpoints. The
 > `observability` profile only adds the optional metrics/traces storage
 > (VictoriaMetrics + VictoriaTraces + tempo-proxy) and Grafana. See
-> [Admin Logs](/docs/operate/admin-logs/).
+> [Admin Logs](/docs/operations/admin-logs/).
 
 ## Profiles at a glance
 
@@ -341,7 +341,7 @@ Grafana is reachable via Kong at `https://<domain>/grafana/` (Keycloak OIDC
 login required). Nine pre-built dashboards are auto-provisioned (five
 application dashboards in the `General` folder plus four infrastructure
 dashboards in the `Observability` folder — see
-[Observability Overview](/docs/observe/overview/)).
+[Observability Overview](/docs/observability/overview/)).
 
 ## Step 7: Verify Kong is ready
 
@@ -498,7 +498,7 @@ docker compose down -v      # stop and delete volumes (DATA LOSS)
 | Port 80/443 already in use | Another service (apache/nginx/systemd-resolved) is bound | `ss -tlnp \| grep ':80\\|:443'`; stop the conflicting process or override with `NGINX_HTTP_PORT` / `NGINX_HTTPS_PORT` |
 | GPU services exit immediately | NVIDIA runtime not installed or `nvidia-container-toolkit` missing | `docker run --rm --gpus all nvidia/cuda:12.0-base nvidia-smi` — must succeed before using `--profile gpu-models`. See [GPU Deployment](/docs/deploy/gpu/) |
 | `vllm` OOMs or crashes on startup | Model is too large for GPU memory | Lower `VLLM_GPU_UTILIZATION` (e.g. 0.85 → 0.6) or use a smaller model. See [GPU Deployment → Memory sizing](/docs/deploy/gpu/) |
-| VictoriaLogs not receiving logs | The `fluentd` driver cannot reach the Collector | `docker compose logs otel-collector --tail 30`; verify port `24224` is bound on the host (Collector uses `mode: host`, `host_ip: 127.0.0.1`). See [Admin Logs](/docs/operate/admin-logs/) |
+| VictoriaLogs not receiving logs | The `fluentd` driver cannot reach the Collector | `docker compose logs otel-collector --tail 30`; verify port `24224` is bound on the host (Collector uses `mode: host`, `host_ip: 127.0.0.1`). See [Admin Logs](/docs/operations/admin-logs/) |
 | Keycloak admin redirect lands on a 404 | `KC_PROXY_HEADERS=xforwarded` not honored, or `NGINX_PUBLIC_DOMAIN` wrong | `docker compose logs keycloak --tail 50`; verify `https://<NGINX_PUBLIC_DOMAIN>/auth/realms/genie/.well-known/openid-configuration` returns valid JSON |
 | `dataprep-arango-service` exits with "cannot import name ..." | A pinned dependency version drifted | Re-pull the image: `docker compose pull dataprep-arango-service && docker compose up -d dataprep-arango-service` |
 
@@ -523,20 +523,20 @@ docker compose run --rm curlimages/curl curl -s http://backend:3000/api/health
 
 See also:
 
-- [Operations → Troubleshooting](/docs/operate/troubleshooting/) — runtime
+- [Operations → Troubleshooting](/docs/operations/troubleshooting/) — runtime
   issues (data, performance, errors)
 - [GPU Deployment → Troubleshooting](/docs/deploy/gpu/#troubleshooting) —
   vLLM, TEI, embedding model sizing
-- [Observability → Stack Overview](/docs/observe/overview/) — Collector,
+- [Observability → Stack Overview](/docs/observability/overview/) — Collector,
   VictoriaMetrics, VictoriaLogs, VictoriaTraces wiring
 
 ## Next steps
 
 You now have GENIE.AI running on `https://localhost/`. Continue with:
 
-- [Post-deploy checklist](/docs/operate/health-checks/) for user
+- [Post-deploy checklist](/docs/operations/health-checks/) for user
   creation and knowledge hierarchy setup
 - [Docker Swarm Setup](/docs/deploy/docker-swarm-setup/) for
   multi-node production deployment
-- [Observability Overview](/docs/observe/overview/) for the
+- [Observability Overview](/docs/observability/overview/) for the
   monitoring stack

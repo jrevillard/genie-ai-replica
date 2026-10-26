@@ -14,7 +14,7 @@ last_reviewed: 2026-09-18
 
 You are done — sign in and chat. Two pages are worth bookmarking:
 
-- **[Glossary](/docs/get-started/glossary/)** — for when the docs use an
+- **[Glossary](/docs/reference/glossary/)** — for when the docs use an
   acronym you don't recognise.
 - **[FAQ](/docs/get-started/faq/)** — for the 12 questions new users ask.
 
@@ -29,9 +29,9 @@ You have a running stack. The next page to read is:
 
 Then move into day-to-day:
 
-- **[Operate → Backup & restore](/docs/operate/backup-restore/)**
-- **[Operate → Updates](/docs/operate/updates/)**
-- **[Operate → Troubleshooting](/docs/operate/troubleshooting/)**
+- **[Operate → Backup & restore](/docs/operations/backup-restore/)**
+- **[Operate → Updates](/docs/operations/updates/)**
+- **[Operate → Troubleshooting](/docs/operations/troubleshooting/)**
 
 ### I am a developer
 
@@ -39,7 +39,7 @@ You have the backend running locally. The next pages are:
 
 - **[Backend → API contracts](/docs/reference/api-contracts/)** — every public
   HTTP endpoint.
-- **[RAG pipeline → Pipeline architecture](/docs/rag-pipeline/pipeline/)** —
+- **[RAG pipeline → Pipeline architecture](/docs/rag/pipeline/)** —
   every OPEA microservice and its contract.
 - **[Architecture → OPEA microservices](/docs/architecture/opea-microservices/)** —
   the service registry and protocol extensions.

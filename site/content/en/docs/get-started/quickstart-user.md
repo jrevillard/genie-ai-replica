@@ -299,7 +299,7 @@ tablets; the navbar collapses into a hamburger menu below 768 px.
 - [Welcome — one-pager](/docs/get-started/welcome/) — the 30-second version.
 - [Concepts in 5 minutes](/docs/get-started/concepts/) — the query →
   embedding → retriever → reranker → LLM mental model.
-- [Glossary](/docs/get-started/glossary/) — *RAG*, *embedding*, *reranker*,
+- [Glossary](/docs/reference/glossary/) — *RAG*, *embedding*, *reranker*,
   *BM25*, *OPEA*, and the rest of the alphabet soup.
 - [FAQ](/docs/get-started/faq/) — the 12 questions deployers ask first.
 - [Where to next?](/docs/get-started/where-to-next/) — paths for each persona.
@@ -307,7 +307,7 @@ tablets; the navbar collapses into a hamburger menu below 768 px.
   — what the documents your assistant reads look like.
 - [Architecture overview](/docs/architecture/architecture/) — the system map
   behind the chat screen.
-- [Privacy & data handling](/docs/operate/security-hardening/) — what is stored,
+- [Privacy & data handling](/docs/operations/security-hardening/) — what is stored,
   where, and for how long.
 - [Report a problem with these docs](/docs/contribute/how-to-mr/) — spotted a
   typo or a UI label that has drifted? Open an issue or MR.

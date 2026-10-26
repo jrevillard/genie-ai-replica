@@ -578,5 +578,5 @@ Architecture:
 
 - [Architecture Overview](/docs/architecture/architecture/) — C4
   container view, service auth matrix
-- [Observability Overview](/docs/observe/overview/) — observability stack
+- [Observability Overview](/docs/observability/overview/) — observability stack
   detail (topology H)

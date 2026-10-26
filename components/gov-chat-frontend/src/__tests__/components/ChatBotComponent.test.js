@@ -1724,6 +1724,46 @@ describe('ChatBotComponent', () => {
       // question and dead answer — is stored nowhere.
       expect(chatHistoryService.addMessage).not.toHaveBeenCalled();
     });
+
+    it('a failed first exchange hands initialMessage to the first answered one', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.createConversation.mockClear();
+      chatHistoryService.addMessage.mockClear();
+
+      // The first exchange died exactly as failStream leaves it: dead
+      // answer without a queryId, question carrying the marker.
+      vm.$store.commit('conversation/appendUserMessage', { sender: 'user', content: 'failed first', isSaved: false });
+      vm.$store.commit('conversation/appendBotMessage', {
+        sender: 'bot',
+        content: '',
+        isStreaming: false,
+        isError: true,
+        isSaved: false
+      });
+      vm.$store.commit('conversation/setMessageProperty', [1, 'isError', true]);
+      vm.$store.commit('conversation/appendUserMessage', {
+        sender: 'user',
+        content: 'second question',
+        isSaved: false
+      });
+      vm.$store.commit('conversation/appendBotMessage', {
+        sender: 'bot',
+        content: 'A2',
+        queryId: 'q2',
+        isSaved: false
+      });
+
+      vm.saveChatDialog = { visible: true, title: 'Order', folderId: 'default' };
+      await vm.handleSaveChat();
+
+      expect(chatHistoryService.createConversation.mock.calls[0][0].initialMessage).toBe('second question');
+      expect(chatHistoryService.addMessage.mock.calls.map((c) => c[0].content)).toEqual(['A2']);
+      // And the deliberately-unpersisted question cannot hold the
+      // unsaved-changes confirm open forever.
+      expect(vm.hasUnsavedChanges()).toBe(false);
+    });
   });
 
   // -----------------------------------------------------------------------
@@ -1820,6 +1860,11 @@ describe('ChatBotComponent', () => {
       vm.$store.commit('conversation/setConversationId', 'conv-old');
       vm.$store.commit('conversation/addContextItem', { service: 'Old', serviceKey: 'old', source: 'quickHelp' });
       vm.$store.commit('conversation/setRelatedDocuments', [{ id: 'doc-1', title: 'Old doc' }]);
+      vm.$store.commit('conversation/appendUserMessage', {
+        sender: 'user',
+        content: 'old transcript turn',
+        isSaved: true
+      });
 
       // The real sidebar path: ChatFolders emits load-conversation.
       await vm.loadExistingConversation('conv-9');
@@ -1828,8 +1873,73 @@ describe('ChatBotComponent', () => {
       expect(vm.selectedContextItems).toEqual([]);
       expect(vm.relatedDocuments).toEqual([]);
       expect(vm.conversationId).toBeNull();
+      // The wholesale replacement includes the transcript: the old
+      // conversation's turns do not survive a failed load.
+      expect(vm.openMessages.some((m) => m.content === 'old transcript turn')).toBe(false);
       // No split brain: the view's own target id is released with the
       // store's, or saves would route into the previous conversation.
+      expect(vm.currentChatId).toBeNull();
+    });
+
+    it('a question sent during the fetch dies with the replaced conversation', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      let resolveLoad;
+      chatHistoryService.getConversation.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveLoad = resolve;
+          })
+      );
+      const loadHandler = mockEventBusOn.mock.calls.find((c) => c[0] === 'load-conversation')[1];
+      const loading = loadHandler('conv-9');
+      await wrapper.vm.$nextTick();
+
+      // The user sends into the cleared transcript while B is loading.
+      await vm.sendMessageFromText('mid-load question');
+      expect(vm.isStreaming).toBe(true);
+
+      resolveLoad({
+        _key: 'conv-9',
+        title: 'B',
+        messages: [
+          { sender: 'user', content: 'restored question', queryId: 'q1' },
+          { sender: 'bot', content: 'B answer', queryId: 'q2' }
+        ]
+      });
+      await loading;
+
+      // The in-flight generation belonged to the replaced conversation
+      // and died with it: no answer of its lands in B's transcript.
+      const open = vm.openMessages;
+      expect(open.some((m) => m.content === 'mid-load question')).toBe(false);
+      expect(open.at(-1).content).toBe('B answer');
+      expect(vm.isStreaming).toBe(false);
+    });
+
+    it('a late load does not land after the conversation was replaced by a new chat', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      let resolveLoad;
+      chatHistoryService.getConversation.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveLoad = resolve;
+          })
+      );
+      const loadHandler = mockEventBusOn.mock.calls.find((c) => c[0] === 'load-conversation')[1];
+      const loading = loadHandler('conv-9');
+      await wrapper.vm.$nextTick();
+
+      vm.startNewChatConfirmed();
+      resolveLoad({ _key: 'conv-9', title: 'B', messages: [{ sender: 'user', content: 'x', queryId: 'q1' }] });
+      await loading;
+
+      // The welcome screen replaced the conversation; the stale response
+      // must not re-attach it.
+      expect(vm.conversationId).toBeNull();
       expect(vm.currentChatId).toBeNull();
     });
   });

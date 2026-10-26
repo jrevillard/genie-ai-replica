@@ -811,6 +811,8 @@ export default {
     eventBus.$on('chat-deleted', (deletedChatId) => {
       if (this.conversationId === deletedChatId) {
         this.$store.dispatch('conversation/abortStream');
+        // The conversation is gone: an in-flight load must not land.
+        this.loadSeq++;
         this.$store.commit('conversation/setConversationId', null);
         this.currentChatId = null;
         this.$store.commit('conversation/setMessages', [
@@ -1628,12 +1630,16 @@ export default {
       try {
         const conversation = await this.chatHistoryService.getConversation(conversationId);
 
-        if (!conversation) {
-          throw new Error('Conversation not found');
-        }
         if (token !== this.loadSeq) {
           return; // a newer load superseded this one
         }
+        if (!conversation) {
+          throw new Error('Conversation not found');
+        }
+        // The fetch window was long enough for the user to send a
+        // question into the cleared transcript — that generation belongs
+        // to the replaced conversation, and dies with it.
+        this.$store.dispatch('conversation/abortStream');
 
         this.$store.commit('conversation/setConversationId', conversation._key);
         this.currentChatId = conversation._key;
@@ -1723,11 +1729,18 @@ export default {
       } catch (error) {
         console.error('Error loading conversation:', error);
         // Only the newest load owns the view's target: a stale failure
-        // must not clear a newer load's id.
+        // must not clear a newer load's id, and must not notify — the
+        // newer load already owns the screen.
         if (token === this.loadSeq) {
           this.currentChatId = null;
+          this.$store.commit('conversation/appendBotMessage', {
+            sender: 'bot',
+            content: this.getWelcomeMessage(),
+            timestamp: new Date().toISOString(),
+            isSaved: true
+          });
+          notificationService.error(this.translate('chatbot.loadError'));
         }
-        notificationService.error(this.translate('chatbot.loadError'));
       }
     },
 
@@ -1775,7 +1788,9 @@ export default {
 
     async saveAndLoadConversation() {
       this.showLoadConfirm = false;
-      if (this.conversationId || this.currentChatId) {
+      // Only the persisted id decides update-vs-create — an in-flight
+      // load target is not saved anywhere yet.
+      if (this.conversationId) {
         await this.updateExistingChat();
       } else {
         this.saveChatDialog = {
@@ -1799,7 +1814,9 @@ export default {
     },
 
     saveChatToHistory() {
-      if (this.conversationId || this.currentChatId) {
+      // Only the persisted id decides update-vs-create — an in-flight
+      // load target is not saved anywhere yet.
+      if (this.conversationId) {
         this.updateExistingChat();
       } else {
         this.saveChatDialog = {
@@ -1846,6 +1863,8 @@ export default {
         }
 
         const conversation = await this.chatHistoryService.createConversation(conversationData);
+        // A fresh conversation replaces whatever load was in flight.
+        this.loadSeq++;
         this.$store.commit('conversation/setConversationId', conversation._key);
 
         // Matched by position, not content, so a later message that
@@ -1861,6 +1880,14 @@ export default {
             if (message.sender === 'user') {
               this.$store.commit('conversation/setMessageProperty', [messageIndex, 'isSaved', true]);
             }
+            continue;
+          }
+
+          // A failed question is deliberately unpersisted (its dead
+          // exchange leaves as a unit) — mark it settled, or it would
+          // hold hasUnsavedChanges() open forever.
+          if (message.sender === 'user' && message.isError && !message.isSaved) {
+            this.$store.commit('conversation/setMessageProperty', [messageIndex, 'isSaved', true]);
             continue;
           }
 
@@ -2021,6 +2048,9 @@ export default {
     startNewChatConfirmed() {
       this.showNewChatConfirm = false;
       this.$store.dispatch('conversation/abortStream');
+      // The welcome screen replaces the conversation: an in-flight load
+      // of another chat must not land after this.
+      this.loadSeq++;
       this.$store.commit('conversation/resetForNewConversation');
       this.$store.commit('conversation/appendBotMessage', {
         sender: 'bot',
@@ -2047,7 +2077,9 @@ export default {
     // place; a never-saved one opens the naming dialog and the navigation
     // resumes when the save completes.
     async saveCurrentChatBeforeLeave() {
-      if (this.conversationId || this.currentChatId) {
+      // Only the persisted id decides update-vs-create — an in-flight
+      // load target is not saved anywhere yet.
+      if (this.conversationId) {
         await this.updateExistingChat();
         return;
       }

@@ -165,7 +165,7 @@ organisation, preferences — PII stripped by the backend) are injected
 into the LLM prompt as persona context. If the call fails, ChatQnA
 proceeds without enrichment — no hard error.
 
-See [Backend → API contracts → `/api/me/context`]({{< relref "/docs/reference/api-contracts" >}})
+See [Reference → API contracts → `/api/me/context`]({{< relref "/docs/reference/api-contracts" >}})
 for the request/response shape.
 
 ## Streaming & metadata envelope

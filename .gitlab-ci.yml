@@ -2807,6 +2807,33 @@ config:validate:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
 
+# Validate the internal links of the documentation site.
+#
+# Hugo rewrites Markdown links that point at a content path, but never
+# rewrites raw-HTML href attributes, and it keeps the old URL of a moved page
+# alive as a redirect.  A link that only resolves through a redirect still
+# works, but the reader lands on a redirect hop and the URL bar shows a path
+# that is not the page's address -- the defect this guard was written for.
+# The checker also refuses a `slug:` on a section, because Hugo's handling of
+# a section slug depends on the Hugo version and the site is built from a
+# floating Hugo image.
+config:docs-links:
+  extends: .node_base
+  stage: config
+  script:
+    - cd ${CI_PROJECT_DIR}/site && node --test scripts/check-links.test.mjs
+    - cd ${CI_PROJECT_DIR}/site && node scripts/check-links.mjs
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "site/content/**/*"
+        - "site/scripts/**/*"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
+
 # Validate CHANGELOG.md has an entry for the version being released
 config:changelog:
   stage: config

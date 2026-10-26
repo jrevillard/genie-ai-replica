@@ -2,7 +2,6 @@
 title: Operations
 description: Day-to-day operations for a running GENIE.AI deployment — backup, restore, updates, scaling, troubleshooting, and operator-facing diagnostic surfaces.
 weight: 30
-slug: operations
 aliases:
   - /docs/operations/
 ---

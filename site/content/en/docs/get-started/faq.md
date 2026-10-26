@@ -17,7 +17,7 @@ backend works without OPEA, but the chat will say *"I cannot answer"*
 because the LLM is not running. For **production**, yes — a single 24 GB GPU
 (RTX 6000 ADA or A40) is enough for embedding + reranking + a 7B-chat
 LLM. The minimum for a 7B model is 16 GB. See
-[Deploy → GPU profiles](/docs/deploy/gpu/).
+[Deployment → GPU profiles](/docs/deploy/gpu/).
 
 ### 2. Can I run GENIE.AI fully air-gapped?
 
@@ -47,7 +47,7 @@ See [Configure → External IdP](/docs/configure/external-idp-integration-guide/
 ArangoDB runs in your perimeter. The backend, ChatQnA, and the OPEA stack
 talk to it over the Docker network. Nothing leaves your host unless you
 explicitly configure a remote GPU node
-([Deploy → Remote GPU](/docs/deploy/gpu/)).
+([Deployment → Remote GPU](/docs/deploy/gpu/)).
 
 ### 5. Can I use a different LLM?
 
@@ -74,7 +74,7 @@ RAM**. The observability stack adds **~1 GB RAM per Victoria* node and
 
 ### 8. How do I update to a new release?
 
-See [Operate → Updates](/docs/operate/updates/). The short version:
+See [Operations → Updates](/docs/operate/updates/). The short version:
 `git pull && docker compose pull && docker compose up -d`. Changing the
 embedding model (`EMBEDDING_MODEL_ID`) requires a full re-ingest because
 existing chunk vectors live in the old model's space; LLM, reranker, and
@@ -83,13 +83,13 @@ translation model changes are query-time and only need a service restart.
 ### 9. How do I back up?
 
 `arangodump` against the running ArangoDB container, then copy the dump off
-host. See [Operate → Backup & restore](/docs/operate/backup-restore/).
+host. See [Operations → Backup & restore](/docs/operate/backup-restore/).
 
 ### 10. How do I see logs?
 
 The admin UI's **Logs** tab (VictoriaLogs-backed) is the operator surface.
 Direct Grafana access: `https://<host>/grafana/` → Explore → VictoriaLogs
-datasource. See [Operate → Admin logs](/docs/operate/admin-logs/).
+datasource. See [Operations → Admin logs](/docs/operate/admin-logs/).
 
 ### 11. How do I add my own documents?
 
@@ -116,5 +116,5 @@ are covered in
 ## Related
 
 - [Concepts in 5 minutes](/docs/get-started/concepts/)
-- [Deploy → Choose your deployment mode](/docs/deploy/install-guide/)
-- [Operate → Troubleshooting](/docs/operate/troubleshooting/)
+- [Deployment → Choose your deployment mode](/docs/deploy/install-guide/)
+- [Operations → Troubleshooting](/docs/operate/troubleshooting/)

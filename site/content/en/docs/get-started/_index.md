@@ -27,7 +27,7 @@ ends with a verifiable artifact you can show someone else.
   verification step.
 - **[Concepts in 5 minutes](/docs/get-started/concepts/)** — the 30-second
   mental model: query → embedding → retriever → reranker → LLM.
-- **[Glossary](/docs/get-started/glossary/)** — every acronym from `BM25` to
+- **[Glossary](/docs/reference/glossary/)** — every acronym from `BM25` to
   `RAG` to `OPEA`.
 - **[FAQ](/docs/get-started/faq/)** — the 12 questions deployers ask first.
 
@@ -39,7 +39,7 @@ ends with a verifiable artifact you can show someone else.
 - [Quickstart: Developer](/docs/get-started/quickstart-developer/)
 - [Quickstart: Contributor](/docs/get-started/quickstart-contributor/)
 - [Concepts in 5 minutes](/docs/get-started/concepts/)
-- [Glossary](/docs/get-started/glossary/)
+- [Glossary](/docs/reference/glossary/)
 - [FAQ](/docs/get-started/faq/)
 - [Where to next?](/docs/get-started/where-to-next/)
 

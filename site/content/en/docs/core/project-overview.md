@@ -90,7 +90,7 @@ GENIE.AI is organised as a multi-component monorepo with seven logical parts:
 | Deployment & ops | `deploy/`, `docker-compose.yaml`, `configs/` |
 
 For the full source-tree walk-through, see
-[Source tree analysis](/docs/core/source-tree-analysis/).
+[Source tree analysis](/docs/reference/source-tree-analysis/).
 
 ## Design principles
 

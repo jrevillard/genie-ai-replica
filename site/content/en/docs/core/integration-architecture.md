@@ -18,7 +18,7 @@ boundaries, dependencies, and the inter-service contract surface.
 > and [Security Considerations](#security-considerations).
 
 For the high-level orientation, see [Project Overview](/docs/core/project-overview/).
-For per-directory code layout, see [Source Tree Analysis](/docs/core/source-tree-analysis/).
+For per-directory code layout, see [Source Tree Analysis](/docs/reference/source-tree-analysis/).
 
 ## Table of Contents
 
@@ -1275,6 +1275,6 @@ logging keeps `docker logs` working too.
 | Deploy the stack (Compose / Swarm / Ansible) | [Deployment](/docs/deploy/) |
 | Trace a request through the RAG pipeline | [Observability](/docs/observe/) |
 | Look up an environment variable | [Configuration](/docs/configure/) |
-| Find where a route or service lives in code | [Source Tree Analysis](/docs/core/source-tree-analysis/) |
-| Set up a local dev environment | [Development Guide](/docs/core/development-guide/) |
+| Find where a route or service lives in code | [Source Tree Analysis](/docs/reference/source-tree-analysis/) |
+| Set up a local dev environment | [Build and run locally](/docs/contribute/build-and-run/) |
 | Understand the high-level system diagram | [Architecture](/docs/architecture/) |

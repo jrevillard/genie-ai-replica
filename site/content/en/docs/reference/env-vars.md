@@ -165,7 +165,7 @@ The validator fails CI if a required env-var is undocumented here.
 
 ## Related
 
-- [Deploy → Install guide](/docs/deploy/install-guide/) — deployment narrative
+- [Deployment → Install guide](/docs/deploy/install-guide/) — deployment narrative
 - [Configure → CORS / CSP](/docs/configure/cors-csp/) — public-domain knobs
 - [Configure → Keycloak admin guide](/docs/configure/keycloak-admin-guide/) — realm/service configuration
 - [Configure → Restrict active locales](/docs/configure/locale-whitelist/) — `VUE_APP_AVAILABLE_LOCALES` / `KEYCLOAK_SUPPORTED_LOCALES` / mobile whitelist

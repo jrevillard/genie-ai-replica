@@ -232,7 +232,7 @@ curl -skI 'https://genie.example.gov/auth/realms/genie/protocol/openid-connect/a
 
 - [Reference → Environment variables](/docs/reference/env-vars/) — the canonical list
 - [Reference → Routes](/docs/reference/routes/) — which paths the CORS middleware protects
-- [Deploy → Install guide](/docs/deploy/install-guide/) — first-deploy wiring walkthrough
+- [Deployment → Install guide](/docs/deploy/install-guide/) — first-deploy wiring walkthrough
 - [Mobile → Deployment Guide](/docs/mobile/mobile-deployment-guide/) — El Salvador-style
   phone↔server trust chain (WireGuard tunnel, private IP, self-signed cert, Keycloak
   `/auth` prefix) where `NGINX_PUBLIC_DOMAIN` is a private IP

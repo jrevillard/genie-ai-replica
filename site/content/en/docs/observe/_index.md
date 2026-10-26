@@ -2,7 +2,6 @@
 title: Observability
 description: OpenTelemetry-native metrics, logs, and traces for the GENIE.AI stack — collection, storage, dashboards, and alerting.
 weight: 40
-slug: observability
 aliases:
   - /docs/observability/
 ---

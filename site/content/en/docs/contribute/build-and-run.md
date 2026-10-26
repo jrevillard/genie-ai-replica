@@ -4,7 +4,7 @@ description: "Setting up a local development environment across all GENIE.AI com
 weight: 4
 section: "contribute"
 aliases:
-  - /docs/contribute/build-and-run/
+  - /docs/core/development-guide/
 audience: "developer"
 mode: how-to
 persona: developer

@@ -2,7 +2,6 @@
 title: Knowledge Base
 description: Managing the GENIE.AI knowledge base — ingesting documents, the processing pipeline, the label taxonomy, document lifecycle, and content guidance.
 weight: 80
-slug: knowledge-base
 ---
 
 GENIE.AI answers only from the documents you load into it. The **knowledge base**

@@ -31,8 +31,8 @@ narrative.
   references (the OPEA `ServiceType` enum lives in
   `genie-ai-overlay/core/constants.py`; service names are string
   literals set per service via `setup_tracing(...)`).
-- [Glossary](/docs/reference/glossary/) — full glossary, same as
-  [Get started → Glossary](/docs/get-started/glossary/).
+- [Glossary](/docs/reference/glossary/) — every acronym used across
+  the docs, defined once.
 
 ## Related sections
 

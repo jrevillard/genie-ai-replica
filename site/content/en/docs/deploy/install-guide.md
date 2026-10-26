@@ -493,7 +493,7 @@ defaults.
 | `RETRIEVER_SUMMARIZER_ENABLED` | bool | no | `false` | LLM-summarize retrieved chunks (latency-heavy) |
 
 For tuning guidance see
-[RAG → Retriever Configuration](/docs/rag-pipeline/retrieval/) and the
+[RAG Pipeline → Retrieval](/docs/rag-pipeline/retrieval/) and the
 [Retriever overview in the source code](https://opensource.unicc.org/un/itu/genie-ai/-/tree/main/genie-ai-overlay/retriever).
 
 #### Network & external services

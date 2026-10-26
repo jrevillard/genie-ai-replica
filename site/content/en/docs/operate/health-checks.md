@@ -7,6 +7,8 @@ audience: deployer, operator
 last_reviewed: 2026-09-19
 persona: deployer
 owner: "docs-stewards"
+aliases:
+  - /docs/operations/health-checks/
 ---
 
 > **For operators and load balancers.** GENIE.AI exposes two layered health
@@ -26,11 +28,11 @@ infrastructure, and how to interpret the results.
 
 - A reachable GENIE.AI deployment via one of:
   - **Docker Compose** — see
-    [Deploy &rarr; Docker Compose Setup](/docs/deploy/docker-compose-setup/).
+    [Deployment &rarr; Docker Compose Setup](/docs/deploy/docker-compose-setup/).
   - **Docker Swarm** — see
-    [Deploy &rarr; Docker Swarm Setup](/docs/deploy/docker-swarm-setup/).
+    [Deployment &rarr; Docker Swarm Setup](/docs/deploy/docker-swarm-setup/).
   - **Ansible** automated Swarm — see
-    [Deploy &rarr; Install Guide](/docs/deploy/install-guide/).
+    [Deployment &rarr; Install Guide](/docs/deploy/install-guide/).
 - The stack's **public domain** (`NGINX_PUBLIC_DOMAIN` in `.env`, default
   `localhost`) and **HTTPS port** (`NGINX_HTTPS_PORT`, default `443`).
 - For the admin endpoint: a Keycloak user with the **`admin`** realm role —
@@ -352,7 +354,7 @@ proxy does not expose, or the `admin` role missing from the service account).
   methodology (trace-first, logs-second).
 - [Admin Logs](/docs/operate/admin-logs/) — when health is green but a
   service is silently degraded, the Logs tab shows you why.
-- [Observe &rarr; Dashboards](/docs/observe/dashboards/) — the Service
+- [Observability &rarr; Dashboards](/docs/observe/dashboards/) — the Service
   Health Overview dashboard is the human-facing complement to these
   endpoints.
 - [Configure &rarr; Keycloak Admin Guide](/docs/configure/keycloak-admin-guide/) —
@@ -360,7 +362,7 @@ proxy does not expose, or the `admin` role missing from the service account).
 - [Configure &rarr; CORS &amp; CSP](/docs/configure/cors-csp/) — when your
   monitoring system originates from outside the configured
   `CORS_ALLOWED_ORIGINS` and the browser blocks the probe.
-- [Deploy &rarr; Docker Swarm Setup](/docs/deploy/docker-swarm-setup/) —
+- [Deployment &rarr; Docker Swarm Setup](/docs/deploy/docker-swarm-setup/) —
   full deployment context (node labels, secrets, profiles).
 - [Architecture Overview](/docs/architecture/architecture/) — where the
   backend, Kong, ArangoDB, and Keycloak fit in the system topology.

@@ -926,7 +926,7 @@ public (on the auth allowlist) and have no business logic.
 
 Always returns 200 unless the process itself is broken. Use this for Docker
 Swarm/Kubernetes/Ansible liveness probes; it is a constant-time handler
-(no DB calls). See [Operate → Health checks](/docs/operate/health-checks/)
+(no DB calls). See [Operations → Health checks](/docs/operate/health-checks/)
 for the runtime contract.
 
 ### `GET /`
@@ -1172,15 +1172,15 @@ counts; the broader stack still works through
 `GET /api/health` returns
 `{ "status": "ok", "serverTime": "<iso>", "uptime": "<n> seconds" }` when
 the process is alive and dependencies are reachable. See
-[Operate → Health checks](/docs/operate/health-checks/) for the runtime
+[Operations → Health checks](/docs/operate/health-checks/) for the runtime
 contract.
 
 ## Related
 
 - [Reference → OPEA protocol](/docs/reference/opea-protocol/) — backend
   ↔ ChatQnA
-- [Operate → Health checks](/docs/operate/health-checks/)
-- [Operate → Security hardening](/docs/operate/security-hardening/)
+- [Operations → Health checks](/docs/operate/health-checks/)
+- [Operations → Security hardening](/docs/operate/security-hardening/)
 - [Architecture Overview](/docs/architecture/architecture/) — service
   topology and the BFF's role in the request path.
 - [Observability Configuration](/docs/observe/configuration/) —

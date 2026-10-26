@@ -7,6 +7,8 @@ audience: deployer, operator, security
 last_reviewed: 2026-09-19
 persona: deployer
 owner: "docs-stewards"
+aliases:
+  - /docs/operations/security-hardening/
 ---
 
 > **For deployers and security reviewers.** This page documents the
@@ -20,7 +22,7 @@ owner: "docs-stewards"
 
 ## Prerequisites
 
-- A running deployment (Compose or Swarm) — see [Deploy &rarr; Docker Swarm](/docs/deploy/docker-swarm-setup/).
+- A running deployment (Compose or Swarm) — see [Deployment &rarr; Docker Swarm](/docs/deploy/docker-swarm-setup/).
 - `curl` + shell access to the gateway node (for the verify steps).
 - Familiarity with HTTP security headers (CSP, HSTS, X-Frame-Options) —
   see [MDN's security headers guide](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers#security_headers).
@@ -300,7 +302,7 @@ configuration (see [Configure &rarr; Keycloak admin guide](/docs/configure/keycl
 
 - **Network-level isolation** — handled by Docker overlay networks, the
   `genieai=true` / `gateway=true` node labels, and `deploy/ansible`.
-  See [Deploy &rarr; Docker Swarm](/docs/deploy/docker-swarm-setup/).
+  See [Deployment &rarr; Docker Swarm](/docs/deploy/docker-swarm-setup/).
 - **Keycloak realm hardening** — covered in
   [Configure &rarr; Keycloak admin guide](/docs/configure/keycloak-admin-guide/).
 - **Container CVE remediation** — covered in the security triage playbook
@@ -393,7 +395,7 @@ deliberately — `proxy_hide_header` in `default.conf.template`) or
 - [Configure &rarr; Keycloak admin guide](/docs/configure/keycloak-admin-guide/) —
   the JWT-lifetime and realm-role settings that gate `/api/files/*` in
   the document-repository service.
-- [Deploy &rarr; Docker Swarm](/docs/deploy/docker-swarm-setup/) —
+- [Deployment &rarr; Docker Swarm](/docs/deploy/docker-swarm-setup/) —
   the overlay network topology and node-label placement constraints.
 - [Architecture &rarr; Service auth matrix](/docs/architecture/architecture/) —
   who-can-call-who between the frontend, Nginx, Kong, backend, and

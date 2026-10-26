@@ -157,7 +157,7 @@ Destructive operations (Rollover, Security Scan) require an additional `ConfirmD
 
 ## Tab: Logs (`logs`)
 
-Live tail + filter of application logs. Backend proxies VictoriaLogs (`SELECT * FROM logs WHERE ...` over HTTP). See [Observability → VictoriaLogs](/docs/operate/admin-logs/) for the storage layer.
+Live tail + filter of application logs. Backend proxies VictoriaLogs (`SELECT * FROM logs WHERE ...` over HTTP). See [Operations → Admin logs](/docs/operate/admin-logs/) for the storage layer.
 
 | Filter | Source |
 |--------|--------|
@@ -186,7 +186,7 @@ Browse and inspect individual queries that ran through the RAG pipeline. Three c
 └────────────────────────────┴─────────────────────────┘
 ```
 
-Click a row in the list to load detail. Filters: user, date range, confidence range, label, query substring. See [Debugging with Tracing & Logs](/docs/observe/tracing/) for the related backend trace view.
+Click a row in the list to load detail. Filters: user, date range, confidence range, label, query substring. See [Debugging with Tracing & Logs](/docs/operate/tracing-howto/) for the related backend trace view.
 
 ## Tab: Security (`security`)
 

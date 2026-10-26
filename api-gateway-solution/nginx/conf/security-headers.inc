@@ -13,5 +13,7 @@ add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; prelo
 # Referrer Policy
 add_header Referrer-Policy "no-referrer-when-downgrade" always;
 
-# Permissions Policy (overridden per-location in default.conf.template)
-# add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+# Permissions Policy — the value is set once, in the server block, and read
+# from there. The server-level add_header is not inherited by a location that
+# declares add_header directives of its own, so it has to be repeated here.
+add_header Permissions-Policy $permissions_policy always;

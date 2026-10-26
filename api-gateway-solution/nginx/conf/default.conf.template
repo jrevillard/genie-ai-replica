@@ -37,8 +37,12 @@ server {
     # set a 50MB file size limit
     client_max_body_size 50m;
 
-    # Permissions Policy (deployment-specific)
-    add_header Permissions-Policy "${NGINX_PERMISSIONS_POLICY}" always;
+    # Permissions Policy (deployment-specific). The value is also read by the
+    # per-location includes: a location that declares add_header directives of
+    # its own does not inherit the server's, so the header has to be set in
+    # each of them.
+    set $permissions_policy "${NGINX_PERMISSIONS_POLICY}";
+    add_header Permissions-Policy $permissions_policy always;
 
     # Strip ALL upstream security/CORS headers — nginx is the single authority
     # (X-Powered-By and Server included — server context, not allowed inside if blocks)
@@ -47,6 +51,11 @@ server {
     # Kong upstream address. The variable is resolved at request time, so
     # nginx starts even when the Kong container is not up yet.
     set $kong_addr ${KONG_PROXY_HOST}:8000;
+
+    # The public HTTPS port, as the client sees it. It differs from the
+    # container's listening port when the host publishes the container on
+    # another one.
+    set $https_port ${NGINX_HTTPS_PORT};
 
     # Block access to dotfiles (e.g., .git, .env), but allow .well-known (OIDC discovery)
     location ~ /\.(?!well-known) {
@@ -60,20 +69,23 @@ server {
         return 404;
     }
 
-    # Keycloak theme resources of our own theme — the login page's and the
-    # consoles' stylesheets, images and scripts.
+    # Keycloak theme resources — the login page's and the consoles'
+    # stylesheets, images and scripts, whichever theme is installed.
     #
-    # Keycloak serves them with a 30-day max-age and no validators, so a
-    # returning browser keeps the previous stylesheet for a month after a
-    # theme change. The theme's own files are the ones that change; the
-    # shared vendor bundle (common/keycloak) and the versioned bundles
-    # (assets/, whose name carries their content hash) keep their long
-    # cache. So the override is scoped to the theme's own resources, and
-    # the versioned bundles are excluded.
+    # Keycloak serves them with a 30-day max-age and, unless the theme names
+    # a content hash, no validator at all. A returning browser then keeps the
+    # previous stylesheet for a month after a theme change.
+    #
+    # Two families keep their long cache, and both are safe to keep:
+    #   - assets/ — the file name carries a content hash, so a changed file
+    #     is a new URL; Keycloak also answers a revalidation with a 304.
+    #   - vendor/ — the bundles shipped with Keycloak itself. They change
+    #     with the Keycloak version, and the version is the resource tag in
+    #     the URL, so an upgrade changes their URL too.
     #
     # It sits before the .txt/.xml rule so that a theme file of either
     # extension is proxied instead of answered from the filesystem.
-    location ~ ^/auth/resources/[^/]+/[^/]+/genie[^/]*/(?!assets/) {
+    location ~ ^/auth/resources/[^/]+/[^/]+/[^/]+/(?!assets/|vendor/).+$ {
         include conf.d/keycloak-headers.inc;
         add_header Cache-Control "no-cache, must-revalidate" always;
 

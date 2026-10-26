@@ -179,7 +179,7 @@ function canonicalRelative(target, file, kind) {
   if (!path) return null;
   const suffix = anchor ? '#' + anchor : '';
 
-  if (kind === 'md') {
+  if (kind === 'md' || kind === 'ref') {
     const dir = rel(file).split('/').slice(0, -1);
     const candidate = normalise('/' + normaliseSegments([...dir, ...path.split('/')]));
     const viaContent = contentPath.get(candidate);
@@ -199,6 +199,7 @@ function canonicalRelative(target, file, kind) {
 
 const MD_LINK = /\]\(([^)\s]+)(\s+"[^"]*")?\)/g;
 const HTML_LINK = /href="([^"]*)"/g;
+const REFERENCE_LINK = /^(\s*)\[([^\]]+)\]:\s*(\S+)(\s+.*)?$/;
 
 const broken = [];
 const redirected = [];
@@ -339,6 +340,11 @@ for (const file of files) {
 
     line = line.replace(MD_LINK, (match, target, title) => '](' + handle(target, 'md') + (title ?? '') + ')');
     line = line.replace(HTML_LINK, (match, target) => 'href="' + handle(target, 'html') + '"');
+    // A reference-style link definition: `[label]: /docs/some/page/`.  Hugo
+    // rewrites it like an inline Markdown link, so it is checked the same way.
+    line = line.replace(REFERENCE_LINK, (match, indent, label, target, rest) => {
+      return indent + '[' + label + ']: ' + handle(target, 'ref') + (rest ?? '');
+    });
     if (line !== lines[i]) dirty = true;
     lines[i] = line;
   }

@@ -198,3 +198,26 @@ test('rejects the wrong GitLab host whatever the case of the host', () => {
   assert.equal(r.code, 1);
   assert.match(r.out, /wrong GitLab host/);
 });
+
+test('rejects a reference-style link whose target does not exist', () => {
+  const root = fixture();
+  writeFileSync(
+    join(root, 'docs/operate/page.md'),
+    '---\ntitle: "Page"\n---\n\n# Page\n\n[missing][gone]\n\n[gone]: /docs/nowhere/\n'
+  );
+  const r = run(root);
+  assert.equal(r.code, 1);
+  assert.match(r.out, /broken internal link/);
+  assert.match(r.out, /\/docs\/nowhere\//);
+});
+
+test('rejects a reference-style link that points at an alias', () => {
+  const root = fixture();
+  writeFileSync(
+    join(root, 'docs/operate/page.md'),
+    '---\ntitle: "Page"\naliases:\n  - /docs/operations/page/\n---\n\n# Page\n\n[legacy][old]\n\n[old]: /docs/operations/page/\n'
+  );
+  const r = run(root);
+  assert.equal(r.code, 1);
+  assert.match(r.out, /redirect/);
+});

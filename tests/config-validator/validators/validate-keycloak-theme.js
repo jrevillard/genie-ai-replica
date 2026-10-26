@@ -30,7 +30,7 @@ const BASE_THEME_ASSIGNMENT = /<#assign\s+isBaseTheme\s*=\s*([^>]*?)>/;
  * expression has to be the test on its own: a test joined to another
  * one by `||` covers more than the theme it names.
  */
-const RESOURCE_PATH_TEST = /^url\.resources(?:Path|Url)\?ends_with\('\/login\/([^']+)'\)$/;
+const RESOURCE_PATH_TEST = /^url\.resources(?:Path|Url)\?ends_with\('(?:\/login)?\/([^']+)'\)$/;
 
 /**
  * The content of a file, or an empty string when it is not there. A

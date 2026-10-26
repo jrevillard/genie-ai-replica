@@ -160,7 +160,7 @@
   (genie-el-salvador) does not get it and keeps its own ground and wave.
   Renaming the base theme directory means renaming the marker with it.
 -->
-<#assign isBaseTheme = url.resourcesPath?ends_with('/login/genie')>
+<#assign isBaseTheme = url.resourcesPath?ends_with('/genie')>
 <body id="keycloak-bg" class="<#if isBaseTheme>kc-theme-genie </#if>${properties.kcBodyClass!}" data-page-id="login-${pageId}">
 <div class="${properties.kcLogin!}">
   <div class="${properties.kcLoginContainer!}">
@@ -173,7 +173,7 @@
         instead of its own mark. A child theme keeps the plain image.
       -->
       <div id="kc-header-wrapper"
-              class="pf-v5-c-brand"><#if isBaseTheme><picture><source srcset="${url.resourcesPath}/img/logo.webp" type="image/webp"><img src="${url.resourcesPath}/img/logo.png" alt="GENIE.AI"></picture><#else><img src="${url.resourcesPath}/img/logo.png" alt="GENIE.AI"></#if></div>
+              class="pf-v5-c-brand"><#if isBaseTheme><picture><source srcset="${url.resourcesPath}/img/logo.webp" type="image/webp"></#if><img src="${url.resourcesPath}/img/logo.png" alt="GENIE.AI"><#if isBaseTheme></picture></#if></div>
     </header>
     <main class="${properties.kcLoginMain!}">
       <div class="${properties.kcLoginMainHeader!}">

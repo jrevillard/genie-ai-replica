@@ -103,6 +103,15 @@ body.kc-theme-genie#keycloak-bg::after {
   pointer-events: none;
 }
 
+/* Below the two-column breakpoint the brand column folds above the form,
+   and the card then covers the band: it would show only as slivers at the
+   sides. The wide composition is the one the band belongs to. */
+@media (max-width: 1199px) {
+  body.kc-theme-genie#keycloak-bg::after {
+    display: none;
+  }
+}
+
 /* Header brand — the artwork carries the GENIE.AI wordmark, so the realm
    name rendered right after it read as a second, weaker brand line.
    font-size:0 collapses that text node (a bare text node cannot be

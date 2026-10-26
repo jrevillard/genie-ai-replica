@@ -640,6 +640,7 @@ export default {
       pendingConversationId: null,
       isLoading: false, // Loading state for spinner
       isSaving: false, // Loading state for save operation to prevent double-save
+      lastSaveSucceeded: false, // The save's own verdict for the leave arms
       loadSeq: 0, // Incremented per conversation load; stale responses are dropped
       hiddenPromptForNextMessage: null, // Stores hidden prompt for dual-prompt mechanism
       // Right sidebar width / collapsed state, both persisted in
@@ -817,6 +818,7 @@ export default {
         this.loadSeq++;
         this.$store.commit('conversation/setConversationId', null);
         this.currentChatId = null;
+        this.currentCategoryId = null;
         this.$store.commit('conversation/setMessages', [
           {
             sender: 'bot',
@@ -1785,6 +1787,12 @@ export default {
     async loadConversationConfirmed() {
       this.showLoadConfirm = false;
       if (this.pendingConversationId) {
+        // A canceled naming dialog keeps the draft: the pending load is
+        // abandoned with it, mirroring the start-new arm.
+        if (!this.lastSaveSucceeded) {
+          this.pendingConversationId = null;
+          return;
+        }
         await this.loadExistingConversation(this.pendingConversationId);
         this.pendingConversationId = null;
       }
@@ -1817,6 +1825,12 @@ export default {
         });
       }
       if (this.pendingConversationId) {
+        // A canceled naming dialog keeps the draft: the pending load is
+        // abandoned with it, mirroring the start-new arm.
+        if (!this.lastSaveSucceeded) {
+          this.pendingConversationId = null;
+          return;
+        }
         await this.loadExistingConversation(this.pendingConversationId);
         this.pendingConversationId = null;
       }
@@ -1847,6 +1861,9 @@ export default {
       }
 
       this.isSaving = true;
+      // The save's own verdict — an id alone is not one: the
+      // conversation can exist server-side while a later step failed.
+      this.lastSaveSucceeded = false;
 
       try {
         const currentUser = this.$store.getters.currentUser;
@@ -1943,6 +1960,7 @@ export default {
         this.$store.commit('conversation/setSavedState');
         this.updateChatInHistory();
 
+        this.lastSaveSucceeded = true;
         notificationService.success(this.translate('chatbot.chatSaved'));
         this.saveChatDialog.visible = false;
 
@@ -1953,7 +1971,10 @@ export default {
       } catch (error) {
         console.error('Error saving chat:', error);
         notificationService.error('Failed to save chat. Please try again.');
-        throw error;
+        // The dialog stays open so the save can be retried; the failure
+        // is a value for the leave arm, not an escaping exception (the
+        // dialog's Save button calls this directly).
+        return false;
       } finally {
         this.isSaving = false;
       }
@@ -2111,7 +2132,7 @@ export default {
           }
         });
       });
-      return Boolean(this.conversationId);
+      return this.lastSaveSucceeded;
     },
 
     openExportDialog() {

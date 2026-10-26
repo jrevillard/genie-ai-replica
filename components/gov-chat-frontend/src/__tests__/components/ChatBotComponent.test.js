@@ -1802,7 +1802,7 @@ describe('ChatBotComponent', () => {
       // lands while the fetch is still in flight, the exact window the
       // guard must close.
       let resolveFirst;
-      chatHistoryService.getConversation.mockImplementation(
+      chatHistoryService.getConversation.mockImplementationOnce(
         () =>
           new Promise((resolve) => {
             resolveFirst = resolve;
@@ -1829,14 +1829,14 @@ describe('ChatBotComponent', () => {
       const vm = wrapper.vm;
       const chatHistoryService = require('../../services/chatHistoryService');
       let resolveA;
-      chatHistoryService.getConversation.mockImplementation((id) => {
-        if (id === 'conv-A') {
-          return new Promise((resolve) => {
-            resolveA = resolve;
-          });
-        }
-        return Promise.resolve({ _key: 'conv-B', title: 'B', messages: [] });
-      });
+      chatHistoryService.getConversation
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveA = resolve;
+            })
+        )
+        .mockImplementationOnce(() => Promise.resolve({ _key: 'conv-B', title: 'B', messages: [] }));
       const loadHandler = mockEventBusOn.mock.calls.find((c) => c[0] === 'load-conversation')[1];
 
       const first = loadHandler('conv-A');
@@ -1886,7 +1886,7 @@ describe('ChatBotComponent', () => {
       const vm = wrapper.vm;
       const chatHistoryService = require('../../services/chatHistoryService');
       let resolveLoad;
-      chatHistoryService.getConversation.mockImplementation(
+      chatHistoryService.getConversation.mockImplementationOnce(
         () =>
           new Promise((resolve) => {
             resolveLoad = resolve;
@@ -1923,7 +1923,7 @@ describe('ChatBotComponent', () => {
       const vm = wrapper.vm;
       const chatHistoryService = require('../../services/chatHistoryService');
       let resolveLoad;
-      chatHistoryService.getConversation.mockImplementation(
+      chatHistoryService.getConversation.mockImplementationOnce(
         () =>
           new Promise((resolve) => {
             resolveLoad = resolve;
@@ -1948,7 +1948,7 @@ describe('ChatBotComponent', () => {
       const vm = wrapper.vm;
       const chatHistoryService = require('../../services/chatHistoryService');
       let resolveLoad;
-      chatHistoryService.getConversation.mockImplementation(
+      chatHistoryService.getConversation.mockImplementationOnce(
         () =>
           new Promise((resolve) => {
             resolveLoad = resolve;
@@ -1977,7 +1977,7 @@ describe('ChatBotComponent', () => {
       const vm = wrapper.vm;
       const chatHistoryService = require('../../services/chatHistoryService');
       let rejectLoad;
-      chatHistoryService.getConversation.mockImplementation(
+      chatHistoryService.getConversation.mockImplementationOnce(
         () =>
           new Promise((_, reject) => {
             rejectLoad = reject;
@@ -2026,6 +2026,79 @@ describe('ChatBotComponent', () => {
       await leaving;
       expect(chatHistoryService.createConversation.mock.calls[0][0].initialMessage).toBe('MY IMPORTANT DRAFT');
       expect(vm.openMessages.some((m) => m.content === 'MY IMPORTANT DRAFT')).toBe(false);
+    });
+
+    it('canceling the leave dialog keeps the draft and stays on the chat', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.$store.commit('conversation/appendUserMessage', { sender: 'user', content: 'KEPT DRAFT', isSaved: false });
+
+      const leaving = vm.saveAndStartNewChat();
+      await wrapper.vm.$nextTick();
+      expect(vm.saveChatDialog.visible).toBe(true);
+
+      // The user closes the dialog without saving.
+      vm.saveChatDialog.visible = false;
+      await leaving;
+
+      // The draft is untouched and no new-chat reset happened.
+      expect(vm.openMessages.some((m) => m.content === 'KEPT DRAFT')).toBe(true);
+      expect(vm.conversationId).toBeNull();
+    });
+
+    it('a failed save does not read as a success for the leave arm', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      // The conversation is created, then a later step fails.
+      chatHistoryService.addMessage.mockRejectedValueOnce(new Error('boom'));
+
+      vm.$store.commit('conversation/appendUserMessage', { sender: 'user', content: 'PARTIAL DRAFT', isSaved: false });
+      // The first question rides as initialMessage — the failure has to
+      // happen in a turn that reaches addMessage.
+      vm.$store.commit('conversation/appendUserMessage', { sender: 'user', content: 'follow-up', isSaved: false });
+      vm.$store.commit('conversation/appendBotMessage', {
+        sender: 'bot',
+        content: 'A2',
+        queryId: 'q2',
+        isSaved: false
+      });
+
+      const leaving = vm.saveAndStartNewChat();
+      await wrapper.vm.$nextTick();
+      await vm.handleSaveChat();
+      // The dialog stays open after the failure — the user closes it.
+      expect(vm.saveChatDialog.visible).toBe(true);
+      vm.saveChatDialog.visible = false;
+      await leaving;
+
+      // The transcript was not wiped over an unsaved draft.
+      expect(vm.openMessages.some((m) => m.content === 'PARTIAL DRAFT')).toBe(true);
+    });
+
+    it('canceling the load-confirm dialog keeps the draft and abandons the pending load', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation.mockClear();
+
+      vm.$store.commit('conversation/appendUserMessage', { sender: 'user', content: 'LOAD-ARM DRAFT', isSaved: false });
+
+      vm.pendingConversationId = 'conv-pending';
+      // "Save and load" opens the naming dialog over the pending load.
+      const saving = vm.saveAndLoadConversation();
+      await wrapper.vm.$nextTick();
+      expect(vm.saveChatDialog.visible).toBe(true);
+
+      // The user cancels.
+      vm.saveChatDialog.visible = false;
+      await saving;
+
+      // The draft survives and the other conversation never loads.
+      expect(vm.openMessages.some((m) => m.content === 'LOAD-ARM DRAFT')).toBe(true);
+      expect(vm.pendingConversationId).toBeNull();
+      expect(chatHistoryService.getConversation).not.toHaveBeenCalled();
     });
   });
 

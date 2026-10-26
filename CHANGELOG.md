@@ -68,6 +68,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **More links in the documentation site pointed at a page that did not answer
+  the question.** The "Developer" card on the home page promised a local dev
+  loop with `npm install` and `npm run dev`, but the page it opens explicitly
+  tells you not to install anything on the host: the card now describes the
+  loop that page actually delivers. The dashboard-customization page sent the
+  reader to the Docker Compose quickstart for a Docker Swarm bring-up and
+  promised the order in which to rebuild the frontend image — in Swarm the
+  image is built by the pipeline and pinned by tag, so the page now points at
+  the Swarm setup and says so. The two deployment guides sent their "next
+  step" to the health checks for the creation of the first user and of the
+  knowledge hierarchy, which the health-check page does not cover: they now
+  point at the Keycloak admin guide and at the admin dashboard. The theme page
+  sent the reader to the mobile architecture page for the Flutter design
+  system, which is documented in the mobile UI component inventory. Two "report
+  a problem" links went to the merge-request guide instead of the section that
+  says how to report a problem. The pages that describe the ingestion log now
+  point at the canonical reference in the Operations section, the pages that
+  need an API token point at the API contracts, and the page that explains how
+  to read a trace points at the tracing guide instead of the Operations landing
+  page. (#608)
+
 - **Links in the documentation site pointed at the wrong page or at the wrong
   section.** The link to the development guide on the home page pointed at
   `/docs/core/development-guide/`, an address no page ever carried: the reader

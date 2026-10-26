@@ -790,8 +790,12 @@ Common first-deploy failures (deployer-oriented, not environment-specific):
 
 You now have GENIE.AI running. Continue with:
 
-- [Post-deploy checklist](/docs/operate/health-checks/) — first
-  user, first knowledge base
+- [Post-deploy checklist](/docs/operate/health-checks/) — verify every
+  service answers its health probe
+- [Configure → Keycloak admin guide](/docs/configure/keycloak-admin-guide/) —
+  create the first user
+- [Frontend → Admin Dashboard](/docs/frontend/admin-dashboard/) — knowledge
+  hierarchy and user management
 - [Knowledge Base](/docs/knowledge-base/) — content design, labelling,
   ingestion
 - [Operations](/docs/operate/) — backup, troubleshooting, monitoring

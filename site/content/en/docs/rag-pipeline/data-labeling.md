@@ -110,7 +110,7 @@ warning.
 | Labels drift to neighbouring categories | Taxonomy may be too coarse for the corpus | Refine the taxonomy or split categories. |
 | Many chunks get `[]` | Usually correct (no taxonomy match) | Verify the taxonomy loaded correctly (some chunks DO get specific labels) before assuming a bug. |
 
-See [Debugging with Tracing & Logs]({{< relref "/docs/operate" >}})
+See [Operations → Distributed tracing]({{< relref "/docs/operate/tracing-howto" >}})
 for the recipe to inspect the labels a single chunk received.
 
 ## Alternative labelling strategies

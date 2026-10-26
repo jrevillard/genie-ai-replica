@@ -67,4 +67,4 @@ You have opened your first MR. Next:
 
 - [Welcome](/docs/get-started/welcome/)
 - [Concepts in 5 minutes](/docs/get-started/concepts/)
-- [Report a problem with these docs](/docs/contribute/how-to-mr/)
+- [Report a problem with these docs](/docs/#report-a-problem)

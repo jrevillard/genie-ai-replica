@@ -252,7 +252,7 @@ If the backend logs show
   uses a self-signed cert; flip `OPEA_SSL_SKIP_VERIFY=1` too.
 - **`source .env` with special chars in `KEYCLOAK_ADMIN_PASSWORD`** —
   breaks shell expansion; extract with `grep | cut` instead. (Same
-  advice as the Server Testing rules — see Related.)
+  advice as the Keycloak admin guide — see Related.)
 - **Trusting the cert on the wrong path.** `NODE_EXTRA_CA_CERTS` must
   point at the certificate nginx is **serving**, not the one your
   browser happens to trust (or vice versa). Verify with
@@ -279,5 +279,5 @@ If the backend logs show
 - [Reference → Environment variables](/docs/reference/env-vars/) — canonical list with defaults.
 - [Deployment → Install guide](/docs/deploy/install-guide/) — first-deploy wiring walkthrough, includes the `NODE_TLS_REJECT_UNAUTHORIZED` row in the variable table.
 - [Deployment → Docker Swarm setup](/docs/deploy/docker-swarm-setup/) — self-signed-cert quick-reference matrix (`NODE_TLS_REJECT_UNAUTHORIZED` × `OPEA_SSL_SKIP_VERIFY` × `KEYCLOAK_SSL_SKIP_VERIFY`).
-- Operations → Server Testing — ROPC token extraction, `source .env` pitfalls, Docker exec patterns that come up while debugging TLS (see the `SERVER-TESTING.md` dev rule under `.claude/rules/`).
+- [Configure → Keycloak admin guide](/docs/configure/keycloak-admin-guide/#84-obtaining-a-token-for-ad-hoc-verification-test-only) — ROPC token extraction, `source .env` pitfalls, and the Docker exec patterns that come up while debugging TLS (the full agent playbook lives in the `SERVER-TESTING.md` dev rule under `.claude/rules/`).
 - [Mobile Deployment Guide](/docs/mobile/mobile-deployment-guide/) — phone↔server trust chain (the "El Salvador" topology): WireGuard tunnel, private IP, self-signed cert, Keycloak `/auth` prefix.

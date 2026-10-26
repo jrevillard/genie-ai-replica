@@ -200,7 +200,7 @@ envelope.
 
 > **Note.** This probe sends an **anonymous** request (no JWT); ChatQnA
 > in production requires a Keycloak Bearer token. To probe with a token,
-> follow the [Server API Testing recipe]({{< relref "/docs/operate" >}})
+> follow the [API contracts recipe]({{< relref "/docs/reference/api-contracts" >}})
 > to obtain a token, then add `Authorization: Bearer $TOKEN`.
 
 ## Related

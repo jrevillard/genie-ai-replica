@@ -2817,12 +2817,13 @@ config:docs-links:
   extends: .node_base
   stage: config
   script:
+    - cd ${CI_PROJECT_DIR}/site && node --test scripts/check-links.test.mjs
     - cd ${CI_PROJECT_DIR}/site && node scripts/check-links.mjs
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - "site/content/**/*"
-        - "site/scripts/check-links.mjs"
+        - "site/scripts/**/*"
         - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'

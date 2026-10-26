@@ -21,15 +21,14 @@
  */
 
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
-import { join, relative, sep } from 'node:path'
+import { join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 const args = process.argv.slice(2)
 const FIX = args.includes('--fix')
-const CONTENT = args.find((a) => !a.startsWith('--'))
-  ? join(process.cwd(), args.find((a) => !a.startsWith('--')))
-  : join(HERE, '..', 'content', 'en')
+const contentArg = args.find((a) => !a.startsWith('--'))
+const CONTENT = contentArg ? resolve(process.cwd(), contentArg) : join(HERE, '..', 'content', 'en')
 
 // ---------------------------------------------------------------- front matter
 

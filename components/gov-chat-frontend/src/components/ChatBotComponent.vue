@@ -266,10 +266,7 @@
         <div ref="messagesEnd"></div>
       </div>
       <!-- Quick Help Overlay -->
-      <div
-        v-if="showQuickHelp && selectedContextItems.length === 0 && !conversationStarted"
-        class="quick-help-overlay"
-      >
+      <div v-if="showQuickHelp && selectedContextItems.length === 0 && !conversationStarted" class="quick-help-overlay">
         <!-- The banner is a real element so its height can grow with the
              heading + subtitle inside it (a content-aware box), and the
              heading reads as sitting inside the artwork instead of below

@@ -800,6 +800,28 @@ development_status:
   #          OutputParserException)" and THE PHASE CONTINUED — the previous run
   #          died at exactly that point. One node degraded; the corpus loses that
   #          chunk's entities and keeps everything else.
+  #          AND THE TOLERANCE WAS INCOMPLETE — it MOVED the failure instead of
+  #          removing it (found live, same day): the re-run degraded the node and
+  #          then died in the phase RIGHT AFTER it with "Node X or Y has no
+  #          entities". A degraded node is left MISSING the property it failed to
+  #          produce, and ragas's relationship builders RAISE on a missing
+  #          property instead of skipping the node (traditional.py:37 / :144).
+  #          Fixed: the builders' FILTERS — which decide which nodes take part in
+  #          the relationship computation — exclude a node with no entities or no
+  #          embedding; it has no relationship to contribute, and excluding it
+  #          keeps the phase alive. Behaviour-preserving in the normal case
+  #          (every node then HAS the property), so the filters differ only for
+  #          a degraded node. The DEGRADED-NODE COUNT was also still the
+  #          process-global sibling of the counters the review had already
+  #          fixed — it travels with the job's stats dict now, because it is
+  #          REPORTED with the suite and a wrong number there is a wrong number
+  #          in front of the operator. Both landed in MR !602 (consolidated with
+  #          the counter fix — with only the counter fix the generation dies one
+  #          phase later, so they cannot land apart). Sidecar suite 90 green.
+  #          CORRECTED 2026-10-26: the claim that the sidecar's pytest suite has
+  #          no CI lane was WRONG — `test:ragas-service` has run ruff + the whole
+  #          suite against the pinned stack since 2026-10-17 (a66aa4659) and
+  #          passed on this MR's own pipeline.
   #          THE REVIEW (independent adversarial review of the diff) found the
   #          counters were PROCESS-GLOBAL: a second job's reset dropped the first
   #          job's published number to zero mid-generation (the KG ticker

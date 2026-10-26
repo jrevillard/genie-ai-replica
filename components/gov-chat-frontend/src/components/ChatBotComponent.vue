@@ -446,6 +446,7 @@ import {
   X
 } from '@lucide/vue';
 import { formatFileSize } from '../utils/fileUtils.js';
+import { isStorableTurn, translateSources } from '../store/modules/conversation';
 import { isExternalUrl, openRepositoryDocument, fileTypeBadge } from '../utils/document-opener.js';
 import { eventBus } from '../eventBus.js';
 import notificationService from '../services/notificationService';
@@ -817,21 +818,10 @@ export default {
         this.$store.dispatch('conversation/abortStream');
         // The conversation is gone: an in-flight load must not land.
         this.loadSeq++;
-        this.$store.commit('conversation/setConversationId', null);
         this.currentChatId = null;
         this.currentCategoryId = null;
-        this.$store.commit('conversation/setMessages', [
-          {
-            sender: 'bot',
-            content: this.getWelcomeMessage(),
-            timestamp: new Date().toISOString(),
-            isSaved: true
-          }
-        ]);
         this.newMessage = '';
-        this.$store.commit('conversation/setContextItems', []);
-        this.$store.commit('conversation/setRelatedDocuments', []);
-        this.$store.commit('conversation/setSavedState');
+        this.resetToWelcome();
       }
     });
 
@@ -874,7 +864,7 @@ export default {
     eventBus.$emit('sidebar-right-width-changed', this.rightSidebarWidth);
 
     if (this.openMessages.length === 0) {
-      this.$store.commit('conversation/appendUserMessage', {
+      this.$store.commit('conversation/appendBotMessage', {
         sender: 'bot',
         content: this.getWelcomeMessage()
       });
@@ -1252,40 +1242,32 @@ export default {
       if (existingIdx >= 0) {
         return; // already selected — no-op (preserves prior dedup behavior)
       }
-      if (rawOption.id === 'just-chat') {
-        // "Just Chat" clears all label filters so the retriever searches
-        // across all documents without restriction. Keeps the Quick Help item
-        // in context so conversation history is preserved for follow-up queries.
-        this.$store.commit(
-          'conversation/setContextItems',
-          this.selectedContextItems.filter((item) => item.source !== 'quickHelp')
-        );
-        this.$store.commit('conversation/addContextItem', {
-          service: rawOption.service,
-          serviceLabels: [], // empty — no label filter
-          serviceKey: rawOption.serviceKey || rawOption.id || rawOption.service,
-          source: 'quickHelp',
-          id: rawOption.id,
-          category: null,
-          selected: true
-        });
-        this.currentCategoryId = null;
-      } else {
-        this.$store.commit(
-          'conversation/setContextItems',
-          this.selectedContextItems.filter((item) => item.source !== 'quickHelp')
-        );
-        this.$store.commit('conversation/addContextItem', {
-          service: rawOption.service,
-          serviceLabels: rawOption.serviceLabels || null,
-          serviceKey: rawOption.serviceKey || rawOption.id || rawOption.service,
-          source: 'quickHelp',
-          id: rawOption.id,
-          category: categoryId,
-          selected: true
-        });
-        this.currentCategoryId = categoryId;
-      }
+      const quickHelpItem =
+        rawOption.id === 'just-chat'
+          ? {
+              // "Just Chat" clears all label filters so the retriever
+              // searches across all documents without restriction. The
+              // item stays in context so conversation history is
+              // preserved for follow-up queries.
+              service: rawOption.service,
+              serviceLabels: [],
+              serviceKey: rawOption.serviceKey || rawOption.id || rawOption.service,
+              source: 'quickHelp',
+              id: rawOption.id,
+              category: null,
+              selected: true
+            }
+          : {
+              service: rawOption.service,
+              serviceLabels: rawOption.serviceLabels || null,
+              serviceKey: rawOption.serviceKey || rawOption.id || rawOption.service,
+              source: 'quickHelp',
+              id: rawOption.id,
+              category: categoryId,
+              selected: true
+            };
+      this.$store.commit('conversation/replaceQuickHelpItem', quickHelpItem);
+      this.currentCategoryId = rawOption.id === 'just-chat' ? null : categoryId;
 
       this.showQuickHelp = false;
       if (rawOption.hiddenPromptKey || rawOption.hiddenPrompt) {
@@ -1312,14 +1294,10 @@ export default {
     // tile behaviour.
     handleWelcomeSend() {
       const entry = this.composerEntry;
-      this.$store.commit(
-        'conversation/setContextItems',
-        this.selectedContextItems.filter((i) => i.source !== 'quickHelp')
-      );
       // Only a real knowledge-area entry becomes a context chip — the plain
       // just-chat surface is not a domain, and a chip would promise one.
       if (entry && entry.category) {
-        this.$store.commit('conversation/addContextItem', {
+        this.$store.commit('conversation/replaceQuickHelpItem', {
           service: entry.service,
           serviceLabels: [],
           serviceKey: entry.serviceKey || entry.id || entry.service,
@@ -1328,6 +1306,11 @@ export default {
           category: entry.category,
           selected: true
         });
+      } else {
+        this.$store.commit(
+          'conversation/setContextItems',
+          this.selectedContextItems.filter((i) => i.source !== 'quickHelp')
+        );
       }
       this.currentCategoryId = null;
       this.showQuickHelp = false;
@@ -1469,12 +1452,11 @@ export default {
       });
 
       if (contextOption === 'conversation-with-labels') {
-        // Streaming placeholders are UI stubs; interrupted or failed
-        // exchanges never delivered an answer; a bot turn without a
-        // queryId is a synthesized greeting, not model output — none of
-        // them belong in the model's context.
+        // Storable turns only: streaming placeholders are UI stubs, and
+        // a synthesized greeting (no queryId) or a failed exchange never
+        // delivered model output — none of it enters the model's context.
         const baseMessages = this.openMessages
-          .filter((msg) => msg && !msg.isStreaming && !msg.isError && !(msg.sender === 'bot' && !msg.queryId))
+          .filter((msg) => msg && !msg.isStreaming && isStorableTurn(msg))
           .map((msg) => ({
             role: msg.sender === 'user' ? 'user' : 'assistant',
             content: msg.content
@@ -1651,50 +1633,31 @@ export default {
         this.$store.commit('conversation/setTitle', conversation.title || this.generateChatTitle());
         this.currentCategoryId = conversation.categoryId || null;
 
-        // NEW: Populate related documents from history (files property from backend)
+        // Populate related documents from history (files property from
+        // backend) — the same sidebar-card shape the live stream builds.
         if (conversation.files && Array.isArray(conversation.files)) {
-          this.$store.commit(
-            'conversation/setRelatedDocuments',
-            conversation.files.map((file) => {
-              const mapped = {
-                id: file.id,
-                title: file.documentName || file.fileName || `Source ${file.id}`,
-                documentName: file.documentName,
-                fileName: file.fileName,
-                type: file.url?.split('.').pop().toUpperCase() || 'LINK',
-                size: 0,
-                url: file.url,
-                score: file.score,
-                categoryLabel: file.categoryLabel,
-                serviceLabels: file.labels || []
-              };
-              return mapped;
-            })
-          );
+          this.$store.commit('conversation/setRelatedDocuments', translateSources(conversation.files));
         } else {
           this.$store.commit('conversation/setRelatedDocuments', []);
         }
 
-        this.$store.commit('conversation/setMessages', []);
+        // Whatever the live path sets on a message (onMetadata), the
+        // reload path sets too — the restored conversation speaks the
+        // same states. One commit per collection: history can be long.
         const messages = conversation.messages || [];
-        messages.forEach((msg) => {
-          // Whatever the live path sets on a message (onMetadata), the reload
-          // path sets too — the restored conversation speaks the same states.
-          this.$store.commit('conversation/appendUserMessage', {
-            sender: msg.sender === 'user' ? 'user' : 'bot',
-            content: msg.content,
-            timestamp: msg.timestamp || new Date().toISOString(),
-            queryId: msg.queryId || null,
-            confidenceScore: msg.metadata?.confidence_score ?? msg.queryInfo?.confidenceScore ?? null,
-            metadata: msg.metadata || null,
-            isGrounded: msg.metadata?.is_grounded,
-            userFeedback: msg.metadata?.userFeedback || null,
-            isSaved: true
-          });
-        });
-
-        if (this.openMessages.length === 0) {
-          this.$store.commit('conversation/appendBotMessage', {
+        const restoredMessages = messages.map((msg) => ({
+          sender: msg.sender === 'user' ? 'user' : 'bot',
+          content: msg.content,
+          timestamp: msg.timestamp || new Date().toISOString(),
+          queryId: msg.queryId || null,
+          confidenceScore: msg.metadata?.confidence_score ?? msg.queryInfo?.confidenceScore ?? null,
+          metadata: msg.metadata || null,
+          isGrounded: msg.metadata?.is_grounded,
+          userFeedback: msg.metadata?.userFeedback || null,
+          isSaved: true
+        }));
+        if (restoredMessages.length === 0) {
+          restoredMessages.push({
             sender: 'bot',
             content: this.getWelcomeMessage(),
             timestamp: new Date().toISOString(),
@@ -1702,25 +1665,27 @@ export default {
             isSaved: true
           });
         }
+        this.$store.commit('conversation/setMessages', restoredMessages);
 
-        this.$store.commit('conversation/setContextItems', []);
+        let restoredContextItems = [];
         if (conversation.tags && Array.isArray(conversation.tags)) {
-          conversation.tags.forEach((tag) => {
-            this.$store.commit('conversation/addContextItem', {
-              service: this.safeTranslate(tag || `category.${this.currentCategoryId || 'general'}`),
-              serviceKey: tag || `category.${this.currentCategoryId || 'general'}`,
-              category: this.currentCategoryId || 'general',
-              selected: true
-            });
-          });
-        } else if (this.currentCategoryId) {
-          this.$store.commit('conversation/addContextItem', {
-            service: this.getCategoryLabelById(this.currentCategoryId),
-            serviceKey: `category.${this.currentCategoryId}`,
-            category: this.currentCategoryId,
+          restoredContextItems = conversation.tags.map((tag) => ({
+            service: this.safeTranslate(tag || `category.${this.currentCategoryId || 'general'}`),
+            serviceKey: tag || `category.${this.currentCategoryId || 'general'}`,
+            category: this.currentCategoryId || 'general',
             selected: true
-          });
+          }));
+        } else if (this.currentCategoryId) {
+          restoredContextItems = [
+            {
+              service: this.getCategoryLabelById(this.currentCategoryId),
+              serviceKey: `category.${this.currentCategoryId}`,
+              category: this.currentCategoryId,
+              selected: true
+            }
+          ];
         }
+        this.$store.commit('conversation/setContextItems', restoredContextItems);
 
         this.$store.commit('conversation/setSavedState');
 
@@ -1742,15 +1707,7 @@ export default {
           // cleared transcript: it dies here, together with the
           // transcript it was writing into.
           this.$store.dispatch('conversation/abortStream');
-          this.$store.commit('conversation/setMessages', [
-            {
-              sender: 'bot',
-              content: this.getWelcomeMessage(),
-              timestamp: new Date().toISOString(),
-              isSaved: true
-            }
-          ]);
-          this.$store.commit('conversation/setSavedState');
+          this.resetToWelcome();
           notificationService.error(this.translate('chatbot.loadError'));
         }
       }
@@ -1765,9 +1722,7 @@ export default {
         return hasUserMessages || hasContextItems;
       }
 
-      const hasNewMessages = this.openMessages.some(
-        (msg) => !msg.isSaved && !msg.isError && (msg.sender === 'user' || (msg.sender === 'bot' && msg.queryId))
-      );
+      const hasNewMessages = this.openMessages.some((msg) => !msg.isSaved && isStorableTurn(msg));
       if (hasNewMessages) {
         return true;
       }
@@ -1803,45 +1758,20 @@ export default {
 
     async saveAndLoadConversation() {
       this.showLoadConfirm = false;
-      // The verdict must describe THIS flow: a success from an earlier
-      // save must never answer this arm's question.
-      this.lastSaveSucceeded = false;
-      // Only the persisted id decides update-vs-create — an in-flight
-      // load target is not saved anywhere yet.
-      if (this.conversationId) {
-        try {
-          await this.updateExistingChat();
-          this.lastSaveSucceeded = true;
-        } catch {
-          // The pending load is abandoned with the failed save.
-          this.pendingConversationId = null;
-          return;
-        }
-      } else {
-        this.saveChatDialog = {
-          visible: true,
-          title: this.generateChatTitle(),
-          folderId: 'default'
-        };
-        await new Promise((resolve) => {
-          const unwatch = this.$watch('saveChatDialog.visible', (newVal) => {
-            if (!newVal) {
-              unwatch();
-              resolve();
-            }
-          });
-        });
+      // The leave arm owns the whole save half — verdict reset, the
+      // update-vs-create decision, the naming dialog and its await.
+      const saved = await this.saveCurrentChatBeforeLeave();
+      if (!this.pendingConversationId) {
+        return;
       }
-      if (this.pendingConversationId) {
-        // A canceled naming dialog keeps the draft: the pending load is
-        // abandoned with it, mirroring the start-new arm.
-        if (!this.lastSaveSucceeded) {
-          this.pendingConversationId = null;
-          return;
-        }
-        await this.loadExistingConversation(this.pendingConversationId);
+      // A canceled naming dialog keeps the draft: the pending load is
+      // abandoned with it, mirroring the start-new arm.
+      if (!saved) {
         this.pendingConversationId = null;
+        return;
       }
+      await this.loadExistingConversation(this.pendingConversationId);
+      this.pendingConversationId = null;
     },
 
     saveChatToHistory() {
@@ -1899,9 +1829,7 @@ export default {
         // Every turn is a failed exchange: creating the conversation
         // would store an empty chat that previews content it does not
         // hold.
-        const hasPersistableTurn = this.openMessages.some(
-          (message) => !message.isError && (message.sender === 'user' || (message.sender === 'bot' && message.queryId))
-        );
+        const hasPersistableTurn = this.openMessages.some(isStorableTurn);
         if (!hasPersistableTurn) {
           notificationService.info(this.translate('chatbot.nothingToSave'));
           this.saveChatDialog.visible = false;
@@ -1931,11 +1859,7 @@ export default {
 
           // A failed exchange is never persisted: its question would
           // reopen later looking answered, with no dead answer beside it.
-          if (
-            (message.sender === 'user' || (message.sender === 'bot' && message.queryId)) &&
-            message.content &&
-            !message.isError
-          ) {
+          if (isStorableTurn(message) && message.content) {
             const messageData = {
               conversationId: conversation._key,
               content: message.content,
@@ -1953,9 +1877,7 @@ export default {
           title: conversationData.title,
           preview: this.chatPreview,
           folderId: this.saveChatDialog.folderId || 'default',
-          messageCount: this.openMessages.filter(
-            (msg) => !msg.isError && (msg.sender === 'user' || (msg.sender === 'bot' && msg.queryId))
-          ).length
+          messageCount: this.openMessages.filter(isStorableTurn).length
         };
         await this.$store.dispatch('chatHistory/createChat', chatData);
 
@@ -2016,11 +1938,7 @@ export default {
           // A failed exchange is never persisted (and is not a pending
           // change either): its question would reopen later looking
           // answered, with no dead answer beside it.
-          if (
-            (message.sender === 'user' || (message.sender === 'bot' && message.queryId)) &&
-            message.content &&
-            !message.isError
-          ) {
+          if (isStorableTurn(message) && message.content) {
             const messageData = {
               conversationId: this.conversationId,
               content: message.content,
@@ -2080,6 +1998,19 @@ export default {
       }
     },
 
+    // One definition of "back to the welcome screen": a pristine entry
+    // holding only the welcome turn, snapshotted as saved.
+    resetToWelcome() {
+      this.$store.commit('conversation/resetForNewConversation');
+      this.$store.commit('conversation/appendBotMessage', {
+        sender: 'bot',
+        content: this.getWelcomeMessage(),
+        timestamp: new Date().toISOString(),
+        isSaved: true
+      });
+      this.$store.commit('conversation/setSavedState');
+    },
+
     async saveAndStartNewChat() {
       this.showNewChatConfirm = false;
       const saved = await this.saveCurrentChatBeforeLeave();
@@ -2095,13 +2026,7 @@ export default {
       // The welcome screen replaces the conversation: an in-flight load
       // of another chat must not land after this.
       this.loadSeq++;
-      this.$store.commit('conversation/resetForNewConversation');
-      this.$store.commit('conversation/appendBotMessage', {
-        sender: 'bot',
-        content: this.getWelcomeMessage(),
-        timestamp: new Date().toISOString(),
-        isSaved: true
-      });
+      this.resetToWelcome();
       this.currentChatId = null;
       this.newMessage = '';
       this.currentCategoryId = null;

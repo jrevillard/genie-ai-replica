@@ -21,18 +21,25 @@ function emptyConversation() {
 // triggered the dead answer is marked too — the failed exchange leaves
 // the transcript as a unit (the retry splices both), so no half of it
 // can leak into a later request's context.
+// The question that triggered a dead answer is marked too — the failed
+// exchange leaves the transcript as a unit (the retry splices both), so
+// no half of it can leak into a later request's context.
+function markTriggeringQuestion(entry) {
+  for (let i = entry.messages.length - 2; i >= 0; i--) {
+    if (entry.messages[i].sender === 'user') {
+      entry.messages[i].isError = true;
+      break;
+    }
+  }
+}
+
 function markEntryInterrupted(entry) {
   entry.isStreaming = false;
   const last = entry.messages.at(-1);
   if (last && last.sender === 'bot' && last.isStreaming) {
     last.isStreaming = false;
     last.isError = true;
-    for (let i = entry.messages.length - 2; i >= 0; i--) {
-      if (entry.messages[i].sender === 'user') {
-        entry.messages[i].isError = true;
-        break;
-      }
-    }
+    markTriggeringQuestion(entry);
   }
 }
 
@@ -58,7 +65,10 @@ const mutations = {
   setSavedState(st) {
     const entry = st.conversations[st.openId];
     entry.lastSavedState = {
-      messages: JSON.parse(JSON.stringify(entry.messages)),
+      // Message dirtiness is carried by the per-message isSaved flags;
+      // only the context list needs a snapshot, and cloning the whole
+      // transcript here would double every persistence write.
+      messages: [],
       contextItems: JSON.parse(JSON.stringify(entry.selectedContextItems))
     };
   },
@@ -77,6 +87,17 @@ const mutations = {
     const entry = st.conversations[st.openId];
     const last = entry.messages.at(-1);
     if (last) last[prop] = value;
+  },
+  setLastBotMetadata(st, metadata) {
+    const entry = st.conversations[st.openId];
+    const last = entry.messages.at(-1);
+    if (!last) return;
+    const sources = translateSources(metadata.source_documents);
+    last.metadata = metadata;
+    last.confidenceScore = metadata.confidence_score ?? null;
+    last.isGrounded = metadata.is_grounded;
+    last.sources = sources;
+    last.sourcesOpen = Boolean(sources.length);
   },
   setTranslation(st, text) {
     const entry = st.conversations[st.openId];
@@ -100,14 +121,7 @@ const mutations = {
       // A partial answer the user was reading is kept; the error text
       // only fills an empty turn.
       if (!last.content) last.content = errorMessage;
-      // The question that triggered the failed answer leaves the
-      // transcript as a unit with it (retry splices both).
-      for (let i = entry.messages.length - 2; i >= 0; i--) {
-        if (entry.messages[i].sender === 'user') {
-          entry.messages[i].isError = true;
-          break;
-        }
-      }
+      markTriggeringQuestion(entry);
     }
   },
   markInterrupted(st) {
@@ -115,6 +129,11 @@ const mutations = {
   },
   addContextItem(st, item) {
     st.conversations[st.openId].selectedContextItems.push(item);
+  },
+  // At most one quickHelp chip: the new item replaces the previous one.
+  replaceQuickHelpItem(st, item) {
+    const entry = st.conversations[st.openId];
+    entry.selectedContextItems = [...entry.selectedContextItems.filter((i) => i.source !== 'quickHelp'), item];
   },
   removeContextItem(st, index) {
     st.conversations[st.openId].selectedContextItems.splice(index, 1);
@@ -158,32 +177,52 @@ const mutations = {
 };
 
 import chatbotService from '../../services/chatbotService';
+import documentFileService from '../../services/documentFileService';
 import i18n from '../../i18n';
 
 function t(key, fallback) {
   return i18n.global.te(key) ? i18n.global.t(key) : fallback;
 }
 
-// AbortControllers live here, outside reactive state: they are not
-// serializable and must never enter `conversations` or storage.
-const controllers = new Map();
+// The in-flight stream's AbortController lives here, outside reactive
+// state: it is not serializable and must never enter `conversations` or
+// storage. One open conversation, one slot.
+let activeController = null;
 
-function translateSources(sourceDocuments = []) {
-  return (sourceDocuments || []).map((doc) => ({
-    id: doc.document_id,
-    title: doc.document_name || doc.file_name || `Source ${(doc.document_id || '').slice(0, 4)}`,
-    documentName: doc.document_name,
-    fileName: doc.file_name,
-    type: doc.url?.split('.').pop().toUpperCase() || 'LINK',
-    size: 0,
-    url: doc.url || (doc.document_id ? `/api/files/${doc.document_id}/download` : ''),
-    score: doc.score
-  }));
+// A turn a save can persist: a real question, or an answer the server
+// acknowledged. Failed exchanges are never storable, metadata, context
+// or prompt — every consumer of this predicate keeps only its own
+// qualifier (isSaved, content).
+export function isStorableTurn(message) {
+  if (!message || message.isError) return false;
+  return message.sender === 'user' || (message.sender === 'bot' && message.queryId);
+}
+
+// The sidebar-card shape, from either naming convention (the stream's
+// source_documents carry snake_case; the history payload's files carry
+// camelCase plus the knowledge-base fields).
+export function translateSources(sourceDocuments = []) {
+  return (sourceDocuments || []).map((doc) => {
+    const documentId = doc.document_id || doc.id;
+    const documentName = doc.document_name || doc.documentName;
+    const fileName = doc.file_name || doc.fileName;
+    return {
+      id: documentId,
+      title: documentName || fileName || `Source ${(documentId || '').slice(0, 4)}`,
+      documentName,
+      fileName,
+      type: doc.url?.split('.').pop().toUpperCase() || 'LINK',
+      size: 0,
+      url: doc.url || (documentId ? `/api/files/${documentId}/download` : ''),
+      score: doc.score,
+      categoryLabel: doc.categoryLabel,
+      serviceLabels: doc.labels || doc.serviceLabels || []
+    };
+  });
 }
 
 const actions = {
-  sendStream({ commit, state, rootState }, queryData) {
-    const id = rootState.conversation.openId;
+  sendStream({ commit, state }, queryData) {
     commit('setStreaming', { isStreaming: true, streamingQueryId: null });
     const controller = chatbotService.submitQueryStream(queryData, {
       onChunk: (content) => commit('appendChunk', content),
@@ -192,14 +231,10 @@ const actions = {
         if (metadata.responseTime) {
           commit('status/setResponseTime', metadata.responseTime, { root: true });
         }
-        commit('setLastBotProperty', ['metadata', metadata]);
-        commit('setLastBotProperty', ['confidenceScore', metadata.confidence_score ?? null]);
-        commit('setLastBotProperty', ['isGrounded', metadata.is_grounded]);
-        const sources = translateSources(metadata.source_documents);
-        commit('setLastBotProperty', ['sources', sources]);
-        commit('setLastBotProperty', ['sourcesOpen', Boolean(sources.length)]);
+        commit('setLastBotMetadata', metadata);
         // The sidebar keeps its accumulated view; a source already cited
         // by an earlier turn is not added twice.
+        const sources = translateSources(metadata.source_documents);
         const knownIds = new Set(state.conversations[state.openId].relatedDocuments.map((d) => d.id));
         commit(
           'unshiftRelatedDocuments',
@@ -207,19 +242,17 @@ const actions = {
         );
         // The repository TYPE · size fields degrade to the extension type
         // when the metadata fetch fails — same as the component did.
-        import('../../services/documentFileService').then(({ default: documentFileService }) => {
-          sources.forEach((doc) => {
-            if (!doc.id) return;
-            documentFileService
-              .getFileMetadata(doc.id)
-              .then((file) => {
-                commit('patchSource', [
-                  doc.id,
-                  { _size: file?.file_size || 0, _type: (file?.file_type || doc.type || 'LINK').toUpperCase() }
-                ]);
-              })
-              .catch(() => {});
-          });
+        sources.forEach((doc) => {
+          if (!doc.id) return;
+          documentFileService
+            .getFileMetadata(doc.id)
+            .then((file) => {
+              commit('patchSource', [
+                doc.id,
+                { _size: file?.file_size || 0, _type: (file?.file_type || doc.type || 'LINK').toUpperCase() }
+              ]);
+            })
+            .catch(() => {});
         });
       },
       onTranslation: (text) => commit('setTranslation', text),
@@ -232,24 +265,23 @@ const actions = {
         // transport-level failures (timeout, premature close, network)
         // render localized — a raw fetch message is developer text.
         let message;
-        if (error.fromServer) {
-          message = error.message || t('chatbot.streamingError', 'Response was interrupted. Please try again.');
-        } else if (error.code === 'STREAM_IDLE_TIMEOUT') {
+        if (!error.fromServer && error.code === 'STREAM_IDLE_TIMEOUT') {
           message = t('chatbot.streamTimeout', 'The assistant is not responding — the request timed out.');
         } else {
-          message = t('chatbot.streamingError', 'Response was interrupted. Please try again.');
+          message =
+            (error.fromServer && error.message) ||
+            t('chatbot.streamingError', 'Response was interrupted. Please try again.');
         }
         commit('status/setOffline', message, { root: true });
         commit('failStream', message);
       }
     });
-    controllers.set(id, controller);
+    activeController = controller;
   },
-  abortStream({ commit, rootState }) {
-    const id = rootState.conversation.openId;
-    const controller = controllers.get(id);
-    if (!controller) return;
-    controllers.delete(id);
+  abortStream({ commit }) {
+    if (!activeController) return;
+    const controller = activeController;
+    activeController = null;
     controller.abort();
     // The aborted fetch rejects with an AbortError the service swallows,
     // so nothing else closes the turn it was writing — mark it here, and
@@ -331,7 +363,11 @@ export function subscribeConversation(store) {
   // lifecycle event fires before the document goes away, so the write
   // through here is what a reload reads back.
   const onPageHide = () => {
-    if (timer) clearTimeout(timer);
+    // A null timer means the last debounced write already captured the
+    // exact current state — skip the redundant synchronous write on the
+    // unload path.
+    if (!timer) return;
+    clearTimeout(timer);
     timer = null;
     persistConversation(store.state.conversation);
   };

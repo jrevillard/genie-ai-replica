@@ -109,7 +109,9 @@ def test_generate_testset_passes_num_personas_to_generate(monkeypatch, engine_en
     # _build_testset_transforms (an explicit mirror of ragas 0.4.3
     # default_transforms) — stub it here; the sequence itself is pinned by
     # test_transform_sequence_matches_ragas_default_plus_seeder.
-    monkeypatch.setattr(ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model: [])
+    monkeypatch.setattr(
+        ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model, stats=None: []
+    )
     # ragas_engine imports apply_transforms INSIDE the function — patch the
     # module it resolves from.
     import ragas.testset.transforms as transforms_module
@@ -155,7 +157,9 @@ def test_generation_progress_calls_match_the_app_tracker_contract(monkeypatch, e
 
     monkeypatch.setattr(ragas_engine, "build_llm", lambda **kwargs: object())
     monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: object())
-    monkeypatch.setattr(ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model: [])
+    monkeypatch.setattr(
+        ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model, stats=None: []
+    )
 
     def fake_generate(self, **kwargs):
         return _testset_with(_StubTS())
@@ -214,7 +218,9 @@ def test_the_knowledge_graph_ticker_reports_both_counts(monkeypatch, engine_env)
 
     monkeypatch.setattr(ragas_engine, "build_llm", lambda **kwargs: object())
     monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: object())
-    monkeypatch.setattr(ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model: [])
+    monkeypatch.setattr(
+        ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model, stats=None: []
+    )
 
     def fake_generate(self, **kwargs):
         return _testset_with(_StubTS())
@@ -284,7 +290,9 @@ def test_generate_testset_caps_concept_text_for_the_kg(monkeypatch, engine_env):
         seen["node_lengths"] = [len(n.properties.get("page_content") or "") for n in kg.nodes]
 
     monkeypatch.setattr(TestsetGenerator, "generate", fake_generate)
-    monkeypatch.setattr(ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model: [])
+    monkeypatch.setattr(
+        ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model, stats=None: []
+    )
     import ragas.testset.transforms as transforms_module
 
     monkeypatch.setattr(transforms_module, "apply_transforms", fake_apply_transforms)
@@ -430,7 +438,7 @@ def test_generate_testset_seeds_missing_headlines_before_splitter(monkeypatch, e
         m.setattr(
             ragas_engine,
             "_build_testset_transforms",
-            lambda documents, llm, embedding_model: default_transforms(
+            lambda documents, llm, embedding_model, stats=None: default_transforms(
                 documents=documents, llm=llm, embedding_model=embedding_model
             ),
         )
@@ -1068,10 +1076,12 @@ def test_two_jobs_never_share_their_counters(monkeypatch, tmp_path):
 
 
 def test_a_node_that_cannot_be_parsed_does_not_kill_the_phase():
-    """Live 2026-10-26: one chunk's NER answer came back as a JSON object
-    where ragas's parser expects a plain string; the format-fix retry failed
-    too, and the exception escaped apply_transforms and took a 137-minute
-    generation with it. One node degrades; the phase continues."""
+    """Live 2026-10-26: one chunk's NER answer was invalid JSON, so NEROutput
+    rejected it; ragas then called its fix-output-format retry — whose
+    output_model is StringIO — and the model answered THAT prompt by echoing
+    the entities JSON, so the StringIO validation is what failed. The
+    exception escaped apply_transforms and took a 137-minute generation with
+    it. One node degrades; the phase continues."""
     import asyncio
 
     class _Boom:
@@ -1093,6 +1103,42 @@ def test_a_node_that_cannot_be_parsed_does_not_kill_the_phase():
     failures = ragas_engine._kg_failures()
     assert failures, "the degraded node was not counted"
     assert any("_Boom" in reason for reason in failures), failures
+
+
+def test_two_jobs_never_share_their_degraded_node_counts():
+    """2026-10-26: the DEGRADED-node count was still process-global while the
+    call counters had already become per-job — the same bug, in the sibling
+    field. A second generation's reset dropped the first's count to zero and
+    then published the second's as the first's. The count is REPORTED with
+    the suite, so a wrong number there is a wrong number in front of the
+    operator."""
+    import asyncio
+
+    class _Boom:
+        def generate_execution_plan(self, kg):
+            async def boom():
+                raise ValueError("Failed to parse StringIO from completion")
+
+            return [boom()]
+
+    stats_a = {"calls": 0, "replays": 0}
+    stats_b = {"calls": 0, "replays": 0}
+
+    async def _degrade(stats):
+        t = ragas_engine._tolerate_node_failures(_Boom(), stats)
+        for c in t.generate_execution_plan(None):
+            await c  # must NOT raise
+
+    asyncio.run(_degrade(stats_a))
+    # a SECOND job starts — its reset of the process global must not touch
+    # the first job's count
+    ragas_engine._reset_kg_failures()
+    asyncio.run(_degrade(stats_b))
+
+    assert sum(ragas_engine._kg_failures(stats_a).values()) == 1, stats_a
+    assert sum(ragas_engine._kg_failures(stats_b).values()) == 1, stats_b
+    # each job's own count is its own — and neither leaked into the global
+    assert ragas_engine._kg_failures() == {}, "a job's failure leaked into the process global"
 
 
 def test_the_tolerance_wrapper_keeps_the_transforms_class():
@@ -1191,7 +1237,9 @@ def test_generate_testset_filters_dropped_samples(monkeypatch, engine_env):
 
     monkeypatch.setattr(ragas_engine, "build_llm", lambda **kwargs: object())
     monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: object())
-    monkeypatch.setattr(ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model: [])
+    monkeypatch.setattr(
+        ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model, stats=None: []
+    )
     import ragas.testset.transforms as transforms_module
 
     monkeypatch.setattr(transforms_module, "apply_transforms", lambda kg, transforms, run_config=None: None)
@@ -1226,7 +1274,9 @@ def test_generate_testset_all_dropped_raises_an_honest_error(monkeypatch, engine
 
     monkeypatch.setattr(ragas_engine, "build_llm", lambda **kwargs: object())
     monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: object())
-    monkeypatch.setattr(ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model: [])
+    monkeypatch.setattr(
+        ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model, stats=None: []
+    )
     import ragas.testset.transforms as transforms_module
 
     monkeypatch.setattr(transforms_module, "apply_transforms", lambda kg, transforms, run_config=None: None)
@@ -1257,7 +1307,9 @@ def test_cancelled_generation_stops_the_kg_phase_within_one_llm_call(monkeypatch
     import threading
 
     monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: object())
-    monkeypatch.setattr(ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model: [])
+    monkeypatch.setattr(
+        ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model, stats=None: []
+    )
     import ragas.testset.transforms as transforms_module
 
     cancel_event = threading.Event()
@@ -1301,7 +1353,9 @@ def test_generate_testset_cancel_beats_partial_results(monkeypatch, engine_env):
 
     monkeypatch.setattr(ragas_engine, "build_llm", lambda **kwargs: object())
     monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: object())
-    monkeypatch.setattr(ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model: [])
+    monkeypatch.setattr(
+        ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model, stats=None: []
+    )
     import ragas.testset.transforms as transforms_module
 
     monkeypatch.setattr(transforms_module, "apply_transforms", lambda kg, transforms, run_config=None: None)
@@ -1938,3 +1992,65 @@ def test_the_scoring_call_timeout_is_configurable_and_bounded(monkeypatch):
     # the floor is 30 s — a zero budget would fail every call
     monkeypatch.setenv("RAGAS_EVAL_TIMEOUT_SECONDS", "0")
     assert ragas_engine._eval_timeout_seconds() == 30
+
+
+def test_a_degraded_node_is_excluded_instead_of_killing_the_relationship_phase():
+    """Live 2026-10-26: the Solar System run degraded two NER nodes and then
+    DIED in the phase right after them — "Node X or Y has no entities" —
+    because a node whose extraction degraded is missing the property the
+    relationship builders compare, and ragas RAISES on the missing property
+    instead of skipping the node. The node is excluded from the relationship
+    computation instead: it has no relationships to contribute, and the
+    phase stays alive."""
+    import asyncio
+
+    from ragas.testset.graph import KnowledgeGraph, Node, NodeType
+    from ragas.testset.transforms import OverlapScoreBuilder
+
+    good = Node(properties={"page_content": "x", "entities": ["NASA"]}, type=NodeType.CHUNK)
+    degraded = Node(properties={"page_content": "y"}, type=NodeType.CHUNK)
+    kg = KnowledgeGraph(nodes=[good, degraded])
+
+    # ragas's own behaviour: the missing property is fatal
+    with pytest.raises(ValueError, match="has no entities"):
+        asyncio.run(OverlapScoreBuilder(threshold=0.01).transform(kg))
+
+    # with the filter the degraded node is excluded and the phase survives
+    builder = OverlapScoreBuilder(threshold=0.01, filter_nodes=lambda n: n.get_property("entities") is not None)
+    assert builder.filter_nodes(good) is True
+    assert builder.filter_nodes(degraded) is False
+
+    async def _run():
+        for c in builder.generate_execution_plan(kg):
+            await c  # must NOT raise
+
+    asyncio.run(_run())
+    assert kg.relationships == []
+
+
+def test_the_transform_chain_excludes_degraded_nodes_from_the_relationship_builders():
+    """The filters the chain actually uses must exclude a node whose
+    extraction degraded — in BOTH branches (the long-doc branch filters the
+    chunks, the medium branch filters every node)."""
+    from langchain_core.documents import Document as LCDocument
+    from ragas.testset.graph import Node, NodeType
+
+    def _builders(docs):
+        chain = ragas_engine._build_testset_transforms(documents=docs, llm=object(), embedding_model=object())
+        parallel = chain[-1]
+        return {type(t).__name__: t for t in parallel.transformations}
+
+    long_docs = [LCDocument(page_content="word " * 600)]
+    medium_docs = [LCDocument(page_content="gamma " * 300)]
+
+    for docs in (long_docs, medium_docs):
+        builders = _builders(docs)
+        overlap = builders["OverlapScoreBuilder"]
+        chunk = Node(properties={"page_content": "x"}, type=NodeType.CHUNK)
+        with_entities = Node(properties={"page_content": "x", "entities": ["NASA"]}, type=NodeType.CHUNK)
+        assert overlap.filter_nodes(chunk) is False, "a degraded node would kill the overlap phase"
+        assert overlap.filter_nodes(with_entities) is True
+
+        cosine = builders["CosineSimilarityBuilder"]
+        doc = Node(properties={"page_content": "x"}, type=NodeType.DOCUMENT)
+        assert cosine.filter_nodes(doc) is False, "a degraded node would kill the cosine phase"

@@ -341,12 +341,28 @@ _KG_FAILURES: dict = {}
 _KG_FAILURES_LOCK = threading.Lock()
 
 
-def _record_kg_failure(reason: str) -> None:
+def _record_kg_failure(reason: str, stats: dict | None = None) -> None:
+    """Count one degraded knowledge-graph node.
+
+    stats (2026-10-26): THIS JOB's dict, when there is one. The process
+    global is the same bug the call counters had — a second job's reset
+    dropped the first job's published count to zero and then published the
+    second's as the first's — so the degraded-node COUNT must belong to the
+    job that produced it, exactly like the call count. The count is REPORTED
+    with the suite, so a wrong number there is a wrong number in front of
+    the operator.
+    """
+    if stats is not None:
+        failures = stats.setdefault("failures", {})
+        failures[reason] = failures.get(reason, 0) + 1
+        return
     with _KG_FAILURES_LOCK:
         _KG_FAILURES[reason] = _KG_FAILURES.get(reason, 0) + 1
 
 
-def _kg_failures() -> dict:
+def _kg_failures(stats: dict | None = None) -> dict:
+    if stats is not None:
+        return dict(stats.get("failures") or {})
     with _KG_FAILURES_LOCK:
         return dict(_KG_FAILURES)
 
@@ -356,7 +372,7 @@ def _reset_kg_failures() -> None:
         _KG_FAILURES.clear()
 
 
-async def _guarded_node(coro, transform):
+async def _guarded_node(coro, transform, stats: dict | None = None):
     """Await one node's transform coroutine; a failure degrades THAT node.
 
     The node keeps its other properties, the failure is COUNTED (and
@@ -365,17 +381,22 @@ async def _guarded_node(coro, transform):
         return await coro
     except Exception as err:  # noqa: BLE001 — one node must not kill the phase
         reason = f"{type(transform).__name__}: {type(err).__name__}"
-        _record_kg_failure(reason)
+        _record_kg_failure(reason, stats)
         logger.warning("knowledge-graph node degraded (%s) — the run continues", reason)
         return None
 
 
-def _tolerate_node_failures(transform):
+def _tolerate_node_failures(transform, stats: dict | None = None):
     """Make ONE node's failure degrade that node instead of the phase.
 
-    Live 2026-10-26: the Solar System generation died at 137 minutes — one
-    chunk's NER answer came back as a JSON object where ragas's parser
-    expects a plain string, the format-fix retry failed too, and the
+    Live 2026-10-26: the Solar System generation died at 137 minutes on one
+    chunk. The chain, read off the installed ragas 0.4.3: the chunk's NER
+    answer was invalid JSON (18 entities plus a `//` comment block), so
+    NEROutput rejected it, and ragas then called its fix-output-format
+    retry — whose output_model is StringIO — and the model answered THAT
+    prompt by echoing the entities JSON, so the StringIO validation is what
+    failed ("1 validation error for StringIO"). The fix prompt retries with
+    the same input, so the cache served the same bad answer again, and the
     exception escaped `apply_transforms` and took the whole job with it.
     The KG already tolerates a DEAD node (a failed call — see the caching
     wrapper's `_degrade`); an UNPARSEABLE answer is the same class of
@@ -387,11 +408,14 @@ def _tolerate_node_failures(transform):
     filter, ...) — and the transform keeps its CLASS, so ragas's
     isinstance checks (Parallel, BaseGraphTransformation) still hold. A
     proxy object would have failed those checks and been silently ignored.
+
+    stats (2026-10-26): THIS JOB's counters — the degraded-node count is
+    reported with the suite, so it must belong to the job that produced it.
     """
     plan = transform.generate_execution_plan
 
     def generate_execution_plan(kg):
-        return [_guarded_node(c, transform) for c in plan(kg)]
+        return [_guarded_node(c, transform, stats) for c in plan(kg)]
 
     transform.generate_execution_plan = generate_execution_plan
     return transform
@@ -736,7 +760,7 @@ def _make_caching_wrapper(  # noqa: N802 — factory, like _make_fanout_class
             continues. 1,074 nodes keep their work; the suite reports how
             many were degraded."""
             reason = _classify_failure(err)
-            _record_kg_failure(reason)
+            _record_kg_failure(reason, self._stats)
             logger.warning("knowledge-graph node degraded (%s) — the run continues", reason)
             return self._rebuild([""], {})
 
@@ -1120,7 +1144,7 @@ def _make_headlines_seeder():
     return _HeadlinesSeeder()
 
 
-def _build_testset_transforms(documents, llm, embedding_model):
+def _build_testset_transforms(documents, llm, embedding_model, stats=None):
     """Explicit mirror of ragas 0.4.3 default_transforms()
     (.venv/Lib/site-packages/ragas/testset/transforms/default.py:34-167)
     with ONE change: a headlines-seeding step (_make_headlines_seeder)
@@ -1158,6 +1182,24 @@ def _build_testset_transforms(documents, llm, embedding_model):
     def filter_chunks(node):
         return node.type == NodeType.CHUNK
 
+    # A node whose extraction DEGRADED (2026-10-26 — the live Solar System run
+    # degraded two NER nodes, and the phase after them raised "Node X or Y has
+    # no entities" and killed the job) has no property to compare. The
+    # relationship builders cannot compare a node they know nothing about,
+    # and they RAISE on the missing property rather than skipping it. So the
+    # node is excluded from the relationship computation instead: it has no
+    # relationships to contribute, and excluding it keeps the phase alive.
+    # In the normal case every node HAS the property, so these filters are
+    # behaviour-preserving — they only differ for a degraded node.
+    def filter_chunks_with_entities(node):
+        return filter_chunks(node) and node.get_property("entities") is not None
+
+    def filter_nodes_with_entities(node):
+        return node.get_property("entities") is not None
+
+    def filter_docs_with_embedding(node, min_num_tokens=500):
+        return filter_doc_with_num_tokens(node, min_num_tokens) and node.get_property("summary_embedding") is not None
+
     # token-length bins pick the branch (default.py:80-82, 86, 131, 162-165)
     bin_ranges = [(0, 100), (101, 500), (501, float("inf"))]
     counts = [num_tokens_from_string(doc.page_content) for doc in documents]
@@ -1178,11 +1220,11 @@ def _build_testset_transforms(documents, llm, embedding_model):
         # similarity builders) are NOT wrapped: a failure there is a code
         # bug, and it must fail loudly.
         return [
-            _tolerate_node_failures(HeadlinesExtractor(llm=llm, filter_nodes=filter_doc_with_num_tokens)),
+            _tolerate_node_failures(HeadlinesExtractor(llm=llm, filter_nodes=filter_doc_with_num_tokens), stats),
             _make_headlines_seeder(),
             HeadlineSplitter(min_tokens=500),
-            _tolerate_node_failures(SummaryExtractor(llm=llm, filter_nodes=filter_doc_with_num_tokens)),
-            _tolerate_node_failures(CustomNodeFilter(llm=llm, filter_nodes=filter_chunks)),
+            _tolerate_node_failures(SummaryExtractor(llm=llm, filter_nodes=filter_doc_with_num_tokens), stats),
+            _tolerate_node_failures(CustomNodeFilter(llm=llm, filter_nodes=filter_chunks), stats),
             Parallel(
                 _tolerate_node_failures(
                     EmbeddingExtractor(
@@ -1190,28 +1232,29 @@ def _build_testset_transforms(documents, llm, embedding_model):
                         property_name="summary_embedding",
                         embed_property_name="summary",
                         filter_nodes=filter_doc_with_num_tokens,
-                    )
+                    ),
+                    stats,
                 ),
-                _tolerate_node_failures(ThemesExtractor(llm=llm, filter_nodes=filter_chunks)),
-                _tolerate_node_failures(NERExtractor(llm=llm, filter_nodes=filter_chunks)),
+                _tolerate_node_failures(ThemesExtractor(llm=llm, filter_nodes=filter_chunks), stats),
+                _tolerate_node_failures(NERExtractor(llm=llm, filter_nodes=filter_chunks), stats),
             ),
             Parallel(
                 CosineSimilarityBuilder(
                     property_name="summary_embedding",
                     new_property_name="summary_similarity",
                     threshold=0.7,
-                    filter_nodes=filter_doc_with_num_tokens,
+                    filter_nodes=filter_docs_with_embedding,
                 ),
-                OverlapScoreBuilder(threshold=0.01, filter_nodes=filter_chunks),
+                OverlapScoreBuilder(threshold=0.01, filter_nodes=filter_chunks_with_entities),
             ),
         ]
     if fractions["101-500"] >= 0.25:
         # medium-doc branch (default.py:131-161) — verbatim, no splitter here
         return [
             _tolerate_node_failures(
-                SummaryExtractor(llm=llm, filter_nodes=lambda node: filter_doc_with_num_tokens(node, 100))
+                SummaryExtractor(llm=llm, filter_nodes=lambda node: filter_doc_with_num_tokens(node, 100)), stats
             ),
-            _tolerate_node_failures(CustomNodeFilter(llm=llm)),
+            _tolerate_node_failures(CustomNodeFilter(llm=llm), stats),
             Parallel(
                 _tolerate_node_failures(
                     EmbeddingExtractor(
@@ -1219,19 +1262,20 @@ def _build_testset_transforms(documents, llm, embedding_model):
                         property_name="summary_embedding",
                         embed_property_name="summary",
                         filter_nodes=lambda node: filter_doc_with_num_tokens(node, 100),
-                    )
+                    ),
+                    stats,
                 ),
-                _tolerate_node_failures(ThemesExtractor(llm=llm, filter_nodes=filter_docs)),
-                _tolerate_node_failures(NERExtractor(llm=llm)),
+                _tolerate_node_failures(ThemesExtractor(llm=llm, filter_nodes=filter_docs), stats),
+                _tolerate_node_failures(NERExtractor(llm=llm), stats),
             ),
             Parallel(
                 CosineSimilarityBuilder(
                     property_name="summary_embedding",
                     new_property_name="summary_similarity",
                     threshold=0.5,
-                    filter_nodes=lambda node: filter_doc_with_num_tokens(node, 100),
+                    filter_nodes=lambda node: filter_docs_with_embedding(node, 100),
                 ),
-                OverlapScoreBuilder(threshold=0.01),
+                OverlapScoreBuilder(threshold=0.01, filter_nodes=filter_nodes_with_entities),
             ),
         ]
     raise ValueError("Documents appears to be too short (ie 100 tokens or less). Please provide longer documents.")
@@ -1624,7 +1668,7 @@ async def generate_testset(
     # The same confinement keeps the uvicorn loop free for health checks.
     if progress:
         progress("building-knowledge-graph")
-    transforms = _build_testset_transforms(documents=docs, llm=llm, embedding_model=embeddings)
+    transforms = _build_testset_transforms(documents=docs, llm=llm, embedding_model=embeddings, stats=stats)
     nodes = [
         Node(
             type=NodeType.DOCUMENT,
@@ -1781,7 +1825,7 @@ async def generate_testset(
         # (2026-10-22: a server-dropped connection at node 1074/1075 ended a
         # 74-minute run). The run CONTINUES on a degraded node; the count
         # travels with the suite so the degradation is never silent.
-        "kg_failures": _kg_failures(),
+        "kg_failures": _kg_failures(stats),
         "generator": {"model": generator_model, "embed_model": generator_embed},
     }
 

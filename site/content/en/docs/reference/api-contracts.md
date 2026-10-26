@@ -1190,5 +1190,5 @@ contract.
   enable/revert.
 - [Troubleshooting](/docs/operate/troubleshooting/) — `docker service
   logs`, security-blocker diagnostics.
-- [Operate → Admin Logs](/docs/operate/admin-logs/) — the Logs tab endpoints,
+- [Operations → Admin Logs](/docs/operate/admin-logs/) — the Logs tab endpoints,
   including `debug-yesterday` and the LogSQL query endpoint.

@@ -47,7 +47,7 @@ For the full **operator-side** flow (upload → antivirus → status states →
 where the ingestion log lives), see
 [Knowledge base → Ingestion]({{< relref "/docs/knowledge-base/ingestion" >}}).
 For the per-chunk LLM-detail (which span is emitted where, how to read a
-trace), see [Operations → Debugging]({{< relref "/docs/operate" >}}).
+trace), see [Operations → Distributed tracing]({{< relref "/docs/operate/tracing-howto" >}}).
 
 ## Chunking
 
@@ -369,7 +369,7 @@ model and re-ingest.
 
 For the span-level view (`dataprep.llm.context_batch` and
 `dataprep.llm.context_doc` spans on the `file_id` trace), see
-[Operations → Debugging with tracing]({{< relref "/docs/operate" >}}).
+[Operations → Distributed tracing]({{< relref "/docs/operate/tracing-howto" >}}).
 
 ## Related
 

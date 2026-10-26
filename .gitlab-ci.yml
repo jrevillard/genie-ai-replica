@@ -2205,6 +2205,36 @@ lint:doc-repo:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
 
+# Format the scripts of the documentation site.  They live outside every
+# component directory, so no component's own lint job covers them; the
+# checker is CI-critical code, so it gets the same Prettier gate as the rest
+# of the repository.  Prettier comes from components/shared/lib, which
+# already pins it -- no second copy to keep in sync.
+lint:site-scripts:
+  extends: .lint_node
+  before_script:
+    - cd components/shared/lib && npm ci
+  script:
+    - node ${CI_PROJECT_DIR}/components/shared/lib/node_modules/prettier/bin/prettier.cjs --check "${CI_PROJECT_DIR}/site/scripts/*.mjs"
+  cache:
+    - key:
+        files:
+          - components/shared/lib/package-lock.json
+        prefix: lint-site-scripts
+      paths:
+        - components/shared/lib/node_modules/
+      fallback_keys:
+        - "lint-site-scripts-$CI_DEFAULT_BRANCH"
+        - "lint-site-scripts-"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "site/scripts/**/*"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
 lint:python:
   image: python:3.11-slim
   stage: lint
@@ -2828,6 +2858,7 @@ config:docs-links:
       changes:
         - "site/content/**/*"
         - "site/scripts/**/*"
+        - "site/hugo.toml"
         - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'

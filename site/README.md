@@ -33,13 +33,25 @@ node scripts/check-links.mjs --fix      # rewrite the links that can be repaired
 node --test scripts/check-links.test.mjs
 ```
 
-It fails on a link whose target does not exist, on a link that only resolves
-through a redirect, on a raw-HTML `href` that Hugo cannot rewrite, and on a
-section that declares a `slug:` — a section slug makes the published URL
-family depend on the Hugo version, and CI builds from a floating Hugo image.
+It fails on:
 
-Hugo shortcodes (`{{< relref >}}`) are resolved by Hugo itself: a target that
-no longer exists fails the `pages` build, so they need no checker rule.
+- a link whose target does not exist — Markdown link, raw-HTML `href`, or
+  reference-style definition;
+- a link that only resolves through a redirect: the reader lands on a
+  redirect hop and the URL bar shows a path that is not the page's address;
+- a link whose anchor does not exist on the target page (the heading was
+  renamed) — the checker reproduces Hugo's own anchor algorithm;
+- a `relref` shortcode that points at a page that does not exist;
+- a section that declares a `slug:` — a section slug makes the published URL
+  family depend on the Hugo version, and CI builds from a floating Hugo image;
+- a site configuration the checker cannot model (`permalinks`, `uglyURLs`, a
+  non-default anchor style, more than one language).
+
+Hugo rewrites a Markdown link that points at a content path, but never
+rewrites a raw-HTML `href` — that is why both forms are checked.
+
+The scripts are formatted with Prettier by `lint:site-scripts` (stage
+`lint`), using the Prettier version pinned in `components/shared/lib`.
 
 ## How docs are sourced
 

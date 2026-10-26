@@ -33,9 +33,13 @@ function fixture() {
   return root;
 }
 
-function run(contentDir, fix = false) {
+function run(contentDir, options = {}) {
+  const argv = [];
+  if (options.fix) argv.push('--fix');
+  if (options.config) argv.push('--config', options.config);
+  argv.push(contentDir);
   try {
-    const out = execFileSync(process.execPath, fix ? [SCRIPT, '--fix', contentDir] : [SCRIPT, contentDir], {
+    const out = execFileSync(process.execPath, [SCRIPT, ...argv], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe']
     });
@@ -96,7 +100,7 @@ test('--fix rewrites an alias link to the published URL and leaves dead links al
     join(root, 'docs/operate/page.md'),
     '---\ntitle: "Page"\naliases:\n  - /docs/operations/page/\n---\n\n# Page\n\n[legacy](/docs/operations/page/)\n\n[dead](/docs/nowhere/)\n'
   );
-  const r = run(root, true);
+  const r = run(root, { fix: true });
   assert.equal(r.code, 1, 'the dead link must still be reported');
   const body = readFileSync(join(root, 'docs/operate/page.md'), 'utf8');
   assert.match(body, /\[legacy\]\(\/docs\/operate\/page\/\)/);
@@ -220,4 +224,89 @@ test('rejects a reference-style link that points at an alias', () => {
   const r = run(root);
   assert.equal(r.code, 1);
   assert.match(r.out, /redirect/);
+});
+
+test('accepts a link to the home page', () => {
+  const root = fixture();
+  writeFileSync(join(root, 'index.md'), '---\ntitle: "Home"\n---\n\n# Home\n');
+  writeFileSync(join(root, 'docs/operate/page.md'), '---\ntitle: "Page"\n---\n\n# Page\n\n[home](/)\n');
+  const r = run(root);
+  assert.equal(r.code, 0, r.out);
+});
+
+test('rejects a link whose anchor does not exist on the target page', () => {
+  const root = fixture();
+  writeFileSync(
+    join(root, 'docs/operate/page.md'),
+    '---\ntitle: "Page"\n---\n\n# Page\n\n## Real heading\n\n[nowhere](/docs/operate/page/#missing-heading)\n'
+  );
+  const r = run(root);
+  assert.equal(r.code, 1);
+  assert.match(r.out, /anchor that does not exist/);
+  assert.match(r.out, /missing-heading/);
+});
+
+test('accepts a link whose anchor exists on the target page', () => {
+  const root = fixture();
+  writeFileSync(
+    join(root, 'docs/operate/page.md'),
+    '---\ntitle: "Page"\n---\n\n# Page\n\n## Real heading\n\n[here](/docs/operate/page/#real-heading)\n'
+  );
+  const r = run(root);
+  assert.equal(r.code, 0, r.out);
+});
+
+test('rejects a link to an anchor that only exists on another page', () => {
+  const root = fixture();
+  writeFileSync(
+    join(root, 'docs/operate/page.md'),
+    '---\ntitle: "Page"\n---\n\n# Page\n\n## Here\n\n[other](/docs/operate/other/#here)\n'
+  );
+  writeFileSync(join(root, 'docs/operate/other.md'), '---\ntitle: "Other"\n---\n\n# Other\n\n## There\n');
+  const r = run(root);
+  assert.equal(r.code, 1);
+  assert.match(r.out, /anchor that does not exist/);
+  assert.match(r.out, /#here/);
+});
+
+test('ignores a link written inside inline code', () => {
+  const root = fixture();
+  writeFileSync(
+    join(root, 'docs/operate/page.md'),
+    '---\ntitle: "Page"\n---\n\n# Page\n\nThe page has no `<a href="#main-content">` element.\n'
+  );
+  const r = run(root);
+  assert.equal(r.code, 0, r.out);
+});
+
+test('rejects a relref shortcode that points at a page that does not exist', () => {
+  const root = fixture();
+  writeFileSync(
+    join(root, 'docs/operate/page.md'),
+    '---\ntitle: "Page"\n---\n\n# Page\n\n[gone]({{< relref "nowhere" >}})\n'
+  );
+  const r = run(root);
+  assert.equal(r.code, 1);
+  assert.match(r.out, /relref/);
+  assert.match(r.out, /nowhere/);
+});
+
+test('accepts a relref shortcode that points at an existing page', () => {
+  const root = fixture();
+  writeFileSync(join(root, 'docs/operate/other.md'), '---\ntitle: "Other"\n---\n\n# Other\n');
+  writeFileSync(
+    join(root, 'docs/operate/page.md'),
+    '---\ntitle: "Page"\n---\n\n# Page\n\n[sibling]({{< relref "other" >}})\n\n[absolute]({{< relref "/docs/operate/other" >}})\n'
+  );
+  const r = run(root);
+  assert.equal(r.code, 0, r.out);
+});
+
+test('rejects a site configuration the checker cannot model', () => {
+  const root = fixture();
+  const config = join(root, 'hugo.toml');
+  writeFileSync(config, 'baseURL = "https://example.org/"\nuglyURLs = true\n');
+  const r = run(root, { config });
+  assert.equal(r.code, 1);
+  assert.match(r.out, /uglyURLs/);
 });

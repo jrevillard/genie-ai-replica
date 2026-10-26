@@ -68,6 +68,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Links in the documentation site pointed at the wrong page or at the wrong
+  section.** The link to the development guide on the home page, and the
+  deployment card next to it, only worked through a redirect: the pages had
+  moved to "Build and run locally" and to the deployment section. Several
+  pages still linked to the glossary, the source-tree analysis and the tracing
+  page under their old addresses, and the "Section -> Page" link texts still
+  named sections that had been renamed, so the reader was sent to a section
+  that no longer had that name. The addresses of the three renamed sections
+  now stay the same whichever version of Hugo builds the site, and a new
+  check in the CI pipeline fails when a link is broken, when it only works
+  through a redirect, or when a section address would depend on the Hugo
+  version. (#607)
+
 - **Static-analysis follow-ups on the application code (SAST wave-7).**
   The translation example's two `requests.post` calls ran without a timeout
   and could hang on a stalled upstream — the translate call now times out

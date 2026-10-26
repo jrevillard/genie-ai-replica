@@ -192,7 +192,7 @@ The Keycloak login, account, admin, and email screens are themed by the `genie` 
 
 The `genie` theme is a child of the Keycloak `keycloak.v2` (login/admin) / `keycloak.v3` (account) / `keycloak` (email) base themes — defined by the `parent=` line in each `theme.properties`.
 
-The default login screen is the Living Intelligence look: the brand artwork (`login/resources/img/logo.png`) in the right-hand column, the wave band (`login/resources/img/genie-bottom-waves.svg`) along the bottom of the page, and the form card with an accent edge and rounded corners. Both the ground and the wave belong to the base theme only — the login template marks its own pages, so a child theme such as `genie-el-salvador` keeps the look it defines for itself.
+The default login screen is the Living Intelligence look: the brand artwork (`login/resources/img/logo.png`) in the brand column, which sits beside the form on wide viewports and above it on narrow ones; the wave band (`login/resources/img/genie-bottom-waves.svg`) along the bottom of the page on wide viewports; and the form card with an accent edge and rounded corners. Both the ground and the wave belong to the base theme only — the login template marks its own pages, so a child theme such as `genie-el-salvador` keeps the look it defines for itself.
 
 ### Multiple themes and theme selection
 

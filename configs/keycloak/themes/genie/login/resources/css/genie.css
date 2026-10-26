@@ -149,7 +149,7 @@ body.kc-theme-genie#keycloak-bg::after {
 
 /* Page title — PatternFly's title component carries no colour of its own,
    so the heading would fall back to the browser's black instead of the
-   theme's foreground token. */
+   theme's foreground token, which the dark stylesheet redefines. */
 #kc-page-title {
-  color: #344049;
+  color: var(--pf-v5-global--Color--100);
 }

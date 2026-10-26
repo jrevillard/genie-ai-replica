@@ -445,7 +445,14 @@ describe('Configuration Validation Suite', () => {
     });
 
     test('the ground and the wave are scoped to the marker class', () => {
-      expect(names.scopedClass).toBe(names.emittedClass);
+      const unscoped = names.paintedSelectors.filter((selector) => !selector.includes(`.${names.emittedClass}`));
+      expect(unscoped).toEqual([]);
+    });
+
+    test('both the ground and the wave are painted', () => {
+      const painted = names.paintedSelectors.join(' ');
+      expect(painted).toMatch(/#keycloak-bg::before/);
+      expect(painted).toMatch(/#keycloak-bg::after/);
     });
   });
 });

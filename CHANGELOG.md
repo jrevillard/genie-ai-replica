@@ -56,16 +56,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The Keycloak theme now covers every surface, not only the login page.**
   The admin console, the account console and the Keycloak emails carry the
   Living Intelligence look: the masthead is a pale wash of the brand instead of
-  a solid brand slab (the console's own label sat on that slab at 1.5:1 and
-  now reads at 16:1), the pale ground shows behind the content panels, the wave
+  a solid brand slab (the console's own label sat on that slab at 2.25:1 and
+  now reads at 14.1:1), the pale ground shows behind the content panels, the wave
   band closes the sidebar, the admin welcome page shows the brand artwork, and
   each data table carries the accent edge. The email template follows the same
   rules, and its images are fetched from the theme's own resources — Keycloak
   attaches nothing to an email, so the logo reference that was there resolved to
   a broken image in every mail client. Deployments that only override the login
   screen are unaffected; a deployment that ships its own child theme
-  (`genie-el-salvador`) keeps its own look on the console surfaces, since a
-  child theme loads only its own stylesheets.
+  (`genie-el-salvador`) inherits the base theme's stylesheets unless it declares
+  its own `styles`, so the console look reaches it too.
+
+- **The gateway revalidates the Keycloak theme's own resources.** Keycloak
+  serves every theme resource with a 30-day `Cache-Control` and no
+  validators, so a browser that fetched the stylesheet before a theme change
+  keeps it for a month. The gateway now overrides that header for the theme's
+  own files (`no-cache, must-revalidate`); the shared vendor bundle and the
+  versioned bundles, whose names carry their content hash, keep their long
+  cache.
 
 - **On iOS and macOS, the trust-all TLS interception of the vendored
   `flutter_appauth` fork is now scoped to the OIDC provider's host.** The

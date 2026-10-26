@@ -117,8 +117,6 @@
      The masthead is a pale wash of the brand — the same plane the web
      app's navbar is (--navbar-bg) — and the ground the panels sit on
      is the dark page wash. */
-  --pf-v5-c-page__header--BackgroundColor: #0d1a32;
-  --pf-v5-c-page__header-brand-link--c-brand--Color: #f3f9ff;
   --pf-v5-c-page__sidebar--BackgroundColor: #0b0e11;
   --pf-v5-c-page__sidebar--m-light--BackgroundColor: #0b0e11;
   --pf-v5-c-page__sidebar--m-light--BorderRightColor: #474e55;
@@ -177,11 +175,14 @@
 }
 
 /* ── Nav: selected item — the brand at low opacity, its ink the brand
-   lightened. The stock console paints it as a solid brand slab. ── */
-.pf-v5-theme-dark .pf-v5-c-nav__link.pf-m-current,
-.pf-v5-theme-dark .pf-v5-c-nav__item.pf-m-current:not(.pf-m-expanded) .pf-v5-c-nav__link {
-  color: #eceff2 !important;
-  background-color: rgba(83, 127, 235, 0.15);
+   lightened.
+
+   Same tokens as the light rule: the stock rule resolves them in
+   every state, so overriding them where the link resolves them
+   covers the resting, hovered and expanded states alike. ── */
+.pf-v5-theme-dark .pf-v5-c-nav__link {
+  --pf-v5-c-nav__link--m-current--BackgroundColor: rgba(83, 127, 235, 0.15);
+  --pf-v5-c-nav__link--m-current--Color: #eceff2;
 }
 
 /* ── The console's data panel is a table: the DS surface treatment

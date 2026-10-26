@@ -27,7 +27,7 @@
                 <tr>
                     <td style="background-color:#ddecff;padding:28px 24px;text-align:center;">
                         <#if url??>
-                            <img src="${url.resourcesUrl}/img/logo.png" alt="GENIE.AI" style="display:block;max-width:72px;max-height:72px;margin:0 auto;border-radius:12px;">
+                            <img src="${url.resourcesUrl}/img/logo.png" alt="GENIE.AI" width="62" height="72" style="display:block;width:62px;height:72px;max-width:72px;max-height:72px;margin:0 auto;border-radius:12px;">
                         </#if>
                         <div style="color:#000d64;font-size:22px;font-weight:700;letter-spacing:0.08em;margin-top:12px;">GENIE.AI</div>
                     </td>
@@ -40,15 +40,15 @@
                 <#if url??>
                     <tr>
                         <td style="padding:0 32px;line-height:0;">
-                            <img src="${url.resourcesUrl}/img/genie-bottom-waves.png" alt="" style="display:block;width:100%;height:auto;">
+                            <img src="${url.resourcesUrl}/img/genie-bottom-waves.png" alt="" width="536" height="106" style="display:block;width:100%;max-width:536px;height:auto;">
                         </td>
                     </tr>
                 </#if>
                 <tr>
                     <td style="background-color:#f9fbfd;padding:20px 32px;text-align:center;border-top:1px solid #bdc5cb;">
                         <p style="margin:0;font-weight:600;color:#344049;">International Telecommunication Union (ITU)</p>
-                        <p style="margin:0;color:#818b91;">Place des Nations, CH-1211 Geneva, Switzerland</p>
-                        <p style="margin:8px 0 0 0;color:#a0a9b0;font-size:12px;line-height:1.5;">This email was sent by GENIE.AI. Please do not reply to this email.</p>
+                        <p style="margin:0;color:#626a70;">Place des Nations, CH-1211 Geneva, Switzerland</p>
+                        <p style="margin:8px 0 0 0;color:#6b7379;font-size:12px;line-height:1.5;">This email was sent by GENIE.AI. Please do not reply to this email.</p>
                     </td>
                 </tr>
             </table>

@@ -436,7 +436,13 @@ describe('Configuration Validation Suite', () => {
   // the template emits. A rename that breaks the chain drops the ground
   // and the wave with no error anywhere.
   describe('Keycloak login theme marker', () => {
-    const names = readLoginThemeNames(ROOT, 'genie');
+    let names;
+
+    beforeAll(() => {
+      // Read in a hook, not while the suite is collected: a theme that
+      // lost a file has to fail one check, not the whole file.
+      names = readLoginThemeNames(ROOT, 'genie');
+    });
 
     test('the login template tests the resource path of its own theme', () => {
       expect(names.testedPath).toBe(names.themeName);
@@ -505,8 +511,8 @@ describe('Configuration Validation Suite', () => {
       // has to be right, not a copy of the repository's themes.
       // `resources` are the theme's assets; `templates` are the files
       // Keycloak renders (an email template lives outside `resources`).
-      const writeTheme = (type, properties, { resources = {}, templates = {} } = {}) => {
-        const dir = path.join(root, 'configs', 'keycloak', 'themes', 'demo', type);
+      const writeTheme = (type, properties, { resources = {}, templates = {}, theme = 'demo' } = {}) => {
+        const dir = path.join(root, 'configs', 'keycloak', 'themes', theme, type);
         fs.mkdirSync(path.join(dir, 'resources'), { recursive: true });
         fs.writeFileSync(path.join(dir, 'theme.properties'), properties);
         const write = (base, files) => {
@@ -568,6 +574,98 @@ describe('Configuration Validation Suite', () => {
           templates: { 'html/template.ftl': '<#-- a `cid:` reference would break --><p>hello</p>' }
         });
         expect(collectThemeIssues(root)).toEqual([]);
+      });
+
+      test('a `CID:` in another case is still a `cid:`', () => {
+        writeTheme('email', 'parent=keycloak\n', {
+          templates: { 'html/template.ftl': '<img src="CID:logo.png" alt="GENIE.AI">' }
+        });
+        expect(collectThemeIssues(root)).toEqual([
+          { theme: 'demo', type: 'email', kind: 'cid', reference: 'logo.png' }
+        ]);
+      });
+
+      test('a `cid:` in an HTML comment is not a `cid:` in the mail', () => {
+        writeTheme('email', 'parent=keycloak\n', {
+          templates: { 'html/template.ftl': '<!-- <img src="cid:logo.png"> --><p>hello</p>' }
+        });
+        expect(collectThemeIssues(root)).toEqual([]);
+      });
+
+      test('a stylesheet the theme imports and does not have', () => {
+        writeTheme('admin', 'styles=css/genie.css\n', {
+          resources: { 'css/genie.css': '@import "missing.css";\n.a { color: red; }' }
+        });
+        expect(collectThemeIssues(root)).toEqual([
+          { theme: 'demo', type: 'admin', kind: 'import', reference: 'missing.css' }
+        ]);
+      });
+
+      test('an image an imported stylesheet names', () => {
+        writeTheme('admin', 'styles=css/genie.css\n', {
+          resources: {
+            'css/genie.css': '@import "base.css";',
+            'css/base.css': '.a { background: url(../img/wave.svg); }'
+          }
+        });
+        expect(collectThemeIssues(root)).toEqual([
+          { theme: 'demo', type: 'admin', kind: 'asset', reference: '../img/wave.svg' }
+        ]);
+      });
+
+      test('a stylesheet a child theme borrows from its parent', () => {
+        // A child theme serves the parent's stylesheets: the file lives
+        // in the parent's resources and the child is served it, so it
+        // is not a broken reference.
+        writeTheme('login', 'parent=base\nstyles=css/base.css\n', { theme: 'child' });
+        writeTheme('login', 'styles=css/base.css\n', {
+          theme: 'base',
+          resources: { 'css/base.css': '.a { color: red; }' }
+        });
+        expect(collectThemeIssues(root)).toEqual([]);
+      });
+
+      test('a property the theme separates with a colon', () => {
+        // Keycloak reads theme.properties as a Java properties file: a
+        // colon separates as well as an equals sign.
+        writeTheme('admin', 'styles:css/genie.css\n');
+        expect(collectThemeIssues(root)).toEqual([
+          { theme: 'demo', type: 'admin', kind: 'styles', reference: 'css/genie.css' }
+        ]);
+      });
+
+      test('a property the theme continues on the next line', () => {
+        writeTheme('admin', 'styles=css/genie.css \\\n      css/other.css\n', {
+          resources: { 'css/genie.css': '.a { color: red; }' }
+        });
+        expect(collectThemeIssues(root)).toEqual([
+          { theme: 'demo', type: 'admin', kind: 'styles', reference: 'css/other.css' }
+        ]);
+      });
+
+      test('a favicon the theme does not have', () => {
+        writeTheme('admin', 'favIcon=/img/favicon.ico\n');
+        expect(collectThemeIssues(root)).toEqual([
+          { theme: 'demo', type: 'admin', kind: 'favIcon', reference: '/img/favicon.ico' }
+        ]);
+      });
+
+      test('a script the theme does not have', () => {
+        writeTheme('admin', 'scripts=js/app.js\n');
+        expect(collectThemeIssues(root)).toEqual([
+          { theme: 'demo', type: 'admin', kind: 'scripts', reference: 'js/app.js' }
+        ]);
+      });
+
+      test('a logo that is a directory and not a file', () => {
+        writeTheme('admin', 'logo=/img/logo.png\n');
+        fs.mkdirSync(
+          path.join(root, 'configs', 'keycloak', 'themes', 'demo', 'admin', 'resources', 'img', 'logo.png'),
+          { recursive: true }
+        );
+        expect(collectThemeIssues(root)).toEqual([
+          { theme: 'demo', type: 'admin', kind: 'logo', reference: '/img/logo.png' }
+        ]);
       });
     });
   });

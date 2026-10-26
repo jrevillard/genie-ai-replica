@@ -152,7 +152,7 @@
   <div class="${properties.kcLoginContainer!}">
     <header id="kc-header" class="pf-v5-c-login__header">
       <div id="kc-header-wrapper"
-              class="pf-v5-c-brand"><img src="${url.resourcesPath}/img/logo.png" alt="GENIE.AI">${kcSanitize(msg("loginTitleHtml",(realm.displayNameHtml!'')))?no_esc}</div>
+              class="pf-v5-c-brand"><img src="${url.resourcesPath}/img/logo.png" alt="GENIE.AI"></div>
     </header>
     <main class="${properties.kcLoginMain!}">
       <div class="${properties.kcLoginMainHeader!}">

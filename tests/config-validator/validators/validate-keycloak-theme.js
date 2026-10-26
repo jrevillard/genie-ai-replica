@@ -12,8 +12,24 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { readProperties } = require('./validate-keycloak-themes');
 
 const THEMES_DIR = path.join('configs', 'keycloak', 'themes');
+
+/**
+ * The content of a file, or an empty string when it is not there. A
+ * theme that lost a file is a failed check, not a failed suite.
+ *
+ * @param {string} file path of the file
+ * @returns {string} the content
+ */
+function readFileOrEmpty(file) {
+  try {
+    return fs.readFileSync(file, 'utf8');
+  } catch {
+    return '';
+  }
+}
 
 /**
  * Split a comma-separated selector list at the commas that separate
@@ -95,8 +111,9 @@ function parseSelectors(css) {
  */
 function readLoginThemeNames(root, themeName) {
   const loginDir = path.join(root, THEMES_DIR, themeName, 'login');
-  const properties = fs.readFileSync(path.join(loginDir, 'theme.properties'), 'utf8');
-  const template = fs.readFileSync(path.join(loginDir, 'template.ftl'), 'utf8');
+  const propertiesFile = path.join(loginDir, 'theme.properties');
+  const properties = fs.existsSync(propertiesFile) ? readProperties(propertiesFile) : {};
+  const template = readFileOrEmpty(path.join(loginDir, 'template.ftl'));
   // FreeMarker comments are not output: a marker that survives only in a
   // comment is not a marker the page carries.
   const templateBody = template.replace(/<#--[\s\S]*?-->/g, '');
@@ -122,11 +139,11 @@ function readLoginThemeNames(root, themeName) {
 
   // The stylesheets the theme declares are the ones the page loads, so
   // the ground and the wave are looked for in all of them.
-  const styles = (/^styles=(.*)$/m.exec(properties)?.[1] || '').trim().split(/\s+/).filter(Boolean);
+  const styles = (properties.styles || '').split(/\s+/).filter(Boolean);
   const paintedSelectors = [];
   const paintedByStyle = [];
   for (const style of styles) {
-    const css = fs.readFileSync(path.join(loginDir, 'resources', style), 'utf8');
+    const css = readFileOrEmpty(path.join(loginDir, 'resources', style));
     const selectors = parseSelectors(css).filter((selector) => /#keycloak-bg::(before|after)/.test(selector));
     paintedSelectors.push(...selectors);
     paintedByStyle.push({

@@ -1,4 +1,7 @@
-# Proxy settings for the Keycloak routes.
+# The proxy settings every Kong route shares: the forwarded-header set and
+# the timeouts. A location that needs more than this — the websocket
+# handshake, an SSE read timeout — adds its own directives after the
+# include.
 #
 # The Kong address is an nginx variable set in the server block, so it is
 # resolved at request time and nginx starts even when the Kong container is

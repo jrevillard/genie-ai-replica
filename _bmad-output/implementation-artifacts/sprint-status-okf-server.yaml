@@ -778,10 +778,15 @@ development_status:
   #          across the 14 locales.
   #          THE LIVE GENERATION DIED (2026-10-26): the Solar System run stopped at
   #          137 minutes, chunk 1599 of 1600 in the NER phase, after 5,989 model
-  #          calls — one chunk's NER answer came back as a JSON object where
-  #          ragas's parser expects a plain string, the format-fix retry failed
-  #          too, and the exception escaped apply_transforms and took the whole
-  #          job with it. An unparseable answer is the same class of event as a
+  #          calls. The chain, read off the installed ragas 0.4.3: the chunk's NER
+  #          answer was invalid JSON (18 entities plus a // comment block) and
+  #          NEROutput rejected it; ragas then called the fix-output-format
+  #          retry, whose output_model is StringIO; asked to fix the format, the
+  #          model ECHOED the entities JSON, so the StringIO validation is what
+  #          failed ("1 validation error for StringIO"); the fix prompt retried
+  #          with the same input, the cache served the same bad answer again, and
+  #          the exception escaped apply_transforms and took the whole job with
+  #          it. An unparseable answer is the same class of event as a
   #          dead node, and a dead node has always been tolerated: the node now
   #          degrades (it keeps its other properties, the failure is COUNTED and
   #          reported with the suite, the other nodes keep their work). The seam
@@ -790,6 +795,11 @@ development_status:
   #          method the transform uses, and the transform keeps its CLASS so
   #          ragas's isinstance dispatch still holds (a proxy object would have
   #          been silently ignored).
+  #          PROVEN LIVE ON THE SAME CORPUS (2026-10-26): the re-run reached the
+  #          same chunk, the sidecar logged "node degraded (NERExtractor:
+  #          OutputParserException)" and THE PHASE CONTINUED — the previous run
+  #          died at exactly that point. One node degraded; the corpus loses that
+  #          chunk's entities and keeps everything else.
   #          THE REVIEW (independent adversarial review of the diff) found the
   #          counters were PROCESS-GLOBAL: a second job's reset dropped the first
   #          job's published number to zero mid-generation (the KG ticker

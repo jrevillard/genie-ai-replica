@@ -25,6 +25,7 @@ const {
   GPU_REQUIRED_SERVICES,
   GPU_SHARED_COMPOSE_VARS
 } = require('../validators/validate-gpu-node');
+const { readLoginThemeNames } = require('../validators/validate-keycloak-theme');
 
 const ROOT = path.resolve(__dirname, '../../..');
 const ENV_FILE = path.join(ROOT, 'env');
@@ -423,6 +424,28 @@ describe('Configuration Validation Suite', () => {
             !rendered.has(name)
         );
       expect(unrendered).toEqual([]);
+    });
+  });
+  // --- Keycloak login theme marker ---
+  // The base login theme marks its own pages so a child theme
+  // (genie-el-salvador, parent=genie) keeps its own ground and wave. The
+  // marker follows the theme directory name: the template tests the
+  // resource path, the CSS scopes the ground and the band to the class
+  // the template emits. A rename that breaks the chain drops the ground
+  // and the wave with no error anywhere.
+  describe('Keycloak login theme marker', () => {
+    const names = readLoginThemeNames(ROOT, 'genie');
+
+    test('the login template tests the resource path of its own theme', () => {
+      expect(names.testedPath).toBe(names.themeName);
+    });
+
+    test('the template emits the marker class of its own theme', () => {
+      expect(names.emittedClass).toBe(`kc-theme-${names.themeName}`);
+    });
+
+    test('the ground and the wave are scoped to the marker class', () => {
+      expect(names.scopedClass).toBe(names.emittedClass);
     });
   });
 });

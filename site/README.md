@@ -38,6 +38,9 @@ through a redirect, on a raw-HTML `href` that Hugo cannot rewrite, and on a
 section that declares a `slug:` — a section slug makes the published URL
 family depend on the Hugo version, and CI builds from a floating Hugo image.
 
+Hugo shortcodes (`{{< relref >}}`) are resolved by Hugo itself: a target that
+no longer exists fails the `pages` build, so they need no checker rule.
+
 ## How docs are sourced
 
 The published doc content is curated and committed directly under

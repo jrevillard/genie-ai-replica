@@ -49,9 +49,25 @@ remains the developer reference.)
    ---
    ```
 3. Internal links use the site path, not repo relative paths:
-   `](/docs/<section>/<name>/)` — e.g. `](/docs/deployment/docker-compose-setup/)`.
+   `](/docs/<section>/<name>/)` — e.g. `](/docs/deploy/docker-compose-setup/)`.
 4. Each section has an `_index.md` landing (weight sets section order:
    core=1 … configuration=7). The portal landing is `content/en/docs/_index.md`.
+
+### Check the links
+
+The internal-link checker runs in CI (`config:docs-links`, stage `config`) and
+fails on a link whose target does not exist, on a link that only resolves
+through a redirect, on a raw-HTML `href` Hugo cannot rewrite, on a relative
+link that resolves to nothing, and on a section that declares a `slug:` — a
+section slug makes the published URL family depend on the Hugo version, and
+CI builds from a floating Hugo image.
+
+```bash
+cd site
+node scripts/check-links.mjs            # report broken / redirect-only links
+node scripts/check-links.mjs --fix      # rewrite the links that can be repaired
+node --test scripts/check-links.test.mjs
+```
 
 ## Theming
 

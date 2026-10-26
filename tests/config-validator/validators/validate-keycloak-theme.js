@@ -12,9 +12,25 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { readProperties, PropertiesError } = require('./validate-keycloak-themes');
+const { readProperties, PropertiesError } = require('./theme-properties');
 
 const THEMES_DIR = path.join('configs', 'keycloak', 'themes');
+
+/**
+ * The assignment that decides whether the page is the base theme's. The
+ * marker follows the theme directory name, so the assignment has to be
+ * the test of the resource path: an assignment that also matches
+ * another theme hands the marker to the child themes too, and a child
+ * loses its own ground and wave.
+ */
+const BASE_THEME_ASSIGNMENT = /<#assign\s+isBaseTheme\s*=\s*([^>]*?)>/;
+
+/**
+ * The test of the resource path of a theme, and nothing else. The
+ * expression has to be the test on its own: a test joined to another
+ * one by `||` covers more than the theme it names.
+ */
+const RESOURCE_PATH_TEST = /^url\.resources(?:Path|Url)\?ends_with\('\/login\/([^']+)'\)$/;
 
 /**
  * The content of a file, or an empty string when it is not there. A
@@ -167,9 +183,10 @@ function parseSelectors(css) {
  *
  * @param {string} root repository root
  * @param {string} themeName theme directory name, e.g. 'genie'
- * @returns {{themeName: string, testedPath: string|null, emittedClass: string|null,
- *            emittedConditionally: boolean, paintedSelectors: string[],
- *            paintedByStyle: {style: string, mentionsBody: boolean, pseudoElements: string[]}[]}}
+ * @returns {{themeName: string, testedPath: string|null,
+ *            emittedClass: string|null, emittedConditionally: boolean, styles: string[],
+ *            paintedSelectors: string[],
+ *            paintedByStyle: {style: string, pseudoElements: string[]}[]}}
  *            the parsed names, and every selector of every stylesheet the
  *            theme declares that paints the ground or the wave
  */
@@ -187,12 +204,18 @@ function readLoginThemeNames(root, themeName) {
     }
   }
   const template = readFileOrEmpty(path.join(loginDir, 'template.ftl'));
-  // FreeMarker comments are not output: a marker that survives only in a
-  // comment is not a marker the page carries.
-  const templateBody = template.replace(/<#--[\s\S]*?-->/g, '');
+  // FreeMarker comments and HTML comments are not output: a marker that
+  // survives only in a comment is not a marker the page carries.
+  const templateBody = template.replace(/<#--[\s\S]*?-->/g, '').replace(/<!--[\s\S]*?-->/g, '');
 
-  // The resource path the template tests — it ends with the theme name.
-  const pathTest = /ends_with\('\/login\/([^']+)'\)/.exec(templateBody);
+  // The assignment that decides whether the page is the base theme's.
+  // The marker is emitted under the name of that assignment, so the
+  // assignment and the marker are read from the same place.
+  const assignment = BASE_THEME_ASSIGNMENT.exec(templateBody);
+  const baseThemeExpression = assignment ? assignment[1].trim() : null;
+  // The resource path the assignment tests — it ends with the theme
+  // name, and the assignment is that test and nothing else.
+  const pathTest = baseThemeExpression ? RESOURCE_PATH_TEST.exec(baseThemeExpression) : null;
 
   // The body tag carries the id the CSS selects on and the class the
   // marker is emitted from. Only the start tag counts: an id that
@@ -221,7 +244,6 @@ function readLoginThemeNames(root, themeName) {
     paintedSelectors.push(...selectors);
     paintedByStyle.push({
       style,
-      mentionsBody: css.replace(/\/\*[\s\S]*?\*\//g, '').includes('#keycloak-bg'),
       pseudoElements: [...new Set(selectors.map((selector) => selector.match(/::(before|after)/)[1]))]
     });
   }

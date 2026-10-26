@@ -6,9 +6,11 @@
  * the band that should be under the form never appears. Nothing in
  * Keycloak reports it. These checks turn that silence into a red job.
  *
- * Two contracts live here:
+ * Three contracts live here:
  *
  * - a reference resolves to a file that exists;
+ * - a stylesheet the theme ships is a stylesheet the theme declares: a
+ *   file nobody loads does nothing;
  * - the email templates carry no `cid:` image. Keycloak attaches
  *   nothing to an email, so a `cid:` reference is a broken image in
  *   every mail client — the images are fetched from the theme's own
@@ -19,15 +21,22 @@
  * - `theme.properties` is a Java properties file: `java.util.Properties`
  *   reads it, so a `:` separator and a backslash continuation are as
  *   valid as `=`, the value carries the escapes Java resolves, and a
- *   malformed `\u` escape is a broken file rather than a literal.
+ *   malformed `\u` escape is a broken file rather than a literal. That
+ *   reading lives in `theme-properties.js`, on its own.
  * - A theme's files are looked for in the theme itself, in the
  *   ancestors it inherits from and in the theme it imports, within the
  *   same theme type. A child theme serves the parent's stylesheets and
  *   the parent's images, so a file the child borrows is not a broken
  *   reference.
+ * - The built-in themes are not on disk. A file the theme does not
+ *   hold but whose directory the theme does not hold either comes from
+ *   the built-in parent, where the guard cannot see it: a reference in
+ *   a directory the theme provides has to resolve, a reference in one
+ *   it does not provide cannot be decided.
  */
 const fs = require('fs');
 const path = require('path');
+const { readProperties, PropertiesError } = require('./theme-properties');
 
 const THEMES_DIR = path.join('configs', 'keycloak', 'themes');
 
@@ -56,37 +65,9 @@ const IMAGE_PROPERTIES = ['logo', 'favIcon'];
 const COMMON_STYLE_PROPERTIES = ['stylesCommon'];
 
 /**
- * The whitespace java.util.Properties skips: a space, a tab and a form
- * feed. A vertical tab and a non-breaking space are ordinary
- * characters there.
- */
-const WHITESPACE = /[ \t\f]/;
-
-/**
  * A quote character, the one a string may be delimited with.
  */
 const QUOTE = /["']/;
-
-/**
- * The escapes java.util.Properties resolves into a single character.
- */
-const SIMPLE_ESCAPES = { t: '\t', n: '\n', r: '\r', f: '\f' };
-
-/**
- * A theme.properties file java.util.Properties would refuse to read.
- */
-class PropertiesError extends Error {
-  /**
-   * @param {string} file the file
-   * @param {string} reason why it is invalid
-   */
-  constructor(file, reason) {
-    super(`${file}: ${reason}`);
-    this.name = 'PropertiesError';
-    this.file = file;
-    this.reason = reason;
-  }
-}
 
 /**
  * Whether a path is a regular file.
@@ -114,172 +95,6 @@ function isDirectory(dir) {
   } catch {
     return false;
   }
-}
-
-/**
- * The whitespace at the start of a line, which java.util.Properties
- * skips.
- *
- * @param {string} text the line
- * @returns {string} the line without its leading whitespace
- */
-function stripLeadingWhitespace(text) {
-  return text.replace(/^[ \t\f]+/, '');
-}
-
-/**
- * The escapes of a key or of a value, resolved the way
- * java.util.Properties resolves them.
- *
- * A `\u` that is not followed by four hex digits is not a literal: the
- * loader throws, so the file is broken.
- *
- * @param {string} text the raw key or value
- * @param {string} file the file it comes from
- * @returns {string} the resolved text
- */
-function unescape(text, file) {
-  let result = '';
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text[index];
-    if (char !== '\\') {
-      result += char;
-      continue;
-    }
-    const escaped = text[index + 1];
-    index += 1;
-    if (escaped === undefined) {
-      // The backslash escapes the newline that follows it. There is
-      // none, so the backslash goes away with it.
-      continue;
-    }
-    if (escaped === 'u') {
-      const code = text.slice(index + 1, index + 5);
-      if (!/^[0-9a-fA-F]{4}$/.test(code)) {
-        throw new PropertiesError(file, 'Malformed \\uxxxx encoding.');
-      }
-      result += String.fromCharCode(parseInt(code, 16));
-      index += 4;
-      continue;
-    }
-    result += Object.hasOwn(SIMPLE_ESCAPES, escaped) ? SIMPLE_ESCAPES[escaped] : escaped;
-  }
-  return result;
-}
-
-/**
- * Whether a line ends with an odd number of backslashes — a backslash
- * continuation, which joins the next line to this one.
- *
- * @param {string} text the line
- * @returns {boolean} true when the line continues on the next one
- */
-function endsWithContinuation(text) {
-  let backslashes = 0;
-  for (let index = text.length - 1; index >= 0 && text[index] === '\\'; index -= 1) {
-    backslashes += 1;
-  }
-  return backslashes % 2 === 1;
-}
-
-/**
- * The key and the value of a logical line.
- *
- * The key ends at the first unescaped `=`, `:` or whitespace. The
- * whitespace before the separator is skipped, and so is the whitespace
- * after it; the value keeps its trailing whitespace, as Java's loader
- * keeps it.
- *
- * @param {string} line the logical line
- * @param {string} file the file it comes from
- * @returns {[string, string]} the key and the value
- */
-function splitProperty(line, file) {
-  let index = 0;
-  let separator = null;
-  while (index < line.length) {
-    const char = line[index];
-    if (char === '\\') {
-      // An escaped character is never a separator.
-      index += 2;
-      continue;
-    }
-    if (char === '=' || char === ':') {
-      separator = char;
-      break;
-    }
-    if (WHITESPACE.test(char)) {
-      separator = ' ';
-      break;
-    }
-    index += 1;
-  }
-
-  if (separator === null) {
-    return [unescape(line, file), ''];
-  }
-
-  const key = line.slice(0, index);
-  index += 1;
-  while (index < line.length && WHITESPACE.test(line[index])) index += 1;
-  if (separator === ' ' && (line[index] === '=' || line[index] === ':')) {
-    // A separator right after the whitespace separates as well.
-    index += 1;
-    while (index < line.length && WHITESPACE.test(line[index])) index += 1;
-  }
-  return [unescape(key, file), unescape(line.slice(index), file)];
-}
-
-/**
- * The `key=value` pairs of a properties file, read the way
- * java.util.Properties reads them.
- *
- * A comment is a `#` or a `!` at the start of a physical line: it ends
- * there, and the next physical line is a line of its own. A `#` inside
- * a value is text.
- *
- * @param {string} file path of the file
- * @returns {Object} the properties
- */
-function readProperties(file) {
-  return parseProperties(fs.readFileSync(file, 'utf8'), file);
-}
-
-/**
- * The `key=value` pairs of a properties file's content, read the way
- * java.util.Properties reads it.
- *
- * @param {string} text the content
- * @param {string} file the file it comes from, for the error message
- * @returns {Object} the properties
- */
-function parseProperties(text, file) {
-  const properties = Object.create(null);
-  const lines = text.split(/\r\n|\r|\n/);
-  let index = 0;
-  while (index < lines.length) {
-    const natural = stripLeadingWhitespace(lines[index]);
-    index += 1;
-    if (!natural) continue;
-    if (natural.startsWith('#') || natural.startsWith('!')) continue;
-
-    // A line that ends with an odd number of backslashes continues on
-    // the next one: the last backslash escapes the newline, which goes
-    // away with it.
-    let logical = natural;
-    while (endsWithContinuation(logical) && index < lines.length) {
-      logical = logical.slice(0, -1) + stripLeadingWhitespace(lines[index]);
-      index += 1;
-    }
-    if (endsWithContinuation(logical)) {
-      // The last backslash escapes a newline that is not there.
-      logical = logical.slice(0, -1);
-    }
-
-    const [key, value] = splitProperty(logical, file);
-    properties[key] = value;
-  }
-  return properties;
 }
 
 /**
@@ -605,6 +420,65 @@ function checkStylesheet(found, roots, report, seen) {
 }
 
 /**
+ * The `styles` property a theme serves: its own when it declares one,
+ * the nearest ancestor's otherwise, the way Keycloak inherits it.
+ *
+ * @param {{properties: Object}[]} chain the theme's chain
+ * @returns {string} the value of the property
+ */
+function effectiveStyles(chain) {
+  for (const entry of chain) {
+    if (entry.properties.styles) return entry.properties.styles;
+  }
+  return '';
+}
+
+/**
+ * The stylesheets a theme holds in its own resources.
+ *
+ * @param {string} typeDir the theme type's directory
+ * @returns {string[]} the paths of the stylesheets
+ */
+function ownStylesheets(typeDir) {
+  const resources = path.join(typeDir, 'resources');
+  const stylesheets = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const file = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(file);
+        continue;
+      }
+      if (entry.name.toLowerCase().endsWith('.css')) stylesheets.push(file);
+    }
+  };
+  if (isDirectory(resources)) walk(resources);
+  return stylesheets;
+}
+
+/**
+ * The directories the resources directories hold.
+ *
+ * A file in a directory the theme does not provide comes from the
+ * built-in parent, which is not on disk: the guard cannot see it, so
+ * it cannot decide it. A file in a directory the theme does provide
+ * has to be there.
+ *
+ * @param {string[]} roots the resources directories
+ * @returns {Set<string>} the names of the directories
+ */
+function providedDirectories(roots) {
+  const directories = new Set();
+  for (const root of roots) {
+    if (!isDirectory(root)) continue;
+    for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+      if (entry.isDirectory()) directories.add(entry.name);
+    }
+  }
+  return directories;
+}
+
+/**
  * Check every theme in the repository.
  *
  * @param {string} root repository root
@@ -672,14 +546,30 @@ function collectThemeIssues(root) {
       }
 
       const roots = resourceRoots(themesDir, resolution);
+
       // The common stylesheets are served from the common theme's
-      // resources, not from the theme's own.
-      const common = parseThemePath(commonPath(resolution.chain));
-      const commonRoot =
-        common && isDirectory(path.join(themesDir, common.name, common.type))
-          ? path.join(themesDir, common.name, common.type, 'resources')
-          : null;
-      const commonRoots = commonRoot ? [...roots, commonRoot] : roots;
+      // resources, not from the theme's own. The theme that holds them
+      // has to be there: a `common` that names a theme that is neither
+      // on disk nor built in leaves the browser asking for a path that
+      // does not exist.
+      const commonValue = commonPath(resolution.chain);
+      const common = parseThemePath(commonValue);
+      let commonRoot = null;
+      let commonMissing = false;
+      if (!common) {
+        report('common', commonValue, 'the common names no theme type');
+        commonMissing = true;
+      } else if (!THEME_TYPES.includes(common.type)) {
+        report('common', commonValue, `the theme type ${common.type} is not one Keycloak serves`);
+        commonMissing = true;
+      } else if (isDirectory(path.join(themesDir, common.name, common.type))) {
+        commonRoot = path.join(themesDir, common.name, common.type, 'resources');
+      } else if (!isBuiltinTheme(common.name)) {
+        report('common', commonValue, 'the common theme does not exist');
+        commonMissing = true;
+      }
+      // A built-in common theme lives in the image: its files are not
+      // on disk, so the guard cannot decide whether they are there.
 
       // The logo and the favicon the page header asks for.
       for (const key of IMAGE_PROPERTIES) {
@@ -692,47 +582,88 @@ function collectThemeIssues(root) {
       }
 
       // The stylesheets and the scripts the page loads, and the images
-      // they name.
+      // they name. A value that leaves the theme's resources names no
+      // file of the theme: the browser asks for a path that does not
+      // exist.
+      const reachable = new Set();
       for (const key of [...STYLE_PROPERTIES, ...SCRIPT_PROPERTIES]) {
         for (const name of (properties[key] || '').split(/\s+/).filter(Boolean)) {
-          const found = findInRoots(roots, name);
+          const relative = resolveResource(roots[0], name);
+          const found = relative ? findInRoots(roots, relative) : null;
           if (!found) {
             report(key, name);
             continue;
           }
-          if (key !== 'scripts') checkStylesheet(found, roots, report, new Set());
+          if (key !== 'scripts') checkStylesheet(found, roots, report, reachable);
         }
       }
 
-      // The common stylesheets: they live in the common theme.
+      // The common stylesheets: they live in the common theme, not in
+      // the theme's own resources.
       for (const key of COMMON_STYLE_PROPERTIES) {
         for (const name of (properties[key] || '').split(/\s+/).filter(Boolean)) {
-          const found = findInRoots(commonRoots, name);
+          if (!commonRoot) {
+            // The common theme is not on disk: its stylesheets are
+            // neither there nor in the theme's own resources.
+            if (commonMissing) report(key, name);
+            continue;
+          }
+          const relative = resolveResource(commonRoot, name);
+          const found = relative ? findInRoots([...roots, commonRoot], relative) : null;
           if (!found) {
             report(key, name);
             continue;
           }
-          checkStylesheet(found, commonRoots, report, new Set());
+          checkStylesheet(found, [...roots, commonRoot], report, new Set());
         }
       }
 
-      // The templates: no `cid:` image, and every image a template
-      // names has to be in the theme's resources.
+      // The templates: no `cid:` image, and every file a template names
+      // has to be in the theme's resources.
+      const directories = providedDirectories(roots);
+      const named = new Set();
       for (const template of themeTemplates(typeDir)) {
         const source = stripComments(fs.readFileSync(template, 'utf8'), 'template');
         for (const match of source.matchAll(/cid:([A-Za-z0-9._/-]+)/gi)) {
           report('cid', match[1]);
         }
-        // The theme owns its images; the scripts and stylesheets it
-        // names come from the parent theme, which lives in the image.
         for (const reference of readAssetReferences(source)) {
+          // A reference that holds a template expression names a value
+          // the template computes at runtime: the guard cannot know it.
+          if (reference.includes('${')) continue;
           const resource = reference.replace(/^\//, '');
-          if (!resource.startsWith('img/')) continue;
           const relative = resolveResource(roots[0], resource);
+          // A reference that leaves the theme is not a file of the
+          // theme.
           if (!relative) continue;
+          // The directory the reference is in. A theme that does not
+          // provide it gets the file from the built-in parent, where
+          // the guard cannot see it; a theme that does provide it has
+          // to hold the file.
+          const directory = relative.includes('/') ? relative.split('/')[0] : '';
+          if (directory && !directories.has(directory)) continue;
+          named.add(relative);
           if (!findInRoots(roots, relative)) {
             report('asset', reference);
           }
+        }
+      }
+
+      // A stylesheet the theme ships but does not declare is a file
+      // nobody loads: the page never asks for it, so it does nothing.
+      // The common theme is not checked: its files are served to the
+      // themes that name them in their `stylesCommon`, and the guard
+      // cannot tell which of them are used.
+      if (type !== 'common') {
+        const declared = new Set(effectiveStyles(resolution.chain).split(/\s+/).filter(Boolean));
+        for (const file of ownStylesheets(typeDir)) {
+          // A stylesheet a declared stylesheet imports is loaded.
+          if (reachable.has(file)) continue;
+          const name = path.relative(path.join(typeDir, 'resources'), file).split(path.sep).join('/');
+          if (declared.has(name)) continue;
+          // A stylesheet a template names is loaded too.
+          if (named.has(name)) continue;
+          report('stylesheet', name);
         }
       }
     }
@@ -741,10 +672,5 @@ function collectThemeIssues(root) {
 }
 
 module.exports = {
-  collectThemeIssues,
-  parseProperties,
-  readAssetReferences,
-  readProperties,
-  PropertiesError,
-  themeChain
+  collectThemeIssues
 };

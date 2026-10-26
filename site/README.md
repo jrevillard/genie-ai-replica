@@ -18,7 +18,6 @@ Published to GitLab Pages: <https://genie-ai-7e342b.opensource.unicc.org/>
 ```bash
 cd site
 npm install               # Docsy PostCSS/PurgeCSS deps (first run only)
-sh scripts/sync-docs.sh      # copy curated docs/*.md -> content/en/docs/
 hugo server -D               # http://127.0.0.1:1313  (-D includes drafts)
 ```
 
@@ -41,12 +40,14 @@ family depend on the Hugo version, and CI builds from a floating Hugo image.
 
 ## How docs are sourced
 
-Doc content is **copied, not committed**, into `content/en/docs/` by
-`scripts/sync-docs.sh`. The source of truth is the repo-root `docs/` directory.
+The published doc content is curated and committed directly under
+`content/en/docs/`, grouped by section (`core/`, `frontend/`, `backend/`,
+`mobile/`, `architecture/`, `deployment/`, `configuration/`, …).
 
-- **To publish a new doc:** add a `cp` line to `scripts/sync-docs.sh`.
-- **To edit a doc:** edit the file under the repo-root `docs/`, not under `site/`.
-- `content/en/docs/` is gitignored — never commit files there.
+- **To publish a new doc:** create `content/en/docs/<section>/<name>.md` with
+  the front matter Docsy needs (`title`, `weight`, `description`).
+- The repo-root `docs/` directory holds the developer-internal references
+  (E2E procedures, release process, triage records). It is not published.
 
 ## i18n
 

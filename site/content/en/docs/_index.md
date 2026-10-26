@@ -111,6 +111,13 @@ see [Environment variables](/docs/reference/env-vars/).
 
 This site is rebuilt continuously. Major waves in the past 48 hours:
 
+- **2026-10-26**: link repair — the homepage link to the development guide
+  and the deployment card now point at the pages that exist; the links to
+  the moved glossary, source-tree analysis and tracing pages use their
+  current addresses; the link texts name the sections as they are titled
+  today; the address of a renamed section no longer depends on the Hugo
+  version; a CI check fails on a broken link, on a link that only works
+  through a redirect, and on a section with a version-dependent address.
 - **2026-09-29**: Wave 36 — fix broken cross-section refs + callout shortcode.
 - **2026-09-29**: Wave 39 — 7 dispersion fixes (labelling + ingestion-log + api-contracts consolidations + locale-whitelist + mode fixes).
 - **2026-09-29**: Wave 41 — grader P0+P1 fixes (alias mechanism + content accuracy).

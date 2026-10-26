@@ -15,8 +15,10 @@ const { createAuthenticatedState } = require('../fixtures/store-state');
 // ---------------------------------------------------------------------------
 
 let capturedCallbacks = {};
+let capturedQueryData = null;
 
 const mockSubmitQueryStream = jest.fn((_queryData, callbacks) => {
+  capturedQueryData = _queryData;
   capturedCallbacks = callbacks;
   return { abort: jest.fn(), signal: {} };
 });
@@ -151,7 +153,7 @@ function createChatBotStore(stateOverrides = {}) {
         state: () => state.chatHistory,
         getters: {
           getAllFolders: (s) => s.folders,
-          getChatById: () => (/* chatId */) => null
+          getChatById: (s) => (chatId) => (s.chats || []).find((c) => c.id === chatId) || null
         },
         actions: {
           createChat: jest.fn().mockResolvedValue({}),
@@ -211,6 +213,7 @@ describe('ChatBotComponent', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     capturedCallbacks = {};
+    capturedQueryData = null;
   });
 
   // -----------------------------------------------------------------------
@@ -1685,6 +1688,53 @@ describe('ChatBotComponent', () => {
       // end is still stored on its own.
       expect(open[1].isSaved).toBe(true);
       expect(open[3].isSaved).toBe(true);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // The request's message history
+  // -----------------------------------------------------------------------
+  describe('Request context', () => {
+    it('sends the welcome turn, failed exchanges and stub bot turns to no one', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      // A context chip routes the send through the conversation branch,
+      // the only one that carries a message history.
+      vm.$store.commit('conversation/addContextItem', {
+        service: 'Tomato',
+        serviceKey: 'Tomato',
+        serviceLabels: ['Tomato'],
+        source: 'quickHelp'
+      });
+
+      await vm.sendMessageFromText('First question');
+      capturedCallbacks.onError(new Error('boom'));
+      await wrapper.vm.$nextTick();
+
+      await vm.sendMessageFromText('Second question');
+
+      // The welcome greeting (no queryId) and the whole failed exchange —
+      // question and dead answer — stay out of the model's context; the
+      // live question is the only turn it sees.
+      expect(capturedQueryData.messages.map((m) => `${m.role}:${m.content}`)).toEqual(['user:Second question']);
+    });
+
+    it('loading a chat from the sidebar aborts the stream and drops the previous conversation state', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const dispatchSpy = jest.spyOn(vm.$store, 'dispatch');
+
+      vm.$store.commit('conversation/setConversationId', 'conv-old');
+      vm.$store.commit('conversation/addContextItem', { service: 'Old', serviceKey: 'old', source: 'quickHelp' });
+      vm.$store.commit('conversation/setRelatedDocuments', [{ id: 'doc-1', title: 'Old doc' }]);
+      vm.$store.state.chatHistory.chats.push({ id: 'chat-9', title: 'Saved chat' });
+
+      vm.loadChatFromHistory('chat-9');
+
+      expect(dispatchSpy).toHaveBeenCalledWith('conversation/abortStream');
+      expect(vm.selectedContextItems).toEqual([]);
+      expect(vm.relatedDocuments).toEqual([]);
+      expect(vm.conversationId).toBeNull();
     });
   });
 

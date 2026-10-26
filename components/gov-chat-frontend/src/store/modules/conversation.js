@@ -17,13 +17,22 @@ function emptyConversation() {
 }
 
 // Shared by the abort path and rehydration: close the streaming turn
-// and surface the retry affordance through isError.
+// and surface the retry affordance through isError. The question that
+// triggered the dead answer is marked too — the failed exchange leaves
+// the transcript as a unit (the retry splices both), so no half of it
+// can leak into a later request's context.
 function markEntryInterrupted(entry) {
   entry.isStreaming = false;
   const last = entry.messages.at(-1);
   if (last && last.sender === 'bot' && last.isStreaming) {
     last.isStreaming = false;
     last.isError = true;
+    for (let i = entry.messages.length - 2; i >= 0; i--) {
+      if (entry.messages[i].sender === 'user') {
+        entry.messages[i].isError = true;
+        break;
+      }
+    }
   }
 }
 
@@ -91,6 +100,14 @@ const mutations = {
       // A partial answer the user was reading is kept; the error text
       // only fills an empty turn.
       if (!last.content) last.content = errorMessage;
+      // The question that triggered the failed answer leaves the
+      // transcript as a unit with it (retry splices both).
+      for (let i = entry.messages.length - 2; i >= 0; i--) {
+        if (entry.messages[i].sender === 'user') {
+          entry.messages[i].isError = true;
+          break;
+        }
+      }
     }
   },
   markInterrupted(st) {
@@ -313,11 +330,12 @@ export function subscribeConversation(store) {
   // inside it would otherwise drop the newest turns entirely. The page
   // lifecycle event fires before the document goes away, so the write
   // through here is what a reload reads back.
-  document.addEventListener('pagehide', () => {
+  const onPageHide = () => {
     if (timer) clearTimeout(timer);
     timer = null;
     persistConversation(store.state.conversation);
-  });
+  };
+  document.addEventListener('pagehide', onPageHide);
   store.subscribe((mutation) => {
     if (!mutation.type.startsWith('conversation/')) return;
     const now = Date.now();
@@ -333,4 +351,9 @@ export function subscribeConversation(store) {
       persistConversation(store.state.conversation);
     }, delay);
   });
+  return () => {
+    document.removeEventListener('pagehide', onPageHide);
+    if (timer) clearTimeout(timer);
+    timer = null;
+  };
 }

@@ -614,6 +614,7 @@ test.describe('Conversation — surface invariants', () => {
           return false;
         }
       },
+      null,
       { timeout: 15000 }
     );
     await page.reload({ waitUntil: 'networkidle' });

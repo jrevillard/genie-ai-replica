@@ -1467,11 +1467,12 @@ export default {
       });
 
       if (contextOption === 'conversation-with-labels') {
-        // Streaming placeholders are UI stubs, and interrupted or failed
-        // turns never delivered an answer — neither belongs in the model's
-        // context.
+        // Streaming placeholders are UI stubs; interrupted or failed
+        // exchanges never delivered an answer; a bot turn without a
+        // queryId is a synthesized greeting, not model output — none of
+        // them belong in the model's context.
         const baseMessages = this.openMessages
-          .filter((msg) => msg && !msg.isStreaming && !msg.isError)
+          .filter((msg) => msg && !msg.isStreaming && !msg.isError && !(msg.sender === 'bot' && !msg.queryId))
           .map((msg) => ({
             role: msg.sender === 'user' ? 'user' : 'assistant',
             content: msg.content
@@ -1963,6 +1964,12 @@ export default {
       // Loading another transcript orphans the open generation — stop it
       // rather than letting its frames land in the wrong conversation.
       this.$store.dispatch('conversation/abortStream');
+      // The loaded chat replaces the open one wholesale: the previous
+      // conversation's context chip, sources and id must not bleed into
+      // the next question.
+      this.$store.commit('conversation/setContextItems', []);
+      this.$store.commit('conversation/setRelatedDocuments', []);
+      this.$store.commit('conversation/setConversationId', null);
       try {
         const storedChatData = localStorage.getItem(`chat_data_${chatId}`);
         if (storedChatData) {

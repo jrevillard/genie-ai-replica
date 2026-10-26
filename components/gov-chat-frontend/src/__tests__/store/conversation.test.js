@@ -97,8 +97,9 @@ describe('conversation persistence', () => {
       fn();
       return 1;
     });
-    subscribeConversation(store);
+    const unsubscribe = subscribeConversation(store);
     store.commit('conversation/setTitle', 'Persisted');
+    unsubscribe();
     const raw = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
     expect(raw.openId).toBe('open');
     expect(raw.conversations.open.title).toBe('Persisted');
@@ -111,9 +112,9 @@ describe('conversation persistence', () => {
     // Mutation check: revert subscribeConversation to a pure trailing
     // debounce and the stored content stays empty at the end of the storm.
     jest.useFakeTimers();
+    const store = freshStore();
+    const unsubscribe = subscribeConversation(store);
     try {
-      const store = freshStore();
-      subscribeConversation(store);
       store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' });
       store.commit('conversation/appendBotMessage', { sender: 'bot', content: '', isStreaming: true });
       for (let i = 0; i < 25; i++) {
@@ -129,6 +130,7 @@ describe('conversation persistence', () => {
       const final = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
       expect(final.conversations.open.messages.at(-1).content).toBe('x'.repeat(25));
     } finally {
+      unsubscribe();
       jest.useRealTimers();
     }
   });
@@ -210,13 +212,14 @@ describe('conversation persistence', () => {
 
   it('flushes the write when the page hides (reload inside the debounce window)', () => {
     const store = freshStore();
-    subscribeConversation(store);
+    const unsubscribe = subscribeConversation(store);
     store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' });
     // No timer advance: the pagehide handler must write through
     // synchronously or a reload within the 300 ms window drops the turn.
     document.dispatchEvent(new Event('pagehide'));
     const raw = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
     expect(raw.conversations.open.messages.at(-1).content).toBe('q');
+    unsubscribe();
   });
 
   it('survives a full storage (quota error is degraded, not thrown)', () => {

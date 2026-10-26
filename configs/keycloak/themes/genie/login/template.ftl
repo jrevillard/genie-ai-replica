@@ -141,10 +141,10 @@
 </head>
 
 <#--
-  The base theme marks its own pages. A child theme (genie-el-salvador)
-  resolves its resources under its own path, so the marker is absent there
-  and the base theme's Living Intelligence ground and wave stay out of the
-  child's login page.
+  The base theme marks its own pages. The marker follows the theme
+  directory name — the resources path ends with it — so a child theme
+  (genie-el-salvador) does not get it and keeps its own ground and wave.
+  Renaming the base theme directory means renaming the marker with it.
 -->
 <#assign isBaseTheme = url.resourcesPath?ends_with('/login/genie')>
 <body id="keycloak-bg" class="<#if isBaseTheme>kc-theme-genie</#if>${properties.kcBodyClass!}" data-page-id="login-${pageId}">

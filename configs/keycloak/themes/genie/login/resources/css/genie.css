@@ -64,11 +64,9 @@
   --pf-v5-c-page--BackgroundColor: #f9fbfd;
 }
 
-/* Page ground — the login sits on the Living Intelligence wash instead of
-   the bare canvas. The PatternFly page token is dead here: the body carries
-   no page class, so the ground is painted on the body itself.
-   The ground and the wave are scoped to the base theme (the template marks
-   it); a child theme keeps the bare canvas it has today. */
+/* Canvas colour under the ground. The PatternFly page token is dead here —
+   the body carries no page class — so the ground is painted on the body's
+   pseudo-element below; this colour is what shows past its edge. */
 body#keycloak-bg {
   background-color: #f4f7fd;
 }

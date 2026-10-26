@@ -147,7 +147,7 @@
   child's login page.
 -->
 <#assign isBaseTheme = url.resourcesPath?ends_with('/login/genie')>
-<body id="keycloak-bg" class="${properties.kcBodyClass!} ${isBaseTheme?then('kc-theme-genie', '')}" data-page-id="login-${pageId}">
+<body id="keycloak-bg" class="<#if isBaseTheme>kc-theme-genie</#if>${properties.kcBodyClass!}" data-page-id="login-${pageId}">
 <div class="${properties.kcLogin!}">
   <div class="${properties.kcLoginContainer!}">
     <header id="kc-header" class="pf-v5-c-login__header">

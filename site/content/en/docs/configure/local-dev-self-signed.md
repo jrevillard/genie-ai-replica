@@ -277,7 +277,7 @@ If the backend logs show
 
 - [CORS, CSP & Public Domain](/docs/configure/cors-csp/) — `NGINX_PUBLIC_DOMAIN` is the hostname clients (and self-signed certs) hang off.
 - [Reference → Environment variables](/docs/reference/env-vars/) — canonical list with defaults.
-- [Deploy → Install guide](/docs/deploy/install-guide/) — first-deploy wiring walkthrough, includes the `NODE_TLS_REJECT_UNAUTHORIZED` row in the variable table.
-- [Deploy → Docker Swarm setup](/docs/deploy/docker-swarm-setup/) — self-signed-cert quick-reference matrix (`NODE_TLS_REJECT_UNAUTHORIZED` × `OPEA_SSL_SKIP_VERIFY` × `KEYCLOAK_SSL_SKIP_VERIFY`).
+- [Deployment → Install guide](/docs/deploy/install-guide/) — first-deploy wiring walkthrough, includes the `NODE_TLS_REJECT_UNAUTHORIZED` row in the variable table.
+- [Deployment → Docker Swarm setup](/docs/deploy/docker-swarm-setup/) — self-signed-cert quick-reference matrix (`NODE_TLS_REJECT_UNAUTHORIZED` × `OPEA_SSL_SKIP_VERIFY` × `KEYCLOAK_SSL_SKIP_VERIFY`).
 - Operations → Server Testing — ROPC token extraction, `source .env` pitfalls, Docker exec patterns that come up while debugging TLS (see the `SERVER-TESTING.md` dev rule under `.claude/rules/`).
 - [Mobile Deployment Guide](/docs/mobile/mobile-deployment-guide/) — phone↔server trust chain (the "El Salvador" topology): WireGuard tunnel, private IP, self-signed cert, Keycloak `/auth` prefix.

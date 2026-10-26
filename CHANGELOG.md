@@ -68,6 +68,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Links in the documentation site pointed at the wrong page or at the wrong
+  section.** The link to the development guide on the home page pointed at
+  `/docs/core/development-guide/`, an address no page ever carried: the reader
+  got a 404. The deployment card next to it, and the links to the glossary, to
+  the source-tree analysis and to the tracing page, resolved through a
+  redirect to the page that has since moved, and the "Section -> Page" link
+  texts still named sections that had been renamed, so the reader was sent to
+  a section that no longer had that name. The addresses of the three renamed
+  sections now stay the same whichever version of Hugo builds the site, and a
+  new check in the CI pipeline fails when a link is broken, when it only works
+  through a redirect, when the anchor it points at does not exist, or when a
+  section address would depend on the Hugo version. The links to the source
+  code pointed at gitlab.com, where the project does not exist, and now point
+  at the self-hosted instance; the links to the NVIDIA container toolkit, to
+  the vLLM documentation and to the JWKS specification pointed at pages that
+  no longer exist. (#607)
+
 - **Static-analysis follow-ups on the application code (SAST wave-7).**
   The translation example's two `requests.post` calls ran without a timeout
   and could hang on a stalled upstream — the translate call now times out

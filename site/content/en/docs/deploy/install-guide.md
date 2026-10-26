@@ -21,7 +21,7 @@ backbone:
 |---|---|---|
 | **Docker Compose** (`docker compose up`) | Local dev, MVP, small single-host production, evaluation | [Docker Compose Setup](/docs/deploy/docker-compose-setup/) |
 | **Docker Swarm** (`docker stack deploy`) | Production multi-node, HA, mixed CPU/GPU node placement | [Docker Swarm Setup](/docs/deploy/docker-swarm-setup/) |
-| **Ansible + Swarm** | Repeatable fleet deploys with per-environment secrets | [Ansible README](/docs/deploy/docker-swarm-setup/#remote-gpu-node) |
+| **Ansible + Swarm** | Repeatable fleet deploys with per-environment secrets | [Ansible README](https://opensource.unicc.org/un/itu/genie-ai/-/raw/main/deploy/ansible/README.md) |
 | **Remote GPU** (`GPU_NODE_HOST=`) | OPEA orchestrators on CPU node, vLLM/TEI on a separate GPU node | [Remote GPU Node](/docs/deploy/docker-swarm-setup/#remote-gpu-node) |
 
 GPU profiles (T4 16 GB / RTX 6000 24 GB / A40 48 GB / H100) layer on top of
@@ -493,7 +493,7 @@ defaults.
 | `RETRIEVER_SUMMARIZER_ENABLED` | bool | no | `false` | LLM-summarize retrieved chunks (latency-heavy) |
 
 For tuning guidance see
-[RAG → Retriever Configuration](/docs/rag-pipeline/retrieval/) and the
+[RAG Pipeline → Retrieval](/docs/rag-pipeline/retrieval/) and the
 [Retriever overview in the source code](https://opensource.unicc.org/un/itu/genie-ai/-/tree/main/genie-ai-overlay/retriever).
 
 #### Network & external services

@@ -104,7 +104,7 @@ Key behaviours:
 
 ## Variable injection — `src/main.js`
 
-`main.js` reads the config (either a `fetch('/config/genie-ai-config.json')` or the runtime-injected `window.APP_CONFIG` — see [Configuration](/docs/configure/)) and writes CSS custom properties on `<html>`. **The `--brand` setProperty has a `'#4071cb'` fallback** so the app works if config isn't loaded yet (first paint, broken CDN, etc.).
+`main.js` reads the config (either a `fetch('/config/genie-ai-config.json')` or the runtime-injected `window.APP_CONFIG` — see [Branding customization](/docs/configure/branding-customization/)) and writes CSS custom properties on `<html>`. **The `--brand` setProperty has a `'#4071cb'` fallback** so the app works if config isn't loaded yet (first paint, broken CDN, etc.).
 
 ```javascript
 // Simplified excerpt — see src/main.js lines ~57-83 for the full implementation.

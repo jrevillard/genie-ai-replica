@@ -198,7 +198,7 @@ For architectural concerns (how the layers compose, what each service is respons
 | `th` | Thai | `th.dart` |
 | `zh` | Chinese (Simplified) | `zh.dart` |
 
-> Deployment-level locale whitelist is **config-driven**. All 14 files stay in the source; a flavor restricts the active set via `KeycloakConfig.supportedLocaleCodes` (see [Mobile Deployment Guide](/docs/mobile/mobile-deployment-guide/) §4).
+> Deployment-level locale whitelist is **config-driven**. All 14 files stay in the source; a flavor restricts the active set via `KeycloakConfig.supportedLocaleCodes` (see [Locale whitelist](/docs/configure/locale-whitelist/)).
 
 ## Tree
 

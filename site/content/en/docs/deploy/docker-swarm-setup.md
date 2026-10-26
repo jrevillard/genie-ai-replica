@@ -26,7 +26,7 @@ root. All services deploy via `docker stack deploy`.
   containers via the `NVIDIA_VISIBLE_DEVICES` env var (default `all`), which
   requires `nvidia-container-runtime` registered as a Docker default runtime
   (or any runtime that supports `NVIDIA_VISIBLE_DEVICES`). Install on each
-  GPU node: see <https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html>.
+  GPU node: see <https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html>.
 - **SSH access** to every node — from the manager you need passwordless SSH
   to every worker (or `docker -H ssh://worker ...`) for cross-node debugging
 - **Network connectivity** between all nodes — Swarm requires

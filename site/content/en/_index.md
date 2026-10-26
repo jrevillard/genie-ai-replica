@@ -90,8 +90,8 @@ weight: 1
   <h2 class="g-section__title">Start Your Journey</h2>
   <div class="g-doclinks">
     <a class="g-doclink" href="/docs/core/project-overview/"><span>Project overview</span><em>What GENIE.AI is and why →</em></a>
-    <a class="g-doclink" href="/docs/core/development-guide/"><span>Development guide</span><em>Build and run locally →</em></a>
-    <a class="g-doclink" href="/docs/deployment/docker-compose-setup/"><span>Deployment</span><em>Ship it with Docker →</em></a>
+    <a class="g-doclink" href="/docs/contribute/build-and-run/"><span>Build and run locally</span><em>Set up the dev stack →</em></a>
+    <a class="g-doclink" href="/docs/deploy/docker-compose-setup/"><span>Deployment</span><em>Ship it with Docker →</em></a>
     <a class="g-doclink" href="/docs/architecture/architecture/"><span>Architecture</span><em>How the RAG pipeline fits together →</em></a>
   </div>
 </section>

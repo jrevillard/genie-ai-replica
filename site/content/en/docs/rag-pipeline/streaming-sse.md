@@ -211,5 +211,5 @@ envelope.
   `retrieval_confidence_score` and `is_grounded` fields.
 - [Pipeline architecture]({{< relref "pipeline" >}}) — how the
   per-stage spans and metrics relate to the wire format.
-- [Backend → API contracts]({{< relref "/docs/reference/api-contracts" >}})
+- [Reference → API contracts]({{< relref "/docs/reference/api-contracts" >}})
   — the BFF route that wraps this stream for the frontend.

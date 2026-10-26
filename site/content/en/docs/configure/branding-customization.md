@@ -302,7 +302,7 @@ After a redeploy, verify each surface end-to-end before announcing the rebrand:
 ### Theme overrides ignored after Keycloak restart
 
 - **Wrong `parent=` line.** The `parent=` in each `theme.properties` must match a theme Keycloak ships — `keycloak.v2` (login/admin), `keycloak.v3` (account), `keycloak` (email). A typo silently fails to inherit the parent styles, leaving the theme unstyled.
-- **Theme not registered.** Keycloak must be told the theme exists. In GENIE.AI deployments this is handled by the realm-import JSON under `configs/keycloak/`; verify the theme is listed. See [Keycloak Admin Guide → Theming](/docs/configure/keycloak-admin-guide/) for the registration flow.
+- **Theme not registered.** Keycloak must be told the theme exists. In GENIE.AI deployments this is handled by the realm-import JSON under `configs/keycloak/`; verify the theme is listed. See [Multiple themes and theme selection](#multiple-themes-and-theme-selection) for the registration flow.
 - **CSS specificity.** Keycloak's base `keycloak.v2` styles are aggressive. Use higher-specificity selectors or `!important` (Keycloak-acceptable in theme CSS, unlike the web app where `!important` is forbidden).
 - **Stale infinispan cache.** After a theme file change, restart Keycloak twice if the first restart still shows old styles — infinispan can survive a single restart in some versions.
 
@@ -320,6 +320,7 @@ This is **expected**: `--brand` is the same in light and dark mode; only the sur
 ## Related
 
 - [Theme System](/docs/frontend/theme-system/) — deep dive on the CSS-native theming architecture, OKLch derivation, and dark mode.
-- [Keycloak Admin Guide](/docs/configure/keycloak-admin-guide/) — managing users, roles, and the realm; theme registration flow.
+- [Keycloak Admin Guide](/docs/configure/keycloak-admin-guide/) — managing users, roles, and the realm.
+- [Keycloak login screen branding](#multiple-themes-and-theme-selection) — theme registration flow.
 - [Install Guide](/docs/deploy/install-guide/) — Docker Compose and Ansible deployment steps; how the runtime config directories are seeded onto each node.
 - [Architecture Overview → Authentication](/docs/architecture/architecture/) — how the Keycloak-fronted web app fits together.

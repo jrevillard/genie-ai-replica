@@ -24,7 +24,7 @@ page is the GPU-specific layer on top of those.
 ## Prerequisites
 
 - **NVIDIA Driver** installed on the GPU node. See
-  [NVIDIA Driver Installation Quickstart](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#driver)
+  [NVIDIA Driver Installation Quickstart](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html#driver)
   for the current matrix.
 - **NVIDIA Container Toolkit** installed and configured — see
   [NVIDIA Container Toolkit overview](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/overview.html).
@@ -212,7 +212,7 @@ If you see out-of-memory errors, lower `VLLM_GPU_UTILIZATION` and/or
 | vLLM logs show `CUDA out of memory` or `torch.cuda.OutOfMemoryError` | GPU has too little VRAM for the configured model/context | Lower `VLLM_GPU_UTILIZATION` (e.g. `0.4` on T4), `VLLM_MAX_MODEL_LEN` (e.g. `2048`), and/or `VLLM_MAX_NUM_SEQS` (e.g. `16`). Re-source env, redeploy. |
 | Model Too Long error at request time | Retriever returned chunks exceeding the model's context window | Reduce retriever output (e.g. set `RETRIEVER_ARANGO_K=4`, `RETRIEVER_ARANGO_FETCH_K=20` as commented example overrides in the `env` template at lines 172-173) and/or lower `VLLM_MAX_MODEL_LEN=2048` |
 | `vllm` task stays in `Preparing` or `Restarting` for >10 min | Model still downloading from Hugging Face Hub on first run (2–10 min typical) | Check `docker service logs genieai_vllm -f` for download progress. Wait, or pre-pull to the `hf_cache` volume (declared at `docker-compose.yaml:64`, bound to `./data/huggingface` per the path comment at line 56). |
-| `docker run --rm --gpus all nvidia/cuda:12.0-base nvidia-smi` reports "could not access GPU" | NVIDIA driver not loaded, or container toolkit not configured | `nvidia-smi` on the host first; then re-install NVIDIA Container Toolkit per [NVIDIA docs](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html). |
+| `docker run --rm --gpus all nvidia/cuda:12.0-base nvidia-smi` reports "could not access GPU" | NVIDIA driver not loaded, or container toolkit not configured | `nvidia-smi` on the host first; then re-install NVIDIA Container Toolkit per [NVIDIA docs](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html). |
 
 More diagnostic commands:
 
@@ -250,5 +250,5 @@ and set `GPU_NODE_HOST`, `VLLM_API_KEY`, and (for self-signed certs)
 ## Resources
 
 - [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/overview.html)
-- [vLLM GPU Memory Utilization](https://docs.vllm.ai/en/latest/serving/usage.html#gpu-memory-utilization)
+- [vLLM GPU Memory Utilization](https://docs.vllm.ai/en/latest/configuration/engine_args.html#gpu-memory-utilization)
 - [Text Embeddings Inference](https://github.com/huggingface/text-embeddings-inference)

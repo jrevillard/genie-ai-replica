@@ -31,7 +31,7 @@ GENIE.AI delegates **all** identity management to Keycloak: users, roles, sessio
 
 ## Related configuration in other sections
 
-- [Frontend Configuration → Authentication & Session](/docs/frontend/auth-flow/) — Vue-side OIDC client settings, token refresh, login UX.
-- [Backend Configuration → Auth Middleware](/docs/reference/api-contracts/) — backend JWT verification and `requireAdmin`.
+- [Frontend → Authentication & Session](/docs/frontend/auth-flow/) — Vue-side OIDC client settings, token refresh, login UX.
+- [Reference → API contracts → `requireAdmin`](/docs/reference/api-contracts/#keycloakauthmiddlewarerequireadmin) — backend JWT verification and the `requireAdmin` guard.
 - [Deployment → Mobile Deployment Guide](/docs/mobile/mobile-deployment-guide/) — Flutter app OIDC client configuration (per-institution `KC_MOBILE_CLIENT_ID`).
 - [External IdP Integration → §5 automated IdP configuration via keycloak-config-cli](/docs/configure/external-idp-integration-guide/) — Grafana SSO is wired the same way (Grafana is another confidential OIDC client of Keycloak).

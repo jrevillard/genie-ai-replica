@@ -56,5 +56,5 @@ end-to-end in Grafana / VictoriaTraces.
 ## Related
 
 - [Concepts in 5 minutes](/docs/get-started/concepts/)
-- [Glossary](/docs/get-started/glossary/)
+- [Glossary](/docs/reference/glossary/)
 - [Architecture overview](/docs/architecture/architecture/)

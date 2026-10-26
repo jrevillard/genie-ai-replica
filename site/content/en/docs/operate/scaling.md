@@ -7,6 +7,8 @@ mode: how-to
 persona: deployer
 owner: "docs-stewards"
 last_reviewed: 2026-09-19
+aliases:
+  - /docs/operations/scaling/
 ---
 
 GENIE.AI runs ~30 services in `docker-compose.yaml` (excluding init/migration
@@ -165,7 +167,7 @@ Caveats:
 - **GPU memory contention**: concurrent requests share the KV cache.
 - **Sub-linear throughput past ~70% GPU utilization** is a rule of thumb,
   not a measured threshold — verify with the
-  [RAG pipeline trace dashboard](/docs/operate/troubleshooting/).
+  [RAG pipeline trace waterfall](/docs/observe/dashboards/).
 - **Watch the queue**:
   ```bash
   # vLLM Prometheus metrics on port 8000 (network-internal)

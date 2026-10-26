@@ -165,5 +165,5 @@ override landed.
   the overrides.
 - [Streaming & metadata events]({{< relref "streaming-sse" >}}) — how
   the result of the override is surfaced to the backend.
-- [Backend → API contracts]({{< relref "/docs/reference/api-contracts" >}})
+- [Reference → API contracts]({{< relref "/docs/reference/api-contracts" >}})
   — the BFF route that proxies this.

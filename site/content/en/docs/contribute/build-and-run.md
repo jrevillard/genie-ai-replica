@@ -4,7 +4,7 @@ description: "Setting up a local development environment across all GENIE.AI com
 weight: 4
 section: "contribute"
 aliases:
-  - /docs/contribute/build-and-run/
+  - /docs/core/development-guide/
 audience: "developer"
 mode: how-to
 persona: developer
@@ -497,7 +497,7 @@ PKCE flow to work on a real device:
 
 A mismatch produces an infinite "logging in..." spinner or
 `error: invalid_request` from Keycloak. See the [Mobile deployment
-guide](/docs/mobile/) for full setup.
+guide](/docs/mobile/mobile-deployment-guide/) for full setup.
 
 ---
 
@@ -827,7 +827,7 @@ npm run lint:dart && npm run format:dart:check
 ```
 
 CI runs the full multi-stage pipeline on every MR — see the canonical
-[CI/CD](/docs/contribute/build-and-run/) for the 12-stage structure
+[`.gitlab-ci.yml`](https://opensource.unicc.org/un/itu/genie-ai/-/raw/main/.gitlab-ci.yml) for the 12-stage structure
 (`lint → test → config → build → scan → contract-in-image → e2e → promote
 → release → scheduled → manual → deploy`). Cancelling obsolete pipelines
 before triggering new ones saves runner minutes.
@@ -895,7 +895,7 @@ If it returns `command not found`, `clamav-daemon` was dropped by
 ### Keycloak login loop
 
 - ROPC is enabled but the user lacks `firstName`, `lastName`, or
-  `emailVerified=true` — see [Server Testing](/docs/contribute/build-and-run/)
+  `emailVerified=true` — see [Keycloak Admin Guide](/docs/configure/keycloak-admin-guide/)
   for the canonical user-creation payload.
 - Mobile scheme mismatch — see the [Scheme Coherence Rule](#mobile-flutter).
 
@@ -933,9 +933,9 @@ interrupted, or VRAM exhaustion (drop model size or run with
 | Deploy to a real environment | [Deployment](/docs/deploy/) (Ansible recommended) |
 | Add observability (OTel, Grafana, dashboards) | [Observability](/docs/observe/) |
 | Debug a slow chat / failing ingest | [Debugging with Tracing & Logs](/docs/operate/tracing-howto/) |
-| Find the CI/CD pipeline structure | [CI/CD](/docs/contribute/build-and-run/) |
-| Look up an environment variable | [Configuration](/docs/configure/) |
-| Understand the C4 architecture | [Architecture](/docs/architecture/) |
+| Find the CI/CD pipeline structure | [`.gitlab-ci.yml`](https://opensource.unicc.org/un/itu/genie-ai/-/raw/main/.gitlab-ci.yml) |
+| Look up an environment variable | [Environment variables](/docs/reference/env-vars/) |
+| Understand the C4 architecture | [Architecture Overview](/docs/architecture/architecture/) |
 | Run the multi-phase E2E suite | [E2E Tests](https://opensource.unicc.org/un/itu/genie-ai/-/raw/main/docs/e2e-tests/README.md) |
 | Work on the mobile app | [Mobile](/docs/mobile/) |
 

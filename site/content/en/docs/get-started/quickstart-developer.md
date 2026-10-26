@@ -388,11 +388,11 @@ prefix doesn't match.
 
 ## What's next
 
-- **Where to put a new route** — [Backend → API contracts](/docs/reference/api-contracts/).
+- **Where to put a new route** — [Reference → API contracts](/docs/reference/api-contracts/).
 - **Branching, commits, and the test pyramid** — [Contribute → Dev workflow](/docs/contribute/dev-workflow/).
 - **Open a merge request** — [Contribute → How to open a MR](/docs/contribute/how-to-mr/).
-- **OTel spans in your route** — [Observe → Tracing](/docs/observe/tracing/).
-- **Trace failures end-to-end** — [Observe → Dashboards](/docs/observe/dashboards/).
+- **OTel spans in your route** — [Operations → Tracing](/docs/operate/tracing-howto/).
+- **Trace failures end-to-end** — [Observability → Dashboards](/docs/observe/dashboards/).
 - **Service topology in detail** — [Architecture → Overview](/docs/architecture/architecture/).
 - **Full bring-up including TLS and secrets** — [Quickstart: Deployer](/docs/get-started/quickstart-deployer/).
 
@@ -441,5 +441,5 @@ prefix doesn't match.
 ## Related
 
 - **Deploy the stack to a Swarm cluster** — [Quickstart: Deployer](/docs/get-started/quickstart-deployer/) (adds TLS, secrets, observability).
-- **Pick the right env-var profile for your hardware** — [Deploy → Topologies](/docs/deploy/topologies/) (single-host, Swarm 2-node / 3-node, remote GPU).
+- **Pick the right env-var profile for your hardware** — [Deployment → Topologies](/docs/deploy/topologies/) (single-host, Swarm 2-node / 3-node, remote GPU).
 - **Understand the request flow you just debugged** — [Architecture → Overview](/docs/architecture/architecture/).

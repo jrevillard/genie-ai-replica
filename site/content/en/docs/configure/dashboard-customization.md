@@ -445,8 +445,8 @@ method name and unmapped i18n keys via snapshot tests.
 ## Related
 
 - [Frontend → Admin Dashboard](/docs/frontend/admin-dashboard/) — reference doc for **what each existing tab does** (data sources, failure modes, sidebar layout). Read this for the contents of `overview`, `hierarchy`, `documents`, `database`, `logs`, `queryInspector`, `security`, `users`.
-- [Operate → Admin Logs](/docs/operate/admin-logs/) — the `logs` tab: VictoriaLogs-backed search, the MELT seam, and the five endpoints behind it.
-- [Operate → Backup & restore](/docs/operate/backup-restore/) — the `database` tab and the **Backup / Optimize / Restore** action cards, including the underlying `arangodump` flow.
+- [Operations → Admin Logs](/docs/operate/admin-logs/) — the `logs` tab: VictoriaLogs-backed search, the MELT seam, and the five endpoints behind it.
+- [Operations → Backup & restore](/docs/operate/backup-restore/) — the `database` tab and the **Backup / Optimize / Restore** action cards, including the underlying `arangodump` flow.
 - [Configure → Keycloak admin guide](/docs/configure/keycloak-admin-guide/) — the role / group / client model. Use this to decide which user roles see the admin surface.
 - [Architecture → Authentication](/docs/architecture/architecture/#6-user-authentication-flow) — how the OIDC token flows from Keycloak to the frontend, and why role checks must be enforced on the backend.
 - [Get started → Quickstart for developers](/docs/get-started/quickstart-developer/) — local dev bring-up, hot-reload, and the npm scripts for `gov-chat-frontend`.

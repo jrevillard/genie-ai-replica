@@ -189,6 +189,36 @@ describe('conversation persistence', () => {
     expect(open.isStreaming).toBe(false);
   });
 
+  it('restores the persisted related documents', () => {
+    const doc = { id: 'doc-1', title: 'Guide', type: 'PDF', url: '/api/files/doc-1/download', size: 0 };
+    sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        openId: 'open',
+        conversations: {
+          open: {
+            messages: [{ sender: 'user', content: 'q' }],
+            relatedDocuments: [doc]
+          }
+        }
+      })
+    );
+    const store = freshStore();
+    rehydrateConversation(store.state.conversation);
+    expect(store.getters['conversation/openConversation'].relatedDocuments).toEqual([doc]);
+  });
+
+  it('flushes the write when the page hides (reload inside the debounce window)', () => {
+    const store = freshStore();
+    subscribeConversation(store);
+    store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' });
+    // No timer advance: the pagehide handler must write through
+    // synchronously or a reload within the 300 ms window drops the turn.
+    document.dispatchEvent(new Event('pagehide'));
+    const raw = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
+    expect(raw.conversations.open.messages.at(-1).content).toBe('q');
+  });
+
   it('survives a full storage (quota error is degraded, not thrown)', () => {
     jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new DOMException('quota', 'QuotaExceededError');

@@ -282,6 +282,7 @@ export function rehydrateConversation(moduleState) {
     const clean = emptyConversation();
     clean.messages = entry.messages.filter((m) => m && typeof m === 'object');
     clean.selectedContextItems = Array.isArray(entry.selectedContextItems) ? entry.selectedContextItems : [];
+    clean.relatedDocuments = Array.isArray(entry.relatedDocuments) ? entry.relatedDocuments : [];
     clean.lastSavedState =
       entry.lastSavedState && typeof entry.lastSavedState === 'object'
         ? {
@@ -308,6 +309,15 @@ const PERSIST_MAX_WAIT_MS = 2000;
 export function subscribeConversation(store) {
   let timer = null;
   let firstChangeAt = 0;
+  // The debounce's minimum lag is one full window: a reload that lands
+  // inside it would otherwise drop the newest turns entirely. The page
+  // lifecycle event fires before the document goes away, so the write
+  // through here is what a reload reads back.
+  document.addEventListener('pagehide', () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    persistConversation(store.state.conversation);
+  });
   store.subscribe((mutation) => {
     if (!mutation.type.startsWith('conversation/')) return;
     const now = Date.now();

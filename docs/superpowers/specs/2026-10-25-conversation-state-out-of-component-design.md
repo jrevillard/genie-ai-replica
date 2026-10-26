@@ -48,7 +48,6 @@ state: {
       title: '',
       isStreaming: false,
       streamingQueryId: null,
-      streamInterrupted: false,  // page reloaded mid-generation
       relatedDocuments: []       // the right sidebar's source list
     }
   }
@@ -80,8 +79,8 @@ Persistence: a module-level `store.subscribe` writes the whole module
 state (the map) to sessionStorage (`genie.conversation.v1`) debounced
 (~300 ms); the store bootstrap rehydrates it before the app mounts —
 including any entry still `isStreaming`. If `isStreaming` was
-true at rehydration, the fetch died with the page: the module sets
-`streamInterrupted` on the last bot message, which renders through the
+true at rehydration, the fetch died with the page: the module closes
+the turn (`isError` on the last bot message), which renders through the
 existing retry affordance.
 
 ### Component changes (`ChatBotComponent.vue`)
@@ -119,8 +118,8 @@ existing retry affordance.
 
 ## Error handling
 
-- Reload mid-generation → `streamInterrupted` → existing
-  `answer-error` + retry render on the last turn.
+- Reload mid-generation → `isError` on the interrupted turn → the
+  existing `answer-error` + retry render.
 - Stream error while backgrounded → stored in the message; visible
   when the user returns.
 - sessionStorage full/unavailable → persistence degrades to

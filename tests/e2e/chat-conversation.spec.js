@@ -603,6 +603,19 @@ test.describe('Conversation — surface invariants', () => {
     await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
     await page.waitForSelector('.chat-message.bot .streaming-indicator', { timeout: 15000 });
+    // The turn survives only through the persisted payload — wait for the
+    // write, not for the render (the debounce trails the first frame).
+    await page.waitForFunction(
+      () => {
+        try {
+          const stored = JSON.parse(sessionStorage.getItem('genie.conversation.v1'));
+          return (stored?.conversations?.open?.messages?.length || 0) >= 2;
+        } catch {
+          return false;
+        }
+      },
+      { timeout: 15000 }
+    );
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForSelector('.chat-message.user', { timeout: 30000 });
     await expect(page.locator('.chat-message.user').last()).toContainText('What is GENIE.AI?');

@@ -914,7 +914,6 @@ export default {
     eventBus.$off('chat-deleted'); // Clean up the chat-deleted listener
     // Removed clearInterval
     eventBus.$off('load-conversation');
-    // Abort active SSE stream on component unmount
   },
 
   methods: {
@@ -1468,10 +1467,11 @@ export default {
       });
 
       if (contextOption === 'conversation-with-labels') {
-        // Drop the streaming bot placeholder pushed for the in-flight SSE — it is
-        // a UI stub, not part of the conversation.
+        // Streaming placeholders are UI stubs, and interrupted or failed
+        // turns never delivered an answer — neither belongs in the model's
+        // context.
         const baseMessages = this.openMessages
-          .filter((msg) => msg && !msg.isStreaming)
+          .filter((msg) => msg && !msg.isStreaming && !msg.isError)
           .map((msg) => ({
             role: msg.sender === 'user' ? 'user' : 'assistant',
             content: msg.content
@@ -1827,16 +1827,18 @@ export default {
         const conversation = await this.chatHistoryService.createConversation(conversationData);
         this.$store.commit('conversation/setConversationId', conversation._key);
 
+        // The first user question is already stored as the conversation's
+        // initialMessage — matched by position, not content, so a later
+        // message that repeats the same text is still stored normally.
+        const firstUserIndex = this.openMessages.findIndex((m) => m.sender === 'user');
         for (const [messageIndex, message] of this.openMessages.entries()) {
           if (
             (message.sender === 'bot' && !message.queryId) ||
-            (message.sender === 'user' && message.content === firstUserMessage && !message.isSaved)
+            (message.sender === 'user' && messageIndex === firstUserIndex && !message.isSaved)
           ) {
-            // The first user question is already stored as the
-            // conversation's initialMessage — mark it saved so
-            // hasUnsavedChanges() settles and the next save pass skips
-            // it instead of adding it a second time. The streaming
-            // placeholder stays unsaved: it is not storable yet.
+            // Mark it saved so hasUnsavedChanges() settles and the next
+            // save pass skips it instead of adding it a second time. The
+            // streaming placeholder stays unsaved: it is not storable yet.
             if (message.sender === 'user') {
               this.$store.commit('conversation/setMessageProperty', [messageIndex, 'isSaved', true]);
             }
@@ -1958,6 +1960,9 @@ export default {
     loadChatFromHistory(chatId) {
       const chat = this.getChatById(chatId);
       if (!chat) return;
+      // Loading another transcript orphans the open generation — stop it
+      // rather than letting its frames land in the wrong conversation.
+      this.$store.dispatch('conversation/abortStream');
       try {
         const storedChatData = localStorage.getItem(`chat_data_${chatId}`);
         if (storedChatData) {

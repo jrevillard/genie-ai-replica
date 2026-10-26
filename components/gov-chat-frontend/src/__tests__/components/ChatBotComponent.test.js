@@ -129,6 +129,11 @@ function createChatBotStore(stateOverrides = {}) {
   const state = createAuthenticatedState(stateOverrides);
   return createStore({
     state: () => state,
+    // The real store registers auth non-namespaced, so its getters sit
+    // at the root — the save paths read currentUser through them.
+    getters: {
+      currentUser: (s) => s.user
+    },
     modules: {
       // The component commits reachability to the shared status module;
       // the real mutations are used so the tests assert state outcomes.
@@ -1644,6 +1649,42 @@ describe('ChatBotComponent', () => {
       vm.$store.commit('conversation/setContextItems', [{ service: 'Service Name', category: 'new-category' }]);
 
       expect(vm.hasUnsavedChanges()).toBe(true);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Saving stores every turn exactly once
+  // -----------------------------------------------------------------------
+  describe('Conversation saving', () => {
+    it('stores a repeated user message; only the first question rides as initialMessage', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.createConversation.mockResolvedValue({ _key: 'conv-dup' });
+      chatHistoryService.addMessage.mockClear();
+
+      vm.$store.commit('conversation/appendUserMessage', { sender: 'user', content: 'hello', isSaved: false });
+      vm.$store.commit('conversation/appendBotMessage', {
+        sender: 'bot',
+        content: 'Hi there',
+        queryId: 'q1',
+        isSaved: false
+      });
+      // Same text as the first question — matched by position, not
+      // content, or this turn would silently vanish from the transcript.
+      vm.$store.commit('conversation/appendUserMessage', { sender: 'user', content: 'hello', isSaved: false });
+
+      vm.saveChatDialog = { visible: true, title: 'Dup', folderId: 'default' };
+      await vm.handleSaveChat();
+
+      const payloads = chatHistoryService.addMessage.mock.calls.map((c) => c[0].content);
+      expect(payloads).toEqual(['Hi there', 'hello']);
+      const open = vm.openMessages;
+      // Index 0 is the factory's welcome turn; the first real user
+      // question rides as initialMessage and the repeated text at the
+      // end is still stored on its own.
+      expect(open[1].isSaved).toBe(true);
+      expect(open[3].isSaved).toBe(true);
     });
   });
 

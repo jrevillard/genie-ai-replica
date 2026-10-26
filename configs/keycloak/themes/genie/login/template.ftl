@@ -160,8 +160,15 @@
 <div class="${properties.kcLogin!}">
   <div class="${properties.kcLoginContainer!}">
     <header id="kc-header" class="pf-v5-c-login__header">
+      <#--
+        The artwork comes in two formats and the template offers them
+        through a picture element. Only the base theme may do that: a
+        child theme that ships its own logo.png but no logo.webp would
+        resolve the webp in its parent and show the parent's artwork
+        instead of its own mark. A child theme keeps the plain image.
+      -->
       <div id="kc-header-wrapper"
-              class="pf-v5-c-brand"><picture><source srcset="${url.resourcesPath}/img/logo.webp" type="image/webp"><img src="${url.resourcesPath}/img/logo.png" alt="GENIE.AI"></picture></div>
+              class="pf-v5-c-brand"><#if isBaseTheme><picture><source srcset="${url.resourcesPath}/img/logo.webp" type="image/webp"><img src="${url.resourcesPath}/img/logo.png" alt="GENIE.AI"></picture><#else><img src="${url.resourcesPath}/img/logo.png" alt="GENIE.AI"></#if></div>
     </header>
     <main class="${properties.kcLoginMain!}">
       <div class="${properties.kcLoginMainHeader!}">

@@ -226,6 +226,7 @@ server {
 
     # Android App Links verification
     location = /.well-known/assetlinks.json {
+        include conf.d/security-headers.inc;
         default_type application/json;
         alias /etc/nginx/conf.d/assetlinks.json;
         add_header Cache-Control "public, max-age=3600" always;
@@ -233,6 +234,7 @@ server {
 
     # iOS Universal Links verification
     location = /.well-known/apple-app-site-association {
+        include conf.d/security-headers.inc;
         default_type text/plain;
         alias /etc/nginx/conf.d/apple-app-site-association;
         add_header Cache-Control "public, max-age=3600" always;

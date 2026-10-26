@@ -187,7 +187,7 @@ The Keycloak login, account, admin, and email screens are themed by the `genie` 
 |---|---|---|---|---|
 | Login | `configs/keycloak/themes/genie/login/theme.properties` | `resources/img/logo.png` | `resources/img/favicon.ico` | `resources/css/genie.css`, `resources/css/dark.css` |
 | Account | `configs/keycloak/themes/genie/account/theme.properties` | `resources/img/logo.png` | (default favicon) | `resources/css/genie.css`, `resources/css/dark.css` |
-| Admin | `configs/keycloak/themes/genie/admin/theme.properties` | `resources/img/logo.png` | `resources/img/favicon.ico` | `resources/css/genie.css`, `resources/css/dark.css` |
+| Admin | `configs/keycloak/themes/genie/admin/theme.properties` | `resources/img/logo.png` | (the built-in `favicon.svg`) | `resources/css/genie.css`, `resources/css/dark.css` |
 | Email | `configs/keycloak/themes/genie/email/theme.properties` | `resources/img/logo.png` | n/a | n/a |
 
 The `genie` theme is a child of the Keycloak `keycloak.v2` (login/admin) / `keycloak.v3` (account) / `keycloak` (email) base themes — defined by the `parent=` line in each `theme.properties`.

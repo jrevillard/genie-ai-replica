@@ -3,8 +3,12 @@
 # Domain-specific headers (CSP, CORS) are defined per-location in default.conf.template
 
 # Basic Security Headers
+#
+# X-Frame-Options is set from $frame_options: the server block
+# declares the default, and a location that frames another surface of the
+# same origin (the Keycloak surfaces, Grafana) overrides it.
 add_header X-Content-Type-Options "nosniff" always;
-add_header X-Frame-Options "DENY" always;
+add_header X-Frame-Options $frame_options always;
 add_header X-XSS-Protection "1; mode=block" always;
 
 # Strict Transport Security with preload

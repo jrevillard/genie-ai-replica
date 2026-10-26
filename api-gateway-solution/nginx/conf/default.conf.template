@@ -44,6 +44,11 @@ server {
     set $permissions_policy "${NGINX_PERMISSIONS_POLICY}";
     add_header Permissions-Policy $permissions_policy always;
 
+    # The framing policy of the default: no page frames another. A surface
+    # that is framed by the same origin — the Keycloak login page, the
+    # consoles, Grafana — overrides it in its own location.
+    set $frame_options "DENY";
+
     # Strip ALL upstream security/CORS headers — nginx is the single authority
     # (X-Powered-By and Server included — server context, not allowed inside if blocks)
     include conf.d/hide-upstream-headers.inc;
@@ -83,10 +88,16 @@ server {
     #     with the Keycloak version, and the version is the resource tag in
     #     the URL, so an upgrade changes their URL too.
     #
+    # Both are Keycloak's own conventions: a bundle under assets/ carries
+    # its content hash in its name, and vendor/ is where the shared bundles
+    # live. A theme that ships a directory of either name is covered by the
+    # rule as well — the rule keys on the directory, not on the owner.
+    #
     # It sits before the .txt/.xml rule so that a theme file of either
     # extension is proxied instead of answered from the filesystem.
     location ~ ^/auth/resources/[^/]+/[^/]+/[^/]+/(?!assets/|vendor/).+$ {
-        include conf.d/keycloak-headers.inc;
+        set $frame_options "SAMEORIGIN";
+        include conf.d/security-headers.inc;
         add_header Cache-Control "no-cache, must-revalidate" always;
 
         # Replace the upstream's 30-day cache, do not add to it. The
@@ -113,7 +124,8 @@ server {
 
     # Keycloak Identity Provider proxied to Kong
     location /auth/ {
-        include conf.d/keycloak-headers.inc;
+        set $frame_options "SAMEORIGIN";
+        include conf.d/security-headers.inc;
         include conf.d/keycloak-proxy.inc;
     }
 
@@ -247,9 +259,9 @@ server {
 
     # Grafana observability dashboards — proxied to Kong
     location /grafana/ {
+        set $frame_options "SAMEORIGIN";
         include conf.d/security-headers.inc;
 
-        add_header X-Frame-Options "SAMEORIGIN" always;
         add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' wss://${NGINX_PUBLIC_DOMAIN}:${NGINX_HTTPS_PORT} https://${NGINX_PUBLIC_DOMAIN}:${NGINX_HTTPS_PORT}; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'self'; form-action 'self' 'unsafe-inline' https://${NGINX_PUBLIC_DOMAIN}:${NGINX_HTTPS_PORT}; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
 
         proxy_pass http://$kong_addr;

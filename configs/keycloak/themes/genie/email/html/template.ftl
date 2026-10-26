@@ -11,9 +11,7 @@
   broken image in every mail client.
 -->
 <#macro emailLayout>
-<#assign rtlLocales = ["ar","he","fa","ur"]>
-<#assign isRtl = rtlLocales?seq_contains(locale.language)>
-<html lang="${locale.language}" dir="${isRtl?string('rtl','ltr')}">
+<html lang="${locale.language}" dir="${(ltr)?then('ltr','rtl')}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">

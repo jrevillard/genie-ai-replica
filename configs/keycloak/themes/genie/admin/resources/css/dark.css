@@ -152,19 +152,12 @@
 /* The wave band — the crest of the Living Intelligence artwork. On the
    dark ground the strokes have to lighten it, not darken it: screen is
    the same mechanism with the opposite effect. */
-.pf-v5-theme-dark .pf-v5-c-page__sidebar-body {
-  position: relative;
-}
-
+/* On the dark ground the strokes lighten it instead of darkening it:
+   screen is the same mechanism with the opposite effect. The geometry is
+   the light stylesheet's - only the colours differ here. */
 .pf-v5-theme-dark .pf-v5-c-page__sidebar-body::after {
-  content: '';
-  position: absolute;
-  inset: auto 0 0 0;
-  height: 110px;
-  background: url('../img/genie-bottom-waves.svg') right bottom / auto 110px no-repeat;
   opacity: 0.42;
   mix-blend-mode: screen;
-  pointer-events: none;
 }
 
 /* The panels let the ground through: the console's surface is the dark

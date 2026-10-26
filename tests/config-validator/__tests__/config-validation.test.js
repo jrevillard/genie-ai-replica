@@ -444,6 +444,10 @@ describe('Configuration Validation Suite', () => {
       expect(names.emittedClass).toBe(`kc-theme-${names.themeName}`);
     });
 
+    test('the marker is emitted only for the base theme', () => {
+      expect(names.emittedConditionally).toBe(true);
+    });
+
     test('the ground and the wave are scoped to the marker class', () => {
       const unscoped = names.paintedSelectors.filter((selector) => !selector.includes(`.${names.emittedClass}`));
       expect(unscoped).toEqual([]);
@@ -453,6 +457,15 @@ describe('Configuration Validation Suite', () => {
       const painted = names.paintedSelectors.join(' ');
       expect(painted).toMatch(/#keycloak-bg::before/);
       expect(painted).toMatch(/#keycloak-bg::after/);
+    });
+
+    test('every stylesheet that paints one of them paints both', () => {
+      // A stylesheet that drops the wave but keeps the ground leaves the
+      // page half-decorated in one colour scheme only.
+      const halfPainted = names.paintedByStyle.filter(
+        (entry) => entry.pseudoElements.length > 0 && entry.pseudoElements.length < 2
+      );
+      expect(halfPainted).toEqual([]);
     });
   });
 });

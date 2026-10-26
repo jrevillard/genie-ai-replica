@@ -60,7 +60,7 @@ recipe ends with a cross-link to the full debugging doc for that subsystem.
 2. Inspect container logs (Swarm: `docker service logs genieai_otel-collector --since 5m` | Compose: `docker compose logs otel-collector --since 5m`)
 3. Verify the OTel Collector → VictoriaMetrics pipeline (`otel exporter` block
    in `configs/otel/otel-collector-config.yaml`)
-4. Escalate: see [Observability stack health](./dashboards/#observability-folder--stack-health-dashboards)
+4. Escalate: see [Observability stack health](/docs/observability/dashboards/#observability-folder--stack-health-dashboards)
 
 ### When `vm_storage_high` fires
 1. Open the **VictoriaMetrics single-node** dashboard → `Disk usage` panel.
@@ -81,7 +81,7 @@ recipe ends with a cross-link to the full debugging doc for that subsystem.
 3. Restart the collector (Swarm: `docker service update --force genieai_otel-collector` |
    Compose: `docker compose restart otel-collector`) to re-establish the
    fluent_forward TCP connection.
-4. Escalate: see [Admin Logs → Failure modes and debugging](../operate/admin-logs/#failure-modes-and-debugging)
+4. Escalate: see [Admin Logs → Failure modes and debugging](/docs/operations/admin-logs/#failure-modes-and-debugging)
 
 ### When `vtraces_export_failures` fires
 1. Query VictoriaTraces HTTP error metric:
@@ -91,7 +91,7 @@ recipe ends with a cross-link to the full debugging doc for that subsystem.
    container: `docker exec $(docker ps -q -f name=otel-collector) curl -sf http://victoriatraces:10428/health`
 3. Check VictoriaTraces disk pressure (the **VictoriaTraces single-node**
    dashboard `Disk usage` panel).
-4. Escalate: see [Tracing → Reading a trace](./tracing/#reading-a-trace)
+4. Escalate: see [Tracing → Reading a trace](/docs/operations/tracing-howto/#reading-a-trace)
 
 ### When `vtraces_ingestion_drop` fires
 1. Check the collector's OTLP receiver:
@@ -100,7 +100,7 @@ recipe ends with a cross-link to the full debugging doc for that subsystem.
    dashboard → `traces exported` rate per service.
 3. Verify `OTEL_EXPORTER_OTLP_ENDPOINT` resolves to the collector from every
    instrumented container.
-4. Escalate: see [Tracing → Reading a trace](./tracing/#reading-a-trace)
+4. Escalate: see [Tracing → Reading a trace](/docs/operations/tracing-howto/#reading-a-trace)
 
 ### When `otel-stamp-service-name-fail` fires
 1. Check the OTel Collector's own debug endpoint:
@@ -109,8 +109,8 @@ recipe ends with a cross-link to the full debugging doc for that subsystem.
    `docker inspect <container> | jq '.[0].HostConfig.LogConfig.Config["fluentd-address"]'`
 3. Confirm `transform/stamp_service_name_from_container` is enabled in
    `configs/otel/otel-collector-config.yaml:605`
-4. Escalate: see [Admin Logs → Failure modes and debugging](../operate/admin-logs/#failure-modes-and-debugging)
-   and [Tracing → Reading a trace](./tracing/#reading-a-trace)
+4. Escalate: see [Admin Logs → Failure modes and debugging](/docs/operations/admin-logs/#failure-modes-and-debugging)
+   and [Tracing → Reading a trace](/docs/operations/tracing-howto/#reading-a-trace)
 
 ### When `otel-pii-redact-fail` fires
 1. Check the collector debug endpoint:

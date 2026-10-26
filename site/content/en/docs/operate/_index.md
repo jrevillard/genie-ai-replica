@@ -4,7 +4,7 @@ description: Day-to-day operations for a running GENIE.AI deployment — backup,
 weight: 30
 slug: operations
 aliases:
-  - /docs/operations/
+  - /docs/operate/
 ---
 
 [Deployment]({{< relref "/docs/deploy" >}}) gets GENIE.AI running; this

@@ -4,7 +4,7 @@ description: OpenTelemetry-native metrics, logs, and traces for the GENIE.AI sta
 weight: 40
 slug: observability
 aliases:
-  - /docs/observability/
+  - /docs/observe/
 ---
 
 GENIE.AI is observable by default for production deployments: every application
@@ -63,14 +63,18 @@ either direction:
 
 - [Overview]({{< relref "overview" >}}) — the full stack, data flow, and how it
   is wired together.
-- [Tracing]({{< relref "tracing-howto" >}}) — W3C `traceparent` propagation, the RAG
-  pipeline span taxonomy, and how a `trace_id` links traces and logs.
 - [Dashboards]({{< relref "dashboards" >}}) — the pre-built Grafana dashboards
   (9 in total) and how to pivot between them.
 - [Alerting]({{< relref "alerting" >}}) — built-in alert rules and what they
   catch.
 - [Configuration]({{< relref "configuration" >}}) — environment variables,
   retention, sampling, and enabling/disabling the stack.
+
+## Related
+
+- [Distributed tracing (operator how-to)]({{< relref "tracing-howto" >}}) — W3C
+  `traceparent` propagation, the RAG pipeline span taxonomy, and how a
+  `trace_id` links traces and logs. Lives in [Operations](/docs/operations/).
 
 ## Design principles
 

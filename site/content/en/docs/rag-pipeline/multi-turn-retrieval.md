@@ -44,7 +44,7 @@ embedding logic is duplicated.
 
 {{% alert title="Distinct from Contextual Retrieval" color="note" %}}
 This is a **query-time** feature.
-[Contextual Retrieval](./contextual-retrieval/) is an **ingest-time**
+[Contextual Retrieval](/docs/rag/contextual-retrieval/) is an **ingest-time**
 feature that prepends doc-context to chunks *before* they are embedded.
 They are independent and complementary — both can be enabled at once.
 {{% /alert %}}

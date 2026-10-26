@@ -1276,5 +1276,5 @@ logging keeps `docker logs` working too.
 | Trace a request through the RAG pipeline | [Observability](/docs/observability/) |
 | Look up an environment variable | [Configuration](/docs/configure/) |
 | Find where a route or service lives in code | [Source Tree Analysis](/docs/reference/source-tree-analysis/) |
-| Set up a local dev environment | [Build and run locally](/docs/contribute/build-and-run/) |
+| Set up a local dev environment | [Development Guide](/docs/contribute/build-and-run/) |
 | Understand the high-level system diagram | [Architecture](/docs/architecture/) |

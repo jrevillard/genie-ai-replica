@@ -115,3 +115,53 @@ test('ignores links inside fenced code blocks', () => {
   const r = run(root)
   assert.equal(r.code, 0, r.out)
 })
+
+test('resolves a relative Markdown link against the content path', () => {
+  const root = fixture()
+  writeFileSync(
+    join(root, 'docs/operate/page.md'),
+    '---\ntitle: "Page"\n---\n\n# Page\n\n[sibling](./other/)\n'
+  )
+  writeFileSync(
+    join(root, 'docs/operate/other.md'),
+    '---\ntitle: "Other"\n---\n\n# Other\n'
+  )
+  const r = run(root)
+  assert.equal(r.code, 0, r.out)
+})
+
+test('rejects a relative Markdown link with no target file', () => {
+  const root = fixture()
+  writeFileSync(
+    join(root, 'docs/operate/page.md'),
+    '---\ntitle: "Page"\n---\n\n# Page\n\n[gone](./tracing/)\n'
+  )
+  const r = run(root)
+  assert.equal(r.code, 1)
+  assert.match(r.out, /\.\/tracing\//)
+})
+
+test('--fix rewrites a relative link to the published URL of its target', () => {
+  const root = fixture()
+  writeFileSync(
+    join(root, 'docs/operate/page.md'),
+    '---\ntitle: "Page"\n---\n\n# Page\n\n[sibling](./other/)\n'
+  )
+  writeFileSync(
+    join(root, 'docs/operate/other.md'),
+    '---\ntitle: "Other"\n---\n\n# Other\n'
+  )
+  run(root, true)
+  const body = readFileSync(join(root, 'docs/operate/page.md'), 'utf8')
+  assert.match(body, /\(\/docs\/operations\/other\/\)/)
+})
+
+test('ignores a placeholder href in prose', () => {
+  const root = fixture()
+  writeFileSync(
+    join(root, 'docs/operate/page.md'),
+    '---\ntitle: "Page"\n---\n\n# Page\n\nraw HTML (`href="…"`) is never rewritten\n'
+  )
+  const r = run(root)
+  assert.equal(r.code, 0, r.out)
+})

@@ -141,4 +141,4 @@ See [Reference → Service registry enum](/docs/reference/service-registry/).
 - [Architecture → OPEA microservices](/docs/architecture/opea-microservices/)
 - [RAG pipeline → Pipeline architecture](/docs/rag/pipeline/)
 - [RAG pipeline → Streaming & metadata events](/docs/rag/streaming-sse/)
-- [Observe → Tracing](/docs/operations/tracing-howto/)
+- [Distributed tracing](/docs/operations/tracing-howto/)

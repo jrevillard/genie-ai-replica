@@ -142,7 +142,7 @@ so **both authentication and the `admin` realm role are required**.
 
 ```bash
 # Pull a realm token (Direct Access Grants are disabled by default —
-# see /docs/operate/server-testing/ for the temporary-enable pattern).
+# see /docs/configure/keycloak-admin-guide/ for the temporary-enable pattern).
 # Defaults from env: KEYCLOAK_REALM=genie, KEYCLOAK_CLIENT_ID=genie-app.
 ADMIN_TOKEN=$(curl -sk -X POST \
   "${KEYCLOAK_URL:-https://${NGINX_PUBLIC_DOMAIN}/auth}/realms/${KEYCLOAK_REALM:-genie}/protocol/openid-connect/token" \

@@ -4,7 +4,7 @@ description: Sovereign retrieval-augmented generation pipeline — embedding, hy
 weight: 70
 slug: rag
 aliases:
-  - /docs/rag/
+  - /docs/rag-pipeline/
 ---
 
 The RAG (Retrieval-Augmented Generation) pipeline turns a user question into a

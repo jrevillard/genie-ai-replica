@@ -16,25 +16,30 @@ cross-link audit**, and have it picked up by the next Hugo build.
 ## Where docs live
 
 User-facing docs go under `site/content/en/docs/<section>/<slug>.md`. The
-15 sections are listed on the [root landing](/docs/):
+13 sections are listed on the [root landing](/docs/):
 
-| Section | When to add here |
-|---|---|
-| `get-started/` | Quickstarts, concepts, glossary, FAQ |
-| `architecture/` | System design, trust boundaries, OPEA contract |
-| `core/` | Foundational concepts shared across components |
-| `deploy/` | Install recipes (Compose, Swarm, GPU, A40) |
-| `operate/` | Day-to-day ops (backup, scaling, updates, troubleshooting) |
-| `observe/` | Metrics, logs, traces, dashboards, alerting |
-| `configure/` | Realm, IdP, banners, CORS / CSP, locale whitelist |
-| `rag-pipeline/` | RAG stages: embedding, retrieval, reranking, generation, translation |
-| `knowledge-base/` | Ingestion, taxonomy, document lifecycle, content quality |
-| `backend/` | HTTP API contracts |
-| `frontend/` | Vue SPA: auth, chat, sidebar, admin, theming |
-| `mobile/` | Flutter app |
-| `reference/` | Canonical tables (env-vars, API, OPEA extensions, glossary) |
-| `contribute/` | Repo, workflow, MR, i18n, security triage, style |
-| `audit/` | Internal docs-audit artifacts (weight 999, last section in nav) |
+| Section | Published URL | When to add here |
+|---|---|---|
+| `get-started/` | `/docs/get-started/` | Quickstarts, concepts, FAQ |
+| `core/` | `/docs/core/` | Project overview, integration architecture |
+| `deploy/` | `/docs/deploy/` | Install recipes (Compose, Swarm, GPU, A40) |
+| `operate/` | `/docs/operations/` | Day-to-day ops (backup, scaling, updates, troubleshooting) |
+| `observe/` | `/docs/observability/` | Metrics, logs, traces, dashboards, alerting |
+| `configure/` | `/docs/configure/` | Realm, IdP, banners, CORS / CSP, locale whitelist |
+| `architecture/` | `/docs/architecture/` | System design, trust boundaries, OPEA contract |
+| `rag-pipeline/` | `/docs/rag/` | RAG stages: embedding, retrieval, reranking, generation, translation |
+| `knowledge-base/` | `/docs/knowledge-base/` | Ingestion, taxonomy, document lifecycle, content quality |
+| `reference/` | `/docs/reference/` | Canonical tables (env-vars, API, OPEA extensions, glossary) |
+| `frontend/` | `/docs/frontend/` | Vue SPA: auth, chat, sidebar, admin, theming |
+| `mobile/` | `/docs/mobile/` | Flutter app |
+| `contribute/` | `/docs/contribute/` | Repo, workflow, MR, i18n, security triage, style |
+
+The **directory name** and the **published URL** differ for three sections
+(`operate/` → `operations`, `observe/` → `observability`, `rag-pipeline/` →
+`rag`) because they set `slug:` in their frontmatter. Always link with the
+published URL — the directory name 404s inside raw HTML (`href="…"`), which
+Hugo does not rewrite. When a page moves, add its old URL to that page's
+`aliases:` so existing bookmarks keep working.
 
 Dev-internal docs go under `docs/` — they are **not published**.
 
@@ -109,7 +114,7 @@ Every page MUST include, in order:
    an admin endpoint).
 8. **Troubleshooting mini-section** — 2–5 "If X, then Y" lines.
 9. **Related links** — `{{</* related */>}}` shortcode at the bottom with 3–5
-   sibling docs using absolute paths (`/docs/<section>/<slug>/`).
+   sibling docs using absolute published paths (`/docs/<published-section>/<slug>/`).
 10. **Last-updated stamp** — auto-rendered from `last_reviewed`.
 11. **Contributing link** — every page links to
     `/docs/contribute/how-to-mr/`.

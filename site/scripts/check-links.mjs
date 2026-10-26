@@ -143,7 +143,7 @@ const HTML_LINK = /href="([^"]*)"/g
 const broken = []
 let rewritten = 0
 
-/** Resolve an internal target to its canonical published URL. */
+/** Resolve an absolute internal target to its canonical published URL. */
 function canonical(target) {
   const [path, anchor] = target.split('#')
   if (!path) return null
@@ -152,6 +152,47 @@ function canonical(target) {
   if (byContent) return byContent + (anchor ? '#' + anchor : '')
   const byAlias = aliasMap.get(path)
   if (byAlias) return byAlias + (anchor ? '#' + anchor : '')
+  return null
+}
+
+/** Normalize a path made of '.' and '..' segments. */
+function normalizeSegments(segments) {
+  const out = []
+  for (const s of segments) {
+    if (s === '' || s === '.') continue
+    if (s === '..') out.pop()
+    else out.push(s)
+  }
+  return out.join('/')
+}
+
+/**
+ * Resolve a RELATIVE link.
+ *
+ * Hugo resolves a relative Markdown link against the CONTENT path of the
+ * referring page, then maps the result to the published URL; a raw-HTML
+ * href is never rewritten, so the browser resolves it against the PUBLISHED
+ * URL of the referring page. The two differ whenever a section carries a
+ * `slug:`, which is exactly where relative links rot.
+ */
+function canonicalRelative(target, file, kind) {
+  const [path, anchor] = target.split('#')
+  if (!path) return null
+  const suffix = anchor ? '#' + anchor : ''
+
+  if (kind === 'md') {
+    const dir = rel(file).split('/').slice(0, -1)
+    const candidate = '/' + normalizeSegments([...dir, ...path.split('/')])
+    const viaContent = contentPath.get(candidate) ?? contentPath.get(candidate.replace(/\/$/, ''))
+    if (viaContent) return viaContent + suffix
+  }
+
+  // published-URL space (what the browser does for raw HTML, and Hugo's fallback)
+  const base = pages.get(file).url
+  const resolved = normalizeSegments([...base.split('/'), ...path.split('/')])
+  const url = '/' + resolved.replace(/\/$/, '') + '/'
+  if (published.has(url)) return url + suffix
+  if (aliasMap.has(url)) return aliasMap.get(url) + suffix
   return null
 }
 
@@ -176,20 +217,34 @@ for (const file of files) {
     if (inFence) continue
 
     const handle = (target, kind) => {
-      if (!target.startsWith('/')) return target
-      const path = target.split('#')[0]
-      if (!path) return target
-      const resolved = canonical(target)
-      if (!resolved) {
-        broken.push({ file: rel(file), line: i + 1, kind, target })
-        return target
+      if (!target) return target
+      if (/^[a-z][a-z0-9+.-]*:/i.test(target)) return target // absolute URL, mailto:, tel:
+      if (target.startsWith('#')) return target // same-page anchor
+      if (/[…{}<>]/.test(target)) return target // placeholder in prose
+
+      if (target.startsWith('/')) {
+        const path = target.split('#')[0]
+        if (!path) return target
+        const resolved = canonical(target)
+        if (!resolved) {
+          broken.push({ file: rel(file), line: i + 1, kind, target })
+          return target
+        }
+        // Hugo rewrites Markdown links that point at a content path, but never
+        // rewrites raw-HTML href attributes — so for HTML only a published URL
+        // or an alias actually works.
+        const direct = published.has(path) || aliasMap.has(path)
+        if (!FIX && !direct && kind === 'html') {
+          broken.push({ file: rel(file), line: i + 1, kind, target })
+          return target
+        }
+        if (resolved !== target) rewritten++
+        return resolved
       }
-      // Hugo rewrites Markdown links that point at a content path, but never
-      // rewrites raw-HTML href attributes — so for HTML only a published URL
-      // or an alias actually works.
-      const direct = published.has(path) || aliasMap.has(path)
-      const viaContentPath = !direct
-      if (!FIX && viaContentPath && kind === 'html') {
+
+      // relative link
+      const resolved = canonicalRelative(target, file, kind)
+      if (!resolved) {
         broken.push({ file: rel(file), line: i + 1, kind, target })
         return target
       }

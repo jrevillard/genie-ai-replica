@@ -68,6 +68,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Broken and misdirected links in the documentation site.** The landing page
+  linked to `/docs/core/development-guide/`, a page that was removed when its
+  content moved to `/docs/contribute/build-and-run/`; the old address now
+  redirects to the new page. Three sections of the site are published under an
+  address that differs from their directory name, and the documentation index
+  cards pointed at the directory names — a link that the site generator does
+  not correct, so it returned "page not found". Every internal link now points
+  at the address the page is actually published under; the published addresses
+  themselves are unchanged.
+
 - **Static-analysis follow-ups on the application code (SAST wave-7).**
   The translation example's two `requests.post` calls ran without a timeout
   and could hang on a stalled upstream — the translate call now times out

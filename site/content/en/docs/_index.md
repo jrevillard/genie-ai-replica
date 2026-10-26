@@ -80,7 +80,7 @@ section's mission in one line.
 
 <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-3">
   <div class="col"><a class="card h-100 text-decoration-none" href="/docs/get-started/"><div class="card-body"><h5 class="card-title">Get started</h5><p class="card-text small">Be productive in 15 minutes — quickstarts for all four personas, concepts, and FAQ.</p></div></a></div>
-  <div class="col"><a class="card h-100 text-decoration-none" href="/docs/core/"><div class="card-body"><h5 class="card-title">Core</h5><p class="card-text small">High-level project overview, integration architecture, source tree, dev guide.</p></div></a></div>
+  <div class="col"><a class="card h-100 text-decoration-none" href="/docs/core/"><div class="card-body"><h5 class="card-title">Core</h5><p class="card-text small">High-level project overview and integration architecture.</p></div></a></div>
   <div class="col"><a class="card h-100 text-decoration-none" href="/docs/deploy/"><div class="card-body"><h5 class="card-title">Deploy</h5><p class="card-text small">Install GENIE.AI on Docker Compose, Swarm, or a remote GPU node.</p></div></a></div>
   <div class="col"><a class="card h-100 text-decoration-none" href="/docs/operations/"><div class="card-body"><h5 class="card-title">Operate</h5><p class="card-text small">Run a live deployment — backup, scaling, updates, troubleshooting.</p></div></a></div>
   <div class="col"><a class="card h-100 text-decoration-none" href="/docs/observability/"><div class="card-body"><h5 class="card-title">Observe</h5><p class="card-text small">Metrics, logs, traces, dashboards, and alerting via VictoriaMetrics + Grafana.</p></div></a></div>

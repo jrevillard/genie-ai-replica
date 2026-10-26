@@ -391,7 +391,7 @@ prefix doesn't match.
 - **Where to put a new route** — [Backend → API contracts](/docs/reference/api-contracts/).
 - **Branching, commits, and the test pyramid** — [Contribute → Dev workflow](/docs/contribute/dev-workflow/).
 - **Open a merge request** — [Contribute → How to open a MR](/docs/contribute/how-to-mr/).
-- **OTel spans in your route** — [Observe → Tracing](/docs/operations/tracing-howto/).
+- **OTel spans in your route** — [Distributed tracing](/docs/operations/tracing-howto/).
 - **Trace failures end-to-end** — [Observe → Dashboards](/docs/observability/dashboards/).
 - **Service topology in detail** — [Architecture → Overview](/docs/architecture/architecture/).
 - **Full bring-up including TLS and secrets** — [Quickstart: Deployer](/docs/get-started/quickstart-deployer/).

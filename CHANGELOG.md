@@ -65,12 +65,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   resources — Keycloak attaches nothing to an email, so the logo reference that
   was there resolved to a broken image in every mail client.
 
-  A deployment that ships its own child theme (`genie-el-salvador`) keeps its
-  own stylesheets: it declares `styles` for every surface, so the base theme's
-  stylesheets do not reach it. It does inherit the base theme's templates — the
-  login one, with its `<picture>` element — but the base theme ships no console
-  template, so its consoles keep Keycloak's stock markup and its own
-  stylesheets: the new console look, which is CSS only, does not reach them.
+  A deployment that ships its own child theme keeps its own look: a child
+  declares `styles` for every surface, so the base theme's stylesheets do not
+  reach it, and the new console look — CSS only — does not either. See
+  [Branding customization](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/site/content/en/docs/configure/branding-customization.md)
+  for how the theme resolution works.
 
 - **The gateway revalidates the Keycloak theme resources.** Keycloak serves
   every theme resource with a 30-day `Cache-Control` and, unless the theme

@@ -250,7 +250,7 @@ server {
         set $frame_options "SAMEORIGIN";
         include conf.d/security-headers.inc;
 
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' wss://${NGINX_PUBLIC_DOMAIN}:${NGINX_HTTPS_PORT} https://${NGINX_PUBLIC_DOMAIN}:${NGINX_HTTPS_PORT}; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'self'; form-action 'self' 'unsafe-inline' https://${NGINX_PUBLIC_DOMAIN}:${NGINX_HTTPS_PORT}; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' wss://${NGINX_PUBLIC_DOMAIN}:$https_port https://${NGINX_PUBLIC_DOMAIN}:$https_port; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'self'; form-action 'self' 'unsafe-inline' https://${NGINX_PUBLIC_DOMAIN}:$https_port; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
 
         include conf.d/kong-proxy.inc;
         proxy_set_header Upgrade $http_upgrade;

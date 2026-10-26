@@ -115,7 +115,7 @@
 
   /* ── Page layout ──
      The masthead is a pale wash of the brand — the same plane the web
-     app's navbar is (--navbar-bg) — and the ground the panels sit on
+     app's navbar occupies in the composition — and the ground the panels sit on
      is the dark page wash. */
   --pf-v5-c-page__sidebar--BackgroundColor: #0b0e11;
   --pf-v5-c-page__sidebar--m-light--BackgroundColor: #0b0e11;
@@ -126,9 +126,9 @@
 /* ── Living Intelligence surfaces ─────────────────────────────────── */
 
 /* The masthead is a dark wash of the brand — the same plane the web
-   app's navbar is (--navbar-bg). The component owns the property, so
+   app's navbar occupies in the composition. The component owns the property, so
    the override belongs on the component, not on :root.
-   Its ink is the brand lightened (--navbar-fg). */
+   Its ink is the brand lightened. */
 .pf-v5-theme-dark .pf-v5-c-masthead {
   --pf-v5-c-masthead--BackgroundColor: #0d1a32;
   color: #f3f9ff;

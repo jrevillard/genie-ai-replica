@@ -114,7 +114,7 @@
 
   /* ── Page layout ──
      The masthead is a pale wash of the brand — the same plane the web
-     app's navbar is (--navbar-bg) — and the ground the panels sit on
+     app's navbar occupies in the composition — and the ground the panels sit on
      is the pale page wash. */
   --pf-v5-c-page__sidebar--BackgroundColor: #ffffff;
   --pf-v5-c-page__sidebar--m-light--BackgroundColor: #ffffff;
@@ -124,11 +124,12 @@
 
 /* ── Living Intelligence surfaces ─────────────────────────────────── */
 
-/* The masthead is a pale wash of the brand — the same plane the web
-   app's navbar is (--navbar-bg). The component owns the property, so
-   the override belongs on the component, not on :root.
-   Its ink is the brand darkened (--navbar-fg): on the pale wash the
-   label reads at 14.1:1. */
+/* The masthead is a pale wash of the brand — the plane of the
+   composition where the web app's navbar sits, not the navbar's own
+   colour (the token there resolves to the solid brand, which is what
+   the wash replaces). The component owns the property, so the override
+   belongs on the component, not on :root. Its ink is the brand
+   darkened: on the pale wash the label reads at 14.1:1. */
 .pf-v5-c-masthead {
   --pf-v5-c-masthead--BackgroundColor: #ddecff;
   color: #000d64;

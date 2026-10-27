@@ -1,0 +1,5 @@
+--set opea.enabled=true
+--set observability.metrics.enabled=true
+--set observability.traces.enabled=true
+--set observability.grafana.enabled=true
+--set data.arangodb.mode=cluster

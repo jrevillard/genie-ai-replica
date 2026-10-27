@@ -32,6 +32,7 @@ byte-identical to one without it. */ -}}
     "probes" (dict
       "readiness" (dict "httpGet" (dict "path" "/health" "port" 6000) "initialDelaySeconds" 30 "periodSeconds" 15)
       "liveness"  (dict "httpGet" (dict "path" "/health" "port" 6000) "initialDelaySeconds" 60 "periodSeconds" 30)
+      "startup"   (dict "httpGet" (dict "path" "/health" "port" 6000) "failureThreshold" 30 "periodSeconds" 10)
     )
 -}}
 {{- $_ := set $vals.services "embedding" $svcVals -}}

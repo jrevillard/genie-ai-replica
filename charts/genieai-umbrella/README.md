@@ -126,8 +126,12 @@ helm install genieai charts/genieai-umbrella/ \
 Image precedence (highest wins):
 
 1. `services.<svc>.image.{repository,tag,pullPolicy}` — per-service.
-2. `global.imageRegistry` — prefixes every `image.repository` (default
-   `registry.opensource.unicc.org/un/itu/genie-ai`).
+2. `global.imageRegistry` — prefixes the `genie-ai-*` factory images and
+   the db-migrations image (charts render `global.imageRegistry`
+   first, then the top-level `imageRegistry`, which defaults to
+   `registry.opensource.unicc.org/un/itu/genie-ai`). The clamav, redis
+   and OPEA model images are upstream names that stay unprefixed —
+   they do not exist in the ITU registry.
 3. Chart default — `genie-ai-<svc>:main` per service.
 
 `imagePullSecrets` is taken from `global.imagePullSecrets` (list).

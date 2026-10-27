@@ -316,7 +316,11 @@ install_gateway_api_crds() {
   if [ -z "${tgz}" ]; then
     log "gateway-helm tgz missing: helm dependency update"
     helm dependency update "${REPO_ROOT}/charts/genieai-umbrella" >/dev/null
-    tgz="$(ls "${REPO_ROOT}/charts/genieai-umbrella/charts/"gateway-helm-*.tgz | head -1)"
+    tgz="$(ls "${REPO_ROOT}/charts/genieai-umbrella/charts/"gateway-helm-*.tgz 2>/dev/null | head -1)"
+    if [ -z "${tgz}" ]; then
+      log "gateway-helm tgz still missing after 'helm dependency update' — the OCI pull to docker.io/envoyproxy failed; check network/proxy and retry"
+      return 1
+    fi
   fi
   # Skip only when ALL THREE kinds the chart renders are present — the
   # first CRD of the bundle alone proves nothing (a failed apply

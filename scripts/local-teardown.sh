@@ -42,6 +42,13 @@ if [ -z "${RELEASE}" ]; then
   count="$(echo "${releases}" | grep -c . || true)"
   if [ "${count}" = "1" ]; then
     RELEASE="$(echo "${releases}" | head -1)"
+  elif [ "${count}" -gt 1 ]; then
+    echo "ERROR: ${count} releases in namespace ${NS}: $(echo "${releases}" | tr '\n' ' ')" >&2
+    echo "       pass RELEASE=<name> to pick the one to remove. Guessing was the" >&2
+    echo "       bug this script already had: the other release's cluster-scoped" >&2
+    echo "       objects (the Envoy Gateway mutating webhook among them) survive a" >&2
+    echo "       deleted namespace, and every pod CREATE on the cluster then fails." >&2
+    exit 1
   else
     RELEASE="test"
   fi

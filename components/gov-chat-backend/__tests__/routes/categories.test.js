@@ -25,15 +25,11 @@ jest.mock('../../services/session-service', () => ({
   createSession: jest.fn()
 }));
 
-// Mock service-category-service, deriving the mocked surface from the REAL service
-// prototype. A hand-written list of method names lets the mock invent methods the
-// service does not have, which hides a route calling a missing method behind a
-// green test. Deriving it means the mock can only ever expose what the service
-// actually implements.
+// Automock the real service: the mock can only expose what the service
+// implements, so a route calling a method the service lacks cannot pass its
+// own test.
 jest.mock('../../services/service-category-service', () =>
-  require('../helpers/service-mock').mockServiceFromPrototype(
-    jest.requireActual('../../services/service-category-service')
-  )
+  jest.createMockFromModule('../../services/service-category-service')
 );
 
 // Mock swagger dependencies
@@ -404,23 +400,13 @@ describe('POST /api/service-categories/:categoryId/services (AC21)', () => {
 // ============================================================
 // POST /api/service-categories/init — removed
 // ============================================================
-// The route used to seed a default taxonomy through a service method that no
-// longer exists (removed during the translation-architecture migration), so it
-// answered 500 on every call. Seeding now goes through the Knowledge Hierarchy
-// tab of the Admin Dashboard or the create-knowledge-hierarchy.js script. The
-// endpoint is pinned as absent so it cannot come back wired to a missing method.
+// Pinned as absent, so it cannot come back wired to a service method that does
+// not exist. Seeding a taxonomy goes through the Knowledge Hierarchy tab of the
+// Admin Dashboard or the create-knowledge-hierarchy.js script.
 describe('POST /api/service-categories/init', () => {
   it('should return 404 — the endpoint no longer exists', async () => {
     const response = await authPost('/api/service-categories/init', {});
 
     expect(response.status).toBe(404);
-  });
-
-  it('should keep the router mounted — the 404 pin must not be satisfiable by an unmounted router', async () => {
-    serviceCategoryService.getAllCategoriesWithServices.mockResolvedValue([]);
-
-    const response = await authGet('/api/service-categories/categories');
-
-    expect(response.status).toBe(200);
   });
 });

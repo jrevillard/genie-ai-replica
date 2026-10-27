@@ -347,14 +347,9 @@ npm run dev
 
 # Production start
 npm start
-
-# DB setup scripts (run after ArangoDB is up)
-cd scripts/new-schema-scripts
-source set-env.sh                                     # ArangoDB connection for the scripts
-node arango-schema-creator.js ./arango-schema.json    # Creates collections + indexes (asks for confirmation)
 ```
 
-Seeding the taxonomy is a separate, interactive step — see
+Creating the collections and seeding the taxonomy is a separate step — see
 [Database Setup](#database-setup).
 
 **Verify:**
@@ -625,8 +620,8 @@ The schema and seed scripts live in
 connection from `ARANGO_URL`, `ARANGO_DATABASE`, `ARANGO_USER` and
 `ARANGO_PASSWORD` — `source set-env.sh` (edit it first) exports them, or set them
 yourself. Note that these are not the deployment variable names (`ARANGO_DB`,
-`ARANGO_USERNAME`): without them the scripts fall back to a `node-services`
-database that the application does not read.
+`ARANGO_USERNAME`): without them the scripts fall back to a database the
+application does not read.
 
 ```bash
 cd components/gov-chat-backend/scripts/new-schema-scripts

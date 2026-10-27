@@ -170,22 +170,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/timeseries` and `/satisfaction` endpoints, and the mobile app never called
   it. It is removed rather than restored — read
   `GET /api/analytics/dashboard` for the overview. (#1108, !613)
-- **A route test can no longer pass while the route calls a service method the
-  service does not have.** Both endpoints above stayed green because their
-  test files mocked the service with a hand-written list of method names, which
-  included methods the service had lost — the mock invented the very method the
-  route was calling. The route tests that mock these services now derive their
-  mock from the real service prototype, so the mocked surface can only be what
-  the service implements, and each removed endpoint is pinned as 404 next to a
-  sibling route that must still answer. (#1108, !613)
 - **The npm wrappers that created the database and seeded the taxonomy are
   gone.** `npm run setup-db`, `npm run init-categories` and `npm run setup-all`
   ran `node setup-db.js`, `node init-service-categories.js` and
-  `node setup-all.js` from the package root, but those files live in
-  `scripts/old-schema-scripts/` (before that, in `examples/gov-chat-backend/`)
-  — so every command failed with `MODULE_NOT_FOUND`, while the documentation
-  presented them as the way to create the collections and seed the taxonomy.
-  Run the scripts that are still there instead, from
+  `node setup-all.js` from the package root, where those files have never
+  existed — they were kept elsewhere in the repository and are now gone
+  entirely — so every command failed with `MODULE_NOT_FOUND`, while the
+  documentation presented them as the way to create the collections and seed
+  the taxonomy. Run the scripts that are still there instead, from
   `components/gov-chat-backend/scripts/new-schema-scripts`:
   `source set-env.sh` and `node arango-schema-creator.js ./arango-schema.json`
   for the schema, and `node create-knowledge-hierarchy.js` for the taxonomy

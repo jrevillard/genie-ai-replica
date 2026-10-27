@@ -80,9 +80,7 @@ jest.mock(
 jest.mock('../../services/user-profile-service', () => ({}));
 jest.mock('../../services/admin-dashboard-service', () => ({}));
 jest.mock('../../services/analytics-service', () => ({}));
-jest.mock('../../services/service-category-service', () => ({
-  getAllCategoriesWithServices: jest.fn()
-}));
+jest.mock('../../services/service-category-service', () => ({}));
 jest.mock('../../services/logs-service', () => ({}));
 jest.mock('../../services/database-operations-service', () => ({}));
 jest.mock('../../services/weather-service', () => ({}));

@@ -18,11 +18,10 @@ jest.mock('../../services/user-provisioning-service', () => ({
   markUserAsDeleted: jest.fn()
 }));
 
-// Mock the TARGET service
+// Mock the TARGET service — automocked from the real one, so the mock can only
+// expose what the service implements.
 jest.mock('../../services/service-category-service', () =>
-  require('../helpers/service-mock').mockServiceFromPrototype(
-    jest.requireActual('../../services/service-category-service')
-  )
+  jest.createMockFromModule('../../services/service-category-service')
 );
 
 // Mock ALL other services loaded by index.js (even unused ones)

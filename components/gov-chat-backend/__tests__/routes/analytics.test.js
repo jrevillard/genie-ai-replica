@@ -26,16 +26,13 @@ jest.mock('../../services/session-service', () => ({
   createSession: jest.fn()
 }));
 
-// Mock analytics-service, deriving the mocked surface from the REAL service
-// prototype (controller constructor validates getDashboardAnalytics). A hand-written
-// list of method names lets the mock invent methods the service does not have —
-// this mock used to declare `getAnalytics`, a method the service lost in the 2025
-// singleton refactor, which kept the route test green while the endpoint answered
-// 500 in production.
+// Automock the real service: the mock can only expose what the service
+// implements, so a route calling a method the service lacks cannot pass its
+// own test. The controller constructor validates getDashboardAnalytics.
 jest.mock('../../services/analytics-service', () =>
-  require('../helpers/service-mock').mockServiceFromPrototype(jest.requireActual('../../services/analytics-service'), {
-    // The prototype-derived mock returns undefined; the controller uses this to label
-    // the series points, so it keeps the identity behaviour the time-series test asserts.
+  Object.assign(jest.createMockFromModule('../../services/analytics-service'), {
+    // The automock returns undefined; the controller uses this to label the
+    // series points, so it keeps the identity behaviour the test asserts.
     formatDateLabel: jest.fn((t) => t),
     db: {
       query: jest.fn().mockResolvedValue({
@@ -70,9 +67,7 @@ jest.mock('../../services/user-profile-service', () => ({}));
 jest.mock('../../services/admin-dashboard-service', () => ({}));
 jest.mock('../../services/query-service', () => ({}));
 jest.mock('../../services/chat-history-service', () => ({}));
-jest.mock('../../services/service-category-service', () => ({
-  getAllCategoriesWithServices: jest.fn()
-}));
+jest.mock('../../services/service-category-service', () => ({}));
 jest.mock('../../services/logs-service', () => ({}));
 jest.mock('../../services/database-operations-service', () => ({}));
 jest.mock('../../services/weather-service', () => ({}));
@@ -283,22 +278,13 @@ describe('GET /api/analytics/metric/:metric (AC3)', () => {
 // ============================================================
 // GET /api/analytics — removed
 // ============================================================
-// The route called `analyticsService.getAnalytics()`, a method removed during the
-// 2025 singleton refactor, so it answered 500 on every call. No first-party client
-// calls it: the web app reads /api/analytics/dashboard and the /metric, /timeseries
-// and /satisfaction endpoints. The endpoint is pinned as absent so it cannot come
-// back wired to a missing method.
+// Pinned as absent, so it cannot come back wired to a service method that does
+// not exist. The overview lives on /api/analytics/dashboard.
 describe('GET /api/analytics', () => {
   it('should return 404 — the endpoint no longer exists', async () => {
     const response = await authGet('/api/analytics');
 
     expect(response.status).toBe(404);
-  });
-
-  it('should keep the router mounted — the 404 pin must not be satisfiable by an unmounted router', async () => {
-    const response = await authGet('/api/analytics/dashboard');
-
-    expect(response.status).toBe(200);
   });
 });
 

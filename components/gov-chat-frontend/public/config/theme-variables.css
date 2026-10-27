@@ -29,15 +29,33 @@
   --accent-hover: oklch(from var(--brand) calc(l - 0.04) c h);
   --accent-muted: oklch(from var(--brand) l c h / 0.12);
   --accent-fg: oklch(from var(--brand) min(calc(l + 0.56), 0.98) calc(c * 0.1) h);
+  /* Same pairing, lifted past the 4.5:1 AA floor for small text
+     (initials on the accent circle). */
+  --accent-fg-strong: color-mix(in oklch, var(--accent-fg) 60%, white);
+  /* One step above the panel ground — the answer cards read by fill,
+     not only by shadow. The same relative lift works in both modes:
+     each theme's surface starts where its own ramp does. */
+  --surface-raised: oklch(from var(--surface) min(calc(l + 0.025), 0.995) c h);
+  /* The message timestamps float over the wave band; plain muted ink
+     drowns there, so they carry a stronger mix of the body ink. */
+  --time-ink: color-mix(in oklch, var(--fg) 55%, var(--muted));
   --accent-secondary: oklch(from var(--brand) max(calc(l - 0.07), 0.05) c calc(h + 0));
 
-  /* --- Navbar (defaults to brand, overridable via config) --- */
-  --navbar-bg: var(--brand);
-  --navbar-fg: oklch(from var(--brand) min(calc(l + 0.56), 0.98) calc(c * 0.1) h);
+  /* --- Navbar (light: a pale wash of the brand, overridable via config) ---
+     The bar is a tinted plane, not a brand-coloured slab: its lightness
+     and chroma are the light surface's, its hue is the deployment's, so a
+     flavour keeps its own colour. The ink is the brand darkened, the same
+     expression the dark block uses, which is what keeps the bar's controls
+     readable at both ends of the theme. */
+  --navbar-bg: oklch(from var(--brand) 0.94 0.04 h);
+  --navbar-fg: oklch(from var(--brand) max(calc(l - 0.32), 0.1) c h);
 
   /* --- Semantic status --- */
   --success: #10b981;
   --warning: #f59e0b;
+  /* The badge token cannot carry body text on a light ground — the ink is
+     the token darkened, derived here so components never re-derive it. */
+  --warning-ink: color-mix(in oklch, var(--warning), black 55%);
   --danger: #ef4444;
 
   /* --- Typography --- */
@@ -97,9 +115,20 @@
   /* --- Info (semantic) --- */
   --info: oklch(65% 0.15 240);
 
-  /* --- Semantic surface tokens --- */
+  /* --- Semantic surface tokens ---
+     --bg-sidebar is the page surface, not a shade below it. It
+     carried its own value (93 % lightness against --bg's 98 %),
+     which put a visible tonal seam down the edge of every sidebar:
+     measured light-theme rgb(228,232,237) against the centre's
+     rgb(246,249,252), and oklch(0.16 …) against oklch(0.14 …) in
+     dark. The layout already separates panels with a 1 px --border,
+     so the third surface tone was doing nothing but cutting the app
+     into pieces. It stays a distinct token — twelve rules across six
+     components read it, and an alias is cheaper for them than
+     --bg spelled out — but it resolves to --bg so every one of them
+     moves together. */
   --bg-tertiary: oklch(91% 0.008 250);
-  --bg-sidebar: oklch(93% 0.008 250);
+  --bg-sidebar: var(--bg);
 
   /* --- Form elements --- */
   --slider-track: oklch(92% 0.005 250);
@@ -129,19 +158,34 @@ body[data-theme='dark'],
   --border: oklch(from var(--brand) 0.3 calc(c * 0.2) h);
   --border-light: oklch(from var(--brand) 0.24 calc(c * 0.18) h);
 
+  /* On a dark ground the badge token itself is the readable ink. */
+  --warning-ink: var(--warning);
+
   /* --- Accent (lighter for dark bg, derived from --brand) --- */
   --accent: oklch(from var(--brand) calc(l + 0.2) calc(c * 0.85) h);
   --accent-hover: oklch(from var(--brand) calc(l + 0.14) calc(c * 0.9) h);
   --accent-muted: oklch(from var(--brand) calc(l + 0.2) c h / 0.15);
   --accent-fg: oklch(from var(--brand) max(calc(l - 0.32), 0.1) c h);
+  --accent-fg-strong: var(--accent-fg);
+  --surface-raised: oklch(from var(--surface) min(calc(l + 0.025), 0.995) c h);
+  --time-ink: color-mix(in oklch, var(--fg) 65%, var(--muted));
   --accent-secondary: oklch(from var(--brand) max(calc(l + 0.1), 0.05) c calc(h + 0));
 
-  /* --- Navbar (dark mode) --- */
-  --navbar-fg: oklch(from var(--brand) max(calc(l - 0.32), 0.1) c h);
+  /* --- Navbar (dark mode) ---
+     The dark band carries the brand's hue at low lightness and low
+     chroma — the same idea the light block uses at the pale end of
+     the same range. Both keep the deployment's hue through
+     `oklch(from var(--brand) ... h)`, and both reuse the same chroma
+     slope (0.04-0.05) so the swap never turns a deep navy into a
+     saturated blue. The ink stays the brand lightened — the light
+     block's darkened expression mirrored — so the controls stay
+     readable against the deep band without restating the chroma. */
+  --navbar-bg: oklch(from var(--brand) 0.22 0.05 h);
+  --navbar-fg: oklch(from var(--brand) min(calc(l + 0.56), 0.98) calc(c * 0.1) h);
 
   /* --- Semantic surfaces (brand-tinted) --- */
   --bg-tertiary: oklch(from var(--brand) 0.19 calc(c * 0.2) h);
-  --bg-sidebar: oklch(from var(--brand) 0.16 calc(c * 0.22) h);
+  --bg-sidebar: var(--bg);
 
   /* --- Shadows (stronger for dark) --- */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -193,12 +237,16 @@ body[data-theme='dark'],
     --accent-hover: oklch(from var(--brand) calc(l + 0.14) calc(c * 0.9) h);
     --accent-muted: oklch(from var(--brand) calc(l + 0.2) c h / 0.15);
     --accent-fg: oklch(from var(--brand) max(calc(l - 0.32), 0.1) c h);
+  --accent-fg-strong: var(--accent-fg);
+  --surface-raised: oklch(from var(--surface) min(calc(l + 0.025), 0.995) c h);
+  --time-ink: color-mix(in oklch, var(--fg) 65%, var(--muted));
     --accent-secondary: oklch(from var(--brand) max(calc(l + 0.1), 0.05) c calc(h + 0));
 
-    --navbar-fg: oklch(from var(--brand) max(calc(l - 0.32), 0.1) c h);
+    --navbar-bg: var(--brand);
+    --navbar-fg: oklch(from var(--brand) min(calc(l + 0.56), 0.98) calc(c * 0.1) h);
 
     --bg-tertiary: oklch(from var(--brand) 0.19 calc(c * 0.2) h);
-    --bg-sidebar: oklch(from var(--brand) 0.16 calc(c * 0.22) h);
+    --bg-sidebar: var(--bg);
 
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
     --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);

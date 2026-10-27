@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Living Intelligence theme layer on the base theme.** A decorative layer — hero banner, dot mesh, bottom waves and corner network — is applied to the welcome screen and switched per deployment from the runtime config (`theme.visual`). The base theme ships it on; the derived flavours (`huduma`, `naat`, `original`) ship it off. Every artwork path is configurable, so an operator can swap an illustration on the host without rebuilding an image.
+- **Per-category tints on the welcome-screen cards.** The nine quick-help cards now carry the background, hover and border colours that were already declared in each button's `styles` block and were never read by the frontend.
+- **`app.splash` in the runtime config.** The splash image is now a declared, per-deployment setting rather than an implicit fallback. The base theme ships the Living Intelligence globe splash; the derived flavours keep the bundled default.
 - **Benchmark rerank batches run in parallel — `OKF_RAGAS_RERANK_CONCURRENCY` (8-7).** The benchmark retrieval leg sends its candidate pool to the reranker in batches of 32, sequentially — at a raised candidate pool (192) that is 6 sequential round trips per question, and the retrieval leg of a 100-question suite measured ~1h50m, ~90 minutes of it rerank transport. The batch calls are independent (the reranker scores query–text pairs; results reassemble by index), so they now run up to `OKF_RAGAS_RERANK_CONCURRENCY` at a time (default **3**, clamp 1–8, read per call) — same scores at any value, purely transport. Measured effect at 192/100 questions: the rerank leg drops from ~90 min to ~30 min. The global in-flight ceiling is `OKF_RAGAS_RUN_CONCURRENCY` × this value (6 at the defaults) — raise on an idle GPU, set `1` when a benchmark shares the GPU with live chat traffic. Landed in all four sites (compose, `env`, Ansible `env.j2`, config-validator).
 
 - **OKF feature flag — the whole OKF stack parks behind `OKF_ENABLED` (8-7).** Every OKF surface is gated by one variable: `0` (parked, the default) or `1` (full). Parked, the three OKF containers (okf-server, pii-service, ragas-service) run at zero replicas, the `/api/okf` Kong route is not created, the Admin Dashboard hides the OKF Studio and Models tabs, and the chat backend answers with the legacy retrieval posture — nothing OKF is reachable or running. **Deployments that use OKF must set `OKF_ENABLED=1` in `.env` (Compose) or `okf_enabled: "1"` in Ansible `group_vars`, or the stack comes up parked after upgrade.** The Query Inspector tab is not gated.
@@ -114,6 +117,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The Keycloak theme now covers every surface, not only the login page.**
+  The admin console, the account console and the Keycloak emails carry the
+  Living Intelligence look: the masthead is a pale wash of the brand instead of
+  a solid brand slab (the console's own label sat on that `#4071cb` slab at
+  2.25:1 and now reads at 14.1:1 — `#000d64` on the `#ddecff` wash), the pale
+  ground shows behind the content panels, the wave
+  band closes the sidebar, the admin welcome page shows the brand artwork, and
+  the admin console's data tables carry the accent edge. The email template
+  follows the same rules, and its images are fetched from the theme's own
+  resources — Keycloak attaches nothing to an email, so the logo reference that
+  was there resolved to a broken image in every mail client.
+
+  A deployment that ships its own child theme keeps its own look: a child
+  declares `styles` for every surface, so the base theme's stylesheets do not
+  reach it, and the new console look — CSS only — does not either. See
+  [Branding customization](https://opensource.unicc.org/genie-ai/docs/configure/branding-customization/)
+  for how the theme resolution works.
+
+- **The gateway revalidates the Keycloak theme resources.** Keycloak serves
+  every theme resource with a 30-day `Cache-Control` and, unless the theme
+  names a content hash, no validators, so a browser that fetched a stylesheet
+  before a theme change keeps it for a month. The gateway now overrides that
+  header (`no-cache, must-revalidate`) for the resources of every installed
+  theme. Two families keep their long cache: the bundles under `assets/`, whose
+  names carry their content hash (Keycloak answers their revalidation with a
+  304), and the bundles under `vendor/`, which change only with the Keycloak
+  version — and the version is part of the resource URL.
+
+  The override applies to the copies fetched after it is deployed. A browser
+  that fetched a stylesheet before that keeps its 30-day entry: the resources
+  version in the URL is a database-stored tag that moves when Keycloak is
+  upgraded, not when a theme is edited. See
+  [Branding customization](https://opensource.unicc.org/genie-ai/docs/configure/branding-customization/)
+  for the two levers that invalidate a browser's stored copy.
+
+- **The login page's brand artwork is served in WebP.** The theme now ships the
+  artwork in two formats — a 96 KB WebP and the 115 KB PNG — and the login
+  template offers them through a `<picture>` element, so a browser that
+  supports WebP fetches the smaller one and the others keep the PNG. Keycloak
+  serves the WebP as `application/octet-stream`, which does not affect the
+  rendering: the browser selects the source by its type and decodes the bytes
+  itself. The console mastheads and the email keep a single PNG file, and mail
+  clients do not read `<picture>` at all.
+
+- **The gateway sends the `Permissions-Policy` header on every surface.** The
+  header was declared once, at the server level, and nginx does not inherit an
+  `add_header` into a location that declares one of its own — so the web app,
+  the API and the Grafana route were served without it. The value now lives in
+  one place and every location reads it, so a deployment's own policy applies
+  everywhere.
 - **The OKF Lab is now the "Testing Lab" (8-6/8-7).** "Routing Lab" named a
   mechanism — routing — that is only one of the surface's four tabs (Head,
   Test, Suites & analytics, RAGAS Benchmarks) plus the advisor, so the name
@@ -141,6 +194,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   both platforms.
 
 ### Fixed
+
+- **The welcome screen's title is wrapped in a local scrim instead of a full-width band.** The scrim used to span the whole artwork, washing the icon tiles along with the text; it now hugs the heading and its subtitle and fades on every side, as the designer's mockup does.
+- **The welcome screen's input bar was the wrong size.** It took 96 % of the card row's width and stood 90 px tall — a two-line field. It now takes 81 % of the row (805 px of 989 in the mockup) and rests at 50 px, one line, growing with what is typed into it.
+- **The welcome screen's subtitle was unreadable in the dark theme.** Its grey sat at 3.05:1 against the artwork behind it, below the 4.5:1 floor WCAG AA sets for 16 px text. It is now a brand tint — 9.95:1 in the light theme, 8.91:1 in the dark one — and stays a visible step below the heading.
+- **The welcome screen broke in the narrow-panel window.** With both sidebars open the panel is at its narrowest just above 1400 px: the title wrapped to two lines in the longer locales, and the wave band stopped short of the panel's edges. The title now holds one line in all 14 locales, and the wave band spans the panel's full width.
+- **The welcome screen's input placeholder wrapped to two lines.** "Ask a question, explore knowledge, or start a task…" overflowed the field in 10 of the 14 locales, including the English one. The third clause is gone in every locale, and the placeholder is measured against the field in the regression test, so it cannot come back.
 
 - **RAGAS benchmarks scored a different answerer than the chat (8-6):** the run's answer leg used a condensed system prompt plus a bare-JSON "answer the question" instruction, producing terse extractive answers ("101,746") where the deployed chat answers in full grounded sentences. RAGAS `answer_relevancy` reverse-generates questions *from the answer text*, so a bare number — factually perfect, faithfulness/context metrics at 1.0 — measured ~0.42 and was marked failing while the real chat answered the same question well (live-measured on the same question, contexts and judge: terse 0.415 vs chat-shaped 1.00). The answer leg now serves with the **verbatim chatqna contract** (or the deployment's pinned `CHATQNA_SYSTEM_PROMPT`, which docker-compose now forwards to okf-server so a pin shapes the chat and the benchmark identically), and the user message mirrors how chatqna presents relevant content. Existing run results were scored by the old answerer — re-run suites to get chat-representative scores.
 - **RAGAS generation orphaned from the UI on refresh (8-6):** an in-flight suite generation has no document in the database until it completes, so after a page refresh the suite list could not contain it — the panel reloaded the previous suite, showed no progress, and a second Generate attempt dead-ended on "a benchmark-suite generation is already running" while the first generation kept executing server-side. The suite listing now surfaces the live generation as a synthetic newest row carrying its live phase and counts, the panel re-attaches on refresh/reopen, and a Generate attempt that lands on the in-flight rejection attaches to the running generation (progress bar + Cancel) instead of erroring.
@@ -282,6 +341,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now detected and handed to the CPU model, rather than being served — and
   cached — half-finished. (!576)
 
+- **The navbar controls in dark mode were below the WCAG AA contrast floor.** The dark theme paired a darkened text ink with a saturated brand band, leaving the icons, the language selector and the logout control between 1.74:1 and 2.17:1. The two themes' inks are now swapped, so the controls sit at 4.46:1 against the band.
+
 - **The backend could not start with observability enabled (!565):** the OpenTelemetry
   setup read the shared propagator factory under a name that module does not
   export, so the process exited at startup with `Cannot read properties of
@@ -418,6 +479,10 @@ Shortening any of these converts a slow-but-successful call into a visible failu
   misreporting on the existing post-stream path, which has been emitting an
   `error` event ahead of `done` — so a translation failure at the end of an
   answer used to mark the deployment offline.
+- **Breaking: a runtime config that does not match its own schema now stops the web app from starting,** and the failing paths are reported. The schema embedded in each `genie-ai-config*.json` is enforced at load time, so a hand-edited or truncated config fails loudly instead of booting into a half-themed site. A config file that cannot be fetched at all still falls back to the bundled defaults and starts normally. Operators running a modified config should validate it before deploying: `npm run validate:config` in `components/gov-chat-frontend`.
+- **Breaking: the navbar in light mode is now a pale band carrying the brand wordmark,** instead of a solid brand-blue bar. The change is driven by the shared `--navbar-bg` and `--navbar-fg` tokens, so it applies to every deployment, including the derived flavours, on every route. Operators who prefer the previous solid bar override `--navbar-bg` in `theme-variables.css`.
+- **The welcome-screen cards now follow their column instead of the viewport,** so the four-column grid survives on a narrow screen instead of being crushed into a single 600 px column. The grid breakpoints are unchanged on a desktop-width screen.
+
 - **Legacy benchmark suite removed** (`tests/rag-benchmarks/{benchmark_*.py, run_benchmarks.sh}`, 2549 lines): the scripts were run-once-and-never-rerun, had no live test, and produced numbers that drifted from the rest of the eval surface. Latency and load-testing now live on the OTel trace waterfall (Grafana RAG Pipeline Trace Waterfall dashboard) — the OTel collector already captures every request with `latency` and `http.status_code` attributes, so the dashboards cover the same question without a separate harness. The site docs (`source-tree-analysis.md`) no longer mention the deleted files.
 - **Wrapper ROPC `EVAL_DEPLOY_ENV` is no longer defaulted:** the wrapper used to silently fall back to `/opt/genieai-el-salvador/.env` when the env var was unset — a stack-specific hardcode inside a script that should be generic. The wrapper now fails LOUD with `:?` and a message naming the expected `/opt/<stack>/.env` pattern (per `deploy/ansible/templates/env.j2` layout) when neither the env var nor `GENIE_ADMIN_PASSWORD` is set. The MR replaces the runbook / docs and the wrapper's "wrapper / argparse defaults" table to make the override path explicit.
 - **Per-context manual slicing heredocs removed from the root `CLAUDE.md` golden-dataset recipe:** the manual `for i in range(N): chunk = dict(gold); chunk['entries'] = gold['entries'][i::N]; open(f'/tmp/batches/gold_{i:02d}.json', 'w').write(json.dumps(chunk))` loop is gone — `run_eval.py` now slices the gold internally when `EVAL_CHUNK_SIZE` is set, and the sidecar already records per-chunk progress so a manual round-robin shell loop is no longer needed.

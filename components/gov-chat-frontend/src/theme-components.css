@@ -389,3 +389,42 @@ td {
   color: var(--muted);
   opacity: 0.7;
 }
+
+/* --- Document type badges ---
+   The per-format mark on document cards: an acronym on a tinted tile.
+   Pure CSS + text, so every badge stays license-free. */
+.file-type-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  padding: 0 var(--space-xs);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  background: var(--muted-soft, var(--border-light));
+}
+
+.file-type-badge[data-tone='danger'] {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+.file-type-badge[data-tone='info'] {
+  color: var(--info);
+  background: var(--info-bg);
+}
+.file-type-badge[data-tone='success'] {
+  color: var(--success);
+  background: var(--success-bg);
+}
+.file-type-badge[data-tone='warning'] {
+  color: var(--warning-ink);
+  background: var(--warning-bg);
+}
+.file-type-badge[data-tone='accent'] {
+  color: var(--accent);
+  background: var(--accent-muted);
+}

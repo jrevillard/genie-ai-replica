@@ -2,28 +2,25 @@
 <template>
   <div class="nav-container">
     <header class="nav-bar" data-test-id="nav-bar">
-      <!-- Left section with hamburger menu, logo, and title -->
+      <!-- Left section with logo and title. The hamburger collapse
+           control has been retired: both sidebars collapse from
+           their own edge handle (SidebarHandle.vue), so the navbar
+           no longer carries the toggle. The brand keeps the slot it
+           used to occupy via the new top padding on .logo-container
+           below — visually unchanged for users who never collapse
+           either sidebar. -->
       <div class="nav-left">
-        <!-- Hamburger button for sidebar toggle -->
-        <DsButton
-          variant="ghost"
-          class="icon-btn hamburger-btn"
-          :class="{ 'is-active': isSidebarOpen }"
-          aria-label="Toggle sidebar"
-          @click="toggleSidebar"
-        >
-          <span class="hamburger-inner"></span>
-        </DsButton>
-
         <!-- Logo container for GENIE.AI configured icon -->
-        <router-link to="/dashboard" class="logo-container">
+        <router-link to="/dashboard" class="logo-container logo-container--no-hamburger">
           <!-- Display SVG icon from config (file or inline) -->
           <img v-if="config.app.icon.type === 'file'" :src="config.app.icon.value" class="govt-logo" alt="App Icon" />
           <!-- eslint-disable-next-line vue/no-v-html -->
           <span v-else class="govt-logo" v-html="config.app.icon.value"></span>
         </router-link>
         <!-- Title from GENIE.AI config - Hide on mobile -->
-        <router-link to="/dashboard" class="brand-name hide-on-mobile">{{ config.app.title }}</router-link>
+        <router-link to="/dashboard" class="brand-name hide-on-mobile" :class="brandWordmarkClass">{{
+          config.app.title
+        }}</router-link>
 
         <!-- Mobile controls - Only shown on mobile devices -->
         <div class="mobile-controls">
@@ -160,6 +157,24 @@
 
       <!-- Right section with language and user controls - Only visible on desktop -->
       <div class="nav-right desktop-only">
+        <!-- The assistant's reachability, visible on every page: online is a
+             quiet pill, offline turns danger and carries the explanation. -->
+        <span
+          class="nav-status"
+          data-testid="nav-status"
+          :data-status="status.online ? 'online' : 'offline'"
+          role="status"
+          :title="
+            status.online
+              ? status.lastResponseTime !== null
+                ? `${status.lastResponseTime}ms`
+                : $t('nav.statusOnline')
+              : status.errorMessage || $t('nav.statusOffline')
+          "
+        >
+          <span class="nav-status__dot" aria-hidden="true"></span>
+          {{ status.online ? $t('nav.statusOnline') : $t('nav.statusOffline') }}
+        </span>
         <div class="language-select-container">
           <language-selector />
         </div>
@@ -282,6 +297,7 @@
 <script>
 import LanguageSelector from '@/components/LanguageSelector.vue';
 import DsButton from './ds/Button.vue';
+import { mapGetters } from 'vuex';
 
 export default {
   name: 'NavBarComponent',
@@ -290,14 +306,10 @@ export default {
     DsButton
   },
   props: {
-    isSidebarOpen: {
-      type: Boolean,
-      default: true
-    },
-    sidebarWidth: {
-      type: Number,
-      default: 250 // Default sidebar width in pixels
-    },
+    // The left sidebar's open/closed state used to be passed in so
+    // the hamburger button could show its active styling. The
+    // hamburger is gone; both sidebars collapse from their edge
+    // handle (SidebarHandle.vue). The prop is left removed.
     // GENIE.AI configuration for title, icon, and navbar styling
     config: {
       type: Object,
@@ -308,11 +320,19 @@ export default {
       })
     }
   },
-  emits: ['toggleSidebar', 'logout'],
+  emits: ['logout'],
   data() {
     return {};
   },
   computed: {
+    ...mapGetters('status', ['status']),
+    // Only the GENIE.AI brand carries the gradient wordmark; the flavour
+    // configs ship their own titles and are left as plain text. Comparing
+    // the title keeps this off the config schema and off the decoration
+    // switch, either of which an operator could turn off by accident.
+    brandWordmarkClass() {
+      return this.config?.app?.title === 'GENIE.AI' ? 'brand-wordmark' : '';
+    },
     isAdmin() {
       const user = this.$store.getters.currentUser;
       if (!user) return false;
@@ -338,22 +358,54 @@ export default {
       } catch {
         this.$emit('logout');
       }
-    },
-    toggleSidebar() {
-      this.$emit('toggleSidebar');
     }
   }
 };
 </script>
 
 <style scoped>
+/* The reachability pill: a quiet dot+label online; danger with the
+   explanation on hover when the assistant is unreachable. */
+.nav-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--muted);
+  padding: 3px var(--space-sm);
+  border-radius: var(--radius-pill, 999px);
+  white-space: nowrap;
+}
+
+.nav-status__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+.nav-status[data-status='offline'] {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.nav-status[data-status='offline'] .nav-status__dot {
+  background: var(--danger);
+}
 /* Base styles - applied to all themes */
 .nav-container {
   position: relative;
 }
 
-/* Navbar styling — flat solid accent background (tech-utility direction) */
+/* Navbar styling — a brand-tinted band, pale in light and saturated in dark */
 .nav-bar {
+  /* Several controls in here — the ghost buttons and the language select
+     among them — read --accent-fg, which is the app-wide ink for the page
+     surface, not for this band. Rebinding it once to the navbar's own token
+     is what keeps them readable when the band changes value; without it the
+     bar inherits one theme's ink and paints the other's. */
+  --accent-fg: var(--navbar-fg);
   display: flex;
   align-items: center;
   background: var(--navbar-bg, var(--accent));
@@ -399,7 +451,29 @@ export default {
   text-decoration: none;
 }
 
-/* Logo styling and animations */
+/*
+ * The wordmark. .brand-wordmark in genie-visual-effects.css paints the
+ * gradient; this only sets the type it is painted in, and outranks
+ * .brand-name above on specificity so the two compose instead of
+ * competing.
+ */
+.brand-name.brand-wordmark {
+  /* Sizes assume --font-scale: 1; the operator's typography.fontScale
+     scales --text-lg / --text-xl with the rest of the tokens, so the
+     wordmark scales with the rest of the navbar rather than holding a
+     fixed size. The clamp floor is the small-screen view (~16px at 1.0
+     scale = var(--text-lg); 1.6vw reaches 16px at a 1024px viewport). */
+  font-family: var(--font-display);
+  font-size: clamp(var(--text-lg), 1.6vw, var(--text-xl));
+  font-weight: 800;
+  letter-spacing: -0.035em;
+}
+
+/* Logo styling and animations. The `--no-hamburger` modifier
+   preserves the visual layout that the retired hamburger button
+   used to occupy; without the hamburger the logo would otherwise
+   shift left to the navbar's padding edge and the brand layout
+   would lose its anchor. */
 .logo-container {
   display: flex;
   align-items: center;
@@ -409,6 +483,13 @@ export default {
   margin-left: var(--space-sm);
   background-color: var(--accent-muted);
   border-radius: 50%;
+}
+
+.logo-container--no-hamburger {
+  /* Sits flush on the nav's own padding — the same 16 px the logout
+     control keeps from the right edge — so the branding and the
+     controls mirror each other across the bar. */
+  margin-left: 0;
 }
 
 .govt-logo {
@@ -555,6 +636,22 @@ export default {
 }
 
 /* Tooltip styling */
+/*
+ * A tooltip may not reach past the viewport.
+ *
+ * Centred on its button and `white-space: nowrap`, this opened
+ * outward from the right-hand group and crossed the window's edge:
+ * measured in French at 1920 px, "Déconnexion" spanned 1839..1929 —
+ * 9 px past the viewport. It only shows on hover, which is why the
+ * overflow is intermittent: one measurement saw scrollWidth 1920 and
+ * the next 1932.
+ *
+ * A tooltip is anchored to the button's outer edge and opens INWARD,
+ * so it can only ever grow away from the edge it would have crossed.
+ * The two groups are mirrored; within a group every tooltip opens the
+ * same way, so the row reads consistently rather than flickering
+ * between orientations as the labels change length.
+ */
 .tooltip {
   position: absolute;
   bottom: -34px;
@@ -566,6 +663,14 @@ export default {
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
   white-space: nowrap;
+  /* A backstop under the inward anchoring: however long a translation
+     turns out to be, the label cannot exceed the viewport's width, so
+     it can never become the thing that widens the page. Truncates
+     rather than wraps — a tooltip that reflows to three lines is a
+     tooltip that has stopped being a tooltip. */
+  max-width: calc(100vw - 2 * var(--space-md));
+  overflow: hidden;
+  text-overflow: ellipsis;
   opacity: 0;
   visibility: hidden;
   transition:
@@ -591,67 +696,21 @@ export default {
   visibility: visible;
 }
 
-/* Hamburger menu styling - Layout only, colors handled by DsButton ghost variant */
-.hamburger-btn {
-  position: relative;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* Right-hand group: anchored to the button's right edge, opening
+   leftward into the page. */
+.nav-right .icon-btn .tooltip,
+.nav-right .language-select-container .tooltip {
+  left: auto;
+  right: 0;
+  transform: none;
 }
 
-.hamburger-inner {
-  position: relative;
-  width: 18px;
-  height: 2px;
-  background-color: var(--accent-fg);
-  transition: background-color 0.2s ease;
-}
-
-.hamburger-inner::before,
-.hamburger-inner::after {
-  content: '';
-  position: absolute;
+/* Left-hand group: the mirror, opening rightward. */
+.nav-left .icon-btn .tooltip,
+.nav-left .language-select-container .tooltip {
   left: 0;
-  width: 18px;
-  height: 2px;
-  background-color: var(--accent-fg);
-  transition:
-    transform 0.3s ease,
-    background-color 0.2s ease;
-}
-
-.hamburger-inner::before {
-  top: -5px;
-}
-
-.hamburger-inner::after {
-  bottom: -5px;
-}
-
-.hamburger-btn:hover .hamburger-inner,
-.hamburger-btn:hover .hamburger-inner::before,
-.hamburger-btn:hover .hamburger-inner::after {
-  background-color: var(--fg);
-}
-
-/* Centered X state */
-.hamburger-btn.is-active .hamburger-inner {
-  background-color: transparent;
-  transform: translateX(0);
-}
-
-.hamburger-btn.is-active .hamburger-inner::before {
-  transform: translateY(5px) rotate(45deg);
-  top: 0;
-}
-
-.hamburger-btn.is-active .hamburger-inner::after {
-  transform: translateY(-5px) rotate(-45deg);
-  bottom: 0;
+  right: auto;
+  transform: none;
 }
 
 /* Language dropdown styling */
@@ -774,11 +833,6 @@ export default {
   .icon-btn svg {
     width: 20px;
     height: 20px;
-  }
-
-  .hamburger-btn {
-    width: 36px;
-    height: 36px;
   }
 
   .tooltip {

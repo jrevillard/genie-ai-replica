@@ -407,6 +407,7 @@ services:
       # Studio and Models tabs (and their sidebar entries) when '0'.
       # Same variable that parks the okf containers and the Kong route.
       - VUE_APP_OKF_ENABLED=${OKF_ENABLED:-0}
+      - VUE_APP_STREAM_IDLE_TIMEOUT_MS=${VUE_APP_STREAM_IDLE_TIMEOUT_MS:-}
     volumes:
       - ${CONFIG_DIR_FRONTEND:-./components/gov-chat-frontend/public/config}:/app/dist/config:ro
     # Port 8090 is internal only - outer nginx on 80/443 is the public entry point

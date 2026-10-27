@@ -235,6 +235,83 @@ describe('chatbotService', () => {
       );
     });
 
+    it('aborts and reports an error when the stream stays silent past the idle timeout', async () => {
+      jest.useFakeTimers();
+      // The budget is pinned, not the default: this test owns the
+      // watchdog mechanism, and the default is a config value.
+      window.APP_CONFIG = { ...(window.APP_CONFIG || {}), streamIdleTimeoutMs: 120000 };
+      try {
+        const neverReader = { read: jest.fn(() => new Promise(() => {})) };
+        global.fetch = jest.fn().mockResolvedValue({ ok: true, body: { getReader: () => neverReader } });
+
+        const onError = jest.fn();
+        const onDone = jest.fn();
+        const controller = chatbotService.submitQueryStream({ query: 'test' }, { onError, onDone });
+
+        jest.advanceTimersByTime(120000);
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(controller.signal.aborted).toBe(true);
+        expect(onError).toHaveBeenCalledTimes(1);
+        expect(onError.mock.calls[0][0].message).toMatch(/timed out/i);
+        expect(onDone).not.toHaveBeenCalled();
+      } finally {
+        delete window.APP_CONFIG.streamIdleTimeoutMs;
+        jest.useRealTimers();
+      }
+    });
+
+    it('keeps the stream alive while frames keep arriving', async () => {
+      jest.useFakeTimers();
+      window.APP_CONFIG = { ...(window.APP_CONFIG || {}), streamIdleTimeoutMs: 120000 };
+      try {
+        // Frames arrive spaced 30s apart (faked timers), like a slow
+        // generation — the watch must re-arm at each one.
+        const delay = (ms, value) => new Promise((resolve) => setTimeout(() => resolve(value), ms));
+        const payload = () => ({
+          done: false,
+          value: new TextEncoder().encode('data: {"type":"chunk","content":"x"}\n\n')
+        });
+        let frameCount = 0;
+        const reader = {
+          read: jest.fn(() => {
+            frameCount += 1;
+            return frameCount <= 3 ? delay(30000, payload()) : new Promise(() => {});
+          })
+        };
+        global.fetch = jest.fn().mockResolvedValue({ ok: true, body: { getReader: () => reader } });
+
+        const onError = jest.fn();
+        const controller = chatbotService.submitQueryStream({ query: 'test' }, { onError });
+
+        const flush = async () => {
+          for (let i = 0; i < 20; i++) await Promise.resolve();
+        };
+        // Three frames land at t=30/60/90 — inside the budget each time.
+        // advanceTimersByTime is synchronous, so each segment flushes the
+        // frame's microtasks before the next segment runs.
+        jest.advanceTimersByTime(30000);
+        await flush();
+        jest.advanceTimersByTime(30000);
+        await flush();
+        jest.advanceTimersByTime(30000);
+        await flush();
+        jest.advanceTimersByTime(50000);
+        await flush();
+        expect(controller.signal.aborted).toBe(false);
+        expect(onError).not.toHaveBeenCalled();
+        // Silence past one full budget from the last frame fires it.
+        jest.advanceTimersByTime(120000);
+        await flush();
+        expect(controller.signal.aborted).toBe(true);
+        expect(onError).toHaveBeenCalledTimes(1);
+      } finally {
+        delete window.APP_CONFIG.streamIdleTimeoutMs;
+        jest.useRealTimers();
+      }
+    });
+
     it('calls onChunk callback when receiving chunk data', async () => {
       const mockFetch = jest.fn();
       global.fetch = mockFetch;
@@ -398,6 +475,41 @@ describe('chatbotService', () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
 
       expect(onError).toHaveBeenCalledWith(expect.any(Error));
+    });
+
+    it('an error frame without a message carries empty prose, marked from the server', async () => {
+      const mockFetch = jest.fn();
+      global.fetch = mockFetch;
+
+      // The frame the backend sends when its own error has nothing to
+      // say: no message field at all. The transport must not invent a
+      // developer string for it — the store's localized floor is what
+      // the user reads.
+      const mockReader = {
+        read: jest
+          .fn()
+          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode('data: {"type":"error"}\n\n') })
+          .mockResolvedValueOnce({ done: true })
+      };
+
+      const mockResponse = {
+        ok: true,
+        body: { getReader: () => mockReader }
+      };
+
+      mockFetch.mockResolvedValue(mockResponse);
+
+      const onError = jest.fn();
+
+      chatbotService.submitQueryStream({ query: 'test' }, { onError });
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(onError).toHaveBeenCalledTimes(1);
+      const error = onError.mock.calls[0][0];
+      expect(error).toBeInstanceOf(Error);
+      expect(error.message).toBe('');
+      expect(error.fromServer).toBe(true);
     });
 
     it('carries the status and the backend reason on a server error', async () => {

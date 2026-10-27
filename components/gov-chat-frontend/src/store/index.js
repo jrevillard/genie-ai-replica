@@ -3,13 +3,17 @@ import { createStore } from 'vuex';
 import chatHistoryStore from './chatHistoryStore';
 import auth from './modules/auth';
 import okf from './modules/okf';
+import status from './modules/status';
+import conversation, { rehydrateConversation, subscribeConversation } from './modules/conversation';
 
 // Create and export the store
-export default createStore({
+const store = createStore({
   modules: {
     chatHistory: chatHistoryStore,
     auth,
-    okf
+    okf,
+    status,
+    conversation
   },
 
   plugins: [
@@ -47,3 +51,10 @@ export default createStore({
     }
   ]
 });
+
+// The open conversation rehydrates before anything renders and persists
+// (debounced) as it changes.
+rehydrateConversation(store.state.conversation);
+subscribeConversation(store);
+
+export default store;

@@ -54,24 +54,48 @@
         </template>
       </modal-dialog>
 
-      <!-- System Status Panel -->
-      <div class="system-status-panel">
-        <div class="status-left">
-          <DsPill :variant="systemStatus.online ? 'success' : 'danger'">{{
-            systemStatus.online ? translate('analytics.status.online') : translate('analytics.status.offline')
-          }}</DsPill>
-          <div v-if="!systemStatus.online && systemStatus.errorMessage" class="status-error-message">
-            {{ systemStatus.errorMessage }}
-          </div>
+      <!-- The conversation header: names the open conversation and closes
+           it. The close button runs startNewChat, whose confirm guards
+           unsaved changes; saved history is never removed by closing. -->
+      <div class="conversation-header">
+        <span class="conversation-header__title" data-testid="conversation-header-title">
+          {{ conversationTitle }}
+        </span>
+        <div class="conversation-header__actions">
+          <button
+            v-if="openMessages.length > 0"
+            type="button"
+            class="conversation-header__action"
+            :title="translate('chatbot.saveChat')"
+            :aria-label="translate('chatbot.saveChat')"
+            :disabled="isSaving"
+            data-testid="conversation-header-save"
+            @click="saveChatToHistory"
+          >
+            <Save :size="16" aria-hidden="true" />
+          </button>
+          <button
+            v-if="openMessages.length > 0"
+            type="button"
+            class="conversation-header__action"
+            :title="translate('chatbot.exportChat')"
+            :aria-label="translate('chatbot.exportChat')"
+            data-testid="conversation-header-export"
+            @click="openExportDialog"
+          >
+            <FileDown :size="16" aria-hidden="true" />
+          </button>
         </div>
-        <div class="status-metrics">
-          <div class="metric">
-            <span class="metric-label">{{ translate('analytics.status.responseTime') }}</span>
-            <span class="metric-value">
-              {{ systemStatus.lastResponseTime !== null ? systemStatus.lastResponseTime + 'ms' : 'N/A' }}
-            </span>
-          </div>
-        </div>
+        <button
+          type="button"
+          class="conversation-header__close"
+          :title="translate('chatbot.closeConversation', 'Close conversation')"
+          :aria-label="translate('chatbot.closeConversation', 'Close conversation')"
+          data-testid="conversation-header-close"
+          @click="startNewChat"
+        >
+          <X :size="16" aria-hidden="true" />
+        </button>
       </div>
       <!-- Context Panel for selected tree nodes -->
       <div v-if="selectedContextItems.length > 0" class="context-panel">
@@ -95,124 +119,249 @@
       <!-- The scrollable chat window -->
       <div ref="chatWindow" class="chat-window" aria-live="polite">
         <div
-          v-for="(msg, index) in chatMessages"
+          v-for="(msg, index) in openMessages"
           :key="`${msg.sender}-${msg.timestamp || ''}-${index}`"
           class="chat-message"
           :class="msg.sender"
         >
+          <div
+            v-if="msg.sender === 'bot'"
+            class="message-avatar message-avatar--assistant"
+            data-testid="assistant-avatar"
+          >
+            <img v-if="assistantIcon.type === 'file'" :src="assistantIcon.value" alt="" />
+            <!-- eslint-disable-next-line vue/no-v-html -->
+            <span v-else class="message-avatar__glyph" v-html="assistantIcon.value"></span>
+          </div>
+          <div v-else class="message-avatar message-avatar--user" data-testid="user-avatar">
+            <img v-if="userAvatarUrl" :src="userAvatarUrl" alt="" />
+            <span v-else-if="userInitials" class="message-avatar__initials">{{ userInitials }}</span>
+            <span v-else class="message-avatar__silhouette" aria-hidden="true"><User :size="18" /></span>
+          </div>
           <div class="message-wrapper">
-            <div class="message-bubble">
-              <!-- Render bot messages as sanitized HTML for Markdown, user messages as plain text -->
-              <span v-if="msg.sender === 'user'">{{ msg.content }}</span>
-              <template v-else>
+            <!-- The assistant answer lives in one elevated card from the
+                 first streaming frame; sources, actions and the confidence block
+                 render inside it below the bubble. -->
+            <div v-if="msg.sender === 'bot'" class="answer-card" data-testid="answer-card">
+              <div v-if="msg.isError" class="answer-error" data-testid="answer-error">
+                <AlertTriangle :size="16" aria-hidden="true" />
+                <span>{{ translate('chatbot.errorUnableToComplete', 'Unable to complete the response.') }}</span>
+                <button type="button" class="answer-retry" data-testid="answer-retry" @click="retryAnswer(index)">
+                  <RotateCcw :size="14" aria-hidden="true" />
+                  <span>{{ translate('chatbot.retry', 'Retry') }}</span>
+                </button>
+              </div>
+              <div v-else class="message-bubble">
                 <div v-if="msg.isStreaming && !msg.content" class="streaming-indicator">
                   <DsSpinner size="sm" />
                   <span>{{ translate('chatbot.thinking', 'Thinking...') }}</span>
                 </div>
+                <!-- Render bot messages as sanitized HTML for Markdown -->
                 <!-- eslint-disable-next-line vue/no-v-html -->
                 <div v-else v-html="renderMarkdown(msg.content)"></div>
-              </template>
+              </div>
+              <!-- Per-answer collapsible sources -->
+              <div v-if="msg.sources && msg.sources.length" class="answer-sources" data-testid="answer-sources">
+                <button
+                  type="button"
+                  class="answer-sources__toggle"
+                  data-testid="answer-sources-toggle"
+                  :aria-expanded="msg.sourcesOpen ? 'true' : 'false'"
+                  @click="msg.sourcesOpen = !msg.sourcesOpen"
+                >
+                  <span>{{ $t('chatbot.relatedSources', { n: msg.sources.length }) }}</span>
+                  <ChevronUp v-if="msg.sourcesOpen" :size="16" aria-hidden="true" />
+                  <ChevronDown v-else :size="16" aria-hidden="true" />
+                </button>
+                <div v-show="msg.sourcesOpen" class="answer-sources__list">
+                  <button
+                    v-for="(d, di) in msg.sources"
+                    :key="d.id"
+                    type="button"
+                    class="answer-source-card"
+                    :data-testid="`answer-source-card-${di}`"
+                    @click="openSourceDocument(d)"
+                  >
+                    <span class="file-type-badge" :data-tone="fileBadge(d).tone">{{ fileBadge(d).label }}</span>
+                    <span class="answer-source-card__body">
+                      <span class="answer-source-card__title">{{ d.title }}</span>
+                      <span v-if="d._size" class="answer-source-card__size">{{ sourceSize(d) }}</span>
+                    </span>
+                    <ExternalLink :size="14" class="answer-source-card__open" aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+              <!-- Not grounded: the answer came from the LLM's own knowledge, not library documents -->
+              <div v-if="msg.isGrounded === false" class="answer-warning" role="note">
+                <AlertTriangle :size="15" aria-hidden="true" />
+                <span>{{
+                  translate('chatbot.aiGeneratedNoDocs', 'AI-generated — not based on library documents')
+                }}</span>
+              </div>
+              <!-- The translation backend did not answer. The text above is the
+                   original response, not a translation of it. -->
+              <div v-if="msg.translationFailed" class="answer-warning" data-testid="translation-failed" role="note">
+                <Languages :size="15" aria-hidden="true" />
+                <span>
+                  {{
+                    translate(
+                      'chatbot.translationUnavailable',
+                      'Translation unavailable — this answer may contain untranslated text.'
+                    )
+                  }}
+                </span>
+              </div>
+              <!-- Inline actions — thumbs, details, copy — with the
+                   confidence percentage at the end of the row. -->
+              <div v-if="msg.queryId" class="answer-actions" data-testid="answer-actions">
+                <button
+                  type="button"
+                  class="answer-action"
+                  data-testid="answer-thumb-up"
+                  :data-rated="msg.userFeedback === 'up' ? 'true' : 'false'"
+                  :aria-pressed="msg.userFeedback === 'up'"
+                  :title="translate('feedback.helpful')"
+                  @click="rateAnswer(index, 'up')"
+                >
+                  <ThumbsUp :size="15" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  class="answer-action"
+                  data-testid="answer-thumb-down"
+                  :data-rated="msg.userFeedback === 'down' ? 'true' : 'false'"
+                  :aria-pressed="msg.userFeedback === 'down'"
+                  :title="translate('feedback.notHelpful')"
+                  @click="rateAnswer(index, 'down')"
+                >
+                  <ThumbsDown :size="15" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  class="answer-action"
+                  data-testid="answer-details"
+                  :title="translate('feedback.button')"
+                  @click="openFeedbackDialog(index)"
+                >
+                  <MessageSquareQuote :size="15" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  class="answer-action"
+                  :class="{ 'answer-action--done': msg.copied }"
+                  data-testid="answer-copy"
+                  :title="translate('chatbot.copyAnswer')"
+                  @click="copyAnswer(msg)"
+                >
+                  <Check v-if="msg.copied" :size="15" aria-hidden="true" />
+                  <Copy v-else :size="15" aria-hidden="true" />
+                </button>
+                <!-- The confidence percentage is a state, not an action —
+                     parked at the end of the row. It steps aside when the
+                     answer is ungrounded (no score to show). -->
+                <span
+                  v-if="msg.confidenceScore != null && msg.isGrounded !== false"
+                  class="confidence-score"
+                  data-testid="confidence-score"
+                >
+                  <Brain :size="14" aria-hidden="true" />
+                  <span>{{ $t('chatbot.confidence') }}: {{ (msg.confidenceScore * 100).toFixed(0) }}%</span>
+                </span>
+              </div>
+            </div>
+            <div v-else class="message-bubble">
+              <span>{{ msg.content }}</span>
             </div>
             <span class="message-time">{{ formatMessageTime(msg.timestamp) }}</span>
-          </div>
-          <!-- Feedback and confidence score for bot messages -->
-          <div v-if="msg.sender === 'bot'" class="bot-message-meta">
-            <div v-if="msg.confidenceScore != null && msg.isGrounded !== false" class="confidence-score">
-              <Brain :size="16" />
-              <span>Confidence: {{ (msg.confidenceScore * 100).toFixed(0) }}%</span>
-            </div>
-            <!-- Not grounded: the answer came from the LLM's own knowledge, not library documents -->
-            <div v-else-if="msg.isGrounded === false" class="grounding-flag">
-              <Sparkles :size="16" />
-              <span>{{ translate('chatbot.aiGeneratedNoDocs', 'AI-generated — not based on library documents') }}</span>
-            </div>
-            <!-- The translation backend did not answer. The text above is the
-                 original response, not a translation of it. -->
-            <div v-if="msg.translationFailed" class="translation-flag">
-              <Languages :size="16" />
-              <span>
-                {{
-                  translate(
-                    'chatbot.translationUnavailable',
-                    'Translation unavailable — this answer may contain untranslated text.'
-                  )
-                }}
-              </span>
-            </div>
-            <div class="feedback-trigger">
-              <DsPill>
-                <DsButton variant="ghost" :small="true" @click="openFeedbackDialog(index)">
-                  {{ translate('feedback.button') }}
-                </DsButton>
-              </DsPill>
-            </div>
           </div>
         </div>
         <!-- Auto-scroll anchor element -->
         <div ref="messagesEnd"></div>
       </div>
       <!-- Quick Help Overlay -->
-      <div v-if="showQuickHelp && selectedContextItems.length === 0" class="quick-help-overlay">
-        <div class="quick-help-content">
-          <h2 class="quick-help-heading">
-            {{ translate('chatbot.whatCanIHelp') }}
-          </h2>
-
-          <div class="quick-help-grid">
-            <DsCard
-              v-for="button in quickHelpButtons"
-              :key="button.id"
-              variant="flat"
-              padding="md"
-              :hoverable="true"
-              class="quick-help-item"
-              :class="{ 'just-chat': !button.category }"
-              @click="selectQuickHelpOption(button)"
-            >
-              <img class="quick-help-icon" :src="button.icon" alt="Quick Help Icon" />
-              <div class="quick-help-text">{{ button.service }}</div>
-            </DsCard>
+      <div v-if="showQuickHelp && selectedContextItems.length === 0 && !conversationStarted" class="quick-help-overlay">
+        <!-- The banner is a real element so its height can grow with the
+             heading + subtitle inside it (a content-aware box), and the
+             heading reads as sitting inside the artwork instead of below
+             a hard cut. With the Living Intelligence layer switched
+             off, the banner has no special styling and the layout is
+             identical to the legacy version: heading + subtitle stack
+             above the composer / grid as ordinary block-flow children. -->
+        <div class="quick-help-banner">
+          <div class="quick-help-content">
+            <i18n-t keypath="chatbot.whatCanIHelp" tag="h2" class="quick-help-heading">
+              <template #brandwordmark>
+                <span :class="brandWordmarkClass">{{ brandName }}</span>
+              </template>
+            </i18n-t>
+            <p class="quick-help-subtitle">{{ translate('chatbot.quickHelpSubtitle') }}</p>
           </div>
+        </div>
+
+        <!-- The composer is the just-chat entry: between the banner and
+             the grid, inside the overlay. A second composer is mounted
+             at the chat-input slot under v-else, so the two positions
+             share exactly one composer instance, never two. The leading
+             slot carries the entry's chat-bubble icon; the parent
+             gives it the localised title as accessible name. -->
+        <div v-if="composerEntry" class="quick-help-composer">
+          <ChatComposer
+            v-model="newMessage"
+            input-id="welcome-composer-input"
+            :placeholder="translate('chatbot.composerPlaceholder')"
+            :accessible-name="composerEntry.service"
+            :tint="composerEntry.styles"
+            :show-actions="true"
+            :attach-title="translate('chatbot.composerAttachTitle')"
+            :mic-title="translate('chatbot.composerMicTitle')"
+            :send-title="translate('chatbot.composerSendTitle')"
+            data-testid="welcome-composer"
+            @send="handleWelcomeSend"
+          >
+            <template #leading>
+              <Sparkles
+                class="composer-leading-mark"
+                :size="22"
+                aria-hidden="true"
+                data-testid="welcome-composer-leading-mark"
+              />
+            </template>
+          </ChatComposer>
+        </div>
+
+        <div class="quick-help-grid">
+          <DsCard
+            v-for="button in tileButtons"
+            :key="button.id"
+            variant="flat"
+            padding="md"
+            :hoverable="true"
+            class="quick-help-item"
+            :class="{ 'just-chat': !button.category }"
+            :style="buttonTintStyle(button)"
+            @click="selectQuickHelpOption(button)"
+          >
+            <img class="quick-help-icon" :src="button.icon" alt="Quick Help Icon" />
+            <div class="quick-help-text">{{ button.service }}</div>
+          </DsCard>
         </div>
       </div>
       <!-- Input Area -->
-      <div class="chat-input">
-        <DsInput
+      <div v-else class="chat-input">
+        <ChatComposer
           v-model="newMessage"
-          type="textarea"
-          class="prompt-textarea"
-          :rows="4"
+          input-id="chat-composer-input"
           :placeholder="translate('chatbot.placeholder')"
-          @enter="sendMessage"
+          :show-actions="true"
+          :attach-title="translate('chatbot.composerAttachTitle')"
+          :mic-title="translate('chatbot.composerMicTitle')"
+          :max-lines="5"
+          :send-title="translate('chatbot.composerSendTitle')"
+          data-testid="chat-composer"
+          @send="sendMessage"
           @focus="handleTextareaFocus"
-        />
-        <div class="input-actions">
-          <DsButton variant="ghost" :title="translate('chatbot.newChat')" @click="startNewChat">
-            <Plus :size="16" />
-          </DsButton>
-          <DsButton
-            v-if="chatMessages.length > 0"
-            variant="ghost"
-            :title="translate('chatbot.saveChat')"
-            data-testid="save-chat-btn"
-            :disabled="isSaving"
-            @click="saveChatToHistory"
-          >
-            <Save v-if="!isSaving" :size="16" />
-            <Loader2 v-else :size="16" class="animate-spin" />
-          </DsButton>
-          <DsButton
-            v-if="chatMessages.length > 0"
-            variant="ghost"
-            :title="translate('chatbot.exportChat')"
-            @click="openExportDialog"
-          >
-            <FileText :size="16" />
-          </DsButton>
-          <DsButton variant="primary" @click="sendMessage">
-            {{ translate('chatbot.sendButton') }}
-          </DsButton>
-        </div>
+        >
+        </ChatComposer>
       </div>
       <!-- Feedback Dialog -->
       <chat-response-feedback-dialog
@@ -271,20 +420,48 @@
         </template>
       </modal-dialog>
     </div>
-    <!-- Right Sidebar - Now using the dedicated component -->
+    <!-- Right Sidebar - the width and collapsed state are owned here
+         so both sidebars stay in sync via localStorage. The handle's
+         on-panel edge replaces the old inline chevron button, but
+         the gesture (collapse / expand) reads the same. -->
     <right-side-bar-component
-      :current-chat-id="currentChatId"
       :current-locale="currentLocale"
       :related-documents="relatedDocuments"
-      @load-chat="loadChatFromHistory"
+      :width="rightSidebarWidth"
+      :max-width="rightSidebarMaxWidth"
+      :collapsed="rightSidebarCollapsed"
+      :show-handle="showRightHandle"
       @open-document="handleOpenDocument"
-      @sidebar-toggle="handleSidebarToggle"
+      @update:width="onRightWidthChange"
+      @update:collapsed="onRightCollapsedChange"
     />
   </div>
 </template>
 
 <script>
-import { Brain, Loader2, Plus, Save, FileText, Sparkles, Languages } from '@lucide/vue';
+import {
+  AlertTriangle,
+  Brain,
+  FileDown,
+  Save,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  ExternalLink,
+  Languages,
+  Loader2,
+  MessageSquareQuote,
+  Sparkles,
+  Check,
+  RotateCcw,
+  ThumbsDown,
+  ThumbsUp,
+  User,
+  X
+} from '@lucide/vue';
+import { formatFileSize } from '../utils/fileUtils.js';
+import { isStorableTurn, translateSources } from '../store/modules/conversation';
+import { isExternalUrl, openRepositoryDocument, fileTypeBadge } from '../utils/document-opener.js';
 import { eventBus } from '../eventBus.js';
 import notificationService from '../services/notificationService';
 import { mapGetters, mapActions } from 'vuex';
@@ -292,12 +469,25 @@ import { getUserId } from '../utils/userUtils';
 import ChatResponseFeedbackDialog from './ChatResponseFeedbackDialog.vue';
 import ModalDialog from './ModalDialog.vue';
 import RightSideBarComponent from './RightSideBarComponent.vue';
-import chatbotService from '../services/chatbotService';
+import chatbotService, { THUMB_RATINGS } from '../services/chatbotService';
+import { config as runtimeConfig } from '../config-loader';
 import serviceTreeService from '../services/serviceTreeService'; // *** NEW: Import serviceTreeService
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
+import ChatComposer from './ChatComposer.vue';
 import chatHistoryService from '../services/chatHistoryService';
 import DsSpinner from './ds/Spinner.vue';
 import DsPill from './ds/Pill.vue';
+import {
+  SIDEBAR_DEFAULTS,
+  SIDEBAR_MIN_WIDTHS,
+  SIDEBAR_INFLOW_MIN_WIDTH,
+  computeMaxFor,
+  clampWidth,
+  persistWidth,
+  persistOpen,
+  readStoredWidth,
+  readStoredOpen
+} from '../composables/sidebarLayout.js';
 import DsButton from './ds/Button.vue';
 import DsCard from './ds/Card.vue';
 import DsInput from './ds/Input.vue';
@@ -393,17 +583,29 @@ marked.use({ renderer: tightListRenderer });
 export default {
   name: 'ChatBotComponent',
   components: {
-    Brain,
-    Loader2,
-    Plus,
+    AlertTriangle,
+    FileDown,
     Save,
-    FileText,
+    Brain,
+    ChevronDown,
+    ChevronUp,
+    ExternalLink,
+    Loader2,
     Sparkles,
+    User,
+    X,
+    RotateCcw,
+    Check,
+    ThumbsUp,
+    ThumbsDown,
+    MessageSquareQuote,
+    Copy,
     Languages,
     ChatResponseFeedbackDialog,
     ModalDialog,
     RightSideBarComponent,
     ConfirmDialog,
+    ChatComposer,
     DsPill,
     DsSpinner,
     DsButton,
@@ -414,10 +616,7 @@ export default {
 
   data() {
     return {
-      conversationId: null,
-      chatMessages: [],
       newMessage: '',
-      selectedContextItems: [],
       feedbackDialog: {
         visible: false,
         message: null
@@ -432,19 +631,12 @@ export default {
         filename: ''
       },
       currentChatId: null,
-      currentChatTitle: '',
       cachedConfig: null,
       currentLocale: (navigator.language || 'en').split('-')[0],
       showQuickHelp: true,
       currentCategoryId: null,
       serviceCategories: [], // This will now hold the transformed tree data
       chatHistoryService: chatHistoryService,
-      systemStatus: {
-        online: true,
-        lastResponseTime: null, // Replaced avgResponseTime
-        errorMessage: '', // Added for error messages
-        lastUpdated: new Date()
-      },
       quickHelpButtons: [],
       showNewChatConfirm: false,
       newChatDialog: {
@@ -452,10 +644,6 @@ export default {
         message: '',
         confirmText: '',
         cancelText: ''
-      },
-      lastSavedState: {
-        messages: [],
-        contextItems: []
       },
       showLoadConfirm: false,
       loadConfirmDialog: {
@@ -468,31 +656,179 @@ export default {
       pendingConversationId: null,
       isLoading: false, // Loading state for spinner
       isSaving: false, // Loading state for save operation to prevent double-save
-      isStreaming: false, // SSE streaming state
-      streamingQueryId: null, // Query ID of the current streaming response
-      streamController: null, // AbortController for cancelling active streams
-      relatedDocuments: [], // Holds documents for the right sidebar
-      hiddenPromptForNextMessage: null // Stores hidden prompt for dual-prompt mechanism
+      lastSaveSucceeded: false, // The save's own verdict for the leave arms
+      loadSeq: 0, // Incremented per conversation load; stale responses are dropped
+      hiddenPromptForNextMessage: null, // Stores hidden prompt for dual-prompt mechanism
+      // Right sidebar width / collapsed state, both persisted in
+      // localStorage and restored clamped against the current viewport.
+      rightSidebarWidth: SIDEBAR_DEFAULTS.right,
+      rightSidebarCollapsed: false,
+      // The left sidebar's width, mirrored here so the max computed
+      // has a reactive dependency. App.vue is the single writer.
+      leftWidthSnapshot: SIDEBAR_DEFAULTS.left,
+      // rAF handle for the resize coalescing; 0 = no pending frame.
+      resizeRaf: 0
     };
   },
 
   computed: {
+    ...mapGetters('conversation', ['openConversation']),
+    openMessages() {
+      return this.openConversation.messages;
+    },
+    selectedContextItems() {
+      return this.openConversation.selectedContextItems;
+    },
+    relatedDocuments() {
+      return this.openConversation.relatedDocuments;
+    },
+    lastSavedState() {
+      return this.openConversation.lastSavedState;
+    },
+    isStreaming() {
+      return this.openConversation.isStreaming;
+    },
+    streamingQueryId() {
+      return this.openConversation.streamingQueryId;
+    },
+    conversationId() {
+      return this.openConversation.conversationId;
+    },
+    currentChatTitle() {
+      return this.openConversation.conversationId ? this.openConversation.title : '';
+    },
     ...mapGetters('chatHistory', ['getAllFolders', 'getChatById']),
+    assistantIcon() {
+      // The product icon, the same one the navbar renders; the default is
+      // the navbar's own until the runtime config has loaded.
+      return this.cachedConfig?.app?.icon || runtimeConfig?.app?.icon;
+    },
+    authUser() {
+      // The auth getters are root-level, not namespaced (the settings page
+      // reads them the same way).
+      return this.$store.getters.currentUser || {};
+    },
+    userAvatarUrl() {
+      return this.authUser.avatarUrl || '';
+    },
+    // The assistant's reachability lives app-wide (the navbar pill renders
+    // it on every page); the chat is usually the component that learns it.
+    systemStatus() {
+      return this.$store.getters['status/status'];
+    },
+
+    conversationTitle() {
+      // A saved conversation keeps its title; a QuickHelp-driven chat takes
+      // the option's own name; the plain just-chat surface keeps its label.
+      if (this.currentChatTitle) return this.currentChatTitle;
+      const item = this.selectedContextItems.find((i) => i.source === 'quickHelp');
+      if (item) return item.service;
+      return this.translate('chatbot.justChat', 'Just Chat');
+    },
+
+    userName() {
+      return this.authUser.name || this.authUser.preferred_username || '';
+    },
+    userInitials() {
+      const parts = this.userName.trim().split(/\s+/).filter(Boolean);
+      if (!parts.length) return '';
+      return parts
+        .slice(0, 2)
+        .map((p) => p[0].toUpperCase())
+        .join('');
+    },
+
+    // The heading's brand comes from the runtime config through a slot,
+    // never through an HTML string, so the operator-editable title is
+    // rendered as escaped text and stays translatable in place.
+    brandName() {
+      return this.cachedConfig?.app?.title || '';
+    },
+
+    // As in the navbar, only the GENIE.AI brand carries the gradient.
+    brandWordmarkClass() {
+      return this.brandName === 'GENIE.AI' ? 'brand-wordmark' : '';
+    },
 
     folders() {
       return this.getAllFolders;
     },
 
     chatPreview() {
-      const userMessage = this.chatMessages.find((msg) => msg.sender === 'user');
+      // A failed exchange is never stored, so it is never the preview.
+      const userMessage = this.openMessages.find((msg) => msg.sender === 'user' && !msg.isError);
       if (userMessage) {
         return userMessage.content.length > 50 ? userMessage.content.substring(0, 47) + '...' : userMessage.content;
       }
       return 'New conversation';
+    },
+
+    // A conversation in progress owns the view: the welcome overlay must
+    // not cover it. The transcript lives in the store, so this survives
+    // the remount a navigation causes — the overlay's own flag does not
+    // (it is component state, and comes back true on every mount).
+    conversationStarted() {
+      return this.openMessages.some((msg) => msg.sender === 'user');
+    },
+
+    // The dynamic max the right handle clamps against. The left sidebar's
+    // current width is the other input, and it lives in App.vue — a
+    // different subtree from this one. It is mirrored into
+    // `leftWidthSnapshot` on mount, on resize, on the eventBus signal
+    // App.vue emits when the left is dragged, and on a cross-tab
+    // `storage` event; reading it here gives the computed a dependency
+    // to invalidate on.
+    rightSidebarMaxWidth() {
+      return computeMaxFor('right', this.leftWidthSnapshot, window.innerWidth);
+    },
+    showRightHandle() {
+      // The handle only exists where the sidebar is an in-flow
+      // reservation — the same threshold App.vue applies on the left.
+      return typeof window !== 'undefined' && window.innerWidth >= SIDEBAR_INFLOW_MIN_WIDTH;
+    },
+
+    // The welcome composer is whichever config entry opts into the
+    // `placement: "composer"` slot. `placement` is the explicit signal —
+    // the brief forbade inferring "this is the just-chat entry" from
+    // the absence of a category and an action, because a second
+    // such entry on a deployment would silently share the slot and
+    // make the deployment's mistake look like a feature. When several
+    // entries declare `placement: "composer"`, the first one in the
+    // button list wins — the grid's `tileButtons` filter reads the
+    // same field, so both sides agree on the routing by construction.
+    composerEntry() {
+      return this.quickHelpButtons.find((b) => b && b.placement === 'composer') || null;
+    },
+    // The grid keeps every entry whose placement is not the composer —
+    // again, the explicit field, not a heuristic from category / action
+    // presence. The seven product configs only ever set this on the
+    // well-known just-chat entry; any deployment that adds a second one
+    // gets the second routed to the grid (default placement is `tile`,
+    // no schema change needed for that).
+    tileButtons() {
+      return this.quickHelpButtons.filter((b) => b && b.placement !== 'composer');
     }
   },
 
   watch: {
+    // The stream writes from the store while this view may not even be
+    // mounted; the watcher keeps the autoscroll and surfaces failures.
+    openConversation: {
+      deep: true,
+      handler() {
+        if (this.isStreaming) this.scrollToBottom();
+        const last = this.openMessages.at(-1);
+        if (last && last.sender === 'bot' && last.isError && last.timestamp !== this._lastNotifiedErrorAt) {
+          this._lastNotifiedErrorAt = last.timestamp;
+          // The failure's reason was chosen by the store (refused request
+          // vs. dead deployment vs. server prose); the key rides on the
+          // message so the notification renders in this view's locale.
+          notificationService.error(
+            last.errorKey ? this.translate(last.errorKey) : this.translate('chatbot.streamingError')
+          );
+        }
+      }
+    },
     currentLocale: function () {
       this.updateDialogTexts();
     },
@@ -503,49 +839,65 @@ export default {
   },
 
   created() {
+    // A failure restored from storage was already surfaced in the session
+    // it died in: seed the watcher's guard so the restored turn does not
+    // re-notify on the first unrelated mutation after the reload.
+    const restored = this.openMessages.at(-1);
+    if (restored && restored.isError) this._lastNotifiedErrorAt = restored.timestamp;
     eventBus.$on('chat-deleted', (deletedChatId) => {
-      if (this.conversationId === deletedChatId) {
-        this.conversationId = null;
+      // The in-flight window has conversationId nulled and the target in
+      // currentChatId — the deleted chat must be recognised in both.
+      if (this.conversationId === deletedChatId || this.currentChatId === deletedChatId) {
+        this.$store.dispatch('conversation/abortStream');
+        // The conversation is gone: an in-flight load must not land.
+        this.loadSeq++;
         this.currentChatId = null;
-        this.chatMessages = [
-          {
-            sender: 'bot',
-            content: this.getWelcomeMessage(),
-            timestamp: new Date().toISOString(),
-            isSaved: true
-          }
-        ];
+        this.currentCategoryId = null;
         this.newMessage = '';
-        this.selectedContextItems = [];
-        this.relatedDocuments = [];
-        this.lastSavedState = {
-          messages: JSON.parse(JSON.stringify(this.chatMessages)),
-          contextItems: []
-        };
+        this.resetToWelcome();
       }
     });
 
     eventBus.$on('load-conversation', (conversationId) => {
-      if (conversationId === this.conversationId) {
-        // Same conversation, no need to load
+      // Same conversation, already on or loading it — no need to load
+      // again (this also swallows a double-click while a load is in
+      // flight: the target id is set before the fetch).
+      if (conversationId === this.currentChatId || conversationId === this.conversationId) {
         return;
       }
       if (this.hasUnsavedChanges()) {
         this.pendingConversationId = conversationId;
         this.showLoadConfirm = true;
       } else {
-        this.chatMessages = []; // Clear previous messages
-        this.selectedContextItems = [];
-        this.relatedDocuments = [];
-        this.lastSavedState = { messages: [], contextItems: [] }; // Reset state
         this.loadExistingConversation(conversationId);
       }
     });
   },
 
   mounted() {
-    if (this.chatMessages.length === 0) {
-      this.chatMessages.push({
+    // Restore the right sidebar's persisted width and collapsed state.
+    // The width is clamped on the way IN, not just on drag: a value
+    // saved at 1920 px must not be applied blind at 1400 px, where it
+    // would push the centre below its usable floor.
+    this.leftWidthSnapshot = readStoredWidth('left');
+    this.rightSidebarWidth = clampWidth('right', readStoredWidth('right'), this.leftWidthSnapshot, window.innerWidth);
+    this.rightSidebarCollapsed = !readStoredOpen('right', true);
+    window.addEventListener('resize', this.handleResize);
+    window.addEventListener('storage', this.handleStorage);
+    // Bound, because the eventBus invokes handlers as bare functions —
+    // an unbound method reference arrives with `this` undefined and the
+    // `$emit` swallows the resulting TypeError into a console error.
+    // The wrapper is kept on the instance so `beforeUnmount` can remove
+    // exactly what it added.
+    this.onLeftWidthChanged = (width) => this.refreshLeftWidth(width);
+    eventBus.$on('sidebar-left-width-changed', this.onLeftWidthChanged);
+    // Announce the width actually in force on first paint, so the left
+    // sidebar clamps against this rather than against a stored value
+    // it may never be able to use at this viewport.
+    eventBus.$emit('sidebar-right-width-changed', this.rightSidebarWidth);
+
+    if (this.openMessages.length === 0) {
+      this.$store.commit('conversation/appendBotMessage', {
         sender: 'bot',
         content: this.getWelcomeMessage()
       });
@@ -558,17 +910,19 @@ export default {
         (newLocale) => {
           this.currentLocale = newLocale;
           // Update context labels when locale changes
-          this.selectedContextItems = this.selectedContextItems.map((item) => ({
-            ...item,
-            service: this.safeTranslate(item.serviceKey || item.service)
-          }));
+          this.$store.commit(
+            'conversation/setContextItems',
+            this.selectedContextItems.map((item) => ({
+              ...item,
+              service: this.safeTranslate(item.serviceKey || item.service)
+            }))
+          );
           this.loadServiceCategories(); // Reload categories for the new locale
         }
       );
     }
 
     eventBus.$on('treeNodeSelected', this.handleTreeNodeSelected);
-    eventBus.$on('open-chat', this.loadChatFromHistory);
     this.scrollToBottom();
     this.loadQuickHelpButtons();
     this.loadServiceCategories(); // Fetch categories on mount
@@ -578,24 +932,143 @@ export default {
   },
 
   beforeUnmount() {
+    window.removeEventListener('resize', this.handleResize);
+    window.removeEventListener('storage', this.handleStorage);
+    eventBus.$off('sidebar-left-width-changed', this.onLeftWidthChanged);
     eventBus.$off('treeNodeSelected', this.handleTreeNodeSelected);
-    eventBus.$off('open-chat', this.loadChatFromHistory);
     eventBus.$off('chat-deleted'); // Clean up the chat-deleted listener
     // Removed clearInterval
     eventBus.$off('load-conversation');
-    // Abort active SSE stream on component unmount
-    if (this.streamController) {
-      this.streamController.abort();
-    }
   },
 
   methods: {
+    // The badge of a source card, from the file's own extension — the
+    // repository type label when the fetch landed, the name otherwise.
+    fileBadge(doc) {
+      return fileTypeBadge(doc.fileName || doc.title || doc._type || doc.type);
+    },
+
+    // The file size, when the repository answered the metadata fetch.
+    sourceSize(d) {
+      return formatFileSize(d._size);
+    },
+
+    // The repository serves files behind Bearer auth, so a plain link
+    // cannot carry the session — internal sources open through the same
+    // fetch-blob flow the related-documents sidebar uses.
+    async openSourceDocument(doc) {
+      if (isExternalUrl(doc.url)) {
+        window.open(doc.url, '_blank', 'noopener');
+        return;
+      }
+      try {
+        await openRepositoryDocument(doc.id, this.$store.getters.accessToken || null);
+      } catch {
+        notificationService.error(this.translate('chatbot.documentOpenError', 'Could not open the document'));
+      }
+    },
+
     ...mapActions('chatHistory', ['createChat', 'updateChat']),
+
+    // --- Right sidebar resize + collapse ---
+    onRightWidthChange(value) {
+      const clamped = Math.max(SIDEBAR_MIN_WIDTHS.right, Math.min(this.rightSidebarMaxWidth, value));
+      this.rightSidebarWidth = clamped;
+      // A user gesture is the one thing that writes storage: the
+      // clamped result IS what the user asked for, within the bounds
+      // the current viewport allows.
+      persistWidth('right', clamped);
+      // The left sidebar lives outside this subtree (App.vue), so it
+      // cannot see this component's reactive state. The event bus is
+      // the in-tab signal that its maximum moved — without it,
+      // widening the right would let the left keep a width that no
+      // longer leaves the centre its floor.
+      eventBus.$emit('sidebar-right-width-changed', clamped);
+    },
+    onRightCollapsedChange(value) {
+      this.rightSidebarCollapsed = value;
+      persistOpen('right', !value);
+    },
+    handleResize() {
+      // Coalesced onto a single animation frame — a window-edge drag
+      // fires resize dozens of times per second and the re-clamp
+      // below does not need that cadence.
+      if (this.resizeRaf) return;
+      this.resizeRaf = requestAnimationFrame(() => {
+        this.resizeRaf = 0;
+        this.refreshLeftWidth(this.leftWidthSnapshot);
+        // `refreshLeftWidth` already rebinds, but the viewport itself
+        // also moved — and that is the viewport half of "the clamp
+        // applies on restore, not only on drag". Storage is
+        // deliberately NOT rewritten: a width the user chose at a wide
+        // viewport comes back when they widen the window again.
+      });
+    },
+    handleStorage(e) {
+      // Cross-tab only: the left sidebar's width landed from another
+      // tab, which changes this side's maximum.
+      if (e.key === 'sidebarWidthLeft') {
+        this.refreshLeftWidth();
+      }
+    },
+    refreshLeftWidth(inForce) {
+      // The left sidebar's width is the one input to this side's
+      // maximum that lives in another component. It is mirrored into
+      // reactive state (rather than read inside the computed) so the
+      // computed has a dependency to invalidate on.
+      //
+      // The argument is the width the left is CURRENTLY painting. It
+      // matters that it is the in-force width and not the stored one:
+      // clamping against the stored value over-reserves when both
+      // sides hold a width neither can currently use, and the
+      // over-reservation is per-viewport — which is exactly what made
+      // the centre narrow from 648 px at 1400 to 496 px at 1600 as
+      // the window widened. The fallback covers the cross-tab
+      // `storage` path and first paint, where there is no payload.
+      this.leftWidthSnapshot = typeof inForce === 'number' ? inForce : readStoredWidth('left');
+      this.rebindRightWidth();
+    },
+    // The mirror of App.vue's `rebindLeftWidth`: the rendered width is
+    // recomputed from the STORED width against whatever the left is
+    // currently painting, rather than carried forward from the previous
+    // clamp. Storage is not written here — only a user-driven change
+    // (a drag, a keyboard step, a double-click reset) writes it, so a
+    // panel squeezed down at a narrow viewport comes back when the
+    // window widens again.
+    rebindRightWidth() {
+      if (this.rightSidebarCollapsed) return;
+      const next = clampWidth('right', readStoredWidth('right'), this.leftWidthSnapshot, window.innerWidth);
+      if (next === this.rightSidebarWidth) return;
+      this.rightSidebarWidth = next;
+      eventBus.$emit('sidebar-right-width-changed', next);
+    },
 
     formatMessageTime(timestamp) {
       if (!timestamp) return '';
       const date = new Date(timestamp);
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const locale = this.$i18n?.locale || undefined;
+      return date.toLocaleTimeString([locale], { hour: '2-digit', minute: '2-digit' });
+    },
+
+    /**
+     * Returns CSS custom-property bindings for the per-button tint —
+     * `--qh-bg`, `--qh-hover`, `--qh-outline` — read from the button's
+     * styles block. Properties whose value is absent are omitted, and the
+     * method returns undefined entirely when nothing is declared, so the
+     * template emits no style attribute and the theme layer's accent
+     * fallback takes over.
+     */
+    buttonTintStyle(button) {
+      const styles = button.styles;
+      if (!styles) return undefined;
+      const bindings = {
+        '--qh-bg': styles.backgroundColor,
+        '--qh-hover': styles.hoverColor,
+        '--qh-outline': styles.outlineColor
+      };
+      const defined = Object.entries(bindings).filter(([, value]) => value);
+      if (!defined.length) return undefined;
+      return Object.fromEntries(defined);
     },
 
     // *** UPDATED: Use serviceTreeService to load and transform categories ***
@@ -750,6 +1223,10 @@ export default {
               hiddenPrompt: hiddenPrompt,
               icon: button.icon?.value,
               category: button.category,
+              styles: button.styles,
+              // Pass the placement field through so the tile / composer
+              // routing in the welcome panel can read it directly.
+              placement: button.placement,
               id: button.id
             };
           });
@@ -768,10 +1245,6 @@ export default {
     },
 
     // formatUptime method removed
-
-    handleSidebarToggle(_collapsed) {
-      // Sidebar toggle state change
-    },
 
     handleOpenDocument(_doc) {
       // Document opened
@@ -798,34 +1271,32 @@ export default {
       if (existingIdx >= 0) {
         return; // already selected — no-op (preserves prior dedup behavior)
       }
-      if (rawOption.id === 'just-chat') {
-        // "Just Chat" clears all label filters so the retriever searches
-        // across all documents without restriction. Keeps the Quick Help item
-        // in context so conversation history is preserved for follow-up queries.
-        this.selectedContextItems = this.selectedContextItems.filter((item) => item.source !== 'quickHelp');
-        this.selectedContextItems.push({
-          service: rawOption.service,
-          serviceLabels: [], // empty — no label filter
-          serviceKey: rawOption.serviceKey || rawOption.id || rawOption.service,
-          source: 'quickHelp',
-          id: rawOption.id,
-          category: null,
-          selected: true
-        });
-        this.currentCategoryId = null;
-      } else {
-        this.selectedContextItems = this.selectedContextItems.filter((item) => item.source !== 'quickHelp');
-        this.selectedContextItems.push({
-          service: rawOption.service,
-          serviceLabels: rawOption.serviceLabels || null,
-          serviceKey: rawOption.serviceKey || rawOption.id || rawOption.service,
-          source: 'quickHelp',
-          id: rawOption.id,
-          category: categoryId,
-          selected: true
-        });
-        this.currentCategoryId = categoryId;
-      }
+      const quickHelpItem =
+        rawOption.id === 'just-chat'
+          ? {
+              // "Just Chat" clears all label filters so the retriever
+              // searches across all documents without restriction. The
+              // item stays in context so conversation history is
+              // preserved for follow-up queries.
+              service: rawOption.service,
+              serviceLabels: [],
+              serviceKey: rawOption.serviceKey || rawOption.id || rawOption.service,
+              source: 'quickHelp',
+              id: rawOption.id,
+              category: null,
+              selected: true
+            }
+          : {
+              service: rawOption.service,
+              serviceLabels: rawOption.serviceLabels || null,
+              serviceKey: rawOption.serviceKey || rawOption.id || rawOption.service,
+              source: 'quickHelp',
+              id: rawOption.id,
+              category: categoryId,
+              selected: true
+            };
+      this.$store.commit('conversation/replaceQuickHelpItem', quickHelpItem);
+      this.currentCategoryId = rawOption.id === 'just-chat' ? null : categoryId;
 
       this.showQuickHelp = false;
       if (rawOption.hiddenPromptKey || rawOption.hiddenPrompt) {
@@ -843,6 +1314,38 @@ export default {
       this.showQuickHelp = false;
     },
 
+    // Enter / send in the welcome composer. Mirrors selectQuickHelpOption
+    // for the just-chat branch (clears prior quickHelp context, pushes
+    // the just-chat item with empty serviceLabels — no label filter, an
+    // unfiltered query) then steps into the chat view and sends. The
+    // existing sendMessage path then reads the empty-array serviceLabels
+    // and selects no label filter, matching the previous "Just Chat"
+    // tile behaviour.
+    handleWelcomeSend() {
+      const entry = this.composerEntry;
+      // Only a real knowledge-area entry becomes a context chip — the plain
+      // just-chat surface is not a domain, and a chip would promise one.
+      if (entry && entry.category) {
+        this.$store.commit('conversation/replaceQuickHelpItem', {
+          service: entry.service,
+          serviceLabels: [],
+          serviceKey: entry.serviceKey || entry.id || entry.service,
+          source: 'quickHelp',
+          id: entry.id,
+          category: entry.category,
+          selected: true
+        });
+      } else {
+        this.$store.commit(
+          'conversation/setContextItems',
+          this.selectedContextItems.filter((i) => i.source !== 'quickHelp')
+        );
+      }
+      this.currentCategoryId = null;
+      this.showQuickHelp = false;
+      this.sendMessage();
+    },
+
     handleTreeNodeSelected(item) {
       if (!item || typeof item !== 'object' || !item.service) {
         return;
@@ -853,7 +1356,7 @@ export default {
           (existing) => existing.service === this.safeTranslate(item.service) && existing.category === item.category
         );
         if (!exists) {
-          this.selectedContextItems.push({
+          this.$store.commit('conversation/addContextItem', {
             service: this.safeTranslate(item.service),
             serviceKey: item.service,
             category: item.category || 'general',
@@ -869,7 +1372,8 @@ export default {
           (existing) => existing.service === this.safeTranslate(item.service) && existing.category === item.category
         );
         if (index !== -1) {
-          const removedItem = this.selectedContextItems.splice(index, 1)[0];
+          const removedItem = this.selectedContextItems[index];
+          this.$store.commit('conversation/removeContextItem', index);
           notificationService.info(this.translate('chatbot.contextRemoved'), 1500);
           eventBus.$emit('contextItemRemoved', removedItem);
           if (this.selectedContextItems.length === 0) {
@@ -881,12 +1385,12 @@ export default {
 
     removeContextItem(index) {
       if (this.selectedContextItems.length > index) {
-        this.selectedContextItems.splice(index, 1)[0];
+        this.$store.commit('conversation/removeContextItem', index);
       }
       if (this.selectedContextItems.length === 0 && this.currentCategoryId) {
         const quickHelpOption = this.quickHelpButtons.find((option) => option.category === this.currentCategoryId);
         if (quickHelpOption) {
-          this.selectedContextItems = [
+          this.$store.commit('conversation/setContextItems', [
             {
               service: quickHelpOption.service,
               serviceLabels: quickHelpOption.serviceLabels || null,
@@ -896,7 +1400,7 @@ export default {
               category: this.currentCategoryId,
               selected: true
             }
-          ];
+          ]);
         } else {
           this.currentCategoryId = null;
         }
@@ -906,30 +1410,70 @@ export default {
     async sendMessage() {
       const content = this.newMessage.trim();
       if (!content) return;
+      await this.sendMessageFromText(content);
+    },
+
+    // The one send pathway: takes the query text (and what the user saw, for
+    // the dual-prompt case) and runs it. The composer and the retry share it.
+    async sendMessageFromText(content) {
+      if (!content) return;
 
       // For dual-prompt mechanism: use hidden prompt for backend, visible text for display
       const messageForBackend = this.hiddenPromptForNextMessage || content;
       const messageForDisplay = content;
 
-      this.chatMessages.push({
+      const useConversationContext = this.selectedContextItems.length > 0;
+      const contextOption = useConversationContext ? 'conversation-with-labels' : 'single-message';
+      let queryData;
+      const categoryLabel = this.getCategoryLabelById(this.currentCategoryId);
+      // The retriever filter is built from English KB labels: sidebar items
+      // carry a stable English serviceKey (the localized `service` must
+      // never reach the filter); Quick Help items carry an explicit
+      // serviceLabels array — multi-label, or explicitly empty (Just Chat,
+      // which contributes no filter).
+      const serviceLabels = useConversationContext
+        ? this.selectedContextItems.flatMap((item) =>
+            Array.isArray(item.serviceLabels)
+              ? item.serviceLabels.length > 0
+                ? item.serviceLabels
+                : []
+              : [item.serviceKey || item.service]
+          )
+        : [];
+      // checkContextConfig returns false when the query must be blocked
+      // (unresolved category id, or no filter active) — before any turn
+      // is committed, so a blocked send leaves no orphan placeholder.
+      const probeQuery = useConversationContext
+        ? { categoryLabel: categoryLabel, serviceLabels }
+        : { language: this.currentLocale.toUpperCase() };
+      if (this.checkContextConfig(probeQuery) === false) {
+        return;
+      }
+
+      // A previous stream still running is replaced by the new one —
+      // aborted BEFORE the new turns are pushed, so the interruption
+      // marks the turn the old fetch was writing, not the new one.
+      this.$store.dispatch('conversation/abortStream');
+
+      this.$store.commit('conversation/appendUserMessage', {
         sender: 'user',
         content: messageForDisplay,
         timestamp: new Date().toISOString(),
         isSaved: false
       });
+
       this.newMessage = '';
       this.showQuickHelp = false;
       this.isLoading = false;
-      this.isStreaming = true;
       // Clear hidden prompt after use
       this.hiddenPromptForNextMessage = null;
 
-      const lastMessageIndex = this.chatMessages.length;
-
-      // Push placeholder bot message for streaming content
-      this.chatMessages.push({
+      // Placeholder bot message for streaming content; the outgoing query
+      // text stays on the message so a failed turn can retry itself.
+      this.$store.commit('conversation/appendBotMessage', {
         sender: 'bot',
         content: '',
+        _query: messageForBackend,
         timestamp: new Date().toISOString(),
         isSaved: false,
         metadata: {},
@@ -937,190 +1481,52 @@ export default {
         translationFailed: false
       });
 
-      try {
-        const useConversationContext = this.selectedContextItems.length > 0;
-        const contextOption = useConversationContext ? 'conversation-with-labels' : 'single-message';
-        let queryData;
-        const categoryLabel = this.getCategoryLabelById(this.currentCategoryId);
-        if (contextOption === 'conversation-with-labels') {
-          // Build the retriever filter from English KB labels:
-          //  - Quick Help items: explicit serviceLabels array (English, may be multi-label)
-          //  - Sidebar items: serviceKey (stable English key; `service` is localized — never use as filter)
-          const serviceLabels = this.selectedContextItems.flatMap(
-            (item) =>
-              Array.isArray(item.serviceLabels)
-                ? item.serviceLabels.length > 0
-                  ? item.serviceLabels
-                  : [] // explicitly empty (Just Chat) — no filter contribution
-                : [item.serviceKey || item.service] // null/undefined — sidebar fallback
-          );
-          // Drop the streaming bot placeholder pushed for the in-flight SSE — it is
-          // a UI stub, not part of the conversation. Without this filter, the
-          // empty placeholder becomes the tail of the messages array, and the
-          // backend's `text = messages[messages.length-1].content` derivation
-          // stores an empty string in queries.text for Quick Help queries.
-          // The `msg &&` guard tolerates corrupted-cache null entries (localStorage
-          // round-trip can introduce them); the inner access would otherwise throw.
-          const baseMessages = this.chatMessages
-            .filter((msg) => msg && !msg.isStreaming)
-            .map((msg) => ({
-              role: msg.sender === 'user' ? 'user' : 'assistant',
-              content: msg.content
-            }));
+      if (contextOption === 'conversation-with-labels') {
+        // Storable turns only: streaming placeholders are UI stubs, and
+        // a synthesized greeting (no queryId) or a failed exchange never
+        // delivered model output — none of it enters the model's context.
+        const baseMessages = this.openMessages
+          .filter((msg) => msg && !msg.isStreaming && isStorableTurn(msg))
+          .map((msg) => ({
+            role: msg.sender === 'user' ? 'user' : 'assistant',
+            content: msg.content
+          }));
 
-          const lastUserMsgIndex = baseMessages.map((m) => m.role).lastIndexOf('user');
-          // Dual-prompt swap: send the hidden prompt to OPEA as the last user
-          // message so the LLM gets the persona + domain context, while
-          // `messageForDisplay` (the visibleText) is what the user actually
-          // clicked/typed. `userQuestion` below carries the visible text to
-          // the analytics layer so the Query Inspector shows it.
-          if (lastUserMsgIndex !== -1 && messageForBackend !== messageForDisplay) {
-            baseMessages[lastUserMsgIndex].content = messageForBackend;
-          }
-
-          queryData = {
-            conversationId: this.conversationId,
-            sessionId: this.currentSessionId || 'new-session',
-            messages: baseMessages,
-            userQuestion: messageForDisplay,
-            context: {
-              categoryLabel: categoryLabel,
-              serviceLabels: serviceLabels,
-              language: this.currentLocale.toUpperCase()
-            },
-            contextOption: 'conversation-with-context-labels',
-            timestamp: new Date().toISOString()
-          };
-        } else {
-          queryData = {
-            sessionId: this.currentSessionId || 'new-session',
-            text: messageForBackend,
-            userQuestion: messageForDisplay,
-            context: {
-              language: this.currentLocale.toUpperCase()
-            },
-            contextOption: contextOption,
-            timestamp: new Date().toISOString()
-          };
+        const lastUserMsgIndex = baseMessages.map((m) => m.role).lastIndexOf('user');
+        // Dual-prompt swap: send the hidden prompt to OPEA as the last user
+        // message so the LLM gets the persona + domain context, while
+        // `messageForDisplay` is what the user actually clicked/typed.
+        if (lastUserMsgIndex !== -1 && messageForBackend !== messageForDisplay) {
+          baseMessages[lastUserMsgIndex].content = messageForBackend;
         }
 
-        // checkContextConfig returns false when the query must be blocked
-        // (unresolved category id, or no filter active). Abort before sending.
-        if (this.checkContextConfig(queryData.context) === false) {
-          return;
-        }
-
-        // Cancel any previous stream
-        if (this.streamController) {
-          this.streamController.abort();
-        }
-
-        this.streamController = chatbotService.submitQueryStream(queryData, {
-          onChunk: (content) => {
-            this.chatMessages[lastMessageIndex].content += content;
-            this.scrollToBottom();
+        queryData = {
+          conversationId: this.conversationId,
+          sessionId: this.currentSessionId || 'new-session',
+          messages: baseMessages,
+          userQuestion: messageForDisplay,
+          context: {
+            categoryLabel: categoryLabel,
+            serviceLabels: serviceLabels,
+            language: this.currentLocale.toUpperCase()
           },
-          onMetadata: (metadata) => {
-            this.chatMessages[lastMessageIndex].metadata = metadata;
-            if (metadata.confidence_score != null) {
-              this.chatMessages[lastMessageIndex].confidenceScore = metadata.confidence_score;
-            }
-            // is_grounded: true = answer backed by retrieved document chunks;
-            // false = generated from the LLM's own knowledge (no document basis).
-            this.chatMessages[lastMessageIndex].isGrounded = metadata.is_grounded;
-            if (metadata.responseTime) {
-              this.systemStatus.lastResponseTime = metadata.responseTime;
-            }
-            this.systemStatus.online = true;
-            this.systemStatus.errorMessage = '';
-            this.systemStatus.lastUpdated = new Date();
-
-            if (metadata.source_documents && Array.isArray(metadata.source_documents)) {
-              const newDocs = metadata.source_documents.map((doc) => ({
-                id: doc.document_id,
-                title: doc.document_name || doc.file_name || `Source ${(doc.document_id || '').slice(0, 4)}`,
-                documentName: doc.document_name,
-                fileName: doc.file_name,
-                type: doc.url?.split('.').pop().toUpperCase() || 'LINK',
-                size: 0,
-                url: doc.url,
-                score: doc.score,
-                categoryLabel: doc.categoryLabel,
-                serviceLabels: doc.serviceLabels
-              }));
-              const existingIds = new Set(this.relatedDocuments.map((d) => d.id));
-              const uniqueNewDocs = newDocs.filter((d) => !existingIds.has(d.id));
-              this.relatedDocuments.unshift(...uniqueNewDocs);
-            }
+          contextOption: 'conversation-with-context-labels',
+          timestamp: new Date().toISOString()
+        };
+      } else {
+        queryData = {
+          sessionId: this.currentSessionId || 'new-session',
+          text: messageForBackend,
+          userQuestion: messageForDisplay,
+          context: {
+            language: this.currentLocale.toUpperCase()
           },
-          onTranslation: (translatedContent) => {
-            this.chatMessages[lastMessageIndex].content = translatedContent;
-            this.scrollToBottom();
-          },
-          onDone: (data) => {
-            this.isStreaming = false;
-            this.streamController = null;
-            this.streamingQueryId = data.queryId;
-            this.chatMessages[lastMessageIndex].isStreaming = false;
-            this.chatMessages[lastMessageIndex].isSaved = false;
-            // The answer is complete either way; only its language is affected,
-            // and only the message carries that — `systemStatus` stays healthy.
-            this.chatMessages[lastMessageIndex].translationFailed = Boolean(data.translationFailed);
-            if (data.queryId) {
-              this.chatMessages[lastMessageIndex].queryId = data.queryId;
-            }
-            this.scrollToBottom();
-            if (this.currentChatId) {
-              this.updateChatInHistory();
-            }
-          },
-          onError: (error) => {
-            console.error('Stream error:', error);
-            this.isStreaming = false;
-            this.streamController = null;
-            this.chatMessages[lastMessageIndex].isStreaming = false;
-
-            // A 4xx is a request the backend refused: the deployment is up
-            // and answered, so it stays online and the reason it gave is what
-            // the user is shown — in the answer bubble and in the
-            // notification. The status panel reports the deployment, not the
-            // request, so it has nothing to add here: its error line only
-            // shows while the deployment is down.
-            // Anything else — a 5xx, a dropped connection — leaves the
-            // deployment down.
-            const refused = Number.isInteger(error?.status) && error.status >= 400 && error.status < 500;
-            const reason = refused
-              ? error.code === 'UNSUPPORTED_LANGUAGE'
-                ? this.translate('chatbot.unsupportedLanguage')
-                : this.translate('chatbot.processingError')
-              : this.translate('chatbot.streamingError');
-
-            if (!this.chatMessages[lastMessageIndex].content) {
-              this.chatMessages[lastMessageIndex].content = reason;
-            }
-
-            this.systemStatus.lastResponseTime = null;
-            this.systemStatus.online = refused;
-            this.systemStatus.errorMessage = refused ? '' : error.message || this.translate('chatbot.processingError');
-            this.systemStatus.lastUpdated = new Date();
-            notificationService.error(reason);
-          }
-        });
-      } catch (error) {
-        this.isStreaming = false;
-        this.streamController = null;
-        this.chatMessages[lastMessageIndex].isStreaming = false;
-
-        console.error('Error sending query:', error);
-        if (!this.chatMessages[lastMessageIndex].content) {
-          this.chatMessages[lastMessageIndex].content = this.translate('chatbot.processingError');
-        }
-        this.systemStatus.lastResponseTime = null;
-        this.systemStatus.online = false;
-        this.systemStatus.errorMessage = error.message || this.translate('chatbot.processingError');
-        this.systemStatus.lastUpdated = new Date();
-        notificationService.error(this.translate('chatbot.processingError'));
+          contextOption: contextOption,
+          timestamp: new Date().toISOString()
+        };
       }
+
+      this.$store.dispatch('conversation/sendStream', queryData);
       this.scrollToBottom();
       if (this.currentChatId) {
         this.updateChatInHistory();
@@ -1130,7 +1536,7 @@ export default {
     openFeedbackDialog(index) {
       this.feedbackDialog = {
         visible: true,
-        message: this.chatMessages[index]
+        message: this.openMessages[index]
       };
     },
 
@@ -1138,25 +1544,78 @@ export default {
       this.feedbackDialog.visible = false;
     },
 
-    async handleFeedbackSubmit(feedback) {
-      const queryId = feedback.message.queryId;
+    // The one place a rating reaches the service — the feedback dialog and
+    // the inline thumbs share it, so analytics keeps its 1-5 scale.
+    // Resolves true only when the submission succeeded.
+    async submitFeedbackPayload(message, rating, comment) {
+      const queryId = message.queryId;
       if (!queryId) {
         notificationService.error(this.translate('chatbot.feedbackMissingQueryId'));
-        this.closeFeedbackDialog();
-        return;
+        return false;
       }
       try {
         await chatbotService.submitFeedback(queryId, {
-          rating: feedback.rating || (feedback.thumbFeedback === 'up' ? 4 : 2),
-          comment: feedback.text || '',
+          rating,
+          comment: comment || '',
           providedAt: new Date().toISOString()
         });
-        notificationService.success(this.translate('chatbot.feedbackSubmitted'));
+        return true;
       } catch (error) {
         console.error('Error submitting feedback for queryId:', queryId, error);
         notificationService.error(this.translate('chatbot.feedbackError'));
+        return false;
       }
+    },
+
+    async handleFeedbackSubmit(feedback) {
+      const rating = feedback.rating || THUMB_RATINGS[feedback.thumbFeedback] || feedback.rating;
+      const ok = await this.submitFeedbackPayload(feedback.message, rating, feedback.text || '');
+      if (ok) notificationService.success(this.translate('chatbot.feedbackSubmitted'));
       this.closeFeedbackDialog();
+    },
+
+    async rateAnswer(index, value) {
+      const msg = this.openMessages[index];
+      const rating = THUMB_RATINGS[value];
+      const ok = await this.submitFeedbackPayload(msg, rating, '');
+      if (ok) {
+        this.$store.commit('conversation/setMessageProperty', [index, 'userFeedback', value]);
+        notificationService.success(this.translate('chatbot.feedbackSubmitted'));
+      }
+    },
+
+    retryAnswer(index) {
+      const msg = this.openMessages[index];
+      const q = msg._query;
+      // The failed turn is its question plus the failed answer — replaced,
+      // not stacked. The visible text lives on the user turn being dropped.
+      const before = this.openMessages[index - 1];
+      const dropUser = before && before.sender === 'user';
+      const display = dropUser ? before.content : q;
+      this.$store.commit('conversation/spliceMessages', [dropUser ? index - 1 : index, dropUser ? 2 : 1]);
+      this.sendMessageFromText(q);
+      if (display !== q) {
+        // The retry re-runs the hidden-prompt query, but shows what the user
+        // saw — the display text rides the same mechanism the composer uses.
+        this.$store.commit('conversation/setMessageProperty', [this.openMessages.length - 2, 'content', display]);
+      }
+    },
+
+    async copyAnswer(msg) {
+      const holder = document.createElement('div');
+      holder.innerHTML = this.renderMarkdown(msg.content);
+      const text = holder.textContent || '';
+      try {
+        await navigator.clipboard.writeText(text);
+        // The clipboard gives no feedback of its own — the check mark is
+        // the acknowledgement, reverted after a beat.
+        msg.copied = true;
+        setTimeout(() => {
+          msg.copied = false;
+        }, 1500);
+      } catch {
+        notificationService.error(this.translate('chatbot.copyFailed', 'Could not copy'));
+      }
     },
 
     scrollToBottom() {
@@ -1169,53 +1628,66 @@ export default {
     },
 
     async loadExistingConversation(conversationId) {
+      // Loading another conversation orphans the open generation — stop
+      // it rather than letting its frames land in the wrong transcript.
+      this.$store.dispatch('conversation/abortStream');
+      // The loaded chat replaces the open one wholesale — and the
+      // replacement starts NOW, before the fetch: if the load fails, the
+      // next question must not carry the previous conversation's id, its
+      // context chip, its sources or its transcript.
+      this.$store.commit('conversation/setConversationId', null);
+      this.$store.commit('conversation/setContextItems', []);
+      this.$store.commit('conversation/setRelatedDocuments', []);
+      this.$store.commit('conversation/setMessages', []);
+      this.$store.commit('conversation/setSavedState');
+      this.currentChatId = conversationId;
+      this.currentCategoryId = null;
+      // A slower load must never overwrite a newer one.
+      const token = ++this.loadSeq;
       try {
         const conversation = await this.chatHistoryService.getConversation(conversationId);
 
+        if (token !== this.loadSeq) {
+          return; // a newer load superseded this one
+        }
         if (!conversation) {
           throw new Error('Conversation not found');
         }
+        // The fetch window was long enough for the user to send a
+        // question into the cleared transcript — that generation belongs
+        // to the replaced conversation, and dies with it.
+        this.$store.dispatch('conversation/abortStream');
 
-        this.conversationId = conversation._key;
+        this.$store.commit('conversation/setConversationId', conversation._key);
         this.currentChatId = conversation._key;
-        this.currentChatTitle = conversation.title || this.generateChatTitle();
+        this.$store.commit('conversation/setTitle', conversation.title || this.generateChatTitle());
         this.currentCategoryId = conversation.categoryId || null;
 
-        // NEW: Populate related documents from history (files property from backend)
+        // Populate related documents from history (files property from
+        // backend) — the same sidebar-card shape the live stream builds.
         if (conversation.files && Array.isArray(conversation.files)) {
-          this.relatedDocuments = conversation.files.map((file) => {
-            const mapped = {
-              id: file.id,
-              title: file.documentName || file.fileName || `Source ${file.id}`,
-              documentName: file.documentName,
-              fileName: file.fileName,
-              type: file.url?.split('.').pop().toUpperCase() || 'LINK',
-              size: 0,
-              url: file.url,
-              score: file.score,
-              categoryLabel: file.categoryLabel,
-              serviceLabels: file.labels || []
-            };
-            return mapped;
-          });
+          this.$store.commit('conversation/setRelatedDocuments', translateSources(conversation.files));
         } else {
-          this.relatedDocuments = [];
+          this.$store.commit('conversation/setRelatedDocuments', []);
         }
 
-        this.chatMessages = [];
+        // Whatever the live path sets on a message (onMetadata), the
+        // reload path sets too — the restored conversation speaks the
+        // same states. One commit per collection: history can be long.
         const messages = conversation.messages || [];
-        messages.forEach((msg) => {
-          this.chatMessages.push({
-            sender: msg.sender === 'user' ? 'user' : 'bot',
-            content: msg.content,
-            timestamp: msg.timestamp || new Date().toISOString(),
-            queryId: msg.queryId || null,
-            isSaved: true
-          });
-        });
-
-        if (this.chatMessages.length === 0) {
-          this.chatMessages.push({
+        const restoredMessages = messages.map((msg) => ({
+          sender: msg.sender === 'user' ? 'user' : 'bot',
+          content: msg.content,
+          timestamp: msg.timestamp || new Date().toISOString(),
+          queryId: msg.queryId || null,
+          confidenceScore: msg.metadata?.confidence_score ?? msg.queryInfo?.confidenceScore ?? null,
+          metadata: msg.metadata || null,
+          isGrounded: msg.metadata?.is_grounded,
+          userFeedback: msg.metadata?.userFeedback || null,
+          isSaved: true
+        }));
+        if (restoredMessages.length === 0) {
+          restoredMessages.push({
             sender: 'bot',
             content: this.getWelcomeMessage(),
             timestamp: new Date().toISOString(),
@@ -1223,30 +1695,29 @@ export default {
             isSaved: true
           });
         }
+        this.$store.commit('conversation/setMessages', restoredMessages);
 
-        this.selectedContextItems = [];
+        let restoredContextItems = [];
         if (conversation.tags && Array.isArray(conversation.tags)) {
-          conversation.tags.forEach((tag) => {
-            this.selectedContextItems.push({
-              service: this.safeTranslate(tag || `category.${this.currentCategoryId || 'general'}`),
-              serviceKey: tag || `category.${this.currentCategoryId || 'general'}`,
-              category: this.currentCategoryId || 'general',
-              selected: true
-            });
-          });
-        } else if (this.currentCategoryId) {
-          this.selectedContextItems.push({
-            service: this.getCategoryLabelById(this.currentCategoryId),
-            serviceKey: `category.${this.currentCategoryId}`,
-            category: this.currentCategoryId,
+          restoredContextItems = conversation.tags.map((tag) => ({
+            service: this.safeTranslate(tag || `category.${this.currentCategoryId || 'general'}`),
+            serviceKey: tag || `category.${this.currentCategoryId || 'general'}`,
+            category: this.currentCategoryId || 'general',
             selected: true
-          });
+          }));
+        } else if (this.currentCategoryId) {
+          restoredContextItems = [
+            {
+              service: this.getCategoryLabelById(this.currentCategoryId),
+              serviceKey: `category.${this.currentCategoryId}`,
+              category: this.currentCategoryId,
+              selected: true
+            }
+          ];
         }
+        this.$store.commit('conversation/setContextItems', restoredContextItems);
 
-        this.lastSavedState = {
-          messages: JSON.parse(JSON.stringify(this.chatMessages)),
-          contextItems: JSON.parse(JSON.stringify(this.selectedContextItems))
-        };
+        this.$store.commit('conversation/setSavedState');
 
         this.newMessage = '';
         this.showQuickHelp = false;
@@ -1257,20 +1728,31 @@ export default {
         notificationService.success(this.translate('chatbot.conversationLoaded'));
       } catch (error) {
         console.error('Error loading conversation:', error);
-        notificationService.error(this.translate('chatbot.loadError'));
+        // Only the newest load owns the view's target: a stale failure
+        // must not clear a newer load's id, and must not notify — the
+        // newer load already owns the screen.
+        if (token === this.loadSeq) {
+          this.currentChatId = null;
+          // The fetch window may have opened a generation into the
+          // cleared transcript: it dies here, together with the
+          // transcript it was writing into.
+          this.$store.dispatch('conversation/abortStream');
+          this.resetToWelcome();
+          notificationService.error(this.translate('chatbot.loadError'));
+        }
       }
     },
 
     hasUnsavedChanges() {
+      // A failed exchange is deliberately never persisted, so it is not
+      // a pending change either.
       if (!this.conversationId && !this.currentChatId) {
-        const hasUserMessages = this.chatMessages.some((msg) => msg.sender === 'user');
+        const hasUserMessages = this.openMessages.some((msg) => msg.sender === 'user' && !msg.isError);
         const hasContextItems = this.selectedContextItems.length > 0;
         return hasUserMessages || hasContextItems;
       }
 
-      const hasNewMessages = this.chatMessages.some(
-        (msg) => !msg.isSaved && (msg.sender === 'user' || (msg.sender === 'bot' && msg.queryId))
-      );
+      const hasNewMessages = this.openMessages.some((msg) => !msg.isSaved && isStorableTurn(msg));
       if (hasNewMessages) {
         return true;
       }
@@ -1292,6 +1774,7 @@ export default {
 
     async loadConversationConfirmed() {
       this.showLoadConfirm = false;
+      // The discard arm performs no save — by definition it always loads.
       if (this.pendingConversationId) {
         await this.loadExistingConversation(this.pendingConversationId);
         this.pendingConversationId = null;
@@ -1305,31 +1788,26 @@ export default {
 
     async saveAndLoadConversation() {
       this.showLoadConfirm = false;
-      if (this.conversationId || this.currentChatId) {
-        await this.updateExistingChat();
-      } else {
-        this.saveChatDialog = {
-          visible: true,
-          title: this.generateChatTitle(),
-          folderId: 'default'
-        };
-        await new Promise((resolve) => {
-          const unwatch = this.$watch('saveChatDialog.visible', (newVal) => {
-            if (!newVal) {
-              unwatch();
-              resolve();
-            }
-          });
-        });
+      // The leave arm owns the whole save half — verdict reset, the
+      // update-vs-create decision, the naming dialog and its await.
+      const saved = await this.saveCurrentChatBeforeLeave();
+      if (!this.pendingConversationId) {
+        return;
       }
-      if (this.pendingConversationId) {
-        await this.loadExistingConversation(this.pendingConversationId);
+      // A canceled naming dialog keeps the draft: the pending load is
+      // abandoned with it, mirroring the start-new arm.
+      if (!saved) {
         this.pendingConversationId = null;
+        return;
       }
+      await this.loadExistingConversation(this.pendingConversationId);
+      this.pendingConversationId = null;
     },
 
     saveChatToHistory() {
-      if (this.conversationId || this.currentChatId) {
+      // Only the persisted id decides update-vs-create — an in-flight
+      // load target is not saved anywhere yet.
+      if (this.conversationId) {
         this.updateExistingChat();
       } else {
         this.saveChatDialog = {
@@ -1345,12 +1823,15 @@ export default {
     },
 
     async handleSaveChat() {
-      // Prevent double-save
+      // Prevent double-save; lastSaveSucceeded carries the verdict.
       if (this.isSaving) {
         return;
       }
 
       this.isSaving = true;
+      // The save's own verdict — an id alone is not one: the
+      // conversation can exist server-side while a later step failed.
+      this.lastSaveSucceeded = false;
 
       try {
         const currentUser = this.$store.getters.currentUser;
@@ -1358,7 +1839,11 @@ export default {
           throw new Error('User not authenticated');
         }
 
-        const firstUserMessage = this.chatMessages.find((msg) => msg.sender === 'user')?.content || '';
+        // The first user question that ever got an answer rides as the
+        // conversation's initialMessage — a failed first exchange is
+        // left out entirely, so it cannot reopen looking answered.
+        const firstUserIndex = this.openMessages.findIndex((m) => m.sender === 'user' && !m.isError);
+        const firstUserMessage = firstUserIndex >= 0 ? this.openMessages[firstUserIndex].content : '';
 
         const conversationData = {
           title: this.saveChatDialog.title || this.generateChatTitle(),
@@ -1371,19 +1856,40 @@ export default {
           throw new Error('handleSaveChat should not be called for existing conversations');
         }
 
-        const conversation = await this.chatHistoryService.createConversation(conversationData);
-        this.conversationId = conversation._key;
+        // Every turn is a failed exchange: creating the conversation
+        // would store an empty chat that previews content it does not
+        // hold.
+        const hasPersistableTurn = this.openMessages.some(isStorableTurn);
+        if (!hasPersistableTurn) {
+          notificationService.info(this.translate('chatbot.nothingToSave'));
+          this.saveChatDialog.visible = false;
+          return false;
+        }
 
-        for (const message of this.chatMessages) {
+        const conversation = await this.chatHistoryService.createConversation(conversationData);
+        // A fresh conversation replaces whatever load was in flight.
+        this.loadSeq++;
+        this.$store.commit('conversation/setConversationId', conversation._key);
+
+        // Matched by position, not content, so a later message that
+        // repeats the same text is still stored normally.
+        for (const [messageIndex, message] of this.openMessages.entries()) {
           if (
             (message.sender === 'bot' && !message.queryId) ||
-            (message.sender === 'user' && message.content === firstUserMessage && !message.isSaved)
+            (message.sender === 'user' && messageIndex === firstUserIndex && !message.isSaved)
           ) {
-            message.isSaved = true;
+            // Mark it saved so hasUnsavedChanges() settles and the next
+            // save pass skips it instead of adding it a second time. The
+            // streaming placeholder stays unsaved: it is not storable yet.
+            if (message.sender === 'user') {
+              this.$store.commit('conversation/setMessageProperty', [messageIndex, 'isSaved', true]);
+            }
             continue;
           }
 
-          if ((message.sender === 'user' || (message.sender === 'bot' && message.queryId)) && message.content) {
+          // A failed exchange is never persisted: its question would
+          // reopen later looking answered, with no dead answer beside it.
+          if (isStorableTurn(message) && message.content) {
             const messageData = {
               conversationId: conversation._key,
               content: message.content,
@@ -1392,7 +1898,7 @@ export default {
               metadata: message.metadata || {}
             };
             await this.chatHistoryService.addMessage(messageData);
-            message.isSaved = true;
+            this.$store.commit('conversation/setMessageProperty', [messageIndex, 'isSaved', true]);
           }
         }
 
@@ -1401,9 +1907,7 @@ export default {
           title: conversationData.title,
           preview: this.chatPreview,
           folderId: this.saveChatDialog.folderId || 'default',
-          messageCount: this.chatMessages.filter(
-            (msg) => msg.sender === 'user' || (msg.sender === 'bot' && msg.queryId)
-          ).length
+          messageCount: this.openMessages.filter(isStorableTurn).length
         };
         await this.$store.dispatch('chatHistory/createChat', chatData);
 
@@ -1416,11 +1920,11 @@ export default {
         }
 
         this.currentChatId = conversation._key;
-        this.currentChatTitle = conversationData.title;
-        this.lastSavedState.messages = [...this.chatMessages];
-        this.lastSavedState.contextItems = [...this.selectedContextItems];
+        this.$store.commit('conversation/setTitle', conversationData.title);
+        this.$store.commit('conversation/setSavedState');
         this.updateChatInHistory();
 
+        this.lastSaveSucceeded = true;
         notificationService.success(this.translate('chatbot.chatSaved'));
         this.saveChatDialog.visible = false;
 
@@ -1428,7 +1932,10 @@ export default {
       } catch (error) {
         console.error('Error saving chat:', error);
         notificationService.error('Failed to save chat. Please try again.');
-        throw error;
+        // The dialog stays open so the save can be retried; the failure
+        // never escapes as an exception (the dialog's Save button calls
+        // this directly), and the flag carries the verdict.
+        this.lastSaveSucceeded = false;
       } finally {
         this.isSaving = false;
       }
@@ -1454,11 +1961,14 @@ export default {
         };
         await this.chatHistoryService.updateConversation(this.conversationId, updateData);
 
-        for (const message of this.chatMessages) {
+        for (const [messageIndex, message] of this.openMessages.entries()) {
           if (message.isSaved) {
             continue;
           }
-          if ((message.sender === 'user' || (message.sender === 'bot' && message.queryId)) && message.content) {
+          // A failed exchange is never persisted (and is not a pending
+          // change either): its question would reopen later looking
+          // answered, with no dead answer beside it.
+          if (isStorableTurn(message) && message.content) {
             const messageData = {
               conversationId: this.conversationId,
               content: message.content,
@@ -1467,13 +1977,12 @@ export default {
               metadata: message.metadata || {}
             };
             await this.chatHistoryService.addMessage(messageData);
-            message.isSaved = true;
+            this.$store.commit('conversation/setMessageProperty', [messageIndex, 'isSaved', true]);
           }
         }
 
         this.currentChatId = this.conversationId;
-        this.lastSavedState.messages = [...this.chatMessages];
-        this.lastSavedState.contextItems = [...this.selectedContextItems];
+        this.$store.commit('conversation/setSavedState');
         this.updateChatInHistory();
 
         notificationService.success(this.translate('chatbot.chatUpdated'));
@@ -1489,37 +1998,14 @@ export default {
         this.updateChat({
           chatId: this.currentChatId,
           preview: this.chatPreview,
-          fullChatData: JSON.stringify(this.chatMessages)
+          fullChatData: JSON.stringify(this.openMessages)
         });
       }
     },
 
-    loadChatFromHistory(chatId) {
-      const chat = this.getChatById(chatId);
-      if (!chat) return;
-      try {
-        const storedChatData = localStorage.getItem(`chat_data_${chatId}`);
-        if (storedChatData) {
-          this.chatMessages = JSON.parse(storedChatData);
-        } else {
-          this.chatMessages = [
-            {
-              sender: 'bot',
-              content: this.getWelcomeMessage()
-            }
-          ];
-        }
-        this.currentChatId = chatId;
-        this.showQuickHelp = false;
-        this.scrollToBottom();
-      } catch (error) {
-        console.error('Error loading chat:', error);
-        notificationService.error(this.translate('chatbot.loadError'));
-      }
-    },
-
     generateChatTitle() {
-      const userMessage = this.chatMessages.find((msg) => msg.sender === 'user');
+      // Consistent with the preview: failed exchanges are not metadata.
+      const userMessage = this.openMessages.find((msg) => msg.sender === 'user' && !msg.isError);
       if (userMessage) {
         return userMessage.content.length > 20 ? userMessage.content.substring(0, 17) + '...' : userMessage.content;
       }
@@ -1542,53 +2028,40 @@ export default {
       }
     },
 
-    async saveAndStartNewChat() {
-      this.showNewChatConfirm = false;
-      try {
-        if (this.conversationId || this.currentChatId) {
-          await this.updateExistingChat();
-        } else {
-          this.saveChatDialog = {
-            visible: true,
-            title: this.generateChatTitle(),
-            folderId: 'default'
-          };
-          await new Promise((resolve) => {
-            const unwatch = this.$watch('saveChatDialog.visible', (newVal) => {
-              if (!newVal) {
-                unwatch();
-                resolve();
-              }
-            });
-          });
-        }
-        this.startNewChatConfirmed();
-      } catch (error) {
-        console.error('Error saving before starting new chat:', error);
-        notificationService.error('Failed to save changes. Please try again.');
-      }
-    },
-
-    startNewChatConfirmed() {
-      this.showNewChatConfirm = false;
-      this.chatMessages.splice(0, this.chatMessages.length, {
+    // One definition of "back to the welcome screen": a pristine entry
+    // holding only the welcome turn, snapshotted as saved.
+    resetToWelcome() {
+      this.$store.commit('conversation/resetForNewConversation');
+      this.$store.commit('conversation/appendBotMessage', {
         sender: 'bot',
         content: this.getWelcomeMessage(),
         timestamp: new Date().toISOString(),
         isSaved: true
       });
+      this.$store.commit('conversation/setSavedState');
+    },
+
+    async saveAndStartNewChat() {
+      this.showNewChatConfirm = false;
+      const saved = await this.saveCurrentChatBeforeLeave();
+      // A canceled naming dialog keeps the draft on screen.
+      if (saved) {
+        this.startNewChatConfirmed();
+      }
+    },
+
+    startNewChatConfirmed() {
+      this.showNewChatConfirm = false;
+      this.$store.dispatch('conversation/abortStream');
+      // The welcome screen replaces the conversation: an in-flight load
+      // of another chat must not land after this.
+      this.loadSeq++;
+      this.resetToWelcome();
       this.currentChatId = null;
-      this.conversationId = null;
-      this.selectedContextItems = [];
       this.newMessage = '';
       this.currentCategoryId = null;
-      this.currentChatTitle = '';
       this.showQuickHelp = true;
-      this.relatedDocuments = [];
-      this.lastSavedState = {
-        messages: JSON.parse(JSON.stringify(this.chatMessages)),
-        contextItems: []
-      };
+      this.$store.commit('conversation/setSavedState');
       this.$nextTick(() => {
         this.scrollToBottom();
       });
@@ -1597,6 +2070,43 @@ export default {
 
     cancelNewChat() {
       this.showNewChatConfirm = false;
+    },
+
+    // The leave-confirm "save" arm: an existing conversation updates in
+    // place; a never-saved one opens the naming dialog and the navigation
+    // resumes when the save completes.
+    async saveCurrentChatBeforeLeave() {
+      // The verdict must describe THIS flow: a success from an earlier
+      // save must never answer this arm's question.
+      this.lastSaveSucceeded = false;
+      // Only the persisted id decides update-vs-create — an in-flight
+      // load target is not saved anywhere yet.
+      if (this.conversationId) {
+        try {
+          await this.updateExistingChat();
+          this.lastSaveSucceeded = true;
+          return true;
+        } catch {
+          return false;
+        }
+      }
+      this.saveChatDialog = {
+        visible: true,
+        title: this.generateChatTitle(),
+        folderId: 'default'
+      };
+      // The navigation must wait for the naming dialog: resetting the
+      // transcript before the save completes would persist an empty
+      // chat. A canceled dialog resolves too — with nothing saved.
+      await new Promise((resolve) => {
+        const unwatch = this.$watch('saveChatDialog.visible', (newVal) => {
+          if (!newVal) {
+            unwatch();
+            resolve();
+          }
+        });
+      });
+      return this.lastSaveSucceeded;
     },
 
     openExportDialog() {
@@ -1748,7 +2258,7 @@ export default {
         doc.text(this.currentChatTitle || this.generateChatTitle(), leftMargin, yOffset);
         yOffset += 15;
 
-        this.chatMessages.forEach((msg) => {
+        this.openMessages.forEach((msg) => {
           checkPageBreak(20);
           yOffset += 5;
 
@@ -1887,11 +2397,14 @@ export default {
   }
 }
 
+/* No `gap` — see the note on `.main-container` in App.vue. A flex gap
+   sits between the items, so a collapsed right rail was separated
+   from the content by a channel it should not have had; the spacing
+   is the panel's own margin, and a collapsed panel drops it. */
 .app-container {
   display: flex;
   height: 100vh;
   overflow: hidden;
-  gap: var(--space-sm);
 }
 
 .chatbot-container {
@@ -1904,61 +2417,121 @@ export default {
   overflow: hidden;
 }
 
-/* System Status Panel */
-.system-status-panel {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border-light);
-  padding: var(--space-sm) var(--space-md);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: var(--text-base);
-  min-height: 45px;
-}
-
-.status-left {
-  display: flex;
-  flex-direction: column; /* Stack status and error */
-  align-items: flex-start;
-  gap: var(--space-xs); /* Space between status and error */
-  flex: 1; /* Allow error message to take space */
-  overflow: hidden; /* Prevent long errors from breaking layout */
-}
-
-.status-error-message {
-  font-size: var(--text-sm);
-  color: var(--danger);
-  font-weight: 500;
-  margin-left: 18px;
-  white-space: nowrap;
+/* The per-turn avatars: the assistant carries the product icon in a
+   36px rounded tile, the user a photo, initials in an accent circle, or a
+   silhouette when even the name is absent. */
+.message-avatar {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
   overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-
-.status-metrics {
   display: flex;
-  gap: var(--space-lg);
-  padding-left: var(--space-md); /* Add space between error and metric */
-}
-
-.metric {
-  display: flex;
-  flex-direction: column;
   align-items: center;
+  justify-content: center;
 }
 
-.metric-label {
-  font-size: var(--text-xs);
-  color: var(--muted-soft);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+.message-avatar--assistant {
+  border: 1px solid var(--border-light);
+  background: var(--surface);
 }
 
-.metric-value {
+.message-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.message-avatar__initials {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--accent-fg-strong);
+  /* One accent ground for everyone — the reference shows the user's
+     circle in the brand accent, not a per-name hash. */
+  background: var(--accent);
+}
+
+.message-avatar__silhouette {
+  color: var(--muted);
+}
+
+/* The conversation header strip. */
+.conversation-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-md);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.conversation-header__title {
+  flex: 1 1 auto;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+
+.conversation-header__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3xs, 4px);
+}
+
+.conversation-header__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.conversation-header__action:hover:not(:disabled) {
+  background: var(--accent-muted);
+  color: var(--fg);
+}
+
+.conversation-header__action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.conversation-header__close {
+  margin-left: var(--space-xs);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.conversation-header__close:hover {
+  background: var(--accent-muted);
+  color: var(--fg);
+}
+
+/* System Status Panel */
 
 /* Context Panel Styles */
 .context-panel {
@@ -1994,7 +2567,6 @@ export default {
   overflow-y: auto;
   padding: var(--space-sm);
   background: var(--surface);
-  position: relative;
 }
 
 .chat-message {
@@ -2034,6 +2606,170 @@ export default {
   border-bottom-left-radius: var(--radius-sm);
 }
 
+/* One elevated card per answer; the bubble loses its own chrome inside it. */
+.answer-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.answer-card .message-bubble {
+  background: transparent;
+  border: none;
+  padding: 0;
+  border-radius: 0;
+}
+
+/* The ungrounded warning and the retryable error — both amber,
+   never red: an error is a state, not an accusation. */
+.answer-warning {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  background: var(--warning-bg);
+  color: var(--warning-ink);
+  font-size: var(--text-xs);
+}
+
+.answer-error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  border-radius: var(--radius-sm);
+  background: var(--warning-bg);
+  color: var(--warning-ink);
+  font-size: var(--text-sm);
+}
+
+.answer-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  border: 1px solid var(--warning-ink);
+  background: transparent;
+  color: var(--warning-ink);
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.answer-retry:hover {
+  background: var(--warning-bg);
+}
+
+/* The inline actions row — thumbs, details, copy, confidence. */
+.answer-actions {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border-light);
+}
+
+.answer-action {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+}
+
+.answer-action:hover {
+  color: var(--fg);
+  background: var(--accent-muted);
+}
+
+.answer-action[data-rated='true'] {
+  color: var(--accent);
+  background: var(--accent-muted);
+}
+
+/* The per-answer collapsible sources. */
+.answer-sources {
+  border-top: 1px solid var(--border-light);
+  padding-top: var(--space-sm);
+}
+
+.answer-sources__toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.answer-sources__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
+}
+
+.answer-source-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.answer-source-card:hover {
+  border-color: var(--accent);
+}
+
+.answer-source-card__body {
+  /* The free span between the badge and the open icon: the title starts
+     at the same left edge on every card, whatever its length. */
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.answer-source-card__title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.answer-source-card__size {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.answer-source-card__open {
+  margin-left: auto;
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
 .message-wrapper {
   display: flex;
   align-items: flex-end;
@@ -2047,9 +2783,11 @@ export default {
 
 .message-time {
   font-size: var(--text-xs);
-  color: var(--muted);
+  color: var(--time-ink);
   white-space: nowrap;
-  padding-bottom: 2px;
+  padding: 1px var(--space-sm);
+  border-radius: 999px;
+  background: var(--surface);
 }
 
 /* Markdown Styles within Message Bubble */
@@ -2166,15 +2904,6 @@ export default {
   padding: var(--space-xs) 0;
 }
 
-.bot-message-meta {
-  margin-left: var(--space-sm);
-  align-self: center;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-  align-items: flex-start;
-}
-
 .confidence-score {
   font-size: var(--text-sm);
   color: var(--muted-soft);
@@ -2184,45 +2913,62 @@ export default {
   display: flex;
   align-items: center;
   gap: var(--space-xs);
-}
-
-/* Shown when the answer is not backed by retrieved documents (LLM-only). */
-.grounding-flag {
-  font-size: var(--text-sm);
-  color: var(--warning);
-  background: var(--warning-bg);
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-}
-
-.translation-flag {
-  font-size: var(--text-sm);
-  color: var(--muted);
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-}
-
-.feedback-trigger {
-  margin-left: 0;
-}
-
-.feedback-trigger button {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: inherit;
-  font-weight: inherit;
-  color: inherit;
-  padding: 0;
+  /* The score parks at the end of the actions row instead of taking a
+     row of its own. */
+  margin-left: auto;
 }
 
 /* Quick Help Overlay */
 .quick-help-overlay {
+  /* The narrow-panel adaptation below .quick-help-content is a container
+     query on this element, so the container has to exist whether the Living
+     Intelligence layer is on or off — otherwise the layer's presence would
+     decide the app's layout. The layer declares the same property on the same
+     element for its own art query; the two agree, and the app's declaration is
+     the one that is always there. */
+  container-type: inline-size;
+  /* Every welcome constant is declared here, on the one element that
+     contains all three of its consumers — the veil's content box, the
+     composer wrapper and the card row — so each of them resolves
+     against a single declaration instead of a literal of its own.
+
+     --qh-measure is the resulting four-column cap (4 cards + 3 gaps),
+     964 px at the default tokens. The grid's auto-fit bound and both
+     max-widths read these two, so a deployment that overrides
+     --space-xl or the card minimum moves the row, the wrapper and the
+     bar's inset in step.
+
+     --qh-card-min is a component-local extension point (the same shape
+     as the Living Intelligence layer's per-button --qh-bg / --qh-hover
+     tokens) rather than a new token in theme-variables.css: 217 px is
+     the card width measured off the reference mockup.
+
+     --qh-veil-pad is the landing ground for the veil's horizontal
+     ramp. The Living Intelligence layer fades that ramp over
+     min(24px, this padding) of its own naming (--qh-veil-ramp), so the
+     ramp is exhausted here and never eats a glyph. --space-xl holds
+     it at 32 px, 8 px wider than the ramp on each side; the
+     container query below .quick-help-content steps it down to 8 px
+     for a narrow panel, and the ramp follows it there.
+
+     --qh-heading-scale multiplies the heading's type size. It is 1 at
+     every width the reference covers, and the narrow-panel query
+     below steps it down.
+
+     --qh-composer-ratio insets the bar from the row it sits above; see
+     .quick-help-composer below.
+
+     These values are mirrored rather than shared on the JavaScript
+     side: composables/sidebarLayout.js derives CENTRE_MIN_WIDTH
+     (480 px) from the same 217 px + 32 px arithmetic in prose, because
+     a module-scope constant cannot read a custom property off an
+     element that does not exist yet. Change one and the other has to be
+     changed with it. */
+  --qh-card-min: 217px;
+  --qh-measure: calc(4 * var(--qh-card-min) + 3 * var(--space-xl));
+  --qh-veil-pad: var(--space-xl);
+  --qh-heading-scale: 1;
+  --qh-composer-ratio: 81%;
   position: absolute;
   top: 0;
   left: 0;
@@ -2235,27 +2981,225 @@ export default {
   align-items: center;
   justify-content: center;
   padding: var(--space-lg);
+  /* The banner's full-bleed reaches past the overlay's content box
+     on purpose: the artwork has to touch the panel's edges, not sit
+     centred inside them. It bleeds by a fixed --space-lg (24 px) a side
+     at every viewport. Above 1300 px the overlay's padding is that same
+     24 px, so the bleed is absorbed by it and the banner's edges land on
+     the panel's. Below 1300 px the padding is stripped, there is nothing
+     to bleed into, and the banner overshoots by 24 px a side — which is
+     what this clip absorbs. The wave ::after spans the padding box
+     exactly and never overshoots. The clip is what keeps the banner's
+     overshoot from becoming a horizontal scrollbar, which is the
+     property that decides whether one is drawn. */
   overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* At narrow viewports the chat column is too small to spare a 24 px
+   gutter on each side of the grid — that 48 px would otherwise eat
+   the panel below the 466 px needed for two cards at the reference's
+   card width. Stripping the overlay's padding at viewports below
+   1300 px gives the grid the full chat column (panel ≈ vw − 794,
+   so panel ≈ 506 − 48 = 458 right at the threshold) and lets auto-fit
+   deliver 2 cols at 1280 px (panel 486 px), 1 col at 1024 px (panel
+   230 px), and 1 col at 769 px (panel 311 px) without any further
+   rule. The hero's full-bleed negative margin still uses --space-lg
+   (24 px) at every width, so the banner extends the same distance
+   past the visible edge regardless of viewport — the banner art
+   and its container query are unaffected. Above 1300 px the padding
+   is restored and the grid keeps the same gutter as before (the
+   reference's own look at 1920 px). */
+@media (max-width: 1299px) {
+  .quick-help-overlay {
+    padding: 0;
+  }
 }
 
 .quick-help-content {
-  max-width: 600px;
-  width: 100%;
+  /* The veil wraps the title and its subtitle instead of spanning the
+     banner: the reference carries the text directly on the artwork, and
+     a band across the whole width washes the icon tiles as well. The
+     padding is the landing ground for the veil's horizontal ramp, which
+     the Living Intelligence layer fades over min(24px, this padding), so
+     the ramp is spent before it reaches a glyph whatever the title's
+     length. The box's height is unchanged — the layer's padding is what
+     sets it — so the title stays where it is relative to the artwork's
+     fade. */
+  width: fit-content;
+  /* The padding sits outside the text's own box: with the global
+     border-box it would eat the title's line and wrap it. The max-width
+     is the banner's width less the two paddings, so the veil never
+     overflows the artwork it covers. Both read --qh-veil-pad, so one
+     declaration moves the padding and its cap together and the cap can
+     never admit a veil the banner cannot hold. */
+  box-sizing: content-box;
+  max-width: calc(100% - 2 * var(--qh-veil-pad));
+  margin-inline: auto;
+  padding-inline: var(--qh-veil-pad);
 }
 
+/* The narrow panel. With both sidebars in flow the centre column is at
+   its narrowest at the breakpoint itself — 630 px of panel at a 1400 px
+   viewport — and widens from there, while below 1400 px the sidebars go
+   off-canvas and the panel IS the viewport. So a panel narrower than
+   about 675 px of content is the whole narrow-panel window: no wrap in
+   the shipped locales, and nothing for the veil's 32 px of padding to
+   spend on either.
+
+   Two things give, both read from the same container — the overlay is
+   this component's own `container-type: inline-size` element, so the
+   query keys on the panel and not on the viewport, it fires
+   identically whether the panel is narrow because the viewport is or
+   because a sidebar is collapsed, and it fires identically whether the
+   Living Intelligence layer is on or off. Above the threshold nothing
+   here applies and the render is the reference's.
+
+     --qh-veil-pad 32 -> 8 px. The veil has to be as wide as its widest
+       child plus twice this, and 32 px of it is 64 px the title cannot
+       have: 630 - 64 = 566 px of content, which the French title
+       (578.3 px) overruns by 12 and Manx (659.1 px) by 93. At 8 px
+       the content is 614 px, which clears Manx outright.
+
+     --qh-heading-scale 1 -> 0.92. The padding alone leaves Manx 45 px
+       over the 614 px it has, and no padding can close that without
+       taking the veil's margin to nothing; 45 px is 6.8 % of the
+       longest shipped title, so an 8 % step clears it — measured, the
+       title lands at 606.3 px and 7.7 px to spare. This is the long
+       tail Option B buys — it is locale-blind, so it steps the English
+       title too, in the narrow panel only, where the panel is at its
+       narrowest and a display size is the one thing with room to give.
+
+   Both tokens are declared on .quick-help-content, the element that
+   reads the padding and the common ancestor of the heading that reads
+   the scale; the base values live on .quick-help-overlay, so both
+   resolve for every descendant of the overlay whether or not the veil
+   is rendered. */
+@container (max-width: 675px) {
+  .quick-help-content {
+    --qh-veil-pad: 8px;
+    --qh-heading-scale: 0.92;
+  }
+}
+
+/* The heading and the subtitle under it share one gap: the heading
+   gives up all but --space-sm and the subtitle carries the rest down to
+   the card row, so the pair needs no negative margin to sit tight.
+
+   The typography is declared here as well as in the Living Intelligence
+   layer (genie-visual-effects.css, on its own selector at a higher
+   specificity, with the same two values). The app owns the pair because
+   the narrow-panel scale above is calibrated against this heading's
+   measured width: a title 5 % wider — because the layer was off, or
+   because a deployment set the theme's --font-display differently — is
+   a title the scale was not measured against, and it wraps where the
+   scale says it fits. The layer's rule stays as the redundant-but-equal
+   declaration, the shape this component already uses for the veil's
+   padding. */
 .quick-help-heading {
   text-align: center;
-  font-size: var(--text-xl);
+  font-family: var(--font-display);
+  font-size: calc(var(--text-xl) * var(--qh-heading-scale));
   font-weight: 600;
-  margin-bottom: var(--space-lg);
+  letter-spacing: -0.025em;
+  margin-bottom: var(--space-sm);
   color: var(--fg);
 }
 
-.quick-help-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: var(--space-md);
+.quick-help-subtitle {
+  text-align: center;
+  font-size: var(--text-md);
+  /* The subtitle's `margin: 0 0 var(--space-lg)` is load-bearing:
+     the welcome scrim (.quick-help-content) is bottom-anchored in
+     the banner's art box, so changing the subtitle's bottom margin
+     moves the scrim and the heading inside or outside of the
+     banner's mask fade (which starts at 72% of the banner's
+     height). Keeping the original gap here also keeps the
+     composer→grid rhythm that the composer wrapper's own margin
+     carries on its own — the overlay stays gap-less so the
+     subtitle's natural margin is what positions the rest. */
+  margin: 0 0 var(--space-lg);
+  /* A brand tint, not the neutral grey --muted carries: 60% of the
+     heading's --fg mixed into the theme's --accent. It reads as the
+     brand colour the subtitle is meant to carry (a navy in light, a
+     light blue in dark) where --muted reads grey, and in the dark theme
+     it does not read dim: dark --muted is derived from --brand at
+     L 0.58, whose luminance (0.196) sits barely above the scrim's
+     (0.031), which puts that ink at 3.05:1 against the artwork behind
+     it, under the 4.5:1 floor WCAG AA sets for 16px/400 text.
+     Lightening the scrim does not rescue it: at alpha 0.50 the same ink
+     measures 2.32:1 in dark and 3.98:1 in light, because the veil's own
+     contribution is what darkens the backdrop the dim ink sits on. This
+     mix measures 9.95:1 light / 8.91:1 dark — and the 40% of --accent
+     in it is what keeps the subtitle a visible step below the heading
+     instead of a second heading. */
+  color: color-mix(in oklch, var(--fg) 60%, var(--accent));
 }
+
+/* The welcome composer shares the grid's measured width — same cap,
+   same auto-margin centering — so the bar and the card row present
+   one visual strip rather than a shrinking pill next to a wide grid.
+   Without `width: 100%`, the flex shrink-to-fit on a column with
+   `align-items: center` would collapse the bar to its intrinsic width
+   and contradict the panel-rhythm the composer is meant to belong to.
+
+   The `margin: var(--space-lg) 0` is the composer's own spacing to its
+   siblings: the overlay's flex `gap` is zero and the subtitle above
+   carries its own bottom margin, so the composer is the one child here
+   that has to state its spacing. */
+.quick-help-composer {
+  width: 100%;
+  max-width: var(--qh-measure);
+  margin: var(--space-lg) auto;
+}
+
+/* The bar itself is inset from the row it sits above, and the inset is
+   measured against the CARD ROW, not against the wrapper: the
+   reference's bar spans 805 px of a 989 px card row — 0.81 — at both
+   themes. The wrapper already carries the row's own measure (both caps
+   read --qh-measure and both are width: 100% of the same overlay
+   content box), so 81 % of the wrapper is 81 % of the row at every
+   viewport: where the cap binds the two are equal by construction, and
+   where it does not the wrapper is simply the overlay's content width
+   on both sides.
+
+   The ratio travels as --composer-width, the shared composer's own
+   escape hatch, rather than as a `width` on this selector. The
+   composer keeps ownership of the property and a consumer supplies a
+   value; neither side has to out-specify the other to get a number. */
+.quick-help-composer .chat-composer {
+  --composer-width: var(--qh-composer-ratio);
+  margin-inline: auto;
+}
+
+/* The welcome composer's leading mark is the reference's sparkles, drawn
+   in the accent's light blue rather than in the text colour. */
+.composer-leading-mark {
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+
+/* The chat view's leading control is the new-chat button, in the
+   reference's rounded square. */
+.composer-leading-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+.composer-leading-btn:hover {
+  background: var(--accent-muted);
+}
+
+/* The grid's column count is driven by container queries on the panel
+   width below. The base rule is the single-column fallback used when
+   the panel is too narrow for two columns. */
 
 .quick-help-item {
   display: flex;
@@ -2271,7 +3215,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
+  width: 36px;
   height: 40px;
 }
 
@@ -2287,20 +3231,14 @@ export default {
   font-weight: 500;
 }
 
-/* Chat Input Styles */
+/* Chat Input Styles — the chat-view composer sits in this wrapper.
+   The composer itself owns its internal layout; this block is just
+   the panel that hugs the bottom of the chatbot container and
+   inherits the existing top border / background. */
 .chat-input {
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-tertiary);
-  border-top: 1px solid var(--border);
-  padding: var(--space-sm);
-}
-
-.input-actions {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-sm);
-  align-items: center;
+  background: transparent;
+  border-top: none;
+  padding: var(--space-sm) var(--space-md);
 }
 
 /* Form Styles for Save Dialog */
@@ -2315,50 +3253,45 @@ export default {
   color: var(--fg);
 }
 
-/* Responsive Adjustments */
-@media (min-width: 768px) {
-  .chat-input {
-    flex-direction: row;
-    align-items: flex-end;
-  }
+/* The grid follows its container, not the viewport. The two fixed
+   sidebars reserve ~770 px of horizontal space from the 768 px
+   breakpoint up, so a viewport-driven grid breaks at 1280 px and
+   below. The grid uses auto-fit minmax() so the column count tracks
+   the panel width at every size, and a max-width cap so a wider
+   panel never grows a fifth column — the reference mocks exactly
+   four.
 
-  .prompt-textarea {
-    margin-bottom: 0;
-    margin-right: var(--space-sm);
-    flex: 1;
-  }
-
-  .quick-help-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-@media (min-width: 1024px) {
-  .quick-help-grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
-}
-
-@media (max-width: 768px) {
-  .system-status-panel {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-sm);
-  }
-
-  .status-metrics {
-    width: 100%;
-    justify-content: space-between;
-  }
+   auto-fit's lower bound and the cap both read --qh-card-min and
+   --qh-measure, declared on .quick-help-overlay — the common ancestor
+   of this grid and the composer wrapper — so a deployment that changes
+   either token gets a grid that recomputes its column count, a cap and
+   a composer wrapper in step. Changing --space-xl does NOT require
+   updating these rules. */
+.quick-help-grid {
+  display: grid;
+  width: 100%;
+  gap: var(--space-xl);
+  grid-template-columns: repeat(auto-fit, minmax(var(--qh-card-min), 1fr));
+  /* The four-column cap, shared with the composer wrapper. */
+  max-width: var(--qh-measure);
+  margin-inline: auto;
 }
 
 @media (max-width: 480px) {
-  .quick-help-grid {
-    grid-template-columns: 1fr;
-  }
-
+  /* Weight, not size: at --text-lg the heading is 20px, which is under
+     WCAG's 24px limb for large text, so the brand ramp inside it has to
+     clear 4.5:1 rather than the 3:1 large-text allowance. 20px at weight
+     700 is large text, and the ramp's worst stop is 3.99:1 against the
+     white panel this viewport renders. Sizes assume --font-scale: 1;
+     the operator's typography.fontScale scales --text-lg with the rest
+     of the tokens, so a deployment that drops it below ~0.93 (18.66px
+     at weight 700 — the WCAG threshold above which the mark qualifies
+     as large text and gets the 3:1 allowance, below which it has to
+     clear 4.5:1 and the worst 3.99:1 stop fails) takes the
+     responsibility itself rather than getting a non-scaling floor. */
   .quick-help-heading {
     font-size: var(--text-lg);
+    font-weight: 700;
   }
 }
 

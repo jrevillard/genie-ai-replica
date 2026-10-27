@@ -461,6 +461,23 @@ class TestInvoke:
         assert "ALL IN" in filter_clause
 
     @pytest.mark.asyncio
+    async def test_deployment_default_applies_when_the_request_carries_no_strategy(self, invoke_env):
+        # A request that carries no filter_strategy takes the strategy the
+        # deployment sets. The chatqna hop sends no such field -- the labels
+        # travel inside search_start -- so this is the path every request
+        # takes.
+        input_mock = create_mock_input(
+            context={"categoryLabels": "health", "serviceLabels": ["education"]},
+            search_start="chunk",
+        )
+        input_mock.model_dump.return_value.pop("filter_strategy")
+        with patch("retriever.genieai_retriever_arangodb.ARANGO_FILTER_STRATEGY", "AND"):
+            await invoke_env["retriever"].invoke(input_mock)
+        call_kwargs = invoke_env["vector_db"].asimilarity_search_with_relevance_scores.call_args
+        filter_clause = call_kwargs.kwargs.get("filter_clause", "")
+        assert "ALL IN" in filter_clause
+
+    @pytest.mark.asyncio
     async def test_empty_labels_produce_no_filter_clause(self, invoke_env):
         input_mock = create_mock_input(context={}, search_start="chunk")
         await invoke_env["retriever"].invoke(input_mock)

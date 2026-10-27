@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { parseEnvTemplate } = require('./parse-env');
 const { parseComposeServiceContracts } = require('./parse-compose');
-const { parseEnvTemplateVarNames } = require('./parse-env-template');
+const { parseEnvTemplateVarNames, readFileOrThrow } = require('./parse-env-template');
 
 /**
  * The namespace of the knobs the retriever reads from its environment.
@@ -52,12 +52,7 @@ const NON_PRODUCTION_DIRS = new Set(['tests', 'contracts', '__pycache__']);
  * @returns {string} The content without its comments
  */
 function readPythonWithoutComments(filePath) {
-  let content;
-  try {
-    content = fs.readFileSync(filePath, 'utf-8');
-  } catch (err) {
-    throw new Error(`Failed to read file: ${filePath}`, { cause: err });
-  }
+  const content = readFileOrThrow(filePath, 'overlay source file');
   return content
     .split('\n')
     .filter((line) => !line.trim().startsWith('#'))
@@ -65,29 +60,21 @@ function readPythonWithoutComments(filePath) {
 }
 
 /**
- * List the Python files of the overlay directories that hold production code.
+ * List the Python files of a directory that hold production code.
  *
- * @param {string} overlayDir - The genie-ai-overlay directory
- * @param {string[]} subdirs - The directories to read
+ * @param {string} dir - The directory to walk
  * @returns {string[]} The file paths
  */
-function collectPythonFiles(overlayDir, subdirs) {
+function collectPythonFiles(dir) {
   const files = [];
-  for (const subdir of subdirs) {
-    const dir = path.join(overlayDir, subdir);
-    if (!fs.existsSync(dir)) {
-      continue;
-    }
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (NON_PRODUCTION_DIRS.has(entry.name)) {
-          continue;
-        }
-        files.push(...collectPythonFiles(overlayDir, [path.join(subdir, entry.name)]));
-      } else if (entry.name.endsWith('.py')) {
-        files.push(full);
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (!NON_PRODUCTION_DIRS.has(entry.name)) {
+        files.push(...collectPythonFiles(full));
       }
+    } else if (entry.name.endsWith('.py')) {
+      files.push(full);
     }
   }
   return files;
@@ -97,21 +84,23 @@ function collectPythonFiles(overlayDir, subdirs) {
  * Collect the knob names the retrieval path reads.
  *
  * @param {string} overlayDir - The genie-ai-overlay directory
- * @returns {Map<string, string[]>} The knob names, each with the files reading it
+ * @returns {Map<string, string>} Each knob name, with one file reading it
  */
 function parseOverlayEnvReads(overlayDir) {
   const reads = new Map();
-  for (const file of collectPythonFiles(overlayDir, RETRIEVER_SOURCE_DIRS)) {
-    const content = readPythonWithoutComments(file);
-    for (const match of content.matchAll(PYTHON_ENV_READ)) {
-      const name = match[1] || match[2] || match[3];
-      if (!name.startsWith(RETRIEVER_ENV_PREFIX)) {
-        continue;
+  for (const subdir of RETRIEVER_SOURCE_DIRS) {
+    const dir = path.join(overlayDir, subdir);
+    if (!fs.existsSync(dir)) {
+      continue;
+    }
+    for (const file of collectPythonFiles(dir)) {
+      const content = readPythonWithoutComments(file);
+      for (const match of content.matchAll(PYTHON_ENV_READ)) {
+        const name = match[1] || match[2] || match[3];
+        if (name.startsWith(RETRIEVER_ENV_PREFIX) && !reads.has(name)) {
+          reads.set(name, path.relative(overlayDir, file));
+        }
       }
-      if (!reads.has(name)) {
-        reads.set(name, []);
-      }
-      reads.get(name).push(path.relative(overlayDir, file));
     }
   }
   return reads;
@@ -121,7 +110,7 @@ function parseOverlayEnvReads(overlayDir) {
  * Check that the deployment and the retrieval path agree on every knob.
  *
  * @param {{ composeFile: string, ansibleEnvFile: string, envTemplateFile: string, overlayDir: string }} input - The files to check
- * @returns {{ errors: string[], deliveredToRetriever: Set<string>, configured: Set<string>, codeNames: Set<string> }}
+ * @returns {{ errors: string[], deliveredToRetriever: Set<string>, codeNames: Set<string> }}
  */
 function validateRetrieverEnvCoverage({ composeFile, ansibleEnvFile, envTemplateFile, overlayDir }) {
   const errors = [];
@@ -159,19 +148,18 @@ function validateRetrieverEnvCoverage({ composeFile, ansibleEnvFile, envTemplate
     }
   }
 
-  for (const [name, files] of reads) {
+  for (const [name, file] of reads) {
     if (FRAMEWORK_VARS.has(name)) {
       continue;
     }
     if (!deliveredAnywhere.has(name) && !configured.has(name)) {
-      errors.push(`${name} is read by ${files[0]} but set by no deployment file (the knob cannot be set)`);
+      errors.push(`${name} is read by ${file} but set by no deployment file (the knob cannot be set)`);
     }
   }
 
   return {
     errors,
     deliveredToRetriever,
-    configured,
     codeNames: new Set(reads.keys())
   };
 }

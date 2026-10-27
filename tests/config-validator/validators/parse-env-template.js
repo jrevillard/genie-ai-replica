@@ -119,10 +119,12 @@ function evalImgNameExpression(expression, imageName) {
  */
 function parseEnvTemplateVarNames(envJ2Path, prefix) {
   const content = readFileOrThrow(envJ2Path, 'env template');
-  const rendered = content
+  // A Jinja comment can span lines: strip it before cutting the file into
+  // lines, or a name it wraps would survive the strip.
+  const withoutJinjaComments = content.replace(/\{#[\s\S]*?#\}/g, '');
+  const rendered = withoutJinjaComments
     .split('\n')
     .filter((line) => !line.trim().startsWith('#'))
-    .map((line) => line.replace(/\{#[\s\S]*?#\}/g, ''))
     .join('\n');
   const names = new Set();
   const namePattern = new RegExp(`(?<![A-Z0-9_])(${prefix}[A-Z0-9_]+)`, 'g');
@@ -191,4 +193,4 @@ function parseEnvTemplateImageVars(envJ2Path, sharedFactsPath) {
   });
 }
 
-module.exports = { parseGenieAiImageNames, parseEnvTemplateImageVars, parseEnvTemplateVarNames };
+module.exports = { readFileOrThrow, parseGenieAiImageNames, parseEnvTemplateImageVars, parseEnvTemplateVarNames };

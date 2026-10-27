@@ -17,12 +17,12 @@ CONFIG_PATH = Path(__file__).resolve().parents[1] / "retriever" / "config.py"
 DEPLOYMENT_ENV_NAME = "RETRIEVER_ARANGO_FILTER_STRATEGY"
 
 
-def _load_config(monkeypatch, env_name, env_value):
-    """Load retriever/config.py as a fresh module with env_name bound to env_value."""
+def _load_config(monkeypatch, env_value):
+    """Load retriever/config.py as a fresh module with the knob bound to env_value."""
     if env_value is None:
-        monkeypatch.delenv(env_name, raising=False)
+        monkeypatch.delenv(DEPLOYMENT_ENV_NAME, raising=False)
     else:
-        monkeypatch.setenv(env_name, env_value)
+        monkeypatch.setenv(DEPLOYMENT_ENV_NAME, env_value)
     spec = importlib.util.spec_from_file_location("retriever_config_under_test", CONFIG_PATH)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -39,7 +39,7 @@ def _load_config(monkeypatch, env_name, env_value):
     ids=["and", "normalised", "unset"],
 )
 def test_filter_strategy_follows_deployment_env_var(monkeypatch, env_value, expected):
-    module = _load_config(monkeypatch, DEPLOYMENT_ENV_NAME, env_value)
+    module = _load_config(monkeypatch, env_value)
     strategy = module.ARANGO_FILTER_STRATEGY
     assert strategy == expected
 
@@ -48,4 +48,4 @@ def test_invalid_filter_strategy_is_rejected_when_the_service_starts(monkeypatch
     # The value comes from the deployment: a typo must fail the service at
     # startup, not turn every filtered query into an error at request time.
     with pytest.raises(ValueError, match="RETRIEVER_ARANGO_FILTER_STRATEGY"):
-        _load_config(monkeypatch, DEPLOYMENT_ENV_NAME, "ALL")
+        _load_config(monkeypatch, "ALL")

@@ -145,10 +145,11 @@ async def _fetch_labels(taxonomy):
         return await dp._fetch_all_labels()
 
 
-# Runs the real taxonomy fetch in a fresh interpreter and prints the labels.
-# ``__OVERLAY_ROOT__`` is replaced with the overlay path so the probe imports
-# the service module the way pytest does — the conftest first, because it is
-# what mocks the deps the service module imports at load time.
+# Runs the real taxonomy fetch in a fresh interpreter and prints what it got:
+# the taxonomy list sent to the prompt, and the labels a chunk ends up
+# storing. ``__OVERLAY_ROOT__`` is replaced with the overlay path so the probe
+# imports the service module the way pytest does — the conftest first, because
+# it is what mocks the deps the service module imports at load time.
 _FETCH_LABELS_PROBE = """
 import asyncio
 import json
@@ -157,14 +158,28 @@ import sys
 sys.path.insert(0, __OVERLAY_ROOT__)
 
 import tests.conftest  # noqa: F401 - installs the vendored-dependency mocks
-from tests.test_dataprep import _fetch_labels
+from unittest.mock import AsyncMock, patch
 
-print(json.dumps(asyncio.run(_fetch_labels([
+from tests.test_dataprep import _fetch_labels, create_dataprep
+
+TAXONOMY = [
     {"name": "Healthcare", "children": [{"name": "Hospitals"}, {"name": "Clinics"}]},
     {"name": "Education", "children": ["Schools"]},
     {"name": "onion", "children": []},
     {"name": "Onion", "children": []},
-]))))
+]
+SUGGESTED = ["Hospitals", "Clinics", "Schools"]
+
+
+async def main():
+    labels = await _fetch_labels(TAXONOMY)
+    dp = create_dataprep()
+    with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
+        stored = await dp._finalize_chunk_labels(0, SUGGESTED, labels, "file1")
+    return {"labels": labels, "stored": stored}
+
+
+print(json.dumps(asyncio.run(main())))
 """
 
 
@@ -1907,28 +1922,88 @@ class TestFetchAllLabels:
         """Two interpreters, two hash seeds, one answer.
 
         ``PYTHONHASHSEED`` is randomised per process, which is what lets an
-        unordered collection reach the prompt: the probe below runs the real
-        fetch in two processes and compares what they return.
+        unordered collection reach the prompt and the stored labels. The probe
+        below runs the real fetch — and the finalisation that decides what a
+        chunk stores — in two processes, and compares what they return. Both
+        probes run at once: each imports the whole service module, and the
+        point of the test is the agreement, not the duration.
         """
-        outputs = []
+        script = _FETCH_LABELS_PROBE.replace("__OVERLAY_ROOT__", repr(str(OVERLAY_ROOT)))
+        probes = []
         for seed in ("0", "1"):
             env = dict(os.environ, PYTHONHASHSEED=seed)
-            probe = subprocess.run(
-                [
-                    sys.executable,
-                    "-c",
-                    _FETCH_LABELS_PROBE.replace("__OVERLAY_ROOT__", repr(str(OVERLAY_ROOT))),
-                ],
-                capture_output=True,
-                text=True,
-                cwd=str(OVERLAY_ROOT),
-                env=env,
-                timeout=120,
+            probes.append(
+                (
+                    seed,
+                    subprocess.Popen(
+                        [sys.executable, "-c", script],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        cwd=str(OVERLAY_ROOT),
+                        env=env,
+                    ),
+                )
             )
-            assert probe.returncode == 0, f"probe failed under PYTHONHASHSEED={seed}:\n{probe.stderr}"
-            outputs.append(json.loads(probe.stdout.strip().splitlines()[-1]))
+
+        outputs = []
+        for seed, probe in probes:
+            stdout, stderr = probe.communicate(timeout=120)
+            assert probe.returncode == 0, f"probe failed under PYTHONHASHSEED={seed}:\n{stderr}"
+            outputs.append(json.loads(stdout.strip().splitlines()[-1]))
 
         assert outputs[0] == outputs[1]
+        # The exact values, so the comparison above cannot pass on two empty
+        # taxonomies: the probe would then guard nothing.
+        assert outputs[0] == {
+            "labels": ["Clinics", "Education", "Healthcare", "Hospitals", "Onion", "onion", "Schools"],
+            "stored": ["Hospitals", "Clinics", "Schools"],
+        }
+
+
+class TestCanonicalTaxonomyOrder:
+    """The ordering contract, asserted on the helper itself."""
+
+    @pytest.mark.parametrize(
+        ("labels", "expected"),
+        [
+            (["Schools", "Clinics"], ["Clinics", "Schools"]),
+            (["Clinics", "Clinics"], ["Clinics"]),
+            (["Onion", "onion"], ["Onion", "onion"]),
+            (["apple", "Banana"], ["apple", "Banana"]),
+            ([None, "", "Clinics"], ["Clinics"]),
+            ([], []),
+        ],
+        ids=["sorted", "duplicates", "case-variants", "case-insensitive", "unusable", "empty"],
+    )
+    def test_the_contract(self, labels, expected):
+        assert dp_module._canonical_taxonomy_order(labels) == expected
+
+    def test_a_label_that_is_not_a_string_is_dropped_and_counted(self):
+        """A missing translation is an operator's problem, not a silent gap."""
+        with patch.object(dp_module, "logger") as logger:
+            assert dp_module._canonical_taxonomy_order([None, "Clinics"]) == ["Clinics"]
+
+        warnings = [call.args[0] for call in logger.warning.call_args_list]
+        assert any("Dropped 1" in message for message in warnings), warnings
+
+
+class TestFinalizeChunkLabels:
+    """The order of the labels a chunk stores."""
+
+    @pytest.mark.asyncio
+    async def test_the_stored_labels_keep_the_order_the_model_suggested(self):
+        dp = create_dataprep()
+
+        with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
+            labels = await dp._finalize_chunk_labels(
+                0,
+                ["Hospitals", "Clinics", "Schools"],
+                ["Clinics", "Education", "Healthcare", "Hospitals", "Schools"],
+                "file1",
+            )
+
+        assert labels == ["Hospitals", "Clinics", "Schools"]
 
 
 class TestRunGuardrail:

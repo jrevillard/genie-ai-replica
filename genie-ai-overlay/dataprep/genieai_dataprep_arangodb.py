@@ -855,12 +855,15 @@ def _canonical_taxonomy_order(labels: list[str | None]) -> list[str]:
     name first, the exact name as the tie-break, so two labels differing only
     in case still have a defined order. Labels that are not usable strings —
     a category whose translation is missing arrives as None — are dropped
-    rather than reaching the prompt as "None".
+    rather than reaching the prompt as "None"; the count of what was dropped
+    is logged, because a missing translation is an operator's problem and a
+    silent taxonomy reads like a complete one.
     """
-    return sorted(
-        dict.fromkeys(label for label in labels if isinstance(label, str) and label),
-        key=lambda label: (label.casefold(), label),
-    )
+    usable = [label for label in labels if isinstance(label, str) and label]
+    dropped = len(labels) - len(usable)
+    if dropped:
+        logger.warning(f"Dropped {dropped} taxonomy entries without a usable label (missing translation).")
+    return sorted(dict.fromkeys(usable), key=lambda label: (label.casefold(), label))
 
 
 async def _safe_log(write_ingestion_log, file_id, level, component, message):
@@ -2789,13 +2792,16 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         Consolidates per-label progress logs into a single summary entry per chunk
         (previously ~3.7 logs/chunk flooded the backend ingestion-log endpoint).
         """
-        final_labels: set[str] = set()
+        # An insertion-ordered set: the stored labels keep the order the LLM
+        # suggested them in, so two ingests of the same document store the same
+        # array. A plain set would order them by hash seed instead.
+        final_labels: dict[str, None] = {}
         new_labels: list[str] = []
         for label in suggested:
             if label in final_labels:
                 continue
             if label in all_labels:
-                final_labels.add(label)
+                final_labels[label] = None
                 continue
             # Fuzzy/synonym match (plural, case-insensitive).
             match = next((x for x in all_labels if x.lower() == label.lower()), None)
@@ -2804,7 +2810,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             if not match:
                 match = next((x for x in all_labels if x.lower() == label.lower() + "s"), None)
             if match:
-                final_labels.add(match)
+                final_labels[match] = None
             else:
                 new_labels.append(label)
 

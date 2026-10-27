@@ -87,8 +87,9 @@ Dropped labels are recorded in the ingestion log for observability.
 
 The LLM is asked to return a JSON object mapping each chunk to its
 labels. The exact prompt template is in `LABEL_SELECTOR_SYSTEM_PROMPT`
-(the built-in default lives in `genieai_dataprep_arangodb.py`); the user
-prompt is `Input: {chunk_text}\nLabels: {taxonomy_list}`. Sampling is
+(the built-in default lives in `genieai_dataprep_arangodb.py`). The taxonomy
+is substituted into that **system** prompt (`{labels_list}`); the user
+message carries the chunk text alone (`Input: {chunk_text}`). Sampling is
 `0.0` with `response_format={"type": "json_object"}`; the per-chunk call
 uses `max_tokens=160` and the batched call uses `max_tokens=len(batch) * 256 + 512`.
 (`DATAPREP_CONTEXTUAL_MAX_TOKENS` is unrelated — it caps the
@@ -96,12 +97,19 @@ Contextual-Retrieval context-generation call, not labelling.)
 
 The taxonomy list in the prompt is ordered canonically — case-folded label
 name first, exact name as the tie-break — independently of the order the
-backend returns the taxonomy in. The prompt is therefore identical from one
-ingestion run to the next, so re-ingesting a document reproduces its labels.
+backend returns the taxonomy in, and the labels a chunk stores keep the
+order the model suggested them in. The prompt is therefore the same from one
+ingestion run to the next, so the labelling no longer varies with the order
+the taxonomy happened to arrive in. The labels are still the model's answer
+to that prompt: greedy decoding is not bit-for-bit reproducible across
+different batch compositions, so a re-ingest can still differ.
 
-The label set returned by the LLM is then intersected with `file_labels`.
-Anything outside the document scope is dropped with an ingestion-log
-warning.
+Each label the LLM returns is resolved against the taxonomy (exact match
+first, then a case-insensitive plural/singular match). A label that resolves
+but falls outside the document's `file_labels` scope is dropped with a
+`Dropped (out of document scope)` ingestion-log warning; a label that does
+not resolve against the taxonomy at all is dropped as a non-taxonomy label
+and logged as `New (non-taxonomy) labels suggested`.
 
 ## Failure modes (labelling)
 

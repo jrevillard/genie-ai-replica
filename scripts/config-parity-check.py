@@ -93,12 +93,21 @@ import json
 import os
 import re
 import sys
+from pathlib import Path
 
 import yaml
 
 DEFAULT_COMPOSE = "docker-compose.yaml"
 DEFAULT_VALUES = "charts/genieai-umbrella/values.yaml"
 DEFAULT_ALLOWLIST = "scripts/config-parity-allowlist.json"
+# Where a codeDefault variable must be DOCUMENTED. A codeDefault variable
+# is one the chart leaves unset on purpose — but "unset on purpose" is
+# only sound if the operator who wants to set it can find it. The chart
+# must mention it somewhere an operator reads: the values file (a comment
+# on the knob), the chart README, or the template that would carry the
+# env row. Not the allowlist itself — the allowlist is the claim, not the
+# documentation.
+DEFAULT_CHART_DOC_ROOTS = ("charts/genieai-umbrella",)
 
 # Source roots and what counts as shipped application source.
 #
@@ -298,6 +307,18 @@ def main(argv):
     with open(allowlist_path) as handle:
         allowlist = json.load(handle)
 
+    # One pass over the chart's operator-facing text: values.yaml, the
+    # chart README, and every template. A codeDefault variable must be
+    # mentioned in at least one of them.
+    chart_doc_text = ""
+    for root in DEFAULT_CHART_DOC_ROOTS:
+        for path in Path(root).rglob("*"):
+            if path.is_file() and path.suffix in (".yaml", ".yml", ".md", ".tpl"):
+                try:
+                    chart_doc_text += path.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    pass
+
     rendered = chart_rendered(docs)
     declared = chart_declared(values)
     services = allowlist.get("services") or {}
@@ -341,9 +362,19 @@ def main(argv):
             if (
                 name in compose_only
                 or name in not_read
-                or name in code_default
                 or name in not_applicable
             ):
+                continue
+            if name in code_default:
+                # Unset on purpose is only sound if the operator who wants
+                # the knob can find it. The chart must mention the name
+                # somewhere an operator reads.
+                if name not in chart_doc_text:
+                    gaps.append(
+                        f"{component}.{name}: filed codeDefault, but the chart never mentions "
+                        "the name (values.yaml / README / templates) — document the knob, "
+                        "or file it under another category if it is not an operator knob"
+                    )
                 continue
             if name in secret_provided:
                 # The chart asks the operator for the value through a

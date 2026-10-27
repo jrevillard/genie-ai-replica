@@ -91,9 +91,11 @@
         "MAX_MODEL_LEN_TEXTGEN": "empty in Compose; the code reads 0 as 'not set' and falls back to its own limit, and the chart leaves it unset",
         "MAX_TRANSLATION_CHARS": "empty in Compose; the code reads 0 as 'not set' and falls back to its own limit, and the chart leaves it unset",
         "MULTI_TURN_CONDENSE_SYSTEM_PROMPT": "empty in Compose; the code falls back to its built-in rewrite prompt when the variable is unset, and the chart leaves it unset",
-        "OPENAI_API_KEY": "empty in Compose; the chart carries the GPU key as VLLM_API_KEY, and the code reads the unset value as 'no key'",
-        "LLM_SERVER_HOST_IP": "Compose points these at its own vllm service name; the chart configures the endpoint form instead (VLLM_LLM_ENDPOINT), which the code parses into host and port before reading either variable, so leaving them unset yields the same endpoint",
-        "LLM_SERVER_PORT": "Compose points these at its own vllm service name; the chart configures the endpoint form instead (VLLM_LLM_ENDPOINT), which the code parses into host and port before reading either variable, so leaving them unset yields the same endpoint"
+        "OPENAI_API_KEY": "empty in Compose; the chart carries the GPU key as VLLM_API_KEY, and the code reads the unset value as 'no key'"
+      },
+      "composeOnly": {
+        "LLM_SERVER_HOST_IP": "Compose points these at its own vllm service name; the chart configures the endpoint form instead (VLLM_LLM_ENDPOINT), which the code parses into host and port before reading either variable, so leaving them unset yields the same endpoint The chart never sets the name: the code derives the endpoint from the configured GPU endpoint (the parsed hostname overrides this fallback), so the compose service name only ever made sense on that surface.",
+        "LLM_SERVER_PORT": "Compose points these at its own vllm service name; the chart configures the endpoint form instead (VLLM_LLM_ENDPOINT), which the code parses into host and port before reading either variable, so leaving them unset yields the same endpoint The chart never sets the name: the code derives the endpoint from the configured GPU endpoint (the parsed hostname overrides this fallback), so the compose service name only ever made sense on that surface."
       }
     },
     "dataprep": {

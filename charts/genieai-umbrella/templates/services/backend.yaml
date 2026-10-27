@@ -20,7 +20,12 @@ external mode the helper also fails the render when
 `opea.gpu.nodeHost` is empty, so the misconfiguration is named at
 install time instead of surfacing as a missing translation endpoint at
 the first user request. */ -}}
-{{- $translationEndpoint := .Values.services.backend.translation.endpoint -}}
+{{- /* Normalized once: an overlay that clears the whole block
+       (`services.backend.translation: null`) gets the derived behavior,
+       not a nil-pointer crash — the same degrade-gracefully contract
+       every other cleared block in the chart follows. */ -}}
+{{- $translation := .Values.services.backend.translation | default dict -}}
+{{- $translationEndpoint := $translation.endpoint | default "" -}}
 {{- if and (not $translationEndpoint) .Values.opea.enabled -}}
 {{- $translationEndpoint = include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "translation") -}}
 {{- end -}}
@@ -49,13 +54,13 @@ There WAS a `backend` knob here and it could only be overwritten
 (auto → gpu|cpu) or refused (cpu while an endpoint is configured), so
 it advertised a choice the chart never honoured. An overlay that still
 sets it fails the render instead of being silently rewritten. */ -}}
-{{- if .Values.services.backend.translation.backend -}}
+{{- if $translation.backend -}}
 {{- fail "services.backend.translation.backend is not a knob: the translation backend is DERIVED — a named translation API is mandatory (the GPU path), and without one the in-process CPU model is the only reachable translator. Remove the key." -}}
 {{- end -}}
 {{- $translationBackend := ternary "gpu" "cpu" (ne $translationEndpoint "") -}}
 {{- $translationEnv := list
     (dict "name" "TRANSLATION_BACKEND" "value" $translationBackend) -}}
-{{- $probeTimeout := .Values.services.backend.translation.probeTimeoutSeconds -}}
+{{- $probeTimeout := $translation.probeTimeoutSeconds -}}
 {{- if $probeTimeout -}}
 {{- $translationEnv = concat $translationEnv (list
     (dict "name" "TRANSLATION_PROBE_TIMEOUT_SECONDS" "value" (printf "%v" $probeTimeout))) -}}
@@ -63,7 +68,7 @@ sets it fails the render instead of being silently rewritten. */ -}}
 {{- if $translationEndpoint }}
 {{- $translationEnv = concat $translationEnv (list
     (dict "name" "VLLM_TRANSLATION_ENDPOINT" "value" $translationEndpoint)
-    (dict "name" "VLLM_TRANSLATION_MODEL_ID" "value" (.Values.services.backend.translation.modelId | default "google/gemma-3-4b-it"))
+    (dict "name" "VLLM_TRANSLATION_MODEL_ID" "value" ($translation.modelId | default "google/gemma-3-4b-it"))
 ) }}
 {{- $translationSecrets = list (include "genieai-umbrella.secretKeyRefEnv" (dict
     "var" "VLLM_API_KEY" "secret" "vllm-api-key" "key" "VLLM_API_KEY") | fromJson) -}}
@@ -83,9 +88,18 @@ values (0, "0", "false") fail at render time: Sprig's default/coalesce
 treat false as empty and a non-empty string flips ternary to its true
 branch, so a lenient coercion would silently stream translated output
 against an operator's explicit off switch. */ -}}
-{{- $streamingTranslation := .Values.services.backend.translation.streamingEnabled -}}
-{{- if not (kindIs "bool" $streamingTranslation) -}}
+{{- $streamingTranslation := $translation.streamingEnabled -}}
+{{- /* Absent (key removed or the whole block cleared) falls back to the
+declared default; a PRESENT non-boolean still fails — the strict-typing
+guard exists for the fat-fingered value, not for the cleared block. */ -}}
+{{- if and (not (kindIs "invalid" $streamingTranslation)) (not (kindIs "bool" $streamingTranslation)) -}}
 {{- fail "services.backend.translation.streamingEnabled must be a YAML boolean (true or false)" -}}
+{{- end -}}
+{{- /* Absent key -> the declared default (true). A plain `| default`
+cannot be used: Sprig treats `false` as empty, so it would flip an
+explicit `false` back to `true`. */ -}}
+{{- if kindIs "invalid" $streamingTranslation -}}
+{{- $streamingTranslation = true -}}
 {{- end -}}
 {{- $urls := list
     (dict "name" "KEYCLOAK_URL" "value" (include "genieai-umbrella.keycloakInternalURL" .))

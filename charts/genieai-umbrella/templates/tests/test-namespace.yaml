@@ -22,7 +22,9 @@ spec:
   imagePullSecrets:
     {{- toYaml . | nindent 4 }}
   {{- end }}
-  # Required by PSA restricted.
+  # The full `restricted`-profile set. The namespace enforces `baseline`
+  # (the GPU model tier cannot run non-root), and a test pod can carry the
+  # stricter posture for free — it keeps passing if the namespace tightens.
   securityContext:
     runAsNonRoot: true
     runAsUser: 65534

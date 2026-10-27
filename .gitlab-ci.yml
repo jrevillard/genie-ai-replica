@@ -3272,6 +3272,14 @@ chart:lint:
     # knob fails with the operator's path instead of "wrong type for value;
     # expected bool". This check keeps the two lists from drifting.
     - python3 scripts/values-schema-bools-check.py charts/genieai-umbrella/values.yaml charts/genieai-umbrella/values.schema.json
+    # Every key a template reads must be declared in values.yaml with its
+    # template default — a tuning knob an operator cannot discover without
+    # reading template source, and one a fat-fingered key silently ignores
+    # (the values digest is unchanged, so Flux never even rolls). The
+    # reverse half (keys no template reads) is the header's claim, not a
+    # gate: it is judged on every render by the parity gate's chart-side
+    # walk.
+    - python3 scripts/values-surface-check.py
     - >-
       python3 /tmp/cluster-scope-check.py test genieai 1 envoy
       /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-prod.yaml /tmp/rendered-incluster.yaml

@@ -55,8 +55,14 @@ kubectl -n genieai create secret generic keycloak-admin-credentials \
 kubectl -n genieai create secret generic translation-cache-password \
   --from-literal=password="$(openssl rand -hex 16)" \
   --from-literal=TRANSLATION_CACHE_PASSWORD="$(openssl rand -hex 16)"
+# The password suffix is not decoration: the realm's password policy
+# requires one special character, and a bare `openssl rand -base64 24`
+# yields none roughly every other run (its alphabet is [A-Za-z0-9+/])
+# — the convergence Job would then reject the credential and the
+# install would fail with an invalid-password error far from this
+# command.
 kubectl -n genieai create secret generic keycloak-convergence-credentials \
-  --from-literal=GENIE_ADMIN_PASSWORD="$(openssl rand -base64 24)" \
+  --from-literal=GENIE_ADMIN_PASSWORD="$(openssl rand -base64 24)Aa1!" \
   --from-literal=EMAIL_PASSWORD="$SMTP_PASSWORD"
 kubectl -n genieai create secret generic keycloak-proxy-client-secret \
   --from-literal=KEYCLOAK_PROXY_CLIENT_SECRET="$(openssl rand -hex 16)"

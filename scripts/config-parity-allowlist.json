@@ -181,7 +181,8 @@
       "chart": "frontend",
       "codeDefault": {
         "PORT": "the frontend reads 8090 as its own default and the chart's container port is 8090",
-        "VUE_APP_AVAILABLE_LOCALES": "empty in Compose; the frontend treats an unset value as 'every locale available'"
+        "VUE_APP_AVAILABLE_LOCALES": "empty in Compose; the frontend treats an unset value as 'every locale available'",
+        "VUE_APP_STREAM_IDLE_TIMEOUT_MS": "Compose leaves it empty (the env template line is commented) and the frontend entrypoint injects the empty value into the runtime config.js — the code default applies on both surfaces. The chart leaves it unset for the same result; a deployment that tunes it adds the env row to services.frontend.env."
       },
       "mayDiffer": {
         "VUE_APP_CSP_CONNECT_SRC": "the browser's origin is the deployment's public origin (ingress.scheme + ingress.host); Compose's list names the localhost development origins"

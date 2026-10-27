@@ -741,7 +741,6 @@ false`) so docker never silently creates a root-owned source.
   one place and every location reads it, so a deployment's own policy applies
   everywhere.
 
-<<<<<<< HEAD
 - **On iOS and macOS, the trust-all TLS interception of the vendored
   `flutter_appauth` fork is now scoped to the OIDC provider's host.** The
   fork registered its `NSURLProtocol` process-globally for the duration of an

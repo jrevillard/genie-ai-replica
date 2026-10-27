@@ -849,7 +849,9 @@ def _canonical_taxonomy_order(groups: list[tuple[str, list[str]]]) -> list[str]:
     returns — a category and the services under it stay together — while the
     order inside a group comes from the labels themselves: the case-folded
     name first, the exact name as the tie-break, so two labels differing only
-    in case still have a defined order.
+    in case still have a defined order. A group with no name of its own (a
+    category whose translation is missing) keeps its services together at the
+    front.
 
     The order does not depend on the order the taxonomy arrives in, and it is
     identical from one process to the next. An unordered collection cannot
@@ -863,48 +865,15 @@ def _canonical_taxonomy_order(groups: list[tuple[str, list[str]]]) -> list[str]:
     with the same sort key by hash, which is the dependence this function
     exists to remove.
     """
-    keyed: list[tuple[tuple[str, str, str, str], str]] = []
+    keyed: list[tuple[tuple[str, str, int, str, str], str]] = []
     for category, services in groups:
+        group_key = (category.casefold(), category)
         if category:
-            keyed.append(((category.casefold(), category, "", ""), category))
+            keyed.append(((*group_key, 0, "", ""), category))
         for service in services:
-            keyed.append(((category.casefold(), category, service.casefold(), service), service))
+            keyed.append(((*group_key, 1, service.casefold(), service), service))
     keyed.sort(key=lambda entry: entry[0])
     return list(dict.fromkeys(label for _, label in keyed))
-
-
-# The count of taxonomy entries dropped by the last fetch, so the reason is
-# reported once and only when it changes: the taxonomy is fetched once per
-# ingested document, and a missing translation does not change between
-# documents. Warning on every fetch would fill the log with the same line.
-_taxonomy_dropped_reported: tuple[int, int] | None = None
-
-
-def _report_dropped_taxonomy_entries(untranslated: int, malformed: int) -> None:
-    """Warn that taxonomy entries had to be dropped, once per distinct count.
-
-    A missing translation is an operator's problem, and a taxonomy that reads
-    as complete while a service is missing from it is worse than a noisy log.
-    The two causes are counted apart because they have different remedies: a
-    missing translation is a content problem, a malformed entry is a contract
-    problem between the dataprep and the backend.
-
-    The count also stays in the per-document fetch log line, so a change
-    remains visible there. A clean fetch clears the record, so a translation
-    that is fixed and lost again is reported again.
-    """
-    global _taxonomy_dropped_reported
-    if not untranslated and not malformed:
-        _taxonomy_dropped_reported = None
-        return
-    dropped = (untranslated, malformed)
-    if dropped == _taxonomy_dropped_reported:
-        return
-    _taxonomy_dropped_reported = dropped
-    logger.warning(
-        f"Dropped {untranslated} taxonomy entries without a usable label "
-        f"(missing translation) and {malformed} malformed entries in the taxonomy payload."
-    )
 
 
 async def _safe_log(write_ingestion_log, file_id, level, component, message):
@@ -1696,13 +1665,17 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                                         untranslated += 1
                             groups.append((group_name, services))
 
-                    _report_dropped_taxonomy_entries(untranslated, malformed)
                     ordered_labels = _canonical_taxonomy_order(groups)
-                    dropped = untranslated + malformed
+                    # The counts are in the per-fetch line: the taxonomy is
+                    # fetched once per document, and a missing translation is
+                    # a standing condition — a warning per document would
+                    # fill the log with the same line. A taxonomy that reads
+                    # as complete while a service is missing from it is worse
+                    # than a noisy log, so the counts are always stated.
                     logger.info(
-                        f"Taxonomy: {len(ordered_labels)} unique labels for labelling"
-                        + (f", {dropped} entries dropped" if dropped else "")
-                        + "."
+                        f"Taxonomy: {len(ordered_labels)} unique labels for labelling, "
+                        f"{untranslated} without a usable label (missing translation), "
+                        f"{malformed} malformed entries in the payload."
                     )
                     return ordered_labels
 
@@ -2958,13 +2931,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 file_id, "WARN", "Labeling", "No labels found in Taxonomy. Using only file labels."
             )
             # Without a taxonomy the document's own scope is the only label
-            # source. It is sorted, so the stored array does not depend on the
-            # order the scope arrived in, and an entry that is not a string is
-            # ignored rather than failing the ingest.
-            fallback_labels = sorted(
-                {label for label in (file_labels or []) if isinstance(label, str) and label},
-                key=lambda label: (label.casefold(), label),
-            )
+            # source: one nameless group, sorted the same way, so the stored
+            # array does not depend on the order the scope arrived in.
+            fallback_labels = _canonical_taxonomy_order([("", list(file_labels or []))])
             return [{"text": c, "labels": fallback_labels} for c in plain_chunks], []
 
         logger.info(f"Labeling using strategy: {LABELING_STRATEGY}")

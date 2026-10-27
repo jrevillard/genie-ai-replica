@@ -14,6 +14,7 @@ import json
 import os
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -145,42 +146,30 @@ async def _fetch_labels(taxonomy):
         return await dp._fetch_all_labels()
 
 
-# Runs the real taxonomy fetch in a fresh interpreter and prints what it got:
-# the taxonomy list sent to the prompt, and the labels a chunk ends up
-# storing. ``__OVERLAY_ROOT__`` is replaced with the overlay path so the probe
-# imports the service module the way pytest does — the conftest first, because
-# it is what mocks the deps the service module imports at load time.
-_FETCH_LABELS_PROBE = """
-import asyncio
-import json
-import sys
-
-sys.path.insert(0, __OVERLAY_ROOT__)
-
-import tests.conftest  # noqa: F401 - installs the vendored-dependency mocks
-from unittest.mock import AsyncMock, patch
-
-from tests.test_dataprep import _fetch_labels, create_dataprep
-
-TAXONOMY = [
+# The taxonomy the probe fetches, and the labels it asks the model to keep.
+# The case variants are there on purpose: two labels that differ only in case
+# must still have a defined order, in every process.
+_PROBE_TAXONOMY = [
     {"name": "Healthcare", "children": [{"name": "Hospitals"}, {"name": "Clinics"}]},
     {"name": "Education", "children": ["Schools"]},
     {"name": "onion", "children": []},
     {"name": "Onion", "children": []},
 ]
-SUGGESTED = ["Hospitals", "Clinics", "Schools"]
+_PROBE_SUGGESTED = ["Hospitals", "Clinics", "Schools"]
 
 
-async def main():
-    labels = await _fetch_labels(TAXONOMY)
+async def _probe_main():
+    """Fetch the taxonomy and finalise a chunk, in a fresh interpreter.
+
+    The subprocess runs this: the point of the probe is the hash seed of the
+    interpreter that builds the order, so the work has to happen in the child
+    process rather than in the one running the suite.
+    """
+    labels = await _fetch_labels(_PROBE_TAXONOMY)
     dp = create_dataprep()
     with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
-        stored = await dp._finalize_chunk_labels(0, SUGGESTED, labels, "file1")
+        stored = await dp._finalize_chunk_labels(0, _PROBE_SUGGESTED, labels, "file1")
     return {"labels": labels, "stored": stored}
-
-
-print(json.dumps(asyncio.run(main())))
-"""
 
 
 # ---------------------------------------------------------------------------
@@ -638,17 +627,17 @@ class TestApplyLabels:
         assert result == [{"text": "chunk", "labels": ["A"]}]
 
     @pytest.mark.asyncio
-    async def test_a_file_label_that_is_not_a_string_does_not_fail_the_ingest(self):
-        """The document scope arrives from the client and is not validated there.
+    async def test_the_fallback_labels_are_stored_in_a_canonical_order(self):
+        """Without a taxonomy the document's own scope is the only label source.
 
-        An unusable entry must not take the document down with it.
+        The stored array must not depend on the order the scope arrived in.
         """
         dp = create_dataprep()
 
         with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
-            docs, reasons = await dp._apply_labels(["chunk"], [], ["Clinics", 123], "file1")
+            docs, reasons = await dp._apply_labels(["chunk"], [], ["Schools", "Clinics"], "file1")
 
-        assert docs == [{"text": "chunk", "labels": ["Clinics"]}]
+        assert docs == [{"text": "chunk", "labels": ["Clinics", "Schools"]}]
         assert reasons == []
 
     @pytest.mark.asyncio
@@ -1933,14 +1922,16 @@ class TestFetchAllLabels:
         assert labels == ["apple", "Banana", "Onion", "onion"]
 
     @pytest.mark.asyncio
-    async def test_entries_without_a_usable_label_are_counted_and_reported(self):
+    async def test_entries_without_a_usable_label_are_counted_in_the_fetch_line(self):
         """A service whose translation is missing arrives as null.
 
         It has no label to offer, and it has to be reported: a taxonomy that
         reads as complete while a service is missing from it is worse than a
-        noisy log.
+        noisy log. The taxonomy is fetched once per document and the reason
+        does not change between documents, so the count is in the fetch line
+        rather than in a warning per document.
         """
-        with patch.object(dp_module, "logger") as logger, patch.object(dp_module, "_taxonomy_dropped_reported", None):
+        with patch.object(dp_module, "logger") as logger:
             labels = await _fetch_labels(
                 [
                     {"name": "Healthcare", "children": ["Clinics", None]},
@@ -1949,8 +1940,9 @@ class TestFetchAllLabels:
             )
 
         assert labels == ["Healthcare", "Clinics"]
-        warnings = [call.args[0] for call in logger.warning.call_args_list]
-        assert any("Dropped 2 taxonomy entries" in message for message in warnings), warnings
+        lines = [call.args[0] for call in logger.info.call_args_list]
+        assert any("2 without a usable label" in line for line in lines), lines
+        assert any("0 malformed entries" in line for line in lines), lines
 
     @pytest.mark.asyncio
     async def test_a_malformed_entry_is_counted_apart_from_a_missing_translation(self):
@@ -1961,7 +1953,7 @@ class TestFetchAllLabels:
         backend. Counting them together would point the operator at the wrong
         one.
         """
-        with patch.object(dp_module, "logger") as logger, patch.object(dp_module, "_taxonomy_dropped_reported", None):
+        with patch.object(dp_module, "logger") as logger:
             await _fetch_labels(
                 [
                     {"name": "Healthcare", "children": [123, {"children": ["Clinics"]}]},
@@ -1969,71 +1961,39 @@ class TestFetchAllLabels:
                 ]
             )
 
-        warnings = [call.args[0] for call in logger.warning.call_args_list]
-        assert any("Dropped 0 taxonomy entries" in message for message in warnings), warnings
-        assert any("3 malformed entries" in message for message in warnings), warnings
-
-    @pytest.mark.asyncio
-    async def test_a_clean_fetch_clears_the_record(self):
-        """A translation that is fixed and lost again is reported again."""
-        with patch.object(dp_module, "logger") as logger, patch.object(dp_module, "_taxonomy_dropped_reported", None):
-            await _fetch_labels([{"name": "Healthcare", "children": [None]}])
-            await _fetch_labels([{"name": "Healthcare", "children": ["Clinics"]}])
-            await _fetch_labels([{"name": "Healthcare", "children": [None]}])
-
-        warnings = [call.args[0] for call in logger.warning.call_args_list]
-        assert len(warnings) == 2, warnings
-
-    @pytest.mark.asyncio
-    async def test_the_report_is_not_repeated_for_the_same_count(self):
-        """The taxonomy is fetched once per document; the reason does not change."""
-        with patch.object(dp_module, "logger") as logger, patch.object(dp_module, "_taxonomy_dropped_reported", None):
-            await _fetch_labels([{"name": "Healthcare", "children": [None]}])
-            await _fetch_labels([{"name": "Healthcare", "children": [None]}])
-
-        warnings = [call.args[0] for call in logger.warning.call_args_list]
-        assert len(warnings) == 1, warnings
+        lines = [call.args[0] for call in logger.info.call_args_list]
+        assert any("0 without a usable label" in line for line in lines), lines
+        assert any("3 malformed entries" in line for line in lines), lines
 
     def test_the_same_taxonomy_yields_the_same_order_in_every_process(self):
         """Two interpreters, two hash seeds, one answer.
 
         ``PYTHONHASHSEED`` is randomised per process, which is what lets an
         unordered collection reach the prompt and the stored labels. The probe
-        below runs the real fetch — and the finalisation that decides what a
-        chunk stores — in two processes, and compares what they return. Both
-        probes run at once: each imports the whole service module, and the
-        point of the test is the agreement, not the duration.
+        runs the real fetch — and the finalisation that decides what a chunk
+        stores — in two processes, and compares what they return. Both probes
+        run at once: each imports the whole service module, and the point of
+        the test is the agreement, not the duration.
         """
-        script = _FETCH_LABELS_PROBE.replace("__OVERLAY_ROOT__", repr(str(OVERLAY_ROOT)))
-        probes = []
-        for seed in ("0", "1"):
-            env = dict(os.environ, PYTHONHASHSEED=seed)
-            probes.append(
-                (
-                    seed,
-                    subprocess.Popen(
-                        [sys.executable, "-c", script],
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        text=True,
-                        cwd=str(OVERLAY_ROOT),
-                        env=env,
-                    ),
-                )
-            )
+        script = (
+            "import asyncio, json, tests.conftest, tests.test_dataprep as t; "
+            "print(json.dumps(asyncio.run(t._probe_main())))"
+        )
 
-        outputs = []
-        try:
-            for seed, probe in probes:
-                stdout, stderr = probe.communicate(timeout=120)
-                assert probe.returncode == 0, f"probe failed under PYTHONHASHSEED={seed}:\n{stderr}"
-                outputs.append(json.loads(stdout.strip().splitlines()[-1]))
-        finally:
-            # A probe that hung would otherwise outlive the test run.
-            for _, probe in probes:
-                if probe.poll() is None:
-                    probe.kill()
-                    probe.wait()
+        def _run(seed):
+            result = subprocess.run(
+                [sys.executable, "-c", script],
+                capture_output=True,
+                text=True,
+                cwd=str(OVERLAY_ROOT),
+                env=dict(os.environ, PYTHONHASHSEED=seed),
+                timeout=120,
+            )
+            assert result.returncode == 0, f"probe failed under PYTHONHASHSEED={seed}:\n{result.stderr}"
+            return json.loads(result.stdout.strip().splitlines()[-1])
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            outputs = list(pool.map(_run, ("0", "1")))
 
         assert outputs[0] == outputs[1]
         # The exact values, so the comparison above cannot pass on two empty

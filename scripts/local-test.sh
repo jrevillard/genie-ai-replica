@@ -119,6 +119,21 @@ ensure_secret keycloak-admin-credentials \
 ensure_secret translation-cache-password \
   --from-literal=password="local-test-cache-password" \
   --from-literal=TRANSLATION_CACHE_PASSWORD="local-test-cache-password"
+# The convergence Job exports the realm's $(env:VAR) placeholders from
+# these Secrets through the envSecrets rows STEP 3 passes — without the
+# rows AND the Secrets they name, kcc's substitution fails on the import
+# and the post-install hook dies, aborting `helm install --wait` at
+# STEP 3 (the exact failure class the chart's render guards and the
+# EMAIL_* sentinels document).
+ensure_secret keycloak-proxy-client-secret \
+  --from-literal=KEYCLOAK_PROXY_CLIENT_SECRET="local-test-proxy-secret"
+ensure_secret kc-dataprep-client-secret \
+  --from-literal=KC_DATAPREP_CLIENT_SECRET="local-test-dataprep-secret"
+ensure_secret kc-grafana-client-secret \
+  --from-literal=KEYCLOAK_GRAFANA_CLIENT_SECRET="local-test-grafana-secret"
+ensure_secret keycloak-convergence-credentials \
+  --from-literal=GENIE_ADMIN_PASSWORD="local-test-admin-password-Aa1!" \
+  --from-literal=EMAIL_PASSWORD="local-test-email-password"
 
 echo
 echo "=== STEP 3: helm install ==="
@@ -130,6 +145,21 @@ helm install "$RELEASE" "$CHART" -n "$NS" --create-namespace \
   --set "ingress.host=$INGRESS_HOST" \
   --set "data.keycloak.adminEmail=$ADMIN_EMAIL" \
   "${MAIL_FLAGS[@]}" \
+  --set data.keycloak.convergence.envSecrets[0].envVar=KC_PROXY_CLIENT_SECRET \
+  --set data.keycloak.convergence.envSecrets[0].secretName=keycloak-proxy-client-secret \
+  --set data.keycloak.convergence.envSecrets[0].secretKey=KEYCLOAK_PROXY_CLIENT_SECRET \
+  --set data.keycloak.convergence.envSecrets[1].envVar=KC_DATAPREP_CLIENT_SECRET \
+  --set data.keycloak.convergence.envSecrets[1].secretName=kc-dataprep-client-secret \
+  --set data.keycloak.convergence.envSecrets[1].secretKey=KC_DATAPREP_CLIENT_SECRET \
+  --set data.keycloak.convergence.envSecrets[2].envVar=KC_GRAFANA_CLIENT_SECRET \
+  --set data.keycloak.convergence.envSecrets[2].secretName=kc-grafana-client-secret \
+  --set data.keycloak.convergence.envSecrets[2].secretKey=KEYCLOAK_GRAFANA_CLIENT_SECRET \
+  --set data.keycloak.convergence.envSecrets[3].envVar=GENIE_ADMIN_PASSWORD \
+  --set data.keycloak.convergence.envSecrets[3].secretName=keycloak-convergence-credentials \
+  --set data.keycloak.convergence.envSecrets[3].secretKey=GENIE_ADMIN_PASSWORD \
+  --set data.keycloak.convergence.envSecrets[4].envVar=EMAIL_PASSWORD \
+  --set data.keycloak.convergence.envSecrets[4].secretName=keycloak-convergence-credentials \
+  --set data.keycloak.convergence.envSecrets[4].secretKey=EMAIL_PASSWORD \
   --wait --timeout 10m
 
 echo

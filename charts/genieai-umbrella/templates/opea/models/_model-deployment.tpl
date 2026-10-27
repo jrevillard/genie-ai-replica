@@ -65,6 +65,14 @@ spec:
       securityContext:
         seccompProfile:
           type: RuntimeDefault
+        # No runAsNonRoot here, unlike every other workload in the
+        # chart: the vLLM / TEI images run as root and keep the model
+        # cache under /root/.cache, so a non-root uid cannot start them
+        # (the kubelet refuses a runAsNonRoot container whose image
+        # would run as root). This tier therefore needs a namespace at
+        # Pod Security `baseline`, not `restricted` — the same posture
+        # the deploy repo's namespace label declares for the whole
+        # application namespace.
       {{- with $root.Values.global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}

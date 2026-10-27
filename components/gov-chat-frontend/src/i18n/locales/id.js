@@ -1525,6 +1525,7 @@ export default {
     clearContext: 'Hapus konteks dan mulai percakapan baru',
     unsavedChanges: 'Anda memiliki perubahan yang belum disimpan. Apakah Anda yakin ingin memulai obrolan baru?',
     whatCanIHelp: 'Bagaimana {brandwordmark} dapat membantu Anda hari ini?',
+    mascotGreeting: 'Halo! Ada yang bisa saya bantu hari ini?',
     quickHelpSubtitle: 'Gerbang Anda menuju layanan publik yang cerdas.',
 
     queryContext: 'Konteks Pertanyaan',
@@ -1576,7 +1577,6 @@ export default {
     feedbackMissingQueryId: 'Jawaban ini belum bisa dinilai',
     chatUpdated: 'Percakapan diperbarui',
     savingConversation: 'Menyimpan…',
-    thinking: 'Berpikir…',
     newChatTitle: 'Mulai Obrolan Baru',
     exportChat: 'Ekspor Obrolan',
     exportFilename: 'Nama File',
@@ -1585,12 +1585,7 @@ export default {
     exportSuccess: 'Obrolan berhasil diekspor',
     exportError: 'Gagal mengekspor obrolan. Silakan coba lagi.',
     removeItem: 'Hapus',
-    chatUpdated: 'Obrolan diperbarui',
-    feedbackError: 'Gagal mengirim umpan balik',
-    feedbackMissingQueryId: 'ID kueri tidak ada untuk umpan balik',
-    feedbackSubmitted: 'Umpan balik terkirim',
-    saving: 'Menyimpan...',
-    savingConversation: 'Menyimpan percakapan...'
+    saving: 'Menyimpan...'
   },
   quickhelp: {
     applyForIDPrompt:

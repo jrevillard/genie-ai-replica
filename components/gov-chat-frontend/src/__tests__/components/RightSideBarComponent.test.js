@@ -417,12 +417,9 @@ describe('RightSideBarComponent', () => {
       expect(leaves.attributes('aria-hidden')).toBe('true');
     });
 
-    it('hides sidebar-header-leaves when sidebar is collapsed', async () => {
-      const wrapper = createRightSideBarWrapper();
-      // `sidebarCollapsed` is a writable alias over the `collapsed` PROP
-      // since the resizable-panel refactor — the collapse state is owned
-      // by the parent, so the test drives the prop, not component data.
-      await wrapper.setProps({ collapsed: true });
+    it('hides sidebar-header-leaves when sidebar is collapsed', () => {
+      // collapsed is a prop on the resizable shell (main), not local state.
+      const wrapper = createRightSideBarWrapper({ collapsed: true });
       expect(wrapper.find('.sidebar-header-leaves').exists()).toBe(false);
     });
   });
@@ -433,12 +430,16 @@ describe('RightSideBarComponent', () => {
       expect(wrapper.find('.sidebar').exists()).toBe(true);
     });
 
-    it('renders the sidebar header with title', () => {
+    it('renders the sidebar header with title (toggle = the resize handle)', () => {
       const wrapper = createRightSideBarWrapper();
       expect(wrapper.find('.sidebar-header').exists()).toBe(true);
-      // The collapse toggle is the SidebarHandle sibling component since
-      // the resizable-panel refactor — not a .sidebar-toggle element.
-      expect(wrapper.find('.sidebar-header h3').exists()).toBe(true);
+      expect(wrapper.find('h3').exists()).toBe(true);
+      // main replaced the DsButton toggle with the SidebarHandle resize grip.
+      expect(
+        wrapper.findComponent({ name: 'SidebarHandle' }).exists() ||
+          wrapper.find('.sidebar-handle').exists() ||
+          wrapper.find('[class*=handle]').exists()
+      ).toBe(true);
     });
   });
 });

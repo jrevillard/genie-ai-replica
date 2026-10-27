@@ -91,6 +91,37 @@ const TOP_N = Math.max(1, parseInt(process.env.OKF_RAGAS_TOP_N || process.env.RE
 const maxCorpusChunks = () => Math.max(1, parseInt(process.env.OKF_RAGAS_MAX_CORPUS_CHUNKS || '1600', 10));
 const CONTEXT_CHARS = 2000; // per-context cap stored on run rows (xlsx uses answer_first_200 anyway)
 const CONCEPT_BODY_CAP = parseInt(process.env.OKF_MAX_CONCEPT_DOC_CHARS || '200000', 10);
+
+// The DECLARED serve posture, recorded on every run doc so the record is
+// self-attributing: a mass-abstention run carries the configuration it ran
+// with (2026-10-27: a K=54 pool blew the reranker's per-batch token cap and
+// all 50 rows abstained — the run must name its own configuration, not
+// present 50 judge-scored refusals as a 0-score benchmark). Defaults mirror
+// the chatqna compose block's interpolation exactly; docker-compose forwards
+// the same vars to okf-server, so the snapshot is the DECLARED deployment
+// posture. Scope: the retrieval/rerank/abstention variables the advisor
+// reasons about — traversal, blend and translation knobs are NOT snapshotted
+// (record them when advice starts reasoning about them). chatqna remains the
+// authoritative reader — this block only RECORDS what the deployment
+// declared.
+const servePosture = () => ({
+  k: parseInt(process.env.RETRIEVER_ARANGO_K || '20', 10),
+  fetch_k: parseInt(process.env.RETRIEVER_ARANGO_FETCH_K || '30', 10),
+  score_threshold: parseFloat(process.env.RETRIEVER_ARANGO_SCORE_THRESHOLD || '0.2'),
+  distance_threshold: parseFloat(process.env.RETRIEVER_ARANGO_DISTANCE_THRESHOLD || '1'),
+  lambda_mult: parseFloat(process.env.RETRIEVER_ARANGO_LAMBDA_MULT || '0.5'),
+  strategy: process.env.RERANKING_STRATEGY || 'slice',
+  top_n: parseInt(process.env.RERANKER_TOP_N || '3', 10),
+  threshold: parseFloat(process.env.RERANKING_THRESHOLD || '0.75'),
+  enforce_abstention: (process.env.CHATQNA_ENFORCE_ABSTENTION || 'true') !== 'false'
+});
+
+// An abstention is NOT an answered row, even when the refusal carries text
+// ("I cannot reliably answer this query because the retrieved documents
+// exceed the reranker's input limit" is a string like any other). Judging a
+// refusal burns the judge on noise and files a dead pipeline as a 0-score
+// benchmark — 2026-10-27, all 50 rows of a live run.
+const isAnswered = (r) => Boolean(r && !r.error && !r.abstained && r.answer);
 // The answer leg's INITIAL token budget. It was hardcoded to 800, and a
 // reasoning-capable judge burns 400-700 tokens BEFORE writing a word — so
 // every answer hit the length cap, was thrown away, and was re-called at
@@ -1830,7 +1861,23 @@ async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
   // therefore be mapped back through the ORIGINAL row index — index-aligning
   // it against `results` directly shifts every row after the first dropped
   // one, which silently scores the wrong answer against the wrong query.
-  const scorable = results.map((r, i) => ({ r, i })).filter(({ r }) => !r.error && r.answer);
+  // An abstained refusal is not an answer — re-scoring must not submit it
+  // to the judge either (same contract as the run path's isAnswered gate;
+  // 2026-10-27: a re-score of the all-abstention run re-burned the judge
+  // on 50 refusals).
+  const scorable = results.map((r, i) => ({ r, i })).filter(({ r }) => isAnswered(r));
+  if (!scorable.length) {
+    // The source run's answers were all abstentions (or errors): there is
+    // nothing to re-judge. Fail the re-score loudly instead of submitting an
+    // empty dataset — the source run's own record already carries the
+    // diagnosis (MASS_ABSTENTION).
+    const err = new Error(
+      'no scorable rows — every row of the source run abstained or errored, so there is nothing to re-judge; fix the cause recorded on the source run and RE-RUN (not re-score)'
+    );
+    err.code = 'NO_SCORABLE_ROWS';
+    err.status = 409;
+    throw err;
+  }
   const samples = scorable.map(({ r }) => {
     const e = byId.get(r.id) || {};
     return {
@@ -2409,8 +2456,28 @@ async function runSuite(repoId, suiteKey, opts = {}) {
         };
       }
     }
-    const erroredRows = results.filter((r) => r.error).length;
-    const answeredRows = results.length - erroredRows;
+    // The IN-SCOPE population is the counting population — out-of-scope
+    // control entries abstain BY DESIGN and must not inflate the abstention
+    // rate or fire the mass-abstention gate (same rule as summarizeRun's
+    // documented denominator).
+    const inScopeIds = new Set(entries.filter((e) => e.oos).map((e) => e.id));
+    const inScopeRows = results.filter((r) => r && !inScopeIds.has(r.id));
+    const erroredRows = inScopeRows.filter((r) => r.error).length;
+    const abstainedRows = inScopeRows.filter((r) => r && r.abstained).length;
+    const answeredRows = inScopeRows.filter(isAnswered).length;
+    // The dominant abstention reason, for the failed-run envelope — the
+    // operator reads the run doc and goes to the cause, not to the rows.
+    const dominantReason = (() => {
+      const counts = {};
+      for (const r of inScopeRows) {
+        if (r && r.abstained) {
+          const key = r.abstention_reason || 'answer contract';
+          counts[key] = (counts[key] || 0) + 1;
+        }
+      }
+      const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+      return best ? best[0] : '';
+    })();
     // A user cancel observed by the workers routes through beginRunSuite's
     // catch (userCancelledRun relabel) so the doc lands status 'cancelled'
     // exactly like a judge-phase cancel — never as failed or done.
@@ -2420,10 +2487,31 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       throw cancelled;
     }
     if (abortErr || answeredRows === 0) {
-      const firstErr = (results.find((r) => r.error && r.error.code !== 'SKIPPED_RUN_ABORTED') || {}).error || {
-        code: 'ANSWER_LEG_FAILED',
-        message: 'every answer failed'
-      };
+      // Three ways here: a terminal abort, every row erroring at the
+      // pipeline level, or EVERY ROW ABSTAINING. The third is not a set of
+      // failed answers — it is one pipeline-wide condition (a reranker
+      // input-budget 422 under a raised candidate pool, a down model
+      // endpoint) expressed N times, and the envelope must name it as such
+      // (2026-10-27: 50 refusals were judged and filed as a 0-score run).
+      const abstentionOnly = abstainedRows > 0 && erroredRows === 0;
+      const firstErr =
+        (results.find((r) => r.error && r.error.code !== 'SKIPPED_RUN_ABORTED') || {}).error ||
+        (abstentionOnly
+          ? {
+              code: 'MASS_ABSTENTION',
+              status: null,
+              message:
+                `all ${abstainedRows} of ${inScopeRows.length} in-scope rows abstained — ` +
+                (serveMode
+                  ? 'the serving pipeline delivered no answers '
+                  : "the answer leg produced no answers (whatif mode — the abstention contract is okf-server's own) ") +
+                `(dominant reason: "${dominantReason}"). This is a pipeline/configuration condition, ` +
+                'not a benchmark result: fix the cause the reasons name, then run again.'
+            }
+          : {
+              code: 'ANSWER_LEG_FAILED',
+              message: 'every answer failed'
+            });
       // Top-level `error` is the READ contract for failed runs — getRunSuite
       // strips a failed doc to {run_key, suite_key, status, error} and the
       // panel renders that envelope's error.
@@ -2452,9 +2540,16 @@ async function runSuite(repoId, suiteKey, opts = {}) {
           results,
           summary: null,
           error: runError,
+          abstained: { count: abstainedRows, rate: inScopeRows.length ? abstainedRows / inScopeRows.length : 0 },
           fidelity: {
             retrieval: serveMode
-              ? { algorithm: 'SERVED — chatqna /v1/chatqna', mode: 'serve', serve_url: SERVE_URL(), graphs: graphNames }
+              ? {
+                  algorithm: 'SERVED — chatqna /v1/chatqna',
+                  mode: 'serve',
+                  serve_url: SERVE_URL(),
+                  graphs: graphNames,
+                  posture: servePosture()
+                }
               : {
                   algorithm: 'per-graph APPROX_NEAR_COSINE + unified rerank',
                   mode: 'whatif',
@@ -2519,70 +2614,7 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     // through the ORIGINAL row index — aligning it against `results`
     // directly shifts every row after the first dropped one, which scores the
     // wrong answer against the wrong query.
-    const scorable = results.map((r, i) => ({ r, i })).filter(({ r }) => !r.error && r.answer);
-    if (!scorable.length) {
-      // Every row is empty — there is nothing to judge. The run fails
-      // loudly (the same shape as the all-rows-failed case above) rather
-      // than submitting an empty dataset and reporting zeros as a result.
-      //
-      // The message says WHICH of the two things happened. "no row produced
-      // an answer" hid the case where every row ERRORED at the pipeline
-      // level, and sent the operator to re-run instead of to fix the
-      // retrieval stack.
-      const allErrored = erroredRows >= total;
-      const emptyError = {
-        code: 'NO_SCORABLE_ROWS',
-        status: null,
-        message: allErrored
-          ? `every row failed at the pipeline level (${erroredRows} of ${total}) — there is nothing to judge; fix the retrieval stack or the upstream service and run again`
-          : `no row produced an answer (${erroredRows} of ${total} errored at the pipeline level, the rest produced no answer) — there is nothing to judge; fix the errors and run again`
-      };
-      const emptyDoc = {
-        _key: opts.runKey,
-        repo_id: repoId,
-        kind: 'ragas_run',
-        status: 'failed',
-        suite_key: suiteKey,
-        created_at: opts.startedAt,
-        created_by: (opts.actor && opts.actor.user_id) || 'system',
-        repo_ids: repoIds,
-        metrics: opts.metrics,
-        error: { ...emptyError, failed_rows: erroredRows, total, aborted: false },
-        payload: {
-          suite_created_at: suite.created_at,
-          entries: entries.map((e) => ({ id: e.id, query: e.query, oos: e.oos })),
-          results,
-          summary: null,
-          error: emptyError,
-          fidelity: {
-            // The SAME shape as the all-rows-failed doc above — a failed
-            // run's fidelity block is read by the panel and the explain.
-            retrieval: serveMode
-              ? { algorithm: 'SERVED — chatqna /v1/chatqna', mode: 'serve', serve_url: SERVE_URL(), graphs: graphNames }
-              : {
-                  algorithm: 'per-graph APPROX_NEAR_COSINE + unified rerank',
-                  mode: 'whatif',
-                  candidate_k: CANDIDATE_K,
-                  top_n: TOP_N,
-                  graphs: graphNames
-                },
-            judge: null,
-            answers: await answerFidelity({ serveMode })
-          }
-        }
-      };
-      await db.collection(COLLECTION).replace(opts.runKey, emptyDoc);
-      logger.error('ragas-suite.run_failed', {
-        repo_id: repoId,
-        suite_key: suiteKey,
-        run_key: opts.runKey,
-        failed_rows: erroredRows,
-        total,
-        aborted: false,
-        cause: emptyError.message
-      });
-      return emptyDoc;
-    }
+    const scorable = results.map((r, i) => ({ r, i })).filter(({ r }) => isAnswered(r));
     const samples = scorable.map(({ r, i }) => {
       const e = entries[i];
       return {
@@ -2733,13 +2765,21 @@ async function runSuite(repoId, suiteKey, opts = {}) {
           total_rows: summary.n_evaluable,
           per_metric: judgeCoverage
         },
+        // Abstentions travelled on the rows only; surfacing the count and
+        // rate at payload level (the in-scope population) makes a
+        // partially-abstaining run legible without re-deriving from 50
+        // rows. The advisor's grounding gate derives its own count from the
+        // rows (runFacts.abstentions) — this field is the run-level RECORD,
+        // not yet a consumer input.
+        abstained: { count: abstainedRows, rate: inScopeRows.length ? abstainedRows / inScopeRows.length : 0 },
         fidelity: {
           retrieval: serveMode
             ? {
                 algorithm: 'SERVED — chatqna /v1/chatqna (the citizen pipeline), include_contexts opt-in',
                 mode: 'serve',
                 serve_url: SERVE_URL(),
-                graphs: graphNames
+                graphs: graphNames,
+                posture: servePosture()
               }
             : {
                 algorithm: 'per-graph APPROX_NEAR_COSINE + unified rerank',
@@ -2835,7 +2875,11 @@ function rowWasJudged(r) {
  * The four buckets now partition the in-scope rows exactly, each row in
  * exactly one:
  *   error     — the pipeline failed; no answer; never judged
- *   abstained — the answerer declined (judged or not — it has its own column)
+ *   abstained — the answerer declined; NEVER judged (2026-10-27: an
+ *               abstention is not an answer — the refusal is not submitted
+ *               to the judge, so n_abstained_unjudged equals n_abstained on
+ *               every post-change run; pre-change runs may carry judged
+ *               abstentions, which the column still distinguishes)
  *   failing   — judged, a metric below its threshold, not a decline
  *   answered  — judged (or answerable), no metric below its threshold
  */
@@ -2848,12 +2892,13 @@ function summarizeRun(suite, results, metrics) {
   const nOos = results.length - inScope.length;
   let nErrors = 0;
   let nAbstained = 0;
-  // A decline that arrived with NO answer was never judged: it carries no
-  // score, it is left out of the averages, AND it reduces the measured
-  // coverage — so it can mark the run invalid. A decline that arrived WITH
-  // an answer was judged, and its context metrics come back 0 — those zeros
-  // ARE in the averages. The two are different states and the guide must
-  // not conflate them (it did, and the guide test pinned the error).
+  // A decline was HISTORICALLY two states: arrived with no answer (never
+  // judged — no score, out of the averages, coverage-reducing) or arrived
+  // with refusal text (was judged; its zeros polluted the averages). Since
+  // 2026-10-27 a decline is NEVER judged — an abstention is not an answer —
+  // so every post-change abstention is the unjudged state and
+  // n_abstained_unjudged equals n_abstained. Pre-change runs keep the
+  // distinction this column was built for.
   let nAbstainedUnjudged = 0;
   let nFailing = 0;
   let nAnswered = 0;
@@ -2969,7 +3014,13 @@ async function getRunSuite(repoId, suiteKey, runKey) {
     return { run_key: runKey, suite_key: suiteKey, status: 'failed', error: failDoc.error };
   }
   if (doc.status === 'failed') {
-    return { run_key: runKey, suite_key: suiteKey, status: 'failed', error: doc.error || null };
+    return {
+      run_key: runKey,
+      suite_key: suiteKey,
+      status: 'failed',
+      error: doc.error || null,
+      abstained: (doc.payload && doc.payload.abstained) || null
+    };
   }
   return doc;
 }
@@ -3345,6 +3396,30 @@ function attributeFailures(suite, runDoc, evidence, judgeComparison) {
     // retrieval or in the answer leg, and that is the first thing the
     // operator must know.
     //
+    // Since 2026-10-27 an abstained row is NEVER judged (an abstention is
+    // not an answer), so it arrives here with no metrics of its own. Stage
+    // it 'abstention' from its own flag — falling through to the
+    // unmeasured branch would send the operator to "check the judge
+    // endpoint" when the judge never saw the row, and would leave the
+    // abstention-contract advice below unreachable on every post-change
+    // run. (Old runs that judged their abstentions keep the
+    // answer_relevancy-based staging further down.)
+    if (r.abstained) {
+      const reason = r.abstention_reason || '';
+      attributions.push({
+        id: r.id,
+        query: r.query,
+        fails: [],
+        stage: 'abstention',
+        recommendation:
+          'the row abstained' +
+          (reason ? ` (reason: "${reason}")` : '') +
+          ' — there was no answer to judge. Fix the cause the reason names; if abstentions are widespread the run itself fails as MASS_ABSTENTION with the diagnosis',
+        evidence: { abstained: true, abstention_reason: reason, contexts_delivered: (r.contexts || []).length }
+      });
+      continue;
+    }
+    //
     // A row that produced an answer and was JUDGED and MEASURED and failed
     // nothing has nothing to say. A row that was handed to the judge and
     // came back with NO metric at all is a different thing — the judge could
@@ -3663,12 +3738,15 @@ function buildEnvAdvice({ attributions, runFacts, mode, candidateK }) {
       }
     : {
         env: 'RETRIEVER_ARANGO_K',
-        def: 20,
+        // The run's OWN recorded posture is the declared cut; the fallback
+        // default stays labelled as an assumption (runs scored before the
+        // posture record existed carry no posture block).
+        def: (facts.declared_posture && facts.declared_posture.k) || 20,
         surface:
           "chatqna (the served pipeline — chatqna forwards it in every retriever request; the retriever service's own copy is inert)",
-        // okf-server cannot read chatqna's env — state the assumption in the
-        // text instead of asserting it as fact (altitude review, 2026-10-27).
-        assumed: true
+        // No recorded posture → state the assumption in the text instead of
+        // asserting it as fact (altitude review, 2026-10-27).
+        assumed: !(facts.declared_posture && facts.declared_posture.k)
       };
   const vectorRecall = rows.filter((r) => r.stage === 'vector-recall' && r.evidence && r.evidence.candidate_rank);
   // Derive the deep ROWS first, then project the ranks — one predicate, not
@@ -3700,7 +3778,11 @@ function buildEnvAdvice({ attributions, runFacts, mode, candidateK }) {
         'A larger pool costs retrieval latency (more vectors fetched and scored) and reranker load ' +
         '(more candidates to score per query). Marginal context_precision/noise_sensitivity risk: more ' +
         'candidates can slip past the reranker as noise. GPU memory is unaffected — this is search ' +
-        'depth, not model size.',
+        'depth, not model size. HARD CEILING — the reranker input budget: the whole pool is scored per ' +
+        "query under the reranker's per-batch token cap (compose sets --max-batch-tokens 8192; at ~180 " +
+        'tokens/chunk that is a ceiling near K=40). A K beyond it makes TEI reject every batch (422) and ' +
+        'the deployment mass-abstains — measured live 2026-10-27. Raise the cap on the reranker host ' +
+        'FIRST, or keep K under the ceiling.',
       apply: isWhatif
         ? 'Set OKF_RAGAS_CANDIDATE_K on okf-server (compose/env template; under Ansible, group_vars) and ' +
           'recreate okf-server. The replay rank is exact for this mode — the knob you are setting is the ' +
@@ -4296,6 +4378,16 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
         .filter((r) => r.abstained)
         .map((r) => r.id)
         .slice(0, 20),
+      // The DECLARED retrieval posture the run recorded — R1 prescribes
+      // against the cut the deployment actually declared, not against an
+      // assumed default (2026-10-27: the advice said "assumed default 20"
+      // on a doc whose run had recorded k=54).
+      declared_posture:
+        (runDoc.payload &&
+          runDoc.payload.fidelity &&
+          runDoc.payload.fidelity.retrieval &&
+          runDoc.payload.fidelity.retrieval.posture) ||
+        null,
       stage_counts: attributions.reduce((acc, a) => {
         acc[a.stage] = (acc[a.stage] || 0) + 1;
         return acc;

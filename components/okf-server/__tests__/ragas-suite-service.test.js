@@ -2112,6 +2112,189 @@ describe('serve mode — the benchmark measures the SERVED system (2026-10-23)',
     expect(doc.payload.fidelity.retrieval.candidate_k).toBeGreaterThan(0);
   });
 
+  // 2026-10-27, live: RETRIEVER_ARANGO_K=54 blew the reranker's per-batch
+  // token cap and EVERY row abstained — and the run judged all 50 refusal
+  // texts and filed a 0-score "done" benchmark. An abstention is not an
+  // answer: the refusal carries text, so the old `r.answer` predicate read
+  // 50 refusals as 50 scorable rows. A run whose every row abstained is a
+  // pipeline condition, and the doc must say so.
+  it('a run whose every row abstains FAILS as MASS_ABSTENTION — refusals are never judged', async () => {
+    const begun = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
+    await begun.done;
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url, opts = {}) => {
+      const u = String(url);
+      if (u.includes('/v1/chatqna')) {
+        return Promise.resolve(
+          sseResponse([
+            "data: b'I cannot reliably answer this query because the retrieved documents exceed the reranker input limit.'\n\n",
+            'data: {"type":"metadata","source_documents":[],"confidence_score":0.1,' +
+              '"abstained":true,"abstention_reason":"the retrieved documents exceed the reranker input limit"}\n\n',
+            'data: [DONE]\n\n'
+          ])
+        );
+      }
+      if (u.includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-eval', status: 'queued' }));
+      if (u.includes('/jobs/j-eval'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-eval',
+            kind: 'evaluate',
+            status: 'done',
+            result: { aggregate: {}, per_query: [], evaluation_log: [] }
+          })
+        );
+      return baseFetch(url, opts);
+    });
+    try {
+      const run = await svc.beginRunSuite('me', begun.suite_key, {}, { actor: { user_id: 'u1' } });
+      await run.done;
+      const doc = await svc.getRunSuite('me', begun.suite_key, run.run_key);
+      expect(doc.status).toBe('failed');
+      expect(doc.error.code).toBe('MASS_ABSTENTION');
+      expect(doc.error.message).toContain('all 2 of 2 in-scope rows abstained');
+      expect(doc.error.message).toContain('reranker input limit');
+      // The refusal texts were never submitted to the judge — scoring a
+      // refusal burns the judge and manufactures zeros.
+      expect(global.fetch.mock.calls.some((c) => String(c[0]).includes('/evaluate'))).toBe(false);
+      // getRunSuite strips a failed doc to the error envelope; read the RAW
+      // doc for the record's own configuration (the single variable that
+      // caused this) and its abstention truth.
+      const raw = __mockDb._stores.okf_head_test_runs[run.run_key];
+      expect(raw.payload.abstained).toEqual({ count: 2, rate: 1 });
+      expect(raw.payload.fidelity.retrieval.posture).toBeTruthy();
+      expect(raw.payload.fidelity.retrieval.posture.strategy).toBeTruthy();
+      expect(raw.payload.summary).toBeNull();
+    } finally {
+      global.fetch = baseFetch;
+    }
+  });
+
+  it('a partially-abstaining run judges only the answered rows and records the abstention rate', async () => {
+    const begun = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
+    await begun.done;
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url, opts = {}) => {
+      const u = String(url);
+      if (u.includes('/v1/chatqna')) {
+        const q = JSON.parse(opts.body).messages || '';
+        const abstain = q === GEN_SAMPLES[0].user_input;
+        return Promise.resolve(
+          sseResponse([
+            abstain
+              ? "data: b'I cannot reliably answer this query because the retrieved documents exceed the reranker input limit.'\n\n"
+              : "data: b'A grounded answer about cob rot.'\n\n",
+            'data: {"type":"metadata","source_documents":[{"document_id":"concept-1","score":0.9,"text":"Chunk one."}],' +
+              '"confidence_score":0.8,"abstained":' +
+              abstain +
+              (abstain ? ',"abstention_reason":"the retrieved documents exceed the reranker input limit"' : '') +
+              ',"is_grounded":false}\n\n',
+            'data: [DONE]\n\n'
+          ])
+        );
+      }
+      if (u.includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-eval', status: 'queued' }));
+      if (u.includes('/jobs/j-eval'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-eval',
+            kind: 'evaluate',
+            status: 'done',
+            result: {
+              aggregate: { faithfulness: 1.0 },
+              per_query: [{ faithfulness: 1.0, context_precision: 0.9, context_recall: 0.9, answer_relevancy: 1.0 }],
+              evaluation_log: []
+            }
+          })
+        );
+      return baseFetch(url, opts);
+    });
+    try {
+      const run = await svc.beginRunSuite('me', begun.suite_key, {}, { actor: { user_id: 'u1' } });
+      await run.done;
+      const doc = await svc.getRunSuite('me', begun.suite_key, run.run_key);
+      expect(doc.status).toBe('done');
+      expect(doc.payload.abstained).toEqual({ count: 1, rate: 0.5 });
+      const evalCall = global.fetch.mock.calls.find((c) => String(c[0]).includes('/evaluate'));
+      const sent = JSON.parse(evalCall[1].body);
+      // ONE sample reached the judge — the refusal was excluded, so the
+      // sidecar answered in the answered-row's order only.
+      expect(sent.samples).toHaveLength(1);
+      expect(sent.samples[0].user_input).not.toBe(GEN_SAMPLES[0].user_input);
+      const abstRow = doc.payload.results.find((r) => r.abstained);
+      // Dropped rows carry an EMPTY metrics object — no numbers, so no mean
+      // is computed over them (the existing merge-back contract).
+      expect(abstRow.metrics).toEqual({});
+    } finally {
+      global.fetch = baseFetch;
+    }
+  });
+
+  it('records the declared serve posture on the run doc (the configuration it measured)', async () => {
+    const prev = { k: process.env.RETRIEVER_ARANGO_K, strategy: process.env.RERANKING_STRATEGY };
+    process.env.RETRIEVER_ARANGO_K = '20';
+    process.env.RERANKING_STRATEGY = 'adaptive';
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url, opts = {}) => {
+      const u = String(url);
+      if (u.includes('/v1/chatqna')) {
+        return Promise.resolve(
+          sseResponse([
+            "data: b'A grounded answer about cob rot.'\n\n",
+            'data: {"type":"metadata","source_documents":[{"document_id":"concept-1","score":0.9,"text":"Chunk one."}],' +
+              '"confidence_score":0.8,"abstained":false,"is_grounded":true}\n\n',
+            'data: [DONE]\n\n'
+          ])
+        );
+      }
+      if (u.includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-eval', status: 'queued' }));
+      if (u.includes('/jobs/j-eval'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-eval',
+            kind: 'evaluate',
+            status: 'done',
+            result: {
+              aggregate: { faithfulness: 1.0 },
+              per_query: GEN_SAMPLES.map(() => ({
+                faithfulness: 1.0,
+                context_precision: 0.9,
+                context_recall: 0.9,
+                answer_relevancy: 1.0
+              })),
+              evaluation_log: []
+            }
+          })
+        );
+      return baseFetch(url, opts);
+    });
+    try {
+      const begun = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
+      await begun.done;
+      const run = await svc.beginRunSuite('me', begun.suite_key, {}, { actor: { user_id: 'u1' } });
+      await run.done;
+      const doc = await svc.getRunSuite('me', begun.suite_key, run.run_key);
+      expect(doc.status).toBe('done');
+      expect(doc.payload.fidelity.retrieval.posture).toEqual({
+        k: 20,
+        fetch_k: 30,
+        score_threshold: 0.2,
+        distance_threshold: 1,
+        lambda_mult: 0.5,
+        strategy: 'adaptive',
+        top_n: 3,
+        threshold: 0.75,
+        enforce_abstention: true
+      });
+    } finally {
+      global.fetch = baseFetch;
+      if (prev.k === undefined) delete process.env.RETRIEVER_ARANGO_K;
+      else process.env.RETRIEVER_ARANGO_K = prev.k;
+      if (prev.strategy === undefined) delete process.env.RERANKING_STRATEGY;
+      else process.env.RERANKING_STRATEGY = prev.strategy;
+    }
+  });
+
   it('a stream that ends WITHOUT the metadata event is an honest error row, not a silent zero-context success', async () => {
     // The contract break must be named (proxy cut the stream / chatqna died
     // post-tokens) — recording answer + contexts=[] + error:null would
@@ -2176,8 +2359,13 @@ describe('serve mode — the benchmark measures the SERVED system (2026-10-23)',
     const run = await svc.beginRunSuite('me', begun.suite_key, {}, { actor: { user_id: 'u1' } });
     await run.done;
     const doc = await svc.getRunSuite('me', begun.suite_key, run.run_key);
-    expect(doc.status).toBe('done');
-    expect(doc.payload.results[0].abstained).toBe(true);
+    // EVERY row abstained (both questions got the same nothing-retrieved
+    // stream) — since 2026-10-27 that is a MASS_ABSTENTION failure, not a
+    // scored "done" run with zeros.
+    expect(doc.status).toBe('failed');
+    expect(doc.error.code).toBe('MASS_ABSTENTION');
+    const raw = __mockDb._stores.okf_head_test_runs[run.run_key];
+    expect(raw.payload.results[0].abstained).toBe(true);
   });
 
   // David 2026-10-24 (live): the benchmark recorded 10 abstentions that the
@@ -2239,9 +2427,14 @@ describe('serve mode — the benchmark measures the SERVED system (2026-10-23)',
     });
     const run = await svc.beginRunSuite('me', begun.suite_key, {}, { actor: { user_id: 'u1' } });
     await run.done;
+    // All rows abstain → the run fails as MASS_ABSTENTION (never a scored
+    // "done"); the flag-wins contract is asserted on the raw row.
     const doc = await svc.getRunSuite('me', begun.suite_key, run.run_key);
-    expect(doc.payload.results[0].abstained).toBe(true);
-    expect(doc.payload.results[0].abstention_reason).toBe('reranker_input_too_long');
+    expect(doc.status).toBe('failed');
+    expect(doc.error.code).toBe('MASS_ABSTENTION');
+    const raw = __mockDb._stores.okf_head_test_runs[run.run_key];
+    expect(raw.payload.results[0].abstained).toBe(true);
+    expect(raw.payload.results[0].abstention_reason).toBe('reranker_input_too_long');
   });
 });
 

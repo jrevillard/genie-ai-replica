@@ -363,17 +363,23 @@ function parseComposeServiceContracts(filePath) {
       continue;
     }
     if (inEnvironment) {
-      const mappingEntry = line.match(/^ {6}([A-Za-z_][A-Za-z0-9_]*):/);
-      const listEntry = line.match(/^ {6}-\s*([A-Za-z_][A-Za-z0-9_]*)=/);
-      if (mappingEntry) {
-        currentEnvVars.push(mappingEntry[1]);
-        continue;
+      // The block ends at the first line that is not an entry of it: an
+      // entry is indented deeper than the `environment:` key, in the mapping
+      // form (NAME: value) or the list form (- NAME=value, quoted or not).
+      if (!/^ {6}/.test(line)) {
+        inEnvironment = false;
+      } else {
+        const mappingEntry = line.match(/^ {6,}([A-Za-z_][A-Za-z0-9_]*):/);
+        const listEntry = line.match(/^ {6,}-\s*['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?\s*(?:=|$)/);
+        if (mappingEntry) {
+          currentEnvVars.push(mappingEntry[1]);
+          continue;
+        }
+        if (listEntry) {
+          currentEnvVars.push(listEntry[1]);
+          continue;
+        }
       }
-      if (listEntry) {
-        currentEnvVars.push(listEntry[1]);
-        continue;
-      }
-      inEnvironment = false;
     }
 
     // profiles: [name1, name2] or profiles: name1

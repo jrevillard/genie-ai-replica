@@ -5,7 +5,8 @@ const { parseComposeServiceContracts } = require('./parse-compose');
 const { parseEnvTemplateVarNames, readFileOrThrow } = require('./parse-env-template');
 
 /**
- * The namespace of the knobs the retriever reads from its environment.
+ * The namespace of the knobs the retrieval services read from their
+ * environment.
  *
  * The deployment (docker-compose.yaml, deploy/ansible/templates/env.j2) and
  * the code that reads the knobs (genie-ai-overlay/retriever,
@@ -16,15 +17,16 @@ const { parseEnvTemplateVarNames, readFileOrThrow } = require('./parse-env-templ
  */
 const RETRIEVER_ENV_PREFIX = 'RETRIEVER_';
 
-/** The compose service that runs the retriever. */
-const RETRIEVER_COMPOSE_SERVICE = 'retriever-arango-service';
-
 /**
- * The services on the retrieval path: the retriever itself and the
- * orchestrator that forwards the query parameters to it. A knob the
- * deployment offers the retriever is read by one of them.
+ * The services on the retrieval path, each with the compose service that
+ * runs it: the retriever itself and the orchestrator that forwards the
+ * query parameters to it. A knob a service reads from its environment must
+ * reach that service's container.
  */
-const RETRIEVER_SOURCE_DIRS = ['retriever', 'chatqna'];
+const RETRIEVAL_PATH = [
+  { composeService: 'retriever-arango-service', sourceDir: 'retriever' },
+  { composeService: 'chatqna-xeon-backend-server', sourceDir: 'chatqna' }
+];
 
 /**
  * Variables the OPEA service sets in its own process, not the deployment:
@@ -46,10 +48,11 @@ const NON_PRODUCTION_DIRS = new Set(['tests', 'contracts', '__pycache__']);
 /**
  * Read a Python file, dropping the comments it holds.
  *
- * A commented-out statement is not code: it reads nothing.
+ * A commented-out statement is not code: it reads nothing. The reads are
+ * found textually, so an env-var name inside a docstring still counts.
  *
  * @param {string} filePath - Path to the file
- * @returns {string} The content without its comments
+ * @returns {string} The content without its comment lines
  */
 function readPythonWithoutComments(filePath) {
   const content = readFileOrThrow(filePath, 'overlay source file');
@@ -81,15 +84,16 @@ function collectPythonFiles(dir) {
 }
 
 /**
- * Collect the knob names the retrieval path reads.
+ * Collect the knob names the retrieval services read, with the service each
+ * name is read by.
  *
  * @param {string} overlayDir - The genie-ai-overlay directory
- * @returns {Map<string, string>} Each knob name, with one file reading it
+ * @returns {Map<string, {file: string, readers: Set<string>}>} Each knob name, with a file reading it and the compose services whose sources read it
  */
 function parseOverlayEnvReads(overlayDir) {
   const reads = new Map();
-  for (const subdir of RETRIEVER_SOURCE_DIRS) {
-    const dir = path.join(overlayDir, subdir);
+  for (const { composeService, sourceDir } of RETRIEVAL_PATH) {
+    const dir = path.join(overlayDir, sourceDir);
     if (!fs.existsSync(dir)) {
       continue;
     }
@@ -97,9 +101,13 @@ function parseOverlayEnvReads(overlayDir) {
       const content = readPythonWithoutComments(file);
       for (const match of content.matchAll(PYTHON_ENV_READ)) {
         const name = match[1] || match[2] || match[3];
-        if (name.startsWith(RETRIEVER_ENV_PREFIX) && !reads.has(name)) {
-          reads.set(name, path.relative(overlayDir, file));
+        if (!name.startsWith(RETRIEVER_ENV_PREFIX)) {
+          continue;
         }
+        if (!reads.has(name)) {
+          reads.set(name, { file: path.relative(overlayDir, file), readers: new Set() });
+        }
+        reads.get(name).readers.add(composeService);
       }
     }
   }
@@ -107,7 +115,7 @@ function parseOverlayEnvReads(overlayDir) {
 }
 
 /**
- * Check that the deployment and the retrieval path agree on every knob.
+ * Check that the deployment and the retrieval services agree on every knob.
  *
  * @param {{ composeFile: string, ansibleEnvFile: string, envTemplateFile: string, overlayDir: string }} input - The files to check
  * @returns {{ errors: string[], deliveredToRetriever: Set<string>, codeNames: Set<string> }}
@@ -116,8 +124,11 @@ function validateRetrieverEnvCoverage({ composeFile, ansibleEnvFile, envTemplate
   const errors = [];
 
   const contracts = parseComposeServiceContracts(composeFile);
-  const retrieverContract = contracts.find((contract) => contract.service === RETRIEVER_COMPOSE_SERVICE);
-  const deliveredToRetriever = new Set(retrieverContract ? retrieverContract.envVars : []);
+  const delivered = new Map();
+  for (const contract of contracts) {
+    delivered.set(contract.service, new Set(contract.envVars));
+  }
+  const retrieverDelivery = delivered.get(RETRIEVAL_PATH[0].composeService) || new Set();
   const deliveredAnywhere = new Set(contracts.flatMap((contract) => contract.envVars));
 
   // The Ansible template renders the variables it configures; the env
@@ -132,34 +143,40 @@ function validateRetrieverEnvCoverage({ composeFile, ansibleEnvFile, envTemplate
 
   const reads = parseOverlayEnvReads(overlayDir);
 
-  for (const name of deliveredToRetriever) {
+  for (const name of retrieverDelivery) {
     if (name.startsWith(RETRIEVER_ENV_PREFIX) && !reads.has(name)) {
       errors.push(
-        `${name} reaches the ${RETRIEVER_COMPOSE_SERVICE} container but no service on the retrieval path reads it (the knob is inert)`
+        `${name} reaches the ${RETRIEVAL_PATH[0].composeService} container but no service on the retrieval path reads it (the knob is inert)`
       );
     }
   }
 
   for (const name of configured) {
-    if (reads.has(name) && !deliveredToRetriever.has(name)) {
-      errors.push(
-        `${name} is configured by the deployment but no compose service passes it to the ${RETRIEVER_COMPOSE_SERVICE} container (the knob is inert)`
-      );
+    const read = reads.get(name);
+    if (!read) {
+      continue;
+    }
+    for (const composeService of read.readers) {
+      if (!delivered.get(composeService)?.has(name)) {
+        errors.push(
+          `${name} is configured by the deployment and read by the ${composeService} sources, but no compose service passes it to the ${composeService} container (the knob is inert)`
+        );
+      }
     }
   }
 
-  for (const [name, file] of reads) {
+  for (const [name, read] of reads) {
     if (FRAMEWORK_VARS.has(name)) {
       continue;
     }
     if (!deliveredAnywhere.has(name) && !configured.has(name)) {
-      errors.push(`${name} is read by ${file} but set by no deployment file (the knob cannot be set)`);
+      errors.push(`${name} is read by ${read.file} but set by no deployment file (the knob cannot be set)`);
     }
   }
 
   return {
     errors,
-    deliveredToRetriever,
+    deliveredToRetriever: retrieverDelivery,
     codeNames: new Set(reads.keys())
   };
 }

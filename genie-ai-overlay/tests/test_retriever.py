@@ -467,7 +467,7 @@ class TestInvoke:
         # travel inside search_start -- so this is the path every request
         # takes.
         input_mock = create_mock_input(
-            context={"categoryLabels": "health", "serviceLabels": ["education"]},
+            context={"categoryLabels": ["health"], "serviceLabels": ["education"]},
             search_start="chunk",
         )
         input_mock.model_dump.return_value.pop("filter_strategy")

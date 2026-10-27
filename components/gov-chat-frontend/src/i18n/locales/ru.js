@@ -1585,6 +1585,7 @@ export default {
     clearContext: 'Очистить контекст и начать новый разговор',
     unsavedChanges: 'У вас есть несохранённые изменения. Вы уверены, что хотите начать новый чат?',
     whatCanIHelp: 'Как {brandwordmark} может помочь вам сегодня?',
+    mascotGreeting: 'Здравствуйте! Чем я могу вам помочь сегодня?',
     quickHelpSubtitle: 'Ваш портал к интеллектуальным государственным услугам.',
 
     queryContext: 'Контекст запроса',
@@ -1613,7 +1614,6 @@ export default {
     feedbackMissingQueryId: 'Этот ответ пока нельзя оценить',
     chatUpdated: 'Беседа обновлена',
     savingConversation: 'Сохранение…',
-    thinking: 'Думаю…',
     newChatTitle: 'Начать новый чат',
     exportChat: 'Экспортировать чат',
     exportFilename: 'Имя файла',
@@ -1622,12 +1622,7 @@ export default {
     exportSuccess: 'Чат успешно экспортирован',
     exportError: 'Не удалось экспортировать чат. Пожалуйста, попробуйте снова.',
     removeItem: 'Удалить',
-    chatUpdated: 'Чат обновлён',
-    feedbackError: 'Ошибка при отправке отзыва',
-    feedbackMissingQueryId: 'Отсутствует ID запроса для отзыва',
-    feedbackSubmitted: 'Отзыв отправлен',
-    saving: 'Сохранение...',
-    savingConversation: 'Сохранение беседы...'
+    saving: 'Сохранение...'
   },
   quickhelp: {
     // Labels (Short for UI)

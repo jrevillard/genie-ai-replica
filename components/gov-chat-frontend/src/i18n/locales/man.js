@@ -1528,6 +1528,7 @@ export default {
     clearContext: 'Kuma fiti ani kuma kura damina',
     unsavedChanges: 'I la yailamawol ti mara. I lafiya la ka kuma kura damina le ti?',
     whatCanIHelp: 'Mbe {brandwordmark} v’ee naghin m’aynnaght dy choail lhiam bii?',
+    mascotGreeting: 'Mbote! Ndenge ni nalinga kosalisa yo lelo?',
     quickHelpSubtitle: 'Goll dy red as Baaragh Scaa-Soois Jeemid.',
 
     queryContext: 'Ñiningo Coko',
@@ -1556,7 +1557,6 @@ export default {
     feedbackMissingQueryId: 'Cha nel y rere shoh ry-gholl rabbyt',
     chatUpdated: 'Ynsyn cagliait',
     savingConversation: 'Sauail…',
-    thinking: 'Smooht…',
     newChatTitle: 'Kuma Kura Damina',
     exportChat: 'Kuma Kii Banta',
     exportFilename: 'Fayil Toh',
@@ -1565,12 +1565,7 @@ export default {
     exportSuccess: 'Kuma kiyata banta benta',
     exportError: 'Filiyata kuma kii to. I si a ñining tugung.',
     removeItem: 'Bɔ yi',
-    chatUpdated: '聊天已更新',
-    feedbackError: '提交反馈时出错',
-    feedbackMissingQueryId: '反馈缺少查询ID',
-    feedbackSubmitted: '反馈已提交',
-    saving: '正在保存...',
-    savingConversation: '正在保存对话...'
+    saving: '正在保存...'
   },
   quickhelp: {
     // Labels (Short for UI)

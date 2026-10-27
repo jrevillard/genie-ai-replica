@@ -1594,6 +1594,7 @@ export default {
     unsavedChanges:
       'Vous avez des modifications non enregistrées. Êtes-vous sûr de vouloir commencer une nouvelle discussion ?',
     whatCanIHelp: "Comment {brandwordmark} peut-il vous aider aujourd'hui ?",
+    mascotGreeting: "Bonjour ! Comment puis-je vous aider aujourd'hui ?",
     quickHelpSubtitle: 'Votre portail vers des services publics intelligents.',
 
     queryContext: 'Contexte de la requête',
@@ -1622,7 +1623,6 @@ export default {
     feedbackMissingQueryId: 'Cette réponse ne peut pas encore être notée',
     chatUpdated: 'Conversation mise à jour',
     savingConversation: 'Enregistrement…',
-    thinking: 'Réflexion…',
     newChatTitle: 'Commencer une nouvelle discussion',
     exportChat: 'Exporter la discussion',
     exportFilename: 'Nom du fichier',
@@ -1631,12 +1631,7 @@ export default {
     exportSuccess: 'Discussion exportée avec succès',
     exportError: "Échec de l'exportation de la discussion. Veuillez réessayer.",
     removeItem: 'Supprimer',
-    chatUpdated: 'Conversation mise à jour',
-    feedbackError: "Erreur lors de l'envoi des commentaires",
-    feedbackMissingQueryId: 'ID de requête manquant pour les commentaires',
-    feedbackSubmitted: 'Commentaires envoyés',
-    saving: 'Enregistrement...',
-    savingConversation: 'Enregistrement de la conversation...'
+    saving: 'Enregistrement...'
   },
   quickhelp: {
     // Labels (Short for UI)

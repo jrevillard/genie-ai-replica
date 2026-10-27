@@ -1589,6 +1589,7 @@ export default {
     clearContext: 'Kontext löschen und neues Gespräch starten',
     unsavedChanges: 'Sie haben ungespeicherte Änderungen. Sind Sie sicher, dass Sie einen neuen Chat starten möchten?',
     whatCanIHelp: 'Wie kann {brandwordmark} Ihnen heute helfen?',
+    mascotGreeting: 'Hallo! Wie kann ich Ihnen heute helfen?',
     quickHelpSubtitle: 'Ihr Tor zu intelligenten öffentlichen Diensten.',
 
     queryContext: 'Anfragekontext',
@@ -1617,7 +1618,6 @@ export default {
     feedbackMissingQueryId: 'Diese Antwort kann noch nicht bewertet werden',
     chatUpdated: 'Unterhaltung aktualisiert',
     savingConversation: 'Speichern…',
-    thinking: 'Denkt nach…',
     newChatTitle: 'Neuen Chat starten',
     exportChat: 'Chat exportieren',
     exportFilename: 'Dateiname',
@@ -1626,12 +1626,7 @@ export default {
     exportSuccess: 'Chat erfolgreich exportiert',
     exportError: 'Fehler beim Exportieren des Chats. Bitte versuchen Sie es erneut.',
     removeItem: 'Entfernen',
-    chatUpdated: 'Chat aktualisiert',
-    feedbackError: 'Fehler beim Senden des Feedbacks',
-    feedbackMissingQueryId: 'Abfrage-ID für Feedback fehlt',
-    feedbackSubmitted: 'Feedback gesendet',
-    saving: 'Speichern...',
-    savingConversation: 'Konversation speichern...'
+    saving: 'Speichern...'
   },
   quickhelp: {
     // Labels (Short for UI)

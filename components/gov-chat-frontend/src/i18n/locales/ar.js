@@ -1567,6 +1567,7 @@ export default {
     clearContext: 'مسح السياق وبدء محادثة جديدة',
     unsavedChanges: 'لديك تغييرات غير محفوظة. هل أنت متأكد من أنك تريد بدء محادثة جديدة؟',
     whatCanIHelp: 'كيف يمكن لـ {brandwordmark} مساعدتك اليوم؟',
+    mascotGreeting: 'مرحبًا! كيف يمكنني مساعدتك اليوم؟',
     quickHelpSubtitle: 'بوابتك إلى الخدمات العامة الذكية.',
 
     queryContext: 'سياق الاستعلام',
@@ -1595,7 +1596,6 @@ export default {
     feedbackMissingQueryId: 'لا يمكن تقييم هذه الإجابة بعد',
     chatUpdated: 'تم تحديث المحادثة',
     savingConversation: 'جارٍ الحفظ…',
-    thinking: 'جارٍ التفكير…',
     newChatTitle: 'بدء محادثة جديدة',
     exportChat: 'تصدير المحادثة',
     exportFilename: 'اسم الملف',
@@ -1604,12 +1604,7 @@ export default {
     exportSuccess: 'تم تصدير المحادثة بنجاح',
     exportError: 'فشل تصدير المحادثة. يرجى المحاولة مرة أخرى.',
     removeItem: 'إزالة العنصر',
-    chatUpdated: 'تم تحديث المحادثة',
-    feedbackError: 'خطأ في إرسال التعليقات',
-    feedbackMissingQueryId: 'معرّف الاستعلام مفقود للتعليقات',
-    feedbackSubmitted: 'تم إرسال التعليقات',
-    saving: 'جارٍ الحفظ...',
-    savingConversation: 'جار虧保存 المحادثة...'
+    saving: 'جارٍ الحفظ...'
   },
   quickhelp: {
     // Labels (Short for UI)

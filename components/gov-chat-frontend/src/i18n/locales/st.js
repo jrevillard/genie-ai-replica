@@ -1581,6 +1581,7 @@ export default {
     clearContext: 'Hlakola nalane mme o qale moqoqo o motjha',
     unsavedChanges: 'O na le diphetoho tse sa bolokoang. Na o na le bonnete ba hore o batla ho qala moqoqo o motjha?',
     whatCanIHelp: 'Joang {brandwordmark} e ka thusa kajeno?',
+    mascotGreeting: 'Lumela! Nka u thusa joang kajeno?',
     quickHelpSubtitle: 'Khoo ea hao ho ea litshebeletso tsa sebohofengi tse ntle tsa bohlale.',
 
     queryContext: 'Mongolo wa Potso',
@@ -1609,7 +1610,6 @@ export default {
     feedbackMissingQueryId: 'Karabo ena e ke ke ea fumanwa maemo a teng',
     chatUpdated: 'Puisano e ntlafalitsoe',
     savingConversation: 'E boloka…',
-    thinking: 'E nahana…',
     newChatTitle: 'Qala Moqoqo o Motjha',
     exportChat: 'Ntshetsa Moqoqo Kantle',
     exportFilename: 'Lebitso la Faele',
@@ -1618,12 +1618,7 @@ export default {
     exportSuccess: 'Moqoqo o ntsheditswe kantle ka katleho',
     exportError: 'Ho hlolehile ho ntshetsa moqoqo kantle. Ka kopo leka hape.',
     removeItem: 'Susa',
-    chatUpdated: 'Puisano e ntlafalitsoe',
-    feedbackError: 'Phoso ha ho romela maikutlo',
-    feedbackMissingQueryId: 'Ha ho ID ya potso bakeng sa maikutlo',
-    feedbackSubmitted: 'Maikutlo a rometsoe',
-    saving: 'E boloka...',
-    savingConversation: 'E boloka puisano...'
+    saving: 'E boloka...'
   },
   quickhelp: {
     // Labels (Short for UI)

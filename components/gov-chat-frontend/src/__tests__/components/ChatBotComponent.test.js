@@ -2957,11 +2957,13 @@ describe('ChatBotComponent welcome heading', () => {
   // the welcome prompt below the banner.
   // -----------------------------------------------------------------------
   describe('AgroGenio banner + speech-bubble integration', () => {
-    it('renders .welcome-banner inside .quick-help-overlay (no leaves on banner)', () => {
+    it('renders .quick-help-banner inside .quick-help-overlay (the hero LI dresses it)', () => {
       const wrapper = createChatBotWrapper();
       const overlay = wrapper.find('.quick-help-overlay');
       expect(overlay.exists()).toBe(true);
-      expect(overlay.find('.welcome-banner').exists()).toBe(true);
+      // The banner element the Living Intelligence layer paints with
+      // theme.visual.assets.hero — ours is the agrogenio banner.
+      expect(overlay.find('.quick-help-banner').exists()).toBe(true);
       // Leaves decoration was moved to the right sidebar only —
       // banner stays clean so the mascot+bubble read as a single scene.
       expect(wrapper.find('.welcome-banner-leaves').exists()).toBe(false);
@@ -2969,13 +2971,13 @@ describe('ChatBotComponent welcome heading', () => {
 
     it('anchors speech bubble INSIDE the banner so the mascot appears to speak', () => {
       const wrapper = createChatBotWrapper();
-      const banner = wrapper.find('.welcome-banner');
+      const banner = wrapper.find('.quick-help-banner');
       expect(banner.exists()).toBe(true);
       const bubble = banner.find('.welcome-mascot-bubble');
       expect(bubble.exists()).toBe(true);
       // translate() is stubbed in tests to echo the key (no real i18n),
       // so the bubble renders the i18n key verbatim.
-      expect(bubble.text()).toContain('chatbot.whatCanIHelp');
+      expect(bubble.text()).toContain('chatbot.mascotGreeting');
       // No duplicate raw h2 outside the banner.
       expect(wrapper.find('.welcome-header h2').exists()).toBe(false);
     });
@@ -2985,9 +2987,24 @@ describe('ChatBotComponent welcome heading', () => {
       expect(wrapper.find('.market-prices-section').exists()).toBe(true);
     });
 
-    it('preserves the chat-input area (regression check)', () => {
+    it('preserves the chat entry (regression check)', async () => {
+      // The entry is the inline welcome composer, rendered when a config
+      // button declares placement: 'composer' (ours: just-chat). The
+      // default wrapper mock ships no buttons, so feed one explicitly.
+      const configLoader = require('../../config-loader');
+      configLoader.default.mockResolvedValue({
+        features: {
+          chat: {
+            quickHelp: {
+              buttons: [{ id: 'just-chat', title: { en: 'Just Chat' }, category: null, placement: 'composer' }]
+            }
+          }
+        }
+      });
       const wrapper = createChatBotWrapper();
-      expect(wrapper.find('.chat-input').exists()).toBe(true);
+      await flushPromises();
+      // The bottom .chat-input only mounts once a conversation is started.
+      expect(wrapper.find('[data-testid="welcome-composer"]').exists()).toBe(true);
     });
   });
 });

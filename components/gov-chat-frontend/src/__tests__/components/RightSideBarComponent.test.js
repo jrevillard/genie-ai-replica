@@ -225,9 +225,9 @@ describe('RightSideBarComponent', () => {
       expect(leaves.attributes('aria-hidden')).toBe('true');
     });
 
-    it('hides sidebar-header-leaves when sidebar is collapsed', async () => {
-      const wrapper = createRightSideBarWrapper();
-      await wrapper.setData({ sidebarCollapsed: true });
+    it('hides sidebar-header-leaves when sidebar is collapsed', () => {
+      // collapsed is a prop on the resizable shell (main), not local state.
+      const wrapper = createRightSideBarWrapper({ collapsed: true });
       expect(wrapper.find('.sidebar-header-leaves').exists()).toBe(false);
     });
   });
@@ -238,10 +238,16 @@ describe('RightSideBarComponent', () => {
       expect(wrapper.find('.sidebar').exists()).toBe(true);
     });
 
-    it('renders the sidebar header with title and toggle', () => {
+    it('renders the sidebar header with title (toggle = the resize handle)', () => {
       const wrapper = createRightSideBarWrapper();
       expect(wrapper.find('.sidebar-header').exists()).toBe(true);
-      expect(wrapper.find('.sidebar-toggle').exists()).toBe(true);
+      expect(wrapper.find('h3').exists()).toBe(true);
+      // main replaced the DsButton toggle with the SidebarHandle resize grip.
+      expect(
+        wrapper.findComponent({ name: 'SidebarHandle' }).exists() ||
+          wrapper.find('.sidebar-handle').exists() ||
+          wrapper.find('[class*=handle]').exists()
+      ).toBe(true);
     });
   });
 });

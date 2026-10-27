@@ -1589,6 +1589,7 @@ export default {
     clearContext: 'Limpar contexto e iniciar uma nova conversa',
     unsavedChanges: 'Você tem alterações não salvas. Tem certeza de que deseja iniciar um novo chat?',
     whatCanIHelp: 'Como o {brandwordmark} pode ajudá-lo hoje?',
+    mascotGreeting: 'Olá! Como posso ajudá-lo hoje?',
     quickHelpSubtitle: 'A sua porta de entrada para serviços públicos inteligentes.',
 
     queryContext: 'Contexto da Consulta',
@@ -1617,7 +1618,6 @@ export default {
     feedbackMissingQueryId: 'Esta resposta ainda não pode ser avaliada',
     chatUpdated: 'Conversa atualizada',
     savingConversation: 'Salvando…',
-    thinking: 'Pensando…',
     newChatTitle: 'Iniciar Novo Chat',
     exportChat: 'Exportar Chat',
     exportFilename: 'Nome do Arquivo',
@@ -1626,12 +1626,7 @@ export default {
     exportSuccess: 'Chat exportado com sucesso',
     exportError: 'Falha ao exportar chat. Por favor, tente novamente.',
     removeItem: 'Remover',
-    chatUpdated: 'Conversa atualizada',
-    feedbackError: 'Erro ao enviar feedback',
-    feedbackMissingQueryId: 'ID da consulta ausente para feedback',
-    feedbackSubmitted: 'Feedback enviado',
-    saving: 'Salvando...',
-    savingConversation: 'Salvando conversa...'
+    saving: 'Salvando...'
   },
   quickhelp: {
     // Labels (Short for UI)

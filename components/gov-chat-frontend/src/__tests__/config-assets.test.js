@@ -60,10 +60,10 @@ describe('runtime config asset references', () => {
     expect(fs.existsSync(path.join(CONFIG_DIR, value.replace(/^\/config\//, '')))).toBe(true);
   });
 
-  it('points the base theme at the Living Intelligence splash', () => {
+  it('points the base theme at the deployment splash (el-salvador base config)', () => {
     expect(readConfig(BASE_CONFIG).app.splash).toStrictEqual({
       type: 'file',
-      value: '/config/splash-living-intelligence.png'
+      value: '/config/agro-genio-splash.png'
     });
   });
 

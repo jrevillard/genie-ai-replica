@@ -1576,6 +1576,7 @@ export default {
     clearContext: 'Futa muktadha na anza mazungumzo mapya',
     unsavedChanges: 'Una mabadiliko ambayo hayajahifadhiwa. Una uhakika unataka kuanza mazungumzo mapya?',
     whatCanIHelp: 'Jinsi {brandwordmark} inaweza kukusaidia leo?',
+    mascotGreeting: 'Habari! Nikusaidieje leo?',
     quickHelpSubtitle: 'Lango lako kwenye huduma za umma zenye akili.',
 
     queryContext: 'Muktadha wa Hoja',
@@ -1604,7 +1605,6 @@ export default {
     feedbackMissingQueryId: 'Jibu hili halijawezi kupewa alama bado',
     chatUpdated: 'Mazungumzo yamesasishwa',
     savingConversation: 'Inahifadhi…',
-    thinking: 'Inafikiri…',
     newChatTitle: 'Anza Mazungumzo Mapya',
     exportChat: 'Hamisha Mazungumzo',
     exportFilename: 'Jina la Faili',
@@ -1613,12 +1613,7 @@ export default {
     exportSuccess: 'Mazungumzo yamehamishwa kwa mafanikio',
     exportError: 'Imeshindwa kuhamisha mazungumzo. Tafadhali jaribu tena.',
     removeItem: 'Ondoa',
-    chatUpdated: 'Mazungumzo yamesasishwa',
-    feedbackError: 'Hitilafu katika kutuma maoni',
-    feedbackMissingQueryId: 'Kitambulisho cha swali hakipo kwa maoni',
-    feedbackSubmitted: 'Maoni yametumwa',
-    saving: 'Inahifadhi...',
-    savingConversation: 'Inahifadhi mazungumzo...'
+    saving: 'Inahifadhi...'
   },
   quickhelp: {
     // Labels (Short for UI)

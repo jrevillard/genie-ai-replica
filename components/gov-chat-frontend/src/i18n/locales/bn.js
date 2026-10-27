@@ -1555,6 +1555,7 @@ export default {
     clearContext: 'প্রসঙ্গ পরিষ্কার করুন এবং একটি নতুন চ্যাট শুরু করুন',
     unsavedChanges: 'আপনার অসংরক্ষিত পরিবর্তন আছে। আপনি কি নিশ্চিত যে আপনি একটি নতুন চ্যাট শুরু করতে চান?',
     whatCanIHelp: '{brandwordmark} আজ আপনাকে কীভাবে সাহায্য করতে পারে?',
+    mascotGreeting: 'হ্যালো! আমি আজ আপনাকে কীভাবে সাহায্য করতে পারি?',
     quickHelpSubtitle: 'আপনার গেটওয়ে বুদ্ধিমান সরকারি পরিষেবার দিকে।',
 
     queryContext: 'কোয়েরি প্রসঙ্গ',
@@ -1583,7 +1584,6 @@ export default {
     feedbackMissingQueryId: 'এই উত্তরটি এখনও রেট করা যাবে না',
     chatUpdated: 'কথোপকথন আপডেট হয়েছে',
     savingConversation: 'সংরক্ষণ হচ্ছে…',
-    thinking: 'ভাবছে…',
     newChatTitle: 'নতুন চ্যাট শুরু করুন',
     exportChat: 'চ্যাট এক্সপোর্ট করুন',
     exportFilename: 'ফাইলের নাম',
@@ -1592,12 +1592,7 @@ export default {
     exportSuccess: 'চ্যাট সফলভাবে এক্সপোর্ট করা হয়েছে',
     exportError: 'চ্যাট এক্সপোর্ট করতে ব্যর্থ। অনুগ্রহ করে আবার চেষ্টা করুন।',
     removeItem: 'আইটেম সরান',
-    chatUpdated: 'চ্যাট আপডেট হয়েছে',
-    feedbackError: 'মতামত পাঠাতে ত্রুটি',
-    feedbackMissingQueryId: 'মতামতের জন্য প্রশ্ন আইডি অনুপস্থিত',
-    feedbackSubmitted: 'মতামত জমা হয়েছে',
-    saving: 'সংরক্ষণ করা হচ্ছে...',
-    savingConversation: 'কথোপকথন সংরক্ষণ করা হচ্ছে...'
+    saving: 'সংরক্ষণ করা হচ্ছে...'
   },
   quickhelp: {
     // Labels (Short for UI)

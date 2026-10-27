@@ -1621,7 +1621,6 @@ export default {
     feedbackMissingQueryId: 'Esta respuesta aún no se puede valorar',
     chatUpdated: 'Conversación actualizada',
     savingConversation: 'Guardando…',
-    thinking: 'Pensando…',
     newChatTitle: 'Iniciar Nuevo Chat',
     exportChat: 'Exportar Chat',
     exportFilename: 'Nombre de Archivo',
@@ -1630,12 +1629,7 @@ export default {
     exportSuccess: 'Chat exportado con éxito',
     exportError: 'Falló la exportación del chat. Por favor, intente nuevamente.',
     removeItem: 'Eliminar',
-    chatUpdated: 'Conversación actualizada',
-    feedbackError: 'Error al enviar comentarios',
-    feedbackMissingQueryId: 'Falta el ID de consulta para los comentarios',
-    feedbackSubmitted: 'Comentarios enviados',
-    saving: 'Guardando...',
-    savingConversation: 'Guardando conversación...'
+    saving: 'Guardando...'
   },
   quickhelp: {
     // Labels (Short for UI)

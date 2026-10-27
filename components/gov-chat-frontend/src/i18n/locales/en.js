@@ -1610,7 +1610,6 @@ export default {
     feedbackMissingQueryId: 'This answer cannot be rated yet',
     chatUpdated: 'Conversation updated',
     savingConversation: 'Saving…',
-    thinking: 'Thinking…',
     newChatTitle: 'Start New Chat',
     exportChat: 'Export Chat',
     exportFilename: 'File Name',
@@ -1623,12 +1622,7 @@ export default {
     nothingToSave: 'Nothing can be saved yet — every answer failed. Retry the conversation first.',
     unsupportedLanguage: 'This language is not available for this deployment.',
     removeItem: 'Remove item',
-    chatUpdated: 'Chat updated',
-    feedbackError: 'Error submitting feedback',
-    feedbackMissingQueryId: 'Missing query ID for feedback',
-    feedbackSubmitted: 'Feedback submitted',
-    saving: 'Saving...',
-    savingConversation: 'Saving conversation...'
+    saving: 'Saving...'
   },
   quickhelp: {
     // Labels (Short for UI)

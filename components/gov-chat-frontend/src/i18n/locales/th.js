@@ -1571,6 +1571,7 @@ export default {
     clearContext: 'ล้างบริบทและเริ่มการสนทนาใหม่',
     unsavedChanges: 'คุณมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก คุณแน่ใจว่าต้องการเริ่มแชทใหม่หรือไม่?',
     whatCanIHelp: 'วันนี้ {brandwordmark} สามารถช่วยคุณได้อย่างไร?',
+    mascotGreeting: 'สวัสดี! วันนี้ฉันช่วยอะไรคุณได้บ้าง?',
     quickHelpSubtitle: 'ประตูของคุณสู่บริการสาธารณะอัจฉริยะ',
 
     queryContext: 'บริบทคำถาม',
@@ -1599,7 +1600,6 @@ export default {
     feedbackMissingQueryId: 'ยังไม่สามารถให้คะแนนคำตอบนี้ได้',
     chatUpdated: 'อัปเดตการสนทนาแล้ว',
     savingConversation: 'กำลังบันทึก…',
-    thinking: 'กำลังคิด…',
     newChatTitle: 'เริ่มแชทใหม่',
     exportChat: 'ส่งออกแชท',
     exportFilename: 'ชื่อไฟล์',
@@ -1608,12 +1608,7 @@ export default {
     exportSuccess: 'ส่งออกแชทสำเร็จ',
     exportError: 'ล้มเหลวในการส่งออกแชท โปรดลองอีกครั้ง',
     removeItem: 'ลบ',
-    chatUpdated: 'อัปเดตการสนทนาแล้ว',
-    feedbackError: 'เกิดข้อผิดพลาดในการส่งความคิดเห็น',
-    feedbackMissingQueryId: 'ไม่มีรหัสคำถามสำหรับความคิดเห็น',
-    feedbackSubmitted: 'ส่งความคิดเห็นแล้ว',
-    saving: 'กำลังบันทึก...',
-    savingConversation: 'กำลังบันทึกการสนทนา...'
+    saving: 'กำลังบันทึก...'
   },
   quickhelp: {
     // Labels (Short for UI)

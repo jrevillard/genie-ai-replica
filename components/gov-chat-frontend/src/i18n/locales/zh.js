@@ -1514,6 +1514,7 @@ export default {
     clearContext: '清除上下文并开始新对话',
     unsavedChanges: '您有未保存的更改。您确定要开始新聊天吗？',
     whatCanIHelp: '今天 {brandwordmark} 能为您做些什么？',
+    mascotGreeting: '您好！今天有什么可以帮您？',
     quickHelpSubtitle: '您通往智能公共服务的门户。',
 
     queryContext: '查询上下文',
@@ -1541,7 +1542,6 @@ export default {
     feedbackMissingQueryId: '该回答尚无法评分',
     chatUpdated: '对话已更新',
     savingConversation: '保存中…',
-    thinking: '思考中…',
     newChatTitle: '开始新聊天',
     exportChat: '导出聊天',
     exportFilename: '文件名',
@@ -1550,12 +1550,7 @@ export default {
     exportSuccess: '聊天导出成功',
     exportError: '导出聊天失败。请重试。',
     removeItem: '移除',
-    chatUpdated: '对话已更新',
-    feedbackError: '提交反馈时出错',
-    feedbackMissingQueryId: '提交反馈时缺少查询ID',
-    feedbackSubmitted: '反馈已提交',
-    saving: '正在保存...',
-    savingConversation: '正在保存对话...'
+    saving: '正在保存...'
   },
   quickhelp: {
     // Labels (Short for UI)

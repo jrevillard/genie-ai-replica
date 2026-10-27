@@ -144,6 +144,15 @@ uninstall_chart() {
 # `app.kubernetes.io/instance: <release>` + `managed-by: Helm` — the
 # `meta.helm.sh/release-name` ANNOTATION is not usable here, label
 # selectors cannot read annotations.
+#
+# NOT swept, deliberately: the GatewayClass and the two safe-upgrades
+# admission policies the gateway-helm subchart installs under a FIXED,
+# release-less name carry no labels at all, so no label selector can
+# reach them — and deleting them would strip the shared Envoy Gateway
+# installation of its class definition and upgrade protection for every
+# other consumer on the cluster. They are per-cluster singletons, not
+# per-release resources (the cluster-scope gate treats them the same
+# way).
 delete_leaked_hook_rbac() {
   local sel="app.kubernetes.io/managed-by=Helm,app.kubernetes.io/instance=${RELEASE}"
   log "removing cluster-scoped resources owned by release ${RELEASE}"

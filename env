@@ -119,8 +119,10 @@ HUGGING_FACE_HUB_TOKEN=
 # - Reranking: Improves retrieval quality, optional but recommended
 
 # Main LLM model for chat (OPEA ChatQnA service)
-# Default: meta-llama/Meta-Llama-3.1-8B-Instruct
-# Options: meta-llama/Llama-3.1-70B-Instruct (more accurate, slower)
+# Default: ibm-granite/granite-4.1-8b
+# Options: any model that honours OpenAI-compatible
+# `response_format={"type":"json_object"}` (the labelling path needs
+# guided JSON) — e.g. ibm-granite/granite-3.3-2b-instruct (faster).
 # VLLM_LLM_MODEL_ID=
 
 # Translation model (OPEA Translation service)

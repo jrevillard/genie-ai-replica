@@ -137,7 +137,13 @@ spec:
     matchLabels:
       app.kubernetes.io/managed-by: opentelemetry-operator
   policyTypes:
+    - Ingress
     - Egress
+  # Ingress: closed. A policy that lists only Egress imposes NO ingress
+  # restriction at all — the agent's 8888 self-telemetry port would be
+  # reachable from every pod in the cluster. An empty ingress list is
+  # the deny-all.
+  ingress: []
   egress:
     # DNS resolution to kube-system.
     - to:

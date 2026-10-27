@@ -9,6 +9,8 @@
 const { mount, flushPromises } = require('@vue/test-utils');
 const { createStore } = require('vuex');
 const { createAuthenticatedState } = require('../fixtures/store-state');
+// The real en locale — the wording the notification must end up showing.
+const enChatbot = require('../../i18n/locales/en.js').default.chatbot;
 
 // ---------------------------------------------------------------------------
 // Service mocks (closure-based refs for per-test control)
@@ -122,6 +124,7 @@ jest.mock('@lucide/vue', () => ({
 const ChatBotComponent = require('../../components/ChatBotComponent.vue').default;
 const statusModule = require('../../store/modules/status.js').default;
 const conversationModule = require('../../store/modules/conversation.js').default;
+const { rehydrateConversation, STORAGE_KEY } = require('../../store/modules/conversation.js');
 
 // ---------------------------------------------------------------------------
 // Store factory
@@ -168,8 +171,9 @@ function createChatBotStore(stateOverrides = {}) {
 // Mount helper
 // ---------------------------------------------------------------------------
 
-function createChatBotWrapper(storeOverrides = {}) {
+function createChatBotWrapper(storeOverrides = {}, { rehydrate = false } = {}) {
   const store = createChatBotStore(storeOverrides);
+  if (rehydrate) rehydrateConversation(store.state.conversation);
   return mount(ChatBotComponent, {
     global: {
       plugins: [store],
@@ -506,8 +510,75 @@ describe('ChatBotComponent', () => {
       expect(vm.systemStatus.errorMessage).toBe('');
       expect(mockNotificationError).toHaveBeenCalledWith(expect.stringContaining('unsupportedLanguage'));
       const streamingMsg = vm.openMessages[vm.openMessages.length - 1];
-      // The empty turn is filled with the reason, as the en locale writes it.
-      expect(streamingMsg.content).toBe('This language is not available for this deployment.');
+      // The transcript keeps the reason (the errored bubble renders the
+      // fixed failure text and retry; the toast and the status line are
+      // what the user reads), as the en locale writes it.
+      expect(streamingMsg.content).toBe(enChatbot.unsupportedLanguage);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Restored failures — the reload path
+  // -----------------------------------------------------------------------
+  describe('restored failures', () => {
+    const restoredPayload = {
+      openId: 'open',
+      conversations: {
+        open: {
+          messages: [
+            { sender: 'user', content: 'the failed question' },
+            {
+              sender: 'bot',
+              content: 'the failed answer',
+              isError: true,
+              errorKey: 'chatbot.unsupportedLanguage',
+              timestamp: '2026-01-01T00:00:01.000Z'
+            }
+          ],
+          selectedContextItems: [],
+          lastSavedState: { messages: [], contextItems: [] },
+          conversationId: null,
+          title: '',
+          isStreaming: false,
+          streamingQueryId: null,
+          relatedDocuments: []
+        }
+      }
+    };
+
+    afterEach(() => {
+      sessionStorage.clear();
+    });
+
+    it('a failure restored from storage does not toast again', async () => {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(restoredPayload));
+      const wrapper = createChatBotWrapper({}, { rehydrate: true });
+      await wrapper.vm.$nextTick();
+
+      // The dying session already surfaced this failure. An unrelated
+      // mutation must not re-notify — not even the stale reason the
+      // restored turn still carries.
+      wrapper.vm.$store.commit('conversation/addContextItem', { source: 'quickHelp', label: 'x' });
+      await wrapper.vm.$nextTick();
+
+      expect(mockNotificationError).not.toHaveBeenCalled();
+    });
+
+    it('a fresh failure after a restored one still toasts', async () => {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(restoredPayload));
+      const wrapper = createChatBotWrapper({}, { rehydrate: true });
+      await wrapper.vm.$nextTick();
+
+      // The seed guards the restored turn, not the view: a new failure
+      // after the reload is announced as any other.
+      wrapper.vm.newMessage = 'A new question';
+      await wrapper.vm.sendMessage();
+      await wrapper.vm.$nextTick();
+      capturedCallbacks.onError(new Error('Stream failed'));
+      await wrapper.vm.$nextTick();
+
+      expect(mockNotificationError).toHaveBeenCalledTimes(1);
+      expect(mockNotificationError).toHaveBeenCalledWith(expect.stringContaining('streamingError'));
     });
   });
 

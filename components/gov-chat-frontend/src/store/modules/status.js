@@ -11,7 +11,6 @@ const mutations = {
   setOnline(state) {
     state.online = true;
     state.errorMessage = '';
-    state.lastResponseTime = null;
     state.lastUpdated = new Date();
   },
   setOffline(state, message = '') {

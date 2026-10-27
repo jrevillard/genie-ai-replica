@@ -187,6 +187,18 @@ function t(key, fallback) {
   return i18n.global.te(key) ? i18n.global.t(key) : fallback;
 }
 
+// The failure wordings, used only when a locale lacks the key — in the
+// app every locale carries every key (localeConsistency pins that), so
+// this floor is reachable only in a broken deployment. The tests assert
+// against en.js itself, so drift between this floor and the real
+// wording turns the suite red.
+const FALLBACK_WORDINGS = {
+  'chatbot.unsupportedLanguage': 'This language is not available for this deployment.',
+  'chatbot.processingError': 'Error processing your request.',
+  'chatbot.streamTimeout': 'The assistant is not responding — the request timed out.',
+  'chatbot.streamingError': 'Response was interrupted. Please try again.'
+};
+
 // The in-flight stream's AbortController lives here, outside reactive
 // state: it is not serializable and must never enter `conversations` or
 // storage. One open conversation, one slot.
@@ -290,13 +302,7 @@ const actions = {
         } else if (error.fromServer && error.message) {
           errorKey = null;
         }
-        const fallbacks = {
-          'chatbot.unsupportedLanguage': 'This language is not available for this deployment.',
-          'chatbot.processingError': 'Error processing your request.',
-          'chatbot.streamTimeout': 'The assistant is not responding — the request timed out.',
-          'chatbot.streamingError': 'Response was interrupted. Please try again.'
-        };
-        const message = errorKey === null ? error.message : t(errorKey, fallbacks[errorKey]);
+        const message = errorKey === null ? error.message : t(errorKey, FALLBACK_WORDINGS[errorKey]);
         if (refused) {
           // The backend answered the request, so the deployment is up:
           // restore the online view a previous failure may have taken
@@ -361,16 +367,7 @@ export function rehydrateConversation(moduleState) {
       return;
     }
     const clean = emptyConversation();
-    // A restored failure keeps its retry affordance (isError) but not the
-    // failure's reason key: the key is the failure session's translation
-    // context and does not carry across a reload.
-    clean.messages = entry.messages
-      .filter((m) => m && typeof m === 'object')
-      .map((m) => {
-        const message = { ...m };
-        delete message.errorKey;
-        return message;
-      });
+    clean.messages = entry.messages.filter((m) => m && typeof m === 'object');
     clean.selectedContextItems = Array.isArray(entry.selectedContextItems) ? entry.selectedContextItems : [];
     clean.relatedDocuments = Array.isArray(entry.relatedDocuments) ? entry.relatedDocuments : [];
     clean.lastSavedState =

@@ -164,7 +164,10 @@ export default {
                 case 'error': {
                   finished = true;
                   clearIdleWatch();
-                  const error = new Error(data.message || 'Stream error');
+                  // An empty frame message stays empty: the store's
+                  // generic floor renders it localized, and a hard-coded
+                  // developer string would surface as server prose.
+                  const error = new Error(data.message);
                   error.fromServer = true;
                   callbacks.onError?.(error);
                   return;

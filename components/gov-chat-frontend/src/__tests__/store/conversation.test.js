@@ -10,6 +10,10 @@ const {
 } = require('../../store/modules/conversation.js');
 
 const statusModule = require('../../store/modules/status.js').default;
+// The real en locale: the store's failure wordings must match it, or the
+// suite goes red — the mocked i18n module below sends t() to the store's
+// fallback floor, so these assertions are what pins floor == locale.
+const enChatbot = require('../../i18n/locales/en.js').default.chatbot;
 
 function freshStore() {
   return createStore({
@@ -65,6 +69,20 @@ describe('conversation module', () => {
     expect(open.messages.at(-1).content).toMatch(/failed/i);
     expect(open.messages.at(-1).isError).toBe(true);
     expect(open.messages.at(-1).errorKey).toBe('chatbot.streamingError');
+  });
+
+  it('failStream normalizes a missing errorKey and tolerates an empty payload', () => {
+    const store = freshStore();
+    store.commit('conversation/appendBotMessage', { sender: 'bot', content: '', isStreaming: true });
+    // Server prose carries no key — the recorded value is null, not
+    // undefined, so the view's null-check stays a null-check.
+    store.commit('conversation/failStream', { message: 'The retriever timed out' });
+    expect(store.getters['conversation/openConversation'].messages.at(-1).errorKey).toBeNull();
+    // No payload at all must not throw — the turn just closes empty.
+    store.commit('conversation/appendBotMessage', { sender: 'bot', content: '', isStreaming: true });
+    expect(() => store.commit('conversation/failStream')).not.toThrow();
+    expect(store.getters['conversation/openConversation'].messages.at(-1).errorKey).toBeNull();
+    expect(store.getters['conversation/openConversation'].messages.at(-1).content).toBe('');
   });
 
   it('setLastBotProperty writes through for arbitrary turn fields', () => {
@@ -166,43 +184,6 @@ describe('conversation persistence', () => {
     expect(open.messages.at(-1).isError).toBe(true);
     // The question leaves with its dead answer, as one unit.
     expect(open.messages[0].isError).toBe(true);
-  });
-
-  it('rehydration keeps a failure but drops its reason key', () => {
-    sessionStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        openId: 'open',
-        conversations: {
-          open: {
-            messages: [
-              { sender: 'user', content: 'the failed question' },
-              {
-                sender: 'bot',
-                content: 'This language is not available for this deployment.',
-                isError: true,
-                errorKey: 'chatbot.unsupportedLanguage',
-                timestamp: '2026-01-01T00:00:01.000Z'
-              }
-            ],
-            selectedContextItems: [],
-            lastSavedState: { messages: [], contextItems: [] },
-            conversationId: null,
-            title: '',
-            isStreaming: false,
-            streamingQueryId: null,
-            relatedDocuments: []
-          }
-        }
-      })
-    );
-    const store = freshStore();
-    rehydrateConversation(store.state.conversation);
-    const restored = store.getters['conversation/openConversation'].messages.at(-1);
-    // The retry affordance survives the reload; the reason key does not —
-    // it belonged to the session the failure happened in.
-    expect(restored.isError).toBe(true);
-    expect(restored.errorKey).toBeUndefined();
   });
 
   it('markInterrupted marks the aborted question together with its answer', () => {
@@ -402,7 +383,7 @@ describe('conversation sendStream action', () => {
       await failingStream(store, refusal);
       const open = store.getters['conversation/openConversation'];
       expect(open.messages.at(-1).errorKey).toBe('chatbot.unsupportedLanguage');
-      expect(open.messages.at(-1).content).toBe('This language is not available for this deployment.');
+      expect(open.messages.at(-1).content).toBe(enChatbot.unsupportedLanguage);
       expect(store.state.status.online).toBe(true);
       expect(store.state.status.errorMessage).toBe('');
     });
@@ -415,7 +396,7 @@ describe('conversation sendStream action', () => {
       await failingStream(store, refusal);
       const open = store.getters['conversation/openConversation'];
       expect(open.messages.at(-1).errorKey).toBe('chatbot.processingError');
-      expect(open.messages.at(-1).content).toBe('Error processing your request.');
+      expect(open.messages.at(-1).content).toBe(enChatbot.processingError);
       expect(store.state.status.online).toBe(true);
     });
 
@@ -426,7 +407,7 @@ describe('conversation sendStream action', () => {
       await failingStream(store, timeout);
       const open = store.getters['conversation/openConversation'];
       expect(open.messages.at(-1).errorKey).toBe('chatbot.streamTimeout');
-      expect(open.messages.at(-1).content).toBe('The assistant is not responding — the request timed out.');
+      expect(open.messages.at(-1).content).toBe(enChatbot.streamTimeout);
       expect(store.state.status.online).toBe(false);
     });
 
@@ -443,14 +424,16 @@ describe('conversation sendStream action', () => {
     });
 
     it('a server error frame without prose falls back to the generic failure', async () => {
+      // The shape the transport actually emits for a message-less error
+      // frame: chatbotService builds Error(undefined), whose message is ''.
       const store = freshStore();
-      const serverError = new Error('');
+      const serverError = new Error(undefined);
       serverError.fromServer = true;
       await failingStream(store, serverError);
       const open = store.getters['conversation/openConversation'];
       expect(open.messages.at(-1).errorKey).toBe('chatbot.streamingError');
-      expect(open.messages.at(-1).content).toBe('Response was interrupted. Please try again.');
-      expect(store.state.status.errorMessage).toBe('Response was interrupted. Please try again.');
+      expect(open.messages.at(-1).content).toBe(enChatbot.streamingError);
+      expect(store.state.status.errorMessage).toBe(enChatbot.streamingError);
     });
   });
 

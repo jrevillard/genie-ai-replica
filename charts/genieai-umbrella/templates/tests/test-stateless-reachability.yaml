@@ -43,20 +43,7 @@ spec:
         - |
           set -eu
           failures=0
-          # Each pair: <expected-status> <host:port> <path>
-          check() {
-            host=$1
-            port=$2
-            path=${3:-/health}
-            expected=$4
-            code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "http://${host}:${port}${path}" 2>/dev/null || echo 000)
-            if [ "$code" = "$expected" ]; then
-              echo "PASS: ${host}:${port}${path} -> ${code}"
-            else
-              echo "FAIL: ${host}:${port}${path} expected ${expected}, got ${code}"
-              failures=$((failures+1))
-            fi
-          }
+          {{- include "genieai-umbrella.testCheckHelper" . | nindent 10 }}
           # TCP-open probe for binary-protocol services (clamav, redis-cache).
           # The test image (curlimages/curl) ships no bash, so /dev/tcp is
           # unavailable; probe with curl's telnet:// scheme instead:

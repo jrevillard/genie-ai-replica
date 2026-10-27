@@ -39,18 +39,20 @@ the first user request. */ -}}
        the silent mismatch this file exists to prevent. Without one:
        the in-process CPU model, since a `gpu` would probe a
        compose-era endpoint that does not resolve here. */ -}}
-{{- $translationBackend := .Values.services.backend.translation.backend | default "gpu" -}}
-{{- if not (has $translationBackend (list "gpu" "cpu" "auto")) -}}
-{{- fail (printf "services.backend.translation.backend must be one of gpu|cpu|auto, got %q" $translationBackend) -}}
+{{- /* The translation backend is DERIVED, never configured. The
+application decides it on the endpoint: a deployment that NAMED a
+translation API always uses it — whatever the deployment says — and the
+backend refuses to start when that API does not answer. With no named
+API, the in-process CPU model is the only reachable translator (a
+`gpu` would probe a compose-era endpoint that does not resolve here).
+There WAS a `backend` knob here and it could only be overwritten
+(auto → gpu|cpu) or refused (cpu while an endpoint is configured), so
+it advertised a choice the chart never honoured. An overlay that still
+sets it fails the render instead of being silently rewritten. */ -}}
+{{- if .Values.services.backend.translation.backend -}}
+{{- fail "services.backend.translation.backend is not a knob: the translation backend is DERIVED — a named translation API is mandatory (the GPU path), and without one the in-process CPU model is the only reachable translator. Remove the key." -}}
 {{- end -}}
-{{- if $translationEndpoint -}}
-{{- if eq $translationBackend "cpu" -}}
-{{- fail "services.backend.translation.backend=cpu cannot be honoured while a translation endpoint is configured: a named translation API is mandatory and the application uses it whatever this knob says. Unset services.backend.translation.endpoint to translate with the in-process CPU model instead." -}}
-{{- end -}}
-{{- $translationBackend = "gpu" -}}
-{{- else -}}
-{{- $translationBackend = "cpu" -}}
-{{- end -}}
+{{- $translationBackend := ternary "gpu" "cpu" (ne $translationEndpoint "") -}}
 {{- $translationEnv := list
     (dict "name" "TRANSLATION_BACKEND" "value" $translationBackend) -}}
 {{- $probeTimeout := .Values.services.backend.translation.probeTimeoutSeconds -}}

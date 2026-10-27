@@ -78,7 +78,7 @@ spec:
           # (clamav is probed by the dedicated busybox/nc sibling pod
           # below — this curlimages/curl image carries no nc.)
           {{- if .Values.services.redisCache.enabled }}
-          check_tcp redis-cache 6379
+          check_tcp redis-cache {{ .Values.services.redisCache.port | default 6379 }}
           {{- end }}
           if [ "$failures" -gt 0 ]; then
             echo "FAIL: $failures service(s) unreachable"

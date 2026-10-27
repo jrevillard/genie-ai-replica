@@ -89,9 +89,21 @@ CONFIG_FILE="${PII_SMOKE_CONFIG:-${ROOT}/configs/otel/otel-collector-config.yaml
 # Chart-rendered configs carry the in-cluster VL Service hostname; the
 # placeholder is rewritten to this run's VL container so the collector
 # can reach it on the docker network.
-if [ "${PII_SMOKE_CONFIG:-}" ] && grep -q "genie-pii-vl-HOSTPLACEHOLDER" "$CONFIG_FILE"; then
-  sed "s/genie-pii-vl-HOSTPLACEHOLDER/${VL_CONTAINER}/g" "$CONFIG_FILE" > "${STATE_DIR}/config.yaml"
-  CONFIG_FILE="${STATE_DIR}/config.yaml"
+if [ "${PII_SMOKE_CONFIG:-}" ]; then
+  if grep -q "genie-pii-vl-HOSTPLACEHOLDER" "$CONFIG_FILE"; then
+    sed "s/genie-pii-vl-HOSTPLACEHOLDER/${VL_CONTAINER}/g" "$CONFIG_FILE" > "${STATE_DIR}/config.yaml"
+    CONFIG_FILE="${STATE_DIR}/config.yaml"
+  else
+    # A PII_SMOKE_CONFIG is by definition a chart-rendered config, and a
+    # chart-rendered config always carries the marker (chart:contract
+    # writes it). Passing an unrewritten config through pointed the
+    # collector at the in-cluster VL hostname inside an isolated docker
+    # network: zero rows arrived and the failure read as an OTTL
+    # transform problem instead of the endpoint rewrite this branch
+    # owns.
+    echo "ERROR: PII_SMOKE_CONFIG=$CONFIG_FILE carries no genie-pii-vl-HOSTPLACEHOLDER marker — it is not a chart-rendered config, or the VL hostname changed and the rewrite no longer matches (see chart:contract's extraction step)" >&2
+    exit 1
+  fi
 fi
 # Remote-daemon (socket-proxy CI) compatibility: bind-mount source paths
 # resolve on the DAEMON's filesystem, not the client's — a client-local

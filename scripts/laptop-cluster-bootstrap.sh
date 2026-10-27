@@ -118,7 +118,11 @@ while [ $# -gt 0 ]; do
     --flux-git-auth) FLUX_GIT_AUTH_FILE="$2"; shift 2 ;;
     --issuer) ISSUER_FILE="$2"; shift 2 ;;
     --skip-start) SKIP_START=1; shift ;;
-    -h|--help) sed -n '2,49p' "$0"; exit 0 ;;
+    # The header ends where the code starts (`set -euo pipefail`), so
+    # the window derives from that marker: a hardcoded line number
+    # truncated or over-closed the help every time the header grew or
+    # shrank, with no error anywhere.
+    -h|--help) sed -n '2,/^set -euo/p' "$0" | sed '$d'; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
 done

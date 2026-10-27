@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-27)
 
-- **Chart `genieai-umbrella` at 0.2.85**, branch `feat/k8s-migration` rebased
+- **Chart `genieai-umbrella` at 0.2.86**, branch `feat/k8s-migration` rebased
   onto `main` at `179a8a8f1` (0 commits behind).
 - **No application code in the branch**: the diff touches `charts/`,
   `scripts/`, `docs/`, `deploy/`, `tests/`, `site/`, `.gitlab-ci.yml`,
@@ -512,6 +512,50 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     caveat (6379 speaks RESP — a real scrape needs a redis_exporter
     sidecar first), so the next reader does not debug a scrape the
     design renders impossible.
+- **Review loop, pass 14 (0.2.86)** — 9 findings, all verified true, all
+  fixed. The one that ran deepest was my own pass-12 crosscheck fix,
+  which had patched the wrong layer:
+  - *A port-less NetworkPolicy rule never declared a flow at all* —
+    `rule_ports` returned an empty set (not None) for a rule with no
+    `ports:` block, so the any-port class was invisible one layer before
+    the `covers()` check I had "fixed": no flow, no assertion, no
+    report. Fixed at the constructor; and an any-port flow a
+    port-specific peer only partially admits is now neither silently
+    permitted (the pass-12 bug) nor falsely blocked (the pre-12 bug) —
+    it prints an ADVISORY line naming the admitted ports. Mutation:
+    a port-less backend→redis rule renders `ADVISORY … the ingress side
+    admits [6379]`.
+  - *`KEEP_RESOURCES=true` destroyed what it promised to keep* —
+    `helm uninstall --keep-resources` kept the PVCs and the very next
+    `kubectl delete namespace` cascaded them, while the log said "PVs
+    are kept". The flag now also skips the namespace deletion (the only
+    way volumes survive) and says so.
+  - *`services.redisCache.port` stopped at the Service* — the backend's
+    TRANSLATION_CACHE_PORT, the backend egress rule and the
+    reachability test hardcoded 6379, so an override produced a cluster
+    where every pod was green and the translation cache timed out.
+    All four sites derive from the knob (render-verified with 6380).
+  - *backend/frontend read raw `.Values.ingress.host`* — bypassing the
+    `ingressHost` helper's `required` fail, so a render with Keycloak
+    (the transitive guard carrier) disabled shipped `CORS_ALLOWED_ORIGINS:
+    https://` and an empty-host issuer. Both go through the helper; the
+    guard now fires with Keycloak off.
+  - *The PII smoke passed an unrewritten chart config through when the
+    placeholder marker was absent* — the collector then dialed the
+    in-cluster VL hostname inside an isolated docker network and the
+    failure read as an OTTL problem. chart:contract asserts the marker
+    exists after its hostname rewrite, and the smoke fails fast naming
+    the mismatch.
+  - *The parity doc corpus ignored values.schema.json* — a knob
+    documented only in its descriptions failed the documented-knob
+    check. `.json` is in the corpus.
+  - *`chart:install` was pinned to the branch name* — it would have
+    vanished from push pipelines the day the branch merged. The rule
+    also matches the default branch now.
+  - *The bootstrap `--help` printed a hardcoded line window* — derived
+    from the `set -euo` marker now, so header edits cannot truncate it.
+  - Plus the unbalanced-parentheses comment on `clusterProfile`, the
+    first knob block an operator reads.
 - **Review round 9 closed (0.2.67)** — three parallel adversarial passes
   over the whole final diff (core/data/services, edge/observability/OPEA,
   CI/scripts), every finding verified against a render or a live cluster
@@ -595,7 +639,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.85** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.86** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `179a8a8f1` (the tip that carries !586, !587,
   !588) — the branch is 0 commits behind `main`.

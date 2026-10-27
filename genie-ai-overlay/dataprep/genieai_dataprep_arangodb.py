@@ -841,6 +841,28 @@ def _read_index_params():
     return metric, n_lists
 
 
+def _canonical_taxonomy_order(labels: list[str | None]) -> list[str]:
+    """Return the taxonomy labels in a canonical, process-independent order.
+
+    The label list is embedded in the labelling prompt verbatim, so its order
+    is part of the prompt. An unordered collection cannot supply it: set
+    iteration order follows the interpreter's per-process string hash seed, so
+    the same taxonomy would produce a different prompt in every container —
+    and the LLM may then label the same chunk differently, a difference that
+    is invisible in the stored result.
+
+    The order is therefore derived from the labels themselves: the case-folded
+    name first, the exact name as the tie-break, so two labels differing only
+    in case still have a defined order. Labels that are not usable strings —
+    a category whose translation is missing arrives as None — are dropped
+    rather than reaching the prompt as "None".
+    """
+    return sorted(
+        {label for label in labels if isinstance(label, str) and label},
+        key=lambda label: (label.casefold(), label),
+    )
+
+
 async def _safe_log(write_ingestion_log, file_id, level, component, message):
     """Write one ingestion-log row, swallowing any exception it raises.
 
@@ -1600,8 +1622,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                                         elif isinstance(child, str):
                                             labels.append(child)
 
-                    logger.info(f"Fetched {len(labels)} labels from Backend taxonomy.")
-                    return list(set(labels))
+                    ordered_labels = _canonical_taxonomy_order(labels)
+                    logger.info(f"Fetched {len(ordered_labels)} labels from Backend taxonomy.")
+                    return ordered_labels
 
                 logger.error(f"Label fetch failed. Status: {response.status}, Body: {await response.text()}")
         except Exception as e:

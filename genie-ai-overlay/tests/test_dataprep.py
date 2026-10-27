@@ -11,6 +11,9 @@ import asyncio
 import contextlib
 import fcntl
 import json
+import os
+import subprocess
+import sys
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -19,6 +22,7 @@ import pytest
 import dataprep.genieai_dataprep_arangodb as dp_module
 import dataprep.genieai_dataprep_microservice as ms
 from dataprep.genieai_dataprep_arangodb import GenieArangoDataprep
+from tests.conftest import OVERLAY_ROOT
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -119,6 +123,47 @@ def _mock_aiohttp_session(method="patch", response_ctx=None):
     session.__aenter__ = AsyncMock(return_value=session)
     session.__aexit__ = AsyncMock(return_value=False)
     return session
+
+
+async def _fetch_labels(taxonomy):
+    """Run the real taxonomy fetch against *taxonomy* and return the labels."""
+    dp = create_dataprep()
+    resp_ctx = _mock_aiohttp_response(status=200, json_data=taxonomy)
+    session = _mock_aiohttp_session("get", resp_ctx)
+
+    with (
+        patch.object(
+            dp,
+            "_service_headers",
+            new_callable=AsyncMock,
+            return_value={"Authorization": "Bearer t", "Content-Type": "application/json"},
+        ),
+        patch.object(dp_module, "aiohttp") as mock_aiohttp,
+    ):
+        mock_aiohttp.ClientTimeout.return_value = MagicMock()
+        mock_aiohttp.ClientSession.return_value = session
+        return await dp._fetch_all_labels()
+
+
+# Runs the real taxonomy fetch in a fresh interpreter and prints the labels.
+# ``__OVERLAY_ROOT__`` is replaced with the overlay path so the probe imports
+# the service module the way pytest does — the conftest first, because it is
+# what mocks the deps the service module imports at load time.
+_FETCH_LABELS_PROBE = """
+import asyncio
+import json
+import sys
+
+sys.path.insert(0, __OVERLAY_ROOT__)
+
+import tests.conftest  # noqa: F401 - installs the vendored-dependency mocks
+from tests.test_dataprep import _fetch_labels
+
+print(json.dumps(asyncio.run(_fetch_labels([
+    {"name": "Healthcare", "children": [{"name": "Hospitals"}, {"name": "Clinics"}]},
+    {"name": "Education", "children": ["Schools"]},
+]))))
+"""
 
 
 # ---------------------------------------------------------------------------
@@ -1771,27 +1816,12 @@ class TestFetchAllLabels:
 
     @pytest.mark.asyncio
     async def test_parses_taxonomy_response(self):
-        dp = create_dataprep()
-
         taxonomy = [
             {"name": "Healthcare", "children": [{"name": "Hospitals"}, {"name": "Clinics"}]},
             {"name": "Education", "children": ["Schools"]},
         ]
-        resp_ctx = _mock_aiohttp_response(status=200, json_data=taxonomy)
-        session = _mock_aiohttp_session("get", resp_ctx)
 
-        with (
-            patch.object(
-                dp,
-                "_service_headers",
-                new_callable=AsyncMock,
-                return_value={"Authorization": "Bearer t", "Content-Type": "application/json"},
-            ),
-            patch.object(dp_module, "aiohttp") as mock_aiohttp,
-        ):
-            mock_aiohttp.ClientTimeout.return_value = MagicMock()
-            mock_aiohttp.ClientSession.return_value = session
-            labels = await dp._fetch_all_labels()
+        labels = await _fetch_labels(taxonomy)
 
         assert "Healthcare" in labels
         assert "Hospitals" in labels
@@ -1805,6 +1835,79 @@ class TestFetchAllLabels:
             labels = await dp._fetch_all_labels()
 
         assert labels == []
+
+    @pytest.mark.asyncio
+    async def test_returns_the_taxonomy_in_a_canonical_order(self):
+        """The label list is embedded in the labelling prompt verbatim.
+
+        Its order is therefore part of the prompt: two ingests of the same
+        document have to send the same prompt, or the LLM may label the same
+        chunk differently — a difference that is invisible in the stored
+        result and shows up only as noise in an A/B comparison.
+        """
+        labels = await _fetch_labels(
+            [
+                {"name": "Healthcare", "children": [{"name": "Hospitals"}, {"name": "Clinics"}]},
+                {"name": "Education", "children": ["Schools"]},
+            ]
+        )
+
+        assert labels == ["Clinics", "Education", "Healthcare", "Hospitals", "Schools"]
+
+    @pytest.mark.asyncio
+    async def test_the_order_does_not_depend_on_the_order_the_backend_returns(self):
+        """The same taxonomy, returned in another order, is the same prompt."""
+        labels = await _fetch_labels(
+            [
+                {"name": "Education", "children": ["Schools"]},
+                {"name": "Healthcare", "children": [{"name": "Clinics"}, {"name": "Hospitals"}]},
+            ]
+        )
+
+        assert labels == ["Clinics", "Education", "Healthcare", "Hospitals", "Schools"]
+
+    @pytest.mark.asyncio
+    async def test_drops_duplicates_and_labels_that_are_not_usable_strings(self):
+        """A category whose translation is missing arrives as None.
+
+        It must not reach the prompt as the string "None", and the same
+        label listed under two categories must appear once.
+        """
+        labels = await _fetch_labels(
+            [
+                {"name": "Healthcare", "children": ["Clinics", "Clinics", {"name": None}, ""]},
+                {"name": None, "children": []},
+            ]
+        )
+
+        assert labels == ["Clinics", "Healthcare"]
+
+    def test_the_same_taxonomy_yields_the_same_order_in_every_process(self):
+        """Two interpreters, two hash seeds, one answer.
+
+        ``PYTHONHASHSEED`` is randomised per process, which is what lets an
+        unordered collection reach the prompt: the probe below runs the real
+        fetch in two processes and compares what they return.
+        """
+        outputs = []
+        for seed in ("0", "1"):
+            env = dict(os.environ, PYTHONHASHSEED=seed)
+            probe = subprocess.run(
+                [
+                    sys.executable,
+                    "-c",
+                    _FETCH_LABELS_PROBE.replace("__OVERLAY_ROOT__", repr(str(OVERLAY_ROOT))),
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(OVERLAY_ROOT),
+                env=env,
+                timeout=120,
+            )
+            assert probe.returncode == 0, f"probe failed under PYTHONHASHSEED={seed}:\n{probe.stderr}"
+            outputs.append(json.loads(probe.stdout.strip().splitlines()[-1]))
+
+        assert outputs[0] == outputs[1]
 
 
 class TestRunGuardrail:

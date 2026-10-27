@@ -94,6 +94,11 @@ uses `max_tokens=160` and the batched call uses `max_tokens=len(batch) * 256 + 5
 (`DATAPREP_CONTEXTUAL_MAX_TOKENS` is unrelated — it caps the
 Contextual-Retrieval context-generation call, not labelling.)
 
+The taxonomy list in the prompt is ordered canonically — case-folded label
+name first, exact name as the tie-break — independently of the order the
+backend returns the taxonomy in. The prompt is therefore identical from one
+ingestion run to the next, so re-ingesting a document reproduces its labels.
+
 The label set returned by the LLM is then intersected with `file_labels`.
 Anything outside the document scope is dropped with an ingestion-log
 warning.

@@ -182,6 +182,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The welcome screen's subtitle was unreadable in the dark theme.** Its grey sat at 3.05:1 against the artwork behind it, below the 4.5:1 floor WCAG AA sets for 16 px text. It is now a brand tint — 9.95:1 in the light theme, 8.91:1 in the dark one — and stays a visible step below the heading.
 - **The welcome screen broke in the narrow-panel window.** With both sidebars open the panel is at its narrowest just above 1400 px: the title wrapped to two lines in the longer locales, and the wave band stopped short of the panel's edges. The title now holds one line in all 14 locales, and the wave band spans the panel's full width.
 - **The welcome screen's input placeholder wrapped to two lines.** "Ask a question, explore knowledge, or start a task…" overflowed the field in 10 of the 14 locales, including the English one. The third clause is gone in every locale, and the placeholder is measured against the field in the regression test, so it cannot come back.
+- **The label-filter strategy could not be changed in a deployment.** The
+  retriever read the strategy from an environment variable that no deployment
+  sets, so a deployment asking for `AND` (every label of the filter must be
+  present on a chunk) filtered with `OR` (one matching label is enough). The
+  retriever now reads the variable the deployment sets,
+  `RETRIEVER_ARANGO_FILTER_STRATEGY`, and refuses to start when the value is
+  neither `AND` nor `OR`. A deployment that set the old variable name must
+  rename it. A check in the configuration validator now fails the build when
+  one of the retriever's variables is read under another name, when the
+  deployment configures a variable that a service reads but no container
+  receives, or when a service reads a variable that no deployment file sets.
+  (#614)
+
 - **More links in the documentation site pointed at a page that did not answer
   the question.** The "Developer" card on the home page promised a local dev
   loop with `npm install` and `npm run dev`, but the page it opens explicitly

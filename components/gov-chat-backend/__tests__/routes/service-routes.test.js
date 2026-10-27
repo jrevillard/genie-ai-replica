@@ -19,11 +19,11 @@ jest.mock('../../services/user-provisioning-service', () => ({
 }));
 
 // Mock the TARGET service
-jest.mock('../../services/service-category-service', () => ({
-  getAllCategoriesWithServices: jest.fn(),
-  getCategoryWithServices: jest.fn(),
-  searchCategoriesAndServices: jest.fn()
-}));
+jest.mock('../../services/service-category-service', () =>
+  require('../helpers/service-mock').mockServiceFromPrototype(
+    jest.requireActual('../../services/service-category-service')
+  )
+);
 
 // Mock ALL other services loaded by index.js (even unused ones)
 jest.mock('../../services/admin-dashboard-service', () => ({

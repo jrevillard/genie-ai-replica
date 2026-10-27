@@ -32,24 +32,18 @@ jest.mock('../../services/session-service', () => ({
 // this mock used to declare `getAnalytics`, a method the service lost in the 2025
 // singleton refactor, which kept the route test green while the endpoint answered
 // 500 in production.
-jest.mock('../../services/analytics-service', () => {
-  const realService = jest.requireActual('../../services/analytics-service');
-  const mocked = {};
-  for (const name of Object.getOwnPropertyNames(Object.getPrototypeOf(realService))) {
-    if (name === 'constructor') continue;
-    // Only methods: a prototype that is not a class prototype would also expose
-    // inherited accessors (`__proto__`), and assigning those would corrupt the mock.
-    if (typeof realService[name] !== 'function') continue;
-    mocked[name] = jest.fn();
-  }
-  mocked.formatDateLabel = jest.fn((t) => t);
-  mocked.db = {
-    query: jest.fn().mockResolvedValue({
-      all: jest.fn().mockResolvedValue([])
-    })
-  };
-  return mocked;
-});
+jest.mock('../../services/analytics-service', () =>
+  require('../helpers/service-mock').mockServiceFromPrototype(jest.requireActual('../../services/analytics-service'), {
+    // The prototype-derived mock returns undefined; the controller uses this to label
+    // the series points, so it keeps the identity behaviour the time-series test asserts.
+    formatDateLabel: jest.fn((t) => t),
+    db: {
+      query: jest.fn().mockResolvedValue({
+        all: jest.fn().mockResolvedValue([])
+      })
+    }
+  })
+);
 
 // Mock swagger dependencies
 jest.mock(
@@ -301,9 +295,7 @@ describe('GET /api/analytics', () => {
     expect(response.status).toBe(404);
   });
 
-  it('should still serve the sibling dashboard route', async () => {
-    // Keeps the 404 pin honest: an unmounted router would answer 404 on the
-    // removed path too, so the pin is only meaningful while the router answers.
+  it('should keep the router mounted — the 404 pin must not be satisfiable by an unmounted router', async () => {
     const response = await authGet('/api/analytics/dashboard');
 
     expect(response.status).toBe(200);

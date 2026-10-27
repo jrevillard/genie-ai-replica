@@ -30,18 +30,11 @@ jest.mock('../../services/session-service', () => ({
 // service does not have, which hides a route calling a missing method behind a
 // green test. Deriving it means the mock can only ever expose what the service
 // actually implements.
-jest.mock('../../services/service-category-service', () => {
-  const realService = jest.requireActual('../../services/service-category-service');
-  const mocked = {};
-  for (const name of Object.getOwnPropertyNames(Object.getPrototypeOf(realService))) {
-    if (name === 'constructor') continue;
-    // Only methods: a prototype that is not a class prototype would also expose
-    // inherited accessors (`__proto__`), and assigning those would corrupt the mock.
-    if (typeof realService[name] !== 'function') continue;
-    mocked[name] = jest.fn();
-  }
-  return mocked;
-});
+jest.mock('../../services/service-category-service', () =>
+  require('../helpers/service-mock').mockServiceFromPrototype(
+    jest.requireActual('../../services/service-category-service')
+  )
+);
 
 // Mock swagger dependencies
 jest.mock(
@@ -423,9 +416,7 @@ describe('POST /api/service-categories/init', () => {
     expect(response.status).toBe(404);
   });
 
-  it('should still serve the sibling categories route', async () => {
-    // Keeps the 404 pin honest: an unmounted router would answer 404 on the
-    // removed path too, so the pin is only meaningful while the router answers.
+  it('should keep the router mounted — the 404 pin must not be satisfiable by an unmounted router', async () => {
     serviceCategoryService.getAllCategoriesWithServices.mockResolvedValue([]);
 
     const response = await authGet('/api/service-categories/categories');

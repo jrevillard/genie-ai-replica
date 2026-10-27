@@ -242,5 +242,6 @@ if ! flux reconcile helmrelease genieai -n flux-system; then
 fi
 
 log "done — watch the rollout with:"
-echo "  kubectl -n genieai get pods,svc,helmrelease"
-echo "  kubectl -n genieai rollout status deploy --timeout=300s"
+echo "  kubectl -n genieai get pods,svc"
+echo "  kubectl -n flux-system get helmrelease genieai"
+echo "  kubectl -n genieai rollout status deploy/<name> --timeout=300s   # per deployment"

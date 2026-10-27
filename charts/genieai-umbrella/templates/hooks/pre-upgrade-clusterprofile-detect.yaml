@@ -6,11 +6,13 @@ metadata:
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "clusterprofile-detect") | nindent 4 }}
   annotations:
-    # pre-upgrade ONLY: the Namespace carrying genieai.io/cluster-profile is
-    # a regular resource, and regular resources apply after every pre-install
-    # hook — on a fresh install the label cannot exist while any hook runs.
-    # By the time an upgrade starts, the previous revision's Namespace
-    # already carries the label, so drift detection has something to read.
+    # pre-upgrade ONLY: the label `genieai.io/cluster-profile` is NOT
+    # written by the chart — the chart does not render the Namespace at
+    # all. The environment owns it: the deploy repo's namespace
+    # Kustomization puts the label on the release namespace, and it is
+    # there from before the first release. A plain `helm install` (no
+    # deploy repo) creates the namespace WITHOUT the label, and this
+    # hook then takes its advisory "label absent" branch.
     "helm.sh/hook": pre-upgrade
     # Runs before the dependency check (-5) so operators checking upgrade
     # progress see profile drift surfaced alongside dependency failures.
@@ -65,7 +67,7 @@ spec:
               # every shell metacharacter in the field, and a hostile
               # label value (backtick, $, ", newline) would otherwise
               # break the printf-built manifest below. Static text only.
-              value: "cluster-profile drift: namespace label does not match the profile this release renders. If unintentional, set clusterProfile to the detected value on the next upgrade; if this upgrade intentionally changes the profile, ignore — the label updates when this upgrade applies."
+              value: "cluster-profile drift: namespace label does not match the profile this release renders. If unintentional, set clusterProfile to the detected value on the next upgrade; if this upgrade intentionally changes the profile, ignore — and note the label itself is owned by the environment (the deploy repo sets it on the namespace), not by this release."
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

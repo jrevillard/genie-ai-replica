@@ -804,10 +804,21 @@ services:
     # that owns them (uid 1000 rationale, /run/clamav tmpfs, signature
     # cache). Edit the template, not this block.
     resources: { requests: { cpu: 100m, memory: 512Mi }, limits: { cpu: 1, memory: 1Gi } }
-    env: []
+    # A MAP ({NAME: value}), like every other service's env: a list of
+    # {name, value} rows renders one variable named 0.
+    env: {}
     probes:
       readiness: { tcpSocket: { port: 3310 }, initialDelaySeconds: 60, periodSeconds: 30 }
       liveness:  { tcpSocket: { port: 3310 }, initialDelaySeconds: 120, periodSeconds: 60, failureThreshold: 5 }
+      # The upstream entrypoint starts freshclam (which downloads the
+      # ~200 MB CVD signature set) and only then opens the clamd
+      # listener: the tcpSocket probe fails for the whole download, and
+      # the liveness budget would kill the pod mid-download. With the
+      # cache disabled the kill discards the partial download and the
+      # pod restarts from zero — a crash loop. The startup probe covers
+      # the download window (30 × 10 s = 5 min) and suspends the
+      # liveness/readiness probes until the listener answers.
+      startup:  { tcpSocket: { port: 3310 }, failureThreshold: 30, periodSeconds: 10 }
     podDisruptionBudget: null
     # Egress to the ClamAV signature-distribution network on 80/443.
     # `database.clamav.net` is a CNAME-to-A round-robin and the IP set

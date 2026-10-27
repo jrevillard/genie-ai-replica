@@ -187,7 +187,6 @@ Everything else requires a valid Keycloak JWT.
 | `STREAM_ERROR` | varies | `query-routes.js:389` (generic upstream stream failure) |
 | `CITY_NOT_FOUND` | 503 | `services/weather-service.js:199` (no city within lookup radius) |
 | `CHATQNA_UNAVAILABLE` | 504 | `query-routes.js:384` (ChatQnA timeout / aborted) |
-| `INVALID_FILTERS_JSON` | 400 | `analytics-routes.js:289` (malformed `filters` query param) |
 | `Not Found` | 404 | Sensitive-path blocker (`index.js:566`), 404 fallback (`index.js:822`) |
 
 > **Note:** the legacy `UNAUTHORIZED` code is **not** emitted. Clients
@@ -518,7 +517,6 @@ survive a folder-recreate). See [Deletion semantics](#deletion-semantics).
 |--------|------|------|-------------|
 | GET | `/dashboard` | Yes | Aggregate dashboard metrics |
 | GET | `/metric/:metric` | Yes | Single metric (generic) |
-| GET | `/` | Yes | High-level overview |
 | GET | `/timeseries/:metricType` | Yes | Time-bucketed series |
 | POST | `/events` | Yes | Record a custom analytics event |
 | GET | `/records` | Yes | Raw event records |
@@ -602,7 +600,6 @@ required**: **Yes** on every endpoint.
 | POST | `/` | Yes | Create category |
 | DELETE | `/:categoryId` | Yes | Soft-delete category |
 | DELETE | `/services/:serviceId` | Yes | Soft-delete service |
-| POST | `/init` | Yes | Initialize default categories (idempotent) |
 | POST | `/:categoryId/services` | Yes | Add service to category |
 | PUT | `/:categoryId` | Yes | Update category metadata |
 | PUT | `/services/:serviceId` | Yes | Update service metadata |

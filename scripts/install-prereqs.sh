@@ -138,10 +138,17 @@ EOF
   # Everything below is idempotent and runs on EVERY invocation so
   # out-of-band drift (e.g. someone re-applies the upstream kustomization
   # bare, or a subject namespace drifts) is repaired on the next run.
+  # `add`, not `replace`: on a JSON patch, `replace` fails when the
+  # member is missing, while `add` on an existing object member sets it
+  # and only fails when the PARENT (subjects) is absent. The operator
+  # then reconciles Keycloak CRs only in its own namespace and the
+  # chart's Keycloak CR in the application namespace sits unreconciled
+  # — a symptom (a Keycloak pod that never becomes Ready) that points
+  # nowhere near this patch.
   kubectl patch clusterrolebinding keycloak-operator-clusterrole-binding \
     --type json \
-    -p "[{\"op\":\"replace\",\"path\":\"/subjects/0/namespace\",\"value\":\"${ns}\"}]" \
-    || warn "could not patch keycloak-operator-clusterrole-binding (absent or renamed upstream) — the operator may reconcile only its own namespace"
+    -p "[{\"op\":\"add\",\"path\":\"/subjects/0/namespace\",\"value\":\"${ns}\"}]" \
+    || warn "could not patch keycloak-operator-clusterrole-binding (absent or renamed upstream) — the operator will reconcile Keycloak CRs only in its own namespace, and the release's Keycloak CR will never become Ready"
   # The upstream kustomization ships namespaced RoleBindings only, so the
   # operator reconciles Keycloak CRs in its own namespace and ignores
   # every application namespace. GENIE.AI renders Keycloak CRs next to

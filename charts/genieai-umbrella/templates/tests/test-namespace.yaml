@@ -174,10 +174,22 @@ spec:
           # NOAUTH) while the TCP probe still passes.
           required_secrets="$required_secrets translation-cache-password"
           {{- end }}
-          {{- if and .Values.data.keycloak.enabled (not .Values.data.keycloak.convergence.enabled) }}
-          # Without the convergence Job the realm carries no client secrets,
-          # so this one is never injected anywhere.
-          required_secrets="$required_secrets keycloak-proxy-client-secret"
+          {{- if and .Values.data.keycloak.enabled .Values.data.keycloak.convergence.enabled }}
+          # The convergence Job mounts the bootstrap admin credentials and
+          # every envSecrets row through NON-optional secretKeyRefs — a
+          # missing Secret is a CreateContainerConfigError on the
+          # post-install hook, which 'helm install --wait' reports as a
+          # pod-named failure far from its cause. The names derive from the
+          # values, so an operator who renamed the admin Secret or pointed
+          # a row elsewhere is tested against the Secrets the Job actually
+          # reads. (The proxy-client Secret is NOT asserted here by name:
+          # the backend's envFrom on it is optional:true, and when the
+          # convergence Job is disabled nothing consumes it at all — the
+          # one shape this gate used to fail falsely.)
+          required_secrets="$required_secrets {{ .Values.data.keycloak.bootstrapAdmin.userSecret | default "keycloak-admin-credentials" }}"
+          {{- range .Values.data.keycloak.convergence.envSecrets }}
+          required_secrets="$required_secrets {{ .secretName }}"
+          {{- end }}
           {{- end }}
           {{- if .Values.opea.enabled }}
           # The OPEA tier mounts both through NON-optional secretKeyRefs

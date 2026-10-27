@@ -96,8 +96,10 @@ def svc_reads(templates_dir):
 
 def shape_block_keys(values_text):
     """Keys the `# Per-service entry shape:` comment block documents —
-    the lines shaped `#   key:` between that heading and the blank line
-    that ends the block."""
+    the lines shaped `#   key:` between that heading and the FIRST blank
+    line, which ends the block. Stopping anywhere later would fold
+    unrelated commented examples (values.yaml is dense with them) into
+    the accepted $svc surface and over-permit undeclared keys."""
     keys = set()
     in_block = False
     for line in values_text.splitlines():
@@ -105,10 +107,12 @@ def shape_block_keys(values_text):
             in_block = True
             continue
         if in_block:
+            if not line.strip():
+                break
             m = re.match(r"#\s+([a-zA-Z][a-zA-Z0-9_.]*):", line)
             if m:
                 keys.add(m.group(1))
-            elif line.strip() and not line.lstrip().startswith("#"):
+            elif not line.lstrip().startswith("#"):
                 break
     return keys
 
@@ -162,8 +166,9 @@ def main():
               f"{' (+%d more)' % (len(missing[key]) - 1) if len(missing[key]) > 1 else ''}")
 
     svc_surface = per_service_surface(yaml.safe_load(values_path.read_text()) or {})
+    svc_read_map = svc_reads(CHART / "templates")
     svc_missing = {}
-    for key, sites in svc_reads(CHART / "templates").items():
+    for key, sites in svc_read_map.items():
         if key in svc_surface:
             continue
         parent = key.rsplit(".", 1)[0]
@@ -184,7 +189,7 @@ def main():
             "if the template consumes it only to reject it."
         )
         return 1
-    print(f"all {len(reads)} values reads and {len(svc_reads(CHART / 'templates'))}"
+    print(f"all {len(reads)} values reads and {len(svc_read_map)}"
           " per-service reads are declared")
     return 0
 

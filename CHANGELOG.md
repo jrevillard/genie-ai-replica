@@ -187,9 +187,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sets, so a deployment asking for `AND` (every label of the filter must be
   present on a chunk) filtered with `OR` (one matching label is enough). The
   retriever now reads the variable the deployment sets,
-  `RETRIEVER_ARANGO_FILTER_STRATEGY`. A check in the configuration validator
-  fails the build when a variable the deployment sets is read by no service, or
-  is read under another name. (#614)
+  `RETRIEVER_ARANGO_FILTER_STRATEGY`, and refuses to start when the value is
+  neither `AND` nor `OR`. A check in the configuration validator fails the
+  build when a variable the deployment sets is read under another name, when
+  the deployment configures a variable that no container receives, or when a
+  service reads a variable that no deployment file sets. (#614)
 
 - **More links in the documentation site pointed at a page that did not answer
   the question.** The "Developer" card on the home page promised a local dev

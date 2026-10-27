@@ -124,6 +124,7 @@ operator's value wins over a derived row of the same name. */ -}}
     "probes" (dict
       "readiness" (dict "tcpSocket" (dict "port" 5000) "initialDelaySeconds" 30 "periodSeconds" 15)
       "liveness"  (dict "tcpSocket" (dict "port" 5000) "initialDelaySeconds" 60 "periodSeconds" 30)
+      "startup"   (dict "tcpSocket" (dict "port" 5000) "failureThreshold" 30 "periodSeconds" 10)
     )
 -}}
 {{- $_ := set $vals.services "dataprep" $svcVals -}}

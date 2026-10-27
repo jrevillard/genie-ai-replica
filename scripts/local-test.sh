@@ -43,6 +43,19 @@ CLIENT_DATAPREP="dummy-dataprep-$(date +%s)"
 CLIENT_GRAFANA="dummy-grafana-$(date +%s)"
 
 echo "=== STEP 0: preflight ==="
+# The whole script targets the minikube context, but switching the
+# kubeconfig's current-context is a MACHINE-WIDE side effect: without
+# the restore below, every other kubectl session on the laptop silently
+# targets minikube afterwards — the same clobber class that made the
+# Makefile run `ct install` against a throwaway KUBECONFIG.
+PREV_CONTEXT="$(kubectl config current-context 2>/dev/null || true)"
+restore_context() {
+  if [ -n "$PREV_CONTEXT" ] && [ "$PREV_CONTEXT" != "$MINIKUBE_PROFILE" ]; then
+    kubectl config use-context "$PREV_CONTEXT" >/dev/null 2>&1 || true
+    echo "  kubeconfig current-context restored to '$PREV_CONTEXT'"
+  fi
+}
+trap restore_context EXIT
 kubectl config use-context "$MINIKUBE_PROFILE"
 helm version --short
 

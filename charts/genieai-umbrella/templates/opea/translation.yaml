@@ -80,6 +80,16 @@ spec:
               port: 8888
             initialDelaySeconds: 60
             periodSeconds: 30
+          # Cold start: the translation worker loads the model before it
+          # binds 8888; without a startup window the liveness probe's
+          # 60s + 3x30s budget kills the pod mid-load on a contended
+          # node (the same slow-start class the factory services got
+          # startup probes for).
+          startupProbe:
+            tcpSocket:
+              port: 8888
+            failureThreshold: 30
+            periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service

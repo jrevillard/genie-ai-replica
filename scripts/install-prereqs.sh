@@ -183,41 +183,43 @@ EOF
   wait_deploy_ready "${ns}" "keycloak-operator"
 }
 
-install_cloudnative_pg() {
-  local ns="cnpg-system" release="cnpg"
+# The five helm-installed operators share one shape: namespace, an
+# already-installed gate on the release name, repo add + update, a pinned
+# --wait install, and a wait on the operator Deployment. One parameterized
+# body instead of five hand-copied ones: a fix to the gate or the wait
+# logic lands once. (The gate keys on the release NAME, so a stale release
+# at a different chart version is skipped as "already installed" — a
+# pre-existing decision this refactor preserves, now in one place.)
+helm_install_operator() {
+  local ns="$1" release="$2" repo_name="$3" repo_url="$4" chart="$5" version="$6" deployment="$7"
+  shift 7
   ensure_namespace "${ns}"
   if helm list -n "${ns}" -q 2>/dev/null | grep -qx "${release}"; then
-    log "cloudnative-pg ${CNPG_VERSION} (release ${release}): already installed, skip"
+    log "${chart} ${version} (release ${release}): already installed, skip"
     return 0
   fi
-  log "cloudnative-pg ${CNPG_VERSION}: helm install"
-  helm repo add cnpg https://cloudnative-pg.github.io/charts >/dev/null 2>&1 || true
+  log "${chart} ${version}: helm install"
+  helm repo add "${repo_name}" "${repo_url}" >/dev/null 2>&1 || true
   helm repo update >/dev/null 2>&1
-  helm install "${release}" cnpg/cloudnative-pg \
-    --version "${CNPG_VERSION}" \
+  helm install "${release}" "${repo_name}/${chart}" \
+    --version "${version}" \
     --namespace "${ns}" --create-namespace=false \
-    --wait --timeout "${READY_TIMEOUT}"
-  wait_deploy_ready "${ns}" "cnpg-cloudnative-pg"
+    --wait --timeout "${READY_TIMEOUT}" \
+    "$@"
+  wait_deploy_ready "${ns}" "${deployment}"
+}
+
+install_cloudnative_pg() {
+  helm_install_operator cnpg-system cnpg cnpg https://cloudnative-pg.github.io/charts \
+    cloudnative-pg "${CNPG_VERSION}" cnpg-cloudnative-pg
 }
 
 install_kube_arangodb() {
-  local ns="arango-system" release="kube-arangodb"
-  ensure_namespace "${ns}"
-  if helm list -n "${ns}" -q 2>/dev/null | grep -qx "${release}"; then
-    log "kube-arangodb ${ARANGO_OPERATOR_VERSION} (release ${release}): already installed, skip"
-    return 0
-  fi
-  log "kube-arangodb ${ARANGO_OPERATOR_VERSION}: helm install"
-  helm repo add arango https://arangodb.github.io/kube-arangodb >/dev/null 2>&1 || true
-  helm repo update >/dev/null 2>&1
-  helm install "${release}" arango/kube-arangodb \
-    --version "${ARANGO_OPERATOR_VERSION}" \
-    --namespace "${ns}" --create-namespace=false \
-    --wait --timeout "${READY_TIMEOUT}"
   # The chart's fullname helper mangles the release name: release
   # "kube-arangodb" renders the operator Deployment as
   # "arango-kube-arangodb-operator" (verified live on the laptop cluster).
-  wait_deploy_ready "${ns}" "arango-kube-arangodb-operator"
+  helm_install_operator arango-system kube-arangodb arango https://arangodb.github.io/kube-arangodb \
+    kube-arangodb "${ARANGO_OPERATOR_VERSION}" arango-kube-arangodb-operator
 }
 
 install_sealed_secrets() {
@@ -249,62 +251,27 @@ install_cert_manager() {
   # chart issues cert-manager.io/v1 Certificates for its serving certs;
   # without cert-manager the webhook pod never becomes Ready and every
   # OpenTelemetryCollector CR write is rejected).
-  local ns="cert-manager" release="cert-manager"
-  ensure_namespace "${ns}"
-  if helm list -n "${ns}" -q 2>/dev/null | grep -qx "${release}"; then
-    log "cert-manager ${CERT_MANAGER_VERSION} (release ${release}): already installed, skip"
-    return 0
-  fi
-  log "cert-manager ${CERT_MANAGER_VERSION}: helm install"
-  helm repo add jetstack https://charts.jetstack.io >/dev/null 2>&1 || true
-  helm repo update >/dev/null 2>&1
-  helm install "${release}" jetstack/cert-manager \
-    --version "${CERT_MANAGER_VERSION}" \
-    --namespace "${ns}" --create-namespace=false \
-    --set crds.enabled=true \
-    --wait --timeout "${READY_TIMEOUT}"
-  wait_deploy_ready "${ns}" "cert-manager"
+  helm_install_operator cert-manager cert-manager jetstack https://charts.jetstack.io \
+    cert-manager "${CERT_MANAGER_VERSION}" cert-manager \
+    --set crds.enabled=true
 }
 
 install_vmoperator() {
   # Reconciles the chart's VLSingle/VMSingle/VTSingle/VMServiceScrape
   # CRs (operator.victoriametrics.com group). Required by the default
   # install: the log tier (VictoriaLogs baseline) is on by default.
-  local ns="vmoperator-system" release="victoria-metrics-operator"
-  ensure_namespace "${ns}"
-  if helm list -n "${ns}" -q 2>/dev/null | grep -qx "${release}"; then
-    log "victoria-metrics-operator ${VM_OPERATOR_VERSION} (release ${release}): already installed, skip"
-    return 0
-  fi
-  log "victoria-metrics-operator ${VM_OPERATOR_VERSION}: helm install"
-  helm repo add vm https://victoriametrics.github.io/helm-charts >/dev/null 2>&1 || true
-  helm repo update >/dev/null 2>&1
-  helm install "${release}" vm/victoria-metrics-operator \
-    --version "${VM_OPERATOR_VERSION}" \
-    --namespace "${ns}" --create-namespace=false \
-    --wait --timeout "${READY_TIMEOUT}"
-  wait_deploy_ready "${ns}" "victoria-metrics-operator"
+  helm_install_operator vmoperator-system victoria-metrics-operator vm https://victoriametrics.github.io/helm-charts \
+    victoria-metrics-operator "${VM_OPERATOR_VERSION}" victoria-metrics-operator
 }
 
 install_otel_operator() {
   # Reconciles the chart's OpenTelemetryCollector CRs (gateway + filelog
   # agent). Depends on cert-manager (install_cert_manager runs first).
-  local ns="opentelemetry-operator-system" release="opentelemetry-operator"
-  ensure_namespace "${ns}"
-  if helm list -n "${ns}" -q 2>/dev/null | grep -qx "${release}"; then
-    log "opentelemetry-operator ${OTEL_OPERATOR_VERSION} (release ${release}): already installed, skip"
-    return 0
-  fi
-  log "opentelemetry-operator ${OTEL_OPERATOR_VERSION}: helm install"
-  helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts >/dev/null 2>&1 || true
-  helm repo update >/dev/null 2>&1
-  helm install "${release}" open-telemetry/opentelemetry-operator \
-    --version "${OTEL_OPERATOR_VERSION}" \
-    --namespace "${ns}" --create-namespace=false \
-    --wait --timeout "${READY_TIMEOUT}"
-  # Chart renders the manager Deployment as plain "opentelemetry-operator"
-  # (no -controller-manager suffix; verified live on the laptop cluster).
-  wait_deploy_ready "${ns}" "opentelemetry-operator"
+  # The chart renders the manager Deployment as plain
+  # "opentelemetry-operator" (no -controller-manager suffix; verified
+  # live on the laptop cluster).
+  helm_install_operator opentelemetry-operator-system opentelemetry-operator open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts \
+    opentelemetry-operator "${OTEL_OPERATOR_VERSION}" opentelemetry-operator
 }
 
 install_gateway_api_crds() {

@@ -3187,11 +3187,6 @@ chart:lint:
     # cluster.
     - >-
       helm template test charts/genieai-umbrella -n genieai $(cat charts/ci/render-base-flags)
-      --set ingress.enabled=true
-      --set ingress.createGatewayClass=true
-      --set 'data.keycloak.clientSecrets.proxyClient=lint-dummy'
-      --set 'data.keycloak.clientSecrets.dataprep=lint-dummy'
-      --set 'data.keycloak.clientSecrets.grafana=lint-dummy'
       > /tmp/rendered.yaml
     # Full-surface render (render-only, no install cost): with defaults
     # opea.enabled / observability.metrics / traces / grafana are all OFF,
@@ -3200,17 +3195,8 @@ chart:lint:
     # base render cannot see.
     - >-
       helm template test charts/genieai-umbrella -n genieai $(cat charts/ci/render-base-flags)
-      --set ingress.enabled=true
-      --set ingress.createGatewayClass=true
-      --set 'data.keycloak.clientSecrets.proxyClient=lint-dummy'
-      --set 'data.keycloak.clientSecrets.dataprep=lint-dummy'
-      --set 'data.keycloak.clientSecrets.grafana=lint-dummy'
-      --set opea.enabled=true
+      $(cat charts/ci/render-full-flags)
       --set opea.gpu.nodeHost=https://gpu.ci-render.local:444
-      --set observability.metrics.enabled=true
-      --set observability.traces.enabled=true
-      --set observability.grafana.enabled=true
-      --set data.arangodb.mode=cluster
       > /tmp/rendered-full.yaml
     # Production topology render. clusterProfile=prod is enum-legal and
     # nothing else in CI ever selects it, so the whole prod surface was
@@ -3221,11 +3207,6 @@ chart:lint:
     # cert-manager Certificate, which no other render emits either.
     - >-
       helm template test charts/genieai-umbrella -n genieai $(cat charts/ci/render-base-flags)
-      --set ingress.enabled=true
-      --set ingress.createGatewayClass=true
-      --set 'data.keycloak.clientSecrets.proxyClient=lint-dummy'
-      --set 'data.keycloak.clientSecrets.dataprep=lint-dummy'
-      --set 'data.keycloak.clientSecrets.grafana=lint-dummy'
       --set clusterProfile=prod
       --set ingress.tls.enabled=true
       --set ingress.tls.issuerName=selfsigned
@@ -3237,17 +3218,8 @@ chart:lint:
     # differs between the two modes.
     - >-
       helm template test charts/genieai-umbrella -n genieai $(cat charts/ci/render-base-flags)
-      --set ingress.enabled=true
-      --set ingress.createGatewayClass=true
-      --set 'data.keycloak.clientSecrets.proxyClient=lint-dummy'
-      --set 'data.keycloak.clientSecrets.dataprep=lint-dummy'
-      --set 'data.keycloak.clientSecrets.grafana=lint-dummy'
-      --set opea.enabled=true
+      $(cat charts/ci/render-full-flags)
       --set opea.gpu.mode=in-cluster
-      --set observability.metrics.enabled=true
-      --set observability.traces.enabled=true
-      --set observability.grafana.enabled=true
-      --set data.arangodb.mode=cluster
       > /tmp/rendered-incluster.yaml
     - >-
       curl -fsSL
@@ -3573,17 +3545,8 @@ chart:crd-validate:
     - |
       set -e
       helm template test charts/genieai-umbrella -n genieai $(cat charts/ci/render-base-flags) \
-        --set ingress.enabled=true \
-        --set ingress.createGatewayClass=true \
-        --set 'data.keycloak.clientSecrets.proxyClient=lint-dummy' \
-        --set 'data.keycloak.clientSecrets.dataprep=lint-dummy' \
-        --set 'data.keycloak.clientSecrets.grafana=lint-dummy' \
-        --set opea.enabled=true \
+        $(cat charts/ci/render-full-flags) \
         --set opea.gpu.mode=in-cluster \
-        --set observability.metrics.enabled=true \
-        --set observability.traces.enabled=true \
-        --set observability.grafana.enabled=true \
-        --set data.arangodb.mode=cluster \
         > /tmp/crd-validate.yaml
     # The second render exists because the first one is not the deployment
     # that ships: clusterProfile=prod multiplies the replicas and puts the
@@ -3597,20 +3560,11 @@ chart:crd-validate:
     - |
       set -e
       helm template test charts/genieai-umbrella -n genieai $(cat charts/ci/render-base-flags) \
-        --set ingress.enabled=true \
-        --set ingress.createGatewayClass=true \
-        --set 'data.keycloak.clientSecrets.proxyClient=lint-dummy' \
-        --set 'data.keycloak.clientSecrets.dataprep=lint-dummy' \
-        --set 'data.keycloak.clientSecrets.grafana=lint-dummy' \
+        $(cat charts/ci/render-full-flags) \
         --set clusterProfile=prod \
         --set ingress.tls.enabled=true \
         --set ingress.tls.issuerName=selfsigned \
-        --set opea.enabled=true \
         --set opea.gpu.nodeHost=https://gpu-node:444 \
-        --set observability.metrics.enabled=true \
-        --set observability.traces.enabled=true \
-        --set observability.grafana.enabled=true \
-        --set data.arangodb.mode=cluster \
         > /tmp/crd-validate-prod.yaml
       ./scripts/validate-crds.sh /tmp/crd-validate.yaml /tmp/crd-validate-prod.yaml
   rules:

@@ -50,8 +50,9 @@ global:
   imagePullPolicy: ""
 
 # Drives chart-derived defaults (replica counts, data-tier topology,
-# observability). dev | staging | prod (sovereign is reserved (rejected by values.schema.json's clusterProfile enum until the sovereign profile lands — its branches
-# land with the sovereign deployment tier; it is rejected until then).
+# observability). dev | staging | prod — sovereign is reserved until the
+# sovereign deployment tier lands (values.schema.json's clusterProfile
+# enum rejects it until then).
 clusterProfile: dev
 
 # Observability. Per-component flags — there is intentionally NO

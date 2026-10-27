@@ -116,7 +116,7 @@ explicit `false` back to `true`. */ -}}
     (dict "name" "ENABLE_OBSERVABILITY" "value" (include "genieai-umbrella.observabilityEnabledFlag" .))
     (dict "name" "TRANSLATION_CACHE" "value" "on")
     (dict "name" "TRANSLATION_CACHE_HOST" "value" (printf "redis-cache.%s.svc.cluster.local" $ns))
-    (dict "name" "TRANSLATION_CACHE_PORT" "value" "6379")
+    (dict "name" "TRANSLATION_CACHE_PORT" "value" (.Values.services.redisCache.port | default 6379 | toString))
     (dict "name" "STREAMING_TRANSLATION_ENABLED" "value" (ternary "1" "0" $streamingTranslation))
 -}}
 {{- /* The public origin: the browser's origin is the deployment's ingress,
@@ -124,7 +124,11 @@ not a localhost list. Compose derives the same two rows from
 NGINX_PUBLIC_DOMAIN; the chart derives them from ingress.scheme +
 ingress.host, and the operator's own value (services.backend.env) wins
 over both — the rows below come first, the operator's last. */ -}}
-{{- $publicHost := .Values.ingress.host -}}
+{{- /* Through the helper, not the raw value: the helper carries the
+`required` fail and the IPv6 rejection, and a render with Keycloak (the
+transitive guard carrier) disabled must fail HERE too instead of
+shipping CORS/CSP origins built from an empty host. */ -}}
+{{- $publicHost := include "genieai-umbrella.ingressHost" . -}}
 {{- $publicScheme := .Values.ingress.scheme | default "https" -}}
 {{- $publicOrigin := printf "%s://%s" $publicScheme $publicHost -}}
 {{- /* The WebSocket source follows the PUBLIC scheme: a browser on an
@@ -265,7 +269,9 @@ spec:
         - protocol: TCP
           port: 53
     # Data tier: ArangoDB (8529), CNPG keycloak-db (5432), Keycloak (8080),
-    # Redis cache (6379). Port-scoped any-destination pending verified
+    # Redis cache (services.redisCache.port, default 6379 — the same knob
+    # the Service and the backend's TRANSLATION_CACHE_PORT derive from).
+    # Port-scoped any-destination pending verified
     # peer labels — see header note above. Operators tightening to
     # specific peers should override this rule via the pluggable
     # `networkPolicy.peers` surface (Plan 6) rather than editing the
@@ -281,7 +287,7 @@ spec:
         - protocol: TCP
           port: 8080
         - protocol: TCP
-          port: 6379
+          port: {{ .Values.services.redisCache.port | default 6379 }}
         # OTLP exporter: required for the observability pipeline. Without
         # this port the default-deny policy drops all traces at the source.
         - protocol: TCP

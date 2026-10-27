@@ -634,7 +634,6 @@ export default {
 }
 [data-theme='dark'] .sidebar-header-leaves {
   opacity: 0.72;
-  filter: brightness(1.1);
 }
 
 .sidebar-section {

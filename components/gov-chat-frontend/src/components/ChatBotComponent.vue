@@ -3179,6 +3179,8 @@ export default {
     --qh-veil-pad: 8px;
     --qh-heading-scale: 0.92;
   }
+}
+
 .quick-help-overlay > :last-child {
   margin-bottom: auto;
 }

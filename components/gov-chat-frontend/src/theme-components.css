@@ -399,6 +399,8 @@ td {
 .file-type-badge[data-tone='accent'] {
   color: var(--accent);
   background: var(--accent-muted);
+}
+
 /* ================================================================
    APEXCHARTS TOOLTIP — override hardcoded colors with DS tokens
    ApexCharts renders tooltips portal-style at body level with inline

@@ -163,6 +163,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The labelling prompt was different on every ingestion run.** The candidate
+  labels sent to the labelling LLM were collected in a Python set, whose order
+  follows the hash seed of the process that built it — so every container sent
+  the same taxonomy in a different order, and the LLM could pick a different
+  label set for the same chunk. The list now keeps the shape the backend
+  returns — each category followed by the services under it — with a canonical
+  order inside each category (case-folded name, exact name as the tie-break),
+  independently of the order the taxonomy arrives in; the labels a chunk
+  stores are in that same order. Two ingestion runs now send the same prompt,
+  so an A/B comparison between labelling runs measures the change under test
+  instead of the prompt ordering. A label whose translation is missing no
+  longer reaches the prompt as the text "None": the per-fetch log line states
+  how many entries carried no usable label and how many the payload held that
+  the parser did not recognise. (#1109, !612)
 - **The welcome screen's title is wrapped in a local scrim instead of a full-width band.** The scrim used to span the whole artwork, washing the icon tiles along with the text; it now hugs the heading and its subtitle and fades on every side, as the designer's mockup does.
 - **The welcome screen's input bar was the wrong size.** It took 96 % of the card row's width and stood 90 px tall — a two-line field. It now takes 81 % of the row (805 px of 989 in the mockup) and rests at 50 px, one line, growing with what is typed into it.
 - **The welcome screen's subtitle was unreadable in the dark theme.** Its grey sat at 3.05:1 against the artwork behind it, below the 4.5:1 floor WCAG AA sets for 16 px text. It is now a brand tint — 9.95:1 in the light theme, 8.91:1 in the dark one — and stays a visible step below the heading.

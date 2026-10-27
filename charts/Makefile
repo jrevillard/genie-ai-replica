@@ -53,7 +53,17 @@ test: test-umbrella
 # + CNPG Cluster + ArangoDeployment onto a bare kind cluster with none
 # of their CRDs installed — `no matches for kind "Keycloak"` on every
 # run of this target.
-TIER_DISABLE = --set data.postgres.enabled=false --set data.arangodb.enabled=false --set data.keycloak.enabled=false
+#
+# The services that DEPEND on the data tier go with it: the pre-install
+# dependency-check hook refuses an install whose enabled component
+# depends on a disabled one (values.yaml dependencyGraph — backend ->
+# [keycloak, arangodb, redisCache], documentRepository -> [keycloak,
+# arangodb, clamav], frontend -> [backend, keycloak]). Leaving the
+# services on made the hook fail the install the target is supposed to
+# prove. What remains installs on a bare kind cluster: clamav, redis,
+# the edge tier and the observability CRs.
+TIER_DISABLE = --set data.postgres.enabled=false --set data.arangodb.enabled=false --set data.keycloak.enabled=false \
+	--set services.backend.enabled=false --set services.frontend.enabled=false --set services.documentRepository.enabled=false
 CT_INSTALL_FLAGS = --config ci/ct.yaml --helm-extra-set-args "$(TIER_DISABLE) $(RENDER_FLAGS)"
 
 # KUBECONFIG isolation: ct install creates AND DELETES its own kind

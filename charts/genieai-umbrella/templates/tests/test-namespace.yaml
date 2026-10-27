@@ -147,26 +147,14 @@ spec:
           ns="{{ .Values.namespace }}"
           echo "test Pod checking required Secrets in namespace"
           # The chart does not render any Secret — operators bring each
-          # one by their preferred secret backend. Poll for materialization
-          # up to 30 × 2s (operator-side propagation can be async).
-          check_secret() {
-            name="$1"
-            i=0
-            while [ "$i" -lt 30 ]; do
-              if kubectl get secret "$name" -n "$ns" >/dev/null 2>&1; then
-                echo "OK: K8s Secret materialized: $name"
-                return 0
-              fi
-              i=$((i+1))
-              sleep 2
-            done
-            echo "FAIL: K8s Secret never materialized: $name (operator must provide via their secret backend)"
-            return 1
-          }
-          failed=0
+          # one by their preferred secret backend. The whole list is
+          # polled at once (one 60 s budget, not one per Secret): the
+          # per-Secret budget ran past helm's 5-minute test timeout once
+          # the list grew, and the FAIL line that NAMES the missing
+          # Secret is exactly what the operator needs.
+          required_secrets=""
           {{- if .Values.data.arangodb.enabled }}
-          check_secret arango-jwt-secret || failed=1
-          check_secret arango-root-secret || failed=1
+          required_secrets="$required_secrets arango-jwt-secret arango-root-secret"
           {{- end }}
           {{- if or .Values.data.keycloak.enabled .Values.data.postgres.enabled }}
           # The CNPG/Keycloak SharedSecret, named by
@@ -174,7 +162,7 @@ spec:
           # bootstrap and the Keycloak CR read, so an operator who
           # renamed it is tested against the Secret the deployment
           # actually consumes, not the default name.
-          check_secret {{ .Values.data.keycloak.db.secretName }} || failed=1
+          required_secrets="$required_secrets {{ .Values.data.keycloak.db.secretName }}"
           {{- end }}
           {{- if .Values.services.redisCache.enabled }}
           # redis runs with --requirepass from a NON-optional secretKeyRef,
@@ -182,21 +170,43 @@ spec:
           # envFrom — a missing Secret therefore starts both pods and
           # breaks the translation cache silently (every read/write gets
           # NOAUTH) while the TCP probe still passes.
-          check_secret translation-cache-password || failed=1
+          required_secrets="$required_secrets translation-cache-password"
           {{- end }}
           {{- if and .Values.data.keycloak.enabled (not .Values.data.keycloak.convergence.enabled) }}
           # Without the convergence Job the realm carries no client secrets,
           # so this one is never injected anywhere.
-          check_secret keycloak-proxy-client-secret || failed=1
+          required_secrets="$required_secrets keycloak-proxy-client-secret"
           {{- end }}
           {{- if .Values.opea.enabled }}
           # The OPEA tier mounts both through NON-optional secretKeyRefs
           # (gpuApiKeyEnv for every GPU consumer, the KC_DATAPREP row on
           # dataprep) — a missing Secret is a CreateContainerConfigError
           # at first pod start, so the install must fail here instead.
-          check_secret vllm-api-key || failed=1
-          check_secret kc-dataprep-client-secret || failed=1
+          required_secrets="$required_secrets vllm-api-key kc-dataprep-client-secret"
           {{- end }}
+          missing=""
+          for name in $required_secrets; do
+            kubectl get secret "$name" -n "$ns" >/dev/null 2>&1 || missing="$missing $name"
+          done
+          i=0
+          while [ -n "$missing" ] && [ "$i" -lt 30 ]; do
+            i=$((i+1))
+            sleep 2
+            missing=""
+            for name in $required_secrets; do
+              kubectl get secret "$name" -n "$ns" >/dev/null 2>&1 || missing="$missing $name"
+            done
+          done
+          for name in $required_secrets; do
+            case " $missing " in
+              *" $name "*) echo "FAIL: K8s Secret never materialized: $name (operator must provide via their secret backend)" ;;
+              *) echo "OK: K8s Secret materialized: $name" ;;
+            esac
+          done
+          failed=0
+          if [ -n "$missing" ]; then
+            failed=1
+          fi
           if [ "$failed" -ne 0 ]; then
             echo "FAIL: required K8s Secrets did not materialize in 60s"
             exit 1

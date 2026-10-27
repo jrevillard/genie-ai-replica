@@ -24,7 +24,7 @@ global:
   # this knob is only about the PULL CREDENTIALS.
   imagePullSecrets: []
   # Architecture for the tooling images the hooks/test pods download
-  # (kubectl, jq). Empty = DETECT it at runtime from the node
+  # (kubectl). Empty = DETECT it at runtime from the node
   # (`uname -m` in the init container): a hardcoded amd64 on an arm64
   # cluster (Apple Silicon minikube) downloads a binary the node cannot
   # execute — "exec format error", and the pod never starts. Set amd64
@@ -36,12 +36,11 @@ global:
   # Container Registry; tooling images are not republished there, so
   # they must keep their public registry. Empty = docker.io.
   toolingImageRegistry: ""
-  # Hook + test-pod init containers curl-download kubectl + jq from the
+  # Hook + test-pod init containers curl-download kubectl from the
   # public releases. In air-gapped environments set this to an
   # internal mirror URL (no scheme) so the init container hits a
-  # local proxy; the paths /release/v1.33.0/bin/linux/amd64/kubectl
-  # and /jq/releases/download/jq-1.7.1/jq-linux-amd64 are appended
-  # automatically. Default = empty (use the public URLs).
+  # local proxy; the path /release/v1.33.0/bin/linux/amd64/kubectl is
+  # appended automatically. Default = empty (use the public URLs).
   kubeletToolsMirror: ""
   # Global pull-policy override for the service images. Leave empty: the
   # default follows the tag (mutable tags — main, latest, stable* — pull
@@ -684,13 +683,15 @@ services:
       - name: nginx-run
         mountPath: /var/run
     resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
-    # Extra origins for the Content-Security-Policy connect-src, beyond
-    # the derived set ('self', the public origin, and wss:///ws:// on
-    # the public host). The Keycloak internal Service URL is
+    # Extra origins for the SPA's Content-Security-Policy connect-src,
+    # beyond the derived set ('self', the public origin, and wss:///ws://
+    # on the public host). The Keycloak internal Service URL is
     # deliberately NOT in it: a browser resolves Keycloak through the
     # same-origin /auth edge route ('self' covers it) and cannot resolve
     # cluster-internal DNS. Empty = the derived set only. Rendered as
-    # CSP_CONNECT_SRC into the backend's Content-Security-Policy header.
+    # VUE_APP_CSP_CONNECT_SRC into the runtime config.js — it shapes the
+    # browser's connect-src, not the backend's own CSP header (that one
+    # carries only the derived set, and no knob feeds it).
     cspConnectSrc: ""
     # Empty by default: the entrypoint injects every VUE_APP_* row into
     # /app/dist/runtime/config.js (window.APP_CONFIG) at startup, and the
@@ -715,7 +716,12 @@ services:
     probes:
       readiness: { httpGet: { path: /health, port: http }, initialDelaySeconds: 5, periodSeconds: 10 }
       liveness:  { httpGet: { path: /health, port: http }, initialDelaySeconds: 30, periodSeconds: 30 }
-    podDisruptionBudget: null
+    # prod scales this service to 2 replicas for zero-downtime rolling
+    # updates — a budget with no PDB lets a voluntary disruption take
+    # BOTH at once, which is the exact outage the second replica exists
+    # to prevent. (Single-replica profiles render no PDB: the generator
+    # emits one only at >=2 replicas.)
+    podDisruptionBudget: { minAvailable: 1 }
 
   documentRepository:
     enabled: true
@@ -808,7 +814,8 @@ services:
     probes:
       readiness: { httpGet: { path: /health, port: http }, initialDelaySeconds: 10, periodSeconds: 10 }
       liveness:  { tcpSocket: { port: http }, initialDelaySeconds: 30, periodSeconds: 30 }
-    podDisruptionBudget: null
+    # Same prod-2-replica reasoning as frontend: minAvailable 1.
+    podDisruptionBudget: { minAvailable: 1 }
 
   clamav:
     cache:

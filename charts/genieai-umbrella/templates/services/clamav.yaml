@@ -99,14 +99,20 @@ spec:
           Merge on the copy — the values are read-only render input. */ -}}
           {{- $clamavPort := $svc.port | default 3310 -}}
           {{- $probes := deepCopy ($svc.probes | default dict) -}}
-          {{- if $probes.readiness.tcpSocket -}}{{- $_ := set $probes.readiness "tcpSocket" (merge (dict "port" $clamavPort) $probes.readiness.tcpSocket) -}}{{- end -}}
-          {{- if $probes.liveness.tcpSocket -}}{{- $_ := set $probes.liveness "tcpSocket" (merge (dict "port" $clamavPort) $probes.liveness.tcpSocket) -}}{{- end -}}
-          {{- if $probes.startup.tcpSocket -}}{{- $_ := set $probes.startup "tcpSocket" (merge (dict "port" $clamavPort) $probes.startup.tcpSocket) -}}{{- end -}}
-          {{- with $probes.readiness }}
+          {{- /* Sub-blocks normalize too: a cleared probes block carries
+          no readiness/liveness/startup maps, and a bare .tcpSocket read
+          on their nil crashed the render. */ -}}
+          {{- $readiness := $probes.readiness | default dict -}}
+          {{- $liveness := $probes.liveness | default dict -}}
+          {{- $startup := $probes.startup | default dict -}}
+          {{- if $readiness.tcpSocket -}}{{- $_ := set $readiness "tcpSocket" (merge (dict "port" $clamavPort) $readiness.tcpSocket) -}}{{- end -}}
+          {{- if $liveness.tcpSocket -}}{{- $_ := set $liveness "tcpSocket" (merge (dict "port" $clamavPort) $liveness.tcpSocket) -}}{{- end -}}
+          {{- if $startup.tcpSocket -}}{{- $_ := set $startup "tcpSocket" (merge (dict "port" $clamavPort) $startup.tcpSocket) -}}{{- end -}}
+          {{- with $readiness }}
           readinessProbe:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with $probes.liveness }}
+          {{- with $liveness }}
           livenessProbe:
             {{- toYaml . | nindent 12 }}
           {{- end }}

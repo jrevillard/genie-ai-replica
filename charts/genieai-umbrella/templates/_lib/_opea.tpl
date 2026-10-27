@@ -128,8 +128,13 @@ have to be 0.0.0.0/0 the way it was when the chart ignored the URL:
 {{- else -}}
 {{- $cidrs = list "0.0.0.0/0" -}}
 {{- end -}}
+{{- /* The port comes from the AUTHORITY (scheme://… up to the first /),
+not from the whole URL: a regex over the full string took a colon in the
+path or query (`/translate?from=en:1`) as the egress port and rendered a
+policy admitting port 1 while the backend dialed 443. */ -}}
+{{- $authority := regexFind "^https?://[^/]+" $url -}}
 {{- $port := "443" -}}
-{{- $matched := regexFind ":([0-9]{1,5})(?:/|$)" $url -}}
+{{- $matched := regexFind ":[0-9]{1,5}$" $authority -}}
 {{- if $matched -}}
 {{- $port = regexFind "[0-9]{1,5}" $matched -}}
 {{- else if regexMatch "^http://" $url -}}

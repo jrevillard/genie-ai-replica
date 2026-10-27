@@ -50,6 +50,10 @@
 
 set -euo pipefail
 
+# Repo the sibling scripts live in — absolute, so the script works from
+# any CWD (its own usage header shows absolute-path invocations).
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 CLUSTER="minikube"
 DEPLOY_REPO="${DEPLOY_REPO:-../genie-ai-deploy}"
 PAYS="jrevillard-laptop"
@@ -138,7 +142,7 @@ fi
 log "cluster operators (keycloak, cnpg, arango, sealed-secrets, cert-manager, vm, otel)"
 # Idempotent: each install is gated on the namespace + helm release
 # already being there.
-./scripts/install-prereqs.sh
+"${REPO_ROOT}/scripts/install-prereqs.sh"
 
 # ── 3. The sealed-secrets key ────────────────────────────────────────────
 # The controller generates a key on first start. It reads every Secret

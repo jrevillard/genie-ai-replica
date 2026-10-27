@@ -196,6 +196,14 @@ ingress:
   # (same-origin deployments — the default topology — need none).
   cors:
     allowOrigins: []
+    # Methods and headers the CORS policy permits once allowOrigins is
+    # set. Declared because the cors-policy template reads them — an
+    # undeclared template-read knob is undiscoverable and untyped. An
+    # empty list falls back to the template's defaults (GET, POST, PUT,
+    # PATCH, DELETE, OPTIONS / Authorization, Content-Type,
+    # X-Requested-With).
+    allowMethods: []
+    allowHeaders: []
 
 data:
   # The `enabled` toggles gate the custom resources only; the operator
@@ -699,6 +707,9 @@ services:
     # documentRepository pod can resolve (e.g. clamav.corp.example.com
     # or clamav.<other-namespace>.svc.cluster.local).
     clamavHost: clamav
+    # Keep in sync with services.clamav.port while clamavHost points at
+    # the in-cluster Service — the scanner side derives its listener from
+    # its own knob, and a mismatch strands every upload's scan step.
     clamavPort: 3310
     # Toggles the doc-repo virus-scan step (CLAMSCAN_* wiring above).
     virusScanning: true
@@ -771,6 +782,12 @@ services:
     # pod stays in ImagePullBackOff. `stable-debian` is a moving tag
     # — re-pin to a digest before any production rollout.
     image: { repository: clamav/clamav, tag: "stable-debian" }
+    # Listener port. The template derives the Service port, the
+    # NetworkPolicy rules, the tcpSocket probe ports and the helm-test
+    # probe from THIS knob. The document-repository's own
+    # `documentRepository.clamavPort` env knob is separate — change both
+    # together when this one moves (independent only when clamavHost
+    # points at an external scanner).
     port: 3310
     # securityContext / volumes / volumeMounts / PVC are NOT values
     # here: templates/services/clamav.yaml is a hand-written Deployment

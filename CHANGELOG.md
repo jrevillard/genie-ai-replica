@@ -128,12 +128,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The welcome screen broke in the narrow-panel window.** With both sidebars open the panel is at its narrowest just above 1400 px: the title wrapped to two lines in the longer locales, and the wave band stopped short of the panel's edges. The title now holds one line in all 14 locales, and the wave band spans the panel's full width.
 - **The welcome screen's input placeholder wrapped to two lines.** "Ask a question, explore knowledge, or start a task…" overflowed the field in 10 of the 14 locales, including the English one. The third clause is gone in every locale, and the placeholder is measured against the field in the regression test, so it cannot come back.
 
-- **The same document could be labelled differently on every ingestion.** The
-  candidate labels sent to the labelling LLM were collected in a Python set,
-  whose order follows the hash seed of the process that built it — so every
-  container sent the taxonomy in a different order, and the LLM could pick a
-  different label set for the same chunk. The list is now ordered canonically
-
 - **The labelling prompt was different on every ingestion run.** The candidate
   labels sent to the labelling LLM were collected in a Python set, whose order
   follows the hash seed of the process that built it — so every container sent
@@ -145,9 +139,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stores are in that same order. Two ingestion runs now send the same prompt,
   so an A/B comparison between labelling runs measures the change under test
   instead of the prompt ordering. A label whose translation is missing no
-  longer reaches the prompt as the text "None"; the count of what was dropped,
-  and whether it was a missing translation or a malformed payload, is
-  reported. (#1109, !612)
+  longer reaches the prompt as the text "None": the per-fetch log line states
+  how many entries carried no usable label and how many the payload held that
+  the parser did not recognise. (#1109, !612)
 
 - **More links in the documentation site pointed at a page that did not answer
   the question.** The "Developer" card on the home page promised a local dev

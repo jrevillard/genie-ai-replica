@@ -11,6 +11,8 @@ retriever ignores it, and the label filter silently falls back to OR.
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 CONFIG_PATH = Path(__file__).resolve().parents[1] / "retriever" / "config.py"
 DEPLOYMENT_ENV_NAME = "RETRIEVER_ARANGO_FILTER_STRATEGY"
 
@@ -35,3 +37,15 @@ def test_filter_strategy_follows_deployment_env_var(monkeypatch):
 def test_filter_strategy_defaults_to_or(monkeypatch):
     module = _load_config(monkeypatch, DEPLOYMENT_ENV_NAME, None)
     assert module.ARANGO_FILTER_STRATEGY == "OR"
+
+
+def test_filter_strategy_value_is_normalized(monkeypatch):
+    module = _load_config(monkeypatch, DEPLOYMENT_ENV_NAME, " and ")
+    assert module.ARANGO_FILTER_STRATEGY == "AND"
+
+
+def test_invalid_filter_strategy_is_rejected_when_the_service_starts(monkeypatch):
+    # The value comes from the deployment: a typo must fail the service at
+    # startup, not turn every filtered query into an error at request time.
+    with pytest.raises(ValueError, match="RETRIEVER_ARANGO_FILTER_STRATEGY"):
+        _load_config(monkeypatch, DEPLOYMENT_ENV_NAME, "ALL")

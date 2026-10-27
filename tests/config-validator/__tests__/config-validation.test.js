@@ -1340,12 +1340,12 @@ describe('Configuration Validation Suite', () => {
       });
     });
 
-    test('every knob the deployment sets is read by the overlay', () => {
+    test('every knob of the retrieval path is delivered and read', () => {
       expect(retrieverEnv.errors).toEqual([]);
     });
 
-    test('the label filter strategy knob is read under the name the deployment sets', () => {
-      expect(retrieverEnv.deploymentNames.has('RETRIEVER_ARANGO_FILTER_STRATEGY')).toBe(true);
+    test('the label filter strategy knob is delivered to the retriever and read by the overlay', () => {
+      expect(retrieverEnv.deliveredToRetriever.has('RETRIEVER_ARANGO_FILTER_STRATEGY')).toBe(true);
       expect(retrieverEnv.codeNames.has('RETRIEVER_ARANGO_FILTER_STRATEGY')).toBe(true);
     });
 
@@ -1354,6 +1354,14 @@ describe('Configuration Validation Suite', () => {
     // passes on every repository state.
     describe('the check on a fixture', () => {
       let root;
+
+      const COMPOSE = [
+        'services:',
+        '  retriever-arango-service:',
+        '    environment:',
+        '      RETRIEVER_ARANGO_K: ${RETRIEVER_ARANGO_K:-4}',
+        ''
+      ].join('\n');
 
       beforeEach(() => {
         root = fs.mkdtempSync(path.join(os.tmpdir(), 'retriever-env-'));
@@ -1370,6 +1378,10 @@ describe('Configuration Validation Suite', () => {
         return target;
       }
 
+      function writeCompose(extraEnvironment = '') {
+        writeFixture('docker-compose.yaml', COMPOSE + extraEnvironment);
+      }
+
       function checkFixture() {
         return validateRetrieverEnvCoverage({
           composeFile: path.join(root, 'docker-compose.yaml'),
@@ -1379,29 +1391,37 @@ describe('Configuration Validation Suite', () => {
         });
       }
 
-      test('a knob the deployment sets and the code reads is not reported', () => {
-        writeFixture('docker-compose.yaml', 'RETRIEVER_ARANGO_K: ${RETRIEVER_ARANGO_K:-4}\n');
-        writeFixture('env.j2', 'RETRIEVER_ARANGO_K={{ retriever_arango_k }}\n');
-        writeFixture('env', 'RETRIEVER_ARANGO_K=4\n');
+      test('a knob the retriever receives and the code reads is not reported', () => {
+        writeCompose();
+        writeFixture('env.j2', '');
+        writeFixture('env', '');
         writeFixture('overlay/retriever/config.py', 'K = os.getenv("RETRIEVER_ARANGO_K", "4")\n');
         expect(checkFixture().errors).toEqual([]);
       });
 
-      test('a knob the deployment sets and no code reads is reported', () => {
-        writeFixture(
-          'docker-compose.yaml',
-          'RETRIEVER_ARANGO_K: ${RETRIEVER_ARANGO_K:-4}\nRETRIEVER_ARANGO_FILTER_STRATEGY: ${RETRIEVER_ARANGO_FILTER_STRATEGY:-OR}\n'
-        );
-        writeFixture('env.j2', 'RETRIEVER_ARANGO_K={{ retriever_arango_k }}\n');
-        writeFixture('env', 'RETRIEVER_ARANGO_K=4\n');
+      test('a knob the retriever receives and no service reads is reported', () => {
+        writeCompose('      RETRIEVER_ARANGO_FILTER_STRATEGY: ${RETRIEVER_ARANGO_FILTER_STRATEGY:-OR}\n');
+        writeFixture('env.j2', '');
+        writeFixture('env', '');
         writeFixture('overlay/retriever/config.py', 'K = os.getenv("RETRIEVER_ARANGO_K", "4")\n');
         expect(checkFixture().errors).toEqual([expect.stringContaining('RETRIEVER_ARANGO_FILTER_STRATEGY')]);
       });
 
+      test('a knob the deployment configures and the retriever does not receive is reported', () => {
+        writeCompose();
+        writeFixture('env.j2', 'RETRIEVER_ARANGO_FILTER_STRATEGY={{ retriever_arango_filter_strategy }}\n');
+        writeFixture('env', '');
+        writeFixture(
+          'overlay/retriever/config.py',
+          'K = os.getenv("RETRIEVER_ARANGO_K", "4")\nSTRATEGY = os.getenv("RETRIEVER_ARANGO_FILTER_STRATEGY", "OR")\n'
+        );
+        expect(checkFixture().errors).toEqual([expect.stringContaining('RETRIEVER_ARANGO_FILTER_STRATEGY')]);
+      });
+
       test('a knob the code reads and no deployment file sets is reported', () => {
-        writeFixture('docker-compose.yaml', 'RETRIEVER_ARANGO_K: ${RETRIEVER_ARANGO_K:-4}\n');
-        writeFixture('env.j2', 'RETRIEVER_ARANGO_K={{ retriever_arango_k }}\n');
-        writeFixture('env', 'RETRIEVER_ARANGO_K=4\n');
+        writeCompose();
+        writeFixture('env.j2', '');
+        writeFixture('env', '');
         writeFixture(
           'overlay/retriever/config.py',
           'K = os.getenv("RETRIEVER_ARANGO_K", "4")\nSTRATEGY = os.getenv("RETRIEVER_ARANGO_GHOST", "OR")\n'
@@ -1409,12 +1429,27 @@ describe('Configuration Validation Suite', () => {
         expect(checkFixture().errors).toEqual([expect.stringContaining('RETRIEVER_ARANGO_GHOST')]);
       });
 
-      test('the code of a test does not count as code that reads a knob', () => {
-        writeFixture('docker-compose.yaml', 'RETRIEVER_ARANGO_K: ${RETRIEVER_ARANGO_K:-4}\n');
-        writeFixture('env.j2', 'RETRIEVER_ARANGO_K={{ retriever_arango_k }}\n');
-        writeFixture('env', 'RETRIEVER_ARANGO_K=4\n');
-        writeFixture('overlay/tests/test_config.py', 'K = os.getenv("RETRIEVER_ARANGO_K", "4")\n');
-        expect(checkFixture().errors).toEqual([expect.stringContaining('RETRIEVER_ARANGO_K')]);
+      test('a commented-out read does not count as a read', () => {
+        writeCompose('      RETRIEVER_ARANGO_FILTER_STRATEGY: ${RETRIEVER_ARANGO_FILTER_STRATEGY:-OR}\n');
+        writeFixture('env.j2', '');
+        writeFixture('env', '');
+        writeFixture(
+          'overlay/retriever/config.py',
+          'K = os.getenv("RETRIEVER_ARANGO_K", "4")\n# STRATEGY = os.getenv("RETRIEVER_ARANGO_FILTER_STRATEGY", "OR")\n'
+        );
+        expect(checkFixture().errors).toEqual([expect.stringContaining('RETRIEVER_ARANGO_FILTER_STRATEGY')]);
+      });
+
+      test('a read by a service outside the retrieval path does not count as a read', () => {
+        writeCompose('      RETRIEVER_ARANGO_FILTER_STRATEGY: ${RETRIEVER_ARANGO_FILTER_STRATEGY:-OR}\n');
+        writeFixture('env.j2', '');
+        writeFixture('env', '');
+        writeFixture('overlay/retriever/config.py', 'K = os.getenv("RETRIEVER_ARANGO_K", "4")\n');
+        writeFixture(
+          'overlay/dataprep/genieai_dataprep_arangodb.py',
+          'STRATEGY = os.getenv("RETRIEVER_ARANGO_FILTER_STRATEGY", "OR")\n'
+        );
+        expect(checkFixture().errors).toEqual([expect.stringContaining('RETRIEVER_ARANGO_FILTER_STRATEGY')]);
       });
     });
   });

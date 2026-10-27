@@ -2845,6 +2845,7 @@ config:validate:
         - "docker-compose.yaml"
         - "docker-compose.gpu.yaml"
         - "genie-ai-overlay/**/*"
+        - "deploy/ansible/**/*"
         - "tests/config-validator/**/*"
         - "tests/fixtures/config/**/*"
         - "api-gateway-solution/new-config/**/*"

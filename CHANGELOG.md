@@ -137,7 +137,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the taxonomy arrives in: re-ingesting a document reproduces its labels, and
   an A/B comparison between two labelling runs measures the change under test
   instead of the prompt ordering. A label whose translation is missing no
-  longer reaches the prompt as the text "None". (#1109)
+  longer reaches the prompt as the text "None". (#1109, !612)
 
 - **More links in the documentation site pointed at a page that did not answer
   the question.** The "Developer" card on the home page promised a local dev

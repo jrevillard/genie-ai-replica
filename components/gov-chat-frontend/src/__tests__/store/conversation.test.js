@@ -338,6 +338,79 @@ describe('conversation sendStream action', () => {
     expect(store.state.status.online).toBe(false);
   });
 
+  // Each classification branch of the store's onError: the errorKey it
+  // records is the chat view's notification contract, the status write
+  // is the deployment view.
+  describe('onError classification', () => {
+    async function failingStream(store, error) {
+      let captured = null;
+      jest.spyOn(chatbotService, 'submitQueryStream').mockImplementation((q, cb) => {
+        captured = cb;
+        return new AbortController();
+      });
+      store.commit('conversation/appendBotMessage', { sender: 'bot', content: '', isStreaming: true });
+      store.dispatch('conversation/sendStream', { queryData: { query: 'q' } });
+      await Promise.resolve();
+      captured.onError(error);
+    }
+
+    it('a refusal stays online and records the unsupported-language key', async () => {
+      const store = freshStore();
+      const refusal = new Error('Unsupported target language');
+      refusal.status = 400;
+      refusal.code = 'UNSUPPORTED_LANGUAGE';
+      await failingStream(store, refusal);
+      const open = store.getters['conversation/openConversation'];
+      expect(open.messages.at(-1).errorKey).toBe('chatbot.unsupportedLanguage');
+      expect(open.messages.at(-1).content).toBe('This language is not available for this deployment.');
+      expect(store.state.status.online).toBe(true);
+      expect(store.state.status.errorMessage).toBe('');
+    });
+
+    it('a refusal of another kind stays online under the generic processing key', async () => {
+      const store = freshStore();
+      const refusal = new Error('Bad request');
+      refusal.status = 422;
+      await failingStream(store, refusal);
+      const open = store.getters['conversation/openConversation'];
+      expect(open.messages.at(-1).errorKey).toBe('chatbot.processingError');
+      expect(store.state.status.online).toBe(true);
+    });
+
+    it('an idle stream times out, offline, under the timeout key', async () => {
+      const store = freshStore();
+      const timeout = new Error('The stream went idle');
+      timeout.code = 'STREAM_IDLE_TIMEOUT';
+      await failingStream(store, timeout);
+      const open = store.getters['conversation/openConversation'];
+      expect(open.messages.at(-1).errorKey).toBe('chatbot.streamTimeout');
+      expect(store.state.status.online).toBe(false);
+    });
+
+    it('a server error frame keeps its prose verbatim, without a key', async () => {
+      const store = freshStore();
+      const serverError = new Error('The retriever timed out');
+      serverError.fromServer = true;
+      await failingStream(store, serverError);
+      const open = store.getters['conversation/openConversation'];
+      expect(open.messages.at(-1).errorKey).toBeNull();
+      expect(open.messages.at(-1).content).toBe('The retriever timed out');
+      expect(store.state.status.online).toBe(false);
+      expect(store.state.status.errorMessage).toBe('The retriever timed out');
+    });
+
+    it('a server error frame without prose falls back to the generic failure', async () => {
+      const store = freshStore();
+      const serverError = new Error('');
+      serverError.fromServer = true;
+      await failingStream(store, serverError);
+      const open = store.getters['conversation/openConversation'];
+      expect(open.messages.at(-1).errorKey).toBe('chatbot.streamingError');
+      expect(open.messages.at(-1).content).toBe('Response was interrupted. Please try again.');
+      expect(store.state.status.errorMessage).toBe('Response was interrupted. Please try again.');
+    });
+  });
+
   it('abortStream aborts the controller and marks the abandoned turn for retry', () => {
     const controller = new AbortController();
     const abortSpy = jest.spyOn(controller, 'abort');

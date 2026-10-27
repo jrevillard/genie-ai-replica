@@ -112,7 +112,7 @@ const mutations = {
     const last = entry.messages.at(-1);
     if (last && last.sender === 'bot') last.isStreaming = false;
   },
-  failStream(st, { message, errorKey }) {
+  failStream(st, { message = '', errorKey = null } = {}) {
     const entry = st.conversations[st.openId];
     entry.isStreaming = false;
     const last = entry.messages.at(-1);
@@ -120,11 +120,12 @@ const mutations = {
       last.isStreaming = false;
       last.isError = true;
       // A partial answer the user was reading is kept; the error text
-      // only fills an empty turn.
+      // only fills an empty turn — with a partial answer the reason is
+      // carried by the errorKey and the offline status line instead.
       if (!last.content) last.content = message;
       // The i18n key the failure maps to, so the chat view can render
       // the notification in its own translation context; null when the
-      // reason is prose the server wrote (shown verbatim).
+      // reason is prose the server wrote.
       last.errorKey = errorKey || null;
       markTriggeringQuestion(entry);
     }
@@ -277,26 +278,28 @@ const actions = {
         // user is shown. Anything else — a 5xx, a dropped connection —
         // leaves the deployment down.
         const refused = Number.isInteger(error?.status) && error.status >= 400 && error.status < 500;
-        // Server error frames carry their own user-facing message;
-        // transport-level failures (timeout, premature close, network)
-        // render localized — a raw fetch message is developer text.
+        // Server error frames carry their own user-facing message — prose
+        // without an i18n key, shown as it was written; a frame without a
+        // message falls back to the generic failure. Transport-level
+        // failures (timeout, premature close, network) render localized —
+        // a raw fetch message is developer text.
+        const unsupported = error.code === 'UNSUPPORTED_LANGUAGE';
+        const timedOut = !error.fromServer && error.code === 'STREAM_IDLE_TIMEOUT';
         let errorKey = 'chatbot.streamingError';
-        let message;
         if (refused) {
-          errorKey = error.code === 'UNSUPPORTED_LANGUAGE' ? 'chatbot.unsupportedLanguage' : 'chatbot.processingError';
-          message =
-            errorKey === 'chatbot.unsupportedLanguage'
-              ? t(errorKey, 'This language is not available for this deployment.')
-              : t(errorKey, 'Error processing your request.');
-        } else if (!error.fromServer && error.code === 'STREAM_IDLE_TIMEOUT') {
+          errorKey = unsupported ? 'chatbot.unsupportedLanguage' : 'chatbot.processingError';
+        } else if (timedOut) {
           errorKey = 'chatbot.streamTimeout';
-          message = t(errorKey, 'The assistant is not responding — the request timed out.');
-        } else if (error.fromServer) {
+        } else if (error.fromServer && error.message) {
           errorKey = null;
-          message = error.message;
-        } else {
-          message = t(errorKey, 'Response was interrupted. Please try again.');
         }
+        const fallbacks = {
+          'chatbot.unsupportedLanguage': 'This language is not available for this deployment.',
+          'chatbot.processingError': 'Error processing your request.',
+          'chatbot.streamTimeout': 'The assistant is not responding — the request timed out.',
+          'chatbot.streamingError': 'Response was interrupted. Please try again.'
+        };
+        const message = errorKey === null ? error.message : t(errorKey, fallbacks[errorKey]);
         if (refused) {
           // The backend answered the request, so the deployment is up:
           // restore the online view a previous failure may have taken
@@ -361,7 +364,16 @@ export function rehydrateConversation(moduleState) {
       return;
     }
     const clean = emptyConversation();
-    clean.messages = entry.messages.filter((m) => m && typeof m === 'object');
+    // A restored failure keeps its retry affordance (isError) but not the
+    // failure's reason key: the view's last-error guard starts fresh, and
+    // the stale reason must not re-notify on the first unrelated mutation.
+    clean.messages = entry.messages
+      .filter((m) => m && typeof m === 'object')
+      .map((m) => {
+        const message = { ...m };
+        delete message.errorKey;
+        return message;
+      });
     clean.selectedContextItems = Array.isArray(entry.selectedContextItems) ? entry.selectedContextItems : [];
     clean.relatedDocuments = Array.isArray(entry.relatedDocuments) ? entry.relatedDocuments : [];
     clean.lastSavedState =

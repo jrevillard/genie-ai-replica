@@ -6,9 +6,9 @@ the design of record ([`helm-charts-design.md`](helm-charts-design.md)).
 Plan checkboxes are not a status source — evidence is the chart, the deploy
 repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
-## Current state (2026-10-22)
+## Current state (2026-10-27)
 
-- **Chart `genieai-umbrella` at 0.2.76**, branch `feat/k8s-migration` rebased
+- **Chart `genieai-umbrella` at 0.2.80**, branch `feat/k8s-migration` rebased
   onto `main` at `179a8a8f1` (0 commits behind).
 - **No application code in the branch**: the diff touches `charts/`,
   `scripts/`, `docs/`, `deploy/`, `tests/`, `site/`, `.gitlab-ci.yml`,
@@ -223,6 +223,80 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     whole bootstrap when the object is absent; and the chart version
     quoted in the READMEs was stale (now a pointer to Chart.yaml —
     Flux reconciles on that number, and it drifted on every bump).
+- **Review loop, passes 5-8 (0.2.77-0.2.80)** — 47 findings across four
+  passes, each one checked against a render, a live cluster or the source
+  before it was acted on (six were refuted that way). The ones that
+  mattered:
+  - *The render guards had never been exercised.* `helm lint --strict`
+    downgrades every `fail()` to an INFO line and still exits 0 (helm
+    3.16.3 prints `level=INFO msg="funcMap fail"` per guard), and every
+    render in the pipeline switches the placeholder guard off through the
+    shared fixture — so a guard that stopped firing was invisible to CI.
+    `scripts/render-guards-check.sh` now renders the values each guard
+    must reject and requires the render to FAIL, plus one render that
+    must succeed; mutation-proven (breaking a covered guard turns the
+    gate red, restoring it turns it green). The `ingress.host` guard
+    lived in three templates, so the mutation of one site did not
+    redden the gate — it is now one helper
+    (`genieai-umbrella.ingressHost`), which also rejects an IPv6
+    literal.
+  - *The parity gate's `notRead` claims passed unverified from any
+    directory but the repository root.* Its input paths were relative,
+    so the source walk found nothing and every claim was green on a
+    claim that was false. All paths are anchored on the script's own
+    location now (identical output from `/tmp` and from the root).
+  - *The parity gate's "other direction" loop reported each pair's OWN
+    chart component as unpaired*, because it read `pair.get("chart")`
+    (None when the key is absent) where the comparison loop reads the
+    component name.
+  - *The gateway-helm subchart installs cluster-wide admission policies
+    under a fixed, release-less name.* A second GENIE release on the
+    cluster collides on them, exactly like the GatewayClass — both are
+    now treated as per-cluster singletons by the cluster-scope gate.
+    The teardown sweep was NOT extended to them: they carry no labels,
+    so the label-selected sweep can never reach them, and deleting them
+    would strip the shared Envoy Gateway of its upgrade protection
+    (documented where the sweep is defined).
+  - *`helm lint` was the only gate that ever rendered the chart's
+    guards, and it does not.* The `chart:lint` job now runs the
+    render-guards gate, and `chart:parity` re-runs when the
+    application source changes — the gate verifies its `notRead`
+    claims against `components/` and `genie-ai-overlay/`, and those
+    paths were not in its `changes` filter.
+  - *The gateway-helm tarball lookup aborted the bootstrap.* A glob
+    that matches nothing is passed through literally, `ls` on it exits
+    2, and under `set -euo pipefail` that killed the script before the
+    "run helm dependency update" fallback could say anything. Found
+    with a `-f` test instead.
+  - *The dashboard sync's documented remedy did not fix what it
+    claimed.* A renamed or deleted source file left its copy behind,
+    the check then reported drift, and re-running the script reproduced
+    the identical state — the write mode now prunes the stale copies
+    first.
+  - *The bootstrap's deploy-repo default resolved against the caller's
+    directory*, so it failed at the last step — after the destructive
+    ones. Anchored on the script's own root now.
+  - Plus: the OPEA endpoint's port is derived from the scheme when the
+    URL carries none (an explicit port is preserved — the laptop's
+    `:444` is untouched); an IPv6 literal is rejected rather than
+    rendered into a URL; `services.backend.translation.backend` is
+    derived from the endpoint and fails if the operator sets it; the
+    OTel collector declares BOTH its OTLP/HTTP and OTLP/gRPC ports (a
+    pass-6 fix had replaced the operator's default list and dropped
+    4317); the ClamAV Service, both policy rules and the probes derive
+    from one port value; the db-migrations Job waits for ArangoDB's
+    `/_api/version` instead of assuming an open port; the PDB helper
+    emits its own newline (the `---` glued itself to the previous
+    document).
+  Refuted with reproduction, not acted on: the reviewer's claim that
+  the backend's egress to Redis was missing (the ipBlock covers it),
+  and the bidirectional NetworkPolicy enumeration — the ingress-side
+  flows it found (`dataprep -> embedding :6000`, `retriever ->
+  embedding :6000`, `translation -> vllm-translation :8888`) are real
+  only in the in-cluster GPU mode, a tier that has never run on a live
+  cluster, and one of them names a port the model does not listen on.
+  The asymmetry is documented in the crosscheck itself rather than
+  turned into a red gate on a tier nobody has run.
 - **Review round 9 closed (0.2.67)** — three parallel adversarial passes
   over the whole final diff (core/data/services, edge/observability/OPEA,
   CI/scripts), every finding verified against a render or a live cluster
@@ -306,7 +380,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.76** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.80** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `179a8a8f1` (the tip that carries !586, !587,
   !588) — the branch is 0 commits behind `main`.

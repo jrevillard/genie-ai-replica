@@ -29,7 +29,7 @@ Context keys: root (the template dot), name, port.
 {{- end -}}
 
 {{- define "genieai-umbrella.keycloakPublicIssuer" -}}
-{{- printf "%s://%s%s" (.Values.ingress.scheme | default "https") (.Values.ingress.host | required "ingress.host is required — supply the public hostname (may carry :port) in the environment overlay") (include "genieai-umbrella.keycloakContextPath" .) -}}
+{{- printf "%s://%s%s" (.Values.ingress.scheme | default "https") (include "genieai-umbrella.ingressHost" .) (include "genieai-umbrella.keycloakContextPath" .) -}}
 {{- end -}}
 
 {{- define "genieai-umbrella.arangoURL" -}}

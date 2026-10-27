@@ -3692,15 +3692,58 @@ chart:install:
     - kubectl wait --for=condition=Ready pod -l app=local-path-provisioner
       -n local-path-storage --timeout=120s
     - ./scripts/install-prereqs.sh
-    # KNOWN INCOMPLETE (manual job): the operator-provided Secrets
-    # (arango-root-secret, arango-jwt-secret, translation-cache-password,
-    # keycloak-admin-credentials, keycloak-db-credentials,
-    # keycloak-proxy-client-secret) are NOT created here, so the
-    # convergence Job and the data tier fail on this install. Seeding
-    # them means materialising throwaway values in the job (a
-    # generated-values step, which does not exist yet) before this job
-    # can prove a full install. Until then it exercises render + install
-    # ordering, not a working stack.
+    # The operator-provided Secrets the release mounts. The chart renders
+    # none, and every one below is mounted through a NON-optional
+    # secretKeyRef: without them the db-migrations and realm-convergence
+    # hook Jobs land in CreateContainerConfigError, never start, and
+    # `helm install --wait` fails on the hooks with a message that names
+    # a pod rather than the missing Secret. Throwaway values — this
+    # cluster is deleted at the end of the job.
+    - |
+      set -e
+      kubectl create namespace genieai --dry-run=client -o yaml | kubectl apply -f -
+      kubectl create secret generic arango-root-secret -n genieai \
+        --from-literal=username=root --from-literal=password=ci-arango-password
+      kubectl create secret generic arango-jwt-secret -n genieai \
+        --from-literal=token=ci-jwt-token
+      kubectl create secret generic keycloak-db-credentials -n genieai \
+        --from-literal=username=keycloak --from-literal=password=ci-db-password
+      kubectl create secret generic keycloak-admin-credentials -n genieai \
+        --from-literal=username=admin --from-literal=password=ci-admin-password
+      kubectl create secret generic translation-cache-password -n genieai \
+        --from-literal=password=ci-cache-password \
+        --from-literal=TRANSLATION_CACHE_PASSWORD=ci-cache-password
+      kubectl create secret generic keycloak-proxy-client-secret -n genieai \
+        --from-literal=KEYCLOAK_PROXY_CLIENT_SECRET=ci-proxy-secret
+      kubectl create secret generic kc-dataprep-client-secret -n genieai \
+        --from-literal=KC_DATAPREP_CLIENT_SECRET=ci-dataprep-secret
+      kubectl create secret generic kc-grafana-client-secret -n genieai \
+        --from-literal=KEYCLOAK_GRAFANA_CLIENT_SECRET=ci-grafana-secret
+      kubectl create secret generic keycloak-convergence-credentials -n genieai \
+        --from-literal=GENIE_ADMIN_PASSWORD=ci-admin-password \
+        --from-literal=EMAIL_PASSWORD=ci-email-password
+    # The convergence Job reads the realm's client secrets and the admin
+    # password from those Secrets — without these rows it exports empty
+    # values and the realm is imported with clients whose secret nobody
+    # holds.
+    - |
+      cat > /tmp/ci-values.yaml <<'EOF'
+      data:
+        keycloak:
+          convergence:
+            envSecrets:
+              - { envVar: KC_PROXY_CLIENT_SECRET, secretName: keycloak-proxy-client-secret, secretKey: KEYCLOAK_PROXY_CLIENT_SECRET }
+              - { envVar: KC_DATAPREP_CLIENT_SECRET, secretName: kc-dataprep-client-secret, secretKey: KC_DATAPREP_CLIENT_SECRET }
+              - { envVar: KC_GRAFANA_CLIENT_SECRET, secretName: kc-grafana-client-secret, secretKey: KEYCLOAK_GRAFANA_CLIENT_SECRET }
+              - { envVar: GENIE_ADMIN_PASSWORD, secretName: keycloak-convergence-credentials, secretKey: GENIE_ADMIN_PASSWORD }
+              - { envVar: EMAIL_PASSWORD, secretName: keycloak-convergence-credentials, secretKey: EMAIL_PASSWORD }
+      EOF
+    # KNOWN INCOMPLETE (manual job): the operator images (ArangoDB,
+    # Keycloak, the model pulls) are multi-GB and this cluster is a cold
+    # kind node on a shared runner — the install needs far more than the
+    # 30-minute budget. The Secrets ARE created above, so the job
+    # exercises a real install (hook ordering, data tier, realm
+    # convergence) rather than failing on a missing Secret.
     #
     # The CRD surface IS covered per push by chart:crd-validate, which
     # validates every rendered object against the installed CRDs without
@@ -3709,6 +3752,7 @@ chart:install:
     - >-
       helm install test charts/genieai-umbrella -n genieai --create-namespace
       $(cat charts/ci/render-base-flags)
+      -f /tmp/ci-values.yaml
       --set "data.keycloak.clientSecrets.proxyClient=${CI_JOB_ID}-proxy"
       --set "data.keycloak.clientSecrets.dataprep=${CI_JOB_ID}-dataprep"
       --set "data.keycloak.clientSecrets.grafana=${CI_JOB_ID}-grafana"

@@ -297,7 +297,12 @@ const actions = {
         } else {
           message = t(errorKey, 'Response was interrupted. Please try again.');
         }
-        if (!refused) {
+        if (refused) {
+          // The backend answered the request, so the deployment is up:
+          // restore the online view a previous failure may have taken
+          // down, and drop its stale error line with it.
+          commit('status/setOnline', null, { root: true });
+        } else {
           commit('status/setOffline', message, { root: true });
         }
         commit('failStream', { message, errorKey });

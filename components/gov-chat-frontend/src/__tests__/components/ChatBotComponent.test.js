@@ -477,6 +477,15 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
+      // A previous turn genuinely took the deployment down, so the state
+      // this test asserts on is a restored one, not the pristine default.
+      vm.newMessage = 'First, an outage';
+      await vm.sendMessage();
+      await wrapper.vm.$nextTick();
+      capturedCallbacks.onError(new Error('Backend crashed'));
+      await wrapper.vm.$nextTick();
+      expect(vm.systemStatus.online).toBe(false);
+
       vm.newMessage = 'Trigger refusal';
       await vm.sendMessage();
       await wrapper.vm.$nextTick();
@@ -638,14 +647,17 @@ describe('ChatBotComponent', () => {
       vm.newMessage = 'Network error test';
       await vm.sendMessage();
       await wrapper.vm.$nextTick();
-
-      // Simulate network error
+      // The turn was answering before it died: a response time was known.
+      capturedCallbacks.onMetadata({ responseTime: 250 });
       capturedCallbacks.onError(new Error('Network request failed'));
       await wrapper.vm.$nextTick();
 
       expect(vm.isStreaming).toBe(false);
       expect(vm.systemStatus.online).toBe(false);
       expect(vm.systemStatus.errorMessage).toBe('Response was interrupted. Please try again.');
+      // The timing described the answer that never came; the pill must
+      // not keep reporting it.
+      expect(vm.systemStatus.lastResponseTime).toBeNull();
     });
 
     it('displays error message in bot message on stream failure', async () => {

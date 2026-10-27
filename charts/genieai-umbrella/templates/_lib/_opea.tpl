@@ -47,7 +47,14 @@ an empty env var produces). */ -}}
   {{- if not $host -}}
 {{- fail "opea.gpu.mode=external requires opea.gpu.nodeHost (e.g. https://gpu-node:444); without it every orchestrator would render an empty GPU endpoint" -}}
   {{- else -}}
-{{- trimSuffix "/" $host }}{{ index $root.Values.opea.gpu.paths $key }}
+{{- /* An empty path renders an EMPTY endpoint, not the bare nodeHost:
+the empty endpoint is the documented "no such remote target" signal
+(dataprep's in-process docling fallback keys on it), and host + "" would
+hand the application a URL whose every request 404s. */ -}}
+{{- $p := index $root.Values.opea.gpu.paths $key -}}
+{{- if $p -}}
+{{- trimSuffix "/" $host }}{{ $p }}
+{{- end -}}
   {{- end -}}
 
 {{- else -}}

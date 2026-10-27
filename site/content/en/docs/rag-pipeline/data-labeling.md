@@ -100,13 +100,14 @@ Contextual-Retrieval context-generation call, not labelling.)
 The taxonomy list in the prompt keeps the shape the backend returns — each
 category is followed by the services under it — and the order inside a
 category is canonical: case-folded label name first, exact name as the
-tie-break. It does not depend on the order the backend returns the taxonomy
-in, and the labels a chunk stores are in that same order. The prompt is
-therefore the same from one ingestion run to the next, so the labelling no
-longer varies with the order the taxonomy happened to arrive in. The labels
-are still the model's answer to that prompt: greedy decoding is not
-bit-for-bit reproducible across different batch compositions, so a re-ingest
-can still differ.
+tie-break. A category whose translation is missing has no name to carry, so
+its services come first, without one. The order does not depend on the order
+the backend returns the taxonomy in, and the labels a chunk stores are in
+that same order. The prompt is therefore the same from one ingestion run to
+the next, so the labelling no longer varies with the order the taxonomy
+happened to arrive in. The labels are still the model's answer to that
+prompt: greedy decoding is not bit-for-bit reproducible across different
+batch compositions, so a re-ingest can still differ.
 
 Each label the LLM returns is resolved against the taxonomy (exact match
 first, then a case-insensitive plural/singular match). A label that resolves

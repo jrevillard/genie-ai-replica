@@ -1619,7 +1619,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             ):
                 if response.status == 200:
                     data = await response.json()
-                    # Backend returns a tree structure (Category -> Children)
+                    # Backend returns a tree structure (Category -> Children).
+                    # A name is a translation: null or empty means the
+                    # translation is missing, a content problem. Anything else
+                    # the parser does not recognise means the dataprep and the
+                    # backend do not agree on the payload, a contract problem.
+                    # The two have different remedies, so they are counted
+                    # apart.
                     groups: list[tuple[str, list[str]]] = []
                     untranslated = 0
                     malformed = 0
@@ -1628,42 +1634,53 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             if not isinstance(category, dict):
                                 malformed += 1
                                 continue
-                            # The Category Name
-                            name = category.get("name")
-                            if isinstance(name, str) and name:
-                                group_name = name
+                            group_name = ""
+                            if "name" not in category:
+                                malformed += 1
                             else:
-                                # A category whose translation is missing arrives as
-                                # null: it has no label to offer, and its services
-                                # are kept under a nameless group.
-                                group_name = ""
-                                untranslated += 1
+                                name = category["name"]
+                                if isinstance(name, str) and name:
+                                    group_name = name
+                                elif name is None or name == "":
+                                    # A category whose translation is missing
+                                    # arrives as null: it has no label to offer,
+                                    # and its services are kept under a nameless
+                                    # group.
+                                    untranslated += 1
+                                else:
+                                    malformed += 1
                             # All Children (Services)
                             services: list[str] = []
                             children = category.get("children")
                             if isinstance(children, list):
                                 for child in children:
                                     # Children might be strings or objects depending on query
+                                    label = ""
                                     if isinstance(child, dict):
                                         if "name" not in child:
                                             malformed += 1
                                             continue
-                                        child_name = child["name"]
-                                    elif isinstance(child, str):
-                                        child_name = child
-                                    elif child is None:
-                                        # The backend returns null for a service whose
-                                        # translation is missing.
-                                        untranslated += 1
-                                        continue
+                                        label = child["name"]
+                                    elif isinstance(child, str) or child is None:
+                                        # The backend returns null for a service
+                                        # whose translation is missing.
+                                        label = child or ""
                                     else:
                                         malformed += 1
                                         continue
-                                    if isinstance(child_name, str) and child_name:
-                                        services.append(child_name)
-                                    else:
+                                    if isinstance(label, str) and label:
+                                        services.append(label)
+                                    elif label is None or label == "":
                                         untranslated += 1
+                                    else:
+                                        malformed += 1
                             groups.append((group_name, services))
+                    else:
+                        # A 200 response whose body is not the taxonomy tree at
+                        # all: every entry is unparseable, and reporting zero
+                        # drops would point the operator at translations rather
+                        # than at the contract.
+                        malformed += 1
 
                     ordered_labels = _canonical_taxonomy_order(groups)
                     # The counts are in the per-fetch line: the taxonomy is

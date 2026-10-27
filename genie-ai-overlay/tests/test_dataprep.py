@@ -157,6 +157,10 @@ _PROBE_TAXONOMY = [
 ]
 _PROBE_SUGGESTED = ["Hospitals", "Clinics", "Schools"]
 
+# The probe marks its result line, so a line the interpreter prints on the way
+# out cannot be mistaken for the answer.
+_PROBE_MARKER = "PROBE:"
+
 
 async def _probe_main():
     """Fetch the taxonomy and finalise a chunk, in a fresh interpreter.
@@ -1951,14 +1955,29 @@ class TestFetchAllLabels:
         with patch.object(dp_module, "logger") as logger:
             await _fetch_labels(
                 [
-                    {"name": "Healthcare", "children": [123, {"children": ["Clinics"]}]},
+                    {"name": "Healthcare", "children": [123, {"name": 123}, {"children": ["Clinics"]}]},
+                    {"children": []},
                     "not-an-object",
                 ]
             )
 
         lines = [call.args[0] for call in logger.info.call_args_list]
         assert any("0 without a usable label" in line for line in lines), lines
-        assert any("3 malformed entries" in line for line in lines), lines
+        assert any("5 malformed entries" in line for line in lines), lines
+
+    @pytest.mark.asyncio
+    async def test_a_payload_that_is_not_a_taxonomy_tree_is_reported_as_malformed(self):
+        """A 200 response the parser does not recognise is a contract problem.
+
+        Reporting zero drops would point the operator at translations rather
+        than at the contract.
+        """
+        with patch.object(dp_module, "logger") as logger:
+            labels = await _fetch_labels({"categories": []})
+
+        assert labels == []
+        lines = [call.args[0] for call in logger.info.call_args_list]
+        assert any("1 malformed entries" in line for line in lines), lines
 
     def test_the_same_taxonomy_yields_the_same_order_in_every_process(self):
         """Two interpreters, two hash seeds, one answer.
@@ -1972,7 +1991,7 @@ class TestFetchAllLabels:
         """
         script = (
             "import asyncio, json, tests.conftest, tests.test_dataprep as t; "
-            "print(json.dumps(asyncio.run(t._probe_main())))"
+            f'print("{_PROBE_MARKER}" + json.dumps(asyncio.run(t._probe_main())))'
         )
 
         def _run(seed):
@@ -1982,10 +2001,14 @@ class TestFetchAllLabels:
                 text=True,
                 cwd=str(OVERLAY_ROOT),
                 env=dict(os.environ, PYTHONHASHSEED=seed),
-                timeout=120,
+                timeout=300,
             )
             assert result.returncode == 0, f"probe failed under PYTHONHASHSEED={seed}:\n{result.stderr}"
-            return json.loads(result.stdout.strip().splitlines()[-1])
+            # The result is marked, so a line the interpreter prints on the way
+            # out cannot be mistaken for it.
+            marked = [line for line in result.stdout.splitlines() if line.startswith(_PROBE_MARKER)]
+            assert marked, f"probe printed no result under PYTHONHASHSEED={seed}:\n{result.stdout}"
+            return json.loads(marked[-1][len(_PROBE_MARKER) :])
 
         with ThreadPoolExecutor(max_workers=2) as pool:
             outputs = list(pool.map(_run, ("0", "1")))

@@ -189,4 +189,10 @@ spec:
       ports:
         - protocol: UDP
           port: 53
+        # Truncated UDP answers (TC bit) fall back to TCP — the same
+        # fallback every sibling policy grants; a resolver that
+        # truncates would otherwise strand redis mid-resolution under
+        # default-deny.
+        - protocol: TCP
+          port: 53
 {{- end -}}

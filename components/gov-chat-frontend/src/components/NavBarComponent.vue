@@ -412,7 +412,11 @@ export default {
   color: var(--navbar-fg, var(--accent-fg));
   height: 60px;
   padding: var(--space-sm) var(--space-md);
-  border-radius: var(--radius-md);
+  /* Square corners: the band is a full-width structural bar, not a
+     floating card. Its rounding only ever showed on deployments whose
+     configured band colour contrasts with the page background (the
+     default light tokens paint a pale wash that melts into it), so the
+     property read as arbitrary from flavour to flavour. */
   position: relative;
   z-index: 20;
 }

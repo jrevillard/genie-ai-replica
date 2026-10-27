@@ -196,23 +196,58 @@ SECRET = "(secret)"
 _INTERP = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::?-([^}]*))?\}")
 
 
+def env_file_defaults():
+    """NAME -> value from the committed `env` template — the canonical
+    default source a `cp env .env` deployment interpolates from."""
+    out = {}
+    try:
+        for line in (Path(REPO_ROOT) / "env").read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            name, _, val = line.partition("=")
+            out[name.strip()] = val.strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return out
+
+
+_ENV_DEFAULTS = None
+
+
 def compose_default(value):
     """The value a Compose variable resolves to when the operator sets nothing.
 
-    Returns (resolved, required). `required` is True for `${NAME}` with no
-    fallback: the operator MUST set it, which the chart has to reproduce
-    (through a Secret), so it is not comparable to a chart default.
+    Returns (resolved, required). `required` is True for a WHOLE-VALUE
+    `${NAME}` with no fallback: the operator MUST set it, which the chart
+    has to reproduce (through a Secret), so it is not comparable to a
+    chart default.
+
+    A value that only CONTAINS an interpolation (`URL=${HOST}:8080`) is
+    resolved against the env template — comparing the literal `${...}`
+    text compared a string no container ever sees (Compose interpolates
+    an unset variable to the empty string).
     """
+    global _ENV_DEFAULTS
     text = str(value)
-    if not text.startswith("${") or not text.endswith("}"):
-        return text, False
     match = _INTERP.fullmatch(text)
-    if not match:
-        return text, False
-    fallback = match.group(2)
-    if fallback is None:
-        return "", True
-    return fallback, False
+    if match:
+        fallback = match.group(2)
+        if fallback is None:
+            return "", True
+        return fallback, False
+    if "${" in text:
+        if _ENV_DEFAULTS is None:
+            _ENV_DEFAULTS = env_file_defaults()
+
+        def sub(m):
+            name, fallback = m.group(1), m.group(2)
+            if fallback is not None:
+                return fallback
+            return _ENV_DEFAULTS.get(name, "")
+
+        return _INTERP.sub(sub, text), False
+    return text, False
 
 
 def compose_vars(service):
@@ -246,6 +281,7 @@ def chart_rendered(docs):
     required, and the operator supplies it either way.
     """
     out = {}
+    envfrom = {}
     for doc in docs:
         if not isinstance(doc, dict) or doc.get("kind") not in ("Deployment", "Job"):
             continue
@@ -255,6 +291,7 @@ def chart_rendered(docs):
         if not component:
             continue
         rows = out.setdefault(component, {})
+        mounts = envfrom.setdefault(component, set())
         for container in template.get("spec", {}).get("containers", []):
             for entry in container.get("env") or []:
                 if "name" in entry:
@@ -262,7 +299,11 @@ def chart_rendered(docs):
                     if value is None and "valueFrom" in entry:
                         value = SECRET
                     rows[entry["name"]] = value
-    return out
+            for entry in container.get("envFrom") or []:
+                ref = entry.get("secretRef") or {}
+                if ref.get("name"):
+                    mounts.add(ref["name"])
+    return out, envfrom
 
 
 # A service's values key can differ from the pod LABEL the chart gives
@@ -356,7 +397,7 @@ def main(argv):
                 except OSError:
                     pass
 
-    rendered = chart_rendered(docs)
+    rendered, rendered_envfrom = chart_rendered(docs)
     declared = chart_declared(values)
     services = allowlist.get("services") or {}
 
@@ -439,7 +480,32 @@ def main(argv):
                 continue
             if name in secret_provided:
                 # The chart asks the operator for the value through a
-                # Secret; there is no literal to compare.
+                # Secret; there is no literal to compare. The WIRING is
+                # still asserted: a category that only suppresses the
+                # comparison is the suppression-nobody-checks failure —
+                # a refactor that removes the Secret mount leaves the
+                # variable undelivered while the gate stays green.
+                spec = secret_provided[name]
+                if not isinstance(spec, dict) or "via" not in spec or "secret" not in spec:
+                    gaps.append(
+                        f"{component}.{name}: secretProvided entry must be an object "
+                        "with 'why', 'secret' and 'via' (envFrom | secretKeyRef) — "
+                        "an uncheckable string is the suppression nobody checks"
+                    )
+                elif spec["via"] == "envFrom":
+                    if spec["secret"] not in rendered_envfrom.get(chart_name, set()):
+                        gaps.append(
+                            f"{component}.{name}: filed secretProvided via envFrom on "
+                            f"Secret '{spec['secret']}', but the rendered {chart_name} "
+                            "pod mounts no such Secret — the wiring was removed"
+                        )
+                else:  # secretKeyRef
+                    if rendered_rows.get(name) is not SECRET:
+                        gaps.append(
+                            f"{component}.{name}: filed secretProvided via secretKeyRef, "
+                            f"but the rendered {chart_name} pod carries no such env row "
+                            "— the wiring was removed"
+                        )
                 continue
             if name in rendered_rows:
                 chart_value = rendered_rows[name]

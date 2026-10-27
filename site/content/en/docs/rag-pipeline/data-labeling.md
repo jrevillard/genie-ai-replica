@@ -209,7 +209,6 @@ at `/api/service-categories` (see
 | `GET /api/service-categories/search?query=` | Search categories | Auth |
 | `GET /api/service-categories/categories/{categoryId}` | Single category + services | Auth |
 | `POST /api/service-categories` | Create category (requires `nameEN`) | Authenticated |
-| `POST /api/service-categories/init` | Seed an initial taxonomy | Authenticated |
 | `POST /api/service-categories/{categoryId}/services` | Add service under category | Authenticated |
 | `PUT /api/service-categories/{categoryId}` | Update category (incl. translations) | Authenticated |
 | `GET /api/service-categories/{categoryId}/translations` | Read translations | Auth |

@@ -120,13 +120,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the flag off and are unaffected. Structured guards pin the scoping on
   both platforms.
 
-### Fixed
+### Removed
 
-- **The welcome screen's title is wrapped in a local scrim instead of a full-width band.** The scrim used to span the whole artwork, washing the icon tiles along with the text; it now hugs the heading and its subtitle and fades on every side, as the designer's mockup does.
-- **The welcome screen's input bar was the wrong size.** It took 96 % of the card row's width and stood 90 px tall — a two-line field. It now takes 81 % of the row (805 px of 989 in the mockup) and rests at 50 px, one line, growing with what is typed into it.
-- **The welcome screen's subtitle was unreadable in the dark theme.** Its grey sat at 3.05:1 against the artwork behind it, below the 4.5:1 floor WCAG AA sets for 16 px text. It is now a brand tint — 9.95:1 in the light theme, 8.91:1 in the dark one — and stays a visible step below the heading.
-- **The welcome screen broke in the narrow-panel window.** With both sidebars open the panel is at its narrowest just above 1400 px: the title wrapped to two lines in the longer locales, and the wave band stopped short of the panel's edges. The title now holds one line in all 14 locales, and the wave band spans the panel's full width.
-- **The welcome screen's input placeholder wrapped to two lines.** "Ask a question, explore knowledge, or start a task…" overflowed the field in 10 of the 14 locales, including the English one. The third clause is gone in every locale, and the placeholder is measured against the field in the regression test, so it cannot come back.
+- **Breaking:** **`POST /api/service-categories/init` removed.** The route
+  answered 500 on every call: it seeded a default taxonomy through
+  `initializeDefaultCategoriesAndServices()`, a service method that no longer
+  exists (removed during the migration of the service-category service to the
+  translation collections), so the request failed with
+  `TypeError: ...initializeDefaultCategoriesAndServices is not a function`.
+  The endpoint is removed rather than restored — it had no caller (the web
+  frontend, the mobile app and the deployment scripts never called it) and the
+  taxonomy it seeded was a hard-coded English default list that matches no real
+  deployment. Seed the taxonomy from the **Knowledge Hierarchy** tab of the
+  Admin Dashboard, or with
+  `components/gov-chat-backend/scripts/new-schema-scripts/create-knowledge-hierarchy.js`
+  (turn the ArangoDB schema validation off for `serviceCategories`, `services`
+  and `categoryServices` before running the script, and back on afterwards).
+- **Breaking:** **`GET /api/analytics` removed.** Same defect as the endpoint
+  above: the route called `analyticsService.getAnalytics()`, a method removed
+  during the 2025 singleton refactor of the backend services, so it answered
+  500 on every call — a malformed `filters` parameter was the one exception, it
+  was rejected with 400 before the service was reached. No first-party client
+  calls it: the web app reads `/api/analytics/dashboard` and the `/metric`,
+  `/timeseries` and `/satisfaction` endpoints, and the mobile app never called
+  it. It is removed rather than restored — read
+  `GET /api/analytics/dashboard` for the overview.
+- **The npm wrappers that created the database and seeded the taxonomy are
+  gone.** `npm run setup-db`, `npm run init-categories` and `npm run setup-all`
+  ran `node setup-db.js`, `node init-service-categories.js` and
+  `node setup-all.js` from the package root, where those files have never
+  existed — they were kept elsewhere in the repository and are now gone
+  entirely — so every command failed with `MODULE_NOT_FOUND`, while the
+  documentation presented them as the way to create the collections and seed
+  the taxonomy. No action is needed on a deployed stack: the one-shot
+  `db-migrations` job already creates every collection and index at deploy
+  time. For a database managed outside Compose, run
+  `node arango-schema-creator.js ./arango-schema.json` (after
+  `source set-env.sh`) from
+  `components/gov-chat-backend/scripts/new-schema-scripts`, and
+  `node create-knowledge-hierarchy.js` to seed the taxonomy (which needs the
+  ArangoDB schema validation turned off first — see the scripts' README).
+
+### Fixed
 
 - **The labelling prompt was different on every ingestion run.** The candidate
   labels sent to the labelling LLM were collected in a Python set, whose order
@@ -142,7 +177,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   longer reaches the prompt as the text "None": the per-fetch log line states
   how many entries carried no usable label and how many the payload held that
   the parser did not recognise. (#1109, !612)
-
+- **The welcome screen's title is wrapped in a local scrim instead of a full-width band.** The scrim used to span the whole artwork, washing the icon tiles along with the text; it now hugs the heading and its subtitle and fades on every side, as the designer's mockup does.
+- **The welcome screen's input bar was the wrong size.** It took 96 % of the card row's width and stood 90 px tall — a two-line field. It now takes 81 % of the row (805 px of 989 in the mockup) and rests at 50 px, one line, growing with what is typed into it.
+- **The welcome screen's subtitle was unreadable in the dark theme.** Its grey sat at 3.05:1 against the artwork behind it, below the 4.5:1 floor WCAG AA sets for 16 px text. It is now a brand tint — 9.95:1 in the light theme, 8.91:1 in the dark one — and stays a visible step below the heading.
+- **The welcome screen broke in the narrow-panel window.** With both sidebars open the panel is at its narrowest just above 1400 px: the title wrapped to two lines in the longer locales, and the wave band stopped short of the panel's edges. The title now holds one line in all 14 locales, and the wave band spans the panel's full width.
+- **The welcome screen's input placeholder wrapped to two lines.** "Ask a question, explore knowledge, or start a task…" overflowed the field in 10 of the 14 locales, including the English one. The third clause is gone in every locale, and the placeholder is measured against the field in the regression test, so it cannot come back.
 - **More links in the documentation site pointed at a page that did not answer
   the question.** The "Developer" card on the home page promised a local dev
   loop with `npm install` and `npm run dev`, but the page it opens explicitly

@@ -436,7 +436,7 @@ prefix doesn't match.
 | Port 80 / 443 already in use on the host | Another web server or leftover container | `sudo lsof -iTCP:80 -sTCP:LISTEN` to find the offender; stop it or remap `NGINX_HTTP_PORT`/`NGINX_HTTPS_PORT` in `.env`. |
 | Host edit picked up by the **wrong** service | You edited `components/shared/` (used by multiple images) and only rebuilt one | `grep -R "<file>" components/*/Dockerfile* genie-ai-overlay/*/Dockerfile*` to find dependents, rebuild each. |
 | `docker compose exec <service>` returns `Error response from daemon: Container ... is not running` | The service container crashed on boot | `docker compose logs <service>` — most often a missing `.env` secret or a syntax error. |
-| Backend test reaches the real ArangoDB and hangs | Accidentally ran `npm run setup-db` instead of `npm test`, or a test imports a setup script | The default Jest config does not load setup scripts — verify you used `npm test`. For tests against the real DB, see `tests/` (not `__tests__/`). |
+| Backend test reaches the real ArangoDB and hangs | Ran a database setup script instead of `npm test`, or a test imports a setup script | The default Jest config does not load setup scripts — verify you used `npm test`. For tests against the real DB, see `tests/` (not `__tests__/`). |
 
 ## Related
 

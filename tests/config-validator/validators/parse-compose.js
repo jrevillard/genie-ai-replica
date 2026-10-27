@@ -277,16 +277,24 @@ module.exports = { parseComposeEnvVars, crossReference, parseComposeImages, pars
  * is unsafe here — same caveat as parseComposeEnvVars).
  *
  * Returns:
- *   [{ service, profiles: string[], replicas: string|null, replicasLine: number|null }]
+ *   [{ service, profiles: string[], replicas: string|null, replicasLine: number|null, envVars: string[] }]
  *
  * - `profiles`: list of profile names declared on the service. Empty if no
  *   `profiles:` key (means default profile = always-on in compose mode).
  * - `replicas`: raw replicas value (may contain `${VAR:-default}`).
  * - `replicasLine`: 1-indexed line number of the `replicas:` line, for error
  *   messages.
+ * - `envVars`: names of the variables the service receives through its
+ *   `environment:` block. A variable reaches a container only through that
+ *   block, so the names of the whole file say nothing about which container
+ *   gets which one. The block is read in the forms this file uses — the
+ *   mapping form (`NAME: value`) and the list form (`- NAME=value`), at
+ *   their usual indentation; YAML anchors (`environment: *shared-env`) and
+ *   inline values are not recognised, and a service wired that way reports
+ *   no variables.
  *
  * @param {string} filePath - Path to a docker-compose.yaml file
- * @returns {Array<{ service: string, profiles: string[], replicas: string|null, replicasLine: number|null }>}
+ * @returns {Array<{ service: string, profiles: string[], replicas: string|null, replicasLine: number|null, envVars: string[] }>}
  */
 function parseComposeServiceContracts(filePath) {
   let content;
@@ -303,6 +311,8 @@ function parseComposeServiceContracts(filePath) {
   let currentProfiles = null;
   let currentReplicas = null;
   let currentReplicasLine = null;
+  let currentEnvVars = [];
+  let inEnvironment = false;
 
   const flush = () => {
     if (currentService) {
@@ -310,12 +320,15 @@ function parseComposeServiceContracts(filePath) {
         service: currentService,
         profiles: currentProfiles || [],
         replicas: currentReplicas,
-        replicasLine: currentReplicasLine
+        replicasLine: currentReplicasLine,
+        envVars: currentEnvVars
       });
     }
     currentProfiles = null;
     currentReplicas = null;
     currentReplicasLine = null;
+    currentEnvVars = [];
+    inEnvironment = false;
   };
 
   for (let i = 0; i < lines.length; i++) {
@@ -346,6 +359,31 @@ function parseComposeServiceContracts(filePath) {
       flush();
       currentService = serviceMatch[1];
       continue;
+    }
+
+    // environment: block — the variables the service receives
+    if (/^ {4}environment:\s*$/.test(line)) {
+      inEnvironment = true;
+      continue;
+    }
+    if (inEnvironment) {
+      // The block ends at the first line that is not an entry of it: an
+      // entry is indented deeper than the `environment:` key, in the mapping
+      // form (NAME: value) or the list form (- NAME=value, quoted or not).
+      if (!/^ {6}/.test(line)) {
+        inEnvironment = false;
+      } else {
+        const mappingEntry = line.match(/^ {6,}([A-Za-z_][A-Za-z0-9_]*):/);
+        const listEntry = line.match(/^ {6,}-\s*['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?\s*(?:=|$)/);
+        if (mappingEntry) {
+          currentEnvVars.push(mappingEntry[1]);
+          continue;
+        }
+        if (listEntry) {
+          currentEnvVars.push(listEntry[1]);
+          continue;
+        }
+      }
     }
 
     // profiles: [name1, name2] or profiles: name1

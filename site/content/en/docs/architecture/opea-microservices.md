@@ -209,7 +209,9 @@ For full per-phase breakdown and an end-to-end debug recipe (fetch a trace by ID
 
 ## 5. Per-Request Overrides (ChatQnA)
 
-The request body fields below act as per-request overrides over the deployment defaults (`RERANKER_TOP_N`, `RERANKING_STRATEGY`, `RETRIEVER_ARANGO_K`, `RETRIEVER_ARANGO_FETCH_K`, `RETRIEVER_ARANGO_FILTER_STRATEGY`, `CONFIDENCE_RANK_DECAY`, `RERANKER_SCORE_CALIBRATION`, `RERANKER_SCORE_TEMPERATURE`). They are **top-level fields** on the ChatQnA request (e.g. `top_n`, `reranking_strategy`), not nested inside a wrapper block — see `genie-ai-overlay/chatqna/genieai_chatqna.py` (`chat_request.top_n`, `chat_request.reranking_strategy`, `GenieaiRetrieverParms`, `GenieaiRerankerParms`). This is how the same chatqna service can serve different retrieval strategies for different user requests without restart.
+The request body fields below act as per-request overrides over the deployment defaults (`RERANKER_TOP_N`, `RERANKING_STRATEGY`, `RETRIEVER_ARANGO_K`, `RETRIEVER_ARANGO_FETCH_K`, `CONFIDENCE_RANK_DECAY`, `RERANKER_SCORE_CALIBRATION`, `RERANKER_SCORE_TEMPERATURE`). They are **top-level fields** on the ChatQnA request (e.g. `top_n`, `reranking_strategy`), not nested inside a wrapper block — see `genie-ai-overlay/chatqna/genieai_chatqna.py` (`chat_request.top_n`, `chat_request.reranking_strategy`, `GenieaiRetrieverParms`, `GenieaiRerankerParms`). This is how the same chatqna service can serve different retrieval strategies for different user requests without restart.
+
+The label-filter strategy (`RETRIEVER_ARANGO_FILTER_STRATEGY`) is not among them: the ChatQnA request carries no field for it, so the retriever takes the strategy from its environment (`AND` requires every filter label on a chunk, `OR` requires one).
 
 | Request field | Maps to | Default | Notes |
 |--------------|---------|---------|-------|

@@ -7,14 +7,63 @@ const TEST_USER = {
 
 const BASE_URL = process.env.BASE_URL || 'https://localhost';
 
+// The wait from the submit click to the dashboard: the identity provider
+// deciding to issue a code, then the app exchanging it. On an idle stack the
+// whole handshake takes about a second (median 974 ms, max 1085 ms over 10
+// sessions), so this budget is not sized for the happy path — it is sized for
+// a stack that stalls or rejects, and the retry is what recovers from that.
+const AUTH_BUDGET_MS = 30000;
+
+// The retry runs after the first budget has already been spent, and both have
+// to fit inside Playwright's 60 s per-test timeout alongside the spec's own
+// work. 30 s + 15 s = 45 s leaves room; 30 s + 30 s would not, and a helper
+// that cannot report why it failed is no better than one that failed.
+const AUTH_RETRY_BUDGET_MS = 15000;
+
 /**
  * Authenticate via page-level login (Keycloak redirect flow).
+ *
+ * Retries once, because a slow identity provider under load must not fail a
+ * test that has nothing to do with authentication. A genuine failure — bad
+ * credentials, wrong realm — fails both passes, and the error names both.
  */
 async function loginViaUI(page, user = TEST_USER) {
+  let firstError;
+  try {
+    await loginAttempt(page, user, AUTH_BUDGET_MS);
+    return;
+  } catch (error) {
+    firstError = error;
+  }
+
+  let secondError;
+  try {
+    await loginAttempt(page, user, AUTH_RETRY_BUDGET_MS);
+    return;
+  } catch (error) {
+    secondError = error;
+  }
+
+  throw new Error(
+    `loginViaUI failed on both attempts.\n` +
+      `  attempt 1 (budget ${AUTH_BUDGET_MS}ms): ${firstError.message}\n` +
+      `  attempt 2 (budget ${AUTH_RETRY_BUDGET_MS}ms): ${secondError.message}`
+  );
+}
+
+/**
+ * One pass of the Keycloak redirect flow.
+ */
+async function loginAttempt(page, user, budgetMs) {
   await page.goto(`${BASE_URL}/`, {
     waitUntil: 'networkidle',
     timeout: 30000,
   });
+
+  // A previous attempt's token exchange can complete just after its wait
+  // expired — that is precisely the failure this helper retries. The session
+  // is then already established and there is nothing left to log in to.
+  if (page.url().includes('dashboard')) return;
 
   await page.waitForURL('**/protocol/openid-connect/auth**', {
     timeout: 15000,
@@ -29,7 +78,7 @@ async function loginViaUI(page, user = TEST_USER) {
       const urlStr = url.toString();
       return urlStr.includes('dashboard') || urlStr === `${BASE_URL}/`;
     },
-    { timeout: 30000 },
+    { timeout: budgetMs },
   );
 
   const finalUrl = page.url();

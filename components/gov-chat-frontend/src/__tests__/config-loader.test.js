@@ -23,6 +23,11 @@ describe('loadConfig', () => {
     global.fetch = jest.fn();
     loadConfig = freshModule();
     setProperty = jest.spyOn(document.documentElement.style, 'setProperty');
+    // The decorative layer writes a real attribute onto documentElement, and
+    // unlike the spied setProperty above that write outlives the mock. Clear
+    // it so an assertion about the attribute's absence tests the config under
+    // test rather than whichever test happened to run before it.
+    delete document.documentElement.dataset.visual;
   });
 
   afterEach(() => {
@@ -127,5 +132,282 @@ describe('loadConfig', () => {
     expect(global.fetch).toHaveBeenCalledWith(CONFIG_URL);
     expect(result.theme.brandColor).toBe(DEFAULT_BRAND_COLOR);
     expect(cssPropsSet()).toEqual(['--brand']);
+  });
+
+  it('rejects when the fetched config does not satisfy its own schema', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          $schema: 'http://json-schema.org/draft-07/schema#',
+          type: 'object',
+          required: ['theme'],
+          properties: {
+            theme: {
+              type: 'object',
+              required: ['brandColor'],
+              properties: { brandColor: { type: 'string' } }
+            }
+          },
+          theme: { brandColor: 42 }
+        })
+    });
+
+    await expect(loadConfig()).rejects.toThrow(/failed schema validation/i);
+  });
+
+  it('rejects when the fetched config carries an unusable schema (compile throws)', async () => {
+    // An operator may hand-edit or truncate the config: if `properties`
+    // is not a compilable schema, Ajv.compile throws and loadConfig must
+    // surface it as a loud validation error rather than silently fall
+    // back to the bundled defaults (the bundled defaults would then mask
+    // the malformed schema).
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          $schema: 'http://json-schema.org/draft-07/schema#',
+          properties: 'not a schema object'
+        })
+    });
+
+    await expect(loadConfig()).rejects.toThrow(/unusable \$schema/i);
+  });
+
+  it('names the failing path when the config is invalid', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          $schema: 'http://json-schema.org/draft-07/schema#',
+          type: 'object',
+          required: ['theme'],
+          properties: {
+            theme: {
+              type: 'object',
+              required: ['brandColor'],
+              properties: { brandColor: { type: 'string' } }
+            }
+          },
+          theme: {}
+        })
+    });
+
+    await expect(loadConfig()).rejects.toThrow(/brandColor/);
+  });
+
+  it('accepts a config that satisfies its schema', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          $schema: 'http://json-schema.org/draft-07/schema#',
+          type: 'object',
+          required: ['theme'],
+          properties: {
+            theme: {
+              type: 'object',
+              required: ['brandColor'],
+              properties: { brandColor: { type: 'string' } }
+            }
+          },
+          theme: { brandColor: '#123456' }
+        })
+    });
+
+    const result = await loadConfig();
+
+    expect(result.theme.brandColor).toBe('#123456');
+  });
+
+  it('marks the decorative layer off and writes no asset properties when theme.visual is absent', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ theme: { brandColor: '#ff0000' } })
+    });
+
+    await loadConfig();
+
+    expect(document.documentElement.getAttribute('data-visual')).toBeNull();
+    expect(cssPropsSet()).not.toContain('--visual-hero');
+  });
+
+  it('marks the decorative layer off when it is disabled', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ theme: { brandColor: '#ff0000', visual: { enabled: false } } })
+    });
+
+    await loadConfig();
+
+    expect(document.documentElement.getAttribute('data-visual')).toBe('off');
+  });
+
+  it('marks the decorative layer on and writes one property per known asset', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          properties: {
+            theme: {
+              properties: {
+                visual: {
+                  properties: {
+                    assets: {
+                      properties: {
+                        hero: { type: 'string' },
+                        waves: { type: 'string' },
+                        mesh: { type: 'string' },
+                        corner: { type: 'string' }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          theme: {
+            brandColor: '#ff0000',
+            visual: {
+              enabled: true,
+              assets: {
+                hero: '/config/genie-visual/assets/genie-hero-transparent.png',
+                waves: '/config/genie-visual/assets/genie-bottom-waves.svg',
+                mesh: '/config/genie-visual/assets/genie-dot-mesh.svg',
+                corner: '/config/genie-visual/assets/genie-corner-network.svg'
+              }
+            }
+          }
+        })
+    });
+
+    await loadConfig();
+
+    expect(document.documentElement.getAttribute('data-visual')).toBe('on');
+    expect(setProperty).toHaveBeenCalledWith(
+      '--visual-hero',
+      'url("/config/genie-visual/assets/genie-hero-transparent.png")'
+    );
+    expect(setProperty).toHaveBeenCalledWith(
+      '--visual-waves',
+      'url("/config/genie-visual/assets/genie-bottom-waves.svg")'
+    );
+    expect(setProperty).toHaveBeenCalledWith('--visual-mesh', 'url("/config/genie-visual/assets/genie-dot-mesh.svg")');
+    expect(setProperty).toHaveBeenCalledWith(
+      '--visual-corner',
+      'url("/config/genie-visual/assets/genie-corner-network.svg")'
+    );
+    // Per-asset presence flags drive the CSS band-collapse: a set asset
+    // gets 1, an absent asset gets 0, and the welcome overlay uses those
+    // values to multiply its layout-reserving properties.
+    expect(setProperty).toHaveBeenCalledWith('--visual-hero-set', '1');
+    expect(setProperty).toHaveBeenCalledWith('--visual-waves-set', '1');
+    expect(setProperty).toHaveBeenCalledWith('--visual-mesh-set', '1');
+    expect(setProperty).toHaveBeenCalledWith('--visual-corner-set', '1');
+  });
+
+  it('marks each unset asset with 0 and emits no url() for it (partial config collapses the band)', async () => {
+    // A config with only hero — the welcome overlay must not reserve a
+    // wave band or a corner band. The per-asset presence flag is the
+    // signal the CSS uses to multiply its layout-reserving properties
+    // by zero.
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          properties: {
+            theme: {
+              properties: {
+                visual: {
+                  properties: {
+                    assets: {
+                      properties: {
+                        hero: { type: 'string' },
+                        waves: { type: 'string' },
+                        mesh: { type: 'string' },
+                        corner: { type: 'string' }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          theme: {
+            brandColor: '#ff0000',
+            visual: {
+              enabled: true,
+              assets: {
+                hero: '/config/genie-visual/assets/genie-hero-transparent.png'
+              }
+            }
+          }
+        })
+    });
+
+    await loadConfig();
+
+    expect(setProperty).toHaveBeenCalledWith('--visual-hero-set', '1');
+    expect(setProperty).toHaveBeenCalledWith('--visual-waves-set', '0');
+    expect(setProperty).toHaveBeenCalledWith('--visual-mesh-set', '0');
+    expect(setProperty).toHaveBeenCalledWith('--visual-corner-set', '0');
+    // No url() for an absent asset — only the presence flag is written.
+    expect(setProperty).not.toHaveBeenCalledWith('--visual-waves', expect.stringContaining('url'));
+  });
+
+  it('derives the asset keys from the schema rather than a hardcoded list', async () => {
+    // Drop one of the assets from the schema and the loader must skip it
+    // (this is the schema/loader drift test: the loader cannot accept
+    // a key the schema rejects, and cannot ignore a key the schema accepts).
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          properties: {
+            theme: {
+              properties: {
+                visual: {
+                  properties: {
+                    assets: {
+                      properties: {
+                        // Only hero is in the schema; waves/mesh/corner are not.
+                        hero: { type: 'string' }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          theme: {
+            brandColor: '#ff0000',
+            visual: { enabled: true, assets: { hero: '/config/h.png' } }
+          }
+        })
+    });
+
+    await loadConfig();
+
+    expect(setProperty).toHaveBeenCalledWith('--visual-hero', 'url("/config/h.png")');
+    expect(setProperty).not.toHaveBeenCalledWith('--visual-waves', expect.anything());
+    expect(setProperty).not.toHaveBeenCalledWith('--visual-mesh', expect.anything());
+    expect(setProperty).not.toHaveBeenCalledWith('--visual-corner', expect.anything());
+  });
+
+  it('ignores an unknown asset key instead of writing an inert property', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          theme: {
+            brandColor: '#ff0000',
+            visual: { enabled: true, assets: { heor: '/config/typo.png' } }
+          }
+        })
+    });
+
+    await loadConfig();
+
+    expect(cssPropsSet()).not.toContain('--visual-heor');
   });
 });

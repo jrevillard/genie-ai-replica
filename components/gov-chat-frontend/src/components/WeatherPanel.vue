@@ -260,7 +260,21 @@ export default {
   font-size: var(--text-base);
 }
 
-.weather-header h4 {
+/* The title and the location+refresh row on one line, giving way to
+   two when the column is too narrow to hold both. Without the wrap a
+   long place name pushes the refresh button past the panel's content
+   box — the same overflow shape the forecast row had. */
+.weather-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+/* The template renders an <h3>; an `h4` selector matched nothing. */
+.weather-header h3 {
   margin: 0;
   font-size: var(--text-base);
   font-weight: 500;
@@ -273,7 +287,18 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: var(--space-xs);
   color: var(--muted);
+  min-width: 0;
+  /* A long place name truncates rather than pushing the refresh
+     button out of the widget. */
+  overflow: hidden;
+}
+
+.weather-location > :first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .refresh-btn {
@@ -375,8 +400,20 @@ export default {
   color: var(--accent);
 }
 
+/* The forecast row reflows rather than overflowing.
+   `flex-wrap` lets a day drop onto a second line once three no longer
+   fit, and `min-width: 0` on the day takes it off the flex
+   automatic-minimum floor — without that, a day is never narrower
+   than its own longest word and the row overflows the widget's
+   content box instead of reflowing. Measured on the rendered panel:
+   at a 199 px widget the row overflowed its content box by 52 px,
+   at 239 px by 16 px, and from 259 px it fitted. The overflow was
+   invisible to a scrollWidth check — the panel does not scroll — so
+   it was found by comparing each child's bounding rect against the
+   content box. */
 .forecast-list {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
 }
 
@@ -385,13 +422,15 @@ export default {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   padding: var(--space-xs);
 }
 
 .day-name {
   color: var(--muted);
   margin-bottom: var(--space-xs);
+  max-width: 100%;
 }
 
 .day-icon {
@@ -401,6 +440,7 @@ export default {
 }
 
 .day-temp {
+  max-width: 100%;
   display: flex;
   gap: var(--space-xs);
 }
@@ -418,5 +458,11 @@ export default {
   color: var(--muted);
   font-size: var(--text-base);
   margin-top: 2px;
+  /* Break inside a word rather than past the widget's edge: the
+     condition names are the longest strings in the panel
+     ("Thunderstorms", "Light rain shower") and they are the first
+     thing to stick out in a narrow column. */
+  overflow-wrap: anywhere;
+  max-width: 100%;
 }
 </style>

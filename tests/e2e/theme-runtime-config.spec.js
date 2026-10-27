@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { expectRevalidated } = require('./helpers/cache-headers');
 
 // Cache-header contract for the runtime theme configuration.
 //
@@ -12,15 +13,6 @@ const { test, expect } = require('@playwright/test');
 // operators edit at runtime, which is exactly what these tests exist to catch.
 
 const IMMUTABLE_ASSET_CACHE = 'public, max-age=31536000, immutable';
-
-function expectRevalidated(response, label) {
-  expect(response.status(), `${label} should be served (HTTP 200)`).toBe(200);
-  const cacheControl = response.headers()['cache-control'] || '';
-  expect(cacheControl, `${label} must be no-cache`).toContain('no-cache');
-  expect(cacheControl, `${label} must be must-revalidate`).toContain('must-revalidate');
-  expect(cacheControl, `${label} must not be immutable`).not.toContain('immutable');
-  expect(cacheControl, `${label} must not carry a one-year max-age`).not.toContain('max-age=31536000');
-}
 
 test.describe('Runtime theme config cache headers', () => {
   test('operator-editable theme stylesheet is revalidated', async ({ request }) => {
@@ -68,11 +60,15 @@ test.describe('Keycloak runtime theme mount', () => {
     // from this request's URL: a wrong hostname setting keeps the endpoint
     // green while silently breaking every OIDC redirect.
     const base = process.env.BASE_URL || 'https://localhost';
+    // A multi-origin dev slot (9444/9445 in front of a shared stack) mints
+    // the stack's canonical issuer for every origin — the backend's issuer
+    // map knows only that one. KEYCLOAK_PUBLIC_ORIGIN names it; unset, the
+    // browser origin IS the canonical origin (single-origin deployments, CI).
+    const kcOrigin = (process.env.KEYCLOAK_PUBLIC_ORIGIN || base).replace(/^https?:\/\//, '');
     const body = await response.json();
-    expect(
-      body.issuer,
-      'issuer must use the public origin the browser reaches'
-    ).toContain(`${base.replace(/^https?:\/\//, '')}/auth/realms/genie`);
+    expect(body.issuer, 'issuer must use the public origin the browser reaches').toContain(
+      `${kcOrigin}/auth/realms/genie`
+    );
   });
 
   // A deployment may select any mounted theme via KEYCLOAK_THEME (default
@@ -102,9 +98,8 @@ test.describe('Keycloak runtime theme mount', () => {
     // Theme assets are referenced as /auth/resources/<hash>/login/<theme>/...;
     // referencing the selected theme proves the MOUNTED theme resolved — the
     // built-in fallback would reference login/keycloak[.v2] instead.
-    expect(
-      html,
-      `login page should load the mounted ${expectedTheme} theme assets`
-    ).toContain(`login/${expectedTheme}/`);
+    expect(html, `login page should load the mounted ${expectedTheme} theme assets`).toContain(
+      `login/${expectedTheme}/`
+    );
   });
 });

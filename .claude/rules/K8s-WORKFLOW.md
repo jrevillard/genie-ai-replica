@@ -37,6 +37,12 @@ the contracts that matter when editing `charts/genieai-umbrella/**` or the
 
 ```bash
 # 1. Edit templates/values
+# 1b. Build the vendored dependencies. charts/.gitignore excludes
+#     */charts/ and */*.tgz, so a fresh clone has NO charts/*.tgz and
+#     every helm command below fails with "no template
+#     genieai-common.fullname" / "chart directory is missing these
+#     dependencies". Run this first, every session.
+helm dependency update charts/genieai-umbrella
 # 2. Lint (strict → fails on warnings)
 helm lint --strict charts/genieai-umbrella/
 

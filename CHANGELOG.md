@@ -153,12 +153,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   existed — they were kept elsewhere in the repository and are now gone
   entirely — so every command failed with `MODULE_NOT_FOUND`, while the
   documentation presented them as the way to create the collections and seed
-  the taxonomy. Run the scripts that are still there instead, from
-  `components/gov-chat-backend/scripts/new-schema-scripts`:
-  `source set-env.sh` and `node arango-schema-creator.js ./arango-schema.json`
-  for the schema, and `node create-knowledge-hierarchy.js` for the taxonomy
-  (which needs the ArangoDB schema validation turned off first — see the
-  scripts' README). (#1108, !613)
+  the taxonomy. No action is needed on a deployed stack: the one-shot
+  `db-migrations` job already creates every collection and index at deploy
+  time. For a database managed outside Compose, run
+  `node arango-schema-creator.js ./arango-schema.json` (after
+  `source set-env.sh`) from
+  `components/gov-chat-backend/scripts/new-schema-scripts`, and
+  `node create-knowledge-hierarchy.js` to seed the taxonomy (which needs the
+  ArangoDB schema validation turned off first — see the scripts' README).
+  (#1108, !613)
 
 ### Fixed
 

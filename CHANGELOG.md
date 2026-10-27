@@ -138,13 +138,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   labels sent to the labelling LLM were collected in a Python set, whose order
   follows the hash seed of the process that built it — so every container sent
   the same taxonomy in a different order, and the LLM could pick a different
-  label set for the same chunk. The list is now ordered canonically
-  (case-folded name, exact name as the tie-break), independently of the order
-  the taxonomy arrives in, and the labels a chunk stores are in that same
-  order. Two ingestion runs now send the same prompt, so an A/B comparison
-  between labelling runs measures the change under test instead of the prompt
-  ordering. A label whose translation is missing no longer reaches the prompt
-  as the text "None"; the count of what was dropped is reported. (#1109, !612)
+  label set for the same chunk. The list now keeps the shape the backend
+  returns — each category followed by the services under it — with a canonical
+  order inside each category (case-folded name, exact name as the tie-break),
+  independently of the order the taxonomy arrives in; the labels a chunk
+  stores are in that same order. Two ingestion runs now send the same prompt,
+  so an A/B comparison between labelling runs measures the change under test
+  instead of the prompt ordering. A label whose translation is missing no
+  longer reaches the prompt as the text "None"; the count of what was dropped,
+  and whether it was a missing translation or a malformed payload, is
+  reported. (#1109, !612)
 
 - **More links in the documentation site pointed at a page that did not answer
   the question.** The "Developer" card on the home page promised a local dev

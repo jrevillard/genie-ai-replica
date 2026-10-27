@@ -638,6 +638,20 @@ class TestApplyLabels:
         assert result == [{"text": "chunk", "labels": ["A"]}]
 
     @pytest.mark.asyncio
+    async def test_a_file_label_that_is_not_a_string_does_not_fail_the_ingest(self):
+        """The document scope arrives from the client and is not validated there.
+
+        An unusable entry must not take the document down with it.
+        """
+        dp = create_dataprep()
+
+        with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
+            docs, reasons = await dp._apply_labels(["chunk"], [], ["Clinics", 123], "file1")
+
+        assert docs == [{"text": "chunk", "labels": ["Clinics"]}]
+        assert reasons == []
+
+    @pytest.mark.asyncio
     async def test_fallback_to_file_labels_when_empty_taxonomy(self):
         dp = create_dataprep()
 
@@ -1869,7 +1883,7 @@ class TestFetchAllLabels:
             ]
         )
 
-        assert labels == ["Clinics", "Education", "Healthcare", "Hospitals", "Schools"]
+        assert labels == ["Education", "Schools", "Healthcare", "Clinics", "Hospitals"]
 
     @pytest.mark.asyncio
     async def test_the_order_does_not_depend_on_the_order_the_backend_returns(self):
@@ -1881,7 +1895,7 @@ class TestFetchAllLabels:
             ]
         )
 
-        assert labels == ["Clinics", "Education", "Healthcare", "Hospitals", "Schools"]
+        assert labels == ["Education", "Schools", "Healthcare", "Clinics", "Hospitals"]
 
     @pytest.mark.asyncio
     async def test_drops_duplicates_and_labels_that_are_not_usable_strings(self):
@@ -1897,7 +1911,7 @@ class TestFetchAllLabels:
             ]
         )
 
-        assert labels == ["Clinics", "Healthcare"]
+        assert labels == ["Healthcare", "Clinics"]
 
     @pytest.mark.asyncio
     async def test_labels_differing_only_in_case_keep_a_defined_order(self):
@@ -1934,9 +1948,41 @@ class TestFetchAllLabels:
                 ]
             )
 
-        assert labels == ["Clinics", "Healthcare"]
+        assert labels == ["Healthcare", "Clinics"]
         warnings = [call.args[0] for call in logger.warning.call_args_list]
-        assert any("Dropped 2" in message for message in warnings), warnings
+        assert any("Dropped 2 taxonomy entries" in message for message in warnings), warnings
+
+    @pytest.mark.asyncio
+    async def test_a_malformed_entry_is_counted_apart_from_a_missing_translation(self):
+        """The two causes have different remedies.
+
+        A missing translation is a content problem; a payload the parser does
+        not recognise is a contract problem between the dataprep and the
+        backend. Counting them together would point the operator at the wrong
+        one.
+        """
+        with patch.object(dp_module, "logger") as logger, patch.object(dp_module, "_taxonomy_dropped_reported", None):
+            await _fetch_labels(
+                [
+                    {"name": "Healthcare", "children": [123, {"children": ["Clinics"]}]},
+                    "not-an-object",
+                ]
+            )
+
+        warnings = [call.args[0] for call in logger.warning.call_args_list]
+        assert any("Dropped 0 taxonomy entries" in message for message in warnings), warnings
+        assert any("3 malformed entries" in message for message in warnings), warnings
+
+    @pytest.mark.asyncio
+    async def test_a_clean_fetch_clears_the_record(self):
+        """A translation that is fixed and lost again is reported again."""
+        with patch.object(dp_module, "logger") as logger, patch.object(dp_module, "_taxonomy_dropped_reported", None):
+            await _fetch_labels([{"name": "Healthcare", "children": [None]}])
+            await _fetch_labels([{"name": "Healthcare", "children": ["Clinics"]}])
+            await _fetch_labels([{"name": "Healthcare", "children": [None]}])
+
+        warnings = [call.args[0] for call in logger.warning.call_args_list]
+        assert len(warnings) == 2, warnings
 
     @pytest.mark.asyncio
     async def test_the_report_is_not_repeated_for_the_same_count(self):
@@ -1993,8 +2039,8 @@ class TestFetchAllLabels:
         # The exact values, so the comparison above cannot pass on two empty
         # taxonomies: the probe would then guard nothing.
         assert outputs[0] == {
-            "labels": ["Clinics", "Education", "Healthcare", "Hospitals", "Onion", "onion", "Schools"],
-            "stored": ["Clinics", "Hospitals", "Schools"],
+            "labels": ["Education", "Schools", "Healthcare", "Clinics", "Hospitals", "Onion", "onion"],
+            "stored": ["Schools", "Clinics", "Hospitals"],
         }
 
 
@@ -2014,11 +2060,11 @@ class TestFinalizeChunkLabels:
             labels = await dp._finalize_chunk_labels(
                 0,
                 ["Hospitals", "Clinics", "Schools"],
-                ["Clinics", "Education", "Healthcare", "Hospitals", "Schools"],
+                ["Education", "Schools", "Healthcare", "Clinics", "Hospitals"],
                 "file1",
             )
 
-        assert labels == ["Clinics", "Hospitals", "Schools"]
+        assert labels == ["Schools", "Clinics", "Hospitals"]
 
 
 class TestRunGuardrail:

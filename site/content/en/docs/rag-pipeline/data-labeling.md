@@ -97,21 +97,25 @@ uses `max_tokens=160` and the batched call uses `max_tokens=len(batch) * 256 + 5
 (`DATAPREP_CONTEXTUAL_MAX_TOKENS` is unrelated — it caps the
 Contextual-Retrieval context-generation call, not labelling.)
 
-The taxonomy list in the prompt is ordered canonically — case-folded label
-name first, exact name as the tie-break — independently of the order the
-backend returns the taxonomy in, and the labels a chunk stores are in that
-same order. The prompt is therefore the same from one ingestion run to the
-next, so the labelling no longer varies with the order the taxonomy happened
-to arrive in. The labels are still the model's answer to that prompt: greedy
-decoding is not bit-for-bit reproducible across different batch compositions,
-so a re-ingest can still differ.
+The taxonomy list in the prompt keeps the shape the backend returns — each
+category is followed by the services under it — and the order inside a
+category is canonical: case-folded label name first, exact name as the
+tie-break. It does not depend on the order the backend returns the taxonomy
+in, and the labels a chunk stores are in that same order. The prompt is
+therefore the same from one ingestion run to the next, so the labelling no
+longer varies with the order the taxonomy happened to arrive in. The labels
+are still the model's answer to that prompt: greedy decoding is not
+bit-for-bit reproducible across different batch compositions, so a re-ingest
+can still differ.
 
 Each label the LLM returns is resolved against the taxonomy (exact match
 first, then a case-insensitive plural/singular match). A label that resolves
-but falls outside the document's `file_labels` scope is dropped with a
-`Dropped (out of document scope)` ingestion-log warning; a label that does
-not resolve against the taxonomy at all is dropped as a non-taxonomy label
-and logged as `New (non-taxonomy) labels suggested`.
+but falls outside the document's `file_labels` scope is dropped and listed
+as `Dropped (out of document scope)` in the chunk's ingestion-log entry; a
+label that does not resolve against the taxonomy at all is dropped as a
+non-taxonomy label and listed as `New (non-taxonomy) labels suggested`. The
+entry is logged at INFO, or at WARN when the chunk also carries non-taxonomy
+labels.
 
 ## Failure modes (labelling)
 

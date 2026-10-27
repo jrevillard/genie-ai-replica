@@ -841,47 +841,69 @@ def _read_index_params():
     return metric, n_lists
 
 
-def _canonical_taxonomy_order(labels: list[str]) -> list[str]:
-    """Return the labels in a canonical, process-independent order.
+def _canonical_taxonomy_order(groups: list[tuple[str, list[str]]]) -> list[str]:
+    """Return the taxonomy labels in a canonical, process-independent order.
 
-    The label list is embedded in the labelling prompt verbatim, so its order
-    is part of the prompt. An unordered collection cannot supply it: set
-    iteration order follows the interpreter's per-process string hash seed, so
-    the same taxonomy would produce a different prompt in every container —
-    and the LLM may then label the same chunk differently, a difference that
-    is invisible in the stored result.
-
-    The order is therefore derived from the labels themselves: the case-folded
+    Each group is a category and the services under it. A category's own name
+    sorts ahead of its services, so the prompt keeps the shape the backend
+    returns — a category and the services under it stay together — while the
+    order inside a group comes from the labels themselves: the case-folded
     name first, the exact name as the tie-break, so two labels differing only
-    in case still have a defined order. Duplicates are collapsed, and the
+    in case still have a defined order.
+
+    The order does not depend on the order the taxonomy arrives in, and it is
+    identical from one process to the next. An unordered collection cannot
+    supply it: set iteration order follows the interpreter's per-process string
+    hash seed, so the same taxonomy would produce a different prompt in every
+    container — and the LLM may then label the same chunk differently, a
+    difference that is invisible in the stored result.
+
+    Duplicates are collapsed, keeping the first occurrence in that order; the
     arrival order is preserved on the way in — a set would resolve two labels
     with the same sort key by hash, which is the dependence this function
     exists to remove.
     """
-    return sorted(dict.fromkeys(labels), key=lambda label: (label.casefold(), label))
+    keyed: list[tuple[tuple[str, str, str, str], str]] = []
+    for category, services in groups:
+        if category:
+            keyed.append(((category.casefold(), category, "", ""), category))
+        for service in services:
+            keyed.append(((category.casefold(), category, service.casefold(), service), service))
+    keyed.sort(key=lambda entry: entry[0])
+    return list(dict.fromkeys(label for _, label in keyed))
 
 
 # The count of taxonomy entries dropped by the last fetch, so the reason is
 # reported once and only when it changes: the taxonomy is fetched once per
 # ingested document, and a missing translation does not change between
 # documents. Warning on every fetch would fill the log with the same line.
-_taxonomy_dropped_reported: int | None = None
+_taxonomy_dropped_reported: tuple[int, int] | None = None
 
 
-def _report_dropped_taxonomy_entries(dropped: int) -> None:
+def _report_dropped_taxonomy_entries(untranslated: int, malformed: int) -> None:
     """Warn that taxonomy entries had to be dropped, once per distinct count.
 
     A missing translation is an operator's problem, and a taxonomy that reads
     as complete while a service is missing from it is worse than a noisy log.
+    The two causes are counted apart because they have different remedies: a
+    missing translation is a content problem, a malformed entry is a contract
+    problem between the dataprep and the backend.
+
     The count also stays in the per-document fetch log line, so a change
-    remains visible there.
+    remains visible there. A clean fetch clears the record, so a translation
+    that is fixed and lost again is reported again.
     """
     global _taxonomy_dropped_reported
+    if not untranslated and not malformed:
+        _taxonomy_dropped_reported = None
+        return
+    dropped = (untranslated, malformed)
     if dropped == _taxonomy_dropped_reported:
         return
     _taxonomy_dropped_reported = dropped
     logger.warning(
-        f"Dropped {dropped} taxonomy entries without a usable label (a missing translation is the usual cause)."
+        f"Dropped {untranslated} taxonomy entries without a usable label "
+        f"(missing translation) and {malformed} malformed entries in the taxonomy payload."
     )
 
 
@@ -1628,42 +1650,58 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             ):
                 if response.status == 200:
                     data = await response.json()
-                    labels: list[str] = []
-                    dropped = 0
                     # Backend returns a tree structure (Category -> Children)
+                    groups: list[tuple[str, list[str]]] = []
+                    untranslated = 0
+                    malformed = 0
                     if isinstance(data, list):
                         for category in data:
                             if not isinstance(category, dict):
-                                dropped += 1
+                                malformed += 1
                                 continue
-                            # Add the Category Name
+                            # The Category Name
                             name = category.get("name")
                             if isinstance(name, str) and name:
-                                labels.append(name)
+                                group_name = name
                             else:
-                                dropped += 1
-                            # Add all Children (Services)
+                                # A category whose translation is missing arrives as
+                                # null: it has no label to offer, and its services
+                                # are kept under a nameless group.
+                                group_name = ""
+                                untranslated += 1
+                            # All Children (Services)
+                            services: list[str] = []
                             children = category.get("children")
                             if isinstance(children, list):
                                 for child in children:
                                     # Children might be strings or objects depending on query
-                                    child_name = child.get("name") if isinstance(child, dict) else child
-                                    if isinstance(child_name, str) and child_name:
-                                        labels.append(child_name)
+                                    if isinstance(child, dict):
+                                        if "name" not in child:
+                                            malformed += 1
+                                            continue
+                                        child_name = child["name"]
+                                    elif isinstance(child, str):
+                                        child_name = child
+                                    elif child is None:
+                                        # The backend returns null for a service whose
+                                        # translation is missing.
+                                        untranslated += 1
+                                        continue
                                     else:
-                                        # A service whose translation is missing arrives
-                                        # as null: it has no usable label to offer, and
-                                        # saying so is better than a taxonomy that reads
-                                        # as complete.
-                                        dropped += 1
+                                        malformed += 1
+                                        continue
+                                    if isinstance(child_name, str) and child_name:
+                                        services.append(child_name)
+                                    else:
+                                        untranslated += 1
+                            groups.append((group_name, services))
 
-                    if dropped:
-                        _report_dropped_taxonomy_entries(dropped)
-                    ordered_labels = _canonical_taxonomy_order(labels)
+                    _report_dropped_taxonomy_entries(untranslated, malformed)
+                    ordered_labels = _canonical_taxonomy_order(groups)
+                    dropped = untranslated + malformed
                     logger.info(
-                        f"Taxonomy: {len(labels)} entries received, "
-                        f"{len(ordered_labels)} unique labels for labelling"
-                        + (f", {dropped} without a usable label" if dropped else "")
+                        f"Taxonomy: {len(ordered_labels)} unique labels for labelling"
+                        + (f", {dropped} entries dropped" if dropped else "")
                         + "."
                     )
                     return ordered_labels
@@ -2831,16 +2869,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         Consolidates per-label progress logs into a single summary entry per chunk
         (previously ~3.7 logs/chunk flooded the backend ingestion-log endpoint).
         """
-        # An insertion-ordered set: the stored labels keep the order the LLM
-        # suggested them in, so two ingests of the same document store the same
-        # array. A plain set would order them by hash seed instead.
-        final_labels: dict[str, None] = {}
+        final_labels: set[str] = set()
         new_labels: list[str] = []
         for label in suggested:
             if label in final_labels:
                 continue
             if label in all_labels:
-                final_labels[label] = None
+                final_labels.add(label)
                 continue
             # Fuzzy/synonym match (plural, case-insensitive).
             match = next((x for x in all_labels if x.lower() == label.lower()), None)
@@ -2849,11 +2884,16 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             if not match:
                 match = next((x for x in all_labels if x.lower() == label.lower() + "s"), None)
             if match:
-                final_labels[match] = None
+                final_labels.add(match)
             else:
                 new_labels.append(label)
 
-        labels_list = list(final_labels)
+        # Store the labels in the taxonomy's own order, so the array is a
+        # function of the label set alone — not of the order the model happened
+        # to answer in — and the same as what the other labelling strategies
+        # store. Every resolved label comes from the taxonomy, so filtering
+        # the taxonomy is the whole ordering.
+        labels_list = [label for label in all_labels if label in final_labels]
         # Scope to the document's file_labels: drop taxonomy-valid labels that
         # fall outside the document's scope (e.g. sibling crops on a single-crop
         # guide). Skipped when file_labels is empty so documents without a scope
@@ -2863,12 +2903,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             scope = set(file_labels)
             dropped = [l for l in labels_list if l not in scope]
             labels_list = [l for l in labels_list if l in scope]
-
-        # Store the labels in the canonical order, so the array is a function
-        # of the label set alone — not of the order the model happened to
-        # answer in, and the same as what the other labelling strategies
-        # store.
-        labels_list = _canonical_taxonomy_order(labels_list)
 
         level = "INFO"
         msg = f"Chunk {index}: Final labels ({len(labels_list)}): {labels_list}."
@@ -2923,7 +2957,14 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             await self._write_ingestion_log(
                 file_id, "WARN", "Labeling", "No labels found in Taxonomy. Using only file labels."
             )
-            fallback_labels = _canonical_taxonomy_order(file_labels) if file_labels else []
+            # Without a taxonomy the document's own scope is the only label
+            # source. It is sorted, so the stored array does not depend on the
+            # order the scope arrived in, and an entry that is not a string is
+            # ignored rather than failing the ingest.
+            fallback_labels = sorted(
+                {label for label in (file_labels or []) if isinstance(label, str) and label},
+                key=lambda label: (label.casefold(), label),
+            )
             return [{"text": c, "labels": fallback_labels} for c in plain_chunks], []
 
         logger.info(f"Labeling using strategy: {LABELING_STRATEGY}")

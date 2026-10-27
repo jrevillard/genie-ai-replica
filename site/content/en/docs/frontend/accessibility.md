@@ -33,7 +33,7 @@ behaviour, and the known gaps.
 ## DS design-system primitives
 
 The 12 DS components live in
-[`components/gov-chat-frontend/src/components/ds/`](https://gitlab.com/un/itu/genie-ai/-/tree/main/components/gov-chat-frontend/src/components/ds/):
+[`components/gov-chat-frontend/src/components/ds/`](https://opensource.unicc.org/un/itu/genie-ai/-/tree/main/components/gov-chat-frontend/src/components/ds/):
 
 | Primitive | File | Accessibility semantics |
 |-----------|------|--------------------------|
@@ -66,7 +66,7 @@ The 12 DS components live in
 (`tag="router-link"`). When the tag is **not** `<button>`, the disabled
 state uses `aria-disabled="true"` instead of the `disabled` attribute
 (disabling an `<a>` would break navigation). See
-[`DsButton.vue:6-7`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-frontend/src/components/ds/Button.vue#L6).
+[`DsButton.vue:6-7`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-frontend/src/components/ds/Button.vue#L6).
 
 ## Dialog patterns
 
@@ -83,7 +83,7 @@ state uses `aria-disabled="true"` instead of the `disabled` attribute
 ```
 
 - Renders as `<div role="dialog" aria-modal="true">` — see
-  [`DsModal.vue:4`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-frontend/src/components/ds/Modal.vue#L4).
+  [`DsModal.vue:4`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-frontend/src/components/ds/Modal.vue#L4).
 - **Focus trap** — focus moves into the modal on open and stays there
   until close. The close button (`DsButton ghost aria-label="Close"`)
   is the only way out via keyboard.
@@ -130,7 +130,7 @@ Behaviour:
 ## Chat-stream live region
 
 The chat message list is a live region
-([`ChatBotComponent.vue`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-frontend/src/components/ChatBotComponent.vue)):
+([`ChatBotComponent.vue`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-frontend/src/components/ChatBotComponent.vue)):
 
 ```html
 <div class="messages" aria-live="polite">

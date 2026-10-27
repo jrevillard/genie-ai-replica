@@ -147,6 +147,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The benchmark panel named a judge the run was not using (8-6/8-7).** A generation carried an explicit judge pick while the panel displayed "Deployment default" — a label that resolves to the deployment's *active* configuration, which was a different model entirely (the run was silently scored against a personal low-tier key while the UI implied the production one). The server now resolves the effective judge **before** dispatch and publishes it in the live progress envelope ("Judging with <configuration> (<model>)"); "Deployment default" names the active configuration and its model rather than hiding behind a generic word; and a pick the selector cannot display is dropped rather than sent silently. The panel's judge labels were also reading the wrong i18n namespace (`okf.ragas.judge.*` instead of the locales' `okf.ragas.generate.*`), so they had been falling back to English in **all 14 locales** — fixed and translated.
 - **One dropped connection destroyed 74 minutes of benchmark work (8-6).** The knowledge-graph build died on a single `Server disconnected without sending a response` and took the whole run with it, even though 2,057 judge answers were already cached and reusable. Transport-family failures (connection/timeout/protocol errors) are now retried on the same jittered backoff as a rate limit, and the knowledge-graph phase degrades a dead node to an empty result and **reports it** in the run's `kg_failures` rather than aborting the run. Only a malformed request (HTTP 400) surfaces immediately.
 - **A progress count of zero is "not counted yet", not "nothing happened" (8-6).** During the knowledge-graph build the panel reported "Building the knowledge graph 0/1075" for over 20 minutes while the work was demonstrably running — the count increments per *finished* transform, and a judge-backed transform's nodes finish minutes apart, so a long phase looks permanently stalled. A zero count is no longer printed, the bar animates as indeterminate while it is zero, the sidecar reports a counter of judge calls **as issued** (so a line always advances), and the elapsed clock is recomputed on every poll rather than only when a phase reports something. A number that never moves is worse than no number.
+
+- **More links in the documentation site pointed at a page that did not answer
+  the question.** The "Developer" card on the home page promised a local dev
+  loop with `npm install` and `npm run dev`, but the page it opens explicitly
+  tells you not to install anything on the host: the card now describes the
+  loop that page actually delivers. The dashboard-customization page sent the
+  reader to the Docker Compose quickstart for a Docker Swarm bring-up and
+  promised the order in which to rebuild the frontend image — in Swarm the
+  image is built by the pipeline and pinned by tag, so the page now points at
+  the Swarm setup and says so. The two deployment guides sent their "next
+  step" to the health checks for the creation of the first user and of the
+  knowledge hierarchy, which the health-check page does not cover: they now
+  point at the Keycloak admin guide and at the admin dashboard. The theme page
+  sent the reader to the mobile architecture page for the Flutter design
+  system, which is documented in the mobile UI component inventory. Two "report
+  a problem" links went to the merge-request guide instead of the section that
+  says how to report a problem. The pages that describe the ingestion log now
+  point at the canonical reference in the Operations section, the pages that
+  need an API token point at the API contracts, and the page that explains how
+  to read a trace points at the tracing guide instead of the Operations landing
+  page. (#608)
+
+- **Links in the documentation site pointed at the wrong page or at the wrong
+  section.** The link to the development guide on the home page pointed at
+  `/docs/core/development-guide/`, an address no page ever carried: the reader
+  got a 404. The deployment card next to it, and the links to the glossary, to
+  the source-tree analysis and to the tracing page, resolved through a
+  redirect to the page that has since moved, and the "Section -> Page" link
+  texts still named sections that had been renamed, so the reader was sent to
+  a section that no longer had that name. The addresses of the three renamed
+  sections now stay the same whichever version of Hugo builds the site, and a
+  new check in the CI pipeline fails when a link is broken, when it only works
+  through a redirect, when the anchor it points at does not exist, or when a
+  section address would depend on the Hugo version. The links to the source
+  code pointed at gitlab.com, where the project does not exist, and now point
+  at the self-hosted instance; the links to the NVIDIA container toolkit, to
+  the vLLM documentation and to the JWKS specification pointed at pages that
+  no longer exist. (#607)
+
 - **Static-analysis follow-ups on the application code (SAST wave-7).**
   The translation example's two `requests.post` calls ran without a timeout
   and could hang on a stalled upstream — the translate call now times out

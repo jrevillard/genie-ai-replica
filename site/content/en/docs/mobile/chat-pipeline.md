@@ -19,7 +19,7 @@ The chat surface is the GENIE.AI mobile app's main user-facing feature. This doc
 |-------------|-----|
 | Authenticated session | Every chat call goes through `AuthInterceptor` (Bearer token) |
 | Backend reachable at `${backendUrl}` | The `POST /api/queries/stream` endpoint |
-| Observability stack (optional) | Trace the chat pipeline via VictoriaTraces — see [Observability — Tracing](/docs/observe/tracing/) |
+| Observability stack (optional) | Trace the chat pipeline via VictoriaTraces — see [Operations — Tracing](/docs/operate/tracing-howto/) |
 
 ## 1. Endpoints
 
@@ -224,7 +224,7 @@ Notifications (UI toasts), Theme (light / dark / system), Language, Reset data, 
 
 | Symptom | Likely cause | First check |
 |---------|--------------|-------------|
-| Stream never emits a `chunk` event | Backend OPEA pipeline stalled | Trace via VictoriaTraces — see [Observability — Tracing](/docs/observe/tracing/) |
+| Stream never emits a `chunk` event | Backend OPEA pipeline stalled | Trace via VictoriaTraces — see [Operations — Tracing](/docs/operate/tracing-howto/) |
 | `translation` event corrupts markdown | Old non-AST translation logic | Confirm the backend has the streaming-translation fix ([issue #829](https://opensource.unicc.org/un/itu/genie-ai/-/issues/829)); check `routes/query-routes.js` for the `STREAMING_TRANSLATION_ENABLED` branch |
 | Feedback POST returns 404 | Backend cleared the in-memory query before the user submitted | Increase backend retention or submit feedback sooner after the message lands |
 | PDF export fails on web | `web_file_utils.dart` blocked by browser download permissions | Use a non-incognito tab; allow downloads for the app origin |
@@ -239,4 +239,4 @@ Notifications (UI toasts), Theme (light / dark / system), Language, Reset data, 
 - [API Contracts (backend)](/docs/reference/api-contracts/) — full request/response shapes for `/api/queries/stream` and `/api/queries/{id}/feedback`.
 - [RAG pipeline](/docs/rag-pipeline/pipeline/) — backend-side retrieval, reranking, and translation.
 - [Streaming SSE](/docs/rag-pipeline/streaming-sse/) — backend-side event protocol contract.
-- [Observability — Tracing](/docs/observe/tracing/) — how to trace a slow or broken chat request end-to-end.
+- [Operations — Tracing](/docs/operate/tracing-howto/) — how to trace a slow or broken chat request end-to-end.

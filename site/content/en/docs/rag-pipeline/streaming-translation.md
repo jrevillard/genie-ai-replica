@@ -7,10 +7,12 @@ audience: developer, deployer
 last_reviewed: 2026-10-22
 persona: developer
 owner: "docs-stewards"
+aliases:
+  - /docs/rag/streaming-translation/
 ---
 
 > **For backend developers and deployers.** This page explains the
-> `STREAMING_TRANSLATION_ENABLED` toggle that fixes [issue #829](https://gitlab.com/un/itu/genie-ai/-/issues/829):
+> `STREAMING_TRANSLATION_ENABLED` toggle that fixes [issue #829](https://opensource.unicc.org/un/itu/genie-ai/-/issues/829):
 > when a user asks in Spanish, the chat must show Spanish text **as it
 > streams**, not an English stream that flips at the end. The flag is
 > off by default — turning it on requires the GPU translation service and
@@ -72,7 +74,7 @@ would have arrived.
 ## How unit boundaries are detected
 
 The boundary detector lives in
-[`components/gov-chat-backend/services/translation/stream-boundary.js`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/services/translation/stream-boundary.js).
+[`components/gov-chat-backend/services/translation/stream-boundary.js`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/services/translation/stream-boundary.js).
 It picks the **latest** of these boundaries in the current buffer:
 
 1. **Paragraph break** (`\n\n`) — Markdown blank line; commits at the
@@ -100,7 +102,7 @@ line 30).
 
 ## How structure survives translation
 
-`translationService.translateMarkdown` ([`services/translation/`](https://gitlab.com/un/itu/genie-ai/-/tree/main/components/gov-chat-backend/services/translation))
+`translationService.translateMarkdown` ([`services/translation/`](https://opensource.unicc.org/un/itu/genie-ai/-/tree/main/components/gov-chat-backend/services/translation))
 parses the unit as Markdown, translates **only the text leaf nodes**, and
 reassembles the AST — so structure **within** the unit (bold, lists,
 inner paragraphs) is preserved by the skeleton, never left to the model.
@@ -157,7 +159,7 @@ answers in tens of milliseconds once connected, so a budget that can expire on
 a healthy API would stop a working deployment.
 
 The flag is **read on every request** at
-[`query-routes.js:208`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/query-routes.js#L208)
+[`query-routes.js:208`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/query-routes.js#L208)
 — no service restart needed. Restart only if you also change the
 underlying model or backend.
 
@@ -165,7 +167,7 @@ underlying model or backend.
 
 The feature is **request-scoped**, not deployment-wide. It activates only
 when **all three** conditions are met
-([`query-routes.js:208-213`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/query-routes.js#L208)):
+([`query-routes.js:208-213`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/query-routes.js#L208)):
 
 ```javascript
 const streamingTranslationEnabled = ['1', 'true'].includes(
@@ -289,7 +291,7 @@ skipped once the streaming translation failed.
 | Spanish stream is **half English, half Spanish** | Translator threw on one unit, fallback fired for the rest | Check `docker service logs genieai_backend --since 5m 2>&1 \| grep stream_translation_unit_failed`. Common causes: GPU node down, model not loaded, OOM in the GPU. |
 | The request is refused with `400 UNSUPPORTED_LANGUAGE` | The requested language is not one the translation models have | Nothing to fix on the backend: the answer would have been in a language the caller did not ask for. The covered languages are the keys of the shipped map (`components/gov-chat-backend/services/translation/language-maps/<model>-map.js`). |
 | Spanish stream has collapsed spacing (`"Frase uno.Frase dos."`) | Boundary detector missing the whitespace separator | This is the bug the boundary detector was designed to prevent — open an MR with a repro and the debug logs (`grep STREAM-TRANSLATE`). |
-| Translation latency is higher than the English stream rate | Translator is CPU-bound and falling behind | Switch `TRANSLATION_BACKEND` to `gpu` (much faster for the model). See [Deploy → Remote GPU node](/docs/deploy/gpu/). |
+| Translation latency is higher than the English stream rate | Translator is CPU-bound and falling behind | Switch `TRANSLATION_BACKEND` to `gpu` (much faster for the model). See [Deployment → Remote GPU node](/docs/deploy/gpu/). |
 | Every unit emits a debug line in production | `LOG_LEVEL=debug` was set and not reverted | The default `LOG_LEVEL=info` suppresses the `[STREAM-TRANSLATE]` lines. Confirm via `docker exec genieai_backend sh -c 'echo $LOG_LEVEL'`. |
 
 ## Related
@@ -298,7 +300,7 @@ skipped once the streaming translation failed.
   temperature settings that affect English-stream quality.
 - [Frontend → Chat UX](/docs/frontend/chat-ux/) — how the browser
   injects `context.language` from `currentLocale`.
-- [Architecture → RAG pipeline](/docs/architecture/architecture/) — the
+- [RAG pipeline → Pipeline architecture](/docs/rag-pipeline/pipeline/) — the
   end-to-end flow including translation.
 - [Translation service reference](/docs/reference/api-contracts/#9-translation-routes-apitranslate)
   — the `POST /api/translate` endpoint used for the post-stream fallback.

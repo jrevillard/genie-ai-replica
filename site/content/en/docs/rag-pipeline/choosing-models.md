@@ -6,6 +6,8 @@ mode: reference
 persona: developer
 owner: docs-stewards
 last_reviewed: 2026-09-29
+aliases:
+  - /docs/rag/choosing-models/
 ---
 
 ## Overview

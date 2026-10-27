@@ -93,4 +93,4 @@ stage fails.
 - [Dev workflow](/docs/contribute/dev-workflow/)
 - [Style guide](/docs/contribute/style-guide/)
 - [Release process](/docs/contribute/release-process/)
-- [Report a problem with these docs](/docs/contribute/how-to-mr/)
+- [Report a problem with these docs](/docs/#report-a-problem)

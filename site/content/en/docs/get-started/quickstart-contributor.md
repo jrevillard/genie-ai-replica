@@ -110,4 +110,4 @@ formatting nit (Prettier / Ruff).
 - [Contribute → Repo layout](/docs/contribute/repo-layout/)
 - [Contribute → Dev workflow](/docs/contribute/dev-workflow/)
 - [Contribute → Style guide](/docs/contribute/style-guide/)
-- [Report a problem with these docs](/docs/contribute/how-to-mr/)
+- [Report a problem with these docs](/docs/#report-a-problem)

@@ -117,7 +117,7 @@ You can read the ingestion log in three places:
 - the **API** — `GET /api/files/{file_id}/ingestion-log` on the document-repository service (Admin or `dataprep-service` role required)
 - the **distributed trace** for the file's `trace_id` in VictoriaTraces, accessed via Grafana → Observability → Traces
 
-See the [Ingestion log reference]({{< relref "ingestion-log" >}}) for the
+See [Operations → Ingestion log]({{< relref "/docs/operate/ingestion-log" >}}) for the
 schema and canonical message strings.
 
 ## Parallel indexing

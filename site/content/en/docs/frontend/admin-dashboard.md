@@ -157,7 +157,7 @@ Destructive operations (Rollover, Security Scan) require an additional `ConfirmD
 
 ## Tab: Logs (`logs`)
 
-Live tail + filter of application logs. Backend proxies VictoriaLogs (`SELECT * FROM logs WHERE ...` over HTTP). See [Observability → VictoriaLogs](/docs/operate/admin-logs/) for the storage layer.
+Live tail + filter of application logs. Backend proxies VictoriaLogs (`SELECT * FROM logs WHERE ...` over HTTP). See [Operations → Admin logs](/docs/operate/admin-logs/) for the storage layer.
 
 | Filter | Source |
 |--------|--------|
@@ -186,7 +186,7 @@ Browse and inspect individual queries that ran through the RAG pipeline. Three c
 └────────────────────────────┴─────────────────────────┘
 ```
 
-Click a row in the list to load detail. Filters: user, date range, confidence range, label, query substring. See [Debugging with Tracing & Logs](/docs/observe/tracing/) for the related backend trace view.
+Click a row in the list to load detail. Filters: user, date range, confidence range, label, query substring. See [Debugging with Tracing & Logs](/docs/operate/tracing-howto/) for the related backend trace view.
 
 ## Tab: Security (`security`)
 
@@ -256,5 +256,5 @@ Most admin operations dispatch through dedicated services (`adminService`, `docu
 - [State Management](/docs/frontend/state-management-frontend/) — non-namespaced `auth` module that owns `currentUser.roles`.
 - [Backend API Contracts](/docs/reference/api-contracts/) — admin REST surface.
 - [Observability](/docs/observe/) — Logs tab and Query Inspector both read from VictoriaLogs / VictoriaTraces.
-- [Knowledge Base: Ingestion](/docs/knowledge-base/ingestion/) — Documents tab and the dataprep status mapping.
+- [Knowledge Base: Document Lifecycle](/docs/knowledge-base/document-lifecycle/) — Documents tab and the dataprep status mapping.
 - [Knowledge Base: Labelling Taxonomy](/docs/knowledge-base/labelling-taxonomy/) — Knowledge Hierarchy tab shapes the chat context filter.

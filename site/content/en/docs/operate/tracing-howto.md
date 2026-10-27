@@ -6,6 +6,7 @@ section: "operate"
 aliases:
   - /docs/observability/tracing/
   - /docs/observe/tracing/
+  - /docs/operations/tracing-howto/
 mode: how-to
 persona: developer
 owner: "docs-stewards"

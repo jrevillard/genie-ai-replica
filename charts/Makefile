@@ -45,7 +45,16 @@ test: test-umbrella
 # and the kube-version were earlier fabrications). The K8s version pin
 # is the kind NODE IMAGE (kindest/node:v1.33.0), created by CI or by
 # hand BEFORE this target runs.
-CT_INSTALL_FLAGS = --config ci/ct.yaml --helm-extra-set-args "$(RENDER_FLAGS)"
+#
+# The data-tier disable flags travel HERE, not only in ci/ct.yaml: a
+# --helm-extra-set-args on the command line REPLACES the config value
+# (viper — a bound flag set on the CLI wins over the config file), so
+# repeating only RENDER_FLAGS left ct install rendering the Keycloak CR
+# + CNPG Cluster + ArangoDeployment onto a bare kind cluster with none
+# of their CRDs installed — `no matches for kind "Keycloak"` on every
+# run of this target.
+TIER_DISABLE = --set data.postgres.enabled=false --set data.arangodb.enabled=false --set data.keycloak.enabled=false
+CT_INSTALL_FLAGS = --config ci/ct.yaml --helm-extra-set-args "$(TIER_DISABLE) $(RENDER_FLAGS)"
 
 # KUBECONFIG isolation: ct install creates AND DELETES its own kind
 # cluster, and kind rewrites the kubeconfig file named by KUBECONFIG —

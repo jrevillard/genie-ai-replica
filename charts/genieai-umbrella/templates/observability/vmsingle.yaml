@@ -6,9 +6,10 @@
   VLSingle/VTSingle). Validation deferred to first reconcile — the
   operator is not installed locally.
 
-  The operator creates the in-cluster Service prefixed with metadata.name
-  ("vmetrics") on the standard VM HTTP port 8428. Remote-write exporters
-  point at http://vmetrics.{{ .Values.namespace }}.svc.cluster.local:8428/api/v1/write
+  The operator creates the in-cluster Service as <kind>-<metadata.name>
+  ("vmsingle-vmetrics") on the standard VM HTTP port 8428. Remote-write
+  exporters point at
+  http://vmsingle-vmetrics.{{ .Values.namespace }}.svc.cluster.local:8428/api/v1/write
   (the Prometheus remote-write endpoint).
 */}}
 apiVersion: operator.victoriametrics.com/v1beta1

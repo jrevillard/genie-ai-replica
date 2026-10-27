@@ -55,7 +55,7 @@ spec:
             - name: LLM_ENDPOINT
               value: {{ include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "translation") }}
             - name: LLM_MODEL_ID
-              value: {{ .Values.opea.translation.modelId }}
+              value: {{ .Values.opea.translation.modelId | default "google/gemma-3-4b-it" }}
             # Observability exporter — derived from the umbrella
             # observability flags (any signal on → SDK initialises)
             # rather than a per-service knob.

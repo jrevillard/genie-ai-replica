@@ -298,9 +298,10 @@
           </div>
 
           <!-- Mascot guide bubble (el-salvador): framed speech-bubble
-               anchored bottom-right of the banner artwork — the farmer in
-               the hero image appears to be speaking. Absolute inside the
-               banner, which this component anchors itself. -->
+               anchored top-right of the banner artwork, in the sky next
+               to the farmer — the centered welcome heading owns the
+               banner's lower band, so the bubble must stay above it.
+               Absolute inside the banner, which this component anchors. -->
           <div class="welcome-mascot-bubble" role="note">
             {{ translate('chatbot.mascotGreeting') }}
           </div>
@@ -3252,15 +3253,15 @@ export default {
 
 .welcome-mascot-bubble {
   position: absolute;
-  right: 4%;
-  bottom: 14%;
-  width: clamp(180px, 36%, 340px);
+  right: 3%;
+  top: 6%;
+  width: clamp(150px, 30%, 300px);
   padding: clamp(6px, 0.9cqw, 12px) clamp(10px, 1.5cqw, 20px);
   background: var(--surface);
   color: var(--fg);
   border: 2px solid var(--accent-gold, var(--accent));
   border-radius: 16px;
-  font-size: clamp(14px, 1.8cqw, 22px);
+  font-size: clamp(13px, 1.5cqw, 19px);
   font-weight: 600;
   line-height: 1.3;
   text-align: center;
@@ -3270,14 +3271,14 @@ export default {
 .welcome-mascot-bubble::after {
   content: '';
   position: absolute;
-  top: -7px;
-  left: 16%;
+  bottom: -7px;
+  left: 14%;
   transform: rotate(45deg);
   width: 14px;
   height: 14px;
   background: var(--surface);
-  border-top: 2px solid var(--accent-gold, var(--accent));
-  border-left: 2px solid var(--accent-gold, var(--accent));
+  border-bottom: 2px solid var(--accent-gold, var(--accent));
+  border-right: 2px solid var(--accent-gold, var(--accent));
 }
 
 .insights-section,
@@ -3443,6 +3444,12 @@ export default {
 }
 
 @media (max-width: 480px) {
+  /* The banner is ~180px tall here and the two-line welcome heading
+     plus subtitle fill it: the bubble has no free sky to sit in. */
+  .welcome-mascot-bubble {
+    display: none;
+  }
+
   .insights-cards,
   .market-cards {
     grid-template-columns: 1fr;

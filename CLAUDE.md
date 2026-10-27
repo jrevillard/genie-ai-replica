@@ -91,6 +91,10 @@ overlays + SealedSecrets live in the deploy repo.
 
 ```bash
 # Chart dev cycle (worktree: feat/k8s-migration)
+helm dependency update charts/genieai-umbrella    # vendored deps are GITIGNORED
+                                                   # (genieai-common, gateway-helm): a fresh
+                                                   # checkout has no charts/*.tgz, and every
+                                                   # helm command below fails without them
 helm lint --strict charts/genieai-umbrella                       # local lint
 # NEVER bare `helm template` — the rtk hook garbles it. The render
 # needs the deployment data (it has no chart defaults for them) and a

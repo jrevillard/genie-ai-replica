@@ -80,8 +80,11 @@ spec:
       # Secret carrying username: someone-else creates role
       # `someone-else` and this line then names a role that does not
       # exist, which fails at initdb time with a CNPG error rather than
-      # at render time. Both default to keycloak.
-      owner: keycloak
+      # at render time. Both default to keycloak — the knob exists so an
+      # operator whose Secret carries a different username can say so:
+      # set data.keycloak.db.username to the SAME value as the Secret's
+      # `username` key.
+      owner: {{ .Values.data.keycloak.db.username | default "keycloak" }}
       # CNPG expects this Secret to carry BOTH `username` and `password`
       # keys (username-only fails validation). The Secret is
       # operator-provided via their secret backend; the chart does not

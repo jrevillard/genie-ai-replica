@@ -159,9 +159,15 @@ spec:
     # the laptop's Calico: the rule was in place and the traffic went
     # through anyway, because the destination is the control plane's
     # host endpoint). Only a CIDR can express it — the same shape as
-    # the document-repository's crawlAllowedCIDRs. Empty (the default)
-    # means the CNI's own default applies, which is what the laptop
-    # runs on: Calico's failsafe ports include the API server's 6443.
+    # the document-repository's crawlAllowedCIDRs.
+    #
+    # Empty (the default) means NO rule is rendered for the API server:
+    # the traffic then depends on the CNI's own failsafe ports, and only
+    # Calico's include the API server's 6443. On Cilium or kube-router
+    # the k8sattributes processor cannot watch pods and namespaces, and
+    # every log line ships without its k8s.pod.* / service.name
+    # enrichment — silently, with the agent still reporting healthy. Set
+    # observability.collectorAgent.apiServerCIDRs on those CNIs.
     {{- with .Values.observability.collectorAgent.apiServerCIDRs }}
     - to:
         {{- range . }}

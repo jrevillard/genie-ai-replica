@@ -99,8 +99,11 @@ have to be 0.0.0.0/0 the way it was when the chart ignored the URL:
     (the knob the crawler tier already uses), and an empty list falls
     back to 0.0.0.0/0 — the same approximation Compose makes, since a
     NetworkPolicy has no way to express a hostname;
-  - the port comes from the URL (`:444`, `:8443`, …), defaulting to 443.
-    The old rule hardcoded 443 + 444 on both ports at once.
+  - the port comes from the URL (`:444`, `:8443`, …). A URL with NO
+    explicit port falls back to the SCHEME's port — 443 for https, 80
+    for plain http: a rule permitting 443 while the client dials 80
+    drops every connection under default-deny. The old rule hardcoded
+    443 + 444 on both ports at once.
 */}}
 {{- define "genieai-umbrella.opeaNetworkFromUrl" -}}
 {{- $root := .root -}}
@@ -119,6 +122,8 @@ have to be 0.0.0.0/0 the way it was when the chart ignored the URL:
 {{- $matched := regexFind ":([0-9]{1,5})(?:/|$)" $url -}}
 {{- if $matched -}}
 {{- $port = regexFind "[0-9]{1,5}" $matched -}}
+{{- else if regexMatch "^http://" $url -}}
+{{- $port = "80" -}}
 {{- end -}}
 {{- dict "cidrs" $cidrs "ports" (list $port) | toJson -}}
 {{- end -}}

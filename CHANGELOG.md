@@ -156,7 +156,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   endpoint mocked a method the service did not have, which is why the defect
   stayed green; that mock is now derived from the real service prototype, so a
   route calling a method the service lacks can no longer pass its own test.
-  (#1108)
+  (#1108, !613)
 - **More links in the documentation site pointed at a page that did not answer
   the question.** The "Developer" card on the home page promised a local dev
   loop with `npm install` and `npm run dev`, but the page it opens explicitly

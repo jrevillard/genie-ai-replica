@@ -26,25 +26,30 @@ jest.mock('../../services/session-service', () => ({
   createSession: jest.fn()
 }));
 
-// Mock analytics-service with ALL required methods (controller constructor validates getDashboardAnalytics)
-jest.mock('../../services/analytics-service', () => ({
-  getDashboardAnalytics: jest.fn(),
-  getAnalytics: jest.fn(),
-  getUniqueUsersCount: jest.fn(),
-  getTimeSeriesData: jest.fn(),
-  formatDateLabel: jest.fn((t) => t),
-  getSatisfactionGaugeData: jest.fn(),
-  getSatisfactionHeatmapData: jest.fn(),
-  recordQuery: jest.fn(),
-  recordFeedback: jest.fn(),
-  trackEvent: jest.fn(),
-  db: {
+// Mock analytics-service, deriving the mocked surface from the REAL service
+// prototype (controller constructor validates getDashboardAnalytics). A hand-written
+// list of method names lets the mock invent methods the service does not have —
+// this mock used to declare `getAnalytics`, a method the service lost in the 2025
+// singleton refactor, which kept the route test green while the endpoint answered
+// 500 in production.
+jest.mock('../../services/analytics-service', () => {
+  const realService = jest.requireActual('../../services/analytics-service');
+  const mocked = {};
+  for (const name of Object.getOwnPropertyNames(Object.getPrototypeOf(realService))) {
+    if (name === 'constructor') continue;
+    // Only methods: a prototype that is not a class prototype would also expose
+    // inherited accessors (`__proto__`), and assigning those would corrupt the mock.
+    if (typeof realService[name] !== 'function') continue;
+    mocked[name] = jest.fn();
+  }
+  mocked.formatDateLabel = jest.fn((t) => t);
+  mocked.db = {
     query: jest.fn().mockResolvedValue({
       all: jest.fn().mockResolvedValue([])
     })
-  },
-  init: jest.fn()
-}));
+  };
+  return mocked;
+});
 
 // Mock swagger dependencies
 jest.mock(
@@ -71,7 +76,9 @@ jest.mock('../../services/user-profile-service', () => ({}));
 jest.mock('../../services/admin-dashboard-service', () => ({}));
 jest.mock('../../services/query-service', () => ({}));
 jest.mock('../../services/chat-history-service', () => ({}));
-jest.mock('../../services/service-category-service', () => ({}));
+jest.mock('../../services/service-category-service', () => ({
+  getAllCategoriesWithServices: jest.fn()
+}));
 jest.mock('../../services/logs-service', () => ({}));
 jest.mock('../../services/database-operations-service', () => ({}));
 jest.mock('../../services/weather-service', () => ({}));
@@ -130,13 +137,6 @@ beforeEach(() => {
     users: { activeCount: 120 },
     topQueries: []
   });
-  analyticsService.getAnalytics.mockResolvedValue({
-    queryCount: 500,
-    feedbackCount: 100,
-    avgRating: 4.2,
-    timeDistribution: {},
-    categoryDistribution: {}
-  });
   analyticsService.getUniqueUsersCount.mockResolvedValue(120);
   analyticsService.getSatisfactionGaugeData.mockResolvedValue({
     currentValue: 85.0,
@@ -179,11 +179,6 @@ function authPost(path, body) {
 describe('Auth guard', () => {
   it('should return 401 on GET /api/analytics/dashboard without token', async () => {
     const response = await request(app).get('/api/analytics/dashboard');
-    expect(response.status).toBe(401);
-  });
-
-  it('should return 401 on GET /api/analytics without token', async () => {
-    const response = await request(app).get('/api/analytics');
     expect(response.status).toBe(401);
   });
 
@@ -292,35 +287,26 @@ describe('GET /api/analytics/metric/:metric (AC3)', () => {
 });
 
 // ============================================================
-// AC4: GET /api/analytics (general)
+// GET /api/analytics — removed
 // ============================================================
-describe('GET /api/analytics (AC4)', () => {
-  const generalData = {
-    queryCount: 500,
-    feedbackCount: 100,
-    avgRating: 4.2,
-    timeDistribution: { morning: 120, afternoon: 200, evening: 180 },
-    categoryDistribution: { health: 150, education: 200 }
-  };
+// The route called `analyticsService.getAnalytics()`, a method removed during the
+// 2025 singleton refactor, so it answered 500 on every call. No first-party client
+// calls it: the web app reads /api/analytics/dashboard and the /metric, /timeseries
+// and /satisfaction endpoints. The endpoint is pinned as absent so it cannot come
+// back wired to a missing method.
+describe('GET /api/analytics', () => {
+  it('should return 404 — the endpoint no longer exists', async () => {
+    const response = await authGet('/api/analytics');
 
-  it('should return 200 with general analytics data', async () => {
-    analyticsService.getAnalytics.mockResolvedValue(generalData);
-
-    const response = await authGet('/api/analytics?startDate=2025-01-01&endDate=2025-01-31');
-
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual(generalData);
-    expect(analyticsService.getAnalytics).toHaveBeenCalledWith({}, '2025-01-01', '2025-01-31');
+    expect(response.status).toBe(404);
   });
 
-  it('should pass filters as parsed JSON when provided', async () => {
-    analyticsService.getAnalytics.mockResolvedValue(generalData);
-    const filters = JSON.stringify({ category: 'health' });
-
-    const response = await authGet(`/api/analytics?filters=${encodeURIComponent(filters)}&locale=fr`);
+  it('should still serve the sibling dashboard route', async () => {
+    // Keeps the 404 pin honest: an unmounted router would answer 404 on the
+    // removed path too, so the pin is only meaningful while the router answers.
+    const response = await authGet('/api/analytics/dashboard');
 
     expect(response.status).toBe(200);
-    expect(analyticsService.getAnalytics).toHaveBeenCalledWith({ category: 'health' }, undefined, undefined);
   });
 });
 
@@ -544,49 +530,11 @@ describe('GET /api/analytics/satisfaction/heatmap (AC8)', () => {
 // ============================================================
 describe('Route catch block error format (AC19)', () => {
   it('should return 500 with { message } when service throws', async () => {
-    analyticsService.getAnalytics.mockRejectedValue(new Error('Database connection failed'));
+    analyticsService.getDashboardAnalytics.mockRejectedValue(new Error('Database connection failed'));
 
-    const response = await authGet('/api/analytics?startDate=2025-01-01&endDate=2025-01-31');
+    const response = await authGet('/api/analytics/dashboard');
 
     expect(response.status).toBe(500);
     expect(response.body).toEqual({ message: 'Database connection failed' });
-  });
-});
-
-// ============================================================
-// DW-114: Malformed JSON in filters parameter
-// ============================================================
-describe('DW-114: Malformed JSON filters validation', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it('should return 400 when filters parameter is malformed JSON', async () => {
-    const response = await authGet('/api/analytics?filters={invalid json}');
-
-    expect(response.status).toBe(400);
-    expect(response.body).toEqual({
-      message: 'Invalid filters parameter: malformed JSON',
-      error: 'INVALID_FILTERS_JSON'
-    });
-    expect(analyticsService.getAnalytics).not.toHaveBeenCalled();
-  });
-
-  it('should accept valid JSON filters', async () => {
-    analyticsService.getAnalytics.mockResolvedValue({ data: [] });
-
-    const response = await authGet('/api/analytics?filters={"category":"test"}');
-
-    expect(response.status).toBe(200);
-    expect(analyticsService.getAnalytics).toHaveBeenCalled();
-  });
-
-  it('should accept request without filters parameter', async () => {
-    analyticsService.getAnalytics.mockResolvedValue({ data: [] });
-
-    const response = await authGet('/api/analytics');
-
-    expect(response.status).toBe(200);
-    expect(analyticsService.getAnalytics).toHaveBeenCalledWith({}, undefined, undefined);
   });
 });

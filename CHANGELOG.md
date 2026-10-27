@@ -146,17 +146,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   seeded a default taxonomy through a service method that no longer exists —
   it was removed during the migration of the service-category service to the
   translation collections — so the call failed with
+- **Breaking:** **`POST /api/service-categories/init` removed.** The route
+  answered 500 on every call: it seeded a default taxonomy through
+  `initializeDefaultCategoriesAndServices()`, a service method that no longer
+  exists (removed during the migration of the service-category service to the
+  translation collections), so the request failed with
   `TypeError: ...initializeDefaultCategoriesAndServices is not a function`.
-  The endpoint is removed rather than restored: it had no caller (the web
-  frontend, the mobile app and the deployment scripts never called it), and
-  the taxonomy it seeded was a hard-coded English default list that does not
-  match any real deployment. Seeding a taxonomy is done through the
-  **Knowledge Hierarchy** tab of the Admin Dashboard, or with the
-  `create-knowledge-hierarchy.js` script. The route test that had covered the
-  endpoint mocked a method the service did not have, which is why the defect
-  stayed green; that mock is now derived from the real service prototype, so a
-  route calling a method the service lacks can no longer pass its own test.
+  The endpoint is removed rather than restored — it had no caller (the web
+  frontend, the mobile app and the deployment scripts never called it) and the
+  taxonomy it seeded was a hard-coded English default list that matches no real
+  deployment. Seed the taxonomy from the **Knowledge Hierarchy** tab of the
+  Admin Dashboard, or with
+  `components/gov-chat-backend/scripts/new-schema-scripts/create-knowledge-hierarchy.js`
+  (turn the ArangoDB schema validation off for `serviceCategories`, `services`
+  and `categoryServices` before running the script, and back on afterwards).
   (#1108, !613)
+- **Breaking:** **`GET /api/analytics` removed.** Same defect as the endpoint
+  above: the route called `analyticsService.getAnalytics()`, a method removed
+  during the 2025 singleton refactor of the backend services, so it answered
+  500 on every call. No first-party client calls it — the web app reads
+  `/api/analytics/dashboard` and the `/metric`, `/timeseries` and
+  `/satisfaction` endpoints, and the mobile app never called it — so it is
+  removed rather than restored. Read `GET /api/analytics/dashboard` for the
+  overview. (#1108, !613)
+- **A route test can no longer pass while the route calls a service method the
+  service does not have.** Both endpoints above stayed green because their
+  test files mocked the service with a hand-written list of method names, which
+  included methods the service had lost — the mock invented the very method the
+  route was calling. The service-category and analytics route tests now derive
+  their mock from the real service prototype, so the mocked surface can only be
+  what the service implements, and each removed endpoint is pinned as 404 next
+  to a sibling route that must still answer. (#1108, !613)
+- **The npm wrappers that created the database and seeded the taxonomy are
+  gone.** `npm run setup-db`, `npm run init-categories` and `npm run setup-all`
+  pointed at `setup-db.js`, `init-service-categories.js` and `setup-all.js` —
+  files that have never existed in the repository, so every command failed
+  immediately — and the documentation presented them as the way to create the
+  collections and seed the taxonomy. Run the scripts directly instead:
+  `node arango-schema-creator.js ./arango-schema.json` and
+  `node create-knowledge-hierarchy.js`, both in
+  `components/gov-chat-backend/scripts/new-schema-scripts`. (#1108, !613)
 - **More links in the documentation site pointed at a page that did not answer
   the question.** The "Developer" card on the home page promised a local dev
   loop with `npm install` and `npm run dev`, but the page it opens explicitly

@@ -187,7 +187,6 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 |--------|----------|-------------|
 | GET | `/dashboard` | Get dashboard analytics within a date range |
 | GET | `/metric/:metric` | Get specific metric data (e.g., totalQueries, uniqueUsers) |
-| GET | `/` | Get general analytics with optional filters |
 | GET | `/timeseries/:metricType` | Get time series data for a metric |
 | POST | `/events` | Track a user event for analytics |
 | GET | `/records` | Get raw analytics records with pagination |

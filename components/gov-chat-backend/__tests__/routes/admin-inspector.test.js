@@ -71,7 +71,9 @@ jest.mock(
 jest.mock('../../services/user-profile-service', () => ({}));
 jest.mock('../../services/analytics-service', () => ({}));
 jest.mock('../../services/chat-history-service', () => ({}));
-jest.mock('../../services/service-category-service', () => ({}));
+jest.mock('../../services/service-category-service', () => ({
+  getAllCategoriesWithServices: jest.fn()
+}));
 jest.mock('../../services/database-operations-service', () => ({}));
 jest.mock('../../services/weather-service', () => ({}));
 jest.mock('../../services/translation-service', () => ({

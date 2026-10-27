@@ -35,6 +35,9 @@ jest.mock('../../services/service-category-service', () => {
   const mocked = {};
   for (const name of Object.getOwnPropertyNames(Object.getPrototypeOf(realService))) {
     if (name === 'constructor') continue;
+    // Only methods: a prototype that is not a class prototype would also expose
+    // inherited accessors (`__proto__`), and assigning those would corrupt the mock.
+    if (typeof realService[name] !== 'function') continue;
     mocked[name] = jest.fn();
   }
   return mocked;
@@ -418,5 +421,15 @@ describe('POST /api/service-categories/init', () => {
     const response = await authPost('/api/service-categories/init', {});
 
     expect(response.status).toBe(404);
+  });
+
+  it('should still serve the sibling categories route', async () => {
+    // Keeps the 404 pin honest: an unmounted router would answer 404 on the
+    // removed path too, so the pin is only meaningful while the router answers.
+    serviceCategoryService.getAllCategoriesWithServices.mockResolvedValue([]);
+
+    const response = await authGet('/api/service-categories/categories');
+
+    expect(response.status).toBe(200);
   });
 });

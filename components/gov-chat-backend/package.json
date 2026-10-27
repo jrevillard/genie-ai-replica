@@ -4,9 +4,6 @@
   "description": "Backend services for chatbot analytics with ArangoDB",
   "main": "index.js",
   "scripts": {
-    "setup-db": "node setup-db.js",
-    "init-categories": "node init-service-categories.js",
-    "setup-all": "node setup-all.js",
     "start": "node index.js",
     "dev": "nodemon index.js",
     "test": "jest",

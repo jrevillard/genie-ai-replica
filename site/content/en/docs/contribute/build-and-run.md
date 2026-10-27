@@ -349,9 +349,9 @@ npm run dev
 npm start
 
 # DB setup scripts (run after ArangoDB is up)
-npm run setup-db                # Creates collections + indexes
-npm run init-categories         # Seeds service categories from configs/
-npm run setup-all               # setup-db + init-categories
+cd scripts/new-schema-scripts
+node arango-schema-creator.js ./arango-schema.json   # Creates collections + indexes
+node create-knowledge-hierarchy.js                    # Seeds the service-category taxonomy
 ```
 
 **Verify:**
@@ -617,13 +617,12 @@ for the full port table.
 
 ## Database Setup
 
-The backend runs migrations and seed scripts via npm wrappers:
+The schema and seed scripts live in `components/gov-chat-backend/scripts/new-schema-scripts`:
 
 ```bash
-cd components/gov-chat-backend
-npm run setup-db              # Create collections + indexes (idempotent)
-npm run init-categories       # Seed serviceCategories from configs/
-npm run setup-all             # Both, in order
+cd components/gov-chat-backend/scripts/new-schema-scripts
+node arango-schema-creator.js ./arango-schema.json   # Create collections + indexes (idempotent)
+node create-knowledge-hierarchy.js                    # Seed the service-category taxonomy
 ```
 
 For dataprep, the ArangoDB graph (`ARANGO_GRAPH_NAME`, default `GRAPH`) and

@@ -3456,6 +3456,12 @@ chart:parity:
     # trips the floor instead of quietly greening the gate).
     - python3 scripts/config-parity-check.py /tmp/rendered.yaml --min-compared=171
   rules:
+    # The gate verifies its `notRead` claims against the APPLICATION
+    # source: a commit under components/ or genie-ai-overlay/ that starts
+    # reading a claimed-unread variable falsifies the claim. Without
+    # those paths in `changes`, the job is not even added to the
+    # pipeline and the claim stays unverified while the pipeline stays
+    # green.
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - charts/**/*
@@ -3463,6 +3469,8 @@ chart:parity:
         - docker-compose.yaml
         - env
         - .gitlab-ci.yml
+        - components/**/*
+        - genie-ai-overlay/**/*
       when: on_success
     - if: '$CI_COMMIT_BRANCH'
       changes:
@@ -3471,6 +3479,8 @@ chart:parity:
         - docker-compose.yaml
         - env
         - .gitlab-ci.yml
+        - components/**/*
+        - genie-ai-overlay/**/*
       when: on_success
 
 chart:crd-validate:

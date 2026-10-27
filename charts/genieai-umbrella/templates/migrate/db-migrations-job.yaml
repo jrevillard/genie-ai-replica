@@ -53,6 +53,41 @@ spec:
         seccompProfile:
           type: RuntimeDefault
         runAsUser: 65534
+      {{- /* Helm's --wait tracks BUILT-IN kinds only: the ArangoDeployment
+      is a custom resource, so the hook Job starts while the ArangoDB
+      pods are still pulling their image and bootstrapping. The
+      migration script connects with no retry, the Job exhausts
+      backoffLimit and the install fails on the hook — a message that
+      points nowhere near the real cause. This initContainer waits for
+      the database to answer before the migration container starts (the
+      sibling convergence Job does the same for Keycloak with
+      KEYCLOAK_AVAILABILITYCHECK). */ -}}
+      {{- if .Values.data.arangodb.enabled }}
+      initContainers:
+        - name: wait-for-arango
+          image: "{{ .Values.global.toolingImageRegistry | default "docker.io" }}/curlimages/curl:8.10.1"
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          command:
+            - sh
+            - -c
+            - |
+              url="{{ include "genieai-umbrella.arangoURL" . }}/_api/version"
+              i=0
+              while [ "$i" -lt 100 ]; do
+                if curl -sf "$url" >/dev/null 2>&1; then
+                  echo "arangodb is up: $url"
+                  exit 0
+                fi
+                i=$((i+1))
+                sleep 3
+              done
+              echo "arangodb did not answer $url within 300s" >&2
+              exit 1
+      {{- end }}
       containers:
         - name: db-migrations
           image: {{ if $registry }}{{ $registry }}/{{ end }}{{ $img.repository | default "genie-ai-db-migrations" }}:{{ $img.tag | default "main" }}

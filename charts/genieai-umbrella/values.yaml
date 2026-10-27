@@ -18,8 +18,12 @@ global:
   # this knob is only about the PULL CREDENTIALS.
   imagePullSecrets: []
   # Architecture for the tooling images the hooks/test pods download
-  # (kubectl, jq). Clusters running arm64 nodes set arm64.
-  toolingArch: "amd64"
+  # (kubectl, jq). Empty = DETECT it at runtime from the node
+  # (`uname -m` in the init container): a hardcoded amd64 on an arm64
+  # cluster (Apple Silicon minikube) downloads a binary the node cannot
+  # execute — "exec format error", and the pod never starts. Set amd64
+  # or arm64 to force a value.
+  toolingArch: ""
   # Registry for Helm hook Jobs and test pods that pull public Docker
   # Hub images (alpine, python, curlimages/curl). Separate from the
   # top-level `imageRegistry`, which scopes service images to the GitLab
@@ -354,6 +358,12 @@ data:
       vendor: postgres
       port: 5432
       database: keycloak
+      # The bootstrap role CNPG creates. It MUST equal the `username`
+      # key of the keycloak-db-credentials Secret: CNPG derives the role
+      # from that key, and a mismatch (owner `keycloak`, Secret
+      # `postgres`) fails at initdb with a CNPG event, not at render
+      # time.
+      username: keycloak
     # HTTP listener (TLS terminates at Envoy Gateway, not here).
     # Context path Keycloak serves under (the operator CR's
     # http-relative-path). Single source: the internal/public URL helpers
@@ -949,6 +959,10 @@ opea:
       RERANK_COMPONENT_NAME: GENIE_TEI_RERANKING
   embedding:
     modelId: BAAI/bge-large-en-v1.5
+    # Operator-facing environment map, like the other orchestrators'
+    # (`opea.chatqna.env` etc). A MAP so an overlay that sets one
+    # variable keeps the chart's own rows beside it.
+    env: {}
   translation:
     modelId: google/gemma-3-4b-it
   models:

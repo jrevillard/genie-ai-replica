@@ -42,8 +42,10 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
-      # Pod-level securityContext: seccompProfile is mandatory
-      # (PSA restricted admission rejects pods without it). The
+      # Pod-level securityContext: seccompProfile is part of the
+      # `restricted` profile the services opt into (the namespace itself
+      # enforces `baseline` — see _model-deployment.tpl for why it cannot
+      # go stricter). The
       # runAsUser/runAsNonRoot defaults that previously sat here
       # are removed: the frontend/clamav entrypoints write to
       # paths owned by the image's default USER (root=0 for the

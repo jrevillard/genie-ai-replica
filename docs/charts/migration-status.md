@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-27)
 
-- **Chart `genieai-umbrella` at 0.2.80**, branch `feat/k8s-migration` rebased
+- **Chart `genieai-umbrella` at 0.2.81**, branch `feat/k8s-migration` rebased
   onto `main` at `179a8a8f1` (0 commits behind).
 - **No application code in the branch**: the diff touches `charts/`,
   `scripts/`, `docs/`, `deploy/`, `tests/`, `site/`, `.gitlab-ci.yml`,
@@ -297,6 +297,51 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
   cluster, and one of them names a port the model does not listen on.
   The asymmetry is documented in the crosscheck itself rather than
   turned into a red gate on a tier nobody has run.
+- **Review loop, pass 9 (0.2.81)** — 6 findings, 6 verified true, all
+  fixed. The one that mattered most was a contract, not a bug: **eighty
+  template-read tuning keys were undeclared in values.yaml** — the whole
+  `opea.<svc>.*` surface (reranking strategy/threshold, retriever hybrid
+  weights, dataprep chunk sizes and label thresholds, per-service log
+  levels, prompt overrides) plus `global.imageRegistry` and
+  `observability.grafana.resources`. An operator tuning the reranker had
+  to read template source to learn the knob existed, and a misspelled
+  key merged into the values and was silently ignored — lint, the schema
+  gate and the parity checker all green. All eighty are now declared
+  with their template defaults, `scripts/values-surface-check.py` (wired
+  into `chart:lint`) keeps the list complete (mutation-proven: dropping
+  one declared key turns it red with the key named), and the four
+  renders are byte-identical before/after except the one intentional
+  comment reword. The other five:
+  - *The ArgoCD example values failed the chart's own
+    placeholder-completeness guard* — proven by execution (`helm
+    template -f examples/argocd-values.yaml` exits 1 on
+    `$(env:EMAIL_PASSWORD)`) while both example files claimed to carry
+    "the minimum that passes those guards". The five `envSecrets` rows
+    are there now; the example renders standalone.
+  - *The chart contradicted itself on the namespace's Pod Security
+    level* — the backend comment and the test pods said `restricted`,
+    the model template said `baseline` (which is what the deploy repo's
+    namespace label enforces: the GPU tier cannot run non-root). The
+    three wrong sites now say what is enforced and that the services
+    OPT INTO the restricted profile.
+  - *`--set services.backend.translation=null` aborted the render with
+    a nil-pointer error* instead of the chart's named guards — the
+    block is normalized once (`| default dict`) and the cleared block
+    degrades like every other cleared block (derived endpoint → CPU
+    model, streaming default on). The strict `streamingEnabled`
+    boolean guard keeps failing a PRESENT non-boolean; only the absent
+    key falls back to the default — a plain `| default true` would have
+    flipped an explicit `false` back on (Sprig treats `false` as
+    empty).
+  - *`install-prereqs.sh` silently ignored any unrecognized argument* —
+    `--with-grafan` ran the full operator install, printed "skipping
+    grafana-operator" and exited 0. Flags are parsed in the sibling
+    scripts' loop style now; a typo dies before anything installs.
+  - *The redis Service rendered `port:` with no default* — the same
+    edit that the clamav Service survived; and the three NetworkPolicy
+    ports were hardcoded 6379 while the Service/containers derive from
+    the knob (the same split-brain the pass-7 clamav fix removed —
+    folded into the same fix at the cause).
 - **Review round 9 closed (0.2.67)** — three parallel adversarial passes
   over the whole final diff (core/data/services, edge/observability/OPEA,
   CI/scripts), every finding verified against a render or a live cluster
@@ -380,7 +425,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.80** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.81** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `179a8a8f1` (the tip that carries !586, !587,
   !588) — the branch is 0 commits behind `main`.

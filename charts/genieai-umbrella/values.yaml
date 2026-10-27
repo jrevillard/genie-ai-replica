@@ -1,9 +1,9 @@
 # GENIE.AI umbrella chart — foundation values.
-# The keys below are the ones the current template surface consumes. Service
-# tiers (services.*, observability.*, data.*, ingress.*, gpu.*, migration.*)
-# and the pluggability surface (secretsBackend / ingressClassName /
-# storageClassName / containerRuntime) are added together with the templates
-# that consume them — keys no template reads are not declared here.
+# The template surface and this file move together, in BOTH directions:
+# every key a template reads is declared here (with its template default,
+# so an operator can discover the knob and its type without reading
+# template source), and keys no template reads are not declared.
+# scripts/values-surface-check.py enforces the first half in CI.
 
 # Target namespace for tier templates that spell one out. MUST equal the
 # release namespace (-n) — the chart fails the render otherwise (the
@@ -11,6 +11,12 @@
 namespace: genieai
 
 global:
+  # Optional registry prefix that WINS over the top-level imageRegistry
+  # when set (the factory and the migrations Job both read it first).
+  # Empty = the top-level imageRegistry applies. Exists for operators
+  # following the Helm `global.*` convention; the chart's own overlays
+  # set the top-level key.
+  imageRegistry: ""
   # imagePullSecrets — a list of {name: <Secret>} refs wired into every
   # service pod's spec.imagePullSecrets, for a registry that requires
   # authentication. The registry the images are pulled FROM is the
@@ -83,6 +89,9 @@ observability:
     # always the operator's (generated once, kept across reconciles).
     # Leave "admin" unless the site pins a different console user.
     adminUser: admin
+    # Container resources for the Grafana pod. Empty = the template
+    # default (requests 100m/128Mi, limits 500m/1Gi).
+    resources: {}
   # OTel operator collector CR name; the in-cluster Service is named
   # <cr>-collector (see templates/_lib/_observability.tpl).
   collectorCRName: genieai-collector
@@ -341,6 +350,18 @@ data:
     # server here. The render FAILS when either flag is true and this is
     # null — a sentinelled smtpServer would swallow the mail and leave
     # the user staring at a form that never answers.
+    # The mail server (see the flags above). Null = no mail server; the
+    # two flags above must then be false or the render fails. When set,
+    # the surface the convergence Job reads is:
+    #   from (required)   — the From address verification/reset mail carries
+    #   host (required)   — the SMTP server
+    #   port              — default 25
+    #   ssl / starttls    — transport security, default false each
+    #   auth              — false = no authentication; EMAIL_USER renders
+    #                       the sentinel "unused"
+    #   user (with auth)  — required; the password arrives through the
+    #                       EMAIL_PASSWORD envSecrets row (a Secret, never
+    #                       this values file)
     smtp: null
     mobileClientId: genie-mobile          # Flutter OIDC client (public, PKCE)
     mobileRedirectScheme: genieai         # <scheme>://callback redirect
@@ -540,8 +561,12 @@ services:
     # chart (in-cluster Service name).
     opeaHost: ""
     port: 3000
-    # Image USER is `node` (uid 1000). PSA `restricted` requires
-    # runAsNonRoot: true and the namespace PSA accepts non-root UIDs.
+    # Image USER is `node` (uid 1000). The namespace enforces Pod Security
+    # `baseline` (the in-cluster GPU model tier cannot run non-root, so it
+    # cannot go stricter — see templates/opea/models/_model-deployment.tpl).
+    # The backend opts into the `restricted` profile anyway: runAsNonRoot +
+    # no-privilege-escalation + dropped capabilities, so a namespace that
+    # later tightens to `restricted` does not reject it.
     securityContext:
       runAsNonRoot: true
       runAsUser: 1000
@@ -869,8 +894,34 @@ opea:
       translation: /translation
       docling: /docling
   chatqna:
-    # CHATQNA_*, RERANKING_*, MULTI_TURN_*, prompts — defaults in templates
-    #
+    # CHATQNA_*, RERANKING_*, MULTI_TURN_* — every knob the chatqna
+    # template reads, declared with its template default so an operator
+    # can discover the tuning surface without reading template source
+    # (scripts/values-surface-check.py keeps this list complete).
+    chatqnaType: "ChatQnA"                # CHATQNA_TYPE; OPEA pipeline name
+    logLevel: "info"                      # LOG_LEVEL
+    rerankingStrategy: "slice"            # RERANKING_STRATEGY: slice | threshold | slice_threshold | knee_threshold | adaptive
+    rerankingThreshold: "0.75"            # RERANKING_THRESHOLD (threshold strategies)
+    rerankerTopN: "3"                     # RERANKER_TOP_N (slice strategies)
+    rerankerScoreCalibration: "none"      # RERANKER_SCORE_CALIBRATION
+    rerankerScoreTemperature: "1.0"       # RERANKER_SCORE_TEMPERATURE
+    confidenceRankDecay: "0.5"            # CONFIDENCE_RANK_DECAY
+    llmSelfConfidenceEnabled: "0"         # LLM_SELF_CONFIDENCE_ENABLED (env string: "0"/"1")
+    multiTurnBlendEnabled: "false"        # MULTI_TURN_BLEND_ENABLED (env string: "false"/"true")
+    multiTurnBlendAlpha: "0.7"            # MULTI_TURN_BLEND_ALPHA
+    multiTurnHistoryTurns: "1"            # MULTI_TURN_HISTORY_TURNS
+    retrieverArangoK: "20"                # RETRIEVER_ARANGO_K
+    retrieverArangoFetchK: "30"           # RETRIEVER_ARANGO_FETCH_K
+    retrieverArangoScoreThreshold: "0.2"  # RETRIEVER_ARANGO_SCORE_THRESHOLD
+    retrieverArangoDistanceThreshold: "1" # RETRIEVER_ARANGO_DISTANCE_THRESHOLD
+    retrieverArangoLambdaMult: "0.5"      # RETRIEVER_ARANGO_LAMBDA_MULT
+    retrieverArangoSearchStart: "chunk"   # RETRIEVER_ARANGO_SEARCH_START
+    retrieverArangoTraversalMaxDepth: "2"       # RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH
+    retrieverArangoTraversalMaxReturned: "5"    # RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED
+    retrieverArangoTraversalScoreThreshold: "0.7"  # RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD
+    kcClientId: "genie-app"               # KC_CLIENT_ID for the chatqna service account
+    kcRealm: ""                           # KC_REALM; empty = follow data.keycloak.realm
+    systemPrompt: ""                      # CHATQNA_SYSTEM_PROMPT; empty = built-in default
     # Boolean realm-adjacent knobs the template exports as env strings.
     # Declared (not left implicit) so the values-schema bools gate types
     # them like every other boolean leaf.
@@ -907,8 +958,33 @@ opea:
       #     VLLM_API_KEY from the vllm-api-key Secret, which the code
       #     accepts on the same paths.
   retriever:
-    # RETRIEVER_* tuning — defaults in templates
-    #
+    # RETRIEVER_* — every knob the retriever template reads, declared
+    # with its template default (see the chatqna note).
+    retrieverComponentName: "GENIE_RETRIEVER_ARANGODB"  # RETRIEVER_COMPONENT_NAME
+    arangoGraphName: "GRAPH"              # ARANGO_GRAPH_NAME
+    logLevel: "info"                      # LOG_LEVEL
+    rerankingStrategy: "slice"            # RERANKING_STRATEGY
+    retrieverArangoK: "20"                # RETRIEVER_ARANGO_K
+    retrieverArangoFetchK: "30"           # RETRIEVER_ARANGO_FETCH_K
+    retrieverArangoScoreThreshold: "0.2"  # RETRIEVER_ARANGO_SCORE_THRESHOLD
+    retrieverArangoDistanceThreshold: "1" # RETRIEVER_ARANGO_DISTANCE_THRESHOLD
+    retrieverArangoLambdaMult: "0.5"      # RETRIEVER_ARANGO_LAMBDA_MULT
+    retrieverArangoSearchStart: "chunk"   # RETRIEVER_ARANGO_SEARCH_START
+    retrieverArangoSearchMode: "vector"   # RETRIEVER_ARANGO_SEARCH_MODE: vector | hybrid
+    retrieverArangoUseApproxSearch: "false"     # RETRIEVER_ARANGO_USE_APPROX_SEARCH
+    retrieverArangoDistanceStrategy: "COSINE"   # RETRIEVER_ARANGO_DISTANCE_STRATEGY
+    retrieverArangoNumCentroids: "1"      # RETRIEVER_ARANGO_NUM_CENTROIDS
+    retrieverArangoFilterStrategy: "OR"   # RETRIEVER_ARANGO_FILTER_STRATEGY
+    retrieverArangoTraversalMaxDepth: "2"              # RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH
+    retrieverArangoTraversalMaxReturned: "5"           # RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED
+    retrieverArangoTraversalScoreThreshold: "0.7"      # RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD
+    retrieverArangoTraversalConcurrentBatches: "10"    # RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES
+    retrieverHybridRrfK: "60"             # RETRIEVER_HYBRID_RRF_K
+    retrieverHybridBm25Candidates: "50"   # RETRIEVER_HYBRID_BM25_CANDIDATES
+    retrieverHybridDenseWeight: "1.0"     # RETRIEVER_HYBRID_DENSE_WEIGHT
+    retrieverHybridLexicalWeight: "1.0"   # RETRIEVER_HYBRID_LEXICAL_WEIGHT
+    retrieverHybridBm25Analyzer: "text_en"      # RETRIEVER_HYBRID_BM25_ANALYZER
+    retrieverSummarizerEnabled: "false"   # RETRIEVER_SUMMARIZER_ENABLED (env string)
     # Boolean knobs the template exports as env strings (typed by the
     # bools gate — see the chatqna note).
     retrieverArangoTraversalEnabled: true
@@ -922,8 +998,38 @@ opea:
       MODEL_PROBE_TIMEOUT_SECONDS: "10"
       MODEL_SUMMARIZER_TIMEOUT_SECONDS: "600"
   dataprep:
-    # chunking / labeling / contextual retrieval — defaults in templates
-    #
+    # chunking / labeling / contextual retrieval — every knob the dataprep
+    # template reads, declared with its template default (see the chatqna
+    # note).
+    dataprepComponentName: "GENIE_DATAPREP_ARANGODB"   # DATAPREP_COMPONENT_NAME
+    arangoGraphName: "GRAPH"              # ARANGO_GRAPH_NAME
+    dataprepMaxConcurrentBatches: "20"    # DATAPREP_MAX_CONCURRENT_BATCHES
+    dataprepLlmLabelBatchSize: "4"        # DATAPREP_LLM_LABEL_BATCH_SIZE
+    dataprepChunkSizePdf: "500"           # DATAPREP_CHUNK_SIZE_PDF
+    dataprepChunkSizeXlsx: "1500"         # DATAPREP_CHUNK_SIZE_XLSX
+    dataprepChunkSizeDocx: "1000"         # DATAPREP_CHUNK_SIZE_DOCX
+    dataprepChunkSizePptx: "500"          # DATAPREP_CHUNK_SIZE_PPTX
+    dataprepChunkSizeHtml: "500"          # DATAPREP_CHUNK_SIZE_HTML
+    dataprepChunkSizeMd: "500"            # DATAPREP_CHUNK_SIZE_MD
+    dataprepChunkSizeTxt: "500"           # DATAPREP_CHUNK_SIZE_TXT
+    dataprepChunkOverlap: "50"            # DATAPREP_CHUNK_OVERLAP
+    labelingStrategy: "llm"               # LABELING_STRATEGY
+    embeddingLabelThreshold: "0.75"       # EMBEDDING_LABEL_THRESHOLD
+    bm25LabelThreshold: "2.00"            # BM25_LABEL_THRESHOLD
+    contentExtractionMethod: "docling"    # CONTENT_EXTRACTION_METHOD
+    doclingDevice: "cuda"                 # DOCLING_DEVICE
+    dataprepContextualModel: ""           # DATAPREP_CONTEXTUAL_MODEL; empty = reuse the chat LLM
+    dataprepContextualDocBudget: "6000"   # DATAPREP_CONTEXTUAL_DOC_BUDGET (per-chunk strategy)
+    dataprepContextualDocBudgetDocLevel: "100000"  # DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL
+    dataprepContextualMaxTokens: "512"    # DATAPREP_CONTEXTUAL_MAX_TOKENS
+    contextualStrategy: "per_chunk"       # CONTEXTUAL_STRATEGY: per_chunk | doc_level
+    contextualRetrievalPrompt: ""         # CONTEXTUAL_RETRIEVAL_PROMPT; empty = built-in default
+    labelSelectorSystemPrompt: ""         # LABEL_SELECTOR_SYSTEM_PROMPT; empty = built-in default
+    kcDataprepClientId: "dataprep-service-client"  # KC_DATAPREP_CLIENT_ID
+    kcRealm: ""                           # KC_REALM; empty = follow data.keycloak.realm
+    keycloakSslSkipVerify: "0"            # KEYCLOAK_SSL_SKIP_VERIFY (env string: "0"/"1")
+    guardrailUrl: "http://guardrail:9090/v1/guardrails"  # GUARDRAIL_URL (guardrail tier is disabled)
+    logLevel: "info"                      # LOG_LEVEL
     # Boolean knobs the template exports as env strings (typed by the
     # bools gate — see the chatqna note).
     contextualRetrievalEnabled: true

@@ -400,6 +400,19 @@ install_grafana_operator() {
 }
 
 main() {
+  # Flag parsing in the loop style of the sibling scripts: a typo'd or
+  # misplaced flag must die here, not be dropped silently — `--with-grafan`
+  # used to run the full operator install, print "skipping grafana-operator"
+  # and exit 0, and the missing controller surfaced only when the release
+  # failed far from the cause.
+  WITH_GRAFANA="false"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --with-grafana) WITH_GRAFANA="true" ;;
+      *) die "unknown argument: $1 (supported: --with-grafana)" ;;
+    esac
+    shift
+  done
   log "install 7 cluster operators (keycloak/cnpg/arango/sealed-secrets/cert-manager/vmoperator/otel-operator)"
   install_keycloak_operator
   install_cloudnative_pg
@@ -413,7 +426,7 @@ main() {
   # CRs are opt-in (observability.grafana.enabled, default false). A
   # cluster enabling them opts in with --with-grafana.
   local installed="7 operators installed"
-  if [[ "${1:-}" == "--with-grafana" ]]; then
+  if [[ "${WITH_GRAFANA}" == "true" ]]; then
     install_grafana_operator
     installed="${installed} + grafana-operator"
   else

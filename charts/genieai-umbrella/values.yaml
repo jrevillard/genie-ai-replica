@@ -522,21 +522,14 @@ services:
       streamingEnabled: true
       # Which backend translates the answer.
       #
-      # The application decides this on the endpoint, not on this knob: a
-      # deployment that NAMED a translation API always uses it, whatever
-      # this is set to, and the backend refuses to start when that API
-      # does not answer — it will not translate with a model the
-      # deployment did not ask for. So this value is only consulted when
-      # no endpoint is configured, where the in-process CPU model
-      # (Xenova/nllb-200-distilled-600M, ~6 Gi at ONNX load) is the
-      # only outcome.
-      #
-      # `cpu` is therefore refused at render time when an endpoint IS
-      # configured: the application would ignore it and use the GPU
-      # anyway, and a chart that advertised the CPU model while the
-      # deployment used the GPU is exactly the silent mismatch this
-      # knob must not create.
-      backend: gpu
+      # NOT a knob: the chart DERIVES it. The application decides on the
+      # endpoint, not on a setting — a deployment that NAMED a
+      # translation API always uses it, and the backend refuses to start
+      # when that API does not answer. With a named endpoint the
+      # translator is the GPU path; without one, the in-process CPU model
+      # (Xenova/nllb-200-distilled-600M, ~6 Gi at ONNX load) is the only
+      # reachable translator. A `backend` key here fails the render
+      # rather than being silently rewritten.
       # Budget for the startup probe of the configured translation API.
       # Failing it stops the backend — the API is mandatory once named —
       # so it has to cover a cold TLS handshake to a remote GPU node

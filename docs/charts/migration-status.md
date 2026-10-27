@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-22)
 
-- **Chart `genieai-umbrella` at 0.2.74**, branch `feat/k8s-migration` rebased
+- **Chart `genieai-umbrella` at 0.2.76**, branch `feat/k8s-migration` rebased
   onto `main` at `179a8a8f1` (0 commits behind).
 - **No application code in the branch**: the diff touches `charts/`,
   `scripts/`, `docs/`, `deploy/`, `tests/`, `site/`, `.gitlab-ci.yml`,
@@ -151,6 +151,78 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
   comments/strings (vmsingle Service name, grafana backendRef,
   embedding skipTlsVerify, fullname truncation reason, gpuApiKeyEnv
   aliases, allowlist secret/knob names).
+- **Review loop, pass 3 (0.2.75)** — 14 findings, all verified true (no
+  false positive for the first time in the loop), all fixed:
+  - *The helm-test pods that probe the stateless and observability tiers
+    never wired `global.imagePullSecrets`* — on a credentialed docker.io
+    mirror they ImagePullBackOffed while every workload they probe
+    pulled fine.
+  - *`validate-crds.sh` waited for a namespace to go Active only when the
+    render DECLARED a Namespace object* — the chart declares one only
+    for the observability tier, so the wait was skipped on every default
+    render and the race the script documents (creating inside a
+    finalizing namespace) was live on every CI run.
+  - *An IPv6-literal `ingress.host` derived the listener port from
+    `"db8" | int` = 8 and the hostname from `[2001`* — the edge rendered
+    silently wrong. Both derivations now share one helper and the render
+    FAILS on an IPv6 literal instead.
+  - *The clamav port knob moved only the containerPort* — the Service,
+    both NetworkPolicy rules, the tcpSocket probes and the helm-test
+    probe stayed on 3310 (found by rendering the override, not by the
+    review). Six sites derive from the knob now; the document-repository
+    egress rule follows it too.
+  - *The RBAC comment claimed `helm install --create-namespace` creates
+    the namespace AFTER the hooks* — helm v3.16.3
+    (`pkg/action/install.go`: the CreateNamespace block precedes
+    `performInstall`'s `execHook(PreInstall)`) says the opposite, and the
+    site doc was right. The comment was rewritten with the source
+    reference.
+  - Three CHANGELOG bullets described mechanisms the shipped chart
+    replaced (the dead KeycloakRealmImport migration step, the SMTP
+    failure that cannot happen, the Compose streaming default flip that
+    was unannounced).
+  - Plus: the CORS knobs the template reads are now declared, the
+    `chart:install` no-op `.real` install dance is gone, the bootstrap
+    script resolves its repo path, the gateway-helm tarball failure is
+    named, the collector config comment says "map" (v1beta1 rejects
+    strings), and the redis policy grants the TCP-53 truncated-answer
+    fallback every sibling grants.
+- **Review loop, pass 4 (0.2.76)** — 14 findings, all verified true.
+  Three of them were render- or install-breaking, and the CI never saw
+  them because the shipped values exercise neither:
+  - *A second PodDisruptionBudget broke the render* — the helper's
+    trailing `-}}` stripped the newline before the next document's
+    `---`, so the second PDB glued itself to the first one's last line
+    (`helm template --set services.documentRepository.podDisruptionBudget.minAvailable=1`
+    died with a YAML parse error). The trap the workflow doc warns
+    about, in the wild.
+  - *The PDB name used the component label verbatim* (`documentRepository`)
+    while the Deployment is lower-cased — the API server rejects the
+    mixed-case name.
+  - *`ct install` could never pass*: the data tier was disabled while
+    backend / frontend / documentRepository stayed on, and the
+    pre-install dependency check refuses an enabled component that
+    depends on a disabled one.
+  - *The chatqna orchestrator never set `LLM_MODEL` on the Compose
+    surface* — the code default names a model the (now changed) vLLM
+    does not serve, so every chat request was a 404. The parity gate
+    could not see it: it walks Compose -> chart, so a chart-only
+    variable is invisible to it. Now set on both sides, and
+    mutation-tested (the gate goes red on a one-token drift).
+  - *The Quickstart, the local-test script and the `chart:install` job
+    all installed a release whose hook Jobs could never start* — the
+    operator-provided Secrets are mounted through non-optional
+    secretKeyRefs and none of the three created them. They do now (the
+    job seeds them, the script creates only the ABSENT ones).
+  - Plus: the vllm-translation initContainer was the only tooling image
+    ignoring `global.toolingImageRegistry`; the model-cache PVC read
+    its own storage-class knob instead of the chart-wide one; the helm
+    test spent one 60s budget per Secret and ran past helm's 5-minute
+    timeout; the ArgoCD example installed with defaults the render
+    guards reject; the Keycloak ClusterRoleBinding patch aborted the
+    whole bootstrap when the object is absent; and the chart version
+    quoted in the READMEs was stale (now a pointer to Chart.yaml —
+    Flux reconciles on that number, and it drifted on every bump).
 - **Review round 9 closed (0.2.67)** — three parallel adversarial passes
   over the whole final diff (core/data/services, edge/observability/OPEA,
   CI/scripts), every finding verified against a render or a live cluster
@@ -234,7 +306,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.66** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.76** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `179a8a8f1` (the tip that carries !586, !587,
   !588) — the branch is 0 commits behind `main`.

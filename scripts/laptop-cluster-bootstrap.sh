@@ -55,7 +55,11 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 CLUSTER="minikube"
-DEPLOY_REPO="${DEPLOY_REPO:-../genie-ai-deploy}"
+# Anchored on REPO_ROOT, not on the caller's directory: the script
+# recreates the cluster and installs the operators before it reads this
+# path, so a relative default resolved against the wrong directory
+# failed only at the last step — after the destructive ones.
+DEPLOY_REPO="${DEPLOY_REPO:-${REPO_ROOT}/../genie-ai-deploy}"
 PAYS="jrevillard-laptop"
 ENV="dev"
 K8S_VERSION="v1.32.0"

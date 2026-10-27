@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Living Intelligence theme layer on the base theme.** A decorative layer — hero banner, dot mesh, bottom waves and corner network — is applied to the welcome screen and switched per deployment from the runtime config (`theme.visual`). The base theme ships it on; the derived flavours (`huduma`, `naat`, `original`) ship it off. Every artwork path is configurable, so an operator can swap an illustration on the host without rebuilding an image.
+- **Per-category tints on the welcome-screen cards.** The nine quick-help cards now carry the background, hover and border colours that were already declared in each button's `styles` block and were never read by the frontend.
+- **`app.splash` in the runtime config.** The splash image is now a declared, per-deployment setting rather than an implicit fallback. The base theme ships the Living Intelligence globe splash; the derived flavours keep the bundled default.
 - **RAG pipeline tracing:** LLM spans now record the model, the sampling
   parameters actually sent, token usage and the finish reason; retrieval spans
   record the search type, candidate fetch depth, whether a taxonomy label filter
@@ -118,6 +121,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   both platforms.
 
 ### Fixed
+
+- **The welcome screen's title is wrapped in a local scrim instead of a full-width band.** The scrim used to span the whole artwork, washing the icon tiles along with the text; it now hugs the heading and its subtitle and fades on every side, as the designer's mockup does.
+- **The welcome screen's input bar was the wrong size.** It took 96 % of the card row's width and stood 90 px tall — a two-line field. It now takes 81 % of the row (805 px of 989 in the mockup) and rests at 50 px, one line, growing with what is typed into it.
+- **The welcome screen's subtitle was unreadable in the dark theme.** Its grey sat at 3.05:1 against the artwork behind it, below the 4.5:1 floor WCAG AA sets for 16 px text. It is now a brand tint — 9.95:1 in the light theme, 8.91:1 in the dark one — and stays a visible step below the heading.
+- **The welcome screen broke in the narrow-panel window.** With both sidebars open the panel is at its narrowest just above 1400 px: the title wrapped to two lines in the longer locales, and the wave band stopped short of the panel's edges. The title now holds one line in all 14 locales, and the wave band spans the panel's full width.
+- **The welcome screen's input placeholder wrapped to two lines.** "Ask a question, explore knowledge, or start a task…" overflowed the field in 10 of the 14 locales, including the English one. The third clause is gone in every locale, and the placeholder is measured against the field in the regression test, so it cannot come back.
+
 
 - **More links in the documentation site pointed at a page that did not answer
   the question.** The "Developer" card on the home page promised a local dev
@@ -251,6 +261,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   claiming the whole window. A translation that still runs past its budget is
   now detected and handed to the CPU model, rather than being served — and
   cached — half-finished. (!576)
+
+- **The navbar controls in dark mode were below the WCAG AA contrast floor.** The dark theme paired a darkened text ink with a saturated brand band, leaving the icons, the language selector and the logout control between 1.74:1 and 2.17:1. The two themes' inks are now swapped, so the controls sit at 4.46:1 against the band.
 
 - **The backend could not start with observability enabled (!565):** the OpenTelemetry
   setup read the shared propagator factory under a name that module does not
@@ -386,6 +398,10 @@ Shortening any of these converts a slow-but-successful call into a visible failu
   misreporting on the existing post-stream path, which has been emitting an
   `error` event ahead of `done` — so a translation failure at the end of an
   answer used to mark the deployment offline.
+- **Breaking: a runtime config that does not match its own schema now stops the web app from starting,** and the failing paths are reported. The schema embedded in each `genie-ai-config*.json` is enforced at load time, so a hand-edited or truncated config fails loudly instead of booting into a half-themed site. A config file that cannot be fetched at all still falls back to the bundled defaults and starts normally. Operators running a modified config should validate it before deploying: `npm run validate:config` in `components/gov-chat-frontend`.
+- **Breaking: the navbar in light mode is now a pale band carrying the brand wordmark,** instead of a solid brand-blue bar. The change is driven by the shared `--navbar-bg` and `--navbar-fg` tokens, so it applies to every deployment, including the derived flavours, on every route. Operators who prefer the previous solid bar override `--navbar-bg` in `theme-variables.css`.
+- **The welcome-screen cards now follow their column instead of the viewport,** so the four-column grid survives on a narrow screen instead of being crushed into a single 600 px column. The grid breakpoints are unchanged on a desktop-width screen.
+
 - **Legacy benchmark suite removed** (`tests/rag-benchmarks/{benchmark_*.py, run_benchmarks.sh}`, 2549 lines): the scripts were run-once-and-never-rerun, had no live test, and produced numbers that drifted from the rest of the eval surface. Latency and load-testing now live on the OTel trace waterfall (Grafana RAG Pipeline Trace Waterfall dashboard) — the OTel collector already captures every request with `latency` and `http.status_code` attributes, so the dashboards cover the same question without a separate harness. The site docs (`source-tree-analysis.md`) no longer mention the deleted files.
 - **Wrapper ROPC `EVAL_DEPLOY_ENV` is no longer defaulted:** the wrapper used to silently fall back to `/opt/genieai-el-salvador/.env` when the env var was unset — a stack-specific hardcode inside a script that should be generic. The wrapper now fails LOUD with `:?` and a message naming the expected `/opt/<stack>/.env` pattern (per `deploy/ansible/templates/env.j2` layout) when neither the env var nor `GENIE_ADMIN_PASSWORD` is set. The MR replaces the runbook / docs and the wrapper's "wrapper / argparse defaults" table to make the override path explicit.
 - **Per-context manual slicing heredocs removed from the root `CLAUDE.md` golden-dataset recipe:** the manual `for i in range(N): chunk = dict(gold); chunk['entries'] = gold['entries'][i::N]; open(f'/tmp/batches/gold_{i:02d}.json', 'w').write(json.dumps(chunk))` loop is gone — `run_eval.py` now slices the gold internally when `EVAL_CHUNK_SIZE` is set, and the sidecar already records per-chunk progress so a manual round-robin shell loop is no longer needed.

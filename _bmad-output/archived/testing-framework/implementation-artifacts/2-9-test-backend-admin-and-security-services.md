@@ -192,7 +192,6 @@ Three services totaling ~2300 lines of source code. With ~3500-4300 lines of tes
 
 ## Change Log
 
-<<<<<<< HEAD
 ### Review Findings
 
 - [x] [Review][Defer] Date calculation in test setup without Date mocking — midnight boundary flakiness risk in logs-service.test.js (new Date() calls without mocking). Deferred: extremely unlikely edge case, tests pass in CI.
@@ -200,7 +199,6 @@ Three services totaling ~2300 lines of source code. With ~3500-4300 lines of tes
 - [x] [Review][Defer] SecurityScanService worker thread / async pattern edge cases — processLogsInParallel() with Worker threads, timeouts, and concurrent file processing has limited edge case coverage. Deferred: worker thread mocking is extremely complex, ACs satisfied.
 - [x] [Review][Defer] LogsService file size limit edge cases — MAX_LOG_FILE_SIZE (20MB) and MAX_LINES_TO_PROCESS (200000) constants exist but edge cases around partial reads and corrupted gzip not fully tested. Deferred: happy path tested, hardening beyond AC scope.
 - [x] [Review][Defer] Date/time edge case coverage — DST transitions, timezone boundaries, leap years not explicitly tested across all services. Deferred: luxon handles these, testing is nice-to-have hardening.
-=======
 - 2026-05-26: Created logs-service.test.js (67 tests), security-scan-service.test.js (52 tests), admin-dashboard-service.test.js (65 tests) — 184 new tests total
 - 2026-05-26: Fixed lint error (duplicate key `type` in admin-dashboard-service test mock)
 - 2026-05-26: All 734 backend tests pass, 0 lint errors, services at 62.35% statements (target ~50%)
@@ -233,4 +231,3 @@ Claude (Sonnet 4.6)
 | `components/gov-chat-backend/__tests__/services/admin-dashboard-service.test.js` | Created |
 | `_bmad-output/implementation-artifacts/2-9-test-backend-admin-and-security-services.md` | Updated (status, tasks, dev record) |
 | `_bmad-output/implementation-artifacts/sprint-status.yaml` | Updated (status → review) |
->>>>>>> origin/feat/testing-framework/2-9-test-backend-admin-and-security-services

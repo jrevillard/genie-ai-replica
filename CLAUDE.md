@@ -148,6 +148,7 @@ User-facing and dev-internal docs live in **separate** places — no duplication
 - **User-facing docs → `site/content/en/docs/`** — canonical, published to the GitLab Pages docs site, editable in the GitLab Web IDE. Grouped by section (`core/`, `rag/`, `observability/`, `knowledge-base/`, `operations/`, `deployment/`, `configuration/`, `architecture/`, `frontend/`, `backend/`, `mobile/`). Hugo + Docsy; see `.claude/rules/SITE-LOCAL-DEV.md` to run locally.
 - **Dev-internal docs → `docs/`** — repo-resident, referenced by code/developers (e.g. `docs/e2e-tests/`, `docs/database-migrations.md`, `docs/RELEASE.md`). NOT published.
 - **Agent instructions → `.claude/rules/`** — step-by-step commands for AI agents (e.g. `RELEASE.md`, `TESTING.md`, `SERVER-TESTING.md`). Referenced by CLAUDE.md.
+- **Archiving a completed BMAD initiative → `.claude/rules/POST-PRD-ARCHIVAL.md`** — when a PRD initiative closes and the next one starts.
 
 When adding a doc, pick one home based on audience. Do not duplicate across both.
 
@@ -195,6 +196,15 @@ Test frameworks: Jest (backend, frontend, doc-repo), pytest (OPEA), flutter_test
 
 → Full commands, patterns, CI details: `.claude/rules/TESTING.md`
 
+**Visible behaviour** has its own rules, per client — read the one that matches what you are changing:
+
+- **Web** (`components/gov-chat-frontend/`) → `components/gov-chat-frontend/CLAUDE.md` § *Visual Fidelity*. The
+  rendered result is verified by the Playwright suite in `tests/e2e/`: measure it, mutation-test every assertion,
+  and never judge a screenshot by eye.
+- **Mobile** (`mobile/genie_ai_mobile/`) → `mobile/genie_ai_mobile/CLAUDE.md` § *Visual Fidelity*. No golden-image
+  harness exists here: widget tests assert structure and resolved tokens, and the device screenshot is verified by
+  a human in both themes.
+
 ## Code Standards Summary
 
 ### JavaScript/Vue 3
@@ -228,6 +238,8 @@ Test frameworks: Jest (backend, frontend, doc-repo), pytest (OPEA), flutter_test
 - All services configured via `env` file (copy to `.env` for local dev)
 - Key tokens: `HUGGING_FACE_HUB_TOKEN`, `VLLM_API_KEY`
 - Database: `ARANGO_URL`, `ARANGO_DB`, `ARANGO_USER`, `ARANGO_PASSWORD`
+
+→ Which file is which, what must never be committed, the service port map: `.claude/rules/ENVIRONMENT.md`
 
 #### Environment Variables Structure (Best Practices)
 

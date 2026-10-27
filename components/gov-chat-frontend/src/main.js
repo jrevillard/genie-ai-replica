@@ -22,6 +22,7 @@ import VueApexCharts from 'vue3-apexcharts';
 import ApexCharts from 'apexcharts';
 // Import theme CSS files
 import './theme-components.css';
+import './styles/genie-visual-effects.css';
 import './charts-apex-overrides.css';
 
 import loadConfig, { config } from './config-loader';

@@ -35,6 +35,28 @@
             "type",
             "value"
           ]
+        },
+        "splash": {
+          "type": "object",
+          "description": "Splash screen image shown while the application boots",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "file"
+              ],
+              "description": "Splash images are file references; inline content is not supported",
+              "default": "file"
+            },
+            "value": {
+              "type": "string",
+              "description": "Path to the splash image, served from the /config/ directory"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ]
         }
       },
       "required": [
@@ -44,32 +66,111 @@
     },
     "theme": {
       "type": "object",
-      "description": "UI theme and color scheme settings",
+      "description": "UI theme and color scheme settings. All accent variants (hover, muted, dark mode) are derived automatically from brandColor via CSS.",
       "properties": {
-        "primaryColor": {
+        "brandColor": {
           "type": "string",
-          "description": "Primary color for buttons and accents",
-          "default": "#4E97D1"
+          "description": "Primary brand color (hex). This is the single source for the entire accent palette.",
+          "default": "#4071cb"
         },
-        "secondaryColor": {
+        "bg": {
           "type": "string",
-          "description": "Secondary color for accents and highlights",
-          "default": "#2C5F8A"
+          "description": "Page background color (overrides the default light gray)"
         },
-        "backgroundColor": {
+        "fg": {
           "type": "string",
-          "description": "Background color for main content area",
-          "default": "#f5f7fa"
+          "description": "Primary text color (overrides the default dark gray)"
         },
-        "textColor": {
-          "type": "string",
-          "description": "Primary text color",
-          "default": "#333333"
+        "navbar": {
+          "type": "object",
+          "description": "Navbar-specific overrides (optional, defaults to brand)",
+          "properties": {
+            "background": {
+              "type": "string",
+              "description": "Navbar background color (defaults to brandColor)"
+            },
+            "text": {
+              "type": "string",
+              "description": "Navbar text/icon color (auto-contrasted if omitted)"
+            }
+          }
+        },
+        "colors": {
+          "type": "object",
+          "description": "Override semantic status colors",
+          "properties": {
+            "success": {
+              "type": "string",
+              "description": "Success color"
+            },
+            "warning": {
+              "type": "string",
+              "description": "Warning color"
+            },
+            "danger": {
+              "type": "string",
+              "description": "Danger color"
+            },
+            "info": {
+              "type": "string",
+              "description": "Info color"
+            }
+          }
+        },
+        "typography": {
+          "type": "object",
+          "description": "Typography overrides",
+          "properties": {
+            "fontFamily": {
+              "type": "string",
+              "description": "Override body font stack"
+            },
+            "fontScale": {
+              "type": "number",
+              "description": "Multiplier for all text sizes (e.g. 1.1)"
+            }
+          }
+        },
+        "visual": {
+          "type": "object",
+          "description": "The Living Intelligence decorative layer. Every asset path is served from /config/ so an operator can replace it on the host without an image rebuild.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Whether the decorative layer is active. When false, no rule of the layer applies."
+            },
+            "assets": {
+              "type": "object",
+              "description": "Site-root-relative paths of the decoration assets.",
+              "properties": {
+                "hero": {
+                  "type": "string",
+                  "description": "Hero illustration above the welcome heading."
+                },
+                "waves": {
+                  "type": "string",
+                  "description": "Bottom wave decoration."
+                },
+                "mesh": {
+                  "type": "string",
+                  "description": "Surface dot motif behind the welcome screen."
+                },
+                "corner": {
+                  "type": "string",
+                  "description": "Corner network motif in the resources sidebar."
+                },
+                "ambient": {
+                  "type": "string",
+                  "description": "Low-opacity line overlay on the welcome panel (designer ships inactive)."
+                }
+              },
+              "additionalProperties": false
+            }
+          }
         }
       },
       "required": [
-        "primaryColor",
-        "secondaryColor"
+        "brandColor"
       ]
     },
     "features": {
@@ -81,9 +182,12 @@
           "description": "Chat-specific settings",
           "properties": {
             "welcomeMessage": {
-              "type": "string",
-              "description": "Custom welcome message for the chatbot",
-              "default": "Welcome to GENIE.AI!"
+              "description": "Custom welcome message for the chatbot, localized.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/localizedText"
+                }
+              ]
             },
             "botName": {
               "type": "string",
@@ -105,8 +209,12 @@
                         "description": "Unique identifier for the button"
                       },
                       "title": {
-                        "type": "string",
-                        "description": "i18n key for button label"
+                        "description": "Button label, localized.",
+                        "allOf": [
+                          {
+                            "$ref": "#/definitions/localizedText"
+                          }
+                        ]
                       },
                       "icon": {
                         "type": "object",
@@ -165,18 +273,35 @@
                         "description": "The dual-prompt mechanism: visibleText for user, hiddenPrompt for LLM",
                         "properties": {
                           "visibleText": {
-                            "type": "string",
-                            "description": "i18n key for text user sees in chat"
+                            "description": "Text the user sees in chat, localized.",
+                            "allOf": [
+                              {
+                                "$ref": "#/definitions/localizedText"
+                              }
+                            ]
                           },
                           "hiddenPrompt": {
-                            "type": "string",
-                            "description": "i18n key for detailed prompt sent to LLM"
+                            "description": "Detailed prompt sent to the LLM, localized.",
+                            "allOf": [
+                              {
+                                "$ref": "#/definitions/localizedText"
+                              }
+                            ]
                           }
                         },
                         "required": [
                           "visibleText",
                           "hiddenPrompt"
                         ]
+                      },
+                      "placement": {
+                        "type": "string",
+                        "enum": [
+                          "tile",
+                          "composer"
+                        ],
+                        "default": "tile",
+                        "description": "How the entry is rendered: a tile in the welcome grid, or the composer that replaces the Just Chat action."
                       }
                     },
                     "required": [
@@ -184,7 +309,6 @@
                       "title",
                       "icon",
                       "category",
-                      "action",
                       "styles"
                     ]
                   }
@@ -218,7 +342,16 @@
   "theme": {
     "brandColor": "#4682B4",
     "bg": "#D3E0EA",
-    "fg": "#1C2526"
+    "fg": "#1C2526",
+    "visual": {
+      "enabled": false,
+      "assets": {
+        "hero": "/config/genie-visual/assets/genie-hero-transparent.png",
+        "waves": "/config/genie-visual/assets/genie-bottom-waves.svg",
+        "mesh": "/config/genie-visual/assets/genie-dot-mesh.svg",
+        "corner": "/config/genie-visual/assets/genie-corner-network.svg"
+      }
+    }
   },
   "features": {
     "chat": {
@@ -242,7 +375,8 @@
             "action": {
               "visibleText": "quickhelp.justChatUserPrompt",
               "hiddenPrompt": "quickhelp.justChatPrompt"
-            }
+            },
+            "placement": "composer"
           },
           {
             "id": "identity-civil",
@@ -392,5 +526,21 @@
       }
     }
   },
-  "custom": {}
+  "custom": {},
+  "definitions": {
+    "localizedText": {
+      "description": "Either a plain string, or a dictionary of locale code to text. The base config ships dictionaries; the flavour configs ship plain strings.",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      ]
+    }
+  }
 }

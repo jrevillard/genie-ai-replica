@@ -86,6 +86,44 @@ void main() {
     });
   });
 
+  group('quickHelpScopeIsNameable', () {
+    test('a button that declares no category needs no tree', () {
+      expect(
+        quickHelpScopeIsNameable(<String, dynamic>{'category': null}, null),
+        isTrue,
+      );
+      expect(
+        quickHelpScopeIsNameable(<String, dynamic>{
+          'category': 'general',
+        }, null),
+        isTrue,
+      );
+    });
+
+    test('a scoped button needs the tree to name its category', () {
+      final button = <String, dynamic>{'category': '2'};
+      // A tree that did not load cannot name the scope — and a query without
+      // it would answer from the whole corpus. No label, no query.
+      expect(quickHelpScopeIsNameable(button, null), isFalse);
+      expect(quickHelpScopeIsNameable(button, resolver), isTrue);
+    });
+
+    test(
+      'a scoped button whose entity carries no EN label is not nameable',
+      () {
+        final tree = <dynamic>[
+          {'catKey': '2', 'name': 'X', 'nameEN': null, 'children': <dynamic>[]},
+        ];
+        expect(
+          quickHelpScopeIsNameable(<String, dynamic>{
+            'category': '2',
+          }, QuickHelpScopeResolver(tree)),
+          isFalse,
+        );
+      },
+    );
+  });
+
   group('QuickHelpScopeResolver.categoryLabelEn', () {
     test('resolves the ENGLISH label of the declared category', () {
       expect(resolver.categoryLabelEn({'category': '2'}), 'Civil Registry');

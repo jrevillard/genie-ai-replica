@@ -49,6 +49,20 @@ jest.mock('../../services/serviceTreeService', () => ({
 // The tree the component loads (the API mock) — the LIVE hierarchy the
 // scope is resolved against. Assigning vm.serviceCategories directly is not
 // enough: the mount-time load overwrites it.
+// A tree carrying the categories and the labels the plumbing tests click. A
+// scoped button is checked against the live tree — its category must exist,
+// its declared labels must be part of the hierarchy's vocabulary, and the
+// scope can only be NAMED through the tree: the click sends nothing without
+// it.
+function treeCarrying(spec) {
+  return Object.entries(spec).map(([catKey, labels]) => ({
+    catKey,
+    name: `Cat ${catKey}`,
+    nameEN: `Area ${catKey}`, // not 'Category N': that spelling is the legacy fallback the send guard blocks
+    children: labels.map((label) => ({ name: label, nameEN: label }))
+  }));
+}
+
 function mockLiveTree(categories) {
   const serviceTreeService = require('../../services/serviceTreeService');
   serviceTreeService.getAllCategories.mockResolvedValue(categories);
@@ -1004,8 +1018,10 @@ describe('ChatBotComponent', () => {
     });
 
     it('sets hiddenPromptForNextMessage for dual-prompt mechanism', async () => {
+      mockLiveTree(treeCarrying({ 'test-category': [] }));
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
+      vm.serviceCategories = treeCarrying({ 'test-category': [] });
 
       const quickHelpOption = {
         service: 'Test Service',
@@ -1064,8 +1080,10 @@ describe('ChatBotComponent', () => {
     });
 
     it('handles "Just Chat" option — keeps conversation mode, clears labels', () => {
+      mockLiveTree(treeCarrying({ 'test-category-123': ['TestLabel'] }));
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
+      vm.serviceCategories = treeCarrying({ 'test-category-123': ['TestLabel'] });
 
       // Setup: select a categorized option first, then switch to Just Chat
       const categorizedOption = {
@@ -1085,7 +1103,7 @@ describe('ChatBotComponent', () => {
         service: 'Just Chat',
         category: null,
         id: 'just-chat',
-        serviceLabels: ['just-chat']
+        serviceLabels: null // the shipped just-chat button declares no labels
       };
 
       vm.selectQuickHelpOption(justChatOption);
@@ -1106,7 +1124,7 @@ describe('ChatBotComponent', () => {
         service: 'Just Chat',
         category: null,
         id: 'just-chat',
-        serviceLabels: ['just-chat']
+        serviceLabels: null // the shipped just-chat button declares no labels
       };
 
       vm.selectQuickHelpOption(justChatOption);
@@ -1134,7 +1152,7 @@ describe('ChatBotComponent', () => {
         service: 'Just Chat',
         category: null,
         id: 'just-chat',
-        serviceLabels: ['just-chat']
+        serviceLabels: null // the shipped just-chat button declares no labels
       };
 
       vm.selectQuickHelpOption(justChatOption);
@@ -1155,8 +1173,10 @@ describe('ChatBotComponent', () => {
     });
 
     it('sets currentCategoryId for categorized options', () => {
+      mockLiveTree(treeCarrying({ 'test-category-123': ['TestLabel'] }));
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
+      vm.serviceCategories = treeCarrying({ 'test-category-123': ['TestLabel'] });
 
       const categorizedOption = {
         service: 'Categorized Service',
@@ -1358,8 +1378,10 @@ describe('ChatBotComponent', () => {
     });
 
     it('selectQuickHelpOption carries serviceLabels and replaces previous Quick Help', () => {
+      mockLiveTree(treeCarrying({ 1: ['Tomato'], 2: ['Onion'] }));
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
+      vm.serviceCategories = treeCarrying({ 1: ['Tomato'], 2: ['Onion'] });
 
       const optA = {
         service: 'Tomato',
@@ -1386,8 +1408,10 @@ describe('ChatBotComponent', () => {
     });
 
     it('selectQuickHelpOption preserves sidebar items (additive)', () => {
+      mockLiveTree(treeCarrying({ 1: ['Tomato'], 9: ['Crops'] }));
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
+      vm.serviceCategories = treeCarrying({ 1: ['Tomato'], 9: ['Crops'] });
 
       // Simulate a sidebar item (source !== 'quickHelp')
       vm.selectedContextItems.push({
@@ -1458,6 +1482,9 @@ describe('ChatBotComponent', () => {
         }
       });
 
+      // Explicitly no tree: the restore now waits for the initial load, so a
+      // previous test's mock must not leak the vocabulary in.
+      mockLiveTree([]);
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
       await vm.loadQuickHelpButtons();
@@ -1504,6 +1531,50 @@ describe('ChatBotComponent', () => {
       });
 
       await vm.loadExistingConversation('c1');
+
+      expect(vm.selectedContextItems[0].serviceKey).toBe('Tomato');
+      expect(vm.selectedContextItems[0].service).toBe('Tomate');
+    });
+
+    it('waits for the tree before resolving a restored sidebar scope', async () => {
+      // The tree is fetched asynchronously. A conversation restored before
+      // the fetch resolved would look its tags up in an empty vocabulary and
+      // drop the scope — the same race the Quick Help config wait fixes, one
+      // data source over.
+      let resolveTree;
+      const treePromise = new Promise((resolve) => {
+        resolveTree = resolve;
+      });
+      const serviceTreeService = require('../../services/serviceTreeService');
+      serviceTreeService.getAllCategories.mockReturnValue(treePromise);
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation.mockResolvedValueOnce({
+        _key: 'c1',
+        title: 'Saved chat',
+        messages: [],
+        tags: ['Tomato']
+      });
+
+      let restored;
+      const restoring = vm.loadExistingConversation('c1').then(() => {
+        restored = true;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      // The restore is parked on the tree: resolving the scope without it
+      // would send an unfiltered query for a scope the tree does carry.
+      expect(restored).toBeUndefined();
+
+      resolveTree([
+        {
+          catKey: '2',
+          name: 'Cultivos',
+          nameEN: 'Crops',
+          children: [{ name: 'Tomate', nameEN: 'Tomato' }]
+        }
+      ]);
+      await restoring;
 
       expect(vm.selectedContextItems[0].serviceKey).toBe('Tomato');
       expect(vm.selectedContextItems[0].service).toBe('Tomate');
@@ -1718,6 +1789,32 @@ describe('ChatBotComponent', () => {
 
       expect(mockSubmitQueryStream).not.toHaveBeenCalled();
       expect(vm.selectedContextItems).toHaveLength(0);
+    });
+
+    it('a scoped button sends nothing when the tree is not there to name its category', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // The config carries the category KEY; the wire needs its ENGLISH
+      // label, and only the live tree can say it. A tree that did not load
+      // cannot name the scope — and a query without it would answer from the
+      // whole corpus, from a button the user believes is scoped.
+      const button = {
+        id: 'civil',
+        service: 'État civil',
+        serviceLabels: [],
+        category: '2',
+        icon: 'x',
+        hiddenPrompt: 'hidden prompt',
+        visibleText: 'visible text'
+      };
+      vm.serviceCategories = [];
+
+      await vm.selectQuickHelpOption(button);
+
+      expect(mockSubmitQueryStream).not.toHaveBeenCalled();
+      expect(vm.selectedContextItems).toHaveLength(0);
+      expect(vm.currentCategoryId).toBeNull();
     });
 
     it('restores the category scope of a saved conversation', async () => {
@@ -1995,8 +2092,10 @@ describe('ChatBotComponent', () => {
     });
 
     it('Quick Help button that declares no labels sends no label filter', async () => {
+      mockLiveTree(treeCarrying({ 1: ['Tomato', 'Onion'] }));
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
+      vm.serviceCategories = treeCarrying({ 1: ['Tomato', 'Onion'] });
 
       // Every shipped button config declares no `serviceLabels`. The button id
       // is not a knowledge label: sending it filtered the corpus down to zero
@@ -2018,8 +2117,10 @@ describe('ChatBotComponent', () => {
     });
 
     it('Quick Help button that declares labels sends exactly those labels', async () => {
+      mockLiveTree(treeCarrying({ 1: ['Tomato', 'Onion'] }));
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
+      vm.serviceCategories = treeCarrying({ 1: ['Tomato', 'Onion'] });
 
       vm.selectQuickHelpOption({
         service: 'Grow',

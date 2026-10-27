@@ -99,3 +99,18 @@ class QuickHelpScopeResolver {
     return en;
   }
 }
+
+/// Whether the button's scope can be put on the wire.
+///
+/// The config carries the category KEY; the wire needs its ENGLISH label,
+/// and only the live tree can say it. A tree that did not load cannot name
+/// the scope — and a query without it would answer from the whole corpus,
+/// from a button the user believes is scoped. No label, no query.
+bool quickHelpScopeIsNameable(
+  Map<String, dynamic> button,
+  QuickHelpScopeResolver? resolver,
+) {
+  final category = button['category']?.toString() ?? '';
+  if (category.isEmpty || category == 'general') return true;
+  return resolver?.categoryLabelEn(button) != null;
+}

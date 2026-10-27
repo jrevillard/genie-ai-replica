@@ -670,7 +670,8 @@ export default {
       currentLocale: (navigator.language || 'en').split('-')[0],
       showQuickHelp: true,
       currentCategoryId: null,
-      serviceCategories: [], // This will now hold the transformed tree data
+      serviceCategories: [],
+      serviceCategoriesLoadPromise: null, // This will now hold the transformed tree data
       chatHistoryService: chatHistoryService,
       quickHelpButtons: [],
       // The in-flight load of the Quick Help configuration. A restore that
@@ -1011,7 +1012,7 @@ export default {
     eventBus.$on('treeNodeSelected', this.handleTreeNodeSelected);
     this.scrollToBottom();
     this.loadQuickHelpButtons();
-    this.loadServiceCategories(); // Fetch categories on mount
+    this.serviceCategoriesLoadPromise = this.loadServiceCategories(); // Fetch categories on mount
 
     // Removed the statusUpdateInterval
     this.updateDialogTexts();
@@ -1219,6 +1220,17 @@ export default {
       return { broken: missingLabels.length > 0 || categoryMissing, missingLabels, categoryMissing };
     },
 
+    // Whether a scope can be put on the wire. A button that declares a
+    // category can only NAME it through the live tree — the config carries
+    // the key, the wire needs the ENGLISH label. No label, no query: a query
+    // without it would answer from the whole corpus.
+    quickHelpScopeIsNameable(categoryId) {
+      if (categoryId == null || categoryId === 'general') {
+        return true;
+      }
+      return this.getCategoryEnLabel(categoryId) != null;
+    },
+
     quickHelpErrorCaption(button) {
       const state = this.quickHelpScopeState(button);
       if (!state.broken) {
@@ -1345,6 +1357,19 @@ export default {
      * tag up in an empty list, fall back to the sidebar branch, and send the
      * button id as a label — an id that names no entity in the hierarchy.
      */
+    /**
+     * The live hierarchy, once the initial load has settled. The restore path
+     * resolves a saved scope against it; restoring before the load resolved
+     * would look the tags up in an empty vocabulary and drop them.
+     */
+    async ensureServiceCategoriesLoaded() {
+      if (!this.serviceCategoriesLoadPromise) {
+        this.serviceCategoriesLoadPromise = this.loadServiceCategories();
+      }
+      await this.serviceCategoriesLoadPromise;
+      return this.serviceCategories;
+    },
+
     async ensureQuickHelpLoaded() {
       if (!this.quickHelpLoadPromise) {
         this.loadQuickHelpButtons();
@@ -1448,6 +1473,13 @@ export default {
         return;
       }
       const categoryId = rawOption.category || (rawOption.id !== 'just-chat' ? 'general' : null);
+      // The config carries the category KEY; the wire needs its ENGLISH
+      // label, and only the live tree can say it. A tree that did not load
+      // cannot name the scope — and a query without it would answer from the
+      // whole corpus, from a button the user believes is scoped.
+      if (!this.quickHelpScopeIsNameable(categoryId)) {
+        return;
+      }
 
       // Quick Help is a mode switch: replace any prior Quick Help selection.
       // Sidebar items (source !== QUICK_HELP_SOURCE) are additive and survive.
@@ -1902,7 +1934,11 @@ export default {
           // scoped by. A Quick Help tag is only recognised once the buttons
           // are known: looked up in an empty list, it would fall through to
           // the sidebar branch and send the button id as a label.
-          await this.ensureQuickHelpLoaded();
+          // The scope is resolved against TWO async sources: the buttons
+          // (a Quick Help tag is the button id) and the tree (a sidebar tag
+          // is an EN label only the tree can confirm). Waiting for the one
+          // and not the other drops the scope of the other kind of tag.
+          await Promise.all([this.ensureQuickHelpLoaded(), this.ensureServiceCategoriesLoaded()]);
           conversation.tags.forEach((tag) => {
             // A saved conversation keeps the tag of an item, not the item
             // itself. A Quick Help tag is the id of the button that produced

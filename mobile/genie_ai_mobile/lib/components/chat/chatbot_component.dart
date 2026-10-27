@@ -852,6 +852,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     if ((_scopeResolver?.stateFor(button)['broken'] as bool?) ?? false) {
       return;
     }
+    // The config carries the category KEY; the wire needs its ENGLISH label,
+    // and only the live tree can say it. A tree that did not load cannot name
+    // the scope — and a query without it would answer from the whole corpus.
+    if (!quickHelpScopeIsNameable(button, _scopeResolver)) {
+      return;
+    }
     final Map<String, dynamic> action = button['action'] ?? {};
     final String visibleTextKey = action['visibleText']?.toString() ?? '';
     final String hiddenPromptKey = action['hiddenPrompt']?.toString() ?? '';

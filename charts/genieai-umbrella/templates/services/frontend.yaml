@@ -52,9 +52,12 @@ spec:
   ingress:
     # The SPA is served by the frontend container; the only network peer
     # is the Envoy Gateway data plane (the edge tier routes `/` here).
-    # With the ingress tier disabled there is no exposure at all —
-    # dev port-forwarding relies on the cluster's CNI not enforcing
-    # NetworkPolicy (minikube kubenet), documented with the dev workflow.
+    # With the ingress tier disabled there is no exposure at all — and
+    # on a policy-enforcing CNI (the laptop cluster is built with
+    # calico precisely for that) the default-deny holds and the edge
+    # would 504 into this Service. A dev cluster that wants
+    # port-forward-only access must either enable the ingress tier or
+    # run a CNI that does not apply policies (minikube kubenet).
     {{- if .Values.ingress.enabled }}
     - from:
         {{- include "genieai-umbrella.ingressDataPlanePeer" . | nindent 8 }}

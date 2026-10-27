@@ -639,6 +639,11 @@ services:
       - name: nginx-run
         mountPath: /var/run
     resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
+    # Extra origins for the SPA's Content-Security-Policy connect-src
+    # (beyond 'self', the public origin and the Keycloak internal URL the
+    # template derives). Empty = the derived set only. Rendered as
+    # VUE_APP_CSP_CONNECT_SRC into the runtime config.js.
+    cspConnectSrc: ""
     # Empty by default: the entrypoint injects every VUE_APP_* row into
     # /app/dist/runtime/config.js (window.APP_CONFIG) at startup, and the
     # code defaults cover the knobs Compose leaves empty. The one the
@@ -910,8 +915,9 @@ opea:
       MODEL_PROBE_TIMEOUT_SECONDS: "10"
   reranker:
     # Adaptive-utility tuning knobs read at reranker startup; only used
-    # when RERANKING_STRATEGY=adaptive.
-    # lines 1130-1133.
+    # when RERANKING_STRATEGY=adaptive. Rendered as the
+    # NOVELTY_SIGMOID_*/CONTEXT_DECAY_FACTOR/MIN_VALUE_THRESHOLD env rows
+    # in templates/opea/reranker.yaml.
     noveltySigmoidA: "20.0"
     noveltySigmoidB: "0.25"
     contextDecayFactor: "0.0025"

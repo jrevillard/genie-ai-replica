@@ -1857,7 +1857,42 @@ class TestFetchAllLabels:
         assert labels == []
 
     @pytest.mark.asyncio
-    async def test_returns_the_taxonomy_in_a_canonical_order(self):
+    @pytest.mark.parametrize(
+        ("taxonomy", "expected"),
+        [
+            (
+                [
+                    {"name": "Healthcare", "children": [{"name": "Hospitals"}, {"name": "Clinics"}]},
+                    {"name": "Education", "children": ["Schools"]},
+                ],
+                ["Education", "Schools", "Healthcare", "Clinics", "Hospitals"],
+            ),
+            (
+                # Two labels that differ only in case are two labels: they have
+                # to sit next to each other, in an order that does not depend
+                # on which of them arrived first.
+                [
+                    {"name": "onion", "children": []},
+                    {"name": "Onion", "children": []},
+                    {"name": "apple", "children": []},
+                    {"name": "Banana", "children": []},
+                ],
+                ["apple", "Banana", "Onion", "onion"],
+            ),
+            (
+                # A label listed twice appears once, and one without a usable
+                # label — a category whose translation is missing — is dropped
+                # rather than reaching the prompt as the text "None".
+                [
+                    {"name": "Healthcare", "children": ["Clinics", "Clinics", {"name": None}, ""]},
+                    {"name": None, "children": []},
+                ],
+                ["Healthcare", "Clinics"],
+            ),
+        ],
+        ids=["canonical", "case-variants", "duplicates-and-unusable"],
+    )
+    async def test_the_taxonomy_comes_back_in_a_canonical_order(self, taxonomy, expected):
         """The label list is embedded in the labelling prompt verbatim.
 
         Its order is therefore part of the prompt: two ingests of the same
@@ -1865,14 +1900,9 @@ class TestFetchAllLabels:
         chunk differently — a difference that is invisible in the stored
         result and shows up only as noise in an A/B comparison.
         """
-        labels = await _fetch_labels(
-            [
-                {"name": "Healthcare", "children": [{"name": "Hospitals"}, {"name": "Clinics"}]},
-                {"name": "Education", "children": ["Schools"]},
-            ]
-        )
+        labels = await _fetch_labels(taxonomy)
 
-        assert labels == ["Education", "Schools", "Healthcare", "Clinics", "Hospitals"]
+        assert labels == expected
 
     @pytest.mark.asyncio
     async def test_the_order_does_not_depend_on_the_order_the_backend_returns(self):
@@ -1885,41 +1915,6 @@ class TestFetchAllLabels:
         )
 
         assert labels == ["Education", "Schools", "Healthcare", "Clinics", "Hospitals"]
-
-    @pytest.mark.asyncio
-    async def test_drops_duplicates_and_labels_that_are_not_usable_strings(self):
-        """A category whose translation is missing arrives as None.
-
-        It must not reach the prompt as the string "None", and the same
-        label listed under two categories must appear once.
-        """
-        labels = await _fetch_labels(
-            [
-                {"name": "Healthcare", "children": ["Clinics", "Clinics", {"name": None}, ""]},
-                {"name": None, "children": []},
-            ]
-        )
-
-        assert labels == ["Healthcare", "Clinics"]
-
-    @pytest.mark.asyncio
-    async def test_labels_differing_only_in_case_keep_a_defined_order(self):
-        """Two labels that differ only in case are two labels.
-
-        They have to sit next to each other, in an order that does not depend
-        on which of them arrived first — otherwise the prompt changes with the
-        taxonomy response rather than with the taxonomy.
-        """
-        labels = await _fetch_labels(
-            [
-                {"name": "onion", "children": []},
-                {"name": "Onion", "children": []},
-                {"name": "apple", "children": []},
-                {"name": "Banana", "children": []},
-            ]
-        )
-
-        assert labels == ["apple", "Banana", "Onion", "onion"]
 
     @pytest.mark.asyncio
     async def test_entries_without_a_usable_label_are_counted_in_the_fetch_line(self):

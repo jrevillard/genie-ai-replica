@@ -61,7 +61,11 @@ sets it fails the render instead of being silently rewritten. */ -}}
 {{- $translationEnv := list
     (dict "name" "TRANSLATION_BACKEND" "value" $translationBackend) -}}
 {{- $probeTimeout := $translation.probeTimeoutSeconds -}}
-{{- if $probeTimeout -}}
+{{- /* Presence check, not truthiness: an explicit 0 is a legal "fail the
+probe immediately" budget and Sprig's truthiness would silently drop the
+row — the same falsy-zero trap the convergence Job's backoffLimit fix
+removed. */ -}}
+{{- if not (kindIs "invalid" $probeTimeout) -}}
 {{- $translationEnv = concat $translationEnv (list
     (dict "name" "TRANSLATION_PROBE_TIMEOUT_SECONDS" "value" (printf "%v" $probeTimeout))) -}}
 {{- end -}}
@@ -235,9 +239,11 @@ spec:
         - protocol: TCP
           port: 3000
   {{- if .Values.observability.metrics.enabled }}
-  # Prometheus scrape peer (VMServiceScrape targets this Service) — the
-  # same peer every sibling policy carries. Without it the default-deny
-  # drops vm-operator's scrapes the moment an image serves /metrics.
+  # vm-operator scrape peer — the same peer every sibling policy
+  # carries. PRE-WIRED, INERT TODAY: the VMServiceScrape CRs match
+  # nothing on purpose (see vmsingle.yaml) and no workload serves
+  # /metrics yet; the peer keeps a future real scrape from silently
+  # timing out against the default-deny.
     - from:
         - podSelector:
             matchLabels:

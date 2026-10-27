@@ -115,10 +115,12 @@ spec:
   containers:
     - name: clamav-reach
       image: {{ .Values.global.toolingImageRegistry | default "docker.io" }}/busybox:1.36
-      # Same container-level PSA-restricted set as the sibling test pods:
-      # the pod-level block carries runAsNonRoot only, and a namespace
-      # with an enforcing restricted baseline rejects the pod at admission
-      # on the missing container fields.
+      # Same container-level restricted-profile set as the sibling test
+      # pods: the pod-level block carries runAsNonRoot only, and a
+      # namespace enforcing `restricted` rejects the pod at admission on
+      # the missing container fields. (The namespace enforces `baseline`
+      # today — the fields are the free stricter posture, not a current
+      # requirement.)
       securityContext:
         allowPrivilegeEscalation: false
         readOnlyRootFilesystem: true

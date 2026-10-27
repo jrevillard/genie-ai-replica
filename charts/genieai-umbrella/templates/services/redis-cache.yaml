@@ -133,7 +133,7 @@ metadata:
 spec:
   ports:
     - name: redis
-      port: {{ $svc.port }}
+      port: {{ $svc.port | default 6379 }}
   selector:
     {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "redis-cache") | nindent 4 }}
 ---
@@ -159,7 +159,7 @@ spec:
               genieai.io/component: backend
       ports:
         - protocol: TCP
-          port: 6379
+          port: {{ $svc.port | default 6379 }}
     # helm-test reachability probe (component "test").
     - from:
         - podSelector:
@@ -167,7 +167,7 @@ spec:
               genieai.io/component: test
       ports:
         - protocol: TCP
-          port: 6379
+          port: {{ $svc.port | default 6379 }}
   {{- if .Values.observability.metrics.enabled }}
   # Prometheus scrape peer (VMServiceScrape targets this Service).
   # VictoriaMetrics runs as a vm-operator-managed pod in this namespace;
@@ -179,7 +179,7 @@ spec:
               app.kubernetes.io/instance: vmetrics
       ports:
         - protocol: TCP
-          port: 6379
+          port: {{ $svc.port | default 6379 }}
   {{- end }}
   egress:
     - to:

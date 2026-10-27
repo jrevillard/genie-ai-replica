@@ -1,9 +1,10 @@
 {{/*
   embedding OPEA orchestrator: two endpoint envs (EMBEDDING_MODEL_ENDPOINT and
   TEI_EMBEDDING_ENDPOINT) that resolve to the same gpu-path; HF_TOKEN +
-  VLLM_API_KEY from the vllm-api-key Secret; OPEA_SSL_SKIP_VERIFY derived
-  from the gpu node URL scheme. Container/listen port 6000; healthcheck
-  hits /health on that port.
+  VLLM_API_KEY from the vllm-api-key Secret; OPEA_SSL_SKIP_VERIFY from
+  the explicit opea.gpu.skipTlsVerify knob (NOT inferred from the node
+  URL scheme — see the opeaSslSkipVerify helper). Container/listen port
+  6000; healthcheck hits /health on that port.
 */}}
 {{- if .Values.opea.enabled -}}
 {{- $vals := deepCopy .Values -}}
@@ -11,7 +12,7 @@
 {{- $urls := list
     (dict "name" "EMBEDDING_MODEL_ENDPOINT" "value" $embeddingEndpoint)
     (dict "name" "TEI_EMBEDDING_ENDPOINT" "value" $embeddingEndpoint)
-    (dict "name" "EMBEDDING_MODEL_ID" "value" .Values.opea.embedding.modelId)
+    (dict "name" "EMBEDDING_MODEL_ID" "value" (.Values.opea.embedding.modelId | default "BAAI/bge-large-en-v1.5"))
     (dict "name" "OPEA_SSL_SKIP_VERIFY" "value" (include "genieai-umbrella.opeaSslSkipVerify" .))
     (dict "name" "ENABLE_OBSERVABILITY" "value" (include "genieai-umbrella.observabilityEnabledFlag" .))
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))

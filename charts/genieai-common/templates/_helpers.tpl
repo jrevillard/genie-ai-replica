@@ -7,9 +7,9 @@ Expand the name of the chart.
 
 {{/*
 Create a default fully qualified app name.
-Truncate at 40 chars: the name budget must reserve the longest hook suffix
-("-sealed-secret-validate", 23 chars) within the 63-char K8s object-name
-limit — fullname + "-sealed-secret-validate" tops out exactly at 63.
+Truncate at 40 chars: the name budget reserves 23 chars of headroom under
+the 63-char K8s object-name limit for the longest suffix the chart appends
+(currently "-clusterprofile-detect", 22 chars — the pre-upgrade drift hook).
 */}}
 {{- define "genieai-common.fullname" -}}
 {{- if .Values.fullnameOverride -}}

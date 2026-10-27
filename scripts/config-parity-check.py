@@ -432,9 +432,15 @@ def main(argv):
     # a way to make this gate green. Every name must be absent from shipped
     # application source — tests and docs are excluded because they mention
     # configuration without reading it.
+    not_read_names = [
+        name
+        for _, pair in sorted(services.items())
+        for name in sorted(pair.get("notRead") or {})
+    ]
+    readers_by_name = verify_not_read(not_read_names)
     for component, pair in sorted(services.items()):
         for name in sorted(pair.get("notRead") or {}):
-            readers = verify_not_read([name]).get(name) or []
+            readers = readers_by_name.get(name) or []
             if readers:
                 gaps.append(
                     f"{component}.{name}: declared notRead, but {readers[0]} reads it "

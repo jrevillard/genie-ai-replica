@@ -189,6 +189,14 @@ spec:
           # so this one is never injected anywhere.
           check_secret keycloak-proxy-client-secret || failed=1
           {{- end }}
+          {{- if .Values.opea.enabled }}
+          # The OPEA tier mounts both through NON-optional secretKeyRefs
+          # (gpuApiKeyEnv for every GPU consumer, the KC_DATAPREP row on
+          # dataprep) — a missing Secret is a CreateContainerConfigError
+          # at first pod start, so the install must fail here instead.
+          check_secret vllm-api-key || failed=1
+          check_secret kc-dataprep-client-secret || failed=1
+          {{- end }}
           if [ "$failed" -ne 0 ]; then
             echo "FAIL: required K8s Secrets did not materialize in 60s"
             exit 1

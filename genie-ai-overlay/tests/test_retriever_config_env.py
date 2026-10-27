@@ -2,10 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 """The retriever must read its ArangoDB knobs under the names the deployment sets.
 
-The deployment sets ``RETRIEVER_ARANGO_FILTER_STRATEGY`` (docker-compose.yaml,
-deploy/ansible/templates/env.j2) and the install guide documents that name.
-Reading a different name leaves the knob inert: the operator sets it, the
-retriever ignores it, and the label filter silently falls back to OR.
+The deployment sets ``RETRIEVER_ARANGO_FILTER_STRATEGY`` (docker-compose.yaml;
+the Ansible template renders it when the operator defines the variable) and
+the install guide documents that name. Reading a different name leaves the
+knob inert: the operator sets it, the retriever ignores it, and the label
+filter silently falls back to OR.
 """
 
 import importlib.util

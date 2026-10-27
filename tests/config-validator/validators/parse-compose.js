@@ -287,7 +287,11 @@ module.exports = { parseComposeEnvVars, crossReference, parseComposeImages, pars
  * - `envVars`: names of the variables the service receives through its
  *   `environment:` block. A variable reaches a container only through that
  *   block, so the names of the whole file say nothing about which container
- *   gets which one.
+ *   gets which one. The block is read in the forms this file uses — the
+ *   mapping form (`NAME: value`) and the list form (`- NAME=value`), at
+ *   their usual indentation; YAML anchors (`environment: *shared-env`) and
+ *   inline values are not recognised, and a service wired that way reports
+ *   no variables.
  *
  * @param {string} filePath - Path to a docker-compose.yaml file
  * @returns {Array<{ service: string, profiles: string[], replicas: string|null, replicasLine: number|null, envVars: string[] }>}

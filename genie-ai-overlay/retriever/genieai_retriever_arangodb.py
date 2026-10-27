@@ -1154,7 +1154,9 @@ class GenieaiArangoRetriever(OpeaComponent):
             traversal_query = input_dict.get("traversal_query", ARANGO_TRAVERSAL_QUERY)
 
             filter_data = input_dict.get("context", {})
-            filter_strategy = input_dict.get("filter_strategy", ARANGO_FILTER_STRATEGY).upper()
+            # Same normalization as the deployment value: a direct API call with
+            # " and " must behave like a deployment that set " and ".
+            filter_strategy = input_dict.get("filter_strategy", ARANGO_FILTER_STRATEGY).strip().upper()
 
             # Consolidate all labels into a single list
             labels_to_filter = []

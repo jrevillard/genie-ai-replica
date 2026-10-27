@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { parseEnvTemplate } = require('./parse-env');
 const { parseComposeServiceContracts } = require('./parse-compose');
-const { parseEnvTemplateVarNames, readFileOrThrow } = require('./parse-env-template');
+const { parseEnvTemplateVarNames, readFileOrThrow, stripCommentLines } = require('./parse-env-template');
 
 /**
  * The namespace of the knobs the retrieval services read from their
@@ -55,11 +55,7 @@ const NON_PRODUCTION_DIRS = new Set(['tests', 'contracts', '__pycache__']);
  * @returns {string} The content without its comment lines
  */
 function readPythonWithoutComments(filePath) {
-  const content = readFileOrThrow(filePath, 'overlay source file');
-  return content
-    .split('\n')
-    .filter((line) => !line.trim().startsWith('#'))
-    .join('\n');
+  return stripCommentLines(readFileOrThrow(filePath, 'overlay source file'));
 }
 
 /**
@@ -144,11 +140,13 @@ function validateRetrieverEnvCoverage({ composeFile, ansibleEnvFile, envTemplate
 
   const reads = parseOverlayEnvReads(overlayDir);
 
-  for (const name of retrieverDelivery) {
-    if (name.startsWith(RETRIEVER_ENV_PREFIX) && !reads.has(name)) {
-      errors.push(
-        `${name} reaches the ${retrieverEntry.composeService} container but no service on the retrieval path reads it (the knob is inert)`
-      );
+  for (const { composeService } of RETRIEVAL_PATH) {
+    for (const name of delivered.get(composeService) || []) {
+      if (name.startsWith(RETRIEVER_ENV_PREFIX) && !reads.has(name)) {
+        errors.push(
+          `${name} reaches the ${composeService} container but no service on the retrieval path reads it (the knob is inert)`
+        );
+      }
     }
   }
 

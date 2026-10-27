@@ -384,6 +384,26 @@ def main(argv):
                         "the name (values.yaml / README / templates) — document the knob, "
                         "or file it under another category if it is not an operator knob"
                     )
+                # The claim has TWO halves and only the first (the name
+                # is documented) was checked: Compose must leave the
+                # variable unset AND the chart must leave it unset too.
+                # A chart that renders a real value (OPEA_SSL_SKIP_VERIFY:
+                # 1) while Compose resolves it empty is exactly the
+                # divergence this category exists to catch — and the
+                # `continue` below skipped it.
+                if value not in ("", None):
+                    gaps.append(
+                        f"{component}.{name}: filed codeDefault, but Compose resolves "
+                        f"{value!r} — a code default applies only when the variable is "
+                        "unset (reclassify it under mayDiffer)"
+                    )
+                chart_value = rendered_rows.get(name, declared_rows.get(name))
+                if chart_value not in (None, ""):
+                    gaps.append(
+                        f"{component}.{name}: filed codeDefault, but the chart renders "
+                        f"{chart_value!r} — a code default applies only when the chart "
+                        "leaves the variable unset (reclassify it under mayDiffer)"
+                    )
                 continue
             if name in secret_provided:
                 # The chart asks the operator for the value through a
@@ -470,6 +490,23 @@ def main(argv):
             )
         else:
             print(f"  not compared: {compose_name} — {unpaired[compose_name]}")
+    # The other direction: a chart component with no Compose counterpart
+    # is outside the gate's coverage — the docstring says a surface is
+    # reported whichever way it points, and only the Compose side was
+    # walked. The component identity is the pod LABEL the chart renders
+    # (a values key can differ: the redis service's values key is
+    # `redisCache`, its pod label `redis-cache`).
+    paired_chart = {pair.get("chart") for pair in services.values()}
+    for chart_component in sorted(rendered.keys()):
+        if chart_component in paired_chart:
+            continue
+        if chart_component in unpaired:
+            print(f"  not compared: {chart_component} (chart) — {unpaired[chart_component]}")
+            continue
+        gaps.append(
+            f"chart component {chart_component!r}: no Compose counterpart declared — pair it "
+            "under `services` or declare it under `unpaired` with the reason"
+        )
     for gap in gaps:
         print(f"  GAP {gap}")
     if checked < min_compared:

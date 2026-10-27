@@ -31,8 +31,20 @@ URLs at a single internal mirror.
       mkdir -p /tools/bin
       BASE="{{ .Values.global.kubeletToolsMirror | default "https://dl.k8s.io" }}"
       BASE_JQ="{{ .Values.global.kubeletToolsMirror | default "https://github.com/jqlang" }}"
-      curl -fsSL "$BASE/release/v1.33.0/bin/linux/{{ .Values.global.toolingArch | default "amd64" }}/kubectl" -o /tools/bin/kubectl
+      # The node's architecture, detected at runtime unless the operator
+      # forces one: an arm64 cluster (Apple Silicon minikube) cannot
+      # execute the amd64 binary, and the pod that needs it — the
+      # helm-test pod, the pre-upgrade drift hook — never starts.
+      ARCH="{{ .Values.global.toolingArch }}"
+      if [ -z "$ARCH" ]; then
+        case "$(uname -m)" in
+          x86_64|amd64) ARCH=amd64 ;;
+          aarch64|arm64) ARCH=arm64 ;;
+          *) ARCH=amd64 ;;
+        esac
+      fi
+      curl -fsSL "$BASE/release/v1.33.0/bin/linux/$ARCH/kubectl" -o /tools/bin/kubectl
       chmod +x /tools/bin/kubectl
-      curl -fsSL "$BASE_JQ/jq/releases/download/jq-1.7.1/jq-linux-{{ .Values.global.toolingArch | default "amd64" }}" -o /tools/bin/jq
+      curl -fsSL "$BASE_JQ/jq/releases/download/jq-1.7.1/jq-linux-$ARCH" -o /tools/bin/jq
       chmod +x /tools/bin/jq
 {{- end -}}

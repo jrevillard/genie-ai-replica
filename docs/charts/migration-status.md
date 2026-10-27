@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-27)
 
-- **Chart `genieai-umbrella` at 0.2.82**, branch `feat/k8s-migration` rebased
+- **Chart `genieai-umbrella` at 0.2.83**, branch `feat/k8s-migration` rebased
   onto `main` at `179a8a8f1` (0 commits behind).
 - **No application code in the branch**: the diff touches `charts/`,
   `scripts/`, `docs/`, `deploy/`, `tests/`, `site/`, `.gitlab-ci.yml`,
@@ -385,6 +385,41 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     (the profile map wins over per-service replicas in
     `resolveReplicas`). Documented profile-override semantics, not a
     dead key.
+- **Review loop, pass 11 (0.2.83)** — 5 findings, all verified true, all
+  fixed. Two were behavioral contracts the static gates cannot see:
+  - *The helm-test required-Secret gate was INVERTED for the Keycloak
+    proxy-client Secret* — asserted only when the convergence Job was
+    DISABLED (the one configuration where the backend's `optional: true`
+    envFrom and the absent realm import consume nothing, so a valid
+    install shape failed helm test), while the Secrets the Job
+    hard-requires when ENABLED — the bootstrap admin credentials and
+    every `envSecrets[].secretName`, all mounted through NON-optional
+    secretKeyRefs — were never asserted: a missing admin Secret passed
+    the test green and died as a CreateContainerConfigError on the
+    post-install hook. The gate now derives the names from the values
+    (`bootstrapAdmin.userSecret` + each `envSecrets[].secretName`) when
+    convergence is on, so an operator who renamed anything is tested
+    against the Secrets the Job actually reads.
+  - *Clearing `opea.gpu.paths.docling` produced the bare nodeHost, not
+    the empty endpoint* — the external branch concatenated
+    `nodeHost + paths.<key>` unconditionally, so the documented remedy
+    for "no remote docling-serve" handed the app a URL whose every
+    conversion POST 404s, and the documented in-process fallback keyed
+    on an empty endpoint that could no longer render. An empty path now
+    renders an empty endpoint (byte-identical on every non-empty
+    default, both GPU modes).
+  - *`convergence.backoffLimit: 0` silently rendered 2* — Sprig's
+    `| default` treats 0 as empty; the same falsy-zero trap the PDB
+    `minAvailable` fix removed. Nil check now (0 / 5 / absent all
+    render-verified); the sweep for other numeric `| default` sites
+    found no other knob where 0 is a legal value (ports and instance
+    counts have no valid 0).
+  - Two gate-quality fixes on `values-surface-check.py`: the `$svc`
+    scan ran twice per invocation (dict computed once now), and
+    `shape_block_keys` only ended the block on a non-comment line, so
+    a blank line followed by unrelated commented examples would have
+    folded foreign keys into the accepted `$svc` surface — it stops at
+    the first blank line now (mutation-proven).
 - **Review round 9 closed (0.2.67)** — three parallel adversarial passes
   over the whole final diff (core/data/services, edge/observability/OPEA,
   CI/scripts), every finding verified against a render or a live cluster
@@ -468,7 +503,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.82** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.83** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `179a8a8f1` (the tip that carries !586, !587,
   !588) — the branch is 0 commits behind `main`.

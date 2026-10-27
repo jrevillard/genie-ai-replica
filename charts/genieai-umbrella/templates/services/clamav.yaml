@@ -93,11 +93,19 @@ spec:
             # without giving up readOnlyRootFilesystem.
             - name: clamav-log
               mountPath: /var/log/clamav
-          {{- with $svc.probes.readiness }}
+          {{- /* The tcpSocket probes dial the LISTENER port: an override
+          of services.clamav.port must move them with it, or the pod is
+          probed on a port it no longer listens on and never goes Ready.
+          Merge on the copy — the values are read-only render input. */ -}}
+          {{- $clamavPort := $svc.port | default 3310 -}}
+          {{- $probes := deepCopy ($svc.probes | default dict) -}}
+          {{- if $probes.readiness.tcpSocket -}}{{- $_ := set $probes.readiness "tcpSocket" (merge (dict "port" $clamavPort) $probes.readiness.tcpSocket) -}}{{- end -}}
+          {{- if $probes.liveness.tcpSocket -}}{{- $_ := set $probes.liveness "tcpSocket" (merge (dict "port" $clamavPort) $probes.liveness.tcpSocket) -}}{{- end -}}
+          {{- with $probes.readiness }}
           readinessProbe:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with $svc.probes.liveness }}
+          {{- with $probes.liveness }}
           livenessProbe:
             {{- toYaml . | nindent 12 }}
           {{- end }}
@@ -140,7 +148,10 @@ metadata:
 spec:
   ports:
     - name: avscanner
-      port: 3310
+      # Same knob the containerPort derives from: an override that moved
+      # only the container listener would leave the Service dialing a
+      # dead port with lint, kubeconform and the crosscheck all green.
+      port: {{ $svc.port | default 3310 }}
   selector:
     {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "clamav") | nindent 4 }}
 ---
@@ -168,7 +179,7 @@ spec:
               genieai.io/component: documentRepository
       ports:
         - protocol: TCP
-          port: 3310
+          port: {{ $svc.port | default 3310 }}
     # helm-test reachability probe (component "test").
     - from:
         - podSelector:
@@ -176,7 +187,7 @@ spec:
               genieai.io/component: test
       ports:
         - protocol: TCP
-          port: 3310
+          port: {{ $svc.port | default 3310 }}
   egress:
     # DNS resolution to kube-system.
     - to:

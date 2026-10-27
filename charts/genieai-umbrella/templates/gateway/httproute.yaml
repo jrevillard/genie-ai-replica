@@ -181,6 +181,6 @@ spec:
             # explicitly supports. Envoy Gateway drops a redirect port
             # equal to the scheme's well-known port by itself, so the
             # default here is harmless for a bare-host origin.
-            port: {{ .Values.ingress.host | default "" | splitList ":" | rest | first | default 443 | int }}
+            port: {{ include "genieai-umbrella.ingressPublicPort" . }}
             statusCode: 301
 {{- end }}

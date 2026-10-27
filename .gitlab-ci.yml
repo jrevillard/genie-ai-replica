@@ -3617,12 +3617,10 @@ chart:install:
     - apk add --no-cache curl bash
     - curl -fsSL https://get.helm.sh/helm-v3.16.3-linux-amd64.tar.gz | tar -xz -C /tmp
     - install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm
-    - curl -fsSL -o /usr/local/bin/kubectl https://dl.k8s.io/release/v1.33.0/bin/linux/amd64/kubectl
-    - install -m 0755 /usr/local/bin/kubectl /usr/local/bin/kubectl.real
-    - mv /usr/local/bin/kubectl.real /usr/local/bin/kubectl
-    - curl -fsSL -o /usr/local/bin/kind https://kind.sigs.k8s.io/dl/v0.27.0/kind-linux-amd64
-    - install -m 0755 /usr/local/bin/kind /usr/local/bin/kind.real
-    - mv /usr/local/bin/kind.real /usr/local/bin/kind
+    - curl -fsSL -o /tmp/kubectl https://dl.k8s.io/release/v1.33.0/bin/linux/amd64/kubectl
+    - install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
+    - curl -fsSL -o /tmp/kind https://kind.sigs.k8s.io/dl/v0.27.0/kind-linux-amd64
+    - install -m 0755 /tmp/kind /usr/local/bin/kind
     - helm dependency update charts/genieai-umbrella
     - helm version --short
     - kubectl version --client

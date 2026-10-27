@@ -19,10 +19,10 @@
   pipeline and that pipeline's exporter — no orphan exporters.
 
   Validation: the operator-managed Service ports are operator-defaults
-  (4318 HTTP, 8428 VM, 9428 VL, 4318 VT). The collector config is a
-  string (`|` block scalar) — the operator parses it as-is and ships
-  the rendered ConfigMap to the collector pods. Validation deferred
-  to first reconcile — the operator is not installed locally.
+  (4318 HTTP, 8428 VM, 9428 VL, 4318 VT). The collector `config` is a
+  MAP (otel-operator v1beta1 rejects string configs — see the note on
+  the config block below). Validation deferred to first reconcile —
+  the operator is not installed locally.
 */}}
 apiVersion: opentelemetry.io/v1beta1
 kind: OpenTelemetryCollector

@@ -171,15 +171,15 @@ function createChatBotStore(stateOverrides = {}) {
 // Mount helper
 // ---------------------------------------------------------------------------
 
-function createChatBotWrapper(storeOverrides = {}, { rehydrate = false } = {}) {
+function createChatBotWrapper(storeOverrides = {}, { rehydrate = false, config = null } = {}) {
   const store = createChatBotStore(storeOverrides);
   if (rehydrate) rehydrateConversation(store.state.conversation);
-  const configMock = {
+  const configMock = config || {
     app: {
       icon: { type: 'inline', value: '' },
       title: 'AgroGenio',
       banner: { url: '/assets/agrogenio/banner.png' },
-      mascot: { url: '/assets/agrogenio/mascot-avatar.png', alt: 'Mascot' },
+      mascot: { url: '/assets/agrogenio/mascot-avatar.png', alt: 'Mascot', welcomeBubble: true },
       leaves: { url: '/assets/agrogenio/leaves-large.png' },
       sidebarLeaf: { url: '/assets/agrogenio/leaf-particles.png' }
     }
@@ -2980,6 +2980,30 @@ describe('ChatBotComponent welcome heading', () => {
       expect(bubble.text()).toContain('chatbot.mascotGreeting');
       // No duplicate raw h2 outside the banner.
       expect(wrapper.find('.welcome-header h2').exists()).toBe(false);
+    });
+
+    it('mascot-welcome mode replaces the generic heading with the speech bubble', () => {
+      const wrapper = createChatBotWrapper();
+      // The bubble carries the greeting; the generic heading + subtitle
+      // would duplicate it under the same banner.
+      expect(wrapper.find('.quick-help-heading').exists()).toBe(false);
+      expect(wrapper.find('.quick-help-subtitle').exists()).toBe(false);
+      expect(wrapper.find('.welcome-mascot-bubble').exists()).toBe(true);
+    });
+
+    it('without the mascot-welcome flag the default heading renders and no bubble does', () => {
+      const config = {
+        app: {
+          icon: { type: 'inline', value: '' },
+          title: 'AgroGenio',
+          mascot: { url: '/assets/agrogenio/mascot-avatar.png', alt: 'Mascot' }
+        },
+        features: { chat: { quickHelp: { buttons: [] } } }
+      };
+      const wrapper = createChatBotWrapper({}, { config });
+      expect(wrapper.find('.quick-help-heading').exists()).toBe(true);
+      expect(wrapper.find('.quick-help-subtitle').exists()).toBe(true);
+      expect(wrapper.find('.welcome-mascot-bubble').exists()).toBe(false);
     });
 
     it('preserves the market-prices section (regression check)', () => {

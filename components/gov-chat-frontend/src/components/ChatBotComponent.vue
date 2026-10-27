@@ -281,14 +281,16 @@
       <!-- Quick Help Overlay -->
       <div v-if="showQuickHelp && selectedContextItems.length === 0 && !conversationStarted" class="quick-help-overlay">
         <!-- The banner is a real element so its height can grow with the
-             heading + subtitle inside it (a content-aware box), and the
-             heading reads as sitting inside the artwork instead of below
+             welcome content inside it (a content-aware box), and the
+             greeting reads as sitting inside the artwork instead of below
              a hard cut. With the Living Intelligence layer switched
              off, the banner has no special styling and the layout is
              identical to the legacy version: heading + subtitle stack
-             above the composer / grid as ordinary block-flow children. -->
+             above the composer / grid as ordinary block-flow children.
+             In mascot-welcome mode (config.app.mascot.welcomeBubble) the
+             banner holds only the artwork and the speech bubble. -->
         <div class="quick-help-banner">
-          <div class="quick-help-content">
+          <div v-if="!mascotWelcomeBubble" class="quick-help-content">
             <i18n-t keypath="chatbot.whatCanIHelp" tag="h2" class="quick-help-heading">
               <template #brandwordmark>
                 <span :class="brandWordmarkClass">{{ brandName }}</span>
@@ -299,10 +301,11 @@
 
           <!-- Mascot guide bubble (el-salvador): framed speech-bubble
                anchored top-right of the banner artwork, in the sky next
-               to the farmer — the centered welcome heading owns the
-               banner's lower band, so the bubble must stay above it.
-               Absolute inside the banner, which this component anchors. -->
-          <div class="welcome-mascot-bubble" role="note">
+               to the farmer. In mascot-welcome mode it replaces the
+               generic heading + subtitle entirely; the banner then holds
+               only the artwork and the bubble. Absolute inside the
+               banner, which this component anchors. -->
+          <div v-if="mascotWelcomeBubble" class="welcome-mascot-bubble" role="note">
             {{ translate('chatbot.mascotGreeting') }}
           </div>
         </div>
@@ -818,6 +821,14 @@ export default {
     // As in the navbar, only the GENIE.AI brand carries the gradient.
     brandWordmarkClass() {
       return this.brandName === 'GENIE.AI' ? 'brand-wordmark' : '';
+    },
+
+    // Mascot-welcome mode (config.app.mascot.welcomeBubble): the banner
+    // artwork and the mascot's speech bubble carry the greeting, so the
+    // generic heading + subtitle stay out of the way. Unset keeps the
+    // default welcome heading.
+    mascotWelcomeBubble() {
+      return Boolean(this.config?.app?.mascot?.welcomeBubble);
     },
 
     folders() {
@@ -3286,6 +3297,10 @@ export default {
   width: 100%;
   max-width: 800px;
   margin-inline: auto;
+  /* --space-xl on top: the quick-help grid has no bottom margin of its
+     own, so without it the Insights header sits too close to the last
+     row of tiles. */
+  margin-top: var(--space-xl);
   margin-bottom: var(--space-lg);
 }
 

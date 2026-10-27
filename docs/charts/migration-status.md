@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-27)
 
-- **Chart `genieai-umbrella` at 0.2.84**, branch `feat/k8s-migration` rebased
+- **Chart `genieai-umbrella` at 0.2.85**, branch `feat/k8s-migration` rebased
   onto `main` at `179a8a8f1` (0 commits behind).
 - **No application code in the branch**: the diff touches `charts/`,
   `scripts/`, `docs/`, `deploy/`, `tests/`, `site/`, `.gitlab-ci.yml`,
@@ -478,6 +478,40 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     `data.postgres.instances`" — the reviewer's own cited precedent
     (`resolveReplicas`) has the SAME profile-wins precedence, and the
     values comments document the override at both declaration sites.
+- **Review loop, pass 13 (0.2.85)** — 5 findings, all verified true, all
+  fixed:
+  - *`local-test.sh` could never succeed* — it rendered no
+    `convergence.envSecrets` rows and created none of the Secrets they
+    name, so the post-install convergence Job hit the exact unresolved-
+    placeholder kcc failure the chart's own sentinels document and
+    `helm install --wait` aborted at STEP 3, before any verification.
+    The four Secrets and the five rows (the README quickstart's set,
+    which CI's chart:install already carried) are wired in now.
+  - *The Quickstart's `openssl rand -base64 24` violated the realm's
+    own password policy* — the base64 alphabet carries no special
+    character, and a 24-byte draw yields none ~47% of the time, so the
+    convergence Job rejected genie-admin's credential and the install
+    failed far from the generator. The documented command now appends a
+    suffix satisfying `specialChars(1)` (and the rest of the policy),
+    with the arithmetic in the comment.
+  - *`KEYCLOAK_LOCALE` was the one env row with no default* — an
+    overlay clearing `defaultLocale` rendered `value: ""`, which
+    Kubernetes drops (omitempty), leaving `$(env:KEYCLOAK_LOCALE)`
+    unresolved and kcc failing the import; every sibling
+    (passwordPolicy, theme, EMAIL_*) carried a default or sentinel for
+    this exact trap. Defaults to the declared `en`.
+  - *`translation.probeTimeoutSeconds: 0` silently dropped the env
+    row* — the falsy-zero class again (the convergence `backoffLimit`
+    fix's twin); presence is a nil check now, and an explicit 0
+    renders.
+  - *Ten NetworkPolicy comments claimed VictoriaMetrics was actively
+    scraping the Services* while `vmsingle.yaml` documents the
+    VMServiceScrape CRs as deliberately inert (no serviceScrapeSelector;
+    no workload serves /metrics — they export over OTLP). All ten now
+    state the pre-wired-but-inert design, and redis's adds the port
+    caveat (6379 speaks RESP — a real scrape needs a redis_exporter
+    sidecar first), so the next reader does not debug a scrape the
+    design renders impossible.
 - **Review round 9 closed (0.2.67)** — three parallel adversarial passes
   over the whole final diff (core/data/services, edge/observability/OPEA,
   CI/scripts), every finding verified against a render or a live cluster
@@ -561,7 +595,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.84** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.85** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `179a8a8f1` (the tip that carries !586, !587,
   !588) — the branch is 0 commits behind `main`.

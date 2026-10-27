@@ -93,14 +93,22 @@ if ! kubectl cluster-info >/dev/null 2>&1; then
 fi
 
 uninstall_chart() {
+  # KEEP_RESOURCES=true keeps the PVCs (clamav signature cache,
+  # document-repository uploads) across the teardown. helm's
+  # --keep-resources alone cannot do that: the namespace delete below
+  # cascades every PVC away regardless — so the flag ALSO skips the
+  # namespace deletion, which is the only way the volumes survive. The
+  # namespace (and its PVCs) is then left behind on purpose; removing
+  # it by hand is the operator's explicit next step.
+  local keep_resources="false"
+  local keep=""
+  if [ "${KEEP_RESOURCES:-false}" = "true" ]; then
+    keep_resources="true"
+    keep="--keep-resources"
+  fi
   if helm list -n "${NS}" -q 2>/dev/null | grep -qx "${RELEASE}"; then
-    # KEEP_RESOURCES=true is the only way to keep the PVs: it maps to
-    # helm's own --keep-resources. kubectl has no equivalent, and
-    # deleting the namespace afterwards discards them either way.
-    local keep=""
-    if [ "${KEEP_RESOURCES:-false}" = "true" ]; then
-      keep="--keep-resources"
-      log "helm uninstall ${RELEASE} -n ${NS} (KEEP_RESOURCES=true: PVs are kept)"
+    if [ "${keep_resources}" = "true" ]; then
+      log "helm uninstall ${RELEASE} -n ${NS} (KEEP_RESOURCES=true: PVCs kept, namespace stays)"
     else
       log "helm uninstall ${RELEASE} -n ${NS}"
     fi
@@ -120,6 +128,10 @@ uninstall_chart() {
   # install collided with the resources that were supposedly gone.
   # Keeping the PVs is `helm uninstall --keep-resources`, i.e. a flag on
   # the uninstall above, not on the namespace delete.
+  if [ "${keep_resources}" = "true" ]; then
+    log "keeping namespace ${NS} (KEEP_RESOURCES=true): its PVCs and Secrets stay; delete it by hand when the volumes are no longer needed"
+    return 0
+  fi
   if kubectl get namespace "${NS}" >/dev/null 2>&1; then
     log "kubectl delete namespace ${NS} (cascades to its PVs and Secrets)"
     if ! kubectl delete namespace "${NS}" --wait=true --timeout=2m; then

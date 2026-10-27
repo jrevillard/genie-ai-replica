@@ -397,7 +397,7 @@ describe('ChatBotComponent', () => {
       capturedCallbacks.onDone({ queryId: 'q-1', translationFailed: true });
       await wrapper.vm.$nextTick();
 
-      const bot = vm.chatMessages[vm.chatMessages.length - 1];
+      const bot = vm.openMessages[vm.openMessages.length - 1];
       expect(bot.translationFailed).toBe(true);
       // The chat pipeline worked; only the translator did not. Reporting the
       // system as down here would be a false status and a false alarm.
@@ -415,7 +415,7 @@ describe('ChatBotComponent', () => {
       capturedCallbacks.onDone({ queryId: 'q-1', translationFailed: false });
       await wrapper.vm.$nextTick();
 
-      expect(vm.chatMessages[vm.chatMessages.length - 1].translationFailed).toBe(false);
+      expect(vm.openMessages[vm.openMessages.length - 1].translationFailed).toBe(false);
     });
 
     it('shows the notice on the message that failed to translate', async () => {
@@ -429,7 +429,7 @@ describe('ChatBotComponent', () => {
       capturedCallbacks.onDone({ queryId: 'q-1', translationFailed: true });
       await wrapper.vm.$nextTick();
 
-      expect(wrapper.find('.translation-flag').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="translation-failed"]').exists()).toBe(true);
     });
   });
 
@@ -496,8 +496,9 @@ describe('ChatBotComponent', () => {
       // by the answer bubble and the notification.
       expect(vm.systemStatus.errorMessage).toBe('');
       expect(mockNotificationError).toHaveBeenCalledWith(expect.stringContaining('unsupportedLanguage'));
-      const streamingMsg = vm.chatMessages[vm.chatMessages.length - 1];
-      expect(streamingMsg.content).toContain('unsupportedLanguage');
+      const streamingMsg = vm.openMessages[vm.openMessages.length - 1];
+      // The empty turn is filled with the reason, as the en locale writes it.
+      expect(streamingMsg.content).toBe('This language is not available for this deployment.');
     });
   });
 

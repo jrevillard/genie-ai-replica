@@ -820,7 +820,12 @@ export default {
         const last = this.openMessages.at(-1);
         if (last && last.sender === 'bot' && last.isError && last.timestamp !== this._lastErrorKey) {
           this._lastErrorKey = last.timestamp;
-          notificationService.error(this.translate('chatbot.streamingError'));
+          // The failure's reason was chosen by the store (refused request
+          // vs. dead deployment vs. server prose); the key rides on the
+          // message so the notification renders in this view's locale.
+          notificationService.error(
+            last.errorKey ? this.translate(last.errorKey) : this.translate('chatbot.streamingError')
+          );
         }
       }
     },

@@ -112,7 +112,7 @@ const mutations = {
     const last = entry.messages.at(-1);
     if (last && last.sender === 'bot') last.isStreaming = false;
   },
-  failStream(st, errorMessage) {
+  failStream(st, { message, errorKey }) {
     const entry = st.conversations[st.openId];
     entry.isStreaming = false;
     const last = entry.messages.at(-1);
@@ -121,7 +121,11 @@ const mutations = {
       last.isError = true;
       // A partial answer the user was reading is kept; the error text
       // only fills an empty turn.
-      if (!last.content) last.content = errorMessage;
+      if (!last.content) last.content = message;
+      // The i18n key the failure maps to, so the chat view can render
+      // the notification in its own translation context; null when the
+      // reason is prose the server wrote (shown verbatim).
+      last.errorKey = errorKey || null;
       markTriggeringQuestion(entry);
     }
   },
@@ -276,23 +280,27 @@ const actions = {
         // Server error frames carry their own user-facing message;
         // transport-level failures (timeout, premature close, network)
         // render localized — a raw fetch message is developer text.
+        let errorKey = 'chatbot.streamingError';
         let message;
         if (refused) {
+          errorKey = error.code === 'UNSUPPORTED_LANGUAGE' ? 'chatbot.unsupportedLanguage' : 'chatbot.processingError';
           message =
-            error.code === 'UNSUPPORTED_LANGUAGE'
-              ? t('chatbot.unsupportedLanguage', 'This language is not available for this deployment.')
-              : t('chatbot.processingError', 'Error processing your request.');
+            errorKey === 'chatbot.unsupportedLanguage'
+              ? t(errorKey, 'This language is not available for this deployment.')
+              : t(errorKey, 'Error processing your request.');
         } else if (!error.fromServer && error.code === 'STREAM_IDLE_TIMEOUT') {
-          message = t('chatbot.streamTimeout', 'The assistant is not responding — the request timed out.');
+          errorKey = 'chatbot.streamTimeout';
+          message = t(errorKey, 'The assistant is not responding — the request timed out.');
+        } else if (error.fromServer) {
+          errorKey = null;
+          message = error.message;
         } else {
-          message =
-            (error.fromServer && error.message) ||
-            t('chatbot.streamingError', 'Response was interrupted. Please try again.');
+          message = t(errorKey, 'Response was interrupted. Please try again.');
         }
         if (!refused) {
           commit('status/setOffline', message, { root: true });
         }
-        commit('failStream', message);
+        commit('failStream', { message, errorKey });
       }
     });
     activeController = controller;

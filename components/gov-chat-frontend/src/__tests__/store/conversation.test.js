@@ -59,11 +59,12 @@ describe('conversation module', () => {
   it('failStream writes the error into the last bot message', () => {
     const store = freshStore();
     store.commit('conversation/appendBotMessage', { sender: 'bot', content: '', isStreaming: true });
-    store.commit('conversation/failStream', 'Network request failed');
+    store.commit('conversation/failStream', { message: 'Network request failed', errorKey: 'chatbot.streamingError' });
     const open = store.getters['conversation/openConversation'];
     expect(open.isStreaming).toBe(false);
     expect(open.messages.at(-1).content).toMatch(/failed/i);
     expect(open.messages.at(-1).isError).toBe(true);
+    expect(open.messages.at(-1).errorKey).toBe('chatbot.streamingError');
   });
 
   it('setLastBotProperty writes through for arbitrary turn fields', () => {

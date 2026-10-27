@@ -21,7 +21,7 @@ Ship a Helm-based deployment of GENIE.AI on any CNCF-conformant Kubernetes clust
 3. **Operators-first for stateful services** — PostgreSQL via CloudNativePG, ArangoDB via kube-arangodb, Keycloak via the official operator, observability stack via vmoperator. The chart consumes these as Helm `dependencies` with `condition:` toggles.
 4. **Phased migration compatibility** — the chart can be installed partial-by-partial (per group) so a phased group-by-group cutover from Docker Swarm is supportable.
 5. **Multi-environment values layering** — `values.yaml` (default), `values-<env>.yaml` (dev/staging/prod/sovereign) for env-specific overrides; no chart forks per env.
-6. **Tested in CI** — `helm lint`, `helm template`, `helm-docs`, `chart-testing` (`ct lint`/`ct install`) on every MR. Production-readiness signalled by status badges on `charts/README.md`.
+6. **Tested in CI** — `helm lint --strict`, four `helm template` renders, `kubeconform`, the NetworkPolicy cross-check, the Compose↔chart parity gate, the values schema check and a CRD validation against a kind cluster run on every push. `ct lint` / `ct install` and `helm-docs` are NOT wired to a pipeline: the ct suite runs locally through `charts/Makefile` (it needs a kind cluster), and the chart READMEs are hand-written. There are no status badges on `charts/README.md`.
 
 ## 2. Non-Goals
 
@@ -250,9 +250,11 @@ CI runs the same Job in dry-run mode on every MR that touches `charts/` or `depl
 **Mechanism**: `clusterProfile` is a value that drives chart-derived defaults (CNPG instances, arangodb mode, replicas, observability default). Two ways to set:
 
 1. **`values.yaml` (default `dev`)**: operator passes `--set clusterProfile=prod` at install.
-2. **Pre-install hook (`templates/hooks/pre-install-clusterprofile-detect.yaml`)**: reads namespace label `genieai.io/cluster-profile=dev|staging|prod|sovereign`, emits a Kubernetes `Event` of type `Normal` `reason: ClusterProfileDetected` recording the detected profile. **The hook does NOT mutate Helm-rendered values** and **does NOT write any annotation** — Helm does not re-render mid-install, and Helm releases do not have annotations in the K8s object sense (only Secrets/ConfigMaps do).
+2. **Pre-upgrade drift hook (`templates/hooks/pre-upgrade-clusterprofile-detect.yaml`)**: reads the namespace label `genieai.io/cluster-profile=dev|staging|prod` and, when it differs from the profile this release renders, emits a Kubernetes `Event` of type `Warning` `reason: ClusterProfileDetected` and warns on stderr. The hook is ADVISORY — it never blocks the upgrade. It runs on upgrade only (there is nothing to drift from on a first install), and it does NOT mutate Helm-rendered values and does NOT write any annotation — Helm does not re-render mid-install, and Helm releases do not have annotations in the K8s object sense (only Secrets/ConfigMaps do).
 
-**Practical consequence**: auto-detection is **decorative** — the namespace label feeds observability/logs/metrics, but the chart's CNPG instances / Arango mode are determined by what the operator passed to `helm install`. Labeling the namespace after install changes the next **upgrade** (if `--set clusterProfile=...` is also passed), not the current install.
+**Who owns the label**: the ENVIRONMENT, not the chart. The chart does not render the Namespace at all (the deploy repo's namespace Kustomization owns it, and a plain `helm install` creates the namespace without the label). The deploy repo's overlay sets the label to its own `clusterProfile`, and that is the pair the hook compares. An install without the deploy repo always takes the hook's advisory "label absent" branch.
+
+**Practical consequence**: auto-detection is **decorative** — the namespace label feeds the drift warning, but the chart's CNPG instances / Arango mode are determined by what the operator passed to `helm install`. Labeling the namespace after install changes the next **upgrade** (if `--set clusterProfile=...` is also passed), not the current install.
 
 For an operator to make auto-detection authoritative, the operator must ALSO pass `--set clusterProfile=$(kubectl get ns $NS -o jsonpath='{.metadata.labels.genieai\.io/cluster-profile}')` at install time. The hook's job is to make that workflow more discoverable (via the Event), not to bypass Helm's rendering model.
 

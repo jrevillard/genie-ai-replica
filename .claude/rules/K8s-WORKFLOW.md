@@ -143,11 +143,32 @@ Two things silently empty that comparison, and both were shipped here once:
   renders diff to nothing — the gate compares two error messages.
 
 ```bash
-# BEFORE the change: check out the pre-change chart into a temp copy
-# (git archive <sha> charts/genieai-umbrella) and render from it.
+# BEFORE the change: render the PRE-change chart. The two "before"
+# files the gate consumes are produced HERE — the block below only
+# writes the "after" ones, and an agent that renders the current tree
+# twice gets an empty diff and a green gate for a refactor that
+# changed one GPU mode only.
+#
+#   PRE_CHANGE_SHA = the commit the change starts from
+#   git archive "$PRE_CHANGE_SHA" charts/genieai-umbrella | tar -x -C /tmp/chart-before
+#
+# The vendored dependency tarballs are gitignored, so the copy needs
+# them: `helm dependency update /tmp/chart-before/charts/genieai-umbrella`.
 # The commands are written out rather than sharing a $VALUES variable:
 # zsh does not word-split an unquoted expansion, so a shared variable
 # silently becomes ONE argument there.
+rm -rf /tmp/chart-before && mkdir -p /tmp/chart-before
+git archive "$PRE_CHANGE_SHA" charts/genieai-umbrella | tar -x -C /tmp/chart-before
+helm dependency update /tmp/chart-before/charts/genieai-umbrella >/dev/null
+
+# The two "before" renders use the SAME flags as the "after" ones, with
+# the chart path swapped:
+#   rtk proxy helm template genieai /tmp/chart-before/charts/genieai-umbrella/ -n genieai \
+#     <the same --set list> --set opea.gpu.mode=external > /tmp/before-external.yaml
+#   rtk proxy helm template genieai /tmp/chart-before/charts/genieai-umbrella/ -n genieai \
+#     <the same --set list> --set opea.gpu.mode=in-cluster > /tmp/before-incluster.yaml
+
+# The "after" renders:
 rtk proxy helm template genieai charts/genieai-umbrella/ -n genieai \
   --set data.keycloak.failOnPlaceholderSecrets=false \
   --set data.keycloak.adminEmail=ci-render@example.org \

@@ -25,26 +25,20 @@ jest.mock('../../services/session-service', () => ({
   createSession: jest.fn()
 }));
 
-// Mock service-category-service with ALL required methods (route constructor validates getAllCategoriesWithServices)
-jest.mock('../../services/service-category-service', () => ({
-  getAllCategoriesWithServices: jest.fn(),
-  getAdminAllCategoriesWithServices: jest.fn(),
-  getCategoryWithServices: jest.fn(),
-  getCategoryTranslations: jest.fn(),
-  getServiceTranslations: jest.fn(),
-  searchCategoriesAndServices: jest.fn(),
-  createCategory: jest.fn(),
-  createServiceWithTranslations: jest.fn(),
-  updateCategoryWithTranslations: jest.fn(),
-  updateServiceWithTranslations: jest.fn(),
-  deleteCategory: jest.fn(),
-  deleteService: jest.fn(),
-  categoryExists: jest.fn(),
-  initializeDefaultCategoriesAndServices: jest.fn(),
-  upsertCategories: jest.fn(),
-  upsertServices: jest.fn(),
-  init: jest.fn()
-}));
+// Mock service-category-service, deriving the mocked surface from the REAL service
+// prototype. A hand-written list of method names lets the mock invent methods the
+// service does not have, which hides a route calling a missing method behind a
+// green test. Deriving it means the mock can only ever expose what the service
+// actually implements.
+jest.mock('../../services/service-category-service', () => {
+  const realService = jest.requireActual('../../services/service-category-service');
+  const mocked = {};
+  for (const name of Object.getOwnPropertyNames(Object.getPrototypeOf(realService))) {
+    if (name === 'constructor') continue;
+    mocked[name] = jest.fn();
+  }
+  return mocked;
+});
 
 // Mock swagger dependencies
 jest.mock(
@@ -412,17 +406,17 @@ describe('POST /api/service-categories/:categoryId/services (AC21)', () => {
 });
 
 // ============================================================
-// AC22: POST /api/service-categories/init
+// POST /api/service-categories/init — removed
 // ============================================================
-describe('POST /api/service-categories/init (AC22)', () => {
-  it('should return 200 with initialization result', async () => {
-    const initResult = { message: 'Default categories initialized', categoriesCreated: 5 };
-    serviceCategoryService.initializeDefaultCategoriesAndServices.mockResolvedValue(initResult);
-
+// The route used to seed a default taxonomy through a service method that no
+// longer exists (removed during the translation-architecture migration), so it
+// answered 500 on every call. Seeding now goes through the Knowledge Hierarchy
+// tab of the Admin Dashboard or the create-knowledge-hierarchy.js script. The
+// endpoint is pinned as absent so it cannot come back wired to a missing method.
+describe('POST /api/service-categories/init', () => {
+  it('should return 404 — the endpoint no longer exists', async () => {
     const response = await authPost('/api/service-categories/init', {});
 
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual(initResult);
-    expect(serviceCategoryService.initializeDefaultCategoriesAndServices).toHaveBeenCalled();
+    expect(response.status).toBe(404);
   });
 });

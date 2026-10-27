@@ -142,7 +142,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   longer reaches the prompt as the text "None": the per-fetch log line states
   how many entries carried no usable label and how many the payload held that
   the parser did not recognise. (#1109, !612)
-
+- **`POST /api/service-categories/init` answered 500 on every call.** The route
+  seeded a default taxonomy through a service method that no longer exists —
+  it was removed during the migration of the service-category service to the
+  translation collections — so the call failed with
+  `TypeError: ...initializeDefaultCategoriesAndServices is not a function`.
+  The endpoint is removed rather than restored: it had no caller (the web
+  frontend, the mobile app and the deployment scripts never called it), and
+  the taxonomy it seeded was a hard-coded English default list that does not
+  match any real deployment. Seeding a taxonomy is done through the
+  **Knowledge Hierarchy** tab of the Admin Dashboard, or with the
+  `create-knowledge-hierarchy.js` script. The route test that had covered the
+  endpoint mocked a method the service did not have, which is why the defect
+  stayed green; that mock is now derived from the real service prototype, so a
+  route calling a method the service lacks can no longer pass its own test.
+  (#1108)
 - **More links in the documentation site pointed at a page that did not answer
   the question.** The "Developer" card on the home page promised a local dev
   loop with `npm install` and `npm run dev`, but the page it opens explicitly

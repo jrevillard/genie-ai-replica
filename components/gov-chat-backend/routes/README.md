@@ -336,7 +336,6 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 | GET | `/search` | Search categories and services |
 | POST | `/` | Create or update categories |
 | DELETE | `/:categoryId` | Delete a category |
-| POST | `/init` | Initialize default categories |
 
 #### Key Parameters
 - `locale`: Language code (e.g., en, fr, sw) for localized content.

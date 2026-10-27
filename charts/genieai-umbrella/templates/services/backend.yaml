@@ -107,9 +107,13 @@ over both — the rows below come first, the operator's last. */ -}}
 {{- $publicHost := .Values.ingress.host -}}
 {{- $publicScheme := .Values.ingress.scheme | default "https" -}}
 {{- $publicOrigin := printf "%s://%s" $publicScheme $publicHost -}}
+{{- /* The WebSocket source follows the PUBLIC scheme: a browser on an
+https origin opens wss://, and a `ws://` entry names a source it
+cannot use (the CSP would block the connection). */ -}}
+{{- $wsScheme := ternary "wss" "ws" (eq $publicScheme "https") -}}
 {{- $urls = concat $urls (list
     (dict "name" "CORS_ALLOWED_ORIGINS" "value" $publicOrigin)
-    (dict "name" "CSP_CONNECT_SRC" "value" (printf "'self' %s ws://%s %s" $publicOrigin $publicHost (include "genieai-umbrella.keycloakInternalURL" .)))
+    (dict "name" "CSP_CONNECT_SRC" "value" (printf "'self' %s %s://%s %s" $publicOrigin $wsScheme $publicHost (include "genieai-umbrella.keycloakInternalURL" .)))
 ) -}}
 {{- /* GPU_NODE_HOST is the signal the application uses to tell a named GPU
 API from its in-cluster worker, and it reaches the backend only when the
@@ -328,12 +332,24 @@ spec:
            values knob, and not the GPU MODE: an explicit endpoint
            overrides the derivation in in-cluster mode too (models
            in-cluster, translation on a remote API), and that endpoint is
-           a URL the default-deny must be told about. "External" here
-           means the endpoint is not a cluster-local Service: a host
-           under .svc.cluster.local (the derived in-cluster shape) is
-           covered by the vllm-translation podSelector rule above; every
-           other host gets the URL-derived ipBlock rule. */ -}}
-    {{- if and $translationEndpoint (not (regexMatch "\\.svc\\.cluster\\.local(:|/|$)" $translationEndpoint)) }}
+           a URL the default-deny must be told about.
+
+           "Covered by a podSelector rule" is TRUE only for the two
+           cluster-local peers the chart names: the translation component
+           (8888/9031) and the in-cluster vllm-translation (9031). An
+           endpoint pointing at ANY OTHER cluster-local Service — a
+           shared translator the operator runs in the cluster — got no
+           rule at all, and since a NAMED translation API is mandatory,
+           the backend's startup probe then failed and the backend
+           refused to start. */ -}}
+    {{- $clusterLocalPeers := list (printf "translation.%s.svc.cluster.local" $ns) (printf "vllm-translation.%s.svc.cluster.local" $ns) -}}
+    {{- $coveredByPeerRule := false -}}
+    {{- range $peer := $clusterLocalPeers -}}
+    {{- if and $translationEndpoint (contains $peer $translationEndpoint) -}}
+    {{- $coveredByPeerRule = true -}}
+    {{- end -}}
+    {{- end -}}
+    {{- if and $translationEndpoint (not $coveredByPeerRule) }}
     # External translation endpoint: the CIDR and the port derive from
     # the endpoint URL, exactly as the six orchestrators derive theirs
     # from opea.gpu.nodeHost. Not 0.0.0.0/0 on 443 + 444.

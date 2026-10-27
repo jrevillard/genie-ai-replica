@@ -566,6 +566,10 @@ services:
       CONTEXT_OPTION: conversation-with-context-labels
       # The service account the admin API proxy authenticates as.
       KEYCLOAK_PROXY_CLIENT_ID: genie-proxy-client
+      # Multi-realm authentication: a JSON array of secondary realm
+      # descriptors the backend also trusts. Unset = the primary realm
+      # only (the same empty-array default Compose leaves it at).
+      #   KEYCLOAK_ADDITIONAL_REALMS: '[{"issuer":"...","clientId":"..."}]'
       # TLS verification towards the model endpoints. 1 = verify (the
       # default here and in Compose); a deployment whose GPU node serves
       # a self-signed certificate sets 0, exactly as Compose does.
@@ -648,6 +652,10 @@ services:
     #     VUE_APP_STREAM_IDLE_TIMEOUT_MS: "600000"
     # (a bare "" is the default; the SPA falls back to 300000 on any
     # non-numeric value.)
+    #   VUE_APP_AVAILABLE_LOCALES — comma-separated whitelist of active
+    #     UI locales (e.g. "en,es,fr"); unset/empty = every locale the
+    #     build ships. The Keycloak login-page side of the same knob is
+    #     data.keycloak.supportedLocales.
     env: {}
     secrets: []
     pvc: null
@@ -851,6 +859,17 @@ opea:
       MULTI_TURN_CONDENSE_HISTORY_TURNS: "8"
       MULTI_TURN_CONDENSE_MAX_TOKENS: "256"
       MULTI_TURN_CONDENSE_TIMEOUT_SECONDS: "5.0"
+      # Override knobs the chart leaves unset on purpose (the code
+      # defaults cover them; Compose leaves them empty too):
+      #   MAX_MODEL_LEN_TEXTGEN / MAX_TRANSLATION_CHARS — hard model
+      #     context caps; 0/unset = the vLLM-served model's own limit.
+      #     Set them only when a shared GPU model is loaded with a
+      #     SMALLER max len than the requests this service builds.
+      #   MULTI_TURN_CONDENSE_SYSTEM_PROMPT — replaces the built-in
+      #     condense-rewrite prompt (must still demand JSON-only output).
+      #   OPENAI_API_KEY — the GPU node key; the chart delivers it as
+      #     VLLM_API_KEY from the vllm-api-key Secret, which the code
+      #     accepts on the same paths.
   retriever:
     # RETRIEVER_* tuning — defaults in templates
     #

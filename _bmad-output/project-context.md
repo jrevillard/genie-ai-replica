@@ -332,6 +332,7 @@ Labels follow a 3-level hierarchy for multi-PRD support:
 ```
 # Global labels (shared across all PRDs)
 status::backlog | ready-for-dev | in-progress | review | done | deferred | closed
+status::awaiting-operator | wont-fix   # human decision needed before work can proceed
 type::prd | story | qa | retrospective
 
 # Per-PRD labels (created dynamically)

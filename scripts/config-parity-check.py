@@ -97,9 +97,21 @@ from pathlib import Path
 
 import yaml
 
-DEFAULT_COMPOSE = "docker-compose.yaml"
-DEFAULT_VALUES = "charts/genieai-umbrella/values.yaml"
-DEFAULT_ALLOWLIST = "scripts/config-parity-allowlist.json"
+# The repository root, resolved from THIS FILE. Every default path and
+# the source walk below are anchored on it: a relative path only works
+# when the script is run from the repository root, and from anywhere
+# else the notRead walk found nothing — so every claim passed
+# unverified and the gate reported green on a claim that was false.
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# The defaults are resolved from the repository root, not the working
+# directory: the gate is run from the repo root in CI, but a developer
+# running it from scripts/ (or any other directory) got a gate that
+# could not find its inputs — and, worse, one whose source walk found
+# nothing and therefore passed every notRead claim unverified.
+DEFAULT_COMPOSE = os.path.join(REPO_ROOT, "docker-compose.yaml")
+DEFAULT_VALUES = os.path.join(REPO_ROOT, "charts/genieai-umbrella/values.yaml")
+DEFAULT_ALLOWLIST = os.path.join(REPO_ROOT, "scripts/config-parity-allowlist.json")
 # Where a codeDefault variable must be DOCUMENTED. A codeDefault variable
 # is one the chart leaves unset on purpose — but "unset on purpose" is
 # only sound if the operator who wants to set it can find it. The chart
@@ -107,7 +119,7 @@ DEFAULT_ALLOWLIST = "scripts/config-parity-allowlist.json"
 # on the knob), the chart README, or the template that would carry the
 # env row. Not the allowlist itself — the allowlist is the claim, not the
 # documentation.
-DEFAULT_CHART_DOC_ROOTS = ("charts/genieai-umbrella",)
+DEFAULT_CHART_DOC_ROOTS = (os.path.join(REPO_ROOT, "charts/genieai-umbrella"),)
 
 # Source roots and what counts as shipped application source.
 #
@@ -123,7 +135,10 @@ DEFAULT_CHART_DOC_ROOTS = ("charts/genieai-umbrella",)
 # the real vendored comps) and vendored/installed trees — node_modules is
 # installed in the working tree this script walks, so skipping it is load-
 # bearing, not decoration.
-SOURCE_ROOTS = ("components", "genie-ai-overlay")
+SOURCE_ROOTS = (
+    os.path.join(REPO_ROOT, "components"),
+    os.path.join(REPO_ROOT, "genie-ai-overlay"),
+)
 SOURCE_SKIP_DIRS = {
     "node_modules", ".git", ".venv", "venv", "__pycache__", ".pytest_cache",
     "dist", "build", "coverage", "tests", "test", "__tests__", ".cache",
@@ -513,7 +528,11 @@ def main(argv):
     # walked. The component identity is the pod LABEL the chart renders
     # (a values key can differ: the redis service's values key is
     # `redisCache`, its pod label `redis-cache`).
-    paired_chart = {pair.get("chart") for pair in services.values()}
+        # The same expression the comparison loop uses: a pair without an
+    # explicit `chart` key resolves to the compose component name, and
+    # reading it as None made the "other direction" loop report the
+    # pair's OWN chart component as unpaired.
+    paired_chart = {pair.get("chart", component) for component, pair in services.items()}
     for chart_component in sorted(rendered.keys()):
         if chart_component in paired_chart:
             continue

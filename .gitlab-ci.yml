@@ -3095,6 +3095,7 @@ chart:lint:
           "ClusterRole", "ClusterRoleBinding", "GatewayClass",
           "CustomResourceDefinition", "PriorityClass", "APIService",
           "MutatingWebhookConfiguration", "ValidatingWebhookConfiguration",
+          "ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding",
           "StorageClass", "CSIDriver", "IngressClass", "Node",
       }
 
@@ -3120,7 +3121,16 @@ chart:lint:
               # no release owns it) — its name comes from
               # ingress.className, so allow it by KIND, not by a literal
               # that would go stale on an override.
-              singleton = doc["kind"] == "GatewayClass"
+              # The gateway-helm subchart also installs a cluster-wide
+              # ValidatingAdmissionPolicy under a FIXED name
+              # (safe-upgrades.gateway.networking.k8s.io): a second
+              # GENIE release on the same cluster collides on it, like
+              # the GatewayClass. Both are per-cluster singletons the
+              # subchart owns, not per-release resources.
+              singleton = doc["kind"] in (
+                  "GatewayClass", "ValidatingAdmissionPolicy",
+                  "ValidatingAdmissionPolicyBinding",
+              )
               if singleton or name in allowed or qualified:
                   print("ok cluster-scoped %s/%s%s" % (
                       doc["kind"], name, " (singleton)" if singleton else ""))
@@ -3155,6 +3165,14 @@ chart:lint:
     # listed file that is missing inlines as an empty dashboard.
     - ./scripts/sync-chart-dashboards.sh --check || { echo "grafana dashboard drift - run 'make chart-dashboards' and commit the result"; exit 1; }
     - helm lint charts/genieai-umbrella --strict
+    # The render-time guards, EXERCISED. `helm lint --strict` downgrades
+    # every `fail()` to an INFO line and still exits 0 (helm 3.16.3
+    # prints `level=INFO msg="funcMap fail"` for each guard it hits), and
+    # every render below switches the placeholder guard off through the
+    # shared render fixture — so nothing else in this pipeline could
+    # catch a guard that stopped firing. This renders the values each
+    # guard must reject and requires the render to fail.
+    - ./scripts/render-guards-check.sh charts/genieai-umbrella
     # Base tier render. charts/ci/render-base-flags is the shared render
     # fixture (required deployment data + placeholder-secret off + an
     # smtp that answers nothing — see the file and the chart README's

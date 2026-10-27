@@ -320,11 +320,28 @@ install_gateway_api_crds() {
   # itself, so the CRDs installed here are BY CONSTRUCTION the bundle
   # the real release installs — no second version pin to drift.
   local tgz work crd missing=""
-  tgz="$(ls "${REPO_ROOT}/charts/genieai-umbrella/charts/"gateway-helm-*.tgz 2>/dev/null | head -1)"
+  # A glob that matches nothing is passed through literally by the
+  # shell, so the `-f` test is what decides "no tarball" — `ls` on a
+  # non-matching glob exits 2, and under `set -euo pipefail` that
+  # aborted the whole bootstrap (exit 2, no message) before the
+  # "run helm dependency update" fallback could say anything.
+  tgz=""
+  for candidate in "${REPO_ROOT}/charts/genieai-umbrella/charts/"gateway-helm-*.tgz; do
+    if [ -f "${candidate}" ]; then
+      tgz="${candidate}"
+      break
+    fi
+  done
   if [ -z "${tgz}" ]; then
     log "gateway-helm tgz missing: helm dependency update"
     helm dependency update "${REPO_ROOT}/charts/genieai-umbrella" >/dev/null
-    tgz="$(ls "${REPO_ROOT}/charts/genieai-umbrella/charts/"gateway-helm-*.tgz 2>/dev/null | head -1)"
+    tgz=""
+    for candidate in "${REPO_ROOT}/charts/genieai-umbrella/charts/"gateway-helm-*.tgz; do
+      if [ -f "${candidate}" ]; then
+        tgz="${candidate}"
+        break
+      fi
+    done
     if [ -z "${tgz}" ]; then
       log "gateway-helm tgz still missing after 'helm dependency update' — the OCI pull to docker.io/envoyproxy failed; check network/proxy and retry"
       return 1

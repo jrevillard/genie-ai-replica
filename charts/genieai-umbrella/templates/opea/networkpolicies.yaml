@@ -46,9 +46,12 @@ spec:
         - protocol: TCP
           port: 8888
   {{- if .Values.observability.metrics.enabled }}
-  # Prometheus scrape peer (VMServiceScrape targets this Service).
-  # VictoriaMetrics runs as a vm-operator-managed pod in this namespace;
-  # without this peer its scrapes are dropped by the default-deny.
+  # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
+  # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
+  # serviceScrapeSelector — see templates/observability/vmsingle.yaml)
+  # and no workload here exposes a Prometheus surface (they export over
+  # OTLP). The peer exists so that enabling a real scrape surface later
+  # does not silently time out against the default-deny.
     - from:
         - podSelector:
             matchLabels:
@@ -183,9 +186,12 @@ spec:
         - protocol: TCP
           port: 7000
   {{- if .Values.observability.metrics.enabled }}
-  # Prometheus scrape peer (VMServiceScrape targets this Service).
-  # VictoriaMetrics runs as a vm-operator-managed pod in this namespace;
-  # without this peer its scrapes are dropped by the default-deny.
+  # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
+  # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
+  # serviceScrapeSelector — see templates/observability/vmsingle.yaml)
+  # and no workload here exposes a Prometheus surface (they export over
+  # OTLP). The peer exists so that enabling a real scrape surface later
+  # does not silently time out against the default-deny.
     - from:
         - podSelector:
             matchLabels:
@@ -270,9 +276,12 @@ spec:
         - protocol: TCP
           port: 5000
   {{- if .Values.observability.metrics.enabled }}
-  # Prometheus scrape peer (VMServiceScrape targets this Service).
-  # VictoriaMetrics runs as a vm-operator-managed pod in this namespace;
-  # without this peer its scrapes are dropped by the default-deny.
+  # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
+  # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
+  # serviceScrapeSelector — see templates/observability/vmsingle.yaml)
+  # and no workload here exposes a Prometheus surface (they export over
+  # OTLP). The peer exists so that enabling a real scrape surface later
+  # does not silently time out against the default-deny.
     - from:
         - podSelector:
             matchLabels:
@@ -384,9 +393,12 @@ spec:
         - protocol: TCP
           port: 6000
   {{- if .Values.observability.metrics.enabled }}
-  # Prometheus scrape peer (VMServiceScrape targets this Service).
-  # VictoriaMetrics runs as a vm-operator-managed pod in this namespace;
-  # without this peer its scrapes are dropped by the default-deny.
+  # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
+  # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
+  # serviceScrapeSelector — see templates/observability/vmsingle.yaml)
+  # and no workload here exposes a Prometheus surface (they export over
+  # OTLP). The peer exists so that enabling a real scrape surface later
+  # does not silently time out against the default-deny.
     - from:
         - podSelector:
             matchLabels:
@@ -453,9 +465,12 @@ spec:
         - protocol: TCP
           port: 8000
   {{- if .Values.observability.metrics.enabled }}
-  # Prometheus scrape peer (VMServiceScrape targets this Service).
-  # VictoriaMetrics runs as a vm-operator-managed pod in this namespace;
-  # without this peer its scrapes are dropped by the default-deny.
+  # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
+  # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
+  # serviceScrapeSelector — see templates/observability/vmsingle.yaml)
+  # and no workload here exposes a Prometheus surface (they export over
+  # OTLP). The peer exists so that enabling a real scrape surface later
+  # does not silently time out against the default-deny.
     - from:
         - podSelector:
             matchLabels:
@@ -534,9 +549,12 @@ spec:
         - protocol: TCP
           port: 8888
   {{- if .Values.observability.metrics.enabled }}
-  # Prometheus scrape peer (VMServiceScrape targets this Service).
-  # VictoriaMetrics runs as a vm-operator-managed pod in this namespace;
-  # without this peer its scrapes are dropped by the default-deny.
+  # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
+  # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
+  # serviceScrapeSelector — see templates/observability/vmsingle.yaml)
+  # and no workload here exposes a Prometheus surface (they export over
+  # OTLP). The peer exists so that enabling a real scrape surface later
+  # does not silently time out against the default-deny.
     - from:
         - podSelector:
             matchLabels:

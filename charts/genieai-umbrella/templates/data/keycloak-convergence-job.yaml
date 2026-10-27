@@ -262,8 +262,13 @@ spec:
               value: {{ .Values.data.keycloak.theme | default "genie" | quote }}
             - name: KEYCLOAK_I18N_ENABLED
               value: {{ eq (include "genieai-umbrella.boolEnvValue" (dict "value" .Values.data.keycloak.internationalizationEnabled "default" true)) "true" | quote }}
+            # A default, not a bare read: an overlay that clears
+            # defaultLocale would render value: "" — which Kubernetes
+            # drops (omitempty), leaving $(env:KEYCLOAK_LOCALE)
+            # unresolved and kcc failing the import. Same sentinel
+            # logic as the EMAIL_* rows.
             - name: KEYCLOAK_LOCALE
-              value: {{ .Values.data.keycloak.defaultLocale | quote }}
+              value: {{ .Values.data.keycloak.defaultLocale | default "en" | quote }}
             # JSON array literal, not a comma-joined string: the realm
             # file's supportedLocales is a list field, and kcc's textual
             # substitution must inject a parseable JSON array. A CSV

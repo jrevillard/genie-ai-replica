@@ -1,4 +1,4 @@
-# Copyright (C) 2025 ITU
+# Copyright (c) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
 """The retriever must read its ArangoDB knobs under the names the deployment sets.
 

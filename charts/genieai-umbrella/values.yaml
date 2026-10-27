@@ -683,10 +683,13 @@ services:
       - name: nginx-run
         mountPath: /var/run
     resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
-    # Extra origins for the SPA's Content-Security-Policy connect-src
-    # (beyond 'self', the public origin and the Keycloak internal URL the
-    # template derives). Empty = the derived set only. Rendered as
-    # VUE_APP_CSP_CONNECT_SRC into the runtime config.js.
+    # Extra origins for the Content-Security-Policy connect-src, beyond
+    # the derived set ('self', the public origin, and wss:///ws:// on
+    # the public host). The Keycloak internal Service URL is
+    # deliberately NOT in it: a browser resolves Keycloak through the
+    # same-origin /auth edge route ('self' covers it) and cannot resolve
+    # cluster-internal DNS. Empty = the derived set only. Rendered as
+    # CSP_CONNECT_SRC into the backend's Content-Security-Policy header.
     cspConnectSrc: ""
     # Empty by default: the entrypoint injects every VUE_APP_* row into
     # /app/dist/runtime/config.js (window.APP_CONFIG) at startup, and the

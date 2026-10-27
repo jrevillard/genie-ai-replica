@@ -129,7 +129,7 @@ cannot use (the CSP would block the connection). */ -}}
 {{- $wsScheme := ternary "wss" "ws" (eq $publicScheme "https") -}}
 {{- $urls = concat $urls (list
     (dict "name" "CORS_ALLOWED_ORIGINS" "value" $publicOrigin)
-    (dict "name" "CSP_CONNECT_SRC" "value" (printf "'self' %s %s://%s %s" $publicOrigin $wsScheme $publicHost (include "genieai-umbrella.keycloakInternalURL" .)))
+    (dict "name" "CSP_CONNECT_SRC" "value" (printf "'self' %s %s://%s" $publicOrigin $wsScheme $publicHost))
 ) -}}
 {{- /* GPU_NODE_HOST is the signal the application uses to tell a named GPU
 API from its in-cluster worker, and it reaches the backend only when the

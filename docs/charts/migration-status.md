@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-27)
 
-- **Chart `genieai-umbrella` at 0.2.83**, branch `feat/k8s-migration` rebased
+- **Chart `genieai-umbrella` at 0.2.84**, branch `feat/k8s-migration` rebased
   onto `main` at `179a8a8f1` (0 commits behind).
 - **No application code in the branch**: the diff touches `charts/`,
   `scripts/`, `docs/`, `deploy/`, `tests/`, `site/`, `.gitlab-ci.yml`,
@@ -420,6 +420,64 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     a blank line followed by unrelated commented examples would have
     folded foreign keys into the accepted `$svc` surface — it stops at
     the first blank line now (mutation-proven).
+- **Review loop, pass 12 (0.2.84)** — 10 findings: 8 verified true and
+  fixed, 1 re-refuted, 1 consolidated into a gate restructure. The
+  structural outcome first: **the CI render fixtures are now one source**
+  — `charts/ci/render-base-flags` carries the complete documented
+  minimum (deployment data, the client-secret tickets AND the five
+  convergence envSecrets rows; the `failOnPlaceholderSecrets=false`
+  bypass is GONE, so every CI render now runs the placeholder guards
+  ON), `render-full-flags` carries the tier extras, and the six
+  previously-inline `--set` blocks (four in chart:lint, two in
+  crd-validate) cat the fixtures. `render-guards-check.sh` sources the
+  fixture too, substituting its own host — a flag added there arrives in
+  every gate automatically. On top of that:
+  - *The parity gate's `secretProvided` category was a suppression
+    nobody checked* — it short-circuited before any presence
+    assertion, so a refactor deleting the Secret wiring left the gate
+    green. The allowlist entries are structured objects now
+    (`{why, secret, via}`), and the checker asserts the wiring: an
+    `envFrom` entry must find its Secret among the rendered mounts, a
+    `secretKeyRef` entry must find its env row — mutation-proven
+    (removing `keycloak-proxy-client-secret` from the backend's envFrom
+    turns the gate red with the wiring named).
+  - *The tools init container downloaded kubectl/jq with single-shot
+    curls* — one transient failure failed the hook Job and aborted the
+    whole helm upgrade, for the drift hook whose script ends `exit 0`
+    precisely so it can never block. Three-attempt retry now.
+  - *The five OPEA services had no startupProbe* — liveness only
+    (60s + 3×30s) against a cold docling/torch import chain; the
+    kubelet killed pods mid-import on a contended node. Startup
+    probes (300s window) on dataprep/retriever/reranker/embedding and
+    the hand-written translation Deployment — all six verified
+    rendered.
+  - *`local-test.sh` permanently mutated the kubeconfig
+    current-context* and never restored it — every other kubectl
+    session on the machine silently targeted minikube afterwards. The
+    previous context is saved and restored through a trap now.
+  - *The NetworkPolicy crosscheck reported a port-less egress rule as
+    BLOCKED against any concrete ingress port* — a rule with no
+    `ports:` legally declares every port; `covers()` now admits it on
+    any declared destination port (five-case unit-checked; the print
+    says `:any`).
+  - *The browser CSP carried the cluster-internal Keycloak URL* — a
+    source no browser can resolve, in an otherwise https set; the SPA
+    reaches Keycloak through the same-origin `/auth` edge route that
+    `'self'` already covers. Dropped; the internal URL stays on the
+    server-side consumers that can actually resolve it.
+  - *`compose_default` only interpreted whole-value interpolation* — a
+    value like `URL=${HOST}:8080` was compared as literal `${...}`
+    text no container ever sees. Embedded interpolations resolve
+    against the committed `env` template now (unset → empty, the
+    Compose semantics).
+  - *`install-prereqs.sh` carried five hand-copies of the same
+    install-and-wait body* — one parameterized `helm_install_operator`
+    now; both paths stub-verified (the skip gate and the extra-`--set`
+    passthrough).
+  - Re-refuted: "`clusterProfile=prod` tramples an explicit
+    `data.postgres.instances`" — the reviewer's own cited precedent
+    (`resolveReplicas`) has the SAME profile-wins precedence, and the
+    values comments document the override at both declaration sites.
 - **Review round 9 closed (0.2.67)** — three parallel adversarial passes
   over the whole final diff (core/data/services, edge/observability/OPEA,
   CI/scripts), every finding verified against a render or a live cluster
@@ -503,7 +561,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.83** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.84** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `179a8a8f1` (the tip that carries !586, !587,
   !588) — the branch is 0 commits behind `main`.

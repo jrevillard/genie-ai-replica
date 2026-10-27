@@ -51,8 +51,16 @@
         "OPEA_SSL_SKIP_VERIFY": "empty in Compose; the code treats an unset value as 'verify', and the chart's NODE_TLS_REJECT_UNAUTHORIZED=1 says the same thing for the Node client"
       },
       "secretProvided": {
-        "KEYCLOAK_PROXY_CLIENT_SECRET": "carried by the keycloak-proxy-client-secret Secret through envFrom; the operator provides the key, so there is no value to compare",
-        "TRANSLATION_CACHE_PASSWORD": "carried by the translation-cache-password Secret through envFrom; the operator provides the key, so there is no value to compare"
+        "KEYCLOAK_PROXY_CLIENT_SECRET": {
+          "why": "carried by the keycloak-proxy-client-secret Secret through envFrom; the operator provides the key, so there is no value to compare",
+          "secret": "keycloak-proxy-client-secret",
+          "via": "envFrom"
+        },
+        "TRANSLATION_CACHE_PASSWORD": {
+          "why": "carried by the translation-cache-password Secret through envFrom; the operator provides the key, so there is no value to compare",
+          "secret": "translation-cache-password",
+          "via": "envFrom"
+        }
       }
     },
     "documentRepository": {
@@ -97,7 +105,11 @@
         "LLM_SERVER_PORT": "Compose points these at its own vllm service name; the chart configures the endpoint form instead (VLLM_LLM_ENDPOINT), which the code parses into host and port before reading either variable, so leaving them unset yields the same endpoint. The chart never sets the name: the code derives the endpoint from the configured GPU endpoint (the parsed hostname overrides this fallback), so the compose service name only ever made sense on that surface."
       },
       "secretProvided": {
-        "OPENAI_API_KEY": "Compose maps `${VLLM_API_KEY:-}` into it (docker-compose.yaml); the chart delivers the same GPU key from the vllm-api-key Secret under that name — the translation and condense clients read only OPENAI_API_KEY for their Bearer header, and a GPU node enforcing the key would see 'Bearer None' without it."
+        "OPENAI_API_KEY": {
+          "why": "Compose maps `${VLLM_API_KEY:-}` into it (docker-compose.yaml); the chart delivers the same GPU key from the vllm-api-key Secret under that name — the translation and condense clients read only OPENAI_API_KEY for their Bearer header, and a GPU node enforcing the key would see 'Bearer None' without it.",
+          "secret": "vllm-api-key",
+          "via": "secretKeyRef"
+        }
       }
     },
     "dataprep": {
@@ -226,11 +238,31 @@
         "KEYCLOAK_URL": "the Job reaches Keycloak in-cluster; Compose reaches it through its own service name"
       },
       "secretProvided": {
-        "EMAIL_PASSWORD": "carried by the email-password Secret through the convergence Job's envSecrets rows; the operator provides it, so there is no value to compare",
-        "GENIE_ADMIN_PASSWORD": "carried by the keycloak-admin-credentials Secret through the convergence Job's envSecrets rows",
-        "KC_DATAPREP_CLIENT_SECRET": "carried by the kc-dataprep-client-secret Secret through the convergence Job's envSecrets rows",
-        "KC_GRAFANA_CLIENT_SECRET": "carried by the kc-grafana-client-secret Secret through the convergence Job's envSecrets rows",
-        "KC_PROXY_CLIENT_SECRET": "carried by the keycloak-proxy-client-secret Secret through the convergence Job's envSecrets rows"
+        "EMAIL_PASSWORD": {
+          "why": "carried by the email-password Secret through the convergence Job's envSecrets rows; the operator provides it, so there is no value to compare",
+          "secret": "keycloak-convergence-credentials",
+          "via": "secretKeyRef"
+        },
+        "GENIE_ADMIN_PASSWORD": {
+          "why": "carried by the keycloak-admin-credentials Secret through the convergence Job's envSecrets rows",
+          "secret": "keycloak-admin-credentials",
+          "via": "secretKeyRef"
+        },
+        "KC_DATAPREP_CLIENT_SECRET": {
+          "why": "carried by the kc-dataprep-client-secret Secret through the convergence Job's envSecrets rows",
+          "secret": "kc-dataprep-client-secret",
+          "via": "secretKeyRef"
+        },
+        "KC_GRAFANA_CLIENT_SECRET": {
+          "why": "carried by the kc-grafana-client-secret Secret through the convergence Job's envSecrets rows",
+          "secret": "kc-grafana-client-secret",
+          "via": "secretKeyRef"
+        },
+        "KC_PROXY_CLIENT_SECRET": {
+          "why": "carried by the keycloak-proxy-client-secret Secret through the convergence Job's envSecrets rows",
+          "secret": "keycloak-proxy-client-secret",
+          "via": "secretKeyRef"
+        }
       }
     }
   },

@@ -43,8 +43,24 @@ URLs at a single internal mirror.
           *) ARCH=amd64 ;;
         esac
       fi
-      curl -fsSL "$BASE/release/v1.33.0/bin/linux/$ARCH/kubectl" -o /tools/bin/kubectl
+      # Three attempts per download, back-to-back sleeps: these pods run
+      # as hook Jobs whose backoffLimit is 0-1, and a single transient
+      # failure on dl.k8s.io or github.com would fail the init container,
+      # fail the Job, and abort the whole helm upgrade — for the drift
+      # hook, a check whose script ends in `exit 0` precisely so it can
+      # never block.
+      fetch() {
+        for i in 1 2 3; do
+          if curl -fsSL "$1" -o "$2"; then
+            return 0
+          fi
+          rm -f "$2"
+          sleep 2
+        done
+        return 1
+      }
+      fetch "$BASE/release/v1.33.0/bin/linux/$ARCH/kubectl" /tools/bin/kubectl
       chmod +x /tools/bin/kubectl
-      curl -fsSL "$BASE_JQ/jq/releases/download/jq-1.7.1/jq-linux-$ARCH" -o /tools/bin/jq
+      fetch "$BASE_JQ/jq/releases/download/jq-1.7.1/jq-linux-$ARCH" /tools/bin/jq
       chmod +x /tools/bin/jq
 {{- end -}}

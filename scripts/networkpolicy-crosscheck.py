@@ -103,7 +103,12 @@ def covers(covered, port):
     if covered is None:
         return True
     if port is None:
-        return False
+        # A rule with no `ports:` legally declares EVERY port. The
+        # destination admits such a flow when it admits the source on
+        # ANY concrete port — returning False here reported a flow the
+        # datapath permits as BLOCKED whenever the destination's rule
+        # was port-specific.
+        return bool(covered)
     return port in covered
 
 
@@ -310,8 +315,9 @@ def crosscheck(path):
     for entry in sorted(skipped):
         print(f"  SKIPPED {entry}: mixes a CIDR/namespace peer with a component peer — not asserted here")
     for source, target, port, missing in blocked:
+        shown = port if port is not None else "any"
         print(
-            f"  BLOCKED {source} -> {target} :{port} ({missing} not permitted by the destination/source policy)"
+            f"  BLOCKED {source} -> {target} :{shown} ({missing} not permitted by the destination/source policy)"
         )
     return policies, blocked
 

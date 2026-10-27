@@ -33,37 +33,21 @@ RELEASE=test
 
 fails=0
 
-# The values a complete, valid release carries: the public origin, the
-# operator contact, a mail server, the three client-secret placeholders
-# (formal tickets — the realm's real secrets come from the convergence
-# rows) and the five convergence envSecrets rows the realm's $(env:VAR)
-# placeholders resolve from.
+# The values a complete, valid release carries: the shared CI fixture
+# (charts/ci/render-base-flags: deployment data, the client-secret
+# tickets, and the convergence envSecrets rows the realm's $(env:VAR)
+# placeholders resolve from) with the guard's own host and value names
+# substituted in. Sourcing the fixture instead of copying it keeps this
+# list from drifting off the configuration every other gate renders — a
+# flag added to the fixture arrives here automatically.
 valid_flags() {
-  printf '%s\n' \
-    "--set ingress.host=guard.example.org" \
-    "--set data.keycloak.adminEmail=ops@example.org" \
-    "--set data.keycloak.smtp.from=no-reply@guard.example.org" \
-    "--set data.keycloak.smtp.host=smtp.guard.example.org" \
-    "--set data.keycloak.smtp.port=587" \
-    "--set data.keycloak.smtp.starttls=true" \
-    "--set data.keycloak.clientSecrets.proxyClient=guard-value" \
-    "--set data.keycloak.clientSecrets.dataprep=guard-value" \
-    "--set data.keycloak.clientSecrets.grafana=guard-value" \
-    "--set data.keycloak.convergence.envSecrets[0].envVar=KC_PROXY_CLIENT_SECRET" \
-    "--set data.keycloak.convergence.envSecrets[0].secretName=keycloak-proxy-client-secret" \
-    "--set data.keycloak.convergence.envSecrets[0].secretKey=KEYCLOAK_PROXY_CLIENT_SECRET" \
-    "--set data.keycloak.convergence.envSecrets[1].envVar=KC_DATAPREP_CLIENT_SECRET" \
-    "--set data.keycloak.convergence.envSecrets[1].secretName=kc-dataprep-client-secret" \
-    "--set data.keycloak.convergence.envSecrets[1].secretKey=KC_DATAPREP_CLIENT_SECRET" \
-    "--set data.keycloak.convergence.envSecrets[2].envVar=KC_GRAFANA_CLIENT_SECRET" \
-    "--set data.keycloak.convergence.envSecrets[2].secretName=kc-grafana-client-secret" \
-    "--set data.keycloak.convergence.envSecrets[2].secretKey=KEYCLOAK_GRAFANA_CLIENT_SECRET" \
-    "--set data.keycloak.convergence.envSecrets[3].envVar=GENIE_ADMIN_PASSWORD" \
-    "--set data.keycloak.convergence.envSecrets[3].secretName=keycloak-convergence-credentials" \
-    "--set data.keycloak.convergence.envSecrets[3].secretKey=GENIE_ADMIN_PASSWORD" \
-    "--set data.keycloak.convergence.envSecrets[4].envVar=EMAIL_PASSWORD" \
-    "--set data.keycloak.convergence.envSecrets[4].secretName=keycloak-convergence-credentials" \
-    "--set data.keycloak.convergence.envSecrets[4].secretKey=EMAIL_PASSWORD"
+  local ci="$(dirname "$CHART")/ci"
+  sed \
+    -e 's/ci-render\.local/guard.example.org/' \
+    -e 's/ci-render@example\.org/ops@example.org/' \
+    -e 's/no-reply@ci\.invalid/no-reply@guard.example.org/' \
+    -e 's/smtp\.invalid/smtp.guard.example.org/' \
+    "${ci}/render-base-flags"
 }
 
 # The same list minus the lines whose flag prefix matches $1.

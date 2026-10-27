@@ -11,9 +11,10 @@ mandatory).
 
 genieai-umbrella.gpuApiKeyEnv — the vllm-api-key rows every GPU consumer
 mounts. Context keys: `keys` — a list of env var names among HF_TOKEN,
-VLLM_API_KEY, HUGGINGFACEHUB_API_TOKEN. Every name resolves to the
-same-named key on the vllm-api-key Secret, except the
-HUGGINGFACEHUB_API_TOKEN alias, which reads the VLLM_API_KEY key.
+VLLM_API_KEY, HUGGINGFACEHUB_API_TOKEN, OPENAI_API_KEY. Every name
+resolves to the same-named key on the vllm-api-key Secret, except the
+HUGGINGFACEHUB_API_TOKEN and OPENAI_API_KEY aliases, which both read the
+VLLM_API_KEY key.
 
 genieai-umbrella.envMapRows — the rows of a MAP of environment variables,
 as a JSON ARRAY. The chart takes the operator's environment as a map, not a

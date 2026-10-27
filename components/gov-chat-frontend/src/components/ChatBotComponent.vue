@@ -185,7 +185,7 @@
                     <span class="file-type-badge" :data-tone="fileBadge(d).tone">{{ fileBadge(d).label }}</span>
                     <span class="answer-source-card__body">
                       <span class="answer-source-card__title">{{ d.title }}</span>
-                      <span class="answer-source-card__meta">{{ docMeta(d) }}</span>
+                      <span v-if="d._size" class="answer-source-card__size">{{ sourceSize(d) }}</span>
                     </span>
                     <ExternalLink :size="14" class="answer-source-card__open" aria-hidden="true" />
                   </button>
@@ -948,6 +948,11 @@ export default {
       return fileTypeBadge(doc.fileName || doc.title || doc._type || doc.type);
     },
 
+    // The file size, when the repository answered the metadata fetch.
+    sourceSize(d) {
+      return formatFileSize(d._size);
+    },
+
     // The repository serves files behind Bearer auth, so a plain link
     // cannot carry the session — internal sources open through the same
     // fetch-blob flow the related-documents sidebar uses.
@@ -963,15 +968,6 @@ export default {
       }
     },
 
-    // The "TYPE · size" line of a source card. The repository fields are
-    // fetched once where the sources arrive (onMetadata) onto the reactive
-    // doc objects; this is only the formatter, degrading to the type alone
-    // when the repository does not answer.
-    docMeta(d) {
-      const type = d._type || d.type || 'LINK';
-      const size = d._size ? formatFileSize(d._size) : '';
-      return size ? `${type} · ${size}` : type;
-    },
     ...mapActions('chatHistory', ['createChat', 'updateChat']),
 
     // --- Right sidebar resize + collapse ---
@@ -2745,8 +2741,12 @@ export default {
 }
 
 .answer-source-card__body {
+  /* The free span between the badge and the open icon: the title starts
+     at the same left edge on every card, whatever its length. */
   display: flex;
-  flex-direction: column;
+  align-items: baseline;
+  gap: var(--space-sm);
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -2758,9 +2758,10 @@ export default {
   white-space: nowrap;
 }
 
-.answer-source-card__meta {
+.answer-source-card__size {
   font-size: var(--text-xs);
   color: var(--muted);
+  flex: 0 0 auto;
 }
 
 .answer-source-card__open {

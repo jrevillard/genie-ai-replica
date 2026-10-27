@@ -54,20 +54,7 @@ spec:
         - |
           set -eu
           failures=0
-          # Single check helper: <name> <host> <port> <path> <expected>.
-          check() {
-            host=$1
-            port=$2
-            path=$3
-            expected=$4
-            code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "http://${host}:${port}${path}" 2>/dev/null || echo 000)
-            if [ "$code" = "$expected" ]; then
-              echo "PASS: ${host}:${port}${path} -> ${code}"
-            else
-              echo "FAIL: ${host}:${port}${path} expected ${expected}, got ${code}"
-              failures=$((failures+1))
-            fi
-          }
+          {{- include "genieai-umbrella.testCheckHelper" . | nindent 10 }}
           {{- /* Each check hits the operator-managed Service — the
                  stable in-cluster contract. VL/VM/VT each expose
                  /health on their default port; the response is a

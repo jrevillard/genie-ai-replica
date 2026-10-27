@@ -33,9 +33,12 @@
   to know about before trusting one:
 
   1. They do nothing unless VMSingle has ingestOnlyMode: false AND a
-     serviceScrapeSelector (see vmsingle.yaml). Both gates are silent —
-     the CRs still report `operational`, which only proves the CR is
-     valid.
+     serviceScrapeSelector that MATCHES them (see vmsingle.yaml). An
+     ABSENT selector matches nothing — a nil LabelSelector is the
+     "match nothing" selector — so with no selector on the VMSingle
+     these CRs are inert today, exactly as stated above. Both gates are
+     silent: the CRs still report `operational`, which only proves the
+     CR is valid.
   2. `selector.matchLabels` here selects the TARGET Service, not the
      VMSingle. Pairing the CR with the VMSingle is
      VMSingle.spec.serviceScrapeSelector, a label selector on the

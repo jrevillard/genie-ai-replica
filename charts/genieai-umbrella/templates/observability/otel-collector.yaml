@@ -49,17 +49,22 @@ spec:
   {{- if .Values.observability.metrics.enabled }}
   image: {{ .Values.observability.collectorImage | quote }}
   {{- end }}
-  # The Service the operator creates must expose the port the receiver
+  # The Service the operator creates must expose the ports the receiver
   # LISTENS on: without this the operator keeps its default (4318) while
   # every client is pointed at observability.collectorPort, and the OTLP
   # export fails with connection refused — silently, for every workload.
-  # The gRPC receiver stays on 4317 (the operator's default): the knob
-  # moves the HTTP receiver only.
+  # Declaring spec.ports REPLACES the operator's default port list, so
+  # the gRPC receiver (4317, bound by the config below and admitted by
+  # the gateway's NetworkPolicy) has to be carried here too.
   ports:
     - name: otlp-http
       port: {{ .Values.observability.collectorPort | default 4318 }}
       protocol: TCP
       targetPort: {{ .Values.observability.collectorPort | default 4318 }}
+    - name: otlp-grpc
+      port: 4317
+      protocol: TCP
+      targetPort: 4317
   # config as a map (otel-operator v1beta1 rejects string configs)
   config:
     receivers:

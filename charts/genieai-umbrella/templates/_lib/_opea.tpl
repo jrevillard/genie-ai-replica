@@ -108,6 +108,9 @@ have to be 0.0.0.0/0 the way it was when the chart ignored the URL:
 {{- define "genieai-umbrella.opeaNetworkFromUrl" -}}
 {{- $root := .root -}}
 {{- $url := .url | default "" -}}
+{{- if contains "[" $url -}}
+{{- fail (printf "an IPv6 literal (%s) is not supported as a named destination: the egress rule can only express an IPv4 CIDR, and an IPv6 connection matches no ipBlock — use a DNS name" $url) -}}
+{{- end -}}
 {{- $host := regexReplaceAll "^([a-z]+://)?(\\[[^\\]]+\\]|[^:/]+).*" $url "$2" -}}
 {{- $isIPv4 := regexMatch "^[0-9]{1,3}(\\.[0-9]{1,3}){3}$" $host -}}
 {{- $cidrs := list -}}

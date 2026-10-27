@@ -250,6 +250,15 @@ def chart_rendered(docs):
     return out
 
 
+# A service's values key can differ from the pod LABEL the chart gives
+# its workload. The declared env rows are indexed by that label (the
+# caller looks them up by component), so the mapping has to be explicit
+# for the services where the two differ.
+VALUES_KEY_TO_COMPONENT = {
+    "redisCache": "redis-cache",
+}
+
+
 def chart_declared(values):
     """{component: {name: value}} from the chart's own values.
 
@@ -258,6 +267,13 @@ def chart_declared(values):
     that sets one variable keeps the others — a list would be replaced
     wholesale). A row declared there but not rendered still counts as
     declared: the operator can set it.
+
+    The rows are indexed by the COMPONENT LABEL, which is how the caller
+    looks them up — and a values key can differ from it (the redis
+    service: values key `redisCache`, pod label `redis-cache`). Without
+    the mapping below the lookup always came up empty for that service,
+    so its declared rows were unreachable and an operator setting one
+    got a false "absent from the chart" gap instead of a comparison.
     """
     out = {}
     for section in ("services", "opea"):
@@ -267,13 +283,14 @@ def chart_declared(values):
             rows = block.get("env")
             if not rows:
                 continue
+            component = VALUES_KEY_TO_COMPONENT.get(name, name)
             if isinstance(rows, dict):
                 for var, value in rows.items():
-                    out.setdefault(name, {})[var] = value
+                    out.setdefault(component, {})[var] = value
             else:
                 for row in rows:
                     if isinstance(row, dict) and "name" in row:
-                        out.setdefault(name, {})[row["name"]] = row.get("value")
+                        out.setdefault(component, {})[row["name"]] = row.get("value")
     return out
 
 

@@ -92,17 +92,18 @@ while read -r ns; do
   fi
 done < "${WORK}/nsnames.txt"
 
-if [ -s "${WORK}/namespaces.yaml" ]; then
-  # A Namespace object is accepted by the API server while the namespace
-  # controller is still finalizing it, and creating anything inside that
-  # window fails with `namespaces "genieai" not found` — CI's first run of
-  # this script hit exactly that. Wait for Active.
-  while read -r ns; do
-    [ -n "${ns}" ] || continue
-    kubectl wait --for=jsonpath='{.status.phase}'=Active "namespace/${ns}" --timeout=60s >/dev/null
-    printf '    namespace/%s Active\n' "${ns}"
-  done < "${WORK}/nsnames.txt"
-fi
+# A Namespace object is accepted by the API server while the namespace
+# controller is still finalizing it, and creating anything inside that
+# window fails with `namespaces "genieai" not found` — CI's first run of
+# this script hit exactly that. Wait for Active for EVERY namespace the
+# render references, not only the ones it declares: a render with the
+# observability tier off declares no Namespace objects at all, and the
+# release namespace is then created fresh by the loop above.
+while read -r ns; do
+  [ -n "${ns}" ] || continue
+  kubectl wait --for=jsonpath='{.status.phase}'=Active "namespace/${ns}" --timeout=60s >/dev/null
+  printf '    namespace/%s Active\n' "${ns}"
+done < "${WORK}/nsnames.txt"
 
 if [ -s "${WORK}/serviceaccounts.yaml" ]; then
   printf '==> applying serviceaccounts\n'

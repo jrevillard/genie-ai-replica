@@ -199,15 +199,17 @@ spec:
       ports:
         - protocol: TCP
           port: 3000
-    # ClamAV scanner. Post-DNAT pod port (3310); the Service port is
-    # identical, but pod-to-pod peers must use the container port.
+    # ClamAV scanner. Post-DNAT pod port; the Service port is identical,
+    # but pod-to-pod peers must use the container port. Same knob the
+    # clamav Deployment, Service and policies derive from — an override
+    # that moved only this side would strand every upload's scan step.
     - to:
         - podSelector:
             matchLabels:
               genieai.io/component: clamav
       ports:
         - protocol: TCP
-          port: 3310
+          port: {{ .Values.services.clamav.port | default 3310 }}
     # Data tier: ArangoDB (8529) — pending verified peer labels.
     # Same port-scoped pattern as the backend's data-tier egress.
     - to:

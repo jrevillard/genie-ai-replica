@@ -5,9 +5,28 @@ the OIDC issuer and KC_PUBLIC_ORIGIN keep the port, but Gateway API
 hostnames, certificate dnsNames and SAN-derived secret names must not —
 HTTPRoute hostname validation rejects ports, and hostname matching
 strips the port from the Host header anyway.
+
+An IPv6 literal ("[2001:db8::1]:4443") cannot be split on ":" — every
+derivation below would produce garbage (hostname "[2001", and
+"db8" | int = 8 for the port), so both helpers fail the render instead.
+An ingress fronting IPv6 still serves hosts by DNS name.
 */}}
+{{- define "genieai-umbrella.ingressHost" -}}
+{{- $host := .Values.ingress.host | required "ingress.host is required — supply the public hostname (may carry :port) in the environment overlay" -}}
+{{- if contains "[" $host -}}
+{{- fail (printf "ingress.host must be a DNS hostname optionally followed by :port — an IPv6 literal (%s) cannot be split; use a hostname" $host) -}}
+{{- end -}}
+{{- $host -}}
+{{- end -}}
 {{- define "genieai-umbrella.ingressHostname" -}}
-{{- (.Values.ingress.host | required "ingress.host is required — supply the public hostname (may carry :port) in the environment overlay" | splitList ":" | first) -}}
+{{- (include "genieai-umbrella.ingressHost" . | splitList ":" | first) -}}
+{{- end -}}
+{{/*
+The PUBLIC port from ingress.host — the single derivation site for the
+https listener port and the HTTPRoute redirect port. Bare host → 443.
+*/}}
+{{- define "genieai-umbrella.ingressPublicPort" -}}
+{{- include "genieai-umbrella.ingressHost" . | splitList ":" | rest | first | default 443 | int -}}
 {{- end -}}
 {{/*
 Canonical TLS Secret name. Precedence:
@@ -58,7 +77,7 @@ spec:
       # behind a port-bearing origin serves portless backchannel URLs and
       # the SPA's token exchange fails. Single source of truth: the port
       # in ingress.host.
-      port: {{ .Values.ingress.host | default "" | splitList ":" | rest | first | default 443 | int }}
+      port: {{ include "genieai-umbrella.ingressPublicPort" . }}
       tls:
         mode: Terminate
         certificateRefs:

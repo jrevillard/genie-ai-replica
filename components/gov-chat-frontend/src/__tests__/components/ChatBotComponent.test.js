@@ -457,7 +457,7 @@ describe('ChatBotComponent', () => {
       // A transport error carries no user-facing text of its own — the
       // turn shows the localized interruption message (the i18n stub
       // resolves the caller-supplied fallback).
-      expect(vm.systemStatus.errorMessage).toBe('Response was interrupted. Please try again.');
+      expect(vm.systemStatus.errorMessage).toBe(enChatbot.streamingError);
       // Bot message should have error content
       const streamingMsg = vm.openMessages[vm.openMessages.length - 1];
       expect(streamingMsg.content).toMatch(/interrupted|error|failed/i);
@@ -725,7 +725,7 @@ describe('ChatBotComponent', () => {
 
       expect(vm.isStreaming).toBe(false);
       expect(vm.systemStatus.online).toBe(false);
-      expect(vm.systemStatus.errorMessage).toBe('Response was interrupted. Please try again.');
+      expect(vm.systemStatus.errorMessage).toBe(enChatbot.streamingError);
       // The timing described the answer that never came; the pill must
       // not keep reporting it.
       expect(vm.systemStatus.lastResponseTime).toBeNull();

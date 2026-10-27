@@ -166,8 +166,10 @@ export default {
                   clearIdleWatch();
                   // An empty frame message stays empty: the store's
                   // generic floor renders it localized, and a hard-coded
-                  // developer string would surface as server prose.
-                  const error = new Error(data.message);
+                  // developer string would surface as server prose. The
+                  // || '' keeps a JSON null from stringifying into the
+                  // status line.
+                  const error = new Error(data.message || '');
                   error.fromServer = true;
                   callbacks.onError?.(error);
                   return;

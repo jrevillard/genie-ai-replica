@@ -11,8 +11,9 @@ const {
 
 const statusModule = require('../../store/modules/status.js').default;
 // The real en locale: the store's failure wordings must match it, or the
-// suite goes red — the mocked i18n module below sends t() to the store's
-// fallback floor, so these assertions are what pins floor == locale.
+// suite goes red. The mocked i18n module (wired by jest.config.js's
+// moduleNameMapper) sends t() to the store's fallback floor, so these
+// assertions pin floor == locale.
 const enChatbot = require('../../i18n/locales/en.js').default.chatbot;
 
 function freshStore() {
@@ -338,6 +339,17 @@ describe('conversation sendStream action', () => {
       expect(open.messages.at(-1).sources[0].url).toBe('/api/files/doc-1/download');
       expect(open.relatedDocuments.length).toBe(1);
     });
+  });
+
+  it('status timing survives going back online and dies with an outage', () => {
+    const store = freshStore();
+    store.commit('status/setResponseTime', 250);
+    store.commit('status/setOnline');
+    // Coming back online does not invalidate the last completed
+    // exchange's timing; only the state where no answer arrived does.
+    expect(store.state.status.lastResponseTime).toBe(250);
+    store.commit('status/setOffline', 'down');
+    expect(store.state.status.lastResponseTime).toBeNull();
   });
 
   it('writes the error path and reports offline via the status module', async () => {

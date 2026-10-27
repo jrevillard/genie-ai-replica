@@ -477,6 +477,41 @@ describe('chatbotService', () => {
       expect(onError).toHaveBeenCalledWith(expect.any(Error));
     });
 
+    it('an error frame without a message carries empty prose, marked from the server', async () => {
+      const mockFetch = jest.fn();
+      global.fetch = mockFetch;
+
+      // The frame the backend sends when its own error has nothing to
+      // say: no message field at all. The transport must not invent a
+      // developer string for it — the store's localized floor is what
+      // the user reads.
+      const mockReader = {
+        read: jest
+          .fn()
+          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode('data: {"type":"error"}\n\n') })
+          .mockResolvedValueOnce({ done: true })
+      };
+
+      const mockResponse = {
+        ok: true,
+        body: { getReader: () => mockReader }
+      };
+
+      mockFetch.mockResolvedValue(mockResponse);
+
+      const onError = jest.fn();
+
+      chatbotService.submitQueryStream({ query: 'test' }, { onError });
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(onError).toHaveBeenCalledTimes(1);
+      const error = onError.mock.calls[0][0];
+      expect(error).toBeInstanceOf(Error);
+      expect(error.message).toBe('');
+      expect(error.fromServer).toBe(true);
+    });
+
     it('carries the status and the backend reason on a server error', async () => {
       const mockFetch = jest.fn();
       global.fetch = mockFetch;

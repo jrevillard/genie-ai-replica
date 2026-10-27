@@ -2054,3 +2054,32 @@ def test_the_transform_chain_excludes_degraded_nodes_from_the_relationship_build
         cosine = builders["CosineSimilarityBuilder"]
         doc = Node(properties={"page_content": "x"}, type=NodeType.DOCUMENT)
         assert cosine.filter_nodes(doc) is False, "a degraded node would kill the cosine phase"
+
+
+def test_ragas_usage_telemetry_is_off_by_default():
+    """ragas's usage telemetry must be OFF, and the engine must enforce it.
+
+    ragas 0.4.3 wraps EVERY prompt generation (ragas/_analytics.py:60) and
+    POSTs the usage event to https://t.explodinggradients.com from INSIDE the
+    async prompt path, with a 1 s timeout. The POST is synchronous, so it
+    blocks the event loop and the configured concurrency never overlaps.
+
+    Measured in the sidecar image (2026-10-26): a warm CACHE HIT — no model
+    call at all — cost 0.79 s, and 0.008 s with the flag set. Solar System's
+    knowledge graph is ~3,800 prompts, so the tax alone was ~50 min of a
+    generation, and the same tax is charged on every judge call of every
+    scored row. It is also a sovereignty leak: a public-sector deployment
+    must not ship per-call usage telemetry to a third-party endpoint outside
+    the deployment.
+    """
+    import os
+
+    assert os.environ.get("RAGAS_DO_NOT_TRACK") == "true", (
+        "the engine must set the telemetry opt-out at import time — a missing "
+        "env plumbing must not silently re-enable a third-party POST on every "
+        "model call"
+    )
+
+    from ragas import _analytics
+
+    assert _analytics.do_not_track() is True, "ragas would POST usage telemetry off the deployment"

@@ -929,6 +929,26 @@ describe('Configuration Validation Suite', () => {
       expect(vars.RAGAS_LLM_MAX_RETRIES && vars.RAGAS_LLM_MAX_RETRIES.default).toBe('5');
     });
 
+    test('ragas usage telemetry is OFF in all four sites (2026-10-26)', () => {
+      // RAGAS_DO_NOT_TRACK: ragas 0.4.3 POSTs every prompt's usage event to
+      // https://t.explodinggradients.com from INSIDE the async prompt path
+      // (1 s timeout), so it blocks the event loop and the configured
+      // concurrency never overlaps. Measured in the sidecar: a warm CACHE HIT
+      // — no model call at all — cost 0.79 s, and 0.008 s with this off. The
+      // tax was ~50 min of Solar System's ~3,800-prompt graph build. It is
+      // also a sovereignty leak: per-call usage telemetry must not leave a
+      // public-sector deployment.
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const ragasBlock = full.slice(full.indexOf('  ragas-service:'), full.indexOf('  document-repository:'));
+      expect(ragasBlock).toMatch(/- RAGAS_DO_NOT_TRACK=\$\{RAGAS_DO_NOT_TRACK:-true\}/);
+      const envText = fs.readFileSync(ENV_FILE, 'utf8');
+      expect(envText).toMatch(/^#\s*RAGAS_DO_NOT_TRACK=true.*$/m);
+      const vars = parseAnsibleEnvVars(
+        fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+      );
+      expect(vars.RAGAS_DO_NOT_TRACK && vars.RAGAS_DO_NOT_TRACK.default).toBe('true');
+    });
+
     test('the scoring-leg throughput vars land in all four sites (2026-10-22)', () => {
       // The scoring leg's worker pool was hardcoded to 8, the same number as
       // the judge-concurrency cap, so the two ceilings could not be moved

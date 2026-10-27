@@ -47,6 +47,30 @@ except ImportError:
     _vertexai.ChatVertexAI = _ChatVertexAI
     _sys.modules["langchain_community.chat_models.vertexai"] = _vertexai
 
+# ragas's usage telemetry — OFF by default, and it is not a rounding error.
+#
+# ragas 0.4.3 wraps EVERY prompt generation in `ragas/_analytics.py:60`, and
+# the wrapper POSTs the usage event to `https://t.explodinggradients.com`
+# (the legacy ragas analytics endpoint) with a 1-second timeout. The POST is
+# SYNCHRONOUS (`requests.post`) inside the async prompt path, so it blocks
+# the event loop: the 16 workers ragas's RunConfig asks for and the
+# `RAGAS_LLM_MAX_CONCURRENCY` cap never overlap.
+#
+# Measured in this container (2026-10-26), one warm CACHE HIT — no model call
+# at all — cost 0.79 s, and 0.008 s with the flag set: a 100x difference.
+# Solar System's knowledge graph is ~3,800 prompts, so the tax alone was
+# ~50 minutes of a generation, and the same tax is charged on every judge
+# call of every scored row.
+#
+# Two reasons it is off, not merely slow:
+#   - PERFORMANCE: it dominated the generation's wall-clock.
+#   - SOVEREIGNTY: a public-sector deployment must not ship per-call usage
+#     telemetry to a third-party endpoint outside the deployment. The env var
+#     stays overridable so an operator can turn it on deliberately.
+#
+# `setdefault` — an operator's explicit value always wins.
+os.environ.setdefault("RAGAS_DO_NOT_TRACK", "true")
+
 # --------------------------------------------------------------------------
 # Config (env — compose supplies deployment defaults; see stack.md)
 # --------------------------------------------------------------------------

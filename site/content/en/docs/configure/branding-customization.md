@@ -54,6 +54,12 @@ Two files are deliberately **outside** the mount and must not be hand-edited:
    docker service update --force <stack>_keycloak
    ```
    In Compose mode use `docker compose up -d --force-recreate keycloak` instead.
+
+   A restart alone is **not enough for the stylesheets** — Keycloak also keeps a compressed copy of every theme resource and never invalidates it (see [Theme caching](#theme-caching-the-server-and-the-browser)). Clear the cache along with the restart:
+   ```bash
+   docker exec <keycloak-container> sh -c 'rm -rf /opt/keycloak/data/tmp/kc-gzip-cache/*'
+   ```
+   In Compose mode, `docker compose up -d --force-recreate keycloak` replaces the container and drops that directory with it — no extra step.
 3. **Reload the browser.** The first time you do this after upgrading from an older deployment, do a **hard reload** (Ctrl+Shift+R, or Cmd+Shift+R). Browsers that visited the site before the upgrade may still hold a one-year immutable copy of these paths from the previous cache headers, and a normal reload will happily reuse it. After that first hard reload, `/config/` and `/runtime/config.js` are served `Cache-Control: no-cache, must-revalidate`, so ordinary reloads are enough.
 
 Keycloak caches themes in memory, so the forced restart is not optional for Keycloak — see [Troubleshooting](#troubleshooting).
@@ -181,10 +187,67 @@ The Keycloak login, account, admin, and email screens are themed by the `genie` 
 |---|---|---|---|---|
 | Login | `configs/keycloak/themes/genie/login/theme.properties` | `resources/img/logo.png` | `resources/img/favicon.ico` | `resources/css/genie.css`, `resources/css/dark.css` |
 | Account | `configs/keycloak/themes/genie/account/theme.properties` | `resources/img/logo.png` | (default favicon) | `resources/css/genie.css`, `resources/css/dark.css` |
-| Admin | `configs/keycloak/themes/genie/admin/theme.properties` | `resources/img/logo.png` | `resources/img/favicon.ico` | `resources/css/genie.css`, `resources/css/dark.css` |
+| Admin | `configs/keycloak/themes/genie/admin/theme.properties` | `resources/img/logo.png` | (the built-in `favicon.svg`) | `resources/css/genie.css`, `resources/css/dark.css` |
 | Email | `configs/keycloak/themes/genie/email/theme.properties` | `resources/img/logo.png` | n/a | n/a |
 
 The `genie` theme is a child of the Keycloak `keycloak.v2` (login/admin) / `keycloak.v3` (account) / `keycloak` (email) base themes — defined by the `parent=` line in each `theme.properties`.
+
+The default login screen is the Living Intelligence look: the brand artwork (`login/resources/img/logo.png`) in the brand column, which sits beside the form on wide viewports and above it on narrow ones; the wave band (`login/resources/img/genie-bottom-waves.svg`) along the bottom of the page on wide viewports; and the form card with an accent edge and rounded corners. Both the ground and the wave belong to the base theme only — the login template marks its own pages, so a child theme such as `genie-el-salvador` keeps the look it defines for itself.
+
+The brand artwork is offered in two formats. The template wraps it in a `<picture>` element: the `<source>` points at `login/resources/img/logo.webp` (96 KB) and the `<img>` at `login/resources/img/logo.png` (115 KB), so a browser that supports WebP fetches the smaller one and the others fall back to the PNG. Keycloak does not know the WebP media type — it serves the file as `application/octet-stream` — which does not matter here: the browser picks the source by the `type` attribute of the `<source>` and decodes the bytes itself. Only the login screen takes the `<picture>` treatment; the console mastheads and the email point at a single file, and mail clients do not read `<picture>` at all.
+
+The `<picture>` element is emitted by the base theme alone. A theme resolves a resource it does not have in its ancestors, so a child that ships its own `logo.png` but no `logo.webp` would resolve the WebP in the **parent** — and the browser prefers it, which would put the parent's artwork on the child's login page instead of the child's own mark. The template therefore emits the plain `<img>` for any theme but the base one, and a child theme that wants the smaller file ships its own `template.ftl`.
+
+### The console and email surfaces
+
+The account console, the admin console and the email carry the same identity as the login screen:
+
+| Surface | What it shows |
+|---|---|
+| Account console | A pale wash of the brand across the masthead, with the brand darkened as its ink; the pale ground behind the form; the wave band closing the sidebar; the selected navigation item as a pale wash of the brand. |
+| Admin console | The same masthead, ground and wave, plus the brand artwork on the welcome page (`admin/resources/img/genie-artwork.png`) and the accent edge along the top of each data table. |
+| Email | A pale brand header with the mark, the content on a white card over the pale ground, and the wave band (`email/resources/img/genie-bottom-waves.png`) closing the card. |
+
+Each console surface ships its own copy of the wave band (`admin/resources/img/genie-bottom-waves.svg`, `account/resources/img/genie-bottom-waves.svg`): a Keycloak theme resolves the images its stylesheets reference inside the resources directory **of the same type**. The admin surface cannot reach the login surface's `img/` — the request 404s — and the account surface cannot reach the admin one's. A child theme *does* inherit its parent's resources of its own type (a child admin theme can reference the parent's `admin/resources/img/`), but it never sees another type's directory.
+
+The masthead is a pale wash of the brand rather than a solid brand slab, and the console's own label reads at 14.1:1 against it — `#000d64` on the `#ddecff` wash, where it sat on a `#4071cb` slab at 2.25:1 before.
+
+### Theme caching: the server and the browser
+
+Two independent caches sit between an edited theme file and the browser.
+
+**On the server**, Keycloak keeps the parsed themes and the FreeMarker templates in memory (`--spi-theme-cache-themes`, `--spi-theme-cache-templates`), so an edit to a `theme.properties` or a `.ftl` is invisible until that cache expires or Keycloak restarts — **restart the container after any theme file change**. A restart alone is still not enough for the stylesheets: Keycloak also stores a compressed copy of every theme resource under `/opt/keycloak/data/tmp/kc-gzip-cache/` inside the container and never invalidates it, so a gzip request is served the old bytes (see [Troubleshooting](#troubleshooting) for the check and the fix).
+
+**On the browser**, Keycloak serves theme resources with `Cache-Control: max-age=2592000` — 30 days. A resource whose theme names a content hash also carries an `ETag` (the resources version) and answers a conditional request with a `304`; every other resource carries no validator and no `Last-Modified`. A returning browser therefore keeps the previous stylesheet for a month after a theme change, however often the server is restarted.
+
+The value comes from one server-wide setting — `CacheControlUtil` reads `Config.scope("theme").getInt("staticMaxAge", 2592000)`, and Keycloak documents the `--spi-theme-static-max-age` SPI option for it. It is all-or-nothing: a value of `0` turns every theme resource into `no-cache`, including the shared vendor bundle the console ships with Keycloak itself — which carries no `ETag`, so the browser would re-download the PatternFly CSS in full on every page load. No `theme.properties` key can change the value per theme: the properties a theme may declare are fixed (`parent`, `import`, `styles`, `stylesCommon`, `scripts`, `favicons`, `logo`, `favIcon`, `darkMode`, `contentHashPattern`, …), and none of them is a cache setting. That is why the override lives at the gateway, where the rule can tell the bundles apart.
+
+GENIE.AI's gateway therefore overrides the header at the nginx edge: `api-gateway-solution/nginx/conf/default.conf.template` matches `/auth/resources/<version>/<type>/<theme>/<path>` — the resources of **every** installed theme, not one theme name — and replaces the upstream `Cache-Control` with `no-cache, must-revalidate`. Two families keep their long cache, and both are safe to keep:
+
+- `assets/` — the bundles whose file name carries a content hash, so a changed file is a new URL. Keycloak also answers their revalidation with a `304` (its `ETag` is the resources version).
+- `vendor/` — the bundles shipped with Keycloak itself (`common/keycloak/vendor/…`). They change with the Keycloak version, and the resources tag in the URL is regenerated on every upgrade, so their URL changes too.
+
+The exclusion keys on the directory, not on who owns it: a custom theme that ships a file under `assets/` or `vendor/` keeps the long cache too, so such a file must carry a content hash in its name to be revalidated at all.
+
+The web app already splits the same way: hashed assets get `immutable`, the runtime-injected theme files get `no-cache, must-revalidate`.
+
+**One catch: the resources version in the URL does not change when a theme changes.** Keycloak's resource URL is `/auth/resources/<version>/<type>/<theme>/<path>`, and `<version>` is a five-character tag stored in the database (`migration_model.id`) — Keycloak mints a new one when it is upgraded, not when a theme file is edited. So a browser that fetched a stylesheet *before* a theme change still holds the copy it was given under the old `Cache-Control`, and the gateway's `no-cache` only applies to the copies fetched *after* the change. The first redeploy of a changed theme therefore needs the browsers to be told, once; every later change lands on the next page load. Two levers do that:
+
+- **Rename the theme directory** and point `KEYCLOAK_THEME` at the new name — and update the path literal in the template's marker check (`url.resourcesPath?ends_with('/genie')` in `configs/keycloak/themes/genie/login/template.ftl`) with it; the `kc-theme-genie` class name itself is arbitrary, so the stylesheets key on it unchanged. A renamed theme that keeps the old literal loses the ground and the wave band. The theme name is part of the resource URL, so every resource moves — and a new directory is one the node does not have yet, so the deploy seeds it (see [What re-running Ansible does to your edits](#what-re-running-ansible-does-to-your-edits)): a repo-side edit to an existing theme file does not reach a seeded node, a renamed directory does. A child theme that inherits from it (`parent=<theme>`) has to follow, and the child's own `styles` keep overriding the parent's — so a child that declares its own stylesheets keeps its own look. On a realm that is already imported, repoint its four theme settings (`loginTheme`, `accountTheme`, `adminTheme`, `emailTheme`) too: `KEYCLOAK_THEME` only applies at import time.
+- **Bump the resources tag in the database** (`migration_model.id`) and restart Keycloak. Every resource URL moves, for every theme at once, and the bundles a browser already holds are simply never requested again. Keycloak mints a new tag by itself when the server is upgraded, which is why an upgrade already invalidates them.
+
+  ```sql
+  -- The tag is the primary key of Keycloak's migration_model table, a five
+  -- character string of lower-case letters and digits. Pick a new one, replace
+  -- the current value below, and restart Keycloak: it reads the tag at startup.
+  UPDATE migration_model SET id = '<new-tag>' WHERE id = '<current-tag>';
+  ```
+
+  A browser that holds a stylesheet never asks for it again — the login page it
+  fetches names the new URL — so this is the way to invalidate a browser's stored
+  copy without touching the theme's files. The bundles Keycloak ships itself are
+  re-fetched too, once: the vendor bundle is 143 KB compressed.
+
 
 ### Multiple themes and theme selection
 
@@ -205,7 +268,7 @@ curl -sk -X PUT "https://<host>/auth/admin/realms/genie" \
   -d '{"loginTheme":"genie-el-salvador"}'
 ```
 
-Then restart the Keycloak container — it caches themes in memory.
+Then restart the Keycloak container — it caches themes in memory — and clear its compressed-resource cache, or the new stylesheet never reaches the browser (see [Troubleshooting](#troubleshooting)).
 
 **Adding a new theme in three steps:** (1) create `configs/keycloak/themes/<your-theme>/` with `login/` (and optionally `account/`, `admin/`, `email/`) subdirectories, each with a `theme.properties` — `parent=genie` reuses the GENIE.AI layout and only overrides your files; (2) deploy — the `config_bootstrap` role seeds the whole `themes/` tree; (3) set `KEYCLOAK_THEME` (or the realm setting) to `<your-theme>`. On an already-deployed node, dropping the theme directory into `/opt/genieai/config/keycloak/themes/` and restarting Keycloak is enough — the bind mount serves it live.
 
@@ -220,13 +283,16 @@ Replace four PNG files (one per surface) and (optionally) tweak the CSS:
    - `configs/keycloak/themes/genie/account/resources/img/logo.png`
    - `configs/keycloak/themes/genie/admin/resources/img/logo.png`
    - `configs/keycloak/themes/genie/email/resources/img/logo.png`
-2. Keep the filename `logo.png` — every template references it directly:
-   - `configs/keycloak/themes/genie/login/template.ftl`: `<img src="${url.resourcesPath}/img/logo.png" alt="GENIE.AI" ...>`
+2. Keep the filename `logo.png` — the login template references it directly, and the console and email surfaces point at it by name:
+   - `configs/keycloak/themes/genie/login/template.ftl`: a `<picture>` element whose `<source>` points at `img/logo.webp` and whose `<img>` points at `img/logo.png`
+   - `configs/keycloak/themes/genie/admin/theme.properties`: `logo=/img/logo.png` — the admin console concatenates the value onto the resources path without adding a slash, and the same property also feeds the dashboard icon (the console renders the mark twice).
+   - `configs/keycloak/themes/genie/account/theme.properties`: `logo=img/logo.png` — the account console adds the slash itself.
+   - `configs/keycloak/themes/genie/email/html/template.ftl`: `${url.resourcesUrl}/img/logo.png`
 3. Replace the `alt` text in each template.ftl if your brand name changed (search for `alt="GENIE.AI"`).
 4. (Optional) Tweak the brand color in `configs/keycloak/themes/genie/{login,account,admin}/resources/css/genie.css` — the admin theme especially uses several brand-tinted backgrounds.
-5. Force a Keycloak container restart: `docker service update --force <stack>_keycloak` (Compose: `docker compose up -d --force-recreate keycloak`). Keycloak caches themes in memory; **always restart** the Keycloak container after a theme file change — see [Troubleshooting](#troubleshooting).
+5. Force a Keycloak container restart: `docker service update --force <stack>_keycloak` (Compose: `docker compose up -d --force-recreate keycloak`). Keycloak caches themes in memory; **always restart** the Keycloak container after a theme file change — and clear the compressed-resource cache described in [Troubleshooting](#troubleshooting), otherwise the stylesheet you just edited never reaches the browser.
 
-> **Logo image specs:** Keycloak renders the login logo at `width: 120px` (height auto, scales with aspect ratio) per `configs/keycloak/themes/genie/login/resources/css/genie.css`. Use a transparent PNG at least 240px wide (2× for retina) so it stays sharp on high-DPI screens. The admin logo is constrained to `height: 32px` in `configs/keycloak/themes/genie/admin/resources/css/genie.css`. For the email surface, the logo is embedded as a CID attachment and capped at `max-width:120px; max-height:40px` in `template.ftl` — keep the file's natural dimensions in that range to avoid downscaling artifacts.
+> **Logo image specs:** Keycloak renders the login logo at `width: 420px` (height auto, scales with aspect ratio) per `configs/keycloak/themes/genie/login/resources/css/genie.css`; it is the brand artwork of the login screen, so use a transparent PNG at least 840px wide (2× for retina) so it stays sharp on high-DPI screens. The console masthead mark is constrained to `height: 32px` in `configs/keycloak/themes/genie/admin/resources/css/genie.css`, and the admin welcome page shows the artwork at 280px (`admin/resources/img/genie-artwork.png` — a separate file from the masthead mark, sized for the 280px display: 560px wide, 2× for retina). For the email surface, the mark is capped at `max-width:72px; max-height:72px` in `template.ftl` — keep the file's natural dimensions in that range to avoid downscaling artifacts.
 
 ## Keycloak email branding
 
@@ -234,27 +300,33 @@ GENIE.AI-themed Keycloak emails (verification, password reset, etc.) use a singl
 
 - `configs/keycloak/themes/genie/email/html/template.ftl`
 
-The logo is embedded via a CID attachment (`<img src="cid:logo.png" alt="GENIE.AI">` on line 17), with the image file at `configs/keycloak/themes/genie/email/resources/img/logo.png`. Keycloak auto-attaches any file under `resources/img/` as a CID; do not change the `src="cid:logo.png"` reference unless you also rename the file.
+**Keycloak attaches nothing to an email.** A `cid:` reference resolves to a broken image in every mail client, because there is no attachment behind it. The template therefore fetches its images from the theme's own resources over HTTP:
+
+```html
+<img src="${url.resourcesUrl}/img/logo.png" alt="GENIE.AI" …>
+<img src="${url.resourcesUrl}/img/genie-bottom-waves.png" alt="" …>
+```
+
+`${url.resourcesUrl}` is the deployment's own origin, so the images resolve wherever the deployment is reachable. The files live at `configs/keycloak/themes/genie/email/resources/img/`. The `url` bean is absent when Keycloak sends a mail outside a request context (a scheduled task, for instance) — the template guards both images with `<#if url??>` and still renders without them.
 
 To rebrand the emails:
 
-1. Replace `configs/keycloak/themes/genie/email/resources/img/logo.png` with your logo (keep the filename).
+1. Replace `configs/keycloak/themes/genie/email/resources/img/logo.png` with your mark (keep the filename).
 2. Edit the two visible strings in `template.ftl`:
-   - Line 8: `<title>${subject!"GENIE.AI"}</title>` — the email's `<title>` fallback (used by the subject only when no subject is set; most clients show the actual subject).
-   - Line 18: `<div ...>GENIE.AI</div>` — the visible brand text rendered next to the logo.
-3. The footer at lines 27–30 hardcodes "International Telecommunication Union (ITU)" and the Geneva address. Replace with your institution's footer text if rebranding.
-4. The header gradient (line 16) uses a hardcoded ITU-blue: `background:linear-gradient(135deg,#2b4acb 0%,#1e3a8a 100%);`. Replace with your brand colors.
+   - `<title>${subject!"GENIE.AI"}</title>` — the email's `<title>` fallback (used by the subject only when no subject is set; most clients show the actual subject).
+   - `<div …>GENIE.AI</div>` — the visible brand text rendered under the mark.
+3. The footer hardcodes "International Telecommunication Union (ITU)" and the Geneva address. Replace with your institution's footer text if rebranding.
+4. The header band uses the pale brand wash `#ddecff` with the brand darkened as its ink (`#000d64`); the ground is `#f4f7fd` and the card white. Replace with your brand colors.
 
 Restart Keycloak after the change (see [Troubleshooting](#troubleshooting)).
 
 ## Favicon
 
-The Keycloak login and admin surfaces each ship their own favicon file:
+The Keycloak login surface ships its own favicon file:
 
 - `configs/keycloak/themes/genie/login/resources/img/favicon.ico`
-- `configs/keycloak/themes/genie/admin/resources/img/favicon.ico`
 
-Replace each `.ico` with your institution's favicon. Use the same file in both locations — they are served independently by Keycloak per theme. For the account surface, no explicit favicon is configured; Keycloak falls back to the realm default.
+Replace it with your institution's favicon — the login template references it by name. The admin console does **not** use a file of the theme's `img/` directory: it serves the theme's `favIcon` property, and this theme declares none, so the console falls back to the built-in `favicon.svg`. To brand the admin console, declare `favIcon=img/favicon.ico` in `configs/keycloak/themes/genie/admin/theme.properties` and keep that file. The account surface has no explicit favicon either; Keycloak falls back to the realm default.
 
 The web app's favicon is controlled separately (see [Per-institution logo](#per-institution-logo)) via the `<link rel="icon">` tags in `components/gov-chat-frontend/public/index.html`, which are re-pointed at runtime by `config-loader.js` (`loadConfig()`) from `app.icon.value`.
 
@@ -284,10 +356,25 @@ After a redeploy, verify each surface end-to-end before announcing the rebrand:
 4. **Theme colors**: confirm the brand-tinted accents (button background, focus rings) reflect your CSS changes — assuming you edited the CSS.
 5. **Email**: trigger a verification or password-reset email → confirm the embedded logo and footer text render correctly. (Most clients cache email images; test from a fresh email address.)
 
+### Keycloak consoles
+
+1. Open the admin console (`/auth/admin/<realm>/console/`) and the account console (`/auth/realms/<realm>/account/`).
+2. **Masthead**: the bar is a pale wash of the brand and its label reads at 14.1:1 against it (`#000d64` on `#ddecff`).
+3. **Ground and wave**: the pale ground shows behind the content panels, and the wave band closes the sidebar.
+4. **Admin welcome page**: the brand artwork renders above "Welcome to …".
+5. **Dark mode**: switch the browser or the OS to dark — the masthead, the ground and the wave follow (the wave lightens the ground instead of darkening it).
+
+### Keycloak email
+
+1. Trigger a verification or password-reset email.
+2. **Images**: the mark and the wave band must render — they are fetched from the theme's resources by URL, so a broken image means the URL does not resolve from the mail client's network.
+3. The card is white on the pale ground, the header is the pale brand wash.
+
 ### Common verification gotchas
 
 - **Stale browser cache**: `/config/` and `/runtime/config.js` are served `Cache-Control: no-cache, must-revalidate`, so a normal reload picks up your change — you do not need to configure anything on the proxy. The one exception is the first reload after upgrading from a deployment that predates this change: those paths used to be served a one-year `immutable` cache, and a browser that fetched them then will reuse the stored copy until you hard-refresh once.
 - **Keycloak theme cache**: Keycloak caches themes in its infinispan layer at startup. **A theme file change requires a Keycloak restart**, not just a deploy. A redeploy that does not restart Keycloak will keep the old theme in memory.
+- **Keycloak theme cache in the browser**: the gateway revalidates the theme resources, so a normal reload picks up a theme change — with the exceptions described in [Theme caching](#theme-caching-the-server-and-the-browser) (the shared bundles keep their 30-day cache, and a copy fetched before the gateway started revalidating keeps its own).
 - **Two favicon files**: the web app's favicon and the Keycloak login's favicon are served from different origins and cached independently. Test each one separately.
 
 ## Troubleshooting
@@ -304,7 +391,8 @@ After a redeploy, verify each surface end-to-end before announcing the rebrand:
 - **Wrong `parent=` line.** The `parent=` in each `theme.properties` must match a theme Keycloak ships — `keycloak.v2` (login/admin), `keycloak.v3` (account), `keycloak` (email). A typo silently fails to inherit the parent styles, leaving the theme unstyled.
 - **Theme not registered.** Keycloak must be told the theme exists. In GENIE.AI deployments this is handled by the realm-import JSON under `configs/keycloak/`; verify the theme is listed. See [Multiple themes and theme selection](#multiple-themes-and-theme-selection) for the registration flow.
 - **CSS specificity.** Keycloak's base `keycloak.v2` styles are aggressive. Use higher-specificity selectors or `!important` (Keycloak-acceptable in theme CSS, unlike the web app where `!important` is forbidden).
-- **Stale infinispan cache.** After a theme file change, restart Keycloak twice if the first restart still shows old styles — infinispan can survive a single restart in some versions.
+- **Stale compressed theme cache.** After a theme file change the stylesheet can stay visibly old even though the file on disk is correct. Keycloak keeps a compressed copy of every theme resource under `/opt/keycloak/data/tmp/kc-gzip-cache/` inside the container and never invalidates it; browsers request gzip, so they are served the old bytes. A plain `curl` of the same URL (no `Accept-Encoding: gzip`) returns the new file, which is the quickest way to confirm the cache is the culprit. Clear it with `docker exec <keycloak-container> sh -c 'rm -rf /opt/keycloak/data/tmp/kc-gzip-cache/*'`, or replace the container (`docker compose up -d --force-recreate keycloak`) — the directory lives in the container's writable layer, so a plain restart keeps it.
+- **Theme change not visible in the browser.** Keycloak serves theme resources with a 30-day `Cache-Control` and no validators, so a browser that fetched the stylesheet before your change keeps it. The GENIE.AI gateway overrides that header for the theme resources (`no-cache, must-revalidate`) — check the header first: `curl -skI https://<host>/auth/resources/<version>/login/genie/css/genie.css | grep -i cache-control`. If it still says `max-age=2592000`, the gateway is running an older configuration. If it says `no-cache` and the browser still shows the old stylesheet, that copy was fetched before the gateway started sending `no-cache` — it keeps its 30-day entry, and no header reaches it; see [Theme caching](#theme-caching-the-server-and-the-browser).
 
 ### CSS not applying (frontend)
 

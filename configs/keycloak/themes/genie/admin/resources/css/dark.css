@@ -113,17 +113,76 @@
   --pf-v5-global--palette--black-900: #030507;
   --pf-v5-global--palette--black-1000: #000000;
 
-  /* ── Page layout ── */
-  --pf-v5-c-page__header--BackgroundColor: #13161a;
-  --pf-v5-c-page__header-brand-link--c-brand--Color: #eceff2;
+  /* ── Page layout ──
+     The masthead is a pale wash of the brand — the same plane the web
+     app's navbar occupies in the composition — and the ground the panels sit on
+     is the dark page wash. */
   --pf-v5-c-page__sidebar--BackgroundColor: #0b0e11;
   --pf-v5-c-page__sidebar--m-light--BackgroundColor: #0b0e11;
   --pf-v5-c-page__sidebar--m-light--BorderRightColor: #474e55;
   --pf-v5-c-page--BackgroundColor: #05080a;
 }
 
-/* ── Nav: selected item — light text on accent background ── */
-.pf-v5-theme-dark .pf-v5-c-nav__link.pf-m-current,
-.pf-v5-theme-dark .pf-v5-c-nav__item.pf-m-current:not(.pf-m-expanded) .pf-v5-c-nav__link {
-  color: #eceff2 !important;
+/* ── Living Intelligence surfaces ─────────────────────────────────── */
+
+/* The masthead is a dark wash of the brand — the same plane the web
+   app's navbar occupies in the composition. The component owns the property, so
+   the override belongs on the component, not on :root.
+   Its ink is the brand lightened. */
+.pf-v5-theme-dark .pf-v5-c-masthead {
+  --pf-v5-c-masthead--BackgroundColor: #0d1a32;
+  color: #f3f9ff;
+}
+
+.pf-v5-theme-dark .pf-v5-c-masthead .pf-v5-c-button.pf-m-plain,
+.pf-v5-theme-dark .pf-v5-c-masthead .pf-v5-c-menu-toggle {
+  color: #f3f9ff;
+}
+
+/* The ground the content sits on — the same washes the login page
+   shows, behind the dark panels. */
+.pf-v5-theme-dark .pf-v5-c-page {
+  background-color: #05080a;
+  background-image:
+    radial-gradient(70% 60% at 76% 38%, rgba(83, 127, 235, 0.22), rgba(83, 127, 235, 0) 70%),
+    radial-gradient(55% 50% at 10% 90%, rgba(148, 108, 255, 0.16), rgba(148, 108, 255, 0) 70%),
+    linear-gradient(180deg, #0a1020 0%, #05080a 100%);
+}
+
+/* The wave band — the crest of the Living Intelligence artwork. On the
+   dark ground the strokes have to lighten it, not darken it: screen is
+   the same mechanism with the opposite effect. */
+/* On the dark ground the strokes lighten it instead of darkening it:
+   screen is the same mechanism with the opposite effect. The geometry is
+   the light stylesheet's - only the colours differ here. */
+.pf-v5-theme-dark .pf-v5-c-page__sidebar-body::after {
+  opacity: 0.42;
+  mix-blend-mode: screen;
+}
+
+/* The panels let the ground through: the console's surface is the dark
+   page wash, and the tables and cards keep their own surface. */
+.pf-v5-theme-dark .pf-v5-c-page__main-section.pf-m-light,
+.pf-v5-theme-dark .pf-v5-c-page__main-breadcrumb {
+  background-color: transparent;
+}
+
+/* ── Nav: selected item — the brand at low opacity, its ink the brand
+   lightened.
+
+   Same tokens as the light rule: the stock rule resolves them in
+   every state, so overriding them where the link resolves them
+   covers the resting, hovered and expanded states alike. ── */
+.pf-v5-theme-dark .pf-v5-c-nav__link {
+  --pf-v5-c-nav__link--m-current--BackgroundColor: rgba(83, 127, 235, 0.15);
+  --pf-v5-c-nav__link--m-current--Color: #eceff2;
+}
+
+/* ── The console's data panel is a table: the DS surface treatment
+   rides its top edge — accent edge, rounded corners, one soft
+   shadow. ── */
+.pf-v5-theme-dark .pf-v5-c-table {
+  border-top: 4px solid #537feb;
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
 }

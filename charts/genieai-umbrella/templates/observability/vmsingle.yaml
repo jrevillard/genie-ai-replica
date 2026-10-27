@@ -29,6 +29,17 @@ spec:
   # it false is what lets the operator generate its self-scrape, so the
   # stack's own VictoriaMetrics dashboard has data.
   ingestOnlyMode: false
+  # No serviceScrapeSelector: the VMServiceScrape CRs the chart renders
+  # are inert (none of the workloads exposes a Prometheus surface — they
+  # export over OTLP), and an ABSENT selector matches nothing, which is
+  # the deterministic way to keep them that way. The second gate the
+  # scrape CRs need is therefore not satisfied on purpose. When an image
+  # does expose /metrics, set a selector here that matches those CRs'
+  # OWN labels (not their target Service) — a nil selector is "match
+  # nothing", not "match all".
+  # serviceScrapeSelector:
+  #   matchLabels:
+  #     app.kubernetes.io/instance: <release>
   retentionPeriod: {{ .Values.observability.metrics.retentionPeriod | quote }}
   removePvcAfterDelete: false
   storage:

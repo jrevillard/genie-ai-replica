@@ -41,6 +41,18 @@ mode=write
 if [ "${mode}" = "write" ]; then
   mkdir -p "${out}/dashboards/observability" "${out}/alerting"
   for pair in "dashboards" "dashboards/observability"; do
+    # Prune the destination FIRST: a renamed or deleted source file
+    # left its copy behind, and the copy was not a copy of anything —
+    # the check then reported drift, and re-running this script
+    # reproduced the identical state, so the documented remedy did not
+    # fix it and the CI message named the wrong cause.
+    for stale in "${out}/${pair}"/*.json; do
+      [ -f "$stale" ] || continue
+      if [ ! -f "${src}/${pair}/$(basename "$stale")" ]; then
+        rm -f "$stale"
+        echo "pruned stale $(basename "$stale")"
+      fi
+    done
     for f in "${src}/${pair}"/*.json; do
       [ -f "$f" ] || continue
       cp "$f" "${out}/${pair}/$(basename "$f")"

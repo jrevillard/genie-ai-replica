@@ -13,17 +13,24 @@ a parameter change moves the values digest and fires this hook.
 {{- $secretName := .Values.data.keycloak.bootstrapAdmin.userSecret | default "keycloak-admin-credentials" -}}
 {{- $realmSecret := printf "%s-keycloak-realm" (include "genieai-common.fullname" .) -}}
 {{- /*
-Placeholder guard, relocated from the deleted realm import. A change-me-*
-client secret produces a client whose secret no consumer in the cluster
-holds — a silent auth failure, and with no realm import nothing else
-would catch it.
+Placeholder guard, relocated from the deleted realm import.
+
+What it actually checks, stated plainly because the old message got it
+wrong: `data.keycloak.clientSecrets.*` is NOT what reaches Keycloak. The
+realm's client secrets come from the operator-provided Secrets the Job
+exports through `data.keycloak.convergence.envSecrets` — the guard
+below checks that every `$(env:VAR)` the realm body carries is wired to
+one of them, and kcc substitutes at import time. This value is the
+chart's formal ticket that the deployment was configured for the realm
+at all: it must not be left at the chart default, and the overlay that
+sets it is the same overlay that names the Secrets.
 */ -}}
 {{- if .Values.data.keycloak.failOnPlaceholderSecrets -}}
 {{- $cs := .Values.data.keycloak.clientSecrets | default dict -}}
 {{- range $k := list "proxyClient" "dataprep" "grafana" -}}
 {{- $v := dig $k "" $cs -}}
 {{- if or (not $v) (eq $v "") (hasPrefix "change-me" $v) -}}
-{{- fail (printf "data.keycloak.clientSecrets.%s is empty or a placeholder (change-me-*); the convergence Job wires it into the realm, and a placeholder produces an OIDC client whose secret no consumer holds. The realm file declares this client unconditionally, so the value is required even when observability.grafana.enabled=false — the same requirement the Compose deployment carries. Set data.keycloak.failOnPlaceholderSecrets=false only where the placeholder is acceptable" $k) -}}
+{{- fail (printf "data.keycloak.clientSecrets.%s is empty or a placeholder (change-me-*). This value is NOT what reaches Keycloak: the realm\u0027s client secrets come from the operator-provided Secrets the convergence Job exports (data.keycloak.convergence.envSecrets), and the guard below checks that every one of them is wired. This value is the chart\u0027s formal ticket that the deployment was configured for the realm at all — it must not be left at the chart default. Set it to any non-default string, and put the real secret in the Secret the matching envSecrets row names. Set data.keycloak.failOnPlaceholderSecrets=false only where the placeholder is acceptable" $k) -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}
@@ -171,7 +178,7 @@ spec:
             - name: KC_CLIENT_ID
               value: {{ .Values.data.keycloak.webClientId | quote }}
             - name: KC_PUBLIC_ORIGIN
-              value: {{ printf "%s://%s" (.Values.ingress.scheme | default "https") (.Values.ingress.host | required "ingress.host is required — supply the public hostname (may carry :port) in the environment overlay") | quote }}
+              value: {{ printf "%s://%s" (.Values.ingress.scheme | default "https") (include "genieai-umbrella.ingressHost" .) | quote }}
             - name: KC_MOBILE_CLIENT_ID
               value: {{ .Values.data.keycloak.mobileClientId | default "genie-mobile" | quote }}
             - name: KC_MOBILE_REDIRECT_SCHEME

@@ -9,7 +9,11 @@ the backend starts unconditionally but fails its first authenticated
 request without the collections, which is what this Job prevents.
 */ -}}
 {{- $ns := .Values.namespace -}}
-{{- $registry := .Values.imageRegistry -}}
+{{- /* Same precedence as the service factory: the documented install
+knob global.imageRegistry wins over the top-level imageRegistry — a
+divergence here would move every service image to an air-gapped mirror
+while this hook kept pulling from the default registry. */ -}}
+{{- $registry := .Values.global.imageRegistry | default .Values.imageRegistry -}}
 {{- $img := .Values.services.backend.migrationsImage | default dict -}}
 apiVersion: batch/v1
 kind: Job

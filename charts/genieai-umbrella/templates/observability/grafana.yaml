@@ -12,7 +12,9 @@ enabled alongside it. */ -}}
 
   Reached through the edge at /grafana: gateway/httproute.yaml renders a
   PathPrefix rule for it (before the SPA catch-all) pointing at
-  "genieai-grafana" — the Service grafana-operator creates after the CR.
+  "genieai-grafana-service" — the Service grafana-operator creates after
+  the CR (<cr-name>-service convention; same name the backendRef below
+  and the CR's spec carry).
   That name is the operator's convention, not a settable field
   (spec.service.metadata only carries annotations/labels, so a name there
   would be pruned); what the chart DOES pin is the Service port (80 →

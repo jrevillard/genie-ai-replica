@@ -82,9 +82,18 @@ def as_port(value):
 
 
 def rule_ports(rule):
-    """Ports a single rule covers. `endPort` expands into the whole range."""
+    """Ports a single rule covers. `endPort` expands into the whole range.
+
+    A rule with NO `ports:` block declares EVERY port and returns None —
+    the same signal an entry without `port` carries. Returning an empty
+    set here made the whole any-port class invisible: no flow was ever
+    declared for a port-less rule, so it was neither asserted nor
+    reported."""
+    entries = rule.get("ports")
+    if entries is None:
+        return None
     covered = set()
-    for entry in rule.get("ports") or []:
+    for entry in entries:
         if "port" not in entry:
             # A rule entry with no `port` at all means "every port".
             return None
@@ -100,16 +109,50 @@ def rule_ports(rule):
 
 
 def covers(covered, port):
+    """True when `covered` admits the declared flow's port.
+
+    `port=None` (a rule with no `ports:`) is the hard case: it declares
+    EVERY port, and no finite destination set admits every port. The
+    first version of this fix returned True against any non-empty set —
+    which silently permitted a source rule whose every-port declaration
+    the destination answers on exactly one port. The flow is neither
+    cleanly permitted nor cleanly blocked: the caller treats
+    (None, concrete set) as ADVISORY and says so."""
     if covered is None:
         return True
     if port is None:
-        # A rule with no `ports:` legally declares EVERY port. The
-        # destination admits such a flow when it admits the source on
-        # ANY concrete port — returning False here reported a flow the
-        # datapath permits as BLOCKED whenever the destination's rule
-        # was port-specific.
-        return bool(covered)
+        return False
     return port in covered
+
+
+def admitted_ports(policies, component, direction, peer_component, services):
+    """Union of the ports the component's matching rules admit for the
+    peer, or None when no rule with a peer match carries concrete ports
+    (the case covers() already judged)."""
+    key = "to" if direction == "egress" else "from"
+    port_space = peer_component if direction == "egress" else component
+    admitted: set[int] = set()
+    matched = False
+    for policy in policies.get(component, []):
+        for rule in (policy.get("spec") or {}).get(direction) or []:
+            if is_unscoped_rule(rule, key) or not peer_allows_any(rule, key, peer_component):
+                continue
+            matched = True
+            covered = to_pod_ports(rule_ports(rule), services, port_space)
+            if covered:
+                admitted.update(covered)
+    return sorted(admitted) if matched and admitted else None
+
+
+def partial_admission(covered, port):
+    """The (any-port flow, concrete destination set) case covers() cannot
+    judge: neither True (only some ports are admitted) nor a useful
+    False (the ports the deployment actually dials may be among them).
+    Returns the admitted ports for the advisory line, or None when the
+    case does not apply."""
+    if port is None and covered:
+        return sorted(covered)
+    return None
 
 
 def component_of(selector):
@@ -298,14 +341,25 @@ def crosscheck(path):
     flows = declared_flows(policies, services)
 
     blocked = []
+    advisory = []
     skipped: set[str] = set()
     for source, target, port in sorted(flows, key=lambda f: (f[0], f[1], str(f[2]))):
         missing = []
-        if not policy_allows(policies, source, "egress", target, port, services, skipped):
-            missing.append("egress")
-        if not policy_allows(policies, target, "ingress", source, port, services, skipped):
-            missing.append("ingress")
-        if missing:
+        allowed = True
+        for side, component, peer in (("egress", source, target), ("ingress", target, source)):
+            if policy_allows(policies, component, side, peer, port, services, skipped):
+                continue
+            # An any-port flow a concrete destination set only partially
+            # admits is neither permitted nor broken: the ports the
+            # deployment actually dials may be among the admitted ones.
+            # Say what IS admitted instead of guessing either way.
+            admitted = admitted_ports(policies, component, side, peer, services)
+            if admitted is not None:
+                advisory.append((source, target, side, admitted))
+            else:
+                allowed = False
+                missing.append(side)
+        if not allowed and missing:
             blocked.append((source, target, port, "+".join(missing)))
 
     print(
@@ -318,6 +372,12 @@ def crosscheck(path):
         shown = port if port is not None else "any"
         print(
             f"  BLOCKED {source} -> {target} :{shown} ({missing} not permitted by the destination/source policy)"
+        )
+    for source, target, side, admitted in advisory:
+        print(
+            f"  ADVISORY {source} -> {target} :any — the {side} side admits only {admitted}; "
+            "the flow is declared port-less, so verify the dialed port is among them "
+            "(an any-port flow cannot be fully asserted against a port-specific peer)."
         )
     return policies, blocked
 

@@ -391,7 +391,12 @@ def main(argv):
         for path in Path(root).rglob("*"):
             if "files" in path.relative_to(root).parts:
                 continue
-            if path.is_file() and path.suffix in (".yaml", ".yml", ".md", ".tpl"):
+            # .json too: values.schema.json carries the operator-facing
+            # descriptions the schema gate maintains — a knob documented
+            # only there is discoverable and must not fail this check.
+            # (Chart.lock is also .json; its URLs cannot collide with a
+            # variable name in practice.)
+            if path.is_file() and path.suffix in (".yaml", ".yml", ".md", ".tpl", ".json"):
                 try:
                     chart_doc_text += path.read_text(encoding="utf-8", errors="replace")
                 except OSError:

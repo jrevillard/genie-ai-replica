@@ -366,12 +366,17 @@ origin directly; TLS is the edge's concern.
 **Helm tests** — two test pods verify namespace + data-tier wiring:
 
 ```bash
-make test                                  # ct install + helm test against kind
-helm test genieai -n genieai
+make -C charts test                        # ct install on a throwaway kind cluster
+helm test genieai -n genieai               # the chart's test pods, against a running release
 ```
 
-Both test Pods need `kubectl`; the chart's init container downloads it
-into a shared `emptyDir`.
+`make -C charts test` boots its own kind cluster, installs the chart
+with the data tier off (the operators and their CRDs are cluster
+prerequisites, absent there) and tears the cluster down — it proves the
+render and the install ordering, not a working stack. The helm-test
+pods run against a release you already installed, and both need
+`kubectl`; the chart's init container downloads it into a shared
+`emptyDir`. There is no `make test` at the repository root.
 
 **Service health** — through the edge:
 

@@ -1,0 +1,28 @@
+# Minimum values the chart's render guards require — the chart does NOT
+# install with its own defaults: `ingress.host` and
+# `data.keycloak.adminEmail` are `required`, `verifyEmail` /
+# `resetPasswordAllowed` default to true and refuse a release with no
+# mail server, and the placeholder-secret guard rejects a `change-me-*`
+# client secret.
+#
+# The client-secret values below are RENDER GUARDS, not credentials: the
+# realm reads the real secrets from the Secrets the operator materializes
+# (data.keycloak.convergence.envSecrets), never from these strings. They
+# must be non-placeholder for the guard to pass, and they are safe to
+# commit for that reason. Replace them with your own values if your
+# policy requires it.
+ingress:
+  host: genieai.example.org
+  scheme: https
+data:
+  keycloak:
+    adminEmail: ops@example.org
+    smtp:
+      from: no-reply@example.org
+      host: smtp.example.org
+      port: 587
+      starttls: true
+    clientSecrets:
+      proxyClient: example-only-not-a-credential
+      dataprep: example-only-not-a-credential
+      grafana: example-only-not-a-credential

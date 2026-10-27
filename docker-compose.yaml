@@ -2011,6 +2011,13 @@ services:
     environment:
       CHATQNA_TYPE: ${CHATQNA_TYPE:-ChatQnA}
       VLLM_API_KEY: ${VLLM_API_KEY:-}
+      # The model the chat orchestrator REQUESTS. It must be the model
+      # the vLLM server serves (VLLM_LLM_MODEL_ID, the --served-model-name
+      # of the vllm service below): the chatqna code's own default is a
+      # different model, and vLLM answers a request for an unknown model
+      # with 404 — every chat request fails. The chart sets the same
+      # variable from opea.models.llm.modelId.
+      LLM_MODEL: ${VLLM_LLM_MODEL_ID:-ibm-granite/granite-4.1-8b}
       # Control-plane budget for the backend / document-repository calls on the
       # chat path (core/model_http_policy.py).
       MODEL_CONTROL_PLANE_TIMEOUT_SECONDS: ${MODEL_CONTROL_PLANE_TIMEOUT_SECONDS:-30}

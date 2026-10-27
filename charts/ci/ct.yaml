@@ -30,5 +30,10 @@ helm-extra-args: --timeout 300s
 # SealedSecrets can never decrypt there. `ct install` renders defaults,
 # so the data CRs + SealedSecrets are disabled for the install check; the
 # tiers re-enable as operator provisioning lands.
-helm-extra-set-args: --set data.postgres.enabled=false --set data.arangodb.enabled=false --set data.keycloak.enabled=false
+#
+# The services that depend on the data tier go with it: the pre-install
+# dependency-check hook refuses an install whose enabled component depends
+# on a disabled one (values.yaml dependencyGraph), so leaving backend /
+# frontend / documentRepository on made the hook fail this install.
+helm-extra-set-args: --set data.postgres.enabled=false --set data.arangodb.enabled=false --set data.keycloak.enabled=false --set services.backend.enabled=false --set services.frontend.enabled=false --set services.documentRepository.enabled=false
 debug: true

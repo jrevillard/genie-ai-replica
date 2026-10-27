@@ -35,9 +35,7 @@ jest.mock('../../services/analytics-service', () =>
     // series points, so it keeps the identity behaviour the test asserts.
     formatDateLabel: jest.fn((t) => t),
     db: {
-      query: jest.fn().mockResolvedValue({
-        all: jest.fn().mockResolvedValue([])
-      })
+      query: jest.fn()
     }
   })
 );

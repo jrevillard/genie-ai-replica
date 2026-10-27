@@ -619,9 +619,10 @@ The schema and seed scripts live in
 `components/gov-chat-backend/scripts/new-schema-scripts`. They read their
 connection from `ARANGO_URL`, `ARANGO_DATABASE`, `ARANGO_USER` and
 `ARANGO_PASSWORD` — `source set-env.sh` (edit it first) exports them, or set them
-yourself. Note that these are not the deployment variable names (`ARANGO_DB`,
-`ARANGO_USERNAME`): without them the scripts fall back to a database the
-application does not read.
+yourself. Mind the one name that differs from the deployment variables: the
+backend reads `ARANGO_DB` where the scripts read `ARANGO_DATABASE`, so a backend
+`.env` alone does not aim the scripts at the right database — without
+`ARANGO_DATABASE` they fall back to a database the application does not read.
 
 ```bash
 cd components/gov-chat-backend/scripts/new-schema-scripts

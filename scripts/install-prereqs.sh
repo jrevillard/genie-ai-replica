@@ -61,6 +61,7 @@ c_reset=$'\033[0m'
 
 log()  { printf '%s==>%s %s\n' "$c_green" "$c_reset" "$*"; }
 warn() { printf '%sWARN%s %s\n' "$c_yellow" "$c_reset" "$*" >&2; }
+die()  { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
 require_tool() {
   if ! command -v "$1" >/dev/null 2>&1; then

@@ -185,6 +185,14 @@ spec:
           # dataprep) — a missing Secret is a CreateContainerConfigError
           # at first pod start, so the install must fail here instead.
           required_secrets="$required_secrets vllm-api-key kc-dataprep-client-secret"
+          {{- else if .Values.services.backend.translation.endpoint }}
+          # OPEA off but a translation endpoint EXPLICITLY named: the
+          # backend Deployment still carries a NON-optional secretKeyRef
+          # on vllm-api-key (the named API is mandatory and authenticated),
+          # so the Secret is required whatever the tier toggle says — the
+          # gate that checks it must not be narrower than the render that
+          # needs it.
+          required_secrets="$required_secrets vllm-api-key"
           {{- end }}
           missing=""
           for name in $required_secrets; do

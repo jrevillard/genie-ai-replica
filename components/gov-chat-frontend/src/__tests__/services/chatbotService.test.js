@@ -477,7 +477,7 @@ describe('chatbotService', () => {
       expect(onError).toHaveBeenCalledWith(expect.any(Error));
     });
 
-    it('calls onError callback when HTTP response is not ok', async () => {
+    it('carries the status and the backend reason on a server error', async () => {
       const mockFetch = jest.fn();
       global.fetch = mockFetch;
 
@@ -495,7 +495,65 @@ describe('chatbotService', () => {
 
       await new Promise((resolve) => setTimeout(resolve, 100));
 
-      expect(onError).toHaveBeenCalledWith(expect.any(Error));
+      // The status travels with the error: the caller tells a refused request
+      // from a broken deployment by it.
+      const error = onError.mock.calls[0][0];
+      expect(error).toBeInstanceOf(Error);
+      expect(error.message).toBe('Internal Server Error');
+      expect(error.status).toBe(500);
+    });
+
+    it('surfaces the backend message when the response is not ok', async () => {
+      const mockFetch = jest.fn();
+      global.fetch = mockFetch;
+
+      const mockResponse = {
+        ok: false,
+        status: 400,
+        json: async () => ({ error: 'UNSUPPORTED_LANGUAGE', message: 'Unsupported target language' })
+      };
+
+      mockFetch.mockResolvedValue(mockResponse);
+
+      const onError = jest.fn();
+
+      chatbotService.submitQueryStream({ query: 'test' }, { onError });
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // The backend says why it refused; the user has to be able to read it,
+      // and the caller has to be able to tell a refusal from a failure.
+      const error = onError.mock.calls[0][0];
+      expect(error).toBeInstanceOf(Error);
+      expect(error.message).toBe('Unsupported target language');
+      expect(error.code).toBe('UNSUPPORTED_LANGUAGE');
+      expect(error.status).toBe(400);
+    });
+
+    it('falls back to the status when the error body carries no message', async () => {
+      const mockFetch = jest.fn();
+      global.fetch = mockFetch;
+
+      const mockResponse = {
+        ok: false,
+        status: 502,
+        json: async () => {
+          throw new Error('not json');
+        }
+      };
+
+      mockFetch.mockResolvedValue(mockResponse);
+
+      const onError = jest.fn();
+
+      chatbotService.submitQueryStream({ query: 'test' }, { onError });
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const error = onError.mock.calls[0][0];
+      expect(error).toBeInstanceOf(Error);
+      expect(error.message).toBe('HTTP 502');
+      expect(error.status).toBe(502);
     });
 
     it('handles abort signal and does not call onError', async () => {

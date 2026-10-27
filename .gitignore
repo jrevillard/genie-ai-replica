@@ -138,7 +138,12 @@ docker-compose.override.yml
 
 # Python editable install artifacts
 genie-ai-overlay/*.egg-info/
+
+# Tokensave
 .tokensave/
+
+# Bmad
+_bmad-output/party-mode
 .bmad-loop/runs/
 .bmad-loop/cache/
 .bmad-loop/policy.toml

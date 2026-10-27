@@ -8,6 +8,11 @@ section: "core"
 ## Documents in this section
 
 1. [Project Overview](/docs/core/project-overview/)
-2. [Source Tree Analysis](/docs/core/source-tree-analysis/)
-3. [Integration Architecture](/docs/core/integration-architecture/)
-4. [Development Guide](/docs/core/development-guide/)
+2. [Integration Architecture](/docs/core/integration-architecture/)
+
+## Elsewhere
+
+- [Source Tree Analysis](/docs/reference/source-tree-analysis/) —
+  what lives where in the repository.
+- [Build and run locally](/docs/contribute/build-and-run/) —
+  prerequisites, commands, tests, and linting.

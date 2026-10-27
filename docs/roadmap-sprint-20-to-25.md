@@ -7,7 +7,7 @@
 
 ## Executive Summary
 
-GENIE.AI is an open-source generative AI framework for the public sector, built on OPEA (Open Platform for Enterprise AI). It provides a sovereign, DPG-compliant RAG (Retrieval-Augmented Generation) system with multilingual support across 34 languages and 14 UI languages.
+GENIE.AI is an open-source generative AI framework for the public sector, built on OPEA (Open Platform for Enterprise AI). It provides a sovereign, DPG-compliant RAG (Retrieval-Augmented Generation) system with multilingual support across 41 languages and 14 UI languages.
 
 This roadmap covers the next 12 months of development, organized into six sprints. The overarching goal is to transform GENIE.AI from a RAG chatbot into the AI Building Block for the GovStack ecosystem — capable of executing multi-step government workflows through agentic automation.
 

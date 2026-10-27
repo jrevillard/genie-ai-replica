@@ -263,20 +263,35 @@ const actions = {
       onDone: (data) => {
         commit('finishStream', data.queryId);
         if (data.queryId) commit('setLastBotProperty', ['queryId', data.queryId]);
+        // The answer is complete either way; only its language is affected,
+        // and only the message carries that — the status stays healthy.
+        commit('setLastBotProperty', ['translationFailed', Boolean(data.translationFailed)]);
       },
       onError: (error) => {
+        // A 4xx is a request the backend refused: the deployment is up and
+        // answered, so it stays online and the reason it gave is what the
+        // user is shown. Anything else — a 5xx, a dropped connection —
+        // leaves the deployment down.
+        const refused = Number.isInteger(error?.status) && error.status >= 400 && error.status < 500;
         // Server error frames carry their own user-facing message;
         // transport-level failures (timeout, premature close, network)
         // render localized — a raw fetch message is developer text.
         let message;
-        if (!error.fromServer && error.code === 'STREAM_IDLE_TIMEOUT') {
+        if (refused) {
+          message =
+            error.code === 'UNSUPPORTED_LANGUAGE'
+              ? t('chatbot.unsupportedLanguage', 'This language is not available for this deployment.')
+              : t('chatbot.processingError', 'Error processing your request.');
+        } else if (!error.fromServer && error.code === 'STREAM_IDLE_TIMEOUT') {
           message = t('chatbot.streamTimeout', 'The assistant is not responding — the request timed out.');
         } else {
           message =
             (error.fromServer && error.message) ||
             t('chatbot.streamingError', 'Response was interrupted. Please try again.');
         }
-        commit('status/setOffline', message, { root: true });
+        if (!refused) {
+          commit('status/setOffline', message, { root: true });
+        }
         commit('failStream', message);
       }
     });

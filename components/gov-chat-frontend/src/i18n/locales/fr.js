@@ -738,6 +738,8 @@ export default {
     noDocuments: 'Aucun document connexe',
     documentsWillAppear: 'Les documents cités dans la conversation apparaîtront ici',
     faq: 'Foire aux questions',
+    faqError: 'Impossible de charger la FAQ.',
+    faqTranslationUnavailable: 'Traduction indisponible — la version originale en anglais est affichée.',
     tab: {
       all: 'Toutes les discussions',
       folders: 'Dossiers',
@@ -1402,7 +1404,9 @@ export default {
     streamTimeout: "L'assistant ne répond pas — la requête a expiré.",
     nothingToSave:
       "Rien à enregistrer pour l'instant — toutes les réponses ont échoué. Réessayez d'abord la conversation.",
+    unsupportedLanguage: "Cette langue n'est pas disponible pour ce déploiement.",
     aiGeneratedNoDocs: 'Généré par IA — non basé sur les documents de la bibliothèque',
+    translationUnavailable: 'Traduction indisponible — cette réponse peut contenir du texte non traduit.',
     placeholder: 'Tapez votre requête ici...',
     composerPlaceholder: 'Posez une question, explorez les savoirs...',
     composerAttachTitle: 'Les pièces jointes ne sont pas encore disponibles',

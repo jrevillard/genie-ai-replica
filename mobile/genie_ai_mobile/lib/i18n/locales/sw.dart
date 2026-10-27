@@ -299,6 +299,8 @@ const Map<String, dynamic> swLocale = {
     "relatedDocs": "Nyaraka Zinazohusiana",
     "noDocuments": "Hakuna nyaraka zinazohusiana",
     "faq": "Maswali Yanayoulizwa Mara kwa Mara",
+    "faqTranslationUnavailable":
+        "Tafsiri hazipatikani — asili ya Kiingereza inaonyeshwa.",
     "tab": {
       "all": "Gumzo Zote",
       "folders": "Folda",
@@ -1016,11 +1018,15 @@ const Map<String, dynamic> swLocale = {
   },
   "chatbot": {
     "aiGeneratedNoDocs": "Imezalishwa na AI — haizingatii nyaraka za maktaba",
+    "translationUnavailable":
+        "Tafsiri hazipatikani — jibu hili linaweza kuwa na maandishi ambayo hayajatafsiriwa.",
     "placeholder": "Andika swali lako hapa...",
     "sendButton": "Tuma",
     "fileReceived": "Faili imepokelewa.",
     "fileUploadError": "Hitilafu kupakia faili.",
     "processingError": "Hitilafu kuchakata ombi lako.",
+    "unsupportedLanguage": 'Lugha hii haipatikani katika mfumo huu.',
+    "noResponse": "Hakuna jibu lililopokelewa.",
     "attachFile": "Ambatanisha Faili",
     "fileTooLarge": "Faili ni kubwa mno. Ukubwa wa juu ni {maxSize}.",
     "saveChat": "Hifadhi Gumzo",

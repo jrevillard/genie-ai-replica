@@ -732,6 +732,8 @@ export default {
     noDocuments: 'Tidak ada dokumen terkait',
     documentsWillAppear: 'Dokumen yang dikutip dalam percakapan akan muncul di sini',
     faq: 'Pertanyaan yang Sering Diajukan',
+    faqError: 'FAQ tidak dapat dimuat.',
+    faqTranslationUnavailable: 'Terjemahan tidak tersedia — versi aslinya dalam bahasa Inggris ditampilkan.',
     tab: {
       all: 'Semua Obrolan',
       folders: 'Folder',
@@ -1378,7 +1380,9 @@ export default {
     streamingError: 'Respons terputus. Silakan coba lagi.',
     streamTimeout: 'Asisten tidak merespons — permintaan kehabisan waktu.',
     nothingToSave: 'Belum ada yang bisa disimpan — semua jawaban gagal. Coba percakapan tersebut lagi dulu.',
+    unsupportedLanguage: 'Bahasa ini tidak tersedia untuk deployment ini.',
     aiGeneratedNoDocs: 'Dihasilkan oleh AI — tidak berdasarkan dokumen perpustakaan',
+    translationUnavailable: 'Terjemahan tidak tersedia — jawaban ini mungkin memuat teks yang belum diterjemahkan.',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'Ketidakcocokan konfigurasi: {warnings}. Silakan periksa konfigurasi Bantuan Cepat dan hierarki pengetahuan.',

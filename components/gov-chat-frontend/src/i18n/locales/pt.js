@@ -735,6 +735,8 @@ export default {
     noDocuments: 'Nenhum documento relacionado',
     documentsWillAppear: 'Os documentos citados na conversa aparecerão aqui',
     faq: 'Perguntas Frequentes',
+    faqError: 'Não foi possível carregar as perguntas frequentes.',
+    faqTranslationUnavailable: 'Tradução indisponível — a versão original em inglês é exibida.',
     tab: {
       all: 'Todos os Chats',
       folders: 'Pastas',
@@ -1392,7 +1394,9 @@ export default {
     streamingError: 'A resposta foi interrompida. Tente novamente.',
     streamTimeout: 'O assistente não está a responder — o pedido expirou.',
     nothingToSave: 'Ainda nada para guardar — todas as respostas falharam. Volte a tentar a conversação primeiro.',
+    unsupportedLanguage: 'Este idioma não está disponível para esta implantação.',
     aiGeneratedNoDocs: 'Gerado por IA — não baseado nos documentos da biblioteca',
+    translationUnavailable: 'Tradução indisponível — esta resposta pode conter texto não traduzido.',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'Incompatibilidade de configuração: {warnings}. Verifique a configuração de Ajuda Rápida e hierarquia de conhecimento.',

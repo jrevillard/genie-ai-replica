@@ -80,21 +80,48 @@ class KeycloakConfig {
   );
 }
 
+/// The startup failure when the deployment configuration cannot be resolved.
+///
+/// [main] renders [message] on a diagnostic screen; there is nothing else to
+/// do with a build whose flavor is missing or unknown.
+class FlavorConfigError implements Exception {
+  const FlavorConfigError(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+final _flavorTable = <String, KeycloakConfig>{
+  'dev': devConfig,
+  'staging': stagingConfig,
+  'e2e': e2eConfig,
+  'itu': flavors.config,
+};
+
+String get _knownFlavors => _flavorTable.keys.join(', ');
+
 KeycloakConfig getConfig() {
-  // When adding a new deployment flavor, add a case below and import its config.
-  const flavor = String.fromEnvironment('FLAVOR', defaultValue: 'dev');
-  switch (flavor) {
-    case 'itu':
-      return flavors.config;
-    case 'staging':
-      return stagingConfig;
-    case 'e2e':
-      return e2eConfig;
-    case 'dev':
-      return devConfig;
-    default:
-      throw ArgumentError(
-        'Unknown FLAVOR: "$flavor". Expected: dev, staging, e2e, or itu.',
+  const flavor = String.fromEnvironment('FLAVOR');
+  if (flavor.isEmpty) {
+    // No FLAVOR dart-define. A debug `flutter run` keeps the dev default for
+    // convenience; a release or profile build must not — it would silently
+    // resolve devConfig, pointing every endpoint at localhost and arming the
+    // trust-all TLS client in a release artifact. Fail at startup instead.
+    if (kReleaseMode || kProfileMode) {
+      throw FlavorConfigError(
+        'No FLAVOR dart-define: build with '
+        '--flavor <name> --dart-define=FLAVOR=<name> ($_knownFlavors).',
       );
+    }
+    return devConfig;
   }
+  final config = _flavorTable[flavor];
+  if (config == null) {
+    throw FlavorConfigError(
+      'Unknown FLAVOR: "$flavor". Expected: $_knownFlavors.',
+    );
+  }
+  return config;
 }

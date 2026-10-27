@@ -155,9 +155,50 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
         span.set_attribute("dataprep.file_size_bytes", len(payload.fileBase64))
         span.set_attribute("dataprep.file_id", payload.fileId)
 
+        # --- Request validation, before the lock: a rejection here must not
+        # have to release anything.
+        if (
+            os.path.basename(payload.fileName) != payload.fileName
+            or payload.fileName in ("", ".", "..")
+            or "\x00" in payload.fileName
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=f"fileName must be a bare file name, got {payload.fileName!r}",
+            )
+        CHUNK_SIZE = get_chunk_size_for_file(payload.fileName)
+        # Per-request chunkOverlap wins over env; env wins over hardcoded default.
+        CHUNK_OVERLAP = payload.chunkOverlap
+        if CHUNK_OVERLAP is None:
+            CHUNK_OVERLAP = int(os.getenv("DATAPREP_CHUNK_OVERLAP", 50))
+        # Reject negatives: RecursiveCharacterTextSplitter treats them as >=chunk_size
+        # (no splitting happens). Caller-side Joi already constrains the batch path;
+        # this is a defense-in-depth guard for the single-ingest endpoint.
+        if CHUNK_OVERLAP < 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"chunkOverlap must be >= 0, got {CHUNK_OVERLAP}",
+            )
+
+        # --- Environment-specific Arango config, still pre-lock: a malformed
+        # env value (int() on ARANGO_BATCH_SIZE, for one) must fail before
+        # there is a lock to release.
+        ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
+        ARANGO_INSERT_ASYNC = os.getenv("ARANGO_INSERT_ASYNC", "false").lower() == "true"
+        ARANGO_BATCH_SIZE = int(os.getenv("ARANGO_BATCH_SIZE", 1000))
+        ALLOWED_NODE_TYPES = os.getenv("ALLOWED_NODE_TYPES", "").split(",") if os.getenv("ALLOWED_NODE_TYPES") else []
+        ALLOWED_EDGE_TYPES = os.getenv("ALLOWED_EDGE_TYPES", "").split(",") if os.getenv("ALLOWED_EDGE_TYPES") else []
+        NODE_PROPERTIES = os.getenv("NODE_PROPERTIES", "description").split(",")
+        EDGE_PROPERTIES = os.getenv("EDGE_PROPERTIES", "description").split(",")
+        TEXT_CAPITALIZATION_STRATEGY = os.getenv("TEXT_CAPITALIZATION_STRATEGY", "upper")
+        INCLUDE_CHUNKS = os.getenv("INCLUDE_CHUNKS", "true").lower() == "true"
+
         # --- SYNCHRONOUS LOCK CHECK ---
         # We acquire the lock HERE to ensure we can return 429 immediately if busy.
-        lock_file = open(LOCK_FILE_PATH, "w")  # noqa: SIM115
+        # O_NOFOLLOW + 0600: the lock file lives in the shared /tmp, so open
+        # it without following a pre-planted symlink and keep it private.
+        lock_fd = os.open(LOCK_FILE_PATH, os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+        lock_file = os.fdopen(lock_fd, "w")
         try:
             # LOCK_EX: Exclusive, LOCK_NB: Non-blocking (throws error immediately if busy)
             fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -169,30 +210,8 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
                 detail="System is currently processing another document. Only one ingestion can run at a time.",
             ) from None
 
-        # --- Environment-specific Arango config ---
-        ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
-        ARANGO_INSERT_ASYNC = os.getenv("ARANGO_INSERT_ASYNC", "false").lower() == "true"
-        ARANGO_BATCH_SIZE = int(os.getenv("ARANGO_BATCH_SIZE", 1000))
-        ALLOWED_NODE_TYPES = os.getenv("ALLOWED_NODE_TYPES", "").split(",") if os.getenv("ALLOWED_NODE_TYPES") else []
-        ALLOWED_EDGE_TYPES = os.getenv("ALLOWED_EDGE_TYPES", "").split(",") if os.getenv("ALLOWED_EDGE_TYPES") else []
-        NODE_PROPERTIES = os.getenv("NODE_PROPERTIES", "description").split(",")
-        EDGE_PROPERTIES = os.getenv("EDGE_PROPERTIES", "description").split(",")
-        TEXT_CAPITALIZATION_STRATEGY = os.getenv("TEXT_CAPITALIZATION_STRATEGY", "upper")
-        INCLUDE_CHUNKS = os.getenv("INCLUDE_CHUNKS", "true").lower() == "true"
-
-        # --- FIX: Dynamic Chunking Configuration ---
-        # Determine chunk size based on file extension
-        CHUNK_SIZE = get_chunk_size_for_file(payload.fileName)
-        # Per-request chunkOverlap wins over env; env wins over hardcoded default.
-        CHUNK_OVERLAP = payload.chunkOverlap
-        if CHUNK_OVERLAP is None:
-            CHUNK_OVERLAP = int(os.getenv("DATAPREP_CHUNK_OVERLAP", 50))
-        # Reject negatives: RecursiveCharacterTextSplitter treats them as >=chunk_size
-        # (no splitting happens). Caller-side Joi already constrains the batch path;
-        # this is a defense-in-depth guard for the single-ingest endpoint.
-        if CHUNK_OVERLAP < 0:
-            raise ValueError(f"chunkOverlap must be >= 0, got {CHUNK_OVERLAP}")
-
+        save_path = None
+        task = None
         try:
             # Decode and temporarily save file
             file_bytes = base64.b64decode(payload.fileBase64)
@@ -225,22 +244,23 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
                 chunk_overlap=CHUNK_OVERLAP,
             )
 
-            # --- Trigger Tracked Background Task ---
-            # We use asyncio.create_task to maintain a reference for the "Kill" functionality.
-            task = asyncio.create_task(loader.ingest_file_with_guardrail(input_req, lock_file=lock_file))
-            active_ingestion_tasks[payload.fileId] = task
-
-            # Ensure the task is removed from the registry upon completion (success or failure)
-            task.add_done_callback(lambda t: active_ingestion_tasks.pop(payload.fileId, None))
-
+            # Metrics first: once the task exists it owns the lock and the
+            # file, so a failure in this tail must not report an ingestion
+            # that then starts anyway.
             statistics_dict["opea_service@dataprep"].append_latency(time.time() - start, None)
-
-            # Record custom ingestion metrics
             _ing_latency = time.time() - start
             _file_type = payload.fileType
             _ing_attrs = sanitize_attributes({"dataprep.file_type": _file_type, "error": "false"})
             _ingestion_requests.add(1, _ing_attrs)
             _ingestion_duration.record(_ing_latency, _ing_attrs)
+
+            # --- Trigger Tracked Background Task ---
+            # We use asyncio.create_task to maintain a reference for the "Kill" functionality.
+            # Last statement group before the return: everything that can
+            # still fail has failed before the lock and the file change owner.
+            task = asyncio.create_task(loader.ingest_file_with_guardrail(input_req, lock_file=lock_file))
+            active_ingestion_tasks[payload.fileId] = task
+            task.add_done_callback(lambda t: active_ingestion_tasks.pop(payload.fileId, None))
 
             return {"success": True, "status": 200, "message": "Ingestion started in background."}
 
@@ -253,13 +273,27 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
             span.record_exception(e)
             span.set_status(Status(StatusCode.ERROR, str(e)))
             logger.error(f"Error initiating dataprep ingest: {e}")
-            # Cleanup lock if we fail before task starts
-            fcntl.flock(lock_file, fcntl.LOCK_UN)
-            lock_file.close()
-
-            if os.path.exists(save_path):
-                os.remove(save_path)
             raise
+        finally:
+            # Release the lock and the decoded file only when the background
+            # task has not picked them up: once created, the task owns both
+            # and unlocks on completion. The finally (not the except) does
+            # this, so a cancellation or interpreter exit in the window
+            # cannot leave the flock held by this process.
+            if task is None:
+                # Each step is guarded: a failure here must not mask the
+                # original exception, and the temp file must still be
+                # reclaimed if the unlock misbehaves.
+                try:
+                    fcntl.flock(lock_file, fcntl.LOCK_UN)
+                    lock_file.close()
+                except OSError:
+                    logger.exception("Failed to release the ingestion lock")
+                if save_path and os.path.exists(save_path):
+                    try:
+                        os.remove(save_path)
+                    except OSError:
+                        logger.exception("Failed to remove %s", save_path)
 
 
 # ------------------------------------------------------------------------------

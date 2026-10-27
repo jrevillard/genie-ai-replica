@@ -29,7 +29,7 @@ content manager, sovereign reviewer) start here.
 - **Hybrid retrieval** — dense-vector search plus lexical search
   ([BM25](https://en.wikipedia.org/wiki/Okapi_BM25), keyword scoring) combined
   with reciprocal-rank fusion, plus optional knowledge-graph traversal. See
-  [RAG Pipeline](/docs/rag-pipeline/).
+  [Retrieval](/docs/rag-pipeline/retrieval/).
 - **Sovereign by design** — embedding, reranking, generation, and translation
   models all run on your infrastructure (OPEA / vLLM / TEI). No third-party
   model API is required for the core path.
@@ -73,7 +73,7 @@ Each RAG stage emits OpenTelemetry [spans](https://opentelemetry.io/docs/concept
 (units of work in distributed tracing), propagated across service boundaries
 with the [W3C `traceparent` header](https://www.w3.org/TR/trace-context/).
 For the full C4 diagrams, authentication flows, and the service-to-service auth
-matrix, see [Architecture](/docs/architecture/).
+matrix, see [Architecture Overview](/docs/architecture/architecture/).
 
 ## Repository structure
 
@@ -90,7 +90,7 @@ GENIE.AI is organised as a multi-component monorepo with seven logical parts:
 | Deployment & ops | `deploy/`, `docker-compose.yaml`, `configs/` |
 
 For the full source-tree walk-through, see
-[Source tree analysis](/docs/core/source-tree-analysis/).
+[Source tree analysis](/docs/reference/source-tree-analysis/).
 
 ## Design principles
 
@@ -110,9 +110,9 @@ For the full source-tree walk-through, see
 
 | Want to know about… | Read |
 |---|---|
-| The RAG pipeline end-to-end | [RAG Pipeline](/docs/rag-pipeline/) |
+| The RAG pipeline end-to-end | [Pipeline architecture](/docs/rag-pipeline/pipeline/) |
 | Tracing, metrics, logs, dashboards | [Observability](/docs/observe/) |
-| C4 diagrams, auth flows, service matrix | [Architecture](/docs/architecture/) |
+| C4 diagrams, auth flows, service matrix | [Architecture Overview](/docs/architecture/architecture/) |
 | Deploying (Compose / Swarm / Ansible) | [Deployment](/docs/deploy/) |
 | Identity, Keycloak, external IdPs | [Configuration](/docs/configure/) |
 | Backend API contracts | [Reference → API contracts](/docs/reference/api-contracts/) |

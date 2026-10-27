@@ -738,6 +738,8 @@ export default {
     noDocuments: 'Keine zugehörigen Dokumente',
     documentsWillAppear: 'In der Konversation zitierte Dokumente erscheinen hier',
     faq: 'Häufig gestellte Fragen',
+    faqError: 'Die FAQ konnte nicht geladen werden.',
+    faqTranslationUnavailable: 'Übersetzung nicht verfügbar – das englische Original wird angezeigt.',
     tab: {
       all: 'Alle Chats',
       folders: 'Ordner',
@@ -1392,7 +1394,9 @@ export default {
     streamTimeout: 'Der Assistent antwortet nicht – die Anfrage hat das Zeitlimit überschritten.',
     nothingToSave:
       'Noch nichts zu speichern – alle Antworten sind fehlgeschlagen. Versuchen Sie zuerst die Konversation erneut.',
+    unsupportedLanguage: 'Diese Sprache ist für diese Installation nicht verfügbar.',
     aiGeneratedNoDocs: 'KI-generiert — nicht auf Bibliotheksdokumenten basierend',
+    translationUnavailable: 'Übersetzung nicht verfügbar — diese Antwort kann unübersetzten Text enthalten.',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'Konfigurationsfehler: {warnings}. Bitte überprüfen Sie die Schnellhilfe- und Wissenshierarchie-Konfiguration.',

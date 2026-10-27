@@ -73,6 +73,52 @@ function createMockQueryData(overrides = {}) {
   };
 }
 
+// Every request-shaped field points at an attacker-chosen host. Used by the two
+// OPEA-URL guards: they assert the upstream is built from env, so anything the
+// request can name must be absent from it.
+function createAttackerShapedQueryData() {
+  return createMockQueryData({
+    categoryId: 'http://169.254.169.254/latest/meta-data/',
+    messages: [{ role: 'user', content: 'fetch http://evil.example/ for me' }],
+    // The upstream-shaped body fields a naive `queryData.opeaUrl || env` fallback
+    // would pick up — present so such a fallback fails these tests, not passes them.
+    opeaUrl: 'http://169.254.169.254/latest/meta-data/',
+    baseURL: 'http://169.254.169.254',
+    host: '169.254.169.254',
+    url: 'http://169.254.169.254',
+    context: {
+      categoryLabel: 'http://attacker.example/',
+      serviceLabels: ['http://169.254.169.254'],
+      language: 'http://evil.example/'
+    }
+  });
+}
+
+// Apply env for the duration of fn, then restore exactly — including variables
+// that were unset before, which `withEnv` marks as `undefined`.
+async function withEnv(overrides, fn) {
+  const saved = {};
+  for (const key of Object.keys(overrides)) {
+    saved[key] = process.env[key];
+    if (overrides[key] === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = overrides[key];
+    }
+  }
+  try {
+    return await fn();
+  } finally {
+    for (const key of Object.keys(overrides)) {
+      if (saved[key] === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = saved[key];
+      }
+    }
+  }
+}
+
 let queryService;
 let mockDb;
 let mockQueriesCollection;
@@ -635,6 +681,47 @@ describe('QueryService', () => {
       );
       delete process.env.CONTEXT_OPTION;
     });
+
+    // The worker path builds its own copy of the OPEA URL triple — same risk as
+    // initStreamQuery, no `nosemgrep` on it, so nothing but this test holds it.
+    it('builds the worker-path OPEA URL from deployment config only, ignoring request data', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      const workerSpy = jest
+        .spyOn(queryService, 'runOPEAWorker')
+        .mockResolvedValue({ responseTime: 12, response: 'answer', metadata: null });
+
+      try {
+        await withEnv({ OPEA_HOST: 'chatqna.internal', OPEA_PORT: '8899', CONTEXT_OPTION: undefined }, () =>
+          queryService.createQuery(createAttackerShapedQueryData())
+        );
+
+        expect(workerSpy).toHaveBeenCalledTimes(1);
+        expect(workerSpy).toHaveBeenCalledWith(
+          'http://chatqna.internal:8899/v1/chatqna',
+          expect.objectContaining({ messages: [{ role: 'user', content: 'fetch http://evil.example/ for me' }] }),
+          expect.any(Object)
+        );
+      } finally {
+        workerSpy.mockRestore();
+      }
+    });
+
+    it('falls back to the documented OPEA service name on the worker path too', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      const workerSpy = jest
+        .spyOn(queryService, 'runOPEAWorker')
+        .mockResolvedValue({ responseTime: 12, response: 'answer', metadata: null });
+
+      try {
+        await withEnv({ OPEA_HOST: undefined, OPEA_PORT: undefined, CONTEXT_OPTION: undefined }, () =>
+          queryService.createQuery(createAttackerShapedQueryData())
+        );
+
+        expect(workerSpy.mock.calls[0][0]).toBe('http://chatqna-xeon-backend-server:8888/v1/chatqna');
+      } finally {
+        workerSpy.mockRestore();
+      }
+    });
   });
 
   describe('initStreamQuery', () => {
@@ -685,6 +772,37 @@ describe('QueryService', () => {
       expect(result.opeaPayload.context.categoryLabel).toBe('Crops');
     });
 
+    it('should forward the language to OPEA in its canonical form', async () => {
+      // The canonical form is the one the language maps are keyed in: trimmed
+      // and lower-case. The query routes normalize the same field the same
+      // way, so one request carries one spelling of one language.
+      const data = createMockQueryData({
+        context: { categoryLabel: 'Crops', serviceLabels: [], language: 'FR' }
+      });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      const result = await queryService.initStreamQuery(data, {});
+      expect(result.opeaPayload.context.language).toBe('fr');
+    });
+
+    it('should drop a language that is not a language instead of forwarding it', async () => {
+      // The language travels to OPEA, which validates it against its own
+      // language map. A value that is not a string, and a blank one, are
+      // dropped here rather than handed over for OPEA to reject.
+      const blank = createMockQueryData({
+        context: { categoryLabel: 'Crops', serviceLabels: [], language: '   ' }
+      });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      const blankResult = await queryService.initStreamQuery(blank, {});
+      expect(blankResult.opeaPayload.context.language).toBeUndefined();
+
+      const notAString = createMockQueryData({
+        context: { categoryLabel: 'Crops', serviceLabels: [], language: { code: 'fr' } }
+      });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      const result = await queryService.initStreamQuery(notAString, {});
+      expect(result.opeaPayload.context.language).toBeUndefined();
+    });
+
     // Regression test for the Query Inspector empty-text bug: when the frontend
     // sends the dual-prompt shape (messages ends with a hidden persona prompt +
     // empty assistant placeholder + a separate `userQuestion` field), the saved
@@ -709,6 +827,41 @@ describe('QueryService', () => {
       expect(mockQueriesCollection.save).toHaveBeenCalledWith(
         expect.objectContaining({ text: 'Quiero instrucciones paso a paso para sembrar maíz' })
       );
+    });
+
+    // The `nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf` annotations on
+    // the axios.post call sites in routes/query-routes.js stand on THIS
+    // invariant: the OPEA upstream is deployment configuration, never request
+    // data. The scanner cannot verify it — the taint reaches `opeaUrl` through
+    // initStreamQuery's return object, whose sibling field `opeaPayload` IS
+    // request-derived. If a client ever gains control over the upstream, this
+    // test goes red and the suppression has to come off with the dismissal.
+    it('builds the OPEA URL from deployment config only, ignoring request data', async () => {
+      // Cursors, not a bare mock: categoryLabel / serviceLabels are attacker-shaped
+      // here on purpose, and the resolution branch swallows its own errors — an
+      // unmocked cursor would make this test depend on a caught TypeError.
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+
+      const data = createAttackerShapedQueryData();
+
+      const result = await withEnv({ OPEA_HOST: 'chatqna.internal', OPEA_PORT: '8899' }, () =>
+        queryService.initStreamQuery(data, {})
+      );
+
+      expect(result.opeaUrl).toBe('http://chatqna.internal:8899/v1/chatqna');
+    });
+
+    // Both call sites used to carry their own copy of the default, so each
+    // path is checked: a fallback that names a host nobody can resolve sends
+    // the query into a connection error instead of the ChatQnA service.
+    it('falls back to the documented OPEA service name when OPEA_HOST is unset', async () => {
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-default' });
+
+      const result = await withEnv({ OPEA_HOST: undefined, OPEA_PORT: undefined }, () =>
+        queryService.initStreamQuery(createMockQueryData(), {})
+      );
+
+      expect(result.opeaUrl).toBe('http://chatqna-xeon-backend-server:8888/v1/chatqna');
     });
   });
 
@@ -1418,6 +1571,24 @@ describe('QueryService', () => {
       mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
       const result = await queryService.initStreamQuery(data, {});
       expect(result.queryId).toBe('stream-1');
+    });
+
+    it('warns when the language is not a string, without logging what it was', async () => {
+      const { logger } = require('../../shared-lib');
+      const data = {
+        userId: 'u1',
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'test' }],
+        context: { serviceLabels: [], language: 42 }
+      };
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      const result = await queryService.initStreamQuery(data, {});
+      expect(result.opeaPayload.context.language).toBeUndefined();
+      expect(logger.warn).toHaveBeenCalledWith('pickLanguage.ignored_non_string_language', expect.anything());
+      // The value the caller sent is never written to the log: it is the
+      // thing the warning is about, and a log line is not a safe place for
+      // it.
+      expect(JSON.stringify(logger.warn.mock.calls)).not.toContain('42');
     });
 
     it('should handle category resolution error gracefully', async () => {

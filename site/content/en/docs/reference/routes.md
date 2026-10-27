@@ -91,4 +91,4 @@ consistent with `OTEL_TRACES_SAMPLER_RATE` in app services.
 
 - [Reference → Environment variables](/docs/reference/env-vars/) — `CORS_ALLOWED_ORIGINS` etc.
 - [Configure → CORS / CSP](/docs/configure/cors-csp/)
-- [Operate → Security hardening](/docs/operate/security-hardening/)
+- [Operations → Security hardening](/docs/operate/security-hardening/)

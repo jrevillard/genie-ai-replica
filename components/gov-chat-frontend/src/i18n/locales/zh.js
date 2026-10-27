@@ -729,6 +729,8 @@ export default {
     noDocuments: '无相关文档',
     documentsWillAppear: '对话中引用的文档将显示在这里',
     faq: '常见问题',
+    faqError: '无法加载常见问题。',
+    faqTranslationUnavailable: '翻译不可用 — 显示英文原文。',
     tab: {
       all: '所有聊天',
       folders: '文件夹',
@@ -1319,7 +1321,9 @@ export default {
     streamingError: '回复已中断。请重试。',
     streamTimeout: '助手没有响应——请求已超时。',
     nothingToSave: '暂无可保存内容——所有回答均失败。请先重试对话。',
+    unsupportedLanguage: '此语言在当前部署中不可用。',
     aiGeneratedNoDocs: 'AI 生成 — 不基于文库文档',
+    translationUnavailable: '翻译不可用 — 此回复可能包含未翻译的文本。',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning: '配置不匹配：{warnings}。请检查快速帮助和知识层次结构的配置。',
     categoryNotFound: '在知识层次结构中未找到类别"{label}"',

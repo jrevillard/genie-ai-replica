@@ -27,7 +27,7 @@ component.
 - The Vuex store loaded (the toast does not depend on Vuex, but the
   emitting components almost always do).
 - The `eventBus` module at
-  [`components/gov-chat-frontend/src/eventBus.js`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-frontend/src/eventBus.js).
+  [`components/gov-chat-frontend/src/eventBus.js`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-frontend/src/eventBus.js).
 
 ## How a toast fires
 
@@ -35,7 +35,7 @@ The wiring has three layers.
 
 ### 1. The service helper
 
-[`src/services/notificationService.js`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-frontend/src/services/notificationService.js)
+[`src/services/notificationService.js`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-frontend/src/services/notificationService.js)
 exposes five methods (`success`, `error`, `info`, `warning`, and a
 generic `show`). All five end up emitting `notification:show` on the
 eventBus:
@@ -54,7 +54,7 @@ second argument to override.
 
 ### 2. The eventBus
 
-[`src/eventBus.js`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-frontend/src/eventBus.js)
+[`src/eventBus.js`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-frontend/src/eventBus.js)
 is a tiny in-process pub/sub (no Vuex, no DOM events, no sockets). It
 exposes `$on`, `$off`, `$emit` — the same shape as the deprecated Vue 2
 event API.
@@ -171,7 +171,7 @@ Two rules:
 
 The legacy documentation referenced a `NotificationSystem.vue`
 component that does not exist (verified in
-[`components/gov-chat-frontend/src/components/`](https://gitlab.com/un/itu/genie-ai/-/tree/main/components/gov-chat-frontend/src/components)
+[`components/gov-chat-frontend/src/components/`](https://opensource.unicc.org/un/itu/genie-ai/-/tree/main/components/gov-chat-frontend/src/components)
 — no such file). The notification code is intentionally inline in
 `App.vue` for two reasons:
 

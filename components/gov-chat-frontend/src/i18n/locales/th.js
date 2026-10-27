@@ -732,6 +732,8 @@ export default {
     noDocuments: 'ไม่มีเอกสารที่เกี่ยวข้อง',
     documentsWillAppear: 'เอกสารที่ถูกอ้างถึงในบทสนทนาจะปรากฏที่นี่',
     faq: 'คำถามที่พบบ่อย',
+    faqError: 'ไม่สามารถโหลดคำถามที่พบบ่อยได้',
+    faqTranslationUnavailable: 'ไม่สามารถแปลได้ — กำลังแสดงต้นฉบับภาษาอังกฤษ',
     tab: {
       all: 'แชททั้งหมด',
       folders: 'โฟลเดอร์',
@@ -1375,7 +1377,9 @@ export default {
     streamingError: 'การตอบกลับถูกขัดจังหวะ โปรดลองอีกครั้ง',
     streamTimeout: 'ผู้ช่วยไม่ตอบสนอง — คำขอหมดเวลาแล้ว',
     nothingToSave: 'ยังไม่มีอะไรให้บันทึก — คำตอบทั้งหมดล้มเหลว โปรดลองบทสนทนาอีกครั้งก่อน',
+    unsupportedLanguage: 'ภาษานี้ไม่พร้อมใช้งานในการติดตั้งนี้',
     aiGeneratedNoDocs: 'สร้างโดย AI — ไม่อิงจากเอกสารในคลังเอกสาร',
+    translationUnavailable: 'ไม่สามารถแปลได้ — คำตอบนี้อาจมีข้อความที่ยังไม่ได้แปล',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'การกำหนดค่าไม่ตรงกัน: {warnings}. กรุณาตรวจสอบการกำหนดค่าความช่วยเหลือด่วนและลำดับชั้นความรู้',

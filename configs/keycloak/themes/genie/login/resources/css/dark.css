@@ -69,20 +69,29 @@
     --pf-v5-c-page--BackgroundColor: #05080a;
   }
 
-  body {
+  /* Page ground — same wash as the light theme, on the dark palette. */
+  body#keycloak-bg {
     background-color: #05080a;
   }
 
-  #keycloak-bg {
-    background-color: #05080a;
+  body.kc-theme-genie#keycloak-bg::before {
+    background-image:
+      radial-gradient(70% 60% at 76% 38%, rgba(83, 127, 235, 0.22), rgba(83, 127, 235, 0) 70%),
+      radial-gradient(55% 50% at 10% 90%, rgba(148, 108, 255, 0.16), rgba(148, 108, 255, 0) 70%),
+      linear-gradient(180deg, #0a1020 0%, #05080a 100%);
+  }
+
+  /* On the dark ground the strokes have to lighten it, not darken it:
+     screen is the same mechanism with the opposite effect. */
+  body.kc-theme-genie#keycloak-bg::after {
+    opacity: 0.42;
+    mix-blend-mode: screen;
   }
 
   .pf-v5-c-login__main {
     background-color: #13161a;
-  }
-
-  #kc-header-wrapper {
-    color: #537feb;
+    border-top-color: #537feb;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
   }
 
   #kc-page-title {

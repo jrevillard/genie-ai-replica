@@ -200,7 +200,7 @@ envelope.
 
 > **Note.** This probe sends an **anonymous** request (no JWT); ChatQnA
 > in production requires a Keycloak Bearer token. To probe with a token,
-> follow the [Server API Testing recipe]({{< relref "/docs/operate" >}})
+> follow the [API contracts recipe]({{< relref "/docs/reference/api-contracts" >}})
 > to obtain a token, then add `Authorization: Bearer $TOKEN`.
 
 ## Related
@@ -211,5 +211,5 @@ envelope.
   `retrieval_confidence_score` and `is_grounded` fields.
 - [Pipeline architecture]({{< relref "pipeline" >}}) — how the
   per-stage spans and metrics relate to the wire format.
-- [Backend → API contracts]({{< relref "/docs/reference/api-contracts" >}})
+- [Reference → API contracts]({{< relref "/docs/reference/api-contracts" >}})
   — the BFF route that wraps this stream for the frontend.

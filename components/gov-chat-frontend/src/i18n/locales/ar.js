@@ -734,6 +734,8 @@ export default {
     noDocuments: 'لا توجد وثائق ذات صلة',
     documentsWillAppear: 'ستظهر هنا المستندات التي يستشهد بها الحوار',
     faq: 'الأسئلة الشائعة',
+    faqError: 'تعذّر تحميل الأسئلة الشائعة.',
+    faqTranslationUnavailable: 'الترجمة غير متاحة — يتم عرض النص الأصلي بالإنجليزية.',
     tab: {
       all: 'جميع المحادثات',
       folders: 'المجلدات',
@@ -1371,7 +1373,9 @@ export default {
     streamingError: 'تمت مقاطعة الاستجابة. يرجى المحاولة مرة أخرى.',
     streamTimeout: 'لا يستجيب المساعد — انتهت مهلة الطلب.',
     nothingToSave: 'لا شيء للحفظ بعد — فشلت جميع الإجابات. أعد محاولة المحادثة أولاً.',
+    unsupportedLanguage: 'هذه اللغة غير متاحة في هذا التثبيت.',
     aiGeneratedNoDocs: 'مُولّد بواسطة الذكاء الاصطناعي — لا يعتمد على وثائق المكتبة',
+    translationUnavailable: 'الترجمة غير متاحة — قد يحتوي هذا الرد على نص غير مترجم.',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'عدم تطابق في التكوين: {warnings}. يرجى التحقق من تكوين المساعدة السريعة والتسلسل الهرمي للمعرفة.',

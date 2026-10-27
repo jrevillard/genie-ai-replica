@@ -736,6 +736,8 @@ export default {
     noDocuments: 'No hay documentos relacionados',
     documentsWillAppear: 'Los documentos citados en la conversación aparecerán aquí',
     faq: 'Preguntas Frecuentes',
+    faqError: 'No se pudo cargar la sección de preguntas frecuentes.',
+    faqTranslationUnavailable: 'Traducción no disponible: se muestra el original en inglés.',
     tab: {
       all: 'Todos los Chats',
       folders: 'Carpetas',
@@ -1391,8 +1393,10 @@ export default {
     streamingError: 'Se interrumpió la respuesta. Inténtelo de nuevo.',
     streamTimeout: 'El asistente no responde: la solicitud ha expirado.',
     nothingToSave: 'Nada que guardar todavía: todas las respuestas fallaron. Reintente primero la conversación.',
+    unsupportedLanguage: 'Este idioma no está disponible para este despliegue.',
     welcomeMessage: 'Welcome! How can I assist you today?',
     aiGeneratedNoDocs: 'Generado por IA — no basado en los documentos de la biblioteca',
+    translationUnavailable: 'Traducción no disponible: esta respuesta puede contener texto sin traducir.',
     configMismatchWarning:
       'Incoherencia de configuración: {warnings}. Verifique la configuración de Ayuda Rápida y la jerarquía de conocimiento.',
     categoryNotFound: 'Categoría "{label}" no encontrada en la jerarquía de conocimiento',

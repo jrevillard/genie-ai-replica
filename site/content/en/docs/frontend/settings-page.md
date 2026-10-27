@@ -69,7 +69,7 @@ fires the `vue-i18n` `localeChanged` event, which propagates to every
 
 `applyTheme(theme)` writes `settings.theme` and forwards to
 `themeManager.setTheme(theme)` (see
-[`src/utils/ThemeManager.js`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-frontend/src/utils/ThemeManager.js)).
+[`src/utils/ThemeManager.js`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-frontend/src/utils/ThemeManager.js)).
 The theme is reflected as `data-theme="light|dark"` on `<div id="app">`
 in `App.vue:3`, which cascades to every CSS variable under
 `[data-theme="dark"]` selectors.

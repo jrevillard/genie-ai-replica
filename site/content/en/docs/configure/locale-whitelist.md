@@ -155,7 +155,7 @@ time (default = all 14 locales).
   — realm-level locale configuration beyond the env var.
 - [Frontend → Settings page](/docs/frontend/settings-page/) — where the
   `<LanguageSelector>` component reads the whitelist.
-- [Operate → Backup & restore](/docs/operate/backup-restore/)
+- [Operations → Backup & restore](/docs/operate/backup-restore/)
   — restore gotcha for `KEYCLOAK_SUPPORTED_LOCALES`.
 - [Reference → env-vars](/docs/reference/env-vars/) — full env-var
   reference.

@@ -2,14 +2,14 @@
 
 ## Overview
 
-The Document Translation Service is a flexible, multi-backend translation system designed to translate markdown documents while preserving their structure. The service supports **34 languages** and provides configurable backends (CPU-based, GPU-based, or automatic fallback).
+The Document Translation Service is a flexible, multi-backend translation system designed to translate markdown documents while preserving their structure. The service supports **41 languages** and provides configurable backends (CPU-based, GPU-based, or automatic fallback).
 
 ### Key Features
 
-- **34 Language Support** - Including English, Arabic, Chinese, Spanish, and 31 others
+- **41 Language Support** - Including English, Arabic, Chinese, Spanish, and 38 others
 - **Multiple Backends** - CPU (NLLB-200), GPU (TranslateGemma, Gemma-3), or Auto mode
 - **Smart Caching** - Redis-based permanent caching per document/language pair
-- **Graceful Degradation** - Language and backend fallback chains for reliability
+- **Graceful Degradation** - Backend fallback chains for reliability; an unsupported language is refused, never substituted
 - **Zero Configuration Changes Required** - Defaults to existing CPU behavior
 - **Configuration-Driven** - All backend selection via `.env` files only
 
@@ -22,7 +22,7 @@ The Document Translation Service is a flexible, multi-backend translation system
 │                  translation-service.js                      │
 │                       (Proxy Service)                        │
 │  - Selects backend based on TRANSLATION_BACKEND env var     │
-│  - Handles language fallback chains                         │
+│  - Refuses a language the map does not know                 │
 │  - Manages Redis caching (backend-agnostic)                 │
 │  - Preserves markdown structure during translation          │
 └────────────────────┬────────────────────────────────────────┘
@@ -35,7 +35,7 @@ The Document Translation Service is a flexible, multi-backend translation system
 │  (NLLB-200)      │      │  (vLLM)          │
 │                  │      │                  │
 │ • 10 tokens/sec  │      │ • 60-100 tokens/s│
-│ • 34 languages   │      │ • 34 languages   │
+│ • 41 languages   │      │ • 41 languages   │
 │ • No GPU needed  │      │ • Requires GPU   │
 │ • Free           │      │ • GPU cost       │
 └──────────────────┘      └──────────────────┘
@@ -111,10 +111,17 @@ All configuration is done via `.env` files. **No code changes required.**
 ```bash
 # env or env-T4 file
 
-# Backend selection: cpu, gpu, or auto
-TRANSLATION_BACKEND=cpu    # Default, backward compatible
-# TRANSLATION_BACKEND=gpu  # Force GPU
-# TRANSLATION_BACKEND=auto # Try GPU, fallback to CPU
+# Backend selection: cpu, gpu, or auto. Default: auto
+# Only consulted when no GPU API is configured (GPU_NODE_HOST unset and no
+# VLLM_TRANSLATION_ENDPOINT of its own). A configured GPU API is mandatory:
+# the service refuses to start rather than translating with another model.
+TRANSLATION_BACKEND=auto   # Probe once at startup, GPU if it answers, else CPU
+# TRANSLATION_BACKEND=gpu  # Require GPU even with no GPU API configured
+# TRANSLATION_BACKEND=cpu  # Require CPU
+
+# Budget for that startup probe. Must cover a cold TLS handshake to a remote
+# GPU node — a budget that expires on a healthy endpoint stops the service.
+TRANSLATION_PROBE_TIMEOUT_SECONDS=30
 ```
 
 #### CPU Backend Configuration
@@ -154,7 +161,7 @@ TRANSLATION_CACHE_PASSWORD=!@#$5678
 
 ---
 
-## Supported Languages (34 Total)
+## Supported Languages (41 Total)
 
 ### Original 11 Languages
 | Code | Language |
@@ -171,33 +178,39 @@ TRANSLATION_CACHE_PASSWORD=!@#$5678
 | pt | Portuguese |
 | sw | Kiswahili |
 
-### Extended Languages (23 Additional)
-| Code | Language | Fallback |
-|------|----------|----------|
-| am | Amharic | English |
-| az | Azerbaijani | Turkish |
-| bn | Bengali | English |
-| ckb | Sorani Kurdish | Arabic |
-| fa | Persian (Farsi) | - |
-| ff | Fulah | Kiswahili |
-| ha | Hausa | Kiswahili |
-| jv | Javanese | Indonesian |
-| kk | Kazakh | Turkish |
-| ku | Kurdish (Kurmanji) | Persian |
-| ml | Malayalam | English |
-| ms | Malay | Indonesian |
-| om | Oromo | Kiswahili |
-| pa | Punjabi | Urdu |
-| ps | Pashto | Persian |
-| sd | Sindhi | Urdu |
-| skr | Saraiki | Urdu |
-| so | Somali | Kiswahili |
-| su | Sundanese | Indonesian |
-| tr | Turkish | - |
-| ug | Uyghur | Turkish |
-| ur | Urdu | - |
-| uz | Uzbek | Turkish |
-| yo | Yoruba | Kiswahili |
+### Extended Languages (30 Additional)
+| Code | Language |
+|------|----------|
+| am | Amharic |
+| az | Azerbaijani |
+| bn | Bengali |
+| ckb | Sorani Kurdish |
+| fa | Persian (Farsi) |
+| ff | Fulah |
+| ha | Hausa |
+| jv | Javanese |
+| kk | Kazakh |
+| ku | Kurdish (Kurmanji) |
+| ml | Malayalam |
+| ms | Malay |
+| om | Oromo |
+| pa | Punjabi |
+| ps | Pashto |
+| sd | Sindhi |
+| skr | Saraiki |
+| so | Somali |
+| su | Sundanese |
+| tr | Turkish |
+| ug | Uyghur |
+| ur | Urdu |
+| uz | Uzbek |
+| yo | Yoruba |
+| man | Mandinka |
+| mnk | Mandinka |
+| st | Sesotho |
+| hi | Hindi |
+| ja | Japanese |
+| ko | Korean |
 
 ---
 
@@ -241,9 +254,11 @@ Markdown Document
 └─────────────────────────────────┘
 ```
 
-### 2. Language Fallback
+### 2. Unsupported Languages
 
-If a target language is not directly supported, the service uses fallback chains:
+A language the loaded map does not know is **refused**. There is no fallback
+language: answering a request for one language in another is a wrong answer,
+and the caller has no way to see it.
 
 ```
 User requests: English → Saraiki (skr)
@@ -253,11 +268,7 @@ Check: Is skr supported?
          │
          │ No
          ▼
-Check: Is there a fallback for skr?
-         │
-         │ Yes → Urdu (ur)
-         ▼
-Translate: English → Urdu (instead of Saraiki)
+Refuse: "Unsupported target language" (HTTP 400)
 ```
 
 ### 3. Backend Fallback (Auto Mode Only)
@@ -515,9 +526,25 @@ If GPU costs $1/hour and saves 35 minutes per large document:
 ```
 
 **Solutions:**
-1. Check if language is in the 34 supported languages
-2. Verify language code is ISO 639-1 format (e.g., 'es', not 'spa')
-3. Check fallback chain for that language
+1. Check the language is in the map of the backend that is loaded
+   (`services/translation/language-maps/`): 41 languages, and the same list the
+   chatqna service accepts
+2. Verify the code is the one the map is keyed by — ISO 639-1 ('es', not 'spa').
+   The code is trimmed and case-insensitive
+3. Check whether the log line names the source or the target language: an
+   unknown source is refused the same way (`Unsupported source language`)
+4. There is no fallback language: a language the map does not know is
+   refused, never answered in another language. The shipped maps name no
+   fallback, and a test fails the build if one of them does
+5. On the chat streaming path, an uncovered language is not a failure: the
+   answer stays in English, the units after the refusal are not sent to the
+   translator again, and the `done` frame carries `translationFailed: false`.
+   The refusal is logged once as
+   `QueryService.stream_translation_unsupported_language`
+
+The language in the log line is sanitised (letters, digits, `_` and `-` only,
+32 characters max), so a value that looks truncated or empty is a language
+that was never accepted.
 
 ### Issue: Translation slower than expected
 
@@ -663,7 +690,7 @@ A: Clear the specific cache key in Redis or upload a new document (different has
 A: Use `google/translategemma-4b-it` for best translation quality. Use `google/gemma-3-1b-it` for lower memory GPUs.
 
 **Q: Can I add support for more languages?**
-A: Yes. Add new language mappings to the language map files. See architecture specification.
+A: Yes. Add new language mappings to the language map files (see architecture specification) **and restart the backend and the chatqna service**. Both read their language map once, at startup: the backend loads it when it selects its backend, and chatqna caches it in the process. A running service keeps the map it read at startup, so a language added to the files is refused until the services restart, and a language removed from them is still accepted until then.
 
 **Q: Why does translation take longer than expected?**
 A: Check logs for actual backend in use. Large documents are processed node-by-node (not as single request).

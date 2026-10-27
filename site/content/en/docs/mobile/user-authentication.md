@@ -25,7 +25,7 @@ The wire protocol and code paths are in [Mobile Architecture](/docs/mobile/mobil
 | Running GENIE.AI stack with a reachable Keycloak | OIDC discovery + token endpoints |
 | Mobile OIDC client created (`genie-mobile-<institution>`) | See [Mobile Deployment Guide §2](/docs/mobile/mobile-deployment-guide/#step-2-keycloak-client) |
 | Matching redirect scheme across the 5 layers | See [Mobile Deployment Guide §3](/docs/mobile/mobile-deployment-guide/#step-3-scheme-coherence-rule) |
-| App built with `--flavor <flavor>` | The flavor selects which Keycloak URL and client ID the app uses at startup |
+| App built with `--flavor <flavor> --dart-define=FLAVOR=<flavor>` | `--flavor` selects the build variant (bundle id, redirect scheme); `FLAVOR` selects which Keycloak URL and client ID the app reads at startup |
 
 ## 1. Login — what the user sees
 
@@ -161,7 +161,7 @@ After the three operations return, the router pushes the unauthenticated route (
 
 ## 8. Programmatic verification
 
-For automated tests, the canonical E2E login flow lives at `mobile/genie_ai_mobile/CLAUDE.md#Verify OIDC Login Flow` and uses Patrol to drive a real device through the OIDC redirect. For backend-side auth checks (token validation, JWKS rotation), see [API Contracts (backend)](/docs/reference/api-contracts/).
+For automated tests, the canonical E2E login flow lives at `mobile/genie_ai_mobile/CLAUDE.md#Verify OIDC Login Flow` and uses Patrol to drive a real device through the OIDC redirect. For backend-side auth checks, see [API Contracts (backend)](/docs/reference/api-contracts/) for token validation, and [Trust Boundaries](/docs/architecture/trust-boundaries/) for JWKS caching and key rotation.
 
 ## Related
 

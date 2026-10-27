@@ -4,7 +4,7 @@ description: "Setting up a local development environment across all GENIE.AI com
 weight: 4
 section: "contribute"
 aliases:
-  - /docs/contribute/build-and-run/
+  - /docs/core/development-guide/
 audience: "developer"
 mode: how-to
 persona: developer
@@ -469,9 +469,13 @@ cd mobile/genie_ai_mobile
 flutter pub get
 
 # Run on a connected device / emulator
-flutter run --flavor dev           # dev flavour (localhost)
-flutter run --flavor itu           # prod flavour (real OIDC client id)
-flutter run --flavor staging       # staging flavour
+# --flavor picks the build variant (bundle id, redirect scheme, assets);
+# --dart-define=FLAVOR picks the Keycloak URL and client id the app reads
+# at startup. Both are needed: --flavor alone leaves the app on the dev
+# configuration.
+flutter run --flavor dev --dart-define=FLAVOR=dev           # dev flavour (localhost)
+flutter run --flavor itu --dart-define=FLAVOR=itu           # prod flavour (real OIDC client id)
+flutter run --flavor staging --dart-define=FLAVOR=staging   # staging flavour
 
 # Static analysis (Dart linting)
 flutter analyze                    # aliased as `npm run lint:dart` at repo root
@@ -486,14 +490,14 @@ PKCE flow to work on a real device:
 
 | Location | Where to set | What to set | Verify |
 |---|---|---|---|
-| `lib/config/flavors/<flavor>.dart` | Flutter source | `keycloakUrl`, `realm`, `clientId` (camelCase fields on `KeycloakConfig`) | `flutter run --flavor dev` shows the login screen |
+| `lib/config/flavors/<flavor>.dart` | Flutter source | `keycloakUrl`, `realm`, `clientId` (camelCase fields on `KeycloakConfig`) | `flutter run --flavor dev --dart-define=FLAVOR=dev` shows the login screen |
 | `mobile/genie_ai_mobile/android/app/build.gradle` | Android Gradle | `applicationId` + `manifestPlaceholders["appAuthRedirectScheme"]` | `adb shell pm dump <package> \| grep -i redirect` |
 | `mobile/genie_ai_mobile/ios/Runner/Info.plist` | Xcode | `CFBundleURLSchemes` (must match `KC_MOBILE_REDIRECT_SCHEME`) | Xcode target → Info → URL Types |
 | `configs/keycloak/genie-realm.yaml` | Keycloak | `redirectUris`, `webOrigins` (must include the bundle id) | `docker logs keycloak-config` after deploy |
 
 A mismatch produces an infinite "logging in..." spinner or
 `error: invalid_request` from Keycloak. See the [Mobile deployment
-guide](/docs/mobile/) for full setup.
+guide](/docs/mobile/mobile-deployment-guide/) for full setup.
 
 ---
 
@@ -823,7 +827,7 @@ npm run lint:dart && npm run format:dart:check
 ```
 
 CI runs the full multi-stage pipeline on every MR — see the canonical
-[CI/CD](/docs/contribute/build-and-run/) for the 12-stage structure
+[`.gitlab-ci.yml`](https://opensource.unicc.org/un/itu/genie-ai/-/raw/main/.gitlab-ci.yml) for the 12-stage structure
 (`lint → test → config → build → scan → contract-in-image → e2e → promote
 → release → scheduled → manual → deploy`). Cancelling obsolete pipelines
 before triggering new ones saves runner minutes.
@@ -891,7 +895,7 @@ If it returns `command not found`, `clamav-daemon` was dropped by
 ### Keycloak login loop
 
 - ROPC is enabled but the user lacks `firstName`, `lastName`, or
-  `emailVerified=true` — see [Server Testing](/docs/contribute/build-and-run/)
+  `emailVerified=true` — see [Keycloak Admin Guide](/docs/configure/keycloak-admin-guide/)
   for the canonical user-creation payload.
 - Mobile scheme mismatch — see the [Scheme Coherence Rule](#mobile-flutter).
 
@@ -929,9 +933,9 @@ interrupted, or VRAM exhaustion (drop model size or run with
 | Deploy to a real environment | [Deployment](/docs/deploy/) (Ansible recommended) |
 | Add observability (OTel, Grafana, dashboards) | [Observability](/docs/observe/) |
 | Debug a slow chat / failing ingest | [Debugging with Tracing & Logs](/docs/operate/tracing-howto/) |
-| Find the CI/CD pipeline structure | [CI/CD](/docs/contribute/build-and-run/) |
-| Look up an environment variable | [Configuration](/docs/configure/) |
-| Understand the C4 architecture | [Architecture](/docs/architecture/) |
+| Find the CI/CD pipeline structure | [`.gitlab-ci.yml`](https://opensource.unicc.org/un/itu/genie-ai/-/raw/main/.gitlab-ci.yml) |
+| Look up an environment variable | [Environment variables](/docs/reference/env-vars/) |
+| Understand the C4 architecture | [Architecture Overview](/docs/architecture/architecture/) |
 | Run the multi-phase E2E suite | [E2E Tests](https://opensource.unicc.org/un/itu/genie-ai/-/raw/main/docs/e2e-tests/README.md) |
 | Work on the mobile app | [Mobile](/docs/mobile/) |
 

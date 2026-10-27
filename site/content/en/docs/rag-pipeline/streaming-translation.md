@@ -4,13 +4,15 @@ description: Translate the answer in the target language WHILE the English strea
 weight: 11
 mode: explanation
 audience: developer, deployer
-last_reviewed: 2026-09-18
+last_reviewed: 2026-10-22
 persona: developer
 owner: "docs-stewards"
+aliases:
+  - /docs/rag/streaming-translation/
 ---
 
 > **For backend developers and deployers.** This page explains the
-> `STREAMING_TRANSLATION_ENABLED` toggle that fixes [issue #829](https://gitlab.com/un/itu/genie-ai/-/issues/829):
+> `STREAMING_TRANSLATION_ENABLED` toggle that fixes [issue #829](https://opensource.unicc.org/un/itu/genie-ai/-/issues/829):
 > when a user asks in Spanish, the chat must show Spanish text **as it
 > streams**, not an English stream that flips at the end. The flag is
 > off by default — turning it on requires the GPU translation service and
@@ -72,7 +74,7 @@ would have arrived.
 ## How unit boundaries are detected
 
 The boundary detector lives in
-[`components/gov-chat-backend/services/translation/stream-boundary.js`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/services/translation/stream-boundary.js).
+[`components/gov-chat-backend/services/translation/stream-boundary.js`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/services/translation/stream-boundary.js).
 It picks the **latest** of these boundaries in the current buffer:
 
 1. **Paragraph break** (`\n\n`) — Markdown blank line; commits at the
@@ -100,7 +102,7 @@ line 30).
 
 ## How structure survives translation
 
-`translationService.translateMarkdown` ([`services/translation/`](https://gitlab.com/un/itu/genie-ai/-/tree/main/components/gov-chat-backend/services/translation))
+`translationService.translateMarkdown` ([`services/translation/`](https://opensource.unicc.org/un/itu/genie-ai/-/tree/main/components/gov-chat-backend/services/translation))
 parses the unit as Markdown, translates **only the text leaf nodes**, and
 reassembles the AST — so structure **within** the unit (bold, lists,
 inner paragraphs) is preserved by the skeleton, never left to the model.
@@ -119,7 +121,7 @@ the source) is passed through verbatim, so structure **between** units
 | Env var | Default | Effect |
 |---------|---------|--------|
 | `STREAMING_TRANSLATION_ENABLED` | `0` | Off by default. Set to `1` or `true` (case-insensitive) to enable unit-by-unit streaming translation. |
-| `TRANSLATION_BACKEND` | `cpu` | Backend used for the translation calls (`cpu` workers or `gpu`). The streaming path calls the same backend as the post-stream fallback. |
+| `TRANSLATION_BACKEND` | `auto` | Backend used for the translation calls (`cpu` workers or `gpu`). Ignored when a GPU API is configured — see below. |
 | `VLLM_TRANSLATION_MODEL_ID` | `google/gemma-3-4b-it` | The model that produces the translations. Must be in the GPU node's `model_store`. |
 
 Enable in `.env`:
@@ -128,8 +130,36 @@ Enable in `.env`:
 STREAMING_TRANSLATION_ENABLED=1
 ```
 
+### A configured GPU API is mandatory
+
+A deployment that names a GPU API — `GPU_NODE_HOST` set, or a
+`VLLM_TRANSLATION_ENDPOINT` of its own — always uses it. `TRANSLATION_BACKEND`
+is not consulted: `cpu`, `gpu`, `auto` and unset all resolve to the GPU.
+
+If that API does not answer, the backend **refuses to start**. This is
+deliberate. The previous behaviour — probe once, switch to CPU on failure —
+turned a five-second probe timeout into a permanent switch: on a remote-GPU
+deployment the chat answers then came from a different, local model, with
+nothing in the response to say so. The check now runs once at startup only;
+after that, a failure is reported as a failure.
+
+When no GPU API is configured, `TRANSLATION_BACKEND` decides, and `auto`
+still probes once and commits:
+
+| `GPU_NODE_HOST` / endpoint | `TRANSLATION_BACKEND` | Result |
+|---|---|---|
+| configured | any value | GPU — service fails to start if it does not answer |
+| not configured | `auto` (default) | GPU if it answers, otherwise CPU |
+| not configured | `cpu` | CPU |
+| not configured | `gpu` | GPU — service fails to start if it does not answer |
+
+`TRANSLATION_PROBE_TIMEOUT_SECONDS` (default `30`) bounds that startup check.
+It must cover a cold TLS handshake to a remote node: the endpoint's `/health`
+answers in tens of milliseconds once connected, so a budget that can expire on
+a healthy API would stop a working deployment.
+
 The flag is **read on every request** at
-[`query-routes.js:208`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/query-routes.js#L208)
+[`query-routes.js:208`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/query-routes.js#L208)
 — no service restart needed. Restart only if you also change the
 underlying model or backend.
 
@@ -137,41 +167,71 @@ underlying model or backend.
 
 The feature is **request-scoped**, not deployment-wide. It activates only
 when **all three** conditions are met
-([`query-routes.js:208-213`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/query-routes.js#L208)):
+([`query-routes.js:208-213`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/query-routes.js#L208)):
 
 ```javascript
 const streamingTranslationEnabled = ['1', 'true'].includes(
   (process.env.STREAMING_TRANSLATION_ENABLED || '').toLowerCase()
 );
-const targetLanguage = queryData.context?.language?.toLowerCase();
-const useStreamingTranslation =
-  streamingTranslationEnabled && targetLanguage && targetLanguage.toUpperCase() !== 'EN';
+const targetLanguage = requestedTargetLanguage(queryData); // trimmed, lower-cased
+const useStreamingTranslation = streamingTranslationEnabled && targetLanguage && targetLanguage !== 'en';
 ```
 
 1. `STREAMING_TRANSLATION_ENABLED` is truthy (`1` or `true`).
 2. The request carries a non-empty `context.language`.
-3. `context.language` is not `EN` (English).
+3. `context.language` is not `en` (English).
 
 The third condition is the safety net for English users — even if an
 operator accidentally turns the flag on, English responses are not
 double-processed.
 
+The requested language is normalized in one place
+(`services/translation/language-request.js`) and then checked against
+the language map the translation backend ships. A language the map does
+not know is **not** translated: it is refused, not guessed.
+
+The check happens **once per request**. The resolution hands back both
+the decision (refuse the request, or proceed) and a translator bound to
+the accepted pair, so the units of a streamed answer are translated in
+the very language that was checked — and the language map is not
+consulted again for every unit.
+
 ## Failure handling
 
-If the translator throws on a unit
-([`query-routes.js:251-262`](https://gitlab.com/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/query-routes.js#L251)),
-the backend:
+A language the translation models do not cover is **refused before the
+stream opens**: the request is answered `400` with
+`{ "error": "UNSUPPORTED_LANGUAGE", "message": "Unsupported target language" }`
+and nothing is generated. The answer is never produced in a language the
+caller did not ask for — that is the whole point of the boundary.
+
+Any other failure is not a refusal — with one exception that happens
+before any request is served. The translation service is a **mandatory
+boot dependency** of the backend (`components/gov-chat-backend/index.js`):
+when a GPU API is configured and cannot be reached at startup, the
+backend does not start at all. There is no request to answer, and no
+English answer either — the deployment is down until the GPU API answers
+again. This is deliberate: a deployment that named a GPU API is not
+silently served by another model.
+
+Once the backend is up, a translation failure (GPU node down, model not
+loaded, OOM) is not a refusal: the request goes through and the answer
+is delivered in English. The backend:
 
 1. Emits the unit as-is (English) with the original separator.
 2. Sets `streamingTranslationFailed = true`.
-3. On the next unit, **falls back to the original English stream** for
-   the remainder of the response (the `streamingTranslationFailed` short
-   circuit at `query-routes.js:303`).
-4. Continues with the post-stream full-translation as before.
+3. The answer stays in English **for the remainder**: the units that
+   follow are emitted as they are, without another attempt at
+   translating them. The English that was already buffered goes out
+   before the chunks that follow it, so the answer keeps its order.
+4. The post-stream translation is skipped — the same failure would
+   fail it again — and the `done` frame carries `translationFailed:
+   true`.
 
-The user never sees a half-translated answer: if streaming translation
-fails, they get the original English stream + the final translation at
-the end (the old behaviour).
+The units that were translated before the failure stay translated; from
+the failure on, the answer is the original English stream. The `done`
+frame says the translation failed: an `error` frame would truncate the
+answer and raise a system-down notification for a translation-only
+failure.
 
 ## Verifying it works
 
@@ -218,8 +278,10 @@ docker service update --env-rm LOG_LEVEL genieai_backend    # revert
 To confirm the fallback short-circuit fires correctly, point
 `TRANSLATION_BACKEND` at a service that is intentionally down
 (`TRANSLATION_BACKEND=nonexistent` or scale the workers to 0). Send a
-Spanish query: you should still see a complete answer (English stream +
-English + a final Spanish-only frame from the post-stream translate).
+Spanish query: you should still see a complete answer — the English
+stream, in order — and a `done` frame carrying `translationFailed:
+true`. No `translation` frame follows: the post-stream translation is
+skipped once the streaming translation failed.
 
 ## Failure modes and troubleshooting
 
@@ -227,8 +289,9 @@ English + a final Spanish-only frame from the post-stream translate).
 |---------|-------|-----|
 | Spanish stream is **all-English** then flips at the end | `STREAMING_TRANSLATION_ENABLED=0`, or the request did not carry `context.language` | Confirm the env var. Confirm the frontend sets `context.language` from `currentLocale` (see [Frontend → Chat UX](/docs/frontend/chat-ux/)). |
 | Spanish stream is **half English, half Spanish** | Translator threw on one unit, fallback fired for the rest | Check `docker service logs genieai_backend --since 5m 2>&1 \| grep stream_translation_unit_failed`. Common causes: GPU node down, model not loaded, OOM in the GPU. |
+| The request is refused with `400 UNSUPPORTED_LANGUAGE` | The requested language is not one the translation models have | Nothing to fix on the backend: the answer would have been in a language the caller did not ask for. The covered languages are the keys of the shipped map (`components/gov-chat-backend/services/translation/language-maps/<model>-map.js`). |
 | Spanish stream has collapsed spacing (`"Frase uno.Frase dos."`) | Boundary detector missing the whitespace separator | This is the bug the boundary detector was designed to prevent — open an MR with a repro and the debug logs (`grep STREAM-TRANSLATE`). |
-| Translation latency is higher than the English stream rate | Translator is CPU-bound and falling behind | Switch `TRANSLATION_BACKEND` to `gpu` (much faster for the model). See [Deploy → Remote GPU node](/docs/deploy/gpu/). |
+| Translation latency is higher than the English stream rate | Translator is CPU-bound and falling behind | Switch `TRANSLATION_BACKEND` to `gpu` (much faster for the model). See [Deployment → Remote GPU node](/docs/deploy/gpu/). |
 | Every unit emits a debug line in production | `LOG_LEVEL=debug` was set and not reverted | The default `LOG_LEVEL=info` suppresses the `[STREAM-TRANSLATE]` lines. Confirm via `docker exec genieai_backend sh -c 'echo $LOG_LEVEL'`. |
 
 ## Related
@@ -237,7 +300,7 @@ English + a final Spanish-only frame from the post-stream translate).
   temperature settings that affect English-stream quality.
 - [Frontend → Chat UX](/docs/frontend/chat-ux/) — how the browser
   injects `context.language` from `currentLocale`.
-- [Architecture → RAG pipeline](/docs/architecture/architecture/) — the
+- [RAG pipeline → Pipeline architecture](/docs/rag-pipeline/pipeline/) — the
   end-to-end flow including translation.
 - [Translation service reference](/docs/reference/api-contracts/#9-translation-routes-apitranslate)
   — the `POST /api/translate` endpoint used for the post-stream fallback.

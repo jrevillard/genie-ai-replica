@@ -100,6 +100,7 @@ const { createValidToken } = require('../fixtures/tokens');
 
 const translationService = require('../../services/translation-service');
 const { keycloakAuthMiddleware } = require('../../middleware/keycloak-auth-middleware');
+const { UnsupportedLanguageError } = require('../../services/translation/unsupported-language');
 
 const validToken = createValidToken();
 
@@ -170,6 +171,10 @@ describe('POST /api/translate', () => {
 
     expect(response.status).toBe(400);
     expect(response.body.message).toContain('texts');
+    // The code is what tells a client that refused to fail: every 400 of
+    // this route carries one, so a client does not have to read the message
+    // to know which one it got.
+    expect(response.body.error).toBe('MISSING_PARAMETERS');
   });
 
   it('should return 400 when source_lang is missing', async () => {
@@ -211,6 +216,25 @@ describe('POST /api/translate', () => {
 
     expect(response.status).toBe(500);
   });
+
+  it('should return 400 when the language is not supported', async () => {
+    translationService.translate.mockRejectedValue(new UnsupportedLanguageError('target'));
+
+    const response = await authPost('/api/translate', {
+      texts: ['Hello'],
+      source_lang: 'en',
+      target_lang: 'not-a-language'
+    });
+
+    expect(response.status).toBe(400);
+    // The body names the refused side only: the value the caller sent is
+    // never echoed back. The code tells the client the request was refused
+    // rather than failed.
+    expect(response.body).toEqual({
+      error: 'UNSUPPORTED_LANGUAGE',
+      message: 'Unsupported target language'
+    });
+  });
 });
 
 // ============================================================
@@ -239,6 +263,7 @@ describe('POST /api/translate/markdown', () => {
 
     expect(response.status).toBe(400);
     expect(response.body.message).toContain('markdown');
+    expect(response.body.error).toBe('MISSING_PARAMETERS');
   });
 
   it('should return 400 when source_lang is missing', async () => {
@@ -269,5 +294,18 @@ describe('POST /api/translate/markdown', () => {
     });
 
     expect(response.status).toBe(500);
+  });
+
+  it('should return 400 when the language is not supported', async () => {
+    translationService.translateMarkdown.mockRejectedValue(new UnsupportedLanguageError('target'));
+
+    const response = await authPost('/api/translate/markdown', {
+      markdown: '# Hello',
+      source_lang: 'en',
+      target_lang: 'not-a-language'
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toContain('Unsupported target language');
   });
 });

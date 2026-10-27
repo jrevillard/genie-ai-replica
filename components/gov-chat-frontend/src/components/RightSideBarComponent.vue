@@ -84,17 +84,34 @@
             <HelpCircle :size="16" />
             {{ $t('sidebar.faq') }}
           </h4>
-          <div class="faq-list">
-            <div v-for="(faq, index) in frequentlyAskedQuestions" :key="index" class="faq-item">
-              <div class="faq-question" :class="{ active: expandedFaqs.includes(index) }" @click="toggleFaq(index)">
-                <!-- eslint-disable-next-line vue/no-v-html -->
-                <span v-html="faq.question"></span>
-                <ChevronUp v-if="expandedFaqs.includes(index)" :size="14" /><ChevronDown v-else :size="14" />
-              </div>
-              <!-- eslint-disable-next-line vue/no-v-html -->
-              <div v-if="expandedFaqs.includes(index)" class="faq-answer" v-html="faq.answer"></div>
+          <DsStateDisplay v-if="faqLoadFailed" type="error" data-testid="faq-error">
+            {{ $t('sidebar.faqError') }}
+          </DsStateDisplay>
+          <template v-else>
+            <!-- The FAQ is written in English. When it could not be translated,
+                 what is shown below is the original: saying so is what keeps an
+                 English FAQ from being read as a translated one. -->
+            <div v-if="faqTranslationFailed" class="faq-translation-notice" data-testid="faq-translation-notice">
+              <Languages :size="14" />
+              <span>{{ $t('sidebar.faqTranslationUnavailable') }}</span>
             </div>
-          </div>
+            <div class="faq-list">
+              <div v-for="(faq, index) in frequentlyAskedQuestions" :key="index" class="faq-item">
+                <div
+                  class="faq-question"
+                  :class="{ active: expandedFaqs.includes(index) }"
+                  data-testid="faq-question"
+                  @click="toggleFaq(index)"
+                >
+                  <!-- eslint-disable-next-line vue/no-v-html -->
+                  <span v-html="faq.question"></span>
+                  <ChevronUp v-if="expandedFaqs.includes(index)" :size="14" /><ChevronDown v-else :size="14" />
+                </div>
+                <!-- eslint-disable-next-line vue/no-v-html -->
+                <div v-if="expandedFaqs.includes(index)" class="faq-answer" v-html="faq.answer"></div>
+              </div>
+            </div>
+          </template>
         </div>
       </div>
     </div>
@@ -107,7 +124,7 @@ import DOMPurify from 'dompurify';
 import { formatFileSize } from '../utils/fileUtils.js';
 import { isExternalUrl as isExternalHref, openRepositoryDocument, fileTypeBadge } from '../utils/document-opener.js';
 import DsStateDisplay from './ds/StateDisplay.vue';
-import { Files, FileText, HelpCircle, ChevronUp, ChevronDown } from '@lucide/vue';
+import { Files, FileText, HelpCircle, ChevronUp, ChevronDown, Languages } from '@lucide/vue';
 import DsCard from './ds/Card.vue';
 import SidebarHandle from './SidebarHandle.vue';
 import { SIDEBAR_DEFAULTS, SIDEBAR_MIN_WIDTHS, SIDEBAR_MAX_WIDTHS } from '../composables/sidebarLayout.js';
@@ -123,7 +140,8 @@ export default {
     ChevronUp,
     ChevronDown,
     Files,
-    DsStateDisplay
+    DsStateDisplay,
+    Languages
   },
 
   props: {
@@ -167,7 +185,9 @@ export default {
   data() {
     return {
       expandedFaqs: [],
-      frequentlyAskedQuestions: []
+      frequentlyAskedQuestions: [],
+      faqLoadFailed: false,
+      faqTranslationFailed: false
     };
   },
   computed: {
@@ -201,6 +221,9 @@ export default {
   methods: {
     formatFileSize,
     async loadFaqContent() {
+      this.faqLoadFailed = false;
+      this.faqTranslationFailed = false;
+
       try {
         const response = await fetch('/FAQ.md');
         if (!response.ok) {
@@ -209,7 +232,14 @@ export default {
         let markdown = await response.text();
 
         if (this.currentLocale !== 'en') {
-          markdown = await this.translateMarkdown(markdown);
+          const translated = await this.translateMarkdown(markdown);
+          if (translated === null) {
+            // The English original is kept — it is still worth showing — but
+            // the user is told that it was not translated.
+            this.faqTranslationFailed = true;
+          } else {
+            markdown = translated;
+          }
         }
 
         const tokens = marked.lexer(markdown);
@@ -242,15 +272,23 @@ export default {
         this.frequentlyAskedQuestions = faqs;
       } catch (error) {
         console.error('Failed to load or parse FAQ content:', error);
-        this.frequentlyAskedQuestions = [{ question: 'Error', answer: 'Could not load FAQ content.' }];
+        this.frequentlyAskedQuestions = [];
+        this.faqLoadFailed = true;
       }
     },
 
+    /**
+     * Translate the FAQ into the interface language.
+     *
+     * @returns {Promise<string|null>} the translated markdown, or null when the
+     *   translation could not be produced. null is not an error to swallow:
+     *   the caller shows the English original and says so.
+     */
     async translateMarkdown(markdown) {
       const authToken = this.getAuthToken();
       if (!authToken) {
         console.error('No auth token found, cannot translate FAQ.');
-        return markdown; // Fallback to English
+        return null;
       }
 
       try {
@@ -272,10 +310,19 @@ export default {
         }
 
         const data = await response.json();
+        // A translation is a non-empty string. A response that carries
+        // nothing usable is not a translation: it would leave the FAQ empty
+        // (or unreadable) and the user would see an English FAQ they were
+        // told was translated. The caller keeps the English original and
+        // says so.
+        if (typeof data.translated_markdown !== 'string' || data.translated_markdown.length === 0) {
+          console.error('Translation response carried no translated markdown.');
+          return null;
+        }
         return data.translated_markdown;
       } catch (error) {
         console.error('Translation failed:', error);
-        return markdown; // Fallback to English
+        return null;
       }
     },
 
@@ -517,6 +564,19 @@ export default {
 
 .detail-value.small-text {
   font-size: var(--text-sm);
+}
+
+.faq-translation-notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-sm);
+  color: var(--warning);
+  font-size: var(--text-xs);
+  font-style: italic;
 }
 
 .faq-list {

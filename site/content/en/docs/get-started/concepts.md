@@ -83,12 +83,12 @@ language (**translation** when the user's UI is not English).
 ## What's next
 
 - Architecture diagrams → [Architecture overview](/docs/architecture/architecture/)
-- RAG pipeline deep dive → [RAG pipeline → Pipeline architecture](/docs/rag-pipeline/pipeline/)
+- RAG pipeline deep dive → [RAG Pipeline → Pipeline architecture](/docs/rag-pipeline/pipeline/)
 - Configurability → [Configuration reference](/docs/reference/env-vars/)
 
 ## Related
 
 - [Welcome](/docs/get-started/welcome/)
-- [Glossary](/docs/get-started/glossary/)
+- [Glossary](/docs/reference/glossary/)
 - [Quickstart: User](/docs/get-started/quickstart-user/)
 - [Architecture overview](/docs/architecture/architecture/)

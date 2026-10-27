@@ -18,7 +18,7 @@ boundaries, dependencies, and the inter-service contract surface.
 > and [Security Considerations](#security-considerations).
 
 For the high-level orientation, see [Project Overview](/docs/core/project-overview/).
-For per-directory code layout, see [Source Tree Analysis](/docs/core/source-tree-analysis/).
+For per-directory code layout, see [Source Tree Analysis](/docs/reference/source-tree-analysis/).
 
 ## Table of Contents
 
@@ -299,7 +299,11 @@ const redis = new Redis({
 
 > **Sessions are NOT in Redis.** `services/session-service.js` stores user
 > sessions in ArangoDB (`sessions` collection). The Redis cache exists only
-> for translation, keyed on `translation:<lang>:<hash>` with a TTL.
+> for translation, keyed on
+> `translation:<md5(content)>:<sourceLang>:<targetLang>:<modelId>:<logicVersion>`.
+> The entries are stored permanently — there is no TTL — so a change to the
+> translation logic needs a `TRANSLATION_LOGIC_VERSION` bump to invalidate
+> them.
 
 ---
 
@@ -472,7 +476,7 @@ async function authenticate(req, res, next) {
 }
 ```
 
-The backend validates the JWT signature against Keycloak's [JWKS](https://oauth.net/2/jwk/)
+The backend validates the JWT signature against Keycloak's [JWKS](https://datatracker.ietf.org/doc/html/rfc7517)
 endpoint (`services/keycloak-auth-service.js`) and checks signature, expiry,
 issuer, and audience.
 
@@ -1270,7 +1274,7 @@ logging keeps `docker logs` working too.
 |---|---|
 | Deploy the stack (Compose / Swarm / Ansible) | [Deployment](/docs/deploy/) |
 | Trace a request through the RAG pipeline | [Observability](/docs/observe/) |
-| Look up an environment variable | [Configuration](/docs/configure/) |
-| Find where a route or service lives in code | [Source Tree Analysis](/docs/core/source-tree-analysis/) |
-| Set up a local dev environment | [Development Guide](/docs/core/development-guide/) |
-| Understand the high-level system diagram | [Architecture](/docs/architecture/) |
+| Look up an environment variable | [Environment variables](/docs/reference/env-vars/) |
+| Find where a route or service lives in code | [Source Tree Analysis](/docs/reference/source-tree-analysis/) |
+| Set up a local dev environment | [Build and run locally](/docs/contribute/build-and-run/) |
+| Understand the high-level system diagram | [Architecture Overview](/docs/architecture/architecture/) |

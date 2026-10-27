@@ -394,9 +394,9 @@ config, retention tuning) see
 - [Install: Docker Swarm](/docs/deploy/docker-swarm-setup/) — production multi-node
 - [GPU Deployment](/docs/deploy/gpu/) — T4 / RTX 6000 / A40 profiles
 - [Configuration reference](/docs/reference/env-vars/) — every env var
-- [Operate → Health Checks](/docs/operate/health-checks/) — `/api/health` semantics
-- [Operate → Admin Logs](/docs/operate/admin-logs/) — the in-app Logs tab
-- [Operate → Troubleshooting](/docs/operate/troubleshooting/) — deeper playbook
+- [Operations → Health Checks](/docs/operate/health-checks/) — `/api/health` semantics
+- [Operations → Admin Logs](/docs/operate/admin-logs/) — the in-app Logs tab
+- [Operations → Troubleshooting](/docs/operate/troubleshooting/) — deeper playbook
 - **Customize branding & dashboard** —
   [Branding Customization](/docs/configure/branding-customization/),
   [Admin dashboard customization](/docs/configure/dashboard-customization/)

@@ -23,9 +23,21 @@
 </#macro>
 
 <#--
-  GENIE.AI login template.
-  Based on upstream keycloak.v2 template (Keycloak 26.5.6).
-  Only difference from upstream: logo added in #kc-header-wrapper.
+  GENIE.AI login template, based on the upstream keycloak.v2 login template.
+  The differences from upstream, among others:
+    - the brand header carries the theme's artwork instead of the realm's
+      display name; the realm's name is in the page title instead;
+    - the body carries the kc-theme-genie marker, which scopes the ground
+      and the wave band to the base theme (see the marker below);
+    - the stylesheets, the favicon and the scripts are read from the
+      theme's properties rather than from the themeResources bean, which
+      Keycloak 26.7 introduced for themes that declare resources with an
+      integrity or a crossorigin attribute. This theme declares plain
+      resource paths.
+
+  Keep the template in step with the upstream one when Keycloak is
+  upgraded: a form or an escape the upstream template gains does not
+  appear here by itself.
 -->
 <#macro registrationLayout bodyClass="" displayInfo=false displayMessage=true displayRequiredFields=false>
 <!DOCTYPE html>
@@ -63,7 +75,9 @@
     </script>
     <#if darkMode>
       <script type="module" async blocking="render">
-          const DARK_MODE_CLASS = "${properties.kcDarkModeClass}";
+          <#outputformat "JavaScript">
+          const DARK_MODE_CLASS = ${properties.kcDarkModeClass?c};
+          </#outputformat>
           const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
 
           updateDarkMode(mediaQuery.matches);
@@ -93,7 +107,7 @@
     <script type="module" src="${url.resourcesPath}/js/passwordVisibility.js"></script>
     <script type="module">
         <#outputformat "JavaScript">
-        import { startSessionPolling } from "${url.resourcesPath}/js/authChecker.js";
+        import { startSessionPolling } from ${(url.resourcesPath + "/js/authChecker.js")?c};
 
         startSessionPolling(
             ${url.ssoLoginInOtherTabsUrl?c}
@@ -126,7 +140,7 @@
     <#if authenticationSession??>
         <script type="module">
              <#outputformat "JavaScript">
-            import { checkAuthSession } from "${url.resourcesPath}/js/authChecker.js";
+            import { checkAuthSession } from ${(url.resourcesPath + "/js/authChecker.js")?c};
 
             checkAuthSession(
                 ${authenticationSession.authSessionIdHash?c}
@@ -140,12 +154,28 @@
     </script>
 </head>
 
-<body id="keycloak-bg" class="${properties.kcBodyClass!}" data-page-id="login-${pageId}">
+<#--
+  The base theme marks its own pages. The check follows the theme
+  directory name — the resources path ends with it — so a child theme
+  (genie-el-salvador) does not get it and keeps its own ground and wave.
+  Renaming the base theme directory means updating the path literal in
+  the check below; the class name itself is arbitrary, the stylesheets
+  key on it unchanged.
+-->
+<#assign isBaseTheme = url.resourcesPath?ends_with('/genie')>
+<body id="keycloak-bg" class="<#if isBaseTheme>kc-theme-genie </#if>${properties.kcBodyClass!}" data-page-id="login-${pageId}">
 <div class="${properties.kcLogin!}">
   <div class="${properties.kcLoginContainer!}">
     <header id="kc-header" class="pf-v5-c-login__header">
+      <#--
+        The artwork comes in two formats and the template offers them
+        through a picture element. Only the base theme may do that: a
+        child theme that ships its own logo.png but no logo.webp would
+        resolve the webp in its parent and show the parent's artwork
+        instead of its own mark. A child theme keeps the plain image.
+      -->
       <div id="kc-header-wrapper"
-              class="pf-v5-c-brand"><img src="${url.resourcesPath}/img/logo.png" alt="GENIE.AI">${kcSanitize(msg("loginTitleHtml",(realm.displayNameHtml!'')))?no_esc}</div>
+              class="pf-v5-c-brand"><#if isBaseTheme><picture><source srcset="${url.resourcesPath}/img/logo.webp" type="image/webp"></#if><img src="${url.resourcesPath}/img/logo.png" alt="GENIE.AI"><#if isBaseTheme></picture></#if></div>
     </header>
     <main class="${properties.kcLoginMain!}">
       <div class="${properties.kcLoginMainHeader!}">
@@ -243,6 +273,16 @@
               <a id="try-another-way" href="javascript:document.forms['kc-select-try-another-way-form'].requestSubmit()"
                   class="${properties.kcButtonSecondaryClass} ${properties.kcButtonBlockClass} ${properties.kcMarginTopClass}">
                     ${msg("doTryAnotherWay")}
+              </a>
+          </form>
+        </#if>
+
+        <#if switchOrganizationEnabled?? && switchOrganizationEnabled>
+          <form id="kc-switch-organization-form" action="${url.loginAction}" method="post" novalidate="novalidate">
+              <input type="hidden" name="switchOrganization" value="true"/>
+              <a id="switch-organization" href="javascript:document.forms['kc-switch-organization-form'].requestSubmit()"
+                  class="${properties.kcButtonSecondaryClass} ${properties.kcButtonBlockClass} ${properties.kcMarginTopClass}">
+                    ${msg("doSwitchOrganization")}
               </a>
           </form>
         </#if>

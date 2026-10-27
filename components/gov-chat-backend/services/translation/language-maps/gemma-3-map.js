@@ -42,7 +42,7 @@ module.exports = {
     pt: 'pt', // Portuguese
     sw: 'sw', // Kiswahili
 
-    // Newly added languages (total 34)
+    // Newly added languages (total 41)
     am: 'am', // Amharic
     az: 'az', // Azerbaijani
     bn: 'bn', // Bengali
@@ -66,48 +66,15 @@ module.exports = {
     ur: 'ur', // Urdu
     uz: 'uz', // Uzbek
     yo: 'yo', // Yoruba
-    ckb: 'ckb', // Sorani Kurdish (34th language)
+    ckb: 'ckb', // Sorani Kurdish
 
     // Newly added languages - Mandinka and Sesotho
     man: 'man', // Mandinka (ISO 639-2)
     mnk: 'mnk', // Mandinka (ISO 639-3)
-    st: 'st' // Sesotho
-  },
-
-  // Language fallback chains for graceful degradation
-  fallbackMap: {
-    // West African languages fallback to Swahili (regional lingua franca)
-    ff: 'sw',
-    ha: 'sw',
-    yo: 'sw',
-    // South Asian fallbacks
-    skr: 'ur',
-    sd: 'ur',
-    pa: 'ur',
-    // Central Asian fallbacks
-    kk: 'tr',
-    uz: 'tr',
-    ug: 'tr',
-    // Southeast Asian fallbacks
-    ms: 'id',
-    su: 'id',
-    jv: 'id',
-    // Middle Eastern fallbacks
-    ps: 'fa',
-    ku: 'fa',
-    ckb: 'ar', // Sorani → Arabic
-    // Horn of Africa fallbacks
-    om: 'sw',
-    so: 'sw',
-    // Other fallbacks
-    am: 'en', // Amharic to English
-    az: 'tr', // Azerbaijani to Turkish
-    bn: 'en', // Bengali to English
-    ml: 'en', // Malayalam to English
-    // Newly added fallbacks
-    man: 'en', // Mandinka to English
-    mnk: 'en', // Mandinka (alternative code) to English
-    st: 'en' // Sesotho to English
+    st: 'st', // Sesotho
+    hi: 'hi', // Hindi
+    ja: 'ja', // Japanese
+    ko: 'ko' // Korean
   },
 
   // Gemma-3 requires prompt-based translation
@@ -155,6 +122,9 @@ module.exports = {
     // Newly added language names
     man: 'Mandinka',
     mnk: 'Mandinka',
-    st: 'Sesotho'
+    st: 'Sesotho',
+    hi: 'Hindi',
+    ja: 'Japanese',
+    ko: 'Korean'
   }
 };

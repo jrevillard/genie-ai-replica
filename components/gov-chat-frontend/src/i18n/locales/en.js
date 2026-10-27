@@ -731,6 +731,8 @@ export default {
     noDocuments: 'No related documents',
     documentsWillAppear: 'Documents cited by the conversation will appear here',
     faq: 'Frequently Asked Questions',
+    faqError: 'The FAQ could not be loaded.',
+    faqTranslationUnavailable: 'Translation unavailable — showing the original English.',
     tab: {
       all: 'All Chats',
       folders: 'Folders',
@@ -1380,6 +1382,7 @@ export default {
     retry: 'Retry',
     welcomeMessage: 'Welcome! How can I assist you today?',
     aiGeneratedNoDocs: 'AI-generated — not based on library documents',
+    translationUnavailable: 'Translation unavailable — this answer may contain untranslated text.',
     configMismatchWarning:
       'Configuration mismatch: {warnings}. Please check the Quick Help and knowledge hierarchy configuration.',
     categoryNotFound: 'Category "{label}" not found in knowledge hierarchy',
@@ -1444,6 +1447,7 @@ export default {
     streamingError: 'Response was interrupted. Please try again.',
     streamTimeout: 'The assistant is not responding — the request timed out.',
     nothingToSave: 'Nothing can be saved yet — every answer failed. Retry the conversation first.',
+    unsupportedLanguage: 'This language is not available for this deployment.',
     removeItem: 'Remove item'
   },
   quickhelp: {

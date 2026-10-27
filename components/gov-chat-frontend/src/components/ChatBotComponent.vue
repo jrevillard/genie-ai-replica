@@ -198,6 +198,19 @@
                   translate('chatbot.aiGeneratedNoDocs', 'AI-generated — not based on library documents')
                 }}</span>
               </div>
+              <!-- The translation backend did not answer. The text above is the
+                   original response, not a translation of it. -->
+              <div v-if="msg.translationFailed" class="answer-warning" data-testid="translation-failed" role="note">
+                <Languages :size="15" aria-hidden="true" />
+                <span>
+                  {{
+                    translate(
+                      'chatbot.translationUnavailable',
+                      'Translation unavailable — this answer may contain untranslated text.'
+                    )
+                  }}
+                </span>
+              </div>
               <!-- Inline actions — thumbs, details, copy — with the
                    confidence percentage at the end of the row. -->
               <div v-if="msg.queryId" class="answer-actions" data-testid="answer-actions">
@@ -435,6 +448,7 @@ import {
   ChevronUp,
   Copy,
   ExternalLink,
+  Languages,
   Loader2,
   MessageSquareQuote,
   Sparkles,
@@ -586,6 +600,7 @@ export default {
     ThumbsDown,
     MessageSquareQuote,
     Copy,
+    Languages,
     ChatResponseFeedbackDialog,
     ModalDialog,
     RightSideBarComponent,
@@ -1456,7 +1471,8 @@ export default {
         timestamp: new Date().toISOString(),
         isSaved: false,
         metadata: {},
-        isStreaming: true
+        isStreaming: true,
+        translationFailed: false
       });
 
       if (contextOption === 'conversation-with-labels') {

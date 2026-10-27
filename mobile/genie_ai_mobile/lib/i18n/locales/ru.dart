@@ -298,6 +298,8 @@ const Map<String, dynamic> ruLocale = {
     "relatedDocs": "Связанные документы",
     "noDocuments": "Нет связанных документов",
     "faq": "Часто задаваемые вопросы",
+    "faqTranslationUnavailable":
+        "Перевод недоступен — показан оригинал на английском.",
     "tab": {
       "all": "Все чаты",
       "folders": "Папки",
@@ -1011,11 +1013,15 @@ const Map<String, dynamic> ruLocale = {
   "chatbot": {
     "aiGeneratedNoDocs":
         "Сгенерировано ИИ — не основано на документах библиотеки",
+    "translationUnavailable":
+        "Перевод недоступен — в этом ответе может быть непереведённый текст.",
     "placeholder": "Введите ваш запрос здесь...",
     "sendButton": "Отправить",
     "fileReceived": "Файл успешно получен.",
     "fileUploadError": "Ошибка загрузки файла.",
     "processingError": "Ошибка обработки вашего запроса.",
+    "unsupportedLanguage": 'Этот язык недоступен в текущем развёртывании.',
+    "noResponse": "Ответ не получен.",
     "attachFile": "Прикрепить файл",
     "fileTooLarge": "Файл слишком большой. Максимальный размер {maxSize}.",
     "saveChat": "Сохранить чат",

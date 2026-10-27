@@ -730,6 +730,8 @@ export default {
     noDocuments: 'Hakuna nyaraka zinazohusiana',
     documentsWillAppear: 'Nyaraka zinazotajwa katika mazungumzo zitaonekana hapa',
     faq: 'Maswali Yanayoulizwa Mara kwa Mara',
+    faqError: 'Maswali Yanayoulizwa Mara kwa Mara hayakuweza kupakiwa.',
+    faqTranslationUnavailable: 'Tafsiri hazipatikani — asili ya Kiingereza inaonyeshwa.',
     tab: {
       all: 'Mazungumzo Yote',
       folders: 'Mafolda',
@@ -1380,7 +1382,9 @@ export default {
     streamingError: 'Jibu lilikatika. Tafadhali jaribu tena.',
     streamTimeout: 'Msaidizi hajibu — omba limeisha muda.',
     nothingToSave: 'Hakuna kitu cha kuhifadhi bado — majibu yote yameshindikana. Jaribu mazungumzo tena kwanza.',
+    unsupportedLanguage: 'Lugha hii haipatikani katika mfumo huu.',
     aiGeneratedNoDocs: 'Imezalishwa na AI — haizingatii nyaraka za maktaba',
+    translationUnavailable: 'Tafsiri hazipatikani — jibu hili linaweza kuwa na maandishi ambayo hayajatafsiriwa.',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'Hitilafu ya usanidi: {warnings}. Tafadhali angalia usanidi wa Msaada wa Haraka na mpangilio wa maarifa.',

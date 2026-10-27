@@ -723,6 +723,8 @@ export default {
     noDocuments: 'Dokuuma kafo mang je',
     documentsWillAppear: 'Dokumaa ji wallitaagal oo ngal feeñi ɗoo',
     faq: 'Ñiningo Ka Ke-yaa',
+    faqError: 'The FAQ could not be loaded.',
+    faqTranslationUnavailable: 'Translation unavailable — showing the original English.',
     tab: {
       all: 'Kumal bee',
       folders: 'Foldalu',
@@ -1332,7 +1334,9 @@ export default {
     streamingError: 'Jɛɛmɔgɔya labɛnnen na. A ñaa ma ñɔɔrɔ.',
     streamTimeout: 'Dɛmɔgɔ tɛ a jaabi la — sɛbɛnni in ka tuma dan.',
     nothingToSave: 'Tɛmɛnnin tɛ mɔgɔw ka ɛrɛ — jaabiw bɛɛ bɛnnen. A ñaa ma Ɛrɛ kɔfɛ.',
+    unsupportedLanguage: 'This language is not available for this deployment.',
     aiGeneratedNoDocs: 'AI-generated — not based on library documents',
+    translationUnavailable: 'Translation unavailable — this answer may contain untranslated text.',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'Configuration mismatch: {warnings}. Please check the Quick Help and knowledge hierarchy configuration.',

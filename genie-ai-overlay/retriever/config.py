@@ -220,9 +220,15 @@ ARANGO_TRAVERSAL_MAX_RETURNED = int(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_MAX_RE
 ARANGO_TRAVERSAL_SCORE_THRESHOLD = float(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD", 0.5))
 ARANGO_TRAVERSAL_QUERY = os.getenv("ARANGO_TRAVERSAL_QUERY")
 ARANGO_TRAVERSAL_CONCURRENT_BATCHES = int(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES", 1))
+# The label-filter strategies the retriever supports: AND = every filter
+# label must be on a chunk, OR = one of them is enough.
+FILTER_STRATEGIES = ("AND", "OR")
 ARANGO_FILTER_STRATEGY = os.getenv("RETRIEVER_ARANGO_FILTER_STRATEGY", "OR").strip().upper()  # for label filtering
-if ARANGO_FILTER_STRATEGY not in ("AND", "OR"):
-    raise ValueError(f"RETRIEVER_ARANGO_FILTER_STRATEGY must be AND or OR, got {ARANGO_FILTER_STRATEGY!r}")
+if ARANGO_FILTER_STRATEGY not in FILTER_STRATEGIES:
+    raise ValueError(
+        f"RETRIEVER_ARANGO_FILTER_STRATEGY must be one of {', '.join(FILTER_STRATEGIES)},"
+        f" got {ARANGO_FILTER_STRATEGY!r}"
+    )
 
 # Hybrid BM25 + RRF Retrieval (Contextual Retrieval Part B)
 # Opt-in lexical (BM25) channel over <GRAPH>_SOURCE.text, fused with the dense

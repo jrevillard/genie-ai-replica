@@ -51,6 +51,7 @@ from .config import (
     ARANGO_USE_APPROX_SEARCH,
     ARANGO_USERNAME,
     EMBEDDING_TIMEOUT,
+    FILTER_STRATEGIES,
     HF_TOKEN,
     HYBRID_BM25_ANALYZER,
     HYBRID_BM25_CANDIDATES,
@@ -252,7 +253,10 @@ def _build_aql_filter_clause(labels_to_filter, filter_strategy):
         return f"FILTER (doc.chunk_labels != null) AND ({labels_array} ALL IN doc.chunk_labels)"
     if filter_strategy == "OR":
         return f"FILTER (doc.chunk_labels != null) AND ({labels_array} ANY IN doc.chunk_labels)"
-    raise HTTPException(status_code=400, detail=f"Invalid filter_strategy: {filter_strategy}. Expected 'AND' or 'OR'.")
+    raise HTTPException(
+        status_code=400,
+        detail=f"Invalid filter_strategy: {filter_strategy}. Expected one of {', '.join(FILTER_STRATEGIES)}.",
+    )
 
 
 def _normalize_chunk_id(doc) -> str | None:

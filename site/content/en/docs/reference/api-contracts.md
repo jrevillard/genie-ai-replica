@@ -187,7 +187,6 @@ Everything else requires a valid Keycloak JWT.
 | `STREAM_ERROR` | varies | `query-routes.js:389` (generic upstream stream failure) |
 | `CITY_NOT_FOUND` | 503 | `services/weather-service.js:199` (no city within lookup radius) |
 | `CHATQNA_UNAVAILABLE` | 504 | `query-routes.js:384` (ChatQnA timeout / aborted) |
-| `INVALID_FILTERS_JSON` | 400 | `analytics-routes.js:289` (malformed `filters` query param) |
 | `Not Found` | 404 | Sensitive-path blocker (`index.js:566`), 404 fallback (`index.js:822`) |
 
 > **Note:** the legacy `UNAUTHORIZED` code is **not** emitted. Clients

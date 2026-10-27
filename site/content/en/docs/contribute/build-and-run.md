@@ -350,9 +350,12 @@ npm start
 
 # DB setup scripts (run after ArangoDB is up)
 cd scripts/new-schema-scripts
-node arango-schema-creator.js ./arango-schema.json   # Creates collections + indexes
-node create-knowledge-hierarchy.js                    # Seeds the service-category taxonomy
+source set-env.sh                                     # ArangoDB connection for the scripts
+node arango-schema-creator.js ./arango-schema.json    # Creates collections + indexes (asks for confirmation)
 ```
+
+Seeding the taxonomy is a separate, interactive step — see
+[Database Setup](#database-setup).
 
 **Verify:**
 
@@ -617,13 +620,29 @@ for the full port table.
 
 ## Database Setup
 
-The schema and seed scripts live in `components/gov-chat-backend/scripts/new-schema-scripts`:
+The schema and seed scripts live in
+`components/gov-chat-backend/scripts/new-schema-scripts`. They read their
+connection from `ARANGO_URL`, `ARANGO_DATABASE`, `ARANGO_USER` and
+`ARANGO_PASSWORD` — `source set-env.sh` (edit it first) exports them, or set them
+yourself. Note that these are not the deployment variable names (`ARANGO_DB`,
+`ARANGO_USERNAME`): without them the scripts fall back to a `node-services`
+database that the application does not read.
 
 ```bash
 cd components/gov-chat-backend/scripts/new-schema-scripts
-node arango-schema-creator.js ./arango-schema.json   # Create collections + indexes (idempotent)
-node create-knowledge-hierarchy.js                    # Seed the service-category taxonomy
+source set-env.sh
+node arango-schema-creator.js ./arango-schema.json   # Create collections + indexes
 ```
+
+The script asks for confirmation before it writes, so it needs a terminal —
+without one it exits without creating anything.
+
+To seed the taxonomy, follow the Knowledge Hierarchy procedure in
+`components/gov-chat-backend/scripts/new-schema-scripts/README.md`. It has two
+prerequisites the commands above do not cover: the ArangoDB schema validation has
+to be turned off for the `serviceCategories`, `services` and `categoryServices`
+collections first, and `create-knowledge-hierarchy.js` is interactive unless it is
+given a hierarchy JSON file (`--file <path>`).
 
 For dataprep, the ArangoDB graph (`ARANGO_GRAPH_NAME`, default `GRAPH`) and
 vector indexes are created on the first run of `dataprep-arango-service`.

@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-22)
 
-- **Chart `genieai-umbrella` at 0.2.69**, branch `feat/k8s-migration` rebased
+- **Chart `genieai-umbrella` at 0.2.74**, branch `feat/k8s-migration` rebased
   onto `main` at `179a8a8f1` (0 commits behind).
 - **No application code in the branch**: the diff touches `charts/`,
   `scripts/`, `docs/`, `deploy/`, `tests/`, `site/`, `.gitlab-ci.yml`,
@@ -122,6 +122,35 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
   three kinds. Proven on a scratch kind cluster from zero CRDs;
   pipeline 14216 `chart:crd-validate` green with 256 objects
   genuinely validated.
+- **Review loop, pass 2 (0.2.74, `bfdc6c47a`)** — the /code-review loop
+  the user asked to keep running while Important findings surface. Pass 2
+  returned 13 findings; 12 verified true and fixed, 1 refuted
+  (local-test.sh sealedsecret `kubectl get`: a present-but-empty CRD
+  exits 0, and install-prereqs installs the controller unconditionally,
+  so the claimed fresh-install abort cannot happen). The four that
+  mattered:
+  - *The migrations hook ignored `global.imageRegistry`* — opposite
+    precedence of the service factory, contradicting its own comment;
+    an air-gapped mirror moved every service image and left the hook on
+    the default registry (confirmed by render before and after).
+  - *`helm test` never asserted the OPEA-tier Secrets* the chart mounts
+    through non-optional secretKeyRefs (`vllm-api-key`,
+    `kc-dataprep-client-secret`) — the CHANGELOG claimed it did; the
+    test now fails the install on a missing one when the tier is on.
+  - *`make test-umbrella`'s CLI `--helm-extra-set-args` REPLACES the
+    ct.yaml value* (viper bound-flag semantics), so the target rendered
+    the Keycloak/CNPG/Arango CRs onto a bare kind cluster and died with
+    `no matches for kind`; the tier-disable flags now travel in the
+    Makefile's own flag string.
+  - *translation/embedding `modelId` rows had no `| default`* — an
+    overlay nulling the key rendered `value: null` and the apply
+    rejected the Deployment; every sibling knob already defaulted.
+  Remaining nine: parity-gate efficiency (one `verify_not_read` pass,
+  mutation-tested), the CHANGELOG Quickstart claim rewritten to the
+  flags the render guards actually require, and six stale
+  comments/strings (vmsingle Service name, grafana backendRef,
+  embedding skipTlsVerify, fullname truncation reason, gpuApiKeyEnv
+  aliases, allowlist secret/knob names).
 - **Review round 9 closed (0.2.67)** — three parallel adversarial passes
   over the whole final diff (core/data/services, edge/observability/OPEA,
   CI/scripts), every finding verified against a render or a live cluster

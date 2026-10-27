@@ -109,12 +109,14 @@ rtk proxy helm template test charts/genieai-umbrella -n genieai \
   --set data.keycloak.smtp.port=587 \
   --set data.keycloak.smtp.starttls=true \
   --set ingress.host=ci-render.local
-git commit/push                                                  # triggers CI: chart:lint + chart:install (see .gitlab-ci.yml)
+git commit/push                                                  # triggers CI: chart:lint + chart:contract + chart:parity + chart:crd-validate
+                                                                  # (chart:install is a MANUAL job — see .gitlab-ci.yml)
 # In genie-ai-deploy: bump `version:` in overlays/<env>/dev/helmrelease.yaml
 flux reconcile helmrelease genieai -n flux-system                # roll the cluster
 
 # Cluster access (namespace: genieai)
-kubectl -n genieai get pods,svc,hpa,helmrelease
+kubectl -n genieai get pods,svc,hpa
+kubectl -n flux-system get helmrelease genieai                   # the HelmRelease lives in flux-system
 kubectl -n genieai port-forward svc/envoy-genieai-genieai-<hash> 4443:443   # browser-validate via https://genieai.local:4443
 # (nginx is gone from the data path — Envoy Gateway is the edge; see charts README)
 

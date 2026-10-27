@@ -45,6 +45,9 @@ rejects.
 {{- end -}}
 
 {{- define "genieai-umbrella.envMapRows" -}}
+{{- if kindIs "slice" . -}}
+{{- fail "the environment map must be a MAP ({NAME: value}), not a list of {name, value} rows — a list renders one variable named 0 whose value is the Go-map string, and every default the chart declares beside it disappears" -}}
+{{- end -}}
 {{- $rows := list -}}
 {{- range $name, $value := . -}}
 {{- $rows = append $rows (dict "name" $name "value" (toString $value)) -}}

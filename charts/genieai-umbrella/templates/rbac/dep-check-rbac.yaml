@@ -21,14 +21,10 @@ rules:
   - apiGroups: [""]
     resources: ["events"]
     verbs: ["create"]
-  # Keycloak 26 official operator (k8s.keycloak.org/v2beta1) ships 4 CRDs.
-  # This chart renders `Keycloak` only; the realm is converged by
-  # keycloak-config-cli, not by the operator's create-only import CR.
-  # The OIDC/SAML client CRDs are listed for completeness (operators may
-  # add them).
-  - apiGroups: ["k8s.keycloak.org"]
-    resources:
-      - keycloaks
-      - keycloakoidcclients
-      - keycloaksamlclients
-    verbs: ["get", "list"]
+  # NO k8s.keycloak.org grants on purpose: nothing here calls the
+  # Keycloak API — the dep-check Job runs with
+  # automountServiceAccountToken: false and makes no API calls, the
+  # detect hook only lists namespaces and creates events, and the test
+  # pods read namespaces and Secrets. Earlier revisions listed the
+  # operator's CRs "for completeness"; a grant with no consumer is pure
+  # review surface — this file carries exactly what is consumed.

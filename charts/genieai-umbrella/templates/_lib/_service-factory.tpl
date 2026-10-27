@@ -141,15 +141,20 @@ spec:
           volumeMounts:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with $svc.probes.readiness }}
+          {{- /* Normalized: a CLEARED probes block (`probes: null`) means
+          "no probes", the same degrade-gracefully contract every other
+          clearable block follows — a bare $svc.probes.readiness crashed
+          the render with a nil-pointer error instead. */ -}}
+          {{- $probes := $svc.probes | default dict -}}
+          {{- with $probes.readiness }}
           readinessProbe:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with $svc.probes.liveness }}
+          {{- with $probes.liveness }}
           livenessProbe:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with $svc.probes.startup }}
+          {{- with $probes.startup }}
           startupProbe:
             {{- toYaml . | nindent 12 }}
           {{- end }}

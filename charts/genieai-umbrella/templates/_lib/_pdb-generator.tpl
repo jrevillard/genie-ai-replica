@@ -20,7 +20,12 @@ Usage:
 {{- $ctx := . -}}
 {{- $svc := index $ctx.Values.services $ctx.name -}}
 {{- $replicas := include "genieai-umbrella.resolveReplicas" (dict "Values" $ctx.Values "service" $ctx.name) | int -}}
-{{- if and (ge $replicas 2) $svc.podDisruptionBudget (hasKey $svc.podDisruptionBudget "minAvailable") $svc.podDisruptionBudget.minAvailable -}}
+{{- /* The minAvailable presence check is a nil check, NOT a truthiness
+check: `minAvailable: 0` is legal (permit every voluntary eviction, keep
+only the scheduler's non-disruption accounting) and sprig's `and`
+short-circuits on the falsy 0 — a truthiness chain silently dropped the
+PDB the values declared. */ -}}
+{{- if and (ge $replicas 2) $svc.podDisruptionBudget (hasKey $svc.podDisruptionBudget "minAvailable") (not (kindIs "invalid" $svc.podDisruptionBudget.minAvailable)) -}}
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget

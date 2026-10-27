@@ -39,7 +39,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: clamav
-          image: "{{ $svc.image.repository | default "clamav/clamav" }}:{{ $svc.image.tag }}"
+          image: "{{ $svc.image.repository | default "clamav/clamav" }}:{{ $svc.image.tag | default "stable-debian" }}"
           imagePullPolicy: {{ include "genieai-umbrella.imagePullPolicy" (dict "tag" $svc.image.tag "pullPolicy" ($svc.image.pullPolicy | default .Values.global.imagePullPolicy)) }}
           # /init-unprivileged is the upstream-provided entrypoint for
           # running clamav 1.4+ as non-root. The default entrypoint

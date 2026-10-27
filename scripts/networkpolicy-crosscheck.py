@@ -267,6 +267,21 @@ def declared_flows(policies, services):
                         continue
                     for port in to_pod_ports(covered, services, target):
                         flows.add((source, target, port))
+    # The INGRESS side declares flows too (a destination that admits a
+    # source expects that source's egress to allow the connection), but
+    # they are NOT asserted here yet: a flow declared only on the
+    # ingress side is ambiguous in a chart whose peers exist in two
+    # topologies. Measured on this branch: `dataprep -> embedding :6000`
+    # and `retriever -> embedding :6000` are real in the in-cluster GPU
+    # mode (the embedding Service is the endpoint) and nonexistent in the
+    # external mode (the clients dial the GPU node), and
+    # `translation -> vllm-translation :8888` names a port the model
+    # does not listen on. The in-cluster tier has never been validated
+    # on a live cluster (the laptop runs the external mode), so turning
+    # those findings into gate failures would ship a red CI on a tier
+    # nobody has run. Until that tier is exercised, the ingress-side
+    # flows are listed in the ledger (docs/charts/migration-status.md)
+    # and the asymmetry is fixed there first.
     return flows
 
 

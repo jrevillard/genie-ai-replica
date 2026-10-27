@@ -2832,6 +2832,7 @@ config:validate:
         - "tests/config-validator/**/*"
         - "tests/fixtures/config/**/*"
         - "api-gateway-solution/new-config/**/*"
+        - "configs/keycloak/themes/**/*"
         - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'

@@ -29,7 +29,10 @@ module.exports = [
     },
     rules: {
       semi: ['error', 'always'],
-      quotes: ['error', 'single'],
+      // avoidEscape: a string that holds FreeMarker's single quotes (the
+      // theme's fixtures are FreeMarker fragments) is written with double
+      // quotes — which is what Prettier formats it to.
+      quotes: ['error', 'single', { avoidEscape: true }],
       indent: ['error', 2],
       'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }]
     }

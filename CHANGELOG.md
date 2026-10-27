@@ -53,6 +53,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The Keycloak theme now covers every surface, not only the login page.**
+  The admin console, the account console and the Keycloak emails carry the
+  Living Intelligence look: the masthead is a pale wash of the brand instead of
+  a solid brand slab (the console's own label sat on that `#4071cb` slab at
+  2.25:1 and now reads at 14.1:1 — `#000d64` on the `#ddecff` wash), the pale
+  ground shows behind the content panels, the wave
+  band closes the sidebar, the admin welcome page shows the brand artwork, and
+  the admin console's data tables carry the accent edge. The email template
+  follows the same rules, and its images are fetched from the theme's own
+  resources — Keycloak attaches nothing to an email, so the logo reference that
+  was there resolved to a broken image in every mail client.
+
+  A deployment that ships its own child theme keeps its own look: a child
+  declares `styles` for every surface, so the base theme's stylesheets do not
+  reach it, and the new console look — CSS only — does not either. See
+  [Branding customization](https://opensource.unicc.org/genie-ai/docs/configure/branding-customization/)
+  for how the theme resolution works.
+
+- **The gateway revalidates the Keycloak theme resources.** Keycloak serves
+  every theme resource with a 30-day `Cache-Control` and, unless the theme
+  names a content hash, no validators, so a browser that fetched a stylesheet
+  before a theme change keeps it for a month. The gateway now overrides that
+  header (`no-cache, must-revalidate`) for the resources of every installed
+  theme. Two families keep their long cache: the bundles under `assets/`, whose
+  names carry their content hash (Keycloak answers their revalidation with a
+  304), and the bundles under `vendor/`, which change only with the Keycloak
+  version — and the version is part of the resource URL.
+
+  The override applies to the copies fetched after it is deployed. A browser
+  that fetched a stylesheet before that keeps its 30-day entry: the resources
+  version in the URL is a database-stored tag that moves when Keycloak is
+  upgraded, not when a theme is edited. See
+  [Branding customization](https://opensource.unicc.org/genie-ai/docs/configure/branding-customization/)
+  for the two levers that invalidate a browser's stored copy.
+
+- **The login page's brand artwork is served in WebP.** The theme now ships the
+  artwork in two formats — a 96 KB WebP and the 115 KB PNG — and the login
+  template offers them through a `<picture>` element, so a browser that
+  supports WebP fetches the smaller one and the others keep the PNG. Keycloak
+  serves the WebP as `application/octet-stream`, which does not affect the
+  rendering: the browser selects the source by its type and decodes the bytes
+  itself. The console mastheads and the email keep a single PNG file, and mail
+  clients do not read `<picture>` at all.
+
+- **The gateway sends the `Permissions-Policy` header on every surface.** The
+  header was declared once, at the server level, and nginx does not inherit an
+  `add_header` into a location that declares one of its own — so the web app,
+  the API and the Grafana route were served without it. The value now lives in
+  one place and every location reads it, so a deployment's own policy applies
+  everywhere.
+
 - **On iOS and macOS, the trust-all TLS interception of the vendored
   `flutter_appauth` fork is now scoped to the OIDC provider's host.** The
   fork registered its `NSURLProtocol` process-globally for the duration of an

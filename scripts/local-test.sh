@@ -168,8 +168,14 @@ echo "-- Deployments --"
 kubectl get deploy -n "$NS"
 echo "-- CRs (Keycloak, ArangoDB, CNPG) --"
 kubectl get keycloak,arangodb,cluster -n "$NS"
-echo "-- SealedSecrets --"
-kubectl get sealedsecret -n "$NS"
+echo "-- SealedSecrets (only when the CRD exists: this chart ships none —
+-- secrets are operator-provided — and a fresh kind cluster has no
+-- sealed-secrets controller installed) --"
+if kubectl get crd sealedsecrets.bitnami.com >/dev/null 2>&1; then
+  kubectl get sealedsecret -n "$NS" || true
+else
+  echo "  (sealedsecrets.bitnami.com CRD absent — nothing to list)"
+fi
 echo "-- Pods Ready? --"
 kubectl get pods -n "$NS" -o wide
 # Deployments, not pods: Succeeded hook pods never become Ready and would

@@ -841,8 +841,8 @@ def _read_index_params():
     return metric, n_lists
 
 
-def _canonical_taxonomy_order(labels: list[str | None]) -> list[str]:
-    """Return the taxonomy labels in a canonical, process-independent order.
+def _canonical_taxonomy_order(labels: list[str]) -> list[str]:
+    """Return the labels in a canonical, process-independent order.
 
     The label list is embedded in the labelling prompt verbatim, so its order
     is part of the prompt. An unordered collection cannot supply it: set
@@ -853,17 +853,36 @@ def _canonical_taxonomy_order(labels: list[str | None]) -> list[str]:
 
     The order is therefore derived from the labels themselves: the case-folded
     name first, the exact name as the tie-break, so two labels differing only
-    in case still have a defined order. Labels that are not usable strings —
-    a category whose translation is missing arrives as None — are dropped
-    rather than reaching the prompt as "None"; the count of what was dropped
-    is logged, because a missing translation is an operator's problem and a
-    silent taxonomy reads like a complete one.
+    in case still have a defined order. Duplicates are collapsed, and the
+    arrival order is preserved on the way in — a set would resolve two labels
+    with the same sort key by hash, which is the dependence this function
+    exists to remove.
     """
-    usable = [label for label in labels if isinstance(label, str) and label]
-    dropped = len(labels) - len(usable)
-    if dropped:
-        logger.warning(f"Dropped {dropped} taxonomy entries without a usable label (missing translation).")
-    return sorted(dict.fromkeys(usable), key=lambda label: (label.casefold(), label))
+    return sorted(dict.fromkeys(labels), key=lambda label: (label.casefold(), label))
+
+
+# The count of taxonomy entries dropped by the last fetch, so the reason is
+# reported once and only when it changes: the taxonomy is fetched once per
+# ingested document, and a missing translation does not change between
+# documents. Warning on every fetch would fill the log with the same line.
+_taxonomy_dropped_reported: int | None = None
+
+
+def _report_dropped_taxonomy_entries(dropped: int) -> None:
+    """Warn that taxonomy entries had to be dropped, once per distinct count.
+
+    A missing translation is an operator's problem, and a taxonomy that reads
+    as complete while a service is missing from it is worse than a noisy log.
+    The count also stays in the per-document fetch log line, so a change
+    remains visible there.
+    """
+    global _taxonomy_dropped_reported
+    if dropped == _taxonomy_dropped_reported:
+        return
+    _taxonomy_dropped_reported = dropped
+    logger.warning(
+        f"Dropped {dropped} taxonomy entries without a usable label (a missing translation is the usual cause)."
+    )
 
 
 async def _safe_log(write_ingestion_log, file_id, level, component, message):
@@ -1609,24 +1628,44 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             ):
                 if response.status == 200:
                     data = await response.json()
-                    labels = []
+                    labels: list[str] = []
+                    dropped = 0
                     # Backend returns a tree structure (Category -> Children)
                     if isinstance(data, list):
                         for category in data:
+                            if not isinstance(category, dict):
+                                dropped += 1
+                                continue
                             # Add the Category Name
-                            if isinstance(category, dict) and "name" in category:
-                                labels.append(category["name"])
-                                # Add all Children (Services)
-                                if "children" in category and isinstance(category["children"], list):
-                                    for child in category["children"]:
-                                        # Children might be strings or objects depending on query
-                                        if isinstance(child, dict) and "name" in child:
-                                            labels.append(child["name"])
-                                        elif isinstance(child, str):
-                                            labels.append(child)
+                            name = category.get("name")
+                            if isinstance(name, str) and name:
+                                labels.append(name)
+                            else:
+                                dropped += 1
+                            # Add all Children (Services)
+                            children = category.get("children")
+                            if isinstance(children, list):
+                                for child in children:
+                                    # Children might be strings or objects depending on query
+                                    child_name = child.get("name") if isinstance(child, dict) else child
+                                    if isinstance(child_name, str) and child_name:
+                                        labels.append(child_name)
+                                    else:
+                                        # A service whose translation is missing arrives
+                                        # as null: it has no usable label to offer, and
+                                        # saying so is better than a taxonomy that reads
+                                        # as complete.
+                                        dropped += 1
 
+                    if dropped:
+                        _report_dropped_taxonomy_entries(dropped)
                     ordered_labels = _canonical_taxonomy_order(labels)
-                    logger.info(f"Fetched {len(ordered_labels)} labels from Backend taxonomy.")
+                    logger.info(
+                        f"Taxonomy: {len(labels)} entries received, "
+                        f"{len(ordered_labels)} unique labels for labelling"
+                        + (f", {dropped} without a usable label" if dropped else "")
+                        + "."
+                    )
                     return ordered_labels
 
                 logger.error(f"Label fetch failed. Status: {response.status}, Body: {await response.text()}")
@@ -2825,6 +2864,12 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             dropped = [l for l in labels_list if l not in scope]
             labels_list = [l for l in labels_list if l in scope]
 
+        # Store the labels in the canonical order, so the array is a function
+        # of the label set alone — not of the order the model happened to
+        # answer in, and the same as what the other labelling strategies
+        # store.
+        labels_list = _canonical_taxonomy_order(labels_list)
+
         level = "INFO"
         msg = f"Chunk {index}: Final labels ({len(labels_list)}): {labels_list}."
         if dropped:
@@ -2878,7 +2923,8 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             await self._write_ingestion_log(
                 file_id, "WARN", "Labeling", "No labels found in Taxonomy. Using only file labels."
             )
-            return [{"text": c, "labels": file_labels if file_labels else []} for c in plain_chunks], []
+            fallback_labels = _canonical_taxonomy_order(file_labels) if file_labels else []
+            return [{"text": c, "labels": fallback_labels} for c in plain_chunks], []
 
         logger.info(f"Labeling using strategy: {LABELING_STRATEGY}")
 

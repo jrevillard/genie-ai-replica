@@ -89,7 +89,9 @@ The LLM is asked to return a JSON object mapping each chunk to its
 labels. The exact prompt template is in `LABEL_SELECTOR_SYSTEM_PROMPT`
 (the built-in default lives in `genieai_dataprep_arangodb.py`). The taxonomy
 is substituted into that **system** prompt (`{labels_list}`); the user
-message carries the chunk text alone (`Input: {chunk_text}`). Sampling is
+message carries the chunk text — `Input: {chunk_text}` for a single chunk,
+and the numbered chunks `[0] …`, `[1] …` when several are labelled in one
+call. Sampling is
 `0.0` with `response_format={"type": "json_object"}`; the per-chunk call
 uses `max_tokens=160` and the batched call uses `max_tokens=len(batch) * 256 + 512`.
 (`DATAPREP_CONTEXTUAL_MAX_TOKENS` is unrelated — it caps the
@@ -97,12 +99,12 @@ Contextual-Retrieval context-generation call, not labelling.)
 
 The taxonomy list in the prompt is ordered canonically — case-folded label
 name first, exact name as the tie-break — independently of the order the
-backend returns the taxonomy in, and the labels a chunk stores keep the
-order the model suggested them in. The prompt is therefore the same from one
-ingestion run to the next, so the labelling no longer varies with the order
-the taxonomy happened to arrive in. The labels are still the model's answer
-to that prompt: greedy decoding is not bit-for-bit reproducible across
-different batch compositions, so a re-ingest can still differ.
+backend returns the taxonomy in, and the labels a chunk stores are in that
+same order. The prompt is therefore the same from one ingestion run to the
+next, so the labelling no longer varies with the order the taxonomy happened
+to arrive in. The labels are still the model's answer to that prompt: greedy
+decoding is not bit-for-bit reproducible across different batch compositions,
+so a re-ingest can still differ.
 
 Each label the LLM returns is resolved against the taxonomy (exact match
 first, then a case-insensitive plural/singular match). A label that resolves

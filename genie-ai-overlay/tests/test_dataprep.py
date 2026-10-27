@@ -1918,6 +1918,36 @@ class TestFetchAllLabels:
 
         assert labels == ["apple", "Banana", "Onion", "onion"]
 
+    @pytest.mark.asyncio
+    async def test_entries_without_a_usable_label_are_counted_and_reported(self):
+        """A service whose translation is missing arrives as null.
+
+        It has no label to offer, and it has to be reported: a taxonomy that
+        reads as complete while a service is missing from it is worse than a
+        noisy log.
+        """
+        with patch.object(dp_module, "logger") as logger, patch.object(dp_module, "_taxonomy_dropped_reported", None):
+            labels = await _fetch_labels(
+                [
+                    {"name": "Healthcare", "children": ["Clinics", None]},
+                    {"name": None, "children": []},
+                ]
+            )
+
+        assert labels == ["Clinics", "Healthcare"]
+        warnings = [call.args[0] for call in logger.warning.call_args_list]
+        assert any("Dropped 2" in message for message in warnings), warnings
+
+    @pytest.mark.asyncio
+    async def test_the_report_is_not_repeated_for_the_same_count(self):
+        """The taxonomy is fetched once per document; the reason does not change."""
+        with patch.object(dp_module, "logger") as logger, patch.object(dp_module, "_taxonomy_dropped_reported", None):
+            await _fetch_labels([{"name": "Healthcare", "children": [None]}])
+            await _fetch_labels([{"name": "Healthcare", "children": [None]}])
+
+        warnings = [call.args[0] for call in logger.warning.call_args_list]
+        assert len(warnings) == 1, warnings
+
     def test_the_same_taxonomy_yields_the_same_order_in_every_process(self):
         """Two interpreters, two hash seeds, one answer.
 
@@ -1947,52 +1977,37 @@ class TestFetchAllLabels:
             )
 
         outputs = []
-        for seed, probe in probes:
-            stdout, stderr = probe.communicate(timeout=120)
-            assert probe.returncode == 0, f"probe failed under PYTHONHASHSEED={seed}:\n{stderr}"
-            outputs.append(json.loads(stdout.strip().splitlines()[-1]))
+        try:
+            for seed, probe in probes:
+                stdout, stderr = probe.communicate(timeout=120)
+                assert probe.returncode == 0, f"probe failed under PYTHONHASHSEED={seed}:\n{stderr}"
+                outputs.append(json.loads(stdout.strip().splitlines()[-1]))
+        finally:
+            # A probe that hung would otherwise outlive the test run.
+            for _, probe in probes:
+                if probe.poll() is None:
+                    probe.kill()
+                    probe.wait()
 
         assert outputs[0] == outputs[1]
         # The exact values, so the comparison above cannot pass on two empty
         # taxonomies: the probe would then guard nothing.
         assert outputs[0] == {
             "labels": ["Clinics", "Education", "Healthcare", "Hospitals", "Onion", "onion", "Schools"],
-            "stored": ["Hospitals", "Clinics", "Schools"],
+            "stored": ["Clinics", "Hospitals", "Schools"],
         }
-
-
-class TestCanonicalTaxonomyOrder:
-    """The ordering contract, asserted on the helper itself."""
-
-    @pytest.mark.parametrize(
-        ("labels", "expected"),
-        [
-            (["Schools", "Clinics"], ["Clinics", "Schools"]),
-            (["Clinics", "Clinics"], ["Clinics"]),
-            (["Onion", "onion"], ["Onion", "onion"]),
-            (["apple", "Banana"], ["apple", "Banana"]),
-            ([None, "", "Clinics"], ["Clinics"]),
-            ([], []),
-        ],
-        ids=["sorted", "duplicates", "case-variants", "case-insensitive", "unusable", "empty"],
-    )
-    def test_the_contract(self, labels, expected):
-        assert dp_module._canonical_taxonomy_order(labels) == expected
-
-    def test_a_label_that_is_not_a_string_is_dropped_and_counted(self):
-        """A missing translation is an operator's problem, not a silent gap."""
-        with patch.object(dp_module, "logger") as logger:
-            assert dp_module._canonical_taxonomy_order([None, "Clinics"]) == ["Clinics"]
-
-        warnings = [call.args[0] for call in logger.warning.call_args_list]
-        assert any("Dropped 1" in message for message in warnings), warnings
 
 
 class TestFinalizeChunkLabels:
     """The order of the labels a chunk stores."""
 
     @pytest.mark.asyncio
-    async def test_the_stored_labels_keep_the_order_the_model_suggested(self):
+    async def test_the_stored_labels_are_in_the_canonical_order(self):
+        """The stored array is a function of the label set alone.
+
+        Not of the order the model answered in: two runs that pick the same
+        labels have to store the same array.
+        """
         dp = create_dataprep()
 
         with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
@@ -2003,7 +2018,7 @@ class TestFinalizeChunkLabels:
                 "file1",
             )
 
-        assert labels == ["Hospitals", "Clinics", "Schools"]
+        assert labels == ["Clinics", "Hospitals", "Schools"]
 
 
 class TestRunGuardrail:

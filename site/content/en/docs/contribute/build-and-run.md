@@ -350,9 +350,9 @@ npm start
 ```
 
 When the stack runs through Docker Compose or Ansible, the one-shot
-`db-migrations` job creates every collection and index automatically before the
-backend starts. What stays manual is seeding the taxonomy — see
-[Database Setup](#database-setup).
+`db-migrations` job creates every collection and index automatically (in Compose
+it completes before the backend starts). What stays manual is seeding the
+taxonomy — see [Database Setup](#database-setup).
 
 **Verify:**
 
@@ -620,9 +620,11 @@ for the full port table.
 **Collections and indexes are created automatically.** The one-shot
 `db-migrations` service (`scripts/migrations/`, built into the
 `genie-ai-db-migrations` image) runs on every Docker Compose / Swarm / Ansible
-deployment and applies the migrations before the backend starts — collections,
-edges and indexes, idempotently. You do not create them by hand on a deployed
-stack.
+deployment and applies the migrations — collections, edges and indexes,
+idempotently. In Compose the backend starts only after the job completes
+(`depends_on: service_completed_successfully`); Docker Swarm ignores that
+ordering, so there the backend can come up while the job is still running. You
+do not create the collections by hand on a deployed stack either way.
 
 The scripts under `components/gov-chat-backend/scripts/new-schema-scripts` are
 for databases managed outside that pipeline — a local database without Compose,
@@ -651,8 +653,9 @@ Admin Dashboard. The script route has two prerequisites: the ArangoDB schema
 validation has to be turned off for the `serviceCategories`, `services` and
 `categoryServices` collections first (only relevant when the validators were
 applied, i.e. on databases created by `arango-schema-creator.js`), and
-`create-knowledge-hierarchy.js` is interactive unless it is given a hierarchy
-JSON file (`--file <path>`).
+`create-knowledge-hierarchy.js` always asks for confirmation before it writes —
+with or without `--file` — so it needs a terminal; run unattended it cancels
+itself and writes nothing.
 
 For dataprep, the ArangoDB graph (`ARANGO_GRAPH_NAME`, default `GRAPH`) and
 vector indexes are created on the first run of `dataprep-arango-service`.

@@ -136,7 +136,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `components/gov-chat-backend/scripts/new-schema-scripts/create-knowledge-hierarchy.js`
   (turn the ArangoDB schema validation off for `serviceCategories`, `services`
   and `categoryServices` before running the script, and back on afterwards).
-  (#1108, !613)
 - **Breaking:** **`GET /api/analytics` removed.** Same defect as the endpoint
   above: the route called `analyticsService.getAnalytics()`, a method removed
   during the 2025 singleton refactor of the backend services, so it answered
@@ -145,7 +144,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   calls it: the web app reads `/api/analytics/dashboard` and the `/metric`,
   `/timeseries` and `/satisfaction` endpoints, and the mobile app never called
   it. It is removed rather than restored — read
-  `GET /api/analytics/dashboard` for the overview. (#1108, !613)
+  `GET /api/analytics/dashboard` for the overview.
 - **The npm wrappers that created the database and seeded the taxonomy are
   gone.** `npm run setup-db`, `npm run init-categories` and `npm run setup-all`
   ran `node setup-db.js`, `node init-service-categories.js` and
@@ -161,7 +160,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `components/gov-chat-backend/scripts/new-schema-scripts`, and
   `node create-knowledge-hierarchy.js` to seed the taxonomy (which needs the
   ArangoDB schema validation turned off first — see the scripts' README).
-  (#1108, !613)
 
 ### Fixed
 

@@ -635,6 +635,19 @@ services:
       - name: nginx-run
         mountPath: /var/run
     resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
+    # Empty by default: the entrypoint injects every VUE_APP_* row into
+    # /app/dist/runtime/config.js (window.APP_CONFIG) at startup, and the
+    # code defaults cover the knobs Compose leaves empty. The one the
+    # operator is most likely to tune —
+    #   VUE_APP_STREAM_IDLE_TIMEOUT_MS
+    # the chat-stream idle watch (the SPA aborts the stream when no frame
+    # arrives for this long and reports the timeout). Default 300000 (5
+    # min); it must outlast the backend's LLM budget (180 s) plus
+    # retrieval, or a slow-but-healthy answer is abandoned client-side.
+    #   env:
+    #     VUE_APP_STREAM_IDLE_TIMEOUT_MS: "600000"
+    # (a bare "" is the default; the SPA falls back to 300000 on any
+    # non-numeric value.)
     env: {}
     secrets: []
     pvc: null

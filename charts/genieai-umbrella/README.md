@@ -9,7 +9,8 @@ Gateway/HTTPRoute/Certificate; nginx is NOT part of the k8s data path), and
 the Keycloak realm-convergence + ArangoDB migrations hook Jobs — with one
 `helm install`.
 
-Chart version: **0.2.66**. `appVersion` mirrors `version` deliberately
+Chart version: see `Chart.yaml` (the single source of truth — Flux
+reconciles on it). `appVersion` mirrors `version` deliberately
 (chart layout, not product release; deployed image tags are governed by
 `values.yaml`, never `latest`).
 
@@ -32,12 +33,28 @@ Operator overrides only what differs on the target cluster.
 kubectl get crd | grep -E 'keycloak|sealedsecret|cluster\.arangodb|cnpg'
 
 # 2. Create the namespace and the operator-provided Secrets. The chart
-#    never creates a secret; the realm convergence Job reads these, and
-#    the five values it needs are the realm's unresolved placeholders:
-#    the admin password, the three client secrets and the SMTP password.
+#    never creates a secret; every one below is mounted through a
+#    non-optional secretKeyRef, so a missing one leaves the pod in
+#    CreateContainerConfigError — the hook Jobs (db-migrations, realm
+#    convergence) never start and `helm install` fails on the hooks.
 #    Use whatever secret backend you run cluster-wide — these are the
-#    plain kubectl equivalent.
+#    plain kubectl equivalent. The key names are the ones the chart and
+#    the operators read.
 kubectl create namespace genieai
+kubectl -n genieai create secret generic arango-root-secret \
+  --from-literal=username=root \
+  --from-literal=password="$(openssl rand -hex 16)"
+kubectl -n genieai create secret generic arango-jwt-secret \
+  --from-literal=token="$(openssl rand -hex 16)"
+kubectl -n genieai create secret generic keycloak-db-credentials \
+  --from-literal=username=keycloak \
+  --from-literal=password="$(openssl rand -hex 16)"
+kubectl -n genieai create secret generic keycloak-admin-credentials \
+  --from-literal=username=admin \
+  --from-literal=password="$(openssl rand -base64 24)"
+kubectl -n genieai create secret generic translation-cache-password \
+  --from-literal=password="$(openssl rand -hex 16)" \
+  --from-literal=TRANSLATION_CACHE_PASSWORD="$(openssl rand -hex 16)"
 kubectl -n genieai create secret generic keycloak-convergence-credentials \
   --from-literal=GENIE_ADMIN_PASSWORD="$(openssl rand -base64 24)" \
   --from-literal=EMAIL_PASSWORD="$SMTP_PASSWORD"

@@ -8,6 +8,7 @@
  */
 const { mount, flushPromises } = require('@vue/test-utils');
 const { createStore } = require('vuex');
+const { reactive } = require('vue');
 const { createAuthenticatedState } = require('../fixtures/store-state');
 // The real en locale — the wording the notification must end up showing.
 const enChatbot = require('../../i18n/locales/en.js').default.chatbot;
@@ -44,6 +45,14 @@ jest.mock('../../services/chatHistoryService', () => ({
 jest.mock('../../services/serviceTreeService', () => ({
   getAllCategories: jest.fn().mockResolvedValue([])
 }));
+
+// The tree the component loads (the API mock) — the LIVE hierarchy the
+// scope is resolved against. Assigning vm.serviceCategories directly is not
+// enough: the mount-time load overwrites it.
+function mockLiveTree(categories) {
+  const serviceTreeService = require('../../services/serviceTreeService');
+  serviceTreeService.getAllCategories.mockResolvedValue(categories);
+}
 
 const mockNotificationError = jest.fn();
 const mockNotificationSuccess = jest.fn();
@@ -179,7 +188,9 @@ function createChatBotWrapper(storeOverrides = {}, { rehydrate = false } = {}) {
       plugins: [store],
       mocks: {
         $t: (key) => key,
-        $i18n: { locale: 'en' }
+        // Reactive, so a test can switch the locale the way the app does and
+        // the component's locale watchers run.
+        $i18n: reactive({ locale: 'en' })
       },
       stubs: {
         ChatResponseFeedbackDialog: true,
@@ -1234,7 +1245,7 @@ describe('ChatBotComponent', () => {
       expect(vm.quickHelpButtons[0].id).toBe('b');
     });
 
-    it('loadQuickHelpButtons reads serviceLabels and sets serviceKey to first English label', async () => {
+    it('loadQuickHelpButtons reads serviceLabels and keeps the button id as the service key', async () => {
       const loadConfig = require('../../config-loader').default;
       loadConfig.mockResolvedValue({
         features: {
@@ -1261,8 +1272,31 @@ describe('ChatBotComponent', () => {
 
       const btn = vm.quickHelpButtons[0];
       expect(btn.serviceLabels).toEqual(['Tomato', 'Onion']);
-      expect(btn.serviceKey).toBe('Tomato');
+      expect(btn.serviceKey).toBe('grow');
       expect(btn.service).toBe('Grow'); // display = localized title, NOT the English label
+    });
+
+    it('loadQuickHelpButtons keys the button on its id, not on the labels it declares', async () => {
+      // The label is DEPLOYMENT DATA: it changes when the hierarchy is
+      // reconfigured. The key of a saved conversation must survive that.
+      const loadConfig = require('../../config-loader').default;
+      loadConfig.mockResolvedValue({
+        features: {
+          chat: {
+            quickHelp: {
+              buttons: [{ id: 'grow', title: 'Grow', category: '1', serviceLabels: ['Tomato'] }]
+            }
+          }
+        }
+      });
+
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      await vm.loadQuickHelpButtons();
+      await wrapper.vm.$nextTick();
+
+      expect(vm.quickHelpButtons[0].serviceKey).toBe('grow');
     });
 
     it('loadQuickHelpButtons falls back to id when no serviceLabels', async () => {
@@ -1286,6 +1320,41 @@ describe('ChatBotComponent', () => {
       const btn = vm.quickHelpButtons[0];
       expect(btn.serviceLabels).toBeNull();
       expect(btn.serviceKey).toBe('legacy');
+    });
+
+    it('does not read the runtime configuration again when the locale changes', async () => {
+      // The runtime configuration is the same for every locale — only the
+      // display text of a button is resolved per locale. Reading the
+      // configuration again on every language switch is a wasted request.
+      const loadConfig = require('../../config-loader').default;
+      loadConfig.mockResolvedValue({
+        features: {
+          chat: {
+            quickHelp: {
+              buttons: [{ id: 'grow', title: { en: 'Grow', fr: 'Cultiver' }, category: '1' }]
+            }
+          }
+        }
+      });
+
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      await vm.loadQuickHelpButtons();
+      await wrapper.vm.$nextTick();
+
+      expect(vm.quickHelpButtons[0].service).toBe('Grow');
+      const readsBeforeLocaleChange = loadConfig.mock.calls.length;
+
+      vm.$i18n.locale = 'fr';
+      await wrapper.vm.$nextTick();
+      // The locale change may start a read of its own; let it settle before
+      // counting the reads.
+      await vm.quickHelpLoadPromise;
+      await wrapper.vm.$nextTick();
+
+      expect(loadConfig.mock.calls.length).toBe(readsBeforeLocaleChange);
+      expect(vm.quickHelpButtons[0].service).toBe('Cultiver');
     });
 
     it('selectQuickHelpOption carries serviceLabels and replaces previous Quick Help', () => {
@@ -1342,35 +1411,523 @@ describe('ChatBotComponent', () => {
       expect(vm.selectedContextItems.some((i) => i.source === 'quickHelp')).toBe(true);
     });
 
-    it('getCategoryLabelById returns null for unknown id', () => {
-      const wrapper = createChatBotWrapper();
-      const vm = wrapper.vm;
-
-      expect(vm.getCategoryLabelById('999999')).toBeNull();
-    });
-
-    it('checkContextConfig blocks non-admin user on Category NN label', () => {
-      const wrapper = createChatBotWrapper();
-      const vm = wrapper.vm;
-
-      // Non-admin user
-      wrapper.vm.$store.commit = wrapper.vm.$store.commit || jest.fn();
-
-      const result = vm.checkContextConfig({
-        categoryLabel: 'Category 123',
-        serviceLabels: []
+    it('restores a Quick Help tag with the labels its button declared', async () => {
+      const loadConfig = require('../../config-loader').default;
+      loadConfig.mockResolvedValue({
+        features: {
+          chat: {
+            quickHelp: {
+              buttons: [{ id: 'grow', title: 'Grow', category: '1', serviceLabels: ['Tomato', 'Onion'] }]
+            }
+          }
+        }
       });
 
-      expect(result).toBe(false);
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      await vm.loadQuickHelpButtons();
+
+      // A saved conversation keeps the tag of the item, not the item itself.
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation.mockResolvedValueOnce({
+        _key: 'c1',
+        title: 'Saved chat',
+        messages: [],
+        tags: ['grow']
+      });
+
+      await vm.loadExistingConversation('c1');
+
+      expect(vm.selectedContextItems.length).toBe(1);
+      expect(vm.selectedContextItems[0].source).toBe('quickHelp');
+      expect(vm.selectedContextItems[0].serviceLabels).toEqual(['Tomato', 'Onion']);
+    });
+
+    it('does not restore a Quick Help button from a tag that is one of its labels', async () => {
+      // A sidebar selection and a Quick Help button can carry the SAME label.
+      // Restoring the button for a sidebar tag would silently change the
+      // scope of the saved query.
+      const loadConfig = require('../../config-loader').default;
+      loadConfig.mockResolvedValue({
+        features: {
+          chat: {
+            quickHelp: {
+              buttons: [{ id: 'grow', title: 'Grow', category: '1', serviceLabels: ['Tomato'] }]
+            }
+          }
+        }
+      });
+
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      await vm.loadQuickHelpButtons();
+
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation.mockResolvedValueOnce({
+        _key: 'c1',
+        title: 'Saved chat',
+        messages: [],
+        tags: ['Tomato']
+      });
+
+      await vm.loadExistingConversation('c1');
+
+      expect(vm.selectedContextItems.length).toBe(1);
+      expect(vm.selectedContextItems[0].source).not.toBe('quickHelp');
+      // The wire carries the EN label the live tree confirms. With no tree
+      // loaded, 'Tomato' is a tag and nothing more — it is not turned into
+      // a filter label the hierarchy cannot vouch for.
+      expect(vm.selectedContextItems[0].serviceKey).toBeNull();
+    });
+
+    it('restores a sidebar scope as its EN label when the tree confirms it', async () => {
+      // A saved conversation carries the EN label of the scope (a
+      // locale-independent identity). The tree confirms it → the wire
+      // filters on it; the chip shows the localized name.
+      const tree = [
+        {
+          catKey: '2',
+          name: 'Cultivos',
+          nameEN: 'Crops',
+          children: [{ name: 'Tomate', nameEN: 'Tomato' }]
+        }
+      ];
+      mockLiveTree(tree);
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation.mockResolvedValueOnce({
+        _key: 'c1',
+        title: 'Saved chat',
+        messages: [],
+        tags: ['Tomato']
+      });
+
+      await vm.loadExistingConversation('c1');
+
+      expect(vm.selectedContextItems[0].serviceKey).toBe('Tomato');
+      expect(vm.selectedContextItems[0].service).toBe('Tomate');
+    });
+
+    it('restores a Quick Help button when the config has not loaded yet', async () => {
+      // The configuration is fetched asynchronously. A conversation restored
+      // before the fetch resolved would find no button for its tag, fall
+      // back to the sidebar branch, and send the button id as a label.
+      const loadConfig = require('../../config-loader').default;
+      let configRequested;
+      const configRequestedPromise = new Promise((resolve) => {
+        configRequested = resolve;
+      });
+      let resolveConfig;
+      loadConfig.mockImplementation(() => {
+        configRequested();
+        return new Promise((resolve) => {
+          resolveConfig = resolve;
+        });
+      });
+
+      try {
+        const wrapper = createChatBotWrapper();
+        const vm = wrapper.vm;
+
+        const chatHistoryService = require('../../services/chatHistoryService');
+        chatHistoryService.getConversation.mockResolvedValueOnce({
+          _key: 'c1',
+          title: 'Saved chat',
+          messages: [],
+          tags: ['grow']
+        });
+
+        const restoring = vm.loadExistingConversation('c1');
+        await configRequestedPromise;
+        resolveConfig({
+          features: {
+            chat: {
+              quickHelp: {
+                buttons: [{ id: 'grow', title: 'Grow', category: '1', serviceLabels: ['Tomato'] }]
+              }
+            }
+          }
+        });
+        await restoring;
+
+        expect(vm.selectedContextItems.length).toBe(1);
+        expect(vm.selectedContextItems[0].source).toBe('quickHelp');
+        expect(vm.selectedContextItems[0].serviceLabels).toEqual(['Tomato']);
+      } finally {
+        loadConfig.mockResolvedValue({ features: { chat: { quickHelp: { buttons: [] } } } });
+      }
+    });
+
+    it('sends no category key — the client contract carries labels only', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // The label names the category; the key is the hierarchy's own
+      // identity and is not part of the contract a client speaks. The backend
+      // resolves the label against the live hierarchy and knows the identity
+      // from there.
+      vm.serviceCategories = [{ catKey: '2', name: 'Cultivos', nameEN: 'Crops' }];
+      vm.currentCategoryId = '2';
+      vm.$store.commit('conversation/setContextItems', [
+        { id: 'grow', source: 'quickHelp', serviceLabels: ['Tomato'], category: '2', selected: true }
+      ]);
+      vm.newMessage = 'How do I grow tomatoes?';
+
+      await vm.sendMessage();
+
+      const payload = mockSubmitQueryStream.mock.calls[0][0];
+      expect(payload.context.categoryLabel).toBe('Crops');
+      expect(payload.context).not.toHaveProperty('categoryKey');
+    });
+
+    it('sends no category key for the general placeholder', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // 'general' is the placeholder a Quick Help button falls back to. It
+      // names no category of the hierarchy, so it is no category at all.
+      vm.currentCategoryId = 'general';
+      vm.$store.commit('conversation/setContextItems', [
+        { id: 'grow', source: 'quickHelp', serviceLabels: ['Tomato'], category: 'general', selected: true }
+      ]);
+      vm.newMessage = 'How do I grow tomatoes?';
+
+      await vm.sendMessage();
+
+      const payload = mockSubmitQueryStream.mock.calls[0][0];
+      expect(payload.context.categoryLabel).toBeNull();
+      expect(payload.context).not.toHaveProperty('categoryKey');
+    });
+
+    it('sends the ENGLISH label of the category — the localized name is display-only', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // English is the SSOT of the filter wire: chunk_labels carry the EN
+      // translation. The localized name the tree displays never filters —
+      // sending it would scope the query against labels no chunk carries.
+      vm.serviceCategories = [{ catKey: '2', name: 'Cultivos', nameEN: 'Crops' }];
+      vm.currentCategoryId = '2';
+      vm.$store.commit('conversation/setContextItems', [
+        { service: 'Tomate', serviceKey: 'Tomato', category: '2', selected: true }
+      ]);
+      vm.newMessage = '¿Cómo cultivo tomates?';
+
+      await vm.sendMessage();
+
+      const payload = mockSubmitQueryStream.mock.calls[0][0];
+      expect(payload.context.categoryLabel).toBe('Crops');
+      expect(payload.context.serviceLabels).toEqual(['Tomato']);
+    });
+
+    it('marks a Quick Help button broken when a declared label left the hierarchy', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      const button = {
+        id: 'civil',
+        service: 'État civil',
+        serviceLabels: ['Registration', 'Births'],
+        category: '2',
+        icon: 'x'
+      };
+      vm.serviceCategories = [
+        {
+          catKey: '2',
+          name: 'État civil',
+          nameEN: 'Civil Registry',
+          children: [{ name: 'Naissances', nameEN: 'Births' }]
+        }
+      ];
+
+      const state = vm.quickHelpScopeState(button);
+      // 'Registration' was renamed ('Birth Registration' now) — the button can
+      // no longer keep its promised scope, so it is a broken button.
+      expect(state.broken).toBe(true);
+      expect(state.missingLabels).toEqual(['Registration']);
+    });
+
+    it('marks a Quick Help button broken when its category left the hierarchy', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      const button = { id: 'tax', service: 'Taxes', serviceLabels: ['Tax Filing'], category: '404', icon: 'x' };
+      vm.serviceCategories = [{ catKey: '2', name: 'Crops', nameEN: 'Crops', children: [] }];
+
+      const state = vm.quickHelpScopeState(button);
+      expect(state.broken).toBe(true);
+      expect(state.categoryMissing).toBe(true);
+    });
+
+    it('does not mark a valid button broken', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      const button = { id: 'civil', service: 'État civil', serviceLabels: ['Births'], category: '2', icon: 'x' };
+      vm.serviceCategories = [
+        {
+          catKey: '2',
+          name: 'État civil',
+          nameEN: 'Civil Registry',
+          children: [{ name: 'Naissances', nameEN: 'Births' }]
+        }
+      ];
+
+      const state = vm.quickHelpScopeState(button);
+      expect(state.broken).toBe(false);
+    });
+
+    it('does not mark any button broken while the hierarchy has not loaded', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // An empty tree is a tree that has not loaded (or failed to): it says
+      // nothing about any button's scope, so it reports nothing.
+      const button = {
+        id: 'civil',
+        service: 'État civil',
+        serviceLabels: ['Registration'],
+        category: '404',
+        icon: 'x'
+      };
+      vm.serviceCategories = [];
+
+      expect(vm.quickHelpScopeState(button).broken).toBe(false);
+    });
+
+    it('a broken Quick Help button sends no query', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // The error state on the button is the visible failure. The click must
+      // not send a query with a silently reduced scope — not even the
+      // auto-send path a hidden prompt would trigger.
+      const broken = {
+        id: 'civil',
+        service: 'État civil',
+        serviceLabels: ['Registration'],
+        category: '2',
+        icon: 'x',
+        hiddenPrompt: 'hidden prompt',
+        visibleText: 'visible text'
+      };
+      vm.serviceCategories = [{ catKey: '2', name: 'État civil', nameEN: 'Civil Registry', children: [] }];
+
+      await vm.selectQuickHelpOption(broken);
+
+      expect(mockSubmitQueryStream).not.toHaveBeenCalled();
+      expect(vm.selectedContextItems).toHaveLength(0);
+    });
+
+    it('restores the category scope of a saved conversation', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // The conversation is linked to its category through an edge, so the
+      // key of the category comes back with it. Without it the restored
+      // conversation loses the scope it was asked in.
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation.mockResolvedValueOnce({
+        _key: 'c1',
+        title: 'Saved chat',
+        messages: [],
+        categories: [{ _key: '2', nameEN: 'Crops' }]
+      });
+
+      await vm.loadExistingConversation('c1');
+
+      expect(vm.currentCategoryId).toBe('2');
+    });
+
+    it('the wire accessor returns the ENGLISH label; the display accessor the localized one', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // English is the SSOT of the filter wire; the localized name is what
+      // the user reads. One lookup, two spellings.
+      mockLiveTree([{ catKey: '2', name: 'Impôts', nameEN: 'Taxes' }]);
+      vm.serviceCategories = [{ catKey: '2', name: 'Impôts', nameEN: 'Taxes' }];
+
+      expect(vm.getCategoryEnLabel('2')).toBe('Taxes');
+      expect(vm.getCategoryDisplayName('2')).toBe('Impôts');
+      expect(vm.getCategoryEnLabel('999999')).toBeNull();
+      expect(vm.getCategoryDisplayName('999999')).toBeNull();
+    });
+
+    it('sends no localized label when the entity carries no EN translation', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // An entity without an EN translation has no filterable label at all:
+      // the localized name matches no chunk, so it must not reach the wire.
+      const tree = [
+        {
+          catKey: '2',
+          name: 'Cultivos',
+          nameEN: 'Crops',
+          children: [{ name: 'Impuestos', nameEN: null }]
+        }
+      ];
+      mockLiveTree(tree);
+      vm.serviceCategories = tree;
+      vm.handleTreeNodeSelected({
+        category: '2',
+        service: 'Impuestos',
+        serviceKey: null,
+        selected: true
+      });
+      vm.currentCategoryId = '2';
+      vm.newMessage = '¿Cuánto es?';
+
+      await vm.sendMessage();
+
+      const payload = mockSubmitQueryStream.mock.calls[0][0];
+      expect(payload.context.serviceLabels).toEqual([]);
+      expect(payload.context.serviceLabels).not.toContain('Impuestos');
+    });
+
+    it('restores a Quick Help card with the category scope it was asked in', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // The card knows its own category. A conversation saved with it may
+      // carry no category edge (the chat was started before the card was
+      // used) — the restored scope is the card's.
+      const tree = [{ catKey: '5', name: 'Impuestos', nameEN: 'Taxes' }];
+      mockLiveTree(tree);
+      vm.serviceCategories = tree;
+      const loadConfig = require('../../config-loader').default;
+      loadConfig.mockResolvedValue({
+        features: {
+          chat: {
+            quickHelp: {
+              buttons: [
+                {
+                  id: 'taxes',
+                  title: { en: 'Taxes' },
+                  category: '5',
+                  serviceLabels: []
+                }
+              ]
+            }
+          }
+        }
+      });
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation.mockResolvedValueOnce({
+        _key: 'c1',
+        title: 'Saved chat',
+        messages: [],
+        tags: ['taxes']
+      });
+
+      await vm.loadExistingConversation('c1');
+
+      expect(vm.currentCategoryId).toBe('5');
+    });
+
+    it('shows the localized name of a restored scope, and sends the ENGLISH one', async () => {
+      // A conversation carries the EN label (a locale-independent identity);
+      // the chip shows the localized name the tree carries for it.
+      const tree = [{ catKey: '2', name: 'Impôts', nameEN: 'Taxes' }];
+      mockLiveTree(tree);
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation.mockResolvedValueOnce({
+        _key: 'c1',
+        title: 'Saved chat',
+        messages: [],
+        categories: [{ _key: '2', nameEN: 'Taxes' }]
+      });
+
+      await vm.loadExistingConversation('c1');
+
+      expect(vm.selectedContextItems[0].service).toBe('Impôts');
+
+      vm.newMessage = 'suite';
+      await vm.sendMessage();
+      const payload = mockSubmitQueryStream.mock.calls[0][0];
+      expect(payload.context.categoryLabel).toBe('Taxes');
+    });
+
+    it('checkContextConfig blocks a Category NN label for every user', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // The block is user-independent: an unresolved category id filters the
+      // corpus down to nothing, whoever asks.
+      expect(vm.checkContextConfig({ categoryLabel: 'Category 123', serviceLabels: [] })).toBe(false);
+
+      wrapper.vm.$store.commit('SET_USER', { ...vm.$store.getters.currentUser, roles: ['admin'] });
+
+      expect(vm.checkContextConfig({ categoryLabel: 'Category 123', serviceLabels: [] })).toBe(false);
     });
 
     it('checkContextConfig blocks when context items present but no filter active', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      // Misconfig symptom: a context item exists but resolved to no labels
+      // Misconfig symptom: a sidebar context item exists but resolved to no
+      // labels. A Quick Help item is exempt — it scopes the answer with its
+      // own prompt, and every shipped button declares no labels at all.
       vm.$store.commit('conversation/setContextItems', [
-        { service: 'Broken', serviceKey: 'Broken', serviceLabels: null, source: 'quickHelp', selected: true }
+        { service: 'Broken', serviceKey: '', serviceLabels: null, source: 'sidebar', selected: true }
+      ]);
+
+      const result = vm.checkContextConfig({
+        categoryLabel: null,
+        serviceLabels: []
+      });
+
+      expect(result).toBe(false);
+    });
+
+    it('checkContextConfig does not warn about a missing filter for a Quick Help item', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // A Quick Help button carries its own prompt. Blocking it because it
+      // declares no label would make the button do nothing at all — and the
+      // query is allowed, so there is nothing to warn the admin about either.
+      wrapper.vm.$store.commit('SET_USER', { ...vm.$store.getters.currentUser, roles: ['admin'] });
+
+      vm.$store.commit('conversation/setContextItems', [
+        {
+          service: 'Apply for ID',
+          serviceKey: 'identity-civil',
+          serviceLabels: null,
+          source: 'quickHelp',
+          selected: true
+        }
+      ]);
+
+      const result = vm.checkContextConfig({
+        categoryLabel: null,
+        serviceLabels: []
+      });
+
+      expect(result).toBe(true);
+      expect(mockNotificationWarning).not.toHaveBeenCalled();
+    });
+
+    it('checkContextConfig blocks when a Quick Help item hides a misconfigured item', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // The Quick Help exemption covers the Quick Help item only. Another
+      // selected item that declares no label is a misconfiguration, and the
+      // query it would produce is unfiltered.
+      vm.$store.commit('conversation/setContextItems', [
+        {
+          service: 'Apply for ID',
+          serviceKey: 'identity-civil',
+          serviceLabels: null,
+          source: 'quickHelp',
+          selected: true
+        },
+        { service: 'Broken', serviceKey: '', serviceLabels: null, source: 'sidebar', selected: true }
       ]);
 
       const result = vm.checkContextConfig({
@@ -1414,7 +1971,7 @@ describe('ChatBotComponent', () => {
       expect(result).toBe(true);
     });
 
-    it('query-build uses serviceLabels array then serviceKey fallback', async () => {
+    it('query-build uses the declared labels of a Quick Help item and the key of a sidebar item', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
@@ -1430,16 +1987,70 @@ describe('ChatBotComponent', () => {
         { service: 'Tomate', serviceKey: 'Tomato', serviceLabels: null, source: 'sidebar', selected: true }
       ]);
 
-      // Build the query payload via the public sendMessage path would require mocking
-      // the service; instead, exercise the flatMap logic directly by inspecting the
-      // constructed serviceLabels from selectedContextItems (mirrors the query-build code).
-      const built = vm.selectedContextItems.flatMap((item) =>
-        Array.isArray(item.serviceLabels) && item.serviceLabels.length > 0
-          ? item.serviceLabels
-          : [item.serviceKey || item.service]
-      );
+      vm.newMessage = 'When do I plant tomatoes?';
+      await vm.sendMessage();
 
-      expect(built).toEqual(['Tomato', 'Onion', 'Tomato']);
+      const payload = mockSubmitQueryStream.mock.calls[mockSubmitQueryStream.mock.calls.length - 1][0];
+      expect(payload.context.serviceLabels).toEqual(['Tomato', 'Onion', 'Tomato']);
+    });
+
+    it('Quick Help button that declares no labels sends no label filter', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // Every shipped button config declares no `serviceLabels`. The button id
+      // is not a knowledge label: sending it filtered the corpus down to zero
+      // documents and left the LLM with no context at all.
+      vm.selectQuickHelpOption({
+        service: 'Apply for ID',
+        serviceLabels: null,
+        serviceKey: 'identity-civil',
+        id: 'identity-civil',
+        category: '1'
+      });
+
+      vm.newMessage = 'How do I apply for an ID card?';
+      await vm.sendMessage();
+
+      expect(mockSubmitQueryStream).toHaveBeenCalled();
+      const payload = mockSubmitQueryStream.mock.calls[mockSubmitQueryStream.mock.calls.length - 1][0];
+      expect(payload.context.serviceLabels).toEqual([]);
+    });
+
+    it('Quick Help button that declares labels sends exactly those labels', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.selectQuickHelpOption({
+        service: 'Grow',
+        serviceLabels: ['Tomato', 'Onion'],
+        serviceKey: 'Tomato',
+        id: 'grow',
+        category: '1'
+      });
+
+      vm.newMessage = 'How do I grow tomatoes?';
+      await vm.sendMessage();
+
+      expect(mockSubmitQueryStream).toHaveBeenCalled();
+      const payload = mockSubmitQueryStream.mock.calls[mockSubmitQueryStream.mock.calls.length - 1][0];
+      expect(payload.context.serviceLabels).toEqual(['Tomato', 'Onion']);
+    });
+
+    it('sidebar item still contributes its service key as a label', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.$store.commit('conversation/setContextItems', [
+        { service: 'Tomate', serviceKey: 'Tomato', serviceLabels: null, source: 'sidebar', selected: true }
+      ]);
+
+      vm.newMessage = 'When do I plant tomatoes?';
+      await vm.sendMessage();
+
+      expect(mockSubmitQueryStream).toHaveBeenCalled();
+      const payload = mockSubmitQueryStream.mock.calls[mockSubmitQueryStream.mock.calls.length - 1][0];
+      expect(payload.context.serviceLabels).toEqual(['Tomato']);
     });
   });
 

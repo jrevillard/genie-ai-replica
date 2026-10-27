@@ -1038,6 +1038,10 @@ const Map<String, dynamic> esLocale = {
     "unsavedChanges":
         "Tienes cambios sin guardar. ¿Estás seguro de que quieres iniciar un nuevo chat?",
     "whatCanIHelp": "¿Cómo puedo ayudarte hoy?",
+    "quickHelpLabelGone":
+        "Problema de configuración: la etiqueta «{labels}» ya no existe en la jerarquía de conocimiento. Este botón no se puede usar hasta que su configuración se actualice.",
+    "quickHelpCategoryGone":
+        "Problema de configuración: la categoría de este botón ya no existe en la jerarquía de conocimiento. Este botón no se puede usar hasta que su configuración se actualice.",
     "queryContext": "Contexto de consulta",
     "contextAdded": "Contexto añadido a tu consulta",
     "contextRemoved": "Contexto eliminado de tu consulta",

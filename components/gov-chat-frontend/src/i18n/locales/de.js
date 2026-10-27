@@ -1401,6 +1401,10 @@ export default {
     configMismatchWarning:
       'Konfigurationsfehler: {warnings}. Bitte überprüfen Sie die Schnellhilfe- und Wissenshierarchie-Konfiguration.',
     categoryNotFound: 'Kategorie "{label}" nicht in der Wissenshierarchie gefunden',
+    quickHelpLabelGone:
+      'Konfigurationsproblem: das Label „{labels}“ existiert nicht mehr in der Wissenshierarchie. Diese Schaltfläche kann nicht verwendet werden, bis ihre Konfiguration aktualisiert wurde.',
+    quickHelpCategoryGone:
+      'Konfigurationsproblem: die Kategorie dieser Schaltfläche existiert nicht mehr in der Wissenshierarchie. Diese Schaltfläche kann nicht verwendet werden, bis ihre Konfiguration aktualisiert wurde.',
     serviceLabelMismatch:
       'Dienst "{label}" verwendet ein UI-Label, das möglicherweise nicht zur Wissenshierarchie passt',
     noFilterWarning: 'Kein Kontextfilter aktiv — Abfrage wird ungefiltert sein.',

@@ -1035,6 +1035,10 @@ const Map<String, dynamic> enLocale = {
     "unsavedChanges":
         "You have unsaved changes. Are you sure you want to start a new chat?",
     "whatCanIHelp": "How can I help you today?",
+    "quickHelpLabelGone":
+        "Configuration problem: the label \"{labels}\" no longer exists in the knowledge hierarchy. This button cannot be used until its configuration is updated.",
+    "quickHelpCategoryGone":
+        "Configuration problem: this button's category no longer exists in the knowledge hierarchy. This button cannot be used until its configuration is updated.",
     "queryContext": "Query Context",
     "contextAdded": "Context added to your query",
     "contextRemoved": "Context removed from your query",

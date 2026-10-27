@@ -1032,6 +1032,10 @@ const Map<String, dynamic> idLocale = {
     "unsavedChanges":
         "Anda memiliki perubahan yang belum disimpan. Apakah Anda yakin ingin memulai obrolan baru?",
     "whatCanIHelp": "Bagaimana saya bisa membantu Anda hari ini?",
+    "quickHelpLabelGone":
+        "Masalah konfigurasi: label \"{labels}\" tidak lagi ada dalam hierarki pengetahuan. Tombol ini tidak dapat digunakan sampai konfigurasinya diperbarui.",
+    "quickHelpCategoryGone":
+        "Masalah konfigurasi: kategori tombol ini tidak lagi ada dalam hierarki pengetahuan. Tombol ini tidak dapat digunakan sampai konfigurasinya diperbarui.",
     "queryContext": "Konteks Kueri",
     "contextAdded": "Konteks ditambahkan ke kueri Anda",
     "contextRemoved": "Konteks dihapus dari kueri Anda",

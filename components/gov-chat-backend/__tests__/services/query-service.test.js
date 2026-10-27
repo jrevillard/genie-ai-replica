@@ -631,16 +631,19 @@ describe('QueryService', () => {
       delete process.env.CONTEXT_OPTION;
     });
 
-    it('should default context to General when missing', async () => {
+    it('should keep a missing category label as null — no phantom filter', async () => {
       process.env.CONTEXT_OPTION = 'test-mode';
       const data = createMockQueryData();
       delete data.context;
       mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'q1' });
       mockQueriesCollection.update.mockResolvedValueOnce({ new: { _key: 'q1', isAnswered: true } });
       await queryService.createQuery(data);
+      // 'General' names no entity of any hierarchy: injecting it would scope
+      // the query to a label no chunk carries. A request with no category
+      // declares no scope, and the corpus is its scope.
       expect(mockQueriesCollection.save).toHaveBeenCalledWith(
         expect.objectContaining({
-          context: { categoryLabel: 'General', serviceLabels: [] }
+          context: { categoryLabel: null, serviceLabels: [] }
         })
       );
       delete process.env.CONTEXT_OPTION;

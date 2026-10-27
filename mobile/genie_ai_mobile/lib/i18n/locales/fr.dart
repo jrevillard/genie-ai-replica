@@ -1047,6 +1047,10 @@ const Map<String, dynamic> frLocale = {
     "unsavedChanges":
         "Vous avez des modifications non enregistrées. Êtes-vous sûr de vouloir commencer un nouveau chat ?",
     "whatCanIHelp": "Comment puis-je vous aider aujourd'hui ?",
+    "quickHelpLabelGone":
+        "Problème de configuration : le label « {labels} » n'existe plus dans la hiérarchie de connaissances. Ce bouton est inutilisable tant que sa configuration n'est pas mise à jour.",
+    "quickHelpCategoryGone":
+        "Problème de configuration : la catégorie de ce bouton n'existe plus dans la hiérarchie de connaissances. Ce bouton est inutilisable tant que sa configuration n'est pas mise à jour.",
     "queryContext": "Contexte de la requête",
     "contextAdded": "Contexte ajouté à votre requête",
     "contextRemoved": "Contexte retiré de votre requête",

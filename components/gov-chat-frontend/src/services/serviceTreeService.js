@@ -4,9 +4,14 @@ import httpService from './httpService';
 export default {
   /**
    * For the MAIN application sidebar.
-   * Fetches all categories with a simple array of service name strings.
+   * Fetches all categories with their services.
+   *
+   * Every category and every child service carries BOTH spellings: `name`
+   * (the localized display name) and `nameEN` (the English translation — the
+   * SSOT the filter wire speaks; the localized name never filters).
+   *
    * @param {String} locale - Locale code (e.g., 'en')
-   * @returns {Promise} Categories with simple service name strings.
+   * @returns {Promise} Categories with their services.
    */
   async getAllCategories(locale = 'en') {
     try {
@@ -50,6 +55,9 @@ export default {
     return categories.map((category) => ({
       catKey: category.catKey,
       name: category.name, // Preserve the name property!
+      // The ENGLISH translation: the SSOT the query wire speaks. Display is
+      // localized; the filter label must be EN, or it matches no chunk.
+      nameEN: category.nameEN,
       expanded: false,
       children: category.children || []
     }));

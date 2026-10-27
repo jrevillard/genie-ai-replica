@@ -5,7 +5,7 @@ weight: 5
 mode: reference
 persona: developer
 owner: "docs-stewards"
-last_reviewed: 2026-09-18
+last_reviewed: 2026-10-26
 ---
 
 > **For frontend developers.** The behaviour of `ChatBotComponent.vue` and its satellite dialogs: the streaming send, the confidence chip, the grounding warning, the feedback dialog, and save / export flows.
@@ -186,14 +186,46 @@ Card config (each entry in config.features.chat.quickHelp.buttons):
     "hiddenPrompt": "Explain the eligibility criteria, required documents, and processing time for the agriculture subsidy programme for smallholder farmers."
   },
   "service": "Agriculture",
-  "serviceKey": "agriculture",
   "serviceLabels": ["agriculture", "subsidies", "rural-development"],
   "category": "agriculture",
   "icon": "agriculture.svg"
 }
 ```
 
-`service` is the localized display name; `serviceKey` / `serviceLabels` are the English KB labels used as the retriever filter. Display and filter are decoupled so the button always shows its localized title while the filter always uses English KB labels.
+`service` is the localized display name; `serviceLabels` are the English KB labels used as the retriever filter. The `serviceKey` of a card is its **`id`** — never one of its labels. The id is the identity of the card: a saved conversation carries it as the conversation tag, so the card can be restored when the conversation is opened again. The labels a card declares are hierarchy data — they change when the hierarchy is reconfigured — and must not be part of an identity. Display, identity and filter are therefore three separate things: the card always shows its localized title, a saved conversation always carries the card id, and the filter always uses the English KB labels.
+
+### Label drift: English on the wire, visible failure on drift
+
+A card declares its filter in `serviceLabels` (English KB labels). The wire
+speaks ENGLISH — the SSOT the corpus filters on:
+
+- `context.serviceLabels` — the ENGLISH labels the selected items contribute.
+  A Quick Help card contributes only the labels it declares. Its `id` is a
+  configuration key, not a knowledge label; sending it as a filter narrowed
+  the corpus to zero documents, and the LLM then answered with no context at
+  all. A sidebar item contributes the **`nameEN`** the knowledge tree carries
+  for it — the localized name is display-only and never filters.
+- `context.categoryLabel` — the **`nameEN`** of the selected category. It is
+  sent whenever the selection names a category that carries an EN
+  translation, so a card that declares no label is still scoped by its
+  category. It is `null` when the selection names no category (the "Just
+  Chat" card) or when the entity carries no EN translation — a request with
+  no category and no service label is legitimately unfiltered.
+- A card that declares **no** label is allowed. Its `action.hiddenPrompt`
+  already scopes the answer, so the client does not block it with "No context
+  filter active" — blocking it would make the button do nothing.
+
+**A broken card is a visible failure.** The client validates every declared
+label and the card's category against the live tree. A label the hierarchy no
+longer carries — or a category that is gone — renders the card with a danger
+icon and a caption naming the problem, in the user's language, and the click
+sends nothing. The card never sends a silently reduced scope, and the query
+is never answered outside the scope the card promised.
+
+When the scope is intact but matches no document anyway (chunks ingested
+before a rename), the query abstains: chatqna's abstention instructions state
+that no documented information was found. The remedy is operational — update
+the configuration, re-ingest the corpus.
 
 ## Accessibility
 

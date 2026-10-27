@@ -1039,6 +1039,10 @@ const Map<String, dynamic> swLocale = {
     "unsavedChanges":
         "Una mabadiliko ambayo hayajahifadhiwa. Una uhakika unataka kuanza gumzo mpya?",
     "whatCanIHelp": "Ninawezaje kukusaidia leo?",
+    "quickHelpLabelGone":
+        "Tatizo la usanidi: lebo \"{labels}\" haipo tena katika mpangilio wa maarifa. Kitufe hiki hakiwezi kutumika hadi usanidi wake ukoreshwe.",
+    "quickHelpCategoryGone":
+        "Tatizo la usanidi: kundi la kitufe hiki haipo tena katika mpangilio wa maarifa. Kitufe hiki hakiwezi kutumika hadi usanidi wake ukoreshwe.",
     "queryContext": "Muktadha wa Swali",
     "contextAdded": "Muktadha umeongezwa kwenye swali lako",
     "contextRemoved": "Muktadha umeondolewa kwenye swali lako",

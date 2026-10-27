@@ -146,10 +146,15 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
     // 2. Normalize Service Data (Handling the String vs Map crash)
     String serviceId;
     String serviceName;
+    // The ENGLISH translation — the SSOT the filter wire speaks. The
+    // localized name is display-only.
+    String serviceEn = "";
 
     if (serviceItem is Map) {
       serviceId = (serviceItem['id'] ?? serviceItem['key'] ?? "").toString();
       serviceName = serviceItem['label'] ?? serviceItem['name'] ?? "Unknown";
+      final en = serviceItem['nameEN'];
+      serviceEn = (en is String) ? en : "";
     } else {
       // Handle simple string case
       serviceId = serviceItem.toString();
@@ -183,7 +188,11 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
         _orderedSelection.add({
           'id': serviceId,
           'name': serviceName,
+          'nameEn': serviceEn,
           'category_id': categoryId,
+          'categoryNameEn': (category['nameEN'] is String)
+              ? category['nameEN']
+              : "",
         });
 
         // Update visual highlights
@@ -203,7 +212,13 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
   void _emitSelectionChange() {
     // Case A: Nothing selected -> Clear context
     if (_orderedSelection.isEmpty) {
-      widget.onSelectionChange({'id': '', 'name': '', 'category_id': ''});
+      widget.onSelectionChange({
+        'id': '',
+        'name': '',
+        'category_id': '',
+        'categoryNameEn': '',
+        'serviceLabelsEn': const <String>[],
+      });
       return;
     }
 
@@ -211,6 +226,12 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
     final String contextString = _orderedSelection
         .map((item) => item['name'])
         .join(', ');
+
+    final List<String> serviceLabelsEn = _orderedSelection
+        .map((item) => item['nameEn'])
+        .where((en) => en != null && en.toString().isNotEmpty)
+        .cast<String>()
+        .toList();
 
     final String primaryCatId = _orderedSelection.first['category_id'];
 
@@ -222,6 +243,8 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
       'id': combinedIds,
       'name': contextString,
       'category_id': primaryCatId,
+      'categoryNameEn': _orderedSelection.first['categoryNameEn'],
+      'serviceLabelsEn': serviceLabelsEn,
     };
 
     debugPrint("[SERVICE_TREE] Emitting Multi-Selection: $payload");

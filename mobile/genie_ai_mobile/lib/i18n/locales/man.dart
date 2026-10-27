@@ -1024,6 +1024,10 @@ const Map<String, dynamic> manLocale = {
     "unsavedChanges":
         "I sota yelema baliyaalu la. I lafita kuma kuta daminang na?",
     "whatCanIHelp": "N si i demba nyaadii bii?",
+    "quickHelpLabelGone":
+        "Configuration problem: the label \"{labels}\" no longer exists in the knowledge hierarchy. This button cannot be used until its configuration is updated.",
+    "quickHelpCategoryGone":
+        "Configuration problem: this button's category no longer exists in the knowledge hierarchy. This button cannot be used until its configuration is updated.",
     "queryContext": "Nyininka kumo",
     "contextAdded": "Kumo kafuta i la nyininka la",
     "contextRemoved": "Kumo wuluta i la nyininka la",

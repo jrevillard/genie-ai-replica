@@ -1401,6 +1401,10 @@ export default {
     configMismatchWarning:
       'Incompatibilidade de configuração: {warnings}. Verifique a configuração de Ajuda Rápida e hierarquia de conhecimento.',
     categoryNotFound: 'Categoria "{label}" não encontrada na hierarquia de conhecimento',
+    quickHelpLabelGone:
+      'Problema de configuração: o rótulo «{labels}» já não existe na hierarquia de conhecimento. Este botão não pode ser usado até que a sua configuração seja atualizada.',
+    quickHelpCategoryGone:
+      'Problema de configuração: a categoria deste botão já não existe na hierarquia de conhecimento. Este botão não pode ser usado até que a sua configuração seja atualizada.',
     serviceLabelMismatch:
       'Serviço "{label}" usa um rótulo de UI que pode não corresponder à hierarquia de conhecimento',
     noFilterWarning: 'Sem filtro de contexto ativo — a consulta não será filtrada.',

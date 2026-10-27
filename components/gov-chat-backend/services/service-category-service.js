@@ -408,7 +408,9 @@ class ServiceCategoryService {
   /**
    * Get all categories with their services (for public-facing components)
    * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
-   * @returns {Promise<Array>} Categories with service name strings.
+   * @returns {Promise<Array>} Categories with their services, each carrying
+   *   the localized display name and the ENGLISH translation (`nameEN`) the
+   *   filter wire speaks.
    */
   async getAllCategoriesWithServices(locale = 'en') {
     await this.init();
@@ -416,6 +418,10 @@ class ServiceCategoryService {
       const upperLocale = locale.toUpperCase();
       logger.info(`Fetching all categories with services for locale ${upperLocale}`);
 
+      // The tree carries BOTH spellings of every entity: the localized name
+      // the UI displays, and the ENGLISH translation the retrieval corpus
+      // filters on. English is the SSOT of the filter wire — a client that
+      // sent a localized name would scope against labels no chunk carries.
       const query = aql`
       FOR category IN serviceCategories
         SORT category.order ASC
@@ -423,6 +429,12 @@ class ServiceCategoryService {
           FOR trans IN serviceCategoryTranslations
             FILTER trans.serviceCategoryId == category._key
             FILTER LOWER(trans.languageCode) == LOWER(${upperLocale})
+            RETURN trans.translation
+        )
+        LET categoryTranslationEN = FIRST(
+          FOR trans IN serviceCategoryTranslations
+            FILTER trans.serviceCategoryId == category._key
+            FILTER LOWER(trans.languageCode) == 'en'
             RETURN trans.translation
         )
         LET services = (
@@ -436,13 +448,20 @@ class ServiceCategoryService {
                   FILTER LOWER(trans.languageCode) == LOWER(${upperLocale})
                   RETURN trans.translation
               )
+              LET serviceTranslationEN = FIRST(
+                FOR trans IN serviceTranslations
+                  FILTER trans.serviceId == service._key
+                  FILTER LOWER(trans.languageCode) == 'en'
+                  RETURN trans.translation
+              )
               SORT edge.order ASC
-              RETURN serviceTranslation
+              RETURN { name: serviceTranslation, nameEN: serviceTranslationEN }
         )
         RETURN {
           catKey: category._key,
           catCode: category.catCode,
           name: categoryTranslation,
+          nameEN: categoryTranslationEN,
           children: services
         }
     `;
@@ -471,7 +490,10 @@ class ServiceCategoryService {
       const upperLocale = locale.toUpperCase();
       logger.info(`Fetching all categories with DETAILED services for admin panel, locale ${upperLocale}`);
 
-      // This query is identical to getAllCategoriesWithServices, except for the final RETURN in the services subquery
+      // The admin variant of getAllCategoriesWithServices: the category
+      // level is the same, but the services subquery returns the entity KEY
+      // (the hierarchy editor acts on entities) instead of the wire
+      // spellings the public tree publishes.
       const query = aql`
           FOR category IN serviceCategories
               SORT category.order ASC

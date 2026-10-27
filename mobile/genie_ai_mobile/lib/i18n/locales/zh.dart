@@ -929,6 +929,8 @@ const Map<String, dynamic> zhLocale = {
     "clearContext": "清除上下文并开始新对话",
     "unsavedChanges": "您有未保存的更改。您确定要开始新聊天吗？",
     "whatCanIHelp": "今天我能为您提供什么帮助？",
+    "quickHelpLabelGone": "配置问题：标签“{labels}”已不存在于知识层次结构中。在更新配置之前，此按钮无法使用。",
+    "quickHelpCategoryGone": "配置问题：此按钮的类别已不存在于知识层次结构中。在更新配置之前，此按钮无法使用。",
     "queryContext": "查询上下文",
     "contextAdded": "上下文已添加到您的查询",
     "contextRemoved": "上下文已从您的查询中移除",

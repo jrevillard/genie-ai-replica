@@ -1040,6 +1040,10 @@ const Map<String, dynamic> stLocale = {
     "unsavedChanges":
         "O na le diphetoho tse sa bolokwang. Na u na le bonnete ba hore u batla ho qala puisano e ncha?",
     "whatCanIHelp": "Nka u thusa joang kajeno?",
+    "quickHelpLabelGone":
+        "Configuration problem: the label \"{labels}\" no longer exists in the knowledge hierarchy. This button cannot be used until its configuration is updated.",
+    "quickHelpCategoryGone":
+        "Configuration problem: this button's category no longer exists in the knowledge hierarchy. This button cannot be used until its configuration is updated.",
     "queryContext": "Moelelo oa Potso",
     "contextAdded": "Moelelo o kentsoe potsong ea hao",
     "contextRemoved": "Moelelo o tlositsoe potsong ea hao",

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'quick_help_scope.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:genie_ai_mobile/components/shared/confirm_dialog.dart';
 import 'package:genie_ai_mobile/components/chat/chat_response_feedback_dialog.dart';
@@ -81,6 +82,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // Context & Related Data
   String? _selectedCategoryId;
   String _selectedCategoryName = "";
+  // The ENGLISH spellings of the sidebar scope — the SSOT the wire speaks.
+  // The localized name (_selectedCategoryName) is display-only.
+  String _selectedCategoryNameEn = "";
+  List<String> _sidebarServiceLabelsEn = [];
+  // The live hierarchy, indexed once: the EN label vocabulary (what the
+  // corpus filters on) and the category keys. Null until the tree loads (or
+  // if it fails) — then no button is judged broken, because an unloaded tree
+  // says nothing.
+  QuickHelpScopeResolver? _scopeResolver;
   // English KB labels for the retriever filter, sourced from a Quick Help button's
   // serviceLabels. Set in _quickHelpPressed, cleared after the stream completes.
   // Sidebar tree selections use _selectedCategoryId/_selectedCategoryName instead.
@@ -127,6 +137,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _welcomeMessage = _getConfigWelcomeMessage();
 
     _loadQuickHelpConfig();
+    _ensureEnTree();
     _titleController.text = _conversationTitle;
 
     _messages.add({
@@ -282,10 +293,54 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     });
   }
 
-  void setCategoryContext(String categoryId, String categoryName) {
+  /// The live hierarchy at locale=en — the label vocabulary the corpus
+  /// filters on. Best effort: a failure leaves the resolver null, which
+  /// validates nothing rather than marking every button broken.
+  Future<void> _ensureEnTree() async {
+    try {
+      final categoriesApi = ref.read(serviceCategoriesApiProvider);
+      final response = await categoriesApi
+          .apiServiceCategoriesCategoriesGetWithHttpInfo(locale: 'en');
+      if (response.statusCode == 200 && mounted) {
+        final tree = jsonDecode(response.body) as List<dynamic>;
+        setState(() {
+          _scopeResolver = QuickHelpScopeResolver(tree);
+        });
+      }
+    } catch (e) {
+      debugPrint(
+        "[CHATBOT] EN tree fetch failed (scope validation disabled): $e",
+      );
+    }
+  }
+
+  String _quickHelpErrorCaption(Map<String, dynamic> scope) {
+    final missing = (scope['missingLabels'] as List).cast<String>();
+    final parts = <String>[];
+    if (missing.isNotEmpty) {
+      parts.add(
+        tr(
+          'chatbot.quickHelpLabelGone',
+        ).replaceAll('{labels}', missing.join(', ')),
+      );
+    }
+    if (scope['categoryMissing'] as bool) {
+      parts.add(tr('chatbot.quickHelpCategoryGone'));
+    }
+    return parts.join(' ');
+  }
+
+  void setCategoryContext(
+    String categoryId,
+    String categoryName, {
+    String categoryNameEn = '',
+    List<String> serviceLabelsEn = const [],
+  }) {
     setState(() {
       _selectedCategoryId = categoryId;
       _selectedCategoryName = categoryName;
+      _selectedCategoryNameEn = categoryNameEn;
+      _sidebarServiceLabelsEn = serviceLabelsEn;
     });
   }
 
@@ -443,7 +498,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // Quick Help sets _activeServiceLabels; sidebar sets _selectedCategoryId.
     // Either constitutes a context-filtered query.
     final hasContext =
-        _selectedCategoryId != null || _activeServiceLabels.isNotEmpty;
+        _selectedCategoryId != null ||
+        _activeServiceLabels.isNotEmpty ||
+        _sidebarServiceLabelsEn.isNotEmpty;
     final request = http.Request('POST', uri)
       ..headers['Content-Type'] = 'application/json'
       ..headers['Accept'] = 'text/event-stream'
@@ -454,10 +511,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         if (hasContext) ...{
           'messages': messagesForApi,
           'context': {
-            'categoryLabel': _selectedCategoryName.isNotEmpty
-                ? _selectedCategoryName
+            // ENGLISH is the SSOT of the filter wire: chunk_labels carry the
+            // EN translation, so the query speaks EN. The localized name is
+            // display-only.
+            'categoryLabel': _selectedCategoryNameEn.isNotEmpty
+                ? _selectedCategoryNameEn
                 : null,
-            'serviceLabels': _activeServiceLabels,
+            'serviceLabels': _activeServiceLabels.isNotEmpty
+                ? _activeServiceLabels
+                : _sidebarServiceLabelsEn,
             'language': I18nService().currentLocale.languageCode.toUpperCase(),
           },
           'contextOption': 'conversation-with-context-labels',
@@ -785,6 +847,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   }
 
   void _quickHelpPressed(Map<String, dynamic> button) {
+    // A broken scope is a VISIBLE failure: the overlay caption names the
+    // configuration problem. Never a query with a silently reduced scope.
+    if ((_scopeResolver?.stateFor(button)['broken'] as bool?) ?? false) {
+      return;
+    }
     final Map<String, dynamic> action = button['action'] ?? {};
     final String visibleTextKey = action['visibleText']?.toString() ?? '';
     final String hiddenPromptKey = action['hiddenPrompt']?.toString() ?? '';
@@ -797,6 +864,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         _activeServiceLabels = [];
         _selectedCategoryId = null;
         _selectedCategoryName = '';
+        _selectedCategoryNameEn = '';
+        _sidebarServiceLabelsEn = [];
       });
       _inputFocusNode.requestFocus();
       return;
@@ -822,10 +891,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     setState(() {
       _showQuickHelpOverlay = false;
       _activeServiceLabels = labels;
-      // Quick Help is a mode switch: clear any prior sidebar category selection
-      // so the request is filtered by the Quick Help labels ONLY (not both).
-      _selectedCategoryId = null;
+      // The button's declared category rides along in its EN spelling — the
+      // wire's SSOT — resolved against the live hierarchy (it used to be
+      // dropped here, silently unscoping the query). The sidebar selection
+      // is a mode switch: it is cleared.
+      _selectedCategoryId = button['category']?.toString();
+      _selectedCategoryNameEn = _scopeResolver?.categoryLabelEn(button) ?? '';
       _selectedCategoryName = '';
+      _sidebarServiceLabelsEn = [];
     });
 
     // Send using the 2-prompt system
@@ -1672,12 +1745,25 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                             final String translatedTitle = tr(titleKey);
                             final String iconAsset =
                                 button['iconAsset']?.toString() ?? '';
+                            final scope =
+                                _scopeResolver?.stateFor(button) ??
+                                const {
+                                  'broken': false,
+                                  'missingLabels': <String>[],
+                                  'categoryMissing': false,
+                                };
+                            final broken = scope['broken'] as bool;
 
                             return Material(
                               color: Colors.transparent,
                               child: InkWell(
                                 borderRadius: BorderRadius.circular(DsRadii.lg),
-                                onTap: () => _quickHelpPressed(button),
+                                // A broken scope is a VISIBLE failure: the
+                                // caption below names the configuration
+                                // problem, and the tap sends nothing.
+                                onTap: broken
+                                    ? null
+                                    : () => _quickHelpPressed(button),
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 12,
@@ -1689,35 +1775,59 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                       DsRadii.lg,
                                     ),
                                     border: Border.all(
-                                      color: tokens.borderLight,
+                                      color: broken
+                                          ? tokens.danger
+                                          : tokens.borderLight,
                                     ),
                                   ),
-                                  child: Row(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      SvgPicture.asset(
-                                        iconAsset,
-                                        width: 18,
-                                        height: 18,
-                                        placeholderBuilder: (_) => Icon(
-                                          Icons.help_outline,
-                                          size: 20,
-                                          color: tokens.accent,
-                                        ),
+                                      Row(
+                                        children: [
+                                          broken
+                                              ? Icon(
+                                                  Icons.warning_amber_rounded,
+                                                  size: 18,
+                                                  color: tokens.danger,
+                                                )
+                                              : SvgPicture.asset(
+                                                  iconAsset,
+                                                  width: 18,
+                                                  height: 18,
+                                                  placeholderBuilder: (_) =>
+                                                      Icon(
+                                                        Icons.help_outline,
+                                                        size: 20,
+                                                        color: tokens.accent,
+                                                      ),
+                                                ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Text(
+                                              translatedTitle,
+                                              style: theme.textTheme.labelMedium
+                                                  ?.copyWith(
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: tokens.textXs,
+                                                    color: tokens.fg,
+                                                  ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Text(
-                                          translatedTitle,
-                                          style: theme.textTheme.labelMedium
+                                      if (broken)
+                                        Text(
+                                          _quickHelpErrorCaption(scope),
+                                          style: theme.textTheme.bodySmall
                                               ?.copyWith(
-                                                fontWeight: FontWeight.w600,
                                                 fontSize: tokens.textXs,
-                                                color: tokens.fg,
+                                                color: tokens.danger,
                                               ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                      ),
                                     ],
                                   ),
                                 ),

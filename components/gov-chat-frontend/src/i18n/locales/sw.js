@@ -1389,6 +1389,10 @@ export default {
     configMismatchWarning:
       'Hitilafu ya usanidi: {warnings}. Tafadhali angalia usanidi wa Msaada wa Haraka na mpangilio wa maarifa.',
     categoryNotFound: 'Kategoria "{label}" haipatikani katika mpangilio wa maarifa',
+    quickHelpLabelGone:
+      'Tatizo la usanidi: lebo "{labels}" haipo tena katika mpangilio wa maarifa. Kitufe hiki hakiwezi kutumika hadi usanidi wake ukoreshwe.',
+    quickHelpCategoryGone:
+      'Tatizo la usanidi: kundi la kitufe hiki haipo tena katika mpangilio wa maarifa. Kitufe hiki hakiwezi kutumika hadi usanidi wake ukoreshwe.',
     serviceLabelMismatch: 'Huduma "{label}" inatumia lebo ya UI ambayo huenda isilingane na mpangilio wa maarifa',
     noFilterWarning: 'Hakuna kichujio cha muktadha kinachofanya kazi — hoja itakuwa bila kichujio.',
     placeholder: 'Andika swali lako hapa...',

@@ -13,10 +13,12 @@ import pytest
 from fastapi import HTTPException
 
 from core import embedding_query_prefix as core_query_prefix
+from core.label_contract import encode_filter_labels
 from retriever.genieai_retriever_arangodb import (
     ARANGO_GRAPH_NAME,
     GenieaiArangoRetriever,
     QueryInstructionEmbeddingsWrapper,
+    _build_aql_filter_clause,
 )
 
 # NOTE: conftest.py mocks the langchain stack (langchain_core/community/...) via
@@ -438,8 +440,11 @@ class TestInvoke:
 
     @pytest.mark.asyncio
     async def test_label_filter_or_strategy(self, invoke_env):
+        # A LIST, like every other label source: the legacy ``context`` path
+        # extends a bare string character by character, so "health" would
+        # become ["h", "e", "a", "l", "t", "h"] — a filter nothing matches.
         input_mock = create_mock_input(
-            context={"categoryLabels": "health", "serviceLabels": ["education"]},
+            context={"categoryLabels": ["health"], "serviceLabels": ["education"]},
             filter_strategy="OR",
             search_start="chunk",
         )
@@ -451,7 +456,7 @@ class TestInvoke:
     @pytest.mark.asyncio
     async def test_label_filter_and_strategy(self, invoke_env):
         input_mock = create_mock_input(
-            context={"categoryLabels": "health", "serviceLabels": ["education"]},
+            context={"categoryLabels": ["health"], "serviceLabels": ["education"]},
             filter_strategy="AND",
             search_start="chunk",
         )
@@ -607,7 +612,7 @@ class TestInvoke:
         invoke_env["retriever"].fetch_neighborhoods = MagicMock(return_value={"doc1": []})
         input_mock = create_mock_input(
             enable_traversal=True,
-            context={"categoryLabels": "health", "serviceLabels": ["education"]},
+            context={"categoryLabels": ["health"], "serviceLabels": ["education"]},
             filter_strategy="OR",
             search_start="chunk",
         )
@@ -641,7 +646,7 @@ class TestInvoke:
     @pytest.mark.asyncio
     async def test_label_filter_or_includes_chunk_labels_check(self, invoke_env):
         input_mock = create_mock_input(
-            context={"categoryLabels": "health", "serviceLabels": ["education"]},
+            context={"categoryLabels": ["health"], "serviceLabels": ["education"]},
             filter_strategy="OR",
             search_start="chunk",
         )
@@ -654,7 +659,7 @@ class TestInvoke:
     @pytest.mark.asyncio
     async def test_label_filter_and_includes_chunk_labels_check(self, invoke_env):
         input_mock = create_mock_input(
-            context={"categoryLabels": "health", "serviceLabels": ["education"]},
+            context={"categoryLabels": ["health"], "serviceLabels": ["education"]},
             filter_strategy="AND",
             search_start="chunk",
         )
@@ -1152,3 +1157,170 @@ class TestGetQueryInstruction:
             assert core_query_prefix.get_query_instruction("valid") == "ok-prefix"
             # nothing else got registered from the malformed entries
             assert core_query_prefix.get_query_instruction("orphan-value") is None
+
+
+# ---------------------------------------------------------------------------
+# Test: the label filter is absolute (no fallback) + AQL escaping
+# ---------------------------------------------------------------------------
+
+
+class TestLabelFilterIsAbsolute:
+    """A label filter that matches nothing returns NOTHING.
+
+    The system never answers outside the scope the request declared: an empty
+    result is the honest answer, and chatqna's abstention instructions speak
+    for it. There is no retry without the clause — a retry would answer a
+    question nobody asked, from a corpus the request never scoped.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_filter_that_matches_nothing_returns_an_empty_result(self, invoke_env):
+        invoke_env["vector_db"].asimilarity_search_with_relevance_scores = AsyncMock(return_value=[])
+        result = await invoke_env["retriever"].invoke(
+            create_mock_input(search_start=encode_filter_labels("chunk", ["health"]))
+        )
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_the_search_runs_exactly_once_and_carries_the_clause(self, invoke_env):
+        """One search, filtered. A second, unfiltered search is a fallback."""
+        mock = AsyncMock(return_value=[])
+        invoke_env["vector_db"].asimilarity_search_with_relevance_scores = mock
+        await invoke_env["retriever"].invoke(create_mock_input(search_start=encode_filter_labels("chunk", ["health"])))
+        assert mock.await_count == 1
+        assert "FILTER" in mock.call_args.kwargs["filter_clause"]
+        assert '"health"' in mock.call_args.kwargs["filter_clause"]
+
+    @pytest.mark.asyncio
+    async def test_the_lexical_leg_keeps_the_clause_when_the_dense_leg_matched_nothing(self, invoke_env):
+        """Every channel answers the same (empty) question — the scope stands."""
+        invoke_env["vector_db"].asimilarity_search_with_relevance_scores = AsyncMock(return_value=[])
+        with (
+            patch("retriever.genieai_retriever_arangodb.HYBRID_RETRIEVAL_ENABLED", True),
+            patch.object(invoke_env["retriever"], "_bm25_search", return_value=[]) as bm25,
+        ):
+            await invoke_env["retriever"].invoke(
+                create_mock_input(search_start=encode_filter_labels("chunk", ["health"]))
+            )
+        assert bm25.call_args.kwargs["labels_to_filter"] == ["health"]
+        assert bm25.call_args.kwargs["aql_filter_clause"] != ""
+
+    @pytest.mark.asyncio
+    async def test_a_filter_that_hits_is_the_single_search(self, invoke_env):
+        hit = _FakeDoc(id="chunkA", page_content="text", metadata={"chunk_labels": ["health"]})
+        invoke_env["vector_db"].asimilarity_search_with_relevance_scores = AsyncMock(return_value=[(hit, 0.9)])
+        result = await invoke_env["retriever"].invoke(
+            create_mock_input(search_start=encode_filter_labels("chunk", ["health"]))
+        )
+        assert [r["doc"].id for r in result] == ["chunkA"]
+        assert invoke_env["vector_db"].asimilarity_search_with_relevance_scores.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_a_query_without_labels_is_untouched(self, invoke_env):
+        invoke_env["vector_db"].asimilarity_search_with_relevance_scores = AsyncMock(return_value=[])
+        result = await invoke_env["retriever"].invoke(create_mock_input(search_start="chunk"))
+        assert result == []
+        assert invoke_env["vector_db"].asimilarity_search_with_relevance_scores.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_a_graph_search_is_untouched(self, invoke_env):
+        """The label clause is a chunk-level concept.
+
+        For a node/edge search the clause never reaches the database, so an
+        empty result is not a label-filter casualty.
+        """
+        doc = _FakeDoc(id="nodeA", page_content="text", metadata={})
+        invoke_env["vector_db"].asimilarity_search_with_relevance_scores = AsyncMock(return_value=[(doc, 0.5)])
+        await invoke_env["retriever"].invoke(create_mock_input(search_start=encode_filter_labels("node", ["health"])))
+        assert invoke_env["vector_db"].asimilarity_search_with_relevance_scores.await_count == 1
+
+
+class TestAqlFilterClauseEscaping:
+    """Labels are DATA interpolated into AQL TEXT — they must not close it."""
+
+    def test_a_double_quote_in_a_label_cannot_close_the_string_literal(self):
+        clause = _build_aql_filter_clause(['He said "hi"'], "OR")
+        assert '"He said \\"hi\\""' in clause
+        # The raw quote pair is gone: the literal cannot be closed early.
+        assert '"hi"' not in clause
+
+    def test_a_backslash_in_a_label_is_escaped(self):
+        clause = _build_aql_filter_clause(["back\\slash"], "OR")
+        assert '"back\\\\slash"' in clause
+
+    def test_an_ordinary_label_is_untouched(self):
+        clause = _build_aql_filter_clause(["Fruit Tree Cultivation"], "OR")
+        assert '"Fruit Tree Cultivation"' in clause
+
+    @pytest.mark.asyncio
+    async def test_the_escaped_clause_reaches_the_vector_search(self, invoke_env):
+        hit = _FakeDoc(id="chunkA", page_content="text", metadata={"chunk_labels": ['He said "hi"']})
+        invoke_env["vector_db"].asimilarity_search_with_relevance_scores = AsyncMock(return_value=[(hit, 0.9)])
+        await invoke_env["retriever"].invoke(
+            create_mock_input(search_start=encode_filter_labels("chunk", ['He said "hi"']))
+        )
+        call_kwargs = invoke_env["vector_db"].asimilarity_search_with_relevance_scores.call_args
+        clause = call_kwargs.kwargs.get("filter_clause", "")
+        assert '"He said \\"hi\\""' in clause
+        assert '"hi"' not in clause
+
+
+# ---------------------------------------------------------------------------
+# Test: the retriever's own context path (Task — retriever scope rule)
+# ---------------------------------------------------------------------------
+
+
+class TestRetrieverContextLabels:
+    """The retriever's own ``context`` path must scope like the chatqna does.
+
+    The chatqna encodes the scope it resolved into ``search_start``, but the
+    retriever also accepts a ``context`` of its own. That path read the
+    plural ``categoryLabels`` only (the singular ``categoryLabel`` the client
+    actually sends was ignored) and unioned it with the service labels — so a
+    service scope leaked into its whole category, and a category-only scope
+    filtered on nothing at all.
+    """
+
+    @staticmethod
+    def _filter_clause(invoke_env):
+        calls = invoke_env["vector_db"].asimilarity_search_with_relevance_scores.call_args_list
+        return calls[0].kwargs.get("filter_clause", "")
+
+    @pytest.mark.asyncio
+    async def test_the_singular_category_label_scopes_the_search(self, invoke_env):
+        await invoke_env["retriever"].invoke(
+            create_mock_input(search_start="chunk", context={"categoryLabel": "Taxes"})
+        )
+        assert '"Taxes"' in self._filter_clause(invoke_env)
+
+    @pytest.mark.asyncio
+    async def test_the_plural_category_labels_are_read_too(self, invoke_env):
+        await invoke_env["retriever"].invoke(
+            create_mock_input(search_start="chunk", context={"categoryLabels": ["Taxes"]})
+        )
+        assert '"Taxes"' in self._filter_clause(invoke_env)
+
+    @pytest.mark.asyncio
+    async def test_the_service_labels_replace_the_category_label(self, invoke_env):
+        """The service is the narrower scope — the category must not widen it."""
+        await invoke_env["retriever"].invoke(
+            create_mock_input(
+                search_start="chunk",
+                context={"categoryLabel": "Taxes", "serviceLabels": ["Tax Payment"]},
+            )
+        )
+        clause = self._filter_clause(invoke_env)
+        assert '"Tax Payment"' in clause
+        assert '"Taxes"' not in clause
+
+    @pytest.mark.asyncio
+    async def test_a_service_label_alone_scopes_the_search(self, invoke_env):
+        await invoke_env["retriever"].invoke(
+            create_mock_input(search_start="chunk", context={"serviceLabels": ["Tax Payment"]})
+        )
+        assert '"Tax Payment"' in self._filter_clause(invoke_env)
+
+    @pytest.mark.asyncio
+    async def test_an_empty_context_leaves_the_search_unfiltered(self, invoke_env):
+        await invoke_env["retriever"].invoke(create_mock_input(search_start="chunk", context={}))
+        assert self._filter_clause(invoke_env) == ""

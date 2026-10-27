@@ -102,6 +102,13 @@ The label filter is encoded in the `search_start` field of the standard
 Per-request label overrides are documented in
 [Per-request overrides]({{< relref "per-request-overrides" >}}).
 
+The filter speaks ENGLISH — the SSOT the corpus filters on. The tree carries
+both spellings of every entity (localized `name` for display, `nameEN` for
+the wire), and an empty filtered result stays empty: chatqna's abstention
+instructions answer it, and a retry without the filter would answer a
+question nobody asked, from a corpus the request never scoped. Both rules are
+described in [Data labelling strategy]({{< relref "data-labeling" >}}).
+
 ## Knobs
 
 | Variable | Default | Effect |

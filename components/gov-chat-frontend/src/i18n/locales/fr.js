@@ -1398,6 +1398,10 @@ export default {
       "Le service « {label} » utilise une étiquette d'interface qui peut ne pas correspondre à la hiérarchie de connaissances",
     noFilterWarning: 'Aucun filtre de contexte actif — la requête sera non filtrée.',
     categoryNotFound: 'Catégorie « {label} » introuvable dans la hiérarchie de connaissances',
+    quickHelpLabelGone:
+      "Problème de configuration : le label « {labels} » n'existe plus dans la hiérarchie de connaissances. Ce bouton est inutilisable tant que sa configuration n'est pas mise à jour.",
+    quickHelpCategoryGone:
+      "Problème de configuration : la catégorie de ce bouton n'existe plus dans la hiérarchie de connaissances. Ce bouton est inutilisable tant que sa configuration n'est pas mise à jour.",
     configMismatchWarning:
       "Incohérence de configuration : {warnings}. Vérifiez la configuration de l'Aide rapide et la hiérarchie de connaissances.",
     streamingError: 'La réponse a été interrompue. Veuillez réessayer.',

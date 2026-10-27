@@ -40,31 +40,7 @@ module.exports = (serviceCategoryService) => {
    *             schema:
    *               type: array
    *               items:
-   *                 type: object
-   *                 properties:
-   *                   _key:
-   *                     type: string
-   *                   nameEN:
-   *                     type: string
-   *                   descriptionEN:
-   *                     type: string
-   *                   icon:
-   *                     type: string
-   *                   services:
-   *                     type: array
-   *                     items:
-   *                       type: object
-   *                       properties:
-   *                         _key:
-   *                           type: string
-   *                         nameEN:
-   *                           type: string
-   *                         descriptionEN:
-   *                           type: string
-   *                         requirements:
-   *                           type: string
-   *                         process:
-   *                           type: string
+   *                 $ref: '#/components/schemas/CategoryTree'
    *       500:
    *         description: Server error
    */

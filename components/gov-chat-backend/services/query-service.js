@@ -567,8 +567,9 @@ class QueryService {
       // --- FIX: START context VALIDATION ---
       if (!queryData.context) {
         logger.warn('[DEBUG] Validation: context object is missing. Supplying default context.');
-        // Create a default context object
-        queryData.context = { categoryLabel: 'General', serviceLabels: [] };
+        // A request with no context declares no scope: the corpus is its
+        // scope. 'General' would scope it to a label no chunk carries.
+        queryData.context = { categoryLabel: null, serviceLabels: [] };
         logger.info('[DEBUG] Validation PASSED: Default context object supplied.');
       } else {
         logger.info('[DEBUG] Validation PASSED: context object is present.');
@@ -583,9 +584,13 @@ class QueryService {
           );
         }
 
-        if (!queryData.context.categoryLabel) {
-          logger.warn('[DEBUG] Validation WARNING: context.categoryLabel is missing. Defaulting to "General".');
-          queryData.context.categoryLabel = 'General';
+        // Preserve null/undefined categoryLabel — null means "no category
+        // filter" (the request declares no scope; the corpus IS its scope).
+        // Do NOT default to 'General' — that label names no entity of any
+        // hierarchy, so it would filter the corpus down to zero documents.
+        // initStreamQuery already refuses it; the two paths must agree.
+        if (queryData.context.categoryLabel === undefined) {
+          queryData.context.categoryLabel = null;
         }
       }
       // --- FIX: END context VALIDATION ---

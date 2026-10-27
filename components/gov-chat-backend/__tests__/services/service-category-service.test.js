@@ -259,12 +259,39 @@ describe('ServiceCategoryService', () => {
   describe('getAllCategoriesWithServices', () => {
     it('should return categories with services', async () => {
       mockDb.query.mockResolvedValue(
-        createMockCursor([{ catKey: 'cat-1', catCode: 'taxes', name: 'Taxes', children: ['Tax Filing'] }])
+        createMockCursor([
+          {
+            catKey: 'cat-1',
+            catCode: 'taxes',
+            name: 'Taxes',
+            nameEN: 'Taxes',
+            children: [{ name: 'Tax Filing', nameEN: 'Tax Filing' }]
+          }
+        ])
       );
 
       const result = await service.getAllCategoriesWithServices('en');
       expect(result).toHaveLength(1);
-      expect(result[0].children).toEqual(['Tax Filing']);
+      expect(result[0].children).toEqual([{ name: 'Tax Filing', nameEN: 'Tax Filing' }]);
+    });
+
+    it('publishes both spellings — the EN translation beside the localized name', async () => {
+      mockDb.query.mockRejectedValueOnce(new Error('done'));
+      await service.getAllCategoriesWithServices('fr').catch(() => {});
+
+      const queryArg = mockDb.query.mock.calls[0][0];
+      // arangojs 8 builds a LAZY aql object ({_aql, strings, values}) — the
+      // query string only exists when a driver serializes it. The static
+      // template parts carry everything structural this test asserts on.
+      const text = queryArg.strings.join('|');
+      // The EN translation is selected for the category AND for every
+      // service: the corpus's chunk_labels carry the EN translation, so the
+      // tree must publish it — that is the value the query wire speaks.
+      const enSelections = (text.match(/'en'/g) || []).length;
+      expect(enSelections).toBeGreaterThanOrEqual(2);
+      // Both levels project the pair: `name` (display) and `nameEN` (wire).
+      const dualSpellings = (text.match(/RETURN\s*\{[^}]*name:\s*\w+[^}]*nameEN/g) || []).length;
+      expect(dualSpellings).toBeGreaterThanOrEqual(2);
     });
 
     it('should throw on database error', async () => {

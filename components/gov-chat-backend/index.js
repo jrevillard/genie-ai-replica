@@ -113,6 +113,56 @@ const swaggerOptions = {
             }
           }
         },
+        // The hierarchy tree, as both public endpoints serve it. ONE
+        // definition: the wire contract must not be written twice.
+        CategoryTree: {
+          type: 'object',
+          properties: {
+            catKey: { type: 'string' },
+            catCode: { type: 'string', nullable: true },
+            name: {
+              type: 'string',
+              nullable: true,
+              description: 'The localized name the UI displays.'
+            },
+            nameEN: {
+              type: 'string',
+              nullable: true,
+              description:
+                'The ENGLISH translation — the SSOT every filter label is spoken in. Clients put THIS value on the query wire; the localized `name` is display-only.'
+            },
+            children: {
+              type: 'array',
+              description: "The category's services, display + wire spellings.",
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string', nullable: true, description: 'Localized, display-only.' },
+                  nameEN: { type: 'string', nullable: true, description: 'English, the filter wire (SSOT).' }
+                }
+              }
+            }
+          }
+        },
+        // The scope a query is filtered by. The labels are ENGLISH: the
+        // corpus's chunk_labels carry the EN translation, so a localized
+        // label matches no chunk and scopes the query to nothing.
+        QueryContext: {
+          type: 'object',
+          properties: {
+            categoryLabel: {
+              type: 'string',
+              nullable: true,
+              description:
+                "The ENGLISH label of the category — the SSOT every filter label is spoken in (the hierarchy's own `nameEN`). It is forwarded to the retriever as is: a label that matches no chunk scopes the query to nothing."
+            },
+            serviceLabels: {
+              type: 'array',
+              items: { type: 'string' }
+            },
+            language: { type: 'string' }
+          }
+        },
         Session: {
           type: 'object',
           properties: {

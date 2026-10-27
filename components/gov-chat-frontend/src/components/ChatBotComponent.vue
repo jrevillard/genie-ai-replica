@@ -335,14 +335,26 @@
             :key="button.id"
             variant="flat"
             padding="md"
-            :hoverable="true"
+            :hoverable="!quickHelpScopeState(button).broken"
             class="quick-help-item"
-            :class="{ 'just-chat': !button.category }"
+            :class="{ 'just-chat': !button.category, 'config-error': quickHelpScopeState(button).broken }"
             :style="buttonTintStyle(button)"
             @click="selectQuickHelpOption(button)"
           >
-            <img class="quick-help-icon" :src="button.icon" alt="Quick Help Icon" />
+            <AlertTriangle
+              v-if="quickHelpScopeState(button).broken"
+              class="quick-help-icon config-error-icon"
+              aria-hidden="true"
+            />
+            <img v-else class="quick-help-icon" :src="button.icon" alt="Quick Help Icon" />
             <div class="quick-help-text">{{ button.service }}</div>
+            <div
+              v-if="quickHelpScopeState(button).broken"
+              class="quick-help-error-caption"
+              data-testid="quick-help-error-caption"
+            >
+              {{ quickHelpErrorCaption(button) }}
+            </div>
           </DsCard>
         </div>
       </div>
@@ -497,6 +509,29 @@ import DOMPurify from 'dompurify';
 import jsPDF from 'jspdf';
 import { resolveConfigText } from '../utils/configResolver';
 
+// Marks a context item that came from a Quick Help button. A Quick Help item
+// is scoped by the labels the deployment declared for it; a sidebar item is
+// scoped by the label the knowledge tree shows.
+const QUICK_HELP_SOURCE = 'quickHelp';
+
+// One Quick Help selection, in the shape every context item uses — whether it
+// was picked from the overlay, restored from a saved conversation, or re-added
+// when the last selected item was removed.
+function quickHelpContextItem(
+  button,
+  { serviceLabels = button.serviceLabels || null, category = button.category } = {}
+) {
+  return {
+    service: button.service,
+    serviceLabels,
+    serviceKey: button.serviceKey || button.id || button.service,
+    source: QUICK_HELP_SOURCE,
+    id: button.id,
+    category,
+    selected: true
+  };
+}
+
 // Tight-list renderer override: chat-tuned model output puts a parent
 // label and its nested sub-list on adjacent lines in the markdown source,
 // but GFM `marked` emits that as `<li><p>Label</p><ul>...</ul></li>` —
@@ -638,6 +673,10 @@ export default {
       serviceCategories: [], // This will now hold the transformed tree data
       chatHistoryService: chatHistoryService,
       quickHelpButtons: [],
+      // The in-flight load of the Quick Help configuration. A restore that
+      // runs while it is pending must wait for it, otherwise the tag of a
+      // saved conversation is looked up in an empty button list.
+      quickHelpLoadPromise: null,
       showNewChatConfirm: false,
       newChatDialog: {
         title: '',
@@ -754,6 +793,48 @@ export default {
       return this.getAllFolders;
     },
 
+    // The live hierarchy indexed by category key. Rebuilt only when the
+    // tree changes — the lookups below read it instead of walking the tree
+    // on every call.
+    categoryIndex() {
+      const index = new Map();
+      for (const cat of this.serviceCategories || []) {
+        if (cat.catKey === null || cat.catKey === undefined) continue;
+        const id = cat.catKey.toString();
+        if (!index.has(id)) index.set(id, cat);
+      }
+      return index;
+    },
+
+    // Every EN label of the live tree — the vocabulary the wire speaks.
+    enLabelSet() {
+      const labels = new Set();
+      for (const cat of this.serviceCategories || []) {
+        if (cat.nameEN) labels.add(cat.nameEN);
+        for (const child of cat.children || []) {
+          if (child && child.nameEN) labels.add(child.nameEN);
+        }
+      }
+      return labels;
+    },
+
+    // The localized name of the entity whose EN label is a given one. The
+    // EN label is the identity (a saved conversation carries it); the name
+    // is what the user reads.
+    enLabelDisplayNames() {
+      const names = new Map();
+      const add = (en, name) => {
+        if (en && !names.has(en)) names.set(en, name || en);
+      };
+      for (const cat of this.serviceCategories || []) {
+        add(cat.nameEN, cat.name);
+        for (const child of cat.children || []) {
+          if (child) add(child.nameEN, child.name);
+        }
+      }
+      return names;
+    },
+
     chatPreview() {
       // A failed exchange is never stored, so it is never the preview.
       const userMessage = this.openMessages.find((msg) => msg.sender === 'user' && !msg.isError);
@@ -834,7 +915,9 @@ export default {
     },
     '$i18n.locale'(newLocale) {
       this.currentLocale = newLocale;
-      this.loadQuickHelpButtons();
+      // The runtime configuration does not change with the locale: only the
+      // display text of the buttons is resolved again.
+      this.applyQuickHelpButtons();
     }
   },
 
@@ -909,12 +992,15 @@ export default {
         () => this.$root.$i18n.locale,
         (newLocale) => {
           this.currentLocale = newLocale;
-          // Update context labels when locale changes
+          // Update context labels when locale changes. A Quick Help item
+          // displays the title of its button, and its key is the button id —
+          // not a translation key — so its display is left alone.
           this.$store.commit(
             'conversation/setContextItems',
             this.selectedContextItems.map((item) => ({
               ...item,
-              service: this.safeTranslate(item.serviceKey || item.service)
+              service:
+                item.source === QUICK_HELP_SOURCE ? item.service : this.safeTranslate(item.serviceKey || item.service)
             }))
           );
           this.loadServiceCategories(); // Reload categories for the new locale
@@ -1083,23 +1169,71 @@ export default {
     },
 
     // *** UPDATED: Find category label by its key in the transformed tree data ***
-    getCategoryLabelById(id) {
+    // The category the query is scoped by, in the SSOT language. English is
+    // what the corpus filters on — chunk_labels carry the EN translation —
+    // so the wire speaks EN and the localized name stays display-only. Null
+    // when the id names no category of the live tree: a broken scope.
+    getCategoryEnLabel(id) {
       if (id === null || id === undefined) {
-        // Just-Chat and other no-category selections: no category filter.
-        // Returning null (not 'General') keeps it consistent with the backend,
-        // which now preserves null instead of defaulting to 'General'. 'General'
-        // is not a real KB label and would match no chunk under the retriever filter.
         return null;
       }
+      const category = this.categoryIndex.get(id.toString());
+      return category ? category.nameEN || null : null;
+    },
 
-      // The service returns `catKey` which corresponds to the numeric ID
-      const category = this.serviceCategories.find((cat) => cat.catKey == id.toString());
-      if (category) {
-        // The service already provides the localized name in the `name` property
-        return category.name || null;
+    // The category name the user reads — the localized spelling of the
+    // same entity. Display only: it never filters.
+    getCategoryDisplayName(id) {
+      if (id === null || id === undefined) {
+        return null;
       }
+      const category = this.categoryIndex.get(id.toString());
+      return category ? category.name || null : null;
+    },
 
-      return null; // Unknown category — null means "no category filter" (do NOT send a `Category NN` string to the retriever)
+    // The localized name of the entity whose EN label is [en] — a saved
+    // conversation carries the EN label (a locale-independent identity), the
+    // chip shows the name the tree carries in the current locale.
+    displayNameForEnLabel(en) {
+      if (!en) {
+        return null;
+      }
+      return this.enLabelDisplayNames.get(en) || en;
+    },
+
+    // The scope of a Quick Help button, checked against the live EN hierarchy.
+    // A declared label the hierarchy no longer carries can never match a
+    // chunk, and a category that is gone leaves the button with no scope at
+    // all. A broken button is a VISIBLE failure — error icon, caption, no
+    // query — never a silently reduced one.
+    quickHelpScopeState(button) {
+      if (!Array.isArray(this.serviceCategories) || this.serviceCategories.length === 0) {
+        // A tree that has not loaded (or failed to) says nothing about any
+        // button: report nothing rather than report every button broken.
+        return { broken: false, missingLabels: [], categoryMissing: false };
+      }
+      const enLabels = this.enLabelSet;
+      const missingLabels = (button.serviceLabels || []).filter((label) => !enLabels.has(label));
+      const categoryMissing =
+        button.category != null && button.category !== 'general' && !this.categoryIndex.has(button.category.toString());
+      return { broken: missingLabels.length > 0 || categoryMissing, missingLabels, categoryMissing };
+    },
+
+    quickHelpErrorCaption(button) {
+      const state = this.quickHelpScopeState(button);
+      if (!state.broken) {
+        return '';
+      }
+      const parts = [];
+      if (state.missingLabels.length > 0) {
+        parts.push(
+          this.translate('chatbot.quickHelpLabelGone', '').replace('{labels}', state.missingLabels.join(', '))
+        );
+      }
+      if (state.categoryMissing) {
+        parts.push(this.translate('chatbot.quickHelpCategoryGone', ''));
+      }
+      return parts.filter(Boolean).join(' ');
     },
 
     checkContextConfig(context) {
@@ -1123,7 +1257,13 @@ export default {
       }
       const hasServiceFilter = Array.isArray(context.serviceLabels) && context.serviceLabels.length > 0;
       const isJustChat = this.selectedContextItems.some((item) => item.id === 'just-chat');
-      if (this.selectedContextItems.length > 0 && !hasServiceFilter && !context.categoryLabel && !isJustChat) {
+      // A Quick Help item scopes the answer with its own prompt, so it is
+      // allowed to declare no label at all — every shipped button config does.
+      // Blocking it would make the button do nothing. The exemption covers the
+      // Quick Help items only: another selected item that declares no label
+      // is a misconfiguration, whatever else is selected.
+      const hasSidebarItem = this.selectedContextItems.some((item) => item.source !== QUICK_HELP_SOURCE);
+      if (hasSidebarItem && !hasServiceFilter && !context.categoryLabel && !isJustChat) {
         blocked = true;
         warnings.push(this.translate('chatbot.noFilterWarning', 'No context filter active.'));
       }
@@ -1190,50 +1330,91 @@ export default {
       }
     },
 
-    async loadQuickHelpButtons() {
+    loadQuickHelpButtons() {
+      const loading = this.fetchQuickHelpButtons();
+      this.quickHelpLoadPromise = loading;
+      return loading;
+    },
+
+    /**
+     * The Quick Help buttons, once the runtime configuration has been read.
+     *
+     * The buttons come from a configuration file that is fetched
+     * asynchronously, so they are not there when the component is created.
+     * A saved conversation restored before the fetch resolved would look its
+     * tag up in an empty list, fall back to the sidebar branch, and send the
+     * button id as a label — an id that names no entity in the hierarchy.
+     */
+    async ensureQuickHelpLoaded() {
+      if (!this.quickHelpLoadPromise) {
+        this.loadQuickHelpButtons();
+      }
+      await this.quickHelpLoadPromise;
+      return this.quickHelpButtons;
+    },
+
+    async fetchQuickHelpButtons() {
       try {
         const loadConfig = (await import('../config-loader')).default;
-        const config = await loadConfig();
-        this.cachedConfig = config;
-        const buttons = config?.features?.chat?.quickHelp?.buttons || [];
-        const locale = this.currentLocale;
-
-        // Filter hidden buttons (no matching corpus content) and resolve display text.
-        // serviceLabels (explicit English KB labels) drives the FILTER only:
-        //   - service       = localized display name (title, resolved per locale) — render only
-        //   - serviceKey    = stable English KB label (first of serviceLabels, or id/title fallback)
-        //   - serviceLabels = full English label array sent as the retriever filter
-        // Display (service) and filter (serviceKey/serviceLabels) are DECOUPLED: the button always
-        // shows its localized title, while the filter always uses English KB labels.
-        // Buttons without serviceLabels fall back to title-based behavior (backward compat).
-        this.quickHelpButtons = buttons
-          .filter((button) => !button.hidden)
-          .map((button) => {
-            const title = resolveConfigText(button.title, locale);
-            const visibleText = resolveConfigText(button.action?.visibleText, locale);
-            const hiddenPrompt = resolveConfigText(button.action?.hiddenPrompt, locale);
-            const explicitLabels = Array.isArray(button.serviceLabels) ? button.serviceLabels : null;
-
-            return {
-              service: title,
-              serviceLabels: explicitLabels,
-              serviceKey: explicitLabels ? explicitLabels[0] : button.id || title,
-              textKey: button.title,
-              visibleText: visibleText,
-              hiddenPrompt: hiddenPrompt,
-              icon: button.icon?.value,
-              category: button.category,
-              styles: button.styles,
-              // Pass the placement field through so the tile / composer
-              // routing in the welcome panel can read it directly.
-              placement: button.placement,
-              id: button.id
-            };
-          });
+        this.cachedConfig = await loadConfig();
+        this.applyQuickHelpButtons();
       } catch (error) {
         console.error('[ChatBotComponent] Failed to load Quick Help config:', error);
         this.quickHelpButtons = [];
       }
+    },
+
+    /**
+     * The Quick Help buttons of the runtime configuration, resolved for the
+     * current locale.
+     *
+     * The configuration is the same for every locale — only the display text
+     * of a button is locale-dependent. So a language switch re-resolves the
+     * buttons already read instead of reading the configuration again.
+     */
+    applyQuickHelpButtons() {
+      const buttons = this.cachedConfig?.features?.chat?.quickHelp?.buttons || [];
+      const locale = this.currentLocale;
+
+      // Filter hidden buttons (no matching corpus content) and resolve display text.
+      // serviceLabels (explicit English KB labels) drives the FILTER only:
+      //   - service       = localized display name (title, resolved per locale) — render only
+      //   - serviceKey    = the id of the button. It is the IDENTITY of the button:
+      //     a saved conversation carries it, so it must not depend on the labels
+      //     the deployment declares — those are hierarchy data, and they change
+      //     when the hierarchy is reconfigured.
+      //   - serviceLabels = full English label array sent as the retriever filter
+      //     (the wire speaks ENGLISH — the SSOT the corpus filters on)
+      // Display (service), identity (serviceKey) and filter (serviceLabels) are
+      // DECOUPLED: the button shows its localized title, a saved conversation
+      // carries the button id, and the filter carries the English KB labels.
+      // A button that declares no label contributes no label of its own: the
+      // request is then scoped by the category label alone, which the backend
+      // resolves against the live hierarchy like any other label.
+      this.quickHelpButtons = buttons
+        .filter((button) => !button.hidden)
+        .map((button) => {
+          const title = resolveConfigText(button.title, locale);
+          const visibleText = resolveConfigText(button.action?.visibleText, locale);
+          const hiddenPrompt = resolveConfigText(button.action?.hiddenPrompt, locale);
+          const explicitLabels = Array.isArray(button.serviceLabels) ? button.serviceLabels : null;
+
+          return {
+            service: title,
+            serviceLabels: explicitLabels,
+            serviceKey: button.id || title,
+            textKey: button.title,
+            visibleText: visibleText,
+            hiddenPrompt: hiddenPrompt,
+            icon: button.icon?.value,
+            category: button.category,
+            styles: button.styles,
+            // Pass the placement field through so the tile / composer
+            // routing in the welcome panel can read it directly.
+            placement: button.placement,
+            id: button.id
+          };
+        });
     },
 
     getWelcomeMessage() {
@@ -1260,13 +1441,19 @@ export default {
       if (!rawOption.service) {
         return;
       }
+      // A broken scope is a VISIBLE failure: the caption on the button names
+      // the configuration problem. Never a query with a silently reduced
+      // scope — not even the auto-send path a hidden prompt would trigger.
+      if (this.quickHelpScopeState(rawOption).broken) {
+        return;
+      }
       const categoryId = rawOption.category || (rawOption.id !== 'just-chat' ? 'general' : null);
 
       // Quick Help is a mode switch: replace any prior Quick Help selection.
-      // Sidebar items (source !== 'quickHelp') are additive and survive.
+      // Sidebar items (source !== QUICK_HELP_SOURCE) are additive and survive.
       // Also dedup: if the same Quick Help option is already selected, keep it as-is.
       const existingIdx = this.selectedContextItems.findIndex(
-        (item) => item.source === 'quickHelp' && item.id === rawOption.id
+        (item) => item.source === QUICK_HELP_SOURCE && item.id === rawOption.id
       );
       if (existingIdx >= 0) {
         return; // already selected — no-op (preserves prior dedup behavior)
@@ -1358,7 +1545,11 @@ export default {
         if (!exists) {
           this.$store.commit('conversation/addContextItem', {
             service: this.safeTranslate(item.service),
-            serviceKey: item.service,
+            // The tree panel hands over BOTH spellings: display (service) and
+            // the EN wire label (serviceKey). The filter carries the EN one —
+            // and an entity with no EN translation carries NONE: the
+            // localized name matches no chunk, so it must not stand in.
+            serviceKey: item.serviceKey || null,
             category: item.category || 'general',
             selected: true
           });
@@ -1425,20 +1616,25 @@ export default {
       const useConversationContext = this.selectedContextItems.length > 0;
       const contextOption = useConversationContext ? 'conversation-with-labels' : 'single-message';
       let queryData;
-      const categoryLabel = this.getCategoryLabelById(this.currentCategoryId);
-      // The retriever filter is built from English KB labels: sidebar items
-      // carry a stable English serviceKey (the localized `service` must
-      // never reach the filter); Quick Help items carry an explicit
-      // serviceLabels array — multi-label, or explicitly empty (Just Chat,
-      // which contributes no filter).
+      // The category the query is scoped by, in the SSOT language: English.
+      // The corpus filters on the EN translation — the localized name would
+      // match no chunk and scope the query to nothing.
+      const categoryLabel = this.getCategoryEnLabel(this.currentCategoryId);
+      // The retriever filter is built from the ENGLISH labels:
+      //  - Quick Help items: only the labels the deployment declared. A
+      //    button id is not a knowledge label — sending one as a filter
+      //    narrowed the corpus to zero documents, and the LLM then had no
+      //    context to answer from.
+      //  - Sidebar items: the nameEN the tree hands over beside the
+      //    localized name (the filter speaks EN; the localized name never
+      //    filters).
       const serviceLabels = useConversationContext
-        ? this.selectedContextItems.flatMap((item) =>
-            Array.isArray(item.serviceLabels)
-              ? item.serviceLabels.length > 0
-                ? item.serviceLabels
-                : []
-              : [item.serviceKey || item.service]
-          )
+        ? this.selectedContextItems.flatMap((item) => {
+            if (item.source === QUICK_HELP_SOURCE) {
+              return Array.isArray(item.serviceLabels) ? item.serviceLabels : [];
+            }
+            return item.serviceKey ? [item.serviceKey] : [];
+          })
         : [];
       // checkContextConfig returns false when the query must be blocked
       // (unresolved category id, or no filter active) — before any turn
@@ -1661,7 +1857,10 @@ export default {
         this.$store.commit('conversation/setConversationId', conversation._key);
         this.currentChatId = conversation._key;
         this.$store.commit('conversation/setTitle', conversation.title || this.generateChatTitle());
-        this.currentCategoryId = conversation.categoryId || null;
+        // The conversation is linked to its category through an edge, so the
+        // key of the category comes back with it. The scope a saved query was
+        // asked in is part of the conversation.
+        this.currentCategoryId = conversation.categoryId || conversation.categories?.[0]?._key || null;
 
         // Populate related documents from history (files property from
         // backend) — the same sidebar-card shape the live stream builds.
@@ -1699,16 +1898,48 @@ export default {
 
         let restoredContextItems = [];
         if (conversation.tags && Array.isArray(conversation.tags)) {
-          restoredContextItems = conversation.tags.map((tag) => ({
-            service: this.safeTranslate(tag || `category.${this.currentCategoryId || 'general'}`),
-            serviceKey: tag || `category.${this.currentCategoryId || 'general'}`,
-            category: this.currentCategoryId || 'general',
-            selected: true
-          }));
+          // The tags of a saved conversation are the ids of the items it was
+          // scoped by. A Quick Help tag is only recognised once the buttons
+          // are known: looked up in an empty list, it would fall through to
+          // the sidebar branch and send the button id as a label.
+          await this.ensureQuickHelpLoaded();
+          conversation.tags.forEach((tag) => {
+            // A saved conversation keeps the tag of an item, not the item
+            // itself. A Quick Help tag is the id of the button that produced
+            // it, so the button is looked up by that id: restoring it as a
+            // plain sidebar item would drop the labels the deployment
+            // declared for it, and would make the query look like a
+            // misconfigured selection. The lookup is on the id and never on a
+            // label — a sidebar selection and a Quick Help button can carry
+            // the same label, and restoring the wrong one silently changes
+            // the scope of the saved query.
+            const button = this.quickHelpButtons.find((candidate) => candidate.id === tag);
+            if (button) {
+              restoredContextItems.push(quickHelpContextItem(button));
+              // The card knows the scope it was asked in: a conversation
+              // saved with it may carry no category edge (the chat was
+              // started before the card was used), and the restored scope is
+              // the card's.
+              if (button.category) {
+                this.currentCategoryId = button.category;
+              }
+              return;
+            }
+            // A sidebar scope: the tag is its EN label (a locale-independent
+            // identity). The chip shows the localized name the tree carries
+            // for it; the wire carries the EN one.
+            const enLabel = this.enLabelSet.has(tag) ? tag : null;
+            restoredContextItems.push({
+              service: this.displayNameForEnLabel(enLabel || tag) || tag,
+              serviceKey: enLabel,
+              category: this.currentCategoryId || 'general',
+              selected: true
+            });
+          });
         } else if (this.currentCategoryId) {
           restoredContextItems = [
             {
-              service: this.getCategoryLabelById(this.currentCategoryId),
+              service: this.getCategoryDisplayName(this.currentCategoryId),
               serviceKey: `category.${this.currentCategoryId}`,
               category: this.currentCategoryId,
               selected: true
@@ -3208,6 +3439,22 @@ export default {
 
 .quick-help-item:hover {
   --ds-card-border-color: var(--accent-hover);
+}
+
+.quick-help-item.config-error {
+  cursor: not-allowed;
+  --ds-card-border-color: var(--danger);
+}
+
+.config-error-icon {
+  color: var(--danger);
+}
+
+.quick-help-error-caption {
+  font-size: var(--text-xs);
+  color: var(--danger);
+  margin-top: var(--space-xs);
+  text-align: left;
 }
 
 .quick-help-icon {

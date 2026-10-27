@@ -858,7 +858,7 @@ def _canonical_taxonomy_order(labels: list[str | None]) -> list[str]:
     rather than reaching the prompt as "None".
     """
     return sorted(
-        {label for label in labels if isinstance(label, str) and label},
+        dict.fromkeys(label for label in labels if isinstance(label, str) and label),
         key=lambda label: (label.casefold(), label),
     )
 

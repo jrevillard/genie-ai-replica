@@ -162,6 +162,8 @@ from tests.test_dataprep import _fetch_labels
 print(json.dumps(asyncio.run(_fetch_labels([
     {"name": "Healthcare", "children": [{"name": "Hospitals"}, {"name": "Clinics"}]},
     {"name": "Education", "children": ["Schools"]},
+    {"name": "onion", "children": []},
+    {"name": "Onion", "children": []},
 ]))))
 """
 
@@ -1881,6 +1883,25 @@ class TestFetchAllLabels:
         )
 
         assert labels == ["Clinics", "Healthcare"]
+
+    @pytest.mark.asyncio
+    async def test_labels_differing_only_in_case_keep_a_defined_order(self):
+        """Two labels that differ only in case are two labels.
+
+        They have to sit next to each other, in an order that does not depend
+        on which of them arrived first — otherwise the prompt changes with the
+        taxonomy response rather than with the taxonomy.
+        """
+        labels = await _fetch_labels(
+            [
+                {"name": "onion", "children": []},
+                {"name": "Onion", "children": []},
+                {"name": "apple", "children": []},
+                {"name": "Banana", "children": []},
+            ]
+        )
+
+        assert labels == ["apple", "Banana", "Onion", "onion"]
 
     def test_the_same_taxonomy_yields_the_same_order_in_every_process(self):
         """Two interpreters, two hash seeds, one answer.

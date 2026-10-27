@@ -1463,6 +1463,12 @@ describe('explain', () => {
     const run = await svc.beginRunSuite('me', begunSuite.suite_key, { mode: 'whatif' }, {});
     await run.done;
     global.fetch = baseFetch;
+    // All passages present → no proven corpus gap → the curation guard has
+    // nothing to keep, so it fires alongside the knob guard.
+    __mockDb.__corpusRows = [
+      { key: 'k1', text: 'Plant after the last frost date.', score: 0.9 },
+      { key: 'k2', text: 'Tomatoes are a crop.', score: 0.8 }
+    ];
     frontmatterService.vllmChatCompletions.mockResolvedValue(
       llmResponse({
         knob_changes: [
@@ -1470,7 +1476,11 @@ describe('explain', () => {
           'a genuinely non-configuration note without identifiers'
         ],
         repo_tag_changes: [],
-        content_curation: [],
+        // A curation proposal with NO proven corpus gap (the corpus rows are
+        // all present below) — so BOTH mechanical guards fire on one
+        // response and the notes must COMPOSE, not overwrite (repeat
+        // review #4).
+        content_curation: [{ concept: 'c1', gap: 'missing frost dates' }],
         prompt_tweaks: ['CHATQNA_SYSTEM_PROMPT: tighten grounding']
       })
     );
@@ -1483,7 +1493,49 @@ describe('explain', () => {
     expect(advice.prompt_tweaks).toHaveLength(0); // CHATQNA_* is a knob token too
     // The mechanical env_changes table is untouched and carries the knobs.
     expect(Array.isArray(advice.env_changes)).toBe(true);
-    expect(advice.note).toMatch(/dropped 2 advice item\(s\)/);
+    // BOTH guards' notes survive — one guard must not eat the other's count.
+    expect(advice.note).toMatch(/dropped 2 advice item\(s\) that named environment knobs/);
+    expect(advice.note).toMatch(/dropped 1 content-curation suggestion\(s\)/);
+    delete __mockDb.__corpusRows;
+  });
+
+  it('keeps env_changes when the advisor LLM call FAILS — the mirror image of review F1', async () => {
+    // Review F1 was: the success path dropped the section. The mirror is
+    // the initializer losing it — then the section would vanish exactly on
+    // the runs where the operator most needs the config lever (advisor
+    // down). Pin BOTH paths.
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-kf', status: 'queued' }));
+      if (u.includes('/jobs/j-kf'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-kf',
+            status: 'done',
+            result: {
+              aggregate: {},
+              per_query: GEN_SAMPLES.map(() => ({ context_recall: 0.2, faithfulness: 1.0 })),
+              model: 'm',
+              n: 2
+            }
+          })
+        );
+      return baseFetch(url);
+    });
+    const begunSuite = await svc.beginSuiteGeneration('me', { testset_size: 2 }, {});
+    await begunSuite.done;
+    const run = await svc.beginRunSuite('me', begunSuite.suite_key, { mode: 'whatif' }, {});
+    await run.done;
+    global.fetch = baseFetch;
+    frontmatterService.vllmChatCompletions.mockRejectedValue(new Error('advisor endpoint down'));
+    const begun = await svc.beginExplainFailures('me', begunSuite.suite_key, { run_key: run.run_key }, {});
+    await begun.done;
+    const explained = await svc.getExplainFailures('me', begunSuite.suite_key, run.run_key);
+    expect(explained.payload.advice.source).toBe('none');
+    expect(explained.payload.advice.note).toMatch(/LLM advice failed/);
+    expect(Array.isArray(explained.payload.advice.env_changes)).toBe(true);
+    expect(explained.payload.advice.env_changes.length).toBeGreaterThan(0);
   });
 
   it('routes tag suggestions through the existing guardrail', async () => {
@@ -3335,12 +3387,20 @@ describe('buildEnvAdvice — the configuration adjustment cycle (2026-10-27)', (
     expect(out.find((e) => e.id === 'retriever-candidate-pool')).toBeUndefined();
   });
 
-  it('tells the operator to LOOSEN the gate for reranker-staged rows (the ladder cut them)', () => {
-    // Review F3: stage 'reranker' means the gate CUT the expected passage —
-    // the per-row recommendation says "raise RERANKER_TOP_N". A rule that
-    // read that stage as noise and prescribed tightening would invert the
-    // proven evidence and worsen the failures it names.
-    const attributions = [row('new-7', 'reranker', ['context_recall'])];
+  it('tells the operator to LOOSEN the gate for ladder gate-cut rows (stage reranker, ladder applied)', () => {
+    // Review F3: a ladder gate-cut row — the per-row recommendation says
+    // "raise RERANKER_TOP_N". A rule that read that evidence as noise and
+    // prescribed tightening would invert the proven evidence and worsen the
+    // failures it names. The ladder gate is the discriminator: stage
+    // 'reranker' has TWO production meanings, and only the ladder-applied
+    // one is a gate cut.
+    const attributions = [
+      row('new-7', 'reranker', ['context_recall'], {
+        ladder_applied: true,
+        candidate_rank: null,
+        ladder_stage: 'reranker'
+      })
+    ];
     const out = svc.buildEnvAdvice({ attributions, runFacts: FACTS, mode: 'serve' });
     const rerank = out.find((e) => e.id === 'reranker-posture');
     expect(rerank).toBeDefined();
@@ -3350,10 +3410,26 @@ describe('buildEnvAdvice — the configuration adjustment cycle (2026-10-27)', (
     expect(rerank.targets).toContain('context_recall');
   });
 
+  it('does NOT prescribe a direction for the NOISE-path reranker rows (stage reranker, ladder silent)', () => {
+    // Repeat review #1: attributeFailures stages a noise-ranked-above-signal
+    // row 'reranker' too (context_utilization failed, recall passed — the
+    // ladder never ran). Reading that stage as a gate cut would prescribe
+    // RAISING the gate and worsen the very noise the row reported.
+    const attributions = [row('new-25', 'reranker', ['context_utilization'])];
+    const out = svc.buildEnvAdvice({ attributions, runFacts: FACTS, mode: 'serve' });
+    expect(out.find((e) => e.id === 'reranker-posture')).toBeUndefined();
+  });
+
   it('merges both gate directions into ONE entry stating the tension', () => {
     const attributions = [
-      row('new-7', 'reranker', ['context_recall']), // gate cut the passage → loosen
-      row('new-22', 'answered', ['noise_sensitivity']) // noise reached the context → tighten
+      // gate cut the passage → loosen
+      row('new-7', 'reranker', ['context_recall'], {
+        ladder_applied: true,
+        candidate_rank: null,
+        ladder_stage: 'reranker'
+      }),
+      // noise reached the context → tighten (production-realistic stage)
+      row('new-22', 'retrieved', ['noise_sensitivity'])
     ];
     const out = svc.buildEnvAdvice({ attributions, runFacts: FACTS, mode: 'serve' });
     const rerank = out.filter((e) => e.id === 'reranker-posture');
@@ -3361,6 +3437,17 @@ describe('buildEnvAdvice — the configuration adjustment cycle (2026-10-27)', (
     expect(rerank[0].trade_off).toMatch(/noise/i);
     expect(rerank[0].trade_off).toMatch(/completeness|context_recall|precision/i);
     expect(rerank[0].why).toMatch(/BOTH/);
+  });
+
+  it('never names a judge/corpus row in the posture entry — the no-change entries own them', () => {
+    // Repeat review #3: a judge-staged row failing noise_sensitivity used to
+    // appear in BOTH the posture entry ("tighten") and the no-change entry
+    // ("no configuration change") — one table, two contradictory sentences.
+    const attributions = [row('new-2', 'judge', ['noise_sensitivity'])];
+    const out = svc.buildEnvAdvice({ attributions, runFacts: FACTS, mode: 'serve' });
+    expect(out.find((e) => e.id === 'no-env-change-judge')).toBeDefined();
+    const posture = out.find((e) => e.id === 'reranker-posture');
+    expect(posture === undefined || !posture.rows.includes('new-2')).toBe(true);
   });
 
   it('excludes retrieved-stage rows from the reranker entry — their passage was delivered', () => {
@@ -3457,7 +3544,9 @@ describe('buildEnvAdvice — the configuration adjustment cycle (2026-10-27)', (
     const KNOWN_METRICS = new Set(svc.ALL_METRICS);
     const attributions = [
       row('new-13', 'vector-recall', ['context_recall'], atRank(43)),
-      row('new-22', 'answered', ['noise_sensitivity']),
+      // Production-realistic stage — 'answered' is not a value
+      // attributeFailures ever emits (repeat review #6).
+      row('new-22', 'retrieved', ['noise_sensitivity']),
       row('new-16', 'llm', ['faithfulness']),
       row('new-9', 'abstention', ['answer_relevancy']),
       row('new-2', 'judge', ['context_entities_recall'])

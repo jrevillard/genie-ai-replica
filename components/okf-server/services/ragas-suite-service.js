@@ -3752,19 +3752,31 @@ function buildEnvAdvice({ attributions, runFacts, mode, candidateK }) {
   }
 
   // ---- R2: the reranker posture — ONE entry, both directions ---------------
-  // The ladder semantics decide the direction, and they are NOT symmetric:
-  //   * stage 'reranker' means the gate CUT the expected passage (the
-  //     per-row recommendation says "raise RERANKER_TOP_N") — the LOOSEN
-  //     direction, targeting the recall-side metrics those rows failed;
-  //   * rows failing noise_sensitivity/context_precision mean noise REACHED
-  //     the context — the TIGHTEN direction, whatever their stage.
+  // The ladder semantics decide the direction, and they are NOT symmetric.
+  // Stage 'reranker' carries TWO production meanings (attributeFailures
+  // stages both paths 'reranker'), and conflating them is an F3-class
+  // inversion (repeat review #1, 2026-10-27):
+  //   * LADDER gate-cut rows — evidence.ladder_applied true, the per-row
+  //     recommendation says "raise RERANKER_TOP_N": the gate CUT the
+  //     expected passage — the LOOSEN direction;
+  //   * NOISE-path rows — the per-row recommendation says "noise ranked
+  //     above signal": the TIGHTEN direction. These are caught by METRIC
+  //     (noise_sensitivity/context_precision), whatever their stage.
   // A 'retrieved'-stage row is neither: its expected passage was DELIVERED,
   // so its failure is answer-side (R3) or judge-side (R5), and turning the
-  // gate for it would only churn the other rows. These are opposite turns of
-  // the same knobs; when both directions are evidence-backed the entry
-  // presents the tension instead of prescribing two contradictory changes.
-  const tightenRows = rows.filter((r) => failedAny(r, ['noise_sensitivity', 'context_precision']));
-  const loosenRows = rows.filter((r) => r.stage === 'reranker' && !tightenRows.includes(r));
+  // gate for it would only churn the other rows. Judge/corpus-staged rows
+  // are excluded from BOTH directions — the no-change entries own them, and
+  // one table cannot tell a row "no configuration change" and "tighten"
+  // (repeat review #3). A reranker-staged row failing ONLY
+  // context_utilization is the noise path without a tighten metric — it
+  // takes NO posture prescription rather than an inverted one; its per-row
+  // recommendation already names the lever.
+  const tightenRows = rows.filter(
+    (r) => failedAny(r, ['noise_sensitivity', 'context_precision']) && r.stage !== 'judge' && r.stage !== 'corpus'
+  );
+  const loosenRows = rows.filter(
+    (r) => r.stage === 'reranker' && r.evidence && r.evidence.ladder_applied && !tightenRows.includes(r)
+  );
   if (tightenRows.length || loosenRows.length) {
     const both = tightenRows.length > 0 && loosenRows.length > 0;
     // The three-state posture resolved ONCE (simplification review): changes,
@@ -3825,9 +3837,12 @@ function buildEnvAdvice({ attributions, runFacts, mode, candidateK }) {
         'THE central completeness-vs-noise trade-off of RAG configuration. Loosening (raise TOP_N / lower ' +
         'threshold) recovers gate-cut passages — context_recall and the facts they carried — but admits ' +
         'more noise: noise_sensitivity and context_precision pay. Tightening buys precision at exactly ' +
-        'those completeness costs. The current RERANKING_STRATEGY decides which knob bites: slice obeys ' +
-        'RERANKER_TOP_N literally; threshold/adaptive obey RERANKING_THRESHOLD. When this entry carries ' +
-        'both directions, pick ONE, re-run, and read both metric groups before turning it further.',
+        'those completeness costs. Which knob bites depends on RERANKING_STRATEGY: slice obeys ' +
+        'RERANKER_TOP_N literally; threshold and slice_threshold obey RERANKING_THRESHOLD; adaptive and ' +
+        'knee_threshold turn their own gates and may ignore both — read the strategy first, or the ' +
+        'turned knob is dead (a docs defect a previous release fixed; do not reintroduce it by trust). ' +
+        'When this entry carries both directions, pick ONE, re-run, and read both metric groups before ' +
+        'turning it further.',
       // Deployment-INDEPENDENT on purpose (altitude review, 2026-10-27): this
       // code cannot read chatqna's env, so it states the read-first rule
       // instead of one deployment's live values, which would be a false
@@ -4487,9 +4502,13 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
             // instruction is not a control. An LLM item that names a
             // deployment env knob is DROPPED and the drop is counted into
             // the note — it would contradict the mechanical env_changes
-            // table sitting next to it.
-            const KNOB_TOKEN =
-              /\b(RETRIEVER_ARANGO_[A-Z_]+|RERANKER_[A-Z_]+|RERANKING_[A-Z_]+|OKF_RAGAS_[A-Z_]+|EMBEDDING_MODEL_ID|CHATQNA_[A-Z_]+)\b/;
+            // table sitting next to it. The pattern is a GENERIC
+            // SCREAMING_SNAKE token (≥2 underscore-separated uppercase
+            // segments), not a prefix list — rule 10 forbids ALL environment
+            // names, and a prefix list rots with every new var (repeat
+            // review #5). A negated mention ("X is fine as-is") is dropped
+            // too: conservative by design, and the note says so.
+            const KNOB_TOKEN = /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/;
             let droppedKnobs = 0;
             for (const key of ['knob_changes', 'prompt_tweaks']) {
               const before = llmAdvice[key].length;
@@ -4498,7 +4517,7 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
             }
             if (droppedKnobs) {
               llmAdvice.note =
-                `dropped ${droppedKnobs} advice item(s) that prescribed environment knobs — ` +
+                `dropped ${droppedKnobs} advice item(s) that named environment knobs — ` +
                 'configuration changes are generated mechanically in the Environment changes table';
             }
             advice = { ...advice, ...llmAdvice };
@@ -4542,7 +4561,15 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
             advice.content_curation = kept;
             if (dropped.length) {
               advice.rejected_curation = dropped.map((d) => `${d} — no proven corpus gap behind it`);
-              advice.note = `dropped ${dropped.length} content-curation suggestion(s) that no proven corpus gap supports`;
+              // COMPOSE, not overwrite — the knob guard may have set a note
+              // already, and silently eating its drop count defeats the
+              // "says so" guarantee (repeat review #4, 2026-10-27).
+              advice.note = [
+                advice.note,
+                `dropped ${dropped.length} content-curation suggestion(s) that no proven corpus gap supports`
+              ]
+                .filter(Boolean)
+                .join('; ');
             }
           }
         } catch (e) {

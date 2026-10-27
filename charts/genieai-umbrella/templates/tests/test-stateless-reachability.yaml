@@ -54,12 +54,20 @@ spec:
             port=$2
             curl_code=$(curl -s -o /dev/null --max-time 3 "telnet://${host}:${port}" </dev/null; echo $?)
             case "$curl_code" in
-              6|7)
-                echo "FAIL: ${host}:${port} tcp closed (curl exit $curl_code)"
+              0)
+                echo "PASS: ${host}:${port} tcp open"
+                ;;
+              28)
+                # A timeout is a SYN that never got an answer — which is
+                # exactly what a NetworkPolicy drop looks like. Counting
+                # it as PASS made this test structurally unable to fail
+                # on the defect class it exists to catch.
+                echo "FAIL: ${host}:${port} connect timed out (curl exit 28) — a NetworkPolicy drop looks exactly like this"
                 failures=$((failures+1))
                 ;;
               *)
-                echo "PASS: ${host}:${port} tcp open (curl exit $curl_code)"
+                echo "FAIL: ${host}:${port} unreachable (curl exit $curl_code)"
+                failures=$((failures+1))
                 ;;
             esac
           }

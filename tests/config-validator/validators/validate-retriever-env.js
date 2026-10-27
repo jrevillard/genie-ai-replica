@@ -128,7 +128,8 @@ function validateRetrieverEnvCoverage({ composeFile, ansibleEnvFile, envTemplate
   for (const contract of contracts) {
     delivered.set(contract.service, new Set(contract.envVars));
   }
-  const retrieverDelivery = delivered.get(RETRIEVAL_PATH[0].composeService) || new Set();
+  const retrieverEntry = RETRIEVAL_PATH.find((entry) => entry.sourceDir === 'retriever');
+  const retrieverDelivery = delivered.get(retrieverEntry.composeService) || new Set();
   const deliveredAnywhere = new Set(contracts.flatMap((contract) => contract.envVars));
 
   // The Ansible template renders the variables it configures; the env
@@ -146,7 +147,7 @@ function validateRetrieverEnvCoverage({ composeFile, ansibleEnvFile, envTemplate
   for (const name of retrieverDelivery) {
     if (name.startsWith(RETRIEVER_ENV_PREFIX) && !reads.has(name)) {
       errors.push(
-        `${name} reaches the ${RETRIEVAL_PATH[0].composeService} container but no service on the retrieval path reads it (the knob is inert)`
+        `${name} reaches the ${retrieverEntry.composeService} container but no service on the retrieval path reads it (the knob is inert)`
       );
     }
   }

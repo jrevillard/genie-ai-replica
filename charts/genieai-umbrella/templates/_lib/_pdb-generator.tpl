@@ -25,7 +25,7 @@ Usage:
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: {{ include "genieai-common.fullname" $ctx }}-{{ $ctx.component }}
+  name: {{ include "genieai-common.fullname" $ctx }}-{{ lower $ctx.component }}
   namespace: {{ $ctx.Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" $ctx.Chart "Release" $ctx.Release "Values" $ctx.Values "component" $ctx.component) | nindent 4 }}
@@ -34,5 +34,6 @@ spec:
   selector:
     matchLabels:
       {{- include "genieai-common.serviceSelector" (dict "Chart" $ctx.Chart "Release" $ctx.Release "Values" $ctx.Values "component" $ctx.component) | nindent 6 }}
+{{- print "\n" -}}
 {{- end -}}
 {{- end -}}

@@ -140,7 +140,8 @@ EOF
   # bare, or a subject namespace drifts) is repaired on the next run.
   kubectl patch clusterrolebinding keycloak-operator-clusterrole-binding \
     --type json \
-    -p "[{\"op\":\"replace\",\"path\":\"/subjects/0/namespace\",\"value\":\"${ns}\"}]"
+    -p "[{\"op\":\"replace\",\"path\":\"/subjects/0/namespace\",\"value\":\"${ns}\"}]" \
+    || warn "could not patch keycloak-operator-clusterrole-binding (absent or renamed upstream) — the operator may reconcile only its own namespace"
   # The upstream kustomization ships namespaced RoleBindings only, so the
   # operator reconciles Keycloak CRs in its own namespace and ignores
   # every application namespace. GENIE.AI renders Keycloak CRs next to

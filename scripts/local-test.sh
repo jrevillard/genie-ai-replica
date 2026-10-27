@@ -6,6 +6,9 @@
 # Operator prerequisites (keycloak-operator, cloudnative-pg, kube-arangodb,
 # sealed-secrets) are installed cluster-wide by `./scripts/install-prereqs.sh`
 # (separate script; this file assumes they are present).
+# The operator-provided Secrets the release mounts are created by this
+# script (STEP 2b) when they are ABSENT — the chart renders none, and a
+# missing one keeps the hook Jobs from starting.
 #
 # Teardown: `./scripts/local-teardown.sh` removes the chart release and
 # `genieai` namespace only; pass `--with-operators` to also uninstall the
@@ -69,6 +72,40 @@ helm template "$RELEASE" "$CHART" -n "$NS" \
   "${MAIL_FLAGS[@]}" \
   > /tmp/genieai-rendered.yaml
 echo "  rendered to /tmp/genieai-rendered.yaml ($(wc -l < /tmp/genieai-rendered.yaml) lines)"
+
+echo
+echo "=== STEP 2b: operator-provided Secrets ==="
+# The chart renders no Secret: every one below is mounted through a
+# non-optional secretKeyRef, so a missing one leaves the pod in
+# CreateContainerConfigError — the db-migrations and realm-convergence
+# hook Jobs never start and `helm install --wait` fails on the hooks
+# with a message that names a pod, not a missing Secret.
+#
+# Only ABSENT Secrets are created: on the laptop the SealedSecrets of
+# genie-ai-deploy have already materialized the real ones, and a test
+# script that overwrote them would break the running deployment.
+ensure_secret() {
+  local name="$1"; shift
+  if kubectl get secret "$name" -n "$NS" >/dev/null 2>&1; then
+    echo "  present: $name"
+    return 0
+  fi
+  kubectl create secret generic "$name" -n "$NS" "$@" >/dev/null
+  echo "  created: $name"
+}
+
+kubectl get namespace "$NS" >/dev/null 2>&1 || kubectl create namespace "$NS" >/dev/null
+ensure_secret arango-root-secret \
+  --from-literal=username=root --from-literal=password="local-test-password"
+ensure_secret arango-jwt-secret \
+  --from-literal=token="local-test-jwt-token"
+ensure_secret keycloak-db-credentials \
+  --from-literal=username=keycloak --from-literal=password="local-test-password"
+ensure_secret keycloak-admin-credentials \
+  --from-literal=username=admin --from-literal=password="local-test-admin-password"
+ensure_secret translation-cache-password \
+  --from-literal=password="local-test-cache-password" \
+  --from-literal=TRANSLATION_CACHE_PASSWORD="local-test-cache-password"
 
 echo
 echo "=== STEP 3: helm install ==="

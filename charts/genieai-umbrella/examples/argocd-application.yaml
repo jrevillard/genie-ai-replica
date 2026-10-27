@@ -45,8 +45,10 @@
 # Helm hook — a Helm hook only protects `helm uninstall`.
 #
 # This example installs the umbrella chart DIRECTLY from its repo path
-# (ArgoCD auto-detects the Helm chart via the Chart.yaml in the path; no
-# valueFiles are set, so chart defaults apply).
+# (ArgoCD auto-detects the Helm chart via the Chart.yaml in the path).
+# The values file it references carries the deployment data the chart's
+# render guards require — the chart does not install with its own
+# defaults.
 #
 # That is a simplification for the example, not the deployment model. The
 # real one is Flux v2 with a HelmRelease per target, in the genie-ai-deploy
@@ -72,6 +74,14 @@ spec:
     targetRevision: HEAD
     # The chart itself, not a per-env overlay — see the comment block above.
     path: charts/genieai-umbrella
+    # The chart does NOT install with its own defaults: ingress.host and
+    # data.keycloak.adminEmail are `required`, the mail server is required
+    # while verifyEmail/resetPasswordAllowed are on, and the placeholder
+    # guard rejects a `change-me-*` client secret. These values carry the
+    # minimum that passes those guards; the real Secrets still come from
+    # the operator's secret backend.
+    valueFiles:
+      - examples/argocd-values.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: genieai

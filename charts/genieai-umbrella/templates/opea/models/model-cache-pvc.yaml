@@ -21,7 +21,12 @@ spec:
   resources:
     requests:
       storage: {{ .Values.opea.models.cache.size | default "100Gi" }}
-  {{- with .Values.opea.models.cache.storageClassName }}
+  # The chart-wide knob wins (pluggable.storageClassName — the one every
+  # other PVC reads); the OPEA-local knob stays as a fallback for a
+  # deployment that names a class for the model cache only. An
+  # empty-string storageClassName means "NO default storage class" and
+  # strands the claim — and with it all four model pods, which mount it.
+  {{- with (.Values.pluggable.storageClassName | default .Values.opea.models.cache.storageClassName) }}
   storageClassName: {{ . }}
   {{- end }}
 {{- end -}}

@@ -90,12 +90,14 @@
         "CHATQNA_SYSTEM_PROMPT": "empty in Compose; the chart has its own prompt knob (opea.chatqna.systemPrompt) and omits the row when it is empty, so the code's built-in prompt applies on both surfaces",
         "MAX_MODEL_LEN_TEXTGEN": "empty in Compose; the code reads 0 as 'not set' and falls back to its own limit, and the chart leaves it unset",
         "MAX_TRANSLATION_CHARS": "empty in Compose; the code reads 0 as 'not set' and falls back to its own limit, and the chart leaves it unset",
-        "MULTI_TURN_CONDENSE_SYSTEM_PROMPT": "empty in Compose; the code falls back to its built-in rewrite prompt when the variable is unset, and the chart leaves it unset",
-        "OPENAI_API_KEY": "empty in Compose; the chart carries the GPU key as VLLM_API_KEY, and the code reads the unset value as 'no key'"
+        "MULTI_TURN_CONDENSE_SYSTEM_PROMPT": "empty in Compose; the code falls back to its built-in rewrite prompt when the variable is unset, and the chart leaves it unset"
       },
       "composeOnly": {
-        "LLM_SERVER_HOST_IP": "Compose points these at its own vllm service name; the chart configures the endpoint form instead (VLLM_LLM_ENDPOINT), which the code parses into host and port before reading either variable, so leaving them unset yields the same endpoint The chart never sets the name: the code derives the endpoint from the configured GPU endpoint (the parsed hostname overrides this fallback), so the compose service name only ever made sense on that surface.",
-        "LLM_SERVER_PORT": "Compose points these at its own vllm service name; the chart configures the endpoint form instead (VLLM_LLM_ENDPOINT), which the code parses into host and port before reading either variable, so leaving them unset yields the same endpoint The chart never sets the name: the code derives the endpoint from the configured GPU endpoint (the parsed hostname overrides this fallback), so the compose service name only ever made sense on that surface."
+        "LLM_SERVER_HOST_IP": "Compose points these at its own vllm service name; the chart configures the endpoint form instead (VLLM_LLM_ENDPOINT), which the code parses into host and port before reading either variable, so leaving them unset yields the same endpoint. The chart never sets the name: the code derives the endpoint from the configured GPU endpoint (the parsed hostname overrides this fallback), so the compose service name only ever made sense on that surface.",
+        "LLM_SERVER_PORT": "Compose points these at its own vllm service name; the chart configures the endpoint form instead (VLLM_LLM_ENDPOINT), which the code parses into host and port before reading either variable, so leaving them unset yields the same endpoint. The chart never sets the name: the code derives the endpoint from the configured GPU endpoint (the parsed hostname overrides this fallback), so the compose service name only ever made sense on that surface."
+      },
+      "secretProvided": {
+        "OPENAI_API_KEY": "Compose maps `${VLLM_API_KEY:-}` into it (docker-compose.yaml); the chart delivers the same GPU key from the vllm-api-key Secret under that name — the translation and condense clients read only OPENAI_API_KEY for their Bearer header, and a GPU node enforcing the key would see 'Bearer None' without it."
       }
     },
     "dataprep": {
@@ -182,7 +184,6 @@
       "compose": "frontend",
       "chart": "frontend",
       "codeDefault": {
-        "PORT": "the frontend reads 8090 as its own default and the chart's container port is 8090",
         "VUE_APP_AVAILABLE_LOCALES": "empty in Compose; the frontend treats an unset value as 'every locale available'",
         "VUE_APP_STREAM_IDLE_TIMEOUT_MS": "Compose leaves it empty (the env template line is commented) and the frontend entrypoint injects the empty value into the runtime config.js — the code default applies on both surfaces. The chart leaves it unset for the same result; a deployment that tunes it adds the env row to services.frontend.env."
       },
@@ -191,6 +192,9 @@
       },
       "notApplicable": {
         "VUE_PROXY_HOST": "the chart serves the SPA and the API from the same origin, so the development proxy host is never dialled"
+      },
+      "composeOnly": {
+        "PORT": "The chart does not set the name at all: its Deployment carries the port as containerPort 8090 (services.frontend.port), and the frontend image's embedded nginx listens on that baked-in default — the PORT env only steers the compose-run process."
       }
     },
     "redisCache": {

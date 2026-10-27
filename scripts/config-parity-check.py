@@ -309,10 +309,15 @@ def main(argv):
 
     # One pass over the chart's operator-facing text: values.yaml, the
     # chart README, and every template. A codeDefault variable must be
-    # mentioned in at least one of them.
+    # mentioned in at least one of them. `files/` is EXCLUDED: it holds
+    # vendored data copies (the realm import, the inlined dashboards) —
+    # a name appearing there is data flowing through, not documentation
+    # an operator would find.
     chart_doc_text = ""
     for root in DEFAULT_CHART_DOC_ROOTS:
         for path in Path(root).rglob("*"):
+            if "files" in path.relative_to(root).parts:
+                continue
             if path.is_file() and path.suffix in (".yaml", ".yml", ".md", ".tpl"):
                 try:
                     chart_doc_text += path.read_text(encoding="utf-8", errors="replace")
@@ -368,8 +373,12 @@ def main(argv):
             if name in code_default:
                 # Unset on purpose is only sound if the operator who wants
                 # the knob can find it. The chart must mention the name
-                # somewhere an operator reads.
-                if name not in chart_doc_text:
+                # somewhere an operator reads. The match is token-exact:
+                # a bare substring would let `PORT` ride on every
+                # `EX-PORT`/`EMAIL_PORT`/prose `passports` in the corpus,
+                # which is precisely the not-findable-knob failure this
+                # check exists to catch.
+                if not re.search(rf"(?<![A-Za-z0-9_]){re.escape(name)}(?![A-Za-z0-9_])", chart_doc_text):
                     gaps.append(
                         f"{component}.{name}: filed codeDefault, but the chart never mentions "
                         "the name (values.yaml / README / templates) — document the knob, "

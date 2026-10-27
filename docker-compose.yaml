@@ -809,6 +809,24 @@ services:
       # pipeline citizens use. 'whatif' runs ignore this and replay retrieval
       # in-process.
       - OKF_RAGAS_SERVE_URL=${OKF_RAGAS_SERVE_URL:-http://chatqna-xeon-backend-server:8888/v1/chatqna}
+      # Declared serve posture, forwarded so every run doc can RECORD the
+      # retrieval configuration it measured (fidelity.retrieval.posture).
+      # chatqna remains the AUTHORITATIVE reader — okf-server only snapshots
+      # these for the record. Keep the interpolation defaults identical to
+      # the chatqna block to avoid silent drift (same convention as the
+      # retriever block's inert copies). The record exists because a
+      # configuration change (RETRIEVER_ARANGO_K=54, 2026-10-27) can silence
+      # the whole pipeline (reranker per-batch token cap) — a run that
+      # abstains 100% must name the posture it ran with.
+      - RETRIEVER_ARANGO_K=${RETRIEVER_ARANGO_K:-20}
+      - RETRIEVER_ARANGO_FETCH_K=${RETRIEVER_ARANGO_FETCH_K:-30}
+      - RETRIEVER_ARANGO_SCORE_THRESHOLD=${RETRIEVER_ARANGO_SCORE_THRESHOLD:-0.2}
+      - RETRIEVER_ARANGO_DISTANCE_THRESHOLD=${RETRIEVER_ARANGO_DISTANCE_THRESHOLD:-1}
+      - RETRIEVER_ARANGO_LAMBDA_MULT=${RETRIEVER_ARANGO_LAMBDA_MULT:-0.5}
+      - RERANKING_STRATEGY=${RERANKING_STRATEGY:-slice}
+      - RERANKER_TOP_N=${RERANKER_TOP_N:-3}
+      - RERANKING_THRESHOLD=${RERANKING_THRESHOLD:-0.75}
+      - CHATQNA_ENFORCE_ABSTENTION=${CHATQNA_ENFORCE_ABSTENTION:-true}
       # The answer leg's INITIAL token budget. It was hardcoded to 800, and a
       # reasoning-capable model burns 400-700 tokens before writing a word --
       # every answer hit the length cap, was thrown away, and was re-called at

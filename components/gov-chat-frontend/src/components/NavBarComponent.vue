@@ -381,7 +381,12 @@ export default {
   gap: var(--space-xs);
   font-size: var(--text-sm);
   font-weight: 500;
-  color: var(--muted);
+  /* The pill sits on the navbar band, so its ink must be the band's
+     (accent-fg is rebound to --navbar-fg by .nav-bar), not the page's
+     --muted — on a saturated light-mode band (agrogenio) that one is
+     a light-surface grey and the pill vanishes. Quieted to 82 % so it
+     still reads as secondary next to the controls beside it. */
+  color: color-mix(in oklch, var(--accent-fg) 82%, transparent);
   padding: 3px var(--space-sm);
   border-radius: var(--radius-pill, 999px);
   white-space: nowrap;
@@ -392,6 +397,10 @@ export default {
   height: 8px;
   border-radius: 50%;
   background: var(--success);
+  /* Ring in the band's ink: the success green sits on a green brand
+     band in both themes here, and without the ring the dot melts into
+     the background. */
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--accent-fg) 35%, transparent);
 }
 
 .nav-status[data-status='offline'] {

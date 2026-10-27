@@ -772,8 +772,16 @@ export default {
     },
     ...mapGetters('chatHistory', ['getAllFolders', 'getChatById']),
     assistantIcon() {
-      // The product icon, the same one the navbar renders; the default is
-      // the navbar's own until the runtime config has loaded.
+      // A deployment that brands the assistant with a mascot face uses it
+      // as the per-turn chat avatar (el-salvador: the farmer). The navbar
+      // logo channel (app.icon) carries the wordmark painted for the
+      // navbar band — white-on-transparent here — which reads as an empty
+      // circle on the chat bubble's light surface, so it must not leak
+      // into the avatar. Deployments without a mascot keep the product
+      // icon, the same one the navbar renders, the navbar's own default
+      // until the runtime config has loaded.
+      const mascot = this.config?.app?.mascot?.url;
+      if (mascot) return { type: 'file', value: mascot };
       return this.cachedConfig?.app?.icon || runtimeConfig?.app?.icon;
     },
     authUser() {

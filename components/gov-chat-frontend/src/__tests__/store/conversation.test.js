@@ -168,6 +168,43 @@ describe('conversation persistence', () => {
     expect(open.messages[0].isError).toBe(true);
   });
 
+  it('rehydration keeps a failure but drops its reason key', () => {
+    sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        openId: 'open',
+        conversations: {
+          open: {
+            messages: [
+              { sender: 'user', content: 'the failed question' },
+              {
+                sender: 'bot',
+                content: 'This language is not available for this deployment.',
+                isError: true,
+                errorKey: 'chatbot.unsupportedLanguage',
+                timestamp: '2026-01-01T00:00:01.000Z'
+              }
+            ],
+            selectedContextItems: [],
+            lastSavedState: { messages: [], contextItems: [] },
+            conversationId: null,
+            title: '',
+            isStreaming: false,
+            streamingQueryId: null,
+            relatedDocuments: []
+          }
+        }
+      })
+    );
+    const store = freshStore();
+    rehydrateConversation(store.state.conversation);
+    const restored = store.getters['conversation/openConversation'].messages.at(-1);
+    // The retry affordance survives the reload; the reason key does not —
+    // it belonged to the session the failure happened in.
+    expect(restored.isError).toBe(true);
+    expect(restored.errorKey).toBeUndefined();
+  });
+
   it('markInterrupted marks the aborted question together with its answer', () => {
     // Mutation check: dropping the backward walk from
     // markEntryInterrupted leaves this test green — it is the only
@@ -356,6 +393,9 @@ describe('conversation sendStream action', () => {
 
     it('a refusal stays online and records the unsupported-language key', async () => {
       const store = freshStore();
+      // Start from a genuine outage so the assertion proves restoration,
+      // not the status module's pristine default.
+      store.commit('status/setOffline', 'Previous outage');
       const refusal = new Error('Unsupported target language');
       refusal.status = 400;
       refusal.code = 'UNSUPPORTED_LANGUAGE';
@@ -369,11 +409,13 @@ describe('conversation sendStream action', () => {
 
     it('a refusal of another kind stays online under the generic processing key', async () => {
       const store = freshStore();
+      store.commit('status/setOffline', 'Previous outage');
       const refusal = new Error('Bad request');
       refusal.status = 422;
       await failingStream(store, refusal);
       const open = store.getters['conversation/openConversation'];
       expect(open.messages.at(-1).errorKey).toBe('chatbot.processingError');
+      expect(open.messages.at(-1).content).toBe('Error processing your request.');
       expect(store.state.status.online).toBe(true);
     });
 
@@ -384,6 +426,7 @@ describe('conversation sendStream action', () => {
       await failingStream(store, timeout);
       const open = store.getters['conversation/openConversation'];
       expect(open.messages.at(-1).errorKey).toBe('chatbot.streamTimeout');
+      expect(open.messages.at(-1).content).toBe('The assistant is not responding — the request timed out.');
       expect(store.state.status.online).toBe(false);
     });
 

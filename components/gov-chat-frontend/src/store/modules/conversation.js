@@ -21,9 +21,6 @@ function emptyConversation() {
 // triggered the dead answer is marked too — the failed exchange leaves
 // the transcript as a unit (the retry splices both), so no half of it
 // can leak into a later request's context.
-// The question that triggered a dead answer is marked too — the failed
-// exchange leaves the transcript as a unit (the retry splices both), so
-// no half of it can leak into a later request's context.
 function markTriggeringQuestion(entry) {
   for (let i = entry.messages.length - 2; i >= 0; i--) {
     if (entry.messages[i].sender === 'user') {
@@ -365,8 +362,8 @@ export function rehydrateConversation(moduleState) {
     }
     const clean = emptyConversation();
     // A restored failure keeps its retry affordance (isError) but not the
-    // failure's reason key: the view's last-error guard starts fresh, and
-    // the stale reason must not re-notify on the first unrelated mutation.
+    // failure's reason key: the key is the failure session's translation
+    // context and does not carry across a reload.
     clean.messages = entry.messages
       .filter((m) => m && typeof m === 'object')
       .map((m) => {

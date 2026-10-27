@@ -677,8 +677,9 @@ describe('ChatBotComponent', () => {
       const lastBotMessage = vm.openMessages[vm.openMessages.length - 1];
       expect(lastBotMessage.sender).toBe('bot');
       expect(lastBotMessage.content).toBe('Stream connection lost');
-      // The prose is the bubble's; the toast stays the generic failure —
-      // the frame carries no i18n key.
+      // The prose is the message's content — an errored turn renders the
+      // fixed failure text and retry, so the status line and the toast
+      // carry it; the toast stays the generic failure (no i18n key).
       expect(mockNotificationError).toHaveBeenCalledWith(expect.stringContaining('streamingError'));
     });
 

@@ -818,8 +818,8 @@ export default {
       handler() {
         if (this.isStreaming) this.scrollToBottom();
         const last = this.openMessages.at(-1);
-        if (last && last.sender === 'bot' && last.isError && last.timestamp !== this._lastErrorKey) {
-          this._lastErrorKey = last.timestamp;
+        if (last && last.sender === 'bot' && last.isError && last.timestamp !== this._lastNotifiedErrorAt) {
+          this._lastNotifiedErrorAt = last.timestamp;
           // The failure's reason was chosen by the store (refused request
           // vs. dead deployment vs. server prose); the key rides on the
           // message so the notification renders in this view's locale.
@@ -839,6 +839,11 @@ export default {
   },
 
   created() {
+    // A failure restored from storage was already surfaced in the session
+    // it died in: seed the watcher's guard so the restored turn does not
+    // re-notify on the first unrelated mutation after the reload.
+    const restored = this.openMessages.at(-1);
+    if (restored && restored.isError) this._lastNotifiedErrorAt = restored.timestamp;
     eventBus.$on('chat-deleted', (deletedChatId) => {
       // The in-flight window has conversationId nulled and the target in
       // currentChatId — the deleted chat must be recognised in both.

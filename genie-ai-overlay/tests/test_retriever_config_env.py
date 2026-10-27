@@ -29,19 +29,19 @@ def _load_config(monkeypatch, env_name, env_value):
     return module
 
 
-def test_filter_strategy_follows_deployment_env_var(monkeypatch):
-    module = _load_config(monkeypatch, DEPLOYMENT_ENV_NAME, "AND")
-    assert module.ARANGO_FILTER_STRATEGY == "AND"
-
-
-def test_filter_strategy_defaults_to_or(monkeypatch):
-    module = _load_config(monkeypatch, DEPLOYMENT_ENV_NAME, None)
-    assert module.ARANGO_FILTER_STRATEGY == "OR"
-
-
-def test_filter_strategy_value_is_normalized(monkeypatch):
-    module = _load_config(monkeypatch, DEPLOYMENT_ENV_NAME, " and ")
-    assert module.ARANGO_FILTER_STRATEGY == "AND"
+@pytest.mark.parametrize(
+    ("env_value", "expected"),
+    [
+        ("AND", "AND"),
+        (" and ", "AND"),
+        (None, "OR"),
+    ],
+    ids=["and", "normalised", "unset"],
+)
+def test_filter_strategy_follows_deployment_env_var(monkeypatch, env_value, expected):
+    module = _load_config(monkeypatch, DEPLOYMENT_ENV_NAME, env_value)
+    strategy = module.ARANGO_FILTER_STRATEGY
+    assert strategy == expected
 
 
 def test_invalid_filter_strategy_is_rejected_when_the_service_starts(monkeypatch):

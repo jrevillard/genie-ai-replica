@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-27)
 
-- **Chart `genieai-umbrella` at 0.2.81**, branch `feat/k8s-migration` rebased
+- **Chart `genieai-umbrella` at 0.2.82**, branch `feat/k8s-migration` rebased
   onto `main` at `179a8a8f1` (0 commits behind).
 - **No application code in the branch**: the diff touches `charts/`,
   `scripts/`, `docs/`, `deploy/`, `tests/`, `site/`, `.gitlab-ci.yml`,
@@ -342,6 +342,49 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     ports were hardcoded 6379 while the Service/containers derive from
     the knob (the same split-brain the pass-7 clamav fix removed —
     folded into the same fix at the cause).
+- **Review loop, pass 10 (0.2.82)** — 7 findings, 6 verified true and
+  fixed, 1 refuted against the chart's own documented contract:
+  - *Pass 9's own unknown-argument guard crashed on the typo it
+    existed for* — `install-prereqs.sh` has no `die()`, so
+    `--with-grafan` died with `die: command not found` (exit 127)
+    instead of the self-documenting message. Defined.
+  - *The cluster-scoped arango RBAC rendered unconditionally* — the
+    ClusterRole + ClusterRoleBinding granting the shared operator
+    cluster-wide CRUD on ArangoDeployment CRs ignored
+    `data.arangodb.enabled`, so a release without ArangoDB installed
+    the grant and removed it on uninstall — deleting RBAC a surviving
+    release's operator informers were started with. Gated like every
+    other arango resource. (The namespaced Role+Binding stays
+    unconditional on its own documented rationale: harmless when the
+    bootstrap never ran.)
+  - *`podDisruptionBudget.minAvailable: 0` silently dropped the PDB* —
+    sprig's `and` short-circuits on the falsy 0; the presence check is
+    a nil check now. Four cases render-verified (0 renders, absent
+    falls to the declared default, null disables, 1 renders).
+  - *The helm-test required-Secret gate was narrower than the render
+    that needs it* — `vllm-api-key` was asserted only when the OPEA
+    tier was on, but the backend carries a NON-optional secretKeyRef on
+    it whenever a translation endpoint is NAMED, tier on or off. The
+    gate now covers the explicit-endpoint case (negative case
+    verified: no endpoint, no ref, no requirement).
+  - *The values-surface gate was blind to the `$svc` alias* — the
+    factory's per-service reads (`$svc.podAnnotations`,
+    `$svc.workingDir`, …) never matched values.yaml, so two knobs were
+    undeclared and undiscoverable. The gate now checks the `$svc`
+    surface against the union of the declared per-service keys and the
+    `Per-service entry shape` block in values.yaml — the shape
+    documentation is a gate-enforced contract now, not prose
+    (mutation-proven).
+  - *The clamav image tag rendered with no fallback* — a cleared tag
+    produced `clamav/clamav:` and lint/kubeconform stayed green.
+    Defaults to the declared `stable-debian`.
+  - Refuted: "`clusterProfile=prod` silently ignores an explicit
+    `data.postgres.instances`" — the override is documented at both
+    declaration sites (`instances: 1  # 3 on prod via clusterProfile`,
+    `# 2 on prod`) and the precedence is the stateless tier's own
+    (the profile map wins over per-service replicas in
+    `resolveReplicas`). Documented profile-override semantics, not a
+    dead key.
 - **Review round 9 closed (0.2.67)** — three parallel adversarial passes
   over the whole final diff (core/data/services, edge/observability/OPEA,
   CI/scripts), every finding verified against a render or a live cluster
@@ -425,7 +468,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.81** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.82** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `179a8a8f1` (the tip that carries !586, !587,
   !588) — the branch is 0 commits behind `main`.

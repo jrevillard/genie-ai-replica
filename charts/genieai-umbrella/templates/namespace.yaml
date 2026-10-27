@@ -94,6 +94,7 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: arango-operator-crd-access
+{{- if .Values.data.arangodb.enabled }}
 ---
 # Cluster-wide ClusterRole + ClusterRoleBinding for the bootstrap
 # kube-arangodb operator. The in-namespace Role+RoleBinding above
@@ -157,3 +158,11 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: arango-operator-crd-access-{{ .Release.Name }}
+{{- end }}
+# The cluster-scoped RBAC above is gated on data.arangodb.enabled like
+# every other arango resource: a release that does not run ArangoDB (or
+# a second GENIE release that does not use it) must neither install the
+# grant nor remove it on uninstall — deleting ClusterRole/Binding a
+# surviving release's operator informers were started with breaks that
+# release's reconciliation, the exact second-release hazard the sweep
+# and the cluster-scope gate exist to prevent.

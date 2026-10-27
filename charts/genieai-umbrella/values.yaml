@@ -513,6 +513,14 @@ dependencyGraph:
 #   volumeMounts: optional container volumeMounts (subPath supported)
 #   probes: readiness/liveness/startup probe definitions
 #   podDisruptionBudget: optional PDB; null disables
+#   podAnnotations: optional map merged into the pod template metadata
+#   workingDir: optional container working directory
+#   command / args: optional container command overrides
+#   image.pullPolicy: optional; derived from the tag when absent
+#   podSecurityContext: optional pod-level securityContext (fsGroup...)
+#
+# scripts/values-surface-check.py enforces this shape list against the
+# factory's `$svc.<key>` reads — the list cannot drift from the surface.
 services:
   backend:
     enabled: true

@@ -3315,6 +3315,15 @@ chart:contract:
       cfg = yaml.safe_dump(cr['spec']['config'], default_flow_style=False, sort_keys=False)
       cfg = cfg.replace('vlsingle-victorialogs.genieai.svc.cluster.local',
                         'genie-pii-vl-HOSTPLACEHOLDER')
+      # The replace above keys on the chart's VL hostname VERBATIM. If the
+      # VLSingle CR is renamed, the replace silently no-ops, the config
+      # keeps the in-cluster hostname, and the smoke below dies with a
+      # generic row-timeout instead of naming the rename — assert the
+      # marker exists, so a hostname change fails HERE with the cause.
+      assert 'genie-pii-vl-HOSTPLACEHOLDER' in cfg, (
+          'the rendered VL endpoint no longer matches '
+          'vlsingle-victorialogs.genieai.svc.cluster.local — update the '
+          'placeholder rewrite in this job and in run-pii-smoke.sh')
       open('/tmp/contract-collector-config.yaml', 'w').write(cfg)
       assert 'pii_redact' in cfg, 'pii_redact processor missing from the rendered gateway config'
       assert 'fluent_forward' not in cfg, 'fluent_forward receiver is compose-only; it must not render on k8s'
@@ -3777,7 +3786,12 @@ chart:install:
         - scripts/**/*
         - .gitlab-ci.yml
       when: manual
-    - if: '$CI_COMMIT_BRANCH == "feat/k8s-migration"'
+    # The migration branch AND the default branch: the job is the
+    # on-demand installability proof, and pinning it to the branch name
+    # alone would drop it from every push pipeline the day the branch
+    # merges — exactly when an operator wants to click it before a
+    # release.
+    - if: '$CI_COMMIT_BRANCH == "feat/k8s-migration" || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       changes:
         - charts/**/*
         - scripts/**/*

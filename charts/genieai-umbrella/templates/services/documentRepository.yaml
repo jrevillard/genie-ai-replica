@@ -200,9 +200,12 @@ spec:
         - protocol: TCP
           port: 3000
     # ClamAV scanner. Post-DNAT pod port; the Service port is identical,
-    # but pod-to-pod peers must use the container port. Same knob the
-    # clamav Deployment, Service and policies derive from — an override
-    # that moved only this side would strand every upload's scan step.
+    # but pod-to-pod peers must use the container port. The port comes
+    # from services.clamav.port — the knob the clamav Deployment,
+    # Service and policies derive from — while the doc-repo DIALS
+    # services.documentRepository.clamavPort: the two are separate
+    # values, and the doc-repo only needs its own when clamavHost points
+    # at an EXTERNAL scanner. Keep them in sync for the in-cluster case.
     - to:
         - podSelector:
             matchLabels:

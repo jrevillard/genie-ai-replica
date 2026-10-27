@@ -18,11 +18,17 @@
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
 -}}
 {{- $secretEnv := include "genieai-umbrella.gpuApiKeyEnv" (dict "keys" (list "HF_TOKEN" "VLLM_API_KEY")) | fromJsonArray -}}
+{{- /* opea.embedding.env — the same operator-facing map the other five
+orchestrators carry. Without it an overlay setting
+opea.embedding.env was silently dropped: the value merged into
+.Values, no template read it, and the rendered Deployment was
+byte-identical to one without it. */ -}}
+{{- $opeaEnvRows := include "genieai-umbrella.envMapRows" (.Values.opea.embedding.env | default dict) | fromJsonArray -}}
 {{- $svcVals := dict
     "image" (dict "repository" "genie-ai-embedding" "tag" "main")
     "port" 6000
     "resources" (dict "requests" (dict "cpu" "100m" "memory" "256Mi") "limits" (dict "cpu" "1" "memory" "1Gi"))
-    "env" (concat $urls $secretEnv)
+    "env" (concat $urls $secretEnv $opeaEnvRows)
     "probes" (dict
       "readiness" (dict "httpGet" (dict "path" "/health" "port" 6000) "initialDelaySeconds" 30 "periodSeconds" 15)
       "liveness"  (dict "httpGet" (dict "path" "/health" "port" 6000) "initialDelaySeconds" 60 "periodSeconds" 30)

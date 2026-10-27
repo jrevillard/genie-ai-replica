@@ -30,7 +30,6 @@ URLs at a single internal mirror.
       set -eu
       mkdir -p /tools/bin
       BASE="{{ .Values.global.kubeletToolsMirror | default "https://dl.k8s.io" }}"
-      BASE_JQ="{{ .Values.global.kubeletToolsMirror | default "https://github.com/jqlang" }}"
       # The node's architecture, detected at runtime unless the operator
       # forces one: an arm64 cluster (Apple Silicon minikube) cannot
       # execute the amd64 binary, and the pod that needs it — the
@@ -59,8 +58,11 @@ URLs at a single internal mirror.
         done
         return 1
       }
+      # kubectl only: nothing in the hook Jobs or test pods shells out to
+      # jq (the pre-upgrade detect hook parses with grep/sed), so
+      # downloading it paid a second external fetch — and a second
+      # mirror requirement for air-gapped installs — for an unused
+      # binary.
       fetch "$BASE/release/v1.33.0/bin/linux/$ARCH/kubectl" /tools/bin/kubectl
       chmod +x /tools/bin/kubectl
-      fetch "$BASE_JQ/jq/releases/download/jq-1.7.1/jq-linux-$ARCH" /tools/bin/jq
-      chmod +x /tools/bin/jq
 {{- end -}}

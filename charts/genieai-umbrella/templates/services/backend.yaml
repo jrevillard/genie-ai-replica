@@ -340,10 +340,11 @@ spec:
             matchLabels:
               genieai.io/component: translation
       ports:
+        # Pod space (post-DNAT): the container listens on 8888; 9031 is
+        # the Service's EXTERNAL port (chatqna's TRANSLATION_SERVICE_PORT)
+        # and admits nothing after DNAT.
         - protocol: TCP
           port: 8888
-        - protocol: TCP
-          port: 9031
     {{- end }}
     {{- if and .Values.opea.enabled (eq .Values.opea.gpu.mode "in-cluster") }}
     # In-cluster translation model (VLLM_TRANSLATION_ENDPOINT default).

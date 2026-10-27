@@ -18,7 +18,12 @@ metadata:
   name: {{ include "genieai-common.fullname" . }}-test-observability
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+    {{- /* component "test", like every sibling test pod: the ingress
+    peers the chart's policies grant are `genieai.io/component: test`, so
+    labeling this pod "observability" worked only while the storage pods
+    carried no ingress policy at all — the first policy added there would
+    silently time this pod out (a "test" peer does not select it). */ -}}
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "test") | nindent 4 }}
   annotations:
     "helm.sh/hook": test
     "helm.sh/hook-delete-policy": before-hook-creation

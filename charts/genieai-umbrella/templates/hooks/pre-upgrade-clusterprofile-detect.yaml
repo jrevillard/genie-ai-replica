@@ -37,9 +37,9 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       # `registry.k8s.io/kubectl` is distroless (no /bin/sh), so this Pod
-      # ships kubectl + jq via an init container that downloads the static
+      # ships kubectl via an init container that downloads the static
       # binaries into the shared `tools` emptyDir. The main container is
-      # alpine (sh is built in); kubectl/jq are picked up via the PATH env,
+      # alpine (sh is built in); kubectl is picked up via the PATH env,
       # which prepends /tools/bin.
       volumes:
         - name: tools
@@ -52,7 +52,7 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             - name: PATH
-              # Prepend /tools/bin so kubectl + jq (downloaded by the
+              # Prepend /tools/bin so kubectl (downloaded by the
               # `tools` init container) are discoverable by the script.
               value: /tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
             - name: RENDERED_PROFILE

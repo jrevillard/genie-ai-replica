@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-27)
 
-- **Chart `genieai-umbrella` at 0.2.86**, branch `feat/k8s-migration` rebased
+- **Chart `genieai-umbrella` at 0.2.87**, branch `feat/k8s-migration` rebased
   onto `main` at `179a8a8f1` (0 commits behind).
 - **No application code in the branch**: the diff touches `charts/`,
   `scripts/`, `docs/`, `deploy/`, `tests/`, `site/`, `.gitlab-ci.yml`,
@@ -556,6 +556,54 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     from the `set -euo` marker now, so header edits cannot truncate it.
   - Plus the unbalanced-parentheses comment on `clusterProfile`, the
     first knob block an operator reads.
+- **Review loop, pass 15 (0.2.87)** — 11 findings: 9 verified true and
+  fixed, 1 removed outright (stronger than reported), 1 refuted:
+  - *A cleared `probes` block crashed the render* — the factory read
+    `$svc.probes.readiness` unguarded and clamav read
+    `$probes.readiness.tcpSocket` after normalizing only the top level,
+    so `--set services.frontend.probes=null` died with a nil-pointer
+    error while every other clearable block degraded gracefully.
+    Normalized at both levels; all four services render probe-free on
+    the cleared block and unchanged on the defaults.
+  - *The reachability test counted a connect TIMEOUT as PASS* — curl
+    exit 28 (the SYN dropped, which is exactly what a NetworkPolicy
+    drop looks like) printed "tcp open", making the test structurally
+    unable to fail on the defect class it exists to catch. Only exit 0
+    passes now; 28 gets its own failure message naming the drop.
+  - *`services.frontend.cspConnectSrc` was documented as feeding the
+    backend's CSP header* — it never did; the knob shapes the browser's
+    connect-src via VUE_APP_CSP_CONNECT_SRC and the backend header
+    carries only the derived set. Documentation fixed.
+  - *prod scaled frontend and documentRepository to 2 replicas with
+    `podDisruptionBudget: null`* — a voluntary disruption could take
+    both replicas of either service at once, defeating the
+    zero-downtime the replica bump exists for. Both declare
+    `minAvailable: 1` (prod renders three PDBs, dev none).
+  - *The observability test pod was labeled `component: observability`*
+    while every policy's ingress peer names `component: test` — it
+    worked only while the storage pods carried no ingress policy at
+    all. Relabeled.
+  - *The dep-check Role granted get/list on the Keycloak operator's
+    CRs with zero consumers* (the Job runs with
+    `automountServiceAccountToken: false`) — removed, with the
+    no-speculative-grants rule stated where the "for completeness"
+    comment used to invite them back.
+  - *The backend's egress rule admitted translation pod port 9031* —
+    the Service's external port; post-DNAT nothing listens there.
+    Pod-space 8888 only.
+  - *`local-test.sh` died on `kubectl get sealedsecret`* on any cluster
+    without the CRD — the chart has shipped no SealedSecrets for many
+    rounds. The listing is CRD-guarded now.
+  - *`opeaNetworkFromUrl` sniffed the port over the whole URL* — a
+    colon in the path or query (`?from=en:1`) became the egress port.
+    The port comes from the authority segment now (five URL shapes
+    render-verified).
+  - *The tools init downloaded jq for zero consumers* — stronger than
+    the finding claimed: not just the test pods, NOTHING in any hook
+    or test shells out to jq. Removed (kubectl only), mirror docs
+    updated.
+  - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
+    is `#!/usr/bin/env bash` at HEAD.
 - **Review round 9 closed (0.2.67)** — three parallel adversarial passes
   over the whole final diff (core/data/services, edge/observability/OPEA,
   CI/scripts), every finding verified against a render or a live cluster
@@ -639,7 +687,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.86** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.87** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `179a8a8f1` (the tip that carries !586, !587,
   !588) — the branch is 0 commits behind `main`.

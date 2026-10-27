@@ -186,6 +186,10 @@ spec:
       ports:
         - protocol: UDP
           port: 53
+        # Truncated UDP answers fall back to TCP — freshclam resolves a
+        # CNAME chain, exactly the shape that trips it.
+        - protocol: TCP
+          port: 53
     # CVD signature updates on 80/443. NetworkPolicy peers are limited
     # to podSelector / namespaceSelector / ipBlock — `host:` is not a
     # valid peer and was rejected by the API server. Domain allowlisting

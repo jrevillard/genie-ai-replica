@@ -70,9 +70,13 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- /* global.imageRegistry (the documented install knob, the Helm
+      convention) wins over the top-level imageRegistry; both target only
+      the genie-ai-* factory images. */}}
+      {{- $registry := $ctx.Values.global.imageRegistry | default $ctx.Values.imageRegistry }}
       containers:
         - name: {{ $objectName }}
-          image: {{- if $ctx.Values.imageRegistry }} {{ $ctx.Values.imageRegistry }}/{{ $svc.image.repository }}{{ else }} {{ $svc.image.repository }}{{ end }}:{{ $svc.image.tag | default "latest" }}
+          image: {{- if $registry }} {{ $registry }}/{{ $svc.image.repository }}{{ else }} {{ $svc.image.repository }}{{ end }}:{{ $svc.image.tag | default "latest" }}
           # Per-service pullPolicy wins; global pullPolicy follows; the
           # tag decides otherwise (mutable tags pull Always — see the
           # helper).

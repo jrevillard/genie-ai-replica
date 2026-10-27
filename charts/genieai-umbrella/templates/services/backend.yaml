@@ -214,6 +214,19 @@ spec:
       ports:
         - protocol: TCP
           port: 3000
+  {{- if .Values.observability.metrics.enabled }}
+  # Prometheus scrape peer (VMServiceScrape targets this Service) — the
+  # same peer every sibling policy carries. Without it the default-deny
+  # drops vm-operator's scrapes the moment an image serves /metrics.
+    - from:
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: vmetrics
+      ports:
+        - protocol: TCP
+          port: 3000
+  {{- end }}
   egress:
     # DNS resolution to kube-system.
     - to:

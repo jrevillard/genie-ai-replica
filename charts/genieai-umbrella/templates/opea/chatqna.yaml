@@ -83,7 +83,7 @@
     (dict "name" "DOC_REPO_URL" "value" (include "genieai-umbrella.serviceURL" (dict "root" . "name" "document-repository" "port" 80)))
     (dict "name" "BACKEND_SERVICE_URL" "value" (include "genieai-umbrella.serviceURL" (dict "root" . "name" "backend" "port" 80)))
     (dict "name" "KEYCLOAK_URL" "value" (include "genieai-umbrella.keycloakPublicIssuer" .))
-    (dict "name" "KC_REALM" "value" (.Values.opea.chatqna.kcRealm | default "genie"))
+    (dict "name" "KC_REALM" "value" (.Values.opea.chatqna.kcRealm | default (.Values.data.keycloak.realm | default "genie")))
     (dict "name" "KEYCLOAK_INTERNAL_URL" "value" (include "genieai-umbrella.keycloakInternalURL" .))
     (dict "name" "GPU_NODE_HOST" "value" (include "genieai-umbrella.opeaGpuHostname" .))
     (dict "name" "KC_CLIENT_ID" "value" (.Values.opea.chatqna.kcClientId | default "genie-app"))

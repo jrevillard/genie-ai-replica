@@ -63,7 +63,7 @@
     (dict "name" "DOCUMENT_REPOSITORY_URL" "value" (include "genieai-umbrella.serviceURL" (dict "root" . "name" "document-repository" "port" 80)))
     (dict "name" "BACKEND_SERVICE_URL" "value" (include "genieai-umbrella.serviceURL" (dict "root" . "name" "backend" "port" 80)))
     (dict "name" "KEYCLOAK_URL" "value" (include "genieai-umbrella.keycloakInternalURL" .))
-    (dict "name" "KC_REALM" "value" (.Values.opea.dataprep.kcRealm | default "genie"))
+    (dict "name" "KC_REALM" "value" (.Values.opea.dataprep.kcRealm | default (.Values.data.keycloak.realm | default "genie")))
     (dict "name" "KC_DATAPREP_CLIENT_ID" "value" (.Values.opea.dataprep.kcDataprepClientId | default "dataprep-service-client"))
     (dict "name" "OPEA_SSL_SKIP_VERIFY" "value" (include "genieai-umbrella.opeaSslSkipVerify" .))
     (dict "name" "KEYCLOAK_SSL_SKIP_VERIFY" "value" (.Values.opea.dataprep.keycloakSslSkipVerify | default "0" | toString))

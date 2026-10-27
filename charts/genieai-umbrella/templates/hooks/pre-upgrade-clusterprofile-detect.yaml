@@ -152,7 +152,7 @@ spec:
                   "reason: ClusterProfileDetected" \
                   "type: Warning" \
                   "message: \"$DRIFT_MSG\"" \
-                  | ( kubectl create -f - >/dev/null 2>/tmp/event.err; rc=$?; cat /tmp/event.err >&2; exit $rc ) \
+                  | ( kubectl create -f - >/dev/null 2>/tools/event.err; rc=$?; cat /tools/event.err >&2; exit $rc ) \
                     || echo "WARN: event create failed" >&2
               fi
               # Drift detection is advisory: a mismatch (or an unreadable

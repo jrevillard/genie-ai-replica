@@ -3597,7 +3597,15 @@ export default {
         knob: 'parámetro',
         tag: 'etiqueta del repositorio',
         content: 'contenido',
-        prompt: 'prompt'
+        prompt: 'prompt',
+        env: 'cambios de entorno',
+        envComponent: 'componente',
+        envChange: 'cambio',
+        envTargets: 'objetivos',
+        envWhy: 'por qué',
+        envTradeOff: 'contrapartida',
+        envApply: 'cómo aplicar',
+        envVerify: 'verificar'
       },
       metric: {
         faithfulness: 'fidelidad',

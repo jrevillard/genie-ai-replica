@@ -3570,7 +3570,15 @@ export default {
         knob: 'kidhibiti',
         tag: 'lebo ya hazina',
         content: 'maudhui',
-        prompt: 'maelekezo'
+        prompt: 'maelekezo',
+        env: 'mabadiliko ya mazingira',
+        envComponent: 'kipengele',
+        envChange: 'mabadiliko',
+        envTargets: 'malengo',
+        envWhy: 'sababu',
+        envTradeOff: 'mapato na hasara',
+        envApply: 'jinsi ya kutumia',
+        envVerify: 'thibitisha'
       },
       metric: {
         faithfulness: 'uaminifu',

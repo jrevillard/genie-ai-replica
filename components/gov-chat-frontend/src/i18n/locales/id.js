@@ -3575,7 +3575,15 @@ export default {
         knob: 'parameter',
         tag: 'tag repositori',
         content: 'konten',
-        prompt: 'prompt'
+        prompt: 'prompt',
+        env: 'perubahan lingkungan',
+        envComponent: 'komponen',
+        envChange: 'perubahan',
+        envTargets: 'target',
+        envWhy: 'alasan',
+        envTradeOff: 'pertimbangan',
+        envApply: 'cara menerapkan',
+        envVerify: 'verifikasi'
       },
       metric: {
         faithfulness: 'kesetiaan',

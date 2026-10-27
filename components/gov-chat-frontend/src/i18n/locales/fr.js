@@ -3597,7 +3597,15 @@ export default {
         knob: 'réglage',
         tag: 'étiquette du dépôt',
         content: 'contenu',
-        prompt: 'prompt'
+        prompt: 'prompt',
+        env: 'modifications d’environnement',
+        envComponent: 'composant',
+        envChange: 'modification',
+        envTargets: 'cibles',
+        envWhy: 'pourquoi',
+        envTradeOff: 'compromis',
+        envApply: 'comment appliquer',
+        envVerify: 'vérifier'
       },
       metric: {
         faithfulness: 'fidélité',

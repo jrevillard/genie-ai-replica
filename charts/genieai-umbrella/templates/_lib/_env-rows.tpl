@@ -37,6 +37,7 @@ rejects.
 {{- range .keys -}}
 {{- $secretKey := . -}}
 {{- if eq $secretKey "HUGGINGFACEHUB_API_TOKEN" -}}{{- $secretKey = "VLLM_API_KEY" -}}{{- end -}}
+{{- if eq $secretKey "OPENAI_API_KEY" -}}{{- $secretKey = "VLLM_API_KEY" -}}{{- end -}}
 {{- $rows = append $rows (dict "name" . "valueFrom" (dict "secretKeyRef" (dict "name" "vllm-api-key" "key" $secretKey))) -}}
 {{- end -}}
 {{- $rows | toJson -}}

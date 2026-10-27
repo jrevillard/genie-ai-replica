@@ -21,9 +21,11 @@
   The guardrail is not rendered by this chart; `GUARDRAIL_SERVICE_*`
   carry the defaults (`guardrail:9090`) and the service tolerates
   an unreachable guardrail. `GPU_NODE_HOST` is superseded by the
-  opeaGpuEndpoint helper. `OPENAI_API_KEY` defaults to empty
-  (`${VLLM_API_KEY:-}`); omitted because the Python default already
-  handles the unset case.
+  opeaGpuEndpoint helper. `OPENAI_API_KEY` is delivered from the same
+  vllm-api-key Secret as `VLLM_API_KEY` — the translation and
+  multi-turn-condense clients read only that name for their Bearer
+  header (Compose maps `${VLLM_API_KEY:-}` into it), and a deployment
+  whose GPU node enforces the key would otherwise see `Bearer None`.
 
   KEYCLOAK_URL is the PUBLIC origin (the pinned issuer on the Keycloak
   CR) — the validator compares it against the token's iss claim, which
@@ -108,7 +110,7 @@ end-to-end for multi-line prompts). */ -}}
 {{- if $systemPrompt -}}
 {{- $promptEnv = append $promptEnv (dict "name" "CHATQNA_SYSTEM_PROMPT" "value" $systemPrompt) -}}
 {{- end -}}
-{{- $gpuSecretEnv := include "genieai-umbrella.gpuApiKeyEnv" (dict "keys" (list "VLLM_API_KEY")) | fromJsonArray -}}
+{{- $gpuSecretEnv := include "genieai-umbrella.gpuApiKeyEnv" (dict "keys" (list "VLLM_API_KEY" "OPENAI_API_KEY")) | fromJsonArray -}}
 {{- /* opea.chatqna.env: the variables the chart must configure the way
 Compose configures them (parity gate: scripts/config-parity-check.py).
 A MAP, so an overlay that sets one variable keeps the others. The rows
@@ -127,7 +129,11 @@ real query runs and the kubelet kills the pod mid-stream (exit 137,
 observed live: the backend saw "socket hang up" from a pod the liveness
 had just killed). `kill -0 1` probes the PROCESS — it fires only when
 the container is genuinely dead, and never punishes a busy event loop.
-The honest long-term fix is application-side (serve /health from the
+The cost is accepted: readiness still flaps NotReady while the loop is
+busy (single replica — no new requests mid-query), which is honest, and
+the app-side threadpool fix restores both the availability and a hang
+bound (an exec probe cannot see a python-level deadlock). The honest
+long-term fix is application-side (serve /health from the
 threadpool so it answers while the loop is busy); this probe keeps the
 chart correct until that lands. */ -}}
 {{- $svcVals := dict

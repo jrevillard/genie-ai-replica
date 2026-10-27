@@ -357,6 +357,18 @@ the compose config, kept verbatim; backlog.
   `database.arangodb.com` rules kept cluster scope, and ArangoDB was
   reinstalled live to prove the operator still reconciles with the
   trimmed role.
+- **chatqna event-loop blocking (2026-10-25 live validation)**: the
+  uvicorn event loop is blocked for the whole duration of a query
+  (retrieval → rerank → LLM, 60-90 s on the shared GPU) — `/health`
+  stops answering, which is why the HTTP liveness probe killed the pod
+  mid-stream (0.2.70 moved the liveness to an exec probe as the chart
+  stopgap). The app-side fix (MR to `main`): serve `/health` from the
+  threadpool so it answers while the loop is busy — it restores both
+  the availability during queries AND a hang bound the exec probe
+  cannot provide (a python-level deadlock with a live bash never
+  restarts today). Related: the ArangoDB database loss observed the
+  same day (datadir empty after a minikube restart, migrations
+  re-applied manually) — cause unexplained, watch for a repeat.
 - **RWO PVC + replicas>1**: `clusterProfileReplicas.prod` runs
   documentRepository ×2 against one ReadWriteOnce PVC with no node
   pinning — multi-attach risk on multi-node prod (single-node minikube

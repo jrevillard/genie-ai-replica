@@ -3533,7 +3533,15 @@ export default {
         knob: 'مفتاح ضبط',
         tag: 'وسم المستودع',
         content: 'المحتوى',
-        prompt: 'الموجه'
+        prompt: 'الموجه',
+        env: 'تغييرات البيئة',
+        envComponent: 'المكوّن',
+        envChange: 'التغيير',
+        envTargets: 'الأهداف',
+        envWhy: 'السبب',
+        envTradeOff: 'المقايضة',
+        envApply: 'كيفية التطبيق',
+        envVerify: 'التحقق'
       },
       metric: {
         faithfulness: 'الوفاء',

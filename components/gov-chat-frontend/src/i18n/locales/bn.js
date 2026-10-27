@@ -3567,7 +3567,15 @@ export default {
         knob: 'নিয়ন্ত্রণ',
         tag: 'রিপোজিটরি ট্যাগ',
         content: 'কনটেন্ট',
-        prompt: 'প্রম্পট'
+        prompt: 'প্রম্পট',
+        env: 'পরিবেশ পরিবর্তন',
+        envComponent: 'উপাদান',
+        envChange: 'পরিবর্তন',
+        envTargets: 'লক্ষ্য',
+        envWhy: 'কারণ',
+        envTradeOff: 'আপস',
+        envApply: 'প্রয়োগের পদ্ধতি',
+        envVerify: 'যাচাই'
       },
       metric: {
         faithfulness: 'বিশ্বস্ততা',

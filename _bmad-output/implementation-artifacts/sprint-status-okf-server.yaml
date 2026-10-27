@@ -844,3 +844,24 @@ development_status:
   #          with the new check "the generation progress envelope separates the
   #          model calls from the cache replays".
 
+  #          FOUR-JUDGE EXPERIMENT + ENV ADVICE 2026-10-27 (branch
+  #          fix/ragas-env-advice, in review): four judges scored the SAME 50
+  #          answers (granite / MiniMax-M3 / glm-5.3-flash / glm-5.3) — the
+  #          outcome bar is a property of the judge (13/37, 25/25, 8/42, 7/43);
+  #          MiniMax's apparent win was never-judged rows counted as passes (its
+  #          <think> leak collapsed coverage); the honest failure core is 14 rows
+  #          (11 factual_correctness) failed by ALL FOUR. Deferred-work carries
+  #          the five-defect ledger. NEW FEATURE (David 2026-10-27: "a cycle of
+  #          adjustment that improves the RAGAS scores by configuration"):
+  #          buildEnvAdvice — env-change entries generated MECHANICALLY from the
+  #          attribution (the advisor LLM proved it loses shapes and prescribes
+  #          knobs for judge-staged rows), rendered as a table in RagasPanel
+  #          (8 i18n keys × 14 locales). Mode-aware (serve → chatqna's
+  #          RETRIEVER_ARANGO_K, whatif → OKF_RAGAS_CANDIDATE_K), rank-derived
+  #          K targets, reranker direction follows the ladder semantics
+  #          (reranker stage = cut the passage = LOOSEN), corpus/judge stages
+  #          get explicit no-change entries. Tests: okf-server 106 (12 new env
+  #          advice + the F1 preservation pin), locales 7/7. /code-review found
+  #          9 findings (2 critical: the LLM success path dropped env_changes;
+  #          the rules read `failed` where production rows carry `fails`) — all
+  #          fixed.

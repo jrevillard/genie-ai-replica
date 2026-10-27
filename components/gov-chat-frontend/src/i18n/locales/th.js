@@ -3543,7 +3543,15 @@ export default {
         knob: 'พารามิเตอร์',
         tag: 'แท็กรีปอซิทอรี',
         content: 'เนื้อหา',
-        prompt: 'พรอมป์ต์'
+        prompt: 'พรอมป์ต์',
+        env: 'การเปลี่ยนแปลงสภาพแวดล้อม',
+        envComponent: 'องค์ประกอบ',
+        envChange: 'การเปลี่ยนแปลง',
+        envTargets: 'เป้าหมาย',
+        envWhy: 'เหตุผล',
+        envTradeOff: 'การแลกเปลี่ยน',
+        envApply: 'วิธีใช้งาน',
+        envVerify: 'การตรวจสอบ'
       },
       metric: {
         faithfulness: 'ความซื่อตรงต่อแหล่งที่มา',

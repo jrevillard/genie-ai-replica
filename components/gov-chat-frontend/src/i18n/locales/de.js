@@ -3601,7 +3601,15 @@ export default {
         knob: 'Stellschraube',
         tag: 'Repo-Tag',
         content: 'Inhalt',
-        prompt: 'Prompt'
+        prompt: 'Prompt',
+        env: 'Umgebungsänderungen',
+        envComponent: 'Komponente',
+        envChange: 'Änderung',
+        envTargets: 'Ziele',
+        envWhy: 'Warum',
+        envTradeOff: 'Abwägung',
+        envApply: 'Anwendung',
+        envVerify: 'Prüfen'
       },
       metric: {
         faithfulness: 'Treue',

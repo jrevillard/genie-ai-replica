@@ -3496,7 +3496,15 @@ export default {
         knob: '配置项',
         tag: '仓库标签',
         content: '内容',
-        prompt: '提示词'
+        prompt: '提示词',
+        env: '环境变更',
+        envComponent: '组件',
+        envChange: '变更',
+        envTargets: '目标',
+        envWhy: '原因',
+        envTradeOff: '权衡',
+        envApply: '应用方法',
+        envVerify: '验证'
       },
       metric: {
         faithfulness: '忠实度',

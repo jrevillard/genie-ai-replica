@@ -1153,6 +1153,11 @@ describe('explain', () => {
     expect(explained.payload.run_key).toBe(run_key);
     expect(Array.isArray(explained.payload.attributions)).toBe(true);
     expect(explained.payload.advice).toBeTruthy();
+    // The configuration adjustment cycle (David 2026-10-27): the mechanical
+    // env changes survive EVERY advisor outcome. The LLM success path
+    // replaces the whole advice object — without the re-attach the section
+    // would appear only on runs where the advisor failed (review F1).
+    expect(Array.isArray(explained.payload.advice.env_changes)).toBe(true);
   });
 
   // David 2026-10-21: "clicked explain… the UX is terrible as it does not show
@@ -1427,6 +1432,112 @@ describe('explain', () => {
     expect(payload.attributions_omitted.length).toBe(0);
   });
 
+  it('strips knob prescriptions from the advisor LLM lists mechanically, and says so', async () => {
+    // Altitude review #4 (2026-10-27): rule 10 tells the advisor not to emit
+    // configuration values, but an instruction is not a control — the same
+    // LLM violated its own stage rule 3 times out of 5 on the granite run.
+    // The guard is MECHANICAL, mirroring the content-curation guard.
+    // Failing rows are forced — the advisor call only runs when something
+    // failed (the same setup its two neighbours use).
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-knob', status: 'queued' }));
+      if (u.includes('/jobs/j-knob'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-knob',
+            status: 'done',
+            result: {
+              aggregate: {},
+              per_query: GEN_SAMPLES.map(() => ({ context_recall: 0.2, faithfulness: 1.0 })),
+              model: 'm',
+              n: 2
+            }
+          })
+        );
+      return baseFetch(url);
+    });
+    const begunSuite = await svc.beginSuiteGeneration('me', { testset_size: 2 }, {});
+    await begunSuite.done;
+    const run = await svc.beginRunSuite('me', begunSuite.suite_key, { mode: 'whatif' }, {});
+    await run.done;
+    global.fetch = baseFetch;
+    // All passages present → no proven corpus gap → the curation guard has
+    // nothing to keep, so it fires alongside the knob guard.
+    __mockDb.__corpusRows = [
+      { key: 'k1', text: 'Plant after the last frost date.', score: 0.9 },
+      { key: 'k2', text: 'Tomatoes are a crop.', score: 0.8 }
+    ];
+    frontmatterService.vllmChatCompletions.mockResolvedValue(
+      llmResponse({
+        knob_changes: [
+          'Set RERANKER_TOP_N to 4 so noise is cut',
+          'a genuinely non-configuration note without identifiers'
+        ],
+        repo_tag_changes: [],
+        // A curation proposal with NO proven corpus gap (the corpus rows are
+        // all present below) — so BOTH mechanical guards fire on one
+        // response and the notes must COMPOSE, not overwrite (repeat
+        // review #4).
+        content_curation: [{ concept: 'c1', gap: 'missing frost dates' }],
+        prompt_tweaks: ['CHATQNA_SYSTEM_PROMPT: tighten grounding']
+      })
+    );
+    const begun = await svc.beginExplainFailures('me', begunSuite.suite_key, { run_key: run.run_key }, {});
+    await begun.done;
+    const explained = await svc.getExplainFailures('me', begunSuite.suite_key, run.run_key);
+    const advice = explained.payload.advice;
+    expect(advice.knob_changes).toHaveLength(1);
+    expect(advice.knob_changes[0]).not.toMatch(/RERANKER_TOP_N/);
+    expect(advice.prompt_tweaks).toHaveLength(0); // CHATQNA_* is a knob token too
+    // The mechanical env_changes table is untouched and carries the knobs.
+    expect(Array.isArray(advice.env_changes)).toBe(true);
+    // BOTH guards' notes survive — one guard must not eat the other's count.
+    expect(advice.note).toMatch(/dropped 2 advice item\(s\) that named environment knobs/);
+    expect(advice.note).toMatch(/dropped 1 content-curation suggestion\(s\)/);
+    delete __mockDb.__corpusRows;
+  });
+
+  it('keeps env_changes when the advisor LLM call FAILS — the mirror image of review F1', async () => {
+    // Review F1 was: the success path dropped the section. The mirror is
+    // the initializer losing it — then the section would vanish exactly on
+    // the runs where the operator most needs the config lever (advisor
+    // down). Pin BOTH paths.
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-kf', status: 'queued' }));
+      if (u.includes('/jobs/j-kf'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-kf',
+            status: 'done',
+            result: {
+              aggregate: {},
+              per_query: GEN_SAMPLES.map(() => ({ context_recall: 0.2, faithfulness: 1.0 })),
+              model: 'm',
+              n: 2
+            }
+          })
+        );
+      return baseFetch(url);
+    });
+    const begunSuite = await svc.beginSuiteGeneration('me', { testset_size: 2 }, {});
+    await begunSuite.done;
+    const run = await svc.beginRunSuite('me', begunSuite.suite_key, { mode: 'whatif' }, {});
+    await run.done;
+    global.fetch = baseFetch;
+    frontmatterService.vllmChatCompletions.mockRejectedValue(new Error('advisor endpoint down'));
+    const begun = await svc.beginExplainFailures('me', begunSuite.suite_key, { run_key: run.run_key }, {});
+    await begun.done;
+    const explained = await svc.getExplainFailures('me', begunSuite.suite_key, run.run_key);
+    expect(explained.payload.advice.source).toBe('none');
+    expect(explained.payload.advice.note).toMatch(/LLM advice failed/);
+    expect(Array.isArray(explained.payload.advice.env_changes)).toBe(true);
+    expect(explained.payload.advice.env_changes.length).toBeGreaterThan(0);
+  });
+
   it('routes tag suggestions through the existing guardrail', async () => {
     // Seed a failing metric so the advice path fires (all-passing runs get
     // attribution only — by design).
@@ -1518,7 +1629,10 @@ describe('explain', () => {
     global.fetch = baseFetch;
     frontmatterService.vllmChatCompletions.mockResolvedValue(
       llmResponse({
-        knob_changes: ['raise OKF_RAGAS_CANDIDATE_K'],
+        // A NON-configuration knob item — items naming deployment env knobs
+        // are dropped mechanically now (the knob guard, 2026-10-27), which
+        // is the point of that guard, not this test's subject.
+        knob_changes: ['raise the candidate pool'],
         repo_tag_changes: [],
         content_curation: [{ concept: 'c1', gap: 'missing frost dates' }],
         prompt_tweaks: []
@@ -1530,9 +1644,10 @@ describe('explain', () => {
     // The proposal is dropped — every passage is in the corpus.
     expect(explained.payload.advice.content_curation).toEqual([]);
     expect(explained.payload.advice.rejected_curation).toBeTruthy();
-    // ...and the KNOB suggestion survives: the advice is not discarded, only
-    // the part that would send a curator to write existing content.
-    expect(explained.payload.advice.knob_changes).toEqual(['raise OKF_RAGAS_CANDIDATE_K']);
+    // ...and the non-configuration advice survives: the advice is not
+    // discarded, only the part that would send a curator to write existing
+    // content.
+    expect(explained.payload.advice.knob_changes).toEqual(['raise the candidate pool']);
     delete __mockDb.__corpusRows;
   });
 
@@ -3195,5 +3310,261 @@ describe('a row that was judged and measured nothing is attributed (2026-10-25)'
     expect(attributions[0].recommendation).toMatch(/could not measure/i);
     // It must NOT claim a threshold breach — there is no metric.
     expect(attributions[0].recommendation).not.toMatch(/metric below threshold/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildEnvAdvice — concrete, per-component environment changes derived from
+// the attribution (David 2026-10-27: "the goal is a cycle of adjustment that
+// improves the RAGAS scores by configuration"). The rules are MECHANICAL —
+// the advisor LLM proved it cannot hold an output shape reliably (live
+// 2026-10-27: an intermittent object-shape answer coerced to "[object
+// Object]"), so the env advice is generated from the same evidence the
+// attribution already proved, and the LLM is forbidden from contradicting it.
+describe('buildEnvAdvice — the configuration adjustment cycle (2026-10-27)', () => {
+  // The PRODUCTION shape, pinned exactly (review F2, 2026-10-27): attribution
+  // rows from attributeFailures carry `fails` (NOT `failed`), no `abstained`
+  // flag, and their own `evidence` object where the replay probe's rank lives
+  // at evidence.candidate_rank.
+  const row = (id, stage, fails, evidence) => ({ id, stage, fails: fails || [], evidence: evidence || null });
+  const atRank = (rank) => ({ ladder_applied: true, candidate_rank: rank, ladder_stage: 'vector-recall' });
+  const FACTS = { rows: 50, abstentions: 0, mean_answer_chars: 1200 };
+
+  it('recommends a concrete candidate-pool K from the observed replay ranks (serve mode)', () => {
+    const attributions = [row('new-13', 'vector-recall', ['context_recall'], atRank(43))];
+    const out = svc.buildEnvAdvice({ attributions, runFacts: FACTS, mode: 'serve' });
+    const pool = out.find((e) => e.id === 'retriever-candidate-pool');
+    expect(pool).toBeDefined();
+    const k = pool.changes.find((c) => c.env === 'RETRIEVER_ARANGO_K');
+    expect(k.to).toBe(54); // ceil(43 * 1.25) — headroom above the deepest observed rank
+    const fetch = pool.changes.find((c) => c.env === 'RETRIEVER_ARANGO_FETCH_K');
+    // A FLOOR, not a target (review F6): an operator's deliberately larger
+    // fetch pool must never be lowered by applying this advice.
+    expect(fetch.to).toBe('>= 64');
+    expect(fetch.to).toMatch(/^>= /);
+    expect(pool.rows).toEqual(['new-13']);
+    expect(pool.targets).toContain('context_recall');
+    expect(pool.why).toMatch(/replay rank \(deepest #43\)/);
+    expect(pool.trade_off).toMatch(/noise|latency|rerank/i);
+  });
+
+  it('prescribes the WHATIF cut for whatif runs, not the serve knob', () => {
+    // Review F4: a whatif run replayed retrieval through OKF_RAGAS_CANDIDATE_K
+    // inside okf-server — RETRIEVER_ARANGO_K on chatqna never influenced the
+    // measured failure, and the re-run could not improve no matter what the
+    // operator set on chatqna.
+    const attributions = [row('new-13', 'vector-recall', ['context_recall'], atRank(43))];
+    const out = svc.buildEnvAdvice({ attributions, runFacts: FACTS, mode: 'whatif' });
+    const pool = out.find((e) => e.id === 'retriever-candidate-pool');
+    expect(pool).toBeDefined();
+    expect(pool.changes.map((c) => c.env)).toContain('OKF_RAGAS_CANDIDATE_K');
+    expect(pool.changes.map((c) => c.env)).not.toContain('RETRIEVER_ARANGO_K');
+    expect(pool.changes.map((c) => c.env)).not.toContain('RETRIEVER_ARANGO_FETCH_K');
+    expect(pool.apply).toMatch(/okf-server/i);
+  });
+
+  it('sizes the whatif advice against the RUN’s recorded cut, not a hardcoded default', () => {
+    // Altitude review #2: the run doc records the cut that ACTUALLY gated it
+    // (fidelity.retrieval.candidate_k). A deployment that raised the knob to
+    // 64 must not see rank-43 rows misdiagnosed as "deeper than the cut".
+    const attributions = [row('new-13', 'vector-recall', ['context_recall'], atRank(43))];
+    const raised = svc.buildEnvAdvice({ attributions, runFacts: FACTS, mode: 'whatif', candidateK: 64 });
+    expect(raised.find((e) => e.id === 'retriever-candidate-pool')).toBeUndefined(); // 43 < 64: the cut did not lose it
+    const raised2 = svc.buildEnvAdvice({
+      attributions: [row('new-9', 'vector-recall', ['context_recall'], atRank(80))],
+      runFacts: FACTS,
+      mode: 'whatif',
+      candidateK: 64
+    });
+    const pool = raised2.find((e) => e.id === 'retriever-candidate-pool');
+    expect(pool).toBeDefined(); // 80 > 64: the recorded cut DID lose it
+    expect(pool.why).toMatch(/cut \(64\)/); // the advice names the run's own cut, not a hardcoded 24
+  });
+
+  it('does not fire the pool rule when the passage ranked inside the default cut', () => {
+    const attributions = [row('new-1', 'vector-recall', ['context_recall'], atRank(5))];
+    const out = svc.buildEnvAdvice({ attributions, runFacts: FACTS, mode: 'serve' });
+    expect(out.find((e) => e.id === 'retriever-candidate-pool')).toBeUndefined();
+  });
+
+  it('tells the operator to LOOSEN the gate for ladder gate-cut rows (stage reranker, ladder applied)', () => {
+    // Review F3: a ladder gate-cut row — the per-row recommendation says
+    // "raise RERANKER_TOP_N". A rule that read that evidence as noise and
+    // prescribed tightening would invert the proven evidence and worsen the
+    // failures it names. The ladder gate is the discriminator: stage
+    // 'reranker' has TWO production meanings, and only the ladder-applied
+    // one is a gate cut.
+    const attributions = [
+      row('new-7', 'reranker', ['context_recall'], {
+        ladder_applied: true,
+        candidate_rank: null,
+        ladder_stage: 'reranker'
+      })
+    ];
+    const out = svc.buildEnvAdvice({ attributions, runFacts: FACTS, mode: 'serve' });
+    const rerank = out.find((e) => e.id === 'reranker-posture');
+    expect(rerank).toBeDefined();
+    expect(rerank.changes.map((c) => c.env)).toContain('RERANKER_TOP_N');
+    const topN = rerank.changes.find((c) => c.env === 'RERANKER_TOP_N');
+    expect(topN.direction).toBe('raise'); // the direction is a FIELD, not prose in the value slot
+    expect(rerank.targets).toContain('context_recall');
+  });
+
+  it('does NOT prescribe a direction for the NOISE-path reranker rows (stage reranker, ladder silent)', () => {
+    // Repeat review #1: attributeFailures stages a noise-ranked-above-signal
+    // row 'reranker' too (context_utilization failed, recall passed — the
+    // ladder never ran). Reading that stage as a gate cut would prescribe
+    // RAISING the gate and worsen the very noise the row reported.
+    const attributions = [row('new-25', 'reranker', ['context_utilization'])];
+    const out = svc.buildEnvAdvice({ attributions, runFacts: FACTS, mode: 'serve' });
+    expect(out.find((e) => e.id === 'reranker-posture')).toBeUndefined();
+  });
+
+  it('merges both gate directions into ONE entry stating the tension', () => {
+    const attributions = [
+      // gate cut the passage → loosen
+      row('new-7', 'reranker', ['context_recall'], {
+        ladder_applied: true,
+        candidate_rank: null,
+        ladder_stage: 'reranker'
+      }),
+      // noise reached the context → tighten (production-realistic stage)
+      row('new-22', 'retrieved', ['noise_sensitivity'])
+    ];
+    const out = svc.buildEnvAdvice({ attributions, runFacts: FACTS, mode: 'serve' });
+    const rerank = out.filter((e) => e.id === 'reranker-posture');
+    expect(rerank).toHaveLength(1); // one posture, not two contradictory knob changes
+    expect(rerank[0].trade_off).toMatch(/noise/i);
+    expect(rerank[0].trade_off).toMatch(/completeness|context_recall|precision/i);
+    expect(rerank[0].why).toMatch(/BOTH/);
+  });
+
+  it('never names a judge/corpus row in the posture entry — the no-change entries own them', () => {
+    // Repeat review #3: a judge-staged row failing noise_sensitivity used to
+    // appear in BOTH the posture entry ("tighten") and the no-change entry
+    // ("no configuration change") — one table, two contradictory sentences.
+    const attributions = [row('new-2', 'judge', ['noise_sensitivity'])];
+    const out = svc.buildEnvAdvice({ attributions, runFacts: FACTS, mode: 'serve' });
+    expect(out.find((e) => e.id === 'no-env-change-judge')).toBeDefined();
+    const posture = out.find((e) => e.id === 'reranker-posture');
+    expect(posture === undefined || !posture.rows.includes('new-2')).toBe(true);
+  });
+
+  it('excludes retrieved-stage rows from the reranker entry — their passage was delivered', () => {
+    // Review F3: a 'retrieved' row's expected passage REACHED the context;
+    // its failure is answer-side (R3) or judge-side (R5), never the gate.
+    const attributions = [row('new-30', 'retrieved', ['factual_correctness', 'answer_correctness'])];
+    const out = svc.buildEnvAdvice({ attributions, runFacts: FACTS, mode: 'serve' });
+    const rerank = out.find((e) => e.id === 'reranker-posture');
+    expect(rerank).toBeUndefined();
+    expect(out.find((e) => e.id === 'no-env-change-judge')).toBeUndefined();
+  });
+
+  it('says NO env change for corpus and judge stages, and prescribes none for them', () => {
+    const attributions = [
+      row('new-2', 'judge', ['context_entities_recall']),
+      row('new-3', 'corpus', ['context_recall'])
+    ];
+    const out = svc.buildEnvAdvice({ attributions, runFacts: FACTS, mode: 'serve' });
+    expect(out.find((e) => e.id === 'no-env-change-corpus')).toBeDefined();
+    expect(out.find((e) => e.id === 'no-env-change-judge')).toBeDefined();
+    // No config rule may name these rows.
+    for (const entry of out.filter((e) => e.id.startsWith('no-env-change') === false)) {
+      for (const id of ['new-2', 'new-3']) {
+        expect(entry.rows || []).not.toContain(id);
+      }
+    }
+  });
+
+  it('recommends the grounding clause for llm rows and cites the run headroom', () => {
+    const attributions = [row('new-16', 'llm', ['faithfulness', 'factual_correctness'])];
+    const out = svc.buildEnvAdvice({
+      attributions,
+      runFacts: { rows: 50, abstentions: 0, mean_answer_chars: 1283 },
+      mode: 'serve'
+    });
+    const g = out.find((e) => e.id === 'grounding-prompt');
+    expect(g).toBeDefined();
+    expect(g.changes[0].env).toBe('CHATQNA_SYSTEM_PROMPT');
+    expect(g.why).toMatch(/0 abstention/);
+    expect(g.why).toMatch(/1,283/); // toLocaleString('en-US') — deterministic grouping
+    expect(g.trade_off).toMatch(/abstention|brevity|coverage/i);
+  });
+
+  it('fires the abstention rule only when the run actually abstained', () => {
+    const none = svc.buildEnvAdvice({
+      attributions: [row('new-1', 'llm', ['answer_relevancy'])],
+      runFacts: { rows: 50, abstentions: 0, mean_answer_chars: 900 },
+      mode: 'serve'
+    });
+    expect(none.find((e) => e.id === 'abstention-contract')).toBeUndefined();
+    const some = svc.buildEnvAdvice({
+      attributions: [row('new-9', 'abstention', ['answer_relevancy'])],
+      runFacts: { rows: 50, abstentions: 4, mean_answer_chars: 400 },
+      mode: 'serve'
+    });
+    const a = some.find((e) => e.id === 'abstention-contract');
+    expect(a).toBeDefined();
+    expect(a.changes.map((c) => c.env)).toContain('CHATQNA_ABSTENTION_INSTRUCTIONS');
+    expect(a.trade_off).toMatch(/hallucination|faithfulness/i);
+  });
+
+  it('escalates to the embedding-model note when the K the evidence demands crosses ~100', () => {
+    // rank 99 → K target 124 ≥ 100: widening the net that far retrieves
+    // mostly noise; the index itself is the honest lever.
+    const attributions = [row('new-47', 'vector-recall', ['context_recall'], atRank(99))];
+    const out = svc.buildEnvAdvice({ attributions, runFacts: FACTS, mode: 'serve' });
+    const esc = out.find((e) => e.id === 'embedding-escalation');
+    expect(esc).toBeDefined();
+    expect(esc.trade_off).toMatch(/re-?index|re-?ingest/i);
+    // And a mid-range rank does NOT escalate — the K raise is still the
+    // proportionate move there.
+    const mid = svc.buildEnvAdvice({
+      attributions: [row('new-13', 'vector-recall', ['context_recall'], atRank(43))],
+      runFacts: FACTS,
+      mode: 'serve'
+    });
+    expect(mid.find((e) => e.id === 'embedding-escalation')).toBeUndefined();
+  });
+
+  it('every entry is well-formed: known env names, known metrics, all four fields', () => {
+    const KNOWN_ENV = new Set([
+      'RETRIEVER_ARANGO_K',
+      'RETRIEVER_ARANGO_FETCH_K',
+      'OKF_RAGAS_CANDIDATE_K',
+      'RERANKER_TOP_N',
+      'RERANKING_THRESHOLD',
+      'CHATQNA_SYSTEM_PROMPT',
+      'CHATQNA_ABSTENTION_INSTRUCTIONS',
+      'CHATQNA_ENFORCE_ABSTENTION',
+      'EMBEDDING_MODEL_ID'
+    ]);
+    // The canonical list, not a parallel literal (reuse review #4): a metric
+    // added to ALL_METRICS must be accepted here by construction.
+    const KNOWN_METRICS = new Set(svc.ALL_METRICS);
+    const attributions = [
+      row('new-13', 'vector-recall', ['context_recall'], atRank(43)),
+      // Production-realistic stage — 'answered' is not a value
+      // attributeFailures ever emits (repeat review #6).
+      row('new-22', 'retrieved', ['noise_sensitivity']),
+      row('new-16', 'llm', ['faithfulness']),
+      row('new-9', 'abstention', ['answer_relevancy']),
+      row('new-2', 'judge', ['context_entities_recall'])
+    ];
+    const out = svc.buildEnvAdvice({
+      attributions,
+      runFacts: { rows: 50, abstentions: 4, mean_answer_chars: 1200 },
+      mode: 'serve'
+    });
+    expect(out.length).toBeGreaterThan(0);
+    for (const e of out) {
+      expect(e.component).toBeTruthy();
+      expect(e.why).toBeTruthy();
+      expect(e.trade_off).toBeTruthy();
+      expect(e.apply).toBeTruthy();
+      expect(e.verify).toBeTruthy();
+      for (const t of e.targets || []) expect(KNOWN_METRICS.has(t)).toBe(true);
+      for (const c of e.changes || []) expect(KNOWN_ENV.has(c.env)).toBe(true);
+    }
   });
 });

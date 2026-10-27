@@ -3585,7 +3585,15 @@ export default {
         knob: 'taolo',
         tag: 'tag ea polokelo',
         content: 'litaba',
-        prompt: 'taelo'
+        prompt: 'taelo',
+        env: 'liphetoho tsa tikoloho',
+        envComponent: 'karolo',
+        envChange: 'phetoho',
+        envTargets: 'sepheo',
+        envWhy: 'hobaneng',
+        envTradeOff: 'tsholisano',
+        envApply: 'mokhoa o sebedisoang',
+        envVerify: 'hlahloba'
       },
       metric: {
         faithfulness: 'boinehelo',

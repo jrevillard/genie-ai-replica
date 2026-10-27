@@ -2229,7 +2229,15 @@ export default {
         knob: 'knob',
         tag: 'repo tag',
         content: 'content',
-        prompt: 'prompt'
+        prompt: 'prompt',
+        env: 'environment changes',
+        envComponent: 'component',
+        envChange: 'change',
+        envTargets: 'targets',
+        envWhy: 'why',
+        envTradeOff: 'trade-off',
+        envApply: 'how to apply',
+        envVerify: 'verify'
       },
       metric: {
         faithfulness: 'faithfulness',

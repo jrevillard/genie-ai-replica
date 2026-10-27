@@ -660,6 +660,63 @@
         </div>
         <p v-if="explainDoc.advice && explainDoc.advice.note" class="okf-ragas__muted">{{ explainDoc.advice.note }}</p>
       </div>
+      <!-- The configuration adjustment cycle (David 2026-10-27): concrete
+           environment changes the SERVER generates from the attribution, so a
+           steward can improve the scores by configuration — apply, re-run,
+           explain again. The trade-off column is first-class on purpose: a
+           knob that helps one metric hurts another, and the operator must see
+           the price before turning it. Generated mechanically, never by the
+           advisor LLM (which once prescribed retrieval knobs for judge-staged
+           rows and intermittently loses its output shape). -->
+      <div v-if="explainDoc.advice && (explainDoc.advice.env_changes || []).length" class="okf-headtest__suggestion">
+        <h5 class="okf-headtest__pane-title">{{ translate('okf.ragas.advice.env', 'Environment changes') }}</h5>
+        <table class="okf-headtest__scores">
+          <thead>
+            <tr>
+              <th>{{ translate('okf.ragas.advice.envComponent', 'Component') }}</th>
+              <th>{{ translate('okf.ragas.advice.envChange', 'Change') }}</th>
+              <th>{{ translate('okf.ragas.advice.envTargets', 'Targets') }}</th>
+              <th>{{ translate('okf.ragas.advice.envWhy', 'Why') }}</th>
+              <th>{{ translate('okf.ragas.advice.envTradeOff', 'Trade-off') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="e in explainDoc.advice.env_changes" :key="e.id">
+              <td>{{ e.component }}</td>
+              <td>
+                <!-- A change carries either a value (`to`) or a DIRECTION —
+                     an instruction sentence in the value slot would render
+                     as if it were a config value. The arrows are
+                     language-neutral, like the active-config ★. -->
+                <code v-for="c in e.changes" :key="c.env" class="okf-ragas__run-key">
+                  {{ c.env
+                  }}{{
+                    c.direction === 'raise'
+                      ? ' ↑'
+                      : c.direction === 'lower'
+                        ? ' ↓'
+                        : c.direction === 'either'
+                          ? ' ↕'
+                          : ''
+                  }}{{ c.to !== undefined && c.to !== null ? ' = ' + c.to : '' }}
+                </code>
+                <span v-if="!(e.changes || []).length" class="okf-ragas__muted">—</span>
+              </td>
+              <td>{{ (e.targets || []).join(', ') || '—' }}</td>
+              <td>
+                {{ e.why }}
+                <div class="okf-ragas__muted">
+                  {{ translate('okf.ragas.advice.envApply', 'How to apply') }}: {{ e.apply }}
+                </div>
+                <div class="okf-ragas__muted">
+                  {{ translate('okf.ragas.advice.envVerify', 'Verify') }}: {{ e.verify }}
+                </div>
+              </td>
+              <td>{{ e.trade_off }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <!-- RUN HISTORY -->

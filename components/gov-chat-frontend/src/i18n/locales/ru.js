@@ -3582,7 +3582,15 @@ export default {
         knob: 'параметр',
         tag: 'тег репозитория',
         content: 'контент',
-        prompt: 'промпт'
+        prompt: 'промпт',
+        env: 'изменения окружения',
+        envComponent: 'компонент',
+        envChange: 'изменение',
+        envTargets: 'цели',
+        envWhy: 'причина',
+        envTradeOff: 'компромисс',
+        envApply: 'как применить',
+        envVerify: 'проверить'
       },
       metric: {
         faithfulness: 'верность',

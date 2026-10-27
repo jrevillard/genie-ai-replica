@@ -70,6 +70,18 @@ const TESTSET_SIZE_DEFAULT = Math.max(1, parseInt(process.env.OKF_RAGAS_TESTSET_
 const MAX_ENTRIES = Math.max(1, parseInt(process.env.OKF_RAGAS_MAX_ENTRIES || '200', 10));
 const RUN_CONCURRENCY = Math.max(1, parseInt(process.env.OKF_RAGAS_RUN_CONCURRENCY || '2', 10));
 const CANDIDATE_K = Math.max(1, parseInt(process.env.OKF_RAGAS_CANDIDATE_K || '24', 10));
+
+/**
+ * Whether this run was scored through the SERVED pipeline (chatqna) or
+ * replayed inside okf-server (whatif). Three consumers read the same fact —
+ * the per-row ladder, the rank probe and the env advice, which names a
+ * DIFFERENT operative knob per mode — so it lives here, once.
+ */
+function isServeRun(runDoc) {
+  return !!(runDoc && runDoc.payload && runDoc.payload.fidelity && runDoc.payload.fidelity.retrieval
+    ? runDoc.payload.fidelity.retrieval.mode === 'serve'
+    : false);
+}
 const TOP_N = Math.max(1, parseInt(process.env.OKF_RAGAS_TOP_N || process.env.RERANKER_TOP_N || '3', 10));
 // Generation corpus budget in CHUNKS (the retrievable unit). Concepts
 // average 3-4 published chunks, so 1600 ≈ the 400-concept corpus this
@@ -3346,10 +3358,7 @@ function attributeFailures(suite, runDoc, evidence, judgeComparison) {
     // explains a RECALL failure: if recall passed, the passage WAS found,
     // so the failure is downstream and the ladder has nothing to say.
     const ev = evidence && evidence.byRow ? evidence.byRow.get(r.id) : null;
-    const serveMode =
-      runDoc.payload && runDoc.payload.fidelity && runDoc.payload.fidelity.retrieval
-        ? runDoc.payload.fidelity.retrieval.mode === 'serve'
-        : false;
+    const serveMode = isServeRun(runDoc);
     // Index-aligned with the evidence builder's carriers: collectEvidence
     // (ragas-attribution-service) drops passages whose norm() is empty, so a
     // whitespace-only entry kept by a bare filter(Boolean) would shift every
@@ -3576,6 +3585,412 @@ function attributeFailures(suite, runDoc, evidence, judgeComparison) {
 }
 
 /**
+ * The configuration adjustment cycle (David 2026-10-27): concrete, per-
+ * component ENVIRONMENT changes derived mechanically from the attribution,
+ * so a steward can improve the RAGAS scores by configuration — apply, re-run
+ * the suite, explain again, iterate.
+ *
+ * MECHANICAL, deliberately. The advisor LLM proved it cannot hold an output
+ * shape reliably (live 2026-10-27: an intermittent object-shape answer was
+ * coerced to "[object Object]" and silently lost 4 of 4 advice items), and it
+ * violated its own no-knob-change rule on judge-staged rows 3 times out of 5
+ * on the granite run. These rules read the SAME evidence the attribution
+ * proved — the stage, the failed metrics, and the replay rank the ladder
+ * probe observed — so every recommendation is checkable against the explain
+ * doc's own attribution rows, and none can contradict them.
+ *
+ * Every entry carries what the operator needs to ACT: the env var and the
+ * value to set, the metrics it targets, WHY the change moves them, the
+ * TRADE-OFF (what it costs the other metrics — David: "if there is a trade
+ * off between improving any specific metric vs others, then this trade off is
+ * to be explained"), how to apply it, and how to verify the effect.
+ *
+ * Rows staged "corpus" and "judge" get an explicit NO-CHANGE entry — the
+ * honest answer for them is benchmark-side work (regenerate the entry, audit
+ * the reference answer), and saying so prevents the config-knob hunting the
+ * advisor previously prescribed for those rows.
+ *
+ * @param {object} p
+ * @param {Array} p.attributions  attributeFailures rows (stage, fails,
+ *   evidence.candidate_rank per row)
+ * @param {object} p.runFacts  the run-level facts (rows, abstentions,
+ *   mean_answer_chars) — the guard against over-constraining prescriptions
+ * @param {string} p.mode  'serve' | 'whatif' — WHICH candidate cut the
+ *   measured failure actually passed through. A serve run was answered by
+ *   chatqna's own retriever (RETRIEVER_ARANGO_K on chatqna, compose default
+ *   20, unknowable from okf-server); a whatif run replayed retrieval inside
+ *   okf-server (OKF_RAGAS_CANDIDATE_K — the run's OWN value arrives in
+ *   p.candidateK, recorded on the run doc at scoring time). Prescribing the
+ *   serve knob for a whatif failure sends the operator to a surface that
+ *   never influenced the measured run — the re-run could not improve no
+ *   matter what they set.
+ * @param {number} [p.candidateK]  the run doc's recorded whatif cut
+ *   (fidelity.retrieval.candidate_k); falls back to the module's CANDIDATE_K.
+ * @returns {Array} env-change entries
+ */
+function buildEnvAdvice({ attributions, runFacts, mode, candidateK }) {
+  const rows = attributions || [];
+  // rows: null, NOT rows.length — the failing-row count is not the run's row
+  // count, and R3's headroom argument would be computed from the wrong
+  // population.
+  const facts = runFacts || { rows: null, abstentions: 0, mean_answer_chars: null };
+  const out = [];
+  const idsOf = (stage) => rows.filter((r) => r.stage === stage).map((r) => r.id);
+  // Production attribution rows carry `fails` (see attributeFailures) — not
+  // `failed`. A rule that reads a field the rows never had is a rule that
+  // never fires.
+  const failedAny = (r, names) => (r.fails || []).some((f) => names.includes(f));
+  const isWhatif = mode === 'whatif';
+  // The recommendation's headroom formula, named once — R1's target and the
+  // escalation filter must agree by construction, not by two copies.
+  const withHeadroom = (rank) => Math.ceil(rank * 1.25);
+
+  // ---- R1: the candidate pool is too small for the observed ranks ----------
+  // A vector-recall row means the expected passage IS in the index but the
+  // operative candidate cut never delivered it. WHICH cut is operative
+  // depends on the run's retrieval mode (see @param mode). The replay probe
+  // OBSERVED the rank, so the recommendation is a number, not a vibe: K must
+  // exceed the deepest observed rank with ~25% headroom, and the fetch pool
+  // stays a FLOOR above the candidate cut (a floor, not a target — an
+  // operator's deliberately larger hybrid-tuning pool must never be lowered
+  // by applying this advice).
+  const CUT = isWhatif
+    ? {
+        env: 'OKF_RAGAS_CANDIDATE_K',
+        def: candidateK || CANDIDATE_K,
+        surface: 'okf-server (whatif replay)',
+        assumed: false
+      }
+    : {
+        env: 'RETRIEVER_ARANGO_K',
+        def: 20,
+        surface:
+          "chatqna (the served pipeline — chatqna forwards it in every retriever request; the retriever service's own copy is inert)",
+        // okf-server cannot read chatqna's env — state the assumption in the
+        // text instead of asserting it as fact (altitude review, 2026-10-27).
+        assumed: true
+      };
+  const vectorRecall = rows.filter((r) => r.stage === 'vector-recall' && r.evidence && r.evidence.candidate_rank);
+  // Derive the deep ROWS first, then project the ranks — one predicate, not
+  // two copies that can drift (simplification review, 2026-10-27).
+  const deepRows = vectorRecall.filter((r) => r.evidence.candidate_rank > CUT.def);
+  if (deepRows.length) {
+    const maxRank = Math.max(...deepRows.map((r) => r.evidence.candidate_rank));
+    const kTarget = withHeadroom(maxRank);
+    const poolChanges = [{ env: CUT.env, to: kTarget, note: `deepest observed rank #${maxRank} + 25% headroom` }];
+    if (!isWhatif) {
+      poolChanges.push({
+        env: 'RETRIEVER_ARANGO_FETCH_K',
+        to: `>= ${kTarget + 10}`,
+        note: 'FLOOR, not a target — raise it if the deployment runs a larger pool; never lower one'
+      });
+    }
+    out.push({
+      id: 'retriever-candidate-pool',
+      component: isWhatif ? 'okf-server (benchmark replay)' : 'chatqna (retriever request) + retriever-arango',
+      changes: poolChanges,
+      rows: deepRows.map((r) => r.id),
+      targets: ['context_recall', 'context_entities_recall', 'factual_correctness', 'answer_correctness'],
+      why:
+        `The expected passage of ${deepRows.length} row(s) IS in the vector index but its replay rank ` +
+        `(deepest #${maxRank}) exceeds the operative candidate cut (${CUT.assumed ? 'assumed default ' : ''}${CUT.def}` +
+        `${CUT.assumed ? ' — read the live value off the chatqna container' : ''}) — the reranker ` +
+        `never saw it, so no downstream tuning can recover it. The cut lives on ${CUT.surface}.`,
+      trade_off:
+        'A larger pool costs retrieval latency (more vectors fetched and scored) and reranker load ' +
+        '(more candidates to score per query). Marginal context_precision/noise_sensitivity risk: more ' +
+        'candidates can slip past the reranker as noise. GPU memory is unaffected — this is search ' +
+        'depth, not model size.',
+      apply: isWhatif
+        ? 'Set OKF_RAGAS_CANDIDATE_K on okf-server (compose/env template; under Ansible, group_vars) and ' +
+          'recreate okf-server. The replay rank is exact for this mode — the knob you are setting is the ' +
+          'knob the measured run used.'
+        : 'Set RETRIEVER_ARANGO_K (and the fetch floor) in .env (or the deployment env template), then ' +
+          'recreate chatqna (docker compose up -d --force-recreate <chatqna service>; under Ansible, set ' +
+          'the vars in group_vars and re-run the deploy tag). The replay rank is a HINT from the OKF ' +
+          'replay index, not the served pipeline — treat the change as a hypothesis the re-run confirms.',
+      verify:
+        'Re-run this suite and compare stage_counts: the vector-recall count should fall. Watch ' +
+        'context_precision and noise_sensitivity in the same run — a rise means the extra candidates ' +
+        'are arriving as noise and the reranker posture (see the reranker entry) needs tightening.'
+    });
+    // Escalation: when the K the evidence demands crosses ~100, the net is
+    // being widened, not fixed — the honest lever stops being the cut and
+    // becomes the index itself. (withHeadroom = 1.25 × rank, so a K target
+    // of 100 is rank 80.)
+    const ESCALATION_K = 100;
+    if (kTarget >= ESCALATION_K) {
+      out.push({
+        id: 'embedding-escalation',
+        component: 'embedding (TEI) + dataprep re-index',
+        changes: [
+          {
+            env: 'EMBEDDING_MODEL_ID',
+            to: '<a stronger retrieval embedding model>',
+            note: 'LAST RESORT — see trade-off'
+          }
+        ],
+        rows: deepRows.filter((r) => withHeadroom(r.evidence.candidate_rank) >= ESCALATION_K).map((r) => r.id),
+        targets: ['context_recall', 'context_entities_recall'],
+        why:
+          `At least one expected passage ranks #${maxRank} — the query and the passage do not land near ` +
+          `each other in the current embedding space. Pushing K that deep retrieves mostly noise; a ` +
+          `stronger retrieval embedding closes the distance instead of widening the net.`,
+        trade_off:
+          'Changing EMBEDDING_MODEL_ID invalidates every existing chunk vector: the FULL corpus must be ' +
+          're-indexed (retract + re-ingest through dataprep), embeddings for all repos recompute on the ' +
+          "GPU, and answer_relevancy's embedder should move with it for consistency. Hours of GPU time " +
+          'and a deployment-wide change — do it only after the K raise provably fails.',
+        apply:
+          'Only after the K raise fails to recover these rows: set EMBEDDING_MODEL_ID (and the reranker/' +
+          'answer embedders consistently), then re-ingest every published repo so vectors rebuild.',
+        verify:
+          "After re-ingest, re-run the suite; the vector-recall rows' replay ranks should drop below the " +
+          'candidate cut. Confirm answer_relevancy did not regress (its embedder changed with it).'
+      });
+    }
+  }
+
+  // ---- R2: the reranker posture — ONE entry, both directions ---------------
+  // The ladder semantics decide the direction, and they are NOT symmetric.
+  // Stage 'reranker' carries TWO production meanings (attributeFailures
+  // stages both paths 'reranker'), and conflating them is an F3-class
+  // inversion (repeat review #1, 2026-10-27):
+  //   * LADDER gate-cut rows — evidence.ladder_applied true, the per-row
+  //     recommendation says "raise RERANKER_TOP_N": the gate CUT the
+  //     expected passage — the LOOSEN direction;
+  //   * NOISE-path rows — the per-row recommendation says "noise ranked
+  //     above signal": the TIGHTEN direction. These are caught by METRIC
+  //     (noise_sensitivity/context_precision), whatever their stage.
+  // A 'retrieved'-stage row is neither: its expected passage was DELIVERED,
+  // so its failure is answer-side (R3) or judge-side (R5), and turning the
+  // gate for it would only churn the other rows. Judge/corpus-staged rows
+  // are excluded from BOTH directions — the no-change entries own them, and
+  // one table cannot tell a row "no configuration change" and "tighten"
+  // (repeat review #3). A reranker-staged row failing ONLY
+  // context_utilization is the noise path without a tighten metric — it
+  // takes NO posture prescription rather than an inverted one; its per-row
+  // recommendation already names the lever.
+  const tightenRows = rows.filter(
+    (r) => failedAny(r, ['noise_sensitivity', 'context_precision']) && r.stage !== 'judge' && r.stage !== 'corpus'
+  );
+  const loosenRows = rows.filter(
+    (r) => r.stage === 'reranker' && r.evidence && r.evidence.ladder_applied && !tightenRows.includes(r)
+  );
+  if (tightenRows.length || loosenRows.length) {
+    const both = tightenRows.length > 0 && loosenRows.length > 0;
+    // The three-state posture resolved ONCE (simplification review): changes,
+    // targets and why all key off `dir` instead of three synchronized
+    // ternary chains.
+    const dir = both ? 'both' : loosenRows.length ? 'loosen' : 'tighten';
+    // The direction travels as a FIELD, not as prose in the value slot — the
+    // UI renders `ENV = to` as a code pair, and an instruction sentence in
+    // `to` would read as a config value (altitude review, 2026-10-27).
+    const POSTURE = {
+      both: [
+        {
+          env: 'RERANKER_TOP_N',
+          direction: 'either',
+          note: 'raise for the gate-cut rows; lower for the noise rows — pick ONE, then re-measure'
+        },
+        {
+          env: 'RERANKING_THRESHOLD',
+          direction: 'either',
+          note: 'lower admits more (gate-cut rows); raise drops weak chunks (noise rows)'
+        }
+      ],
+      loosen: [
+        { env: 'RERANKER_TOP_N', direction: 'raise', note: 'the gate must stop cutting the expected passage' },
+        { env: 'RERANKING_THRESHOLD', direction: 'lower', note: 'admit chunks the cutoff is dropping' }
+      ],
+      tighten: [
+        { env: 'RERANKER_TOP_N', direction: 'lower', note: 'fewer chunks reach the context' },
+        { env: 'RERANKING_THRESHOLD', direction: 'raise', note: 'drop chunks scoring below it' }
+      ]
+    };
+    const WHY = {
+      both: () =>
+        `This run fails BOTH ways: ${loosenRows.length} row(s) had the expected passage CUT by the gate ` +
+        `(reranker stage — the passage was a candidate the reranker dropped) and ${tightenRows.length} ` +
+        `row(s) had noise REACH the context (noise_sensitivity/context_precision failures). The same ` +
+        `knob gates both — a looser gate recovers the first and admits more of the second.`,
+      loosen: () =>
+        `${loosenRows.length} row(s) had the expected passage cut by the reranker — it WAS a candidate ` +
+        `and the gate dropped it, so the context never carried it.`,
+      tighten: () =>
+        `${tightenRows.length} row(s) rank noise above signal — the reranker is the last gate before ` +
+        `context assembly and it let weak chunks through.`
+    };
+    const TARGETS = {
+      both: ['noise_sensitivity', 'context_precision', 'context_recall', 'factual_correctness'],
+      loosen: ['context_recall', 'factual_correctness'],
+      tighten: ['noise_sensitivity', 'context_precision']
+    };
+    out.push({
+      id: 'reranker-posture',
+      component: 'chatqna (rerank stage) + reranker service',
+      changes: POSTURE[dir],
+      rows: [...new Set([...tightenRows, ...loosenRows].map((r) => r.id))],
+      targets: TARGETS[dir],
+      why: WHY[dir](),
+      trade_off:
+        'THE central completeness-vs-noise trade-off of RAG configuration. Loosening (raise TOP_N / lower ' +
+        'threshold) recovers gate-cut passages — context_recall and the facts they carried — but admits ' +
+        'more noise: noise_sensitivity and context_precision pay. Tightening buys precision at exactly ' +
+        'those completeness costs. Which knob bites depends on RERANKING_STRATEGY: slice obeys ' +
+        'RERANKER_TOP_N literally; threshold and slice_threshold obey RERANKING_THRESHOLD; adaptive and ' +
+        'knee_threshold turn their own gates and may ignore both — read the strategy first, or the ' +
+        'turned knob is dead (a docs defect a previous release fixed; do not reintroduce it by trust). ' +
+        'When this entry carries both directions, pick ONE, re-run, and read both metric groups before ' +
+        'turning it further.',
+      // Deployment-INDEPENDENT on purpose (altitude review, 2026-10-27): this
+      // code cannot read chatqna's env, so it states the read-first rule
+      // instead of one deployment's live values, which would be a false
+      // claim everywhere else and would rot even where it was true.
+      apply:
+        'Read RERANKING_STRATEGY, RERANKER_TOP_N and RERANKING_THRESHOLD off the chatqna container FIRST ' +
+        '(which knob bites depends on the strategy: slice obeys TOP_N literally, threshold/adaptive obey ' +
+        'the threshold), turn it in the chosen direction, recreate chatqna, and note the old value so the ' +
+        're-run can be compared against a known starting point.',
+      verify:
+        'Re-run the suite. The turned direction should show fewer of the rows it serves (gate-cut or ' +
+        'noise); the OPPOSITE metric group is the price — if it rises more than the first fell, revert: ' +
+        'this corpus is at the tension point, not on the wrong side of it.'
+    });
+  }
+
+  // ---- R3: the grounding contract of the answer leg ------------------------
+  const llmRows = rows.filter((r) => r.stage === 'llm' && failedAny(r, ['faithfulness']));
+  if (llmRows.length) {
+    const abst = facts.abstentions || 0;
+    const chars = facts.mean_answer_chars;
+    out.push({
+      id: 'grounding-prompt',
+      component: 'chatqna (answer leg)',
+      changes: [
+        {
+          env: 'CHATQNA_SYSTEM_PROMPT',
+          to: '<current deployment prompt> + an attribution clause: "Use only facts stated in the provided context; if an element of the question is not covered by the context, say it is not covered rather than inferring."',
+          note: 'the deployment pins its own prompt — extend it, do not replace it'
+        }
+      ],
+      rows: llmRows.map((r) => r.id),
+      targets: ['faithfulness', 'factual_correctness'],
+      why:
+        `${llmRows.length} row(s) drifted from the delivered context (faithfulness failed on an llm-staged ` +
+        `row — the model bridged or inferred beyond the chunks). The headroom is measured, not assumed: ` +
+        `${abst} abstention(s)${facts.rows ? ` out of ${facts.rows} rows` : ''} and mean answer length ` +
+        `${chars == null ? 'unrecorded' : chars.toLocaleString('en-US')} chars ` +
+        `— the contract is not over-constraining today, so tightening it has room to land.`,
+      trade_off:
+        'Grounding clauses suppress inference, which is exactly what multi-part synthesis needs: expect ' +
+        'shorter, more hedged answers (brevity/coverage risk) and, if overdone, abstentions on answerable ' +
+        'questions — answer_relevancy and coverage pay for faithfulness. This is why the entry is gated ' +
+        'on run_facts: with 0 abstentions the run can afford it; a run already abstaining should NOT ' +
+        'tighten further (see the abstention entry).',
+      apply:
+        'Extend CHATQNA_SYSTEM_PROMPT on chatqna (the deployment already pins one — the compose forwards it) ' +
+        'and recreate chatqna. Change ONE clause per iteration; a prompt is a config surface with a ' +
+        'continuum of settings, not a switch.',
+      verify:
+        'Re-run the suite: the llm-stage faithfulness failures should fall. Watch the abstention count and ' +
+        'mean answer length in run_facts of the NEW run — if abstentions appear or answers shrink ' +
+        'materially, the clause over-constrained and should be softened.'
+    });
+  }
+
+  // ---- R4: the abstention contract -----------------------------------------
+  const abstentionRows = rows.filter(
+    // Attribution rows carry no `abstained` flag — the stage is where the
+    // abstention verdict lives (attributeFailures stages a declined row
+    // 'abstention'). Reading r.abstained here would always be undefined.
+    (r) => r.stage === 'abstention'
+  );
+  if (abstentionRows.length && (facts.abstentions || 0) > 0) {
+    out.push({
+      id: 'abstention-contract',
+      component: 'chatqna (answer leg)',
+      changes: [
+        {
+          env: 'CHATQNA_ABSTENTION_INSTRUCTIONS',
+          to: '<soften the decline criteria — answer when the context supports any part of the question>',
+          note: 'override of the built-in abstention prompt'
+        },
+        {
+          env: 'CHATQNA_ENFORCE_ABSTENTION',
+          to: 'keep true',
+          note: 'disable the enforcement only as a diagnostic, never as the fix'
+        }
+      ],
+      rows: abstentionRows.map((r) => r.id),
+      targets: ['answer_relevancy', 'context_utilization'],
+      why:
+        `The run abstained on ${facts.abstentions} row(s) and ${abstentionRows.length} of them failed ` +
+        `answer_relevancy — the model declined on question(s) the context could have partially answered. ` +
+        `That is a COVERAGE loss, not a grounding one.`,
+      trade_off:
+        'Loosening abstention raises coverage (more answered rows) but admits unsupported answers on ' +
+        'questions the context genuinely cannot support — faithfulness and factual_correctness pay, and ' +
+        'in a public-sector deployment an unsupported answer costs more than a decline. Loosen toward ' +
+        '"answer the supported parts", never toward "always answer".',
+      apply:
+        'Set CHATQNA_ABSTENTION_INSTRUCTIONS on chatqna with softened decline criteria and recreate it. ' +
+        "Keep CHATQNA_ENFORCE_ABSTENTION=true — the enforcement flag is the contract's backbone.",
+      verify:
+        'Re-run the suite: the abstention stage count should fall while faithfulness holds. If faithfulness ' +
+        'failures appear on newly-answered rows, the loosening went too far.'
+    });
+  }
+
+  // ---- R5: the explicit NO-CHANGE entries ----------------------------------
+  const corpusRows = idsOf('corpus');
+  if (corpusRows.length) {
+    out.push({
+      id: 'no-env-change-corpus',
+      component: 'benchmark entry (not the pipeline)',
+      changes: [],
+      rows: corpusRows,
+      targets: [],
+      why:
+        `${corpusRows.length} row(s) ask about content that is not in the indexed corpus at all. NO ` +
+        `environment change can retrieve what was never indexed — this row measures the benchmark, not ` +
+        `the assistant.`,
+      trade_off:
+        'None applies: the honest action is benchmark-side. Regenerate the entry against the current ' +
+        'corpus; only author the missing concept if that content was deliberately removed and is wanted.',
+      apply: 'No configuration change. Regenerate this suite entry (the row operation exists on the panel).',
+      verify:
+        'After regeneration, the row should retrieve its own reference passage; its stage on the next explain should not be corpus.'
+    });
+  }
+  const judgeRows = idsOf('judge');
+  if (judgeRows.length) {
+    out.push({
+      id: 'no-env-change-judge',
+      component: 'benchmark entry (not the pipeline)',
+      changes: [],
+      rows: judgeRows,
+      targets: [],
+      why:
+        `${judgeRows.length} row(s) failed on metric-side findings — the answer IS grounded in the ` +
+        `delivered context (faithfulness passed) and the failure lives in the judge's claim or entity ` +
+        `matching. Tuning any environment variable for these rows optimises the pipeline against a ` +
+        `judge artefact, not against the citizen's experience.`,
+      trade_off:
+        'Applying a knob here trades real pipeline quality for a score: any change that moves these rows ' +
+        'would move them by perturbing behaviour the grounded rows depend on. The honest lever is the ' +
+        'reference answer (audit it against the corpus, regenerate the entry), not the configuration.',
+      apply:
+        'No configuration change. Audit the reference answers of these rows against the corpus; regenerate entries whose references drifted.',
+      verify:
+        'After the reference audit/regeneration, re-run: these rows should pass or move to a pipeline stage. If they stay judge-staged across a regenerated reference AND a second judge agrees, the metric itself is the finding.'
+    });
+  }
+
+  return out;
+}
+
+/**
  * Walk the evidence ladder for one row and report where the expected
  * passage was lost. `r` is the run row (it carries the candidate_keys and
  * context_keys the run actually used).
@@ -3736,10 +4151,7 @@ async function collectAttributionEvidence(db, suite, runDoc) {
 
   // Rank-probe the rows where the dense stage lost the passage: the rank
   // is the actionable half of "the vector search missed it".
-  const serveMode =
-    runDoc.payload && runDoc.payload.fidelity && runDoc.payload.fidelity.retrieval
-      ? runDoc.payload.fidelity.retrieval.mode === 'serve'
-      : false;
+  const serveMode = isServeRun(runDoc);
   for (const row of failing) {
     const ev = evidence.byRow.get(row.id);
     if (!ev) continue;
@@ -3862,6 +4274,17 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
     // stored on the explain doc as well as sent to the advisor: the advice
     // cites them ("run_facts show 0 abstentions and mean_answer_chars of
     // 717"), so the reader has to be able to check them.
+    // The retrieval mode decides WHICH candidate cut the env advice names
+    // (serve → chatqna's RETRIEVER_ARANGO_K, whatif → OKF_RAGAS_CANDIDATE_K).
+    const serveMode = isServeRun(runDoc);
+    // The run's OWN whatif cut, recorded at scoring time — the env advice
+    // prescribes headroom over the cut that ACTUALLY gated this run, not
+    // over a hardcoded default that an override would falsify (altitude
+    // review, 2026-10-27).
+    const runCandidateK =
+      runDoc.payload && runDoc.payload.fidelity && runDoc.payload.fidelity.retrieval
+        ? runDoc.payload.fidelity.retrieval.candidate_k || CANDIDATE_K
+        : CANDIDATE_K;
     const runFacts = {
       rows: (runDoc.payload.results || []).length,
       abstentions: (runDoc.payload.results || []).filter((r) => r.abstained).length,
@@ -3882,6 +4305,19 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
       judge_comparison: judgeComparison
     };
     try {
+      // The configuration adjustment cycle (David 2026-10-27): concrete env
+      // changes generated MECHANICALLY from the attribution — never by the
+      // LLM, which cannot hold a shape and once prescribed retrieval knobs
+      // for judge-staged rows. Computed ONCE here and re-attached after the
+      // LLM success path below REPLACES the advice object — without that
+      // re-attach, the section would appear only on runs where the advisor
+      // FAILED (2026-10-27 review F1), the exact inverse of the guarantee.
+      const envChanges = buildEnvAdvice({
+        attributions,
+        runFacts,
+        mode: serveMode ? 'serve' : 'whatif',
+        candidateK: runCandidateK
+      });
       // ONE guided-JSON advice call; tag suggestions pass the existing guardrail.
       let advice = {
         source: 'none',
@@ -3889,7 +4325,10 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
         knob_changes: [],
         repo_tag_changes: [],
         content_curation: [],
-        prompt_tweaks: []
+        prompt_tweaks: [],
+        // Present even when the LLM call fails, so the operator always has
+        // the config lever the evidence supports.
+        env_changes: envChanges
       };
       if (attributions.length) {
         try {
@@ -3961,7 +4400,19 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
             // re-score — the advisor must not assert one of its own.
             '(9) Use run_facts.judge_comparison for the second judge: if its source is "none", NO second judge has scored this run, ' +
             'so say the row is unproven and that re-scoring with another judge would settle it. If its source is "sibling", ' +
-            'quote its cleared/kept_failing counts and never assert a proportion you were not given.';
+            'quote its cleared/kept_failing counts and never assert a proportion you were not given. ' +
+            // David 2026-10-27: the env changes are GENERATED from the
+            // attribution, mechanically, and attached to the advice outside
+            // this prompt. The advisor once prescribed retrieval knobs for 25
+            // judge-staged rows (rule-1 violation) and cannot hold an output
+            // shape reliably — it never touches this section. The rule does
+            // NOT claim the payload carries them (it does not — review F7):
+            // a model told "you were shown X" when it was not may invent X.
+            '(10) Environment-change recommendations are generated by the system from the attribution and ' +
+            'attached separately; you are NOT shown them and must NOT produce any. Do not emit environment ' +
+            'variables, knob names or configuration values in any of your four lists — your advice covers ' +
+            'the non-configuration surfaces (reference answers, benchmark entries, curation) that the ' +
+            'mechanical rules cannot see.';
           const advisorAttributions = packAttributions(attributions);
           const advisorUserPayload = JSON.stringify({
             repo: suite.name,
@@ -4026,7 +4477,12 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
           const match = content && typeof content === 'string' ? content.match(/\{[\s\S]*\}/) : null;
           if (match) {
             const parsed = JSON.parse(match[0]);
-            advice = {
+            // SPREAD, not replace: `env_changes` is owned by the initializer
+            // above and survives every advisor outcome by construction —
+            // the earlier re-attach-per-branch shape was exactly how a
+            // silent drop would be re-introduced (review F1 + altitude
+            // review #6, 2026-10-27).
+            const llmAdvice = {
               source: 'llm',
               knob_changes: arr(parsed.knob_changes),
               repo_tag_changes: arr(parsed.repo_tag_changes),
@@ -4038,6 +4494,33 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
               prompt_tweaks: arr(parsed.prompt_tweaks),
               note: ''
             };
+            // The knob GUARD is mechanical, not a prompt instruction — the
+            // same house principle as the content-curation guard below
+            // (altitude review #4, 2026-10-27): the advisor was told (rule
+            // 10) not to emit configuration values and violated its own
+            // stage rules 3 times out of 5 on the granite run, so an
+            // instruction is not a control. An LLM item that names a
+            // deployment env knob is DROPPED and the drop is counted into
+            // the note — it would contradict the mechanical env_changes
+            // table sitting next to it. The pattern is a GENERIC
+            // SCREAMING_SNAKE token (≥2 underscore-separated uppercase
+            // segments), not a prefix list — rule 10 forbids ALL environment
+            // names, and a prefix list rots with every new var (repeat
+            // review #5). A negated mention ("X is fine as-is") is dropped
+            // too: conservative by design, and the note says so.
+            const KNOB_TOKEN = /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/;
+            let droppedKnobs = 0;
+            for (const key of ['knob_changes', 'prompt_tweaks']) {
+              const before = llmAdvice[key].length;
+              llmAdvice[key] = llmAdvice[key].filter((item) => !KNOB_TOKEN.test(item));
+              droppedKnobs += before - llmAdvice[key].length;
+            }
+            if (droppedKnobs) {
+              llmAdvice.note =
+                `dropped ${droppedKnobs} advice item(s) that named environment knobs — ` +
+                'configuration changes are generated mechanically in the Environment changes table';
+            }
+            advice = { ...advice, ...llmAdvice };
             // Guard the content-curation suggestions against the proven
             // evidence (2026-10-23). A curator is asked to WRITE content, so
             // this is the expensive kind of advice: sending someone to
@@ -4078,7 +4561,15 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
             advice.content_curation = kept;
             if (dropped.length) {
               advice.rejected_curation = dropped.map((d) => `${d} — no proven corpus gap behind it`);
-              advice.note = `dropped ${dropped.length} content-curation suggestion(s) that no proven corpus gap supports`;
+              // COMPOSE, not overwrite — the knob guard may have set a note
+              // already, and silently eating its drop count defeats the
+              // "says so" guarantee (repeat review #4, 2026-10-27).
+              advice.note = [
+                advice.note,
+                `dropped ${dropped.length} content-curation suggestion(s) that no proven corpus gap supports`
+              ]
+                .filter(Boolean)
+                .join('; ');
             }
           }
         } catch (e) {
@@ -4411,6 +4902,7 @@ module.exports = {
   loadSecondJudgeRun,
   secondJudgeSentence,
   attributeFailures,
+  buildEnvAdvice,
   // Exported so the summary's population rule (in-scope rows only) and its
   // four buckets can be pinned by a test: the panel used to derive them
   // itself, across two populations, and misreported which rows failed.

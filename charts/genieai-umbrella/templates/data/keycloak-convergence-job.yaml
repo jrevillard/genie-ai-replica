@@ -70,6 +70,15 @@ being set would fail this assertion on every default render.
 {{- range $e := (.Values.data.keycloak.convergence.envSecrets | default list) -}}
 {{- $known = append $known $e.envVar -}}
 {{- end -}}
+{{- /* backoffLimit is a NIL check, not `| default 2`: Sprig treats 0 as
+empty, so an explicit 0 (fail fast — gate a GitOps pipeline on a bad
+realm) silently rendered 2 and the release failure arrived two retries
+later with three failed pods instead of one. The same falsy-zero trap
+resolveReplicas was written to avoid. */ -}}
+{{- $backoffLimit := 2 -}}
+{{- if not (kindIs "invalid" .Values.data.keycloak.convergence.backoffLimit) -}}
+{{- $backoffLimit = .Values.data.keycloak.convergence.backoffLimit -}}
+{{- end -}}
 {{- $realmFile := .Files.Get "files/genie-realm.yaml" -}}
 {{- if .Values.data.keycloak.failOnPlaceholderSecrets -}}
 {{- range $p := (regexFindAll "\\$\\(env:[A-Z_][A-Z0-9_]*\\)" $realmFile -1) -}}
@@ -101,7 +110,7 @@ metadata:
     # before-hook-creation replaces a stale one on the next release.
     "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
 spec:
-  backoffLimit: {{ .Values.data.keycloak.convergence.backoffLimit | default 2 }}
+  backoffLimit: {{ $backoffLimit }}
   template:
     metadata:
       labels:

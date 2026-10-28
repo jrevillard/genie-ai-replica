@@ -577,7 +577,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       NotificationService.error(tr('chatbot.loadError'));
       debugPrint("[CHATBOT] Load error: $e");
     } finally {
-      setState(() => _isLoading = false);
+      // The load AWAITS the hierarchy and the config before it commits
+      // its scope: the user can navigate away inside that window, and a
+      // setState after dispose is a FlutterError in debug and E2E runs.
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 

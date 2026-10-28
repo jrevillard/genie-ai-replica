@@ -54,24 +54,6 @@ export default {
   },
 
   /**
-   * Transform backend categories to tree panel format
-   * @param {Array} categories - Categories from backend
-   * @param {String} locale - Locale code
-   * @returns {Array} Transformed nodes for tree panel
-   */
-  transformCategoriesToTreeNodes(categories) {
-    return categories.map((category) => ({
-      catKey: category.catKey,
-      name: category.name, // Preserve the name property!
-      // The ENGLISH translation: the SSOT the query wire speaks. Display is
-      // localized; the filter label must be EN, or it matches no chunk.
-      nameEN: category.nameEN,
-      expanded: false,
-      children: category.children || []
-    }));
-  },
-
-  /**
    * Get services for a specific category
    * @param {String} categoryId - Category ID
    * @param {String} locale - Locale code

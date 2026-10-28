@@ -1025,31 +1025,15 @@ export default {
         () => this.$root.$i18n.locale,
         (newLocale) => {
           this.currentLocale = newLocale;
-          // Update context labels when locale changes. A Quick Help item
-          // displays the title of its button, re-resolved from the config
-          // by the button id (applyQuickHelpButtons refreshes the buttons
-          // alone — the chips are separate store items). A SIDEBAR item's
-          // identity is its EN label: its display is the tree's localized
-          // name FOR that EN label — safeTranslate would return the EN
-          // string unchanged in a non-English UI.
-          this.$store.commit(
-            'conversation/setContextItems',
-            this.selectedContextItems.map((item) => ({
-              ...item,
-              service:
-                item.source === QUICK_HELP_SOURCE
-                  ? this.quickHelpTitleFor(item, newLocale)
-                  : item.categoryOnly
-                    ? this.getCategoryDisplayName(item.category)
-                    : this.displayNameForEnLabel(item.serviceKey) || this.safeTranslate(item.service)
-            }))
-          );
+          this.remapContextItemsToLocale(newLocale);
           // A DIRECT load, not the assurer: the names are per-locale tree
           // data, and the assurer no-ops once a load succeeded — a locale
           // switch that skipped the refetch kept the old locale's names
           // for the whole session. The mount keeps the assurer (a
-          // transient failure there is retried by the next need).
-          this.loadServiceCategories();
+          // transient failure there is retried by the next need). The
+          // chips re-map once the NEW tree has landed — the indexes the
+          // lookups read are rebuilt by that load.
+          this.loadServiceCategories().then(() => this.remapContextItemsToLocale(newLocale));
         }
       );
     }
@@ -1584,6 +1568,30 @@ export default {
      * of a button is locale-dependent. So a language switch re-resolves the
      * buttons already read instead of reading the configuration again.
      */
+    // Re-resolve every chip's display for [locale]. A Quick Help item
+    // displays the title of its button, re-resolved from the config by
+    // the button id (applyQuickHelpButtons refreshes the buttons alone —
+    // the chips are separate store items). A SIDEBAR item's identity is
+    // its EN label: its display is the tree's localized name FOR that EN
+    // label — safeTranslate would return the EN string unchanged in a
+    // non-English UI. Called AFTER the per-locale tree refetch lands:
+    // the tree's indexes are what the lookups read, and re-mapping
+    // before the fetch would re-write the OLD locale's names.
+    remapContextItemsToLocale(locale) {
+      this.$store.commit(
+        'conversation/setContextItems',
+        this.selectedContextItems.map((item) => ({
+          ...item,
+          service:
+            item.source === QUICK_HELP_SOURCE
+              ? this.quickHelpTitleFor(item, locale)
+              : item.categoryOnly
+                ? this.getCategoryDisplayName(item.category)
+                : this.displayNameForEnLabel(item.serviceKey) || this.safeTranslate(item.service)
+        }))
+      );
+    },
+
     // A Quick Help chip's title is the BUTTON's title — localized config
     // text. The chip is installed with the title resolved at press time;
     // a locale switch must re-resolve it from the config (by the button
@@ -1713,6 +1721,18 @@ export default {
               selected: true
             };
       this.$store.commit('conversation/replaceQuickHelpItem', quickHelpItem);
+      // A card is a MODE SWITCH: it replaces the SIDEBAR selection too —
+      // the two are alternative ways of scoping the same query (the
+      // mobile rules this already). Keeping both sent the card's
+      // category and the sidebar's service label together, and the
+      // wire's service-wins rule then dropped the category the card
+      // promised — a silent reduction the two platforms also disagreed
+      // about. Legacy conversations still RESTORE both (their tags say
+      // so); new selections are exclusive.
+      this.$store.commit(
+        'conversation/setContextItems',
+        this.selectedContextItems.filter((item) => item.source === QUICK_HELP_SOURCE)
+      );
       this.currentCategoryId = rawOption.id === 'just-chat' ? null : categoryId;
 
       this.showQuickHelp = false;
@@ -1754,7 +1774,15 @@ export default {
         // would leave unfiltered while the chip promised the card's scope.
         if (this.quickHelpScopeState(entry).broken || !this.quickHelpScopeIsNameable(entry.category)) {
           const caption = this.quickHelpStatesCaption([this.quickHelpScopeState(entry)]);
-          notificationService.error(caption || this.translate('chatbot.quickHelpScopeUnavailable', ''));
+          // A hierarchy still ON ITS WAY is not a configuration problem:
+          // the unavailable caption would point the operator at the
+          // wrong thing. The loading copy says what is happening.
+          notificationService.error(
+            caption ||
+              (this.serviceCategoriesStatus === 'loading'
+                ? this.safeTranslate('hierarchy.loading')
+                : this.translate('chatbot.quickHelpScopeUnavailable', ''))
+          );
           return;
         }
         // The entry's OWN declared labels and category ride along: the
@@ -2168,23 +2196,27 @@ export default {
         // saved), so the array test alone cannot route a category-scoped
         // conversation to its branch — an EMPTY tag list with a category
         // edge must fall through to it too.
+        // The scope is resolved against TWO async sources: the buttons
+        // (a Quick Help tag is the button id) and the tree (a sidebar tag
+        // is an EN label only the tree can confirm, and the category-only
+        // branch below names its chip through it too). Waiting for the
+        // one and not the other drops the scope of the other kind of tag
+        // — and the category-only branch built its chip against a
+        // possibly-empty tree: a null name, and a load race diagnosed as
+        // a configuration problem. BOTH branches wait.
+        await Promise.all([this.ensureQuickHelpLoaded(), this.ensureServiceCategoriesLoaded()]);
+        // The wait above is a REAL await (the config fetch, the
+        // hierarchy fetch): a newer restore may have landed while it
+        // was pending, and this one must not commit its scope over
+        // the newer conversation's.
+        if (token !== this.loadSeq) {
+          return;
+        }
         if (Array.isArray(conversation.tags) && conversation.tags.length > 0) {
           // The tags of a saved conversation are the ids of the items it was
           // scoped by. A Quick Help tag is only recognised once the buttons
           // are known: looked up in an empty list, it would fall through to
           // the sidebar branch and send the button id as a label.
-          // The scope is resolved against TWO async sources: the buttons
-          // (a Quick Help tag is the button id) and the tree (a sidebar tag
-          // is an EN label only the tree can confirm). Waiting for the one
-          // and not the other drops the scope of the other kind of tag.
-          await Promise.all([this.ensureQuickHelpLoaded(), this.ensureServiceCategoriesLoaded()]);
-          // The wait above is a REAL await (the config fetch, the
-          // hierarchy fetch): a newer restore may have landed while it
-          // was pending, and this one must not commit its scope over
-          // the newer conversation's.
-          if (token !== this.loadSeq) {
-            return;
-          }
           conversation.tags.forEach((tag) => {
             // A saved conversation keeps the tag of an item, not the item
             // itself. A Quick Help tag is the id of the button that produced

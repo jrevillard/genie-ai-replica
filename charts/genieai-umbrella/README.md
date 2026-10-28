@@ -9,8 +9,9 @@ Gateway/HTTPRoute/Certificate; nginx is NOT part of the k8s data path), and
 the Keycloak realm-convergence + ArangoDB migrations hook Jobs — with one
 `helm install`.
 
-Chart version: see `Chart.yaml` (the single source of truth — Flux
-reconciles on it). `appVersion` mirrors `version` deliberately
+Chart version: see `Chart.yaml` (it moves with the chart's content —
+the deploy repo's overlay names the version it installs; Flux ignores the
+field for a Git-path source). `appVersion` mirrors `version` deliberately
 (chart layout, not product release; deployed image tags are governed by
 `values.yaml`, never `latest`).
 

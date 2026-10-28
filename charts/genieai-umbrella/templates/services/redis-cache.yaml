@@ -7,6 +7,10 @@ default, not crash the template engine). */ -}}{{- $global := .Values.global | d
 
 {{- $svc := deepCopy ($services.redisCache | default dict) -}}
 {{- $_ := set $svc "image" ($svc.image | default dict) -}}
+{{- /* The LISTENER port, bound once: the --port flag, the containerPort,
+the Service, the NetworkPolicy and every probe command derive from it
+(clamav.yaml binds its port the same way). */ -}}
+{{- $redisPort := $svc.port | default 6379 -}}
 {{- $pluggable := .Values.pluggable | default dict -}}
 {{- if $svc.enabled -}}
 apiVersion: apps/v1
@@ -53,7 +57,7 @@ spec:
             # The port the plumbing uses (Service, NetworkPolicy,
             # probes) — redis-server takes it as a flag, so an override
             # of services.redisCache.port moves the LISTENER with it.
-            - "{{ $svc.port | default 6379 }}"
+            - "{{ $redisPort }}"
             - --appendonly
             - "yes"
             - --maxmemory-policy
@@ -81,13 +85,24 @@ spec:
                   key: TRANSLATION_CACHE_PASSWORD
           ports:
             - name: redis
-              containerPort: {{ $svc.port | default 6379 }}
+              containerPort: {{ $redisPort }}
+          # With --appendonly yes, redis answers PING with -LOADING until
+          # the dataset is in memory; on a PVC-backed /data a grown AOF
+          # can outrun the liveness budget below and the pod would
+          # restart into the same load — a crash loop. The startup probe
+          # (30 x 10 s = 5 min) suspends readiness and liveness until the
+          # server answers, the same window clamav's startup probe gives
+          # the signature download.
+          startupProbe:
+            exec: { command: ["sh", "-c", "redis-cli -p {{ $redisPort }} ping"] }
+            failureThreshold: 30
+            periodSeconds: 10
           readinessProbe:
-            exec: { command: ["sh", "-c", "redis-cli -p {{ $svc.port | default 6379 }} ping"] }
+            exec: { command: ["sh", "-c", "redis-cli -p {{ $redisPort }} ping"] }
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
-            exec: { command: ["sh", "-c", "redis-cli -p {{ $svc.port | default 6379 }} ping"] }
+            exec: { command: ["sh", "-c", "redis-cli -p {{ $redisPort }} ping"] }
             initialDelaySeconds: 30
             periodSeconds: 30
           volumeMounts:
@@ -151,7 +166,7 @@ metadata:
 spec:
   ports:
     - name: redis
-      port: {{ $svc.port | default 6379 }}
+      port: {{ $redisPort }}
   selector:
     {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "redis-cache") | nindent 4 }}
 ---
@@ -177,7 +192,7 @@ spec:
               genieai.io/component: backend
       ports:
         - protocol: TCP
-          port: {{ $svc.port | default 6379 }}
+          port: {{ $redisPort }}
     # helm-test reachability probe (component "test").
     - from:
         - podSelector:
@@ -185,7 +200,7 @@ spec:
               genieai.io/component: test
       ports:
         - protocol: TCP
-          port: {{ $svc.port | default 6379 }}
+          port: {{ $redisPort }}
   {{- if $obsMetrics.enabled }}
   # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
   # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
@@ -203,7 +218,7 @@ spec:
               app.kubernetes.io/instance: vmetrics
       ports:
         - protocol: TCP
-          port: {{ $svc.port | default 6379 }}
+          port: {{ $redisPort }}
   {{- end }}
   egress:
     - to:

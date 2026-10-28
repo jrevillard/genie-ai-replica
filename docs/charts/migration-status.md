@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-28)
 
-- **Chart `genieai-umbrella` at 0.2.100**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.101**, branch `feat/k8s-migration` based
   on `main` at `179a8a8f1` and **12 commits behind `origin/main`**
   (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
   the backend's analytics routes, the OPEA overlay (retriever/dataprep),
@@ -614,6 +614,43 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 29 (0.2.101)** — 7 findings from the fifth
+  `/code-review`, three verified by render. Two were leftovers of the
+  run-4 fix itself — the review passes now audit each other's patches,
+  which is exactly what the loop is for.
+  - *The OPEA policies still hardcoded the app-tier ports* — run 4
+    derived the services-tier policies from `services.<svc>.port` and
+    missed this sibling file: an override moved the Service and the
+    tier's own policy while chatqna/dataprep egress still admitted the
+    default port, dropping their calls to the BFF and the doc-repo
+    under default-deny. Derived now, through a parent-first port map.
+  - *The convergence Job rendered cleared realm knobs as null* —
+    `KC_REALM`, `KC_CLIENT_ID`, `KC_GRAFANA_CLIENT_ID` and
+    `GENIE_ADMIN_USERNAME` read the values with no default, and Helm's
+    null DELETES the declared one: `| quote` of nil rendered
+    `value: null`. Each carries its values.yaml default now.
+  - *The values-surface gate collected only literal `$svc.` chains* —
+    the reads through the templates' own bindings
+    (`$servicesRedisCache.port`, `$svcBackend.port` — several born in
+    run 4) never entered its candidate set, and the typo-guard reported
+    "all declared" over reads it had never collected. It resolves every
+    alias a template binds now; the candidate set grew from 24 to 33.
+  - *The keycloak smoke captured kubectl's own creation line* —
+    `pod/kc-probe created200` never matched the 200|401 case, failing
+    the merge decision on a healthy cluster. The code is read from the
+    trailing number.
+  - *A stale comment still documented the old replicas precedence* —
+    values.yaml said the profile map wins over `services.<svc>.replicas`,
+    the exact misreading that produced the pass-27 bug. Same order as
+    the data tier now, stated once.
+  - *The env-types `#` strip guard blocked continuation lines* — a
+    multi-line action's trailing comment was swallowed into the
+    capture. Balance alone decides now (probed on both shapes).
+  - *The doc-repo's scanner port was a second manually-synced knob* —
+    `documentRepository.clamavPort` declared 3310 beside
+    `services.clamav.port` and the operator had to move both. It is
+    null by default and follows the listener; its own value remains
+    for an external scanner.
 - **Review loop, pass 28 (0.2.100)** — 7 findings from the fourth
   `/code-review`, each verified against the render or the source before
   the fix. One was a fleet-wide chart defect, one a graph gap, five
@@ -1297,7 +1334,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.100** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.101** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `179a8a8f1` (the tip that carries !586, !587,
   !588); the branch has since drifted 12 commits behind `origin/main`

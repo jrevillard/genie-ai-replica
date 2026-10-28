@@ -9,16 +9,27 @@ conversion — the value is then rejected by the API server at apply time,
 as a CreateContainerConfigError the operator sees minutes after the
 install, with the pod's manifest as the only clue.
 
-The chart's env rows are built from operator-tunable values, and those
-values are NOT all strings in values.yaml: a port is an int, a flag is a
-bool, a threshold is a float. The template must stringify them at the
-render boundary, because the API server does not.
+What this gate ACTUALLY catches
+-------------------------------
 
-This script renders the chart twice — once with the default values, once
-with the numeric knobs overridden to a number — and asserts every
-rendered env value is a string in both renders. The second render is the
-one that matters: the defaults happen to be strings, so a template that
-forgot `| toString` renders clean until an operator tunes the knob.
+The chart has two stringification layers, and they are not equivalent:
+
+  * the service factory's `envRows` normalizes every row that goes
+    through it (`toString` on the value), so a row that forgets its own
+    `| toString` still renders a string — the per-row `| toString` is a
+    second layer, not the load-bearing one;
+  * a template that hand-renders its env block (the translation
+    orchestrator does — it does not go through the factory) has NEITHER
+    layer: its value reaches the manifest as the operator typed it, and
+    an id whose text happens to parse as a YAML number ("3.1") takes the
+    whole Deployment down with "cannot unmarshal number into Go struct
+    field EnvVar.value of type string".
+
+So the second render overrides the knobs whose values feed the rows
+OUTSIDE the factory, plus the numeric knobs the factory reads. The knob
+list is the gate's real specification: a knob there that no row consumes
+proves nothing, because the factory would stringify it again before it
+reached the manifest.
 
 Usage: scripts/env-types-check.py [chart-path]
        CHART=charts/genieai-umbrella scripts/env-types-check.py
@@ -32,10 +43,15 @@ import yaml
 
 WORKLOAD_KINDS = ("Deployment", "Job", "DaemonSet", "StatefulSet", "ReplicaSet")
 
-# The knobs whose values are numbers or booleans in values.yaml. Overriding
-# them with a number is what turns a missing `| toString` into a visible
-# non-string env value.
-NUMERIC_OVERRIDES = [
+# The overrides that make a non-string reachable.
+#
+# `opea.translation.modelId` is the load-bearing entry: the translation
+# orchestrator hand-renders its env block (it does not go through the
+# service factory), so its LLM_MODEL_ID row has no normalization layer at
+# all. The others exercise the factory's rows with values whose text
+# parses as a number or a boolean.
+TYPE_OVERRIDES = [
+    "--set=opea.translation.modelId=3.1",
     "--set=opea.chatqna.retrieverArangoSearchStart=1",
     "--set=opea.dataprep.labelingStrategy=5",
     "--set=opea.retriever.retrieverArangoK=42",
@@ -145,10 +161,10 @@ def main():
     failures += check(
         render(
             chart_path,
-            NUMERIC_OVERRIDES + ["--set=opea.gpu.nodeHost=https://gpu.ci-render.local:444"],
+            TYPE_OVERRIDES + ["--set=opea.gpu.nodeHost=https://gpu.ci-render.local:444"],
             with_full_tier=True,
         ),
-        "full surface with numeric and boolean overrides",
+        "full surface with type-breaking overrides",
     )
     if failures:
         print()

@@ -6,10 +6,15 @@ the design of record ([`helm-charts-design.md`](helm-charts-design.md)).
 Plan checkboxes are not a status source — evidence is the chart, the deploy
 repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
-## Current state (2026-10-27)
+## Current state (2026-10-28)
 
-- **Chart `genieai-umbrella` at 0.2.90**, branch `feat/k8s-migration` rebased
-  onto `main` at `179a8a8f1` (0 commits behind).
+- **Chart `genieai-umbrella` at 0.2.91**, branch `feat/k8s-migration` based
+  on `main` at `179a8a8f1` and **8 commits behind `origin/main`**
+  (`5786919c1`). The gap touches the frontend, the OPEA overlay
+  (retriever/dataprep), the site docs and the config-validator tests —
+  **nothing under `charts/` or `scripts/`**, so the chart's gates and
+  renders are unaffected. The branch is rebased onto `main` before the
+  MR leaves Draft.
 - **No application code in the branch**: the diff touches `charts/`,
   `scripts/`, `docs/`, `deploy/`, `tests/`, `site/`, `.gitlab-ci.yml`,
   `docker-compose.yaml`, `env`, `Makefile`, `CLAUDE.md`, `CHANGELOG.md` —
@@ -604,6 +609,55 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 19 (0.2.91)** — 5 findings, all verified true, all
+  fixed. The headline: **the stringification had two layers and the gate
+  only tested one of them.**
+  - *One env row was outside both layers* — the translation orchestrator
+    hand-renders its env block (it does not go through the service
+    factory, because the factory prefixes the image with the registry),
+    so its `LLM_MODEL_ID` reached the manifest exactly as the operator
+    typed it: `--set opea.translation.modelId=3.1` rendered
+    `value: 3.1`, a YAML FLOAT, and the API server rejects the whole
+    Deployment with "cannot unmarshal number into Go struct field
+    EnvVar.value of type string". It is quoted and stringified now —
+    the only raw env value left in the chart.
+  - *The env-types gate could not fail on that class* — every knob in
+    its list fed a row that goes through the factory, whose `envRows`
+    normalization stringifies it anyway (the per-row `| toString` is a
+    second layer, not the load-bearing one — measured: removing it
+    leaves the gate green). The list now names the knobs consumed by
+    the rows OUTSIDE the factory, and the docstring says which layer
+    the gate actually tests. Mutation-tested: unquoting the
+    translation row turns the gate red with the offending row named.
+  - *The keycloak membership gate missed chatqna* — it read
+    `KEYCLOAK_URL` only, and chatqna's `KEYCLOAK_URL` is the PUBLIC
+    issuer while its JWKS fetch goes in-cluster through
+    `KEYCLOAK_INTERNAL_URL`. The client list is now derived from the
+    URL itself (the in-cluster keycloak Service), not from an env var
+    name. Mutation-tested: dropping the chatqna peer from the policy
+    now fails with `BLOCKED chatqna -> keycloak :8080`.
+  - *The port validation sat at a TLS-gated consumption site* — both
+    consumers of `ingressPublicPort` (the https listener and the
+    http→https redirect) render only when `ingress.tls.enabled=true`,
+    which is OFF by default: in the default topology a malformed port
+    reached the issuer, the CORS origin, both CSP connect-src sets and
+    the X-Forwarded-Host header with no error anywhere, and a browser
+    cannot dial port 443x. The validation moved to `ingressHost`, the
+    parse site every consumer reaches (where the IPv6 sibling already
+    lived).
+  - *Four operator-reachable guards had no case* — the render-guards
+    script claimed to exercise the chart's guards, and the external
+    GPU mode without a node host (the first error an operator
+    following the OPEA quickstart hits), the unknown `opea.gpu.mode`,
+    the IPv6-literal GPU node host and the unknown `data.arangodb.mode`
+    were not exercised: every CI render that enables the tier passes a
+    node host, so a regression inverting or deleting those conditions
+    shipped green. Seven cases added (18 now), including the port
+    RANGE branch and the namespace / dependency-graph guards. The
+    script now names the guards that remain uncovered and why (they
+    are unreachable from values: Helm's coalesce keeps the chart's
+    table over an operator's scalar, the templates build the env rows
+    themselves, and the schema rejects a zero instance count first).
 - **Review loop, pass 18 (0.2.90)** — 5 findings, all verified true, all
   fixed, plus the gates that protect pass 17's fixes. The headline:
   **the keycloak NetworkPolicy was invisible to the flow gate.**
@@ -835,7 +889,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.90** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.91** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `179a8a8f1` (the tip that carries !586, !587,
   !588) — the branch is 0 commits behind `main`.
@@ -999,6 +1053,22 @@ the compose config, kept verbatim; backlog.
   restarts today). Related: the ArangoDB database loss observed the
   same day (datadir empty after a minikube restart, migrations
   re-applied manually) — cause unexplained, watch for a repeat.
+- **The flow gate cannot see the egress side of an ipBlock rule**
+  (2026-10-28 review, pass 18): the cross-check declares a flow from
+  the SOURCE's egress naming a peer, so a rule with an `ipBlock` peer
+  (the chart's deliberate compromise for the operator-managed
+  destinations: arangodb, keycloak, the collector, VictoriaLogs)
+  declares nothing — and a port dropped from that rule's port list
+  (the backend's egress losing 6379 would strand the translation
+  cache) changes nothing the gate can see. Measured on the current
+  renders: every in-cluster dial the workloads make IS covered by the
+  egress port lists, so there is no live defect — only the blind spot.
+  Closing it needs an expectation derived from the render (which
+  workload dials which in-cluster Service on which port) translated
+  into POD space, and the chart's Services use a NAMED targetPort
+  (`targetPort: http`), so the translation has to resolve the named
+  container port through the Deployment — a real piece of work, not a
+  one-liner.
 - **RWO PVC + replicas>1**: `clusterProfileReplicas.prod` runs
   documentRepository ×2 against one ReadWriteOnce PVC with no node
   pinning — multi-attach risk on multi-node prod (single-node minikube

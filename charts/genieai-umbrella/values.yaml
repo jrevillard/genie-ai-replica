@@ -934,9 +934,11 @@ services:
     port: 6379
     # Probes are NOT declared under a `probes:` key here: the
     # hand-written template (templates/services/redis-cache.yaml) renders
-    # readiness/liveness exec probes (`redis-cli -p <port> ping`) plus a
-    # startup probe covering the AOF load window on a PVC-backed /data.
-    # To widen or retime them, edit the template.
+    # readiness/liveness exec probes that ASSERT the reply
+    # (`test "$(redis-cli -p <port> ping)" = PONG` — redis-cli exits 0
+    # on server error replies, so a bare ping would pass during an AOF
+    # load), plus a startup probe covering that load window on a
+    # PVC-backed /data. To widen or retime them, edit the template.
     resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 250m, memory: 512Mi } }
     pvc:
       enabled: true                          # appendonly persistence

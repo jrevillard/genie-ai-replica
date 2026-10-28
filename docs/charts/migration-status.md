@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-28)
 
-- **Chart `genieai-umbrella` at 0.2.110**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.111**, branch `feat/k8s-migration` based
   on `main` at `18d02f094` and **12 commits behind `origin/main`**
   (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
   the backend's analytics routes, the OPEA overlay (retriever/dataprep),
@@ -614,6 +614,43 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 37 (0.2.111)** — 6 findings from the thirteenth
+  `/code-review`: five fixed here, one belongs to a compose-side MR.
+  - *The comment sweep of runs 11–12 missed the chart's own values
+    file* — the redisCache block still documented the probes as bare
+    `redis-cli -p <port> ping`, the exact never-could-fail command
+    0.2.110 removed from the template. The block describes the PONG
+    assert and why it exists now.
+  - *The "the knob the Service follows" phrasing was false for the
+    k8s Services* — it was true for redis/clamav (whose Service ports
+    follow the knob) but was generalized to the factory surfaces where
+    the Service publishes the fixed 80 and only the targetPort follows
+    the knob. documentRepository.yaml and the opea doc-repo rule say
+    "publishes the factory's fixed 80, targets the pod by name" now.
+  - *One knob-port comment survived in the OPEA tier* — chatqna's env
+    doc said "targetPort 3001/3000"; it names the knobs now (comments
+    never render, so no gate can catch this class — the sweep is
+    manual and readers find what sweeps miss).
+  - *The required-secrets justification described an impossible
+    state* — it claimed a missing redis Secret breaks the cache
+    silently while a TCP probe passes; with the NON-optional
+    secretKeyRef the pod sits in CreateContainerConfigError and no
+    probe runs at all. The justification states the real mechanism
+    (the pre-install check surfaces a failure that scheduling would
+    otherwise report later).
+  - *The PONG command was copy-pasted into three probes* — bound once
+    as `$redisProbe` next to `$redisPort`, the in-file idiom this file
+    already established. The byte-compare against the 0.2.110 render
+    caught the first attempt: `printf %s` on an int64 rendered
+    `%!s(int64=6380)`; the binding stringifies now and the probe
+    commands are byte-identical to the previous release.
+  - *Compose ships the same broken healthcheck* —
+    `docker-compose.yaml` runs the bare `redis-cli ping` against a
+    `--requirepass` + `--appendonly yes` redis: on restart during an
+    AOF load the container reports healthy while unable to serve (and
+    in Swarm it is never replaced). Compose is read-only for chart
+    work on this branch — the fix belongs to a dedicated compose MR
+    off `main`.
 - **Review loop, pass 36 (0.2.110)** — 7 findings from the twelfth
   `/code-review`. The theme: the fix that could not fix, and the
   comments that outlived their numbers.
@@ -1671,7 +1708,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.110** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.111** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `18d02f094` (the tip that carries !586, !587,
   !588); the branch has since drifted 12 commits behind `origin/main`

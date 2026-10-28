@@ -215,8 +215,9 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
-    # Backend BFF. Post-DNAT pod port — services.backend.port, the knob
-    # the Service follows.
+    # Backend BFF. Post-DNAT pod port — services.backend.port (the
+    # Service publishes the factory's fixed 80 and targets the pod by
+    # name).
     - to:
         - podSelector:
             matchLabels:

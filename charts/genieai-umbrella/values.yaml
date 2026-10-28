@@ -583,6 +583,9 @@ services:
       # Failing it stops the backend — the API is mandatory once named —
       # so it has to cover a cold TLS handshake to a remote GPU node
       # that is busy serving another workload.
+      # A value below 1 is treated as UNSET by the application (it
+      # parses with a minimum of 1 and falls back to its own 30 s
+      # default), so 0 does not mean "fail the probe immediately".
       probeTimeoutSeconds: 30
     # OPEA chat pipeline host (chatqna service). Empty = the code's
     # image default — set it to the chatqna Service when the OPEA
@@ -939,7 +942,14 @@ opea:
       embedding: /embed
       reranker: /rerank
       translation: /translation
-      docling: /docling
+      # The docling endpoint is OPT-IN, like the reference deployment
+      # (Compose leaves DOCLING_ENDPOINT empty and dataprep uses its
+      # in-process converter). The chart renders no docling service in
+      # any mode: an external GPU node may serve one, but nothing here
+      # deploys it, so a default endpoint would point every ingestion at
+      # a service that answers 404. Set it when the GPU node really
+      # serves docling-serve at that path.
+      docling: ""
   chatqna:
     # CHATQNA_*, RERANKING_*, MULTI_TURN_* — every knob the chatqna
     # template reads, declared with its template default so an operator

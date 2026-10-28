@@ -16,6 +16,26 @@ An ingress fronting IPv6 still serves hosts by DNS name.
 {{- if contains "[" $host -}}
 {{- fail (printf "ingress.host must be a DNS hostname optionally followed by :port — an IPv6 literal (%s) cannot be split; use a hostname" $host) -}}
 {{- end -}}
+{{- /* The PORT is validated HERE, at the parse site, and not at the
+listeners that consume it: the two consumers (the https listener and
+the http→https redirect) are both TLS-gated, so in the DEFAULT
+topology (ingress.tls.enabled=false) a malformed port reached every
+OTHER derivation — the OIDC issuer, the CORS origin, both CSP
+connect-src sets, the X-Forwarded-Host header — with no error
+anywhere. A browser cannot dial port 443x, so the SPA's token exchange
+failed far from the values key the operator typed. Sprig's `int` is
+lenient ("443x" → 0), so the port is checked for digits and for its
+range before anything reads it. */ -}}
+{{- $parts := splitList ":" $host -}}
+{{- if gt (len $parts) 1 -}}
+{{- $port := index $parts 1 -}}
+{{- if not (regexMatch "^[0-9]{1,5}$" $port) -}}
+{{- fail (printf "ingress.host carries an invalid port %q: the port must be numeric (a value like \"genieai.local:443x\" is not a port)" $port) -}}
+{{- end -}}
+{{- if or (lt (int $port) 1) (gt (int $port) 65535) -}}
+{{- fail (printf "ingress.host carries an out-of-range port %q: a TCP port is between 1 and 65535" $port) -}}
+{{- end -}}
+{{- end -}}
 {{- $host -}}
 {{- end -}}
 {{- define "genieai-umbrella.ingressHostname" -}}
@@ -25,23 +45,14 @@ An ingress fronting IPv6 still serves hosts by DNS name.
 The PUBLIC port from ingress.host — the single derivation site for the
 https listener port and the HTTPRoute redirect port. Bare host → 443.
 
-The port is VALIDATED here. Sprig's `int` is lenient: "443x" converts to
-0, and the render then carries `port: 0` — the API server rejects the
-Gateway with "spec.listeners[1].port: Invalid value: 0", a message that
-names a CR field instead of the values key the operator typed. The IPv6
-sibling of this guard fails the render by name; this one does the same.
+The port is VALIDATED in ingressHost, the parse site every consumer
+reaches (see the note there).
 */}}
 {{- define "genieai-umbrella.ingressPublicPort" -}}
 {{- $parts := include "genieai-umbrella.ingressHost" . | splitList ":" -}}
 {{- $port := "443" -}}
 {{- if gt (len $parts) 1 -}}
 {{- $port = index $parts 1 -}}
-{{- if not (regexMatch "^[0-9]{1,5}$" $port) -}}
-{{- fail (printf "ingress.host carries an invalid port %q: the port must be numeric (a value like \"genieai.local:443x\" renders port 0 and the API server rejects the Gateway listener)" $port) -}}
-{{- end -}}
-{{- if or (lt (int $port) 1) (gt (int $port) 65535) -}}
-{{- fail (printf "ingress.host carries an out-of-range port %q: a TCP port is between 1 and 65535" $port) -}}
-{{- end -}}
 {{- end -}}
 {{- $port | int -}}
 {{- end -}}

@@ -780,10 +780,11 @@ services:
     # documentRepository pod can resolve (e.g. clamav.corp.example.com
     # or clamav.<other-namespace>.svc.cluster.local).
     clamavHost: clamav
-    # Keep in sync with services.clamav.port while clamavHost points at
-    # the in-cluster Service — the scanner side derives its listener from
-    # its own knob, and a mismatch strands every upload's scan step.
-    clamavPort: 3310
+    # The port the scanner step dials. NULL by default = follow
+    # services.clamav.port — the one listener knob, so moving the
+    # scanner moves its clients. Set it only when clamavHost points at
+    # an EXTERNAL scanner on a different port.
+    clamavPort: null
     # Toggles the doc-repo virus-scan step (CLAMSCAN_* wiring above).
     virusScanning: true
     # Web-crawler egress (POST /api/files/crawl/schedule fetches
@@ -861,11 +862,10 @@ services:
     # helper (a mutable tag pulls Always, a pinned one does not).
     image: { repository: clamav/clamav, tag: "stable-debian", pullPolicy: "" }
     # Listener port. The template derives the Service port, the
-    # NetworkPolicy rules, the tcpSocket probe ports and the helm-test
-    # probe from THIS knob. The document-repository's own
-    # `documentRepository.clamavPort` env knob is separate — change both
-    # together when this one moves (independent only when clamavHost
-    # points at an external scanner).
+    # NetworkPolicy rules, the tcpSocket probe ports, the helm-test
+    # probe AND the document-repository's dial port (its clamavPort is
+    # null by default and follows this one) from THIS knob. It is
+    # independent only when clamavHost points at an external scanner.
     port: 3310
     # securityContext / volumes / volumeMounts / PVC are NOT values
     # here: templates/services/clamav.yaml is a hand-written Deployment
@@ -1211,13 +1211,12 @@ clusterProfileReplicas:
 # runs a Keycloak pair against a three-instance Postgres; every other
 # profile keeps a single instance of each.
 #
-# The order is the opposite of `clusterProfileReplicas`: there the
-# profile map WINS over `services.<svc>.replicas` (documented as a
-# baseline). Here `data.<tier>.instances` is the count the operator
-# sized the database for, so an explicit value WINS over the profile.
-# The chart declares `instances: null` so "unset" stays distinguishable
-# from "the operator pinned 1" — a chart default of 1 could not carry
-# that distinction.
+# The order is the SAME as `clusterProfileReplicas`: the explicit value
+# wins, then the profile, then 1 (resolveInstances and resolveReplicas
+# share it). The chart declares both knobs `null` by default, which is
+# what keeps "unset" — the profile applies — distinguishable from "the
+# operator pinned a count": a chart default of 1 could not carry that
+# distinction.
 clusterProfileInstances:
   prod:
     keycloak: 2

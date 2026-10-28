@@ -194,11 +194,16 @@ spec:
             - name: IMPORT_CACHE_ENABLED
               value: "true"
             # Non-secret realm parameters, resolved from the realm file's
-            # $(env:VAR) placeholders. Values only — no Secret here.
+            # $(env:VAR) placeholders. Values only — no Secret here. Each
+            # carries the same default its values.yaml declaration does:
+            # a null DELETES the declared default, and `| quote` of nil
+            # renders `value: null` — a row the API server rejects (or
+            # empties), with the kcc import dying on an unresolved
+            # $(env:VAR) far from the cleared knob.
             - name: KC_REALM
-              value: {{ $keycloak.realm | quote }}
+              value: {{ $keycloak.realm | default "genie" | quote }}
             - name: KC_CLIENT_ID
-              value: {{ $keycloak.webClientId | quote }}
+              value: {{ $keycloak.webClientId | default "genie-app" | quote }}
             - name: KC_PUBLIC_ORIGIN
               value: {{ printf "%s://%s" ($ingress.scheme | default "https") (include "genieai-umbrella.ingressHost" .) | quote }}
             - name: KC_MOBILE_CLIENT_ID
@@ -206,9 +211,9 @@ spec:
             - name: KC_MOBILE_REDIRECT_SCHEME
               value: {{ $keycloak.mobileRedirectScheme | default "genieai" | quote }}
             - name: KC_GRAFANA_CLIENT_ID
-              value: {{ $keycloak.grafanaClientId | quote }}
+              value: {{ $keycloak.grafanaClientId | default "grafana" | quote }}
             - name: GENIE_ADMIN_USERNAME
-              value: {{ $keycloak.adminUsername | quote }}
+              value: {{ $keycloak.adminUsername | default "genie-admin" | quote }}
             - name: GENIE_ADMIN_EMAIL
               # Supplied per environment (operator contact) — no silent
               # placeholder fallback.

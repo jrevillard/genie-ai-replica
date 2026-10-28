@@ -198,6 +198,11 @@
                   "type": "boolean"
                 }
               }
+            },
+            "replicas": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Pod count. 0 is the documented way to scale a tier off; a non-numeric value would be coerced by the template's int conversion into 0 \u2014 a silent scale-to-zero \u2014 so the type is pinned here."
             }
           }
         },
@@ -217,6 +222,11 @@
                   "type": "boolean"
                 }
               }
+            },
+            "replicas": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Pod count. 0 is the documented way to scale a tier off; a non-numeric value would be coerced by the template's int conversion into 0 \u2014 a silent scale-to-zero \u2014 so the type is pinned here."
             }
           }
         },
@@ -247,6 +257,11 @@
                   "type": "boolean"
                 }
               }
+            },
+            "replicas": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Pod count. 0 is the documented way to scale a tier off; a non-numeric value would be coerced by the template's int conversion into 0 \u2014 a silent scale-to-zero \u2014 so the type is pinned here."
             }
           }
         },
@@ -263,6 +278,11 @@
             },
             "enabled": {
               "type": "boolean"
+            },
+            "replicas": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Pod count. 0 is the documented way to scale a tier off; a non-numeric value would be coerced by the template's int conversion into 0 \u2014 a silent scale-to-zero \u2014 so the type is pinned here."
             }
           }
         },
@@ -279,6 +299,11 @@
                   "type": "boolean"
                 }
               }
+            },
+            "replicas": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Pod count. 0 is the documented way to scale a tier off; a non-numeric value would be coerced by the template's int conversion into 0 \u2014 a silent scale-to-zero \u2014 so the type is pinned here."
             }
           }
         }
@@ -354,6 +379,17 @@
         "additionalProperties": {
           "type": "integer",
           "minimum": 1
+        }
+      }
+    },
+    "clusterProfileReplicas": {
+      "type": "object",
+      "description": "clusterProfile-driven replica overrides. The profile WINS over services.<svc>.replicas (that value is a baseline).",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     }

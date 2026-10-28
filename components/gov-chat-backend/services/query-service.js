@@ -660,28 +660,29 @@ class QueryService {
       }
 
       // Resolve the wire's EN labels to the entities they name — the
-      // SAME resolution the stream path applies, written once.
+      // SAME single resolution the stream path applies: both ids out of
+      // ONE call (two calls meant up to four Arango queries per send).
       let categoryId = queryData.categoryId || null;
-      if (!categoryId && queryData.context?.categoryLabel) {
-        const resolved = await this.resolveScopeIds({ categoryLabel: queryData.context.categoryLabel });
-        categoryId = resolved.categoryId;
-        if (!categoryId) {
-          logger.warn(`Category not found for label: ${queryData.context.categoryLabel}`);
-        } else {
-          logger.info(`Resolved categoryLabel "${queryData.context.categoryLabel}" to categoryId: ${categoryId}`);
-        }
-      }
-
-      // Optionally resolve serviceLabels to serviceIds (array) — the
-      // shared resolution, with this path's own diagnostics.
       let serviceIds = queryData.serviceId ? [queryData.serviceId] : []; // Preserve if provided (as single or array)
-      if (queryData.context?.serviceLabels?.length > 0 && serviceIds.length === 0) {
-        const resolved = await this.resolveScopeIds({ serviceLabels: queryData.context.serviceLabels });
-        serviceIds = resolved.serviceIds;
-        if (serviceIds.length === 0) {
-          logger.warn(`No services found for labels: ${queryData.context.serviceLabels.join(', ')}`);
-        } else {
-          logger.info(`Resolved serviceLabels to serviceIds: ${serviceIds.join(', ')}`);
+      const needCategory = !categoryId && Boolean(queryData.context?.categoryLabel);
+      const needServices = queryData.context?.serviceLabels?.length > 0 && serviceIds.length === 0;
+      if (needCategory || needServices) {
+        const resolved = await this.resolveScopeIds(queryData.context, { resolveCategory: needCategory });
+        if (needCategory) {
+          categoryId = resolved.categoryId;
+          if (!categoryId) {
+            logger.warn(`Category not found for label: ${queryData.context.categoryLabel}`);
+          } else {
+            logger.info(`Resolved categoryLabel "${queryData.context.categoryLabel}" to categoryId: ${categoryId}`);
+          }
+        }
+        if (needServices) {
+          serviceIds = resolved.serviceIds;
+          if (serviceIds.length === 0) {
+            logger.warn(`No services found for labels: ${queryData.context.serviceLabels.join(', ')}`);
+          } else {
+            logger.info(`Resolved serviceLabels to serviceIds: ${serviceIds.join(', ')}`);
+          }
         }
       }
 

@@ -288,22 +288,45 @@ class ConversationScopeResolver {
       final button = _buttons[tag];
       if (button == null) continue;
       final category = button['category']?.toString();
-      final labels =
+      final buttonLabels =
           (button['serviceLabels'] as List<dynamic>? ?? const <dynamic>[])
               .map((label) => label.toString())
               .toList();
+      // A legacy conversation can carry SEVERAL button ids: the web
+      // restores every chip and sends the union of their labels. Every
+      // other button tag is CONSUMED here (counted as a sidebar tag, it
+      // read as a dropped label and refused the follow-up forever).
+      final otherButtons = tagList
+          .where((other) => other != tag && _buttons.containsKey(other))
+          .map((other) => _buttons[other]!)
+          .toList();
+      final labels = [
+        ...buttonLabels,
+        for (final other in otherButtons)
+          ...(other['serviceLabels'] as List<dynamic>? ?? const <dynamic>[])
+              .map((label) => label.toString()),
+      ];
       // A LEGACY 'category.<id>' tag beside the button named the same
       // category the button declares (the old web wrote the pair): it is
       // consumed here, not counted as a sidebar tag — counting it refused
       // every follow-up while the web restored both chips and answered.
       final otherTags = tagList
-          .where((other) => other != tag && !other.startsWith('category.'))
+          .where(
+            (other) =>
+                other != tag &&
+                !_buttons.containsKey(other) &&
+                !other.startsWith('category.'),
+          )
           .toList();
       final sidebarLabels = otherTags.where(_hierarchy.knowsLabel).toList();
+      // The button's own category WINS; a button that declares NONE keeps
+      // the conversation's own edge — dropping it sent the follow-up
+      // unscoped (a silent widening) while the web kept the edge.
+      final effectiveCategory = category ?? categoryKey;
       return ConversationScope(
-        categoryId: category,
-        categoryNameEn: _hierarchy.categoryEnLabel(category),
-        categoryName: _hierarchy.categoryDisplayName(category),
+        categoryId: effectiveCategory,
+        categoryNameEn: _hierarchy.categoryEnLabel(effectiveCategory),
+        categoryName: _hierarchy.categoryDisplayName(effectiveCategory),
         serviceLabelsEn: labels,
         sidebarLabelsEn: sidebarLabels,
         // The count remembers the tags the conversation was SAVED with

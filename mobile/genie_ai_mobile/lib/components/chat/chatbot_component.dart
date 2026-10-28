@@ -377,6 +377,20 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
             );
             if (button.isNotEmpty) {
               _activeQuickHelpScope = _scopeResolver!.stateFor(button);
+            } else {
+              // The button left the config between the outage and the
+              // retry: its saved scope is gone with it. No frozen
+              // outage caption for a disappearance — clearing the state
+              // hands the refusal to the nameable guard, whose message
+              // does not name a cause that is not there.
+              _activeQuickHelpScope = null;
+            }
+            // The category's EN name was restored as EMPTY during the
+            // outage: a label-less button scope would stay refused
+            // (scopeNotNameable) after a SUCCESSFUL retry without this.
+            if (_selectedCategoryId != null) {
+              _selectedCategoryNameEn =
+                  _scopeResolver!.categoryEnLabel(_selectedCategoryId) ?? '';
             }
           }
         });

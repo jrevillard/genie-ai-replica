@@ -178,7 +178,10 @@ def build_filter_labels(context: dict) -> list[str]:
     # KEPT label) is not a scope: a list of them must not take the service
     # branch and eclipse the DECLARED category, or the query would run
     # unfiltered outside the scope the request named.
-    service_list = [l for l in _as_label_list(service_labels) if l != ""]
+    # A None entry is no label at all — like the empty string, it must
+    # not take the service branch and eclipse the declared category.
+    # A whitespace-only label is KEPT (the wire is verbatim).
+    service_list = [l for l in _as_label_list(service_labels) if l is not None and l != ""]
     if service_list:
         # The service is the narrower scope — the category must not widen it.
         labels.extend(service_list)

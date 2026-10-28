@@ -1044,7 +1044,12 @@ export default {
           // transient failure there is retried by the next need). The
           // chips re-map once the NEW tree has landed — the indexes the
           // lookups read are rebuilt by that load.
-          this.loadServiceCategories().then(() => this.remapContextItemsToLocale(newLocale));
+          // The CURRENT locale, not the captured one: a rapid second
+          // switch drops this load's response (treeLoadSeq) while its
+          // promise still resolves — remapping with the captured locale
+          // would re-title the chips in a locale the installed tree does
+          // not speak.
+          this.loadServiceCategories().then(() => this.remapContextItemsToLocale(this.currentLocale));
         }
       );
     }
@@ -1425,6 +1430,17 @@ export default {
         }
       }
 
+      // A restored tag that resolved to NOTHING is a saved scope the
+      // conversation cannot carry: the send refuses — the same
+      // no-partial-drop rule the mobile enforces with its tag count. The
+      // 'general' placeholder on the item's category must not exempt it.
+      if (this.selectedContextItems.some((item) => item.unresolved)) {
+        blocked = true;
+        if (!scopeNotNameableShown) {
+          notificationService.error(this.translate('chatbot.scopeNotNameable', ''));
+        }
+      }
+
       // A Quick Help scope the hierarchy can no longer NAME leaves the
       // query with no filter at all: the corpus would answer outside the
       // scope the button declared. That is the silent reduction this
@@ -1534,11 +1550,20 @@ export default {
     async ensureServiceCategoriesLoaded() {
       // A FAILED load is not cached: the mobile retries (its fix is in),
       // and the web must too — one transient failure at mount must not
-      // keep every scoped card dead for the session.
-      if (!this.serviceCategoriesLoadPromise || this.serviceCategoriesStatus === 'failed') {
+      // keep every scoped card dead for the session. The promise is
+      // cleared AFTER the failure (not before the re-run): two callers
+      // arriving while the retry is still in flight share it, instead of
+      // each starting its own load.
+      if (!this.serviceCategoriesLoadPromise) {
         this.serviceCategoriesLoadPromise = this.loadServiceCategories();
       }
-      await this.serviceCategoriesLoadPromise;
+      try {
+        await this.serviceCategoriesLoadPromise;
+      } finally {
+        if (this.serviceCategoriesStatus === 'failed') {
+          this.serviceCategoriesLoadPromise = null;
+        }
+      }
       return this.serviceCategories;
     },
 
@@ -2319,6 +2344,13 @@ export default {
               service: this.displayNameForEnLabel(enLabel || tag) || tag,
               serviceKey: enLabel,
               category: this.currentCategoryId || 'general',
+              // A tag that names NOTHING anymore is a SAVED SCOPE that
+              // cannot be carried. The 'general' placeholder below would
+              // exempt it from the unnamed-item rule, and the send would
+              // quietly drop the scope it stood for the moment another
+              // item provided a filter. The flag names it for the guard:
+              // no partial drop, the send refuses.
+              unresolved: enLabel === null,
               selected: true
             });
           });

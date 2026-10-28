@@ -34,6 +34,13 @@ class TestBuildFilterLabels:
         result = build({"serviceLabels": ["Tomato", "Onion"]})
         assert result == ["Tomato", "Onion"]
 
+    def test_a_none_service_label_does_not_eclipse_the_declared_category(self):
+        # A raw-dict caller can hand a None entry: it is no label at all.
+        # The blank-string sibling is tested; None took the service branch
+        # too (None != "") and eclipsed the category the same way, then
+        # the dedupe dropped it to an empty filter.
+        assert build({"categoryLabel": "Healthcare", "serviceLabels": [None]}) == ["Healthcare"]
+
     def test_a_blank_service_label_does_not_eclipse_the_declared_category(self):
         # A label that is NOTHING (not a whitespace-only one, which is
         # KEPT) is not a scope: taking the service branch for it would

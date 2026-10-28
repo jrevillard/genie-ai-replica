@@ -2320,6 +2320,23 @@ describe('ChatBotComponent', () => {
       ]);
       const vm = wrapper.vm;
 
+      // A Quick Help chip is live before the switches: its title is
+      // per-locale config text, and the stale load's own remap must not
+      // re-title it in a locale the installed tree does not speak.
+      vm.cachedConfig = {
+        features: {
+          chat: {
+            quickHelp: {
+              buttons: [{ id: 'b', title: { en: 'EN', fr: 'FR', es: 'ES' }, category: '2' }]
+            }
+          }
+        }
+      };
+      vm.applyQuickHelpButtons();
+      vm.$store.commit('conversation/setContextItems', [
+        { service: 'EN', serviceKey: 'b', source: 'quickHelp', id: 'b', category: '2', selected: true }
+      ]);
+
       // Two locale switches in a row: the FIRST fetch is slow, the
       // second fast. The slower OLD request landing last must not
       // install its tree over the newer locale's.
@@ -2339,6 +2356,9 @@ describe('ChatBotComponent', () => {
       await flushPromises();
 
       expect(vm.serviceCategories[0].name).toBe('ES name');
+      // The stale load's .then fired its remap on release: the chip
+      // carries the CURRENT locale's title, not the stale French one.
+      expect(vm.selectedContextItems[0].service).toBe('ES');
     });
 
     it('chips re-map AFTER the per-locale tree lands, not against the old one', async () => {
@@ -2455,6 +2475,39 @@ describe('ChatBotComponent', () => {
         (c) => c[0] === vm.translate('chatbot.scopeNotNameable', '')
       );
       expect(calls).toHaveLength(1);
+    });
+
+    it('a DEAD restored tag beside a live label refuses the send, not rides along', async () => {
+      const tree = [
+        {
+          catKey: '2',
+          name: 'État civil',
+          nameEN: 'Civil Registry',
+          children: [{ name: 'Naissances', nameEN: 'Births' }]
+        }
+      ];
+      mockLiveTree(tree);
+      const wrapper = await createChatBotWrapperAsync(tree);
+      const vm = wrapper.vm;
+
+      // One tag resolves (Births), one names nothing anymore. The dead
+      // chip rode along under the 'general' placeholder — the no-filter
+      // rule stayed quiet as soon as the live label provided a filter,
+      // and the send silently dropped the dead tag's scope.
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation.mockResolvedValueOnce({
+        _key: 'c13',
+        title: 'Saved',
+        messages: [],
+        tags: ['Births', 'Renamed Away'],
+        categories: []
+      });
+
+      await vm.loadExistingConversation('c13');
+
+      expect(vm.selectedContextItems).toHaveLength(2);
+      // The send is REFUSED: no partial drop of a saved scope.
+      expect(vm.checkContextConfig({ categoryLabel: null, serviceLabels: ['Births'] })).toBe(false);
     });
 
     it('a LEGACY category.<id> tag restores the category scope, not a dead chip', async () => {

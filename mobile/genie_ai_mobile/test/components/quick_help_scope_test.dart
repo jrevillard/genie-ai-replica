@@ -317,6 +317,81 @@ void main() {
       );
     });
 
+    test('TWO button tags restore BOTH scopes, not a refusal', () {
+      // The old web could save a conversation carrying two button ids.
+      // The web restores both chips and sends the union of their labels;
+      // the mobile returned on the FIRST and counted the second as an
+      // unknown sidebar tag — a permanent refusal on data the web
+      // answers.
+      final convButtons7 = <Map<String, dynamic>>[
+        {
+          'id': 'btn-a',
+          'category': '2',
+          'serviceLabels': const <dynamic>['Births'],
+        },
+        {
+          'id': 'btn-b',
+          'category': '2',
+          'serviceLabels': const <dynamic>['Marriages'],
+        },
+      ];
+      final scope = ConversationScopeResolver(
+        hierarchy: QuickHelpScopeResolver(convTree),
+        quickHelpButtons: convButtons7,
+      ).resolve(tags: ['btn-a', 'btn-b']);
+
+      expect(scope.quickHelpButtonId, 'btn-a');
+      // The union — the scope the web sends for the same conversation.
+      expect(scope.serviceLabelsEn, ['Births', 'Marriages']);
+      // The second button tag is CONSUMED, not counted as a dropped
+      // sidebar tag.
+      expect(scope.sidebarTagCount, 0);
+      expect(
+        scopeCanGoOnTheWire(
+          categoryId: scope.categoryId,
+          categoryNameEn: scope.categoryNameEn,
+          serviceLabels: scope.serviceLabelsEn,
+          sidebarServiceLabels: scope.sidebarLabelsEn,
+          sidebarServiceCount: scope.sidebarTagCount,
+        ),
+        isTrue,
+      );
+    });
+
+    test(
+      'a button with NO category keeps the conversation own category edge',
+      () {
+        // A legacy pair: the conversation carries a category edge, the
+        // button declares none. Dropping the edge sent the follow-up
+        // UNscoped — a silent widening — while the web kept the edge.
+        final convButtons6 = <Map<String, dynamic>>[
+          {
+            'id': 'no-cat',
+            'category': null,
+            'serviceLabels': const <dynamic>[],
+          },
+        ];
+        final scope = ConversationScopeResolver(
+          hierarchy: QuickHelpScopeResolver(convTree),
+          quickHelpButtons: convButtons6,
+        ).resolve(tags: ['no-cat'], categoryKey: '2');
+
+        expect(scope.quickHelpButtonId, 'no-cat');
+        expect(scope.categoryId, '2');
+        expect(scope.categoryNameEn, 'Civil Registry');
+        expect(
+          scopeCanGoOnTheWire(
+            categoryId: scope.categoryId,
+            categoryNameEn: scope.categoryNameEn,
+            serviceLabels: scope.serviceLabelsEn,
+            sidebarServiceLabels: scope.sidebarLabelsEn,
+            sidebarServiceCount: scope.sidebarTagCount,
+          ),
+          isTrue,
+        );
+      },
+    );
+
     test(
       'a LEGACY category tag BESIDE a Quick Help tag does not refuse the send',
       () {

@@ -130,7 +130,12 @@ spec:
           livenessProbe:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with $probes.startup }}
+          {{- /* The BOUND binding, not the raw block: $startup carries
+          the port merge above — rendering the raw `$probes.startup`
+          rested on the two names aliasing one map, and the natural
+          dead-variable cleanup of the unused binding would have left
+          the startup probe dialing the old port. */ -}}
+          {{- with $startup }}
           startupProbe:
             {{- toYaml . | nindent 12 }}
           {{- end }}

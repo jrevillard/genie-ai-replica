@@ -31,6 +31,9 @@ failed far from the values key the operator typed. Sprig's `int` is
 lenient ("443x" → 0), so the port is checked for digits and for its
 range before anything reads it. */ -}}
 {{- $parts := splitList ":" $host -}}
+{{- if gt (len $parts) 2 -}}
+{{- fail (printf "ingress.host %q carries more than one colon segment: the shape is host or host:port, and a third segment (%s) would flow verbatim into the OIDC issuer, the CORS origin and both CSP sets" $host (index $parts 2)) -}}
+{{- end -}}
 {{- if gt (len $parts) 1 -}}
 {{- $port := index $parts 1 -}}
 {{- if not (regexMatch "^[0-9]{1,5}$" $port) -}}

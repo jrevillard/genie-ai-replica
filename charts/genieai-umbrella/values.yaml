@@ -302,9 +302,12 @@ data:
     theme: genie
     # Image that unpacks the theme tarball in the Keycloak pod's
     # initContainer. Needs tar(1) with gzip + --strip-components
-    # (busybox qualifies). Override for air-gapped clusters with a
-    # mirrored image.
-    themeUnpackImage: busybox:1.36
+    # (busybox qualifies). NULL by default = docker.io/busybox:1.36
+    # through global.toolingImageRegistry, like every other public
+    # tooling image in this chart; an explicit value is a FULL image
+    # reference and wins verbatim (an air-gapped cluster may also pin a
+    # fully qualified unpack image this way).
+    themeUnpackImage: null
     # Self-registration ("Register" link on the login page). Mirrors the
     # compose default (KEYCLOAK_REGISTRATION_ENABLED:-true).
     registrationAllowed: true

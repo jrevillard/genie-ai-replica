@@ -30,11 +30,11 @@ second. A dep name resolves against services, then opea, then data.
 {{- $nodes := (index $graph $tier) | default dict }}
 {{- range $node, $deps := $nodes }}
 {{- if not (kindIs "slice" $deps) }}
-{{- fail (printf "dependencyGraph.%s.%s.deps must be a list of strings, got %s — declare the dependencies as a YAML list" $tier $node (kindOf $deps)) -}}
+{{- fail (printf "dependencyGraph.%s.%s must be a list of strings, got %s — declare the dependencies as a YAML list: dependencyGraph.%s.%s: [dep, ...]" $tier $node (kindOf $deps) $tier $node) -}}
 {{- end }}
 {{- range $dep := $deps }}
 {{- if not (kindIs "string" $dep) }}
-{{- fail (printf "dependencyGraph.%s.%s.deps must be a list of strings, got an element of type %s" $tier $node (kindOf $dep)) -}}
+{{- fail (printf "dependencyGraph.%s.%s must be a list of strings, got an element of type %s — every entry is a component name" $tier $node (kindOf $dep)) -}}
 {{- end }}
 {{- end }}
 {{- end }}

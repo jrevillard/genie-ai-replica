@@ -81,8 +81,10 @@ helm install genieai charts/genieai-umbrella/ \
   -f my-values.yaml
 ```
 
-The chart creates the `genieai` namespace; pass `--create-namespace` so
-helm propagates it before the pre-install hooks run. `my-values.yaml` must
+The chart renders NO Namespace object — the namespace is created by helm
+itself, so pass `--create-namespace` to have it propagated before the
+pre-install hooks run (without it the first hook Job never schedules:
+"namespaces \"genieai\" not found"). `my-values.yaml` must
 carry the values the render requires — the public origin, the operator
 contact, a mail server and the client-secret placeholders (see
 [Configuration highlights](#configuration-highlights) and the chart

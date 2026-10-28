@@ -29,3 +29,45 @@ Usage:
 {{- end -}}
 {{- $replicas -}}
 {{- end -}}
+
+{{/*
+Resolve the instance count of a DATA-TIER component (the Keycloak CR's
+`spec.instances`, the CNPG Cluster's `spec.instances`).
+
+The stateless tier's helper cannot be reused as-is: there the profile
+map WINS over the per-service value, because `services.<svc>.replicas`
+is documented as a baseline. For the data tier the operator's explicit
+count is the thing they sized the database for, so it wins: a template
+that overrode `data.keycloak.instances: 5` with a literal 2 on the prod
+profile discarded the operator's sizing with no warning and no error —
+helm template, lint, kubeconform and the CRD gate all stayed green.
+
+So the order is: the explicit value, then the cluster profile, then 1.
+
+The explicit value is ABSENT by default (values.yaml declares
+`instances: null`), which is what keeps "unset" distinguishable from
+"the operator pinned 1". A number in values.yaml could not carry that
+distinction: 1 is both the chart default and a legitimate operator
+choice.
+
+Usage:
+  {{- $instances := include "genieai-umbrella.resolveInstances" (dict "Values" .Values "tier" "keycloak") | int }}
+*/}}
+{{- define "genieai-umbrella.resolveInstances" -}}
+{{- $tier := .tier -}}
+{{- $explicit := index .Values.data $tier "instances" -}}
+{{- $instances := 0 -}}
+{{- if not (kindIs "invalid" $explicit) -}}
+{{- $instances = int $explicit -}}
+{{- else -}}
+{{- $profiles := default (dict) .Values.clusterProfileInstances -}}
+{{- if hasKey $profiles .Values.clusterProfile -}}
+{{- $perTier := index $profiles .Values.clusterProfile -}}
+{{- if hasKey $perTier $tier -}}
+{{- $instances = int (index $perTier $tier) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if eq $instances 0 -}}{{- $instances = 1 -}}{{- end -}}
+{{- $instances -}}
+{{- end -}}

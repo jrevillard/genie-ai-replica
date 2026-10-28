@@ -65,14 +65,14 @@ the Kubernetes-injected connection env for the dataprep Service
 both rows must be set explicitly. */ -}}
 {{- $urls := list
     (dict "name" "KEYCLOAK_URL" "value" (include "genieai-umbrella.keycloakInternalURL" .))
-    (dict "name" "KC_REALM" "value" (.Values.data.keycloak.realm | default "genie"))
+    (dict "name" "KC_REALM" "value" (.Values.data.keycloak.realm | default "genie" | toString))
     (dict "name" "KEYCLOAK_EXPECTED_ISSUER" "value" (printf "%s/realms/%s" (include "genieai-umbrella.keycloakPublicIssuer" .) (.Values.data.keycloak.realm | default "genie")))
     (dict "name" "ARANGO_URL" "value" (include "genieai-umbrella.arangoURL" .))
     (dict "name" "ARANGO_DB" "value" (.Values.data.arangodb.database | default "_system" | toString))
     (dict "name" "DATAPREP_HOST" "value" "http://dataprep")
     (dict "name" "DATAPREP_PORT" "value" "5000")
-    (dict "name" "CLAMSCAN_HOST" "value" .Values.services.documentRepository.clamavHost)
-    (dict "name" "CLAMSCAN_PORT" "value" (.Values.services.documentRepository.clamavPort | toString))
+    (dict "name" "CLAMSCAN_HOST" "value" (.Values.services.documentRepository.clamavHost | default "clamav" | toString))
+    (dict "name" "CLAMSCAN_PORT" "value" (.Values.services.documentRepository.clamavPort | default (.Values.services.clamav.port | default 3310) | toString))
     (dict "name" "VIRUS_SCANNING" "value" ($virusScanning | toString))
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
     (dict "name" "ENABLE_OBSERVABILITY" "value" (include "genieai-umbrella.observabilityEnabledFlag" .))

@@ -183,7 +183,15 @@ def index_services(docs):
         # A Service's spec.selector is a FLAT label map, not a
         # LabelSelector — reading it with component_of() (which expects
         # {"matchLabels": ...}) yields nothing and the index stays empty.
-        component = (doc.get("spec", {}).get("selector") or {}).get("genieai.io/component")
+        selector = doc.get("spec", {}).get("selector") or {}
+        # Two selector shapes name a chart-owned workload: the
+        # `genieai.io/component` label (services, orchestrators, hooks)
+        # and the bare `app` (the four in-cluster model Services) —
+        # component_of() already treats both as component identities, so
+        # the port translation must accept both too. Skipping the `app`
+        # Services left their Service-space ports untranslated (the
+        # crosscheck compared Service space against pod space).
+        component = selector.get("genieai.io/component") or selector.get("app")
         if not component:
             continue
         ports = {}

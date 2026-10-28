@@ -118,7 +118,8 @@ spec:
         - protocol: TCP
           port: 8888
     # document-repository (DOC_REPO_URL). Post-DNAT pod port —
-    # services.documentRepository.port, the knob the Service follows.
+    # services.documentRepository.port (the Service publishes the
+    # factory's fixed 80 and targets the pod by name).
     - to:
         - podSelector:
             matchLabels:

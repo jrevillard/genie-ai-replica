@@ -35,7 +35,9 @@
   wiring and Keycloak's hostname v2 backchannelDynamic.
   DOC_REPO_URL/BACKEND_SERVICE_URL/KEYCLOAK_URL target the in-cluster
   Service names + chart port mappings
-  (document-repository and backend expose port 80 → targetPort 3001/3000;
+  (document-repository and backend publish the factory's fixed port 80,
+  which targets the pod by name — the pod port is
+  services.documentRepository.port / services.backend.port;
   keycloak-service:8080/auth). Container/listen port 8888; healthcheck
   hits `/health` on that port.
 */}}

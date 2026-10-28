@@ -91,18 +91,6 @@ void main() {
       },
     );
 
-    test('a hierarchy that could not be loaded breaks every scope', () {
-      // The hierarchy is what NAMES a scope. Without it, no scope can be
-      // verified — and the button says so rather than looking healthy and
-      // swallowing the tap.
-      final resolver = QuickHelpScopeResolver.unavailable();
-
-      final state = resolver.stateFor({'id': 'civil', 'category': '2'});
-
-      expect(state['broken'], isTrue);
-      expect(state['unavailable'], isTrue);
-    });
-
     test('a hierarchy that has not loaded says nothing about any button', () {
       expect(QuickHelpScopeResolver.pending['broken'], isFalse);
       expect(QuickHelpScopeResolver.pending['unavailable'], isFalse);

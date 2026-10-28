@@ -1223,16 +1223,26 @@ class TestLabelFilterIsAbsolute:
         assert invoke_env["vector_db"].asimilarity_search_with_relevance_scores.await_count == 1
 
     @pytest.mark.asyncio
-    async def test_a_graph_search_is_untouched(self, invoke_env):
-        """The label clause is a chunk-level concept.
+    async def test_a_graph_search_carries_labels_but_only_one_query(self, invoke_env):
+        """A node/edge search runs ONE query, labels or not.
 
-        For a node/edge search the clause never reaches the database, so an
-        empty result is not a label-filter casualty.
+        The label clause is a chunk-level concept and never reaches the
+        database for a node/edge search — but the defence-in-depth filter
+        still applies in Python: a node document carries no chunk_labels,
+        so a label-carrying node search returns NOTHING. That is the net
+        the filter exists to be (production only ever searches 'chunk';
+        a direct node search with labels is an API-level call).
         """
         doc = _FakeDoc(id="nodeA", page_content="text", metadata={})
         invoke_env["vector_db"].asimilarity_search_with_relevance_scores = AsyncMock(return_value=[(doc, 0.5)])
-        await invoke_env["retriever"].invoke(create_mock_input(search_start=encode_filter_labels("node", ["health"])))
+        result = await invoke_env["retriever"].invoke(
+            create_mock_input(search_start=encode_filter_labels("node", ["health"]))
+        )
         assert invoke_env["vector_db"].asimilarity_search_with_relevance_scores.await_count == 1
+        # The node document carries no chunk_labels: the defence-in-depth
+        # filter drops it, so the label-carrying node search returns
+        # nothing rather than answering outside the requested scope.
+        assert result == []
 
 
 class TestAqlFilterClauseEscaping:

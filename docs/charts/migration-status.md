@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-28)
 
-- **Chart `genieai-umbrella` at 0.2.107**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.108**, branch `feat/k8s-migration` based
   on `main` at `18d02f094` and **12 commits behind `origin/main`**
   (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
   the backend's analytics routes, the OPEA overlay (retriever/dataprep),
@@ -614,6 +614,28 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 34 (0.2.108)** — 4 findings from the tenth
+  `/code-review`. The theme: pass 33's own leftovers.
+  - *The redis probes still dialled 6379* — pass 33 moved the
+    listener (`--port`), the containerPort, the Service and the
+    backend's `TRANSLATION_CACHE_PORT` with `services.redisCache.port`,
+    but the readiness/liveness commands stayed `redis-cli ping`,
+    which dials the hardcoded default 6379: an override rendered green
+    and the pod never went Ready. The probes take the knob now
+    (`redis-cli -p <port> ping`) — unlike clamd, redis-server takes
+    its port as a flag, so the chart honours the override instead of
+    rejecting it.
+  - *Two `clamavPort` references survived the knob's deletion* — the
+    env-types gate's fixture still overrode
+    `services.documentRepository.clamavPort`, a key no template reads
+    (the row asserted nothing), and the chart README still documented
+    it as a knob. The fixture exercises the document-repository's PORT
+    row now, and the README points at `services.clamav.port`.
+  - *The per-service shape contract described only the factory* —
+    "the Service always listens on 80" is false for the two
+    hand-written Services (redisCache and clamav expose their Service
+    ON this port). The block states the factory case and names the
+    exceptions.
 - **Review loop, pass 33 (0.2.107)** — 10 findings from the ninth
   `/code-review`. The theme: a knob the chart moves but nothing honours.
   - *The chart moved the port plumbing but never the LISTENER* —
@@ -1569,7 +1591,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.107** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.108** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `18d02f094` (the tip that carries !586, !587,
   !588); the branch has since drifted 12 commits behind `origin/main`

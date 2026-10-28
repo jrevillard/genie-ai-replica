@@ -399,10 +399,13 @@ enforcement and both halves is neither.
 
 Assets go under `public/config/`, **not** `public/`. `config_bootstrap` already
 rsyncs `components/gov-chat-frontend/public/config` → `{{ config_dir }}/frontend`
-with `--ignore-existing` (`defaults/main.yml:27`, `tasks/main.yml:107`), so they
-are seeded automatically and an operator's replacement survives the next deploy.
-That invariant is the single thing a future contributor is most likely to break
-by "tidying" the path — hence this line.
+as a mirror of the branch (`rsync --archive --checksum --delete`,
+`defaults/main.yml:27`, `tasks/main.yml:107`), so they are seeded automatically
+and the host always serves the branch's copy. **Update 2026-10-28**: the mirror
+replaced `--ignore-existing`; an operator's replacement on the host does not
+survive the next deploy any more — the change belongs in the repository, in the
+flavour's config file. That invariant is the single thing a future contributor
+is most likely to break by "tidying" the path — hence this line.
 
 ### Modified files
 
@@ -650,7 +653,7 @@ cherry-picked to `release/el-salvador` by whoever owns that convergence.
 | Lever | Effect |
 |---|---|
 | `"visual": { "enabled": false }` on the host | Removes the entire visual layer |
-| Restore `genie-ai-config.json` on the host | `--ignore-existing` means a deploy never overwrote the operator's file |
+| Restore `genie-ai-config.json` on the host | **Update 2026-10-28**: the host copy mirrors the branch, so a deploy DOES overwrite the operator's file — the change belongs in the repository, in the flavour's config file, and the deploy re-seeds it from the branch |
 | Remove the `validate` call | Disables load-time schema enforcement |
 | `git revert` either commit | Nothing else depends on either |
 

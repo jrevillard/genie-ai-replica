@@ -81,15 +81,15 @@ Move all theme assets (frontend palette + brand JSON + Keycloak theme) to runtim
 ### Source-of-truth strategy
 
 - **Repo** (`components/gov-chat-frontend/public/config/`, `configs/keycloak/themes/genie/`) is the canonical source for default theme assets.
-- **Ansible** (`config_bootstrap` role) rsyncs repo defaults into `{{ config_dir }}` on every node at deploy time using `synchronize` with `delete: false` and `rsync_opts: [--ignore-existing]`. This:
-  - Skips files that already exist on the node (preserves manual operator edits made between deploys)
-  - Never deletes files that exist only on the node (no data loss)
-  - Idempotent: second invocation is a no-op (all files already present)
+- **Ansible** (`config_bootstrap` role) rsyncs repo defaults into `{{ config_dir }}` on every node at deploy time. **Update 2026-10-28**: the role now mirrors the branch — `rsync --archive --checksum --delete` over the files the branch changed and removes the ones it no longer ships; the earlier `synchronize` with `delete: false` and `rsync_opts: [--ignore-existing]` is gone. The branch is the single source of truth for the runtime config, and operator changes belong in the repository, in the flavour's config file. This:
+  - Overwrites the files the branch changed, content-compared (`--checksum`)
+  - Removes the files the branch no longer ships, and refuses to sync a branch that does not ship the deployment's Keycloak theme
+  - Idempotent: second invocation is a no-op (the host already matches the branch)
 - **`config_dir`** is defined in `group_vars/all.yml` as `"{{ deploy_dir }}/config"` (i.e. `/opt/genieai/config`). It is promoted to `group_vars` rather than kept as a role default because the bind mounts are rendered by the separate `deploy` play via `env.j2`, which does not include this role — a role default would render as an empty string there. It is derived from `deploy_dir` rather than an inventory group name so the path does not move when a host's groups are reordered, and so operators find the editable theme files inside the deploy directory they already know.
 - **rsync source paths** are not taken from the local checkout. The role downloads a branch-pinned archive from GitLab (`?path=<repo-relative dir>`) and rsyncs out of the extraction root:
   - `frontend`: `components/gov-chat-frontend/public/config`
   - `keycloak`: `configs/keycloak/themes/genie`
-  - The playbook never clones the repo onto the node, and the documented workflow runs it from a local checkout that may sit on a different branch than the one being deployed — seeding from `playbook_dir` would write the wrong theme assets, and `--ignore-existing` would then lock that mistake in.
+  - The playbook never clones the repo onto the node, and the documented workflow runs it from a local checkout that may sit on a different branch than the one being deployed — seeding from `playbook_dir` would write the wrong theme assets, and the mirror would then push that mistake to every host. The role refuses to sync a branch that does not ship the deployment's Keycloak theme.
 - **No shared filesystem** (NFS/CephFS) — Ansible is the single source-of-truth distributor, matching the existing deploy contract.
 
 ### Mount strategy

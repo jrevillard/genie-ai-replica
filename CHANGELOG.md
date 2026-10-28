@@ -56,6 +56,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The host's runtime configuration now mirrors the deployed branch.**
+  The deployment seeds the host's config directory (the theme assets, the brand
+  configuration and the Keycloak themes the containers bind-mount) from the
+  branch being deployed, and the host copy is now a mirror: files the branch
+  changed are overwritten, and files the branch no longer ships are removed.
+  Previously the host kept whatever it already had, so a host could serve a
+  configuration that no longer matched the branch it was deployed from — the
+  symptom was a blank landing page behind a deploy that reported success.
+  **Operator changes to the runtime configuration must go in the repository**,
+  in the flavour's configuration file: a change made directly on the host is
+  reverted by the next deployment. The deployment also refuses to sync a branch
+  that does not ship the Keycloak theme the deployment is configured to use,
+  and fails when the host's copy does not match the branch it just seeded.
+
 - **The Keycloak theme now covers every surface, not only the login page.**
   The admin console, the account console and the Keycloak emails carry the
   Living Intelligence look: the masthead is a pale wash of the brand instead of

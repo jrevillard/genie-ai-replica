@@ -17,6 +17,17 @@
     state: present
   when: config_bootstrap_sync_enabled | bool
 
+# diffutils provides the diff the verification below runs. The role
+# installs its own tools rather than assuming the host has them: a
+# minimal or air-gapped node is exactly where a missing binary turns a
+# deploy into "diff: command not found".
+- name: Ensure diffutils is available on the target
+  become_user: root
+  ansible.builtin.package:
+    name: diffutils
+    state: present
+  when: config_bootstrap_sync_enabled | bool
+
 # Root is needed to create {{ config_dir }} itself on a host that does not have
 # it yet (the play runs on `all`, including GPU nodes), mirroring the deploy
 # play's "Ensure deploy directory exists" task for the same tree. The
@@ -47,6 +58,18 @@
   loop_control:
     label: "{{ item.src }}"
   when: config_bootstrap_sync_enabled | bool
+
+# The scratch tree is rebuilt from the archive on every run, so it must
+# start empty. A run that aborted between extraction and cleanup left
+# its leftovers behind, and the next run of a DIFFERENT branch extracted
+# into that dirty tree: files the new branch no longer ships stayed
+# there, were copied to the host, and the verification below then
+# compared the host against the same contaminated tree and passed.
+- name: Remove the extraction scratch directory before extracting
+  become_user: root
+  ansible.builtin.file:
+    path: "{{ config_bootstrap_tmp_root }}"
+    state: absent
 
 # unarchive requires its dest to exist; a fresh host (or a changed dest_subdir)
 # has neither the scratch root nor the per-pair extraction directory.
@@ -114,19 +137,33 @@
 # an operator wants changed belongs in the repository, in the flavour's
 # config file, not on the host.
 #
-# The trailing slash on src is load-bearing: without it rsync copies the source
-# directory *by name*, adding an extra level under dest.
+# --checksum: rsync's default quick check compares size and mtime, so a
+# file whose bytes changed but whose size and mtime did not would be
+# skipped and stay stale on the host. Comparing content is the only
+# check that matches the claim this task makes.
+#
+# The trailing slash on src is load-bearing twice over: without it rsync
+# copies the source directory *by name* (an extra level under dest) and,
+# with --delete in play, removes everything else in dest — the whole
+# host config tree. The slash is what keeps --delete scoped to the
+# config tree.
+#
+# The task name is unchanged from the --ignore-existing era on purpose:
+# it is the addressing key for `ansible-playbook --start-at-task`, and
+# renaming it breaks any runbook that resumes the play at it. The
+# semantics it names have changed; the comment above is the contract.
 #
 # ansible.posix.synchronize is deliberately NOT used here: it runs rsync on the
 # Ansible controller and treats src as a controller-local path, while these
 # archives were downloaded and extracted on the target host. Plain rsync under
 # the play's become runs on the target, where the data actually is, and writes
 # into the root-owned config_dir without any --rsync-path sudo games.
-- name: Rsync branch defaults to host runtime config dir (mirror the branch)
+- name: Rsync branch defaults to host runtime config dir (preserve manual edits)
   ansible.builtin.command:
     argv:
       - rsync
       - --archive
+      - --checksum
       - --delete
       - --out-format=%i
       - "{{ config_bootstrap_tmp_root }}/{{ item.dest_subdir | replace('/', '-') }}/{{ item.src }}/"
@@ -139,11 +176,16 @@
   when: config_bootstrap_sync_enabled | bool
 
 # The mirror is the claim; this is the proof. A host that still serves a
-# file the branch does not ship — or one whose content differs — is the
-# failure that cost a white page in production, and it must fail the
-# deploy here, not in the browser. diff -r compares content, so an
-# operator edit and a stale file are both caught.
-- name: Verify the host runtime config mirrors the branch copy
+# file the branch does not ship — or one whose content differs — must
+# fail the deploy here, not in the browser. diff -r compares content, so
+# a stale file and a hand-edited one are both caught.
+#
+# What this does NOT prove: that the shipped file passes the frontend's
+# own schema validation. That is a property of the file's content, and
+# it is checked where the content is written — a test asserts every
+# runtime config satisfies the schema it declares, and the app renders a
+# configuration error screen when one does not.
+- name: Diff the host runtime config against the branch copy
   ansible.builtin.command:
     argv:
       - diff
@@ -153,11 +195,70 @@
       - "{{ config_dir }}/{{ item.dest_subdir }}/"
   register: config_bootstrap_diff
   changed_when: false
-  failed_when: config_bootstrap_diff.rc != 0
+  # rc 1 = the trees differ; rc 2 = diff could not read one of them. Both
+  # fail the deploy, but the message says which.
+  failed_when: false
   loop: "{{ config_bootstrap_pairs }}"
   loop_control:
     label: "{{ item.dest_subdir }}"
-  when: config_bootstrap_sync_enabled | bool
+  when:
+    - config_bootstrap_sync_enabled | bool
+    - not ansible_check_mode | default(false) | bool
+
+- name: Fail when the host runtime config does not match the branch
+  ansible.builtin.assert:
+    that:
+      - item.config_bootstrap_diff.rc == 0
+    fail_msg: >-
+      The host runtime config does not match the branch ({{ repo_branch }}).
+      diff exited {{ item.config_bootstrap_diff.rc }}
+      ({{ 'the trees differ' if item.config_bootstrap_diff.rc == 1 else 'diff could not read one of the trees' }}).
+      {{ item.config_bootstrap_diff.stdout | default('') }}
+    success_msg: "config_bootstrap: the host runtime config matches the branch"
+  loop: "{{ config_bootstrap_diff.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.dest_subdir | default('unknown') }}"
+  when:
+    - config_bootstrap_sync_enabled | bool
+    - not ansible_check_mode | default(false) | bool
+
+# A wrong-branch deploy is now destructive: --delete removes what the
+# branch does not ship. The deployment's own Keycloak theme names the
+# branch it needs — main ships only the genie theme, while an
+# el-salvador deployment runs on genie-el-salvador — so the branch is
+# checked for it BEFORE anything is synced. A branch that does not ship
+# the deployment's theme is the wrong branch for this host.
+- name: Stat the deployment's Keycloak theme in the extracted branch
+  ansible.builtin.stat:
+    path: >-
+      {{ config_bootstrap_tmp_root }}/{{ item.dest_subdir | replace('/', '-') }}/{{ item.src }}/{{ keycloak_theme }}
+  register: config_bootstrap_theme_stat
+  loop: "{{ config_bootstrap_pairs | selectattr('dest_subdir', 'match', '^keycloak/') | list }}"
+  loop_control:
+    label: "{{ item.dest_subdir }}"
+  when:
+    - keycloak_theme is defined
+    - config_bootstrap_sync_enabled | bool
+    - not ansible_check_mode | default(false) | bool
+
+- name: Fail when the branch does not ship the deployment's Keycloak theme
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+    fail_msg: >-
+      The branch ({{ repo_branch }}) does not ship the Keycloak theme
+      {{ keycloak_theme }} that this deployment uses (keycloak_theme in the
+      group vars). Deploying it would delete that theme from the host and
+      the realms would fall back to the built-in Keycloak theme. Check
+      repo_branch against the branch this host is deployed from.
+    success_msg: "config_bootstrap: the branch ships the {{ keycloak_theme }} Keycloak theme"
+  loop: "{{ config_bootstrap_theme_stat.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.dest_subdir | default('unknown') }}"
+  when:
+    - keycloak_theme is defined
+    - config_bootstrap_sync_enabled | bool
+    - not ansible_check_mode | default(false) | bool
 
 - name: Remove extraction scratch directory
   ansible.builtin.file:

@@ -6,10 +6,12 @@
 #
 #   1. Idempotence          - re-running the role does not change the seeded
 #                             runtime config tree on the host.
-#   2. Manual edits survive  - a file an operator edited by hand between deploys
-#                             is byte-for-byte preserved by a subsequent run,
-#                             which is what `--ignore-existing` in the
-#                             synchronize task buys us.
+#   2. The host mirrors the branch - the branch is the single source of truth
+#                             for the runtime config, so a file an operator
+#                             edited by hand between deploys is reverted by the
+#                             next run, and a file the branch does not ship is
+#                             removed. Operator changes belong in the
+#                             repository, in the flavour's config file.
 #
 # Usage:
 #   test_idempotence.sh <inventory_file> <host> [vault_id] [become_password] [repo_branch]
@@ -23,10 +25,13 @@
 #                     Needed when the target's sudo is not passwordless.
 #   [repo_branch]     Optional. Branch the role seeds from. Defaults to the
 #                     playbook's repo_branch (main). ALWAYS pass the branch the
-#                     host is actually deployed from when it is not main:
-#                     --ignore-existing never removes files, so seeding main
-#                     assets onto e.g. a release/el-salvador node leaves them
-#                     there forever.
+#                     host is actually deployed from when it is not main: the
+#                     host copy MIRRORS the branch (files the branch does not
+#                     ship are removed), so seeding main's assets onto e.g. a
+#                     release/el-salvador node would delete that node's theme
+#                     and its flavour configuration. The role refuses to sync
+#                     a branch that does not ship the deployment's Keycloak
+#                     theme.
 #
 # Both the inventory and the host must be given explicitly: the script never
 # guesses a target, and it never falls back to a hardcoded host. Run it against
@@ -41,7 +46,7 @@
 #   deploy/ansible/roles/config_bootstrap/defaults/main.yml:26-33
 #                                               config_bootstrap_pairs (dest_subdir)
 #   deploy/ansible/roles/config_bootstrap/tasks/main.yml
-#                                               rsync --ignore-existing (preserve edits)
+#                                               rsync --archive --checksum --delete (mirror the branch)
 #   deploy/ansible/deploy.yml:418-423            play tags [config, deploy]
 #   deploy/ansible/templates/env.j2:415-416      CONFIG_DIR_FRONTEND / CONFIG_DIR_KEYCLOAK
 #   docker-compose.yaml:402                      /config  <- ${CONFIG_DIR_FRONTEND}:ro
@@ -321,11 +326,11 @@ if [ "$MANIFEST_BEFORE" != "$MANIFEST_AFTER" ]; then
 fi
 pass "second run left every file under $CONFIG_DIR byte-identical"
 
-# --- contract 2: operator edits survive ---------------------------------------
+# --- contract 2: the host mirrors the branch ----------------------------------
 
-step "Contract 2: a manual operator edit must survive a role run"
+step "Contract 2: the host copy must mirror the branch"
 
-remote_sh "test -f '$THEME_CSS'" || fail "cannot test manual-edit preservation: $THEME_CSS is missing"
+remote_sh "test -f '$THEME_CSS'" || fail "cannot test the mirror contract: $THEME_CSS is missing"
 
 BACKUP_PATH="/tmp/config_bootstrap_smoke_backup_$$.css"
 remote_sh "cp -p '$THEME_CSS' '$BACKUP_PATH'" ||
@@ -341,30 +346,41 @@ remote_sh "printf '%s\\n' '$MARKER' >> '$THEME_CSS'" ||
     fail "could not append the smoke-test marker to $THEME_CSS"
 pass "appended marker line to $THEME_CSS"
 
+# A file the branch does not ship: the mirror must take it away.
+STRAY_PATH="$CONFIG_DIR/frontend/config_bootstrap_smoke_stray_$$.txt"
+remote_sh "printf 'stray\\n' > '$STRAY_PATH'" ||
+    fail "could not create the stray file $STRAY_PATH"
+pass "created stray file $STRAY_PATH"
+
 step "Run 3: re-run the role after a manual edit"
 run_role
 
-# The marker must still be there...
-remote_sh "grep -Fq '$MARKER' '$THEME_CSS'" ||
-    fail "the manual edit was clobbered: marker not found in $THEME_CSS after the role run (--ignore-existing is not doing its job)"
-pass "marker still present in $THEME_CSS after the role run"
+# The manual edit must be gone: the branch is the source of truth.
+if remote_sh "grep -Fq '$MARKER' '$THEME_CSS'"; then
+    fail "the manual edit survived the role run - the host copy does not mirror the branch"
+fi
+pass "the manual edit was reverted by the role run"
 
-# ...and the file must equal the pre-test content plus exactly the marker line.
-# This is the strict form of the contract: rsync did not rewrite a single byte.
+# ...and the file must equal the pre-test content again, byte for byte.
 EXPECTED_PATH="/tmp/config_bootstrap_smoke_expected_$$.css"
 ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
-    -a "cat '$BACKUP_PATH' > '$EXPECTED_PATH' && printf '%s\\n' '$MARKER' >> '$EXPECTED_PATH'" ||
+    -a "cat '$BACKUP_PATH' > '$EXPECTED_PATH'" ||
     fail "could not build the expected-content file on the host"
 if ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell -a "cmp -s '$EXPECTED_PATH' '$THEME_CSS'"; then
-    pass "$THEME_CSS is byte-identical to (pre-test content + marker line)"
+    pass "$THEME_CSS is byte-identical to the pre-test content again"
 else
-    fail "$THEME_CSS was rewritten by the role run - operator edits are not preserved"
+    fail "$THEME_CSS was not restored to the branch copy by the role run"
 fi
 ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell -a "rm -f '$EXPECTED_PATH'" || true
 
-# A re-run must not have introduced or removed any file either. The edited
-# stylesheet stays in the list (its name does not change), so the whole file
-# list must match the one captured before the marker was appended.
+# The file the branch does not ship must be gone as well.
+if remote_sh "test -e '$STRAY_PATH'"; then
+    fail "the stray file $STRAY_PATH survived the role run - the mirror does not delete what the branch does not ship"
+fi
+pass "the stray file was removed by the role run"
+
+# A re-run must not have introduced or removed any other file either: the
+# whole file list must match the one captured before the test.
 FILELIST_AFTER_EDIT="$(filelist)"
 if [ "$FILELIST_BEFORE" != "$FILELIST_AFTER_EDIT" ]; then
     printf '--- file list before the manual edit ---\n%s\n' "$FILELIST_BEFORE" >&2

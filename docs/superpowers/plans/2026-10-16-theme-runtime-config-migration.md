@@ -1,5 +1,14 @@
 # Theme Runtime Config Migration Implementation Plan
 
+> **2026-10-28 revision (post-execution):** the role's sync contract changed
+> after the production incident of 2026-10-27 — a host kept serving a
+> configuration that no longer matched the branch it was deployed from, and the
+> app refused to mount (a blank landing page behind a successful deploy). The
+> role now MIRRORS the branch: `rsync --archive --checksum --delete`, plus a
+> check that the host matches the branch afterwards. The `--ignore-existing`
+> contract described below (and in the design specs) is gone. The shipped
+> `deploy/ansible/roles/config_bootstrap/` is authoritative.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 > **2026-10-18 revision (post-execution):** the Keycloak mount contract changed

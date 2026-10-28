@@ -204,8 +204,8 @@ spec:
           # convergence Job is disabled nothing consumes it at all — the
           # one shape this gate used to fail falsely.)
           required_secrets="$required_secrets {{ $bootstrapAdmin.userSecret | default "keycloak-admin-credentials" }}"
-          {{- range $kcConvergence.envSecrets }}
-          required_secrets="$required_secrets {{ .secretName }}"
+          {{- range $e := (include "genieai-umbrella.validatedConvergenceEnvSecrets" ($kcConvergence.envSecrets | default list) | fromJsonArray) }}
+          required_secrets="$required_secrets {{ $e.secretName }}"
           {{- end }}
           {{- end }}
           {{- if .Values.opea.enabled }}

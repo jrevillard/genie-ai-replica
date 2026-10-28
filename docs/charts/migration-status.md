@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-27)
 
-- **Chart `genieai-umbrella` at 0.2.88**, branch `feat/k8s-migration` rebased
+- **Chart `genieai-umbrella` at 0.2.89**, branch `feat/k8s-migration` rebased
   onto `main` at `179a8a8f1` (0 commits behind).
 - **No application code in the branch**: the diff touches `charts/`,
   `scripts/`, `docs/`, `deploy/`, `tests/`, `site/`, `.gitlab-ci.yml`,
@@ -604,6 +604,80 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 17 (0.2.89)** — 13 findings, all verified true, all
+  fixed, plus the two brittleness notes the reviewer appended. The
+  headline: **every environment value the chart rendered was a string by
+  luck, not by construction.**
+  - *16 derived env rows rendered raw values* — `v1.EnvVar.value` is
+    typed `string`; an operator tuning a numeric knob (`--set
+    opea.chatqna.retrieverArangoSearchStart=1`) produced `value: 1`, and
+    the API server would reject the whole Deployment with "cannot
+    unmarshal number into Go struct field EnvVar.value of type string"
+    — minutes after the install, naming a template field rather than
+    the values path the operator typed. Every row now stringifies at
+    the render boundary.
+  - *The factory rendered whatever shape it was handed* — `toYaml
+    $svc.env` emitted a YAML MAPPING when a caller skipped the map→list
+    conversion, which the API server rejects with a schema error naming
+    neither the service nor the key. The new `envRows` helper is the
+    boundary: a map env, a row without a name, a row with neither
+    value nor valueFrom, and a nil value are all render-time errors.
+    Both guards were mutation-tested (each renders red when its defect
+    is reintroduced).
+  - *A gate for the class* — `scripts/env-types-check.py` renders the
+    chart twice (defaults, then the numeric and boolean knobs
+    overridden to numbers) and requires every env value to be a
+    string. The defaults are strings, so the second render is the one
+    that catches it.
+  - *The prod profile discarded the operator's instance counts* — the
+    Keycloak CR and the CNPG Cluster hardcoded 2 and 3 on prod, so
+    `data.keycloak.instances: 5` was ignored with no warning, no
+    error, and a green render. The counts now resolve through
+    `clusterProfileInstances` (a values map, like
+    `clusterProfileReplicas`) with the ORDER INVERTED for the data
+    tier: an explicit `data.<tier>.instances` wins over the profile,
+    because it is the count the operator sized the database for. The
+    chart declares `instances: null` so "unset" stays distinguishable
+    from "the operator pinned 1".
+  - *The frontend's CSP was stricter than the chart documents* —
+    `VUE_APP_CSP_CONNECT_SRC` carried only the public origin, so a
+    browser on a non-default port (the laptop port-forward,
+    `https://genieai.local:4443`) had its own same-origin /api calls
+    blocked: "https://genieai.local" does not match the page origin
+    "https://genieai.local:4443", and 'self' is the only source that
+    matches whatever origin the page was served from. Both policies
+    now derive from ONE helper (`cspConnectSrc`).
+  - *An empty env value is dropped by the API server* —
+    `DOCLING_ENDPOINT: ""` is `omitempty`, so the row was rendered,
+    declared a variable the kubelet never set, and the comment claimed
+    it was "always set, like Compose". The row is now rendered only
+    when there is a remote docling target, and the comment states
+    what the cluster actually does.
+  - *The GPU node label was a literal* — the four in-cluster model
+    Deployments hardcoded `nodeSelector: gpu: "true"`; a cluster
+    labelling its GPU nodes the NVIDIA way would leave them Pending
+    with "node(s) didn't match Pod's node affinity/selector" and no
+    gate in the repository able to see a scheduling decision. The
+    label is now `opea.models.nodeSelector`, declared EMPTY on
+    purpose: Helm MERGES values maps, so a chart default of
+    `{gpu: "true"}` would survive an overlay declaring
+    `{nvidia.com/gpu.present: "true"}` and the pods would need a node
+    carrying BOTH labels.
+  - *The rest* — the namespace guard no longer accepts
+    `namespace: ""` (58 of 74 objects rendered with an empty
+    namespace); the Grafana `admin_user` is quoted, as the file's own
+    rule demands; the theme-regeneration script fails on a tar error
+    instead of writing a valid-but-empty tarball that the documented
+    remedy reproduces; the NetworkPolicy cross-check indexes the model
+    Services (selector `app:`) so their ports are translated from
+    Service space to pod space; the helm-test helper prints `000`, not
+    `000000`; the teardown script refuses an unmapped namespace.
+  - *The two brittleness notes fixed* — the parity floor was one
+    below the count it guards (171 vs 172 compared), so a single
+    reclassification was invisible; it is now 172. And `chart:lint`'s
+    prod render did not enable the OPEA tier while
+    `chart:crd-validate`'s did: two jobs calling their render "the
+    prod one" must render the same thing.
 - **Review loop, pass 16 (0.2.88)** — 6 findings, all verified true, all
   fixed. The headline is **a regression of pass 15's own fix**, caught by
   measurement rather than by reading:
@@ -714,7 +788,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.88** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.89** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `179a8a8f1` (the tip that carries !586, !587,
   !588) — the branch is 0 commits behind `main`.

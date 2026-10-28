@@ -189,6 +189,11 @@ uninstall_operators() {
   # helm uninstall anyway, so the correct teardown there is in the deploy
   # repo).
   for ns in cnpg-system arango-system cert-manager vmoperator-system opentelemetry-operator-system grafana-operator-system; do
+    # Reset per iteration: `release` declared outside the loop kept the
+    # PREVIOUS iteration's value when a namespace had no case arm, so a
+    # new namespace in the list uninstalled the wrong release (silently,
+    # the case had no default branch).
+    release=""
     case "$ns" in
       cnpg-system)             release="cnpg" ;;
       arango-system)           release="kube-arangodb" ;;
@@ -196,6 +201,10 @@ uninstall_operators() {
       vmoperator-system)       release="victoria-metrics-operator" ;;
       opentelemetry-operator-system) release="opentelemetry-operator" ;;
       grafana-operator-system) release="grafana-operator" ;;
+      *)
+        warn "no release name mapped for namespace ${ns} — add it to the case list"
+        continue
+        ;;
     esac
     if helm list -n "${ns}" -q 2>/dev/null | grep -qx "${release}"; then
       log "helm uninstall ${release} -n ${ns}"

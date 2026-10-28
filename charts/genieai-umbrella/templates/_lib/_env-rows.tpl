@@ -62,6 +62,60 @@ this in two dialects (a `ternary` over `kindIs "invalid"` and an `eq`
 over `default false`); both reduce to this, and the default is an
 argument so the two families keep their distinct values.
 */}}
+{{/*
+genieai-umbrella.envRows — the container env list, normalized and checked.
+
+The chart hands the service factory a LIST of {name, value} or
+{name, valueFrom} rows. This helper is the boundary where those rows
+are validated and stringified, so a non-string value can never reach the
+manifest: `v1.EnvVar.value` is typed `string`, and the API server
+rejects a number or a boolean at apply time — minutes after the
+install, with the pod's manifest as the only clue.
+
+Rules:
+  - a MAP env (the operator-facing shape) is rejected. `toYaml` of a map
+    renders a YAML MAPPING under `env:`, which the API server rejects
+    with a schema error naming neither the service nor the key. The map
+    shape is converted first by genieai-umbrella.envMapRows.
+  - every row must carry a name, and either a value or a valueFrom. A
+    row with neither renders an env entry the kubelet ignores — a
+    variable the chart documents but the pod never receives.
+  - a value is stringified; a NIL value is an error, because an
+    operator's `FOO:` with no value is a typo, not an empty string.
+
+Usage: {{ include "genieai-umbrella.envRows" ($svc.env | default list) | fromJsonArray | toYaml }}
+*/}}
+{{- define "genieai-umbrella.envRows" -}}
+{{- $env := . -}}
+{{- if kindIs "map" $env -}}
+{{- fail "the environment must be a LIST of {name, value} rows; a map renders as a YAML mapping under env:, which the API server rejects. Convert it with the genieai-umbrella.envMapRows helper." -}}
+{{- end -}}
+{{- if not (kindIs "slice" $env) -}}
+{{- fail (printf "the environment must be a LIST of {name, value} rows, not %s" (kindOf $env)) -}}
+{{- end -}}
+{{- $rows := list -}}
+{{- range $row := $env -}}
+{{- if not (kindIs "map" $row) -}}
+{{- fail (printf "each environment row must be a {name, value} map, not %s" (kindOf $row)) -}}
+{{- end -}}
+{{- if not (hasKey $row "name") -}}
+{{- fail "each environment row must carry a name" -}}
+{{- end -}}
+{{- if hasKey $row "value" -}}
+{{- $value := get $row "value" -}}
+{{- if kindIs "invalid" $value -}}
+{{- fail (printf "the environment row %q carries a nil value; declare an empty string instead" (get $row "name")) -}}
+{{- end -}}
+{{- $rows = append $rows (dict "name" (get $row "name") "value" (toString $value)) -}}
+{{- else if hasKey $row "valueFrom" -}}
+{{- $rows = append $rows (dict "name" (get $row "name") "valueFrom" (get $row "valueFrom")) -}}
+{{- else -}}
+{{- fail (printf "the environment row %q carries neither a value nor a valueFrom" (get $row "name")) -}}
+{{- end -}}
+{{- end -}}
+{{- toJson $rows -}}
+{{- end -}}
+
 {{- define "genieai-umbrella.boolEnvValue" -}}
 {{- $v := .value -}}
 {{- if kindIs "invalid" $v -}}{{- $v = .default -}}{{- end -}}

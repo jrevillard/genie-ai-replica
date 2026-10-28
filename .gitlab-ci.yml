@@ -3205,13 +3205,20 @@ chart:lint:
     # document-repository and frontend to 2, and it puts the Keycloak
     # database at 3 CNPG instances. ingress.tls.enabled adds the
     # cert-manager Certificate, which no other render emits either.
+    #
+    # The OPEA tier is ON here, the same as the chart:crd-validate prod
+    # render: two jobs calling their render "the prod one" must render
+    # the same thing, or a surface is covered in one job and missing
+    # from the other for reasons nobody wrote down.
     - >-
       helm template test charts/genieai-umbrella -n genieai $(cat charts/ci/render-base-flags)
+      $(cat charts/ci/render-full-flags)
       --set clusterProfile=prod
       --set ingress.tls.enabled=true
       --set ingress.tls.issuerName=selfsigned
       --set observability.metrics.enabled=true
       --set observability.traces.enabled=true
+      --set opea.gpu.nodeHost=https://gpu.ci-render.local:444
       > /tmp/rendered-prod.yaml
     # Same render with the in-cluster GPU tier: every orchestrator's
     # endpoint, model Deployment, NetworkPolicy port and model-cache PVC
@@ -3252,6 +3259,15 @@ chart:lint:
     # gate: it is judged on every render by the parity gate's chart-side
     # walk.
     - python3 scripts/values-surface-check.py
+    # Every rendered environment value must be a STRING. `v1.EnvVar.value`
+    # is typed string: the API server rejects a number or a boolean at
+    # apply time — minutes after the install, with the pod's manifest as
+    # the only clue. The chart builds env rows from two surfaces (the
+    # operator's values.yaml map and the rows the templates assemble),
+    # and the DEFAULTS are strings — so the gate also renders with the
+    # numeric and boolean knobs overridden to a number, which is the
+    # configuration that used to render `value: 42`.
+    - python3 scripts/env-types-check.py charts/genieai-umbrella
     - >-
       python3 /tmp/cluster-scope-check.py test genieai 1 envoy
       /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-prod.yaml /tmp/rendered-incluster.yaml
@@ -3457,11 +3473,14 @@ chart:parity:
       --set opea.enabled=true
       --set opea.gpu.nodeHost=https://gpu-node:444
       > /tmp/rendered.yaml
-    # --min-compared is the floor on variables actually compared (171 at
-    # the time of writing; secretProvided and mayDiffer rows are excluded
-    # from the count, so growing EITHER category now drops the number and
-    # trips the floor instead of quietly greening the gate).
-    - python3 scripts/config-parity-check.py /tmp/rendered.yaml --min-compared=171
+    # --min-compared is the floor on variables actually compared (172 —
+    # the number the gate compares TODAY; secretProvided, mayDiffer and
+    # codeDefault rows are excluded from the count, so growing ANY of
+    # those categories drops the number and trips the floor instead of
+    # quietly greening the gate). The floor equals the count, not one
+    # below it: with a floor of 171 a single reclassification was
+    # invisible.
+    - python3 scripts/config-parity-check.py /tmp/rendered.yaml --min-compared=172
   rules:
     # The gate verifies its `notRead` claims against the APPLICATION
     # source: a commit under components/ or genie-ai-overlay/ that starts

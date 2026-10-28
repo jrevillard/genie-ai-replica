@@ -254,7 +254,11 @@ def compose_vars(service):
     """{name: (effective value, required)} for a Compose service."""
     environment = service.get("environment") or []
     if isinstance(environment, dict):
-        environment = [f"{k}={v}" for k, v in environment.items()]
+        # A YAML null in dict form (`KEY:` with no value) is an UNSET
+        # variable, which Compose resolves to the empty string. f-string
+        # interpolation turned it into the literal text "None", and the
+        # gate then compared that text against the chart's value.
+        environment = [f"{k}=" if v is None else f"{k}={v}" for k, v in environment.items()]
     out = {}
     for entry in environment:
         text = str(entry)

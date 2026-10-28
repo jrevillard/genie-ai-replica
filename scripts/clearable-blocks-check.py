@@ -195,6 +195,47 @@ def classify(stderr):
     return "nameless", stderr.strip().split("\n")[0][:160]
 
 
+def object_names(docs):
+    """The name of every rendered object."""
+    names = set()
+    for doc in docs:
+        if isinstance(doc, dict):
+            name = (doc.get("metadata") or {}).get("name")
+            if name:
+                names.add(name)
+    return names
+
+
+def _normalized(name):
+    return re.sub(r"[^a-z0-9]", "", name.lower())
+
+
+def owns_drop(block, group, vanished):
+    """Whether the cleared block owns the rows it removed.
+
+    A row that DISAPPEARS is a degradation the operator did not ask
+    for, unless the block that removed it is the one that configures it:
+
+      * the block's path names the workload it took the row from (the
+        service segment of `services.backend.env` names the backend), or
+      * the row pointed at a resource the block removed (a service
+        switched off with its tier: the row carried its host, the port
+        beside it carried nothing).
+
+    The rows that vanish together are judged as ONE group: a row that
+    carried no name of its own belongs to the same removal as the row
+    that did.
+    """
+    segments = [_normalized(part) for part in block.split(".")]
+    for key, value in group:
+        workload = _normalized(key[0])
+        if any(token and token in workload for token in segments[-2:]):
+            return True
+        if any(gone and gone in str(value) for gone in vanished):
+            return True
+    return False
+
+
 def main():
     chart_path = (
         sys.argv[1]
@@ -212,6 +253,7 @@ def main():
     crashes = []
     nameless = []
     emptied = []
+    orphans = []
     guards = 0
     rendered = 0
     started = time.time()
@@ -221,6 +263,7 @@ def main():
             print("FAIL: the baseline render of the %s failed:\n%s" % (label, base_err[:800]))
             return 1
         base_rows = env_rows(base_docs)
+        base_names = object_names(base_docs)
         for block in blocks:
             rc, stderr, docs, text = render(chart_path, flags + [f"--set={block}=null"])
             if rc == 0:
@@ -241,6 +284,30 @@ def main():
                             "  [%s] %s: %s / %s / %s went from %r to an empty value"
                             % (label, block, key[0], key[1], key[2], value)
                         )
+                # NO SILENT DROP. A row that DISAPPEARS is as much a
+                # degradation as one that empties: the pod starts without
+                # a variable the operator never touched. It is legitimate
+                # only when the block that removed it is the one that
+                # configures it.
+                surviving = {key[0] for key in cleared_rows}
+                dropped = [
+                    (key, value)
+                    for key, value in base_rows.items()
+                    if key not in cleared_rows and key[0] in surviving
+                ]
+                if dropped and not owns_drop(block, dropped, base_names - object_names(docs)):
+                    orphans.append(
+                        "  [%s] %s: the block removed %d env row(s) from a workload "
+                        "it does not configure — %s"
+                        % (
+                            label,
+                            block,
+                            len(dropped),
+                            ", ".join(
+                                sorted("%s / %s" % (key[0], key[2]) for key, _ in dropped)
+                            ),
+                        )
+                    )
                 continue
             kind, detail = classify(stderr)
             if kind == "guard":
@@ -273,7 +340,12 @@ def main():
               "the template engine's debug output:")
         for row in emptied:
             print(row)
-    if crashes or nameless or emptied:
+    if orphans:
+        print("a cleared block must not remove an env row from a workload it does "
+              "not configure:")
+        for row in orphans:
+            print(row)
+    if crashes or nameless or emptied or orphans:
         return 1
     print("every cleared block degrades or fails with a named guard")
     return 0

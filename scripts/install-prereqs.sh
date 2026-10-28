@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
-# Idempotent installer for the 7 cluster operators that the genie-ai
-# chart requires as cluster-wide bootstrap (NOT chart dependencies),
-# plus the Gateway API CRDs the chart's edge tier renders.
+# Idempotent installer for the 7 cluster operators the genie-ai stack
+# needs as cluster-wide bootstrap (NOT chart dependencies), plus the
+# Gateway API CRDs the chart's edge tier renders.
+#
+# One of the seven is not the CHART's requirement: the chart renders no
+# SealedSecret CR (it reads the Secrets it is given, it never creates
+# them). The DEPLOY repo's overlays do — they carry one SealedSecret per
+# cluster Secret and let the controller materialize it in the namespace.
+# Sealed-secrets is therefore installed for the overlays, and the
+# operator stays in the list.
 #
 # Usage: KUBECONFIG=/path/to/kubeconfig ./scripts/install-prereqs.sh [--with-grafana]
 #        (no KUBECONFIG = kubectl's current context)
@@ -12,7 +19,7 @@
 #   - keycloak-operator 26.8.0   (namespace keycloak-system; Kustomize install of the official modern Quarkus-based operator; 4 CRDs in k8s.keycloak.org group)
 #   - cloudnative-pg 0.22.0      (namespace cnpg-system)
 #   - kube-arangodb 1.4.5        (namespace arango-system)
-#   - sealed-secrets 0.40.0      (namespace sealed-secrets)
+#   - sealed-secrets 0.40.0      (namespace sealed-secrets; for the deploy repo's overlays — the chart renders no SealedSecret)
 #   - cert-manager v1.18.2       (namespace cert-manager; required by the otel-operator webhooks)
 #   - victoria-metrics-operator 0.68.1 (namespace vmoperator-system; reconciles the
 #     chart's VLSingle/VMSingle/VTSingle/VMServiceScrape CRs — the log tier is on by default)

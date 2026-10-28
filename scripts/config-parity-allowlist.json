@@ -120,7 +120,6 @@
         "ARANGO_URL": "in-cluster Service DNS instead of the Compose service name",
         "ARANGO_PASSWORD": "carried by the arango-root-secret Secret the operator provides",
         "BACKEND_SERVICE_URL": "in-cluster Service DNS instead of the Compose service name",
-        "DOCLING_ENDPOINT": "the chart points at the OPEA tier's docling endpoint; Compose runs docling in-process",
         "DOCUMENT_REPOSITORY_URL": "in-cluster Service DNS instead of the Compose service name",
         "ENABLE_OBSERVABILITY": "the chart's observability tier is an operator-enabled install of its own; Compose gates the same services behind a profile",
         "GPU_NODE_HOST": "the chart names the GPU node it was configured with; Compose leaves it empty unless the remote-GPU topology is used",
@@ -138,7 +137,8 @@
       },
       "codeDefault": {
         "CONTEXTUAL_RETRIEVAL_PROMPT": "empty in Compose; the code falls back to its built-in prompt when the variable is unset, and the chart has its own knob (opea.dataprep.contextualRetrievalPrompt)",
-        "LABEL_SELECTOR_SYSTEM_PROMPT": "empty in Compose; the code falls back to its built-in prompt when the variable is unset, and the chart has its own knob (opea.dataprep.labelSelectorSystemPrompt)"
+        "LABEL_SELECTOR_SYSTEM_PROMPT": "empty in Compose; the code falls back to its built-in prompt when the variable is unset, and the chart has its own knob (opea.dataprep.labelSelectorSystemPrompt)",
+        "DOCLING_ENDPOINT": "Compose leaves DOCLING_ENDPOINT empty and the code's own default applies (the in-process docling converter); the chart leaves it unset too, so both surfaces run the in-process converter. The knob is opea.gpu.paths.docling: set it when the GPU node really serves docling-serve."
       }
     },
     "retriever": {

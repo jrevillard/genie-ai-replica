@@ -73,10 +73,12 @@ sets it fails the render instead of being silently rewritten. */ -}}
 {{- $translationEnv := list
     (dict "name" "TRANSLATION_BACKEND" "value" $translationBackend) -}}
 {{- $probeTimeout := $translation.probeTimeoutSeconds -}}
-{{- /* Presence check, not truthiness: an explicit 0 is a legal "fail the
-probe immediately" budget and Sprig's truthiness would silently drop the
-row — the same falsy-zero trap the convergence Job's backoffLimit fix
-removed. */ -}}
+{{- /* Presence check, not truthiness: Sprig's truthiness would silently
+drop an explicit 0 — the same falsy-zero trap the convergence Job's
+backoffLimit fix removed. Note that 0 does NOT shorten the budget: the
+application parses the value with a minimum of 1 and falls back to its
+own 30 s default for anything below, so a 0 in the manifest buys the
+default, not an immediate failure. */ -}}
 {{- if not (kindIs "invalid" $probeTimeout) -}}
 {{- $translationEnv = concat $translationEnv (list
     (dict "name" "TRANSLATION_PROBE_TIMEOUT_SECONDS" "value" (printf "%v" $probeTimeout))) -}}

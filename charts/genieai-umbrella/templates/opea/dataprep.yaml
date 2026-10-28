@@ -83,7 +83,7 @@
 empty endpoint = the in-process docling converter, a non-empty one = a
 remote docling-serve. The helper returns empty whenever no docling
 target exists (no in-cluster Deployment; an external deployment whose
-opea.gpu.paths.docling is cleared).
+opea.gpu.paths.docling is empty — the default).
 
 The row is rendered ONLY when there is a target. `v1.EnvVar.value` is
 omitempty, so a row carrying `value: ""` is DROPPED by the API server:

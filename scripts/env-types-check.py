@@ -160,6 +160,12 @@ SAFE_VALUE = ("quote", "toString", "include", "printf", "boolEnvValue")
 ENV_NAME_LINE = re.compile(r"^\s*-\s*name:\s*[A-Za-z_][A-Za-z0-9_]*\s*$")
 ENV_VALUE_START = re.compile(r"^\s*value:\s*\{\{-?\s*")
 
+# The control markers of a template action. A marker opens, closes or
+# switches a BRANCH; anything else in an action position produces the
+# value.
+CONTROL_KEYWORDS = ("else if", "else", "if", "with", "range", "end", "define", "template", "block")
+BRANCH_MARKERS = ("if", "else if", "else", "with", "range")
+
 
 def _action_expression(lines, start):
     """The expression of the `value: {{ ... }}` action starting at `start`.
@@ -186,7 +192,83 @@ def _action_expression(lines, start):
     # and the safety of the row depends on the WHOLE action, not on its first
     # sub-expression.
     match = re.search(r"\{\{-?\s*(.*)\s*-?\}\}", text, re.S)
-    return (match.group(1) if match else text), index
+    return match.group(1) if match else text
+
+
+def _control_marker(piece):
+    """The control keyword of an action piece, or None when it is a value."""
+    text = piece.strip()
+    for keyword in CONTROL_KEYWORDS:
+        if text == keyword:
+            return keyword
+        if text.startswith(keyword + " ") or text.startswith(keyword + "("):
+            return keyword
+    return None
+
+
+def _branches(expression):
+    """The action's branches: each is (value expressions, literal text).
+
+    The row's safety is the safety of EVERY branch: `{{ if $x }}{{ .a }}{{ else
+    }}{{ .b | quote }}{{ end }}` renders a string only when $x is false, and
+    the operator's knob decides which. A whole-action match ("does the
+    action mention quote anywhere?") hides that — it says yes while the
+    branch that actually renders is unprotected.
+    """
+    parts = re.split(r"(\{\{|\}\})", "{{" + expression + "}}")
+    branches = []
+    leaves = []
+    literal = []
+    for index in range(0, len(parts), 2):
+        if index == 0:
+            continue
+        piece = parts[index]
+        if parts[index - 1] == "}}":
+            # Literal text between two actions.
+            literal.append(piece)
+            continue
+        marker = _control_marker(piece)
+        if marker is None:
+            leaves.append(piece.strip())
+        elif marker in BRANCH_MARKERS:
+            branches.append((leaves, "".join(literal)))
+            leaves, literal = [], []
+    branches.append((leaves, "".join(literal)))
+    return branches
+
+
+def _unsafe_branches(expression):
+    """The branches of the action that can render a non-string value."""
+    unsafe = []
+    for leaves, literal in _branches(expression):
+        for leaf in leaves:
+            if not any(token in leaf for token in SAFE_VALUE):
+                unsafe.append(leaf)
+                break
+        else:
+            # A branch with no value expression renders its literal text
+            # alone: `value: {{ if $x }}3.1{{ end }}` renders `value: 3.1`,
+            # a YAML float. A literal next to a value expression is part of
+            # a longer text and stays a string.
+            text = literal.strip()
+            if not leaves and text and not _is_yaml_string(text):
+                unsafe.append(text)
+    return unsafe
+
+
+def _is_yaml_string(text):
+    """Whether the text parses as a YAML string.
+
+    The literal branch is only a problem when YAML reads it as something
+    else — a number, a boolean (`yes`, `on`), a null. `localhost` and
+    `no-reply@genieai.local` are strings and stay strings.
+    """
+    try:
+        return isinstance(yaml.safe_load(text), str)
+    except yaml.YAMLError:
+        # Not YAML at all: the manifest is broken for another reason, and
+        # this gate is about types.
+        return True
 
 
 def scan_hand_rendered_env_rows(chart_path):
@@ -195,7 +277,8 @@ def scan_hand_rendered_env_rows(chart_path):
     The RENDER half of this gate can only see the values it overrides:
     a template that hand-renders a new env row outside the factory is
     unprotected until its knob joins TYPE_OVERRIDES. This half closes
-    the class structurally — every such row must quote or stringify.
+    the class structurally — every such row must quote or stringify, on
+    EVERY branch.
     """
     problems = []
     templates = Path(chart_path) / "templates"
@@ -222,12 +305,13 @@ def scan_hand_rendered_env_rows(chart_path):
                 continue
             if not ENV_VALUE_START.match(lines[value_index]):
                 continue
-            expression, last = _action_expression(lines, value_index)
-            if any(token in expression for token in SAFE_VALUE):
+            expression = _action_expression(lines, value_index)
+            unsafe = _unsafe_branches(expression)
+            if not unsafe:
                 continue
             problems.append(
                 f"{path.relative_to(chart_path)}:{value_index + 1}: the env row "
-                f"{line.strip()} renders an unquoted value ({expression.strip()}) — "
+                f"{line.strip()} renders an unquoted value ({'; '.join(unsafe)}) — "
                 "a value that parses as a number or a boolean reaches the API "
                 "server as a non-string"
             )

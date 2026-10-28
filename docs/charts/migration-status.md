@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-28)
 
-- **Chart `genieai-umbrella` at 0.2.96**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.97**, branch `feat/k8s-migration` based
   on `main` at `179a8a8f1` and **8 commits behind `origin/main`**
   (`5786919c1`). The gap touches the frontend, the OPEA overlay
   (retriever/dataprep), the site docs and the config-validator tests —
@@ -609,6 +609,55 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 25 (0.2.97)** — 8 findings from the `/code-review`
+  skill, all verified true, all fixed. The pass attacked the gates the
+  previous passes had just rewritten, and it was right to: three of the
+  findings were holes in a gate that had passed every run.
+  - *The docling endpoint default contradicted the documented
+    contract* — Compose leaves `DOCLING_ENDPOINT` empty and dataprep
+    then uses its in-process converter, but the chart shipped
+    `/docling` as its default: every ingestion pointed at a path
+    nothing in the chart serves. The default is empty now (the
+    endpoint is opt-in), and the parity allowlist row moved from
+    `mayDiffer` to `codeDefault` — the chart applies the code's
+    default, so it must leave the key unset.
+  - *The `mayDiffer` branch of the parity gate asserted nothing* — it
+    accepted a chart value that was EMPTY under the claim that the
+    two deployments may differ. It now asserts the chart renders a
+    non-empty value.
+  - *The probe-timeout comment promised what the value cannot buy* —
+    it read "an explicit 0 is a legal 'fail the probe immediately'
+    budget", but the application parses the value with a minimum of 1
+    and falls back to its own 30 s default. The comment says what a 0
+    actually does.
+  - *The env-types static half matched the WHOLE action* — a
+    conditional row passed whenever ANY branch mentioned `quote`, so
+    the branch that actually rendered could hand the API server a
+    number. The check is per branch now, and a branch made only of
+    literal text is judged by what YAML reads it as.
+  - *The cleared-block sweep ignored DROPPED env rows* — it compared
+    the rows present in both renders, so a block that removed a row
+    from a workload it does not configure was a compliant degradation.
+    A drop is now judged: the block must own it (its path names the
+    workload, or the row pointed at a resource the block removed), and
+    the rows that vanish together are judged as one group.
+  - *The NetworkPolicy cross-check could not see an ingress peer with
+    no policy of its own* — the helm-test probes are admitted by the
+    backend and the doc-repo, and their egress is declared nowhere; a
+    namespace-wide default-deny would lock them out silently. A narrow
+    assertion reports the pair now (it is decidable: such a peer is
+    unrestricted unless a namespace-wide policy isolates its egress).
+  - *The prereqs installer called sealed-secrets a chart
+    requirement* — the chart renders no SealedSecret; the deploy
+    repo's overlays carry them. The header now says whose
+    requirement the operator is.
+  - *The chart's version IS its artifact identity, and nothing
+    enforced the bump* — Flux reconciles `spec.chart.spec.version`,
+    so a push that changes the chart without moving it installs
+    nothing (the release reports "in-sync with desired state"). 114
+    commits of this branch changed the chart without a bump.
+    `scripts/chart-version-check.py` fails the pipeline when the
+    content moves without the version.
 - **Review loop, pass 24 (0.2.96)** — 7 findings from the `/code-review`
   skill, all verified true, all fixed. The review attacked the gates the
   previous passes had just rewritten, and it was right to.
@@ -1116,7 +1165,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.96** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.97** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `179a8a8f1` (the tip that carries !586, !587,
   !588) — the branch is 0 commits behind `main`.

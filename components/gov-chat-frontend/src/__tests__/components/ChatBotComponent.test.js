@@ -3035,6 +3035,40 @@ describe('ChatBotComponent', () => {
       expect(notificationService.error).toHaveBeenCalled();
     });
 
+    it('two configuration cards sharing an id keep only the FIRST', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // The id is the button's IDENTITY: the conversation tag carries it,
+      // the restore resolves it, and the grid's verdict map keys on it.
+      // Two cards with one id cannot both be honoured — and keeping both
+      // made the wire disagree with the verdict: the map judged the FIRST
+      // card (healthy) while the click put the CLICKED card's labels on
+      // the wire, a dead label among them, and the corpus abstained
+      // silently behind a card that looked healthy. The FIRST card wins,
+      // the duplicate never becomes a card at all.
+      vm.cachedConfig = {
+        features: {
+          chat: {
+            quickHelp: {
+              buttons: [
+                { id: 'civil', title: { en: 'First' }, category: '2', serviceLabels: ['Births'] },
+                { id: 'civil', title: { en: 'Second' }, category: '2', serviceLabels: ['No Such Service'] }
+              ]
+            }
+          }
+        }
+      };
+
+      vm.applyQuickHelpButtons();
+
+      expect(vm.quickHelpButtons).toHaveLength(1);
+      // The FIRST card's scope is what survives — its labels are the ones
+      // a click would put on the wire.
+      expect(vm.quickHelpButtons[0].service).toBe('First');
+      expect(vm.quickHelpButtons[0].serviceLabels).toEqual(['Births']);
+    });
+
     it('a category-only selection is not refused for lacking a service name', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;

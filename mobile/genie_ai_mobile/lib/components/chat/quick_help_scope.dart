@@ -20,6 +20,28 @@ bool declaresCategoryScope(String? id) {
   return id != null && id.isNotEmpty && id != 'general';
 }
 
+/// The loaded Quick Help buttons, with a duplicated id keeping only the
+/// FIRST entry.
+///
+/// The id is the button's IDENTITY: the conversation tag carries it, the
+/// restore resolves it, the grid's verdict keys on it. Two cards with one
+/// id cannot both be honoured — the web keeps the first and drops the
+/// duplicate at load, so the mobile must too, or the same saved
+/// conversation would carry a different scope on the two platforms.
+List<Map<String, dynamic>> dedupeQuickHelpButtons(
+  List<Map<String, dynamic>> buttons,
+) {
+  final seen = <String>{};
+  final unique = <Map<String, dynamic>>[];
+  for (final button in buttons) {
+    final id = button['id']?.toString();
+    if (id == null || id.isEmpty || seen.add(id)) {
+      unique.add(button);
+    }
+  }
+  return unique;
+}
+
 /// Checks Quick Help buttons against the live hierarchy.
 ///
 /// The hierarchy is what NAMES a scope: the config carries a category

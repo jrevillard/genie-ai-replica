@@ -1207,6 +1207,30 @@ class TestLabelFilterIsAbsolute:
         assert bm25.call_args.kwargs["aql_filter_clause"] != ""
 
     @pytest.mark.asyncio
+    async def test_the_encoded_scope_wins_over_a_context_carried_alongside(self, invoke_env):
+        """The labels encoded in search_start ARE the request's scope.
+
+        The chatqna encodes the scope it resolved against the live
+        hierarchy; a caller that ALSO carries a ``context`` with labels of
+        its own must not have them swap in — the encoded set is what the
+        conversation was scoped by, the context is only the fallback for a
+        caller that encodes nothing. Inverting the preference would
+        silently widen (or narrow) the scope while every suite stayed
+        green: no test drove BOTH paths at once.
+        """
+        invoke_env["vector_db"].asimilarity_search_with_relevance_scores = AsyncMock(return_value=[])
+        await invoke_env["retriever"].invoke(
+            create_mock_input(
+                search_start=encode_filter_labels("chunk", ["health"]),
+                context={"serviceLabels": ["Tax Payment"], "categoryLabel": "Taxes"},
+            )
+        )
+        clause = invoke_env["vector_db"].asimilarity_search_with_relevance_scores.call_args.kwargs["filter_clause"]
+        assert '"health"' in clause
+        assert '"Tax Payment"' not in clause
+        assert '"Taxes"' not in clause
+
+    @pytest.mark.asyncio
     async def test_a_filter_that_hits_is_the_single_search(self, invoke_env):
         hit = _FakeDoc(id="chunkA", page_content="text", metadata={"chunk_labels": ["health"]})
         invoke_env["vector_db"].asimilarity_search_with_relevance_scores = AsyncMock(return_value=[(hit, 0.9)])

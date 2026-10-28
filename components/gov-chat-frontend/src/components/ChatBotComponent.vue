@@ -924,15 +924,13 @@ export default {
     },
     // Every button's scope state, computed ONCE per tree/config change:
     // the template reads a button's state several times per render, and
-    // every streaming token re-renders the panel.
+    // every streaming token re-renders the panel. The buttons are unique
+    // by id here — applyQuickHelpButtons keeps the FIRST of any duplicate
+    // — so the map needs no rule of its own.
     quickHelpScopeStateMap() {
       const map = new Map();
       for (const button of this.quickHelpButtons) {
         if (!button || !button.id) continue;
-        // FIRST wins: the restore's lookup by id is first-wins too, and
-        // two cards sharing an id must not get different verdicts in the
-        // grid and in the restore.
-        if (map.has(button.id)) continue;
         map.set(button.id, this.computeQuickHelpScopeState(button));
       }
       return map;
@@ -1697,6 +1695,22 @@ export default {
       // resolves against the live hierarchy like any other label.
       this.quickHelpButtons = buttons
         .filter((button) => !button.hidden)
+        // The id is the button's IDENTITY — the conversation tag carries
+        // it, the restore resolves it, the grid's verdict keys on it. Two
+        // cards with one id cannot both be honoured: keeping both made
+        // the wire disagree with the verdict (the click put the CLICKED
+        // card's labels on the wire while the verdict spoke for the
+        // FIRST). The FIRST card wins; the duplicate never becomes a
+        // card, on either platform.
+        .filter((button, index, all) => {
+          if (!button.id) return true;
+          const first = all.findIndex((b) => b.id === button.id);
+          if (first === index) return true;
+          console.warn(
+            `[ChatBotComponent] Duplicate Quick Help button id "${button.id}" — keeping the first entry, ignoring this one`
+          );
+          return false;
+        })
         .map((button) => {
           const title = resolveConfigText(button.title, locale);
           const visibleText = resolveConfigText(button.action?.visibleText, locale);

@@ -315,7 +315,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       }
 
       setState(() {
-        _quickHelpButtons = loadedButtons;
+        // The id is the button's IDENTITY. Two cards sharing one is a
+        // configuration error: the FIRST wins and the duplicate never
+        // becomes a card — the same rule the web applies at its own load.
+        _quickHelpButtons = dedupeQuickHelpButtons(loadedButtons);
         // The config just settled: a restore resolved while it was
         // unavailable re-resolves now (button tags read as dead sidebar
         // tags against an empty button list).

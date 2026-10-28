@@ -142,7 +142,12 @@ async function stubConfiguration(page) {
     body.features.chat = body.features.chat || {};
     body.features.chat.quickHelp = body.features.chat.quickHelp || {};
     body.features.chat.quickHelp.buttons = STUB_BUTTONS;
-    await route.fulfill({ response, json: body });
+    // Fulfil WITHOUT `response`: passing it would inherit the served
+    // document's `Content-Length` — a length that no longer matches the
+    // modified body, and Chromium's handling of the stale one is not
+    // ours to bet the spec on. `json` alone sets the status (200), the
+    // content type and a recomputed length.
+    await route.fulfill({ json: body });
   });
 }
 

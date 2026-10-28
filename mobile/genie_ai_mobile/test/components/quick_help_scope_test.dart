@@ -897,4 +897,41 @@ void main() {
       expect(conversationScopeTags(), isEmpty);
     });
   });
+
+  /// The id is the button's identity: the loaded list is unique by id, the
+  /// FIRST of any duplicate winning, on both platforms.
+  group('dedupeQuickHelpButtons', () {
+    test('a duplicated id keeps only the FIRST entry', () {
+      final first = {
+        'id': 'civil',
+        'serviceLabels': ['Births'],
+      };
+      final second = {
+        'id': 'civil',
+        'serviceLabels': ['No Such Service'],
+      };
+
+      final unique = dedupeQuickHelpButtons([first, second]);
+
+      expect(unique, hasLength(1));
+      // The FIRST card's scope survives — its labels are the ones a click
+      // would put on the wire, and the ones a saved conversation restores.
+      expect(unique.single, same(first));
+    });
+
+    test('a button with no id is kept as-is', () {
+      final idless = {
+        'serviceLabels': ['Births'],
+      };
+
+      expect(dedupeQuickHelpButtons([idless]), [idless]);
+    });
+
+    test('distinct ids are all kept', () {
+      final a = {'id': 'a'};
+      final b = {'id': 'b'};
+
+      expect(dedupeQuickHelpButtons([a, b]), [a, b]);
+    });
+  });
 }

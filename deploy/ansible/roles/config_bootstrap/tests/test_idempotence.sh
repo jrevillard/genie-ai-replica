@@ -205,6 +205,11 @@ EXPECTED_PATH=""
 STRAY_PATH=""
 RESTORE_ARMED="false"
 
+# The restore stays armed until it SUCCEEDS, so a signal that lands while it
+# is running re-enters it: the tree is put back, the archive is removed, and
+# the run still ends on the signal's exit code. Disarming it up front left the
+# archive on the host whenever a signal landed between the extraction and its
+# removal.
 restore() {
     local exit_code="$?"
     # Runs on every exit (armed or not): scrub the become-password file first.
@@ -212,7 +217,6 @@ restore() {
         rm -f "$BECOME_PW_FILE"
     fi
     [ "$RESTORE_ARMED" = "true" ] || return "$exit_code"
-    RESTORE_ARMED="false"
     if [ -n "$EXPECTED_PATH" ]; then
         ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
             -a "rm -f '$EXPECTED_PATH'" >/dev/null 2>&1 || true
@@ -245,6 +249,7 @@ restore() {
             ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
                 -a "rm -f '$BACKUP_ARCHIVE'" >/dev/null 2>&1 || true
             printf '  [ok] %s restored from pre-test backup; backup removed.\n' "$CONFIG_DIR"
+            RESTORE_ARMED="false"
             return "$exit_code"
         fi
     fi
@@ -256,6 +261,10 @@ restore() {
     # produce, so it must not be reported as a pass: the script exits with a
     # failure whether the test itself had failed or not. `exit` (not `return`)
     # because a trap's return value does not change the script's exit status.
+    # The archive stays on the host: it is what the operator needs when the
+    # tree was left unrestored. Disarm before exiting so the EXIT trap does
+    # not attempt the restore a second time and print the failure twice.
+    RESTORE_ARMED="false"
     exit 1
 }
 # The EXIT trap restores the host. The signal traps restore it AND stop the

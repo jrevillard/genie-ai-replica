@@ -185,12 +185,29 @@
           config_bootstrap: the deployment's Keycloak theme is
           {{ config_bootstrap_keycloak_theme }}
 
+    - name: Select the pairs that carry the Keycloak themes
+      ansible.builtin.set_fact:
+        config_bootstrap_keycloak_pairs: "{{ config_bootstrap_pairs | selectattr('dest_subdir', 'match', '^keycloak/') | list }}"
+
+    # The guard below iterates over those pairs. Zero of them would make the
+    # assert pass without checking anything — the guard would disappear the
+    # day a defaults edit renames the themes pair's dest_subdir.
+    - name: Fail unless a pair carries the Keycloak themes
+      ansible.builtin.assert:
+        that:
+          - config_bootstrap_keycloak_pairs | length > 0
+        fail_msg: >-
+          No config_bootstrap_pairs entry seeds the Keycloak themes (one must
+          have a dest_subdir under keycloak/). The theme guard has nothing to
+          check, and the mirror would delete the deployment's theme.
+        success_msg: "config_bootstrap: the Keycloak themes are seeded by a pair"
+
     - name: Stat the deployment's Keycloak theme in the extracted branch
       ansible.builtin.stat:
         path: >-
           {{ config_bootstrap_tmp.path }}/{{ item.dest_subdir | replace('/', '-') }}/{{ item.src }}/{{ config_bootstrap_keycloak_theme }}
       register: config_bootstrap_theme_stat
-      loop: "{{ config_bootstrap_pairs | selectattr('dest_subdir', 'match', '^keycloak/') | list }}"
+      loop: "{{ config_bootstrap_keycloak_pairs }}"
       loop_control:
         label: "{{ item.dest_subdir }}"
 

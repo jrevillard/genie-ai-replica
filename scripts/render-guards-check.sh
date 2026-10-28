@@ -237,7 +237,34 @@ expect_fail "a convergence envSecrets row with a typo'd key" \
 expect_ok "a cleared translation block still renders" \
   $(valid_flags) --set services.backend.translation=null
 
-# 20. The documented valid configuration must still render: a guard that
+# 20. A convergence row that is a SCALAR (the classic missing-dash YAML
+#     mistake) must be rejected BY NAME, not crash whichever template
+#     reads it first with a raw Go-template error. The shared fixture's
+#     own rows would override a values file (--set beats -f), so the
+#     case drops them and supplies the malformed row through a file.
+scalar_rows="$(mktemp)"
+trap 'rm -f "${scalar_rows}"' EXIT
+cat > "${scalar_rows}" <<'YAML'
+data:
+  keycloak:
+    convergence:
+      envSecrets:
+        - KC_PROXY_CLIENT_SECRET
+YAML
+expect_fail "a convergence envSecrets row that is not a map" \
+  "must be a map {envVar, secretName, secretKey}" \
+  $(valid_flags_except "convergence.envSecrets") -f "${scalar_rows}"
+
+# 21. The envVar is an environment variable NAME: a numeric one passes
+#     a non-empty check, renders as a YAML integer, and the API server
+#     rejects the EnvVar name at apply time.
+expect_fail "a convergence envSecrets row with a numeric envVar" \
+  "is not an environment variable name" \
+  $(valid_flags) --set 'data.keycloak.convergence.envSecrets[5].envVar=90210' \
+  --set 'data.keycloak.convergence.envSecrets[5].secretName=foo' \
+  --set 'data.keycloak.convergence.envSecrets[5].secretKey=bar'
+
+# 22. The documented valid configuration must still render: a guard that
 #     rejects a good deployment is a defect too.
 expect_ok "the documented values render" $(valid_flags)
 

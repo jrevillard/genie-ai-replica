@@ -11,9 +11,11 @@ pod spec and `volumeMounts: - name: tools mountPath: /tools` plus
 The kubeletToolsMirror values key lets air-gapped clusters point the
 URL at a single internal mirror.
 */}}
+
 {{- define "genieai-umbrella.toolsInitContainer" -}}
+{{- $global := .Values.global | default dict -}}
 - name: tools
-  image: {{ .Values.global.toolingImageRegistry | default "docker.io" }}/curlimages/curl:8.10.1
+  image: {{ $global.toolingImageRegistry | default "docker.io" }}/curlimages/curl:8.10.1
   imagePullPolicy: IfNotPresent
   securityContext:
     allowPrivilegeEscalation: false
@@ -32,12 +34,12 @@ URL at a single internal mirror.
     - |
       set -eu
       mkdir -p /tools/bin
-      BASE="{{ .Values.global.kubeletToolsMirror | default "https://dl.k8s.io" }}"
+      BASE="{{ $global.kubeletToolsMirror | default "https://dl.k8s.io" }}"
       # The node's architecture, detected at runtime unless the operator
       # forces one: an arm64 cluster (Apple Silicon minikube) cannot
       # execute the amd64 binary, and the pod that needs it — the
       # helm-test pod, the pre-upgrade drift hook — never starts.
-      ARCH="{{ .Values.global.toolingArch }}"
+      ARCH="{{ $global.toolingArch }}"
       if [ -z "$ARCH" ]; then
         case "$(uname -m)" in
           x86_64|amd64) ARCH=amd64 ;;

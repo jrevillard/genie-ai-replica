@@ -3,7 +3,8 @@
   tier its panels query is enabled in this environment. A dashboard whose
   datasource is absent is permanently blank and its panels read
   "Datasource not found" — silently, with the pipeline green.
-*/}}{{- $obs := .Values.observability | default dict -}}
+*/}}
+{{- $obs := .Values.observability | default dict -}}
 {{- $obsGrafana := $obs.grafana | default dict -}}
 {{- $obsMetrics := $obs.metrics | default dict -}}
 {{- $obsTraces := $obs.traces | default dict -}}

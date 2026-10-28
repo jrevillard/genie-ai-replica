@@ -23,7 +23,8 @@
   The guardrail is not rendered by this chart; `GUARDRAIL_URL` carries
   the image default (`http://guardrail:9090/v1/guardrails`) and the
   service tolerates an unreachable guardrail.
-*/}}{{- $opea := .Values.opea | default dict -}}
+*/}}
+{{- $opea := .Values.opea | default dict -}}
 {{- $opeaDataprep := $opea.dataprep | default dict -}}
 {{- $opeaModels := $opea.models | default dict -}}
 {{- $opeaModelsLlm := $opeaModels.llm | default dict -}}

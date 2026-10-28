@@ -3,7 +3,8 @@
   .Values.opea.models.reranker.modelId. Image from ghcr.io
   unconditionally (see tei.yaml). Skeleton via
   genieai-umbrella.modelDeployment.
-*/}}{{- $opea := .Values.opea | default dict -}}
+*/}}
+{{- $opea := .Values.opea | default dict -}}
 {{- $opeaGpu := $opea.gpu | default dict -}}
 {{- $opeaModels := $opea.models | default dict -}}
 {{- $opeaModelsReranker := $opeaModels.reranker | default dict -}}

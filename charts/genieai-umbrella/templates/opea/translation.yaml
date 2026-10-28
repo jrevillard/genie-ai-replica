@@ -12,7 +12,9 @@
   port). The Service exposes 9031 -> 8888 because chatqna dials
   TRANSLATION_SERVICE_PORT 9031; the tcpSocket probe targets the real
   listener (8888).
-*/}}{{- $opea := .Values.opea | default dict -}}
+*/}}
+{{- $global := .Values.global | default dict -}}
+{{- $opea := .Values.opea | default dict -}}
 {{- $opeaTranslation := $opea.translation | default dict -}}
 
 {{- if $opea.enabled -}}
@@ -36,7 +38,7 @@ spec:
       securityContext:
         seccompProfile:
           type: RuntimeDefault
-      {{- with .Values.global.imagePullSecrets }}
+      {{- with $global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -49,7 +51,7 @@ spec:
           # site must mirror docker.io/opea/translation and rewrite via
           # insertAgent, not via the registry value.
           image: docker.io/opea/translation:1.3
-          imagePullPolicy: {{ include "genieai-umbrella.imagePullPolicy" (dict "tag" "1.3" "pullPolicy" .Values.global.imagePullPolicy) }}
+          imagePullPolicy: {{ include "genieai-umbrella.imagePullPolicy" (dict "tag" "1.3" "pullPolicy" $global.imagePullPolicy) }}
           ports:
             - name: http
               containerPort: 8888

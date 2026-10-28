@@ -154,12 +154,12 @@ services:
 
 - **New role** `roles/config_bootstrap/`:
   - `tasks/main.yml` (**update 2026-10-28** — the role ships a mirror, not a preserving sync):
-    - `file: path={{ config_dir }}/{{ item.dest_subdir }} state=directory mode=0755` for `frontend/` and `keycloak/themes/` — part of the seeding, so it is skipped when `config_bootstrap_sync_enabled` is false
+    - `file: path={{ config_dir }}/{{ item.dest_subdir }} state=directory` for `frontend/` and `keycloak/themes/` — part of the seeding, so it is skipped when `config_bootstrap_sync_enabled` is false. No mode is pinned: the mirror restores the directory's mode from the branch, and pinning one made the role set it and the mirror set it back on every run, a change the role then reported as "not changed"
     - a private scratch directory per run (`ansible.builtin.tempfile`), the branch-pinned archive downloaded into it and extracted there; the scratch tree is removed in an `always` section, so a guard failure does not leak it
-    - the expected assets of each pair are stat'ed before anything is synced; the deployment's Keycloak theme (read from the rendered `.env`) is checked against the branch BEFORE the sync, because the mirror deletes what the branch does not ship; the brand the branch carries is compared with the brand the host serves, and a re-brand fails the deploy
+    - the expected assets of each pair are stat'ed before anything is synced; the deployment's Keycloak theme is checked against the branch BEFORE the sync, because the mirror deletes what the branch does not ship. The theme comes from the `keycloak_theme` variable — what the deployment renders into `KEYCLOAK_THEME` — and not from the rendered `.env`, which is written later in the same playbook and therefore describes the PREVIOUS deployment; the brand the branch carries is compared with the brand the host serves, and a re-brand fails the deploy
     - `rsync --archive --checksum --delete` from the extraction tree into `{{ config_dir }}/{{ item.dest_subdir }}/` — the host copy mirrors the branch
     - the same rsync run as a dry run afterwards: an empty report means the host matches the branch, a non-empty one names the files that differ and fails the deploy; the verification's own exit code is asserted too, so a dry run that failed is never mistaken for a match
-    - `--check` skips the whole seeding: `ansible.builtin.tempfile` does not support check mode, so the run is planned, not executed
+    - `--check` skips the whole seeding, directories included: `ansible.builtin.tempfile` does not support check mode, so the role does nothing and a check-mode plan agrees with a check-mode run
   - `defaults/main.yml`: `config_bootstrap_pairs` (src / dest_subdir / expect / brand_file) — `config_dir` lives in `group_vars/all.yml`, not here
   - `meta/main.yml`: `galaxy_info` with author + dependencies
 

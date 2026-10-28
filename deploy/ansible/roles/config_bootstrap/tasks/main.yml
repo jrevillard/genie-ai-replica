@@ -33,36 +33,47 @@
     state: present
   when: config_bootstrap_sync_enabled | bool
 
-# Root is needed to create {{ config_dir }} itself on a host that does not have
-# it yet (the play runs on `all`, including GPU nodes), mirroring the deploy
-# play's "Ensure deploy directory exists" task for the same tree. The
-# directories stay root-owned, consistent with the rest of the playbook: the
-# rsync below runs under the play's become, so it writes into them as root.
-#
-# Creating them is part of the seeding: with config_bootstrap_sync_enabled
-# false the role owns nothing on the host and leaves the operator's tree
-# exactly as it is (docker-compose creates a missing bind-mount source as an
-# empty root-owned directory anyway, so an operator who manages the tree by
-# hand has to populate it themselves).
-- name: Ensure runtime config directories exist
-  become_user: root
-  ansible.builtin.file:
-    path: "{{ config_dir }}/{{ item.dest_subdir }}"
-    state: directory
-    mode: "0755"
-  loop: "{{ config_bootstrap_pairs }}"
-  loop_control:
-    label: "{{ item.dest_subdir }}"
-  when: config_bootstrap_sync_enabled | bool
-
 # The whole seeding runs in a block with an `always` section: the scratch tree
 # holds the downloaded archives and the extracted branch copy (tens of MB per
 # pair), and the guard failures below are a designed path — a wrong branch, a
 # re-brand — not an accident. Without the always section every one of those
 # runs leaked its scratch tree into /tmp on every node of the fleet.
+#
+# The block is skipped in check mode, and it is skipped WHOLE: the directories
+# it creates are part of the seeding, so a check-mode plan that listed them
+# would disagree with what a check-mode run does (nothing).
 - name: Seed the host runtime config from the branch
   when: config_bootstrap_run | bool
   block:
+    # Root is needed to create {{ config_dir }} itself on a host that does not
+    # have it yet (the play runs on `all`, including GPU nodes), mirroring the
+    # deploy play's "Ensure deploy directory exists" task for the same tree.
+    # The directories stay root-owned, consistent with the rest of the
+    # playbook: the rsync below runs under the play's become, so it writes
+    # into them as root.
+    #
+    # No mode is pinned here. The mirror restores the directory's mode from
+    # the branch (the archive carries 0775), so pinning one made the role
+    # set it to 0755 and the mirror set it back on every single run — a
+    # change the role then reported as "not changed", because the itemize
+    # line for the destination directory itself was filtered out. The
+    # directory is created with the default mode and the mirror owns it from
+    # then on.
+    #
+    # Creating them is part of the seeding: with config_bootstrap_sync_enabled
+    # false the role owns nothing on the host and leaves the operator's tree
+    # exactly as it is (docker-compose creates a missing bind-mount source as
+    # an empty root-owned directory anyway, so an operator who manages the tree
+    # by hand has to populate it themselves).
+    - name: Ensure runtime config directories exist
+      become_user: root
+      ansible.builtin.file:
+        path: "{{ config_dir }}/{{ item.dest_subdir }}"
+        state: directory
+      loop: "{{ config_bootstrap_pairs }}"
+      loop_control:
+        label: "{{ item.dest_subdir }}"
+
     # A private scratch directory per run. It used to be a fixed path under
     # /tmp, which two problems came with: the path was predictable, so a local
     # user could pre-create it and steer a root write, and two overlapping
@@ -139,23 +150,28 @@
     # The mirror is destructive by design: --delete removes what the branch does
     # not ship. So the branch must be the branch this host is deployed from, and
     # that is checkable before anything is touched: the deployment's own Keycloak
-    # theme is named in the rendered environment, and the branch has to ship it.
-    # Deploying a branch that does not (main ships only the genie theme, while an
-    # el-salvador deployment runs on genie-el-salvador) would delete that theme
-    # from the host and the realms would fall back to the built-in one.
+    # theme is named by the `keycloak_theme` variable, and the branch has to
+    # ship it. Deploying a branch that does not (main ships only the genie
+    # theme, while an el-salvador deployment runs on genie-el-salvador) would
+    # delete that theme from the host and the realms would fall back to the
+    # built-in one.
+    #
+    # The variable is the source of truth, not the rendered .env: the .env is
+    # written LATER in the same playbook, so reading it here checks the
+    # PREVIOUS deployment — and it only carries the variable when the flavour
+    # defines one, so a host whose .env predates it silently checked the
+    # default theme and the mirror then deleted the deployment's real theme.
+    # The variable is what templates/env.j2 renders into KEYCLOAK_THEME and
+    # what docker-compose passes to the realm (defaulting to 'genie', the
+    # compose default).
     - name: Read the Keycloak theme this deployment is configured to use
-      ansible.builtin.shell:
-        cmd: >-
-          if [ -f '{{ config_dir }}/../.env' ]; then
-            grep -E '^KEYCLOAK_THEME=' '{{ config_dir }}/../.env' | tail -n 1 | cut -d= -f2- | tr -d '"'\''' || true;
-          fi
-      register: config_bootstrap_env_theme
-      changed_when: false
+      ansible.builtin.set_fact:
+        config_bootstrap_keycloak_theme: "{{ keycloak_theme | default('genie', true) | trim }}"
 
     - name: Stat the deployment's Keycloak theme in the extracted branch
       ansible.builtin.stat:
         path: >-
-          {{ config_bootstrap_tmp.path }}/{{ item.dest_subdir | replace('/', '-') }}/{{ item.src }}/{{ config_bootstrap_env_theme.stdout | trim | default('genie', true) }}
+          {{ config_bootstrap_tmp.path }}/{{ item.dest_subdir | replace('/', '-') }}/{{ item.src }}/{{ config_bootstrap_keycloak_theme }}
       register: config_bootstrap_theme_stat
       loop: "{{ config_bootstrap_pairs | selectattr('dest_subdir', 'match', '^keycloak/') | list }}"
       loop_control:
@@ -167,13 +183,13 @@
           - item.stat.exists
         fail_msg: >-
           The branch ({{ repo_branch }}) does not ship the Keycloak theme
-          {{ config_bootstrap_env_theme.stdout | trim | default('genie', true) }} that this
-          deployment is configured to use. Syncing it would delete that theme from the
-          host and the realms would fall back to the built-in Keycloak theme. Check
+          {{ config_bootstrap_keycloak_theme }} that this deployment is
+          configured to use. Syncing it would delete that theme from the host
+          and the realms would fall back to the built-in Keycloak theme. Check
           repo_branch against the branch this host is deployed from.
         success_msg: >-
           config_bootstrap: the branch ships the
-          {{ config_bootstrap_env_theme.stdout | trim | default('genie', true) }} Keycloak theme
+          {{ config_bootstrap_keycloak_theme }} Keycloak theme
       loop: "{{ config_bootstrap_theme_stat.results | default([]) }}"
       loop_control:
         label: "{{ item.item.dest_subdir | default('unknown') }}"
@@ -224,6 +240,25 @@
         config_bootstrap_host_title: >-
           {{ ((config_bootstrap_host_config.content | b64decode | from_json).app.title | default(''))
              if config_bootstrap_host_config.content is defined else '' }}
+
+    - name: Fail when the host's brand file carries no title
+      ansible.builtin.assert:
+        that:
+          # A host that was never seeded has no brand file at all: the first
+          # deploy is not a re-brand. A host that HAS one but no app.title is
+          # a different thing — the mirror would overwrite it with the
+          # branch's copy and re-brand the deployment, and an empty title
+          # would have made the guard pass silently.
+          - config_bootstrap_host_config.content is not defined
+            or config_bootstrap_host_title != ''
+        fail_msg: >-
+          The host serves a brand file without an app.title
+          ({{ config_dir }}/{{ config_bootstrap_brand_pairs.0.dest_subdir }}/{{ config_bootstrap_brand_pairs.0.brand_file }}).
+          Mirroring the branch over it would re-brand the deployment without
+          the guard noticing, so the deploy stops here. Fix the host's file,
+          or set config_bootstrap_allow_rebrand to true when the re-brand is
+          the point.
+        success_msg: "config_bootstrap: the host's brand file carries a title"
 
     - name: Fail when the branch re-brands the deployment
       ansible.builtin.assert:
@@ -282,12 +317,11 @@
           - "{{ config_bootstrap_tmp.path }}/{{ item.dest_subdir | replace('/', '-') }}/{{ item.src }}/"
           - "{{ config_dir }}/{{ item.dest_subdir }}/"
       register: config_bootstrap_rsync
-      # The "./" line is the destination directory's own permissions, not a
-      # content difference: the role's own "Ensure runtime config directories
-      # exist" task sets the mode to 0755, while the archive carries 0775 and
-      # the mirror restores it — so the line reappears on every run, whatever
-      # the content. Filtering it keeps the task honest about what it changed
-      # (a run that only moves the directory's mode is not a change).
+      # The "./" line is the destination directory itself, itemized when its
+      # own attributes differ from the source's. The role does not pin a mode
+      # on that directory, so it does not normally appear; filtering it keeps
+      # the task from reporting a change when the directory's own timestamp
+      # moved, which is not a difference in content.
       changed_when: >-
         (config_bootstrap_rsync.stdout_lines | default([])
          | reject('search', '\\s\\./$') | list | length) > 0
@@ -335,9 +369,8 @@
       ansible.builtin.assert:
         that:
           - item.rc == 0
-          # The "./" line is the destination directory's own permissions, not
-          # a difference in content: the mirror sets the mode from the source,
-          # and a directory whose mode moved is not a diverged file.
+          # The "./" line is the destination directory itself, not a file: a
+          # directory whose own attributes moved is not a diverged file.
           - (item.stdout_lines | default([]) | reject('search', '\\s\\./$') | list | length) == 0
         fail_msg: >-
           The host runtime config does not match the branch ({{ repo_branch }}).

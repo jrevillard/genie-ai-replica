@@ -42,6 +42,11 @@
 # not damage: the host is left serving the branch, which is the state a deploy
 # would leave it in anyway.
 #
+# A restore that fails fails the test. The restore removes the config tree
+# before extracting the archive back into it, so a failed restore leaves the
+# host with an empty config directory - which shadows the images and breaks
+# every container that reads it. That must never read as a pass.
+#
 # NOT run by CI. This needs a live Ansible target host.
 #
 # Grounded in:
@@ -199,6 +204,7 @@ BACKUP_ARCHIVE=""
 EXPECTED_PATH=""
 STRAY_PATH=""
 RESTORE_ARMED="false"
+RESTORE_FAILED="false"
 
 restore() {
     local exit_code="$?"
@@ -221,6 +227,13 @@ restore() {
         STRAY_PATH=""
     fi
     printf '\n=== Cleanup: restoring the config tree under %s ===\n' "$CONFIG_DIR"
+    # The single-file copy is redundant next to the tree archive, and it must
+    # not outlive the test.
+    if [ -n "$BACKUP_PATH" ]; then
+        ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
+            -a "rm -f '$BACKUP_PATH'" >/dev/null 2>&1 || true
+        BACKUP_PATH=""
+    fi
     # The whole tree is restored, not only the file this test edited: a run
     # that removed the host's config (a wrong branch, or a mirror whose source
     # path is wrong) must not leave the node without it while the script
@@ -239,7 +252,13 @@ restore() {
     printf '  [FAIL] automatic restore did not complete.\n' >&2
     printf '         To restore %s by hand, run on the host:\n' "$CONFIG_DIR" >&2
     printf '           tar -xpf %s -C %s\n' "$BACKUP_ARCHIVE" "$CONFIG_PARENT" >&2
-    return "$exit_code"
+    # The restore failed and the host's config tree is gone (the rm -rf ran,
+    # the extraction did not). That is the worst outcome this script can
+    # produce, so it must not be reported as a pass: the script exits with a
+    # failure whether the test itself had failed or not. `exit` (not `return`)
+    # because a trap's return value does not change the script's exit status.
+    RESTORE_FAILED="true"
+    exit 1
 }
 trap restore EXIT INT TERM
 

@@ -54,13 +54,22 @@ spec:
           {{- /* Checks hit the SERVICE ports (80; non-HTTP probes use their
                  configured port), NOT the container ports — Services are
                  the stable in-cluster contract. */ -}}
-          {{- if .Values.services.backend.enabled }}
+          {{- /* The service blocks are CLEARABLE — a cleared block degrades to
+the derived behaviour, not to a nil-pointer crash in a helm TEST
+template (which names the test pod, never the values key). */ -}}
+{{- $services := .Values.services | default dict -}}
+{{- $backend := $services.backend | default dict -}}
+{{- $frontend := $services.frontend | default dict -}}
+{{- $documentRepository := $services.documentRepository | default dict -}}
+{{- $clamav := $services.clamav | default dict -}}
+{{- $redisCache := $services.redisCache | default dict -}}
+{{- if $backend.enabled }}
           check backend 80 /api/health 200
           {{- end }}
-          {{- if .Values.services.frontend.enabled }}
+          {{- if $frontend.enabled }}
           check frontend 80 /health 200
           {{- end }}
-          {{- if .Values.services.documentRepository.enabled }}
+          {{- if $documentRepository.enabled }}
           check document-repository 80 /health 200
           {{- end }}
           if [ "$failures" -gt 0 ]; then
@@ -68,7 +77,7 @@ spec:
             exit 1
           fi
           echo "PASS: all stateless-tier services reachable"
-{{- if or .Values.services.clamav.enabled .Values.services.redisCache.enabled }}
+{{- if or $clamav.enabled $redisCache.enabled }}
 ---
 # TCP reachability for the binary-protocol services (clamav, redis-cache)
 # from the only peer their NetworkPolicies admit. nc -z completes the
@@ -121,16 +130,16 @@ spec:
         - |
           set -eu
           failures=0
-          {{- if .Values.services.clamav.enabled }}
-          if nc -z -w 5 clamav {{ .Values.services.clamav.port | default 3310 }}; then
+          {{- if $clamav.enabled }}
+          if nc -z -w 5 clamav {{ $clamav.port | default 3310 }}; then
             echo "PASS: clamav reachable"
           else
             echo "FAIL: clamav unreachable"
             failures=$((failures+1))
           fi
           {{- end }}
-          {{- if .Values.services.redisCache.enabled }}
-          if nc -z -w 5 redis-cache {{ .Values.services.redisCache.port | default 6379 }}; then
+          {{- if $redisCache.enabled }}
+          if nc -z -w 5 redis-cache {{ $redisCache.port | default 6379 }}; then
             echo "PASS: redis-cache reachable"
           else
             echo "FAIL: redis-cache unreachable"

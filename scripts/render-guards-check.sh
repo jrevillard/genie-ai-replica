@@ -218,7 +218,26 @@ expect_fail "an enabled data tier with no dependency-graph entry" \
   "dependencyGraph.data has no 'postgres' entry" \
   $(valid_flags) --set dependencyGraph.data.postgres=null
 
-# 18. The documented valid configuration must still render: a guard that
+# 18. Every convergence envSecrets row is operator-facing (each overlay
+#     hand-writes five of them). A typo'd key rendered `name: null`, and
+#     the API server rejected the whole Job at apply time with
+#     "spec.template.spec.containers[0].env[N].name: Required value" —
+#     naming neither the values key nor the row.
+expect_fail "a convergence envSecrets row with a typo'd key" \
+  'envSecrets[5] has no "envVar"' \
+  $(valid_flags) --set 'data.keycloak.convergence.envSecrets[5].envvar=TYPO' \
+  --set 'data.keycloak.convergence.envSecrets[5].secretName=foo' \
+  --set 'data.keycloak.convergence.envSecrets[5].secretKey=bar'
+
+# 19. A CLEARED block must degrade, not crash: the chart documents
+#     `services.backend.translation: null` as the supported way to reset
+#     that block to the derived defaults, and a helm TEST template
+#     reading it unguarded turned it into a nil-pointer crash that named
+#     the test pod instead of the values key.
+expect_ok "a cleared translation block still renders" \
+  $(valid_flags) --set services.backend.translation=null
+
+# 20. The documented valid configuration must still render: a guard that
 #     rejects a good deployment is a defect too.
 expect_ok "the documented values render" $(valid_flags)
 

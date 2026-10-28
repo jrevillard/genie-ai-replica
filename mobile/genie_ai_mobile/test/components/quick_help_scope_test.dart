@@ -254,6 +254,9 @@ void main() {
       expect(scope.quickHelpButtonId, isNull);
       expect(scope.categoryNameEn, 'Civil Registry');
       expect(scope.serviceLabelsEn, ['Births']);
+      // A sidebar scope's filter labels are its sidebar labels: the
+      // chatbot reads this field directly, no fallback re-derivation.
+      expect(scope.sidebarLabelsEn, ['Births']);
     });
 
     test('a LEGACY category.<id> tag restores the category, not a refusal', () {
@@ -281,6 +284,44 @@ void main() {
         isTrue,
       );
     });
+
+    test(
+      'a LEGACY category tag BESIDE a Quick Help tag does not refuse the send',
+      () {
+        // Old-web conversations can carry both: a button tag and the
+        // category-only chip's legacy spelling. The legacy tag is not a
+        // sidebar label — counting it refused every follow-up while the
+        // web restored both chips and answered.
+        final convButtons5 = <Map<String, dynamic>>[
+          {
+            'id': 'civil',
+            'category': '2',
+            'serviceLabels': const <dynamic>['Births'],
+          },
+        ];
+        final scope = ConversationScopeResolver(
+          hierarchy: QuickHelpScopeResolver(convTree),
+          quickHelpButtons: convButtons5,
+        ).resolve(tags: ['civil', 'category.2']);
+
+        expect(scope.quickHelpButtonId, 'civil');
+        expect(scope.serviceLabelsEn, ['Births']);
+        // The legacy tag named the same category the button declares: it
+        // is consumed, not counted as a dropped sidebar tag.
+        expect(scope.sidebarTagCount, 0);
+        expect(
+          scopeCanGoOnTheWire(
+            categoryId: scope.categoryId,
+            categoryNameEn: scope.categoryNameEn,
+            serviceLabels: scope.serviceLabelsEn,
+            sidebarServiceLabels: scope.sidebarLabelsEn,
+            sidebarServiceCount: scope.sidebarTagCount,
+            quickHelpScopeBroken: scope.quickHelpScopeState!['broken'] as bool,
+          ),
+          isTrue,
+        );
+      },
+    );
 
     test('a LEGACY category.general tag names no scope', () {
       final scope = convResolver().resolve(tags: ['category.general']);

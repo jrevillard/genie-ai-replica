@@ -266,7 +266,13 @@ class ConversationScopeResolver {
           (button['serviceLabels'] as List<dynamic>? ?? const <dynamic>[])
               .map((label) => label.toString())
               .toList();
-      final otherTags = tagList.where((other) => other != tag).toList();
+      // A LEGACY 'category.<id>' tag beside the button named the same
+      // category the button declares (the old web wrote the pair): it is
+      // consumed here, not counted as a sidebar tag — counting it refused
+      // every follow-up while the web restored both chips and answered.
+      final otherTags = tagList
+          .where((other) => other != tag && !other.startsWith('category.'))
+          .toList();
       final sidebarLabels = otherTags.where(_hierarchy.knowsLabel).toList();
       return ConversationScope(
         categoryId: category,
@@ -322,6 +328,10 @@ class ConversationScopeResolver {
         legacyCategoryId ?? categoryKey,
       ),
       serviceLabelsEn: knownLabels,
+      // The same labels, in their role: a sidebar scope's filter labels
+      // ARE its sidebar labels — the chatbot reads one field instead of
+      // re-deriving the fallback this used to force.
+      sidebarLabelsEn: knownLabels,
       sidebarTagCount: sidebarTags.length,
     );
   }

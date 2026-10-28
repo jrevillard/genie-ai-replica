@@ -392,31 +392,26 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
     // (_selectedNodes) is tracked by that index, and a list whose
     // composition changes with the search would point the highlight and
     // the deselection at the wrong rows.
-    final filteredChildren = children
-        .asMap()
-        .entries
-        .where((entry) {
-          final child = entry.value;
-          // An entity with no display name in this locale has nothing to
-          // offer: the web hides it, and offering it here would let the user
-          // pick a scope that is guaranteed to fail the send.
-          if (child is Map &&
-              (child['name'] == null || child['name'].toString().isEmpty)) {
-            return false;
-          }
-          if (_searchQuery.isEmpty) return true;
+    final filteredChildren = children.asMap().entries.where((entry) {
+      final child = entry.value;
+      // An entity with no display name in this locale has nothing to
+      // offer: the web hides it, and offering it here would let the user
+      // pick a scope that is guaranteed to fail the send.
+      if (child is Map &&
+          (child['name'] == null || child['name'].toString().isEmpty)) {
+        return false;
+      }
+      if (_searchQuery.isEmpty) return true;
 
-          String name;
-          if (child is Map) {
-            name = (child['label'] ?? child['name'] ?? "").toString();
-          } else {
-            name = child.toString();
-          }
+      String name;
+      if (child is Map) {
+        name = (child['label'] ?? child['name'] ?? "").toString();
+      } else {
+        name = child.toString();
+      }
 
-          return name.toLowerCase().contains(_searchQuery);
-        })
-        .map((entry) => MapEntry(entry.key, entry.value))
-        .toList();
+      return name.toLowerCase().contains(_searchQuery);
+    }).toList();
 
     // Hide Category if no matches found
     if (_searchQuery.isNotEmpty && filteredChildren.isEmpty) {

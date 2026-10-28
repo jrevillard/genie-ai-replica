@@ -1658,6 +1658,23 @@ describe('ChatBotComponent', () => {
       expect(payload.text).toBe('a completely different question');
     });
 
+    it('a hidden prompt binds through the TRIM the send applies', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // The send trims the composer (content = newMessage.trim()); the
+      // arm used the raw visible text. A button whose visibleText
+      // carries padding never bound, and the VISIBLE text went to the
+      // LLM instead of the hidden prompt — silently.
+      vm.hiddenPromptForNextMessage = 'PADDED BUTTON PROMPT';
+      vm.hiddenPromptForText = '  padded button question  ';
+      vm.newMessage = '  padded button question  ';
+      await vm.sendMessage();
+
+      const payload = mockSubmitQueryStream.mock.calls.at(-1)[0];
+      expect(payload.text).toBe('PADDED BUTTON PROMPT');
+    });
+
     it('a refused button send keeps its hidden prompt for the SAME text', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
@@ -2223,6 +2240,27 @@ describe('ChatBotComponent', () => {
       // Identity and labels are untouched: only the display moved.
       expect(vm.selectedContextItems[0].id).toBe('births');
       expect(vm.selectedContextItems[0].serviceKey).toBe('births');
+    });
+
+    it('a locale switch REFETCHES the tree — the assurer alone would serve the old locale', async () => {
+      const tree = [
+        { catKey: '2', name: 'Impuestos', nameEN: 'Taxes', children: [{ name: 'Declaración', nameEN: 'Tax Filing' }] }
+      ];
+      mockLiveTree(tree);
+      const wrapper = await createChatBotWrapperAsync(tree);
+      const vm = wrapper.vm;
+      expect(vm.serviceCategoriesStatus).toBe('loaded');
+
+      const serviceTreeService = require('../../services/serviceTreeService');
+      serviceTreeService.getAllCategories.mockClear();
+      wrapper.vm.$i18n.locale = 'fr';
+      await vm.$nextTick();
+      await flushPromises();
+
+      // The names are per-locale tree data: a locale switch without a
+      // refetch keeps the OLD locale's names for the whole session (the
+      // assurer no-ops once a load succeeded).
+      expect(serviceTreeService.getAllCategories).toHaveBeenCalledTimes(1);
     });
 
     it('a locale switch re-resolves a CATEGORY-ONLY chip, not the stale name', async () => {

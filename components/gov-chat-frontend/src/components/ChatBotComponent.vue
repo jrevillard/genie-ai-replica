@@ -672,7 +672,7 @@ export default {
       showQuickHelp: true,
       currentCategoryId: null,
       serviceCategories: [],
-      serviceCategoriesLoadPromise: null, // This will now hold the transformed tree data
+      serviceCategoriesLoadPromise: null, // The in-flight (or settled) hierarchy load
       // The state of the hierarchy load: 'loading' until it settles, then
       // 'loaded' or 'failed'. The hierarchy is what NAMES a Quick Help
       // scope, so a button cannot say whether its scope is valid before it
@@ -708,10 +708,11 @@ export default {
       isSaving: false, // Loading state for save operation to prevent double-save
       lastSaveSucceeded: false, // The save's own verdict for the leave arms
       loadSeq: 0, // Incremented per conversation load; stale responses are dropped
-      hiddenPromptForNextMessage: null, // Stores hidden prompt for dual-prompt mechanism      // The text the hidden prompt was armed FOR: a refused send leaves
-      // the prompt armed (retrying the same question must keep it), and
-      // the binding is what stops an unrelated question from being
-      // answered by a prompt it never belonged to.
+      hiddenPromptForNextMessage: null, // The hidden prompt of a dual-prompt send
+      // The text that prompt was armed FOR: a refused send leaves the
+      // prompt armed (retrying the same question must keep it), and the
+      // binding is what stops an unrelated question from being answered
+      // by a prompt it never belonged to.
       hiddenPromptForText: null,
       // Right sidebar width / collapsed state, both persisted in
       // localStorage and restored clamped against the current viewport.
@@ -1043,7 +1044,12 @@ export default {
                     : this.displayNameForEnLabel(item.serviceKey) || this.safeTranslate(item.service)
             }))
           );
-          this.ensureServiceCategoriesLoaded(); // Reload categories for the new locale — and retry a failed load
+          // A DIRECT load, not the assurer: the names are per-locale tree
+          // data, and the assurer no-ops once a load succeeded — a locale
+          // switch that skipped the refetch kept the old locale's names
+          // for the whole session. The mount keeps the assurer (a
+          // transient failure there is retried by the next need).
+          this.loadServiceCategories();
         }
       );
     }
@@ -1717,7 +1723,10 @@ export default {
 
         // Store the hidden prompt to send to backend (what LLM sees)
         this.hiddenPromptForNextMessage = rawOption.hiddenPrompt || this.$t(rawOption.hiddenPromptKey);
-        this.hiddenPromptForText = visibleMessage;
+        // TRIMMED: the send trims the composer before comparing, and a
+        // padded visibleText that never bound sent the VISIBLE text to
+        // the LLM instead of the hidden prompt.
+        this.hiddenPromptForText = (visibleMessage || '').trim();
         this.sendMessage();
       }
     },
@@ -1748,19 +1757,11 @@ export default {
           notificationService.error(caption || this.translate('chatbot.quickHelpScopeUnavailable', ''));
           return;
         }
-        this.$store.commit('conversation/replaceQuickHelpItem', {
-          service: entry.service,
-          // The entry's OWN declared labels and category ride along: the
-          // entry is a Quick Help card like any tile, and hardcoding an
-          // empty scope here sent its query unfiltered while the chip
-          // showed the card.
-          serviceLabels: Array.isArray(entry.serviceLabels) ? entry.serviceLabels : [],
-          serviceKey: entry.serviceKey || entry.id || entry.service,
-          source: 'quickHelp',
-          id: entry.id,
-          category: entry.category,
-          selected: true
-        });
+        // The entry's OWN declared labels and category ride along: the
+        // entry is a Quick Help card like any tile, and hardcoding an
+        // empty scope here sent its query unfiltered while the chip
+        // showed the card. One builder for every Quick Help item.
+        this.$store.commit('conversation/replaceQuickHelpItem', quickHelpContextItem(entry));
         this.currentCategoryId = entry.category;
         this.sendMessage();
         return;
@@ -1835,17 +1836,7 @@ export default {
         if (quickHelpOption && this.quickHelpScopeState(quickHelpOption).broken) {
           this.currentCategoryId = null;
         } else if (quickHelpOption) {
-          this.$store.commit('conversation/setContextItems', [
-            {
-              service: quickHelpOption.service,
-              serviceLabels: quickHelpOption.serviceLabels || null,
-              serviceKey: quickHelpOption.serviceKey || quickHelpOption.id || quickHelpOption.service,
-              source: 'quickHelp',
-              id: quickHelpOption.id,
-              category: this.currentCategoryId,
-              selected: true
-            }
-          ]);
+          this.$store.commit('conversation/setContextItems', [quickHelpContextItem(quickHelpOption)]);
         } else if (categoryButtons.length > 1) {
           // The same shape the conversation-restore path builds for a
           // category scope: no label on the wire, the category's own edge
@@ -1883,7 +1874,7 @@ export default {
       // refused send leaves it armed so the SAME question keeps it, and
       // any other question sends exactly what the user typed.
       const messageForBackend =
-        this.hiddenPromptForNextMessage && this.hiddenPromptForText === content
+        this.hiddenPromptForNextMessage && this.hiddenPromptForText?.trim() === content
           ? this.hiddenPromptForNextMessage
           : content;
       const messageForDisplay = content;

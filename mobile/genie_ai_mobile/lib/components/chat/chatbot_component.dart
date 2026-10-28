@@ -549,11 +549,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         _activeServiceLabels = scope.quickHelpButtonId == null
             ? const []
             : scope.serviceLabelsEn;
-        _sidebarServiceLabelsEn = scope.sidebarLabelsEn.isNotEmpty
-            ? scope.sidebarLabelsEn
-            : (scope.quickHelpButtonId == null
-                  ? scope.serviceLabelsEn
-                  : const []);
+        // Both branches of the resolver set this field — a sidebar
+        // scope's filter labels are its sidebar labels, a Quick Help
+        // scope carries the ones selected beside the button.
+        _sidebarServiceLabelsEn = scope.sidebarLabelsEn;
         // How many sidebar tags the conversation was saved with: a tag
         // the hierarchy no longer carries is dropped from the labels, and
         // the send guard refuses it instead of letting it vanish.

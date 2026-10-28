@@ -21,6 +21,15 @@
 {{- $obs := .Values.observability | default dict -}}
 {{- $obsMetrics := $obs.metrics | default dict -}}
 {{- $opeaGpu := $opea.gpu | default dict -}}
+{{- /* The app-tier ports the egress rules name, bound parent-first like
+every values read: the knob a policy follows must be the SAME knob the
+Service and the probes follow (services.<svc>.port), or an operator's
+override strands the orchestrator behind its own default-deny. */ -}}
+{{- $appPorts := dict "backend" 3000 "documentRepository" 3001 -}}
+{{- $services := .Values.services | default dict -}}
+{{- range $name, $default := $appPorts -}}
+{{- $_ := set $appPorts $name (int (index (index $services $name | default dict) "port" | default $default)) -}}
+{{- end -}}
 
 {{- if $opea.enabled -}}
 ---
@@ -108,22 +117,24 @@ spec:
         # listener 8888.
         - protocol: TCP
           port: 8888
-    # document-repository (DOC_REPO_URL). Post-DNAT pod port 3001.
+    # document-repository (DOC_REPO_URL). Post-DNAT pod port —
+    # services.documentRepository.port, the knob the Service follows.
     - to:
         - podSelector:
             matchLabels:
               genieai.io/component: documentRepository
       ports:
         - protocol: TCP
-          port: 3001
-    # Backend BFF (BACKEND_SERVICE_URL). Post-DNAT pod port 3000.
+          port: {{ index $appPorts "documentRepository" }}
+    # Backend BFF (BACKEND_SERVICE_URL). Post-DNAT pod port —
+    # services.backend.port, the knob the Service follows.
     - to:
         - podSelector:
             matchLabels:
               genieai.io/component: backend
       ports:
         - protocol: TCP
-          port: 3000
+          port: {{ index $appPorts "backend" }}
     # Keycloak (KEYCLOAK_URL). Port-scoped ipBlock pending verified
     # peer labels — the operator-managed Keycloak pod labels are not
     # part of the genieai.io/component convention. Same rationale as
@@ -321,22 +332,24 @@ spec:
       ports:
         - protocol: TCP
           port: 8080
-    # document-repository (DOCUMENT_REPOSITORY_URL). Post-DNAT pod port 3001.
+    # document-repository (DOCUMENT_REPOSITORY_URL). Post-DNAT pod port —
+    # services.documentRepository.port, the knob the Service follows.
     - to:
         - podSelector:
             matchLabels:
               genieai.io/component: documentRepository
       ports:
         - protocol: TCP
-          port: 3001
-    # Backend BFF (BACKEND_SERVICE_URL). Post-DNAT pod port 3000.
+          port: {{ index $appPorts "documentRepository" }}
+    # Backend BFF (BACKEND_SERVICE_URL). Post-DNAT pod port —
+    # services.backend.port, the knob the Service follows.
     - to:
         - podSelector:
             matchLabels:
               genieai.io/component: backend
       ports:
         - protocol: TCP
-          port: 3000
+          port: {{ index $appPorts "backend" }}
     # OTLP exporter.
     - to:
         - ipBlock:

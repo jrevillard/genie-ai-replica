@@ -204,7 +204,11 @@ def _action_expression(lines, start):
             # strip applies only when the braces still balance after
             # it, which is true exactly when the `#` sits outside.
             stripped = re.sub(r"(?<!#)#.*$", "", line)
-            if stripped.count("{{") == stripped.count("}}") and "{{" in stripped:
+            # Balance alone decides: a strip that removes an action's
+            # closing `}}` leaves the line unbalanced (the `#` was
+            # inside), while a continuation line's comment — no braces
+            # of its own — stays balanced (the `#` was outside).
+            if stripped.count("{{") == stripped.count("}}"):
                 line = stripped
         collected.append(line)
         depth += line.count("{{") - line.count("}}")

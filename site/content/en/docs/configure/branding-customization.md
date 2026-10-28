@@ -76,7 +76,9 @@ A host that kept a stale configuration served a brand the branch no longer decla
 
 The re-seeded files are live immediately — the bind mount serves them from disk, so a browser reload is all it takes (no frontend restart).
 
-Nodes that you want to manage entirely by hand — an air-gapped deployment, for instance — can skip the sync with `config_bootstrap_sync_enabled: false`; the role then leaves the host directory untouched.
+Nodes that you want to manage entirely by hand — an air-gapped deployment, for instance — can skip the sync with `config_bootstrap_sync_enabled: false`; the role then leaves the host's configuration directory untouched — it creates no directory, installs nothing and mirrors nothing. Populate the directory yourself.
+
+A run that stops on one of the role's guards (a branch that does not ship the deployment's Keycloak theme, a branch that would re-brand it, an archive that does not contain the expected assets) leaves the host as it was: the guards all run before anything is mirrored, and the role cleans up after itself. The same applies to `--check`: the role skips the download and the mirror entirely and only reports what it would do.
 
 ## Frontend brand (logo, favicon, app name, brand color)
 

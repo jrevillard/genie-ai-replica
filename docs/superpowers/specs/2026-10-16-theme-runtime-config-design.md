@@ -88,7 +88,7 @@ Move all theme assets (frontend palette + brand JSON + Keycloak theme) to runtim
 - **`config_dir`** is defined in `group_vars/all.yml` as `"{{ deploy_dir }}/config"` (i.e. `/opt/genieai/config`). It is promoted to `group_vars` rather than kept as a role default because the bind mounts are rendered by the separate `deploy` play via `env.j2`, which does not include this role — a role default would render as an empty string there. It is derived from `deploy_dir` rather than an inventory group name so the path does not move when a host's groups are reordered, and so operators find the editable theme files inside the deploy directory they already know.
 - **rsync source paths** are not taken from the local checkout. The role downloads a branch-pinned archive from GitLab (`?path=<repo-relative dir>`) and rsyncs out of the extraction root:
   - `frontend`: `components/gov-chat-frontend/public/config`
-  - `keycloak`: `configs/keycloak/themes/genie`
+  - `keycloak`: `configs/keycloak/themes` (the whole tree — additional themes such as `genie-el-salvador`, whose parent is `genie`, must sit next to it under the mounted directory or their parent reference cannot resolve)
   - The playbook never clones the repo onto the node, and the documented workflow runs it from a local checkout that may sit on a different branch than the one being deployed — seeding from `playbook_dir` would write the wrong theme assets, and the mirror would then push that mistake to every host. The role refuses to sync a branch that does not ship the deployment's Keycloak theme.
 - **No shared filesystem** (NFS/CephFS) — Ansible is the single source-of-truth distributor, matching the existing deploy contract.
 
@@ -154,12 +154,13 @@ services:
 
 - **New role** `roles/config_bootstrap/`:
   - `tasks/main.yml` (**update 2026-10-28** — the role ships a mirror, not a preserving sync):
-    - `file: path={{ config_dir }}/{{ item.dest_subdir }} state=directory mode=0755` for `frontend/` and `keycloak/themes/`
-    - a private scratch directory per run (`ansible.builtin.tempfile`), the branch-pinned archive downloaded into it and extracted there
-    - the expected assets of each pair are stat'ed before anything is synced; the deployment's Keycloak theme (read from the rendered `.env`) is checked against the branch BEFORE the sync, because the mirror deletes what the branch does not ship
+    - `file: path={{ config_dir }}/{{ item.dest_subdir }} state=directory mode=0755` for `frontend/` and `keycloak/themes/` — part of the seeding, so it is skipped when `config_bootstrap_sync_enabled` is false
+    - a private scratch directory per run (`ansible.builtin.tempfile`), the branch-pinned archive downloaded into it and extracted there; the scratch tree is removed in an `always` section, so a guard failure does not leak it
+    - the expected assets of each pair are stat'ed before anything is synced; the deployment's Keycloak theme (read from the rendered `.env`) is checked against the branch BEFORE the sync, because the mirror deletes what the branch does not ship; the brand the branch carries is compared with the brand the host serves, and a re-brand fails the deploy
     - `rsync --archive --checksum --delete` from the extraction tree into `{{ config_dir }}/{{ item.dest_subdir }}/` — the host copy mirrors the branch
-    - the same rsync run as a dry run afterwards: an empty report means the host matches the branch, a non-empty one names the files that differ and fails the deploy
-  - `defaults/main.yml`: `config_bootstrap_pairs` (src / dest_subdir / expect) — `config_dir` lives in `group_vars/all.yml`, not here
+    - the same rsync run as a dry run afterwards: an empty report means the host matches the branch, a non-empty one names the files that differ and fails the deploy; the verification's own exit code is asserted too, so a dry run that failed is never mistaken for a match
+    - `--check` skips the whole seeding: `ansible.builtin.tempfile` does not support check mode, so the run is planned, not executed
+  - `defaults/main.yml`: `config_bootstrap_pairs` (src / dest_subdir / expect / brand_file) — `config_dir` lives in `group_vars/all.yml`, not here
   - `meta/main.yml`: `galaxy_info` with author + dependencies
 
 - **`deploy.yml`**: new play with `tags: [config]` that applies the role to `[all]`. Update header comment to document the new tag.
@@ -210,7 +211,8 @@ services:
 
 - Keycloak falls back to the unbranded built-in theme. Ugly but functional — the login flow still works.
 - `delete: false` does **not** keep the image-baked theme available. `delete` only governs how rsync treats files that are *already on the host*: it prevents the sync from removing them. It says nothing about the image's own contents, which a bind mount hides entirely. The only thing that keeps the theme available is the role having actually populated the host directory.
-- The role does not warn when the destination is empty. Its guard runs on the *extracted archive* (`ansible.builtin.assert` over `config_bootstrap_extract_check`), which catches a wrong `repo_branch`, a truncated download, or a changed archive layout — it fires before anything is synced — but there is no post-sync check of the destination tree. An operator who sets `config_bootstrap_sync_enabled: false`, or who empties the directory by hand, gets no signal from Ansible.
+- The role's guards run on the *extracted archive* (`ansible.builtin.assert` over `config_bootstrap_extract_check`), which catches a wrong `repo_branch`, a truncated download, or a changed archive layout — they fire before anything is synced. A post-sync check now closes the loop: the same mirror is re-run as a dry run and the deploy fails if it would still change anything, naming the files that differ.
+- An operator who sets `config_bootstrap_sync_enabled: false` gets no signal from Ansible, by design: the role then owns nothing on the host — it creates no directory, mirrors nothing and verifies nothing. The tree is the operator's, and the deployment serves whatever it holds.
 
 ### Bind mount source empty or missing
 

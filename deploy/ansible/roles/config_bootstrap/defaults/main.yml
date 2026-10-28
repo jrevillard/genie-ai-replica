@@ -30,12 +30,20 @@ config_bootstrap_allow_rebrand: false
 #                the frontend fetches and validates at boot: a branch whose
 #                config directory does not carry it would mirror that absence
 #                onto the host, and the mount would serve a 404 for it.
+#   brand_file  - the file inside the pair that carries the deployment's brand
+#                (its app.title). Exactly one pair must declare it: the role
+#                compares the branch's copy with the host's copy and refuses to
+#                mirror a branch that would re-brand the deployment. Declared
+#                here rather than hardcoded in the role so that changing a
+#                pair's src or dest_subdir cannot leave the check reading a
+#                path that no longer exists.
 config_bootstrap_pairs:
   - src: "components/gov-chat-frontend/public/config"
     dest_subdir: "frontend"
     expect:
       - "theme-variables.css"
       - "genie-ai-config.json"
+    brand_file: "genie-ai-config.json"
   # Seed the whole themes tree, not one theme: additional themes (e.g.
   # genie-el-salvador with parent=genie) must sit next to genie under the
   # mounted directory, or their parent reference cannot resolve. The mount

@@ -36,11 +36,11 @@
 # Both the inventory and the host must be given explicitly: the script never
 # guesses a target, and it never falls back to a hardcoded host. Run it against
 # a real deploy node (or any host Ansible can reach) - it writes to that host's
-# config_dir, and it removes the files it created and restores the one it
-# edited, including on failure. What the role's own mirror removes (the host
-# files the branch does not ship) is the mirror's contract, not damage: the
-# host is left serving the branch, which is the state a deploy would leave it
-# in anyway.
+# config_dir, and it removes the files it created and restores the whole config
+# tree from a pre-test archive, including on failure. What the role's own mirror
+# removes (the host files the branch does not ship) is the mirror's contract,
+# not damage: the host is left serving the branch, which is the state a deploy
+# would leave it in anyway.
 #
 # NOT run by CI. This needs a live Ansible target host.
 #
@@ -195,6 +195,7 @@ if [ -n "$BECOME_PASSWORD" ]; then
 fi
 
 BACKUP_PATH=""
+BACKUP_ARCHIVE=""
 EXPECTED_PATH=""
 STRAY_PATH=""
 RESTORE_ARMED="false"
@@ -219,21 +220,25 @@ restore() {
             -a "rm -f '$STRAY_PATH'" >/dev/null 2>&1 || true
         STRAY_PATH=""
     fi
-    printf '\n=== Cleanup: restoring %s ===\n' "$THEME_CSS"
-    if [ -n "$BACKUP_PATH" ] &&
+    printf '\n=== Cleanup: restoring the config tree under %s ===\n' "$CONFIG_DIR"
+    # The whole tree is restored, not only the file this test edited: a run
+    # that removed the host's config (a wrong branch, or a mirror whose source
+    # path is wrong) must not leave the node without it while the script
+    # reports a successful restore.
+    if [ -n "$BACKUP_ARCHIVE" ] &&
         ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
-            -a "test -f '$BACKUP_PATH'" >/dev/null 2>&1; then
-        if ansible_run raw -i "$INVENTORY" "$HOST" -b -m copy \
-            -a "src=$BACKUP_PATH dest=$THEME_CSS remote_src=true" >/dev/null 2>&1; then
+            -a "test -f '$BACKUP_ARCHIVE'" >/dev/null 2>&1; then
+        if ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
+            -a "rm -rf '$CONFIG_DIR' && tar -xpf '$BACKUP_ARCHIVE' -C '$CONFIG_PARENT'" >/dev/null 2>&1; then
             ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
-                -a "rm -f '$BACKUP_PATH'" >/dev/null 2>&1 || true
-            printf '  [ok] %s restored from pre-test backup; backup removed.\n' "$THEME_CSS"
+                -a "rm -f '$BACKUP_ARCHIVE'" >/dev/null 2>&1 || true
+            printf '  [ok] %s restored from pre-test backup; backup removed.\n' "$CONFIG_DIR"
             return "$exit_code"
         fi
     fi
     printf '  [FAIL] automatic restore did not complete.\n' >&2
-    printf '         To restore %s by hand, run on the host:\n' "$THEME_CSS" >&2
-    printf '           cp %s %s && rm -f %s\n' "$BACKUP_PATH" "$THEME_CSS" "$BACKUP_PATH" >&2
+    printf '         To restore %s by hand, run on the host:\n' "$CONFIG_DIR" >&2
+    printf '           tar -xpf %s -C %s\n' "$BACKUP_ARCHIVE" "$CONFIG_PARENT" >&2
     return "$exit_code"
 }
 trap restore EXIT INT TERM
@@ -245,6 +250,14 @@ CONFIG_DIR="$(resolve_config_dir)"
 # config_dir is "{{ deploy_dir }}/config" (group_vars/all.yml:22) - normalise so
 # the sub-path joins below are unambiguous whether or not it carries a slash.
 CONFIG_DIR="${CONFIG_DIR%/}"
+# The restore below removes the config tree and extracts the backup in its
+# place, so the path has to be the one the deployment uses: a mis-resolved
+# config_dir would otherwise be deleted wholesale. The playbook always derives
+# it as "{{ deploy_dir }}/config", so the basename is checked before anything
+# destructive can run.
+[ "$(basename "$CONFIG_DIR")" = "config" ] || die \
+    "refusing to operate on '$CONFIG_DIR': config_dir must be a directory named 'config'."
+CONFIG_PARENT="$(dirname "$CONFIG_DIR")"
 FRONTEND_DIR="${CONFIG_DIR}/frontend"
 KEYCLOAK_THEME_DIR="${CONFIG_DIR}/keycloak/themes"
 THEME_CSS="${FRONTEND_DIR}/theme-variables.css"
@@ -256,6 +269,20 @@ remote_sh "test -d '$FRONTEND_DIR'" >/dev/null ||
     fail "frontend config dir is absent: $FRONTEND_DIR (run the role first?)"
 remote_sh "test -d '$KEYCLOAK_THEME_DIR'" >/dev/null ||
     fail "keycloak theme dir is absent: $KEYCLOAK_THEME_DIR (run the role first?)"
+
+# --- backup the host tree ------------------------------------------------------
+
+# The tree is archived BEFORE the first role run and the restore is armed with
+# it, so a run that destroys the host's config (a wrong branch, or a mirror
+# whose source path is wrong) leaves the node with its config back, not with an
+# empty mount that shadows the images. The whole tree is archived, not just the
+# file this test edits: the mirror can remove any file the branch does not
+# ship.
+BACKUP_ARCHIVE="/tmp/config_bootstrap_smoke_backup_$$.tar"
+remote_sh "tar -cpf '$BACKUP_ARCHIVE' -C '$CONFIG_PARENT' '$(basename "$CONFIG_DIR")'" ||
+    fail "could not archive the config tree under $CONFIG_DIR to $BACKUP_ARCHIVE"
+RESTORE_ARMED="true"
+pass "backed up the config tree under $CONFIG_DIR to $BACKUP_ARCHIVE"
 
 # --- run 1: populate ----------------------------------------------------------
 
@@ -347,7 +374,6 @@ remote_sh "test -f '$THEME_CSS'" || fail "cannot test the mirror contract: $THEM
 BACKUP_PATH="/tmp/config_bootstrap_smoke_backup_$$.css"
 remote_sh "cp -p '$THEME_CSS' '$BACKUP_PATH'" ||
     fail "could not back up $THEME_CSS to $BACKUP_PATH"
-RESTORE_ARMED="true"
 pass "backed up $THEME_CSS to $BACKUP_PATH"
 
 # Append the marker as its own line rather than folding it into an existing rule:

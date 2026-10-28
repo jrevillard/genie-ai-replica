@@ -16,6 +16,16 @@
 # source of truth for the runtime config; anything an operator wants changed
 # belongs in the repository, in the flavour's config file, not on the host.
 
+# ansible.builtin.tempfile does not support check mode: it is skipped there and
+# registers no path, so every task that reads the scratch tree would fail on
+# an undefined attribute. The decision to seed at all is taken once, here, and
+# every task below follows it.
+- name: Decide whether this run seeds the host
+  ansible.builtin.set_fact:
+    config_bootstrap_run: >-
+      {{ config_bootstrap_sync_enabled | bool
+         and not (ansible_check_mode | default(false) | bool) }}
+
 - name: Ensure rsync is available on the target
   become_user: root
   ansible.builtin.package:
@@ -23,23 +33,17 @@
     state: present
   when: config_bootstrap_sync_enabled | bool
 
-# A private scratch directory per run. It used to be a fixed path under /tmp,
-# which two problems came with: the path was predictable, so a local user
-# could pre-create it and steer a root write, and two overlapping deploys on
-# the same host purged each other's extraction tree mid-run — one of them then
-# mirrored a half-extracted tree onto the host.
-- name: Create a private scratch directory for this run
-  ansible.builtin.tempfile:
-    state: directory
-    prefix: genieai-config-
-  register: config_bootstrap_tmp
-  when: config_bootstrap_sync_enabled | bool
-
 # Root is needed to create {{ config_dir }} itself on a host that does not have
 # it yet (the play runs on `all`, including GPU nodes), mirroring the deploy
 # play's "Ensure deploy directory exists" task for the same tree. The
 # directories stay root-owned, consistent with the rest of the playbook: the
 # rsync below runs under the play's become, so it writes into them as root.
+#
+# Creating them is part of the seeding: with config_bootstrap_sync_enabled
+# false the role owns nothing on the host and leaves the operator's tree
+# exactly as it is (docker-compose creates a missing bind-mount source as an
+# empty root-owned directory anyway, so an operator who manages the tree by
+# hand has to populate it themselves).
 - name: Ensure runtime config directories exist
   become_user: root
   ansible.builtin.file:
@@ -49,287 +53,310 @@
   loop: "{{ config_bootstrap_pairs }}"
   loop_control:
     label: "{{ item.dest_subdir }}"
-
-# Same endpoint shape the Grafana provisioning download uses in deploy.yml:
-# a whole-directory archive at the pinned branch, with --strip-components=1
-# to drop the archive's top-level <branch>-<sha>-<short>/ prefix. The archive
-# preserves the full repo-relative path, so item.src is still present as a
-# subdirectory of the extraction root.
-- name: Download theme config archive at {{ repo_branch }}
-  ansible.builtin.get_url:
-    url: "{{ repo_url | regex_replace('\\.git$', '') }}/-/archive/{{ repo_branch }}/genieai-config.tar.gz?path={{ item.src }}"
-    dest: "{{ config_bootstrap_tmp.path }}/{{ item.dest_subdir | replace('/', '-') }}.tar.gz"
-    force: true
-    mode: '0644'
-  loop: "{{ config_bootstrap_pairs }}"
-  loop_control:
-    label: "{{ item.src }}"
   when: config_bootstrap_sync_enabled | bool
 
-# unarchive requires its dest to exist.
-- name: Create the scratch extraction directory for each pair
-  become_user: root
-  ansible.builtin.file:
-    path: "{{ config_bootstrap_tmp.path }}/{{ item.dest_subdir | replace('/', '-') }}"
-    state: directory
-    mode: "0755"
-  loop: "{{ config_bootstrap_pairs }}"
-  loop_control:
-    label: "{{ item.dest_subdir }}"
-  when: config_bootstrap_sync_enabled | bool
+# The whole seeding runs in a block with an `always` section: the scratch tree
+# holds the downloaded archives and the extracted branch copy (tens of MB per
+# pair), and the guard failures below are a designed path — a wrong branch, a
+# re-brand — not an accident. Without the always section every one of those
+# runs leaked its scratch tree into /tmp on every node of the fleet.
+- name: Seed the host runtime config from the branch
+  when: config_bootstrap_run | bool
+  block:
+    # A private scratch directory per run. It used to be a fixed path under
+    # /tmp, which two problems came with: the path was predictable, so a local
+    # user could pre-create it and steer a root write, and two overlapping
+    # deploys on the same host purged each other's extraction tree mid-run —
+    # one of them then mirrored a half-extracted tree onto the host.
+    - name: Create a private scratch directory for this run
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: genieai-config-
+      register: config_bootstrap_tmp
 
-- name: Extract theme config archive at {{ repo_branch }}
-  ansible.builtin.unarchive:
-    src: "{{ config_bootstrap_tmp.path }}/{{ item.dest_subdir | replace('/', '-') }}.tar.gz"
-    dest: "{{ config_bootstrap_tmp.path }}/{{ item.dest_subdir | replace('/', '-') }}"
-    remote_src: true
-    extra_opts:
-      - "--strip-components=1"
-  loop: "{{ config_bootstrap_pairs }}"
-  loop_control:
-    label: "{{ item.src }}"
-  when: config_bootstrap_sync_enabled | bool
+    # Same endpoint shape the Grafana provisioning download uses in deploy.yml:
+    # a whole-directory archive at the pinned branch, with --strip-components=1
+    # to drop the archive's top-level <branch>-<sha>-<short>/ prefix. The
+    # archive preserves the full repo-relative path, so item.src is still
+    # present as a subdirectory of the extraction root.
+    - name: Download theme config archive at {{ repo_branch }}
+      ansible.builtin.get_url:
+        url: "{{ repo_url | regex_replace('\\.git$', '') }}/-/archive/{{ repo_branch }}/genieai-config.tar.gz?path={{ item.src }}"
+        dest: "{{ config_bootstrap_tmp.path }}/{{ item.dest_subdir | replace('/', '-') }}.tar.gz"
+        force: true
+        mode: '0644'
+      loop: "{{ config_bootstrap_pairs }}"
+      loop_control:
+        label: "{{ item.src }}"
 
-# Guard: a wrong branch, a truncated download or a changed archive layout must
-# fail the deploy here, before anything is synced into the mount source. Checking
-# one well-known entrypoint asset per pair catches both an empty extraction and a
-# silently reshaped tree.
-- name: Stat the expected assets in each extracted archive
-  ansible.builtin.stat:
-    path: "{{ config_bootstrap_tmp.path }}/{{ item.0.dest_subdir | replace('/', '-') }}/{{ item.0.src }}/{{ item.1 }}"
-  loop: "{{ config_bootstrap_pairs | subelements('expect') }}"
-  loop_control:
-    label: "{{ item.0.dest_subdir | default('unknown') }}/{{ item.1 | default('unknown') }}"
-  register: config_bootstrap_extract_check
-  when: config_bootstrap_sync_enabled | bool
+    # unarchive requires its dest to exist.
+    - name: Create the scratch extraction directory for each pair
+      become_user: root
+      ansible.builtin.file:
+        path: "{{ config_bootstrap_tmp.path }}/{{ item.dest_subdir | replace('/', '-') }}"
+        state: directory
+        mode: "0755"
+      loop: "{{ config_bootstrap_pairs }}"
+      loop_control:
+        label: "{{ item.dest_subdir }}"
 
-- name: Fail when an extracted archive is missing an expected asset
-  ansible.builtin.assert:
-    that:
-      - item.stat.exists
-    fail_msg: >-
-      config_bootstrap: the archive for {{ item.item.0.dest_subdir }} does not contain
-      {{ item.item.0.src }}/{{ item.item.1 }}. Check that repo_branch
-      ({{ repo_branch }}) really ships those assets before deploying.
-    success_msg: "config_bootstrap: {{ item.item.1 }} found for {{ item.item.0.dest_subdir }}"
-  loop: "{{ config_bootstrap_extract_check.results | default([]) }}"
-  loop_control:
-    label: "{{ item.item.0.dest_subdir | default('unknown') }}/{{ item.item.1 | default('unknown') }}"
-  when:
-    - config_bootstrap_sync_enabled | bool
-    - not ansible_check_mode | default(false) | bool
+    - name: Extract theme config archive at {{ repo_branch }}
+      ansible.builtin.unarchive:
+        src: "{{ config_bootstrap_tmp.path }}/{{ item.dest_subdir | replace('/', '-') }}.tar.gz"
+        dest: "{{ config_bootstrap_tmp.path }}/{{ item.dest_subdir | replace('/', '-') }}"
+        remote_src: true
+        extra_opts:
+          - "--strip-components=1"
+      loop: "{{ config_bootstrap_pairs }}"
+      loop_control:
+        label: "{{ item.src }}"
 
-# The mirror is destructive by design: --delete removes what the branch does
-# not ship. So the branch must be the branch this host is deployed from, and
-# that is checkable before anything is touched: the deployment's own Keycloak
-# theme is named in the rendered environment, and the branch has to ship it.
-# Deploying a branch that does not (main ships only the genie theme, while an
-# el-salvador deployment runs on genie-el-salvador) would delete that theme
-# from the host and the realms would fall back to the built-in one.
-- name: Read the Keycloak theme this deployment is configured to use
-  ansible.builtin.shell:
-    cmd: >-
-      if [ -f '{{ config_dir }}/../.env' ]; then
-        grep -E '^KEYCLOAK_THEME=' '{{ config_dir }}/../.env' | tail -n 1 | cut -d= -f2- | tr -d '"'\''' || true;
-      fi
-  register: config_bootstrap_env_theme
-  changed_when: false
-  when:
-    - config_bootstrap_sync_enabled | bool
-    - not ansible_check_mode | default(false) | bool
+    # Guard: a wrong branch, a truncated download or a changed archive layout
+    # must fail the deploy here, before anything is synced into the mount
+    # source. Checking one well-known entrypoint asset per pair catches both an
+    # empty extraction and a silently reshaped tree.
+    - name: Stat the expected assets in each extracted archive
+      ansible.builtin.stat:
+        path: "{{ config_bootstrap_tmp.path }}/{{ item.0.dest_subdir | replace('/', '-') }}/{{ item.0.src }}/{{ item.1 }}"
+      loop: "{{ config_bootstrap_pairs | subelements('expect') }}"
+      loop_control:
+        label: "{{ item.0.dest_subdir | default('unknown') }}/{{ item.1 | default('unknown') }}"
+      register: config_bootstrap_extract_check
 
-- name: Stat the deployment's Keycloak theme in the extracted branch
-  ansible.builtin.stat:
-    path: >-
-      {{ config_bootstrap_tmp.path }}/{{ item.dest_subdir | replace('/', '-') }}/{{ item.src }}/{{ config_bootstrap_env_theme.stdout | trim | default('genie', true) }}
-  register: config_bootstrap_theme_stat
-  loop: "{{ config_bootstrap_pairs | selectattr('dest_subdir', 'match', '^keycloak/') | list }}"
-  loop_control:
-    label: "{{ item.dest_subdir }}"
-  when:
-    - config_bootstrap_sync_enabled | bool
-    - not ansible_check_mode | default(false) | bool
+    - name: Fail when an extracted archive is missing an expected asset
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+        fail_msg: >-
+          config_bootstrap: the archive for {{ item.item.0.dest_subdir }} does not contain
+          {{ item.item.0.src }}/{{ item.item.1 }}. Check that repo_branch
+          ({{ repo_branch }}) really ships those assets before deploying.
+        success_msg: "config_bootstrap: {{ item.item.1 }} found for {{ item.item.0.dest_subdir }}"
+      loop: "{{ config_bootstrap_extract_check.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item.0.dest_subdir | default('unknown') }}/{{ item.item.1 | default('unknown') }}"
 
-- name: Fail when the branch does not ship the deployment's Keycloak theme
-  ansible.builtin.assert:
-    that:
-      - item.stat.exists
-    fail_msg: >-
-      The branch ({{ repo_branch }}) does not ship the Keycloak theme
-      {{ config_bootstrap_env_theme.stdout | trim | default('genie', true) }} that this
-      deployment is configured to use. Syncing it would delete that theme from the
-      host and the realms would fall back to the built-in Keycloak theme. Check
-      repo_branch against the branch this host is deployed from.
-    success_msg: >-
-      config_bootstrap: the branch ships the
-      {{ config_bootstrap_env_theme.stdout | trim | default('genie', true) }} Keycloak theme
-  loop: "{{ config_bootstrap_theme_stat.results | default([]) }}"
-  loop_control:
-    label: "{{ item.item.dest_subdir | default('unknown') }}"
-  when:
-    - config_bootstrap_sync_enabled | bool
-    - not ansible_check_mode | default(false) | bool
+    # The mirror is destructive by design: --delete removes what the branch does
+    # not ship. So the branch must be the branch this host is deployed from, and
+    # that is checkable before anything is touched: the deployment's own Keycloak
+    # theme is named in the rendered environment, and the branch has to ship it.
+    # Deploying a branch that does not (main ships only the genie theme, while an
+    # el-salvador deployment runs on genie-el-salvador) would delete that theme
+    # from the host and the realms would fall back to the built-in one.
+    - name: Read the Keycloak theme this deployment is configured to use
+      ansible.builtin.shell:
+        cmd: >-
+          if [ -f '{{ config_dir }}/../.env' ]; then
+            grep -E '^KEYCLOAK_THEME=' '{{ config_dir }}/../.env' | tail -n 1 | cut -d= -f2- | tr -d '"'\''' || true;
+          fi
+      register: config_bootstrap_env_theme
+      changed_when: false
 
-# A wrong branch re-brands the deployment. The Keycloak theme catches the
-# half of the flavour that lives in the themes tree; the brand the web app
-# shows lives in the runtime configuration, and the branch ships that file
-# too. So the branch's title is compared with the one the host serves, and
-# a difference fails the deploy: re-branding is a decision (change the
-# repository), not a side effect of deploying another branch. Set
-# config_bootstrap_allow_rebrand to true to make it a warning.
-- name: Read the brand the branch ships
-  ansible.builtin.slurp:
-    src: "{{ config_bootstrap_tmp.path }}/frontend/components/gov-chat-frontend/public/config/genie-ai-config.json"
-  register: config_bootstrap_branch_config
-  when:
-    - config_bootstrap_sync_enabled | bool
-    - not ansible_check_mode | default(false) | bool
+    - name: Stat the deployment's Keycloak theme in the extracted branch
+      ansible.builtin.stat:
+        path: >-
+          {{ config_bootstrap_tmp.path }}/{{ item.dest_subdir | replace('/', '-') }}/{{ item.src }}/{{ config_bootstrap_env_theme.stdout | trim | default('genie', true) }}
+      register: config_bootstrap_theme_stat
+      loop: "{{ config_bootstrap_pairs | selectattr('dest_subdir', 'match', '^keycloak/') | list }}"
+      loop_control:
+        label: "{{ item.dest_subdir }}"
 
-- name: Read the brand the host currently serves
-  ansible.builtin.slurp:
-    src: "{{ config_dir }}/frontend/genie-ai-config.json"
-  register: config_bootstrap_host_config
-  # A host that has never been seeded has no brand to compare with: the
-  # first deploy is not a re-brand.
-  failed_when: false
-  when:
-    - config_bootstrap_sync_enabled | bool
-    - not ansible_check_mode | default(false) | bool
+    - name: Fail when the branch does not ship the deployment's Keycloak theme
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+        fail_msg: >-
+          The branch ({{ repo_branch }}) does not ship the Keycloak theme
+          {{ config_bootstrap_env_theme.stdout | trim | default('genie', true) }} that this
+          deployment is configured to use. Syncing it would delete that theme from the
+          host and the realms would fall back to the built-in Keycloak theme. Check
+          repo_branch against the branch this host is deployed from.
+        success_msg: >-
+          config_bootstrap: the branch ships the
+          {{ config_bootstrap_env_theme.stdout | trim | default('genie', true) }} Keycloak theme
+      loop: "{{ config_bootstrap_theme_stat.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item.dest_subdir | default('unknown') }}"
 
-- name: Compute the brand each side carries
-  ansible.builtin.set_fact:
-    config_bootstrap_branch_title: >-
-      {{ (config_bootstrap_branch_config.content | b64decode | from_json).app.title | default('') }}
-    config_bootstrap_host_title: >-
-      {{ ((config_bootstrap_host_config.content | b64decode | from_json).app.title | default(''))
-         if config_bootstrap_host_config.content is defined else '' }}
-  when:
-    - config_bootstrap_sync_enabled | bool
-    - not ansible_check_mode | default(false) | bool
+    # A wrong branch re-brands the deployment. The Keycloak theme catches the
+    # half of the flavour that lives in the themes tree; the brand the web app
+    # shows lives in the runtime configuration, and the branch ships that file
+    # too. So the branch's title is compared with the one the host serves, and
+    # a difference fails the deploy: re-branding is a decision (change the
+    # repository), not a side effect of deploying another branch. Set
+    # config_bootstrap_allow_rebrand to true to make it a warning.
+    #
+    # The file that carries the brand is declared by the pair that owns it
+    # (brand_file), not hardcoded here: a pair whose src or dest_subdir
+    # changes must not leave the check reading a path that no longer exists.
+    - name: Find the pairs that declare a brand file
+      ansible.builtin.set_fact:
+        config_bootstrap_brand_pairs: "{{ config_bootstrap_pairs | selectattr('brand_file', 'defined') | list }}"
 
-- name: Fail when the branch re-brands the deployment
-  ansible.builtin.assert:
-    that:
-      - config_bootstrap_host_title == ''
-        or config_bootstrap_branch_title == config_bootstrap_host_title
-        or config_bootstrap_allow_rebrand | bool
-    fail_msg: >-
-      The branch ({{ repo_branch }}) ships the brand
-      '{{ config_bootstrap_branch_title }}' while the host serves
-      '{{ config_bootstrap_host_title }}'. Mirroring it would re-brand the
-      deployment. Deploy the branch this host runs, or set
-      config_bootstrap_allow_rebrand to true when the re-brand is the point.
-    success_msg: "config_bootstrap: the branch carries the deployment's brand"
-  when:
-    - config_bootstrap_sync_enabled | bool
-    - not ansible_check_mode | default(false) | bool
+    - name: Fail unless exactly one pair declares the brand file
+      ansible.builtin.assert:
+        that:
+          - config_bootstrap_brand_pairs | length == 1
+        fail_msg: >-
+          Exactly one config_bootstrap_pairs entry must declare brand_file (the
+          runtime config file whose app.title is the deployment's brand).
+          {{ config_bootstrap_brand_pairs | length }} entries declare one.
+        success_msg: "config_bootstrap: the brand file is declared by one pair"
 
-# The host copy is a MIRROR of the branch: rsync --archive --checksum --delete
-# overwrites the files the branch changed and removes the ones it no longer
-# ships. Preserving whatever sat on the host (--ignore-existing) let the
-# runtime config drift away from the branch it is validated against: a stale
-# genie-ai-config.json kept the schema it was written with, while the
-# frontend validates the served file against the schema the branch ships —
-# the app then refuses to mount, and the symptom is a white page in
-# production behind a deploy that reported success.
-#
-# --checksum: rsync's default quick check compares size and mtime, so a file
-# whose bytes changed but whose size and mtime did not would be skipped and
-# stay stale on the host. Comparing content is the only check that matches
-# the claim this task makes.
-#
-# The out-format names the paths: with --delete, the task now removes host
-# state, and an operator has to see what it removed.
-#
-# The trailing slash on src is load-bearing twice over: without it rsync
-# copies the source directory *by name* (an extra level under dest) and,
-# with --delete in play, removes everything else in dest — the whole
-# host config tree. The slash is what keeps --delete scoped to the
-# config tree.
-#
-# ansible.posix.synchronize is deliberately NOT used here: it runs rsync on the
-# Ansible controller and treats src as a controller-local path, while these
-# archives were downloaded and extracted on the target host. Plain rsync under
-# the play's become runs on the target, where the data actually is, and writes
-# into the root-owned config_dir without any --rsync-path sudo games.
-- name: Rsync branch defaults to host runtime config dir (mirror the branch)
-  ansible.builtin.command:
-    argv:
-      - rsync
-      - --archive
-      - --checksum
-      - --delete
-      - --out-format=%i %n%L
-      - "{{ config_bootstrap_tmp.path }}/{{ item.dest_subdir | replace('/', '-') }}/{{ item.src }}/"
-      - "{{ config_dir }}/{{ item.dest_subdir }}/"
-  register: config_bootstrap_rsync
-  # The "./" line is the destination directory's own mtime, not a content
-  # difference: ignoring it keeps the task honest about what it changed
-  # (a run that only moves that mtime is not a change).
-  changed_when: >-
-    (config_bootstrap_rsync.stdout_lines | default([])
-     | reject('search', '\\s\\./$') | list | length) > 0
-  loop: "{{ config_bootstrap_pairs }}"
-  loop_control:
-    label: "{{ item.dest_subdir }}"
-  when: config_bootstrap_sync_enabled | bool
+    - name: Read the brand the branch ships
+      ansible.builtin.slurp:
+        src: >-
+          {{ config_bootstrap_tmp.path }}/{{ config_bootstrap_brand_pairs.0.dest_subdir | replace('/', '-') }}/{{ config_bootstrap_brand_pairs.0.src }}/{{ config_bootstrap_brand_pairs.0.brand_file }}
+      register: config_bootstrap_branch_config
 
-# The mirror is the claim; this is the proof. The same rsync, run as a dry
-# run, reports what it WOULD change: an empty report means the host already
-# matches the branch, and a non-empty one names the files that differ. It
-# needs no second tool (no diffutils) and it names the divergence, so the
-# failure says which file drifted instead of "non-zero return code".
-#
-# What this does NOT prove: that the shipped file passes the frontend's own
-# schema validation. That is a property of the file's content, and it is
-# checked where the content is written — a test asserts every runtime config
-# satisfies the schema it declares, and the app renders a configuration error
-# screen when one does not.
-- name: Check what the mirror would still change on the host
-  ansible.builtin.command:
-    argv:
-      - rsync
-      - --archive
-      - --checksum
-      - --delete
-      - --dry-run
-      - --itemize-changes
-      - --out-format=%i %n%L
-      - "{{ config_bootstrap_tmp.path }}/{{ item.dest_subdir | replace('/', '-') }}/{{ item.src }}/"
-      - "{{ config_dir }}/{{ item.dest_subdir }}/"
-  register: config_bootstrap_verify
-  changed_when: false
-  failed_when: false
-  loop: "{{ config_bootstrap_pairs }}"
-  loop_control:
-    label: "{{ item.dest_subdir }}"
-  when:
-    - config_bootstrap_sync_enabled | bool
-    - not ansible_check_mode | default(false) | bool
+    - name: Read the brand the host currently serves
+      ansible.builtin.slurp:
+        src: "{{ config_dir }}/{{ config_bootstrap_brand_pairs.0.dest_subdir }}/{{ config_bootstrap_brand_pairs.0.brand_file }}"
+      register: config_bootstrap_host_config
+      # A host that has never been seeded has no brand to compare with: the
+      # first deploy is not a re-brand.
+      failed_when: false
 
-- name: Fail when the host runtime config does not match the branch
-  ansible.builtin.assert:
-    that:
-      # The "./" line is the destination directory's own mtime, not a
-      # difference in content: the mirror sets it from the source, and a
-      # directory whose mtime moved is not a diverged file.
-      - (item.stdout_lines | default([]) | reject('search', '\\s\\./$') | list | length) == 0
-    fail_msg: >-
-      The host runtime config does not match the branch ({{ repo_branch }}).
-      A dry-run mirror would still change:
-      {{ item.stdout | default('') }}
-    success_msg: "config_bootstrap: the host runtime config matches the branch"
-  loop: "{{ config_bootstrap_verify.results | default([]) }}"
-  loop_control:
-    label: "{{ item.item.dest_subdir | default('unknown') }}"
-  when:
-    - config_bootstrap_sync_enabled | bool
-    - not ansible_check_mode | default(false) | bool
+    - name: Compute the brand each side carries
+      ansible.builtin.set_fact:
+        config_bootstrap_branch_title: >-
+          {{ (config_bootstrap_branch_config.content | b64decode | from_json).app.title | default('') }}
+        config_bootstrap_host_title: >-
+          {{ ((config_bootstrap_host_config.content | b64decode | from_json).app.title | default(''))
+             if config_bootstrap_host_config.content is defined else '' }}
 
-- name: Remove the scratch directory
-  ansible.builtin.file:
-    path: "{{ config_bootstrap_tmp.path }}"
-    state: absent
-  when:
-    - config_bootstrap_sync_enabled | bool
-    - config_bootstrap_tmp.path is defined
+    - name: Fail when the branch re-brands the deployment
+      ansible.builtin.assert:
+        that:
+          - config_bootstrap_host_title == ''
+            or config_bootstrap_branch_title == config_bootstrap_host_title
+            or config_bootstrap_allow_rebrand | bool
+        fail_msg: >-
+          The branch ({{ repo_branch }}) ships the brand
+          '{{ config_bootstrap_branch_title }}' while the host serves
+          '{{ config_bootstrap_host_title }}'. Mirroring it would re-brand the
+          deployment. Deploy the branch this host runs, or set
+          config_bootstrap_allow_rebrand to true when the re-brand is the point.
+        success_msg: "config_bootstrap: the branch carries the deployment's brand"
+
+    # The host copy is a MIRROR of the branch: rsync --archive --checksum --delete
+    # overwrites the files the branch changed and removes the ones it no longer
+    # ships. Preserving whatever sat on the host (--ignore-existing) let the
+    # runtime config drift away from the branch it is validated against: a stale
+    # genie-ai-config.json kept the schema it was written with, while the
+    # frontend validates the served file against the schema the branch ships —
+    # the app then refuses to mount, and the symptom is a white page in
+    # production behind a deploy that reported success.
+    #
+    # --checksum: rsync's default quick check compares size and mtime, so a file
+    # whose bytes changed but whose size and mtime did not would be skipped and
+    # stay stale on the host. Comparing content is the only check that matches
+    # the claim this task makes.
+    #
+    # The out-format names the paths: with --delete, the task now removes host
+    # state, and an operator has to see what it removed.
+    #
+    # The trailing slash on src is load-bearing: it makes the source's CONTENTS
+    # land directly in dest, and it is what scopes --delete to dest as a whole.
+    # Without it rsync copies the source directory by name (dest/<name>/...) and
+    # confines --delete to that new subdirectory — the mirror would then seed a
+    # stray nested directory, delete nothing, and the deploy would report
+    # success with the host untouched. With the slash, --delete removes from
+    # dest every file the branch does not ship; dest is exactly the config
+    # subtree this role owns, so that is the intended scope, and nothing
+    # outside those trees is touched.
+    #
+    # ansible.posix.synchronize is deliberately NOT used here: it runs rsync on the
+    # Ansible controller and treats src as a controller-local path, while these
+    # archives were downloaded and extracted on the target host. Plain rsync under
+    # the play's become runs on the target, where the data actually is, and writes
+    # into the root-owned config_dir without any --rsync-path sudo games.
+    - name: Rsync branch defaults to host runtime config dir (mirror the branch)
+      ansible.builtin.command:
+        argv:
+          - rsync
+          - --archive
+          - --checksum
+          - --delete
+          - --out-format=%i %n%L
+          - "{{ config_bootstrap_tmp.path }}/{{ item.dest_subdir | replace('/', '-') }}/{{ item.src }}/"
+          - "{{ config_dir }}/{{ item.dest_subdir }}/"
+      register: config_bootstrap_rsync
+      # The "./" line is the destination directory's own permissions, not a
+      # content difference: the role's own "Ensure runtime config directories
+      # exist" task sets the mode to 0755, while the archive carries 0775 and
+      # the mirror restores it — so the line reappears on every run, whatever
+      # the content. Filtering it keeps the task honest about what it changed
+      # (a run that only moves the directory's mode is not a change).
+      changed_when: >-
+        (config_bootstrap_rsync.stdout_lines | default([])
+         | reject('search', '\\s\\./$') | list | length) > 0
+      loop: "{{ config_bootstrap_pairs }}"
+      loop_control:
+        label: "{{ item.dest_subdir }}"
+
+    # The mirror is the claim; this is the proof. The same rsync, run as a dry
+    # run, reports what it WOULD change: an empty report means the host already
+    # matches the branch, and a non-empty one names the files that differ. It
+    # needs no second tool (no diffutils) and it names the divergence, so the
+    # failure says which file drifted instead of "non-zero return code".
+    #
+    # What this does NOT prove: that the shipped file passes the frontend's own
+    # schema validation. That is a property of the file's content, and it is
+    # checked where the content is written — a test asserts every runtime config
+    # satisfies the schema it declares, and the app renders a configuration error
+    # screen when one does not.
+    #
+    # failed_when is false so the assert below can report WHICH files diverge
+    # rather than a bare exit code — which is why the exit code is asserted
+    # there too. A verification run that itself failed (a vanished source tree,
+    # an unreadable destination) produces no report at all, and must not be
+    # mistaken for "the host matches the branch".
+    - name: Check what the mirror would still change on the host
+      ansible.builtin.command:
+        argv:
+          - rsync
+          - --archive
+          - --checksum
+          - --delete
+          - --dry-run
+          - --itemize-changes
+          - --out-format=%i %n%L
+          - "{{ config_bootstrap_tmp.path }}/{{ item.dest_subdir | replace('/', '-') }}/{{ item.src }}/"
+          - "{{ config_dir }}/{{ item.dest_subdir }}/"
+      register: config_bootstrap_verify
+      changed_when: false
+      failed_when: false
+      loop: "{{ config_bootstrap_pairs }}"
+      loop_control:
+        label: "{{ item.dest_subdir }}"
+
+    - name: Fail when the host runtime config does not match the branch
+      ansible.builtin.assert:
+        that:
+          - item.rc == 0
+          # The "./" line is the destination directory's own permissions, not
+          # a difference in content: the mirror sets the mode from the source,
+          # and a directory whose mode moved is not a diverged file.
+          - (item.stdout_lines | default([]) | reject('search', '\\s\\./$') | list | length) == 0
+        fail_msg: >-
+          The host runtime config does not match the branch ({{ repo_branch }}).
+          The verification mirror exited with rc={{ item.rc }} and reported:
+          {{ item.stdout | default('') }}
+          {{ item.stderr | default('') }}
+        success_msg: "config_bootstrap: the host runtime config matches the branch"
+      loop: "{{ config_bootstrap_verify.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item.dest_subdir | default('unknown') }}"
+  always:
+    # The scratch tree is removed on every path: success, guard failure, or a
+    # failure inside the block. It holds the downloaded archives and the
+    # extracted branch copy — tens of megabytes per pair, on every node of the
+    # fleet, on every failed run.
+    - name: Remove the scratch directory
+      ansible.builtin.file:
+        path: "{{ config_bootstrap_tmp.path }}"
+        state: absent
+      when:
+        - config_bootstrap_tmp is defined
+        - config_bootstrap_tmp.path is defined

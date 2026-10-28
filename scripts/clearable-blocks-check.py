@@ -79,6 +79,13 @@ CRASH_TEMPLATE = re.compile(r"templates/([A-Za-z0-9_./-]+):(\d+):(\d+)")
 
 WORKLOAD_KINDS = ("Deployment", "Job", "DaemonSet", "StatefulSet", "ReplicaSet", "Pod")
 
+# Go's template engine prints these when a nil value reaches a `%s` verb
+# or a stringified field: "%!s(<nil>)" in a container argument, the bare
+# text "<nil>" in an env value. They are not values — they are the
+# engine's debug output, and a pod that reads one fails at runtime with
+# nothing in the manifest to explain it.
+GARBAGE = re.compile(r"<nil>|%!")
+
 # Blocks whose clearing is NOT a configuration — the sweep cannot assert
 # on them, and the chart does not promise anything for them. EMPTY: every
 # block of the values tree is swept.
@@ -106,11 +113,25 @@ def fixture_flags(chart_path, name):
 
 
 def surfaces(chart_path):
-    """The render surfaces the sweep runs on: the baseline and the full tier."""
+    """The render surfaces the sweep runs on.
+
+    Three, not two: the in-cluster GPU tier is its OWN surface. The model
+    Deployments (vllm, vllm-translation, tei, tei-reranker) exist ONLY in
+    that mode, so a sweep that never renders them asserts nothing about
+    the blocks they read — and a cleared model block rendered "%!s(<nil>)"
+    into the container args while the whole suite stayed green.
+    """
     base = fixture_flags(chart_path, "render-base-flags")
-    full = base + fixture_flags(chart_path, "render-full-flags")
+    full_flags = fixture_flags(chart_path, "render-full-flags")
+    full = base + full_flags
     full.append(f"--set=opea.gpu.nodeHost={GPU_NODE_HOST}")
-    return [("baseline", base), ("full surface", full)]
+    incluster = base + full_flags
+    incluster.append("--set=opea.gpu.mode=in-cluster")
+    return [
+        ("baseline", base),
+        ("full surface", full),
+        ("in-cluster GPU", incluster),
+    ]
 
 
 def dict_blocks(values):
@@ -131,7 +152,7 @@ def dict_blocks(values):
 
 
 def render(chart_path, flags):
-    """(rc, stderr, documents) for one render."""
+    """(rc, stderr, documents, text) for one render."""
     proc = subprocess.run(
         ["helm", "template", "test", chart_path, "-n", "genieai"] + list(flags),
         capture_output=True,
@@ -140,7 +161,7 @@ def render(chart_path, flags):
     docs = []
     if proc.returncode == 0:
         docs = [d for d in yaml.load_all(proc.stdout, Loader=LOADER) if d]
-    return proc.returncode, proc.stderr, docs
+    return proc.returncode, proc.stderr, docs, proc.stdout
 
 
 def env_rows(docs):
@@ -195,15 +216,22 @@ def main():
     rendered = 0
     started = time.time()
     for label, flags in surfaces(chart_path):
-        base_rc, base_err, base_docs = render(chart_path, flags)
+        base_rc, base_err, base_docs, base_text = render(chart_path, flags)
         if base_rc != 0:
             print("FAIL: the baseline render of the %s failed:\n%s" % (label, base_err[:800]))
             return 1
         base_rows = env_rows(base_docs)
         for block in blocks:
-            rc, stderr, docs = render(chart_path, flags + [f"--set={block}=null"])
+            rc, stderr, docs, text = render(chart_path, flags + [f"--set={block}=null"])
             if rc == 0:
                 rendered += 1
+                garbage = GARBAGE.search(text)
+                if garbage:
+                    emptied.append(
+                        "  [%s] %s: the render carries the template engine's debug "
+                        "output %r — a cleared block reached a value as nil"
+                        % (label, block, text[max(0, garbage.start() - 40):garbage.start() + 20])
+                    )
                 cleared_rows = env_rows(docs)
                 for key, value in base_rows.items():
                     if key not in cleared_rows:
@@ -222,9 +250,9 @@ def main():
             else:
                 nameless.append("  [%s] %s: %s" % (label, block, detail))
     elapsed = time.time() - started
-    total = len(blocks) * 2
+    total = len(blocks) * len(surfaces(chart_path))
     print(
-        f"{len(blocks)} blocks swept on 2 surfaces ({total} renders): "
+        f"{len(blocks)} blocks swept on {len(surfaces(chart_path))} surfaces ({total} renders): "
         f"{rendered} degraded, {guards} failed by name, "
         f"{len(crashes)} crashed the template engine, "
         f"{len(nameless)} failed without naming a values key ({elapsed:.0f}s)"
@@ -241,7 +269,8 @@ def main():
         for failure in nameless:
             print(failure)
     if emptied:
-        print("a cleared block must not EMPTY a value the pods read:")
+        print("a cleared block must not EMPTY a value the pods read, nor render "
+              "the template engine's debug output:")
         for row in emptied:
             print(row)
     if crashes or nameless or emptied:

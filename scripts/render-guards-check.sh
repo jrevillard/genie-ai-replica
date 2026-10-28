@@ -32,7 +32,10 @@
 #   - the envRows shape guards (a row that is not a map, a row without a
 #     name, a row with neither value nor valueFrom) — the templates
 #     build those rows, not the operator;
-#   - the instance-count guards — the schema rejects a 0 first.
+#   - the instance-count guards — the schema rejects a 0 first;
+#   - the translation streamingEnabled guard — the schema types the
+#     knob as a boolean and rejects a non-boolean first;
+#   - the realm-file guard — it checks a file of the CHART, not a value.
 #
 # Usage: scripts/render-guards-check.sh [chart-path]
 #        CHART=charts/genieai-umbrella scripts/render-guards-check.sh
@@ -341,7 +344,19 @@ expect_fail "a convergence envSecrets row with an empty value" \
   "envSecrets[5].envVar is empty" \
   $(valid_flags_except "convergence.envSecrets") -f "${empty_row}"
 
-# 28. The documented valid configuration must still render: a guard that
+# 28. A GPU path with no endpoint: the external endpoint is nodeHost +
+#     path, and a missing path renders an empty URL the orchestrator
+#     dials — a release that installs cleanly and answers no request.
+#     The docling path is NOT in this class: an empty docling endpoint
+#     is the documented signal that dataprep uses its in-process
+#     converter.
+expect_fail "a GPU path with no endpoint" \
+  "opea.gpu.paths.llm is required in the external GPU mode" \
+  $(valid_flags) --set opea.enabled=true \
+  --set opea.gpu.nodeHost=https://gpu.ci-render.local:444 \
+  --set opea.gpu.paths.llm=null
+
+# 29. The documented valid configuration must still render: a guard that
 #     rejects a good deployment is a defect too.
 expect_ok "the documented values render" $(valid_flags)
 

@@ -144,17 +144,6 @@ def admitted_ports(policies, component, direction, peer_component, services):
     return sorted(admitted) if matched and admitted else None
 
 
-def partial_admission(covered, port):
-    """The (any-port flow, concrete destination set) case covers() cannot
-    judge: neither True (only some ports are admitted) nor a useful
-    False (the ports the deployment actually dials may be among them).
-    Returns the admitted ports for the advisory line, or None when the
-    case does not apply."""
-    if port is None and covered:
-        return sorted(covered)
-    return None
-
-
 def component_of(selector):
     """The component label a `podSelector` targets, if it names one.
 

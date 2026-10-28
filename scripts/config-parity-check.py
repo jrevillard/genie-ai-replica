@@ -354,6 +354,19 @@ def chart_declared(values):
     return out
 
 
+def _scalar_text(value):
+    """The text a YAML scalar represents, the way both sides spell it.
+
+    A boolean declared in a values-file env map compares as Python's
+    `True` against Compose's "true" otherwise — two surfaces that agree
+    reported as a GAP. YAML spells booleans true/false, so the text form
+    follows YAML, not Python.
+    """
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
+
+
 def main(argv):
     if len(argv) < 2:
         print(__doc__)
@@ -565,7 +578,7 @@ def main(argv):
                 # Carried by a Secret on the chart side: the operator
                 # supplies it, so the value cannot be compared.
                 continue
-            if str(chart_value) != str(value):
+            if _scalar_text(chart_value) != _scalar_text(value):
                 gaps.append(
                     f"{component}.{name}: chart has {chart_value!r}, "
                     f"Compose resolves to {value!r} — declare it under mayDiffer if "

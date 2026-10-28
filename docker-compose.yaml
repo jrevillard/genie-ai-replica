@@ -407,6 +407,7 @@ services:
       # Studio and Models tabs (and their sidebar entries) when '0'.
       # Same variable that parks the okf containers and the Kong route.
       - VUE_APP_OKF_ENABLED=${OKF_ENABLED:-0}
+      - VUE_APP_STREAM_IDLE_TIMEOUT_MS=${VUE_APP_STREAM_IDLE_TIMEOUT_MS:-}
     volumes:
       - ${CONFIG_DIR_FRONTEND:-./components/gov-chat-frontend/public/config}:/app/dist/config:ro
     # Port 8090 is internal only - outer nginx on 80/443 is the public entry point
@@ -1807,12 +1808,29 @@ services:
       # these (k, fetch_k, score_threshold, lambda_mult, search_start, traversal_*)
       # in the HTTP request body, so this env block is only reached on direct
       # retriever API calls that bypass chatqna (debugging/probes). Keep defaults
-      # identical to the chatqna block to avoid silent drift.
+      # identical to the chatqna block to avoid silent drift. The label-filter
+      # strategy is not one of them: no request field carries it, so the retriever
+      # reads it from this block.
       RETRIEVER_ARANGO_K: ${RETRIEVER_ARANGO_K:-20}
       RETRIEVER_ARANGO_FETCH_K: ${RETRIEVER_ARANGO_FETCH_K:-30}
       RETRIEVER_ARANGO_SCORE_THRESHOLD: ${RETRIEVER_ARANGO_SCORE_THRESHOLD:-0.2}
       RETRIEVER_ARANGO_DISTANCE_THRESHOLD: ${RETRIEVER_ARANGO_DISTANCE_THRESHOLD:-1}
       RETRIEVER_ARANGO_LAMBDA_MULT: ${RETRIEVER_ARANGO_LAMBDA_MULT:-0.5}
+      # Fan-out spine knobs (ADR-039 option-d): defaults mirror retriever/config.py —
+      # opt-in via RETRIEVER_FANOUT_ENABLED, legacy byte-identical when disabled.
+      RETRIEVER_FANOUT_ENABLED: ${RETRIEVER_FANOUT_ENABLED:-true}
+      RETRIEVER_FANOUT_MAX_GRAPHS: ${RETRIEVER_FANOUT_MAX_GRAPHS:-5}
+      RETRIEVER_FANOUT_PER_GRAPH_TIMEOUT_MS: ${RETRIEVER_FANOUT_PER_GRAPH_TIMEOUT_MS:-8000}
+      RETRIEVER_FANOUT_CANDIDATE_CAP_PER_GRAPH: ${RETRIEVER_FANOUT_CANDIDATE_CAP_PER_GRAPH:-50}
+      RETRIEVER_FANOUT_CANDIDATE_CAP_GLOBAL: ${RETRIEVER_FANOUT_CANDIDATE_CAP_GLOBAL:-200}
+      RETRIEVER_FANOUT_SPINE_MAX_HOPS: ${RETRIEVER_FANOUT_SPINE_MAX_HOPS:-2}
+      RETRIEVER_FANOUT_EXTRACTED_HOP_CAP: ${RETRIEVER_FANOUT_EXTRACTED_HOP_CAP:-1}
+      # Query-affinity routing knobs (ADR-039): defaults mirror retriever/config.py.
+      RETRIEVER_ROUTE_ENABLED: ${RETRIEVER_ROUTE_ENABLED:-true}
+      RETRIEVER_ROUTE_TOP_K: ${RETRIEVER_ROUTE_TOP_K:-40}
+      RETRIEVER_ROUTE_MIN_CHUNKS: ${RETRIEVER_ROUTE_MIN_CHUNKS:-3}
+      RETRIEVER_ROUTE_PROBE_TIMEOUT_MS: ${RETRIEVER_ROUTE_PROBE_TIMEOUT_MS:-2000}
+      RETRIEVER_ROUTE_RETRY: ${RETRIEVER_ROUTE_RETRY:-1}
       RETRIEVER_ARANGO_SEARCH_START: ${RETRIEVER_ARANGO_SEARCH_START:-chunk}
       RETRIEVER_ARANGO_SEARCH_MODE: ${RETRIEVER_ARANGO_SEARCH_MODE:-vector}
       RETRIEVER_ARANGO_USE_APPROX_SEARCH: ${RETRIEVER_ARANGO_USE_APPROX_SEARCH:-false}
@@ -1950,10 +1968,13 @@ services:
       RERANKER_TOP_N: ${RERANKER_TOP_N:-3}
       # Retriever query params (forwarded to retriever via the HTTP request body).
       # chatqna is the AUTHORITATIVE source — in production it always sends these,
-      # so the retriever service's own RETRIEVER_ARANGO_* env vars are inert
-      # (OPEA-vendored fallback, only reached on direct retriever API calls that
-      # bypass chatqna). Defaults are intentionally kept identical in both blocks
-      # to avoid silent drift; tune here and the retriever block tracks it.
+      # so the retriever service's own RETRIEVER_ARANGO_* env vars are inert for
+      # them (OPEA-vendored fallback, only reached on direct retriever API calls
+      # that bypass chatqna). The label-filter strategy is the exception: chatqna
+      # sends no strategy, so the retriever reads it from its own environment,
+      # and it exists in the retriever block only. Defaults of the forwarded
+      # params are intentionally kept identical in both blocks to avoid silent
+      # drift; tune here and the retriever block tracks them.
       RETRIEVER_ARANGO_K: ${RETRIEVER_ARANGO_K:-20}
       RETRIEVER_ARANGO_FETCH_K: ${RETRIEVER_ARANGO_FETCH_K:-30}
       RETRIEVER_ARANGO_SCORE_THRESHOLD: ${RETRIEVER_ARANGO_SCORE_THRESHOLD:-0.2}

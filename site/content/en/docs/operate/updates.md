@@ -331,4 +331,4 @@ baseline within a few minutes once the rolled-back container is serving.
 - [Dashboards]({{< relref "/docs/observe/dashboards" >}}) — the panels cited above
 - [Knowledge base &rarr; Ingestion]({{< relref "/docs/knowledge-base/ingestion" >}}) — full re-ingest procedure
 - [Knowledge base &rarr; Document lifecycle]({{< relref "/docs/knowledge-base/document-lifecycle" >}}) — `dataprep.status` state machine
-- [Knowledge base &rarr; Ingestion log]({{< relref "/docs/knowledge-base/ingestion-log" >}}) — reading `failed` rows in ArangoDB
+- [Operations &rarr; Ingestion log]({{< relref "/docs/operate/ingestion-log" >}}) — reading `failed` rows in ArangoDB

@@ -112,23 +112,110 @@
   --pf-v5-global--palette--black-900: #282d32;
   --pf-v5-global--palette--black-1000: #282d32;
 
-  /* ── Page layout ── */
-  --pf-v5-c-page__header--BackgroundColor: #4071cb;
-  --pf-v5-c-page__header-brand-link--c-brand--Color: #f9fbfd;
+  /* ── Page layout ──
+     The masthead is a pale wash of the brand — the same plane the web
+     app's navbar occupies in the composition — and the ground the panels sit on
+     is the pale page wash. */
   --pf-v5-c-page__sidebar--BackgroundColor: #ffffff;
   --pf-v5-c-page__sidebar--m-light--BackgroundColor: #ffffff;
   --pf-v5-c-page__sidebar--m-light--BorderRightColor: #bdc5cb;
-  --pf-v5-c-page--BackgroundColor: #f9fbfd;
+  --pf-v5-c-page--BackgroundColor: #f4f7fd;
 }
 
-/* ── Nav: selected item — light text on accent background ── */
-.pf-v5-c-nav__link.pf-m-current,
-.pf-v5-c-nav__item.pf-m-current:not(.pf-m-expanded) .pf-v5-c-nav__link {
-  color: #f9fbfd !important;
+/* ── Living Intelligence surfaces ─────────────────────────────────── */
+
+/* The masthead is a pale wash of the brand — the plane of the
+   composition where the web app's navbar sits, not the navbar's own
+   colour (the token there resolves to the solid brand, which is what
+   the wash replaces). The component owns the property, so the override
+   belongs on the component, not on :root. Its ink is the brand
+   darkened: on the pale wash the label reads at 14.1:1. */
+.pf-v5-c-masthead {
+  --pf-v5-c-masthead--BackgroundColor: #ddecff;
+  color: #000d64;
+}
+
+.pf-v5-c-masthead .pf-v5-c-button.pf-m-plain,
+.pf-v5-c-masthead .pf-v5-c-menu-toggle {
+  color: #000d64;
+}
+
+/* The ground the content sits on — the same washes the login page
+   shows, behind the white panels. */
+.pf-v5-c-page {
+  background-color: #f4f7fd;
+  background-image:
+    radial-gradient(70% 60% at 76% 38%, rgba(64, 113, 203, 0.18), rgba(64, 113, 203, 0) 70%),
+    radial-gradient(55% 50% at 10% 90%, rgba(120, 92, 214, 0.12), rgba(120, 92, 214, 0) 70%),
+    linear-gradient(180deg, #f9fbfd 0%, #eef2fb 100%);
+}
+
+/* The wave band — the crest of the Living Intelligence artwork, in the
+   same 1800:356 ratio the web theme uses. It closes the sidebar, the
+   one plane the console keeps free on every page. */
+.pf-v5-c-page__sidebar-body {
+  position: relative;
+}
+
+.pf-v5-c-page__sidebar-body::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 110px;
+  background: url('../img/genie-bottom-waves.svg') right bottom / auto 110px no-repeat;
+  opacity: 0.5;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+/* The panels let the ground through: the console's surface is the pale
+   page wash, and the tables and cards keep their own white. */
+.pf-v5-c-page__main-section.pf-m-light,
+.pf-v5-c-page__main-breadcrumb {
+  background-color: transparent;
+}
+
+/* ── Nav: selected item — a pale wash of the brand, its ink the brand
+   darkened. The ink reads at 14.1:1 on the wash.
+
+   The stock rule reads the selected state off two component tokens,
+   and reads them in every state: resting, hovered, expanded. So the
+   override belongs on the tokens, declared where the link resolves
+   them — a direct declaration on the link beats the value the nav
+   inherits, whatever the stock rule's specificity. ── */
+.pf-v5-c-nav__link {
+  --pf-v5-c-nav__link--m-current--BackgroundColor: #ddecff;
+  --pf-v5-c-nav__link--m-current--Color: #000d64;
+}
+
+/* ── The console's data panel is a table: the DS surface treatment
+   rides its top edge — accent edge, rounded corners, one soft
+   shadow. ── */
+.pf-v5-c-table {
+  border-top: 4px solid #4071cb;
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 16px 40px rgba(20, 30, 60, 0.14);
 }
 
 /* ── Logo ── */
 img.keycloak__pageheader_brand {
   height: 32px;
   width: auto;
+}
+
+/* ── The welcome page is the console's one empty page: it shows the
+   artwork, with the small mark giving way to it.
+
+   The empty state is a shared PatternFly component — every list that
+   comes up empty renders one — so the artwork is scoped to the empty
+   state that carries the console's dashboard icon, which only the
+   welcome page has. Without :has() the stock welcome page stands:
+   the mark stays, no artwork, no leak onto the other lists. ── */
+.pf-v5-c-empty-state__content:has(img.keycloak__dashboard_icon) {
+  background: url('../img/genie-artwork.png') center top / 280px auto no-repeat;
+  padding-top: 300px;
+}
+
+.pf-v5-c-empty-state__content:has(img.keycloak__dashboard_icon) img.keycloak__dashboard_icon {
+  display: none;
 }

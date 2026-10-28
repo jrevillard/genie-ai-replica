@@ -199,7 +199,6 @@ main {
 
 /* --- Cards and panels --- */
 .panel,
-.chat-message.bot .message-bubble,
 .analytics-section {
   background-color: var(--surface);
   color: var(--fg);
@@ -207,10 +206,15 @@ main {
   border-radius: var(--radius-md);
 }
 
-.chat-message.bot .message-bubble {
-  background-color: var(--bg);
-  border-bottom-left-radius: var(--radius-sm);
-}
+/* The bot bubble is not painted here: it lives inside the elevated
+   answer card, and the card is its surface. The component flattens
+   the bubble inside the card (transparent, no chrome of its own) so
+   the answer reads as one panel — painting the bubble here as well
+   stacked a second surface inside the card, and the inner one read as
+   a second colour in the middle of the answer. A global rule that
+   outranks the scoped one (a :root body prefix, for instance) brings
+   that stacking back, which is why the bubble is left to the
+   component here. */
 
 /* Analytics-section hover lift (UnifiedAnalytics.vue)
    :root body outranks scoped. Transition on base state for reverse
@@ -388,4 +392,43 @@ td {
 ::placeholder {
   color: var(--muted);
   opacity: 0.7;
+}
+
+/* --- Document type badges ---
+   The per-format mark on document cards: an acronym on a tinted tile.
+   Pure CSS + text, so every badge stays license-free. */
+.file-type-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  padding: 0 var(--space-xs);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  background: var(--muted-soft, var(--border-light));
+}
+
+.file-type-badge[data-tone='danger'] {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+.file-type-badge[data-tone='info'] {
+  color: var(--info);
+  background: var(--info-bg);
+}
+.file-type-badge[data-tone='success'] {
+  color: var(--success);
+  background: var(--success-bg);
+}
+.file-type-badge[data-tone='warning'] {
+  color: var(--warning-ink);
+  background: var(--warning-bg);
+}
+.file-type-badge[data-tone='accent'] {
+  color: var(--accent);
+  background: var(--accent-muted);
 }

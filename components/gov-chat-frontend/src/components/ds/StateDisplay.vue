@@ -8,6 +8,9 @@
     <p v-if="$slots.default || message" class="ds-state__message">
       <slot>{{ message }}</slot>
     </p>
+    <p v-if="$slots.hint" class="ds-state__hint">
+      <slot name="hint" />
+    </p>
     <div v-if="$slots.action" class="ds-state__action">
       <slot name="action" />
     </div>
@@ -69,6 +72,12 @@ export default {
 
 .ds-state__message {
   font-size: var(--text-md);
+  margin: 0;
+}
+
+.ds-state__hint {
+  font-size: var(--text-sm);
+  color: var(--muted);
   margin: 0;
 }
 

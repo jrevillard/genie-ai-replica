@@ -1,0 +1,642 @@
+/*
+ * GENIE.AI — Living Intelligence visual layer.
+ *
+ * An additive decorative layer over the existing design system. The
+ * design-system tokens stay canonical; every colour here is derived from
+ * one with color-mix(). The only literal colours are the two three-stop
+ * brand-wordmark ramps declared below; everything else the layer paints
+ * is a token. The one other literal is white, which is a neutral rather
+ * than a hue and is used for the dark navbar's wordmark.
+ *
+ * Two gates, both required:
+ *   - .genie-living-intelligence scopes the layer to the dashboard route
+ *   - html[data-visual='on'] carries the deployment's own choice
+ *
+ * The asset paths are configuration, not CSS: --visual-hero and its
+ * siblings are written onto the document element by config-loader from
+ * the theme.visual block of the runtime config.
+ *
+ * One block in this file is deliberately ungated: .brand-wordmark paints
+ * the navbar wordmark and the brand inside the welcome heading. Those
+ * are identity, not decoration — binding them to [data-visual] would
+ * silently strip a deployment's name when decoration is switched off.
+ * The components apply the class only for the GENIE.AI brand, so the
+ * rule stays inert for every other flavour.
+ */
+html[data-visual='on'] .genie-living-intelligence {
+  --gli-frost-border: color-mix(in srgb, var(--accent) 17%, var(--border));
+  /* The waves carry their own contrast, so they read at near-full
+     strength on the light surface and are held back on the dark one,
+     where they would otherwise glare. */
+  --gli-deco-strength: 0.92;
+  /* The corner network keeps the same strength in both themes. */
+  --gli-corner-strength: 0.85;
+  min-width: 0;
+  isolation: isolate;
+}
+
+html[data-theme='dark'][data-visual='on'] .genie-living-intelligence,
+html[data-visual='on'] .dark-mode .genie-living-intelligence {
+  --gli-deco-strength: 0.53;
+  --gli-frost-border: color-mix(in srgb, var(--accent) 27%, var(--border));
+}
+
+/*
+ * The card tint. --qh-bg, --qh-hover and --qh-outline come from the
+ * button's own config `styles` block; a button that declares none falls
+ * back to the accent, so a deployment without per-button tints still
+ * renders.
+ *
+ * In light mode the configured tint is a pale 50-step used almost
+ * directly; in dark mode the card has to be a saturated dark version
+ * of the operator's hue — see the dark rule below.
+ */
+html[data-visual='on'] .genie-living-intelligence .quick-help-item {
+  --ds-card-bg: var(--qh-bg, var(--surface));
+  --ds-card-border-color: var(--qh-outline, var(--gli-frost-border));
+}
+
+html[data-visual='on'] .genie-living-intelligence .quick-help-item:hover {
+  --ds-card-bg: var(--qh-hover, var(--qh-bg, var(--surface)));
+  --ds-card-border-color: color-mix(in srgb, var(--qh-outline, var(--accent)) 47%, var(--border));
+}
+
+/*
+ * Dark cards.
+ *
+ * The card surface comes from `--qh-outline` (a Tailwind-200/300 step
+ * with a real category colour), not from `--qh-bg` (a pale 50 step
+ * whose chroma is below the noise floor): mixing a pale source into
+ * the dark surface cannot carry a hue, which is why earlier dark
+ * cards came out colourless. Relative colour syntax takes the source's
+ * own chroma and hue and replaces only the lightness with the dark
+ * surface's, so the operator-configured hue survives at surface depth.
+ *
+ * The top-lit wash is a low-opacity overlay above the card surface
+ * (Card.vue paints --ds-card-bg itself; the wash sits on a pseudo so
+ * the DS primitive is untouched). The wash colour is the card's own
+ * outline mixed into transparent, so the highlight and the body share
+ * the same hue without introducing a hard-coded colour.
+ */
+html[data-theme='dark'][data-visual='on'] .genie-living-intelligence .quick-help-item,
+html[data-visual='on'] .dark-mode .genie-living-intelligence .quick-help-item {
+  position: relative;
+  /* The card surface uses the dark --surface's lightness (0.22 — the
+     literal L of the dark --surface token, kept here as a number for
+     the relative-colour-source slot). chroma and hue come from the
+     category's --qh-outline, so each card stays the operator-configured
+     hue at panel depth. */
+  --ds-card-bg: oklch(from var(--qh-outline, var(--accent)) 0.22 c h);
+  /* Parity with light: full --qh-outline at rest, 47 %-mix on hover.
+     Only the un-configured path falls back, and both themes fall back
+     the same way, so neither theme's card diverges from the other's
+     when a button declares no tint. */
+  --ds-card-border-color: var(--qh-outline, var(--accent));
+}
+
+html[data-theme='dark'][data-visual='on'] .genie-living-intelligence .quick-help-item::before,
+html[data-visual='on'] .dark-mode .genie-living-intelligence .quick-help-item::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklch, var(--qh-outline, var(--accent)) 24%, transparent) 0%,
+    transparent 55%
+  );
+}
+
+html[data-theme='dark'][data-visual='on'] .genie-living-intelligence .quick-help-item:hover,
+html[data-visual='on'] .dark-mode .genie-living-intelligence .quick-help-item:hover {
+  --ds-card-bg: oklch(from var(--qh-hover, var(--qh-outline, var(--accent))) 0.22 c h);
+  --ds-card-border-color: color-mix(in srgb, var(--qh-outline, var(--accent)) 47%, var(--border));
+}
+
+/* Keep the existing chat, data and scroll behavior intact. */
+html[data-visual='on'] .genie-living-intelligence .chatbot-container {
+  min-width: 0;
+}
+
+/*
+ * The welcome overlay. The mesh is painted on the overlay rather than
+ * on the chat window: the overlay is opaque, so anything painted on the
+ * window behind it would never be seen.
+ *
+ * The mesh fades only across the card row (25-55 %), not as a monotonic
+ * ramp to the panel bottom. The cards hide the field on their own
+ * (--ds-card-bg is a solid color-mix), so the fade is a band, not a
+ * mask — the mesh stays faintly present in the hero and again below
+ * the cards, where the reference's particle field lives.
+ */
+html[data-visual='on'] .genie-living-intelligence .quick-help-overlay {
+  isolation: isolate;
+  justify-content: flex-start;
+  /* The overlay is the panel: a container query keying on it lets the
+     art's box respond to its width, not the viewport's — important
+     when a sidebar is collapsed and the centre widens. */
+  container-type: inline-size;
+  /* f is the box-to-image-display fraction. f_max (0.553) shows the
+     full ink band; f_min (0.515) is the widest legal crop before
+     the icon tiles or wave crest get sliced. The container query
+     below eases --f to f_min once the overlay is wide enough that
+     the reference's own crop would otherwise grow the box past the
+     mockup's full-bleed. The flag multiplier zeros both for the
+     partial-config collapse. */
+  --f-max: calc(var(--visual-hero-set, 0) * 0.553);
+  --f-min: calc(var(--visual-hero-set, 0) * 0.515);
+  --f: var(--f-max);
+  background-image:
+    linear-gradient(180deg, transparent 0 25%, var(--surface) 40%, var(--surface) 55%, transparent 70% 100%),
+    var(--visual-mesh), var(--visual-ambient, none);
+  background-position:
+    center top,
+    center top,
+    center 22%;
+  background-size:
+    100% 100%,
+    min(900px, 100%) auto,
+    min(100%, 1600px) clamp(120px, 22%, 220px);
+  background-repeat: no-repeat, no-repeat, no-repeat;
+}
+
+/*
+ * The banner is a real element rather than a ::before pseudo-element
+ * so it can contain the heading and subtitle in its box. A pseudo
+ * cannot host text in flow, and a heading that overflows the box
+ * must either be clipped, overlap, or push the box — and only the
+ * third satisfies the brief's "make the box content-aware" goal.
+ *
+ * The aspect-ratio is the artwork's band (a function of --f, declared
+ * on the overlay), so it provides a floor: content that fits inside
+ * the band leaves the height at its reference; content taller than
+ * the band grows the box past it. The mask dissolves the lower 28 %
+ * toward --surface so the heading reads as sitting inside the
+ * artwork rather than below a hard cut, and so the wordmark and
+ * subtitle paint against the panel surface, not against the ink band.
+ */
+html[data-visual='on'] .genie-living-intelligence .quick-help-banner {
+  position: relative;
+  z-index: 0;
+  flex: 0 0 auto;
+  align-self: stretch;
+  /* Full bleed: the box breaks out past the overlay's padding so the
+     artwork reaches the panel's edges at every width (the user
+     explicitly rejected a centred-with-gutters banner). */
+  width: calc(100% + 2 * var(--space-lg));
+  margin-left: calc(-1 * var(--space-lg));
+  margin-right: calc(-1 * var(--space-lg));
+  margin-top: calc(-1 * var(--space-lg));
+  /* The artwork's legible bands, measured on the alpha channel (the
+     box tracks the art, not the viewport):
+       alpha > 128  y 178..667  490 px  aspect 3.62:1  f = 0.553  (full ink band)
+       alpha > 192  y 200..655  456 px  aspect 3.89:1  f = 0.515  (tiles + wave crest)
+     f is the fraction of the image's display height that the box
+     occupies; f_max gives the reference's own crop, f_min is the
+     widest legal crop before the icon tiles or wave crest get sliced.
+     Anything below f_min would expose bright ink to a hard edge.
+     f, f_max, f_min are declared on the overlay (the container query
+     target), and inherited here. */
+  aspect-ratio: calc(2 / var(--f));
+  /* bg-position-y at center P%, with P = (c - f/2) / (1 - f) chosen so
+     the artwork band's centre stays at the box's centre at every f
+     (overflow = I - H, image's top at P * (I - H)). With c = 0.477
+     (the alpha > 128 band centre as a fraction of the frame), P is
+     45.0 % at f_max and 45.1 % at f_min — width-independent. */
+  background: var(--visual-hero) center calc(((0.477 - var(--f) / 2) / (1 - var(--f))) * 100%) / 100% auto no-repeat;
+  /* Dissolve the lower edge into the panel so the heading reads as
+     sitting inside the artwork rather than below a hard cut. The ramp
+     starts where the globe's own falloff already thins out. */
+  -webkit-mask-image: linear-gradient(to bottom, rgb(0 0 0 / 1) 0 72%, transparent 100%);
+  mask-image: linear-gradient(to bottom, rgb(0 0 0 / 1) 0 72%, transparent 100%);
+  /* Lay the heading + subtitle at the bottom of the box, inside the
+     fade band. The visible pixels behind them are masked-out — the
+     panel surface shows through — so contrast over the gradient is
+     not the contrast we have to clear. */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  filter: drop-shadow(0 12px 30px color-mix(in srgb, var(--accent) 16%, transparent));
+  animation: gli-enter 650ms ease-out both;
+}
+
+/* At full-bleed panel widths the reference's own crop would otherwise
+   grow the box linearly with width (a 3.62:1 band is 525 px at 1900 px).
+   Easing the ratio down to f_min keeps the height bounded; the crop
+   then enters only the soft falloff above the icons or below the
+   waves, never the dense band. The container query keys on the panel,
+   not the viewport, so a collapsed sidebar triggers the response
+   even when the viewport is narrow.
+
+   The container query must target a descendant of the container; the
+   banner element is itself a flex child of the overlay, so targeting
+   the banner here keeps the descendant rule and the container
+   relationship intact now that the banner is a real element rather
+   than a ::before pseudo. */
+@container (min-width: 1700px) {
+  html[data-visual='on'] .genie-living-intelligence .quick-help-banner {
+    --f: var(--f-min);
+  }
+}
+
+html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::after,
+html[data-visual='on'] .genie-living-intelligence .chatbot-container::after {
+  content: '';
+  position: absolute;
+  /* The width has to be definite. With `inset: auto 0 0` and
+     `width: auto`, the width is indefinite — it is solved from the
+     insets — and `max-height: 320px` then re-transfers the aspect
+     ratio from the height to the width: the band resolves to 320 ×
+     1800/356 ≈ 1617.97 px and stops there, whatever the panel's width.
+     Holding `width: 100%` keeps the width definite; aspect-ratio still
+     sets height = width * 356/1800, and max-height clamps the height
+     without re-deriving the width. The band therefore tracks the
+     surface's width at every size — width independent — and is at most
+     320 px tall. The artwork itself is sized 100% auto, so its crests
+     keep their own ratio everywhere. */
+  inset: auto auto 0 0;
+  width: 100%;
+  aspect-ratio: 1800 / 356;
+  max-height: calc(var(--visual-waves-set, 0) * 320px);
+  background: var(--visual-waves) bottom / 100% auto no-repeat;
+  pointer-events: none;
+}
+
+html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::after {
+  opacity: var(--gli-deco-strength);
+  /* Multiply sinks the light-blue strokes into the white surface (light
+     mode). In dark mode the strokes need to *lighten* the dark surface,
+     so we switch to screen — same blend-mode mechanism, opposite effect. */
+  mix-blend-mode: multiply;
+  z-index: 0;
+}
+
+html[data-visual='on'] .genie-living-intelligence .chatbot-container::after {
+  opacity: 0.72;
+  z-index: -1;
+}
+
+html[data-theme='dark'][data-visual='on'] .genie-living-intelligence .quick-help-overlay::after,
+html[data-visual='on'] .dark-mode .genie-living-intelligence .quick-help-overlay::after {
+  mix-blend-mode: screen;
+}
+
+/* The content sits inside the banner. z-index 1 places it above the
+   artwork inside the banner's stacking context, and the banner's own
+   z-index 0 keeps the artwork below the grid (which uses z-index 1 to
+   sit above the waves ::after).
+
+   A translucent surface scrim sits behind the text, so the artwork
+   reads faintly through the heading's band instead of being cut off
+   by an opaque panel.
+
+   --qh-banner-scrim-alpha is the only knob, and its value is a measured
+   floor rather than a preference. The wordmark is live text on a
+   three-stop brand ramp, so what it has to clear is its worst RENDERED
+   pairing against the artwork pixel directly behind each glyph. At
+   0.88 in light and 0.80 in dark that pairing still clears 3:1 at every
+   width from 769 px to 1920 px; one step further down drops below it at
+   0.84 (light) and 0.74 (dark). The binding pixel is the artwork's
+   saturated blue in its lower band.
+
+   Placement is not a way out. The globe's ink runs dark from roughly 20 %
+   to 80 % of the band, so the heading's row is about as dark as anywhere
+   it could legally go: sliding the text down to the band's lower third or
+   up to its pale top edge measured no better than the position it already
+   holds, and neither could reach a more translucent scrim.
+
+   The mask below is what keeps the scrim's top edge from cutting a line
+   through the globe and the icon tiles. It ramps the scrim up over the
+   top 30 % of the content, and the banner's own mask ramps everything
+   back down over its lower 28 %; the two meet across a plateau rather
+   than a seam, so the artwork dissolves into the scrim and the scrim
+   dissolves into the panel as one continuous fade in both themes. */
+html[data-visual='on'] .genie-living-intelligence .quick-help-content {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  --qh-banner-scrim-alpha: 0.88;
+  /* The horizontal fade's run, in pixels rather than a percentage: the
+     ramp has to land inside the content's own padding, and that padding
+     is a width, so the ramp has to be one too. Its partner is the app's
+     --qh-veil-pad, declared on .quick-help-overlay and stepped down by
+     the app's own container query when the panel is narrow; the
+     relationship between the two is stated where both are declared.
+     min(), not a copy of the padding: the ramp is also its own design
+     value, and clamping it to the padding would widen the fade by 8 px
+     at every width the app does not step. */
+  --qh-veil-ramp: min(24px, var(--qh-veil-pad, 24px));
+  background: color-mix(in srgb, var(--surface) calc(var(--qh-banner-scrim-alpha) * 100%), transparent);
+  /*
+   * mask-mode: alpha is load-bearing. Without it, Blink resolves the
+   * linear-gradient's `transparent` stop as luminance=0, which the
+   * `match-source` default keys to the luminance mask mode; the 0-30%
+   * fade then collapses to a uniform 0 (mask OFF everywhere) and the
+   * banner's artwork bleeds through the scrim. Forcing alpha locks
+   * the gradient to its declared alpha stops.
+   */
+  /* The veil fades in on every side, not only at the top: it wraps the
+     heading and its subtitle, so its left and right edges are cuts in
+     the artwork and have to be ramps too. The two gradients are
+     intersected — the veil is only where both of them are opaque.
+     The horizontal ramp runs over --qh-veil-ramp, which is the app's
+     --qh-veil-pad clamped to 24 px, and is spent inside the content's
+     own padding. The invariant between them holds by construction: the
+     ramp is min(24, padding), so it can never be wider than the padding
+     it has to be exhausted in, whatever the app declares and at every
+     width. (With the padding at its wide-panel 32 px the ramp stays at
+     24; where the app steps the padding down for a narrow panel the
+     ramp follows it, and a padding smaller than a fixed 24 px ramp
+     would have the fade still running where the first glyph starts.)
+     The -webkit- spelling of mask-composite is the legacy name of the
+     same operator (source-in ≡ intersect); Chromium normalises it to
+     the standard value, and Safari still needs it. */
+  -webkit-mask-image:
+    linear-gradient(to bottom, transparent 0%, rgb(0 0 0 / 1) 30%),
+    linear-gradient(
+      to right,
+      transparent 0,
+      rgb(0 0 0 / 1) var(--qh-veil-ramp),
+      rgb(0 0 0 / 1) calc(100% - var(--qh-veil-ramp)),
+      transparent 100%
+    );
+  mask-image:
+    linear-gradient(to bottom, transparent 0%, rgb(0 0 0 / 1) 30%),
+    linear-gradient(
+      to right,
+      transparent 0,
+      rgb(0 0 0 / 1) var(--qh-veil-ramp),
+      rgb(0 0 0 / 1) calc(100% - var(--qh-veil-ramp)),
+      transparent 100%
+    );
+  -webkit-mask-mode: alpha;
+  mask-mode: alpha;
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+  /* The padding-top is large enough that the heading's first pixel
+     sits past the 30 % mask transition, so every glyph paints where
+     the scrim has reached its full alpha. It cancels out of where the
+     heading sits inside the band — growing it grows the scrim by the
+     same amount — which is why the text's position is set from the
+     space below it rather than from here. */
+  padding-top: 50px;
+  padding-bottom: var(--space-sm);
+}
+
+/*
+ * The dark scrim can sit lower than the light one. Its floor is set by
+ * 1280 px, the width at which the heading sits closest to the banner's
+ * mask knee and therefore has the least of the artwork dissolved out
+ * from under it.
+ */
+html[data-theme='dark'][data-visual='on'] .genie-living-intelligence .quick-help-content,
+html[data-visual='on'] .dark-mode .genie-living-intelligence .quick-help-content {
+  --qh-banner-scrim-alpha: 0.8;
+}
+
+/* The grid is a sibling of the banner, not a descendant of content
+   anymore. The waves ::after has z-index 0, so the grid needs an
+   explicit z-index 1 to keep painting on top of them. */
+html[data-visual='on'] .genie-living-intelligence .quick-help-grid {
+  position: relative;
+  z-index: 1;
+}
+
+html[data-visual='on'] .genie-living-intelligence .quick-help-heading {
+  font-family: var(--font-display);
+  color: var(--fg);
+  text-wrap: balance;
+  letter-spacing: -0.025em;
+}
+
+html[data-visual='on'] .genie-living-intelligence .quick-help-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/*
+ * Scoped right resources sidebar; position the network out of text's way.
+ *
+ * Gated to the range where the sidebar is in flow: ≥1400 px. The
+ * breakpoint matches the component's off-canvas threshold; below it,
+ * the sidebar is position:fixed with transform translateX(100%) and
+ * the corner artwork would anchor to nothing visible. Bounds the
+ * layer's claim on `position` so the component owns the off-canvas
+ * state below the threshold without selector mirroring.
+ */
+@media screen and (min-width: 1400px) {
+  html[data-visual='on'] .genie-living-intelligence .sidebar:not(.collapsed) {
+    position: relative;
+    isolation: isolate;
+  }
+
+  html[data-visual='on'] .genie-living-intelligence .sidebar:not(.collapsed)::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    /* `contain` fits the whole viewBox, and this asset paints only its
+       right 49 % and top 88 %. A 190x205 box therefore showed 64 px of
+       artwork; 300x420 shows 131 px, close to the ~160 px the approved
+       mockup gives it, and keeps the painted band inside the box. */
+    width: calc(var(--visual-corner-set, 0) * min(78%, 300px));
+    height: calc(var(--visual-corner-set, 0) * 420px);
+    background: var(--visual-corner) right top / contain no-repeat;
+    opacity: var(--gli-corner-strength);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  html[data-visual='on'] .genie-living-intelligence .sidebar .sidebar-header,
+  html[data-visual='on'] .genie-living-intelligence .sidebar .sidebar-section {
+    position: relative;
+    z-index: 1;
+  }
+}
+
+html[data-visual='on'] .genie-living-intelligence .document-item {
+  border: 1px solid var(--gli-frost-border);
+  border-radius: var(--radius-lg);
+}
+
+@keyframes gli-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* A narrower corner network when the in-flow chat column is small —
+   1400 - 1600 px is the range where the panel starts narrow and the
+   78 % / 420 px corner would crowd the text. Above 1600 px the full
+   300 x 420 px network anchors as written above. */
+@media screen and (min-width: 1400px) and (max-width: 1600px) {
+  html[data-visual='on'] .genie-living-intelligence .sidebar:not(.collapsed)::before {
+    width: calc(var(--visual-corner-set, 0) * 150px);
+    height: calc(var(--visual-corner-set, 0) * 230px);
+    opacity: 0.36;
+  }
+}
+
+@media (max-width: 600px) {
+  /* The waves are dimmer at this width because their band fills the
+     column fully and the strokes would compete with the cards; the
+     hero's f and bg-position continue to track the artwork's band. */
+  html[data-visual='on'] .genie-living-intelligence .quick-help-overlay::after {
+    opacity: 0.3;
+  }
+}
+
+/*
+ * Reduced motion.
+ *
+ * The !important is load-bearing and is the only one in this file:
+ * .quick-help-banner carries the entrance animation; the universal
+ * `*` rule below (0,0,0) cannot outrank it without !important, so
+ * the animation would keep running under prefers-reduced-motion.
+ * Every other rule in this layer relies on the design system's own
+ * extension points instead.
+ */
+@media (prefers-reduced-motion: reduce) {
+  html[data-visual='on'] .genie-living-intelligence *,
+  html[data-visual='on'] .genie-living-intelligence *::before,
+  html[data-visual='on'] .genie-living-intelligence *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Scoped opt-outs, for a deployment that wants the layer without a motif. */
+html[data-visual='on'] .genie-living-intelligence.gli-no-hero .quick-help-banner {
+  display: none;
+}
+
+html[data-visual='on'] .genie-living-intelligence.gli-no-corner .sidebar::before {
+  display: none;
+}
+
+html[data-visual='on'] .genie-living-intelligence.gli-no-waves .quick-help-overlay::after {
+  display: none;
+}
+
+/*
+ * The brand wordmark - the gradient painted into the navbar name and the
+ * brand inside the welcome heading. Ungated, for the reason given in the
+ * preamble: this is identity, and it must survive decoration being
+ * switched off. Both call sites pass the brand through as a slot, so
+ * the name is rendered as text and stays selectable and translatable.
+ *
+ * Two surfaces, two ramps. The mockup paints the navbar name and the
+ * heading brand with the same gradient — the same family in both
+ * themes — but the surfaces they sit on are not the same: the navbar
+ * band is brand-tinted and lifts the contrast, the panel surface is
+ * deep and cannot. So the navbar's tokens stay the light ramp across
+ * both themes (the ramp is the same family regardless of theme), and
+ * the heading's tokens get a lifted dark ramp for the panel surface
+ * that the light ramp's violet end would not clear at 3:1.
+ *
+ * background-clip: text is what keeps the mark resolution-independent -
+ * it is live type, not an image, so it re-rasterises at any zoom. The
+ * color fallback covers a renderer that honours neither background-clip
+ * nor -webkit-text-fill-color; without it the name would be invisible.
+ *
+ * The magenta stop of the light ramp was lifted from #a036f7 to
+ * #9b2ce6 — same hue (≈272° violet, within 1°), ~16 % darker. The
+ * previous value measured 2.83:1 against the rendered surface (its
+ * anti-aliased glyphs), under the 3:1 large-text floor the heading
+ * relies on. Pure-CSS contrast is 4.82:1, so the floor failure was
+ * visual (rendered average), not arithmetic — the lifted value clears
+ * 5.3:1 against pure white and the same hue preserves the designer's
+ * blue→violet family.
+ */
+:root {
+  --brand-mark-from: #2e79fc;
+  --brand-mark-mid: #755cf8;
+  --brand-mark-to: #9b2ce6;
+
+  /* The navbar's ramp is the same in both themes: a literal triplet so
+     that the dark block's heading override below cannot reach it. */
+  --brand-mark-navbar-from: #2e79fc;
+  --brand-mark-navbar-mid: #755cf8;
+  --brand-mark-navbar-to: #9b2ce6;
+}
+
+/*
+ * The heading's lifted ramp sits on the panel surface (deeper than
+ * the navbar band), where the light ramp's violet end would not clear
+ * the 3:1 large-text floor. The navbar must NOT pick this ramp up —
+ * its tokens above are literals, not references to --brand-mark-*, so
+ * these overrides name a different family entirely and the navbar's
+ * triplet above is unchanged.
+ *
+ * The dark theme's lifted ramp already cleared 3:1 against the dark
+ * panel surface; this branch's stop lift is for the light ramp, not
+ * this one.
+ */
+html[data-theme='dark'],
+html.dark-mode,
+body.dark-mode {
+  --brand-mark-from: #58bcff;
+  --brand-mark-mid: #a48bff;
+  --brand-mark-to: #ec82ff;
+}
+
+.brand-wordmark {
+  display: inline-block;
+  background-image: linear-gradient(
+    100deg,
+    var(--brand-mark-from) 5%,
+    var(--brand-mark-mid) 62%,
+    var(--brand-mark-to) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: var(--accent);
+}
+
+.nav-bar .brand-wordmark {
+  background-image: linear-gradient(
+    100deg,
+    var(--brand-mark-navbar-from) 5%,
+    var(--brand-mark-navbar-mid) 62%,
+    var(--brand-mark-navbar-to) 100%
+  );
+  /* The navbar's own ink, which is the brand darkened in light and the
+     brand lightened in dark — the accent is wrong on both bands. */
+  color: var(--navbar-fg, var(--accent-fg));
+}
+
+/*
+ * The conversation's wave: the same asset as the welcome screen's,
+ * anchored to the bottom of the centre column — absolute within the
+ * container, which itself never scrolls (only the message window
+ * inside it does), so the band holds its place while the messages
+ * move. Slightly dimmer than the welcome's band to favour the text
+ * over it; it shows behind the composer and rises a little on the
+ * sides only.
+ */
+html[data-visual='on'] .genie-living-intelligence .chatbot-container {
+  /* The layer owns the stacking its artwork creates: the container becomes
+     its own stacking context and the wave paints below every child — the
+     app's own rules carry no layer compensations. */
+  isolation: isolate;
+}
+
+html[data-visual='on'] .genie-living-intelligence .chatbot-container {
+  /* The reference shows the wave band behind the last messages, not below
+     an opaque panel: the conversation area takes the bubbles' own surface
+     as its ground (one colour for panel and bubbles — the cards read by
+     border and shadow), and the wave paints inside it. The window's own
+     surface steps aside; layer off = the app's paint returns untouched. */
+  background: var(--surface);
+}
+
+html[data-visual='on'] .genie-living-intelligence .chatbot-container .chat-window {
+  background: transparent;
+}

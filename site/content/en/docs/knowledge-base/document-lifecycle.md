@@ -201,8 +201,8 @@ its chunks may be partially present — retract it before re-uploading.
 
 - [Ingestion]({{< relref "ingestion" >}}) — the pipeline stages, supported
   formats, and size limits.
-- [Ingestion log reference]({{< relref "ingestion-log" >}}) — per-chunk log
-  schema and canonical message strings.
+- [Operations → Ingestion log]({{< relref "/docs/operate/ingestion-log" >}}) —
+  per-chunk log schema and canonical message strings.
 - [Labelling & taxonomy]({{< relref "labelling-taxonomy" >}}) — what labels
   chunks get and how to curate the taxonomy that drives them.
 - [Content guidance]({{< relref "content-guidance" >}}) — how to prepare

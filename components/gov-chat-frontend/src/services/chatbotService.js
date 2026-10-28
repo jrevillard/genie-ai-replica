@@ -2,6 +2,11 @@
 import httpService from './httpService';
 import keycloakAuthService from './keycloakAuthService';
 
+// The one thumb→rating mapping. The dialog's thumbs and the answer card's
+// inline thumbs are the same gesture and must reach analytics as the same
+// values; explicit star ratings pass through unchanged.
+export const THUMB_RATINGS = { up: 5, down: 1 };
+
 export default {
   /**
    * Submit a query to the chatbot
@@ -54,6 +59,30 @@ export default {
     const token = keycloakAuthService.getAccessToken();
     const url = `${baseUrl}/queries/stream`;
 
+    // A silent stream never recovers on its own: when the assistant is
+    // unreachable upstream the connection just stays open. Watch for
+    // frames — any resets the watch; silence past the budget aborts the
+    // stream and reports, so the UI leaves its thinking state. The
+    // budget must outlast the backend's own LLM timeout (180 s) plus
+    // retrieval, or a slow-but-healthy answer gets abandoned here.
+    const idleMs = Number(window.APP_CONFIG?.streamIdleTimeoutMs) || 300000;
+    let idleTimer = null;
+    let finished = false;
+    const clearIdleWatch = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = null;
+    };
+    const armIdleWatch = () => {
+      clearIdleWatch();
+      idleTimer = setTimeout(() => {
+        controller.abort();
+        const error = new Error('The assistant is not responding — the request timed out.');
+        error.code = 'STREAM_IDLE_TIMEOUT';
+        callbacks.onError?.(error);
+      }, idleMs);
+    };
+    armIdleWatch();
+
     const payload = {
       ...queryData,
       timestamp: new Date().toISOString()
@@ -93,7 +122,16 @@ export default {
         let buffer = '';
 
         function processChunk({ done, value }) {
-          if (done) return;
+          if (done) {
+            // A transport-level close without a done frame is a failure —
+            // otherwise the stream would sit open forever.
+            if (!finished) {
+              const error = new Error('The stream closed before the answer completed.');
+              error.code = 'STREAM_ENDED';
+              callbacks.onError?.(error);
+            }
+            return;
+          }
 
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split('\n');
@@ -101,11 +139,13 @@ export default {
 
           for (const line of lines) {
             const trimmed = line.trim();
-            if (!trimmed || !trimmed.startsWith('data: ')) continue;
-            if (trimmed.startsWith(': ')) continue; // SSE comment/keepalive
+            // Not a data line — SSE comments (the backend's keepalives)
+            // fall through here too, and must not reset the idle watch.
+            if (!trimmed.startsWith('data: ')) continue;
 
             try {
               const data = JSON.parse(trimmed.slice(6));
+              armIdleWatch();
               switch (data.type) {
                 case 'chunk':
                   callbacks.onChunk?.(data.content);
@@ -117,11 +157,23 @@ export default {
                   callbacks.onTranslation?.(data.content);
                   break;
                 case 'done':
+                  finished = true;
+                  clearIdleWatch();
                   callbacks.onDone?.(data);
                   return;
-                case 'error':
-                  callbacks.onError?.(new Error(data.message || 'Stream error'));
+                case 'error': {
+                  finished = true;
+                  clearIdleWatch();
+                  // An empty frame message stays empty: the store's
+                  // generic floor renders it localized, and a hard-coded
+                  // developer string would surface as server prose. The
+                  // || '' keeps a JSON null from stringifying into the
+                  // status line.
+                  const error = new Error(data.message || '');
+                  error.fromServer = true;
+                  callbacks.onError?.(error);
                   return;
+                }
               }
             } catch {
               // Ignore JSON parse errors for non-data lines
@@ -131,9 +183,10 @@ export default {
           return reader.read().then(processChunk);
         }
 
-        return reader.read().then(processChunk);
+        return reader.read().then(processChunk).finally(clearIdleWatch);
       })
       .catch((error) => {
+        clearIdleWatch();
         if (error.name === 'AbortError') return;
         callbacks.onError?.(error);
       });

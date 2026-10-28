@@ -10,6 +10,10 @@ utility methods with fully mocked ArangoDB, LangChain, aiohttp, and OpenAI deps.
 import asyncio
 import contextlib
 import json
+import os
+import subprocess
+import sys
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -24,6 +28,7 @@ except ModuleNotFoundError:  # Windows dev checkout: locking degrades to a no-op
 import dataprep.genieai_dataprep_arangodb as dp_module
 import dataprep.genieai_dataprep_microservice as ms
 from dataprep.genieai_dataprep_arangodb import GenieArangoDataprep
+from tests.conftest import OVERLAY_ROOT
 
 # The lock-acquisition tests assert on fcntl itself. POSIX locking does not
 # exist on a Windows dev checkout, so those tests are skipped there (the
@@ -135,6 +140,56 @@ def _mock_aiohttp_session(method="patch", response_ctx=None):
     session.__aenter__ = AsyncMock(return_value=session)
     session.__aexit__ = AsyncMock(return_value=False)
     return session
+
+
+async def _fetch_labels(taxonomy):
+    """Run the real taxonomy fetch against *taxonomy* and return the labels."""
+    dp = create_dataprep()
+    resp_ctx = _mock_aiohttp_response(status=200, json_data=taxonomy)
+    session = _mock_aiohttp_session("get", resp_ctx)
+
+    with (
+        patch.object(
+            dp,
+            "_service_headers",
+            new_callable=AsyncMock,
+            return_value={"Authorization": "Bearer t", "Content-Type": "application/json"},
+        ),
+        patch.object(dp_module, "aiohttp") as mock_aiohttp,
+    ):
+        mock_aiohttp.ClientTimeout.return_value = MagicMock()
+        mock_aiohttp.ClientSession.return_value = session
+        return await dp._fetch_all_labels()
+
+
+# The taxonomy the probe fetches, and the labels it asks the model to keep.
+# The case variants are there on purpose: two labels that differ only in case
+# must still have a defined order, in every process.
+_PROBE_TAXONOMY = [
+    {"name": "Healthcare", "children": [{"name": "Hospitals"}, {"name": "Clinics"}]},
+    {"name": "Education", "children": ["Schools"]},
+    {"name": "onion", "children": []},
+    {"name": "Onion", "children": []},
+]
+_PROBE_SUGGESTED = ["Hospitals", "Clinics", "Schools"]
+
+# The probe marks its result line, so a line the interpreter prints on the way
+# out cannot be mistaken for the answer.
+_PROBE_MARKER = "PROBE:"
+
+
+async def _probe_main():
+    """Fetch the taxonomy and finalise a chunk, in a fresh interpreter.
+
+    The subprocess runs this: the point of the probe is the hash seed of the
+    interpreter that builds the order, so the work has to happen in the child
+    process rather than in the one running the suite.
+    """
+    labels = await _fetch_labels(_PROBE_TAXONOMY)
+    dp = create_dataprep()
+    with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
+        stored = await dp._finalize_chunk_labels(0, _PROBE_SUGGESTED, labels, "file1")
+    return {"labels": labels, "stored": stored}
 
 
 # ---------------------------------------------------------------------------
@@ -590,6 +645,20 @@ class TestApplyLabels:
             result, _degraded = await dp._apply_labels(["chunk"], ["A", "B"], [], "file1")
 
         assert result == [{"text": "chunk", "labels": ["A"]}]
+
+    @pytest.mark.asyncio
+    async def test_the_fallback_labels_are_stored_in_a_canonical_order(self):
+        """Without a taxonomy the document's own scope is the only label source.
+
+        The stored array must not depend on the order the scope arrived in.
+        """
+        dp = create_dataprep()
+
+        with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
+            docs, reasons = await dp._apply_labels(["chunk"], [], ["Schools", "Clinics"], "file1")
+
+        assert docs == [{"text": "chunk", "labels": ["Clinics", "Schools"]}]
+        assert reasons == []
 
     @pytest.mark.asyncio
     async def test_fallback_to_file_labels_when_empty_taxonomy(self):
@@ -2141,27 +2210,12 @@ class TestFetchAllLabels:
 
     @pytest.mark.asyncio
     async def test_parses_taxonomy_response(self):
-        dp = create_dataprep()
-
         taxonomy = [
             {"name": "Healthcare", "children": [{"name": "Hospitals"}, {"name": "Clinics"}]},
             {"name": "Education", "children": ["Schools"]},
         ]
-        resp_ctx = _mock_aiohttp_response(status=200, json_data=taxonomy)
-        session = _mock_aiohttp_session("get", resp_ctx)
 
-        with (
-            patch.object(
-                dp,
-                "_service_headers",
-                new_callable=AsyncMock,
-                return_value={"Authorization": "Bearer t", "Content-Type": "application/json"},
-            ),
-            patch.object(dp_module, "aiohttp") as mock_aiohttp,
-        ):
-            mock_aiohttp.ClientTimeout.return_value = MagicMock()
-            mock_aiohttp.ClientSession.return_value = session
-            labels = await dp._fetch_all_labels()
+        labels = await _fetch_labels(taxonomy)
 
         assert "Healthcare" in labels
         assert "Hospitals" in labels
@@ -2175,6 +2229,190 @@ class TestFetchAllLabels:
             labels = await dp._fetch_all_labels()
 
         assert labels == []
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("taxonomy", "expected"),
+        [
+            (
+                [
+                    {"name": "Healthcare", "children": [{"name": "Hospitals"}, {"name": "Clinics"}]},
+                    {"name": "Education", "children": ["Schools"]},
+                ],
+                ["Education", "Schools", "Healthcare", "Clinics", "Hospitals"],
+            ),
+            (
+                # Two labels that differ only in case are two labels: they have
+                # to sit next to each other, in an order that does not depend
+                # on which of them arrived first.
+                [
+                    {"name": "onion", "children": []},
+                    {"name": "Onion", "children": []},
+                    {"name": "apple", "children": []},
+                    {"name": "Banana", "children": []},
+                ],
+                ["apple", "Banana", "Onion", "onion"],
+            ),
+            (
+                # A label listed twice appears once, and one without a usable
+                # label — a category whose translation is missing — is dropped
+                # rather than reaching the prompt as the text "None".
+                [
+                    {"name": "Healthcare", "children": ["Clinics", "Clinics", {"name": None}, ""]},
+                    {"name": None, "children": []},
+                ],
+                ["Healthcare", "Clinics"],
+            ),
+        ],
+        ids=["canonical", "case-variants", "duplicates-and-unusable"],
+    )
+    async def test_the_taxonomy_comes_back_in_a_canonical_order(self, taxonomy, expected):
+        """The label list is embedded in the labelling prompt verbatim.
+
+        Its order is therefore part of the prompt: two ingests of the same
+        document have to send the same prompt, or the LLM may label the same
+        chunk differently — a difference that is invisible in the stored
+        result and shows up only as noise in an A/B comparison.
+        """
+        labels = await _fetch_labels(taxonomy)
+
+        assert labels == expected
+
+    @pytest.mark.asyncio
+    async def test_the_order_does_not_depend_on_the_order_the_backend_returns(self):
+        """The same taxonomy, returned in another order, is the same prompt."""
+        labels = await _fetch_labels(
+            [
+                {"name": "Education", "children": ["Schools"]},
+                {"name": "Healthcare", "children": [{"name": "Clinics"}, {"name": "Hospitals"}]},
+            ]
+        )
+
+        assert labels == ["Education", "Schools", "Healthcare", "Clinics", "Hospitals"]
+
+    @pytest.mark.asyncio
+    async def test_entries_without_a_usable_label_are_counted_in_the_fetch_line(self):
+        """A service whose translation is missing arrives as null.
+
+        It has no label to offer, and it has to be reported: a taxonomy that
+        reads as complete while a service is missing from it is worse than a
+        noisy log. The taxonomy is fetched once per document and the reason
+        does not change between documents, so the count is in the fetch line
+        rather than in a warning per document.
+        """
+        with patch.object(dp_module, "logger") as logger:
+            labels = await _fetch_labels(
+                [
+                    {"name": "Healthcare", "children": ["Clinics", None]},
+                    {"name": None, "children": []},
+                ]
+            )
+
+        assert labels == ["Healthcare", "Clinics"]
+        lines = [call.args[0] for call in logger.info.call_args_list]
+        assert any("2 without a usable label" in line for line in lines), lines
+        assert any("0 malformed entries" in line for line in lines), lines
+
+    @pytest.mark.asyncio
+    async def test_a_malformed_entry_is_counted_apart_from_a_missing_translation(self):
+        """The two causes have different remedies.
+
+        A missing translation is a content problem; a payload the parser does
+        not recognise is a contract problem between the dataprep and the
+        backend. Counting them together would point the operator at the wrong
+        one.
+        """
+        with patch.object(dp_module, "logger") as logger:
+            await _fetch_labels(
+                [
+                    {"name": "Healthcare", "children": [123, {"name": 123}, {"children": ["Clinics"]}]},
+                    {"children": []},
+                    "not-an-object",
+                ]
+            )
+
+        lines = [call.args[0] for call in logger.info.call_args_list]
+        assert any("0 without a usable label" in line for line in lines), lines
+        assert any("5 malformed entries" in line for line in lines), lines
+
+    @pytest.mark.asyncio
+    async def test_a_payload_that_is_not_a_taxonomy_tree_is_reported_as_malformed(self):
+        """A 200 response the parser does not recognise is a contract problem.
+
+        Reporting zero drops would point the operator at translations rather
+        than at the contract.
+        """
+        with patch.object(dp_module, "logger") as logger:
+            labels = await _fetch_labels({"categories": []})
+
+        assert labels == []
+        lines = [call.args[0] for call in logger.info.call_args_list]
+        assert any("1 malformed entries" in line for line in lines), lines
+
+    def test_the_same_taxonomy_yields_the_same_order_in_every_process(self):
+        """Two interpreters, two hash seeds, one answer.
+
+        ``PYTHONHASHSEED`` is randomised per process, which is what lets an
+        unordered collection reach the prompt and the stored labels. The probe
+        runs the real fetch — and the finalisation that decides what a chunk
+        stores — in two processes, and compares what they return. Both probes
+        run at once: each imports the whole service module, and the point of
+        the test is the agreement, not the duration.
+        """
+        script = (
+            "import asyncio, json, tests.conftest, tests.test_dataprep as t; "
+            f'print("{_PROBE_MARKER}" + json.dumps(asyncio.run(t._probe_main())))'
+        )
+
+        def _run(seed):
+            result = subprocess.run(
+                [sys.executable, "-c", script],
+                capture_output=True,
+                text=True,
+                cwd=str(OVERLAY_ROOT),
+                env=dict(os.environ, PYTHONHASHSEED=seed),
+                timeout=300,
+            )
+            assert result.returncode == 0, f"probe failed under PYTHONHASHSEED={seed}:\n{result.stderr}"
+            # The result is marked, so a line the interpreter prints on the way
+            # out cannot be mistaken for it.
+            marked = [line for line in result.stdout.splitlines() if line.startswith(_PROBE_MARKER)]
+            assert marked, f"probe printed no result under PYTHONHASHSEED={seed}:\n{result.stdout}"
+            return json.loads(marked[-1][len(_PROBE_MARKER) :])
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            outputs = list(pool.map(_run, ("0", "1")))
+
+        assert outputs[0] == outputs[1]
+        # The exact values, so the comparison above cannot pass on two empty
+        # taxonomies: the probe would then guard nothing.
+        assert outputs[0] == {
+            "labels": ["Education", "Schools", "Healthcare", "Clinics", "Hospitals", "Onion", "onion"],
+            "stored": ["Schools", "Clinics", "Hospitals"],
+        }
+
+
+class TestFinalizeChunkLabels:
+    """The order of the labels a chunk stores."""
+
+    @pytest.mark.asyncio
+    async def test_the_stored_labels_are_in_the_canonical_order(self):
+        """The stored array is a function of the label set alone.
+
+        Not of the order the model answered in: two runs that pick the same
+        labels have to store the same array.
+        """
+        dp = create_dataprep()
+
+        with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
+            labels = await dp._finalize_chunk_labels(
+                0,
+                ["Hospitals", "Clinics", "Schools"],
+                ["Education", "Schools", "Healthcare", "Clinics", "Hospitals"],
+                "file1",
+            )
+
+        assert labels == ["Schools", "Clinics", "Hospitals"]
 
 
 class TestRunGuardrail:

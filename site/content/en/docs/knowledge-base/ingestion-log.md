@@ -16,7 +16,7 @@ embeds a file.
 The canonical reference (schema, endpoints, canonical message strings, the
 AQL read pattern, the trace-correlation recipe, the failure-mode playbook,
 and the verify-it-worked checks) has moved to
-[Operate → Ingestion Log]({{< relref "/docs/operate/ingestion-log" >}}).
+[Operations → Ingestion Log]({{< relref "/docs/operate/ingestion-log" >}}).
 
 For label-quality diagnostics and per-chunk label debugging, see
-[RAG → Data labelling strategy]({{< relref "/docs/rag-pipeline/data-labeling" >}}).
+[RAG Pipeline → Data labelling strategy]({{< relref "/docs/rag-pipeline/data-labeling" >}}).

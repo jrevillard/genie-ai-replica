@@ -104,7 +104,7 @@ Key behaviours:
 
 ## Variable injection — `src/main.js`
 
-`main.js` reads the config (either a `fetch('/config/genie-ai-config.json')` or the runtime-injected `window.APP_CONFIG` — see [Configuration](/docs/configure/)) and writes CSS custom properties on `<html>`. **The `--brand` setProperty has a `'#4071cb'` fallback** so the app works if config isn't loaded yet (first paint, broken CDN, etc.).
+`main.js` reads the config (either a `fetch('/config/genie-ai-config.json')` or the runtime-injected `window.APP_CONFIG` — see [Branding customization](/docs/configure/branding-customization/)) and writes CSS custom properties on `<html>`. **The `--brand` setProperty has a `'#4071cb'` fallback** so the app works if config isn't loaded yet (first paint, broken CDN, etc.).
 
 ```javascript
 // Simplified excerpt — see src/main.js lines ~57-83 for the full implementation.
@@ -265,7 +265,7 @@ The default at first load is whatever `localStorage.theme` contains, falling bac
 
 The mobile app (`mobile/genie_ai_mobile/`) follows the same JSON schema and the same "single brand color drives everything" philosophy. It parses the same config and derives a parallel Dart token set via `AppTokens.fromConfig` (HSLColor-based, the Dart analogue of OKLch relative syntax).
 
-For the Flutter side — DS components, spacing/radii tokens, theme wiring — see [/docs/mobile/mobile-architecture/](/docs/mobile/mobile-architecture/). This page intentionally focuses on the web frontend.
+For the Flutter side — DS components, spacing/radii tokens, theme wiring — see [Mobile → UI component inventory](/docs/mobile/ui-component-inventory-mobile/#design-system). This page intentionally focuses on the web frontend.
 
 ## Related
 

@@ -4,7 +4,7 @@ description: "Setting up a local development environment across all GENIE.AI com
 weight: 4
 section: "contribute"
 aliases:
-  - /docs/contribute/build-and-run/
+  - /docs/core/development-guide/
 audience: "developer"
 mode: how-to
 persona: developer
@@ -347,12 +347,12 @@ npm run dev
 
 # Production start
 npm start
-
-# DB setup scripts (run after ArangoDB is up)
-npm run setup-db                # Creates collections + indexes
-npm run init-categories         # Seeds service categories from configs/
-npm run setup-all               # setup-db + init-categories
 ```
+
+When the stack runs through Docker Compose or Ansible, the one-shot
+`db-migrations` job creates every collection and index automatically (in Compose
+it completes before the backend starts). What stays manual is seeding the
+taxonomy — see [Database Setup](#database-setup).
 
 **Verify:**
 
@@ -497,7 +497,7 @@ PKCE flow to work on a real device:
 
 A mismatch produces an infinite "logging in..." spinner or
 `error: invalid_request` from Keycloak. See the [Mobile deployment
-guide](/docs/mobile/) for full setup.
+guide](/docs/mobile/mobile-deployment-guide/) for full setup.
 
 ---
 
@@ -617,14 +617,45 @@ for the full port table.
 
 ## Database Setup
 
-The backend runs migrations and seed scripts via npm wrappers:
+**Collections and indexes are created automatically.** The one-shot
+`db-migrations` service (`scripts/migrations/`, built into the
+`genie-ai-db-migrations` image) runs on every Docker Compose / Swarm / Ansible
+deployment and applies the migrations — collections, edges and indexes,
+idempotently. In Compose the backend starts only after the job completes
+(`depends_on: service_completed_successfully`); Docker Swarm ignores that
+ordering, so there the backend can come up while the job is still running. You
+do not create the collections by hand on a deployed stack either way.
+
+The scripts under `components/gov-chat-backend/scripts/new-schema-scripts` are
+for databases managed outside that pipeline — a local database without Compose,
+or applying the schema validators from `arango-schema.json`. They read their
+connection from `ARANGO_URL`, `ARANGO_DATABASE`, `ARANGO_USER` and
+`ARANGO_PASSWORD` — `source set-env.sh` (edit it first) exports them, or set them
+yourself. Mind the one name that differs from the deployment variables: the
+backend reads `ARANGO_DB` where these scripts read `ARANGO_DATABASE`, so a
+backend `.env` alone does not aim them at the right database — without
+`ARANGO_DATABASE` they fall back to a database the application does not read.
 
 ```bash
-cd components/gov-chat-backend
-npm run setup-db              # Create collections + indexes (idempotent)
-npm run init-categories       # Seed serviceCategories from configs/
-npm run setup-all             # Both, in order
+cd components/gov-chat-backend/scripts/new-schema-scripts
+source set-env.sh
+node arango-schema-creator.js ./arango-schema.json   # Create collections + indexes + validators
 ```
+
+The script asks for confirmation before it writes, so it needs a terminal —
+without one it exits without creating anything.
+
+**Seeding the taxonomy is manual on every setup.** An empty `serviceCategories`
+hierarchy boots and serves chats, but retrieval has no labels to filter on until
+documents are ingested against one. Follow the Knowledge Hierarchy procedure in
+`components/gov-chat-backend/scripts/new-schema-scripts/README.md`, or use the
+Admin Dashboard. The script route has two prerequisites: the ArangoDB schema
+validation has to be turned off for the `serviceCategories`, `services` and
+`categoryServices` collections first (only relevant when the validators were
+applied, i.e. on databases created by `arango-schema-creator.js`), and
+`create-knowledge-hierarchy.js` always asks for confirmation before it writes —
+with or without `--file` — so it needs a terminal; run unattended it cancels
+itself and writes nothing.
 
 For dataprep, the ArangoDB graph (`ARANGO_GRAPH_NAME`, default `GRAPH`) and
 vector indexes are created on the first run of `dataprep-arango-service`.
@@ -827,7 +858,7 @@ npm run lint:dart && npm run format:dart:check
 ```
 
 CI runs the full multi-stage pipeline on every MR — see the canonical
-[CI/CD](/docs/contribute/build-and-run/) for the 12-stage structure
+[`.gitlab-ci.yml`](https://opensource.unicc.org/un/itu/genie-ai/-/raw/main/.gitlab-ci.yml) for the 12-stage structure
 (`lint → test → config → build → scan → contract-in-image → e2e → promote
 → release → scheduled → manual → deploy`). Cancelling obsolete pipelines
 before triggering new ones saves runner minutes.
@@ -895,7 +926,7 @@ If it returns `command not found`, `clamav-daemon` was dropped by
 ### Keycloak login loop
 
 - ROPC is enabled but the user lacks `firstName`, `lastName`, or
-  `emailVerified=true` — see [Server Testing](/docs/contribute/build-and-run/)
+  `emailVerified=true` — see [Keycloak Admin Guide](/docs/configure/keycloak-admin-guide/)
   for the canonical user-creation payload.
 - Mobile scheme mismatch — see the [Scheme Coherence Rule](#mobile-flutter).
 
@@ -933,9 +964,9 @@ interrupted, or VRAM exhaustion (drop model size or run with
 | Deploy to a real environment | [Deployment](/docs/deploy/) (Ansible recommended) |
 | Add observability (OTel, Grafana, dashboards) | [Observability](/docs/observe/) |
 | Debug a slow chat / failing ingest | [Debugging with Tracing & Logs](/docs/operate/tracing-howto/) |
-| Find the CI/CD pipeline structure | [CI/CD](/docs/contribute/build-and-run/) |
-| Look up an environment variable | [Configuration](/docs/configure/) |
-| Understand the C4 architecture | [Architecture](/docs/architecture/) |
+| Find the CI/CD pipeline structure | [`.gitlab-ci.yml`](https://opensource.unicc.org/un/itu/genie-ai/-/raw/main/.gitlab-ci.yml) |
+| Look up an environment variable | [Environment variables](/docs/reference/env-vars/) |
+| Understand the C4 architecture | [Architecture Overview](/docs/architecture/architecture/) |
 | Run the multi-phase E2E suite | [E2E Tests](https://opensource.unicc.org/un/itu/genie-ai/-/raw/main/docs/e2e-tests/README.md) |
 | Work on the mobile app | [Mobile](/docs/mobile/) |
 

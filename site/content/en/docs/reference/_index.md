@@ -31,8 +31,8 @@ narrative.
   references (the OPEA `ServiceType` enum lives in
   `genie-ai-overlay/core/constants.py`; service names are string
   literals set per service via `setup_tracing(...)`).
-- [Glossary](/docs/reference/glossary/) — full glossary, same as
-  [Get started → Glossary](/docs/get-started/glossary/).
+- [Glossary](/docs/reference/glossary/) — every acronym used across
+  the docs, defined once.
 
 ## Related sections
 
@@ -40,4 +40,4 @@ narrative.
   references.
 - **[Configure](/docs/configure/)** — runtime tunables that map onto the
   env-vars page.
-- **[API contracts](/docs/reference/api-contracts/)** — narrative version of every HTTP endpoint.
+- **[Core → Integration Architecture](/docs/core/integration-architecture/)** — narrative view of how the components integrate and the inter-service contract surface.

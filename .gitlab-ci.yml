@@ -2529,6 +2529,40 @@ lint:okf-server:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
 
+# Format the scripts of the documentation site.  They live outside every
+# component directory, so no component's own lint job covers them; the
+# checker is CI-critical code, so it gets the same Prettier gate as the rest
+# of the repository.  Prettier comes from components/shared/lib, which
+# already pins it -- no second copy to keep in sync.
+lint:site-scripts:
+  extends: .lint_node
+  before_script:
+    - cd components/shared/lib && npm ci
+  script:
+    - node ${CI_PROJECT_DIR}/components/shared/lib/node_modules/prettier/bin/prettier.cjs --check "${CI_PROJECT_DIR}/site/scripts/*.mjs"
+  cache:
+    - key:
+        files:
+          - components/shared/lib/package-lock.json
+        prefix: lint-site-scripts
+      paths:
+        - components/shared/lib/node_modules/
+      fallback_keys:
+        - "lint-site-scripts-$CI_DEFAULT_BRANCH"
+        - "lint-site-scripts-"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "site/scripts/**/*"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
 lint:python:
   image: python:3.11-slim
   stage: lint
@@ -3145,9 +3179,15 @@ config:validate:
   before_script:
     - cd tests/config-validator && npm ci
     - cd ${CI_PROJECT_DIR}/api-gateway-solution/new-config && npm ci
+    - cd ${CI_PROJECT_DIR}/components/gov-chat-frontend && npm ci
   script:
     - cd ${CI_PROJECT_DIR}/tests/config-validator && npm test
     - cd ${CI_PROJECT_DIR}/api-gateway-solution/new-config && npm run test:ci
+    # Each shipped config is validated against the schema it embeds. The
+    # frontend's parity suite checks the asset keys agree across the seven
+    # files; it never checks a file's data against its own schema, so a
+    # mistyped value or a dropped required key ships otherwise.
+    - cd ${CI_PROJECT_DIR}/components/gov-chat-frontend && npm run validate:config
   cache:
     - key:
         files:
@@ -3167,6 +3207,15 @@ config:validate:
       fallback_keys:
         - "config-kong-$CI_DEFAULT_BRANCH"
         - "config-kong-"
+    - key:
+        files:
+          - components/gov-chat-frontend/package-lock.json
+        prefix: config-frontend
+      paths:
+        - components/gov-chat-frontend/node_modules/
+      fallback_keys:
+        - "config-frontend-$CI_DEFAULT_BRANCH"
+        - "config-frontend-"
   artifacts:
     when: always
     expire_in: 7 days
@@ -3181,9 +3230,42 @@ config:validate:
         - "env.*"
         - "docker-compose.yaml"
         - "docker-compose.gpu.yaml"
+        - "genie-ai-overlay/retriever/**/*"
+        - "genie-ai-overlay/chatqna/**/*"
+        - "deploy/ansible/**/*"
         - "tests/config-validator/**/*"
         - "tests/fixtures/config/**/*"
         - "api-gateway-solution/new-config/**/*"
+        - "components/gov-chat-frontend/public/config/genie-ai-config*.json"
+        - "components/gov-chat-frontend/scripts/validate-config-schema.js"
+        - "configs/keycloak/themes/**/*"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
+# Validate the internal links of the documentation site.
+#
+# Hugo rewrites Markdown links that point at a content path, but never
+# rewrites raw-HTML href attributes, and it keeps the old URL of a moved page
+# alive as a redirect.  A link that only resolves through a redirect still
+# works, but the reader lands on a redirect hop and the URL bar shows a path
+# that is not the page's address -- the defect this guard was written for.
+# The checker also refuses a `slug:` on a section, because Hugo's handling of
+# a section slug depends on the Hugo version and the site is built from a
+# floating Hugo image.
+config:docs-links:
+  extends: .node_base
+  stage: config
+  script:
+    - cd ${CI_PROJECT_DIR}/site && node --test scripts/check-links.test.mjs
+    - cd ${CI_PROJECT_DIR}/site && node scripts/check-links.mjs
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "site/content/**/*"
+        - "site/scripts/**/*"
+        - "site/hugo.toml"
         - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'

@@ -366,7 +366,7 @@ docker compose up -d --build
 
 See [Get started → Quickstart for developers](/docs/get-started/quickstart-developer/)
 for the full local stack bring-up, and
-[Get started → Quickstart for deployers](/docs/get-started/quickstart-deployer/)
+[Deployment → Docker Swarm setup](/docs/deploy/docker-swarm-setup/)
 for the production-style swarm bring-up.
 
 ## Adding a new dashboard card
@@ -445,11 +445,11 @@ method name and unmapped i18n keys via snapshot tests.
 ## Related
 
 - [Frontend → Admin Dashboard](/docs/frontend/admin-dashboard/) — reference doc for **what each existing tab does** (data sources, failure modes, sidebar layout). Read this for the contents of `overview`, `hierarchy`, `documents`, `database`, `logs`, `queryInspector`, `security`, `users`.
-- [Operate → Admin Logs](/docs/operate/admin-logs/) — the `logs` tab: VictoriaLogs-backed search, the MELT seam, and the five endpoints behind it.
-- [Operate → Backup & restore](/docs/operate/backup-restore/) — the `database` tab and the **Backup / Optimize / Restore** action cards, including the underlying `arangodump` flow.
+- [Operations → Admin Logs](/docs/operate/admin-logs/) — the `logs` tab: VictoriaLogs-backed search, the MELT seam, and the five endpoints behind it.
+- [Operations → Backup & restore](/docs/operate/backup-restore/) — the `database` tab and the **Backup / Optimize / Restore** action cards, including the underlying `arangodump` flow.
 - [Configure → Keycloak admin guide](/docs/configure/keycloak-admin-guide/) — the role / group / client model. Use this to decide which user roles see the admin surface.
 - [Architecture → Authentication](/docs/architecture/architecture/#6-user-authentication-flow) — how the OIDC token flows from Keycloak to the frontend, and why role checks must be enforced on the backend.
 - [Get started → Quickstart for developers](/docs/get-started/quickstart-developer/) — local dev bring-up, hot-reload, and the npm scripts for `gov-chat-frontend`.
-- [Get started → Quickstart for deployers](/docs/get-started/quickstart-deployer/) — production-style bring-up via Docker Swarm, including the order in which to rebuild the frontend image.
+- [Deployment → Docker Swarm setup](/docs/deploy/docker-swarm-setup/) — production bring-up via Docker Swarm. In Swarm the frontend image is built by CI and pinned with `GENIE_AI_FRONTEND_IMAGE_TAG`, not rebuilt on the node.
 - [Contribute → i18n guide](/docs/contribute/i18n/) — locale parity, which locales are required for production, and the validation script.
 - [Contribute → Dev workflow](/docs/contribute/dev-workflow/) — the full dev loop (lint, format, test, hot-reload) for the JS components.

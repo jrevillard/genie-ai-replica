@@ -49,11 +49,11 @@ links to a 10-minute quickstart and a curated set of follow-on docs.
     <a class="card h-100 text-decoration-none border-primary" href="/docs/get-started/quickstart-developer/">
       <div class="card-body">
         <h5 class="card-title">Developer</h5>
-        <p class="card-text">Extend the backend or the RAG pipeline — local dev loop in 10 minutes.</p>
+        <p class="card-text">Extend the backend or the RAG pipeline — ship a service change in 30 minutes.</p>
         <ol class="small mb-0">
-          <li>Run <code>npm install</code> in <code>components/gov-chat-backend</code></li>
-          <li>Spin up dependencies with <code>docker compose up -d</code></li>
-          <li>Run <code>npm run dev</code> and hit <code>localhost:3000/api/health</code></li>
+          <li>Start the stack with <code>docker compose up -d</code> — no host toolchain</li>
+          <li>Edit one service, rebuild only that image</li>
+          <li>Hit the change through NGINX and run the service's tests</li>
         </ol>
       </div>
     </a>
@@ -80,13 +80,13 @@ section's mission in one line.
 
 <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-3">
   <div class="col"><a class="card h-100 text-decoration-none" href="/docs/get-started/"><div class="card-body"><h5 class="card-title">Get started</h5><p class="card-text small">Be productive in 15 minutes — quickstarts for all four personas, concepts, and FAQ.</p></div></a></div>
-  <div class="col"><a class="card h-100 text-decoration-none" href="/docs/core/"><div class="card-body"><h5 class="card-title">Core</h5><p class="card-text small">High-level project overview, integration architecture, source tree, dev guide.</p></div></a></div>
-  <div class="col"><a class="card h-100 text-decoration-none" href="/docs/deploy/"><div class="card-body"><h5 class="card-title">Deploy</h5><p class="card-text small">Install GENIE.AI on Docker Compose, Swarm, or a remote GPU node.</p></div></a></div>
-  <div class="col"><a class="card h-100 text-decoration-none" href="/docs/operate/"><div class="card-body"><h5 class="card-title">Operate</h5><p class="card-text small">Run a live deployment — backup, scaling, updates, troubleshooting.</p></div></a></div>
-  <div class="col"><a class="card h-100 text-decoration-none" href="/docs/observe/"><div class="card-body"><h5 class="card-title">Observe</h5><p class="card-text small">Metrics, logs, traces, dashboards, and alerting via VictoriaMetrics + Grafana.</p></div></a></div>
-  <div class="col"><a class="card h-100 text-decoration-none" href="/docs/configure/"><div class="card-body"><h5 class="card-title">Configure</h5><p class="card-text small">Realm setup, IdP integration, branding, dashboard, CORS / CSP, locale whitelist.</p></div></a></div>
+  <div class="col"><a class="card h-100 text-decoration-none" href="/docs/core/"><div class="card-body"><h5 class="card-title">Core</h5><p class="card-text small">Project overview and integration architecture — how the components fit together.</p></div></a></div>
+  <div class="col"><a class="card h-100 text-decoration-none" href="/docs/deploy/"><div class="card-body"><h5 class="card-title">Deployment</h5><p class="card-text small">Install GENIE.AI on Docker Compose, Swarm, or a remote GPU node.</p></div></a></div>
+  <div class="col"><a class="card h-100 text-decoration-none" href="/docs/operate/"><div class="card-body"><h5 class="card-title">Operations</h5><p class="card-text small">Run a live deployment — backup, scaling, updates, troubleshooting.</p></div></a></div>
+  <div class="col"><a class="card h-100 text-decoration-none" href="/docs/observe/"><div class="card-body"><h5 class="card-title">Observability</h5><p class="card-text small">Metrics, logs, traces, dashboards, and alerting via VictoriaMetrics + Grafana.</p></div></a></div>
+  <div class="col"><a class="card h-100 text-decoration-none" href="/docs/configure/"><div class="card-body"><h5 class="card-title">Configuration</h5><p class="card-text small">Realm setup, IdP integration, branding, dashboard, CORS / CSP, locale whitelist.</p></div></a></div>
   <div class="col"><a class="card h-100 text-decoration-none" href="/docs/architecture/"><div class="card-body"><h5 class="card-title">Architecture</h5><p class="card-text small">C4 context/container view, auth flows, trust boundaries, OPEA contract.</p></div></a></div>
-  <div class="col"><a class="card h-100 text-decoration-none" href="/docs/rag-pipeline/"><div class="card-body"><h5 class="card-title">RAG pipeline</h5><p class="card-text small">Embedding, retrieval, reranking, generation, translation — every stage.</p></div></a></div>
+  <div class="col"><a class="card h-100 text-decoration-none" href="/docs/rag-pipeline/"><div class="card-body"><h5 class="card-title">RAG Pipeline</h5><p class="card-text small">Embedding, retrieval, reranking, generation, translation — every stage.</p></div></a></div>
   <div class="col"><a class="card h-100 text-decoration-none" href="/docs/knowledge-base/"><div class="card-body"><h5 class="card-title">Knowledge base</h5><p class="card-text small">Ingestion, taxonomy, document lifecycle, content quality guidance.</p></div></a></div>
   <div class="col"><a class="card h-100 text-decoration-none" href="/docs/reference/"><div class="card-body"><h5 class="card-title">Reference</h5><p class="card-text small">Single-source env-var table, HTTP API, OPEA extensions, glossary.</p></div></a></div>
   <div class="col"><a class="card h-100 text-decoration-none" href="/docs/frontend/"><div class="card-body"><h5 class="card-title">Frontend</h5><p class="card-text small">Vue 3 SPA — auth flow, chat UX, sidebar, admin dashboard, theming.</p></div></a></div>
@@ -111,6 +111,13 @@ see [Environment variables](/docs/reference/env-vars/).
 
 This site is rebuilt continuously. Major waves in the past 48 hours:
 
+- **2026-10-26**: link repair — the homepage link to the development guide
+  and the deployment card now point at the pages that exist; the links to
+  the moved glossary, source-tree analysis and tracing pages use their
+  current addresses; the link texts name the sections as they are titled
+  today; the address of a renamed section no longer depends on the Hugo
+  version; a CI check fails on a broken link, on a link that only works
+  through a redirect, and on a section with a version-dependent address.
 - **2026-09-29**: Wave 36 — fix broken cross-section refs + callout shortcode.
 - **2026-09-29**: Wave 39 — 7 dispersion fixes (labelling + ingestion-log + api-contracts consolidations + locale-whitelist + mode fixes).
 - **2026-09-29**: Wave 41 — grader P0+P1 fixes (alias mechanism + content accuracy).

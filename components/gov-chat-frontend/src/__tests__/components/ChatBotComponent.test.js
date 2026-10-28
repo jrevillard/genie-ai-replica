@@ -6,17 +6,21 @@
  * Covers: empty render, user message submission, input clearing,
  * loading state, and error state.
  */
-const { mount } = require('@vue/test-utils');
+const { mount, flushPromises } = require('@vue/test-utils');
 const { createStore } = require('vuex');
 const { createAuthenticatedState } = require('../fixtures/store-state');
+// The real en locale — the wording the notification must end up showing.
+const enChatbot = require('../../i18n/locales/en.js').default.chatbot;
 
 // ---------------------------------------------------------------------------
 // Service mocks (closure-based refs for per-test control)
 // ---------------------------------------------------------------------------
 
 let capturedCallbacks = {};
+let capturedQueryData = null;
 
 const mockSubmitQueryStream = jest.fn((_queryData, callbacks) => {
+  capturedQueryData = _queryData;
   capturedCallbacks = callbacks;
   return { abort: jest.fn(), signal: {} };
 });
@@ -74,7 +78,8 @@ jest.mock('../../config-loader', () => ({
   default: jest.fn().mockResolvedValue({
     features: { chat: { quickHelp: { buttons: [] } } }
   }),
-  config: {}
+  config: { app: { icon: { type: 'file', value: '/config/logo-genie-ai.jpeg' } } },
+  defaults: { app: { icon: { type: 'file', value: '/config/logo-genie-ai.jpeg' } } }
 }));
 
 // Mock heavy libraries
@@ -117,6 +122,9 @@ jest.mock('@lucide/vue', () => ({
 // Component import (after mocks)
 // ---------------------------------------------------------------------------
 const ChatBotComponent = require('../../components/ChatBotComponent.vue').default;
+const statusModule = require('../../store/modules/status.js').default;
+const conversationModule = require('../../store/modules/conversation.js').default;
+const { rehydrateConversation, STORAGE_KEY } = require('../../store/modules/conversation.js');
 
 // ---------------------------------------------------------------------------
 // Store factory
@@ -126,25 +134,29 @@ function createChatBotStore(stateOverrides = {}) {
   const state = createAuthenticatedState(stateOverrides);
   return createStore({
     state: () => state,
+    // The real store registers auth non-namespaced, so its getters sit
+    // at the root — the save paths read currentUser through them.
     getters: {
-      currentUser: (s) => s.user,
-      isAuthenticated: (s) => s.isAuthenticated
-    },
-    mutations: {
-      SET_USER(s, user) {
-        s.user = user;
-      }
-    },
-    actions: {
-      logout: jest.fn().mockResolvedValue(undefined)
+      currentUser: (s) => s.user
     },
     modules: {
+      // The component commits reachability to the shared status module;
+      // the real mutations are used so the tests assert state outcomes.
+      status: {
+        ...statusModule,
+        state: () => ({ ...statusModule.state })
+      },
+      // The component renders from the store-owned conversation.
+      conversation: {
+        ...conversationModule,
+        state: () => conversationModule.state()
+      },
       chatHistory: {
         namespaced: true,
         state: () => state.chatHistory,
         getters: {
           getAllFolders: (s) => s.folders,
-          getChatById: () => (/* chatId */) => null
+          getChatById: (s) => (chatId) => (s.chats || []).find((c) => c.id === chatId) || null
         },
         actions: {
           createChat: jest.fn().mockResolvedValue({}),
@@ -159,8 +171,9 @@ function createChatBotStore(stateOverrides = {}) {
 // Mount helper
 // ---------------------------------------------------------------------------
 
-function createChatBotWrapper(storeOverrides = {}) {
+function createChatBotWrapper(storeOverrides = {}, { rehydrate = false } = {}) {
   const store = createChatBotStore(storeOverrides);
+  if (rehydrate) rehydrateConversation(store.state.conversation);
   return mount(ChatBotComponent, {
     global: {
       plugins: [store],
@@ -204,6 +217,7 @@ describe('ChatBotComponent', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     capturedCallbacks = {};
+    capturedQueryData = null;
   });
 
   // -----------------------------------------------------------------------
@@ -215,16 +229,76 @@ describe('ChatBotComponent', () => {
       expect(wrapper.find('[data-test-id="chatbot-container"]').exists()).toBe(true);
     });
 
-    it('displays the welcome message in chatMessages', () => {
+    it('the welcome overlay does not cover a conversation in progress', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
-      const botMsgs = vm.chatMessages.filter((m) => m.sender === 'bot');
+
+      // Fresh mount: no question asked yet — the welcome overlay is the view.
+      expect(wrapper.find('.quick-help-overlay').exists()).toBe(true);
+
+      // A question in the store (the conversation survived a navigation):
+      // the overlay must get out of the way.
+      vm.$store.commit('conversation/appendUserMessage', {
+        sender: 'user',
+        content: 'asked something',
+        isSaved: false
+      });
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.find('.quick-help-overlay').exists()).toBe(false); // the overlay must not cover the conversation
+      expect(wrapper.find('.chat-input').exists()).toBe(true); // the conversation composer is the view
+    });
+
+    it('opens on the welcome message in the conversation transcript', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const botMsgs = vm.openMessages.filter((m) => m.sender === 'bot');
       expect(botMsgs.length).toBeGreaterThanOrEqual(1);
     });
 
-    it('renders a message input area', () => {
+    it('renders a message input area', async () => {
+      // The default config-loader mock returns an empty buttons list,
+      // so `composerEntry` is null and the welcome composer is gated
+      // out — the v-else chat composer then renders instead. Install
+      // a non-empty just-chat entry so the welcome composer is the
+      // input that lives in the DOM here, mirroring production.
+      const configLoader = require('../../config-loader');
+      configLoader.default.mockResolvedValue({
+        features: {
+          chat: {
+            quickHelp: {
+              buttons: [
+                {
+                  id: 'just-chat',
+                  title: { en: 'Just Chat' },
+                  icon: { type: 'file', value: '/config/quickhelp/just-chat.svg' },
+                  category: null,
+                  placement: 'composer'
+                },
+                {
+                  id: 'one',
+                  title: { en: 'One' },
+                  icon: { type: 'file', value: '/config/quickhelp/one.svg' },
+                  category: 'cat-1'
+                }
+              ]
+            }
+          }
+        }
+      });
       const wrapper = createChatBotWrapper();
-      expect(wrapper.find('input').exists() || wrapper.find('.ds-input').exists()).toBe(true);
+      await flushPromises();
+      // The composer slots between the welcome panel and the chat input
+      // area via v-if/v-else — only one is in the DOM at a time. The
+      // welcome screen is the default rendered state, so the welcome
+      // composer is the input that lives in the DOM here.
+      expect(
+        wrapper.find('input').exists() || wrapper.find('.ds-input').exists() || wrapper.find('.chat-composer').exists()
+      ).toBe(true);
+      // Restore the empty default for the rest of the suite.
+      configLoader.default.mockResolvedValue({
+        features: { chat: { quickHelp: { buttons: [] } } }
+      });
     });
   });
 
@@ -242,7 +316,7 @@ describe('ChatBotComponent', () => {
       await vm.sendMessage();
       await wrapper.vm.$nextTick();
 
-      const userMsg = vm.chatMessages.find((m) => m.sender === 'user' && m.content === 'Hello, can you help me?');
+      const userMsg = vm.openMessages.find((m) => m.sender === 'user' && m.content === 'Hello, can you help me?');
       expect(userMsg).toBeDefined();
     });
 
@@ -254,7 +328,7 @@ describe('ChatBotComponent', () => {
       await vm.sendMessage();
       await wrapper.vm.$nextTick();
 
-      const botMsg = vm.chatMessages.filter((m) => m.sender === 'bot');
+      const botMsg = vm.openMessages.filter((m) => m.sender === 'bot');
       // Welcome msg + streaming placeholder
       expect(botMsg.length).toBeGreaterThanOrEqual(2);
     });
@@ -295,7 +369,7 @@ describe('ChatBotComponent', () => {
       expect(vm.isStreaming).toBe(true);
     });
 
-    it('resets isStreaming when onDone is called', async () => {
+    it('resets isStreaming and stamps the query id when the stream completes', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
@@ -327,7 +401,7 @@ describe('ChatBotComponent', () => {
       capturedCallbacks.onDone({ queryId: 'q-1', translationFailed: true });
       await wrapper.vm.$nextTick();
 
-      const bot = vm.chatMessages[vm.chatMessages.length - 1];
+      const bot = vm.openMessages[vm.openMessages.length - 1];
       expect(bot.translationFailed).toBe(true);
       // The chat pipeline worked; only the translator did not. Reporting the
       // system as down here would be a false status and a false alarm.
@@ -345,7 +419,7 @@ describe('ChatBotComponent', () => {
       capturedCallbacks.onDone({ queryId: 'q-1', translationFailed: false });
       await wrapper.vm.$nextTick();
 
-      expect(vm.chatMessages[vm.chatMessages.length - 1].translationFailed).toBe(false);
+      expect(vm.openMessages[vm.openMessages.length - 1].translationFailed).toBe(false);
     });
 
     it('shows the notice on the message that failed to translate', async () => {
@@ -359,7 +433,7 @@ describe('ChatBotComponent', () => {
       capturedCallbacks.onDone({ queryId: 'q-1', translationFailed: true });
       await wrapper.vm.$nextTick();
 
-      expect(wrapper.find('.translation-flag').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="translation-failed"]').exists()).toBe(true);
     });
   });
 
@@ -380,10 +454,13 @@ describe('ChatBotComponent', () => {
 
       expect(vm.isStreaming).toBe(false);
       expect(vm.systemStatus.online).toBe(false);
-      expect(vm.systemStatus.errorMessage).toBe('Stream failed');
+      // A transport error carries no user-facing text of its own — the
+      // turn shows the localized interruption message (the i18n stub
+      // resolves the caller-supplied fallback).
+      expect(vm.systemStatus.errorMessage).toBe(enChatbot.streamingError);
       // Bot message should have error content
-      const streamingMsg = vm.chatMessages[vm.chatMessages.length - 1];
-      expect(streamingMsg.content).toMatch(/error|failed|unavailable/i);
+      const streamingMsg = vm.openMessages[vm.openMessages.length - 1];
+      expect(streamingMsg.content).toMatch(/interrupted|error|failed/i);
     });
 
     it('calls notificationService.error with message on stream error', async () => {
@@ -404,6 +481,15 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
+      // A previous turn genuinely took the deployment down, so the state
+      // this test asserts on is a restored one, not the pristine default.
+      vm.newMessage = 'First, an outage';
+      await vm.sendMessage();
+      await wrapper.vm.$nextTick();
+      capturedCallbacks.onError(new Error('Backend crashed'));
+      await wrapper.vm.$nextTick();
+      expect(vm.systemStatus.online).toBe(false);
+
       vm.newMessage = 'Trigger refusal';
       await vm.sendMessage();
       await wrapper.vm.$nextTick();
@@ -423,8 +509,76 @@ describe('ChatBotComponent', () => {
       // by the answer bubble and the notification.
       expect(vm.systemStatus.errorMessage).toBe('');
       expect(mockNotificationError).toHaveBeenCalledWith(expect.stringContaining('unsupportedLanguage'));
-      const streamingMsg = vm.chatMessages[vm.chatMessages.length - 1];
-      expect(streamingMsg.content).toContain('unsupportedLanguage');
+      const streamingMsg = vm.openMessages[vm.openMessages.length - 1];
+      // The transcript keeps the reason (the errored bubble renders the
+      // fixed failure text and retry; the toast and the status line are
+      // what the user reads), as the en locale writes it.
+      expect(streamingMsg.content).toBe(enChatbot.unsupportedLanguage);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Restored failures — the reload path
+  // -----------------------------------------------------------------------
+  describe('restored failures', () => {
+    const restoredPayload = {
+      openId: 'open',
+      conversations: {
+        open: {
+          messages: [
+            { sender: 'user', content: 'the failed question' },
+            {
+              sender: 'bot',
+              content: 'the failed answer',
+              isError: true,
+              errorKey: 'chatbot.unsupportedLanguage',
+              timestamp: '2026-01-01T00:00:01.000Z'
+            }
+          ],
+          selectedContextItems: [],
+          lastSavedState: { messages: [], contextItems: [] },
+          conversationId: null,
+          title: '',
+          isStreaming: false,
+          streamingQueryId: null,
+          relatedDocuments: []
+        }
+      }
+    };
+
+    afterEach(() => {
+      sessionStorage.clear();
+    });
+
+    it('a failure restored from storage does not toast again', async () => {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(restoredPayload));
+      const wrapper = createChatBotWrapper({}, { rehydrate: true });
+      await wrapper.vm.$nextTick();
+
+      // The dying session already surfaced this failure. An unrelated
+      // mutation must not re-notify — not even the stale reason the
+      // restored turn still carries.
+      wrapper.vm.$store.commit('conversation/addContextItem', { source: 'quickHelp', label: 'x' });
+      await wrapper.vm.$nextTick();
+
+      expect(mockNotificationError).not.toHaveBeenCalled();
+    });
+
+    it('a fresh failure after a restored one still toasts', async () => {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(restoredPayload));
+      const wrapper = createChatBotWrapper({}, { rehydrate: true });
+      await wrapper.vm.$nextTick();
+
+      // The seed guards the restored turn, not the view: a new failure
+      // after the reload is announced as any other.
+      wrapper.vm.newMessage = 'A new question';
+      await wrapper.vm.sendMessage();
+      await wrapper.vm.$nextTick();
+      capturedCallbacks.onError(new Error('Stream failed'));
+      await wrapper.vm.$nextTick();
+
+      expect(mockNotificationError).toHaveBeenCalledTimes(1);
+      expect(mockNotificationError).toHaveBeenCalledWith(expect.stringContaining('streamingError'));
     });
   });
 
@@ -438,7 +592,6 @@ describe('ChatBotComponent', () => {
       expect(events).toContain('chat-deleted');
       expect(events).toContain('load-conversation');
       expect(events).toContain('treeNodeSelected');
-      expect(events).toContain('open-chat');
     });
 
     it('unsubscribes from specific eventBus events in beforeUnmount', () => {
@@ -448,55 +601,39 @@ describe('ChatBotComponent', () => {
       expect(unsubscribedEvents).toContain('chat-deleted');
       expect(unsubscribedEvents).toContain('load-conversation');
       expect(unsubscribedEvents).toContain('treeNodeSelected');
-      expect(unsubscribedEvents).toContain('open-chat');
     });
   });
 
   // -----------------------------------------------------------------------
   // Subtask 3a: SSE streaming behavior
   // -----------------------------------------------------------------------
+  describe('Conversation V1 — reload restores metadata', () => {
+    it('restores per-message metadata (confidence, groundedness, feedback) from the conversation payload', async () => {
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation.mockResolvedValueOnce({
+        messages: [
+          { sender: 'user', content: 'q', timestamp: '2026-10-23T10:00:00Z' },
+          {
+            sender: 'assistant',
+            content: 'answer',
+            timestamp: '2026-10-23T10:00:05Z',
+            queryId: 'q-1',
+            metadata: { confidence_score: 0.87, is_grounded: true, userFeedback: 'up' }
+          }
+        ]
+      });
+      const wrapper = createChatBotWrapper();
+      await flushPromises();
+      await wrapper.vm.loadExistingConversation('conv-1');
+      await flushPromises();
+      const msg = wrapper.vm.openMessages.find((m) => m.sender === 'bot' && m.content === 'answer');
+      expect(msg.confidenceScore).toBe(0.87);
+      expect(msg.isGrounded).toBe(true);
+      expect(msg.userFeedback).toBe('up');
+    });
+  });
+
   describe('Subtask 3a — SSE streaming', () => {
-    it('sets isStreaming state to true when stream starts', async () => {
-      const wrapper = createChatBotWrapper();
-      const vm = wrapper.vm;
-
-      vm.newMessage = 'Start streaming test';
-      await vm.sendMessage();
-      await wrapper.vm.$nextTick();
-
-      expect(vm.isStreaming).toBe(true);
-      expect(mockSubmitQueryStream).toHaveBeenCalled();
-    });
-
-    it('stores streamController reference when stream starts', async () => {
-      const wrapper = createChatBotWrapper();
-      const vm = wrapper.vm;
-
-      vm.newMessage = 'Controller test';
-      await vm.sendMessage();
-      await wrapper.vm.$nextTick();
-
-      expect(vm.streamController).toBeDefined();
-      expect(typeof vm.streamController.abort).toBe('function');
-    });
-
-    it('resets isStreaming and streamController when stream completes', async () => {
-      const wrapper = createChatBotWrapper();
-      const vm = wrapper.vm;
-
-      vm.newMessage = 'Completion test';
-      await vm.sendMessage();
-      await wrapper.vm.$nextTick();
-
-      // Simulate stream completion
-      capturedCallbacks.onDone({ queryId: 'q-123' });
-      await wrapper.vm.$nextTick();
-
-      expect(vm.isStreaming).toBe(false);
-      expect(vm.streamController).toBeNull();
-      expect(vm.streamingQueryId).toBe('q-123');
-    });
-
     it('aborts previous stream when new message is sent', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
@@ -504,7 +641,7 @@ describe('ChatBotComponent', () => {
       // First stream
       vm.newMessage = 'First message';
       await vm.sendMessage();
-      const firstController = vm.streamController;
+      const firstController = mockSubmitQueryStream.mock.results[0].value;
       await wrapper.vm.$nextTick();
 
       // Second stream (should abort first)
@@ -513,21 +650,6 @@ describe('ChatBotComponent', () => {
       await wrapper.vm.$nextTick();
 
       expect(firstController.abort).toHaveBeenCalled();
-      expect(vm.streamController).not.toBe(firstController);
-    });
-
-    it('sets streamingQueryId on successful stream completion', async () => {
-      const wrapper = createChatBotWrapper();
-      const vm = wrapper.vm;
-
-      vm.newMessage = 'Query ID test';
-      await vm.sendMessage();
-      await wrapper.vm.$nextTick();
-
-      capturedCallbacks.onDone({ queryId: 'test-query-456' });
-      await wrapper.vm.$nextTick();
-
-      expect(vm.streamingQueryId).toBe('test-query-456');
     });
   });
 
@@ -550,10 +672,10 @@ describe('ChatBotComponent', () => {
       });
       await wrapper.vm.$nextTick();
 
-      const lastBot = vm.chatMessages[vm.chatMessages.length - 1];
+      const lastBot = vm.openMessages[vm.openMessages.length - 1];
       expect(lastBot.isGrounded).toBe(false);
       // Ungrounded responses show the warning flag, not the confidence bar.
-      expect(wrapper.find('.grounding-flag').exists()).toBe(true);
+      expect(wrapper.find('.answer-warning').exists()).toBe(true);
       expect(wrapper.find('.confidence-score').exists()).toBe(false);
     });
 
@@ -572,11 +694,16 @@ describe('ChatBotComponent', () => {
       });
       await wrapper.vm.$nextTick();
 
-      const lastBot = vm.chatMessages[vm.chatMessages.length - 1];
+      // The stream completes so the turn carries its queryId — the score
+      // renders inside the actions row, which the queryId gates.
+      capturedCallbacks.onDone({ queryId: 'q-conf-1' });
+      await wrapper.vm.$nextTick();
+
+      const lastBot = vm.openMessages[vm.openMessages.length - 1];
       expect(lastBot.isGrounded).toBe(true);
       expect(lastBot.confidenceScore).toBe(0.92);
-      expect(wrapper.find('.confidence-score').exists()).toBe(true);
-      expect(wrapper.find('.grounding-flag').exists()).toBe(false);
+      expect(wrapper.find('.answer-actions .confidence-score').exists()).toBe(true);
+      expect(wrapper.find('.answer-warning').exists()).toBe(false);
     });
   });
 
@@ -591,14 +718,17 @@ describe('ChatBotComponent', () => {
       vm.newMessage = 'Network error test';
       await vm.sendMessage();
       await wrapper.vm.$nextTick();
-
-      // Simulate network error
+      // The turn was answering before it died: a response time was known.
+      capturedCallbacks.onMetadata({ responseTime: 250 });
       capturedCallbacks.onError(new Error('Network request failed'));
       await wrapper.vm.$nextTick();
 
       expect(vm.isStreaming).toBe(false);
       expect(vm.systemStatus.online).toBe(false);
-      expect(vm.systemStatus.errorMessage).toBe('Network request failed');
+      expect(vm.systemStatus.errorMessage).toBe(enChatbot.streamingError);
+      // The timing described the answer that never came; the pill must
+      // not keep reporting it.
+      expect(vm.systemStatus.lastResponseTime).toBeNull();
     });
 
     it('displays error message in bot message on stream failure', async () => {
@@ -609,12 +739,19 @@ describe('ChatBotComponent', () => {
       await vm.sendMessage();
       await wrapper.vm.$nextTick();
 
-      capturedCallbacks.onError(new Error('Stream connection lost'));
+      // Server error frames carry their own message — shown verbatim.
+      const serverError = new Error('Stream connection lost');
+      serverError.fromServer = true;
+      capturedCallbacks.onError(serverError);
       await wrapper.vm.$nextTick();
 
-      const lastBotMessage = vm.chatMessages[vm.chatMessages.length - 1];
+      const lastBotMessage = vm.openMessages[vm.openMessages.length - 1];
       expect(lastBotMessage.sender).toBe('bot');
-      expect(lastBotMessage.content).toMatch(/error|unavailable|failed/i);
+      expect(lastBotMessage.content).toBe('Stream connection lost');
+      // The prose is the message's content — an errored turn renders the
+      // fixed failure text and retry, so the status line and the toast
+      // carry it; the toast stays the generic failure (no i18n key).
+      expect(mockNotificationError).toHaveBeenCalledWith(expect.stringContaining('streamingError'));
     });
 
     it('resets isStreaming on stream error', async () => {
@@ -631,7 +768,6 @@ describe('ChatBotComponent', () => {
       await wrapper.vm.$nextTick();
 
       expect(vm.isStreaming).toBe(false);
-      expect(vm.streamController).toBeNull();
     });
 
     it('shows notification on streaming error', async () => {
@@ -1233,9 +1369,9 @@ describe('ChatBotComponent', () => {
       const vm = wrapper.vm;
 
       // Misconfig symptom: a context item exists but resolved to no labels
-      vm.selectedContextItems = [
+      vm.$store.commit('conversation/setContextItems', [
         { service: 'Broken', serviceKey: 'Broken', serviceLabels: null, source: 'quickHelp', selected: true }
-      ];
+      ]);
 
       const result = vm.checkContextConfig({
         categoryLabel: null,
@@ -1250,7 +1386,7 @@ describe('ChatBotComponent', () => {
       const vm = wrapper.vm;
 
       // No context items selected — unfiltered query is legitimate
-      vm.selectedContextItems = [];
+      vm.$store.commit('conversation/setContextItems', []);
       const result = vm.checkContextConfig({
         categoryLabel: null,
         serviceLabels: []
@@ -1266,9 +1402,9 @@ describe('ChatBotComponent', () => {
       // Make the user an admin (default user has roles: ['user'])
       wrapper.vm.$store.commit('SET_USER', { ...vm.$store.getters.currentUser, roles: ['admin'] });
 
-      vm.selectedContextItems = [
+      vm.$store.commit('conversation/setContextItems', [
         { service: 'Tomato', serviceKey: 'Tomato', serviceLabels: ['Tomato'], source: 'quickHelp' }
-      ];
+      ]);
 
       const result = vm.checkContextConfig({
         categoryLabel: null,
@@ -1283,7 +1419,7 @@ describe('ChatBotComponent', () => {
       const vm = wrapper.vm;
 
       // Quick Help item (has serviceLabels) + sidebar item (no serviceLabels, uses serviceKey)
-      vm.selectedContextItems = [
+      vm.$store.commit('conversation/setContextItems', [
         {
           service: 'Grow',
           serviceKey: 'Tomato',
@@ -1292,7 +1428,7 @@ describe('ChatBotComponent', () => {
           selected: true
         },
         { service: 'Tomate', serviceKey: 'Tomato', serviceLabels: null, source: 'sidebar', selected: true }
-      ];
+      ]);
 
       // Build the query payload via the public sendMessage path would require mocking
       // the service; instead, exercise the flatMap logic directly by inspecting the
@@ -1316,13 +1452,13 @@ describe('ChatBotComponent', () => {
       const vm = wrapper.vm;
 
       // Add a test message
-      vm.chatMessages.push({
+      vm.openMessages.push({
         sender: 'bot',
         content: 'Test bot message',
         queryId: 'test-q-123'
       });
 
-      vm.openFeedbackDialog(vm.chatMessages.length - 1);
+      vm.openFeedbackDialog(vm.openMessages.length - 1);
 
       expect(vm.feedbackDialog.visible).toBe(true);
       expect(vm.feedbackDialog.message).toBeDefined();
@@ -1385,7 +1521,7 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.chatMessages.push({
+      vm.openMessages.push({
         sender: 'user',
         content: 'Test user message',
         timestamp: new Date().toISOString()
@@ -1401,7 +1537,7 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.chatMessages.push({
+      vm.openMessages.push({
         sender: 'user',
         content: 'Export test message',
         timestamp: new Date().toISOString()
@@ -1418,10 +1554,10 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.chatMessages = [
+      vm.$store.commit('conversation/setMessages', [
         { sender: 'user', content: 'User message', timestamp: new Date().toISOString() },
         { sender: 'bot', content: 'Bot response', timestamp: new Date().toISOString() }
-      ];
+      ]);
 
       vm.exportDialog.filename = 'test-export';
 
@@ -1442,7 +1578,7 @@ describe('ChatBotComponent', () => {
         throw new Error('PDF generation failed');
       });
 
-      vm.chatMessages = [{ sender: 'bot', content: 'Test' }];
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Test' }]);
       vm.exportDialog.filename = 'error-test';
 
       vm.exportChatToPDF();
@@ -1464,7 +1600,7 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.chatMessages = [{ sender: 'bot', content: 'Test' }];
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Test' }]);
       vm.exportDialog.filename = 'test-without-extension';
 
       vm.exportChatToPDF();
@@ -1483,10 +1619,10 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.conversationId = null;
+      vm.$store.commit('conversation/setConversationId', null);
       vm.currentChatId = null;
-      vm.chatMessages = [{ sender: 'bot', content: 'Welcome', isSaved: true }];
-      vm.selectedContextItems = [];
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Welcome', isSaved: true }]);
+      vm.$store.commit('conversation/setContextItems', []);
 
       expect(vm.hasUnsavedChanges()).toBe(false);
     });
@@ -1495,12 +1631,12 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.conversationId = null;
+      vm.$store.commit('conversation/setConversationId', null);
       vm.currentChatId = null;
-      vm.chatMessages = [
+      vm.$store.commit('conversation/setMessages', [
         { sender: 'bot', content: 'Welcome', isSaved: true },
         { sender: 'user', content: 'User message', isSaved: false }
-      ];
+      ]);
 
       expect(vm.hasUnsavedChanges()).toBe(true);
     });
@@ -1509,10 +1645,10 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.conversationId = null;
+      vm.$store.commit('conversation/setConversationId', null);
       vm.currentChatId = null;
-      vm.chatMessages = [{ sender: 'bot', content: 'Welcome', isSaved: true }];
-      vm.selectedContextItems = [{ service: 'Test Service', category: 'general' }];
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Welcome', isSaved: true }]);
+      vm.$store.commit('conversation/setContextItems', [{ service: 'Test Service', category: 'general' }]);
 
       expect(vm.hasUnsavedChanges()).toBe(true);
     });
@@ -1521,17 +1657,17 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.conversationId = 'existing-conv-123';
+      vm.$store.commit('conversation/setConversationId', 'existing-conv-123');
       vm.currentChatId = 'existing-conv-123';
-      vm.lastSavedState = {
-        messages: [{ sender: 'bot', content: 'Saved bot message', isSaved: true }],
-        contextItems: []
-      };
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Saved bot message', isSaved: true }]);
+      vm.$store.commit('conversation/setContextItems', []);
+      // Snapshot: the saved state IS this state; the writes below move the live one.
+      vm.$store.commit('conversation/setSavedState');
 
-      vm.chatMessages = [
+      vm.$store.commit('conversation/setMessages', [
         { sender: 'bot', content: 'Saved bot message', isSaved: true },
         { sender: 'user', content: 'New user message', isSaved: false }
-      ];
+      ]);
 
       expect(vm.hasUnsavedChanges()).toBe(true);
     });
@@ -1540,15 +1676,15 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.conversationId = 'conv-456';
+      vm.$store.commit('conversation/setConversationId', 'conv-456');
       vm.currentChatId = 'conv-456';
-      vm.lastSavedState = {
-        messages: [{ sender: 'bot', content: 'Saved', isSaved: true }],
-        contextItems: [{ service: 'Old Service', category: 'general' }]
-      };
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Saved', isSaved: true }]);
+      vm.$store.commit('conversation/setContextItems', [{ service: 'Old Service', category: 'general' }]);
+      // Snapshot: the saved state IS this state; the writes below move the live one.
+      vm.$store.commit('conversation/setSavedState');
 
-      vm.chatMessages = [{ sender: 'bot', content: 'Saved', isSaved: true }];
-      vm.selectedContextItems = [{ service: 'New Service', category: 'general' }];
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Saved', isSaved: true }]);
+      vm.$store.commit('conversation/setContextItems', [{ service: 'New Service', category: 'general' }]);
 
       expect(vm.hasUnsavedChanges()).toBe(true);
     });
@@ -1557,18 +1693,18 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.conversationId = 'conv-789';
+      vm.$store.commit('conversation/setConversationId', 'conv-789');
       vm.currentChatId = 'conv-789';
-      vm.lastSavedState = {
-        messages: [{ sender: 'bot', content: 'Saved', isSaved: true }],
-        contextItems: [
-          { service: 'Service 1', category: 'general' },
-          { service: 'Service 2', category: 'general' }
-        ]
-      };
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Saved', isSaved: true }]);
+      vm.$store.commit('conversation/setContextItems', [
+        { service: 'Service 1', category: 'general' },
+        { service: 'Service 2', category: 'general' }
+      ]);
+      // Snapshot: the saved state IS this state; the writes below move the live one.
+      vm.$store.commit('conversation/setSavedState');
 
-      vm.chatMessages = [{ sender: 'bot', content: 'Saved', isSaved: true }];
-      vm.selectedContextItems = [{ service: 'Service 1', category: 'general' }];
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Saved', isSaved: true }]);
+      vm.$store.commit('conversation/setContextItems', [{ service: 'Service 1', category: 'general' }]);
 
       expect(vm.hasUnsavedChanges()).toBe(true);
     });
@@ -1577,21 +1713,21 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.conversationId = 'conv-saved-123';
+      vm.$store.commit('conversation/setConversationId', 'conv-saved-123');
       vm.currentChatId = 'conv-saved-123';
-      vm.lastSavedState = {
-        messages: [
-          { sender: 'bot', content: 'Saved bot', isSaved: true },
-          { sender: 'user', content: 'Saved user', isSaved: true }
-        ],
-        contextItems: [{ service: 'Saved Service', category: 'saved' }]
-      };
-
-      vm.chatMessages = [
+      vm.$store.commit('conversation/setMessages', [
         { sender: 'bot', content: 'Saved bot', isSaved: true },
         { sender: 'user', content: 'Saved user', isSaved: true }
-      ];
-      vm.selectedContextItems = [{ service: 'Saved Service', category: 'saved' }];
+      ]);
+      vm.$store.commit('conversation/setContextItems', [{ service: 'Saved Service', category: 'saved' }]);
+      // Snapshot: the saved state IS this state; the writes below move the live one.
+      vm.$store.commit('conversation/setSavedState');
+
+      vm.$store.commit('conversation/setMessages', [
+        { sender: 'bot', content: 'Saved bot', isSaved: true },
+        { sender: 'user', content: 'Saved user', isSaved: true }
+      ]);
+      vm.$store.commit('conversation/setContextItems', [{ service: 'Saved Service', category: 'saved' }]);
 
       expect(vm.hasUnsavedChanges()).toBe(false);
     });
@@ -1600,14 +1736,16 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.conversationId = 'conv-bot-123';
+      vm.$store.commit('conversation/setConversationId', 'conv-bot-123');
       vm.currentChatId = 'conv-bot-123';
-      vm.lastSavedState = {
-        messages: [{ sender: 'bot', content: 'Old bot', isSaved: true }],
-        contextItems: []
-      };
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Old bot', isSaved: true }]);
+      vm.$store.commit('conversation/setContextItems', []);
+      // Snapshot: the saved state IS this state; the writes below move the live one.
+      vm.$store.commit('conversation/setSavedState');
 
-      vm.chatMessages = [{ sender: 'bot', content: 'New bot response', isSaved: false, queryId: 'new-query' }];
+      vm.$store.commit('conversation/setMessages', [
+        { sender: 'bot', content: 'New bot response', isSaved: false, queryId: 'new-query' }
+      ]);
 
       expect(vm.hasUnsavedChanges()).toBe(true);
     });
@@ -1616,15 +1754,15 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.conversationId = 'conv-empty-123';
+      vm.$store.commit('conversation/setConversationId', 'conv-empty-123');
       vm.currentChatId = 'conv-empty-123';
-      vm.lastSavedState = {
-        messages: [{ sender: 'bot', content: 'Saved', isSaved: true }],
-        contextItems: []
-      };
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Saved', isSaved: true }]);
+      vm.$store.commit('conversation/setContextItems', []);
+      // Snapshot: the saved state IS this state; the writes below move the live one.
+      vm.$store.commit('conversation/setSavedState');
 
-      vm.chatMessages = [{ sender: 'bot', content: 'Saved', isSaved: true }];
-      vm.selectedContextItems = [];
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Saved', isSaved: true }]);
+      vm.$store.commit('conversation/setContextItems', []);
 
       expect(vm.hasUnsavedChanges()).toBe(false);
     });
@@ -1633,17 +1771,671 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.conversationId = 'conv-prop-123';
+      vm.$store.commit('conversation/setConversationId', 'conv-prop-123');
       vm.currentChatId = 'conv-prop-123';
-      vm.lastSavedState = {
-        messages: [{ sender: 'bot', content: 'Saved', isSaved: true }],
-        contextItems: [{ service: 'Service Name', category: 'old-category' }]
-      };
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Saved', isSaved: true }]);
+      vm.$store.commit('conversation/setContextItems', [{ service: 'Service Name', category: 'old-category' }]);
+      // Snapshot: the saved state IS this state; the writes below move the live one.
+      vm.$store.commit('conversation/setSavedState');
 
-      vm.chatMessages = [{ sender: 'bot', content: 'Saved', isSaved: true }];
-      vm.selectedContextItems = [{ service: 'Service Name', category: 'new-category' }];
+      vm.$store.commit('conversation/setMessages', [{ sender: 'bot', content: 'Saved', isSaved: true }]);
+      vm.$store.commit('conversation/setContextItems', [{ service: 'Service Name', category: 'new-category' }]);
 
       expect(vm.hasUnsavedChanges()).toBe(true);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Saving stores every turn exactly once
+  // -----------------------------------------------------------------------
+  describe('Conversation saving', () => {
+    it('stores a repeated user message; only the first question rides as initialMessage', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.createConversation.mockResolvedValue({ _key: 'conv-dup' });
+      chatHistoryService.addMessage.mockClear();
+
+      vm.$store.commit('conversation/appendUserMessage', { sender: 'user', content: 'hello', isSaved: false });
+      vm.$store.commit('conversation/appendBotMessage', {
+        sender: 'bot',
+        content: 'Hi there',
+        queryId: 'q1',
+        isSaved: false
+      });
+      // Same text as the first question — matched by position, not
+      // content, or this turn would silently vanish from the transcript.
+      vm.$store.commit('conversation/appendUserMessage', { sender: 'user', content: 'hello', isSaved: false });
+
+      vm.saveChatDialog = { visible: true, title: 'Dup', folderId: 'default' };
+      await vm.handleSaveChat();
+
+      const payloads = chatHistoryService.addMessage.mock.calls.map((c) => c[0].content);
+      expect(payloads).toEqual(['Hi there', 'hello']);
+      const open = vm.openMessages;
+      // Index 0 is the factory's welcome turn; the first real user
+      // question rides as initialMessage and the repeated text at the
+      // end is still stored on its own.
+      expect(open[1].isSaved).toBe(true);
+      expect(open[3].isSaved).toBe(true);
+    });
+
+    it('does not persist a failed exchange', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.createConversation.mockResolvedValue({ _key: 'conv-fail' });
+      chatHistoryService.addMessage.mockClear();
+
+      vm.$store.commit('conversation/appendUserMessage', {
+        sender: 'user',
+        content: 'first ok question',
+        isSaved: false
+      });
+      vm.$store.commit('conversation/appendUserMessage', {
+        sender: 'user',
+        content: 'failed question',
+        isSaved: false
+      });
+      // The failed exchange exactly as failStream leaves it: the dead
+      // answer never earned a queryId, and its question carries the
+      // marker too — the pair leaves as a unit.
+      vm.$store.commit('conversation/appendBotMessage', {
+        sender: 'bot',
+        content: '',
+        isStreaming: false,
+        isError: true,
+        isSaved: false
+      });
+      vm.$store.commit('conversation/setMessageProperty', [2, 'isError', true]);
+
+      vm.saveChatDialog = { visible: true, title: 'F', folderId: 'default' };
+      await vm.handleSaveChat();
+
+      // The first question rides as initialMessage; the failed exchange —
+      // question and dead answer — is stored nowhere.
+      expect(chatHistoryService.addMessage).not.toHaveBeenCalled();
+    });
+
+    it('a failed first exchange hands initialMessage to the first answered one', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.createConversation.mockClear();
+      chatHistoryService.addMessage.mockClear();
+
+      // The first exchange died exactly as failStream leaves it: dead
+      // answer without a queryId, question carrying the marker.
+      vm.$store.commit('conversation/appendUserMessage', { sender: 'user', content: 'failed first', isSaved: false });
+      vm.$store.commit('conversation/appendBotMessage', {
+        sender: 'bot',
+        content: '',
+        isStreaming: false,
+        isError: true,
+        isSaved: false
+      });
+      vm.$store.commit('conversation/setMessageProperty', [1, 'isError', true]);
+      vm.$store.commit('conversation/appendUserMessage', {
+        sender: 'user',
+        content: 'second question',
+        isSaved: false
+      });
+      vm.$store.commit('conversation/appendBotMessage', {
+        sender: 'bot',
+        content: 'A2',
+        queryId: 'q2',
+        isSaved: false
+      });
+
+      vm.saveChatDialog = { visible: true, title: 'Order', folderId: 'default' };
+      await vm.handleSaveChat();
+
+      expect(chatHistoryService.createConversation.mock.calls[0][0].initialMessage).toBe('second question');
+      expect(chatHistoryService.addMessage.mock.calls.map((c) => c[0].content)).toEqual(['A2']);
+      // And the deliberately-unpersisted question cannot hold the
+      // unsaved-changes confirm open forever.
+      expect(vm.hasUnsavedChanges()).toBe(false);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // The request's message history
+  // -----------------------------------------------------------------------
+  describe('Request context', () => {
+    it('sends the welcome turn, failed exchanges and stub bot turns to no one', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      // A context chip routes the send through the conversation branch,
+      // the only one that carries a message history.
+      vm.$store.commit('conversation/addContextItem', {
+        service: 'Tomato',
+        serviceKey: 'Tomato',
+        serviceLabels: ['Tomato'],
+        source: 'quickHelp'
+      });
+
+      await vm.sendMessageFromText('First question');
+      capturedCallbacks.onError(new Error('boom'));
+      await wrapper.vm.$nextTick();
+
+      await vm.sendMessageFromText('Second question');
+
+      // The welcome greeting (no queryId) and the whole failed exchange —
+      // question and dead answer — stay out of the model's context; the
+      // live question is the only turn it sees.
+      expect(capturedQueryData.messages.map((m) => `${m.role}:${m.content}`)).toEqual(['user:Second question']);
+    });
+
+    it('the sidebar event routes through the handler; a re-click of the loading chat is swallowed', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      // The first load hangs until the test releases it: the re-click
+      // lands while the fetch is still in flight, the exact window the
+      // guard must close.
+      let resolveFirst;
+      chatHistoryService.getConversation.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve;
+          })
+      );
+      // The handler registered on the mocked eventBus in created() —
+      // drive it the way ChatFolders' emit does.
+      const loadHandler = mockEventBusOn.mock.calls.find((c) => c[0] === 'load-conversation')[1];
+
+      const first = loadHandler('conv-9');
+      await wrapper.vm.$nextTick();
+      expect(chatHistoryService.getConversation).toHaveBeenCalledTimes(1);
+
+      await loadHandler('conv-9');
+      expect(chatHistoryService.getConversation).toHaveBeenCalledTimes(1);
+
+      resolveFirst({ _key: 'conv-9', title: 'Loaded chat', messages: [] });
+      await first;
+      expect(vm.conversationId).toBe('conv-9');
+    });
+
+    it('a slower earlier load never overwrites a newer one', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      let resolveA;
+      chatHistoryService.getConversation
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveA = resolve;
+            })
+        )
+        .mockImplementationOnce(() => Promise.resolve({ _key: 'conv-B', title: 'B', messages: [] }));
+      const loadHandler = mockEventBusOn.mock.calls.find((c) => c[0] === 'load-conversation')[1];
+
+      const first = loadHandler('conv-A');
+      await loadHandler('conv-B');
+      expect(vm.conversationId).toBe('conv-B');
+      resolveA({ _key: 'conv-A', title: 'A', messages: [] });
+      await first;
+      // The stale response is dropped: the last click wins, not the
+      // last response.
+      expect(vm.conversationId).toBe('conv-B');
+      expect(vm.currentChatId).toBe('conv-B');
+    });
+
+    it('loading a conversation drops the previous one first — even when the fetch fails', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const dispatchSpy = jest.spyOn(vm.$store, 'dispatch');
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation.mockRejectedValueOnce(new Error('network down'));
+
+      vm.$store.commit('conversation/setConversationId', 'conv-old');
+      vm.$store.commit('conversation/addContextItem', { service: 'Old', serviceKey: 'old', source: 'quickHelp' });
+      vm.$store.commit('conversation/setRelatedDocuments', [{ id: 'doc-1', title: 'Old doc' }]);
+      vm.$store.commit('conversation/appendUserMessage', {
+        sender: 'user',
+        content: 'old transcript turn',
+        isSaved: true
+      });
+
+      // The real sidebar path: ChatFolders emits load-conversation.
+      await vm.loadExistingConversation('conv-9');
+
+      expect(dispatchSpy).toHaveBeenCalledWith('conversation/abortStream');
+      expect(vm.selectedContextItems).toEqual([]);
+      expect(vm.relatedDocuments).toEqual([]);
+      expect(vm.conversationId).toBeNull();
+      // The wholesale replacement includes the transcript: the old
+      // conversation's turns do not survive a failed load.
+      expect(vm.openMessages.some((m) => m.content === 'old transcript turn')).toBe(false);
+      // No split brain: the view's own target id is released with the
+      // store's, or saves would route into the previous conversation.
+      expect(vm.currentChatId).toBeNull();
+    });
+
+    it('a question sent during the fetch dies with the replaced conversation', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      let resolveLoad;
+      chatHistoryService.getConversation.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveLoad = resolve;
+          })
+      );
+      const loadHandler = mockEventBusOn.mock.calls.find((c) => c[0] === 'load-conversation')[1];
+      const loading = loadHandler('conv-9');
+      await wrapper.vm.$nextTick();
+
+      // The user sends into the cleared transcript while B is loading.
+      await vm.sendMessageFromText('mid-load question');
+      expect(vm.isStreaming).toBe(true);
+
+      resolveLoad({
+        _key: 'conv-9',
+        title: 'B',
+        messages: [
+          { sender: 'user', content: 'restored question', queryId: 'q1' },
+          { sender: 'bot', content: 'B answer', queryId: 'q2' }
+        ]
+      });
+      await loading;
+
+      // The in-flight generation belonged to the replaced conversation
+      // and died with it: no answer of its lands in B's transcript.
+      const open = vm.openMessages;
+      expect(open.some((m) => m.content === 'mid-load question')).toBe(false);
+      expect(open.at(-1).content).toBe('B answer');
+      expect(vm.isStreaming).toBe(false);
+    });
+
+    it('a late load does not land after the conversation was replaced by a new chat', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      let resolveLoad;
+      chatHistoryService.getConversation.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveLoad = resolve;
+          })
+      );
+      const loadHandler = mockEventBusOn.mock.calls.find((c) => c[0] === 'load-conversation')[1];
+      const loading = loadHandler('conv-9');
+      await wrapper.vm.$nextTick();
+
+      vm.startNewChatConfirmed();
+      resolveLoad({ _key: 'conv-9', title: 'B', messages: [{ sender: 'user', content: 'x', queryId: 'q1' }] });
+      await loading;
+
+      // The welcome screen replaced the conversation; the stale response
+      // must not re-attach it.
+      expect(vm.conversationId).toBeNull();
+      expect(vm.currentChatId).toBeNull();
+    });
+
+    it('deleting the chat being loaded prevents the load from landing', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      let resolveLoad;
+      chatHistoryService.getConversation.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveLoad = resolve;
+          })
+      );
+      const loadHandler = mockEventBusOn.mock.calls.find((c) => c[0] === 'load-conversation')[1];
+      const deleteHandler = mockEventBusOn.mock.calls.find((c) => c[0] === 'chat-deleted')[1];
+      const loading = loadHandler('conv-9');
+      await wrapper.vm.$nextTick();
+
+      // The chat is deleted from its menu while its load is in flight —
+      // the fetch window has conversationId nulled, so the guard must
+      // recognise the target through currentChatId.
+      deleteHandler('conv-9');
+      resolveLoad({ _key: 'conv-9', title: 'Ghost', messages: [{ sender: 'user', content: 'x', queryId: 'q1' }] });
+      await loading;
+
+      // The deleted conversation is not resurrected.
+      expect(vm.conversationId).toBeNull();
+      expect(vm.currentChatId).toBeNull();
+      expect(vm.openMessages.some((m) => m.content === 'x')).toBe(false);
+    });
+
+    it('a failed load aborts the generation the window opened and restores the welcome', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      let rejectLoad;
+      chatHistoryService.getConversation.mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            rejectLoad = reject;
+          })
+      );
+      const loadHandler = mockEventBusOn.mock.calls.find((c) => c[0] === 'load-conversation')[1];
+      const loading = loadHandler('conv-9');
+      await wrapper.vm.$nextTick();
+
+      await vm.sendMessageFromText('mid-load question');
+      rejectLoad(new Error('network down'));
+      await loading;
+
+      // No chunk of that generation lands in the welcome turn, and no
+      // placeholder spins forever.
+      expect(vm.isStreaming).toBe(false);
+      const open = vm.openMessages;
+      expect(open).toHaveLength(1);
+      expect(open[0].sender).toBe('bot');
+      expect(vm.hasUnsavedChanges()).toBe(false);
+    });
+
+    it('the leave arm saves before resetting, and a canceled dialog keeps the draft', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.createConversation.mockClear();
+
+      vm.$store.commit('conversation/appendUserMessage', {
+        sender: 'user',
+        content: 'MY IMPORTANT DRAFT',
+        isSaved: false
+      });
+
+      const leaving = vm.saveAndStartNewChat();
+      // Yield the microtasks: the un-awaited mutation resets the
+      // transcript right here — the correct code keeps the draft until
+      // the dialog completes.
+      await wrapper.vm.$nextTick();
+      expect(vm.saveChatDialog.visible).toBe(true);
+      expect(vm.openMessages.some((m) => m.content === 'MY IMPORTANT DRAFT')).toBe(true);
+
+      // Completing the dialog saves through the normal path, and only
+      // then does the welcome screen replace the transcript.
+      await vm.handleSaveChat();
+      await leaving;
+      expect(chatHistoryService.createConversation.mock.calls[0][0].initialMessage).toBe('MY IMPORTANT DRAFT');
+      expect(vm.openMessages.some((m) => m.content === 'MY IMPORTANT DRAFT')).toBe(false);
+    });
+
+    it('canceling the leave dialog keeps the draft and stays on the chat', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // A prior save left the verdict true — this flow's entry reset
+      // must not answer its own cancel with that stale success.
+      vm.lastSaveSucceeded = true;
+      vm.$store.commit('conversation/appendUserMessage', { sender: 'user', content: 'KEPT DRAFT', isSaved: false });
+
+      const leaving = vm.saveAndStartNewChat();
+      await wrapper.vm.$nextTick();
+      expect(vm.saveChatDialog.visible).toBe(true);
+
+      // The user closes the dialog without saving.
+      vm.saveChatDialog.visible = false;
+      await leaving;
+
+      // The draft is untouched and no new-chat reset happened.
+      expect(vm.openMessages.some((m) => m.content === 'KEPT DRAFT')).toBe(true);
+      expect(vm.conversationId).toBeNull();
+    });
+
+    it('a failed save does not read as a success for the leave arm', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      // The conversation is created, then a later step fails.
+      chatHistoryService.addMessage.mockRejectedValueOnce(new Error('boom'));
+
+      vm.$store.commit('conversation/appendUserMessage', { sender: 'user', content: 'PARTIAL DRAFT', isSaved: false });
+      // The first question rides as initialMessage — the failure has to
+      // happen in a turn that reaches addMessage.
+      vm.$store.commit('conversation/appendUserMessage', { sender: 'user', content: 'follow-up', isSaved: false });
+      vm.$store.commit('conversation/appendBotMessage', {
+        sender: 'bot',
+        content: 'A2',
+        queryId: 'q2',
+        isSaved: false
+      });
+
+      const leaving = vm.saveAndStartNewChat();
+      await wrapper.vm.$nextTick();
+      await vm.handleSaveChat();
+      // The dialog stays open after the failure — the user closes it.
+      expect(vm.saveChatDialog.visible).toBe(true);
+      vm.saveChatDialog.visible = false;
+      await leaving;
+
+      // The transcript was not wiped over an unsaved draft.
+      expect(vm.openMessages.some((m) => m.content === 'PARTIAL DRAFT')).toBe(true);
+    });
+
+    it('canceling the load-confirm dialog keeps the draft and abandons the pending load', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation.mockClear();
+
+      vm.$store.commit('conversation/appendUserMessage', { sender: 'user', content: 'LOAD-ARM DRAFT', isSaved: false });
+
+      vm.pendingConversationId = 'conv-pending';
+      // "Save and load" opens the naming dialog over the pending load.
+      const saving = vm.saveAndLoadConversation();
+      await wrapper.vm.$nextTick();
+      expect(vm.saveChatDialog.visible).toBe(true);
+
+      // The user cancels.
+      vm.saveChatDialog.visible = false;
+      await saving;
+
+      // The draft survives and the other conversation never loads.
+      expect(vm.openMessages.some((m) => m.content === 'LOAD-ARM DRAFT')).toBe(true);
+      expect(vm.pendingConversationId).toBeNull();
+      expect(chatHistoryService.getConversation).not.toHaveBeenCalled();
+    });
+
+    it('the discard arm always loads, whatever an earlier save decided', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation
+        .mockResolvedValueOnce({ _key: 'conv-target', title: 'Target', messages: [] })
+        .mockResolvedValueOnce({ _key: 'conv-target', title: 'Target', messages: [] });
+
+      // An earlier successful save left the verdict true; the discard
+      // arm performs no save and must not read it.
+      vm.lastSaveSucceeded = true;
+      vm.pendingConversationId = 'conv-target';
+
+      await vm.loadConversationConfirmed();
+
+      expect(chatHistoryService.getConversation).toHaveBeenCalledWith('conv-target');
+      expect(vm.conversationId).toBe('conv-target');
+      expect(vm.pendingConversationId).toBeNull();
+
+      // And with no save at all before it (the flag false) — the discard
+      // arm is the no-save arm; it must not read the flag either way.
+      chatHistoryService.getConversation.mockClear();
+      vm.lastSaveSucceeded = false;
+      vm.pendingConversationId = 'conv-target';
+      await vm.loadConversationConfirmed();
+      expect(chatHistoryService.getConversation).toHaveBeenCalledWith('conv-target');
+    });
+
+    it('canceling the save-and-load dialog does not inherit an earlier save verdict', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation.mockClear();
+
+      // A prior save left the flag true — the arm resets it for its own
+      // flow, so a cancel cannot read as a success.
+      vm.lastSaveSucceeded = true;
+      vm.$store.commit('conversation/setConversationId', null);
+      vm.pendingConversationId = 'conv-pending';
+
+      const saving = vm.saveAndLoadConversation();
+      await wrapper.vm.$nextTick();
+      vm.saveChatDialog.visible = false; // the user cancels
+      await saving;
+
+      expect(chatHistoryService.getConversation).not.toHaveBeenCalled();
+      expect(vm.pendingConversationId).toBeNull();
+    });
+
+    it('the save-and-load update branch records its own verdict', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.updateConversation.mockResolvedValueOnce({});
+      chatHistoryService.getConversation.mockResolvedValueOnce({
+        _key: 'conv-pending',
+        title: 'Pending',
+        messages: []
+      });
+
+      vm.$store.commit('conversation/setConversationId', 'conv-current');
+      vm.pendingConversationId = 'conv-pending';
+
+      await vm.saveAndLoadConversation();
+
+      expect(chatHistoryService.updateConversation).toHaveBeenCalledWith('conv-current', expect.anything());
+      expect(chatHistoryService.getConversation).toHaveBeenCalledWith('conv-pending');
+      expect(vm.conversationId).toBe('conv-pending');
+      expect(vm.pendingConversationId).toBeNull();
+    });
+
+    it('a failed update abandons the pending load and keeps the transcript', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.updateConversation.mockRejectedValueOnce(new Error('network down'));
+
+      vm.$store.commit('conversation/setConversationId', 'conv-current');
+      vm.$store.commit('conversation/appendUserMessage', { sender: 'user', content: 'UNSAVED TURN', isSaved: false });
+      vm.pendingConversationId = 'conv-pending';
+
+      await vm.saveAndLoadConversation();
+
+      expect(chatHistoryService.getConversation).not.toHaveBeenCalled();
+      expect(vm.pendingConversationId).toBeNull();
+      expect(vm.openMessages.some((m) => m.content === 'UNSAVED TURN')).toBe(true);
+    });
+
+    it('a failed leave-arm update keeps the draft and stays on the chat', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.updateConversation.mockRejectedValueOnce(new Error('network down'));
+
+      vm.$store.commit('conversation/setConversationId', 'conv-current');
+      vm.currentChatId = 'conv-current';
+      vm.$store.commit('conversation/appendUserMessage', { sender: 'user', content: 'ARM DRAFT', isSaved: false });
+
+      await vm.saveAndStartNewChat();
+
+      expect(vm.openMessages.some((m) => m.content === 'ARM DRAFT')).toBe(true);
+      expect(vm.currentChatId).toBe('conv-current');
+    });
+
+    it('an update never persists the failed exchange and does not prompt', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.updateConversation.mockResolvedValueOnce({});
+      chatHistoryService.addMessage.mockClear();
+
+      vm.$store.commit('conversation/setConversationId', 'conv-saved');
+      vm.currentChatId = 'conv-saved';
+      // The saved conversation reopened: answered turn + a follow-up that
+      // timed out (failStream's shape).
+      vm.$store.commit('conversation/appendUserMessage', { sender: 'user', content: 'answered q', isSaved: true });
+      vm.$store.commit('conversation/appendUserMessage', { sender: 'user', content: 'timed out q', isSaved: false });
+      vm.$store.commit('conversation/appendBotMessage', {
+        sender: 'bot',
+        content: '',
+        isStreaming: false,
+        isError: true,
+        isSaved: false
+      });
+      const failedQuestionIndex = vm.openMessages.findIndex((m) => m.content === 'timed out q');
+      vm.$store.commit('conversation/setMessageProperty', [failedQuestionIndex, 'isError', true]);
+      vm.$store.commit('conversation/setSavedState');
+
+      await vm.updateExistingChat();
+
+      // Nothing persistable was left: the failed exchange is stored
+      // nowhere and cannot hold the unsaved-changes confirm open.
+      expect(chatHistoryService.addMessage).not.toHaveBeenCalled();
+      expect(vm.hasUnsavedChanges()).toBe(false);
+    });
+
+    it('saving a failed-only transcript creates nothing', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.createConversation.mockClear();
+
+      vm.$store.commit('conversation/appendUserMessage', {
+        sender: 'user',
+        content: 'doomed question',
+        isSaved: false
+      });
+      vm.$store.commit('conversation/appendBotMessage', {
+        sender: 'bot',
+        content: '',
+        isStreaming: false,
+        isError: true,
+        isSaved: false
+      });
+      const doomedIndex = vm.openMessages.findIndex((m) => m.content === 'doomed question');
+      vm.$store.commit('conversation/setMessageProperty', [doomedIndex, 'isError', true]);
+
+      vm.saveChatDialog = { visible: true, title: 'Empty', folderId: 'default' };
+      await vm.handleSaveChat();
+
+      expect(chatHistoryService.createConversation).not.toHaveBeenCalled();
+      expect(vm.saveChatDialog.visible).toBe(false);
+      // The metadata agrees: no preview text or count from the dead turn.
+      expect(vm.chatPreview).toBe('New conversation');
+    });
+
+    it('a failed-only transcript is not an unsaved change', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.$store.commit('conversation/appendUserMessage', {
+        sender: 'user',
+        content: 'doomed question',
+        isSaved: false
+      });
+      vm.$store.commit('conversation/appendBotMessage', {
+        sender: 'bot',
+        content: '',
+        isStreaming: false,
+        isError: true,
+        isSaved: false
+      });
+      const doomedIndex = vm.openMessages.findIndex((m) => m.content === 'doomed question');
+      vm.$store.commit('conversation/setMessageProperty', [doomedIndex, 'isError', true]);
+
+      // Saving it would persist an empty conversation — the prompt is
+      // for content a save would keep.
+      expect(vm.hasUnsavedChanges()).toBe(false);
+    });
+
+    it('deleting the open chat clears its category for the next save', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const deleteHandler = mockEventBusOn.mock.calls.find((c) => c[0] === 'chat-deleted')[1];
+
+      vm.currentCategoryId = 'cat-42';
+      vm.$store.commit('conversation/setConversationId', 'conv-cat');
+      deleteHandler('conv-cat');
+
+      expect(vm.currentCategoryId).toBeNull();
     });
   });
 
@@ -1659,11 +2451,11 @@ describe('ChatBotComponent', () => {
       await vm.sendMessage();
       await wrapper.vm.$nextTick();
 
-      const botMsgIndex = vm.chatMessages.length - 1;
+      const botMsgIndex = vm.openMessages.length - 1;
       capturedCallbacks.onChunk('Hello ');
       capturedCallbacks.onChunk('World');
 
-      expect(vm.chatMessages[botMsgIndex].content).toContain('Hello World');
+      expect(vm.openMessages[botMsgIndex].content).toContain('Hello World');
     });
 
     it('processes metadata with confidence score and response time', async () => {
@@ -1674,13 +2466,13 @@ describe('ChatBotComponent', () => {
       await vm.sendMessage();
       await wrapper.vm.$nextTick();
 
-      const botMsgIndex = vm.chatMessages.length - 1;
+      const botMsgIndex = vm.openMessages.length - 1;
       capturedCallbacks.onMetadata({
         confidence_score: 0.95,
         responseTime: 250
       });
 
-      expect(vm.chatMessages[botMsgIndex].confidenceScore).toBe(0.95);
+      expect(vm.openMessages[botMsgIndex].confidenceScore).toBe(0.95);
       expect(vm.systemStatus.lastResponseTime).toBe(250);
       expect(vm.systemStatus.online).toBe(true);
     });
@@ -1731,11 +2523,11 @@ describe('ChatBotComponent', () => {
       await vm.sendMessage();
       await wrapper.vm.$nextTick();
 
-      const botMsgIndex = vm.chatMessages.length - 1;
+      const botMsgIndex = vm.openMessages.length - 1;
       capturedCallbacks.onChunk('Original');
       capturedCallbacks.onTranslation('Traduction');
 
-      expect(vm.chatMessages[botMsgIndex].content).toBe('Traduction');
+      expect(vm.openMessages[botMsgIndex].content).toBe('Traduction');
     });
   });
 
@@ -1747,10 +2539,10 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      vm.selectedContextItems = [
+      vm.$store.commit('conversation/setContextItems', [
         { service: 'Service A', category: 'cat-1' },
         { service: 'Service B', category: 'cat-2' }
-      ];
+      ]);
 
       vm.removeContextItem(0);
 
@@ -1763,7 +2555,7 @@ describe('ChatBotComponent', () => {
       const vm = wrapper.vm;
 
       vm.currentCategoryId = 'cat-1';
-      vm.selectedContextItems = [{ service: 'Service A', category: 'cat-1' }];
+      vm.$store.commit('conversation/setContextItems', [{ service: 'Service A', category: 'cat-1' }]);
 
       vm.removeContextItem(0);
 
@@ -1814,5 +2606,198 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       expect(wrapper.vm.translate('chatbot.thinking')).toBe('chatbot.thinking');
     });
+  });
+
+  describe('quick-help card tint', () => {
+    const configLoader = require('../../config-loader');
+
+    const tintedButton = {
+      id: 'identity-civil',
+      title: { en: 'Apply for ID' },
+      icon: { type: 'file', value: '/config/quickhelp/identity-civil.svg' },
+      category: 'civil',
+      styles: {
+        backgroundColor: '#ecfdf5',
+        hoverColor: '#d1fae5',
+        outlineColor: '#a7f3d0'
+      }
+    };
+
+    const untintedButton = {
+      id: 'just-chat',
+      title: { en: 'Just Chat' },
+      icon: { type: 'file', value: '/config/quickhelp/just-chat.svg' },
+      category: null
+    };
+
+    const mountWithButtons = async (buttons) => {
+      configLoader.default.mockResolvedValue({
+        features: { chat: { quickHelp: { buttons } } }
+      });
+      const wrapper = createChatBotWrapper();
+      await flushPromises();
+      return wrapper;
+    };
+
+    afterEach(() => {
+      // The config-loader mock is module-level, and clearAllMocks() does
+      // not reset an implementation — restore the empty-button default so
+      // the rest of the suite is unaffected.
+      configLoader.default.mockResolvedValue({
+        features: { chat: { quickHelp: { buttons: [] } } }
+      });
+    });
+
+    it('exposes the button tint as custom properties', () => {
+      const wrapper = createChatBotWrapper();
+
+      expect(wrapper.vm.buttonTintStyle(tintedButton)).toEqual({
+        '--qh-bg': '#ecfdf5',
+        '--qh-hover': '#d1fae5',
+        '--qh-outline': '#a7f3d0'
+      });
+    });
+
+    it('returns undefined when a button declares no styles', () => {
+      const wrapper = createChatBotWrapper();
+
+      expect(wrapper.vm.buttonTintStyle(untintedButton)).toBeUndefined();
+    });
+
+    it('returns undefined when a button styles block is empty', () => {
+      const wrapper = createChatBotWrapper();
+
+      expect(wrapper.vm.buttonTintStyle({ styles: {} })).toBeUndefined();
+    });
+
+    it('returns only the declared properties for a partial styles block', () => {
+      const wrapper = createChatBotWrapper();
+
+      // toStrictEqual distinguishes {a: undefined} from {} — toEqual
+      // does not, so a regression that emits unused undefined bindings
+      // would slip past the loose matcher.
+      expect(wrapper.vm.buttonTintStyle({ styles: { backgroundColor: '#ecfdf5' } })).toStrictEqual({
+        '--qh-bg': '#ecfdf5'
+      });
+    });
+
+    it('binds the tint onto the quick-help card', async () => {
+      const wrapper = await mountWithButtons([tintedButton]);
+
+      const card = wrapper.find('.quick-help-item');
+      expect(card.exists()).toBe(true);
+      expect(card.attributes('style') || '').toContain('--qh-bg');
+    });
+
+    it('does not paint a visible tint on an untinted card', async () => {
+      const wrapper = await mountWithButtons([untintedButton]);
+
+      const card = wrapper.find('.quick-help-item');
+      expect(card.exists()).toBe(true);
+      // An empty-string binding is CSSOM-indistinguishable from a missing
+      // declaration (CSS `setProperty(name, '')` removes the property), so
+      // a naive impl that returned `{'--qh-bg': '', ...}` would pass this
+      // byte-identical DOM check. The empty-value contract is enforced at
+      // the method boundary by the `returns undefined` tests above.
+      expect(card.attributes('style') || '').not.toContain('--qh-bg');
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Brand-spaced heading
+//
+// The welcome heading uses <i18n-t> with a named slot for the brand name.
+// createChatBotWrapper installs only the store, not the i18n plugin, so
+// vue-i18n is absent and <i18n-t> resolves to nothing in every test above —
+// a regression that dropped the brand span or emitted the raw key would be
+// invisible. This block mounts a real i18n instance (minimal messages,
+// legacy mode) and asserts the heading renders the localized sentence and
+// the brand name in its own element.
+// ---------------------------------------------------------------------------
+
+const { createI18n } = require('vue-i18n');
+
+function createChatBotWrapperWithI18n() {
+  const store = createChatBotStore();
+  const i18n = createI18n({
+    legacy: true,
+    locale: 'en',
+    fallbackLocale: 'en',
+    messages: {
+      en: {
+        chatbot: {
+          whatCanIHelp: 'How can {brandwordmark} help you today?'
+        }
+      }
+    }
+  });
+  return mount(ChatBotComponent, {
+    global: {
+      plugins: [store, i18n],
+      stubs: {
+        ChatResponseFeedbackDialog: true,
+        ModalDialog: true,
+        RightSideBarComponent: true,
+        ConfirmDialog: true,
+        DsPill: true,
+        DsButton: {
+          template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
+          props: ['disabled', 'variant', 'small', 'tag']
+        },
+        DsCard: true,
+        DsInput: true,
+        DsSelect: true,
+        Brain: true,
+        Loader2: true,
+        Plus: true,
+        Save: true,
+        FileText: true
+      }
+    }
+  });
+}
+
+describe('ChatBotComponent welcome heading', () => {
+  beforeEach(() => {
+    // Brand name is read from cachedConfig.app.title, which the
+    // config-loader mock at the top of this file returns through the
+    // loadConfig mock. The default mock returns no `app` block, so
+    // brandName is empty and brandWordmarkClass returns ''. To
+    // exercise the wordmark class branch (the path the layer paints
+    // the brand gradient on), install a config-loader mock that
+    // returns the GENIE.AI title.
+    const configLoader = require('../../config-loader');
+    configLoader.default.mockResolvedValue({
+      app: { title: 'GENIE.AI' },
+      features: { chat: { quickHelp: { buttons: [] } } }
+    });
+  });
+
+  it('renders the localized sentence with the brand name in its own element', async () => {
+    const wrapper = createChatBotWrapperWithI18n();
+    // The component mounts and then resolves the runtime config; until
+    // that promise settles, cachedConfig is null and brandName resolves
+    // to ''. Wait one tick before asserting the rendered brand element.
+    await flushPromises();
+    const heading = wrapper.find('h2.quick-help-heading');
+    expect(heading.exists()).toBe(true);
+    // The localized sentence and the brand name are both rendered as
+    // text inside the h2; a regression that emits the raw key or the
+    // raw placeholder would fail this match.
+    expect(heading.text()).toContain('How can');
+    expect(heading.text()).toContain('GENIE.AI');
+    // The brand must live in its own element so the layer can paint
+    // the gradient. <i18n-t> renders the slot template's root tag,
+    // so a regression that flattened the slot to a bare text node
+    // would fail this assertion.
+    const brand = heading.find('.brand-wordmark');
+    expect(brand.exists()).toBe(true);
+    expect(brand.text()).toBe('GENIE.AI');
+    // No placeholder leakage (the "{brandwordmark}" form would mean
+    // the slot never bound). No HTML-tag leakage (would mean the
+    // fallback path rendered).
+    expect(heading.text()).not.toMatch(/[{}]/);
+    expect(heading.text()).not.toMatch(/[<>]/);
   });
 });

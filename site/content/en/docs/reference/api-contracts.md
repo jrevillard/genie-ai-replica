@@ -187,7 +187,6 @@ Everything else requires a valid Keycloak JWT.
 | `STREAM_ERROR` | varies | `query-routes.js:389` (generic upstream stream failure) |
 | `CITY_NOT_FOUND` | 503 | `services/weather-service.js:199` (no city within lookup radius) |
 | `CHATQNA_UNAVAILABLE` | 504 | `query-routes.js:384` (ChatQnA timeout / aborted) |
-| `INVALID_FILTERS_JSON` | 400 | `analytics-routes.js:289` (malformed `filters` query param) |
 | `Not Found` | 404 | Sensitive-path blocker (`index.js:566`), 404 fallback (`index.js:822`) |
 
 > **Note:** the legacy `UNAUTHORIZED` code is **not** emitted. Clients
@@ -518,7 +517,6 @@ survive a folder-recreate). See [Deletion semantics](#deletion-semantics).
 |--------|------|------|-------------|
 | GET | `/dashboard` | Yes | Aggregate dashboard metrics |
 | GET | `/metric/:metric` | Yes | Single metric (generic) |
-| GET | `/` | Yes | High-level overview |
 | GET | `/timeseries/:metricType` | Yes | Time-bucketed series |
 | POST | `/events` | Yes | Record a custom analytics event |
 | GET | `/records` | Yes | Raw event records |
@@ -602,7 +600,6 @@ required**: **Yes** on every endpoint.
 | POST | `/` | Yes | Create category |
 | DELETE | `/:categoryId` | Yes | Soft-delete category |
 | DELETE | `/services/:serviceId` | Yes | Soft-delete service |
-| POST | `/init` | Yes | Initialize default categories (idempotent) |
 | POST | `/:categoryId/services` | Yes | Add service to category |
 | PUT | `/:categoryId` | Yes | Update category metadata |
 | PUT | `/services/:serviceId` | Yes | Update service metadata |
@@ -611,8 +608,7 @@ required**: **Yes** on every endpoint.
 `GET /services/:serviceId/translations`) return translation records
 keyed `${sourceKey}_${languageCode}` (e.g. `name_en`, `name_fr`). The
 translation schema is documented in the i18n section of `CHANGELOG.md`
-and on the frontend inventory page (see
-[UI Component Inventory](/docs/frontend/ui-component-inventory-frontend/)).
+and in [ArangoDB collections](/docs/reference/arangodb-collections/).
 
 ### 8. Service routes (`/api/services`)
 
@@ -926,7 +922,7 @@ public (on the auth allowlist) and have no business logic.
 
 Always returns 200 unless the process itself is broken. Use this for Docker
 Swarm/Kubernetes/Ansible liveness probes; it is a constant-time handler
-(no DB calls). See [Operate → Health checks](/docs/operate/health-checks/)
+(no DB calls). See [Operations → Health checks](/docs/operate/health-checks/)
 for the runtime contract.
 
 ### `GET /`
@@ -1172,15 +1168,15 @@ counts; the broader stack still works through
 `GET /api/health` returns
 `{ "status": "ok", "serverTime": "<iso>", "uptime": "<n> seconds" }` when
 the process is alive and dependencies are reachable. See
-[Operate → Health checks](/docs/operate/health-checks/) for the runtime
+[Operations → Health checks](/docs/operate/health-checks/) for the runtime
 contract.
 
 ## Related
 
 - [Reference → OPEA protocol](/docs/reference/opea-protocol/) — backend
   ↔ ChatQnA
-- [Operate → Health checks](/docs/operate/health-checks/)
-- [Operate → Security hardening](/docs/operate/security-hardening/)
+- [Operations → Health checks](/docs/operate/health-checks/)
+- [Operations → Security hardening](/docs/operate/security-hardening/)
 - [Architecture Overview](/docs/architecture/architecture/) — service
   topology and the BFF's role in the request path.
 - [Observability Configuration](/docs/observe/configuration/) —
@@ -1190,4 +1186,6 @@ contract.
   realm setup, client credentials, admin user creation, ROPC
   enable/revert.
 - [Troubleshooting](/docs/operate/troubleshooting/) — `docker service
-  logs`, debug-yesterday, security-blocker diagnostics.
+  logs`, security-blocker diagnostics.
+- [Operations → Admin Logs](/docs/operate/admin-logs/) — the Logs tab endpoints,
+  including `debug-yesterday` and the LogSQL query endpoint.

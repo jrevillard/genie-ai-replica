@@ -20,7 +20,7 @@ The full labelling reference (developer and operator angles, including the
 configuration table, output contract, file-scope labels, failure modes,
 verification steps, and the document-repository `/api/labels` surface) has
 moved to
-[RAG pipeline → Data labelling strategy]({{< relref "/docs/rag-pipeline/data-labeling" >}}).
+[RAG Pipeline → Data labelling strategy]({{< relref "/docs/rag-pipeline/data-labeling" >}}).
 
 ## Manage the taxonomy
 

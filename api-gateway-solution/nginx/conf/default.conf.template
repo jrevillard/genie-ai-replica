@@ -37,29 +37,30 @@ server {
     # set a 50MB file size limit
     client_max_body_size 50m;
 
-    # Permissions Policy (deployment-specific)
-    add_header Permissions-Policy "${NGINX_PERMISSIONS_POLICY}" always;
+    # Permissions Policy (deployment-specific). The value is also read by the
+    # per-location includes: a location that declares add_header directives of
+    # its own does not inherit the server's, so the header has to be set in
+    # each of them.
+    set $permissions_policy "${NGINX_PERMISSIONS_POLICY}";
+    add_header Permissions-Policy $permissions_policy always;
 
-    # Hide server info (server context — not allowed inside if blocks)
-    proxy_hide_header X-Powered-By;
-    proxy_hide_header Server;
+    # The framing policy of the default: no page frames another. A surface
+    # that is framed by the same origin — the Keycloak login page, the
+    # consoles, Grafana — overrides it in its own location.
+    set $frame_options "DENY";
 
     # Strip ALL upstream security/CORS headers — nginx is the single authority
-    proxy_hide_header X-Content-Type-Options;
-    proxy_hide_header X-Frame-Options;
-    proxy_hide_header X-XSS-Protection;
-    proxy_hide_header Strict-Transport-Security;
-    proxy_hide_header Referrer-Policy;
-    proxy_hide_header Content-Security-Policy;
-    proxy_hide_header Permissions-Policy;
-    proxy_hide_header Feature-Policy;
-    proxy_hide_header Access-Control-Allow-Origin;
-    proxy_hide_header Access-Control-Allow-Methods;
-    proxy_hide_header Access-Control-Allow-Headers;
-    proxy_hide_header Access-Control-Allow-Credentials;
-    proxy_hide_header Access-Control-Max-Age;
-    proxy_hide_header Access-Control-Expose-Headers;
-    proxy_hide_header X-Kong-Proxy-Latency;
+    # (X-Powered-By and Server included — server context, not allowed inside if blocks)
+    include conf.d/hide-upstream-headers.inc;
+
+    # Kong upstream address. The variable is resolved at request time, so
+    # nginx starts even when the Kong container is not up yet.
+    set $kong_addr ${KONG_PROXY_HOST}:8000;
+
+    # The public HTTPS port, as the client sees it. It differs from the
+    # container's listening port when the host publishes the container on
+    # another one.
+    set $https_port ${NGINX_HTTPS_PORT};
 
     # Block access to dotfiles (e.g., .git, .env), but allow .well-known (OIDC discovery)
     location ~ /\.(?!well-known) {
@@ -71,6 +72,41 @@ server {
     location ~ /(BitKeeper|\.git|\.svn|\.hg|CVS) {
         deny all;
         return 404;
+    }
+
+    # Keycloak theme resources — the login page's and the consoles'
+    # stylesheets, images and scripts, whichever theme is installed.
+    #
+    # Keycloak serves them with a 30-day max-age and, unless the theme names
+    # a content hash, no validator at all. A returning browser then keeps the
+    # previous stylesheet for a month after a theme change.
+    #
+    # Two families keep their long cache, and both are safe to keep:
+    #   - assets/ — the file name carries a content hash, so a changed file
+    #     is a new URL; Keycloak also answers a revalidation with a 304.
+    #   - vendor/ — the bundles shipped with Keycloak itself. They change
+    #     with the Keycloak version, and the version is the resource tag in
+    #     the URL, so an upgrade changes their URL too.
+    #
+    # Both are Keycloak's own conventions: a bundle under assets/ carries
+    # its content hash in its name, and vendor/ is where the shared bundles
+    # live. A theme that ships a directory of either name is covered by the
+    # rule as well — the rule keys on the directory, not on the owner.
+    #
+    # It sits before the .txt/.xml rule so that a theme file of either
+    # extension is proxied instead of answered from the filesystem.
+    location ~ ^/auth/resources/[^/]+/[^/]+/[^/]+/(?!assets/|vendor/).+$ {
+        set $frame_options "SAMEORIGIN";
+        include conf.d/security-headers.inc;
+        add_header Cache-Control "no-cache, must-revalidate" always;
+
+        # Replace the upstream's 30-day cache, do not add to it. The
+        # include repeats the server's hide list, because a location
+        # that hides a header of its own stops inheriting that list.
+        include conf.d/hide-upstream-headers.inc;
+        proxy_hide_header Cache-Control;
+
+        include conf.d/kong-proxy.inc;
     }
 
     # For robots.txt, sitemap.xml and other specific text files
@@ -87,30 +123,10 @@ server {
     }
 
     # Keycloak Identity Provider proxied to Kong
-    # Note: when proxy_pass uses a variable, nginx does NOT perform
-    # path prefix substitution — the full request URI is forwarded as-is.
-    set $kong_addr ${KONG_PROXY_HOST}:8000;
     location /auth/ {
-        # Security headers — SAMEORIGIN instead of DENY for Keycloak admin console iframes
-        add_header X-Content-Type-Options "nosniff" always;
-        add_header X-Frame-Options "SAMEORIGIN" always;
-        add_header X-XSS-Protection "1; mode=block" always;
-        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
-        add_header Referrer-Policy "no-referrer-when-downgrade" always;
-        add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
-
-        # Proxy settings to Kong
-        proxy_pass http://$kong_addr;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Host $host;
-        proxy_set_header X-Forwarded-Port ${NGINX_HTTPS_PORT};
-        proxy_connect_timeout 300s;
-        proxy_read_timeout 300s;
-        proxy_send_timeout 300s;
+        set $frame_options "SAMEORIGIN";
+        include conf.d/security-headers.inc;
+        include conf.d/kong-proxy.inc;
     }
 
     # Backend API traffic proxied to Kong
@@ -141,15 +157,19 @@ server {
             return 204;
         }
 
-        # Proxy settings to Kong
+        # Proxy settings to Kong. This location spells the proxy block out
+        # rather than including kong-proxy.inc: an SSE stream stays open for
+        # the whole conversation, and nginx rejects a timeout directive
+        # repeated in the same block instead of letting the location's
+        # override the include's.
         proxy_pass http://$kong_addr;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-
-        # SSE-specific: disable all buffering
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Port $https_port;
         proxy_buffering off;
         proxy_cache off;
         proxy_set_header X-Accel-Buffering no;
@@ -187,18 +207,10 @@ server {
         # Proxy settings to Kong
         # Note: when proxy_pass uses a variable, nginx does NOT perform
         # path prefix substitution — the full request URI is forwarded as-is.
-        proxy_pass http://$kong_addr;
-        proxy_http_version 1.1;
+        include conf.d/kong-proxy.inc;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
-        proxy_connect_timeout 300s;
-        proxy_read_timeout 300s;
-        proxy_send_timeout 300s;
     }
 
     # Swagger API docs — proxied to Kong (backend serves /api-docs and /api-docs.json)
@@ -209,19 +221,12 @@ server {
 
         add_header Content-Security-Policy "default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; connect-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'self'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
 
-        proxy_pass http://$kong_addr;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_connect_timeout 300s;
-        proxy_read_timeout 300s;
-        proxy_send_timeout 300s;
+        include conf.d/kong-proxy.inc;
     }
 
     # Android App Links verification
     location = /.well-known/assetlinks.json {
+        include conf.d/security-headers.inc;
         default_type application/json;
         alias /etc/nginx/conf.d/assetlinks.json;
         add_header Cache-Control "public, max-age=3600" always;
@@ -229,6 +234,7 @@ server {
 
     # iOS Universal Links verification
     location = /.well-known/apple-app-site-association {
+        include conf.d/security-headers.inc;
         default_type text/plain;
         alias /etc/nginx/conf.d/apple-app-site-association;
         add_header Cache-Control "public, max-age=3600" always;
@@ -241,24 +247,14 @@ server {
 
     # Grafana observability dashboards — proxied to Kong
     location /grafana/ {
+        set $frame_options "SAMEORIGIN";
         include conf.d/security-headers.inc;
 
-        add_header X-Frame-Options "SAMEORIGIN" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' wss://${NGINX_PUBLIC_DOMAIN}:${NGINX_HTTPS_PORT} https://${NGINX_PUBLIC_DOMAIN}:${NGINX_HTTPS_PORT}; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'self'; form-action 'self' 'unsafe-inline' https://${NGINX_PUBLIC_DOMAIN}:${NGINX_HTTPS_PORT}; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' wss://${NGINX_PUBLIC_DOMAIN}:$https_port https://${NGINX_PUBLIC_DOMAIN}:$https_port; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'self'; form-action 'self' 'unsafe-inline' https://${NGINX_PUBLIC_DOMAIN}:$https_port; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
 
-        proxy_pass http://$kong_addr;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Host $host;
-        proxy_set_header X-Forwarded-Port ${NGINX_HTTPS_PORT};
+        include conf.d/kong-proxy.inc;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_connect_timeout 300s;
-        proxy_read_timeout 300s;
-        proxy_send_timeout 300s;
     }
 
     location / {

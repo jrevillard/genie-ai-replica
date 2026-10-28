@@ -109,6 +109,42 @@ function evalImgNameExpression(expression, imageName) {
 }
 
 /**
+ * The lines of a text that are comments: a line whose first non-blank
+ * character is '#' carries nothing a parser reads.
+ *
+ * @param {string} content - The file's content
+ * @returns {string} The content without its comment lines
+ */
+function stripCommentLines(content) {
+  return content
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('#'))
+    .join('\n');
+}
+
+/**
+ * The environment variable names the Ansible template renders.
+ *
+ * A name inside a Jinja comment is not rendered, so it does not count. A
+ * Jinja comment can span lines: strip it before cutting the file into
+ * lines, or a name it wraps would survive the strip.
+ *
+ * @param {string} envJ2Path - Path to deploy/ansible/templates/env.j2
+ * @param {string} prefix - The prefix of the names to collect (e.g. 'RETRIEVER_')
+ * @returns {Set<string>} The names the template renders
+ */
+function parseEnvTemplateVarNames(envJ2Path, prefix) {
+  const content = readFileOrThrow(envJ2Path, 'env template');
+  const rendered = stripCommentLines(content.replace(/\{#[\s\S]*?#\}/g, ''));
+  const names = new Set();
+  const namePattern = new RegExp(`(?<![A-Z0-9_])(${prefix}[A-Z0-9_]+)`, 'g');
+  for (const match of rendered.matchAll(namePattern)) {
+    names.add(match[1]);
+  }
+  return names;
+}
+
+/**
  * Derive the per-service env var names env.j2 renders inside its
  * genieai_images loop, for every image in deploy-shared-facts.yml.
  *
@@ -167,4 +203,10 @@ function parseEnvTemplateImageVars(envJ2Path, sharedFactsPath) {
   });
 }
 
-module.exports = { parseGenieAiImageNames, parseEnvTemplateImageVars };
+module.exports = {
+  readFileOrThrow,
+  stripCommentLines,
+  parseGenieAiImageNames,
+  parseEnvTemplateImageVars,
+  parseEnvTemplateVarNames
+};

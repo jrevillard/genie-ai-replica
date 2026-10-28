@@ -127,7 +127,8 @@ The chip is informational, not actionable. The user can always click the feedbac
 - The skin-tone selector (`thumbFeedback === 'up' ? skinToneColor : 'none'`) draws from a small palette stored on the component. Selection is NOT persisted across sessions — it lives on the dialog instance only.
 - Comments are sanitised before submission (no HTML, length capped server-side).
 - On submit: `chatbotService.submitFeedback(queryId, { thumb, rating, comment })` — `POST /api/queries/{queryId}/feedback`. On success, the dialog closes and a toast appears. On failure, an inline error stays in the dialog.
-- Ratings aggregate into the admin analytics satisfaction tiles — see [Dashboards](/docs/observe/dashboards/).
+- Ratings aggregate into the admin analytics satisfaction tiles — see
+  [API Contracts → Analytics routes](/docs/reference/api-contracts/#5-analytics-routes-apianalytics).
 
 ## Save / export / new-chat flows
 

@@ -247,8 +247,8 @@ curl -sk https://localhost/<your-endpoint> | jq .
 curl -sk https://localhost/<your-endpoint> -H "Authorization: Bearer $GENIE_TOKEN"
 ```
 
-Mint a realm token first if your route is gated (see [Contribute →
-Dev workflow](/docs/contribute/dev-workflow/) or `.claude/rules/SERVER-TESTING.md`).
+Mint a realm token first if your route is gated (see [Reference →
+API contracts](/docs/reference/api-contracts/#how-to-call-these-endpoints)).
 
 **Frontend changes** — reload the browser (`Cmd-R` / `Ctrl-R`). NGINX serves
 the rebuilt SPA on `https://localhost/`.
@@ -388,11 +388,11 @@ prefix doesn't match.
 
 ## What's next
 
-- **Where to put a new route** — [Backend → API contracts](/docs/reference/api-contracts/).
+- **Where to put a new route** — [Reference → API contracts](/docs/reference/api-contracts/).
 - **Branching, commits, and the test pyramid** — [Contribute → Dev workflow](/docs/contribute/dev-workflow/).
 - **Open a merge request** — [Contribute → How to open a MR](/docs/contribute/how-to-mr/).
-- **OTel spans in your route** — [Observe → Tracing](/docs/observe/tracing/).
-- **Trace failures end-to-end** — [Observe → Dashboards](/docs/observe/dashboards/).
+- **OTel spans in your route** — [Operations → Tracing](/docs/operate/tracing-howto/).
+- **Trace failures end-to-end** — [Observability → Dashboards](/docs/observe/dashboards/).
 - **Service topology in detail** — [Architecture → Overview](/docs/architecture/architecture/).
 - **Full bring-up including TLS and secrets** — [Quickstart: Deployer](/docs/get-started/quickstart-deployer/).
 
@@ -436,10 +436,10 @@ prefix doesn't match.
 | Port 80 / 443 already in use on the host | Another web server or leftover container | `sudo lsof -iTCP:80 -sTCP:LISTEN` to find the offender; stop it or remap `NGINX_HTTP_PORT`/`NGINX_HTTPS_PORT` in `.env`. |
 | Host edit picked up by the **wrong** service | You edited `components/shared/` (used by multiple images) and only rebuilt one | `grep -R "<file>" components/*/Dockerfile* genie-ai-overlay/*/Dockerfile*` to find dependents, rebuild each. |
 | `docker compose exec <service>` returns `Error response from daemon: Container ... is not running` | The service container crashed on boot | `docker compose logs <service>` — most often a missing `.env` secret or a syntax error. |
-| Backend test reaches the real ArangoDB and hangs | Accidentally ran `npm run setup-db` instead of `npm test`, or a test imports a setup script | The default Jest config does not load setup scripts — verify you used `npm test`. For tests against the real DB, see `tests/` (not `__tests__/`). |
+| Backend test reaches the real ArangoDB and hangs | Ran a database setup script instead of `npm test`, or a test imports a setup script | The default Jest config does not load setup scripts — verify you used `npm test`. For tests against the real DB, see `tests/` (not `__tests__/`). |
 
 ## Related
 
 - **Deploy the stack to a Swarm cluster** — [Quickstart: Deployer](/docs/get-started/quickstart-deployer/) (adds TLS, secrets, observability).
-- **Pick the right env-var profile for your hardware** — [Deploy → Topologies](/docs/deploy/topologies/) (single-host, Swarm 2-node / 3-node, remote GPU).
+- **Pick the right env-var profile for your hardware** — [Deployment → Topologies](/docs/deploy/topologies/) (single-host, Swarm 2-node / 3-node, remote GPU).
 - **Understand the request flow you just debugged** — [Architecture → Overview](/docs/architecture/architecture/).

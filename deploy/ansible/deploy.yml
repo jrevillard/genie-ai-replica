@@ -298,12 +298,18 @@
     - name: Ensure deploy directories exist with correct ownership
       become_user: root
       block:
+        # secrets/ssl is written by the cap-dropped certbot container (root
+        # without DAC_OVERRIDE): owned by the ansible user, the container's
+        # rm/cp/chmod in copy_certs all fail with permission denied and the
+        # renewed certificate never reaches nginx. The files inside are
+        # root-owned (written by the container, or by the root copy task
+        # below), so the directory itself must be root-owned too.
         - name: Create deploy directories
           ansible.builtin.file:
             path: "{{ item }}"
             state: directory
-            owner: "{{ ansible_user }}"
-            group: "{{ ansible_user }}"
+            owner: root
+            group: root
           loop:
             - "{{ deploy_dir }}/secrets/ssl"
 

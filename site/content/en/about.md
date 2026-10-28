@@ -46,7 +46,7 @@ trusts:
   it is stored or processed. See [Knowledge base &rarr; Ingestion]({{< relref "/docs/knowledge-base/ingestion" >}}).
 - **PII-safe telemetry** — observability spans are filtered to strip sensitive
   attributes (tokens, passwords, user PII) before export. See
-  [Observability &rarr; Tracing]({{< relref "/docs/operate/tracing-howto" >}}).
+  [Operations &rarr; Tracing]({{< relref "/docs/operate/tracing-howto" >}}).
 - **Hardened backend** — security headers (`helmet`), rate limiting, and
   CORS/CSP policies are applied at the backend and gateway.
 - **Data residency** — because the whole stack is self-hosted, data stays within
@@ -65,7 +65,7 @@ The people who use this documentation fall into four roles:
 | **Evaluator / decision-maker** | Assess fit, sovereignty, compliance. | This page + [Project overview]({{< relref "/docs/core/project-overview" >}}) |
 | **Operator / admin** | Deploy, configure, run, observe. | [Deployment]({{< relref "/docs/deploy" >}}) + [Observability]({{< relref "/docs/observe" >}}) |
 | **Knowledge / content manager** | Curate the knowledge base. | [Knowledge base]({{< relref "/docs/knowledge-base" >}}) |
-| **Developer / integrator** | Extend, integrate, customise. | [Architecture]({{< relref "/docs/architecture" >}}) + [RAG pipeline]({{< relref "/docs/rag-pipeline" >}}) |
+| **Developer / integrator** | Extend, integrate, customise. | [Architecture]({{< relref "/docs/architecture" >}}) + [RAG Pipeline]({{< relref "/docs/rag-pipeline" >}}) |
 
 ## What you can do with it
 

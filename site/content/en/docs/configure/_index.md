@@ -20,7 +20,8 @@ GENIE.AI delegates **all** identity management to Keycloak: users, roles, sessio
 5. [Local development with self-signed certificates](/docs/configure/local-dev-self-signed/) — bypass or trust the self-signed NGINX/GPU certs on a local dev stack: which env vars, which services, security implications.
 6. [CORS, CSP & Public Domain](/docs/configure/cors-csp/) — wire the browser-facing CORS allow-list, the nginx Content-Security-Policy, and the public-domain variable that drives every redirect URL.
 7. [Restrict active locales on a deployment](/docs/configure/locale-whitelist/) — restrict which languages the web UI, Keycloak login, and Flutter mobile app expose. Covers `VUE_APP_AVAILABLE_LOCALES`, `KEYCLOAK_SUPPORTED_LOCALES`, and `KeycloakConfig.supportedLocaleCodes`.
-8. [Deployment flavors](/docs/configure/deployment-flavors/) — what makes a deployment look like a particular institution (the `flavors/<name>/` directory, splash image, branding overrides, locale whitelist, mobile OIDC client).
+8. [Tune the chat stream idle timeout](/docs/configure/stream-idle-timeout/) — how long the web UI waits for a silent chat stream before reporting a timeout. Covers `VUE_APP_STREAM_IDLE_TIMEOUT_MS`.
+9. [Deployment flavors](/docs/configure/deployment-flavors/) — what makes a deployment look like a particular institution (the `flavors/<name>/` directory, splash image, branding overrides, locale whitelist, mobile OIDC client).
 
 ## Where to go next
 
@@ -31,7 +32,7 @@ GENIE.AI delegates **all** identity management to Keycloak: users, roles, sessio
 
 ## Related configuration in other sections
 
-- [Frontend Configuration → Authentication & Session](/docs/frontend/auth-flow/) — Vue-side OIDC client settings, token refresh, login UX.
-- [Backend Configuration → Auth Middleware](/docs/reference/api-contracts/) — backend JWT verification and `requireAdmin`.
+- [Frontend → Authentication & Session](/docs/frontend/auth-flow/) — Vue-side OIDC client settings, token refresh, login UX.
+- [Reference → API contracts → `requireAdmin`](/docs/reference/api-contracts/#keycloakauthmiddlewarerequireadmin) — backend JWT verification and the `requireAdmin` guard.
 - [Deployment → Mobile Deployment Guide](/docs/mobile/mobile-deployment-guide/) — Flutter app OIDC client configuration (per-institution `KC_MOBILE_CLIENT_ID`).
 - [External IdP Integration → §5 automated IdP configuration via keycloak-config-cli](/docs/configure/external-idp-integration-guide/) — Grafana SSO is wired the same way (Grafana is another confidential OIDC client of Keycloak).

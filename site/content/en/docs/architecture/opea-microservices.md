@@ -209,12 +209,14 @@ For full per-phase breakdown and an end-to-end debug recipe (fetch a trace by ID
 
 ## 5. Per-Request Overrides (ChatQnA)
 
-The request body fields below act as per-request overrides over the deployment defaults (`RERANKER_TOP_N`, `RERANKING_STRATEGY`, `RETRIEVER_ARANGO_K`, `RETRIEVER_ARANGO_FETCH_K`, `RETRIEVER_ARANGO_FILTER_STRATEGY`, `CONFIDENCE_RANK_DECAY`, `RERANKER_SCORE_CALIBRATION`, `RERANKER_SCORE_TEMPERATURE`). They are **top-level fields** on the ChatQnA request (e.g. `top_n`, `reranking_strategy`), not nested inside a wrapper block — see `genie-ai-overlay/chatqna/genieai_chatqna.py` (`chat_request.top_n`, `chat_request.reranking_strategy`, `GenieaiRetrieverParms`, `GenieaiRerankerParms`). This is how the same chatqna service can serve different retrieval strategies for different user requests without restart.
+The request body fields below act as per-request overrides over the deployment defaults (`RERANKER_TOP_N`, `RERANKING_STRATEGY`, `RETRIEVER_ARANGO_K`, `RETRIEVER_ARANGO_FETCH_K`, `CONFIDENCE_RANK_DECAY`, `RERANKER_SCORE_CALIBRATION`, `RERANKER_SCORE_TEMPERATURE`). They are **top-level fields** on the ChatQnA request (e.g. `top_n`, `reranking_strategy`), not nested inside a wrapper block — see `genie-ai-overlay/chatqna/genieai_chatqna.py` (`chat_request.top_n`, `chat_request.reranking_strategy`, `GenieaiRetrieverParms`, `GenieaiRerankerParms`). This is how the same chatqna service can serve different retrieval strategies for different user requests without restart.
+
+The label-filter strategy (`RETRIEVER_ARANGO_FILTER_STRATEGY`) is not among them: the ChatQnA request carries no field for it, so the retriever takes the strategy from its environment (`AND` requires every filter label on a chunk, `OR` requires one).
 
 | Request field | Maps to | Default | Notes |
 |--------------|---------|---------|-------|
 | `top_n` | `RERANKER_TOP_N` | `3` | Final chunks forwarded to the LLM |
-| `reranking_strategy` | `RERANKING_STRATEGY` | `slice` | See [Architecture — §9.3 Reranker Strategies](/docs/architecture/architecture/#93-reranker-strategies) |
+| `reranking_strategy` | `RERANKING_STRATEGY` | `slice` | See [RAG Pipeline → Reranking](/docs/rag-pipeline/reranking/) |
 | `reranking_threshold` | `RERANKING_THRESHOLD` | (env) | Threshold used by `threshold` / `slice_threshold` only — `slice`, `knee_threshold` and `adaptive` never read it |
 | `traversal_max_depth` | `RETRIEVER_TRAVERSAL_MAX_DEPTH` | (env) | Graph traversal depth |
 | `traversal_max_returned` | `RETRIEVER_TRAVERSAL_MAX_RETURNED` | (env) | Graph traversal fan-out |
@@ -241,7 +243,7 @@ search_start = encode_filter_labels("chunk", ["Agriculture.Crops.Corn", "Agricul
 
 The retriever parses this back out (`decode_filter_labels(search_start)` in `genie-ai-overlay/core/label_contract.py`) and uses the label list to build the AQL `FILTER` clause before the vector search. If a chunk arrives without an expected label (dataprep returned `[]`), the chunk is still stored but will not surface under a strict label filter at query time.
 
-For the label-driven retrieval behavior (label selector prompt, taxonomy alignment, common pitfalls), see [Knowledge Base — Labelling & Taxonomy](/docs/knowledge-base/labelling-taxonomy/).
+For the label-driven retrieval behavior (label selector prompt, taxonomy alignment, common pitfalls), see [RAG Pipeline → Data Labelling Strategy](/docs/rag-pipeline/data-labeling/).
 
 ---
 
@@ -291,7 +293,7 @@ A trace that returns fewer spans than expected means one stage silently no-ops �
 |---------|-------|
 | End-to-end RAG flow with operator-facing config | [RAG Pipeline]({{< relref "/docs/rag-pipeline" >}}) |
 | Ingestion stages (parse, chunk, label, embed) | [Knowledge Base — Ingestion](/docs/knowledge-base/ingestion/) |
-| Confidence score derivation | [Architecture — §9.4 Confidence Scoring](/docs/architecture/architecture/#94-confidence-scoring) |
+| Confidence score derivation | [RAG Pipeline → Reranking](/docs/rag-pipeline/reranking/) |
 | Contextual Retrieval | [Architecture — §10.2 Ingestion Flow](/docs/architecture/architecture/#102-ingestion-flow) and [Data Labelling Strategy]({{< relref "/docs/rag-pipeline/data-labeling" >}}) §7 |
 | Multi-turn retrieval | [Multi-Turn Retrieval]({{< relref "/docs/rag-pipeline/multi-turn-retrieval" >}}) |
 | HTTP API shapes | [API Contracts — Backend]({{< relref "/docs/reference/api-contracts" >}}) |

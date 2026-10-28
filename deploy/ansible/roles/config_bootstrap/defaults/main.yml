@@ -28,6 +28,19 @@ config_bootstrap_allow_rebrand: false
 #
 # The value must name a theme the deployed branch ships under
 # configs/keycloak/themes/. An empty value fails the deploy.
+#
+# The default here and docker-compose's KEYCLOAK_THEME default are two
+# declarations of the same thing and must move together: role defaults do not
+# reach the play that renders the .env, so when the variable is not overridden
+# the compose default (`KEYCLOAK_THEME=${KEYCLOAK_THEME:-genie}`,
+# docker-compose.yaml) is what the realm actually gets. Change both or neither.
+#
+# The guard protects the CONFIGURED theme. A second theme it does not know
+# about — a parent theme a surviving child inherits from (a flavour theme
+# declares parent=genie), or anything an operator dropped in the themes
+# directory — is protected only by the pair's `expect` entries: keep the
+# parent theme's entrypoint in the list whenever the deployment's theme
+# inherits from it.
 keycloak_theme: genie
 
 # List of (source, destination) pairs.

@@ -213,6 +213,7 @@ services:
 - `delete: false` does **not** keep the image-baked theme available. `delete` only governs how rsync treats files that are *already on the host*: it prevents the sync from removing them. It says nothing about the image's own contents, which a bind mount hides entirely. The only thing that keeps the theme available is the role having actually populated the host directory.
 - The role's guards run on the *extracted archive* (`ansible.builtin.assert` over `config_bootstrap_extract_check`), which catches a wrong `repo_branch`, a truncated download, or a changed archive layout — they fire before anything is synced. A post-sync check now closes the loop: the same mirror is re-run as a dry run and the deploy fails if it would still change anything, naming the files that differ.
 - An operator who sets `config_bootstrap_sync_enabled: false` gets no signal from Ansible, by design: the role then owns nothing on the host — it creates no directory, mirrors nothing and verifies nothing. The tree is the operator's, and the deployment serves whatever it holds.
+- A failure DURING the mirror (a later pair's rsync erroring after earlier pairs succeeded) leaves the host half-converged: the guards cannot catch it, because it happens after they ran. The deploy fails loudly, and re-running the deployment converges the rest — the mirror is content-compared (`--checksum`), so a re-run never rewrites what is already correct.
 
 ### Bind mount source empty or missing
 

@@ -36,11 +36,13 @@
 # Both the inventory and the host must be given explicitly: the script never
 # guesses a target, and it never falls back to a hardcoded host. Run it against
 # a real deploy node (or any host Ansible can reach) - it writes to that host's
-# config_dir, and it removes the files it created and restores the whole config
-# tree from a pre-test archive, including on failure. What the role's own mirror
-# removes (the host files the branch does not ship) is the mirror's contract,
-# not damage: the host is left serving the branch, which is the state a deploy
-# would leave it in anyway.
+# config_dir, and at the end it restores the whole config tree from the archive
+# taken before the first run: the host is returned to its PRE-TEST state, not
+# left serving the branch. What the role's mirror did DURING the test (the
+# reverts, the removals) is the mirror's contract being exercised; the restore
+# then puts back whatever the host served before the test, so a node that had
+# drifted is drifted again afterwards - run the deploy, not this test, to
+# converge a node.
 #
 # A restore that fails fails the test. The restore removes the config tree
 # before extracting the archive back into it, so a failed restore leaves the
@@ -258,19 +260,22 @@ restore() {
     printf '           tar -xpf %s -C %s\n' "$BACKUP_ARCHIVE" "$CONFIG_PARENT" >&2
     # The restore failed and the host's config tree is gone (the rm -rf ran,
     # the extraction did not). That is the worst outcome this script can
-    # produce, so it must not be reported as a pass: the script exits with a
-    # failure whether the test itself had failed or not. `exit` (not `return`)
-    # because a trap's return value does not change the script's exit status.
-    # The archive stays on the host: it is what the operator needs when the
-    # tree was left unrestored. Disarm before exiting so the EXIT trap does
-    # not attempt the restore a second time and print the failure twice.
+    # produce, so it must not be reported as a pass: the CALLER decides the
+    # exit code (the EXIT trap turns a failed restore into a failed run; the
+    # signal traps keep the signal's code, because "interrupted" is what a
+    # caller keys on). The archive stays on the host: it is what the operator
+    # needs when the tree was left unrestored. Disarm either way, so the EXIT
+    # trap does not attempt the restore a second time and print it twice.
     RESTORE_ARMED="false"
-    exit 1
+    return 1
 }
-# The EXIT trap restores the host. The signal traps restore it AND stop the
-# script: a signal that only restored the host would let the run continue on
-# a tree the restore had just put back, and it would end by reporting a pass.
-trap restore EXIT
+# The EXIT trap restores the host and turns a FAILED restore into a failed
+# run. The signal traps restore it and stop the script on the signal's code:
+# a signal that only restored the host would let the run continue on a tree
+# the restore had just put back, and it would end by reporting a pass — and a
+# caller keys on 130/143 to recognise "interrupted", so the signal's code is
+# re-asserted even when the restore itself failed (whose [FAIL] is printed).
+trap 'restore || exit 1' EXIT
 trap 'restore; exit 130' INT
 trap 'restore; exit 143' TERM
 
@@ -460,7 +465,7 @@ pass "no files were added or removed under $CONFIG_DIR"
 
 # --- cleanup (also runs via the EXIT trap) -----------------------------------
 
-restore
+restore || exit 1
 trap - EXIT INT TERM
 
 printf '\n=== ALL SMOKE TESTS PASSED ===\n'

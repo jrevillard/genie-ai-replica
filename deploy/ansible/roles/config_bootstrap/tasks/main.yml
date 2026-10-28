@@ -96,6 +96,10 @@
         dest: "{{ config_bootstrap_tmp.path }}/{{ item.dest_subdir | replace('/', '-') }}.tar.gz"
         force: true
         mode: '0644'
+        # The archives are multi-megabyte and the module default is 10 s: a
+        # busy link failed the deploy with "The read operation timed out" for
+        # no reason an operator could act on.
+        timeout: 300
       loop: "{{ config_bootstrap_pairs }}"
       loop_control:
         label: "{{ item.src }}"
@@ -126,6 +130,25 @@
     # must fail the deploy here, before anything is synced into the mount
     # source. Checking one well-known entrypoint asset per pair catches both an
     # empty extraction and a silently reshaped tree.
+    #
+    # The expect check also validates the pairs' own shape first: `expect` is a
+    # list, and subelements fed the pre-mirror SCALAR form would iterate the
+    # string character by character — the deploy would fail on a wall of
+    # "does not contain .../config/t" messages that say nothing about the real
+    # problem (an override still using the old shape).
+    - name: Fail unless every pair declares its expected assets as a list
+      ansible.builtin.assert:
+        that:
+          - item.expect is sequence
+          - item.expect is not string
+        fail_msg: >-
+          The config_bootstrap_pairs entry for {{ item.dest_subdir }} declares
+          its expected assets as a string. `expect` is a list (one file per
+          entry, repo-relative to the pair's src); the string form belongs to
+          the pre-mirror role and no longer works.
+        success_msg: "config_bootstrap: {{ item.dest_subdir }} expects a list of assets"
+      loop: "{{ config_bootstrap_pairs }}"
+
     - name: Stat the expected assets in each extracted archive
       ansible.builtin.stat:
         path: "{{ config_bootstrap_tmp.path }}/{{ item.0.dest_subdir | replace('/', '-') }}/{{ item.0.src }}/{{ item.1 }}"
@@ -204,8 +227,12 @@
 
     - name: Stat the deployment's Keycloak theme in the extracted branch
       ansible.builtin.stat:
+        # The theme's entrypoint, not its directory: a branch that ships the
+        # directory without login/theme.properties would pass a directory
+        # check and the mirror would replace a working host theme with a
+        # broken one — the exact regression this guard exists to stop.
         path: >-
-          {{ config_bootstrap_tmp.path }}/{{ item.dest_subdir | replace('/', '-') }}/{{ item.src }}/{{ config_bootstrap_keycloak_theme }}
+          {{ config_bootstrap_tmp.path }}/{{ item.dest_subdir | replace('/', '-') }}/{{ item.src }}/{{ config_bootstrap_keycloak_theme }}/login/theme.properties
       register: config_bootstrap_theme_stat
       loop: "{{ config_bootstrap_keycloak_pairs }}"
       loop_control:
@@ -239,6 +266,12 @@
     # The file that carries the brand is declared by the pair that owns it
     # (brand_file), not hardcoded here: a pair whose src or dest_subdir
     # changes must not leave the check reading a path that no longer exists.
+    #
+    # The files are parsed with python3 on the target rather than with Jinja's
+    # from_json: a malformed file made the templating itself fail — an opaque
+    # filter traceback that no escape hatch could bypass, on a role whose job
+    # is to survive a broken host configuration. A failed parse is a result
+    # the asserts below reason about, not a crash.
     - name: Find the pairs that declare a brand file
       ansible.builtin.set_fact:
         config_bootstrap_brand_pairs: "{{ config_bootstrap_pairs | selectattr('brand_file', 'defined') | list }}"
@@ -253,27 +286,79 @@
           {{ config_bootstrap_brand_pairs | length }} entries declare one.
         success_msg: "config_bootstrap: the brand file is declared by one pair"
 
-    - name: Read the brand the branch ships
-      ansible.builtin.slurp:
-        src: >-
-          {{ config_bootstrap_tmp.path }}/{{ config_bootstrap_brand_pairs.0.dest_subdir | replace('/', '-') }}/{{ config_bootstrap_brand_pairs.0.src }}/{{ config_bootstrap_brand_pairs.0.brand_file }}
-      register: config_bootstrap_branch_config
-
-    - name: Read the brand the host currently serves
-      ansible.builtin.slurp:
-        src: "{{ config_dir }}/{{ config_bootstrap_brand_pairs.0.dest_subdir }}/{{ config_bootstrap_brand_pairs.0.brand_file }}"
-      register: config_bootstrap_host_config
-      # A host that has never been seeded has no brand to compare with: the
-      # first deploy is not a re-brand.
+    - name: Read the title the branch's brand file carries
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - |
+            import json,sys
+            try:
+                print(json.load(open(sys.argv[1])).get("app", {}).get("title", ""))
+            except Exception as exc:
+                sys.stderr.write("%s\n" % exc)
+                sys.exit(3)
+          - >-
+            {{ config_bootstrap_tmp.path }}/{{ config_bootstrap_brand_pairs.0.dest_subdir | replace('/', '-') }}/{{ config_bootstrap_brand_pairs.0.src }}/{{ config_bootstrap_brand_pairs.0.brand_file }}
+      register: config_bootstrap_branch_title_cmd
+      changed_when: false
       failed_when: false
 
-    - name: "Compute the brand each side carries ({{ config_dir }}/{{ config_bootstrap_brand_pairs.0.dest_subdir }}/{{ config_bootstrap_brand_pairs.0.brand_file }})"
+    - name: Stat the host's brand file
+      ansible.builtin.stat:
+        path: "{{ config_dir }}/{{ config_bootstrap_brand_pairs.0.dest_subdir }}/{{ config_bootstrap_brand_pairs.0.brand_file }}"
+      register: config_bootstrap_host_brand_stat
+
+    # A host that has never been seeded has no brand file at all: the first
+    # deploy is not a re-brand, and there is nothing to parse.
+    - name: Read the title the host's brand file carries
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - |
+            import json,sys
+            try:
+                print(json.load(open(sys.argv[1])).get("app", {}).get("title", ""))
+            except Exception as exc:
+                sys.stderr.write("%s\n" % exc)
+                sys.exit(3)
+          - "{{ config_dir }}/{{ config_bootstrap_brand_pairs.0.dest_subdir }}/{{ config_bootstrap_brand_pairs.0.brand_file }}"
+      register: config_bootstrap_host_title_cmd
+      changed_when: false
+      failed_when: false
+      when: config_bootstrap_host_brand_stat.stat.exists
+
+    - name: Compute the brand each side carries
       ansible.builtin.set_fact:
         config_bootstrap_branch_title: >-
-          {{ (config_bootstrap_branch_config.content | b64decode | from_json).app.title | default('') }}
+          {{ (config_bootstrap_branch_title_cmd.stdout | default('') | trim)
+             if (config_bootstrap_branch_title_cmd.rc | default(1)) == 0 else '' }}
+        config_bootstrap_branch_file_valid: "{{ (config_bootstrap_branch_title_cmd.rc | default(1)) == 0 }}"
         config_bootstrap_host_title: >-
-          {{ ((config_bootstrap_host_config.content | b64decode | from_json).app.title | default(''))
-             if config_bootstrap_host_config.content is defined else '' }}
+          {{ (config_bootstrap_host_title_cmd.stdout | default('') | trim)
+             if (config_bootstrap_host_title_cmd.rc | default(1)) == 0 else '' }}
+        config_bootstrap_host_file_valid: >-
+          {{ (not config_bootstrap_host_brand_stat.stat.exists)
+             or ((config_bootstrap_host_title_cmd.rc | default(1)) == 0) }}
+
+    - name: Fail when a brand file is not valid JSON
+      ansible.builtin.assert:
+        that:
+          - config_bootstrap_branch_file_valid | bool
+          - config_bootstrap_host_file_valid | bool
+            or config_bootstrap_allow_rebrand | bool
+        fail_msg: >-
+          {{ 'The branch' if not (config_bootstrap_branch_file_valid | bool)
+             else 'The host' }} serves a brand file that is not valid JSON:
+          {{ 'the extracted ' ~ repo_branch ~ ' copy' if not (config_bootstrap_branch_file_valid | bool)
+             else (config_dir ~ '/' ~ config_bootstrap_brand_pairs.0.dest_subdir ~ '/' ~ config_bootstrap_brand_pairs.0.brand_file) }}.
+          The parse error is: {{ (config_bootstrap_branch_title_cmd.stderr | default('')
+             if not (config_bootstrap_branch_file_valid | bool)
+             else config_bootstrap_host_title_cmd.stderr | default('')) | trim }}.
+          Fix the file, or set config_bootstrap_allow_rebrand to true when
+          overwriting it with the branch's copy is the point.
+        success_msg: "config_bootstrap: both brand files parse"
 
     - name: Fail when the host's brand file carries no title
       ansible.builtin.assert:
@@ -283,7 +368,7 @@
           # a different thing — the mirror would overwrite it with the
           # branch's copy and re-brand the deployment, and an empty title
           # would have made the guard pass silently.
-          - config_bootstrap_host_config.content is not defined
+          - not config_bootstrap_host_brand_stat.stat.exists
             or config_bootstrap_host_title != ''
             or config_bootstrap_allow_rebrand | bool
         fail_msg: >-
@@ -341,6 +426,18 @@
     # archives were downloaded and extracted on the target host. Plain rsync under
     # the play's become runs on the target, where the data actually is, and writes
     # into the root-owned config_dir without any --rsync-path sudo games.
+    #
+    # Both rsync invocations below (the mirror and its verification) loop over
+    # the SAME specs, computed once: the two paths are long expressions, and
+    # writing them twice meant a future edit to one could silently leave the
+    # verification comparing a tree the mirror never wrote.
+    - name: Compute the mirror source and destination for each pair
+      ansible.builtin.set_fact:
+        config_bootstrap_mirror_specs: "{{ (config_bootstrap_mirror_specs | default([])) + [{'src': config_bootstrap_tmp.path ~ '/' ~ (item.dest_subdir | replace('/', '-')) ~ '/' ~ item.src ~ '/', 'dest': config_dir ~ '/' ~ item.dest_subdir ~ '/', 'label': item.dest_subdir}] }}"
+      loop: "{{ config_bootstrap_pairs }}"
+      loop_control:
+        label: "{{ item.dest_subdir }}"
+
     - name: Rsync branch defaults to host runtime config dir (mirror the branch)
       ansible.builtin.command:
         argv:
@@ -349,8 +446,8 @@
           - --checksum
           - --delete
           - --out-format=%i %n%L
-          - "{{ config_bootstrap_tmp.path }}/{{ item.dest_subdir | replace('/', '-') }}/{{ item.src }}/"
-          - "{{ config_dir }}/{{ item.dest_subdir }}/"
+          - "{{ item.src }}"
+          - "{{ item.dest }}"
       register: config_bootstrap_rsync
       # The "./" line is the destination directory itself, itemized when its
       # own attributes differ from the source's. The role does not pin a mode
@@ -360,9 +457,9 @@
       changed_when: >-
         (config_bootstrap_rsync.stdout_lines | default([])
          | reject('search', '\\s\\./$') | list | length) > 0
-      loop: "{{ config_bootstrap_pairs }}"
+      loop: "{{ config_bootstrap_mirror_specs }}"
       loop_control:
-        label: "{{ item.dest_subdir }}"
+        label: "{{ item.label }}"
 
     # The mirror is the claim; this is the proof. The same rsync, run as a dry
     # run, reports what it WOULD change: an empty report means the host already
@@ -381,6 +478,11 @@
     # there too. A verification run that itself failed (a vanished source tree,
     # an unreadable destination) produces no report at all, and must not be
     # mistaken for "the host matches the branch".
+    #
+    # A failure DURING the mirror can leave the host half-converged (the pairs
+    # before the failing one are already mirrored): the deploy fails loudly,
+    # and the next run converges the rest — the mirror is content-compared, so
+    # re-running never rewrites what is already correct.
     - name: Check what the mirror would still change on the host
       ansible.builtin.command:
         argv:
@@ -391,14 +493,14 @@
           - --dry-run
           - --itemize-changes
           - --out-format=%i %n%L
-          - "{{ config_bootstrap_tmp.path }}/{{ item.dest_subdir | replace('/', '-') }}/{{ item.src }}/"
-          - "{{ config_dir }}/{{ item.dest_subdir }}/"
+          - "{{ item.src }}"
+          - "{{ item.dest }}"
       register: config_bootstrap_verify
       changed_when: false
       failed_when: false
-      loop: "{{ config_bootstrap_pairs }}"
+      loop: "{{ config_bootstrap_mirror_specs }}"
       loop_control:
-        label: "{{ item.dest_subdir }}"
+        label: "{{ item.label }}"
 
     - name: Fail when the host runtime config does not match the branch
       ansible.builtin.assert:
@@ -415,7 +517,7 @@
         success_msg: "config_bootstrap: the host runtime config matches the branch"
       loop: "{{ config_bootstrap_verify.results | default([]) }}"
       loop_control:
-        label: "{{ item.item.dest_subdir | default('unknown') }}"
+        label: "{{ item.item.label | default('unknown') }}"
   always:
     # The scratch tree is removed on every path: success, guard failure, or a
     # failure inside the block. It holds the downloaded archives and the

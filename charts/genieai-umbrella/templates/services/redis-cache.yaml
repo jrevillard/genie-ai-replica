@@ -90,7 +90,9 @@ spec:
             capabilities: { drop: ["ALL"] }
       volumes:
         - name: data
-        {{- if $svc.pvc.enabled }}
+        {{- /* The PVC block is OPTIONAL (the per-service shape block says so): a cleared block means "no claim", not a nil-pointer crash. */ -}}
+{{- $pvc := $svc.pvc | default dict -}}
+{{- if $pvc.enabled }}
           persistentVolumeClaim:
             claimName: redis-cache-data
         {{- else }}
@@ -104,7 +106,9 @@ spec:
         - name: tmp
           emptyDir:
             medium: Memory
-{{- if $svc.pvc.enabled }}
+{{- /* The PVC block is OPTIONAL (the per-service shape block says so): a cleared block means "no claim", not a nil-pointer crash. */ -}}
+{{- $pvc := $svc.pvc | default dict -}}
+{{- if $pvc.enabled }}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

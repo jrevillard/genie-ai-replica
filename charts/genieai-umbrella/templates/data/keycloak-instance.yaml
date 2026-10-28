@@ -41,6 +41,21 @@ spec:
     user:
       secret: {{ $kcBootstrap.userSecret | default "keycloak-admin-credentials" }}
   instances: {{ $instances }}
+  # The pull credentials for the Keycloak StatefulSet. The OPERATOR owns
+  # that StatefulSet, so the chart cannot write its pod spec directly —
+  # and the podTemplate is NOT the way either: the operator overwrites
+  # the template's imagePullSecrets with this field's value
+  # (`withImagePullSecrets(spec.getImagePullSecrets())` in
+  # KeycloakDeploymentDependentResource) and warns on the CR status that
+  # "The imagePullSecrets of the keycloak container cannot be modified
+  # using podTemplate". This CR field is the one the operator reads.
+  # Without it a mirrored registry cannot pull the Keycloak image and
+  # the whole identity tier stays in ImagePullBackOff, with a pull
+  # error naming no values key.
+  {{- with $global.imagePullSecrets }}
+  imagePullSecrets:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   # CNPG hosts the Postgres database; the secret holds both `username` and
   # `password` keys (CNPG bootstrap requirement). The chart does NOT
   # materialize the secret — operators wire it from their secret backend.
@@ -99,15 +114,6 @@ spec:
         annotations:
           genieai.io/keycloak-theme-checksum: {{ .Files.Get "files/keycloak-themes.tgz" | sha256sum | trunc 16 }}
       spec:
-        # The pull credentials every other workload the chart renders
-        # gets: the theme-unpack init pulls busybox, and an air-gapped
-        # mirror needs the Secret to pull it at all. Without them the
-        # init dies in ImagePullBackOff and the whole identity tier
-        # never starts — with a pull error that names no values key.
-        {{- with $global.imagePullSecrets }}
-        imagePullSecrets:
-          {{- toYaml . | nindent 10 }}
-        {{- end }}
         volumes:
           - name: keycloak-themes-src
             configMap:

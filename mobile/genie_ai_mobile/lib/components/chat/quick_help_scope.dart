@@ -43,8 +43,13 @@ class QuickHelpScopeResolver {
     final category = button['category']?.toString();
     final labels =
         (button['serviceLabels'] as List<dynamic>?) ?? const <dynamic>[];
+    // 'general' is the placeholder a category-less selection is stored
+    // under: it names no category, and every rule treats it as NO scope —
+    // this one included, or a category-less card would look healthy in
+    // the grid and be refused at send time.
     final declaresScope =
-        (category != null && category.isNotEmpty) || labels.isNotEmpty;
+        (category != null && category.isNotEmpty && category != 'general') ||
+        labels.isNotEmpty;
     return {
       'broken': declaresScope,
       'unavailable': declaresScope,

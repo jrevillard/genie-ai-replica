@@ -385,6 +385,24 @@ void main() {
   });
 
   group('QuickHelpScopeResolver.unavailableScopeFor', () {
+    test(
+      "'general' names no category — a card stored under it stays usable",
+      () {
+        // selectQuickHelpOption stores a category-less selection under the
+        // 'general' placeholder: the grid treats the raw card (category
+        // null) as scope-free, and the send guard treats the STORED item —
+        // so the two must agree on 'general' too, or the card looks
+        // healthy and is refused at send time.
+        final scope = QuickHelpScopeResolver.unavailableScopeFor({
+          'id': 'free',
+          'category': 'general',
+          'serviceLabels': const <dynamic>[],
+        });
+
+        expect(scope['broken'], isFalse);
+      },
+    );
+
     test('a card that declares no scope stays usable', () {
       // The "just chat" card promises nothing the hierarchy could deny,
       // and the composer must stay reachable when the hierarchy is down.

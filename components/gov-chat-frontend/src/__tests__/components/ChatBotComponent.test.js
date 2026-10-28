@@ -2119,6 +2119,74 @@ describe('ChatBotComponent', () => {
       expect(vm.checkContextConfig({ categoryLabel: null, serviceLabels: [] })).toBe(true);
     });
 
+    it('a locale switch shows the localized name of a sidebar chip, not the EN label', async () => {
+      const tree = [
+        {
+          catKey: '2',
+          name: 'Impuestos',
+          nameEN: 'Taxes',
+          children: [{ name: 'Declaración de impuestos', nameEN: 'Tax Filing' }]
+        }
+      ];
+      mockLiveTree(tree);
+      const wrapper = await createChatBotWrapperAsync(tree);
+      const vm = wrapper.vm;
+
+      // The chip's identity is the EN label; its DISPLAY is the tree's
+      // localized name for it. safeTranslate returned the EN string
+      // unchanged in a non-English UI.
+      vm.$store.commit('conversation/setContextItems', [
+        { service: 'Tax Filing', serviceKey: 'Tax Filing', source: 'sidebar', category: '2', selected: true }
+      ]);
+
+      // The locale switch is what re-resolves the chips: the watcher must
+      // rewrite the display through the tree, not through safeTranslate
+      // (which returns the EN string unchanged in a non-English UI).
+      wrapper.vm.$i18n.locale = 'fr';
+      await vm.$nextTick();
+      await flushPromises();
+
+      expect(vm.selectedContextItems[0].service).toBe('Declaración de impuestos');
+    });
+
+    it('a FAILED hierarchy load is retried, not cached for the session', async () => {
+      const serviceTreeService = require('../../services/serviceTreeService');
+      serviceTreeService.getAllCategories
+        .mockRejectedValueOnce(new Error('down'))
+        .mockResolvedValueOnce([{ catKey: '2', name: 'Crops', nameEN: 'Crops', children: [] }]);
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      await flushPromises();
+      expect(vm.serviceCategoriesStatus).toBe('failed');
+
+      await vm.ensureServiceCategoriesLoaded();
+      await flushPromises();
+
+      expect(vm.serviceCategoriesStatus).toBe('loaded');
+      expect(serviceTreeService.getAllCategories).toHaveBeenCalledTimes(2);
+    });
+
+    it('a category-less card is not refused at send time when the hierarchy failed', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      vm.serviceCategoriesStatus = 'failed';
+
+      // The grid treats a category-less card as scope-free (usable); the
+      // send guard must agree — 'general' is the placeholder such a
+      // selection is stored under, and it names no category.
+      const item = {
+        id: 'free',
+        service: 'Free chat',
+        serviceLabels: [],
+        source: 'quickHelp',
+        category: 'general',
+        selected: true
+      };
+      const state = vm.quickHelpScopeState(item);
+      expect(state.broken).toBe(false);
+      expect(vm.checkContextConfig({ categoryLabel: null, serviceLabels: [] })).toBe(true);
+    });
+
     it('a category-scoped conversation with NO tags restores its scope', async () => {
       const tree = [{ catKey: '2', name: 'Cultivos', nameEN: 'Crops', children: [] }];
       mockLiveTree(tree);

@@ -1021,14 +1021,19 @@ export default {
         (newLocale) => {
           this.currentLocale = newLocale;
           // Update context labels when locale changes. A Quick Help item
-          // displays the title of its button, and its key is the button id —
-          // not a translation key — so its display is left alone.
+          // displays the title of its button (re-resolved by
+          // applyQuickHelpButtons). A SIDEBAR item's identity is its EN
+          // label: its display is the tree's localized name FOR that EN
+          // label — safeTranslate would return the EN string unchanged in
+          // a non-English UI.
           this.$store.commit(
             'conversation/setContextItems',
             this.selectedContextItems.map((item) => ({
               ...item,
               service:
-                item.source === QUICK_HELP_SOURCE ? item.service : this.safeTranslate(item.serviceKey || item.service)
+                item.source === QUICK_HELP_SOURCE
+                  ? item.service
+                  : this.displayNameForEnLabel(item.serviceKey) || this.safeTranslate(item.service)
             }))
           );
           this.loadServiceCategories(); // Reload categories for the new locale
@@ -1256,8 +1261,13 @@ export default {
         // verified — and the button says so rather than looking healthy
         // and swallowing the click. A card that declares NO scope promises
         // nothing the hierarchy could deny: it stays usable.
+        // 'general' is the placeholder a category-less selection is stored
+        // under: it names no category, and every rule treats it as NO
+        // scope — this one included, or a category-less card would look
+        // healthy in the grid and be refused at send time.
         const declaresScope =
-          (button.category != null && button.category !== '') || (button.serviceLabels || []).length > 0;
+          (button.category != null && button.category !== '' && button.category !== 'general') ||
+          (button.serviceLabels || []).length > 0;
         return {
           broken: declaresScope,
           unavailable: declaresScope,
@@ -1510,7 +1520,10 @@ export default {
      * would look the tags up in an empty vocabulary and drop them.
      */
     async ensureServiceCategoriesLoaded() {
-      if (!this.serviceCategoriesLoadPromise) {
+      // A FAILED load is not cached: the mobile retries (its fix is in),
+      // and the web must too — one transient failure at mount must not
+      // keep every scoped card dead for the session.
+      if (!this.serviceCategoriesLoadPromise || this.serviceCategoriesStatus === 'failed') {
         this.serviceCategoriesLoadPromise = this.loadServiceCategories();
       }
       await this.serviceCategoriesLoadPromise;

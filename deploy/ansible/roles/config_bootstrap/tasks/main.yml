@@ -473,6 +473,18 @@
     # exactly as it is (docker-compose creates a missing bind-mount source as
     # an empty root-owned directory anyway, so an operator who manages the tree
     # by hand has to populate it themselves).
+    # The config_dir parent is not part of any pair, so the mirror never
+    # touches it — and a mode drifted on it (a 0700 between deploys) would
+    # shadow a readable subtree behind a green deploy. Creating it with an
+    # explicit mode both seeds it correctly and repairs a drifted one on
+    # every run; the readability guard below stays as the backstop.
+    - name: Ensure the config directory itself is present and traversable
+      become_user: root
+      ansible.builtin.file:
+        path: "{{ config_dir }}"
+        state: directory
+        mode: "0775"
+
     - name: Ensure runtime config directories exist
       become_user: root
       ansible.builtin.file:
@@ -594,8 +606,9 @@
         fail_msg: >-
           The config directory {{ item.item.dest }} carries mode
           {{ item.stat.mode }} after the mirror: the containers read the mount
-          as a non-root user and would not be able to traverse it. Fix the
-          directory mode in the repository the branch is deployed from.
+          as a non-root user and would not be able to traverse it. The role
+          creates these directories mode 0775 — a mode that still fails this
+          check was changed on the host after the deploy.
         success_msg: "config_bootstrap: the seeded directories are readable"
       loop: "{{ config_bootstrap_dir_stat.results | default([]) }}"
       loop_control:

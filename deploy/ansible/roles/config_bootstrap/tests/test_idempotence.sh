@@ -210,12 +210,11 @@ STRAY_PATH=""
 RESTORE_ARMED="false"
 RESTORE_RUNNING="false"
 
-# The restore stays armed until it SUCCEEDS, so a signal that lands while it
-# is running re-enters it: the tree is put back, the archive is removed, and
-# the run still ends on the signal's exit code. A signal landing mid-restore
-# finds the busy flag set and leaves the in-flight restore alone instead of
-# re-entering it — a second restore would delete the scratch tree the first
-# is still reading. Disarming it up front left the
+# The restore stays armed until it SUCCEEDS, so a signal that lands mid-run
+# still finds the host's config recoverable: the archive is only removed once
+# the tree is back. While a restore is in flight the busy flag makes a second
+# caller leave it alone — a nested restore would delete the scratch tree the
+# first one is still reading. Disarming it up front left the
 # archive on the host whenever a signal landed between the extraction and its
 # removal.
 # 0 = the host is back to its pre-test state (or there was nothing to
@@ -270,7 +269,7 @@ restore() {
             -a "test -f '$BACKUP_ARCHIVE'" >/dev/null 2>&1; then
         RESTORE_SCRATCH="$CONFIG_PARENT/.config_bootstrap_restore_scratch"
         if ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
-            -a "rm -rf '$RESTORE_SCRATCH' && mkdir -p '$RESTORE_SCRATCH' && tar -xpf '$BACKUP_ARCHIVE' -C '$RESTORE_SCRATCH' && rsync -a --delete '$RESTORE_SCRATCH/$(basename "$CONFIG_DIR")/' '$CONFIG_DIR/' && rm -rf '$RESTORE_SCRATCH'" >/dev/null 2>&1; then
+            -a "rm -rf '$RESTORE_SCRATCH'; mkdir -p '$RESTORE_SCRATCH' && tar -xpf '$BACKUP_ARCHIVE' -C '$RESTORE_SCRATCH' && rsync -a --delete '$RESTORE_SCRATCH/$(basename "$CONFIG_DIR")/' '$CONFIG_DIR/'; st=\$?; rm -rf '$RESTORE_SCRATCH'; exit \$st" >/dev/null 2>&1; then
             ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
                 -a "rm -f '$BACKUP_ARCHIVE'" >/dev/null 2>&1 || true
             printf '  [ok] %s restored from pre-test backup; backup removed.\n' "$CONFIG_DIR"
@@ -311,7 +310,7 @@ restore() {
 # reached.
 sigtrap() {
     if [ "$RESTORE_RUNNING" = "true" ]; then
-        printf '  [..] signal received while the restore is running; it finishes first, then this shell exits with the signal code.\n' >&2
+        printf '  [..] signal received while the restore is running; it finishes before the shell goes away.\n' >&2
         return 0
     fi
     restore || true
@@ -518,11 +517,12 @@ step "Contract 3: the guards refuse a branch that does not belong to this deploy
 # and the role refuses to mirror it before anything is written. Which guard
 # fires depends on the branch's theme versus the group_vars theme — either
 # refusal is proof the deployment rejects a foreign branch before touching it.
-# Seeded from main there is no flavour to defend (every branch satisfies the
-# defaults), so the contract is skipped rather than made vacuous. An empty
-# REPO_BRANCH means deploy.yml's default, which is main.
+# The contract refuses branch main by name, so it needs a host whose own
+# branch is not main; seeded from main the test does not know which branch
+# would be foreign here, and skips. An empty REPO_BRANCH means deploy.yml's
+# default, which is main.
 if [ -z "$REPO_BRANCH" ] || [ "$REPO_BRANCH" = "main" ]; then
-    pass "skipped: seeded from main, whose defaults every branch satisfies - there is no foreign branch to refuse"
+    pass "skipped: seeded from main - this test does not know which branch this deployment would have to refuse; run it on the deployment host, where contract 3 exercises the refusal against the branch that host actually runs"
 else
     # The pre-test archive is still armed: if the guards fail to fire and the
     # mirror runs main's assets onto this host, the restore puts the

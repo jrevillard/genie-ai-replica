@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-27)
 
-- **Chart `genieai-umbrella` at 0.2.89**, branch `feat/k8s-migration` rebased
+- **Chart `genieai-umbrella` at 0.2.90**, branch `feat/k8s-migration` rebased
   onto `main` at `179a8a8f1` (0 commits behind).
 - **No application code in the branch**: the diff touches `charts/`,
   `scripts/`, `docs/`, `deploy/`, `tests/`, `site/`, `.gitlab-ci.yml`,
@@ -604,6 +604,53 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 18 (0.2.90)** — 5 findings, all verified true, all
+  fixed, plus the gates that protect pass 17's fixes. The headline:
+  **the keycloak NetworkPolicy was invisible to the flow gate.**
+  - *The chart renders a policy for the keycloak-operator's pods, and
+    the cross-check could not see it* — `component_of()` read
+    `genieai.io/component` and the bare `app`, while the keycloak policy
+    selects by `app.kubernetes.io/instance: keycloak` +
+    `managed-by: keycloak-operator`. The whole ingress list (the
+    backend's realm-token validation, the doc-repo's JWKS fetch,
+    chatqna, dataprep, the convergence Job) was therefore outside the
+    gate: dropping the backend from that list changed nothing the
+    script could see. A flow-based gate CANNOT catch that — the peer
+    list IS the declaration — so the expectation is now derived from
+    the RENDER: every workload carrying a KEYCLOAK_URL that points at
+    the in-cluster keycloak Service must be admitted by that policy, on
+    the port it dials. The reviewer's own mutation (drop the backend
+    peer) now fails with `BLOCKED backend -> keycloak :8080`, and so
+    does a port swapped for 9090.
+  - *`instances: 0` rendered as 1* — the resolver coerced a zero to
+    one, so an operator pinning 0 got a running database they did not
+    ask for. The schema now types both counts (`minimum: 1`, with a
+    named path) and the resolver fails with the tier's name instead of
+    coercing.
+  - *A non-numeric port in `ingress.host` rendered `port: 0`* — sprig's
+    `int` is lenient ("443x" → 0), and the API server rejects the
+    Gateway with "spec.listeners[1].port: Invalid value: 0", naming a
+    CR field instead of the values key. The derivation site now
+    validates the port (numeric, 1-65535) and fails by name, like its
+    IPv6 sibling.
+  - *A nil environment value became the text "<nil>"* — the map path
+    (the operator's `services.<svc>.env`) stringified it; the list path
+    already rejected it. Both now fail with the variable's name.
+  - *The model Deployment's comment contradicted its code* — it said
+    "Empty = no node constraint" while an empty map renders the
+    `gpu=true` default. There is deliberately no "no constraint"
+    configuration (the model pods need a GPU), and the comment now
+    says so.
+  - *Gates around pass 17* — `scripts/instance-count-check.py` renders
+    the three configurations the instance precedence must hold (dev,
+    prod, prod with an operator override) and fails when one drifts
+    (mutation-tested against the old hardcoded behaviour);
+    `chart:contract` now asserts the SPA's connect-src starts with the
+    backend's derived set (mutation-tested against the old
+    single-origin policy); the render-guards script exercises the env
+    map/list and nil-value guards; the schema gate rejects a duplicate
+    key in `values.schema.json` (`json.load` keeps the last one and
+    says nothing).
 - **Review loop, pass 17 (0.2.89)** — 13 findings, all verified true, all
   fixed, plus the two brittleness notes the reviewer appended. The
   headline: **every environment value the chart rendered was a string by
@@ -788,7 +835,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.89** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.90** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `179a8a8f1` (the tip that carries !586, !587,
   !588) — the branch is 0 commits behind `main`.

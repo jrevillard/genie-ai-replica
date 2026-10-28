@@ -201,7 +201,10 @@ KC_RAW=$(kubectl run kc-probe --rm -i --restart=Never -n "$NS" \
   "http://keycloak-service.${NS}.svc.cluster.local:8080/auth/realms/genie/.well-known/openid-configuration")
 # kubectl relays the pod's stdout AFTER its own creation line on some
 # versions ("pod/kc-probe created200") — the code is the trailing number.
-KC_CODE=$(printf '%s' "$KC_RAW" | grep -oE '[0-9]{3}[[:space:]]*$' | tr -d '[:space:]')
+# grep finds nothing when the output carries no code (a pod error, a
+# policy drop that lost the output): `|| true` lets that reach the
+# assertion below instead of set -e killing the script with no message.
+KC_CODE=$(printf '%s' "$KC_RAW" | grep -oE '[0-9]{3}[[:space:]]*$' | tr -d '[:space:]' || true)
 case "$KC_CODE" in
   200|401) echo "  keycloak OIDC discovery: HTTP $KC_CODE (expected)";;
   *) echo "  FAIL: keycloak OIDC discovery answered HTTP ${KC_CODE:-none} (expect 200 or 401)"; exit 1;;

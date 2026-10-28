@@ -133,11 +133,14 @@ spec:
     # the UI renders blank. Same shape the compose path gets from Kong's
     # strip-prefix location.
     server:
-      {{- if .Values.ingress.host }}
-      root_url: {{ printf "%s://%s/grafana" (.Values.ingress.scheme | default "https") .Values.ingress.host }}
-      {{- else }}
-      root_url: "%(protocol)s://%(domain)s:%(http_port)s/grafana"
-      {{- end }}
+      # Through the shared helper, not a raw values chain: the helper
+      # normalizes a cleared ingress block (failing by name, as every
+      # consumer of the public host does) and validates the host:port
+      # shape this URL feeds to the browser. The else-branch the raw
+      # chain carried was unreachable — no render passes the guards
+      # with ingress.host unset — and advertised a degrade path nothing
+      # could take.
+      root_url: {{ printf "%s://%s/grafana" (.Values.ingress.scheme | default "https") (include "genieai-umbrella.ingressHost" .) }}
       # spec.config is a map[string]string (the ini-file form): every
       # value must be a STRING. A YAML boolean is rejected by the API
       # server with "must be of type string: boolean" — the whole Grafana

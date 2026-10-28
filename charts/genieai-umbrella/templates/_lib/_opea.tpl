@@ -58,9 +58,17 @@ the empty endpoint is the documented "no such remote target" signal
 hand the application a URL whose every request 404s. */ -}}
 {{- $paths := $gpu.paths | default dict -}}
 {{- $p := index $paths $key -}}
-{{- if $p -}}
-{{- trimSuffix "/" $host }}{{ $p }}
+{{- /* A missing path is a NAMED error, not an empty endpoint: the
+endpoint is nodeHost + path, and an empty path renders an empty URL
+the pod dials — a connection failure at runtime, with the values key
+the operator cleared nowhere in the message. The chart's own defaults
+(llm=/llm, embedding=/embed, reranker=/rerank, translation=/translation,
+docling=/docling) are deleted by a null, so they cannot be the
+fallback. */ -}}
+{{- if not $p -}}
+{{- fail (printf "opea.gpu.paths.%s is required in the external GPU mode — the endpoint is nodeHost + path, and a missing path renders an empty endpoint the pods dial; declare it (the chart's defaults are llm=/llm, embedding=/embed, reranker=/rerank, translation=/translation, docling=/docling)" $key) -}}
 {{- end -}}
+{{- trimSuffix "/" $host }}{{ $p }}
   {{- end -}}
 
 {{- else -}}

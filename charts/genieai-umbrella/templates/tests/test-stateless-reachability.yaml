@@ -1,6 +1,7 @@
 {{- /* Stateless-tier service reachability smoke test. Probes each Service's
        /health endpoint (or TCP-open for clamd / redis-cache) and asserts
-       the response. Skips disabled services. */ -}}
+       the response. Skips disabled services. */ -}}{{- $global := .Values.global | default dict -}}
+
 apiVersion: v1
 kind: Pod
 metadata:
@@ -18,7 +19,7 @@ spec:
     runAsUser: 65534
     seccompProfile:
       type: RuntimeDefault
-  {{- with .Values.global.imagePullSecrets }}
+  {{- with $global.imagePullSecrets }}
   # Same credential as every sibling pod: a credentialed docker.io
   # mirror must not ImagePullBackOff the test pod while every workload
   # it probes pulls fine.
@@ -27,7 +28,7 @@ spec:
   {{- end }}
   containers:
     - name: t
-      image: "{{ .Values.global.toolingImageRegistry | default "docker.io" }}/curlimages/curl:8.10.1"
+      image: "{{ $global.toolingImageRegistry | default "docker.io" }}/curlimages/curl:8.10.1"
       imagePullPolicy: IfNotPresent
       securityContext:
         allowPrivilegeEscalation: false
@@ -100,7 +101,7 @@ spec:
     runAsUser: 65534
     seccompProfile:
       type: RuntimeDefault
-  {{- with .Values.global.imagePullSecrets }}
+  {{- with $global.imagePullSecrets }}
   # Same credential as every sibling pod: a credentialed docker.io
   # mirror must not ImagePullBackOff the test pod while every workload
   # it probes pulls fine.
@@ -109,7 +110,7 @@ spec:
   {{- end }}
   containers:
     - name: tcp-reach
-      image: {{ .Values.global.toolingImageRegistry | default "docker.io" }}/busybox:1.36
+      image: {{ $global.toolingImageRegistry | default "docker.io" }}/busybox:1.36
       # Same container-level restricted-profile set as the sibling test
       # pods: the pod-level block carries runAsNonRoot only, and a
       # namespace enforcing `restricted` rejects the pod at admission on

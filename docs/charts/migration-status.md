@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-28)
 
-- **Chart `genieai-umbrella` at 0.2.94**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.95**, branch `feat/k8s-migration` based
   on `main` at `179a8a8f1` and **8 commits behind `origin/main`**
   (`5786919c1`). The gap touches the frontend, the OPEA overlay
   (retriever/dataprep), the site docs and the config-validator tests —
@@ -609,6 +609,51 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 23 (0.2.95)** — 5 findings, all verified true, all
+  fixed. The pass attacked the gates pass 22 had just rewritten, and it
+  was right to: the "degraded" bucket asserted only that the render did
+  not fail, so a degradation that EMPTIES a value the pods dial passed
+  as compliant.
+  - *Clearing `opea.gpu.paths` emptied every GPU endpoint* — the
+    external-mode endpoint is nodeHost + path, and a missing path
+    rendered an empty URL that the orchestrators dial: a release that
+    installs cleanly and answers no request. The helper's own docstring
+    says an empty endpoint must be a named install-time error (the
+    nodeHost guard does exactly that); the path had no such guard. It
+    fails by name now, naming the key.
+  - *`observability.collectorPort` and `collectorCRName` had no
+    default at two of their five read sites* — clearing the port
+    produced a YAML parse error naming a template, and clearing the CR
+    name produced a CR with no name (the API server rejects it). Both
+    reads now carry the same default their siblings carry.
+  - *The gate's failure classifier asserted nothing in its "compliant"
+    branch* — it counted every error that was not an engine crash as a
+    named guard, so a YAML parse error (the collectorPort case above)
+    passed as the contract being honoured. The classifier now asserts
+    the POSITIVE form: a guard names the values key
+    (`execution error at (<file>:<line>): <message>`), and anything
+    else is a defect.
+  - *The gate could not see a degraded render that empties a value* —
+    the sweep now compares the cleared render with the baseline and
+    fails when an environment row present in both goes from a
+    populated value to an empty one. It catches the whole class (the
+    mutation test reproduces the finding exactly: ten rows emptied,
+    each named).
+  - *The render-guards coverage claim was false* — six operator
+    reachable guards had no case (the derived translation backend, the
+    identity tier without its database, a service with no image
+    repository, the OPEA tier with no dependency-graph entry, Grafana
+    with no storage component, and a convergence row with an empty
+    value). The script now has a case for each of them, so the claim
+    it makes is the one it can support.
+  - *`global` was the one block still crashing, and the exemption's
+    stated harm did not exist* — the reason cited the tools init
+    container being handed an empty architecture, but the chart's
+    default for that knob IS empty (the init container detects the
+    architecture at runtime) and every other global knob degrades to a
+    default. The block is normalized like the rest and swept: the
+    sweep now covers 117 blocks with NO exemption at all, and the
+    exemption mechanism stays in the script for the day one is needed.
 - **Review loop, pass 22 (0.2.94)** — 3 findings, all verified true, all
   fixed. The first one turned this loop's own gate inside out.
   - *The clearable-blocks gate could not see a block it did not know* —
@@ -1031,7 +1076,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.94** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.95** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `179a8a8f1` (the tip that carries !586, !587,
   !588) — the branch is 0 commits behind `main`.

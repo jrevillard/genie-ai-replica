@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-28)
 
-- **Chart `genieai-umbrella` at 0.2.103**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.104**, branch `feat/k8s-migration` based
   on `main` at `18d02f094` and **12 commits behind `origin/main`**
   (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
   the backend's analytics routes, the OPEA overlay (retriever/dataprep),
@@ -614,7 +614,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
-- **Review loop, pass 31 (0.2.103)** — 10 findings from the seventh
+- **Review loop, pass 31 (0.2.104)** — 10 findings from the seventh
   `/code-review`. The theme of the pass: the values a deployment reads
   through a path the chart does not own.
   - *The Keycloak context path was concatenated with no shape check* —
@@ -624,11 +624,19 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     "auth/", a URL no client can dial, with the values key nowhere in
     the error. The shape (leading slash, no whitespace) is checked at
     the single source now.
-  - *The Keycloak CR's injected podTemplate carried no pull
-    credentials* — the theme-unpack init pulls busybox, and an
-    air-gapped mirror needs the Secret to pull it at all. Without
-    them the init died in ImagePullBackOff and the whole identity
-    tier never started, with a pull error naming no values key.
+  - *The Keycloak CR carried no pull credentials* — the operator owns
+    that StatefulSet, so the chart could not write its pod spec, and an
+    air-gapped mirror could pull neither the Keycloak image nor the
+    theme-unpack init's busybox: the whole identity tier stayed in
+    ImagePullBackOff, with a pull error naming no values key. The
+    credentials go in the CR's TOP-LEVEL `spec.imagePullSecrets`, not
+    in the podTemplate: the operator overwrites the template's value
+    with that field's (`withImagePullSecrets(spec.getImagePullSecrets())`
+    in `KeycloakDeploymentDependentResource`) and warns on the CR
+    status that "The imagePullSecrets of the keycloak container cannot
+    be modified using podTemplate". Both facts are upstream's, read at
+    keycloak/keycloak 26.8.0 — the podTemplate placement renders,
+    lints and passes kubeconform, and is silently dropped.
   - *Grafana's `root_url` read `ingress.scheme` as a raw chain* — the
     one file that skipped the parent-first binding, so a CLEARED
     ingress block crashed the template engine instead of failing
@@ -1424,7 +1432,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.103** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.104** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `18d02f094` (the tip that carries !586, !587,
   !588); the branch has since drifted 12 commits behind `origin/main`

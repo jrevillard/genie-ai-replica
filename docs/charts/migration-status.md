@@ -9,12 +9,17 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 ## Current state (2026-10-28)
 
 - **Chart `genieai-umbrella` at 0.2.98**, branch `feat/k8s-migration` based
-  on `main` at `179a8a8f1` and **8 commits behind `origin/main`**
-  (`5786919c1`). The gap touches the frontend, the OPEA overlay
-  (retriever/dataprep), the site docs and the config-validator tests —
+  on `main` at `179a8a8f1` and **12 commits behind `origin/main`**
+  (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
+  the backend's analytics routes, the OPEA overlay (retriever/dataprep),
+  `docker-compose.yaml`, the site docs, the config-validator tests and
+  `.gitlab-ci.yml` (the `config:validate` job's `changes:` list) —
   **nothing under `charts/` or `scripts/`**, so the chart's gates and
-  renders are unaffected. The branch is rebased onto `main` before the
-  MR leaves Draft.
+  renders are unaffected. Two of those touch the gates indirectly: the
+  rebase brings main's `docker-compose.yaml` (the parity gate's other
+  side) and main's `.gitlab-ci.yml` (the job definitions), so both gates
+  must be re-run after the rebase. The branch is rebased onto `main`
+  before the MR leaves Draft.
 - **No application code in the branch**: the diff touches `charts/`,
   `scripts/`, `docs/`, `deploy/`, `tests/`, `site/`, `.gitlab-ci.yml`,
   `docker-compose.yaml`, `env`, `Makefile`, `CLAUDE.md`, `CHANGELOG.md` —
@@ -1215,7 +1220,8 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 - Chart `genieai-umbrella` at **0.2.98** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `179a8a8f1` (the tip that carries !586, !587,
-  !588) — the branch is 0 commits behind `main`.
+  !588); the branch has since drifted 12 commits behind `origin/main`
+  (see the current state above).
 - **Edge tier shipped (0.2.21–0.2.26)**: Envoy Gateway as a chart dependency
   (`envoyGateway.enabled`, default on, disable-able), Gateway API Gateway/
   GatewayClass/HTTPRoute/Certificate/SecurityPolicy templates, **nginx

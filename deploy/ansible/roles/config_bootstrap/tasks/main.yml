@@ -232,18 +232,24 @@
           check, and the mirror would delete the deployment's theme.
         success_msg: "config_bootstrap: the Keycloak themes are seeded by a pair"
 
-    # An empty entrypoints list would run the stat loop over zero items and
-    # pass vacuously: the guard would check nothing while reporting success,
-    # and the mirror would delete the deployment's theme unchecked.
+    # An entrypoints list that is not a list — or an empty one — breaks the
+    # guard below: an empty list runs the stat loop over zero items and
+    # passes vacuously (the guard checks nothing while reporting success, and
+    # the mirror deletes the deployment's theme unchecked), and a bare string
+    # is walked one character per item into a wall of per-character
+    # assertions. Both are refused here, with one actionable message.
     - name: Fail unless the theme guard has entrypoints to check
       ansible.builtin.assert:
         that:
+          - config_bootstrap_theme_entrypoints is sequence
+          - config_bootstrap_theme_entrypoints is not string
           - config_bootstrap_theme_entrypoints | length > 0
         fail_msg: >-
-          config_bootstrap_theme_entrypoints is empty, so the theme guard
-          would check nothing and still pass. Name the theme subtrees the
-          realm points at (for the stock realm: login, account, admin, email)
-          or remove the override entirely.
+          config_bootstrap_theme_entrypoints must be a non-empty list of
+          theme subtree names (for the stock realm: login, account, admin,
+          email). Anything else — an empty list, a bare string — breaks the
+          guard that stops the mirror from deleting the deployment's theme.
+          Remove the override entirely to use the default list.
         success_msg: "config_bootstrap: the theme guard checks {{ config_bootstrap_theme_entrypoints | length }} entrypoints"
 
     # The theme's entrypoints, not its directory: a branch that ships the
@@ -487,9 +493,16 @@
         # twice and yield an eight-character string that matches nothing.
         config_bootstrap_dir_itemize_pattern: '\s\./$'
 
+    # Facts persist across plays for a host: a second application of the role
+    # in the same run must start from an empty list, or it would append this
+    # run's specs to the first run's — whose scratch paths no longer exist.
+    - name: Start the mirror spec list from scratch
+      ansible.builtin.set_fact:
+        config_bootstrap_mirror_specs: []
+
     - name: Compute the mirror source and destination for each pair
       ansible.builtin.set_fact:
-        config_bootstrap_mirror_specs: "{{ (config_bootstrap_mirror_specs | default([])) + [{'src': config_bootstrap_tmp.path ~ '/' ~ (item.dest_subdir | replace('/', '-')) ~ '/' ~ item.src ~ '/', 'dest': config_dir ~ '/' ~ item.dest_subdir ~ '/', 'label': item.dest_subdir}] }}"
+        config_bootstrap_mirror_specs: "{{ config_bootstrap_mirror_specs + [{'src': config_bootstrap_tmp.path ~ '/' ~ (item.dest_subdir | replace('/', '-')) ~ '/' ~ item.src ~ '/', 'dest': config_dir ~ '/' ~ item.dest_subdir ~ '/', 'label': item.dest_subdir}] }}"
       loop: "{{ config_bootstrap_pairs }}"
       loop_control:
         label: "{{ item.dest_subdir }}"
@@ -562,12 +575,15 @@
     # sources. The containers read those sources as a non-root user, so each
     # directory must grant others read and traverse (the low octal digit >= 5
     # in an 0o775-mode world): a restrictive mode in the archive would shadow
-    # a readable config behind a deploy that reports success.
+    # a readable config behind a deploy that reports success. The config_dir
+    # parent itself is in the loop too: the mirror only writes the pair
+    # subtrees, so a drifted mode on it would pass every other check while
+    # the containers can no longer traverse into them.
     - name: Check the seeded directories are readable by the containers
       ansible.builtin.stat:
         path: "{{ item.dest }}"
       register: config_bootstrap_dir_stat
-      loop: "{{ config_bootstrap_mirror_specs }}"
+      loop: "{{ config_bootstrap_mirror_specs + [{'dest': config_dir, 'label': 'config'}] }}"
       loop_control:
         label: "{{ item.label }}"
 

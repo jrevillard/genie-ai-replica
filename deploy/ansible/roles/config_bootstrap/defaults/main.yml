@@ -37,14 +37,16 @@ config_bootstrap_theme_entrypoints:
   - admin
   - email
 
-# The guard protects the CONFIGURED theme only. A theme it does not know
-# about — the parent a flavour theme inherits from (a flavour declares
-# parent=genie), or anything an operator dropped in the themes directory —
-# is protected by the owning pair's `expect` list: put the paths that must
-# exist in the branch (e.g. genie/account/theme.properties) there, never in
-# config_bootstrap_theme_entrypoints, which names the configured theme's
-# own subtrees. The expect list is also the knob when a deployment retires
-# one of the parent's subtrees.
+# The guard protects the CONFIGURED theme only. The owning pair's `expect`
+# list keeps the rest of the branch's themes tree intact: the paths it names
+# (the parent a flavour theme inherits from, e.g.
+# genie/account/theme.properties) must exist in the branch, so a branch that
+# ships them re-seeds them and the mirror never deletes them. What the branch
+# does NOT ship, the mirror removes — a theme that exists only on the host
+# does not survive a deploy (the branding guide says the same): keep it in
+# the repository, then name it in config_bootstrap_theme_entrypoints if a
+# realm points at it. The expect list is also the knob when a deployment
+# retires one of the parent's subtrees.
 
 # List of (source, destination) pairs.
 #   src        - repo-relative directory. Used two ways: as the `?path=` argument

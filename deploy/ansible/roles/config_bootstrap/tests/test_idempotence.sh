@@ -296,17 +296,30 @@ restore() {
     return 1
 }
 # The EXIT trap keeps the code the run ended with and turns a FAILED restore
-# into a failed run (1). The signal traps restore it and stop the script on
+# into a failed run (1). A signal restores the host and stops the script on
 # the signal's code: a signal that only restored the host would let the run
 # continue on a tree the restore had just put back, and it would end by
-# reporting a pass — and a caller keys on 130/143 to recognise "interrupted",
-# so the signal's code is re-asserted even when the restore itself failed
-# (whose [FAIL] is printed). `restore || true` matters here: with errexit on,
-# a failing command inside the trap handler would end the handler on ITS code
-# and the signal's code would never be reached.
+# reporting a pass — and a caller keys on 130/143 to recognise "interrupted".
+# A signal landing WHILE a restore is running (the busy flag is set) only
+# notes itself and returns: exiting there would kill the restore mid-way and
+# leave the host half-restored — the interrupted restore finishes putting the
+# tree back. A restore that a signal trap started still ends on the signal's
+# code; a restore the script itself started (the end-of-run cleanup) lets the
+# run finish and report its own result. `restore || true` matters in the
+# direct path: with errexit on, a failing command inside the trap handler
+# would end the handler on ITS code and the signal's code would never be
+# reached.
+sigtrap() {
+    if [ "$RESTORE_RUNNING" = "true" ]; then
+        printf '  [..] signal received while the restore is running; it finishes first, then this shell exits with the signal code.\n' >&2
+        return 0
+    fi
+    restore || true
+    exit "$1"
+}
 trap 'rc=$?; if restore; then exit "$rc"; else exit 1; fi' EXIT
-trap 'restore || true; exit 130' INT
-trap 'restore || true; exit 143' TERM
+trap 'sigtrap 130' INT
+trap 'sigtrap 143' TERM
 
 # --- resolve paths ------------------------------------------------------------
 

@@ -31,7 +31,7 @@
   ansible.builtin.package:
     name: rsync
     state: present
-  when: config_bootstrap_sync_enabled | bool
+  when: config_bootstrap_run | bool
 
 # The whole seeding runs in a block with an `always` section: the scratch tree
 # holds the downloaded archives and the extracted branch copy (tens of MB per
@@ -48,8 +48,10 @@
     # The pre-mirror role kept its scratch under a fixed path and removed it
     # only at the end of a successful play, so failed runs left the archives
     # and the extraction tree on every node. This run's scratch is private;
-    # these two paths are what it replaced. Retirable once every node has run
-    # this role at least once.
+    # these two paths are what it replaced. Only what has been there for more
+    # than a week is removed, so a deployment of the pre-mirror role that is
+    # still running keeps its scratch. Retirable once every node has run this
+    # role at least once.
     - name: Remove the legacy scratch tree and archives of the pre-mirror role
       become_user: root
       ansible.builtin.command:
@@ -65,6 +67,8 @@
           - -name
           - genieai-config-extract-*.tar.gz
           - )
+          - -mtime
+          - "+7"
           - -print
           - -exec
           - rm
@@ -248,7 +252,11 @@
           {{ config_bootstrap_keycloak_theme }}/{{ item.item.1 }}/theme.properties
           is missing. Syncing it would delete that theme from the host and the
           realms would fall back to the built-in Keycloak theme. Check
-          repo_branch against the branch this host is deployed from.
+          repo_branch against the branch this host is deployed from. A theme
+          that serves only some of the realms' screens (a login-only theme,
+          with the other screens set per type in the realm) belongs in
+          config_bootstrap_theme_entrypoints: the list names the subtrees
+          the deployment's realm actually uses.
         success_msg: >-
           config_bootstrap: the branch ships the
           {{ config_bootstrap_keycloak_theme }} Keycloak theme
@@ -339,43 +347,35 @@
           {{ (not config_bootstrap_host_brand_stat.stat.exists)
              or ((config_bootstrap_host_title_cmd.rc | default(1)) == 0) }}
 
-    - name: Fail when a brand file is not valid JSON
+    # The BRANCH's brand file is the deployment's declared brand: if it does
+    # not parse, the frontend would refuse the file it is served, so the
+    # deploy stops.
+    - name: Fail when the branch's brand file is not valid JSON
       ansible.builtin.assert:
         that:
           - config_bootstrap_branch_file_valid | bool
-          - config_bootstrap_host_file_valid | bool
-            or config_bootstrap_allow_rebrand | bool
         fail_msg: >-
-          {{ 'The branch' if not (config_bootstrap_branch_file_valid | bool)
-             else 'The host' }} serves a brand file that is not valid JSON:
-          {{ 'the extracted ' ~ repo_branch ~ ' copy' if not (config_bootstrap_branch_file_valid | bool)
-             else (config_dir ~ '/' ~ config_bootstrap_brand_pairs.0.dest_subdir ~ '/' ~ config_bootstrap_brand_pairs.0.brand_file) }}.
-          The parse error is: {{ (config_bootstrap_branch_title_cmd.stderr | default('')
-             if not (config_bootstrap_branch_file_valid | bool)
-             else config_bootstrap_host_title_cmd.stderr | default('')) | trim }}.
-          Fix the file, or set config_bootstrap_allow_rebrand to true when
-          overwriting it with the branch's copy is the point.
-        success_msg: "config_bootstrap: both brand files parse"
+          The branch ({{ repo_branch }}) ships a brand file that is not valid
+          JSON ({{ config_bootstrap_brand_pairs.0.brand_file }}). The parse
+          error is: {{ config_bootstrap_branch_title_cmd.stderr | default('') | trim }}.
+          The frontend refuses to start on a file it cannot parse, so the
+          deploy stops here.
+        success_msg: "config_bootstrap: the branch's brand file parses"
 
-    - name: Fail when the host's brand file carries no title
-      ansible.builtin.assert:
-        that:
-          # A host that was never seeded has no brand file at all: the first
-          # deploy is not a re-brand. A host that HAS one but no app.title is
-          # a different thing — the mirror would overwrite it with the
-          # branch's copy and re-brand the deployment, and an empty title
-          # would have made the guard pass silently.
-          - not config_bootstrap_host_brand_stat.stat.exists
-            or config_bootstrap_host_title != ''
-            or config_bootstrap_allow_rebrand | bool
-        fail_msg: >-
-          The host serves a brand file without an app.title
-          ({{ config_dir }}/{{ config_bootstrap_brand_pairs.0.dest_subdir }}/{{ config_bootstrap_brand_pairs.0.brand_file }}).
-          Mirroring the branch over it would re-brand the deployment without
-          the guard noticing, so the deploy stops here. Fix the host's file,
-          or set config_bootstrap_allow_rebrand to true when the re-brand is
-          the point.
-        success_msg: "config_bootstrap: the host's brand file carries a title"
+    # The HOST's brand file is the copy the mirror is about to replace: a
+    # corrupt one is not evidence of a re-brand, and blocking on it would
+    # make the very deploy that repairs it impossible. It is reported, and
+    # the comparison below is skipped because there is nothing to compare.
+    - name: Warn when the host's brand file carries no readable title
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: the host's brand file
+          ({{ config_dir }}/{{ config_bootstrap_brand_pairs.0.dest_subdir }}/{{ config_bootstrap_brand_pairs.0.brand_file }})
+          carries no readable title ({{ 'it is not valid JSON' if not (config_bootstrap_host_file_valid | bool)
+             else 'it has no app.title' }}), so the re-brand check has nothing
+          to compare and is skipped. The mirror replaces the file with the
+          branch's copy — the deployment's brand comes from the branch.
+      when: config_bootstrap_host_brand_stat.stat.exists and not (config_bootstrap_host_title != '')
 
     - name: Fail when the branch re-brands the deployment
       ansible.builtin.assert:
@@ -465,7 +465,9 @@
     # which is not a difference in content.
     - name: Keep the itemize filter in one place
       ansible.builtin.set_fact:
-        config_bootstrap_dir_itemize_pattern: '{{ "\\s\\./$" }}'
+        # A plain YAML scalar: templating it would unescape the backslashes
+        # twice and yield an eight-character string that matches nothing.
+        config_bootstrap_dir_itemize_pattern: '\s\./$'
 
     - name: Compute the mirror source and destination for each pair
       ansible.builtin.set_fact:

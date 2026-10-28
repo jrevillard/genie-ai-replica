@@ -11,7 +11,7 @@ last_reviewed: 2026-09-20
 
 This guide explains how to rebrand a GENIE.AI deployment for a partner institution: swap the logo, favicon, application title, and brand color in the web UI; replace the logo on the Keycloak login, account, admin, and email templates; and verify that everything renders correctly after a reload.
 
-The brand surface is small (one JSON config, four logo files, two CSS files) and every file is committed to the repository, so rebranding can be a normal code change: open one MR, get one review. Because those same files are also seeded onto every deployed node, you can equally rebrand a running deployment by editing them **on the node** — no image rebuild, no redeploy. Pick whichever fits; [Where the brand files live at runtime](#where-the-brand-files-live-at-runtime) covers the difference, including the one trade-off that surprises people.
+The brand surface is small (one JSON config, four logo files, two CSS files) and every file is committed to the repository, so rebranding is a normal code change: open one MR, get one review, and the next deployment seeds the new files onto every node. Editing the files **on the node** is not a way to rebrand: the deployment mirrors the branch, so a node edit is reverted by the next deploy. The branch is the source of truth; [What re-running Ansible does to your edits](#what-re-running-ansible-does-to-your-edits) explains the contract.
 
 ## Overview
 
@@ -44,10 +44,7 @@ Two files are deliberately **outside** the mount and must not be hand-edited:
 
 ### The edit → reload loop
 
-1. **Edit the file on the node**, for example `/opt/genieai/config/frontend/genie-ai-config.json` or `/opt/genieai/config/keycloak/themes/genie/login/resources/img/logo.png`. The runtime config directories are seeded by Ansible as root-owned `0755`/`0644`, so editing them needs `sudo`:
-   ```bash
-   sudo vi /opt/genieai/config/frontend/genie-ai-config.json
-   ```
+1. **Edit the file in the repository** — `components/gov-chat-frontend/public/config/genie-ai-config.json` or `configs/keycloak/themes/genie/login/resources/img/logo.png` — and deploy. The node's copy is seeded from the branch and mirrors it: an edit made on the node is reverted by the next deployment. (On the node, the same files live under `/opt/genieai/config/frontend/` and `/opt/genieai/config/keycloak/themes/`, seeded by Ansible as root-owned — that is where to LOOK, not where to change.)
 2. **Restart only what caches.** A directory bind mount is live: the frontend nginx reads the mounted files from disk on every request, so a web-app change needs nothing beyond the browser reload below. Keycloak caches themes in memory, so it is the one container that must be restarted after a theme file change:
    ```bash
    # Swarm — Keycloak only
@@ -72,6 +69,15 @@ The role syncs the host's configuration directory as a **mirror of the deployed 
 - **Make the change in the repository.** The runtime configuration is the flavour's config file (`components/gov-chat-frontend/public/config/genie-ai-config.json` for the web app, `configs/keycloak/themes/` for the Keycloak themes). Edit it there, deploy, and the node picks it up.
 - **The deploy verifies it.** After seeding, the role re-runs the same mirror as a dry run: if the host still differs from the branch, the deploy fails and names the files that differ, instead of leaving a node that serves a configuration nobody declared.
 - **The deploy refuses the wrong branch.** Two guards run before anything is mirrored: the branch must ship the Keycloak theme the deployment is configured to use, and it must not re-brand the deployment. The theme is the `keycloak_theme` variable — the same value the deployment renders into `KEYCLOAK_THEME` and hands to the realm. It has one default for the whole deployment (`genie`, in the role's defaults) and is overridden per environment in `group_vars/<environment>/vars.yml`, because the theme is a property of the deployment and not of a node: when a deployment spans several inventory groups, every one of them must carry the same `keycloak_theme`. Keycloak itself is scheduled on the gateway node, which is the node the deployment configures. A theme installed by hand in the themes directory is outside what the deployment declares: keep it in the repository, or the next deploy removes it.
+
+  Both guards have a way out, for the cases where they are wrong:
+
+  | Variable | What it relaxes | When to use it |
+  |---|---|---|
+  | `config_bootstrap_allow_rebrand` | The re-brand guard: the branch may carry a different `app.title` than the host serves | A deliberate rename in the repository — the guard compares the branch's title with the copy the host still serves, so a rename in the repository reads as a re-brand until every node has taken the new file |
+  | `config_bootstrap_theme_entrypoints` | The theme guard: which subtrees (`login`, `account`, `admin`, `email`) the deployment's theme must carry | A theme that serves only some of the realm's screens — the realm can point each screen at its own theme, and the list then names the subtrees that are actually used |
+
+  Both live in `deploy/ansible/roles/config_bootstrap/defaults/main.yml`; set them in `group_vars/<environment>/vars.yml`.
 
 A host that kept a stale configuration served a brand the branch no longer declared, and the application refused to start on it — a blank landing page behind a deploy that reported success. That is why the branch is the single source of truth.
 
@@ -232,7 +238,7 @@ The web app already splits the same way: hashed assets get `immutable`, the runt
 
 **One catch: the resources version in the URL does not change when a theme changes.** Keycloak's resource URL is `/auth/resources/<version>/<type>/<theme>/<path>`, and `<version>` is a five-character tag stored in the database (`migration_model.id`) — Keycloak mints a new one when it is upgraded, not when a theme file is edited. So a browser that fetched a stylesheet *before* a theme change still holds the copy it was given under the old `Cache-Control`, and the gateway's `no-cache` only applies to the copies fetched *after* the change. The first redeploy of a changed theme therefore needs the browsers to be told, once; every later change lands on the next page load. Two levers do that:
 
-- **Rename the theme directory** and point `KEYCLOAK_THEME` at the new name — and update the path literal in the template's marker check (`url.resourcesPath?ends_with('/genie')` in `configs/keycloak/themes/genie/login/template.ftl`) with it; the `kc-theme-genie` class name itself is arbitrary, so the stylesheets key on it unchanged. A renamed theme that keeps the old literal loses the ground and the wave band. The theme name is part of the resource URL, so every resource moves — and a new directory is one the node does not have yet, so the deploy seeds it (see [What re-running Ansible does to your edits](#what-re-running-ansible-does-to-your-edits)): a repo-side edit to an existing theme file does not reach a seeded node, a renamed directory does. A child theme that inherits from it (`parent=<theme>`) has to follow, and the child's own `styles` keep overriding the parent's — so a child that declares its own stylesheets keeps its own look. On a realm that is already imported, repoint its four theme settings (`loginTheme`, `accountTheme`, `adminTheme`, `emailTheme`) too: `KEYCLOAK_THEME` only applies at import time.
+- **Rename the theme directory** and point `KEYCLOAK_THEME` at the new name — and update the path literal in the template's marker check (`url.resourcesPath?ends_with('/genie')` in `configs/keycloak/themes/genie/login/template.ftl`) with it; the `kc-theme-genie` class name itself is arbitrary, so the stylesheets key on it unchanged. A renamed theme that keeps the old literal loses the ground and the wave band. The theme name is part of the resource URL, so every resource moves — and a new directory is one the node does not have yet, so the deploy seeds it (see [What re-running Ansible does to your edits](#what-re-running-ansible-does-to-your-edits)): the deploy mirrors the branch, so a repo-side edit to an existing theme file reaches the node as well, and a renamed directory is seeded the same way. A child theme that inherits from it (`parent=<theme>`) has to follow, and the child's own `styles` keep overriding the parent's — so a child that declares its own stylesheets keeps its own look. On a realm that is already imported, repoint its four theme settings (`loginTheme`, `accountTheme`, `adminTheme`, `emailTheme`) too: `KEYCLOAK_THEME` only applies at import time.
 - **Bump the resources tag in the database** (`migration_model.id`) and restart Keycloak. Every resource URL moves, for every theme at once, and the bundles a browser already holds are simply never requested again. Keycloak mints a new tag by itself when the server is upgraded, which is why an upgrade already invalidates them.
 
   ```sql

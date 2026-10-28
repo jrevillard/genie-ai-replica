@@ -85,12 +85,83 @@ class QueryService {
     this.dbService = dbService; // Store the service reference instead of the promise
     this.db = null;
     this.queries = null;
+    this.serviceCategories = null;
     this.serviceCategoryTranslations = null;
     this.serviceTranslations = null;
     this.analyticsService = null; // Will be set via dependency injection
     this.chatHistoryService = null; // Will be set via dependency injection
     this.initialized = false;
     logger.info('QueryService constructor called');
+  }
+
+  /**
+   * Normalize a request's context to the one contract both query paths
+   * speak. A bare serviceLabels string is ONE label (never a sequence of
+   * characters, never an EMPTY scope — dropping it would send the query
+   * out with no filter at all); categoryLabel stays null when the request
+   * declares no category (never 'General' — that label names no entity).
+   */
+  normalizeQueryContext(context) {
+    const normalized = { ...(context || {}) };
+    if (!Array.isArray(normalized.serviceLabels)) {
+      normalized.serviceLabels = typeof normalized.serviceLabels === 'string' ? [normalized.serviceLabels] : [];
+    }
+    if (normalized.categoryLabel === undefined) {
+      normalized.categoryLabel = null;
+    }
+    return normalized;
+  }
+
+  /**
+   * Resolve the wire's EN labels to the entities they name, for the query
+   * record's links (analytics). The EN translation is the SSOT; the
+   * document's cached `nameEN` is the FALLBACK for entities imported
+   * outside the write path (no translation row at all). The WIRE itself
+   * is untouched: the retriever filters on what the client sent.
+   */
+  async resolveScopeIds(context) {
+    let categoryId = null;
+    if (context?.categoryLabel) {
+      try {
+        const categoryQuery = aql`
+            FOR trans IN ${this.serviceCategoryTranslations}
+              FILTER LOWER(trans.languageCode) == 'en'
+              FILTER trans.translation == ${context.categoryLabel}
+              LIMIT 1
+              RETURN trans.serviceCategoryId
+          `;
+        let cursor = await this.db.query(categoryQuery);
+        categoryId = await cursor.next();
+        if (!categoryId) {
+          const fallbackQuery = aql`
+              FOR cat IN ${this.serviceCategories}
+                FILTER cat.nameEN == ${context.categoryLabel}
+                LIMIT 1
+                RETURN cat._key
+            `;
+          cursor = await this.db.query(fallbackQuery);
+          categoryId = await cursor.next();
+        }
+      } catch (error) {
+        logger.error(`Error resolving categoryId: ${error.message}`);
+      }
+    }
+    let serviceIds = [];
+    if (context?.serviceLabels?.length > 0) {
+      try {
+        const servicesQuery = aql`
+            FOR trans IN ${this.serviceTranslations}
+              FILTER LOWER(trans.languageCode) == 'en'
+              FILTER trans.translation IN ${context.serviceLabels}
+              RETURN trans.serviceId
+          `;
+        const cursor = await this.db.query(servicesQuery);
+        serviceIds = await cursor.all();
+      } catch (error) {
+        logger.error(`Error resolving serviceIds: ${error.message}`);
+      }
+    }
+    return { categoryId, serviceIds };
   }
 
   /**
@@ -105,6 +176,7 @@ class QueryService {
     try {
       this.db = await this.dbService.getConnection('default');
       this.queries = this.db.collection('queries');
+      this.serviceCategories = this.db.collection('serviceCategories');
       this.serviceCategoryTranslations = this.db.collection('serviceCategoryTranslations');
       this.serviceTranslations = this.db.collection('serviceTranslations');
       this.initialized = true;
@@ -382,24 +454,7 @@ class QueryService {
       }
     }
 
-    if (!queryData.context) {
-      queryData.context = { categoryLabel: null, serviceLabels: [] };
-    } else {
-      if (!Array.isArray(queryData.context.serviceLabels)) {
-        // A bare string is ONE label — never a sequence of characters, and
-        // never an EMPTY scope: dropping it would send the query out with
-        // no filter at all, and the corpus would answer from outside the
-        // scope the client declared. Absent stays absent.
-        queryData.context.serviceLabels =
-          typeof queryData.context.serviceLabels === 'string' ? [queryData.context.serviceLabels] : [];
-      }
-      // Preserve null/undefined categoryLabel — null means "no category filter"
-      // (chatqna treats a missing categoryLabel as no category-level filter).
-      // Do NOT default to 'General' — that would inject a non-matching label.
-      if (queryData.context.categoryLabel === undefined) {
-        queryData.context.categoryLabel = null;
-      }
-    }
+    queryData.context = this.normalizeQueryContext(queryData.context);
 
     if (missingFields.length > 0) {
       throw new Error(`Missing required query data. Fields: ${missingFields.join(', ')}`);
@@ -414,45 +469,14 @@ class QueryService {
       });
     }
 
-    // Resolve categoryId
+    // Resolve the wire's EN labels to the entities they name (the
+    // query record's links). The wire itself is untouched.
     let categoryId = queryData.categoryId || null;
-    if (queryData.context?.categoryLabel && !categoryId) {
-      try {
-        // The wire carries the ENGLISH TRANSLATION — the label the corpus's
-        // chunk_labels are minted from. The document's own `nameEN` is a
-        // cached copy: an entity edited there alone leaves the two apart,
-        // and a lookup against the copy finds nothing. The translation is
-        // the SSOT, so the translation is what the lookup reads.
-        const categoryQuery = aql`
-            FOR trans IN ${this.serviceCategoryTranslations}
-              FILTER LOWER(trans.languageCode) == 'en'
-              FILTER trans.translation == ${queryData.context.categoryLabel}
-              LIMIT 1
-              RETURN trans.serviceCategoryId
-          `;
-        const cursor = await this.db.query(categoryQuery);
-        categoryId = await cursor.next();
-      } catch (error) {
-        logger.error(`Error resolving categoryId: ${error.message}`);
-      }
-    }
-
-    // Resolve serviceIds
     let serviceIds = queryData.serviceId ? [queryData.serviceId] : [];
-    if (queryData.context?.serviceLabels?.length > 0 && serviceIds.length === 0) {
-      try {
-        // Same SSOT as the category: the ENGLISH translation.
-        const servicesQuery = aql`
-            FOR trans IN ${this.serviceTranslations}
-              FILTER LOWER(trans.languageCode) == 'en'
-              FILTER trans.translation IN ${queryData.context.serviceLabels}
-              RETURN trans.serviceId
-          `;
-        const cursor = await this.db.query(servicesQuery);
-        serviceIds = await cursor.all();
-      } catch (error) {
-        logger.error(`Error resolving serviceIds: ${error.message}`);
-      }
+    if (!categoryId) {
+      const resolved = await this.resolveScopeIds(queryData.context);
+      categoryId = resolved.categoryId;
+      serviceIds = serviceIds.length > 0 ? serviceIds : resolved.serviceIds;
     }
 
     const backendMode = process.env.CONTEXT_OPTION || 'conversation-with-context-labels';
@@ -578,45 +602,9 @@ class QueryService {
       // --- FIX: END messages VALIDATION ---
 
       // --- FIX: START context VALIDATION ---
-      if (!queryData.context) {
-        logger.warn('[DEBUG] Validation: context object is missing. Supplying default context.');
-        // A request with no context declares no scope: the corpus is its
-        // scope. 'General' would scope it to a label no chunk carries.
-        queryData.context = { categoryLabel: null, serviceLabels: [] };
-        logger.info('[DEBUG] Validation PASSED: Default context object supplied.');
-      } else {
-        logger.info('[DEBUG] Validation PASSED: context object is present.');
-
-        // Also validate the internals of the provided context
-        if (!Array.isArray(queryData.context.serviceLabels)) {
-          if (typeof queryData.context.serviceLabels === 'string') {
-            // A bare string is ONE label — never a sequence of characters,
-            // and never an EMPTY scope: dropping it would send the query
-            // out with no filter at all, and the corpus would answer from
-            // outside the scope the client declared.
-            logger.warn('[DEBUG] Validation WARNING: context.serviceLabels is a bare string. Reading it as one label.');
-            queryData.context.serviceLabels = [queryData.context.serviceLabels];
-          } else {
-            logger.warn(
-              '[DEBUG] Validation WARNING: context.serviceLabels is not an array. Defaulting to empty array.'
-            );
-            queryData.context.serviceLabels = [];
-          }
-        } else {
-          logger.info(
-            `[DEBUG] Validation PASSED: context.serviceLabels is present with labels: ${queryData.context.serviceLabels.join(', ')}.`
-          );
-        }
-
-        // Preserve null/undefined categoryLabel — null means "no category
-        // filter" (the request declares no scope; the corpus IS its scope).
-        // Do NOT default to 'General' — that label names no entity of any
-        // hierarchy, so it would filter the corpus down to zero documents.
-        // initStreamQuery already refuses it; the two paths must agree.
-        if (queryData.context.categoryLabel === undefined) {
-          queryData.context.categoryLabel = null;
-        }
-      }
+      // The SAME normalization the stream path applies: the two paths are
+      // one contract, written once.
+      queryData.context = this.normalizeQueryContext(queryData.context);
       // --- FIX: END context VALIDATION ---
 
       if (missingFields.length > 0) {
@@ -632,54 +620,29 @@ class QueryService {
         logger.warn('No extractable text from messages; analytics may be affected.');
       }
 
-      // Resolve categoryLabel to categoryId if not provided
+      // Resolve the wire's EN labels to the entities they name — the
+      // SAME resolution the stream path applies, written once.
       let categoryId = queryData.categoryId || null;
-      if (queryData.context?.categoryLabel && !categoryId) {
-        try {
-          // The wire carries the ENGLISH TRANSLATION — the label the corpus's
-          // chunk_labels are minted from. The document's own `nameEN` is a
-          // cached copy: an entity edited there alone leaves the two apart,
-          // and a lookup against the copy finds nothing.
-          const categoryQuery = aql`
-              FOR trans IN ${this.serviceCategoryTranslations}
-                FILTER LOWER(trans.languageCode) == 'en'
-                FILTER trans.translation == ${queryData.context.categoryLabel}
-                LIMIT 1
-                RETURN trans.serviceCategoryId
-            `;
-          const cursor = await this.db.query(categoryQuery);
-          categoryId = await cursor.next();
-          if (!categoryId) {
-            logger.warn(`Category not found for label: ${queryData.context.categoryLabel}`);
-          } else {
-            logger.info(`Resolved categoryLabel "${queryData.context.categoryLabel}" to categoryId: ${categoryId}`);
-          }
-        } catch (error) {
-          logger.error(`Error resolving categoryId: ${error.message}`, { stack: error.stack });
+      if (!categoryId && queryData.context?.categoryLabel) {
+        const resolved = await this.resolveScopeIds({ categoryLabel: queryData.context.categoryLabel });
+        categoryId = resolved.categoryId;
+        if (!categoryId) {
+          logger.warn(`Category not found for label: ${queryData.context.categoryLabel}`);
+        } else {
+          logger.info(`Resolved categoryLabel "${queryData.context.categoryLabel}" to categoryId: ${categoryId}`);
         }
       }
 
-      // Optionally resolve serviceLabels to serviceIds (array)
+      // Optionally resolve serviceLabels to serviceIds (array) — the
+      // shared resolution, with this path's own diagnostics.
       let serviceIds = queryData.serviceId ? [queryData.serviceId] : []; // Preserve if provided (as single or array)
       if (queryData.context?.serviceLabels?.length > 0 && serviceIds.length === 0) {
-        try {
-          // Same SSOT as the category: the ENGLISH translation the wire
-          // carries, not the document's cached `nameEN` copy.
-          const servicesQuery = aql`
-              FOR trans IN ${this.serviceTranslations}
-                FILTER LOWER(trans.languageCode) == 'en'
-                FILTER trans.translation IN ${queryData.context.serviceLabels}
-                RETURN trans.serviceId
-            `;
-          const cursor = await this.db.query(servicesQuery);
-          serviceIds = await cursor.all();
-          if (serviceIds.length === 0) {
-            logger.warn(`No services found for labels: ${queryData.context.serviceLabels.join(', ')}`);
-          } else {
-            logger.info(`Resolved serviceLabels to serviceIds: ${serviceIds.join(', ')}`);
-          }
-        } catch (error) {
-          logger.error(`Error resolving serviceIds: ${error.message}`, { stack: error.stack });
+        const resolved = await this.resolveScopeIds({ serviceLabels: queryData.context.serviceLabels });
+        serviceIds = resolved.serviceIds;
+        if (serviceIds.length === 0) {
+          logger.warn(`No services found for labels: ${queryData.context.serviceLabels.join(', ')}`);
+        } else {
+          logger.info(`Resolved serviceLabels to serviceIds: ${serviceIds.join(', ')}`);
         }
       }
 

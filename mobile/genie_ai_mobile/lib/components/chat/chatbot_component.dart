@@ -213,6 +213,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     return tr('chatbot.welcomeMessage');
   }
 
+  /// The Quick Help configuration load, once started. A restore that
+  /// needs the buttons (a Quick Help tag is a button id) awaits this —
+  /// resolving a tag against a config that has not parsed yet loses the
+  /// conversation's scope.
+  Future<void>? _quickHelpConfigFuture;
+
+  Future<void> _ensureQuickHelpConfig() {
+    return _quickHelpConfigFuture ??= _loadQuickHelpConfig();
+  }
+
   Future<void> _loadQuickHelpConfig() async {
     try {
       final String configString = await rootBundle.loadString(
@@ -458,7 +468,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       // tree is awaited first — a scope that cannot be named must not
       // leave the follow-up unscoped, and an unscoped query answers from
       // the whole corpus.
-      await _ensureEnTree();
+      // The scope is resolved against BOTH async sources: the hierarchy
+      // (a category key is named through it) and the Quick Help config
+      // (a Quick Help tag is a button id). Waiting for the one and not
+      // the other drops the scope of the other kind of tag.
+      await Future.wait([_ensureEnTree(), _ensureQuickHelpConfig()]);
+      if (!mounted) return;
       final scope =
           ConversationScopeResolver(
             hierarchy: _scopeResolver ?? QuickHelpScopeResolver(const []),

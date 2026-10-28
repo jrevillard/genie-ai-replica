@@ -771,6 +771,26 @@ describe('QueryService', () => {
       expect(result.opeaPayload.context.serviceLabels).toEqual(['Tomato']);
     });
 
+    it('falls back to the document nameEN when no EN translation row exists', async () => {
+      // An entity imported outside the write path carries nameEN with no
+      // translation document: its queries still get their category link
+      // (the analytics), while the wire is untouched.
+      const data = createMockQueryData({ context: { categoryLabel: 'Crops', serviceLabels: [] } });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([])) // the translation lookup: nothing
+        .mockResolvedValueOnce(createMockCursor(['cat-2'])) // the nameEN fallback: found
+        .mockResolvedValueOnce(createMockCursor([])); // the services lookup: nothing
+
+      const result = await queryService.initStreamQuery(data, {});
+
+      // The query document keeps its category link...
+      const savedDoc = mockQueriesCollection.save.mock.calls[0][0];
+      expect(savedDoc.categoryId).toBe('cat-2');
+      // ...and the wire still carries exactly what the client sent.
+      expect(result.opeaPayload.context.categoryLabel).toBe('Crops');
+    });
+
     it('resolves the ids through the ENGLISH translation the wire carries', async () => {
       // The wire carries the EN translation — the label the corpus's
       // chunk_labels are minted from. The document's own `nameEN` is a

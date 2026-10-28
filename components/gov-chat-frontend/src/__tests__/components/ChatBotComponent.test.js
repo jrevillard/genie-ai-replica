@@ -2019,6 +2019,106 @@ describe('ChatBotComponent', () => {
       expect(String(message)).toContain('Renamed Away');
     });
 
+    it('a superseded restore does not commit its scope over the newer one', async () => {
+      // The Quick Help config resolves SLOWLY: A's scope wait
+      // (Promise.all) stays pending long enough for B — the newer load —
+      // to land first. A's wait resolving afterwards must not commit A's
+      // scope over B's.
+      const configLoader = require('../../config-loader');
+      let releaseConfig;
+      configLoader.default.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            releaseConfig = resolve;
+          })
+      );
+      const tree = [{ catKey: '2', name: 'Cultivos', nameEN: 'Crops', children: [] }];
+      mockLiveTree(tree);
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation.mockImplementation(async (id) =>
+        id === 'a1'
+          ? { _key: 'a1', title: 'A', messages: [], tags: ['Renamed-Away'], categories: [] }
+          : { _key: 'b1', title: 'B', messages: [], tags: [], categories: [] }
+      );
+
+      const loadA = vm.loadExistingConversation('a1');
+      await flushPromises(); // A's getConversation resolved; its scope wait is held
+      const loadB = vm.loadExistingConversation('b1');
+      await flushPromises(); // B is fully loaded — it owns the view
+      expect(vm.currentChatId).toBe('b1');
+
+      releaseConfig({ features: { chat: { quickHelp: { buttons: [] } } } });
+      await Promise.all([loadA, loadB]);
+      await flushPromises();
+
+      // B still owns the view: A's scope never landed over it.
+      expect(vm.currentChatId).toBe('b1');
+      expect(vm.selectedContextItems).toHaveLength(0);
+    });
+
+    it('a conversation saves no localized display name as a tag', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // A tag is the item's IDENTITY (a button id, an EN label). The
+      // localized display name is not: persisting it made the conversation
+      // unresolvable on the next open — and locale-dependent.
+      vm.$store.commit('conversation/setContextItems', [
+        { service: 'Cultivos', serviceKey: null, categoryOnly: true, category: '2', selected: true }
+      ]);
+      expect(vm.getContextTags()).toEqual([]);
+
+      vm.$store.commit('conversation/setContextItems', [
+        { service: 'Nacimientos', serviceKey: 'Births', source: 'sidebar', category: '2', selected: true }
+      ]);
+      expect(vm.getContextTags()).toEqual(['Births']);
+    });
+
+    it('clearing the last chip does not re-install a BROKEN Quick Help scope', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const tree = [
+        {
+          catKey: '2',
+          name: 'État civil',
+          nameEN: 'Civil Registry',
+          children: [{ name: 'Naissances', nameEN: 'Births' }]
+        }
+      ];
+      mockLiveTree(tree);
+      vm.serviceCategories = tree;
+      vm.serviceCategoriesStatus = 'loaded';
+
+      // The button of this category declares a label that left the
+      // hierarchy: it is broken. Re-installing it would block every
+      // subsequent send — and removing the chip again would re-add the
+      // same broken button, so the user could not recover.
+      vm.quickHelpButtons = [
+        {
+          id: 'civil',
+          service: 'Civil registry',
+          serviceLabels: ['Renamed Away'],
+          serviceKey: 'civil',
+          category: '2',
+          icon: 'x'
+        }
+      ];
+      vm.currentCategoryId = '2';
+      vm.$store.commit('conversation/setContextItems', [
+        { service: 'Cultivos', serviceKey: null, source: 'sidebar', category: '2', selected: true }
+      ]);
+
+      vm.removeContextItem(0);
+
+      expect(vm.selectedContextItems).toHaveLength(0);
+      expect(vm.currentCategoryId).toBeNull();
+      // And the send is not blocked by a scope nobody can name.
+      expect(vm.checkContextConfig({ categoryLabel: null, serviceLabels: [] })).toBe(true);
+    });
+
     it('a category-scoped conversation with NO tags restores its scope', async () => {
       const tree = [{ catKey: '2', name: 'Cultivos', nameEN: 'Crops', children: [] }];
       mockLiveTree(tree);

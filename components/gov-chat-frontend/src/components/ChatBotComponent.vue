@@ -905,6 +905,17 @@ export default {
     // cannot be checked cannot be offered.
     quickHelpScopeSettled() {
       return this.serviceCategoriesStatus !== 'loading';
+    },
+    // Every button's scope state, computed ONCE per tree/config change:
+    // the template reads a button's state several times per render, and
+    // every streaming token re-renders the panel.
+    quickHelpScopeStateMap() {
+      const map = new Map();
+      for (const button of this.quickHelpButtons) {
+        if (!button || !button.id) continue;
+        map.set(button.id, this.computeQuickHelpScopeState(button));
+      }
+      return map;
     }
   },
 
@@ -1229,6 +1240,17 @@ export default {
     // all. A broken button is a VISIBLE failure — error icon, caption, no
     // query — never a silently reduced one.
     quickHelpScopeState(button) {
+      // The state is computed once per tree/config change (the computed
+      // map); this read is what every caller goes through — the
+      // template's several reads per render included.
+      const cached = this.quickHelpScopeStateMap.get(button && button.id);
+      if (cached) {
+        return cached;
+      }
+      return this.computeQuickHelpScopeState(button);
+    },
+
+    computeQuickHelpScopeState(button) {
       if (this.serviceCategoriesStatus === 'failed') {
         // The hierarchy is what NAMES a scope. Without it, no scope can be
         // verified — and the button says so rather than looking healthy
@@ -1744,7 +1766,13 @@ export default {
       }
       if (this.selectedContextItems.length === 0 && this.currentCategoryId) {
         const quickHelpOption = this.quickHelpButtons.find((option) => option.category === this.currentCategoryId);
-        if (quickHelpOption) {
+        // A BROKEN button (a declared label or its category left the
+        // hierarchy) must not be re-installed: it would block every
+        // subsequent send, and removing the chip again would re-add the
+        // same broken button — the user could not recover from here.
+        if (quickHelpOption && this.quickHelpScopeState(quickHelpOption).broken) {
+          this.currentCategoryId = null;
+        } else if (quickHelpOption) {
           this.$store.commit('conversation/setContextItems', [
             {
               service: quickHelpOption.service,
@@ -2075,6 +2103,13 @@ export default {
           // is an EN label only the tree can confirm). Waiting for the one
           // and not the other drops the scope of the other kind of tag.
           await Promise.all([this.ensureQuickHelpLoaded(), this.ensureServiceCategoriesLoaded()]);
+          // The wait above is a REAL await (the config fetch, the
+          // hierarchy fetch): a newer restore may have landed while it
+          // was pending, and this one must not commit its scope over
+          // the newer conversation's.
+          if (token !== this.loadSeq) {
+            return;
+          }
           conversation.tags.forEach((tag) => {
             // A saved conversation keeps the tag of an item, not the item
             // itself. A Quick Help tag is the id of the button that produced
@@ -2227,7 +2262,13 @@ export default {
     },
 
     getContextTags() {
-      return this.selectedContextItems.map((item) => item.serviceKey || item.service).filter((tag) => tag);
+      // A tag is the item's IDENTITY: a Quick Help button's id, or the
+      // ENGLISH label of a sidebar selection. The localized display name
+      // is not an identity — persisting it would make the conversation
+      // unresolvable on the next open (and locale-dependent). An item
+      // with no identity (a category-only scope) carries NO tag: the
+      // conversation's category edge is what restores it.
+      return this.selectedContextItems.map((item) => item.serviceKey).filter((tag) => tag);
     },
 
     async handleSaveChat() {

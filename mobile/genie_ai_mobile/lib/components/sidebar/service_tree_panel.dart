@@ -385,6 +385,13 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
 
     // Filter Children based on Search Query
     final filteredChildren = children.where((child) {
+      // An entity with no display name in this locale has nothing to
+      // offer: the web hides it, and offering it here would let the user
+      // pick a scope that is guaranteed to fail the send.
+      if (child is Map &&
+          (child['name'] == null || child['name'].toString().isEmpty)) {
+        return false;
+      }
       if (_searchQuery.isEmpty) return true;
 
       String name;
@@ -428,8 +435,11 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
         leading: Icon(Icons.folder_open, color: tokens.brand, size: 20),
         childrenPadding: EdgeInsets.zero,
 
-        // Children Generation
-        children: children.asMap().entries.map((entry) {
+        // Children Generation — the FILTERED list: an entity with no
+        // display name in this locale is not offered (the web hides it
+        // too), and picking one would be picking a scope that is
+        // guaranteed to fail the send.
+        children: filteredChildren.asMap().entries.map((entry) {
           final int childIndex = entry.key;
           final dynamic child = entry.value;
           // FIX: Pass catKey correctly to child

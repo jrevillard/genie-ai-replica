@@ -21,6 +21,9 @@ void main() {
       'nameEN': 'Civil Registry',
       'children': [
         {'name': 'Nacimientos', 'nameEN': 'Births'},
+        // No display name in this locale: the web hides it, and offering
+        // it would let the user pick a scope guaranteed to fail the send.
+        {'name': null, 'nameEN': null},
       ],
     },
   ];
@@ -48,6 +51,7 @@ void main() {
 
     await tester.tap(find.text('Estado civil'));
     await tester.pumpAndSettle();
+    expect(find.text('Unknown Service'), findsNothing);
     await tester.tap(find.text('Nacimientos'));
     await tester.pumpAndSettle();
 

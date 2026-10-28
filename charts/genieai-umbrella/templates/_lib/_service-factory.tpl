@@ -13,8 +13,10 @@ the dot context. A merge into `.Values` would put the per-call value
 where nothing reads it, and the helpers would fall back to the
 top-level `.Values.component` (default: "umbrella") instead.
 */}}
+
 {{- define "genieai-umbrella.serviceDeployment" -}}
 {{- $ctx := . -}}
+{{- $global := $ctx.Values.global | default dict -}}
 {{- $svcName := $ctx.name -}}
 {{- /* The service entry is copied before it is defaulted: the copy
 keeps the defaulting local to this render (no write-back into the
@@ -78,21 +80,21 @@ spec:
       volumes:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with $ctx.Values.global.imagePullSecrets }}
+      {{- with $global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       {{- /* global.imageRegistry (the documented install knob, the Helm
       convention) wins over the top-level imageRegistry; both target only
       the genie-ai-* factory images. */}}
-      {{- $registry := $ctx.Values.global.imageRegistry | default $ctx.Values.imageRegistry }}
+      {{- $registry := $global.imageRegistry | default $ctx.Values.imageRegistry }}
       containers:
         - name: {{ $objectName }}
           image: {{- if $registry }} {{ $registry }}/{{ $svc.image.repository }}{{ else }} {{ $svc.image.repository }}{{ end }}:{{ $svc.image.tag | default "latest" }}
           # Per-service pullPolicy wins; global pullPolicy follows; the
           # tag decides otherwise (mutable tags pull Always — see the
           # helper).
-          imagePullPolicy: {{ include "genieai-umbrella.imagePullPolicy" (dict "tag" $svc.image.tag "pullPolicy" ($svc.image.pullPolicy | default $ctx.Values.global.imagePullPolicy)) }}
+          imagePullPolicy: {{ include "genieai-umbrella.imagePullPolicy" (dict "tag" $svc.image.tag "pullPolicy" ($svc.image.pullPolicy | default $global.imagePullPolicy)) }}
           {{- with $svc.workingDir }}
           workingDir: {{ . }}
           {{- end }}

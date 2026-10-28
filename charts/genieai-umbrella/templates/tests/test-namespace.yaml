@@ -1,4 +1,5 @@
-{{- /* Component label context, same pattern as templates/namespace.yaml. */ -}}{{- $opea := .Values.opea | default dict -}}
+{{- /* Component label context, same pattern as templates/namespace.yaml. */ -}}{{- $global := .Values.global | default dict -}}
+{{- $opea := .Values.opea | default dict -}}
 
 {{- $componentValues := dict "Chart" .Chart "Release" .Release "Values" .Values "component" "test" -}}
 apiVersion: v1
@@ -19,7 +20,7 @@ spec:
   # queries `kubectl get ns`, which is NOT a noop: it requires both
   # the kubectl binary (alpine lacks it) and an SA-bound RBAC grant.
   serviceAccountName: {{ include "genieai-common.fullname" . }}-dep-check
-  {{- with .Values.global.imagePullSecrets }}
+  {{- with $global.imagePullSecrets }}
   imagePullSecrets:
     {{- toYaml . | nindent 4 }}
   {{- end }}
@@ -44,7 +45,7 @@ spec:
   containers:
     - name: test
       # SA = the hook-owned dep-check SA (read-only ClusterRole on namespaces).
-      image: "{{ .Values.global.toolingImageRegistry | default "docker.io" }}/alpine:3.20"
+      image: "{{ $global.toolingImageRegistry | default "docker.io" }}/alpine:3.20"
       imagePullPolicy: IfNotPresent
       securityContext:
         allowPrivilegeEscalation: false
@@ -118,7 +119,7 @@ metadata:
 spec:
   restartPolicy: Never
   serviceAccountName: {{ include "genieai-common.fullname" . }}-dep-check
-  {{- with .Values.global.imagePullSecrets }}
+  {{- with $global.imagePullSecrets }}
   imagePullSecrets:
     {{- toYaml . | nindent 4 }}
   {{- end }}
@@ -141,7 +142,7 @@ spec:
     - name: t
       # SA = the hook-owned dep-check SA (persists between hook fires via
       # before-hook-creation).
-      image: "{{ .Values.global.toolingImageRegistry | default "docker.io" }}/alpine:3.20"
+      image: "{{ $global.toolingImageRegistry | default "docker.io" }}/alpine:3.20"
       imagePullPolicy: IfNotPresent
       securityContext:
         allowPrivilegeEscalation: false

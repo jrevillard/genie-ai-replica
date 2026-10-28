@@ -478,12 +478,18 @@
           <span class="okf-ragas__chart-title">{{
             translate('okf.ragas.results.trendTitle', 'Metric trend across runs')
           }}</span>
+          <DsPill v-if="trendMixedJudges" variant="warning" class="okf-ragas__trend-warn">{{
+            translate(
+              'okf.ragas.results.trendMixedJudges',
+              'Judges differ across these runs — compare within a judge segment, not across'
+            )
+          }}</DsPill>
           <DsInfoTip
             :label="translate('okf.ragas.results.trendTitle', 'Metric trend across runs')"
             :text="
               translate(
                 'okf.ragas.results.trendNote',
-                'Each line is one RAGAS metric’s suite mean per run, oldest to newest — hover any gauge’s ⓘ for what that metric measures. Judged answers are cached, so equal re-runs differ only where answers or retrieval changed.'
+                'Each line is one RAGAS metric’s suite mean per run, oldest to newest, and never crosses a judge boundary — each x-label names the judge that scored it. Judged answers are cached, so equal re-runs differ only where answers or retrieval changed.'
               )
             "
           />
@@ -1207,18 +1213,49 @@ export default {
           };
         });
     },
+    // The trended history — same filter+order as trendSeries and the
+    // x-axis categories, so the three always describe the same slots.
+    trendedHistory() {
+      return [...this.runHistory].filter((h) => h.summary && h.summary.metrics).reverse();
+    },
+    // How many DISTINCT judges the trend spans. One judge = the line is a
+    // like-for-like sequence; several = each segment only compares runs
+    // scored by the same judge (the metric-picker bug family, trend
+    // edition: the same 50 answers scored 13/37 under granite and 7/43
+    // under glm-5.3 — a continuous line across that boundary reads as a
+    // regression that never happened).
+    trendMixedJudges() {
+      return new Set(this.trendedHistory.map((h) => this.runJudgeLabel(h))).size > 1;
+    },
     trendSeries() {
-      const history = [...this.runHistory].filter((h) => h.summary && h.summary.metrics).reverse();
+      const history = this.trendedHistory;
       if (history.length < 1) return [];
       const keys = this.historyMetricKeys;
-      return keys
-        .map((m) => ({
-          name: this.metricLabel(m),
-          data: history.map((h) =>
-            typeof h.summary.metrics[m] === 'number' ? Number(h.summary.metrics[m].toFixed(3)) : null
-          )
-        }))
-        .filter((s) => s.data.some((v) => v !== null));
+      // Contiguous judge segments: a line never crosses a judge boundary.
+      // Each segment is its own series (nulls outside its slot range), so
+      // ApexCharts draws separate connected lines; the color is pinned per
+      // METRIC in trendOptions so a metric keeps its color across segments.
+      const segs = [];
+      for (let i = 0; i < history.length; i += 1) {
+        const judge = this.runJudgeLabel(history[i]);
+        const last = segs[segs.length - 1];
+        if (last && last.judge === judge) last.end = i;
+        else segs.push({ judge, start: i, end: i });
+      }
+      const series = [];
+      for (const m of keys) {
+        for (const s of segs) {
+          const data = history.map((h, i) => {
+            if (i < s.start || i > s.end) return null;
+            const v = h.summary.metrics[m];
+            return typeof v === 'number' ? Number(v.toFixed(3)) : null;
+          });
+          if (data.some((v) => v !== null)) {
+            series.push({ name: `${this.metricLabel(m)} · ${this.trendJudgeTag(history[s.start])}`, data, _metric: m });
+          }
+        }
+      }
+      return series;
     },
     statusSeries() {
       const s = this.runDoc && this.runDoc.payload && this.runDoc.payload.summary;
@@ -1480,17 +1517,22 @@ export default {
       // this.chartTheme read = reactive dependency on mode flips
       const t = this.chartThemeStrings();
       const mode = this.chartTheme === 'dark' ? 'dark' : 'light';
+      const history = this.trendedHistory;
       return {
         chart: { toolbar: { show: false }, animations: { enabled: false } },
         theme: { mode },
-        colors: t.chartColors,
+        // One color per METRIC (pinned by key length, the same formula the
+        // gauges use) so a metric keeps its color across its judge segments;
+        // the tooltip names the segment's judge.
+        colors: this.trendSeries.map((s) => t.chartColors[Math.abs(String(s._metric).length) % t.chartColors.length]),
+        // Every x-label names the judge that scored that run — the point is
+        // self-describing without a legend (hidden below: one series per
+        // metric per judge segment would read as dozens of entries).
         xaxis: {
-          categories: [...this.runHistory]
-            .filter((h) => h.summary && h.summary.metrics)
-            .reverse()
-            .map((h) => String(h.created_at || '').slice(5, 16)),
+          categories: history.map((h) => `${String(h.created_at || '').slice(5, 16)} · ${this.trendJudgeTag(h)}`),
           labels: { style: { colors: t.textColor } }
         },
+        legend: { show: false },
         yaxis: { min: 0, max: 1, labels: { style: { colors: t.textColor } } },
         stroke: { curve: 'straight', width: 2 },
         // a single-run history is ONE point — without markers the line
@@ -2326,6 +2368,17 @@ export default {
       if (config) return config;
       return this.translate('okf.ragas.history.judgeUnknown', 'Judge not recorded');
     },
+    /** Short judge tag for a trend x-label: the bare model name (vendor
+     * prefix stripped — `ibm-granite/granite-4.1-8b` renders as
+     * `granite-4.1-8b`). Falls back to the full judge label when no model
+     * was recorded (older runs). */
+    trendJudgeTag(run) {
+      const model = String((run && (run.judge_model || (run.judge_pick && run.judge_pick.model))) || '')
+        .split('/')
+        .pop()
+        .trim();
+      return model || this.runJudgeLabel(run);
+    },
     async onRescoreOpen(run) {
       this.rescoreAsk = run;
       this.rescoreModel = '';
@@ -2671,7 +2724,12 @@ export default {
               const ds = d === null || Math.abs(d) < 0.005 ? '' : d > 0 ? `+${d.toFixed(2)}` : d.toFixed(2);
               return `${this.scoreText(v)}${ds ? '/' + ds : ''}`;
             });
-            const label = (h.created_at || '').slice(0, 10) + ' ' + String(h._key || '').slice(-6);
+            // The row names its judge — a delta against a run scored by a
+            // different judge is not like-for-like, and the table must say
+            // so on every line (the trend chart annotates for the same
+            // reason).
+            const label =
+              (h.created_at || '').slice(0, 10) + ' ' + this.trendJudgeTag(h) + ' ' + String(h._key || '').slice(-6);
             doc.text(`${label}  ${cells.join('  ')}`.slice(0, 120), M, y);
             y += 10;
           }
@@ -2999,6 +3057,10 @@ export default {
 .okf-ragas__trend,
 .okf-ragas__status {
   margin: 10px 0;
+}
+
+.okf-ragas__trend-warn {
+  margin-left: 8px;
 }
 
 .okf-ragas__table-scroll {

@@ -3548,7 +3548,8 @@ export default {
         colResizeTip: 'Tsoasa seatla ho fetosa boholo — tlanya habeli hlooho ho qala hape',
         trendTitle: 'Tsoelo-pele ea liteko hara ditsamaiso',
         trendNote:
-          'Mola o mong le o mong ke karolo ea tekong e nngwe ea RAGAS ka sesebediso, ho tloha hodilo — ⓘ ea sekhomethadiso e nngwe le e nngwe e hlalosa teko eo. Dikarabo tse hlahlojitsoeng di bolokwa; dikopiso tse tšoanang di fapana hoo fela hoo karabo kapa phumullo e fetohe.',
+          'Mola o mong le o mong ke karolo ea tekong e nngwe ea RAGAS ka sesebediso, ho tloha hodilo, mme ha e tsamaee nakong ea moahloli o fapaneng — letshwao le leng le le leng la x-axis le bolela moahloli ea hlahlobileng sesebediso. Dikarabo tse hlahlojitsoeng di bolokwa; dikopiso tse tšoanang di fapana hoo fela hoo karabo kapa phumullo e fetohe.',
+        trendMixedJudges: 'Moahloli o fapana pakeng tsa li-run tsena — bapisa ka hare ho karolo ea moahloli e le ’ngoe',
         statusTitle: 'Diphetho ka potso e nngwe le e nngwe',
         statusNote:
           'Potso e nngwe le e nngwe ea sehlooho sening se ka hare ho sepheo, ka phetho: e arabitse, e hlotse (teko e kgethilweng e tlase ho moelo oa eona), e ile ka thoko, kapa phoso ea moralo. Linotso tse ka ntle ho sepheo tse bapisi ha li bale — ke taolo ya bapiso, eseng sephetho.',

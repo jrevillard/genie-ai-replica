@@ -247,7 +247,11 @@ def _escape_aql_string(value) -> str:
     character — doubling it before the quote keeps the two escapes
     independent.
     """
-    return str(value).replace("\\", "\\\\").replace('"', '\\"')
+    escaped = str(value).replace("\\", "\\\\").replace('"', '\\"')
+    # A raw newline, CR or tab breaks the AQL string literal the same way
+    # a quote does: the query errors, the except swallows it, and every
+    # query scoped by the label abstains looking like an empty corpus.
+    return escaped.replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
 
 
 def _build_aql_filter_clause(labels_to_filter, filter_strategy):

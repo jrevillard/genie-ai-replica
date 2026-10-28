@@ -19,6 +19,7 @@ from retriever.genieai_retriever_arangodb import (
     GenieaiArangoRetriever,
     QueryInstructionEmbeddingsWrapper,
     _build_aql_filter_clause,
+    _escape_aql_string,
 )
 
 # NOTE: conftest.py mocks the langchain stack (langchain_core/community/...) via
@@ -1334,3 +1335,23 @@ class TestRetrieverContextLabels:
     async def test_an_empty_context_leaves_the_search_unfiltered(self, invoke_env):
         await invoke_env["retriever"].invoke(create_mock_input(search_start="chunk", context={}))
         assert self._filter_clause(invoke_env) == ""
+
+
+class TestEscapeAqlString:
+    """A label is DATA interpolated into AQL TEXT: any character that
+    breaks the string literal breaks the whole query, and the except
+    swallows the error into an empty result — every query scoped by that
+    label abstains looking like an empty corpus."""
+
+    def test_quote_and_backslash_still_escape(self):
+        bs = chr(92)
+        assert _escape_aql_string('a"b') == "a" + bs + '"b'
+        assert _escape_aql_string("a" + bs + "b") == "a" + bs + bs + "b"
+
+    def test_control_characters_escape(self):
+        # A translation value carrying a raw newline, CR or tab closed
+        # the AQL literal before this — the query errored, the except
+        # returned [] and the label's whole scope abstained silently.
+        assert _escape_aql_string("a\nb") == "a\\nb"
+        assert _escape_aql_string("a\rb") == "a\\rb"
+        assert _escape_aql_string("a\tb") == "a\\tb"

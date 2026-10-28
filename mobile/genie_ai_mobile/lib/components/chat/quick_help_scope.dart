@@ -266,6 +266,24 @@ class ConversationScopeResolver {
   final QuickHelpScopeResolver _hierarchy;
   final Map<String, Map<String, dynamic>> _buttons;
 
+  /// The merged scope state of [buttons]: broken if ANY is, with the
+  /// missing labels unioned and the flags OR-ed — one conversation, one
+  /// verdict.
+  Map<String, dynamic> _mergedScopeState(List<Map<String, dynamic>> buttons) {
+    final states = buttons.map(_hierarchy.stateFor).toList();
+    return {
+      'broken': states.any((st) => st['broken'] as bool? ?? false),
+      'unavailable': states.any((st) => st['unavailable'] as bool? ?? false),
+      'missingLabels': [
+        for (final st in states)
+          ...(st['missingLabels'] as List? ?? const <dynamic>[]),
+      ],
+      'categoryMissing': states.any(
+        (st) => st['categoryMissing'] as bool? ?? false,
+      ),
+    };
+  }
+
   /// The scope of the conversation that carries [tags] and was asked in
   /// [categoryKey].
   ConversationScope resolve({List<dynamic>? tags, String? categoryKey}) {
@@ -335,7 +353,11 @@ class ConversationScopeResolver {
         // it does when there is no Quick Help tag.
         sidebarTagCount: otherTags.length,
         quickHelpButtonId: tag,
-        quickHelpScopeState: _hierarchy.stateFor(button),
+        // EVERY restored button's state, merged: the web checks every
+        // chip at send, and a broken SECOND button must refuse here too
+        // — carrying the first button's state alone sent the union
+        // including the dead labels, a silent abstention.
+        quickHelpScopeState: _mergedScopeState([button, ...otherButtons]),
       );
     }
 
@@ -396,8 +418,11 @@ bool quickHelpScopeIsNameable(
   Map<String, dynamic> button,
   QuickHelpScopeResolver? resolver,
 ) {
-  final category = button['category']?.toString() ?? '';
-  if (category.isEmpty || category == 'general') return true;
+  final category = button['category']?.toString();
+  // An id that declares NO category scope (empty, or the 'general'
+  // placeholder) is how a selection is cleared — the hierarchy has
+  // nothing to deny. declaresCategoryScope is the ONE predicate.
+  if (!declaresCategoryScope(category)) return true;
   return resolver?.categoryLabelEn(button) != null;
 }
 

@@ -358,6 +358,42 @@ void main() {
       );
     });
 
+    test('a BROKEN second button refuses the two-button conversation', () {
+      // The web checks every chip at send; the mobile carried the FIRST
+      // button's state alone and sent the union including the dead
+      // labels — a silent abstention.
+      final convButtons8 = <Map<String, dynamic>>[
+        {
+          'id': 'btn-a',
+          'category': '2',
+          'serviceLabels': const <dynamic>['Births'],
+        },
+        {
+          'id': 'btn-b',
+          'category': '2',
+          'serviceLabels': const <dynamic>['Renamed Away'],
+        },
+      ];
+      final scope = ConversationScopeResolver(
+        hierarchy: QuickHelpScopeResolver(convTree),
+        quickHelpButtons: convButtons8,
+      ).resolve(tags: ['btn-a', 'btn-b']);
+
+      expect(scope.quickHelpScopeState!['broken'], isTrue);
+      expect(scope.quickHelpScopeState!['missingLabels'], ['Renamed Away']);
+      expect(
+        scopeCanGoOnTheWire(
+          categoryId: scope.categoryId,
+          categoryNameEn: scope.categoryNameEn,
+          serviceLabels: scope.serviceLabelsEn,
+          sidebarServiceLabels: scope.sidebarLabelsEn,
+          sidebarServiceCount: scope.sidebarTagCount,
+          quickHelpScopeBroken: scope.quickHelpScopeState!['broken'] as bool,
+        ),
+        isFalse,
+      );
+    });
+
     test(
       'a button with NO category keeps the conversation own category edge',
       () {

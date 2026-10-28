@@ -505,15 +505,17 @@ class QueryService {
     // does).
     let categoryId = queryData.categoryId || null;
     let serviceIds = queryData.serviceId ? [queryData.serviceId] : [];
-    if (!categoryId || serviceIds.length === 0) {
-      // The category branch is skipped when the request already carries
-      // its own id: its lookup result would be thrown away — one query
-      // per send for nothing.
-      const resolved = await this.resolveScopeIds(queryData.context, { resolveCategory: !categoryId });
-      if (!categoryId) {
+    // BOTH branches are skipped when the request already carries the id
+    // they would resolve: their lookup results would be thrown away —
+    // queries per send for nothing.
+    const needCategory = !categoryId && Boolean(queryData.context?.categoryLabel);
+    const needServices = queryData.context?.serviceLabels?.length > 0 && serviceIds.length === 0;
+    if (needCategory || needServices) {
+      const resolved = await this.resolveScopeIds(queryData.context, { resolveCategory: needCategory });
+      if (needCategory && !categoryId) {
         categoryId = resolved.categoryId;
       }
-      if (serviceIds.length === 0) {
+      if (needServices && serviceIds.length === 0) {
         serviceIds = resolved.serviceIds;
       }
     }

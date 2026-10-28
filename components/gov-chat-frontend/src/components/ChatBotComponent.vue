@@ -1049,7 +1049,15 @@ export default {
           // promise still resolves — remapping with the captured locale
           // would re-title the chips in a locale the installed tree does
           // not speak.
-          this.loadServiceCategories().then(() => this.remapContextItemsToLocale(this.currentLocale));
+          // Only on a SUCCESSFUL refetch: the load swallows its own
+          // errors (the promise never rejects), and remapping after a
+          // FAILED one would rewrite the chips against the OLD locale's
+          // tree — mixed-language names until the next good load.
+          this.loadServiceCategories().then(() => {
+            if (this.serviceCategoriesStatus === 'loaded') {
+              this.remapContextItemsToLocale(this.currentLocale);
+            }
+          });
         }
       );
     }
@@ -1328,9 +1336,10 @@ export default {
     // the key, the wire needs the ENGLISH label. No label, no query: a query
     // without it would answer from the whole corpus.
     quickHelpScopeIsNameable(categoryId) {
-      // An EMPTY category id declares nothing: it is how a selection is
-      // CLEARED, not a scope the hierarchy could deny.
-      if (categoryId == null || categoryId === '' || categoryId === 'general') {
+      // An id that declares NO category scope (empty, or the 'general'
+      // placeholder) is how a selection is CLEARED — the hierarchy has
+      // nothing to deny. declaresCategoryScope is the ONE predicate.
+      if (!declaresCategoryScope(categoryId)) {
         return true;
       }
       return this.getCategoryEnLabel(categoryId) != null;
@@ -1623,6 +1632,14 @@ export default {
         'conversation/setContextItems',
         this.selectedContextItems.map((item) => ({
           ...item,
+          // A chip marked UNRESOLVED at restore time is re-checked
+          // against the tree this remap runs after: the hierarchy may
+          // have caught up (a renamed-back label), and a chip that can
+          // now be named must stop refusing the send. The tag's own
+          // text is the identity the lookup uses.
+          ...(item.unresolved && this.enLabelSet.has(item.service)
+            ? { serviceKey: item.service, unresolved: false }
+            : {}),
           service:
             item.source === QUICK_HELP_SOURCE
               ? this.quickHelpTitleFor(item, locale)
@@ -1807,7 +1824,15 @@ export default {
       const entry = this.composerEntry;
       // Only a real knowledge-area entry becomes a context chip — the plain
       // just-chat surface is not a domain, and a chip would promise one.
-      if (entry && entry.category) {
+      // The gate is DECLARES ANY SCOPE (a category, or labels): a
+      // labels-only card fell through to the just-chat branch, which
+      // strips the Quick Help context and sends UNFILTERED while the
+      // card promised the declared scope.
+      const entryDeclaresScope =
+        entry &&
+        (declaresCategoryScope(entry.category) ||
+          (Array.isArray(entry.serviceLabels) && entry.serviceLabels.length > 0));
+      if (entryDeclaresScope) {
         // The composer card renders BEFORE the hierarchy settles (the grid
         // waits for it), so the same gate selectQuickHelpOption enforces
         // has to run here too: a broken card, or a scope the tree cannot

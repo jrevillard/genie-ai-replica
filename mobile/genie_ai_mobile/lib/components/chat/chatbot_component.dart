@@ -350,6 +350,61 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     });
   }
 
+  /// Applies a resolved conversation scope to the chat state. Called by
+  /// the restore and by the hierarchy-retry re-resolve — the SAME
+  /// mapping, never two copies of it.
+  void _applyRestoredScope(ConversationScope scope) {
+    _selectedCategoryId = scope.categoryId;
+    _selectedCategoryNameEn = scope.categoryNameEn ?? '';
+    // The resolver's tree is the ENGLISH one (the wire's
+    // vocabulary): its display name is English too. A Quick Help
+    // scope shows the button's own localized title — the same thing
+    // the press and the web show. (A sidebar scope still shows the
+    // EN name: the localized tree lives in the panel, not here.)
+    if (scope.quickHelpButtonId != null) {
+      final button = _quickHelpButtons.firstWhere(
+        (b) => b['id']?.toString() == scope.quickHelpButtonId,
+        orElse: () => <String, dynamic>{},
+      );
+      _selectedCategoryName =
+          button['resolvedTitle']?.toString() ?? scope.categoryName ?? '';
+    } else {
+      _selectedCategoryName = scope.categoryName ?? '';
+    }
+    _activeQuickHelpButtonId = scope.quickHelpButtonId;
+    // During a hierarchy OUTAGE the resolver was built over an
+    // empty tree: every declared label reads as missing, and the
+    // refusal would name a configuration problem that may not exist.
+    // The outage is the CALLER's fact — the grid handles it through
+    // unavailableScopeFor, and the restore does the same.
+    if (_treeUnavailable && scope.quickHelpButtonId != null) {
+      final button = _quickHelpButtons.firstWhere(
+        (b) => b['id']?.toString() == scope.quickHelpButtonId,
+        orElse: () => <String, dynamic>{},
+      );
+      _activeQuickHelpScope = button.isNotEmpty
+          ? QuickHelpScopeResolver.unavailableScopeFor(button)
+          : scope.quickHelpScopeState;
+    } else {
+      _activeQuickHelpScope = scope.quickHelpScopeState;
+    }
+    // A Quick Help scope narrows the FIRST follow-up by its declared
+    // labels (the mobile's one-turn scope); the sidebar labels that
+    // were selected BESIDE it keep narrowing the whole conversation —
+    // a conversation can carry both, and the web restores both.
+    _activeServiceLabels = scope.quickHelpButtonId == null
+        ? const []
+        : scope.serviceLabelsEn;
+    // Both branches of the resolver set this field — a sidebar
+    // scope's filter labels are its sidebar labels, a Quick Help
+    // scope carries the ones selected beside the button.
+    _sidebarServiceLabelsEn = scope.sidebarLabelsEn;
+    // How many sidebar tags the conversation was saved with: a tag
+    // the hierarchy no longer carries is dropped from the labels, and
+    // the send guard refuses it instead of letting it vanish.
+    _sidebarServiceCount = scope.sidebarTagCount;
+  }
+
   Future<void> _fetchEnTree() async {
     try {
       final categoriesApi = ref.read(serviceCategoriesApiProvider);
@@ -365,33 +420,20 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           // against the tree that IS here now, not against the one that
           // failed to load.
           _treeUnavailable = false;
-          // A scope restored DURING the outage froze its own state as
-          // unavailable — without this, a successful retry left the
-          // conversation refused with an outage caption whose cause is
-          // gone. The active button's scope is re-checked against the
-          // tree that just landed (the web recomputes on every send).
-          if (_activeQuickHelpButtonId != null) {
-            final button = _quickHelpButtons.firstWhere(
-              (b) => b['id']?.toString() == _activeQuickHelpButtonId,
-              orElse: () => <String, dynamic>{},
-            );
-            if (button.isNotEmpty) {
-              _activeQuickHelpScope = _scopeResolver!.stateFor(button);
-            } else {
-              // The button left the config between the outage and the
-              // retry: its saved scope is gone with it. No frozen
-              // outage caption for a disappearance — clearing the state
-              // hands the refusal to the nameable guard, whose message
-              // does not name a cause that is not there.
-              _activeQuickHelpScope = null;
-            }
-            // The category's EN name was restored as EMPTY during the
-            // outage: a label-less button scope would stay refused
-            // (scopeNotNameable) after a SUCCESSFUL retry without this.
-            if (_selectedCategoryId != null) {
-              _selectedCategoryNameEn =
-                  _scopeResolver!.categoryEnLabel(_selectedCategoryId) ?? '';
-            }
+          // A restore resolved during an outage froze its whole scope
+          // against an empty tree (labels dropped, count remembered,
+          // names empty) — a successful retry must RE-RESOLVE it, or the
+          // conversation stays refused on a cause that is gone. Only
+          // when the restore still OWNS the scope: a user action since
+          // (epoch moved) means the saved scope no longer applies.
+          if (_restoredTags != null &&
+              _restoredScopeEpoch == _scopeEpoch &&
+              _scopeResolver != null) {
+            final scope = ConversationScopeResolver(
+              hierarchy: _scopeResolver!,
+              quickHelpButtons: _quickHelpButtons,
+            ).resolve(tags: _restoredTags, categoryKey: _restoredCategoryKey);
+            _applyRestoredScope(scope);
           }
         });
         return;
@@ -451,6 +493,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       _sidebarServiceCount = serviceCount;
       // A sidebar selection REPLACES the Quick Help scope: the two are
       // alternative ways of scoping the same query.
+      _scopeEpoch++;
+      _restoredTags = null;
       _activeQuickHelpButtonId = null;
       _activeQuickHelpScope = null;
       _activeServiceLabels = const [];
@@ -471,6 +515,19 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // a newer one (the web's loadSeq, ported — the scope block added an
   // await into the window).
   int _loadSeq = 0;
+
+  // The epoch of the LAST USER scope action (a card press, a sidebar
+  // pick, a reset). A restore whose awaits outlive a user action must
+  // not commit the conversation's saved scope OVER the one the user just
+  // chose — loadSeq guards newer LOADS, this guards user actions.
+  int _scopeEpoch = 0;
+  // The restore's raw inputs, kept so a hierarchy retry that SUCCEEDS
+  // can re-resolve the whole scope (a restore resolved during an outage
+  // froze labels, count and names against an empty tree). Null when no
+  // restore owns the current scope.
+  List<dynamic>? _restoredTags;
+  String? _restoredCategoryKey;
+  int? _restoredScopeEpoch;
 
   Future<void> _loadConversationDirect(String conversationId) async {
     final seq = ++_loadSeq;
@@ -525,66 +582,25 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       // (a category key is named through it) and the Quick Help config
       // (a Quick Help tag is a button id). Waiting for the one and not
       // the other drops the scope of the other kind of tag.
+      final scopeEpoch = _scopeEpoch;
+      final restoredTags = conv['tags'] is List
+          ? conv['tags'] as List<dynamic>
+          : null;
+      final restoredCategoryKey = _conversationCategoryKey(conv);
       await Future.wait([_ensureEnTree(), _ensureQuickHelpConfig()]);
-      if (!mounted || seq != _loadSeq) return;
-      final scope =
-          ConversationScopeResolver(
-            hierarchy: _scopeResolver ?? QuickHelpScopeResolver(const []),
-            quickHelpButtons: _quickHelpButtons,
-          ).resolve(
-            tags: conv['tags'] is List ? conv['tags'] as List<dynamic> : null,
-            categoryKey: _conversationCategoryKey(conv),
-          );
+      // BOTH guards: a NEWER load replaced this one, or the USER set a
+      // scope while the fetches were pending — either way this restore
+      // no longer owns the view.
+      if (!mounted || seq != _loadSeq || scopeEpoch != _scopeEpoch) return;
+      final scope = ConversationScopeResolver(
+        hierarchy: _scopeResolver ?? QuickHelpScopeResolver(const []),
+        quickHelpButtons: _quickHelpButtons,
+      ).resolve(tags: restoredTags, categoryKey: restoredCategoryKey);
       setState(() {
-        _selectedCategoryId = scope.categoryId;
-        _selectedCategoryNameEn = scope.categoryNameEn ?? '';
-        // The resolver's tree is the ENGLISH one (the wire's
-        // vocabulary): its display name is English too. A Quick Help
-        // scope shows the button's own localized title — the same thing
-        // the press and the web show. (A sidebar scope still shows the
-        // EN name: the localized tree lives in the panel, not here.)
-        if (scope.quickHelpButtonId != null) {
-          final button = _quickHelpButtons.firstWhere(
-            (b) => b['id']?.toString() == scope.quickHelpButtonId,
-            orElse: () => <String, dynamic>{},
-          );
-          _selectedCategoryName =
-              button['resolvedTitle']?.toString() ?? scope.categoryName ?? '';
-        } else {
-          _selectedCategoryName = scope.categoryName ?? '';
-        }
-        _activeQuickHelpButtonId = scope.quickHelpButtonId;
-        // During a hierarchy OUTAGE the resolver was built over an
-        // empty tree: every declared label reads as missing, and the
-        // refusal would name a configuration problem that may not exist.
-        // The outage is the CALLER's fact — the grid handles it through
-        // unavailableScopeFor, and the restore does the same.
-        if (_treeUnavailable && scope.quickHelpButtonId != null) {
-          final button = _quickHelpButtons.firstWhere(
-            (b) => b['id']?.toString() == scope.quickHelpButtonId,
-            orElse: () => <String, dynamic>{},
-          );
-          _activeQuickHelpScope = button.isNotEmpty
-              ? QuickHelpScopeResolver.unavailableScopeFor(button)
-              : scope.quickHelpScopeState;
-        } else {
-          _activeQuickHelpScope = scope.quickHelpScopeState;
-        }
-        // A Quick Help scope narrows the FIRST follow-up by its declared
-        // labels (the mobile's one-turn scope); the sidebar labels that
-        // were selected BESIDE it keep narrowing the whole conversation —
-        // a conversation can carry both, and the web restores both.
-        _activeServiceLabels = scope.quickHelpButtonId == null
-            ? const []
-            : scope.serviceLabelsEn;
-        // Both branches of the resolver set this field — a sidebar
-        // scope's filter labels are its sidebar labels, a Quick Help
-        // scope carries the ones selected beside the button.
-        _sidebarServiceLabelsEn = scope.sidebarLabelsEn;
-        // How many sidebar tags the conversation was saved with: a tag
-        // the hierarchy no longer carries is dropped from the labels, and
-        // the send guard refuses it instead of letting it vanish.
-        _sidebarServiceCount = scope.sidebarTagCount;
+        _restoredTags = restoredTags;
+        _restoredCategoryKey = restoredCategoryKey;
+        _restoredScopeEpoch = scopeEpoch;
+        _applyRestoredScope(scope);
       });
 
       List<dynamic> accumulatedDocs = [];
@@ -643,6 +659,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       _selectedCategoryNameEn = '';
       _sidebarServiceLabelsEn = [];
       _sidebarServiceCount = 0;
+      _scopeEpoch++;
+      _restoredTags = null;
       _activeQuickHelpButtonId = null;
       _activeQuickHelpScope = null;
       _activeServiceLabels = [];
@@ -1121,6 +1139,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         // and a stale button id would tag the next conversation with a
         // scope it never had.
         _sidebarServiceCount = 0;
+        _scopeEpoch++;
+        _restoredTags = null;
         _activeQuickHelpButtonId = null;
         _activeQuickHelpScope = null;
       });
@@ -1167,6 +1187,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       _selectedCategoryName =
           button['resolvedTitle']?.toString() ?? visibleText;
       _sidebarServiceLabelsEn = [];
+      _scopeEpoch++;
+      _restoredTags = null;
       _activeQuickHelpButtonId = button['id']?.toString();
       // Not broken here — the press path refuses a broken button before
       // it reaches this line. Carried so the send guard and the restore

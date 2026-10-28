@@ -115,8 +115,8 @@ spec:
         - name: tmp
           emptyDir:
             medium: Memory
-{{- /* The PVC block is OPTIONAL (the per-service shape block says so): a cleared block means "no claim", not a nil-pointer crash. */ -}}
-{{- $pvc := $svc.pvc | default dict -}}
+{{- /* Same $pvc binding as the volume above: the claim document and the
+volume that mounts it must agree on whether the block is enabled. */ -}}
 {{- if $pvc.enabled }}
 ---
 apiVersion: v1

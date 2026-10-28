@@ -34,10 +34,11 @@ moved too. Two derivations matter:
     The diff base (CI_MERGE_REQUEST_DIFF_BASE_SHA, set in every MR
     pipeline) pins the comparison to this change's own commits.
   * WHICH paths. The library chart charts/genieai-common renders INTO the
-    umbrella's output, but Flux reconciles the UMBRELLA's version: a
-    library-only fix with no umbrella bump installs nothing. Both chart
-    directories are watched; only the umbrella's Chart.yaml is exempt
-    (it is the version itself).
+    umbrella's output, so a library-only fix changes what the umbrella
+    installs while leaving the umbrella's version where it was — the
+    overlay would name a release whose content is not the one in the
+    cluster. Both chart directories are watched; only the umbrella's
+    Chart.yaml is exempt (it is the version itself).
 
 Usage: scripts/chart-version-check.py [chart-path]
        CHART=charts/genieai-umbrella scripts/chart-version-check.py

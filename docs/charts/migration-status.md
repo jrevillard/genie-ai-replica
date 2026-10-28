@@ -231,8 +231,8 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     timeout; the ArgoCD example installed with defaults the render
     guards reject; the Keycloak ClusterRoleBinding patch aborted the
     whole bootstrap when the object is absent; and the chart version
-    quoted in the READMEs was stale (now a pointer to Chart.yaml —
-    Flux reconciles on that number, and it drifted on every bump).
+    quoted in the READMEs was stale (now a pointer to Chart.yaml — the
+    number the deploy repo names, and it drifted on every bump).
 - **Review loop, passes 5-8 (0.2.77-0.2.80)** — 47 findings across four
   passes, each one checked against a render, a live cluster or the source
   before it was acted on (six were refuted that way). The ones that
@@ -940,7 +940,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     here. The comparison is now anchored on the diff base and on the
     change's own side of the merge, and the library chart
     (`charts/genieai-common`) is watched too: it renders INTO the
-    umbrella, but Flux reconciles the umbrella's version.
+    umbrella, and the overlay names the umbrella's version.
   - *The "silent drop" assertion forgave too much* — one owned row
     forgave every other row of the group, and a workload stripped of
     ALL its rows was exempt (the check asked "does the workload still

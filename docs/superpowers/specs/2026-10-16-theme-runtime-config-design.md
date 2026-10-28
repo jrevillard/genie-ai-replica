@@ -153,11 +153,13 @@ services:
 ### Ansible (`deploy/ansible/`)
 
 - **New role** `roles/config_bootstrap/`:
-  - `tasks/main.yml`:
-    - `file: path={{ config_dir }}/{{ item }} state=directory mode=0755` for `frontend/` and `keycloak/themes/genie/`
-    - `synchronize: src={{ playbook_dir }}/../../components/gov-chat-frontend/public/config/ dest={{ config_dir }}/frontend/ delete=false rsync_opts=["--ignore-existing"]`
-    - `synchronize: src={{ playbook_dir }}/../../configs/keycloak/themes/genie/ dest={{ config_dir }}/keycloak/themes/genie/ delete=false rsync_opts=["--ignore-existing"]`
-  - `defaults/main.yml`: `config_dir: "/opt/genieai-{{ env_name | default(group_names[0] | default('default')) }}/config"`
+  - `tasks/main.yml` (**update 2026-10-28** — the role ships a mirror, not a preserving sync):
+    - `file: path={{ config_dir }}/{{ item.dest_subdir }} state=directory mode=0755` for `frontend/` and `keycloak/themes/`
+    - a private scratch directory per run (`ansible.builtin.tempfile`), the branch-pinned archive downloaded into it and extracted there
+    - the expected assets of each pair are stat'ed before anything is synced; the deployment's Keycloak theme (read from the rendered `.env`) is checked against the branch BEFORE the sync, because the mirror deletes what the branch does not ship
+    - `rsync --archive --checksum --delete` from the extraction tree into `{{ config_dir }}/{{ item.dest_subdir }}/` — the host copy mirrors the branch
+    - the same rsync run as a dry run afterwards: an empty report means the host matches the branch, a non-empty one names the files that differ and fails the deploy
+  - `defaults/main.yml`: `config_bootstrap_pairs` (src / dest_subdir / expect) — `config_dir` lives in `group_vars/all.yml`, not here
   - `meta/main.yml`: `galaxy_info` with author + dependencies
 
 - **`deploy.yml`**: new play with `tags: [config]` that applies the role to `[all]`. Update header comment to document the new tag.

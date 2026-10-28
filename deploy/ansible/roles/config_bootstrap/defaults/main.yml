@@ -8,9 +8,12 @@
 # false to skip when they want to manage the host directory entirely by hand.
 config_bootstrap_sync_enabled: true
 
-# Scratch directory for the branch-pinned archive downloads and their extraction.
-# Cleaned up at the end of the play.
-config_bootstrap_tmp_root: /tmp/genieai-config-extract
+# Whether a branch that carries a different app.title than the host serves may
+# be mirrored onto it. The default is false: re-branding a deployment is a
+# decision to make in the repository, not a side effect of deploying another
+# branch by mistake. Set it to true when the re-brand is the point of the
+# deploy.
+config_bootstrap_allow_rebrand: false
 
 # List of (source, destination) pairs.
 #   src        - repo-relative directory. Used two ways: as the `?path=` argument
@@ -20,17 +23,24 @@ config_bootstrap_tmp_root: /tmp/genieai-config-extract
 #                unpacks to after --strip-components=1.
 #   dest_subdir - subdirectory of config_dir to seed, matching the host paths
 #                rendered as CONFIG_DIR_FRONTEND / CONFIG_DIR_KEYCLOAK.
-#   expect      - a file that MUST exist in the extracted archive. Checked before
+#   expect      - files that MUST exist in the extracted archive. Checked before
 #                anything is synced, so a wrong branch or a failed extraction
 #                fails the deploy instead of silently seeding a broken mount.
+#                The runtime config JSON is in the list because it is the file
+#                the frontend fetches and validates at boot: a branch whose
+#                config directory does not carry it would mirror that absence
+#                onto the host, and the mount would serve a 404 for it.
 config_bootstrap_pairs:
   - src: "components/gov-chat-frontend/public/config"
     dest_subdir: "frontend"
-    expect: "theme-variables.css"
+    expect:
+      - "theme-variables.css"
+      - "genie-ai-config.json"
   # Seed the whole themes tree, not one theme: additional themes (e.g.
   # genie-el-salvador with parent=genie) must sit next to genie under the
   # mounted directory, or their parent reference cannot resolve. The mount
   # target in docker-compose.yaml is /opt/keycloak/themes (the root).
   - src: "configs/keycloak/themes"
     dest_subdir: "keycloak/themes"
-    expect: "genie/login/theme.properties"
+    expect:
+      - "genie/login/theme.properties"

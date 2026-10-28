@@ -66,21 +66,17 @@ Keycloak caches themes in memory, so the forced restart is not optional for Keyc
 
 ### What re-running Ansible does to your edits
 
-The role syncs with `rsync --ignore-existing`, which means:
+The role syncs the host's configuration directory as a **mirror of the deployed branch** (`rsync --archive --checksum --delete`), which means:
 
-- **Your edits are preserved.** Re-running the role — including a full `--tags deploy` — will not overwrite a file you changed on the node.
-- **But a repo-side change will not reach the node either.** Once a file has been seeded, `--ignore-existing` skips it forever, so fixing a logo in the repository and redeploying does *not* update a node that already has its own copy. This is the deliberate trade-off: operator edits survive deploys, at the cost of the repo no longer being authoritative for that file.
+- **The branch is authoritative.** Re-running the role — including a full `--tags deploy` — overwrites the files the branch changed and removes the files the branch no longer ships. A logo you changed on the node is reverted by the next deploy, and a file the repository dropped disappears from the node.
+- **Make the change in the repository.** The runtime configuration is the flavour's config file (`components/gov-chat-frontend/public/config/genie-ai-config.json` for the web app, `configs/keycloak/themes/` for the Keycloak themes). Edit it there, deploy, and the node picks it up.
+- **The deploy verifies it.** After seeding, the role re-runs the same mirror as a dry run: if the host still differs from the branch, the deploy fails and names the files that differ, instead of leaving a node that serves a configuration nobody declared.
 
-So if you want a repository change to win on a given node, edit it on the node, or delete the file there and re-run the role so it is re-seeded from the repository:
+A host that kept a stale configuration served a brand the branch no longer declared, and the application refused to start on it — a blank landing page behind a deploy that reported success. That is why the branch is the single source of truth.
 
-```bash
-rm /opt/genieai/config/frontend/genie-ai-config.json
-ansible-playbook -i inventory/<env>.ini deploy.yml --tags config --vault-id <env>@prompt
-```
+The re-seeded files are live immediately — the bind mount serves them from disk, so a browser reload is all it takes (no frontend restart).
 
-The re-seeded file is live immediately — the bind mount serves it from disk, so a browser reload is all it takes (no frontend restart).
-
-Nodes that you want to follow the repository exactly — CI, or a deployment where nobody edits files by hand — can skip the sync entirely with `config_bootstrap_sync_enabled: false`.
+Nodes that you want to manage entirely by hand — an air-gapped deployment, for instance — can skip the sync with `config_bootstrap_sync_enabled: false`; the role then leaves the host directory untouched.
 
 ## Frontend brand (logo, favicon, app name, brand color)
 
@@ -270,7 +266,7 @@ curl -sk -X PUT "https://<host>/auth/admin/realms/genie" \
 
 Then restart the Keycloak container — it caches themes in memory — and clear its compressed-resource cache, or the new stylesheet never reaches the browser (see [Troubleshooting](#troubleshooting)).
 
-**Adding a new theme in three steps:** (1) create `configs/keycloak/themes/<your-theme>/` with `login/` (and optionally `account/`, `admin/`, `email/`) subdirectories, each with a `theme.properties` — `parent=genie` reuses the GENIE.AI layout and only overrides your files; (2) deploy — the `config_bootstrap` role seeds the whole `themes/` tree; (3) set `KEYCLOAK_THEME` (or the realm setting) to `<your-theme>`. On an already-deployed node, dropping the theme directory into `/opt/genieai/config/keycloak/themes/` and restarting Keycloak is enough — the bind mount serves it live.
+**Adding a new theme in three steps:** (1) create `configs/keycloak/themes/<your-theme>/` with `login/` (and optionally `account/`, `admin/`, `email/`) subdirectories, each with a `theme.properties` — `parent=genie` reuses the GENIE.AI layout and only overrides your files; (2) deploy — the `config_bootstrap` role seeds the whole `themes/` tree from the branch; (3) set `KEYCLOAK_THEME` (or the realm setting) to `<your-theme>`. The role refuses to sync a branch that does not ship the theme this deployment is configured to use, so a theme has to be in the repository before the deploy that activates it — a theme dropped on the node alone is removed by the next deploy.
 
 > **`KEYCLOAK_THEME` applies to all four surfaces at once** (login, account, admin, email — see `genie-realm.yaml`). A theme that only ships `login/` therefore leaves the account console, the admin console and emails on Keycloak's unbranded built-in look. If that is not what you want, either ship the other subdirectories too, or set the per-type realm settings (`accountTheme`, `adminTheme`, `emailTheme`) to `genie` via the admin API while pointing `loginTheme` at your theme.
 

@@ -36,7 +36,11 @@
 # Both the inventory and the host must be given explicitly: the script never
 # guesses a target, and it never falls back to a hardcoded host. Run it against
 # a real deploy node (or any host Ansible can reach) - it writes to that host's
-# config_dir, and it restores everything it changes, including on failure.
+# config_dir, and it removes the files it created and restores the one it
+# edited, including on failure. What the role's own mirror removes (the host
+# files the branch does not ship) is the mirror's contract, not damage: the
+# host is left serving the branch, which is the state a deploy would leave it
+# in anyway.
 #
 # NOT run by CI. This needs a live Ansible target host.
 #
@@ -192,6 +196,7 @@ fi
 
 BACKUP_PATH=""
 EXPECTED_PATH=""
+STRAY_PATH=""
 RESTORE_ARMED="false"
 
 restore() {
@@ -206,6 +211,13 @@ restore() {
         ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
             -a "rm -f '$EXPECTED_PATH'" >/dev/null 2>&1 || true
         EXPECTED_PATH=""
+    fi
+    # The stray file this test creates must never outlive it, whether the run
+    # passed, failed, or aborted before the mirror removed it.
+    if [ -n "$STRAY_PATH" ]; then
+        ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
+            -a "rm -f '$STRAY_PATH'" >/dev/null 2>&1 || true
+        STRAY_PATH=""
     fi
     printf '\n=== Cleanup: restoring %s ===\n' "$THEME_CSS"
     if [ -n "$BACKUP_PATH" ] &&

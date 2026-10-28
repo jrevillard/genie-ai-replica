@@ -426,11 +426,17 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   /// settled (the tree, the Quick Help config): a restore resolved
   /// during an outage of either froze its scope against empty data. Only
   /// when the restore still OWNS the scope — a user action since (epoch
-  /// moved) means the saved scope no longer applies.
+  /// moved) means the saved scope no longer applies. The ownership rule
+  /// lives in one predicate; a restore with NO tags (a category-only
+  /// scope) is re-resolved too.
   void _maybeReResolveRestoredScope() {
-    if (_restoredTags == null ||
-        _restoredScopeEpoch != _scopeEpoch ||
-        _scopeResolver == null) {
+    if (!shouldReResolveRestoredScope(
+      restoredTags: _restoredTags,
+      restoredCategoryKey: _restoredCategoryKey,
+      restoredScopeEpoch: _restoredScopeEpoch,
+      scopeEpoch: _scopeEpoch,
+      hierarchyReady: _scopeResolver != null,
+    )) {
       return;
     }
     final scope = ConversationScopeResolver(

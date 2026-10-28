@@ -2714,9 +2714,12 @@ describe('ChatBotComponent', () => {
       expect(mockSubmitQueryStream).not.toHaveBeenCalled();
       const lastError = notificationService.error.mock.calls.at(-1)[0];
       // The hierarchy is ON ITS WAY — naming a configuration problem
-      // points the operator at the wrong thing. (The wrapper's $t mock
-      // returns the key; the KEY is what distinguishes the two copies.)
-      expect(lastError).toBe('admin.hierarchy.loading');
+      // points the operator at the wrong thing. And the copy is the
+      // CHAT's own, not the admin panel's: the toast is read by the
+      // person whose question was held, not by an operator. (The
+      // wrapper's $t mock returns the key; the KEY is what
+      // distinguishes the two copies.)
+      expect(lastError).toBe('chatbot.loading');
     });
 
     it('two services sharing a DISPLAY name are two scopes (identity is the EN key)', async () => {

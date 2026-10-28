@@ -28,9 +28,11 @@
 //   - drop the 'config-error' class from .quick-help-item       -> test 2 fails
 //   - drop the .config-error-icon                               -> test 2 fails
 //   - remove the BROKEN-card guard in selectQuickHelpOption     -> test 2 fails
-//     (that card's CATEGORY names fine; only its LABELS are gone, so the
-//      broken-guard is the ONLY thing refusing it — the nameable-guard
-//      would let the click through and the query would go out)
+//     (the send-time guard would still block the QUERY — checkContextConfig
+//      refuses a broken installed chip too — so "nothing was sent" cannot
+//      tell the two guards apart. What only the tile guard does is refuse
+//      the CHIP: without it the card installs its context item and the
+//      welcome screen leaves. Test 2 asserts the welcome screen STAYS.)
 //   - drop the LABEL-GONE part of the caption assembly          -> test 3 fails
 //     (the caption would name the category instead of the label, and the
 //      user would be pointed at the wrong half of their configuration)
@@ -256,6 +258,13 @@ test.describe('Quick Help scope states', () => {
 
     expect(streamed(), 'a broken card must not reach the query path').toBe(false);
     expect(await page.locator('[data-testid="user-avatar"]').count()).toBe(0);
+
+    // The tile guard refuses BEFORE anything is installed: no context item
+    // appears, and the welcome screen (which only renders while NO context
+    // item is selected) is still there. This is the assertion that tells
+    // the tile guard apart from the send-time guard — the send-time guard
+    // blocks the query but leaves the chip installed.
+    await expect(page.locator('.quick-help-banner')).toBeVisible();
 
     await ctx.close();
   });

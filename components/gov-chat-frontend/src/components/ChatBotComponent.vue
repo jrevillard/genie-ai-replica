@@ -1875,11 +1875,13 @@ export default {
           const caption = this.quickHelpStatesCaption([this.quickHelpScopeState(entry)]);
           // A hierarchy still ON ITS WAY is not a configuration problem:
           // the unavailable caption would point the operator at the
-          // wrong thing. The loading copy says what is happening.
+          // wrong thing. The loading copy says what is happening — the
+          // CHAT's own copy, not the admin panel's (the toast is read by
+          // the person whose question was held, not by an operator).
           notificationService.error(
             caption ||
               (this.serviceCategoriesStatus === 'loading'
-                ? this.safeTranslate('admin.hierarchy.loading')
+                ? this.translate('chatbot.loading', '')
                 : this.translate('chatbot.quickHelpScopeUnavailable', ''))
           );
           return;

@@ -425,6 +425,32 @@ class ConversationScopeResolver {
   }
 }
 
+/// Whether a committed restore should be re-resolved now that a source it
+/// depended on (the hierarchy, the config) settled.
+///
+/// The restore's OWNERSHIP is its epoch marker, never its tags: a
+/// conversation saved without a `tags` array restores a category-only
+/// scope — the one scope the tree alone names — and keying the re-resolve
+/// on the tags left exactly that scope frozen against the outage's empty
+/// tree, unanswerable forever after the tree recovered. A user action
+/// since the restore (the epoch moved) means the saved scope no longer
+/// applies, and a restore that carried neither tags nor a category has
+/// nothing to re-resolve.
+bool shouldReResolveRestoredScope({
+  required List<dynamic>? restoredTags,
+  required String? restoredCategoryKey,
+  required int? restoredScopeEpoch,
+  required int scopeEpoch,
+  required bool hierarchyReady,
+}) {
+  // A null epoch (no restore ever committed) never equals the live one —
+  // the comparison alone refuses it.
+  if (restoredScopeEpoch != scopeEpoch || !hierarchyReady) {
+    return false;
+  }
+  return (restoredTags?.isNotEmpty ?? false) || restoredCategoryKey != null;
+}
+
 /// Whether the button's scope can be put on the wire.
 ///
 /// The config carries the category KEY; the wire needs its ENGLISH label,

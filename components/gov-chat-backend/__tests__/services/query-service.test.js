@@ -776,6 +776,49 @@ describe('QueryService', () => {
       expect(result.opeaPayload.context.serviceLabels).toEqual(['Tomato']);
     });
 
+    it('forwards the legacy plural categoryLabels instead of dropping the scope', async () => {
+      // The upstream OPEA field is the PLURAL list. A caller using that
+      // spelling declared a category scope: keeping it only in the query
+      // record while the wire carries categoryLabel: null answers from the
+      // whole corpus while the caller believes it asked a scoped question.
+      const data = createMockQueryData({
+        context: { categoryLabel: null, categoryLabels: ['Taxes & Revenue'], serviceLabels: [] }
+      });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+
+      const result = await queryService.initStreamQuery(data, {});
+
+      expect(result.opeaPayload.context.categoryLabel).toBeNull();
+      expect(result.opeaPayload.context.categoryLabels).toEqual(['Taxes & Revenue']);
+    });
+
+    it('reads a bare plural categoryLabels string as ONE label', async () => {
+      // The same rule the singular spellings follow: a bare string is ONE
+      // label, never a sequence of characters and never an empty scope.
+      const data = createMockQueryData({
+        context: { categoryLabel: null, categoryLabels: 'Taxes & Revenue', serviceLabels: [] }
+      });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+
+      const result = await queryService.initStreamQuery(data, {});
+
+      expect(result.opeaPayload.context.categoryLabels).toEqual(['Taxes & Revenue']);
+    });
+
+    it('sends no categoryLabels key when the caller used the singular', async () => {
+      // The singular is this API's contract; the plural rides along only
+      // when the caller sent it. An always-present empty key would make
+      // the wire claim a plural spelling nobody used.
+      const data = createMockQueryData({
+        context: { categoryLabel: 'Crops', serviceLabels: [] }
+      });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+
+      const result = await queryService.initStreamQuery(data, {});
+
+      expect(result.opeaPayload.context.categoryLabels).toBeUndefined();
+    });
+
     it('falls back to the document nameEN when no EN translation row exists', async () => {
       // An entity imported outside the write path carries nameEN with no
       // translation document: its queries still get their category link

@@ -115,6 +115,17 @@ class QueryService {
     if (normalized.categoryLabel === undefined) {
       normalized.categoryLabel = null;
     }
+    // The upstream OPEA spelling of the category is a LIST. A bare string
+    // is ONE label — the same rule serviceLabels follows. Dropping the
+    // spelling instead of carrying it would answer from the whole corpus
+    // while the caller believed it asked a category-scoped question.
+    if (typeof normalized.categoryLabels === 'string') {
+      if (normalized.categoryLabels !== '') {
+        normalized.categoryLabels = [normalized.categoryLabels];
+      } else {
+        delete normalized.categoryLabels;
+      }
+    }
     return normalized;
   }
 
@@ -551,6 +562,10 @@ class QueryService {
         messages: queryData.messages,
         context: {
           categoryLabel: queryData.context.categoryLabel,
+          // The legacy PLURAL spelling rides along when the caller used
+          // it: the chatqna contract accepts both, and a scope the
+          // request declared must never die at this boundary.
+          categoryLabels: queryData.context.categoryLabels,
           serviceLabels: queryData.context.serviceLabels,
           language: pickLanguage(queryData.context)
         },
@@ -758,6 +773,9 @@ class QueryService {
             messages: queryData.messages,
             context: {
               categoryLabel: queryData.context.categoryLabel,
+              // Same rule as the stream path: the plural spelling rides
+              // along when the caller used it.
+              categoryLabels: queryData.context.categoryLabels,
               serviceLabels: queryData.context.serviceLabels,
               language: pickLanguage(queryData.context)
             },

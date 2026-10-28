@@ -655,6 +655,86 @@ void main() {
     });
   });
 
+  group('shouldReResolveRestoredScope', () {
+    test('a restore with NO tags still owns the re-resolve', () {
+      // A conversation saved without a `tags` array restores a
+      // category-only scope — the one scope the tree alone names. Keying
+      // the re-resolve on the tags (the old guard) froze exactly that
+      // scope against the outage's empty tree forever.
+      expect(
+        shouldReResolveRestoredScope(
+          restoredTags: null,
+          restoredCategoryKey: '2',
+          restoredScopeEpoch: 3,
+          scopeEpoch: 3,
+          hierarchyReady: true,
+        ),
+        isTrue,
+      );
+    });
+
+    test('no restore ever committed — nothing is re-resolved', () {
+      expect(
+        shouldReResolveRestoredScope(
+          restoredTags: const <dynamic>['births'],
+          restoredCategoryKey: '2',
+          restoredScopeEpoch: null,
+          scopeEpoch: 0,
+          hierarchyReady: true,
+        ),
+        isFalse,
+      );
+    });
+
+    test(
+      'a user action since the restore — the saved scope no longer applies',
+      () {
+        expect(
+          shouldReResolveRestoredScope(
+            restoredTags: const <dynamic>['births'],
+            restoredCategoryKey: '2',
+            restoredScopeEpoch: 3,
+            scopeEpoch: 4,
+            hierarchyReady: true,
+          ),
+          isFalse,
+        );
+      },
+    );
+
+    test(
+      'the hierarchy is still not there — re-resolving would freeze again',
+      () {
+        expect(
+          shouldReResolveRestoredScope(
+            restoredTags: const <dynamic>['births'],
+            restoredCategoryKey: '2',
+            restoredScopeEpoch: 3,
+            scopeEpoch: 3,
+            hierarchyReady: false,
+          ),
+          isFalse,
+        );
+      },
+    );
+
+    test(
+      'a restore that carried neither tags nor a category has nothing to re-resolve',
+      () {
+        expect(
+          shouldReResolveRestoredScope(
+            restoredTags: const <dynamic>[],
+            restoredCategoryKey: null,
+            restoredScopeEpoch: 3,
+            scopeEpoch: 3,
+            hierarchyReady: true,
+          ),
+          isFalse,
+        );
+      },
+    );
+  });
+
   group('scopeCanGoOnTheWire', () {
     test('a selection that declares NO scope asks an unscoped question', () {
       // The user's own choice: nothing was selected, so nothing is

@@ -157,9 +157,17 @@ const swaggerOptions = {
               description:
                 "The ENGLISH label of the category — the SSOT every filter label is spoken in (the hierarchy's own `nameEN`). It is forwarded to the retriever as is: a label that matches no chunk scopes the query to nothing."
             },
+            categoryLabels: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                'The legacy PLURAL spelling of categoryLabel (the upstream OPEA field). Honoured like the singular when present; a bare string is read as ONE label. Clients of this API should send the singular.'
+            },
             serviceLabels: {
               type: 'array',
-              items: { type: 'string' }
+              items: { type: 'string' },
+              description:
+                'ENGLISH service labels. A bare string is also accepted and read as ONE label (never as a sequence of characters, never as an empty scope).'
             },
             language: { type: 'string', default: 'EN' }
           }

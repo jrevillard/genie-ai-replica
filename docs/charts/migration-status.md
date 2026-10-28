@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-28)
 
-- **Chart `genieai-umbrella` at 0.2.104**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.105**, branch `feat/k8s-migration` based
   on `main` at `18d02f094` and **12 commits behind `origin/main`**
   (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
   the backend's analytics routes, the OPEA overlay (retriever/dataprep),
@@ -614,6 +614,83 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 32 (0.2.105)** — 12 findings from the eighth
+  `/code-review`, four of them in the deploy repo. The theme: a value
+  the chart (or the overlay) reads, but nobody honours.
+  - *Three realm knobs declared `true` fell back to `false`* —
+    `verifyEmail`, `resetPasswordAllowed` and `registrationAllowed`
+    are declared `true` in values.yaml, but their render-time fallback
+    was `false`, so an overlay that CLEARS a knob (`null` deletes it)
+    got the opposite of the documented default. Worse, the two mail
+    knobs' guard read the same nil, so clearing one STOPPED the guard:
+    the render succeeded with no mail server and the realm imported
+    with verification and password reset off. The fallback now matches
+    the declaration, and the guard reads the knob through the same
+    helper (Sprig's `default true` cannot express it: `false` is
+    empty, so an explicit false would read as true).
+  - *The backend declared two Secrets nobody creates* —
+    `huggingface-hub-token` and `email-password` appear in no
+    deployment surface, and no backend code reads the keys they would
+    mount (`envFrom` injects EVERY key of a Secret under its own name,
+    so an `email-password` Secret with a `password` key would land in
+    the process as an env var named `password`). The registry token is
+    the OPEA tier's business (`HF_TOKEN` from `vllm-api-key`), the
+    SMTP password belongs to the convergence Job. Both rows deleted.
+  - *The clamav probe port was a dead knob* — the probes dial the
+    LISTENER, so the port is DERIVED from `services.clamav.port`; the
+    template's merge gave precedence to the destination and the
+    operator's number was discarded in silence. The port is derived
+    now, and a number that contradicts the derivation is REJECTED by
+    name (the chart's rule for a value it cannot honour). values.yaml
+    declares an empty `tcpSocket` — a declared number would always win
+    over the derivation, because Helm merges the chart's values with
+    the overlay's and the template cannot tell them apart.
+  - *The doc claimed values the shipped overlays do not carry* — a
+    `valuesFrom` Secret (the laptop overlay has none: its secrets are
+    SealedSecrets), inline values that carry "only the per-pays
+    overrides" (the shipped inline block was a chart-wide guard
+    switch), 900s install timeouts (the overlay raises them to 60m /
+    2700s after two installs hit the 5-minute default and a cold pull
+    outran 15 minutes), a `email-password` Secret that exists nowhere,
+    and "the chart renders NO Namespace" (it renders `<ns>-obs`).
+  - *The laptop overlay switched the placeholder guard off for
+    nothing* — its render passes with the guard ON (the overlay
+    declares all three client secrets and all five convergence rows),
+    and the switch was disarming the half of the guard that fails the
+    render when a realm placeholder has no row to resolve it from. The
+    switch and its false comment (SOPS-decrypted secrets: the laptop
+    uses SealedSecrets) are gone.
+  - *Refuted: `RETRIEVER_ARANGO_FILTER_STRATEGY` is not read by the
+    branch's code* — the chart renders the name Compose uses AND the
+    name `main` reads (`0bf445ce9`); the branch's in-tree overlay is
+    12 commits behind and still reads the old name. The deployed image
+    comes from the registry (built from `main`), so the setting works;
+    the branch's rebase closes the source drift.
+  - *Deferred to the deploy repo's queue* (`docs/plan-defects.md`
+    P14–P18): the minikube TEMPLATE overlay's `valuesFrom` Secret
+    namespace, its missing Flux wiring, the plaintext seed the Agent
+    applies next to the encrypted one, and a values key the chart does
+    not read. Fixing them needs the SOPS lifecycle decided, not a
+    one-line edit — and wiring an overlay whose secrets are placeholders
+    would install a release with placeholder credentials.
+  - *Deferred: the parity gate does not check that a COMPARED variable
+    is read by the code* — it checks that the two surfaces agree, and
+    that the `notRead` claims hold; a variable both surfaces set and
+    no code reads passes. The machinery exists (the same source walk),
+    and the obstacle is the one the deferred verifier item names: the
+    walk must know what the shipped RUNTIME reads, not what the source
+    tree mentions (the frontend's `VUE_PROXY_HOST` is read by
+    `server.js`, which the image never executes).
+  - *Open question: does the chart version still bind for a Git-path
+    source?* — the deploy repo's `GitRepository` carries no SHA pin and
+    the overlay's `spec.chart.spec.version` is what this branch's
+    measurement says Flux reconciles on; the reviewer's reading is that
+    a Git-path source ignores the version and the pin is inert. The
+    branch's measurement (a reconcile that printed "applied revision
+    0.2.64" and left every object at its creationTimestamp) is the
+    stronger evidence, but it was taken on a laptop cluster this
+    branch cannot reach today. Settle it with one live reconcile before
+    the MR leaves Draft.
 - **Review loop, pass 31 (0.2.104)** — 10 findings from the seventh
   `/code-review`. The theme of the pass: the values a deployment reads
   through a path the chart does not own.
@@ -675,6 +752,12 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     chart owns: it holds the filelog DaemonSet and nothing that
     outlives the release). The release namespace stays the deploy
     repo's, and the comment says which is which.
+  - *The changelog rewrote a RELEASED entry* — the branch's Compose
+    default flip (`STREAMING_TRANSLATION_ENABLED` 0 → 1) was
+    documented by editing the `[2.0.0]` section, claiming of a July
+    release a behaviour change that ships now. Every released section
+    is byte-identical to `main` again, and the flip is documented under
+    `[Unreleased]`.
 - **Review loop, pass 30 (0.2.102)** — 7 findings from the sixth
   `/code-review`, three mutation-confirmed by the reviewer before the
   fix. The theme of the pass: values that reach a browser or a hook.
@@ -1432,7 +1515,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.104** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.105** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `18d02f094` (the tip that carries !586, !587,
   !588); the branch has since drifted 12 commits behind `origin/main`

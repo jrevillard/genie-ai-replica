@@ -227,10 +227,20 @@ spec:
             # runtime with nothing in the operator's face: the user sees
             # "check your email" and no mail ever leaves. Failing the
             # render points at the knob instead.
-            {{- if and ($keycloak.verifyEmail | default false) (not $smtp) -}}
+            {{- /* The guard reads the knob through the same helper the env
+            row uses, with the SAME fallback: values.yaml declares both
+            knobs `true`, so an UNSET knob (an overlay's `null` deletes
+            it) must be judged as true — otherwise a deployment that
+            nulls the knob gets the opposite of the documented default
+            AND the guard stops firing, silently installing a realm
+            that never verifies an address. `| default true` cannot
+            express that: Sprig treats `false` as empty, so an
+            explicit false would read as true and the guard would fire
+            on the "no mail server" deployment the knob exists for. */ -}}
+            {{- if and (eq (include "genieai-umbrella.boolEnvValue" (dict "value" $keycloak.verifyEmail "default" true)) "true") (not $smtp) -}}
             {{- fail "data.keycloak.verifyEmail=true requires data.keycloak.smtp — without a mail server the verification mail never leaves" -}}
             {{- end -}}
-            {{- if and ($keycloak.resetPasswordAllowed | default false) (not $smtp) -}}
+            {{- if and (eq (include "genieai-umbrella.boolEnvValue" (dict "value" $keycloak.resetPasswordAllowed "default" true)) "true") (not $smtp) -}}
             {{- fail "data.keycloak.resetPasswordAllowed=true requires data.keycloak.smtp — without a mail server the reset mail never leaves" -}}
             {{- end -}}
             # The realm file's smtpServer block is unconditional, so the
@@ -259,11 +269,11 @@ spec:
             - name: EMAIL_USER
               value: {{ if and $smtp ($smtp.auth) }}{{ $smtp.user | required "data.keycloak.smtp.user is required when smtp.auth is true" | quote }}{{ else }}unused{{ end }}
             - name: KEYCLOAK_REGISTRATION_ENABLED
-              value: {{ include "genieai-umbrella.boolEnvValue" (dict "value" $keycloak.registrationAllowed "default" false) | quote }}
+              value: {{ include "genieai-umbrella.boolEnvValue" (dict "value" $keycloak.registrationAllowed "default" true) | quote }}
             - name: KEYCLOAK_VERIFY_EMAIL
-              value: {{ include "genieai-umbrella.boolEnvValue" (dict "value" $keycloak.verifyEmail "default" false) | quote }}
+              value: {{ include "genieai-umbrella.boolEnvValue" (dict "value" $keycloak.verifyEmail "default" true) | quote }}
             - name: KEYCLOAK_RESET_PASSWORD
-              value: {{ include "genieai-umbrella.boolEnvValue" (dict "value" $keycloak.resetPasswordAllowed "default" false) | quote }}
+              value: {{ include "genieai-umbrella.boolEnvValue" (dict "value" $keycloak.resetPasswordAllowed "default" true) | quote }}
             - name: KEYCLOAK_LOGIN_WITH_EMAIL
               value: {{ eq (include "genieai-umbrella.boolEnvValue" (dict "value" $keycloak.loginWithEmailAllowed "default" true)) "true" | quote }}
             - name: KEYCLOAK_DUPLICATE_EMAILS

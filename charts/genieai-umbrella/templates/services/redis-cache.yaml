@@ -83,11 +83,11 @@ spec:
             - name: redis
               containerPort: {{ $svc.port | default 6379 }}
           readinessProbe:
-            exec: { command: ["sh", "-c", "redis-cli ping"] }
+            exec: { command: ["sh", "-c", "redis-cli -p {{ $svc.port | default 6379 }} ping"] }
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
-            exec: { command: ["sh", "-c", "redis-cli ping"] }
+            exec: { command: ["sh", "-c", "redis-cli -p {{ $svc.port | default 6379 }} ping"] }
             initialDelaySeconds: 30
             periodSeconds: 30
           volumeMounts:

@@ -437,7 +437,8 @@ to avoid duplicating the var.
 ### document-repository image requirement
 
 The chart points the document repository at the ClamAV Service
-(`services.documentRepository.clamavHost` / `clamavPort`), and at Keycloak
+(target host `services.documentRepository.clamavHost`; the port follows
+`services.clamav.port`, pinned to 3310 by the render guard), and at Keycloak
 for both the JWKS and the expected token issuer
 (`KEYCLOAK_EXPECTED_ISSUER`, derived from `ingress.scheme` + `ingress.host`
 when the service itself reaches a different origin). Two of those variables

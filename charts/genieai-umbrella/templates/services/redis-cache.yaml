@@ -11,6 +11,10 @@ default, not crash the template engine). */ -}}{{- $global := .Values.global | d
 the Service, the NetworkPolicy and every probe command derive from it
 (clamav.yaml binds its port the same way). */ -}}
 {{- $redisPort := $svc.port | default 6379 -}}
+{{- /* The probe command, bound once: three probes must agree on what
+"serving" means, and the assert is a quoted one-liner easy to get
+subtly wrong. */ -}}
+{{- $redisProbe := printf "test \"$(redis-cli -p %s ping)\" = PONG" ($redisPort | toString) -}}
 {{- $pluggable := .Values.pluggable | default dict -}}
 {{- if $svc.enabled -}}
 apiVersion: apps/v1
@@ -98,15 +102,15 @@ spec:
           # server actually answers PONG, the same window clamav's
           # startup probe gives the signature download.
           startupProbe:
-            exec: { command: ["sh", "-c", "test \"$(redis-cli -p {{ $redisPort }} ping)\" = PONG"] }
+            exec: { command: ["sh", "-c", {{ $redisProbe | quote }}] }
             failureThreshold: 30
             periodSeconds: 10
           readinessProbe:
-            exec: { command: ["sh", "-c", "test \"$(redis-cli -p {{ $redisPort }} ping)\" = PONG"] }
+            exec: { command: ["sh", "-c", {{ $redisProbe | quote }}] }
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
-            exec: { command: ["sh", "-c", "test \"$(redis-cli -p {{ $redisPort }} ping)\" = PONG"] }
+            exec: { command: ["sh", "-c", {{ $redisProbe | quote }}] }
             initialDelaySeconds: 30
             periodSeconds: 30
           volumeMounts:

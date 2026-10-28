@@ -188,11 +188,10 @@ spec:
           required_secrets="$required_secrets {{ $kcDb.secretName | default "keycloak-db-credentials" }}"
           {{- end }}
           {{- if $redisCache.enabled }}
-          # redis runs with --requirepass from a NON-optional secretKeyRef,
-          # but the backend consumes the same Secret through an optional
-          # envFrom — a missing Secret therefore starts both pods and
-          # breaks the translation cache silently (every read/write gets
-          # NOAUTH) while the TCP probe still passes.
+          # redis runs with --requirepass from a NON-optional secretKeyRef:
+          # a missing Secret holds the redis pod in
+          # CreateContainerConfigError at scheduling. Listing it here
+          # surfaces that failure in this pre-install check instead.
           required_secrets="$required_secrets translation-cache-password"
           {{- end }}
           {{- if and $keycloak.enabled $kcConvergence.enabled }}

@@ -4,7 +4,16 @@
 {{- /* Dedicated namespace for the filelog agent DaemonSet: reading the
 node's /var/log/pods requires hostPath volumes, which the release
 namespace's pod-security baseline forbids. Only this namespace relaxes
-to privileged. */ -}}
+to privileged.
+
+This one IS chart-owned, unlike the release namespace (which the
+deploy-repo Kustomization owns — see templates/namespace.yaml). Owning it
+is safe: the namespace holds the filelog DaemonSet and nothing else —
+no PVC, no SealedSecret, no per-environment operator — so an uninstall
+deleting it cascades away nothing that outlives the release. The
+release namespace is the opposite case: it carries the SealedSecrets
+and the PVCs, and a chart-owned copy of it would delete them on every
+failed install → uninstall remediation. */ -}}
 apiVersion: v1
 kind: Namespace
 metadata:

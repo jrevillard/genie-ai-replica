@@ -1,4 +1,8 @@
 {{- $obs := .Values.observability | default dict -}}
+{{- /* The ingress block, bound parent-first like every other read: a
+cleared ingress block must not crash the template engine on a nil
+parent — the helper below fails by NAME, which is the contract. */ -}}
+{{- $ingress := .Values.ingress | default dict -}}
 {{- $obsGrafana := $obs.grafana | default dict -}}
 {{- $obsLogs := $obs.logs | default dict -}}
 {{- $obsMetrics := $obs.metrics | default dict -}}
@@ -140,7 +144,7 @@ spec:
       # chain carried was unreachable — no render passes the guards
       # with ingress.host unset — and advertised a degrade path nothing
       # could take.
-      root_url: {{ printf "%s://%s/grafana" (.Values.ingress.scheme | default "https") (include "genieai-umbrella.ingressHost" .) }}
+      root_url: {{ printf "%s://%s/grafana" ($ingress.scheme | default "https") (include "genieai-umbrella.ingressHost" .) }}
       # spec.config is a map[string]string (the ini-file form): every
       # value must be a STRING. A YAML boolean is rejected by the API
       # server with "must be of type string: boolean" — the whole Grafana

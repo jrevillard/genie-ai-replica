@@ -99,6 +99,15 @@ spec:
         annotations:
           genieai.io/keycloak-theme-checksum: {{ .Files.Get "files/keycloak-themes.tgz" | sha256sum | trunc 16 }}
       spec:
+        # The pull credentials every other workload the chart renders
+        # gets: the theme-unpack init pulls busybox, and an air-gapped
+        # mirror needs the Secret to pull it at all. Without them the
+        # init dies in ImagePullBackOff and the whole identity tier
+        # never starts — with a pull error that names no values key.
+        {{- with $global.imagePullSecrets }}
+        imagePullSecrets:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
         volumes:
           - name: keycloak-themes-src
             configMap:

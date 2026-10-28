@@ -195,8 +195,17 @@ def _action_expression(lines, start):
     collected = []
     for index in range(start, len(lines)):
         line = lines[index]
-        # A YAML comment after the action is not part of it.
-        line = re.sub(r"(?<!#)#.*$", "", line) if "#" in line else line
+        if "#" in line:
+            # A YAML comment AFTER the action is not part of it — but a
+            # `#` inside it is content (a URL fragment, a quoted
+            # default), and stripping it corrupted the capture: the
+            # braces stopped balancing mid-action and the following
+            # lines were swallowed into one garbled expression. The
+            # strip applies only when the braces still balance after
+            # it, which is true exactly when the `#` sits outside.
+            stripped = re.sub(r"(?<!#)#.*$", "", line)
+            if stripped.count("{{") == stripped.count("}}") and "{{" in stripped:
+                line = stripped
         collected.append(line)
         depth += line.count("{{") - line.count("}}")
         if depth <= 0 and "{{" in "".join(collected):

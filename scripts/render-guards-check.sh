@@ -196,7 +196,14 @@ expect_fail "an unknown opea.gpu.mode" \
 #     rule could never admit it.
 expect_fail "an IPv6-literal GPU node host" \
   "an IPv6 literal" \
-  $(valid_flags) --set opea.enabled=true --set 'opea.gpu.nodeHost=[2001:db8::1]:444'
+  $(valid_flags) --set opea.enabled=true --set 'opea.gpu.nodeHost=https://[2001:db8::1]:444'
+
+# 13b. The egress port is derived from the URL's authority: a scheme-less
+#      host matched nothing and the rule silently admitted TCP 443 while
+#      the client dialed the node's port. The render must name the key.
+expect_fail "a scheme-less GPU node host" \
+  "carries no http:// or https:// scheme" \
+  $(valid_flags) --set opea.enabled=true --set 'opea.gpu.nodeHost=10.0.0.110:444'
 
 # 14. The ArangoDB mode is a two-value switch (neither is schema-enum'd).
 expect_fail "an unknown data.arangodb.mode" \

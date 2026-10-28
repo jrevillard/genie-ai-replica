@@ -9,6 +9,10 @@
 {{- $obsMetrics := $obs.metrics | default dict -}}
 {{- $opeaGpu := $opea.gpu | default dict -}}
 {{- $svcBackend := $services.backend | default dict -}}
+{{- /* The document-repository's port: bound parent-first (see the same
+note in frontend.yaml) — a cleared services.documentRepository must
+degrade this egress rule to the default port. */ -}}
+{{- $servicesDocumentRepository := index $services "documentRepository" | default dict -}}
 {{- $ingress := .Values.ingress | default dict -}}
 {{- if $svcBackend.enabled -}}
 {{- $ns := .Values.namespace -}}
@@ -223,7 +227,7 @@ spec:
         {{- include "genieai-umbrella.ingressDataPlanePeer" . | nindent 8 }}
       ports:
         - protocol: TCP
-          port: 3000
+          port: {{ $svcBackend.port | default 3000 }}
     {{- end }}
     # The same-namespace consumers, named. A `podSelector: {}` peer
     # matches EVERY pod in the namespace — the operator's ArangoDB, the
@@ -251,7 +255,7 @@ spec:
               genieai.io/component: test
       ports:
         - protocol: TCP
-          port: 3000
+          port: {{ $svcBackend.port | default 3000 }}
   {{- if $obsMetrics.enabled }}
   # vm-operator scrape peer — the same peer every sibling policy
   # carries. PRE-WIRED, INERT TODAY: the VMServiceScrape CRs match
@@ -265,7 +269,7 @@ spec:
               app.kubernetes.io/instance: vmetrics
       ports:
         - protocol: TCP
-          port: 3000
+          port: {{ $svcBackend.port | default 3000 }}
   {{- end }}
   egress:
     # DNS resolution to kube-system.
@@ -324,7 +328,7 @@ spec:
               genieai.io/component: documentRepository
       ports:
         - protocol: TCP
-          port: 3001
+          port: {{ $servicesDocumentRepository.port | default 3001 }}
     {{- if $opea.enabled }}
     # Chat stream: the backend dials the chatqna orchestrator directly
     # (OPEA_HOST:8888) when the OPEA tier is enabled. query-service.js

@@ -10,6 +10,10 @@
   and become ready.
 */ -}}{{- $services := .Values.services | default dict -}}
 {{- $servicesDocumentRepository := $services.documentRepository | default dict -}}
+{{- /* The backend's port: bound parent-first, like every values read —
+a cleared services.backend must degrade this egress rule to the default
+port, not crash the render on a nil parent. */ -}}
+{{- $servicesBackend := index $services "backend" | default dict -}}
 {{- $data := .Values.data | default dict -}}
 {{- $dataKeycloak := $data.keycloak | default dict -}}
 {{- $dataArangodb := $data.arangodb | default dict -}}
@@ -151,7 +155,7 @@ spec:
         {{- include "genieai-umbrella.ingressDataPlanePeer" . | nindent 8 }}
       ports:
         - protocol: TCP
-          port: 3001
+          port: {{ $servicesDocumentRepository.port | default 3001 }}
     {{- end }}
     - from:
         - podSelector:
@@ -159,7 +163,7 @@ spec:
               genieai.io/component: backend
       ports:
         - protocol: TCP
-          port: 3001
+          port: {{ $servicesDocumentRepository.port | default 3001 }}
     # dataprep: PATCH /api/files/<id>/status is how an ingest reports
     # completion (genieai_dataprep_arangodb.py _update_doc_status).
     - from:
@@ -168,7 +172,7 @@ spec:
               genieai.io/component: dataprep
       ports:
         - protocol: TCP
-          port: 3001
+          port: {{ $servicesDocumentRepository.port | default 3001 }}
     # chatqna: reads file metadata for citation provenance
     # (genieai_chatqna.py, the sources shown next to an answer).
     - from:
@@ -177,7 +181,7 @@ spec:
               genieai.io/component: chatqna
       ports:
         - protocol: TCP
-          port: 3001
+          port: {{ $servicesDocumentRepository.port | default 3001 }}
     # helm-test reachability probe (component "test").
     - from:
         - podSelector:
@@ -185,7 +189,7 @@ spec:
               genieai.io/component: test
       ports:
         - protocol: TCP
-          port: 3001
+          port: {{ $servicesDocumentRepository.port | default 3001 }}
   {{- if $obsMetrics.enabled }}
   # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
   # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
@@ -200,7 +204,7 @@ spec:
               app.kubernetes.io/instance: vmetrics
       ports:
         - protocol: TCP
-          port: 3001
+          port: {{ $servicesDocumentRepository.port | default 3001 }}
   {{- end }}
   egress:
     # DNS resolution to kube-system.
@@ -220,7 +224,7 @@ spec:
               genieai.io/component: backend
       ports:
         - protocol: TCP
-          port: 3000
+          port: {{ $servicesBackend.port | default 3000 }}
     # ClamAV scanner. Post-DNAT pod port; the Service port is identical,
     # but pod-to-pod peers must use the container port. The port comes
     # from services.clamav.port — the knob the clamav Deployment,

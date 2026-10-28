@@ -1,12 +1,15 @@
 {{/*
-toolsInitContainer — the init container that downloads kubectl and jq into
-a shared emptyDir at /tools (so the main container has sh, kubectl, jq via
-PATH=/tools/bin:...). Renders ONLY the initContainers entry. The caller
+toolsInitContainer — the init container that downloads kubectl into
+a shared emptyDir at /tools (so the main container has sh and kubectl via
+PATH=/tools/bin:...). Nothing in the hook Jobs or the test pods shells
+out to jq, so it is not downloaded — a second binary would be a second
+external fetch and a second mirror requirement for no consumer.
+Renders ONLY the initContainers entry. The caller
 is responsible for adding `volumes: - name: tools emptyDir: {}` to the
 pod spec and `volumeMounts: - name: tools mountPath: /tools` plus
 `env: - name: PATH value: /tools/bin:...` to the main container.
-The kubeletToolsMirror values key lets air-gapped clusters point both
-URLs at a single internal mirror.
+The kubeletToolsMirror values key lets air-gapped clusters point the
+URL at a single internal mirror.
 */}}
 {{- define "genieai-umbrella.toolsInitContainer" -}}
 - name: tools

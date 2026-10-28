@@ -932,6 +932,11 @@ services:
     # helper (a mutable tag pulls Always, a pinned one does not).
     image: { repository: redis, tag: "7-alpine", pullPolicy: "" }
     port: 6379
+    # Probes are NOT declared under a `probes:` key here: the
+    # hand-written template (templates/services/redis-cache.yaml) renders
+    # readiness/liveness exec probes (`redis-cli -p <port> ping`) plus a
+    # startup probe covering the AOF load window on a PVC-backed /data.
+    # To widen or retime them, edit the template.
     resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 250m, memory: 512Mi } }
     pvc:
       enabled: true                          # appendonly persistence

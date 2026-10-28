@@ -416,7 +416,10 @@ the gate refuses to pass with a service it does not account for.
 
 Renders each enabled entry as a Deployment + Service + default-deny
 NetworkPolicy. Probes, resources, security contexts, volumes, and PVCs
-all live on `values.yaml`.
+all live on `values.yaml` — except redisCache, whose hand-written
+template renders the probes itself (edit
+`templates/services/redis-cache.yaml`; `services.redisCache.port` moves
+the probe commands with the listener).
 
 | Service | `services.<name>` key | Container port | Service port | Default → prod replicas |
 |---|---|---|---|---|

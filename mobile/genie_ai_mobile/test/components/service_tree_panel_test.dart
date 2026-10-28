@@ -28,6 +28,74 @@ void main() {
     },
   ];
 
+  testWidgets(
+    'two same-named services in DIFFERENT categories are two scopes',
+    (tester) async {
+      // The children carry no id/key — their identity is the (category,
+      // name) pair. Matching on the name alone crossed the categories:
+      // tapping B's 'Registro' found A's entry, DESELECTED A's scope while
+      // A's highlight stayed, and B's own tap never selected B.
+      final dupTree = [
+        {
+          'catKey': '2',
+          'name': 'Estado civil',
+          'nameEN': 'Civil Registry',
+          'children': [
+            {'name': 'Registro', 'nameEN': 'Registry Births'},
+          ],
+        },
+        {
+          'catKey': '3',
+          'name': 'Impuestos',
+          'nameEN': 'Taxes',
+          'children': [
+            {'name': 'Registro', 'nameEN': 'Registry Taxes'},
+          ],
+        },
+      ];
+      Map<String, dynamic>? emitted;
+      resetThemeManager();
+      final api = ServiceCategoriesApi(
+        ApiClient()..client = _MockClient(jsonEncode(dupTree)),
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [serviceCategoriesApiProvider.overrideWithValue(api)],
+          child: MaterialApp(
+            home: Scaffold(
+              body: ServiceTreePanel(onSelectionChange: (s) => emitted = s),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Estado civil'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Registro').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Impuestos'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Registro').last);
+      await tester.pumpAndSettle();
+
+      // BOTH selections live: the second tap selected B, it did not
+      // deselect A.
+      expect(emitted!['serviceLabelsEn'], [
+        'Registry Births',
+        'Registry Taxes',
+      ]);
+      expect(emitted!['serviceCount'], 2);
+
+      // Deselecting B leaves A's scope intact.
+      await tester.tap(find.text('Registro').last);
+      await tester.pumpAndSettle();
+      expect(emitted!['serviceLabelsEn'], ['Registry Births']);
+      expect(emitted!['serviceCount'], 1);
+    },
+  );
+
   testWidgets('a service selection carries the category catKey', (
     tester,
   ) async {

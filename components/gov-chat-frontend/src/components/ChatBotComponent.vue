@@ -1364,6 +1364,7 @@ export default {
       //    symptom (button clicked, but its serviceLabels/category are empty). A genuinely
       //    empty context (Just Chat, no items selected) is NOT blocked — it's an unfiltered query.
       let blocked = false;
+      let scopeNotNameableShown = false;
       if (context.categoryLabel && /^Category \d+$/.test(context.categoryLabel)) {
         blocked = true;
         warnings.push(this.translateWithParams('chatbot.categoryNotFound', { label: context.categoryLabel }));
@@ -1384,6 +1385,7 @@ export default {
         // refused is the one that would have answered from the WHOLE
         // corpus, outside the scope the selection declared.
         notificationService.error(this.translate('chatbot.scopeNotNameable', ''));
+        scopeNotNameableShown = true;
       }
 
       // A sidebar item whose entity carries NO ENGLISH name cannot put its
@@ -1402,7 +1404,13 @@ export default {
       );
       if (unnamedSidebarItem) {
         blocked = true;
-        notificationService.error(this.translate('chatbot.scopeNotNameable', ''));
+        // The no-filter block above already toasted for the SAME items
+        // (a set category, no serviceKey, no labels): one refusal, one
+        // toast — two identical toasts for one click read as two
+        // problems.
+        if (!scopeNotNameableShown) {
+          notificationService.error(this.translate('chatbot.scopeNotNameable', ''));
+        }
       }
 
       // A Quick Help scope the hierarchy can no longer NAME leaves the
@@ -2191,6 +2199,30 @@ export default {
               // the card's.
               if (button.category) {
                 this.currentCategoryId = button.category;
+              }
+              return;
+            }
+            // A LEGACY tag: conversations saved before the redesign carry
+            // 'category.<id>' — the old restore's own spelling for a
+            // category-only scope. The id still names the category
+            // through the live tree, so the scope restores as what it
+            // was; restoring it as a label chip made every follow-up
+            // refuse. A category the tree no longer carries still
+            // installs the item — the send is then refused visibly
+            // (nothing can name the scope), never silently widened.
+            // 'category.general' is the no-scope placeholder: it
+            // contributes nothing.
+            const legacyCategory = /^category\.(.+)$/.exec(tag);
+            if (legacyCategory) {
+              if (legacyCategory[1] !== 'general') {
+                restoredContextItems.push({
+                  service: this.getCategoryDisplayName(legacyCategory[1]) || tag,
+                  serviceKey: null,
+                  categoryOnly: true,
+                  category: legacyCategory[1],
+                  selected: true
+                });
+                this.currentCategoryId = legacyCategory[1];
               }
               return;
             }

@@ -256,6 +256,77 @@ void main() {
       expect(scope.serviceLabelsEn, ['Births']);
     });
 
+    test(
+      'a restored QUICK HELP scope with a DEAD declared label refuses the send',
+      () {
+        // The button's declared labels are replayed VERBATIM — never
+        // dropped, the press path refuses the tap rather than narrowing.
+        // The restore is the third entry to the same rule: a label the
+        // hierarchy no longer carries must refuse the follow-up too, with
+        // the broken state carried so the refusal can NAME what is gone.
+        final convButtons3 = <Map<String, dynamic>>[
+          {
+            'id': 'civil',
+            'category': '2',
+            'serviceLabels': const <dynamic>['Registration'],
+          },
+        ];
+        final scope = ConversationScopeResolver(
+          hierarchy: QuickHelpScopeResolver(convTree),
+          quickHelpButtons: convButtons3,
+        ).resolve(tags: ['civil']);
+
+        expect(scope.quickHelpButtonId, 'civil');
+        // Replayed verbatim: a partial drop is the silent narrowing this
+        // rule forbids.
+        expect(scope.serviceLabelsEn, ['Registration']);
+        expect(scope.quickHelpScopeState!['broken'], isTrue);
+        expect(scope.quickHelpScopeState!['missingLabels'], ['Registration']);
+        expect(
+          scopeCanGoOnTheWire(
+            categoryId: scope.categoryId,
+            categoryNameEn: scope.categoryNameEn,
+            serviceLabels: scope.serviceLabelsEn,
+            sidebarServiceLabels: scope.sidebarLabelsEn,
+            sidebarServiceCount: scope.sidebarTagCount,
+            quickHelpScopeBroken: scope.quickHelpScopeState!['broken'] as bool,
+          ),
+          isFalse,
+        );
+      },
+    );
+
+    test(
+      'a restored QUICK HELP scope with a DEAD category refuses the send',
+      () {
+        final convButtons4 = <Map<String, dynamic>>[
+          {
+            'id': 'gone-cat',
+            'category': '404',
+            'serviceLabels': const <dynamic>[],
+          },
+        ];
+        final scope = ConversationScopeResolver(
+          hierarchy: QuickHelpScopeResolver(convTree),
+          quickHelpButtons: convButtons4,
+        ).resolve(tags: ['gone-cat']);
+
+        expect(scope.quickHelpScopeState!['broken'], isTrue);
+        expect(scope.quickHelpScopeState!['categoryMissing'], isTrue);
+        expect(
+          scopeCanGoOnTheWire(
+            categoryId: scope.categoryId,
+            categoryNameEn: scope.categoryNameEn,
+            serviceLabels: scope.serviceLabelsEn,
+            sidebarServiceLabels: scope.sidebarLabelsEn,
+            sidebarServiceCount: scope.sidebarTagCount,
+            quickHelpScopeBroken: scope.quickHelpScopeState!['broken'] as bool,
+          ),
+          isFalse,
+        );
+      },
+    );
+
     test('a dropped tag beside a QUICK HELP tag refuses the send too', () {
       // The conversation was saved with a Quick Help scope AND a sidebar
       // label that was renamed away. The guard must refuse the follow-up

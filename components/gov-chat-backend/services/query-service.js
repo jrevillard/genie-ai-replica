@@ -125,9 +125,9 @@ class QueryService {
    * outside the write path (no translation row at all). The WIRE itself
    * is untouched: the retriever filters on what the client sent.
    */
-  async resolveScopeIds(context) {
+  async resolveScopeIds(context, { resolveCategory = true } = {}) {
     let categoryId = null;
-    if (context?.categoryLabel) {
+    if (resolveCategory && context?.categoryLabel) {
       try {
         const categoryQuery = aql`
             FOR trans IN ${this.serviceCategoryTranslations}
@@ -155,14 +155,33 @@ class QueryService {
     let serviceIds = [];
     if (context?.serviceLabels?.length > 0) {
       try {
+        // The pairs come back, not the bare ids: a label the translation
+        // lookup did not answer for is the input of the fallback below.
         const servicesQuery = aql`
             FOR trans IN ${this.serviceTranslations}
               FILTER LOWER(trans.languageCode) == 'en'
               FILTER trans.translation IN ${context.serviceLabels}
-              RETURN trans.serviceId
+              RETURN DISTINCT { label: trans.translation, serviceId: trans.serviceId }
           `;
         const cursor = await this.db.query(servicesQuery);
-        serviceIds = await cursor.all();
+        const matched = await cursor.all();
+        serviceIds = matched.map((pair) => pair.serviceId);
+        // The same fallback the category resolution has: an entity
+        // imported outside the write path carries nameEN with no
+        // translation document. The fallback feeds the query RECORD's
+        // link only — the wire still carries exactly what the client
+        // sent.
+        const matchedLabels = new Set(matched.map((pair) => pair.label));
+        const unmatched = context.serviceLabels.filter((label) => !matchedLabels.has(label));
+        if (unmatched.length > 0) {
+          const fallbackQuery = aql`
+              FOR svc IN ${this.services}
+                FILTER svc.nameEN IN ${unmatched}
+                RETURN svc._key
+            `;
+          const fallbackCursor = await this.db.query(fallbackQuery);
+          serviceIds.push(...(await fallbackCursor.all()));
+        }
       } catch (error) {
         logger.error(`Error resolving serviceIds: ${error.message}`);
       }
@@ -185,6 +204,7 @@ class QueryService {
       this.serviceCategories = this.db.collection('serviceCategories');
       this.serviceCategoryTranslations = this.db.collection('serviceCategoryTranslations');
       this.serviceTranslations = this.db.collection('serviceTranslations');
+      this.services = this.db.collection('services');
       this.initialized = true;
       logger.info('QueryService initialized successfully');
     } catch (error) {
@@ -483,7 +503,10 @@ class QueryService {
     let categoryId = queryData.categoryId || null;
     let serviceIds = queryData.serviceId ? [queryData.serviceId] : [];
     if (!categoryId || serviceIds.length === 0) {
-      const resolved = await this.resolveScopeIds(queryData.context);
+      // The category branch is skipped when the request already carries
+      // its own id: its lookup result would be thrown away — one query
+      // per send for nothing.
+      const resolved = await this.resolveScopeIds(queryData.context, { resolveCategory: !categoryId });
       if (!categoryId) {
         categoryId = resolved.categoryId;
       }

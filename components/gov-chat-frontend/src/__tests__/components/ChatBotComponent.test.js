@@ -2032,6 +2032,17 @@ describe('ChatBotComponent', () => {
             releaseConfig = resolve;
           })
       );
+      // mockImplementation is not reset between tests, and a LATER test
+      // that loads the config through the restore path would inherit a
+      // promise nothing ever resolves — it hangs to the timeout. The
+      // default comes back the moment this test is done.
+      const withConfigRestore = async (fn) => {
+        try {
+          return await fn();
+        } finally {
+          configLoader.default.mockResolvedValue({ features: { chat: { quickHelp: { buttons: [] } } } });
+        }
+      };
       const tree = [{ catKey: '2', name: 'Cultivos', nameEN: 'Crops', children: [] }];
       mockLiveTree(tree);
       const wrapper = createChatBotWrapper();
@@ -2044,17 +2055,19 @@ describe('ChatBotComponent', () => {
           : { _key: 'b1', title: 'B', messages: [], tags: [], categories: [] }
       );
 
-      const loadA = vm.loadExistingConversation('a1');
-      await flushPromises(); // A's getConversation resolved; its scope wait is held
-      const loadB = vm.loadExistingConversation('b1');
-      await flushPromises(); // B is fully loaded — it owns the view
-      expect(vm.currentChatId).toBe('b1');
+      await withConfigRestore(async () => {
+        const loadA = vm.loadExistingConversation('a1');
+        await flushPromises(); // A's getConversation resolved; its scope wait is held
+        const loadB = vm.loadExistingConversation('b1');
+        await flushPromises(); // B is fully loaded — it owns the view
+        expect(vm.currentChatId).toBe('b1');
 
-      releaseConfig({ features: { chat: { quickHelp: { buttons: [] } } } });
-      await Promise.all([loadA, loadB]);
-      await flushPromises();
+        releaseConfig({ features: { chat: { quickHelp: { buttons: [] } } } });
+        await Promise.all([loadA, loadB]);
+        await flushPromises();
 
-      // B still owns the view: A's scope never landed over it.
+        // B still owns the view: A's scope never landed over it.
+      });
       expect(vm.currentChatId).toBe('b1');
       expect(vm.selectedContextItems).toHaveLength(0);
     });
@@ -2218,6 +2231,81 @@ describe('ChatBotComponent', () => {
       expect(state.broken).toBe(false);
       expect(vm.checkContextConfig({ categoryLabel: null, serviceLabels: [] })).toBe(true);
     });
+
+    it('one refused send shows ONE scopeNotNameable toast, not two', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const notificationService = require('../../services/notificationService');
+      notificationService.error.mockClear();
+
+      // A sidebar item with a set category and NO serviceKey trips BOTH
+      // the no-filter refusal and the unnamed-item refusal — the user
+      // clicked once; they get one toast, not two identical ones.
+      vm.$store.commit('conversation/setContextItems', [
+        { service: 'Naissances', serviceKey: null, source: 'sidebar', category: '2', selected: true }
+      ]);
+      vm.checkContextConfig({ categoryLabel: null, serviceLabels: [] });
+
+      const calls = notificationService.error.mock.calls.filter(
+        (c) => c[0] === vm.translate('chatbot.scopeNotNameable', '')
+      );
+      expect(calls).toHaveLength(1);
+    });
+
+    it('a LEGACY category.<id> tag restores the category scope, not a dead chip', async () => {
+      const tree = [{ catKey: '2', name: 'Cultivos', nameEN: 'Crops', children: [] }];
+      mockLiveTree(tree);
+      const wrapper = await createChatBotWrapperAsync(tree);
+      const vm = wrapper.vm;
+
+      // Conversations saved before the redesign carry 'category.<id>' —
+      // the old restore's spelling for a category-only scope. The id
+      // still names the category through the live tree, so the scope
+      // restores as what it was. Restoring it as a label chip made the
+      // conversation refuse EVERY follow-up.
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation.mockResolvedValueOnce({
+        _key: 'c11',
+        title: 'Saved',
+        messages: [],
+        tags: ['category.2'],
+        categories: []
+      });
+
+      await vm.loadExistingConversation('c11');
+
+      expect(vm.selectedContextItems).toHaveLength(1);
+      expect(vm.selectedContextItems[0].categoryOnly).toBe(true);
+      expect(vm.selectedContextItems[0].serviceKey).toBeNull();
+      expect(vm.selectedContextItems[0].category).toBe('2');
+      expect(vm.currentCategoryId).toBe('2');
+      // And the follow-up carries the category's EN label, not a dead tag.
+      expect(vm.getCategoryEnLabel(vm.currentCategoryId)).toBe('Crops');
+      expect(vm.getContextTags()).toEqual([]);
+    }, 15000);
+
+    it('a LEGACY category.general tag names no scope and restores nothing', async () => {
+      const tree = [{ catKey: '2', name: 'Cultivos', nameEN: 'Crops', children: [] }];
+      mockLiveTree(tree);
+      const wrapper = await createChatBotWrapperAsync(tree);
+      const vm = wrapper.vm;
+
+      // 'general' is the placeholder a category-less selection was stored
+      // under — it names no category in every rule, the legacy spelling
+      // included.
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation.mockResolvedValueOnce({
+        _key: 'c12',
+        title: 'Saved',
+        messages: [],
+        tags: ['category.general'],
+        categories: []
+      });
+
+      await vm.loadExistingConversation('c12');
+
+      expect(vm.selectedContextItems).toHaveLength(0);
+    }, 15000);
 
     it('a category-scoped conversation with NO tags restores its scope', async () => {
       const tree = [{ catKey: '2', name: 'Cultivos', nameEN: 'Crops', children: [] }];

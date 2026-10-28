@@ -754,7 +754,7 @@ describe('QueryService', () => {
       mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
       mockDb.query
         .mockResolvedValueOnce(createMockCursor(['cat-1']))
-        .mockResolvedValueOnce(createMockCursor(['svc-1']));
+        .mockResolvedValueOnce(createMockCursor([{ label: 'Tomato', serviceId: 'svc-1' }]));
       const result = await queryService.initStreamQuery(data, {});
       expect(result.queryId).toBe('stream-1');
     });
@@ -791,6 +791,46 @@ describe('QueryService', () => {
       expect(result.opeaPayload.context.categoryLabel).toBe('Crops');
     });
 
+    it('falls back to the service nameEN for the LINK when no EN translation row exists', async () => {
+      // The same asymmetry the category fallback fixed: an entity
+      // imported outside the write path carries nameEN with no
+      // translation document. Its queries lost their service link while
+      // identical categories kept theirs. The fallback feeds the query
+      // RECORD only — the wire still carries exactly what the client
+      // sent.
+      const data = createMockQueryData({ context: { categoryLabel: null, serviceLabels: ['Tomato'] } });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([])) // the translation lookup: nothing
+        .mockResolvedValueOnce(createMockCursor(['svc-9'])); // the nameEN fallback: found
+
+      await queryService.initStreamQuery(data, {});
+
+      const savedDoc = mockQueriesCollection.save.mock.calls[0][0];
+      expect(savedDoc.serviceId).toContain('svc-9');
+    });
+
+    it('does not re-resolve the category when the request carries its own categoryId', async () => {
+      // The request names its category AND a service label: the id
+      // resolution ran the full category lookup anyway and threw its
+      // result away — one query per send for nothing.
+      const data = createMockQueryData({
+        categoryId: 'cat-own',
+        context: { categoryLabel: 'Crops', serviceLabels: ['Tomato'] }
+      });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      mockDb.query.mockResolvedValueOnce(createMockCursor([{ label: 'Tomato', serviceId: 'svc-1' }])); // services lookup only
+
+      await queryService.initStreamQuery(data, {});
+
+      // Exactly ONE resolution query ran — the services one.
+      expect(mockDb.query).toHaveBeenCalledTimes(1);
+      expect(mockDb.query.mock.calls[0][0].values[0]).toBe(mockServiceTranslationsCollection);
+      const savedDoc = mockQueriesCollection.save.mock.calls[0][0];
+      expect(savedDoc.categoryId).toBe('cat-own');
+      expect(savedDoc.serviceId).toEqual(['svc-1']);
+    });
+
     it('resolves the ids through the ENGLISH translation the wire carries', async () => {
       // The wire carries the EN translation — the label the corpus's
       // chunk_labels are minted from. The document's own `nameEN` is a
@@ -800,7 +840,7 @@ describe('QueryService', () => {
       mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
       mockDb.query
         .mockResolvedValueOnce(createMockCursor(['cat-1']))
-        .mockResolvedValueOnce(createMockCursor(['svc-1']));
+        .mockResolvedValueOnce(createMockCursor([{ label: 'Tomato', serviceId: 'svc-1' }]));
 
       await queryService.initStreamQuery(data, {});
 

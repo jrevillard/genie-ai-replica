@@ -165,11 +165,15 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
     }
 
     // 3. Update Selection State
-    // Check if this specific item is already selected by ID/Name
+    // Check if this specific item is already selected. The children
+    // carry no id/key, so their identity is the (category, name) pair:
+    // matching on the name alone crossed the categories — two services
+    // named alike in different categories toggled each other's scope,
+    // and the highlight desynced from what the chat received.
     final existingIndex = _orderedSelection.indexWhere(
       (item) =>
           (item['id'] == serviceId && serviceId.isNotEmpty) ||
-          item['name'] == serviceName,
+          (item['name'] == serviceName && item['category_id'] == categoryId),
     );
 
     setState(() {

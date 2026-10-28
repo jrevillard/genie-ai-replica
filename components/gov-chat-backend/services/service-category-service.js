@@ -422,37 +422,51 @@ class ServiceCategoryService {
       // the UI displays, and the ENGLISH translation the retrieval corpus
       // filters on. English is the SSOT of the filter wire — a client that
       // sent a localized name would scope against labels no chunk carries.
+      // Both spellings of an entity come out of ONE translation pass:
+      // the sub-iterators below run over the (at most two) documents the
+      // single index seek returned. Two FIRST() subqueries per entity —
+      // the shape this replaces — did the seek twice, and the dataprep
+      // walks this tree once per ingest.
+      const localeCode = upperLocale.toLowerCase();
       const query = aql`
       FOR category IN serviceCategories
         SORT category.order ASC
-        LET categoryTranslation = FIRST(
+        LET categoryTranslations = (
           FOR trans IN serviceCategoryTranslations
             FILTER trans.serviceCategoryId == category._key
-            FILTER LOWER(trans.languageCode) == LOWER(${upperLocale})
-            RETURN trans.translation
+            FILTER LOWER(trans.languageCode) IN [ ${localeCode}, 'en' ]
+            RETURN { code: LOWER(trans.languageCode), translation: trans.translation }
+        )
+        LET categoryTranslation = FIRST(
+          FOR t IN categoryTranslations
+            FILTER t.code == ${localeCode}
+            RETURN t.translation
         )
         LET categoryTranslationEN = FIRST(
-          FOR trans IN serviceCategoryTranslations
-            FILTER trans.serviceCategoryId == category._key
-            FILTER LOWER(trans.languageCode) == 'en'
-            RETURN trans.translation
+          FOR t IN categoryTranslations
+            FILTER t.code == 'en'
+            RETURN t.translation
         )
         LET services = (
           FOR edge IN categoryServices
             FILTER edge._from == category._id
             FOR service IN services
               FILTER service._id == edge._to
-              LET serviceTranslation = FIRST(
+              LET serviceTranslations = (
                 FOR trans IN serviceTranslations
                   FILTER trans.serviceId == service._key
-                  FILTER LOWER(trans.languageCode) == LOWER(${upperLocale})
-                  RETURN trans.translation
+                  FILTER LOWER(trans.languageCode) IN [ ${localeCode}, 'en' ]
+                  RETURN { code: LOWER(trans.languageCode), translation: trans.translation }
+              )
+              LET serviceTranslation = FIRST(
+                FOR t IN serviceTranslations
+                  FILTER t.code == ${localeCode}
+                  RETURN t.translation
               )
               LET serviceTranslationEN = FIRST(
-                FOR trans IN serviceTranslations
-                  FILTER trans.serviceId == service._key
-                  FILTER LOWER(trans.languageCode) == 'en'
-                  RETURN trans.translation
+                FOR t IN serviceTranslations
+                  FILTER t.code == 'en'
+                  RETURN t.translation
               )
               SORT edge.order ASC
               RETURN { name: serviceTranslation, nameEN: serviceTranslationEN }

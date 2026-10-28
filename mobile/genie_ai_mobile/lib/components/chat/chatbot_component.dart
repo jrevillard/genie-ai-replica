@@ -111,8 +111,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // by the button (a Quick Help tag is the button id, never a label: a
   // sidebar selection and a button can carry the same label).
   String? _activeQuickHelpButtonId;
+  // The scope state of the ACTIVE Quick Help button against the live
+  // hierarchy (stateFor's map): a restored button whose declared labels
+  // or category left the hierarchy refuses the follow-up, with a caption
+  // naming what is gone — the same refusal the press path gives the tap.
+  Map<String, dynamic>? _activeQuickHelpScope;
   // English KB labels for the retriever filter, sourced from a Quick Help button's
-  // serviceLabels. Set in _quickHelpPressed, cleared after the stream completes.
+  // serviceLabels. Set in _quickHelpPressed, kept for the conversation's turns.
   // Sidebar tree selections use _selectedCategoryId/_selectedCategoryName instead.
   List<String> _activeServiceLabels = [];
   List<dynamic> _relatedDocuments = [];
@@ -156,7 +161,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _conversationTitle = tr('chatbot.newChatTitle');
     _welcomeMessage = _getConfigWelcomeMessage();
 
-    _loadQuickHelpConfig();
+    // Through the single-flight wrapper: a bare _loadQuickHelpConfig
+    // here left _quickHelpConfigFuture unpopulated, so a startup restore
+    // started a SECOND full config parse — and this load's late failure
+    // nulled the future of that in-flight second load (a third fetch).
+    _ensureQuickHelpConfig();
     _ensureEnTree();
     _titleController.text = _conversationTitle;
 
@@ -414,6 +423,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       // A sidebar selection REPLACES the Quick Help scope: the two are
       // alternative ways of scoping the same query.
       _activeQuickHelpButtonId = null;
+      _activeQuickHelpScope = null;
       _activeServiceLabels = const [];
     });
   }
@@ -515,6 +525,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           _selectedCategoryName = scope.categoryName ?? '';
         }
         _activeQuickHelpButtonId = scope.quickHelpButtonId;
+        _activeQuickHelpScope = scope.quickHelpScopeState;
         // A Quick Help scope narrows the FIRST follow-up by its declared
         // labels (the mobile's one-turn scope); the sidebar labels that
         // were selected BESIDE it keep narrowing the whole conversation —
@@ -583,6 +594,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       _sidebarServiceLabelsEn = [];
       _sidebarServiceCount = 0;
       _activeQuickHelpButtonId = null;
+      _activeQuickHelpScope = null;
       _activeServiceLabels = [];
     });
     widget.onRelatedDocumentsUpdate([]);
@@ -608,6 +620,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // outside the scope the selection declared. The send is refused, and
     // the user is told why (the refusal happens BEFORE the turn is
     // committed, so the question stays in the composer).
+    // A restored Quick Help scope whose button is broken refuses with
+    // the caption that NAMES what is gone — before the nameable guard,
+    // whose generic message would point at the wrong thing.
+    final quickHelpBroken =
+        (_activeQuickHelpScope?['broken'] as bool?) ?? false;
+    if (quickHelpBroken) {
+      NotificationService.error(_quickHelpErrorCaption(_activeQuickHelpScope!));
+      return;
+    }
     if (!scopeCanGoOnTheWire(
       categoryId: _selectedCategoryId,
       categoryNameEn: _selectedCategoryNameEn,
@@ -1051,6 +1072,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         // scope it never had.
         _sidebarServiceCount = 0;
         _activeQuickHelpButtonId = null;
+        _activeQuickHelpScope = null;
       });
       _inputFocusNode.requestFocus();
       return;
@@ -1096,6 +1118,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           button['resolvedTitle']?.toString() ?? visibleText;
       _sidebarServiceLabelsEn = [];
       _activeQuickHelpButtonId = button['id']?.toString();
+      // Not broken here — the press path refuses a broken button before
+      // it reaches this line. Carried so the send guard and the restore
+      // read ONE field for the same fact.
+      _activeQuickHelpScope = _scopeResolver?.stateFor(button);
     });
 
     // Send using the 2-prompt system

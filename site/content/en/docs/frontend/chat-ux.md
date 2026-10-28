@@ -198,9 +198,11 @@ names the knowledge tree carries** (`nameEN`, as `GET
 retriever filters on, so a slug like `agriculture` or `rural-development`
 names nothing and breaks the card. `category` is the category's **key**
 (`catKey`, from the same endpoint — the shipped configs use `1`…`9`). A card
-whose declared labels or category are not in the live hierarchy renders with
-a danger icon and a caption naming the problem, and the click sends nothing:
-the drift is visible, never a silently reduced scope. The `serviceKey` of a card is its **`id`** — never one of its labels. The id is the identity of the card: a saved conversation carries it as the conversation tag, so the card can be restored when the conversation is opened again. The labels a card declares are hierarchy data — they change when the hierarchy is reconfigured — and must not be part of an identity. Display, identity and filter are therefore three separate things: the card always shows its localized title, a saved conversation always carries the card id, and the filter always uses the English KB labels.
+in the grid whose declared labels or category are not in the live hierarchy
+renders with a danger icon and a caption naming the problem, and the click
+sends nothing: the drift is visible, never a silently reduced scope. (The
+composer entry is a send surface, not a grid tile: it refuses at send time,
+with the same message the grid's caption carries.) The `serviceKey` of a card is its **`id`** — never one of its labels. The id is the identity of the card: a saved conversation carries it as the conversation tag, so the card can be restored when the conversation is opened again. The labels a card declares are hierarchy data — they change when the hierarchy is reconfigured — and must not be part of an identity. Display, identity and filter are therefore three separate things: the card always shows its localized title, a saved conversation always carries the card id, and the filter always uses the English KB labels.
 
 ### Label drift: English on the wire, visible failure on drift
 

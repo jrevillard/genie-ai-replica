@@ -178,6 +178,7 @@ class ConversationScope {
     this.sidebarLabelsEn = const <String>[],
     this.sidebarTagCount = 0,
     this.quickHelpButtonId,
+    this.quickHelpScopeState,
   });
 
   /// The category the conversation was scoped by (its storage key).
@@ -206,6 +207,15 @@ class ConversationScope {
   /// The id of the Quick Help button that produced the conversation, when
   /// it was one.
   final String? quickHelpButtonId;
+
+  /// The button's scope state against the LIVE hierarchy (the same map
+  /// [QuickHelpScopeResolver.stateFor] returns). The restore replays the
+  /// declared labels verbatim — never a partial drop — and a broken scope
+  /// (a dead declared label, a dead category) refuses the follow-up with
+  /// a caption that names what is gone, exactly as the press path
+  /// refuses the tap. Null when the conversation carries no Quick Help
+  /// scope.
+  final Map<String, dynamic>? quickHelpScopeState;
 }
 
 /// Resolves the scope of a saved conversation against the live hierarchy
@@ -270,6 +280,7 @@ class ConversationScopeResolver {
         // it does when there is no Quick Help tag.
         sidebarTagCount: otherTags.length,
         quickHelpButtonId: tag,
+        quickHelpScopeState: _hierarchy.stateFor(button),
       );
     }
 
@@ -319,7 +330,13 @@ bool scopeCanGoOnTheWire({
   List<String> serviceLabels = const <String>[],
   List<String> sidebarServiceLabels = const <String>[],
   int sidebarServiceCount = 0,
+  bool quickHelpScopeBroken = false,
 }) {
+  // A restored Quick Help scope whose button is BROKEN (a declared label
+  // or its category left the hierarchy) refuses like the press path
+  // refuses the tap: replaying the dead labels would filter on labels no
+  // chunk carries — a silent abstention instead of a named failure.
+  if (quickHelpScopeBroken) return false;
   final labels = serviceLabels.isNotEmpty
       ? serviceLabels
       : sidebarServiceLabels;

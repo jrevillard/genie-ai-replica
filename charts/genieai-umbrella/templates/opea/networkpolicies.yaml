@@ -128,7 +128,8 @@ spec:
         - protocol: TCP
           port: {{ index $appPorts "documentRepository" }}
     # Backend BFF (BACKEND_SERVICE_URL). Post-DNAT pod port —
-    # services.backend.port, the knob the Service follows.
+    # services.backend.port (the Service publishes the factory's fixed
+    # 80 and targets the pod by name).
     - to:
         - podSelector:
             matchLabels:
@@ -334,7 +335,8 @@ spec:
         - protocol: TCP
           port: 8080
     # document-repository (DOCUMENT_REPOSITORY_URL). Post-DNAT pod port —
-    # services.documentRepository.port, the knob the Service follows.
+    # services.documentRepository.port (the Service publishes the
+    # factory's fixed 80 and targets the pod by name).
     - to:
         - podSelector:
             matchLabels:
@@ -343,7 +345,8 @@ spec:
         - protocol: TCP
           port: {{ index $appPorts "documentRepository" }}
     # Backend BFF (BACKEND_SERVICE_URL). Post-DNAT pod port —
-    # services.backend.port, the knob the Service follows.
+    # services.backend.port (the Service publishes the factory's fixed
+    # 80 and targets the pod by name).
     - to:
         - podSelector:
             matchLabels:

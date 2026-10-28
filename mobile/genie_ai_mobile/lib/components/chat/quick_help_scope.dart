@@ -176,6 +176,11 @@ class QuickHelpScopeResolver {
     if (name == null || name.isEmpty) return null;
     return name;
   }
+
+  /// Whether [label] is a label of the live hierarchy. A tag that names
+  /// no entity is not a filter label: putting it on the wire would filter
+  /// on a label no chunk carries, and the follow-up would abstain.
+  bool knowsLabel(String label) => _enLabels.contains(label);
 }
 
 /// The scope a saved conversation was asked in.
@@ -259,12 +264,18 @@ class ConversationScopeResolver {
     }
 
     // A sidebar scope: the tags are the ENGLISH labels it was narrowed
-    // by, and the category comes from the conversation's own edge.
+    // by, and the category comes from the conversation's own edge. A tag
+    // that names no entity of the LIVE hierarchy (an unknown button id, a
+    // label that was renamed away) is not a filter label: it would filter
+    // on a label no chunk carries, and the follow-up would abstain. It is
+    // dropped here — the send guard then refuses the scope if nothing
+    // nameable is left, instead of sending an unfiltered query.
+    final knownLabels = tagList.where(_hierarchy.knowsLabel).toList();
     return ConversationScope(
       categoryId: categoryKey,
       categoryNameEn: _hierarchy.categoryEnLabel(categoryKey),
       categoryName: _hierarchy.categoryDisplayName(categoryKey),
-      serviceLabelsEn: tagList,
+      serviceLabelsEn: knownLabels,
     );
   }
 }

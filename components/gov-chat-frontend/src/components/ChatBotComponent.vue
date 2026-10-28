@@ -1340,6 +1340,25 @@ export default {
         notificationService.error(this.translate('chatbot.scopeNotNameable', ''));
       }
 
+      // A sidebar item whose entity carries NO ENGLISH name cannot put its
+      // scope on the wire: the item would contribute no label, and the
+      // query would silently widen to the whole category (or the whole
+      // corpus) while the chip still names the service the user picked.
+      // No partial drop either — one unnamed item refuses the send.
+      const unnamedSidebarItem = this.selectedContextItems.some(
+        (item) =>
+          item.source !== QUICK_HELP_SOURCE &&
+          !item.categoryOnly &&
+          item.category != null &&
+          item.category !== '' &&
+          item.category !== 'general' &&
+          !item.serviceKey
+      );
+      if (unnamedSidebarItem) {
+        blocked = true;
+        notificationService.error(this.translate('chatbot.scopeNotNameable', ''));
+      }
+
       // A Quick Help scope the hierarchy can no longer NAME leaves the
       // query with no filter at all: the corpus would answer outside the
       // scope the button declared. That is the silent reduction this
@@ -2073,7 +2092,12 @@ export default {
           restoredContextItems = [
             {
               service: this.getCategoryDisplayName(this.currentCategoryId),
-              serviceKey: `category.${this.currentCategoryId}`,
+              // The scope of this item IS the category — 'category.<id>' is
+              // not a label, and putting it on the wire would filter on a
+              // label no chunk carries (the query would abstain instead of
+              // answering from the category it was scoped by).
+              serviceKey: null,
+              categoryOnly: true,
               category: this.currentCategoryId,
               selected: true
             }

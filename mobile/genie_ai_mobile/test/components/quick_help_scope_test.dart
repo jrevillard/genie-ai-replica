@@ -241,15 +241,28 @@ void main() {
 
       expect(scope.categoryNameEn, isNull);
       expect(scope.categoryName, isNull);
-      expect(scope.serviceLabelsEn, ['Renamed']);
+      // A tag the live hierarchy does not carry is not a label: it would
+      // filter on a label no chunk carries, and the follow-up would
+      // abstain instead of telling the user the scope is gone.
+      expect(scope.serviceLabelsEn, isEmpty);
     });
 
     test('a tag that names no button stays a sidebar scope', () {
-      final scope = convResolver().resolve(tags: ['gone'], categoryKey: '2');
+      // 'Births' is a service of the hierarchy: it survives the filter.
+      final scope = convResolver().resolve(tags: ['Births'], categoryKey: '2');
 
       expect(scope.quickHelpButtonId, isNull);
       expect(scope.categoryNameEn, 'Civil Registry');
-      expect(scope.serviceLabelsEn, ['gone']);
+      expect(scope.serviceLabelsEn, ['Births']);
+    });
+
+    test('a tag the hierarchy does not carry is not a filter label', () {
+      // An unknown button id (the web's runtime config has a button the
+      // mobile's build-time config does not), or a label renamed away:
+      // the tag must not reach the wire — it filters on nothing.
+      final scope = convResolver().resolve(tags: ['gone', 'Births']);
+
+      expect(scope.serviceLabelsEn, ['Births']);
     });
 
     test('a conversation with no scope at all resolves to nothing', () {

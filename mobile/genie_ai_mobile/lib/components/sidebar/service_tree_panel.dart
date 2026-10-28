@@ -139,9 +139,12 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
     int index,
     String catKey,
   ) {
-    // 1. Safe Key Extraction for Category (Backup if catKey fails)
-    final String categoryId = (category['id'] ?? category['key'] ?? "")
-        .toString();
+    // 1. The category id IS the tree's catKey — the parameter is extracted
+    // from the same node this handler was invoked for. Reading the raw
+    // node's 'id'/'key' yields an empty string (the tree publishes neither)
+    // and every selection then carried an EMPTY category id: the chat read
+    // it as "no scope" and the query left unfiltered.
+    final String categoryId = catKey;
 
     // 2. Normalize Service Data (Handling the String vs Map crash)
     String serviceId;
@@ -369,8 +372,9 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
     // Safe Property Access
     final String catLabel =
         category['label'] ?? category['name'] ?? "Unknown Category";
-    final String catKey = (category['key'] ?? category['id'] ?? index)
-        .toString();
+    final String catKey =
+        (category['catKey'] ?? category['key'] ?? category['id'] ?? index)
+            .toString();
     final List children = category['children'] ?? [];
 
     // Filter Children based on Search Query

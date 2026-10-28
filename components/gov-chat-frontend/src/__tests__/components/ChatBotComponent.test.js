@@ -1937,6 +1937,54 @@ describe('ChatBotComponent', () => {
       expect(vm.quickHelpScopeState(scoped).broken).toBe(true);
     });
 
+    it('a sidebar service with no English name refuses the send, and says so', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const tree = [
+        {
+          catKey: '2',
+          name: 'Impuestos',
+          nameEN: 'Taxes',
+          children: [{ name: 'Declaración de impuestos', nameEN: null }]
+        }
+      ];
+      mockLiveTree(tree);
+      vm.serviceCategories = tree;
+      vm.serviceCategoriesStatus = 'loaded';
+
+      // The user picked the SERVICE; without its English name the wire
+      // would carry the CATEGORY alone — the query silently widening to
+      // the whole category while the chip still names the service.
+      vm.$store.commit('conversation/addContextItem', {
+        service: 'Declaración de impuestos',
+        serviceKey: null,
+        category: '2',
+        selected: true
+      });
+      vm.currentCategoryId = '2';
+
+      expect(vm.checkContextConfig({ categoryLabel: 'Taxes', serviceLabels: [] })).toBe(false);
+      expect(mockNotificationError).toHaveBeenCalledWith('chatbot.scopeNotNameable');
+    });
+
+    it('a category-only selection is not refused for lacking a service name', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const tree = [{ catKey: '2', name: 'Impuestos', nameEN: 'Taxes', children: [] }];
+      mockLiveTree(tree);
+      vm.serviceCategories = tree;
+      vm.serviceCategoriesStatus = 'loaded';
+
+      // The restored category-only item's scope IS the category — the
+      // categoryLabel carries it, and the send must go through.
+      vm.$store.commit('conversation/setContextItems', [
+        { service: 'Impuestos', serviceKey: null, categoryOnly: true, category: '2', selected: true }
+      ]);
+      vm.currentCategoryId = '2';
+
+      expect(vm.checkContextConfig({ categoryLabel: 'Taxes', serviceLabels: [] })).toBe(true);
+    });
+
     it('an EMPTY category id declares no scope', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
@@ -2046,12 +2094,41 @@ describe('ChatBotComponent', () => {
       expect(vm.getCategoryDisplayName('999999')).toBeNull();
     });
 
-    it('sends no localized label when the entity carries no EN translation', async () => {
+    it('a restored category-only scope puts no synthetic label on the wire', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const tree = [{ catKey: '2', name: 'Cultivos', nameEN: 'Crops', children: [] }];
+      mockLiveTree(tree);
+      vm.serviceCategories = tree;
+      vm.serviceCategoriesStatus = 'loaded';
+
+      // A conversation linked to its category but carrying no tags: the
+      // restored scope IS the category. 'category.<id>' is not a label —
+      // it must never reach the wire as a filter (it matches no chunk and
+      // the query would abstain instead of answering from the category).
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation.mockResolvedValueOnce({
+        _key: 'c9',
+        title: 'Saved',
+        messages: [],
+        categories: [{ _key: '2', nameEN: 'Crops' }]
+      });
+
+      await vm.loadExistingConversation('c9');
+
+      const item = vm.selectedContextItems[0];
+      expect(item.categoryOnly).toBe(true);
+      expect(item.serviceKey).toBeNull();
+    });
+
+    it('refuses the send when the picked entity carries no EN translation', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
       // An entity without an EN translation has no filterable label at all:
-      // the localized name matches no chunk, so it must not reach the wire.
+      // the localized name matches no chunk. Sending anyway would either
+      // leak it as a label (the old bug) or silently widen the query to
+      // the whole category — both are out. The send is refused, visibly.
       const tree = [
         {
           catKey: '2',
@@ -2073,9 +2150,8 @@ describe('ChatBotComponent', () => {
 
       await vm.sendMessage();
 
-      const payload = mockSubmitQueryStream.mock.calls[0][0];
-      expect(payload.context.serviceLabels).toEqual([]);
-      expect(payload.context.serviceLabels).not.toContain('Impuestos');
+      expect(mockSubmitQueryStream).not.toHaveBeenCalled();
+      expect(mockNotificationError).toHaveBeenCalledWith('chatbot.scopeNotNameable');
     });
 
     it('restores a Quick Help card with the category scope it was asked in', async () => {

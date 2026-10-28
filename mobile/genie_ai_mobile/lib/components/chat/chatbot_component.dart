@@ -992,12 +992,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       // is a mode switch: it is cleared.
       _selectedCategoryId = button['category']?.toString();
       _selectedCategoryNameEn = _scopeResolver?.categoryLabelEn(button) ?? '';
-      // The scope the query carries is VISIBLE: the context bar names the
-      // category the answer is scoped by. A scope the user cannot see is a
-      // scope they cannot check.
+      // The scope the query carries is VISIBLE. The resolver's tree is the
+      // ENGLISH one (it is the wire's vocabulary), so its display name is
+      // English too — the chip shows the button's own localized title
+      // instead, the same thing the web's chip shows for the same
+      // selection.
       _selectedCategoryName =
-          _scopeResolver?.categoryDisplayName(button['category']?.toString()) ??
-          '';
+          button['resolvedTitle']?.toString() ?? visibleText;
       _sidebarServiceLabelsEn = [];
       _activeQuickHelpButtonId = button['id']?.toString();
     });

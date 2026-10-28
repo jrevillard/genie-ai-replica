@@ -28,7 +28,20 @@ names no values key. The chain is bound parent-first so a cleared tier
 degrades to the chart's documented default instead. */ -}}
 {{- $data := .Values.data | default dict -}}
 {{- $kc := $data.keycloak | default dict -}}
-{{- $kc.httpRelativePath | default "/auth" -}}
+{{- $path := $kc.httpRelativePath | default "/auth" -}}
+{{- /* The path is CONCATENATED into every URL the chart builds
+(":8080<path>", "<host><path>") and into the HTTPRoute's path rules.
+Without a leading slash the concatenation produced "…:8080auth" and
+the route path "auth/" — a URL no client can dial, with the values key
+nowhere in the error. The shape is checked HERE, the one place every
+consumer reaches. */ -}}
+{{- if not (hasPrefix "/" $path) -}}
+{{- fail (printf "data.keycloak.httpRelativePath %q must start with a slash: it is concatenated into every Keycloak URL and into the HTTPRoute path rules" $path) -}}
+{{- end -}}
+{{- if regexMatch "\\s" $path -}}
+{{- fail (printf "data.keycloak.httpRelativePath %q carries whitespace: it is part of a URL and of a route path" $path) -}}
+{{- end -}}
+{{- $path -}}
 {{- end -}}
 
 {{- define "genieai-umbrella.keycloakInternalURL" -}}

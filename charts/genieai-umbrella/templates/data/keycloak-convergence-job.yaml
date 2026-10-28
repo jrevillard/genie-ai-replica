@@ -278,14 +278,11 @@ spec:
               value: {{ .Values.data.keycloak.supportedLocales | default (list "ar" "de" "en" "es" "fr" "pt" "ru" "th" "zh-Hans") | toJson | quote }}
             - name: KEYCLOAK_ACCESS_TOKEN_LIFESPAN
               value: {{ .Values.data.keycloak.accessTokenLifespan | default 300 | quote }}
-            # Secret-backed parameters, one row per operator-declared entry.
-            {{- range $e := (.Values.data.keycloak.convergence.envSecrets | default list) }}
-            - name: {{ $e.envVar }}
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $e.secretName | quote }}
-                  key: {{ $e.secretKey | quote }}
-            {{- end }}
+            # Secret-backed parameters, one row per operator-declared
+            # entry. The rows are VALIDATED by the helper (a typo'd key
+            # would render `name: null` and the API server would reject
+            # the whole Job at apply time).
+            {{- include "genieai-umbrella.convergenceEnvSecretRows" (.Values.data.keycloak.convergence.envSecrets | default list) | nindent 12 }}
           volumeMounts:
             - name: realm
               mountPath: /config

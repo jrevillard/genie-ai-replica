@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-28)
 
-- **Chart `genieai-umbrella` at 0.2.91**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.92**, branch `feat/k8s-migration` based
   on `main` at `179a8a8f1` and **8 commits behind `origin/main`**
   (`5786919c1`). The gap touches the frontend, the OPEA overlay
   (retriever/dataprep), the site docs and the config-validator tests —
@@ -609,6 +609,37 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 20 (0.2.92)** — 2 findings, both verified true, both
+  fixed. Both are the same shape: a place where the chart accepted an
+  operator mistake without naming it.
+  - *The operator-facing convergence rows had no shape validation* —
+    `data.keycloak.convergence.envSecrets` is the ONE row list an
+    operator hand-writes (five rows per overlay), and a typo'd key
+    (`envvar` instead of `envVar`) rendered `name: null`: the API
+    server rejects the whole Job at apply time with "spec.template.spec.
+    containers[0].env[N].name: Required value", naming neither the
+    values key nor the row. The placeholder-completeness guard did not
+    cover it — it only catches a broken row whose variable the realm
+    file references, so an extra or misspelled row passed every gate.
+    The rows are validated now (a row must be a map carrying a
+    non-empty `envVar`, `secretName` and `secretKey`), with the row
+    INDEX in the message. The rendered Job is byte-identical to the
+    previous one (the validation only rejects what was already broken).
+  - *The helm TEST templates read clearable blocks unguarded* — the
+    chart's contract is that a cleared block degrades to the derived
+    behaviour, and `services.backend.translation: null` is even
+    documented as the supported way to reset it; the test template read
+    it unguarded, so the documented configuration crashed the render
+    with "nil pointer evaluating interface {}.endpoint" naming the
+    TEST POD instead of the values key. The two test templates
+    (test-namespace, test-stateless-reachability) normalize their
+    blocks now, like every other template. A block that is NOT
+    clearable (the service blocks themselves) still fails the render —
+    but in the template that actually needs it, not in a test pod.
+  - *Two cases added to the render-guards script* (20 now): the
+    convergence row with a typo'd key, and a POSITIVE case — a cleared
+    translation block must still render, which is the contract the
+    second finding broke.
 - **Review loop, pass 19 (0.2.91)** — 5 findings, all verified true, all
   fixed. The headline: **the stringification had two layers and the gate
   only tested one of them.**
@@ -889,7 +920,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.91** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.92** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `179a8a8f1` (the tip that carries !586, !587,
   !588) — the branch is 0 commits behind `main`.

@@ -388,7 +388,7 @@ Per-chunk LLM document-context prefix → embedding (+ optionally labeling) so c
 | `kc_dataprep_client_id` | `genie-dataprep` | no | Keycloak client ID for dataprep service account |
 | `keycloak_ssl_skip_verify` | `""` | no | Skip SSL verification for Keycloak API calls (set `"true"` for self-signed certs) |
 | `keycloak_password_policy` | — | no | Password policy string (e.g. `length(8) and notUsername`) |
-| `keycloak_theme` | `keycloak` | no | Login theme for Keycloak |
+| `keycloak_theme` | `genie` | no | Login theme for Keycloak — must name a theme the deployed branch ships under `configs/keycloak/themes/` |
 | `keycloak_access_token_lifespan` | — | no | Access token lifespan (e.g. `300` seconds, `5m`) |
 | `keycloak_registration_enabled` | — | no | Enable user self-registration (`true`/`false`) |
 | `keycloak_verify_email` | — | no | Require email verification for new users |

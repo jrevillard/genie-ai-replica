@@ -15,6 +15,21 @@ config_bootstrap_sync_enabled: true
 # deploy.
 config_bootstrap_allow_rebrand: false
 
+# The Keycloak theme this deployment serves — the one the realms are pointed
+# at, and the one the mirror must not delete from a node that does not ship
+# it. The role refuses to sync a branch that does not ship it.
+#
+# It is a property of the DEPLOYMENT, not of a node: the role runs on every
+# node, and a fallback that differed per host group made a node outside the
+# environment's group check a theme the deployment does not use. The default
+# is the base theme every branch carries; a flavour overrides it in
+# group_vars/<environment>/vars.yml (e.g. genie-el-salvador) — and every group
+# of that deployment must carry the same value.
+#
+# The value must name a theme the deployed branch ships under
+# configs/keycloak/themes/. An empty value fails the deploy.
+keycloak_theme: genie
+
 # List of (source, destination) pairs.
 #   src        - repo-relative directory. Used two ways: as the `?path=` argument
 #                of the GitLab archive endpoint (so the assets come from

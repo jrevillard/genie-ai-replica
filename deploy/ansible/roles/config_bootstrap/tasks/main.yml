@@ -162,11 +162,28 @@
     # defines one, so a host whose .env predates it silently checked the
     # default theme and the mirror then deleted the deployment's real theme.
     # The variable is what templates/env.j2 renders into KEYCLOAK_THEME and
-    # what docker-compose passes to the realm (defaulting to 'genie', the
-    # compose default).
+    # what docker-compose passes to the realm. It has a default in the role
+    # (defaults/main.yml), so every node checks the same theme unless the
+    # deployment overrides it — the theme is a property of the deployment,
+    # not of a node.
     - name: Read the Keycloak theme this deployment is configured to use
       ansible.builtin.set_fact:
-        config_bootstrap_keycloak_theme: "{{ keycloak_theme | default('genie', true) | trim }}"
+        config_bootstrap_keycloak_theme: "{{ keycloak_theme | trim }}"
+
+    # An empty theme name would make the guard below stat the themes ROOT,
+    # which exists — the guard would then pass while checking nothing.
+    - name: Fail when the deployment's Keycloak theme is empty
+      ansible.builtin.assert:
+        that:
+          - config_bootstrap_keycloak_theme | length > 0
+        fail_msg: >-
+          keycloak_theme is empty. It must name a theme the branch ships under
+          configs/keycloak/themes/ (the deployment-wide default is 'genie'),
+          because it is the theme the realms are pointed at and the theme the
+          mirror must not delete from a node.
+        success_msg: >-
+          config_bootstrap: the deployment's Keycloak theme is
+          {{ config_bootstrap_keycloak_theme }}
 
     - name: Stat the deployment's Keycloak theme in the extracted branch
       ansible.builtin.stat:
@@ -233,7 +250,7 @@
       # first deploy is not a re-brand.
       failed_when: false
 
-    - name: Compute the brand each side carries
+    - name: "Compute the brand each side carries ({{ config_dir }}/{{ config_bootstrap_brand_pairs.0.dest_subdir }}/{{ config_bootstrap_brand_pairs.0.brand_file }})"
       ansible.builtin.set_fact:
         config_bootstrap_branch_title: >-
           {{ (config_bootstrap_branch_config.content | b64decode | from_json).app.title | default('') }}
@@ -251,6 +268,7 @@
           # would have made the guard pass silently.
           - config_bootstrap_host_config.content is not defined
             or config_bootstrap_host_title != ''
+            or config_bootstrap_allow_rebrand | bool
         fail_msg: >-
           The host serves a brand file without an app.title
           ({{ config_dir }}/{{ config_bootstrap_brand_pairs.0.dest_subdir }}/{{ config_bootstrap_brand_pairs.0.brand_file }}).

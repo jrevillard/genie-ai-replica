@@ -204,7 +204,6 @@ BACKUP_ARCHIVE=""
 EXPECTED_PATH=""
 STRAY_PATH=""
 RESTORE_ARMED="false"
-RESTORE_FAILED="false"
 
 restore() {
     local exit_code="$?"
@@ -257,10 +256,14 @@ restore() {
     # produce, so it must not be reported as a pass: the script exits with a
     # failure whether the test itself had failed or not. `exit` (not `return`)
     # because a trap's return value does not change the script's exit status.
-    RESTORE_FAILED="true"
     exit 1
 }
-trap restore EXIT INT TERM
+# The EXIT trap restores the host. The signal traps restore it AND stop the
+# script: a signal that only restored the host would let the run continue on
+# a tree the restore had just put back, and it would end by reporting a pass.
+trap restore EXIT
+trap 'restore; exit 130' INT
+trap 'restore; exit 143' TERM
 
 # --- resolve paths ------------------------------------------------------------
 

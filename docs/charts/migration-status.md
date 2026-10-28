@@ -8,8 +8,8 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-28)
 
-- **Chart `genieai-umbrella` at 0.2.102**, branch `feat/k8s-migration` based
-  on `main` at `179a8a8f1` and **12 commits behind `origin/main`**
+- **Chart `genieai-umbrella` at 0.2.103**, branch `feat/k8s-migration` based
+  on `main` at `18d02f094` and **12 commits behind `origin/main`**
   (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
   the backend's analytics routes, the OPEA overlay (retriever/dataprep),
   `docker-compose.yaml`, the site docs, the config-validator tests and
@@ -614,6 +614,59 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 31 (0.2.103)** — 10 findings from the seventh
+  `/code-review`. The theme of the pass: the values a deployment reads
+  through a path the chart does not own.
+  - *The Keycloak context path was concatenated with no shape check* —
+    `data.keycloak.httpRelativePath` lands in every Keycloak URL
+    (":8080<path>") and in the HTTPRoute's path rules. A path without
+    its leading slash rendered "…:8080auth" and the route path
+    "auth/", a URL no client can dial, with the values key nowhere in
+    the error. The shape (leading slash, no whitespace) is checked at
+    the single source now.
+  - *The Keycloak CR's injected podTemplate carried no pull
+    credentials* — the theme-unpack init pulls busybox, and an
+    air-gapped mirror needs the Secret to pull it at all. Without
+    them the init died in ImagePullBackOff and the whole identity
+    tier never started, with a pull error naming no values key.
+  - *Grafana's `root_url` read `ingress.scheme` as a raw chain* — the
+    one file that skipped the parent-first binding, so a CLEARED
+    ingress block crashed the template engine instead of failing
+    through the helper, by name.
+  - *The named translation endpoint's egress port is a Service port,
+    the policy matches a pod port* — a NetworkPolicy's egress port is
+    matched after DNAT, against the pod's port, while the rule carries
+    the URL's port (the Service's). The chart cannot read an
+    operator-named Service's `targetPort`, so the constraint
+    (`targetPort` == `port`) is documented in the rendered policy and
+    in the operator doc.
+  - *The doc stated the replica precedence backwards* — it claimed
+    `clusterProfileReplicas` wins over `services.<svc>.replicas`, the
+    order the chart inverted when the explicit value moved first. Both
+    tiers now read explicit → profile → 1, and the doc says so.
+  - *The doc called the translation endpoint an optional CPU-skip
+    switch* — a named GPU API is MANDATORY (the backend waits for it
+    at startup and refuses to come up without it); only an UNSET
+    endpoint means the in-process CPU model translates.
+  - *The two newest guards had no render-guard case* — and the
+    suite's own header claimed the dependency-graph guard was
+    unreachable, which it is not: a mistyped `--set` leaves a map
+    behind and the guard fires. Three cases now (the third colon
+    segment, the map shape, the non-string element), each
+    mutation-tested against its own guard.
+  - *The ledger named a stale base commit* — `179a8a8f1` where the
+    merge-base is `18d02f094`.
+  - *The document-repository read one values block under two names* —
+    the crawl CIDR rule ranged over `$svcDocRepo` and tested
+    emptiness on `$servicesDocumentRepository`, two aliases of the
+    same map: the day one of them changed, the rule would have
+    admitted `0.0.0.0/0` alongside the operator's CIDRs. One name
+    now.
+  - *The namespace comment said the chart renders no Namespace* — the
+    observability tier renders one (`<ns>-obs`, the only namespace the
+    chart owns: it holds the filelog DaemonSet and nothing that
+    outlives the release). The release namespace stays the deploy
+    repo's, and the comment says which is which.
 - **Review loop, pass 30 (0.2.102)** — 7 findings from the sixth
   `/code-review`, three mutation-confirmed by the reviewer before the
   fix. The theme of the pass: values that reach a browser or a hook.
@@ -1373,7 +1426,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     that read like a chart error. The comments moved above the step.
 - Chart `genieai-umbrella` at **0.2.102** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
-- Rebased onto `main` at `179a8a8f1` (the tip that carries !586, !587,
+- Rebased onto `main` at `18d02f094` (the tip that carries !586, !587,
   !588); the branch has since drifted 12 commits behind `origin/main`
   (see the current state above).
 - **Edge tier shipped (0.2.21–0.2.26)**: Envoy Gateway as a chart dependency

@@ -177,12 +177,17 @@ the realm is never imported — useful for smoke installs.
 topology. Valid values: `dev`, `staging`, `prod`. `sovereign` is reserved
 until that profile lands. Per-service overrides go through
 `clusterProfileReplicas` in your overlay; the data tier's instance counts
-(Keycloak, Postgres) come from `clusterProfileInstances`. The two
-precedence rules differ on purpose: `clusterProfileReplicas` WINS over
-`services.<svc>.replicas` (that value is documented as a baseline), while
-an explicit `data.keycloak.instances` / `data.postgres.instances` WINS over
-`clusterProfileInstances` — it is the count you sized the database for.
-Leave the value unset to inherit the profile's count.
+(Keycloak, Postgres) come from `clusterProfileInstances`. Both tiers
+resolve their count the same way: an **explicit** value wins, then the
+cluster profile, then 1. `services.<svc>.replicas` and
+`data.<tier>.instances` are null by default, and that null is what keeps
+"unset" (the profile applies) distinguishable from "the operator pinned a
+count" (it wins). Pinning a count of 0 switches a stateless tier off on
+every profile: the profile used to win, so an operator on `prod` who
+scaled a tier off got the profile's count back — plus a
+PodDisruptionBudget for pods they had switched off. A data-tier count of
+0 is rejected at render time (a CNPG Cluster or a Keycloak CR cannot
+scale to zero).
 
 **`ingress.host` and `ingress.scheme`** — public origin, **required** (no
 chart default: the render fails with a supply-it message when unset).
@@ -218,9 +223,18 @@ target-language chat translation during generation (issue #829). Default
 `true`. Set `false` only when the target LLM-translation backend cannot
 keep up with the chat stream.
 
-**`services.backend.translation.endpoint`** — set to the GPU-node
-translation API to skip the in-process CPU model (which burns a CPU core
-per dashboard render).
+**`services.backend.translation.endpoint`** — the GPU-node translation API.
+Naming one is a commitment, not a preference: the application treats a
+named API as **mandatory**, waits for it at startup and refuses to come up
+if it does not answer. Leaving it unset (with the OPEA tier off) means no
+GPU API is named, and the answer is translated by the in-process CPU model
+(Xenova/nllb-200-distilled-600M — ~6 Gi at ONNX load and a core of steady
+inference). A named endpoint that resolves to an in-cluster Service must
+publish the port its container listens on (`targetPort` == `port`): a
+NetworkPolicy's egress port is matched after DNAT, against the pod's port,
+while the chart derives the rule's port from the URL — it cannot read an
+operator-named Service's `targetPort`. A destination outside the cluster
+(an IP literal, a node reached directly) has no such gap.
 
 **`pluggable.storageClassName`** — overrides the cluster default StorageClass
 for chart-managed PVCs. Empty string = use the cluster default.

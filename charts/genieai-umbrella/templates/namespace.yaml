@@ -1,5 +1,5 @@
 {{- /* Namespace-scoped RBAC the chart's workloads and the per-environment
-kube-arangodb operator rely on. The namespace itself is owned by the
+kube-arangodb operator rely on. The RELEASE namespace is owned by the
 deploy-repo Kustomization (namespace-genieai.yaml) — see the note
 below the release-namespace guard. */ -}}
 {{- $ns := .Release.Namespace -}}
@@ -17,7 +17,7 @@ the real one — the exact divergence this guard exists to prevent. */ -}}
 {{- if ne .Values.namespace .Release.Namespace -}}
 {{- fail (printf "values 'namespace' (%q) must equal the release namespace (%q) — set namespace: %s in your values-override, OR install with -n %s" (toString .Values.namespace) .Release.Namespace .Release.Namespace .Release.Namespace) -}}
 {{- end -}}
-{{- /* The namespace itself is NOT rendered by the chart. It is owned by
+{{- /* The RELEASE namespace is NOT rendered by the chart. It is owned by
        the deploy-repo Kustomization (namespace-genieai.yaml), which
        applies it before the SealedSecrets and HelmReleases that target
        it. A chart-owned Namespace made every failed install → uninstall
@@ -25,7 +25,10 @@ the real one — the exact divergence this guard exists to prevent. */ -}}
        resources on uninstall), cascading away the SealedSecrets, the
        per-environment kube-arangodb operator and every PVC, and
        deadlocking the Kustomization (it cannot apply SealedSecrets into
-       a terminating namespace). */ -}}
+       a terminating namespace).
+
+       The observability tier's OWN namespace (`<ns>-obs`) is the one
+       exception and IS chart-owned — see observability/namespace-obs.yaml. */ -}}
 # ArgoDB operator in-cluster RBAC. The kube-arangodb operator installed
 # by scripts/install-prereqs.sh runs in arango-system with `legacy`
 # scope: cluster-wide for core K8s resources (deployments, services,

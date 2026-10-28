@@ -2712,6 +2712,92 @@ describe('ChatBotComponent', () => {
       expect(lastError).toBe('admin.hierarchy.loading');
     });
 
+    it('two services sharing a DISPLAY name are two scopes (identity is the EN key)', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // Same localized display name, different EN names, same category:
+      // the dedup keyed on the display swallowed the second pick while
+      // the panel highlighted it — and the deselection removed the wrong
+      // chip.
+      vm.$store.commit('conversation/setContextItems', [
+        { service: 'Registro', serviceKey: 'Registry Births', source: 'sidebar', category: '2', selected: true }
+      ]);
+      vm.handleTreeNodeSelected({ service: 'Registro', serviceKey: 'Registry Taxes', category: '2', selected: true });
+
+      expect(vm.selectedContextItems).toHaveLength(2);
+      const keys = vm.selectedContextItems.map((i) => i.serviceKey).sort();
+      expect(keys).toEqual(['Registry Births', 'Registry Taxes']);
+    });
+
+    it('a PROMPT-ONLY composer entry arms its prompt, not the raw text', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const tree = [{ catKey: '2', name: 'Cultivos', nameEN: 'Crops', children: [] }];
+      mockLiveTree(tree);
+      vm.serviceCategories = tree;
+      vm.serviceCategoriesStatus = 'loaded';
+      vm.quickHelpButtons = [
+        {
+          id: 'persona-entry',
+          service: 'Persona card',
+          serviceLabels: [],
+          serviceKey: 'persona-entry',
+          placement: 'composer',
+          icon: 'x',
+          hiddenPrompt: 'Answer as a domain advisor.'
+        }
+      ];
+      vm.newMessage = 'a plain question';
+
+      vm.handleWelcomeSend();
+
+      expect(mockSubmitQueryStream).toHaveBeenCalled();
+      const payload = mockSubmitQueryStream.mock.calls.at(-1)[0];
+      expect(payload.messages.at(-1).content).toBe('Answer as a domain advisor.');
+      expect(payload.userQuestion).toBe('a plain question');
+    });
+
+    it("removing a non-last chip moves the category to the remaining scope's own", async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // Two chips of DIFFERENT categories; the first (whose category the
+      // id tracked) is removed: the id must follow the survivor, or the
+      // saved conversation names a category nothing in it belongs to.
+      vm.$store.commit('conversation/setContextItems', [
+        { service: 'A', serviceKey: 'A EN', source: 'sidebar', category: '1', selected: true },
+        { service: 'B', serviceKey: 'B EN', source: 'sidebar', category: '2', selected: true }
+      ]);
+      vm.currentCategoryId = '1';
+
+      vm.removeContextItem(0);
+
+      expect(vm.currentCategoryId).toBe('2');
+    });
+
+    it('a saved just-chat tag rebuilds even when the config dropped the entry', async () => {
+      const tree = [{ catKey: '2', name: 'Cultivos', nameEN: 'Crops', children: [] }];
+      mockLiveTree(tree);
+      const wrapper = await createChatBotWrapperAsync(tree);
+      const vm = wrapper.vm;
+
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation.mockResolvedValueOnce({
+        _key: 'c15',
+        title: 'Saved',
+        messages: [],
+        tags: ['just-chat'],
+        categories: []
+      });
+      await vm.loadExistingConversation('c15');
+
+      const item = vm.selectedContextItems.find((i) => i.id === 'just-chat');
+      expect(item).toBeDefined();
+      // And it does not refuse the send: just-chat is unfiltered BY DESIGN.
+      expect(vm.checkContextConfig({ categoryLabel: null, serviceLabels: [] })).toBe(true);
+    });
+
     it('selecting a sidebar service REPLACES a live card chip (the mode switch is symmetric)', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;

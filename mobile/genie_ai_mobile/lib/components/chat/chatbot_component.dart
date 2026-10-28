@@ -285,13 +285,26 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           _currentLocale,
         );
 
-        // Explicit English KB labels for the retriever filter (may be null).
-        final serviceLabels = btn['serviceLabels'] as List<dynamic>?;
+        // Explicit English KB labels for the retriever filter. A bare
+        // STRING where the array belongs is the config typo the web half
+        // wraps as ONE label — the wire's own bare-string rule — and the
+        // parse must agree: the hard cast made the WHOLE config load
+        // throw (Quick Help dead for the session) while the web filtered
+        // correctly on the same file.
+        final dynamic rawServiceLabels = btn['serviceLabels'];
+        final List<dynamic> serviceLabels;
+        if (rawServiceLabels is List<dynamic>) {
+          serviceLabels = rawServiceLabels;
+        } else if (rawServiceLabels is String && rawServiceLabels.isNotEmpty) {
+          serviceLabels = [rawServiceLabels];
+        } else {
+          serviceLabels = const <dynamic>[];
+        }
 
         loadedButtons.add({
           'id': btn['id'],
           'category': btn['category'],
-          'serviceLabels': serviceLabels ?? const <dynamic>[],
+          'serviceLabels': serviceLabels,
           'action': action ?? {},
           'appearance': appearance ?? {},
           'iconAsset': localIconAsset,

@@ -787,7 +787,7 @@ export default {
       // A saved conversation keeps its title; a QuickHelp-driven chat takes
       // the option's own name; the plain just-chat surface keeps its label.
       if (this.currentChatTitle) return this.currentChatTitle;
-      const item = this.selectedContextItems.find((i) => i.source === 'quickHelp');
+      const item = this.selectedContextItems.find((i) => i.source === QUICK_HELP_SOURCE);
       if (item) return item.service;
       return this.translate('chatbot.justChat', 'Just Chat');
     },
@@ -1799,7 +1799,12 @@ export default {
       // wire's service-wins rule then dropped the category the card
       // promised — a silent reduction the two platforms also disagreed
       // about. Legacy conversations still RESTORE both (their tags say
-      // so); new selections are exclusive.
+      // so); new selections are exclusive. Every dropped SIDEBAR item is
+      // announced on the panel's own sync channel — its highlights must
+      // not outlive the store items that backed them.
+      this.selectedContextItems
+        .filter((item) => item.source !== QUICK_HELP_SOURCE)
+        .forEach((item) => eventBus.$emit('contextItemRemoved', item));
       this.$store.commit(
         'conversation/setContextItems',
         this.selectedContextItems.filter((item) => item.source === QUICK_HELP_SOURCE)
@@ -1844,7 +1849,12 @@ export default {
       const entryDeclaresScope =
         entry &&
         (declaresCategoryScope(entry.category) ||
-          (Array.isArray(entry.serviceLabels) && entry.serviceLabels.length > 0));
+          (Array.isArray(entry.serviceLabels) && entry.serviceLabels.length > 0) ||
+          // A PROMPT-ONLY entry still differs from the plain surface: its
+          // configured persona/domain prompt must reach the LLM. The
+          // tile path arms the same shape; a gate keyed on scope alone
+          // dropped the prompt silently.
+          Boolean(entry.hiddenPrompt));
       if (entryDeclaresScope) {
         // The composer card renders BEFORE the hierarchy settles (the grid
         // waits for it), so the same gate selectQuickHelpOption enforces
@@ -1871,7 +1881,11 @@ export default {
         this.$store.commit('conversation/replaceQuickHelpItem', quickHelpContextItem(entry));
         // The same MODE SWITCH the tile path rules: the card replaces the
         // sidebar selection, or the wire would carry the union and the
-        // service-wins rule would drop the category the card promised.
+        // service-wins rule would drop the category the card promised —
+        // and the panel's highlights hear about every dropped row.
+        this.selectedContextItems
+          .filter((item) => item.source !== QUICK_HELP_SOURCE)
+          .forEach((item) => eventBus.$emit('contextItemRemoved', item));
         this.$store.commit(
           'conversation/setContextItems',
           this.selectedContextItems.filter((item) => item.source === QUICK_HELP_SOURCE)
@@ -1890,7 +1904,7 @@ export default {
       } else {
         this.$store.commit(
           'conversation/setContextItems',
-          this.selectedContextItems.filter((i) => i.source !== 'quickHelp')
+          this.selectedContextItems.filter((i) => i.source !== QUICK_HELP_SOURCE)
         );
       }
       this.currentCategoryId = null;
@@ -1904,8 +1918,20 @@ export default {
       }
 
       if (item.selected) {
+        // The IDENTITY is the (EN serviceKey, category) pair — the
+        // redesign's own rule. Two services sharing a DISPLAY name in
+        // one category are two scopes; keying on the display swallowed
+        // the second pick while the panel highlighted it, and the
+        // deselection then removed the WRONG chip. The display pair
+        // stands in only for an item with no EN name at all (it carries
+        // no label — it will refuse at send, visibly).
+        const itemKey = item.serviceKey || null;
+        const itemDisplay = this.safeTranslate(item.service);
         const exists = this.selectedContextItems.some(
-          (existing) => existing.service === this.safeTranslate(item.service) && existing.category === item.category
+          (existing) =>
+            existing.category === item.category &&
+            ((itemKey !== null && existing.serviceKey === itemKey) ||
+              (itemKey === null && existing.service === itemDisplay && !existing.serviceKey))
         );
         if (!exists) {
           // The mode switch is SYMMETRIC: a card press replaces the
@@ -1935,16 +1961,28 @@ export default {
           this.currentCategoryId = item.category || null;
         }
       } else {
+        // The same identity key the add-branch dedups on — a remove that
+        // matched a DIFFERENT chip than the row the user clicked is a
+        // silently swallowed selection.
+        const itemKey2 = item.serviceKey || null;
+        const itemDisplay2 = this.safeTranslate(item.service);
         const index = this.selectedContextItems.findIndex(
-          (existing) => existing.service === this.safeTranslate(item.service) && existing.category === item.category
+          (existing) =>
+            existing.category === item.category &&
+            ((itemKey2 !== null && existing.serviceKey === itemKey2) ||
+              (itemKey2 === null && existing.service === itemDisplay2 && !existing.serviceKey))
         );
         if (index !== -1) {
           const removedItem = this.selectedContextItems[index];
           this.$store.commit('conversation/removeContextItem', index);
           notificationService.info(this.translate('chatbot.contextRemoved'), 1500);
           eventBus.$emit('contextItemRemoved', removedItem);
+          // The same rule the chip's own X follows: the category tracks
+          // the remaining scope, never the removed item's own.
           if (this.selectedContextItems.length === 0) {
             this.currentCategoryId = null;
+          } else {
+            this.currentCategoryId = this.selectedContextItems[0].category || null;
           }
         }
       }
@@ -1953,6 +1991,13 @@ export default {
     removeContextItem(index) {
       if (this.selectedContextItems.length > index) {
         this.$store.commit('conversation/removeContextItem', index);
+      }
+      // Chips REMAIN: the category follows the remaining scope, or the
+      // queries record and the saved conversation's category edge name a
+      // category none of the remaining chips belongs to (the removed
+      // item's own).
+      if (this.selectedContextItems.length > 0) {
+        this.currentCategoryId = this.selectedContextItems[0].category || null;
       }
       if (this.selectedContextItems.length === 0 && this.currentCategoryId) {
         const categoryButtons = this.quickHelpButtons.filter((option) => option.category === this.currentCategoryId);
@@ -2338,6 +2383,24 @@ export default {
             // label — a sidebar selection and a Quick Help button can carry
             // the same label, and restoring the wrong one silently changes
             // the scope of the saved query.
+            // The RESERVED just-chat id: a saved conversation keeps it
+            // even when the deployment's config dropped the entry — the
+            // scope it names (NONE, unfiltered by design) does not
+            // depend on the config, so the chip rebuilds from the id
+            // alone instead of restoring as a dead tag that refuses
+            // every send.
+            if (tag === 'just-chat') {
+              restoredContextItems.push({
+                service: this.translate('chatbot.justChat'),
+                serviceLabels: [],
+                serviceKey: 'just-chat',
+                source: QUICK_HELP_SOURCE,
+                id: 'just-chat',
+                category: null,
+                selected: true
+              });
+              return;
+            }
             const button = this.quickHelpButtons.find((candidate) => candidate.id === tag);
             if (button) {
               restoredContextItems.push(quickHelpContextItem(button));

@@ -365,15 +365,26 @@ def declared_flows(policies, services):
 KEYCLOAK_SERVICE_PORT = 8080
 
 
+# The in-cluster keycloak Service, by the name the chart's URL helper
+# builds: keycloak-service.<namespace>.svc.cluster.local:<port><path>.
+# Matched on the Service NAME and the cluster DNS, not on an env var
+# name: the workloads reach keycloak through different rows —
+# KEYCLOAK_URL (the backend, the doc-repo, dataprep, the convergence
+# Job) and KEYCLOAK_INTERNAL_URL (chatqna, whose KEYCLOAK_URL is the
+# PUBLIC issuer but whose JWKS fetch is in-cluster). A name-based list
+# would have left chatqna unguarded.
+KEYCLOAK_INTERNAL = re.compile(r"keycloak-service\.[^/\s\"]*\.svc\.cluster\.local(?::(\d+))?")
+
+
 def index_keycloak_clients(docs):
     """{component: port} for the workloads that dial the in-cluster keycloak.
 
     Derived from the RENDER, not from a hand-written list: every
-    workload carrying a KEYCLOAK_URL that points at the in-cluster
-    keycloak Service (the chart's own URL helper) needs that port
-    admitted by the keycloak policy. A workload whose KEYCLOAK_URL is
-    the PUBLIC issuer is not one of them — it dials the edge, and the
-    edge's data plane is admitted by its own rule.
+    workload carrying a row that points at the in-cluster keycloak
+    Service (the chart's own URL helper) needs that port admitted by the
+    keycloak policy. A workload whose only keycloak row is the PUBLIC
+    issuer is not one of them — it dials the edge, and the edge's data
+    plane is admitted by its own rule.
     """
     clients: dict[str, int] = {}
     for doc in docs:
@@ -391,13 +402,13 @@ def index_keycloak_clients(docs):
             continue
         for container in (pod.get("spec") or {}).get("containers") or []:
             for entry in container.get("env") or []:
-                if entry.get("name") != "KEYCLOAK_URL":
+                url = entry.get("value")
+                if not isinstance(url, str):
                     continue
-                url = entry.get("value") or ""
-                if ".svc.cluster.local" not in url:
+                match = KEYCLOAK_INTERNAL.search(url)
+                if not match:
                     continue
-                match = re.search(r":(\d+)", url)
-                clients[component] = int(match.group(1)) if match else 80
+                clients[component] = int(match.group(1)) if match.group(1) else 80
     return clients
 
 

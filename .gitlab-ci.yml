@@ -3268,6 +3268,13 @@ chart:lint:
     # numeric and boolean knobs overridden to a number, which is the
     # configuration that used to render `value: 42`.
     - python3 scripts/env-types-check.py charts/genieai-umbrella
+    # Clearing a CLEARABLE block must degrade, never crash: the chart
+    # documents `services.backend.translation: null` as the supported way
+    # to reset that block, and a nil-pointer crash names a template
+    # instead of the values key the operator cleared. Three review
+    # passes found that class (a helm test template, two services'
+    # optional PVC block, the convergence templates).
+    - python3 scripts/clearable-blocks-check.py charts/genieai-umbrella
     # The data tier's instance counts resolve the way the values say: the
     # profile map supplies the count when the operator states none, and
     # an explicit data.<tier>.instances WINS over the profile. The prod

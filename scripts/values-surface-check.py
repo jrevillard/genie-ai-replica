@@ -51,8 +51,23 @@ CHART = Path(__file__).resolve().parent.parent / "charts" / "genieai-umbrella"
 # is a guard, not a knob: the template reads the key only to REJECT it
 # (the fail message names it), so declaring it with a default would
 # advertise a setting the chart refuses to honour.
+#
+# The smtp leaves are the second kind: the BLOCK is declared null because
+# its nullness IS the switch ("no mail server declared" — the render then
+# fails when verifyEmail or resetPasswordAllowed is on). Declaring a leaf
+# would make the block a non-empty map, the guard would see a mail server,
+# and the protection would be lost. The block's shape is documented in the
+# comment above `smtp: null` (from, host, port, ssl, starttls, auth, user)
+# and the operator sets them in the overlay.
 ALLOWLIST = {
     "services.backend.translation.backend",
+    "data.keycloak.smtp.auth",
+    "data.keycloak.smtp.from",
+    "data.keycloak.smtp.host",
+    "data.keycloak.smtp.port",
+    "data.keycloak.smtp.ssl",
+    "data.keycloak.smtp.starttls",
+    "data.keycloak.smtp.user",
 }
 
 
@@ -62,6 +77,19 @@ def strip_go_comments(text):
     return re.sub(r"\{\{-?\s*/\*.*?\*/\s*-?\}\}", "", text, flags=re.S)
 
 
+# A template that NORMALIZES a block (`{{- $keycloak := .Values.data.keycloak
+# | default dict -}}`) reads its leaves through the variable
+# (`$keycloak.enabled`), and those reads are invisible to a scan of the
+# literal `.Values` chains: the coverage this gate claims would shrink
+# with every normalization. The variable's chain is therefore resolved
+# back to the values path — `$keycloak.enabled` is read as
+# `data.keycloak.enabled` — so a typo in a normalized leaf is still an
+# UNDECLARED read.
+NORMALIZE = re.compile(
+    r"\$(\w+)\s*:=\s*(?:deepCopy\s+)?\.Values((?:\.[a-zA-Z][a-zA-Z0-9_]*)*)"
+)
+
+
 def template_reads(templates_dir):
     """Static `.Values...` chains across the templates, comments stripped."""
     reads = {}
@@ -69,9 +97,23 @@ def template_reads(templates_dir):
         if path.suffix not in (".tpl", ".yaml", ".yml"):
             continue
         text = strip_go_comments(path.read_text(encoding="utf-8", errors="replace"))
+        # The normalized variables of THIS file: name -> values chain.
+        normalized = {}
+        for m in NORMALIZE.finditer(text):
+            normalized[m.group(1)] = m.group(2).lstrip(".")
         for lineno, line in enumerate(text.splitlines(), 1):
             for m in re.finditer(r"\.Values((?:\.[a-zA-Z][a-zA-Z0-9_]*)+)", line):
                 chain = m.group(1).lstrip(".")
+                if not chain:
+                    continue
+                reads.setdefault(chain, []).append(f"{path.relative_to(CHART)}:{lineno}")
+            if not normalized:
+                continue
+            for m in re.finditer(r"\$(\w+)((?:\.[a-zA-Z][a-zA-Z0-9_]*)+)", line):
+                base = normalized.get(m.group(1))
+                if base is None:
+                    continue
+                chain = ".".join(part for part in (base, m.group(2).lstrip(".")) if part)
                 if not chain:
                     continue
                 reads.setdefault(chain, []).append(f"{path.relative_to(CHART)}:{lineno}")

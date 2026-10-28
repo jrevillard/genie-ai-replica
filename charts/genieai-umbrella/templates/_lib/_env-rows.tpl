@@ -125,25 +125,34 @@ Usage: {{ include "genieai-umbrella.envRows" ($svc.env | default list) | fromJso
 
 
 {{/*
-genieai-umbrella.convergenceEnvSecretRows — the operator-declared env
-rows of the Keycloak convergence Job, validated.
+genieai-umbrella.validatedConvergenceEnvSecrets — the operator-declared
+rows of the Keycloak convergence Job, VALIDATED, as a JSON list.
 
 Every row is OPERATOR-FACING: each overlay hand-writes five of them
-(data.keycloak.convergence.envSecrets), and a typo'd key — `envvar`
-instead of `envVar` — rendered `name: null` and reached the API server,
+(data.keycloak.convergence.envSecrets), and a typo'd key (`envvar`
+instead of `envVar`) rendered `name: null` and reached the API server,
 which rejects the whole Job at apply time with "spec.template.spec.
 containers[0].env[N].name: Required value": a message naming neither
-the values key nor the row. The chart's own envRows helper rejects a
-row without a name; the same rule applies to the one operator-facing
-row list, and the placeholder-completeness guard does not cover it (it
-only catches a broken row whose variable the realm file references — an
-extra or misspelled row passes every other gate).
+the values key nor the row. A row that is a SCALAR (the classic
+missing-dash YAML mistake) crashed the render with a raw Go-template
+error in whichever template read it first.
 
-Usage: {{ include "genieai-umbrella.convergenceEnvSecretRows" .Values.data.keycloak.convergence.envSecrets | nindent 12 }}
+The validation therefore lives in ONE place, and every consumer of the
+rows goes through it — the emitters, the placeholder-completeness guard
+and the helm test that lists the Secrets the Job reads. A validator
+that only the emitter runs is a validator the other readers bypass.
+
+The envVar is also checked for shape: it is an environment variable
+NAME, and the realm's `$(env:VAR)` substitution and the Kubernetes
+EnvVar both expect one. A numeric name ("90210") passes a non-empty
+check and renders as a YAML integer, which the API server rejects at
+apply time.
+
+Usage:
+  {{- $rows := include "genieai-umbrella.validatedConvergenceEnvSecrets" .Values.data.keycloak.convergence.envSecrets | fromJsonArray }}
 */}}
-{{- define "genieai-umbrella.convergenceEnvSecretRows" -}}
+{{- define "genieai-umbrella.validatedConvergenceEnvSecrets" -}}
 {{- $rows := . | default list -}}
-{{- $out := list -}}
 {{- range $i, $row := $rows -}}
 {{- if not (kindIs "map" $row) -}}
 {{- fail (printf "data.keycloak.convergence.envSecrets[%d] must be a map {envVar, secretName, secretKey}, got %s" $i (kindOf $row)) -}}
@@ -157,7 +166,26 @@ Usage: {{ include "genieai-umbrella.convergenceEnvSecretRows" .Values.data.keycl
 {{- fail (printf "data.keycloak.convergence.envSecrets[%d].%s is empty" $i $key) -}}
 {{- end -}}
 {{- end -}}
-{{- $out = append $out (printf "- name: %s\n  valueFrom:\n    secretKeyRef:\n      name: %s\n      key: %s" (get $row "envVar") (get $row "secretName" | quote) (get $row "secretKey" | quote)) -}}
+{{- if not (regexMatch "^[A-Za-z_][A-Za-z0-9_]*$" (toString (get $row "envVar"))) -}}
+{{- fail (printf "data.keycloak.convergence.envSecrets[%d].envVar (%q) is not an environment variable name: it must start with a letter or an underscore and hold only letters, digits and underscores" $i (toString (get $row "envVar"))) -}}
+{{- end -}}
+{{- end -}}
+{{- toJson $rows -}}
+{{- end -}}
+
+{{/*
+genieai-umbrella.convergenceEnvSecretRows — the same rows, rendered as
+the Job's env entries. The envVar is QUOTED: an unquoted numeric name
+renders as a YAML integer, and the API server rejects the EnvVar name
+at apply time.
+
+Usage: {{ include "genieai-umbrella.convergenceEnvSecretRows" .Values.data.keycloak.convergence.envSecrets | nindent 12 }}
+*/}}
+{{- define "genieai-umbrella.convergenceEnvSecretRows" -}}
+{{- $rows := include "genieai-umbrella.validatedConvergenceEnvSecrets" . | fromJsonArray -}}
+{{- $out := list -}}
+{{- range $row := $rows -}}
+{{- $out = append $out (printf "- name: %s\n  valueFrom:\n    secretKeyRef:\n      name: %s\n      key: %s" (get $row "envVar" | quote) (get $row "secretName" | quote) (get $row "secretKey" | quote)) -}}
 {{- end -}}
 {{- join "\n" $out -}}
 {{- end -}}

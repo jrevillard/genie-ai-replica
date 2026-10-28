@@ -36,8 +36,10 @@ Usage: scripts/env-types-check.py [chart-path]
 """
 
 import os
+import re
 import subprocess
 import sys
+from pathlib import Path
 
 import yaml
 
@@ -148,11 +150,70 @@ def check(docs, label):
     return 0
 
 
+# An env row that bypasses the service factory must quote or stringify
+# its value: the factory's `envRows` normalization is what makes the
+# factory-rendered rows safe, and a template that hand-renders its env
+# block has no such layer. `include` and `printf` return strings; a
+# bare `.Values` expression does not (an operator's "3.1" renders a
+# YAML float).
+SAFE_VALUE = ("quote", "toString", "include", "printf", "boolEnvValue")
+ENV_NAME_LINE = re.compile(r"^\s*-\s*name:\s*[A-Za-z_][A-Za-z0-9_]*\s*$")
+ENV_VALUE_LINE = re.compile(r"^\s*value:\s*\{\{(.*)\}\}\s*$")
+
+
+def scan_hand_rendered_env_rows(chart_path):
+    """The env rows that bypass the factory and are not quoted/stringified.
+
+    The RENDER half of this gate can only see the values it overrides:
+    a template that hand-renders a new env row outside the factory is
+    unprotected until its knob joins TYPE_OVERRIDES. This half closes
+    the class structurally — every such row must quote or stringify.
+    """
+    problems = []
+    templates = Path(chart_path) / "templates"
+    for path in sorted(templates.rglob("*.yaml")):
+        lines = path.read_text().split("\n")
+        for index, line in enumerate(lines):
+            if not ENV_NAME_LINE.match(line):
+                continue
+            # The value may sit a few lines below the name (a comment
+            # explains it): scan forward to the first content line.
+            value_index = index + 1
+            while value_index < len(lines) and (
+                not lines[value_index].strip()
+                or lines[value_index].lstrip().startswith("#")
+            ):
+                value_index += 1
+            if value_index >= len(lines):
+                continue
+            match = ENV_VALUE_LINE.match(lines[value_index])
+            if not match:
+                continue
+            expression = match.group(1)
+            if any(token in expression for token in SAFE_VALUE):
+                continue
+            problems.append(
+                f"{path.relative_to(chart_path)}:{value_index + 1}: the env row "
+                f"{line.strip()} renders an unquoted value ({expression.strip()}) — "
+                "a value that parses as a number or a boolean reaches the API "
+                "server as a non-string"
+            )
+    return problems
+
+
 def main():
     chart_path = sys.argv[1] if len(sys.argv) > 1 else os.environ.get(
         "CHART", "charts/genieai-umbrella"
     )
     failures = 0
+    unquoted = scan_hand_rendered_env_rows(chart_path)
+    if unquoted:
+        print(f"FAIL: {len(unquoted)} hand-rendered env row(s) render an unquoted value:")
+        for problem in unquoted:
+            print(f"  {problem}")
+        failures += 1
+    else:
+        print("PASS: every hand-rendered env row quotes or stringifies its value")
     failures += check(render(chart_path, []), "default values")
     # The full-surface render: the OPEA tier is OFF by default, and the
     # OPEA orchestrators are where most of the numeric knobs live. Without

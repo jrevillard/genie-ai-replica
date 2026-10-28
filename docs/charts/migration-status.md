@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-28)
 
-- **Chart `genieai-umbrella` at 0.2.108**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.109**, branch `feat/k8s-migration` based
   on `main` at `18d02f094` and **12 commits behind `origin/main`**
   (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
   the backend's analytics routes, the OPEA overlay (retriever/dataprep),
@@ -614,6 +614,39 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 35 (0.2.109)** — 5 findings from the eleventh
+  `/code-review`, one in the deploy repo. The theme: pass 34's own
+  context, again.
+  - *The deploy repo has TWO overlays, and only one got the label* —
+    the 0.2.108 bump updated `jrevillard-laptop` but left
+    `overlays/minikube/dev` at 0.2.107, while both track the branch
+    HEAD: the minikube cluster renders 0.2.108 content under a
+    HelmRelease claiming 0.2.107 — the label naming a chart that is not
+    the one in the cluster, the exact state the bump rule exists to
+    prevent. Both overlays move together from now on.
+  - *Redis could be killed mid-load* — no startupProbe: with
+    `--appendonly yes` redis answers PING with `-LOADING` until the
+    dataset is in memory, and on a PVC-backed /data a grown AOF can
+    outrun the liveness budget (~2 min) — the pod restarts into the
+    same load, a crash loop. A startup probe (30 × 10 s) suspends
+    readiness and liveness for a 5-minute load window, the same
+    mechanism clamav's startup probe gives the signature download.
+  - *The README claimed probes live on values.yaml; redis's do not* —
+    its probes are rendered by the hand-written template, and neither
+    the redisCache values block nor the README said so. Both now name
+    the exception (clamav's block carried the caveat already).
+  - *Rendered NetworkPolicy comments hardcoded knob-following ports* —
+    the chatqna/dataprep policy comments named "document-repository
+    (3001), backend BFF (3000)"; under a `services.*.port` override the
+    shipped manifest carried a comment contradicting the rule beneath
+    it. The numbers are gone from the comments (the rules carry the
+    ports; the constants that remain are template-fixed).
+  - *The redis port was spelled out nine times* — the same
+    `$svc.port | default 6379` expression in the --port flag, the
+    containerPort, the Service, the NetworkPolicy and the probes, while
+    clamav.yaml binds its port once. A single `$redisPort` binding now
+    feeds every site — mutation-tested: changing the binding moves all
+    ten rendered occurrences and leaves zero stale 6379.
 - **Review loop, pass 34 (0.2.108)** — 4 findings from the tenth
   `/code-review`. The theme: pass 33's own leftovers.
   - *The redis probes still dialled 6379* — pass 33 moved the
@@ -1591,7 +1624,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.108** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.109** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `18d02f094` (the tip that carries !586, !587,
   !588); the branch has since drifted 12 commits behind `origin/main`

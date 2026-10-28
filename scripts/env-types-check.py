@@ -199,7 +199,13 @@ def scan_hand_rendered_env_rows(chart_path):
     """
     problems = []
     templates = Path(chart_path) / "templates"
-    for path in sorted(templates.rglob("*.yaml")):
+    for path in sorted(templates.rglob("*")):
+        # The library helpers (.tpl) hand-render env rows too — envMapRows,
+        # envRows, convergenceEnvSecretRows — so a row added THERE must be
+        # covered as well: the render half can only see the knobs it
+        # overrides by hand.
+        if path.suffix not in (".yaml", ".yml", ".tpl"):
+            continue
         lines = path.read_text().split("\n")
         for index, line in enumerate(lines):
             if not ENV_NAME_LINE.match(line):

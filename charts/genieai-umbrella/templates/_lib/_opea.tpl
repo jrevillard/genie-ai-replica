@@ -11,8 +11,10 @@ Modes:
     a named error at install time).
   - in-cluster: returns an in-cluster Service URL using a fixed
     service-name:port map (llm→vllm:8000, embedding→tei:80,
-    reranker→tei-reranker:80, translation→vllm-translation:9031,
-    docling→docling:5001).
+    reranker→tei-reranker:80, translation→vllm-translation:9031).
+    There is NO docling entry: the chart renders no docling Deployment
+    in any mode, so the docling endpoint is empty in-cluster too — the
+    documented signal that dataprep uses its in-process converter.
 
 Unknown path key → fail. Unknown mode → fail.
 */}}
@@ -58,6 +60,12 @@ the empty endpoint is the documented "no such remote target" signal
 hand the application a URL whose every request 404s. */ -}}
 {{- $paths := $gpu.paths | default dict -}}
 {{- $p := index $paths $key -}}
+{{- /* The docling path is OPTIONAL: an empty docling endpoint is the
+documented signal that dataprep uses its in-process converter (see
+opea/dataprep.yaml), so a cleared one is not an error. Every other path
+names a model the orchestrator DIALS, and an empty endpoint there is a
+runtime connection failure with no error anywhere. */ -}}
+{{- $optionalKeys := list "docling" -}}
 {{- /* A missing path is a NAMED error, not an empty endpoint: the
 endpoint is nodeHost + path, and an empty path renders an empty URL
 the pod dials — a connection failure at runtime, with the values key
@@ -65,8 +73,8 @@ the operator cleared nowhere in the message. The chart's own defaults
 (llm=/llm, embedding=/embed, reranker=/rerank, translation=/translation,
 docling=/docling) are deleted by a null, so they cannot be the
 fallback. */ -}}
-{{- if not $p -}}
-{{- fail (printf "opea.gpu.paths.%s is required in the external GPU mode — the endpoint is nodeHost + path, and a missing path renders an empty endpoint the pods dial; declare it (the chart's defaults are llm=/llm, embedding=/embed, reranker=/rerank, translation=/translation, docling=/docling)" $key) -}}
+{{- if and (not $p) (not (has $key $optionalKeys)) -}}
+{{- fail (printf "opea.gpu.paths.%s is required in the external GPU mode — the endpoint is nodeHost + path, and a missing path renders an empty endpoint the pods dial; declare it (the chart's defaults are llm=/llm, embedding=/embed, reranker=/rerank, translation=/translation)" $key) -}}
 {{- end -}}
 {{- trimSuffix "/" $host }}{{ $p }}
   {{- end -}}

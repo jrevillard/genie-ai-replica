@@ -145,7 +145,11 @@ spec:
       # what the admin secret reconciler writes into
       # genieai-grafana-admin-credentials on every reconcile — it wins
       # over whatever user an operator-provided Secret carried.
-      admin_user: {{ .Values.observability.grafana.adminUser | default "admin" }}
+      # Quoted: spec.config is a map[string]string — an unquoted YAML
+      # boolean (an operator writing `adminUser: true`) is rejected by
+      # the API server and takes the whole Grafana CR — datasources,
+      # folders, dashboards, alert rules — with it.
+      admin_user: {{ .Values.observability.grafana.adminUser | default "admin" | quote }}
 ---
 {{- if .Values.observability.logs.enabled }}
 ---

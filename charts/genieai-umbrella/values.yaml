@@ -232,7 +232,14 @@ data:
     enabled: true
     # CNPG Cluster resources for the keycloak-db (the only Postgres; the edge
     # tier is Envoy Gateway, not Kong).
-    instances: 1                       # 3 on prod via clusterProfile (staging keeps 1). ArangoDB does NOT follow: data.arangodb.mode is the only source of truth for its topology, on every profile
+    #
+    # `instances: null` = inherit the cluster profile's count
+    # (clusterProfileInstances: prod 3, every other profile 1). Set a
+    # number to PIN the count in every profile — an explicit value wins
+    # over the profile, because it is the count the operator sized the
+    # database for. ArangoDB does NOT follow: data.arangodb.mode is the
+    # only source of truth for its topology, on every profile.
+    instances: null
     storageSize: 10Gi
   arangodb:
     enabled: true
@@ -255,7 +262,7 @@ data:
     # Gates the Keycloak CR. The operator itself is a cluster
     # bootstrap prerequisite — NOT a chart dependency.
     enabled: true
-    instances: 1                      # 2 on prod via clusterProfile
+    instances: null                   # null = inherit clusterProfileInstances (prod 2, else 1); a number pins the count in every profile
     # Operator contact email for the genie-admin realm user — deployment
     # data, supplied per environment. No chart default: the render fails
     # loudly when it is missing.
@@ -1106,8 +1113,8 @@ opea:
     # Shared model-weights cache mounted by all four model Deployments.
     # HF weights are 4-16 GB per model; without a persistent cache every
     # pod restart re-downloads them. ReadWriteOnce — assumes all model
-    # pods on the single gpu=true node; multi-GPU clusters need RWX or
-    # per-model claims.
+    # pods on the single GPU node (the one opea.models.nodeSelector
+    # selects); multi-GPU clusters need RWX or per-model claims.
     cache:
       enabled: true
       storageClassName: ""
@@ -1117,6 +1124,18 @@ opea:
     # requests/limits (the pods share one GPU via utilization args; see
     # the model-deployment template note).
     resources: {}
+    # Node selector for the four in-cluster model Deployments. EMPTY =
+    # the chart's default (a node labelled `gpu=true`, the documented
+    # single-GPU-node topology). Declare the map to use your cluster's
+    # own labels — NVIDIA GPU Feature Discovery ships
+    # `nvidia.com/gpu.present=true`; otherwise the four model pods stay
+    # Pending with "node(s) didn't match Pod's node affinity/selector"
+    # and nothing in the chart, the render gates or the CRD gate
+    # reports it. The map is declared EMPTY on purpose: Helm MERGES
+    # values maps, so a chart default of `{gpu: "true"}` would survive
+    # your overlay next to your own label and make the pods need a node
+    # carrying both. Declaring it here replaces the default outright.
+    nodeSelector: {}
 
 # clusterProfile-driven replica overrides. prod runs multiple replicas per
 # stateless service for zero-downtime rolling updates; staging runs a
@@ -1131,3 +1150,21 @@ clusterProfileReplicas:
     backend: 2
     frontend: 2
     documentRepository: 1
+
+# clusterProfile-driven instance counts for the DATA tier — the Keycloak
+# CR's `spec.instances` and the CNPG Cluster's `spec.instances`. prod
+# runs a Keycloak pair against a three-instance Postgres; every other
+# profile keeps a single instance of each.
+#
+# The order is the opposite of `clusterProfileReplicas`: there the
+# profile map WINS over `services.<svc>.replicas` (documented as a
+# baseline). Here `data.<tier>.instances` is the count the operator
+# sized the database for, so an explicit value WINS over the profile.
+# The chart declares `instances: null` so "unset" stays distinguishable
+# from "the operator pinned 1" — a chart default of 1 could not carry
+# that distinction.
+clusterProfileInstances:
+  prod:
+    keycloak: 2
+    postgres: 3
+

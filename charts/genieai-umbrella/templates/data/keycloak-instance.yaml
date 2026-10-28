@@ -1,8 +1,5 @@
 {{- if .Values.data.keycloak.enabled -}}
-{{- $instances := .Values.data.keycloak.instances | default 1 -}}
-{{- if eq .Values.clusterProfile "prod" -}}
-{{- $instances = 2 -}}
-{{- end -}}
+{{- $instances := include "genieai-umbrella.resolveInstances" (dict "Values" .Values "tier" "keycloak") | int -}}
 {{- $ns := .Values.namespace -}}
 {{- $dbHost := printf "%s-rw.%s.svc.cluster.local" (.Values.data.keycloak.cnpgServiceName | default "keycloak-db") $ns -}}
 apiVersion: k8s.keycloak.org/v2beta1

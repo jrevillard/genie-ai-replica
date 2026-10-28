@@ -107,8 +107,8 @@ explicit `false` back to `true`. */ -}}
 {{- end -}}
 {{- $urls := list
     (dict "name" "KEYCLOAK_URL" "value" (include "genieai-umbrella.keycloakInternalURL" .))
-    (dict "name" "KEYCLOAK_REALM" "value" (.Values.data.keycloak.realm | default "genie"))
-    (dict "name" "KEYCLOAK_CLIENT_ID" "value" (.Values.data.keycloak.webClientId | default "genie-app"))
+    (dict "name" "KEYCLOAK_REALM" "value" (.Values.data.keycloak.realm | default "genie" | toString))
+    (dict "name" "KEYCLOAK_CLIENT_ID" "value" (.Values.data.keycloak.webClientId | default "genie-app" | toString))
     (dict "name" "ARANGO_URL" "value" (include "genieai-umbrella.arangoURL" .))
     (dict "name" "ARANGO_DB" "value" (.Values.data.arangodb.database | default "_system" | toString))
     (dict "name" "ARANGO_USER" "value" "root")
@@ -131,13 +131,9 @@ shipping CORS/CSP origins built from an empty host. */ -}}
 {{- $publicHost := include "genieai-umbrella.ingressHost" . -}}
 {{- $publicScheme := .Values.ingress.scheme | default "https" -}}
 {{- $publicOrigin := printf "%s://%s" $publicScheme $publicHost -}}
-{{- /* The WebSocket source follows the PUBLIC scheme: a browser on an
-https origin opens wss://, and a `ws://` entry names a source it
-cannot use (the CSP would block the connection). */ -}}
-{{- $wsScheme := ternary "wss" "ws" (eq $publicScheme "https") -}}
 {{- $urls = concat $urls (list
     (dict "name" "CORS_ALLOWED_ORIGINS" "value" $publicOrigin)
-    (dict "name" "CSP_CONNECT_SRC" "value" (printf "'self' %s %s://%s" $publicOrigin $wsScheme $publicHost))
+    (dict "name" "CSP_CONNECT_SRC" "value" (include "genieai-umbrella.cspConnectSrc" .))
 ) -}}
 {{- /* GPU_NODE_HOST is the signal the application uses to tell a named GPU
 API from its in-cluster worker, and it reaches the backend only when the

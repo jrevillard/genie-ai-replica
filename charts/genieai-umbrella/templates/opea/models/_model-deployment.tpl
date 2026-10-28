@@ -40,6 +40,23 @@ applied to all four model pods, not a per-model knob (llm gets a full
 GPU, the TEI sidecars need far less; a uniform exclusive grant
 over-provisions three of the four). */ -}}
 {{- $res := $root.Values.opea.models.resources | default dict -}}
+{{- /* The GPU node label is an operator knob: the chart's default
+matches its documented single-GPU-node topology (a node labelled
+`gpu=true`), but a cluster that labels its GPU nodes differently —
+NVIDIA GPU Feature Discovery ships `nvidia.com/gpu.present=true` —
+would leave the four model pods Pending with "node(s) didn't match
+Pod's node affinity/selector", and no gate in this repository can see
+a scheduling decision.
+
+The default lives HERE, not in values.yaml: a values map is MERGED by
+Helm, so a chart default of `{gpu: "true"}` would survive an overlay
+that declares `{nvidia.com/gpu.present: "true"}` — the pods would then
+need a node carrying BOTH labels, and stay Pending. values.yaml
+therefore declares the map EMPTY, which an overlay replaces outright. */ -}}
+{{- $nodeSelector := $root.Values.opea.models.nodeSelector | default dict -}}
+{{- if eq (len $nodeSelector) 0 -}}
+{{- $nodeSelector = dict "gpu" "true" -}}
+{{- end -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -60,8 +77,17 @@ spec:
       labels:
         app: {{ .name }}
     spec:
+      {{- /* The GPU node label is an operator knob: the chart's default
+      matches its documented single-GPU-node topology (`gpu=true`), but a
+      cluster that labels its GPU nodes differently — NVIDIA GPU Feature
+      Discovery ships `nvidia.com/gpu.present=true` — would leave the
+      four model pods Pending with "node(s) didn't match Pod's node
+      affinity/selector", and no gate in this repository can see a
+      scheduling decision. Empty = no node constraint. */}}
+      {{- with $nodeSelector }}
       nodeSelector:
-        gpu: "true"
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       securityContext:
         seccompProfile:
           type: RuntimeDefault

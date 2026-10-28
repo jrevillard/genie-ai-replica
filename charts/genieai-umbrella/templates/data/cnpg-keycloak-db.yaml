@@ -11,10 +11,7 @@
 {{- fail "data.keycloak.enabled=true requires data.postgres.enabled=true — this chart renders exactly one CNPG Cluster (the Keycloak database, named data.keycloak.cnpgServiceName); without it the Keycloak CR has no database to connect to" -}}
 {{- end -}}
 {{- if .Values.data.postgres.enabled -}}
-{{- $instances := .Values.data.postgres.instances | default 1 -}}
-{{- if eq .Values.clusterProfile "prod" -}}
-{{- $instances = 3 -}}
-{{- end -}}
+{{- $instances := include "genieai-umbrella.resolveInstances" (dict "Values" .Values "tier" "postgres") | int -}}
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:

@@ -15,7 +15,8 @@ Usage:
   {{- $replicas := include "genieai-umbrella.resolveReplicas" (dict "Values" .Values "service" "backend") | int }}
 */}}
 {{- define "genieai-umbrella.resolveReplicas" -}}
-{{- $svc := index .Values.services .service -}}
+{{- $services := .Values.services | default dict -}}
+{{- $svc := index $services .service | default dict -}}
 {{- $replicas := 1 -}}
 {{- if not (kindIs "invalid" $svc.replicas) -}}
 {{- $replicas = int $svc.replicas -}}
@@ -55,7 +56,8 @@ Usage:
 */}}
 {{- define "genieai-umbrella.resolveInstances" -}}
 {{- $tier := .tier -}}
-{{- $explicit := index .Values.data $tier "instances" -}}
+{{- $data := .Values.data | default dict -}}
+{{- $explicit := index $data $tier "instances" -}}
 {{- $instances := 1 -}}
 {{- /* An explicit 0 is rejected by the schema (minimum: 1): a data
 tier with no instance cannot serve, and "scale to zero" is not a thing

@@ -3,7 +3,12 @@
   tier its panels query is enabled in this environment. A dashboard whose
   datasource is absent is permanently blank and its panels read
   "Datasource not found" — silently, with the pipeline green.
-*/}}
+*/}}{{- $obs := .Values.observability | default dict -}}
+{{- $obsGrafana := $obs.grafana | default dict -}}
+{{- $obsMetrics := $obs.metrics | default dict -}}
+{{- $obsTraces := $obs.traces | default dict -}}
+{{- $obsLogs := $obs.logs | default dict -}}
+
 {{- define "genieai-umbrella.dashboardTierEnabled" -}}
 {{- $e := .entry -}}
 {{- $t := .tier -}}
@@ -50,7 +55,7 @@
 {{- end }}
 {{- end }}
 
-{{- if .Values.observability.grafana.enabled }}
+{{- if $obsGrafana.enabled }}
 {{- /*
   GrafanaFolders + GrafanaDashboard + GrafanaAlertRuleGroup CRs.
   GrafanaFolders group dashboards into a UI tree: General for the
@@ -79,7 +84,7 @@
        environment renders permanently blank and its alert rules can never
        fire — the worst kind of green. Each entry names the storage tiers
        it needs. */ -}}
-{{- $tierOn := dict "metrics" .Values.observability.metrics.enabled "traces" .Values.observability.traces.enabled "logs" .Values.observability.logs.enabled -}}
+{{- $tierOn := dict "metrics" $obsMetrics.enabled "traces" $obsTraces.enabled "logs" $obsLogs.enabled -}}
 {{- /* The tier columns are what the dashboard's PANELS query (walked
 from the JSON "datasource" fields), not what the dashboard is ABOUT:
 service-logs is LogsQL only, the trace waterfall and the single-node
@@ -199,7 +204,7 @@ spec:
        group on the tier it is ABOUT suppresses the collector-down alert
        in exactly the metrics-only deployment that still runs a
        collector. */}}
-{{- $onMetrics := $.Values.observability.metrics.enabled }}
+{{- $onMetrics := $obsMetrics.enabled }}
 {{- if $onMetrics }}
 ---
 apiVersion: grafana.integreatly.org/v1beta1

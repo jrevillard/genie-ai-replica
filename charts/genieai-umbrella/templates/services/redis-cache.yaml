@@ -1,5 +1,13 @@
-{{- if .Values.services.redisCache.enabled -}}
-{{- $svc := .Values.services.redisCache -}}
+{{- /* Copied and defaulted before it is read — see services/clamav.yaml
+for the rationale (a cleared image block must degrade to the chart's
+default, not crash the template engine). */ -}}{{- $services := .Values.services | default dict -}}
+{{- $obs := .Values.observability | default dict -}}
+{{- $obsMetrics := $obs.metrics | default dict -}}
+
+{{- $svc := deepCopy ($services.redisCache | default dict) -}}
+{{- $_ := set $svc "image" ($svc.image | default dict) -}}
+{{- $pluggable := .Values.pluggable | default dict -}}
+{{- if $svc.enabled -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -122,7 +130,7 @@ spec:
   resources:
     requests:
       storage: {{ $svc.pvc.storageSize | default "5Gi" }}
-  {{- with .Values.pluggable.storageClassName }}
+  {{- with $pluggable.storageClassName }}
   storageClassName: {{ . }}
   {{- end }}
 {{- end }}
@@ -172,7 +180,7 @@ spec:
       ports:
         - protocol: TCP
           port: {{ $svc.port | default 6379 }}
-  {{- if .Values.observability.metrics.enabled }}
+  {{- if $obsMetrics.enabled }}
   # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
   # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
   # serviceScrapeSelector — see templates/observability/vmsingle.yaml)

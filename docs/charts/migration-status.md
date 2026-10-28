@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-28)
 
-- **Chart `genieai-umbrella` at 0.2.93**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.94**, branch `feat/k8s-migration` based
   on `main` at `179a8a8f1` and **8 commits behind `origin/main`**
   (`5786919c1`). The gap touches the frontend, the OPEA overlay
   (retriever/dataprep), the site docs and the config-validator tests —
@@ -609,6 +609,56 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 22 (0.2.94)** — 3 findings, all verified true, all
+  fixed. The first one turned this loop's own gate inside out.
+  - *The clearable-blocks gate could not see a block it did not know* —
+    the sweep matched blocks by NAME (a hand-written list of 42), so
+    every optional block outside that list was never swept and still
+    crashed the render with a nil pointer naming only the template:
+    `data.keycloak.bootstrapAdmin` (values.yaml itself documents it as
+    ignorable), `services.clamav.cache` (the same shape as the
+    redis/doc-repo `pvc` blocks pass 21 fixed) and `ingress.cors`. The
+    gate is now STRUCTURAL — every dict-valued node of values.yaml,
+    swept on BOTH render surfaces (the baseline and the full tier, so
+    the OPEA and observability templates are actually exercised) — and
+    the structural sweep found FORTY-FIVE blocks whose clearing crashed
+    the template engine, not three: the identity CR's six sub-blocks,
+    the edge tier's `tls`/`cors` blocks, the four observability signal
+    blocks, the six OPEA service blocks, the five service entries, the
+    pluggable storage class, the convergence block, and the tier roots.
+    Every one of them now degrades to the chart's documented default,
+    or fails with a message naming the values key. Only `global` is
+    exempt (it holds the chart's own cluster-wide defaults: clearing it
+    DELETES them, which is a destructive edit, not a configuration —
+    `global: {}` is the documented way to drop an override).
+  - *A cleared block now degrades, and the rule is written down* —
+    Helm's `null` DELETES a key, so `services.backend: null` removes
+    the switch too: the service stops rendering, which is the same
+    meaning as `enabled: false`. That semantic is documented in
+    values.yaml, and every block is read through a normalized binding
+    (`$x := .Values.<block> | default dict`, parent first) so a cleared
+    block can never crash the engine. The renders are byte-identical
+    before and after the refactor (baseline and full surface).
+  - *The values-surface resolution followed ONE hop* — a variable bound
+    from ANOTHER variable (`$convergence := $keycloak.convergence`) was
+    invisible to the scan, and the chart's most operator-facing block
+    (`data.keycloak.convergence` — every overlay hand-writes five
+    `envSecrets` rows under it) is read exclusively through such
+    chains: a typo'd leaf there passed lint, every render and the
+    schema gate, and reached the cluster as a silently-empty value. The
+    resolution is now transitive and order-sensitive (the nearest
+    preceding binding of a name wins, as in Go templates). The refactor
+    it enabled initially DROPPED the coverage from 272 resolved reads to
+    90 — the resolver could not follow the new normalized bindings —
+    which is the failure mode the gate exists to catch, in the gate
+    itself; it resolves 306 reads now, with none of the previous set
+    lost.
+  - *The env-types static scan could not see a value with a trailing
+    comment or a wrapped expression* — the scanner matched a
+    `value: {{ ... }}` that ENDED the line, so a row documented with a
+    trailing comment (the natural way to document a knob) escaped the
+    static half entirely. The scanner now balances the braces of the
+    action, so it sees the whole expression whatever its shape.
 - **Review loop, pass 21 (0.2.93)** — 4 findings, all verified true, all
   fixed, plus the gates the pass's own notes asked for.
   - *A non-numeric replica count rendered `replicas: 0`* — the resolver
@@ -981,7 +1031,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.93** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.94** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `179a8a8f1` (the tip that carries !586, !587,
   !588) — the branch is 0 commits behind `main`.

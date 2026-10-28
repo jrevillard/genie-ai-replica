@@ -1,4 +1,6 @@
-{{- if .Values.observability.traces.enabled }}
+{{- $obs := .Values.observability | default dict -}}
+{{- $obsTraces := $obs.traces | default dict -}}
+{{- if $obsTraces.enabled }}
 {{- /*
   VTSingle CR — single-node VictoriaTraces.
   apiVersion: vmoperator v0.75.0 places VTSingle under
@@ -22,11 +24,11 @@ metadata:
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
 spec:
-  retentionPeriod: {{ .Values.observability.traces.retentionPeriod | quote }}
+  retentionPeriod: {{ $obsTraces.retentionPeriod | quote }}
   removePvcAfterDelete: false
   storage:
     resources:
       requests:
-        storage: {{ .Values.observability.traces.storageSize | quote }}
+        storage: {{ $obsTraces.storageSize | quote }}
   replicaCount: 1
 {{- end }}

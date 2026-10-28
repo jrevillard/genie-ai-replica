@@ -1,4 +1,16 @@
-{{- if .Values.services.backend.enabled -}}
+{{- $services := .Values.services | default dict -}}
+{{- $opea := .Values.opea | default dict -}}
+{{- $data := .Values.data | default dict -}}
+{{- $dataKeycloak := $data.keycloak | default dict -}}
+{{- $dataArangodb := $data.arangodb | default dict -}}
+{{- $servicesRedisCache := $services.redisCache | default dict -}}
+{{- $obs := .Values.observability | default dict -}}
+{{- $obsLogs := $obs.logs | default dict -}}
+{{- $obsMetrics := $obs.metrics | default dict -}}
+{{- $opeaGpu := $opea.gpu | default dict -}}
+{{- $svcBackend := $services.backend | default dict -}}
+{{- $ingress := .Values.ingress | default dict -}}
+{{- if $svcBackend.enabled -}}
 {{- $ns := .Values.namespace -}}
 {{- $backendVals := deepCopy .Values -}}
 {{- /* Remote translation API (OpenAI-compatible vLLM). An explicit
@@ -24,9 +36,9 @@ the first user request. */ -}}
        (`services.backend.translation: null`) gets the derived behavior,
        not a nil-pointer crash — the same degrade-gracefully contract
        every other cleared block in the chart follows. */ -}}
-{{- $translation := .Values.services.backend.translation | default dict -}}
+{{- $translation := $svcBackend.translation | default dict -}}
 {{- $translationEndpoint := $translation.endpoint | default "" -}}
-{{- if and (not $translationEndpoint) .Values.opea.enabled -}}
+{{- if and (not $translationEndpoint) $opea.enabled -}}
 {{- $translationEndpoint = include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "translation") -}}
 {{- end -}}
 {{- $translationSecrets := list -}}
@@ -80,8 +92,8 @@ removed. */ -}}
 {{- /* OPEA chat pipeline (chatqna). When the OPEA tier is enabled the
 host defaults to the in-cluster chatqna Service; the code default names
 a compose-only service that does not resolve here. */ -}}
-{{- $opeaHost := .Values.services.backend.opeaHost -}}
-{{- if and (not $opeaHost) .Values.opea.enabled -}}
+{{- $opeaHost := $svcBackend.opeaHost -}}
+{{- if and (not $opeaHost) $opea.enabled -}}
 {{- $opeaHost = printf "chatqna.%s.svc.cluster.local" .Values.namespace -}}
 {{- end -}}
 {{- if $opeaHost }}
@@ -107,16 +119,16 @@ explicit `false` back to `true`. */ -}}
 {{- end -}}
 {{- $urls := list
     (dict "name" "KEYCLOAK_URL" "value" (include "genieai-umbrella.keycloakInternalURL" .))
-    (dict "name" "KEYCLOAK_REALM" "value" (.Values.data.keycloak.realm | default "genie" | toString))
-    (dict "name" "KEYCLOAK_CLIENT_ID" "value" (.Values.data.keycloak.webClientId | default "genie-app" | toString))
+    (dict "name" "KEYCLOAK_REALM" "value" ($dataKeycloak.realm | default "genie" | toString))
+    (dict "name" "KEYCLOAK_CLIENT_ID" "value" ($dataKeycloak.webClientId | default "genie-app" | toString))
     (dict "name" "ARANGO_URL" "value" (include "genieai-umbrella.arangoURL" .))
-    (dict "name" "ARANGO_DB" "value" (.Values.data.arangodb.database | default "_system" | toString))
+    (dict "name" "ARANGO_DB" "value" ($dataArangodb.database | default "_system" | toString))
     (dict "name" "ARANGO_USER" "value" "root")
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
     (dict "name" "ENABLE_OBSERVABILITY" "value" (include "genieai-umbrella.observabilityEnabledFlag" .))
     (dict "name" "TRANSLATION_CACHE" "value" "on")
     (dict "name" "TRANSLATION_CACHE_HOST" "value" (printf "redis-cache.%s.svc.cluster.local" $ns))
-    (dict "name" "TRANSLATION_CACHE_PORT" "value" (.Values.services.redisCache.port | default 6379 | toString))
+    (dict "name" "TRANSLATION_CACHE_PORT" "value" ($servicesRedisCache.port | default 6379 | toString))
     (dict "name" "STREAMING_TRANSLATION_ENABLED" "value" (ternary "1" "0" $streamingTranslation))
 -}}
 {{- /* The public origin: the browser's origin is the deployment's ingress,
@@ -129,7 +141,7 @@ over both — the rows below come first, the operator's last. */ -}}
 transitive guard carrier) disabled must fail HERE too instead of
 shipping CORS/CSP origins built from an empty host. */ -}}
 {{- $publicHost := include "genieai-umbrella.ingressHost" . -}}
-{{- $publicScheme := .Values.ingress.scheme | default "https" -}}
+{{- $publicScheme := $ingress.scheme | default "https" -}}
 {{- $publicOrigin := printf "%s://%s" $publicScheme $publicHost -}}
 {{- $urls = concat $urls (list
     (dict "name" "CORS_ALLOWED_ORIGINS" "value" $publicOrigin)
@@ -139,7 +151,7 @@ shipping CORS/CSP origins built from an empty host. */ -}}
 API from its in-cluster worker, and it reaches the backend only when the
 OPEA tier is on: with no GPU API named there is no GPU host to name, and
 the backend's translation endpoint is what declares one. */ -}}
-{{- if .Values.opea.enabled -}}
+{{- if $opea.enabled -}}
 {{- $urls = concat $urls (list
     (dict "name" "GPU_NODE_HOST" "value" (include "genieai-umbrella.opeaGpuHostname" .))
 ) -}}
@@ -148,7 +160,7 @@ the backend's translation endpoint is what declares one. */ -}}
       Service (<cr-name> pattern). Rendered only when the log tier is
       on; without it the backend treats VL as absent and every
       /api/admin/logs read 503s with the typed vl_unreachable error. */ -}}
-{{- if .Values.observability.logs.enabled -}}
+{{- if $obsLogs.enabled -}}
 {{- $urls = concat $urls (list (dict "name" "VICTORIALOGS_URL" "value" (printf "http://vlsingle-victorialogs.%s.svc.cluster.local:9428" $ns))) -}}
 {{- end }}
 {{- $urls = concat $urls $translationEnv -}}
@@ -204,7 +216,7 @@ spec:
     # same-namespace consumers on the app port — the frontend BFF-dials
     # the backend directly for SPA-initiated calls, and chatqna fetches
     # user context from /api/me/context.
-    {{- if .Values.ingress.enabled }}
+    {{- if $ingress.enabled }}
     - from:
         {{- include "genieai-umbrella.ingressDataPlanePeer" . | nindent 8 }}
       ports:
@@ -238,7 +250,7 @@ spec:
       ports:
         - protocol: TCP
           port: 3000
-  {{- if .Values.observability.metrics.enabled }}
+  {{- if $obsMetrics.enabled }}
   # vm-operator scrape peer — the same peer every sibling policy
   # carries. PRE-WIRED, INERT TODAY: the VMServiceScrape CRs match
   # nothing on purpose (see vmsingle.yaml) and no workload serves
@@ -283,12 +295,12 @@ spec:
         - protocol: TCP
           port: 8080
         - protocol: TCP
-          port: {{ .Values.services.redisCache.port | default 6379 }}
+          port: {{ $servicesRedisCache.port | default 6379 }}
         # OTLP exporter: required for the observability pipeline. Without
         # this port the default-deny policy drops all traces at the source.
         - protocol: TCP
           port: {{ include "genieai-umbrella.otlpPort" . }}
-    {{- if .Values.observability.logs.enabled }}
+    {{- if $obsLogs.enabled }}
     # VictoriaLogs read path for the admin logs UI (VICTORIALOGS_URL).
     # Own rule, not a port in the shared any-destination list: the
     # VLSingle pod carries vmoperator-stamped labels, so the peer is
@@ -311,7 +323,7 @@ spec:
       ports:
         - protocol: TCP
           port: 3001
-    {{- if .Values.opea.enabled }}
+    {{- if $opea.enabled }}
     # Chat stream: the backend dials the chatqna orchestrator directly
     # (OPEA_HOST:8888) when the OPEA tier is enabled. query-service.js
     # builds the URL internally; this egress rule is the only
@@ -342,7 +354,7 @@ spec:
         - protocol: TCP
           port: 8888
     {{- end }}
-    {{- if and .Values.opea.enabled (eq .Values.opea.gpu.mode "in-cluster") }}
+    {{- if and $opea.enabled (eq $opeaGpu.mode "in-cluster") }}
     # In-cluster translation model (VLLM_TRANSLATION_ENDPOINT default).
     - to:
         - podSelector:

@@ -16,8 +16,12 @@
   scoped: an IPv4 literal in nodeHost becomes a /32, a DNS name takes
   opea.gpu.allowedCIDRs, and the port comes from the URL rather than
   being one of a hardcoded pair.
-*/}}
-{{- if .Values.opea.enabled -}}
+*/}}{{- $opea := .Values.opea | default dict -}}
+{{- $obs := .Values.observability | default dict -}}
+{{- $obsMetrics := $obs.metrics | default dict -}}
+{{- $opeaGpu := $opea.gpu | default dict -}}
+
+{{- if $opea.enabled -}}
 ---
 # chatqna (port 8888). Ingress: backend BFF. Egress: in-cluster
 # orchestrator peers (embedding 6000, retriever 7000, reranker 8000,
@@ -45,7 +49,7 @@ spec:
       ports:
         - protocol: TCP
           port: 8888
-  {{- if .Values.observability.metrics.enabled }}
+  {{- if $obsMetrics.enabled }}
   # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
   # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
   # serviceScrapeSelector — see templates/observability/vmsingle.yaml)
@@ -137,10 +141,10 @@ spec:
       ports:
         - protocol: TCP
           port: {{ include "genieai-umbrella.otlpPort" . }}
-    {{- if and (eq .Values.opea.gpu.mode "external") .Values.opea.gpu.nodeHost }}
+    {{- if and (eq $opeaGpu.mode "external") $opeaGpu.nodeHost }}
 {{- include "genieai-umbrella.opeaGpuEgressRule" . | nindent 4 }}
     {{- end }}
-    {{- if eq .Values.opea.gpu.mode "in-cluster" }}
+    {{- if eq $opeaGpu.mode "in-cluster" }}
     # In-cluster GPU models (VLLM_LLM_ENDPOINT, VLLM_TRANSLATION_ENDPOINT).
     # The model Deployments carry `app: <name>` pod labels, not the
     # genieai.io/component convention.
@@ -185,7 +189,7 @@ spec:
       ports:
         - protocol: TCP
           port: 7000
-  {{- if .Values.observability.metrics.enabled }}
+  {{- if $obsMetrics.enabled }}
   # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
   # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
   # serviceScrapeSelector — see templates/observability/vmsingle.yaml)
@@ -229,10 +233,10 @@ spec:
       ports:
         - protocol: TCP
           port: {{ include "genieai-umbrella.otlpPort" . }}
-    {{- if and (eq .Values.opea.gpu.mode "external") .Values.opea.gpu.nodeHost }}
+    {{- if and (eq $opeaGpu.mode "external") $opeaGpu.nodeHost }}
 {{- include "genieai-umbrella.opeaGpuEgressRule" . | nindent 4 }}
     {{- end }}
-    {{- if eq .Values.opea.gpu.mode "in-cluster" }}
+    {{- if eq $opeaGpu.mode "in-cluster" }}
     # In-cluster GPU models (VLLM_ENDPOINT, TEI_EMBEDDING_ENDPOINT).
     - to:
         - podSelector:
@@ -275,7 +279,7 @@ spec:
       ports:
         - protocol: TCP
           port: 5000
-  {{- if .Values.observability.metrics.enabled }}
+  {{- if $obsMetrics.enabled }}
   # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
   # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
   # serviceScrapeSelector — see templates/observability/vmsingle.yaml)
@@ -339,10 +343,10 @@ spec:
       ports:
         - protocol: TCP
           port: {{ include "genieai-umbrella.otlpPort" . }}
-    {{- if and (eq .Values.opea.gpu.mode "external") .Values.opea.gpu.nodeHost }}
+    {{- if and (eq $opeaGpu.mode "external") $opeaGpu.nodeHost }}
 {{- include "genieai-umbrella.opeaGpuEgressRule" . | nindent 4 }}
     {{- end }}
-    {{- if eq .Values.opea.gpu.mode "in-cluster" }}
+    {{- if eq $opeaGpu.mode "in-cluster" }}
     # In-cluster GPU models (VLLM_ENDPOINT, TEI_EMBEDDING_ENDPOINT).
     # DOCLING_ENDPOINT has no in-cluster Deployment to target — the
     # chart renders no docling model service.
@@ -392,7 +396,7 @@ spec:
       ports:
         - protocol: TCP
           port: 6000
-  {{- if .Values.observability.metrics.enabled }}
+  {{- if $obsMetrics.enabled }}
   # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
   # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
   # serviceScrapeSelector — see templates/observability/vmsingle.yaml)
@@ -426,10 +430,10 @@ spec:
       ports:
         - protocol: TCP
           port: {{ include "genieai-umbrella.otlpPort" . }}
-    {{- if and (eq .Values.opea.gpu.mode "external") .Values.opea.gpu.nodeHost }}
+    {{- if and (eq $opeaGpu.mode "external") $opeaGpu.nodeHost }}
 {{- include "genieai-umbrella.opeaGpuEgressRule" . | nindent 4 }}
     {{- end }}
-    {{- if eq .Values.opea.gpu.mode "in-cluster" }}
+    {{- if eq $opeaGpu.mode "in-cluster" }}
     # In-cluster GPU model (TEI_EMBEDDING_ENDPOINT).
     - to:
         - podSelector:
@@ -464,7 +468,7 @@ spec:
       ports:
         - protocol: TCP
           port: 8000
-  {{- if .Values.observability.metrics.enabled }}
+  {{- if $obsMetrics.enabled }}
   # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
   # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
   # serviceScrapeSelector — see templates/observability/vmsingle.yaml)
@@ -498,10 +502,10 @@ spec:
       ports:
         - protocol: TCP
           port: {{ include "genieai-umbrella.otlpPort" . }}
-    {{- if and (eq .Values.opea.gpu.mode "external") .Values.opea.gpu.nodeHost }}
+    {{- if and (eq $opeaGpu.mode "external") $opeaGpu.nodeHost }}
 {{- include "genieai-umbrella.opeaGpuEgressRule" . | nindent 4 }}
     {{- end }}
-    {{- if eq .Values.opea.gpu.mode "in-cluster" }}
+    {{- if eq $opeaGpu.mode "in-cluster" }}
     # In-cluster GPU model (TEI_RERANKING_ENDPOINT).
     - to:
         - podSelector:
@@ -548,7 +552,7 @@ spec:
         # Post-DNAT pod port; the Service maps 9031 to 8888.
         - protocol: TCP
           port: 8888
-  {{- if .Values.observability.metrics.enabled }}
+  {{- if $obsMetrics.enabled }}
   # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
   # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
   # serviceScrapeSelector — see templates/observability/vmsingle.yaml)
@@ -582,10 +586,10 @@ spec:
       ports:
         - protocol: TCP
           port: {{ include "genieai-umbrella.otlpPort" . }}
-    {{- if and (eq .Values.opea.gpu.mode "external") .Values.opea.gpu.nodeHost }}
+    {{- if and (eq $opeaGpu.mode "external") $opeaGpu.nodeHost }}
 {{- include "genieai-umbrella.opeaGpuEgressRule" . | nindent 4 }}
     {{- end }}
-    {{- if eq .Values.opea.gpu.mode "in-cluster" }}
+    {{- if eq $opeaGpu.mode "in-cluster" }}
     # In-cluster GPU model (LLM_ENDPOINT).
     - to:
         - podSelector:
@@ -600,7 +604,7 @@ spec:
 inference endpoints are reachable from every pod that can route to the
 namespace — free GPU spend for anything compromised in-cluster. Egress
 stays open: model pods pull weights from HF and answer DNS. */ -}}
-{{- if eq .Values.opea.gpu.mode "in-cluster" }}
+{{- if eq $opeaGpu.mode "in-cluster" }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

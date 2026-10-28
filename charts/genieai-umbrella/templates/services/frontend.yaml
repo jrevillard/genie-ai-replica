@@ -1,4 +1,9 @@
-{{- if .Values.services.frontend.enabled -}}
+{{- $services := .Values.services | default dict -}}
+{{- $obs := .Values.observability | default dict -}}
+{{- $obsMetrics := $obs.metrics | default dict -}}
+{{- $svcFrontend := $services.frontend | default dict -}}
+{{- $ingress := .Values.ingress | default dict -}}
+{{- if $svcFrontend.enabled -}}
 {{- $vals := deepCopy .Values -}}
 {{- /* The SPA resolves its OIDC issuer at RUNTIME from
    window.APP_CONFIG.keycloak.url, which docker-entrypoint.sh generates
@@ -16,7 +21,7 @@ the explicit origin "https://genieai.local" does not match the page
 origin "https://genieai.local:4443", and 'self' is the only source
 that matches whatever origin the page was served from. */ -}}
 {{- $cspConnectSrc := include "genieai-umbrella.cspConnectSrc" . -}}
-{{- with .Values.services.frontend.cspConnectSrc -}}
+{{- with $svcFrontend.cspConnectSrc -}}
 {{- $cspConnectSrc = printf "%s %s" $cspConnectSrc . -}}
 {{- end -}}
 {{- $urls := list
@@ -71,7 +76,7 @@ spec:
     # would 504 into this Service. A dev cluster that wants
     # port-forward-only access must either enable the ingress tier or
     # run a CNI that does not apply policies (minikube kubenet).
-    {{- if .Values.ingress.enabled }}
+    {{- if $ingress.enabled }}
     - from:
         {{- include "genieai-umbrella.ingressDataPlanePeer" . | nindent 8 }}
       ports:
@@ -86,7 +91,7 @@ spec:
       ports:
         - protocol: TCP
           port: 8090
-  {{- if .Values.observability.metrics.enabled }}
+  {{- if $obsMetrics.enabled }}
   # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
   # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
   # serviceScrapeSelector — see templates/observability/vmsingle.yaml)

@@ -1,4 +1,8 @@
-{{- if .Values.services.backend.enabled -}}
+{{- $services := .Values.services | default dict -}}
+{{- $servicesBackend := $services.backend | default dict -}}
+{{- $data := .Values.data | default dict -}}
+{{- $dataArangodb := $data.arangodb | default dict -}}
+{{- if $servicesBackend.enabled -}}
 {{- /*
 The migrations image (components/gov-chat-backend/Dockerfile.migrations)
 creates the ArangoDB collections the backend's user provisioning writes
@@ -14,7 +18,7 @@ knob global.imageRegistry wins over the top-level imageRegistry — a
 divergence here would move every service image to an air-gapped mirror
 while this hook kept pulling from the default registry. */ -}}
 {{- $registry := .Values.global.imageRegistry | default .Values.imageRegistry -}}
-{{- $img := .Values.services.backend.migrationsImage | default dict -}}
+{{- $img := $servicesBackend.migrationsImage | default dict -}}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -62,7 +66,7 @@ spec:
       the database to answer before the migration container starts (the
       sibling convergence Job does the same for Keycloak with
       KEYCLOAK_AVAILABILITYCHECK). */ -}}
-      {{- if .Values.data.arangodb.enabled }}
+      {{- if $dataArangodb.enabled }}
       initContainers:
         - name: wait-for-arango
           image: "{{ .Values.global.toolingImageRegistry | default "docker.io" }}/curlimages/curl:8.10.1"
@@ -103,7 +107,7 @@ spec:
             - name: ARANGO_URL
               value: {{ include "genieai-umbrella.arangoURL" . | quote }}
             - name: ARANGO_DB
-              value: {{ .Values.data.arangodb.database | default "_system" | quote }}
+              value: {{ $dataArangodb.database | default "_system" | quote }}
             - name: ARANGO_USER
               value: "root"
             - name: ARANGO_PASSWORD

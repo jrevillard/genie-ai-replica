@@ -3255,9 +3255,14 @@ chart:lint:
     # template default — a tuning knob an operator cannot discover without
     # reading template source, and one a fat-fingered key silently ignores
     # (the values digest is unchanged, so Flux never even rolls). The
-    # reverse half (keys no template reads) is the header's claim, not a
-    # gate: it is judged on every render by the parity gate's chart-side
-    # walk.
+    # reads are resolved TRANSITIVELY: a template that normalizes a block
+    # reads its leaves through a variable, and a chain of normalizations
+    # (`$a := .Values.x`, `$b := $a.y`, `$c := $b.z`) is what the chart
+    # actually uses — resolving one hop only would leave every leaf below
+    # it invisible, and the coverage would shrink with each
+    # normalization. The reverse half (keys no template reads) is the
+    # header's claim, not a gate: it is judged on every render by the
+    # parity gate's chart-side walk.
     - python3 scripts/values-surface-check.py
     # Every rendered environment value must be a STRING. `v1.EnvVar.value`
     # is typed string: the API server rejects a number or a boolean at
@@ -3268,12 +3273,19 @@ chart:lint:
     # numeric and boolean knobs overridden to a number, which is the
     # configuration that used to render `value: 42`.
     - python3 scripts/env-types-check.py charts/genieai-umbrella
-    # Clearing a CLEARABLE block must degrade, never crash: the chart
-    # documents `services.backend.translation: null` as the supported way
-    # to reset that block, and a nil-pointer crash names a template
-    # instead of the values key the operator cleared. Three review
-    # passes found that class (a helm test template, two services'
-    # optional PVC block, the convergence templates).
+    # Clearing a block must never crash the render. Helm's `null`
+    # DELETES a key, so a cleared block turns the tier it controls OFF
+    # (the same meaning as `enabled: false`) — and the chart degrades to
+    # its own default, or fails with a message naming the values key.
+    # A template-engine crash names a TEMPLATE instead, and leaves the
+    # operator guessing which of the hundred blocks they cleared was
+    # guilty. The sweep is STRUCTURAL: every dict-valued node of
+    # values.yaml is cleared, one at a time, on both render surfaces
+    # (a list of block names cannot see a block added later, and the
+    # blocks that crash are exactly the ones nobody remembered to add).
+    # Six review passes found that class (helm test templates, two
+    # services' optional PVC block, the convergence templates, the
+    # identity CR's sub-blocks, the edge tier's tls/cors blocks).
     - python3 scripts/clearable-blocks-check.py charts/genieai-umbrella
     # The data tier's instance counts resolve the way the values say: the
     # profile map supplies the count when the operator states none, and

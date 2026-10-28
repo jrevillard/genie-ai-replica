@@ -39,3 +39,27 @@ Context keys: root (the template dot), name, port.
 {{- define "genieai-umbrella.serviceURL" -}}
 {{- printf "http://%s.%s.svc.cluster.local:%s" .name .root.Values.namespace (.port | toString) -}}
 {{- end -}}
+
+{{/*
+genieai-umbrella.cspConnectSrc — the DERIVED Content-Security-Policy
+connect-src set: 'self', the public origin, and the WebSocket source on
+the public host.
+
+One derivation for the backend's CSP header and the SPA's: the two
+policies answer the same question ("which origins may this client talk
+to?"), and two derivations drift — the SPA's policy was missing 'self'
+and the WebSocket source, so a browser on a non-default PORT (the laptop
+port-forward, https://genieai.local:4443) had its own same-origin /api
+calls blocked: the explicit origin "https://genieai.local" does not
+match the page origin "https://genieai.local:4443", and 'self' is the
+only source that matches whatever origin the page was served from.
+
+The WebSocket source follows the PUBLIC scheme: a browser on an https
+origin opens wss://, and a ws:// entry names a source it cannot use.
+*/}}
+{{- define "genieai-umbrella.cspConnectSrc" -}}
+{{- $scheme := .Values.ingress.scheme | default "https" -}}
+{{- $host := include "genieai-umbrella.ingressHost" . -}}
+{{- $wsScheme := ternary "wss" "ws" (eq $scheme "https") -}}
+{{- printf "'self' %s://%s %s://%s" $scheme $host $wsScheme $host -}}
+{{- end -}}

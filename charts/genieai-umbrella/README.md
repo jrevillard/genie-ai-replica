@@ -307,7 +307,7 @@ the current source of truth.
 | Tier | Top-level key | Purpose |
 |---|---|---|
 | Global | `global.imageRegistry`, `global.imagePullSecrets`, `global.toolingArch`, `global.toolingImageRegistry`, `global.kubeletToolsMirror` | Image + tooling registry knobs |
-| Profile | `clusterProfile`, `clusterProfileReplicas` | `dev` \| `staging` \| `prod`; `sovereign` reserved |
+| Profile | `clusterProfile`, `clusterProfileReplicas`, `clusterProfileInstances` | `dev` \| `staging` \| `prod`; `sovereign` reserved |
 | Pluggable | `pluggable.storageClassName` | PVC storage class; `""` = cluster default |
 | Ingress | `ingress.host`, `ingress.scheme` | Public origin; feeds `KC_PUBLIC_ORIGIN` (issuer pin) |
 | Observability | `observability.collectorCRName`, `observability.collectorPort` | OTLP exporter endpoint overrides |
@@ -519,9 +519,9 @@ shared node).
 
 | Tier | Operator CR | Default mode |
 |---|---|---|
-| Postgres | CNPG `Cluster` (`keycloak-db`) | `instances: 1` (prod → 3) |
+| Postgres | CNPG `Cluster` (`keycloak-db`) | `instances: null` → the profile's count (prod → 3, else 1); an explicit number wins |
 | ArangoDB | kube-arangodb `ArangoDeployment` (`arangodb-single` / `arangodb-cluster`) | `mode: single`; cluster on staging + prod |
-| Keycloak | `Keycloak` v2beta1 (`keycloak`) | single replica by default; `RecreateOnImageChange` strategy |
+| Keycloak | `Keycloak` v2beta1 (`keycloak`) | `instances: null` → the profile's count (prod → 2, else 1); an explicit number wins; `RecreateOnImageChange` strategy |
 
 The chart's ArangoDeployment template honors `data.arangodb.mode` ONLY
 and does NOT auto-promote on `clusterProfile` changes — kube-arangodb

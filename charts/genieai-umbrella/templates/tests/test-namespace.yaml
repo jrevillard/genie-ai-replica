@@ -82,11 +82,16 @@ spec:
           [ -n "$enforce" ] \
             || echo "WARN: pod-security.kubernetes.io/enforce not set on $ns (admission defaults apply)"
           echo "PASS"
-{{- /* Gated on at least one data tier rendering against a required
-       Secret. The test asserts the operator-provided Secret exists in
-       the namespace — the chart does not materialize the Secret itself
-       (operator brings it via their secret backend of choice), so a
-       release with all data tiers disabled has nothing to check. */ -}}
+{{- /* The Pod gate must cover EVERY condition that adds a Secret to
+       `required_secrets` below — the gate and the assertions are two
+       halves of one contract, and a condition joined to one without
+       the other leaves the Secret unchecked in that shape (run 14
+       missed redisCache, run 15 found opea and translation.endpoint).
+       Adding a required Secret = add its assertion block AND join its
+       condition to the `or` list on the gate line. The test asserts
+       the operator-provided Secret exists in the namespace — the chart
+       does not materialize the Secret itself (operator brings it via
+       their secret backend of choice). */ -}}
 {{- /* Every block read below is CLEARABLE, and the chart's contract is
 that a cleared block degrades to the derived behaviour — not to a
 nil-pointer crash in a helm TEST template, which names the test pod and
@@ -104,7 +109,7 @@ derived defaults. */ -}}
 {{- $backend := $services.backend | default dict -}}
 {{- $translation := $backend.translation | default dict -}}
 {{- $redisCache := $services.redisCache | default dict -}}
-{{- if or $arangodb.enabled $keycloak.enabled $postgres.enabled $redisCache.enabled }}
+{{- if or $arangodb.enabled $keycloak.enabled $postgres.enabled $redisCache.enabled $opea.enabled $translation.endpoint }}
 ---
 apiVersion: v1
 kind: Pod
@@ -247,11 +252,7 @@ spec:
               *) echo "OK: K8s Secret materialized: $name" ;;
             esac
           done
-          failed=0
           if [ -n "$missing" ]; then
-            failed=1
-          fi
-          if [ "$failed" -ne 0 ]; then
             echo "FAIL: required K8s Secrets did not materialize in 60s"
             exit 1
           fi

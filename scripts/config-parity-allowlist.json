@@ -203,7 +203,7 @@
         "VUE_APP_CSP_CONNECT_SRC": "the browser's origin is the deployment's public origin (ingress.scheme + ingress.host); Compose's list names the localhost development origins"
       },
       "notApplicable": {
-        "VUE_PROXY_HOST": "the chart serves the SPA and the API from the same origin, so the development proxy host is never dialled"
+        "VUE_PROXY_HOST": "the chart's runtime never dials it: the frontend image's CMD runs nginx (Dockerfile:31), whose /api block proxies the backend itself — server.js (the dev-only proxy that reads VUE_PROXY_HOST at line 11) is not executed by the image, and no module under src/ reads the proxyHost key that docker-entrypoint.sh writes into window.APP_CONFIG"
       },
       "composeOnly": {
         "PORT": "The chart does not set the name at all: its Deployment carries the port as containerPort 8090 (services.frontend.port), and the frontend image's embedded nginx listens on that baked-in default — the PORT env only steers the compose-run process."

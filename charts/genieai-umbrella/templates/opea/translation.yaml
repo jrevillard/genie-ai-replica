@@ -55,7 +55,14 @@ spec:
             - name: LLM_ENDPOINT
               value: {{ include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "translation") }}
             - name: LLM_MODEL_ID
-              value: {{ .Values.opea.translation.modelId | default "google/gemma-3-4b-it" }}
+              # Quoted AND stringified: this template hand-renders its
+              # env block (it does not go through the service factory's
+              # envRows normalization), and `v1.EnvVar.value` is typed
+              # string — an operator whose model id happens to parse as
+              # a YAML number ("3.1") would otherwise take the whole
+              # Deployment down with "cannot unmarshal number into Go
+              # struct field EnvVar.value of type string".
+              value: {{ .Values.opea.translation.modelId | default "google/gemma-3-4b-it" | toString | quote }}
             # Observability exporter — derived from the umbrella
             # observability flags (any signal on → SDK initialises)
             # rather than a per-service knob.

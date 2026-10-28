@@ -238,6 +238,7 @@
             type="checkbox"
             :value="m.key"
             :disabled="m.default || readOnly || runBusy"
+            @change="metricsTouched = true"
           />
           <span>{{ m.label }}</span>
         </label>
@@ -968,6 +969,11 @@ export default {
       distSpecific: 25,
       genPersonas: 3,
       selectedMetrics: [...DEFAULT_METRICS],
+      // The user's metric selection is INTENT: background suite loads must
+      // never silently re-seed it (2026-10-28 live: all 10 metrics ticked,
+      // a background loadSuite re-seeded the 4 defaults mid-dialog, and the
+      // run scored 4 — the judge-picker bug family, metrics edition).
+      metricsTouched: false,
       suite: null,
       runDoc: null,
       runHistory: [],
@@ -1932,6 +1938,10 @@ export default {
       if (latestRun) this.onLoadRun(latestRun._key, latestRun.suite_key, { silent: true });
     },
     async loadSuite(suiteKey) {
+      // A genuinely different suite invalidates the user's selection (the
+      // new suite's own memory should load); a re-load of the SAME suite is
+      // the clobber path the metricsTouched guard exists for.
+      if (this.suite && this.suite.suite_key !== suiteKey) this.metricsTouched = false;
       const epoch = ++this.suiteEpoch;
       const res = await this.$store.dispatch('okf/ragasGetSuite', {
         repoId: this.repo && this.repo.repo_id,
@@ -1948,9 +1958,14 @@ export default {
         this.adoptGeneration(suiteKey, res.result);
       } else if (res.ok && res.result && res.result.kind === 'ragas_suite') {
         this.suite = res.result;
-        this.selectedMetrics = [
-          ...new Set([...DEFAULT_METRICS, ...((this.suite.payload && this.suite.payload.metrics_config) || [])])
-        ];
+        // Seed the picker ONLY while the user has not expressed a choice:
+        // a background refresh lands mid-dialog and must not wipe the
+        // ticked selection (2026-10-28: all 10 ticked, run scored 4).
+        if (!this.metricsTouched) {
+          this.selectedMetrics = [
+            ...new Set([...DEFAULT_METRICS, ...((this.suite.payload && this.suite.payload.metrics_config) || [])])
+          ];
+        }
         this.$emit('changed');
         await this.adoptInFlight(suiteKey);
         // Judge memory: reopen/refresh restores the pick this suite was last
@@ -2217,6 +2232,10 @@ export default {
         });
         if (res.ok) {
           this.runDoc = res.result;
+          // The submitted selection is now the run's own record — clear the
+          // touched flag so the completion load restores FROM it (the next
+          // dialog session starts from the run's metrics, not a stale flag).
+          this.metricsTouched = false;
           this.$emit('changed');
         } else if (res.code === 'RUN_CANCELLED') {
           // The user stopped it — not a failure, and it must not read as one.
@@ -2408,6 +2427,13 @@ export default {
         .catch(() => null);
       if (res && res.ok) {
         this.runDoc = res.result;
+        // Metric memory (judge-pick pattern, 2026-10-28): loading a run
+        // restores the metrics THAT RUN was scored with — the picker shows
+        // the suite's last real measurement, not the generation defaults.
+        // Gated on metricsTouched: the user's live selection wins.
+        if (!this.metricsTouched && this.runDoc && Array.isArray(this.runDoc.metrics) && this.runDoc.metrics.length) {
+          this.selectedMetrics = [...new Set([...DEFAULT_METRICS, ...this.runDoc.metrics])];
+        }
         // The advisor travels with the run: a persisted explain for THIS run
         // loads automatically, so the admin sees "what can I do" with the
         // results instead of having to know the button exists (2026-10-19:

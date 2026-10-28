@@ -1567,3 +1567,66 @@ describe('RagasPanel', () => {
     });
   });
 });
+
+// 2026-10-28 live: all 10 metrics ticked, a background loadSuite re-seeded
+// the 4 defaults mid-dialog, and the run scored 4. The user's selection is
+// intent — background loads must not clobber it, and loading a run restores
+// THAT run's metrics (the judge-pick memory pattern, metrics edition).
+describe('metric selection survives background loads (2026-10-28)', () => {
+  it('a touched selection is NOT re-seeded by loadSuite', async () => {
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    // The user ticks everything (the @change handler sets the flag).
+    w.vm.selectedMetrics = [
+      'faithfulness',
+      'context_precision',
+      'context_recall',
+      'answer_relevancy',
+      'context_utilization',
+      'context_entities_recall',
+      'factual_correctness',
+      'answer_correctness',
+      'answer_similarity',
+      'noise_sensitivity'
+    ];
+    w.vm.metricsTouched = true;
+    await w.vm.loadSuite('rs1-test');
+    expect(w.vm.selectedMetrics).toHaveLength(10);
+  });
+
+  it('an untouched selection still seeds from the suite (the existing path)', async () => {
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    w.vm.metricsTouched = false;
+    await w.vm.loadSuite('rs1-test');
+    expect(w.vm.selectedMetrics).toEqual(['faithfulness', 'context_precision', 'context_recall', 'answer_relevancy']);
+  });
+
+  it("loading a run restores THAT run's metrics into the picker", async () => {
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    const ten = runFixture();
+    ten.metrics = [
+      'faithfulness',
+      'context_precision',
+      'context_recall',
+      'answer_relevancy',
+      'context_utilization',
+      'context_entities_recall',
+      'factual_correctness',
+      'answer_correctness',
+      'answer_similarity',
+      'noise_sensitivity'
+    ];
+    dispatch.mockImplementation(async (action) => {
+      if (action === 'okf/ragasGetRunQuiet') return { ok: true, result: ten };
+      if (action === 'okf/ragasGetExplainQuiet') return { ok: false };
+      if (action === 'okf/ragasListRuns') return { ok: true, runs: [] };
+      return { ok: true, result: suiteFixture() };
+    });
+    await w.vm.onLoadRun('rr1-run', 'rs1-test', {});
+    await new Promise((r) => setTimeout(r, 0));
+    expect(w.vm.selectedMetrics).toHaveLength(10);
+    expect(w.vm.selectedMetrics).toContain('noise_sensitivity');
+  });
+});

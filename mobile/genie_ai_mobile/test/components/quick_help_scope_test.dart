@@ -260,6 +260,39 @@ void main() {
     });
 
     test(
+      'two buttons sharing an id resolve to the FIRST one, like the web',
+      () {
+        // A configuration error: two cards with the same id. The web keeps
+        // the FIRST (the grid's verdict map, and the restore's lookup, are
+        // both first-wins), so the mobile must too — otherwise the same
+        // saved conversation restores a DIFFERENT scope on the two
+        // platforms, which is the drift this work exists to remove.
+        final duplicated = <Map<String, dynamic>>[
+          {
+            'id': 'civil',
+            'category': '2',
+            'serviceLabels': ['Births'],
+          },
+          {
+            'id': 'civil',
+            'category': '2',
+            'serviceLabels': ['No Such Service'],
+          },
+        ];
+
+        final scope = convResolver(
+          duplicated,
+        ).resolve(tags: ['civil'], categoryKey: '2');
+
+        // The FIRST button's scope: its label survives, the second one's
+        // label is not sent.
+        expect(scope.serviceLabelsEn, ['Births']);
+        expect(scope.quickHelpScopeState!['missingLabels'], isEmpty);
+        expect(scope.quickHelpScopeState!['broken'], isFalse);
+      },
+    );
+
+    test(
       'a PRE-nameEN tree (deploy window) still names scopes through name',
       () {
         // The mobile fetches the tree with locale 'en': there, `name` IS

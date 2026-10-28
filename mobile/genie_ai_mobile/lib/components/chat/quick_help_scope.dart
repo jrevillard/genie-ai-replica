@@ -258,10 +258,27 @@ class ConversationScopeResolver {
     required QuickHelpScopeResolver hierarchy,
     required List<Map<String, dynamic>> quickHelpButtons,
   }) : _hierarchy = hierarchy,
-       _buttons = {
-         for (final button in quickHelpButtons)
-           if (button['id'] != null) button['id'].toString(): button,
-       };
+       _buttons = _indexButtons(quickHelpButtons);
+
+  /// The buttons by id, FIRST-wins.
+  ///
+  /// A configuration error can give two cards the same id. The web keeps
+  /// the FIRST — its verdict map and its restore lookup are both
+  /// first-wins — so the mobile must too, or the same saved conversation
+  /// restores a DIFFERENT scope on the two platforms. A map literal would
+  /// keep the LAST: the later key overwrites the earlier one.
+  static Map<String, Map<String, dynamic>> _indexButtons(
+    List<Map<String, dynamic>> buttons,
+  ) {
+    final byId = <String, Map<String, dynamic>>{};
+    for (final button in buttons) {
+      final id = button['id']?.toString();
+      if (id == null || id.isEmpty) continue;
+      if (byId.containsKey(id)) continue;
+      byId[id] = button;
+    }
+    return byId;
+  }
 
   final QuickHelpScopeResolver _hierarchy;
   final Map<String, Map<String, dynamic>> _buttons;

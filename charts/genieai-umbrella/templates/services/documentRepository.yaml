@@ -8,17 +8,29 @@
       secretKeyRef below
   Both prerequisites are required for this Deployment's pods to schedule
   and become ready.
-*/ -}}
-{{- if .Values.services.documentRepository.enabled -}}
+*/ -}}{{- $services := .Values.services | default dict -}}
+{{- $servicesDocumentRepository := $services.documentRepository | default dict -}}
+{{- $data := .Values.data | default dict -}}
+{{- $dataKeycloak := $data.keycloak | default dict -}}
+{{- $dataArangodb := $data.arangodb | default dict -}}
+{{- $servicesClamav := $services.clamav | default dict -}}
+{{- $obs := .Values.observability | default dict -}}
+{{- $obsLogs := $obs.logs | default dict -}}
+{{- $obsMetrics := $obs.metrics | default dict -}}
+
+{{- $svcDocRepo := $services.documentRepository | default dict -}}
+{{- $svcClamav := $services.clamav | default dict -}}
+{{- $ingress := .Values.ingress | default dict -}}
+{{- if $svcDocRepo.enabled -}}
 {{- $ns := .Values.namespace -}}
 {{- $vals := deepCopy .Values -}}
 {{- /* VIRUS_SCANNING is the app-side switch, not the operator's: a scan
 step with no scanner behind it fails every upload, so the ClamAV tier
 being off forces it off. `services.documentRepository.virusScanning`
 still turns it off on its own. */ -}}
-{{- $virusScanning := .Values.services.clamav.enabled -}}
-{{- if kindIs "bool" .Values.services.documentRepository.virusScanning -}}
-{{- $virusScanning = and $virusScanning .Values.services.documentRepository.virusScanning -}}
+{{- $virusScanning := $svcClamav.enabled -}}
+{{- if kindIs "bool" $servicesDocumentRepository.virusScanning -}}
+{{- $virusScanning = and $virusScanning $servicesDocumentRepository.virusScanning -}}
 {{- end -}}
 {{- /* The chart owns `document-repository-uploads` only while
 `services.documentRepository.pvc.enabled` is true. With it off, a volume
@@ -28,7 +40,7 @@ dropped here. Operator-supplied volumes and mounts are left untouched:
 turning the PVC off means "ephemeral /app/uploads, or bring your own
 volume". */ -}}
 {{- /* The PVC block is OPTIONAL (the per-service shape block says so): a cleared block means "no chart-owned claim", not a nil-pointer crash. */ -}}
-{{- $pvc := .Values.services.documentRepository.pvc | default dict -}}
+{{- $pvc := $svcDocRepo.pvc | default dict -}}
 {{- if not $pvc.enabled -}}
 {{- $ownedClaim := "document-repository-uploads" -}}
 {{- $keptVolumes := list -}}
@@ -67,21 +79,21 @@ the Kubernetes-injected connection env for the dataprep Service
 both rows must be set explicitly. */ -}}
 {{- $urls := list
     (dict "name" "KEYCLOAK_URL" "value" (include "genieai-umbrella.keycloakInternalURL" .))
-    (dict "name" "KC_REALM" "value" (.Values.data.keycloak.realm | default "genie" | toString))
-    (dict "name" "KEYCLOAK_EXPECTED_ISSUER" "value" (printf "%s/realms/%s" (include "genieai-umbrella.keycloakPublicIssuer" .) (.Values.data.keycloak.realm | default "genie")))
+    (dict "name" "KC_REALM" "value" ($dataKeycloak.realm | default "genie" | toString))
+    (dict "name" "KEYCLOAK_EXPECTED_ISSUER" "value" (printf "%s/realms/%s" (include "genieai-umbrella.keycloakPublicIssuer" .) ($dataKeycloak.realm | default "genie")))
     (dict "name" "ARANGO_URL" "value" (include "genieai-umbrella.arangoURL" .))
-    (dict "name" "ARANGO_DB" "value" (.Values.data.arangodb.database | default "_system" | toString))
+    (dict "name" "ARANGO_DB" "value" ($dataArangodb.database | default "_system" | toString))
     (dict "name" "DATAPREP_HOST" "value" "http://dataprep")
     (dict "name" "DATAPREP_PORT" "value" "5000")
-    (dict "name" "CLAMSCAN_HOST" "value" (.Values.services.documentRepository.clamavHost | default "clamav" | toString))
-    (dict "name" "CLAMSCAN_PORT" "value" (.Values.services.documentRepository.clamavPort | default (.Values.services.clamav.port | default 3310) | toString))
+    (dict "name" "CLAMSCAN_HOST" "value" ($servicesDocumentRepository.clamavHost | default "clamav" | toString))
+    (dict "name" "CLAMSCAN_PORT" "value" ($servicesDocumentRepository.clamavPort | default ($servicesClamav.port | default 3310) | toString))
     (dict "name" "VIRUS_SCANNING" "value" ($virusScanning | toString))
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
     (dict "name" "ENABLE_OBSERVABILITY" "value" (include "genieai-umbrella.observabilityEnabledFlag" .))
 -}}
 {{- /* Admin logs UI data source — the vmoperator-managed VLSingle
 Service, same address the backend is given. */ -}}
-{{- if .Values.observability.logs.enabled -}}
+{{- if $obsLogs.enabled -}}
 {{- $urls = concat $urls (list (dict "name" "VICTORIALOGS_URL" "value" (printf "http://vlsingle-victorialogs.%s.svc.cluster.local:9428" $ns))) -}}
 {{- end }}
 {{- $secretEnv := list (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "ARANGO_PASSWORD" "secret" "arango-root-secret" "key" "password" "optional" true) | fromJson) -}}
@@ -129,7 +141,7 @@ spec:
     # The Envoy Gateway data plane (edge routing: /api/files, /api/labels,
     # /uploads) and the backend (file references) on the container port
     # (post-DNAT).
-    {{- if .Values.ingress.enabled }}
+    {{- if $ingress.enabled }}
     - from:
         {{- include "genieai-umbrella.ingressDataPlanePeer" . | nindent 8 }}
       ports:
@@ -169,7 +181,7 @@ spec:
       ports:
         - protocol: TCP
           port: 3001
-  {{- if .Values.observability.metrics.enabled }}
+  {{- if $obsMetrics.enabled }}
   # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
   # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
   # serviceScrapeSelector — see templates/observability/vmsingle.yaml)
@@ -217,7 +229,7 @@ spec:
               genieai.io/component: clamav
       ports:
         - protocol: TCP
-          port: {{ .Values.services.clamav.port | default 3310 }}
+          port: {{ $servicesClamav.port | default 3310 }}
     # Data tier: ArangoDB (8529) — pending verified peer labels.
     # Same port-scoped pattern as the backend's data-tier egress.
     - to:
@@ -233,11 +245,11 @@ spec:
     documents. Empty list = allow every IPv4 destination on the HTTP(S)
     ports, matching the compose deployment's unrestricted network. */}}
     - to:
-        {{- range $cidr := .Values.services.documentRepository.crawlAllowedCIDRs }}
+        {{- range $cidr := $svcDocRepo.crawlAllowedCIDRs }}
         - ipBlock:
             cidr: {{ $cidr }}
         {{- end }}
-        {{- if not .Values.services.documentRepository.crawlAllowedCIDRs }}
+        {{- if not $servicesDocumentRepository.crawlAllowedCIDRs }}
         - ipBlock:
             cidr: 0.0.0.0/0
         {{- end }}
@@ -278,7 +290,7 @@ spec:
       ports:
         - protocol: TCP
           port: {{ include "genieai-umbrella.otlpPort" . }}
-    {{- if .Values.observability.logs.enabled }}
+    {{- if $obsLogs.enabled }}
     # VictoriaLogs read path. The chart renders VICTORIALOGS_URL for this
     # pod whenever the logs tier is on; an env var pointing at a
     # destination the pod's own policy forbids fails as a connection

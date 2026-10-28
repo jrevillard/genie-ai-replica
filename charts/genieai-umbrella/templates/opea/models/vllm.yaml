@@ -5,10 +5,14 @@
   site mirrors it and rewrites the reference via insertAgent. Skeleton
   via genieai-umbrella.modelDeployment; this file carries only the
   model-specific args.
-*/}}
-{{- if and .Values.opea.enabled (eq .Values.opea.gpu.mode "in-cluster") -}}
-{{- $modelId := .Values.opea.models.llm.modelId -}}
-{{- $llm := .Values.opea.models.llm -}}
+*/}}{{- $opea := .Values.opea | default dict -}}
+{{- $opeaGpu := $opea.gpu | default dict -}}
+{{- $opeaModels := $opea.models | default dict -}}
+{{- $opeaModelsLlm := $opeaModels.llm | default dict -}}
+
+{{- if and $opea.enabled (eq $opeaGpu.mode "in-cluster") -}}
+{{- $modelId := $opeaModelsLlm.modelId -}}
+{{- $llm := $opeaModels.llm -}}
 {{- include "genieai-umbrella.modelDeployment" (dict
       "root" .
       "name" "vllm"

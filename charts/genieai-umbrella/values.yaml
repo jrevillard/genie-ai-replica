@@ -4,6 +4,19 @@
 # so an operator can discover the knob and its type without reading
 # template source), and keys no template reads are not declared.
 # scripts/values-surface-check.py enforces the first half in CI.
+#
+# CLEARING A BLOCK. Helm's `null` DELETES a key — it does not merge an
+# empty map over it. So `services.backend: null` removes the whole
+# service entry, switch included, and the service stops rendering: a
+# cleared block turns the tier it controls OFF, the same meaning as
+# `enabled: false`. The chart NEVER crashes on a cleared block: every
+# block is read through a normalized binding, so a cleared block
+# degrades to the chart's own default, or the render fails with a
+# message naming the values key (never a template-engine crash).
+# scripts/clearable-blocks-check.py sweeps every block in this file on
+# both render surfaces and asserts exactly that. The documented way to
+# drop an override WITHOUT losing the chart's defaults is an empty map
+# (`global: {}`), which MERGES.
 
 # Target namespace for tier templates that spell one out. MUST equal the
 # release namespace (-n) — the chart fails the render otherwise (the

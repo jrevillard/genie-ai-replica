@@ -6,8 +6,13 @@
   four model Deployments; the single-gpu=true node assumption makes
   RWO sufficient (all model pods co-schedule on that node). Multi-GPU
   clusters need a ReadWriteMany class or one claim per model.
-*/}}
-{{- if and .Values.opea.enabled (eq .Values.opea.gpu.mode "in-cluster") .Values.opea.models.cache.enabled -}}
+*/}}{{- $opea := .Values.opea | default dict -}}
+{{- $opeaGpu := $opea.gpu | default dict -}}
+{{- $opeaModels := $opea.models | default dict -}}
+{{- $opeaModelsCache := $opeaModels.cache | default dict -}}
+{{- $pluggable := .Values.pluggable | default dict -}}
+
+{{- if and $opea.enabled (eq $opeaGpu.mode "in-cluster") $opeaModelsCache.enabled -}}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -20,13 +25,13 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: {{ .Values.opea.models.cache.size | default "100Gi" }}
+      storage: {{ $opeaModelsCache.size | default "100Gi" }}
   # The chart-wide knob wins (pluggable.storageClassName — the one every
   # other PVC reads); the OPEA-local knob stays as a fallback for a
   # deployment that names a class for the model cache only. An
   # empty-string storageClassName means "NO default storage class" and
   # strands the claim — and with it all four model pods, which mount it.
-  {{- with (.Values.pluggable.storageClassName | default .Values.opea.models.cache.storageClassName) }}
+  {{- with ($pluggable.storageClassName | default $opeaModelsCache.storageClassName) }}
   storageClassName: {{ . }}
   {{- end }}
 {{- end -}}

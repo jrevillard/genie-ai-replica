@@ -1,6 +1,10 @@
 {{- /* The convergence block is CLEARABLE: a cleared block means "no
 convergence" (the same as enabled: false), not a nil-pointer crash. */ -}}
-{{- $keycloak := .Values.data.keycloak | default dict -}}
+{{- $data := .Values.data | default dict -}}
+{{- $keycloak := $data.keycloak | default dict -}}
+{{- $keycloakBootstrap := $keycloak.bootstrapAdmin | default dict -}}
+{{- $keycloakConvergence := $keycloak.convergence | default dict -}}
+{{- $ingress := .Values.ingress | default dict -}}
 {{- $convergence := $keycloak.convergence | default dict -}}
 {{- if and $keycloak.enabled $convergence.enabled -}}
 {{- /*
@@ -14,7 +18,7 @@ import through an env or envSecrets row, both of which are values — so
 a parameter change moves the values digest and fires this hook.
 */ -}}
 {{- $ns := .Values.namespace -}}
-{{- $secretName := .Values.data.keycloak.bootstrapAdmin.userSecret | default "keycloak-admin-credentials" -}}
+{{- $secretName := $keycloakBootstrap.userSecret | default "keycloak-admin-credentials" -}}
 {{- $realmSecret := printf "%s-keycloak-realm" (include "genieai-common.fullname" .) -}}
 {{- /*
 Placeholder guard, relocated from the deleted realm import.
@@ -195,7 +199,7 @@ spec:
             - name: KC_CLIENT_ID
               value: {{ .Values.data.keycloak.webClientId | quote }}
             - name: KC_PUBLIC_ORIGIN
-              value: {{ printf "%s://%s" (.Values.ingress.scheme | default "https") (include "genieai-umbrella.ingressHost" .) | quote }}
+              value: {{ printf "%s://%s" ($ingress.scheme | default "https") (include "genieai-umbrella.ingressHost" .) | quote }}
             - name: KC_MOBILE_CLIENT_ID
               value: {{ .Values.data.keycloak.mobileClientId | default "genie-mobile" | quote }}
             - name: KC_MOBILE_REDIRECT_SCHEME

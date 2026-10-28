@@ -10,7 +10,9 @@ operator flips the mode value. This helper mirrors that contract and
 returns the Service hostname that the CR is actually serving.
 */}}
 {{- define "genieai-umbrella.arangoHost" -}}
-{{- if eq (.Values.data.arangodb.mode | default "single") "cluster" -}}
+{{- $data := .Values.data | default dict -}}
+{{- $arangodb := $data.arangodb | default dict -}}
+{{- if eq ($arangodb.mode | default "single") "cluster" -}}
 arangodb-cluster
 {{- else -}}
 arangodb-single

@@ -21,7 +21,14 @@ for chart-internal peers (backend:80, document-repository:80, ...).
 Context keys: root (the template dot), name, port.
 */}}
 {{- define "genieai-umbrella.keycloakContextPath" -}}
-{{- .Values.data.keycloak.httpRelativePath | default "/auth" -}}
+{{- /* Every block read is normalized on the way in: `| default` protects a
+nil LEAF, never a nil PARENT, so reading `.Values.data.keycloak.x` while
+`data.keycloak` is nil crashes the template engine with a message that
+names no values key. The chain is bound parent-first so a cleared tier
+degrades to the chart's documented default instead. */ -}}
+{{- $data := .Values.data | default dict -}}
+{{- $kc := $data.keycloak | default dict -}}
+{{- $kc.httpRelativePath | default "/auth" -}}
 {{- end -}}
 
 {{- define "genieai-umbrella.keycloakInternalURL" -}}
@@ -29,7 +36,8 @@ Context keys: root (the template dot), name, port.
 {{- end -}}
 
 {{- define "genieai-umbrella.keycloakPublicIssuer" -}}
-{{- printf "%s://%s%s" (.Values.ingress.scheme | default "https") (include "genieai-umbrella.ingressHost" .) (include "genieai-umbrella.keycloakContextPath" .) -}}
+{{- $ingress := .Values.ingress | default dict -}}
+{{- printf "%s://%s%s" ($ingress.scheme | default "https") (include "genieai-umbrella.ingressHost" .) (include "genieai-umbrella.keycloakContextPath" .) -}}
 {{- end -}}
 
 {{- define "genieai-umbrella.arangoURL" -}}
@@ -58,7 +66,8 @@ The WebSocket source follows the PUBLIC scheme: a browser on an https
 origin opens wss://, and a ws:// entry names a source it cannot use.
 */}}
 {{- define "genieai-umbrella.cspConnectSrc" -}}
-{{- $scheme := .Values.ingress.scheme | default "https" -}}
+{{- $ingress := .Values.ingress | default dict -}}
+{{- $scheme := $ingress.scheme | default "https" -}}
 {{- $host := include "genieai-umbrella.ingressHost" . -}}
 {{- $wsScheme := ternary "wss" "ws" (eq $scheme "https") -}}
 {{- printf "'self' %s://%s %s://%s" $scheme $host $wsScheme $host -}}

@@ -1,4 +1,12 @@
-{{- if .Values.observability.metrics.enabled }}
+{{- $obs := .Values.observability | default dict -}}
+{{- $obsMetrics := $obs.metrics | default dict -}}
+{{- $services := .Values.services | default dict -}}
+{{- $servicesBackend := $services.backend | default dict -}}
+{{- $servicesFrontend := $services.frontend | default dict -}}
+{{- $servicesDocumentRepository := $services.documentRepository | default dict -}}
+{{- $servicesRedisCache := $services.redisCache | default dict -}}
+{{- $opea := .Values.opea | default dict -}}
+{{- if $obsMetrics.enabled }}
 {{- /*
   VMServiceScrapes — one per Service the chart renders that exposes a
   Prometheus-friendly metrics surface. Reconciled by vmoperator; the
@@ -44,7 +52,7 @@
      VMSingle.spec.serviceScrapeSelector, a label selector on the
      VMServiceScrape object's OWN labels.
 */}}
-{{- if .Values.services.backend.enabled }}
+{{- if $servicesBackend.enabled }}
 ---
 apiVersion: operator.victoriametrics.com/v1beta1
 kind: VMServiceScrape
@@ -61,7 +69,7 @@ spec:
     - port: http
       interval: 30s
 {{- end }}
-{{- if .Values.services.frontend.enabled }}
+{{- if $servicesFrontend.enabled }}
 ---
 apiVersion: operator.victoriametrics.com/v1beta1
 kind: VMServiceScrape
@@ -79,7 +87,7 @@ spec:
       interval: 30s
 {{- end }}
 
-{{- if .Values.services.documentRepository.enabled }}
+{{- if $servicesDocumentRepository.enabled }}
 ---
 apiVersion: operator.victoriametrics.com/v1beta1
 kind: VMServiceScrape
@@ -96,7 +104,7 @@ spec:
     - port: http
       interval: 30s
 {{- end }}
-{{- if .Values.services.redisCache.enabled }}
+{{- if $servicesRedisCache.enabled }}
 ---
 apiVersion: operator.victoriametrics.com/v1beta1
 kind: VMServiceScrape
@@ -115,7 +123,7 @@ spec:
     - port: redis
       interval: 30s
 {{ end }}
-{{ if .Values.opea.enabled }}
+{{ if $opea.enabled }}
 {{- /* All six OPEA orchestrators render together — the per-service
 templates are gated on the umbrella .Values.opea.enabled flag. */ -}}
 ---

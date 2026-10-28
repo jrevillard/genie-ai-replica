@@ -5,23 +5,25 @@
   (NOVELTY_SIGMOID_*, CONTEXT_DECAY_FACTOR, MIN_VALUE_THRESHOLD) carry
   defaults overridable via .Values.opea.reranker.* (camelCase).
   Container/listen port 8000.
-*/}}
-{{- if .Values.opea.enabled -}}
+*/}}{{- $opea := .Values.opea | default dict -}}
+{{- $opeaReranker := $opea.reranker | default dict -}}
+
+{{- if $opea.enabled -}}
 {{- $vals := deepCopy .Values -}}
 {{- $urls := list
     (dict "name" "TEI_RERANKING_ENDPOINT" "value" (include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "reranker")))
     (dict "name" "OPEA_SSL_SKIP_VERIFY" "value" (include "genieai-umbrella.opeaSslSkipVerify" .))
     (dict "name" "ENABLE_OBSERVABILITY" "value" (include "genieai-umbrella.observabilityEnabledFlag" .))
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
-    (dict "name" "LOG_LEVEL" "value" (.Values.opea.reranker.logLevel | default "info" | toString))
-    (dict "name" "NOVELTY_SIGMOID_A" "value" (.Values.opea.reranker.noveltySigmoidA | default "20.0" | toString))
-    (dict "name" "NOVELTY_SIGMOID_B" "value" (.Values.opea.reranker.noveltySigmoidB | default "0.25" | toString))
-    (dict "name" "CONTEXT_DECAY_FACTOR" "value" (.Values.opea.reranker.contextDecayFactor | default "0.0025" | toString))
-    (dict "name" "MIN_VALUE_THRESHOLD" "value" (.Values.opea.reranker.minValueThreshold | default "-1.0" | toString))
+    (dict "name" "LOG_LEVEL" "value" ($opeaReranker.logLevel | default "info" | toString))
+    (dict "name" "NOVELTY_SIGMOID_A" "value" ($opeaReranker.noveltySigmoidA | default "20.0" | toString))
+    (dict "name" "NOVELTY_SIGMOID_B" "value" ($opeaReranker.noveltySigmoidB | default "0.25" | toString))
+    (dict "name" "CONTEXT_DECAY_FACTOR" "value" ($opeaReranker.contextDecayFactor | default "0.0025" | toString))
+    (dict "name" "MIN_VALUE_THRESHOLD" "value" ($opeaReranker.minValueThreshold | default "-1.0" | toString))
 -}}
 {{- $secretEnv := include "genieai-umbrella.gpuApiKeyEnv" (dict "keys" (list "HF_TOKEN" "VLLM_API_KEY")) | fromJsonArray -}}
 {{- /* opea.reranker.env: see the parity gate. */ -}}
-{{- $opeaEnvRows := include "genieai-umbrella.envMapRows" (.Values.opea.reranker.env | default dict) | fromJsonArray -}}
+{{- $opeaEnvRows := include "genieai-umbrella.envMapRows" ($opeaReranker.env | default dict) | fromJsonArray -}}
 {{- $svcVals := dict
     "image" (dict "repository" "genie-ai-reranker" "tag" "main")
     "port" 8000
@@ -33,7 +35,12 @@
       "startup"   (dict "tcpSocket" (dict "port" 8000) "failureThreshold" 30 "periodSeconds" 10)
     )
 -}}
-{{- $_ := set $vals.services "reranker" $svcVals -}}
+{{- /* The service map is rebuilt rather than mutated in place: a
+cleared `services` map has nothing to mutate, and `set` on a nil map
+crashes the template engine. */ -}}
+{{- $valsServices := $vals.services | default dict -}}
+{{- $_ := set $valsServices "reranker" $svcVals -}}
+{{- $_ := set $vals "services" $valsServices -}}
 {{- $ctx := dict "name" "reranker" "component" "reranker" "Values" $vals "Chart" .Chart "Release" .Release -}}
 {{- include "genieai-umbrella.serviceDeployment" $ctx }}
 ---

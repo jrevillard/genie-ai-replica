@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-28)
 
-- **Chart `genieai-umbrella` at 0.2.112**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.113**, branch `feat/k8s-migration` based
   on `main` at `18d02f094` and **12 commits behind `origin/main`**
   (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
   the backend's analytics routes, the OPEA overlay (retriever/dataprep),
@@ -614,6 +614,34 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 39 (0.2.113)** — 4 findings from the fifteenth
+  `/code-review`: three fixed, one declined as machinery (with a
+  mitigation).
+  - *The block comment above the gate stated the OLD contract* —
+    "gated on at least one data tier … all data tiers disabled has
+    nothing to check", one line above the gate pass 38 widened with
+    redisCache. The comment now states the real contract and the rule:
+    every condition that adds a Secret to `required_secrets` must join
+    the gate's `or` list.
+  - *The gate was still narrower than its assertions* — `$opea.enabled`
+    and the `$translation.endpoint` branch (vllm-api-key,
+    kc-dataprep-client-secret) did not join it: an opea-only or
+    endpoint-only shape rendered mandatory secretKeyRefs and no test
+    Pod. Latent today (the dependency graph blocks those shapes at
+    install) but the graph is an operator knob. Both conditions joined;
+    mutation-tested (dropping `$opea.enabled` from the gate removes the
+    Pod from the opea-only render; restoring it brings it back).
+  - *Declined (KISS): a template-side `$requiredSecrets` list that the
+    gate and the script both derive from* — the reviewer's structural
+    fix for the recurring gate/assertion drift (runs 37→38→14→15). It
+    is real machinery: a helper building a list with reasons, a gate on
+    its emptiness, comments emitted from it. The mitigation chosen
+    instead is the contract comment naming the two halves and the rule
+    for adding a Secret — the next author reads the rule at the site of
+    the mistake. If a fifth drift instance appears, the machinery item
+    activates.
+  - *`failed=0; if [ -n … ]` was a two-hop copy* — collapsed to the
+    single `if [ -n "$missing" ]` branch.
 - **Review loop, pass 38 (0.2.112)** — 3 findings from the fourteenth
   `/code-review`, all in the comment-accuracy and coverage classes.
   - *Three copies of the exact phrase pass 37 declared false survived* —
@@ -1733,7 +1761,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.112** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.113** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `18d02f094` (the tip that carries !586, !587,
   !588); the branch has since drifted 12 commits behind `origin/main`
